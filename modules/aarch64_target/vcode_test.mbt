@@ -1213,3 +1213,44 @@ test "AArch64 verifier rejects a safepoint marker without metadata" {
     _ => fail("expected unmarked safepoint to be rejected")
   }
 }
+
+///|
+test "AArch64 verifier rejects an unencodable comparison immediate" {
+  let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
+    "bad_compare_immediate",
+    [I32],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    CompareSetImmediate(W32, Eq, 4097UL),
+    [@vcode.Input::any(builder.parameter(0))],
+    [@vcode.Output::any(I32)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try @aarch64_target.verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="comparison immediate cannot be encoded",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an unencodable comparison immediate to be rejected")
+  }
+}

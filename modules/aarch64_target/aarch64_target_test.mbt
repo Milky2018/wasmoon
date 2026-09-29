@@ -165,3 +165,65 @@ test "AArch64 direct arithmetic selects modular negative immediates" {
     }
   }
 }
+
+///|
+test "AArch64 value comparisons use immediate encoding only when eligible" {
+  let abi = @aarch64_target.InternalAbi::new(
+    0,
+    8,
+    [1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  )
+
+  let cases : Array[(@native.ValueType, UInt64, UInt?)] = [
+    (I32, 42UL, Some(0x7100a83fU)),
+    (I64, 42UL, Some(0xf100a83fU)),
+    (I64, 4096UL, Some(0xf140043fU)),
+    (I32, 4097UL, None),
+    (I64, 0xffffffffffffffffUL, None),
+  ]
+  for (ty, bits, expected) in cases {
+    let session = @aarch64_target.DirectLoweringSession::new(
+      "compare_immediate",
+      Internal,
+      [Ptr64, ty],
+      [I32],
+      @aarch64_target.LoweringContext::new(abi),
+    )
+    let sink = session.sink()
+    inspect(
+      sink.supports_int_compare_immediate(ty, bits) == (expected is Some(_)),
+      content="true",
+    )
+    let builder = @lowering.DirectBuilder::new([Ptr64, ty], sink)
+    let result = builder.emit_with_metadata(
+        IntCompareImmediate(Equal, bits),
+        [builder.parameters()[1]],
+        [I32],
+        @lowering.InstructionMetadata::empty(),
+      )[0]
+    builder.return_([result])
+    builder.finish()
+    let diagnostics = @aarch64_target.diagnose_selected(
+      session.finish_selected(),
+    )
+    match expected {
+      Some(word) => {
+        let code = diagnostics.object.code()
+        inspect(code.length(), content="12")
+        let actual = code[0].to_uint() |
+          (code[1].to_uint() << 8) |
+          (code[2].to_uint() << 16) |
+          (code[3].to_uint() << 24)
+        inspect(actual == word, content="true")
+      }
+      None =>
+        inspect(
+          diagnostics.target_vcode.contains("LoadConstant"),
+          content="true",
+        )
+    }
+  }
+}

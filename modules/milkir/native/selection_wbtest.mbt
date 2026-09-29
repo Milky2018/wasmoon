@@ -10,6 +10,7 @@ priv struct LoweringTrace {
 fn trace_lowering(
   function : @milkir.Function,
   folds_unsigned_index_into_memory? : Bool = false,
+  compare_immediates? : Bool = false,
 ) -> LoweringTrace raise {
   let operands : Array[Array[Int]] = []
   let operations : Array[@lowering.Operation] = []
@@ -43,6 +44,9 @@ fn trace_lowering(
     fn(_, terminator, _) { terminators.push(terminator) },
     fn() { () },
     folds_unsigned_index_into_memory~,
+    supports_int_compare_immediate=fn(_, bits) {
+      compare_immediates && bits == 42UL
+    },
   )
   lower_core_to_sink(function, sink, verify_input=false)
   { operations, operands, operation_blocks, terminators, }
@@ -499,4 +503,55 @@ test "native vector and-not selection retains the other negation and identical o
       debug_inspect(trace.operands, content="[[0], [2, 1]]")
     }
   }
+}
+
+///|
+test "native comparison selection respects target eligibility and shared constants" {
+  for enabled in [false, true] {
+    for returned in [false, true] {
+      let builder = @milkir.FunctionBuilder::FunctionBuilder(
+        "compare_constants",
+      )
+      let input = builder.add_param(I32)
+      builder.add_result(I32)
+      builder.add_result(I32)
+      let constant = builder.iconst_i32(42)
+      let left = builder.icmp_slt(input, constant)
+      let right = builder.icmp_slt(constant, input)
+      if returned {
+        builder.add_result(I32)
+        builder.return_([left, right, constant])
+      } else {
+        builder.return_([left, right])
+      }
+      let trace = trace_lowering(builder.finalize(), compare_immediates=enabled)
+      inspect(
+        trace.operations.any(op => {
+          op is IntCompareImmediate(SignedLessThan, 42UL)
+        }) ==
+        enabled,
+        content="true",
+      )
+      inspect(
+        trace.operations.any(op => {
+          op is IntCompareImmediate(SignedGreaterThan, 42UL)
+        }) ==
+        enabled,
+        content="true",
+      )
+      inspect(
+        trace.operations.any(op => op is I32Const(42U)) ==
+        (!enabled || returned),
+        content="true",
+      )
+    }
+  }
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("ineligible_constant")
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let constant = builder.iconst_i32(43)
+  builder.return_([builder.icmp_slt(input, constant)])
+  let trace = trace_lowering(builder.finalize(), compare_immediates=true)
+  inspect(trace.operations.any(op => op is I32Const(43U)), content="true")
+  inspect(trace.operations.any(op => op is IntCompare(_)), content="true")
 }

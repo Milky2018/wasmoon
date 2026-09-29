@@ -76,3 +76,37 @@ test "x64 direct selection erases raw-word pointer bitcasts" {
   builder.finish()
   session.finish_selected() |> ignore
 }
+
+///|
+test "x64 explicit immediate comparison retains semantic fallback" {
+  let abi = @x64_target.InternalAbi::new(
+    7,
+    12,
+    [6, 2, 1, 8, 9],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 2, 1, 8, 9, 6, 7, 10],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  )
+
+  let session = @x64_target.DirectLoweringSession::new(
+    "compare_fallback",
+    Internal,
+    [Ptr64, I64],
+    [I32],
+    @x64_target.LoweringContext::new(abi),
+  )
+  let sink = session.sink()
+  inspect(sink.supports_int_compare_immediate(I64, 42UL), content="false")
+  let builder = @lowering.DirectBuilder::new([Ptr64, I64], sink)
+  let result = builder.emit_with_metadata(
+      IntCompareImmediate(Equal, 42UL),
+      [builder.parameters()[1]],
+      [I32],
+      @lowering.InstructionMetadata::empty(),
+    )[0]
+  builder.return_([result])
+  builder.finish()
+  let diagnostics = @x64_target.diagnose_selected(session.finish_selected())
+  inspect(diagnostics.target_vcode.contains("LoadConstant"), content="true")
+  inspect(diagnostics.target_vcode.contains("CompareSet"), content="true")
+}

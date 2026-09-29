@@ -238,3 +238,31 @@ test "direct builder assigns hidden allocation stack maps monotonically" {
   inspect(second_map.id, content="1")
   inspect(second_map.argument_root_count, content="1")
 }
+
+///|
+test "immediate comparison contract requires one integer and boolean result" {
+  for ty in [@native.ValueType::I32, I64] {
+    inspect(
+      verify_operation_contract(IntCompareImmediate(Equal, 42UL), [ty], [I32])
+      is None,
+      content="true",
+    )
+  }
+  let malformed : Array[(Array[@native.ValueType], Array[@native.ValueType])] = [
+    ([F64], [I32]),
+    ([I32, I32], [I32]),
+    ([I64], [I64]),
+    ([], [I32]),
+  ]
+  for (inputs, outputs) in malformed {
+    inspect(
+      verify_operation_contract(
+        IntCompareImmediate(Equal, 42UL),
+        inputs,
+        outputs,
+      )
+      is Some(_),
+      content="true",
+    )
+  }
+}

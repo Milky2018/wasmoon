@@ -415,6 +415,7 @@ pub(all) enum Operation {
   IntHighMultiply(@native.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
+  IntCompareImmediate(IntComparison, UInt64)
   FloatUnary(FloatUnaryOp)
   FloatBinary(FloatBinaryOp)
   FloatTernary(FloatTernaryOp)
@@ -493,6 +494,7 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
+    | IntCompareImmediate(_, _)
     | FloatUnary(_)
     | FloatBinary(_)
     | FloatTernary(_)
@@ -1311,6 +1313,16 @@ pub fn verify_operation_contract(
       }
       None
     }
+    IntCompareImmediate(_, _) => {
+      if operands.length() != 1 ||
+        results != [I32] ||
+        !is_integer_type(operands[0]) {
+        return operation_error(
+          "integer immediate comparison expects one i32 or i64 operand and i32 result",
+        )
+      }
+      None
+    }
     IntCompare(_) => {
       if operands.length() != 2 ||
         results != [I32] ||
@@ -1645,6 +1657,7 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
+    | IntCompareImmediate(_, _)
     | FloatUnary(_)
     | FloatBinary(_)
     | FloatTernary(_)

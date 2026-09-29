@@ -75,3 +75,53 @@ test "JIT: materialized integer constants preserve all bits" {
     }
   }
 }
+
+///|
+test "JIT: immediate comparisons preserve signedness and both operand orders" {
+  for width in ["i32", "i64"] {
+    for constant in ["0", "42", "4095", "4096", "16773120", "4097", "-1"] {
+      let comparisons : Array[String] = []
+      for
+        operation in [
+          "eq", "ne", "lt_s", "le_s", "gt_s", "ge_s", "lt_u", "le_u", "gt_u", "ge_u",
+        ] {
+        comparisons.push(
+          "(\{width}.\{operation} (local.get $x) (\{width}.const \{constant}))",
+        )
+        comparisons.push(
+          "(\{width}.\{operation} (\{width}.const \{constant}) (local.get $x))",
+        )
+      }
+      let results = Array::make(20, "i32").join(" ")
+      let body = comparisons.join("\n")
+      let source = "(module (func (export \"test\") (param $x \{width}) (result \{results}) \{body}))"
+      let inputs : Array[@types.Value] = if width == "i32" {
+        [
+          I32(0),
+          I32(-1),
+          I32(41),
+          I32(42),
+          I32(43),
+          I32(-2147483648),
+          I32(2147483647),
+        ]
+      } else {
+        [
+          I64(0L),
+          I64(-1L),
+          I64(41L),
+          I64(42L),
+          I64(43L),
+          I64(-9223372036854775808L),
+          I64(9223372036854775807L),
+        ]
+      }
+      for input in inputs {
+        inspect(
+          @testsuite.compare_jit_interp(source, "test", [input]),
+          content="matched",
+        )
+      }
+    }
+  }
+}

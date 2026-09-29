@@ -3264,6 +3264,11 @@ fn emit_instruction(
       metadata_offset = buffer.position()
       buffer.emit_word(0xD4200000U | (AARCH64_INTEGER_OVERFLOW_BRK << 5))
     }
+    CompareSetImmediate(width, condition, bits) => {
+      buffer.emit_word(encode_compare_immediate(width, bits, reg(0)))
+      let inverse = condition_code(condition) ^ 1U
+      buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(1)))
+    }
     CompareSet(width, condition) => {
       let compare_base = if width == W32 { 0x6B00001FU } else { 0xEB00001FU }
       buffer.emit_word(

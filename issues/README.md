@@ -623,6 +623,7 @@ graph TD
   ISS_593["ISS-593: Normalize vector AndNot in MilkIR"]
   ISS_594["ISS-594: Select opposite AArch64 arithmetic immediates"]
   ISS_595["ISS-595: Minimize AArch64 constant materialization"]
+  ISS_596["ISS-596: Select immediate comparisons that return booleans"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -1086,6 +1087,7 @@ graph TD
   ISS_553 --> ISS_554
   ISS_575 --> ISS_576
   ISS_582 --> ISS_583
+  ISS_595 --> ISS_596
 ```
 
 ## Warnings

@@ -190,6 +190,32 @@ fn lower_direct_operation(
       ),
     )
   }
+  if operation is IntCompareImmediate(comparison, bits) {
+    guard optional_gpr_width(operand_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    let constant = append_body(
+        builder,
+        block,
+        LoadConstant(width, bits),
+        [],
+        [@vcode.Output::any(operand_types[0])],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_body(
+      builder,
+      block,
+      CompareSet(width, lower_condition(comparison)),
+      [@vcode.Input::any(operands[0]), @vcode.Input::any(constant)],
+      scratch.any_outputs(result_types),
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
   if operation is IntBinaryImmediate(binary, bits) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)

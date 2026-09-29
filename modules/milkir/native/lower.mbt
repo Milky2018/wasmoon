@@ -1174,6 +1174,16 @@ fn lower_scalar_instruction(
   facts : SelectionFacts,
 ) -> Unit raise NativeLowerError {
   match select_scalar_lowering(instruction, facts) {
+    Some(CompareImmediate(input, comparison, bits)) => {
+      let results = builder.emit_with_metadata(
+        IntCompareImmediate(comparison, bits),
+        [demand_value(builder, values, value_types, facts, input)],
+        [I32],
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, results)
+      return
+    }
     Some(IntImmediate(input, operation, bits)) => {
       let lowered_results = builder.emit_with_metadata(
         IntBinaryImmediate(operation, bits),
@@ -1695,6 +1705,7 @@ fn lower_verified_construction(
   let facts = build_selection_facts(
     function,
     sink.folds_unsigned_index_into_memory(),
+    fn(ty, bits) { sink.supports_int_compare_immediate(ty, bits) },
   )
   let gc_roots = if has_gc_references {
     Some(compute_gc_roots(function, cfg))

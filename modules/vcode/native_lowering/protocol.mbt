@@ -120,6 +120,7 @@ pub(all) enum TargetTerminator {
 /// and stack-object requests; `DirectBuilder` is the only component that
 /// exposes typed transient handles to legalization code.
 pub struct TargetSink {
+  priv supports_int_compare_immediate : (@native.ValueType, UInt64) -> Bool
   priv folds_unsigned_index_into_memory : Bool
   priv parameters : () -> Array[Int]
   priv entry_block : () -> Int
@@ -158,8 +159,15 @@ pub fn TargetSink::new(
   terminate : (Int, TargetTerminator, TargetTerminatorMetadata) -> Unit,
   finish : () -> Unit,
   folds_unsigned_index_into_memory? : Bool = false,
+  supports_int_compare_immediate? : (@native.ValueType, UInt64) -> Bool = fn(
+    _,
+    _,
+  ) {
+    false
+  },
 ) -> TargetSink {
   {
+    supports_int_compare_immediate,
     folds_unsigned_index_into_memory,
     parameters,
     entry_block,
@@ -177,6 +185,16 @@ pub fn TargetSink::new(
 /// without materializing a separate extension and address addition.
 pub fn TargetSink::folds_unsigned_index_into_memory(self : TargetSink) -> Bool {
   self.folds_unsigned_index_into_memory
+}
+
+///|
+/// Whether a scalar comparison can consume this constant without materializing it.
+pub fn TargetSink::supports_int_compare_immediate(
+  self : TargetSink,
+  ty : @native.ValueType,
+  bits : UInt64,
+) -> Bool {
+  (self.supports_int_compare_immediate)(ty, bits)
 }
 
 ///|

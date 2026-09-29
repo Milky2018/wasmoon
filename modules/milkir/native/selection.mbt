@@ -14,6 +14,7 @@ priv struct MemoryAddressMatch {
 
 ///|
 priv enum ScalarSelection {
+  CompareImmediate(@milkir.Value, @lowering.IntComparison, UInt64)
   IntImmediate(@milkir.Value, @lowering.IntBinaryOp, UInt64)
   ShiftImmediate(@milkir.Value, @lowering.IntBinaryOp, Int)
   MultiplyAdd(@milkir.Value, @milkir.Value, @milkir.Value)
@@ -28,6 +29,7 @@ priv enum BranchSelection {
 
 ///|
 priv struct SelectionFacts {
+  supports_int_compare_immediate : (@native_types.ValueType, UInt64) -> Bool
   folds_unsigned_index_into_memory : Bool
   uses : Array[Int]
   consumers : Array[Int]
@@ -445,7 +447,25 @@ fn select_right_immediate(
 fn select_scalar_instruction(
   instruction : @milkir.Inst,
   constants : Array[UInt64?],
+  supports_int_compare_immediate : (@native_types.ValueType, UInt64) -> Bool,
 ) -> (ScalarSelection, @milkir.Value)? {
+  if instruction.opcode is Scalar(IntCompare(comparison)) &&
+    binary_operands(instruction) is Some((left, right)) &&
+    left.ty == right.ty &&
+    left.ty is (I32 | I64) {
+    let condition = selection_comparison(comparison)
+    if constants[right.id] is Some(bits) &&
+      supports_int_compare_immediate(lower_type(left.ty), bits) {
+      return Some((CompareImmediate(left, condition, bits), right))
+    }
+    if constants[left.id] is Some(bits) &&
+      supports_int_compare_immediate(lower_type(right.ty), bits) {
+      return Some(
+        (CompareImmediate(right, swapped_comparison(condition), bits), left),
+      )
+    }
+    return None
+  }
   guard instruction.opcode is Scalar(IntBinary(binary)) else { return None }
   guard binary_operands(instruction) is Some((left, right)) else { return None }
   guard instruction.results is [result] &&
@@ -504,6 +524,7 @@ fn selection_tracks_shared_consumers(
 fn build_selection_facts(
   function : @milkir.Function,
   folds_unsigned_index_into_memory : Bool,
+  supports_int_compare_immediate : (@native_types.ValueType, UInt64) -> Bool,
 ) -> SelectionFacts {
   let uses = Array::make(function.next_value_id, 0)
   let consumers = Array::make(function.next_value_id, -2)
@@ -584,6 +605,7 @@ fn build_selection_facts(
     }
   }
   {
+    supports_int_compare_immediate,
     folds_unsigned_index_into_memory,
     uses,
     consumers,
@@ -699,7 +721,11 @@ fn consumer_selects_constant(
   guard consumer_id >= 0 && facts.instructions[consumer_id] is Some(instruction) else {
     return false
   }
-  if select_scalar_instruction(instruction, facts.constants)
+  if select_scalar_instruction(
+      instruction,
+      facts.constants,
+      facts.supports_int_compare_immediate,
+    )
     is Some((_, selected_constant)) &&
     selected_constant == constant {
     return true
@@ -862,7 +888,11 @@ fn select_scalar_lowering(
         }
     }
   }
-  select_scalar_instruction(instruction, facts.constants).map(value => value.0)
+  select_scalar_instruction(
+    instruction,
+    facts.constants,
+    facts.supports_int_compare_immediate,
+  ).map(value => value.0)
 }
 
 ///|
