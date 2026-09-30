@@ -49,4 +49,12 @@ Repair Wasmoon's Darwin trap landing so signal-mask restoration is thread-local.
 
 The original diagnosis commit did not change runtime behavior. The subsequent repair disables Darwin's process-wide jump-mask restoration, saves/restores the invocation's mask via pthread_sigmask, and returns signal handlers through the kernel before jumping from a recovered invocation stack. This preserves alternate-stack bookkeeping without using private Darwin APIs. Linux and Windows retain their existing jump paths.
 
-The deterministic native regression in `native_test_support/trap_test_support.c` fails before the fix and passes after it. It checks a worker's independently blocked SIGUSR2, the caller mask, repeated alternate-stack SIGSEGV recovery and nested activation recovery. The detailed 6,000-process probe run completes without hangs. Core WAST, async-0.3 and the full misc corpus pass locally. ISS-614 remains open until cross-platform CI acceptance.
+The deterministic native regression in `native_test_support/trap_test_support.c` fails before the fix and passes after it. It checks a worker's independently blocked SIGUSR2, the caller mask, repeated alternate-stack SIGSEGV recovery and nested activation recovery. The detailed 6,000-process probe run completes without hangs. Core WAST, async-0.3 and the full misc corpus pass locally. ISS-614 is closed after successful cross-platform CI acceptance.
+
+## Darwin x86_64 follow-up
+
+The updated trap code compiles with strict warnings for Darwin x86_64. An isolated x86_64 build using the installed MoonBit version's scalar runtime (the installed SIMD objects are ARM64-only) runs under Rosetta and passes the new regression, all 191 wasmoon_jit package tests, the 258-file core JIT suite (62,563 assertions), and full JIT misc (346 passes, 36 script-only, no failures/timeouts/deferred cases). The compiler wrapper and results are retained in `fix-validation.json.gz`. This validates the x86_64 recovery path, not production x86_64 toolchain packaging.
+
+## Cross-platform acceptance
+
+[CI run 36663336133](https://github.com/Milky2018/wasmoon/actions/runs/36663336133) passed all five jobs for fix commit `de537e14a9abed5f65570d025b753289b38ce3a8`: macOS ARM64, Linux AMD64, Windows clang, Windows MSVC, and Linux ASan/UBSan. In particular, macOS passed both previously affected external suites and the component gates. The CI metadata is retained in `fix-validation.json.gz`.
