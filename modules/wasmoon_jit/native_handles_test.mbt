@@ -837,3 +837,8 @@ test "global pointer tables snapshot addresses and release both ownership modes"
   context.bind_globals([48L]) |> ignore
   inspect(@native_test_support.context_globals_ownership(), content="1")
 }
+
+///|
+test "trap recovery preserves thread masks and alternate signal stack" {
+  inspect(@native_test_support.trap_signal_masks(), content="1")
+}

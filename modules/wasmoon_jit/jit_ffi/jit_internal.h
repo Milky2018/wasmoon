@@ -111,6 +111,10 @@ static inline int wasmoon_address_sanitizer_active(void) { return 0; }
 
 typedef struct jit_trap_activation {
     sigjmp_buf jmp_buf;
+#ifdef __APPLE__
+    sigset_t signal_mask;
+    uintptr_t signal_landing_sp;
+#endif
     volatile sig_atomic_t active;
     volatile sig_atomic_t code;
     volatile sig_atomic_t signal;

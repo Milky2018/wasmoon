@@ -838,7 +838,20 @@ static int invoke_trampoline_caught(
     int64_t *values_vec,
     int64_t *exception
 ) {
+#ifdef __APPLE__
+    // Darwin siglongjmp with savemask=1 changes every thread's mask.
+    // Capture the recovery stack before entering guest code, including fibers.
+    pthread_sigmask(SIG_SETMASK, NULL, &activation->signal_mask);
+#if defined(__aarch64__)
+    __asm__ volatile("mov %0, sp" : "=r"(activation->signal_landing_sp));
+#elif defined(__x86_64__)
+    __asm__ volatile("movq %%rsp, %0" : "=r"(activation->signal_landing_sp));
+#endif
+    if (sigsetjmp(activation->jmp_buf, 0) != 0) {
+        pthread_sigmask(SIG_SETMASK, &activation->signal_mask, NULL);
+#else
     if (sigsetjmp(activation->jmp_buf, 1) != 0) {
+#endif
 #ifdef _WIN32
         if ((DWORD)activation->signal == EXCEPTION_STACK_OVERFLOW && !_resetstkoflw()) abort();
 #endif

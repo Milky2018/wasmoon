@@ -596,8 +596,35 @@ void jit_trap_activation_finalize(jit_trap_activation_t *activation) {
 }
 
 #ifndef _WIN32
-// Signal handler for SIGTRAP (triggered by BRK instruction)
-// Uses SA_SIGINFO to get ucontext and extract BRK immediate
+#ifdef __APPLE__
+// Entered only after sigreturn has restored the interrupted thread's signal
+// mask and alternate-stack status. No guest stack space is needed to recover.
+_Noreturn static void darwin_trap_landing(void) {
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+#endif
+
+static void finish_trap_signal(void *ucontext) {
+#ifdef __APPLE__
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    ucontext_t *uc = ucontext;
+#if defined(__aarch64__)
+    __darwin_arm_thread_state64_set_pc_fptr(uc->uc_mcontext->__ss, darwin_trap_landing);
+    __darwin_arm_thread_state64_set_sp(uc->uc_mcontext->__ss, activation->signal_landing_sp);
+#elif defined(__x86_64__)
+    // SysV function entry has an eight-byte return address below aligned RSP.
+    uintptr_t sp = activation->signal_landing_sp - sizeof(uintptr_t);
+    *(uintptr_t *)sp = 0;
+    uc->uc_mcontext->__ss.__rsp = sp;
+    uc->uc_mcontext->__ss.__rip = (uintptr_t)darwin_trap_landing;
+#endif
+#else
+    (void)ucontext;
+    siglongjmp(g_trap_jmp_buf, 1);
+#endif
+}
+
+// Signal handler for SIGTRAP (BRK/INT3); SA_SIGINFO supplies the fault context.
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
     (void)info;
 
@@ -711,7 +738,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 
         g_trap_frame_count = 0;
 
-        siglongjmp(g_trap_jmp_buf, 1);
+        finish_trap_signal(ucontext);
+        return;
     }
 }
 
@@ -807,25 +835,29 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             fault >= activation->guard_base &&
             fault < activation->guard_base + activation->guard_size) {
             g_trap_code = 2;
-            siglongjmp(g_trap_jmp_buf, 1);
+            finish_trap_signal(ucontext);
+            return;
         }
 
         // Check for memory guard page access (bounds check elimination)
         // This converts out-of-bounds memory access to a proper trap
         if (ctx && is_memory_guard_page_access(ctx, fault_addr)) {
             g_trap_code = 1;  // out of bounds memory access
-            siglongjmp(g_trap_jmp_buf, 1);
+            finish_trap_signal(ucontext);
+            return;
         }
 
         if (is_stack_overflow(fault_addr)) {
             // Native stack overflow detected for a direct host-stack call.
             g_trap_code = 2;  // call stack exhausted
-            siglongjmp(g_trap_jmp_buf, 1);
+            finish_trap_signal(ucontext);
+            return;
         } else {
             // Could be WASM memory access violation or other error
             // Use unknown trap code since we can't determine the exact cause
             g_trap_code = 99;
-            siglongjmp(g_trap_jmp_buf, 1);
+            finish_trap_signal(ucontext);
+            return;
         }
     }
 

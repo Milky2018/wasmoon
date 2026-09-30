@@ -101,6 +101,8 @@ pub fn sparse_table(Int) -> @jit_ffi.NativeTableHandle
 
 pub fn transfer_cancellation_callback_to_null_context(() -> Bool) -> Unit
 
+pub fn trap_signal_masks() -> Int
+
 pub fn x64_stack_alignment_probe_ptr() -> Int64
 
 // Errors

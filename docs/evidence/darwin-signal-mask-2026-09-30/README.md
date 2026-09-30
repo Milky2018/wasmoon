@@ -2,7 +2,7 @@
 
 ## Finding
 
-Wasmoon's native trap boundary calls `sigsetjmp(activation->jmp_buf, 1)` in `jit_ffi/jit.c`. On Darwin ARM64, the matching `siglongjmp` restores the saved mask through `sigprocmask`. XNU's process-mask implementation updates every thread, overwriting the async signal worker's independently configured mask. This can consume the shutdown wakeup in the ordinary SIGUSR2 handler before the worker enters `sigwait`, leaving the main thread blocked in `pthread_join`.
+At the diagnosed revision, Wasmoon's native trap boundary calls `sigsetjmp(activation->jmp_buf, 1)` in `jit_ffi/jit.c`. On Darwin ARM64, the matching `siglongjmp` restores the saved mask through `sigprocmask`. XNU's process-mask implementation updates every thread, overwriting the async signal worker's independently configured mask. This can consume the shutdown wakeup in the ordinary SIGUSR2 handler before the worker enters `sigwait`, leaving the main thread blocked in `pthread_join`.
 
 This is a native trap / signal-thread integration defect. It predates the function-table and globals RC migrations; neither WAST assertion execution nor compilation is stuck. The earlier characterization as an unexplained timeout was incomplete.
 
@@ -47,4 +47,6 @@ These public source revisions explain the observed behavior; they are not claime
 
 Repair Wasmoon's Darwin trap landing so signal-mask restoration is thread-local. Preserve repeated synchronous traps, alternate-stack state, nested activation boundaries and continuations. Simply changing `sigsetjmp(..., 1)` to zero is insufficient: the current thread's trap signal mask and alternate-stack bookkeeping still need correct restoration. Do not increase runner timeouts or add polling to hide the deadlock. Async can independently harden its pre-wait cancellation check, but that alone does not stop Wasmoon from overwriting other threads' masks.
 
-Runtime behavior is unchanged by this diagnosis commit. ISS-614 remains open for the repair and cross-platform validation.
+The original diagnosis commit did not change runtime behavior. The subsequent repair disables Darwin's process-wide jump-mask restoration, saves/restores the invocation's mask via pthread_sigmask, and returns signal handlers through the kernel before jumping from a recovered invocation stack. This preserves alternate-stack bookkeeping without using private Darwin APIs. Linux and Windows retain their existing jump paths.
+
+The deterministic native regression in `native_test_support/trap_test_support.c` fails before the fix and passes after it. It checks a worker's independently blocked SIGUSR2, the caller mask, repeated alternate-stack SIGSEGV recovery and nested activation recovery. The detailed 6,000-process probe run completes without hangs. Core WAST, async-0.3 and the full misc corpus pass locally. ISS-614 remains open until cross-platform CI acceptance.
