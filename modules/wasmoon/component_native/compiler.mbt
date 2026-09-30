@@ -238,7 +238,9 @@ fn compile_component_artifact(
   )
   let translation_context = @wasm_frontend.translation_context_from_module(
     module_,
-    @wasmoon.wasm_frontend_embedding_environment(),
+    @wasmoon.wasm_frontend_embedding_environment(
+      context_shape=@wasmoon_jit.context_shape(module_),
+    ),
     memory_max_override=actual_memory_max,
   )
   let validation_context = @wasm_frontend.wasm_validation_context(
@@ -260,7 +262,10 @@ fn compile_component_artifact(
     }
   }
   let functions : Array[@artifact.FunctionCode] = []
-  let native_compiler = @wasmoon_jit.NativeCompiler::new(target)
+  let native_compiler = @wasmoon_jit.NativeCompiler::new(
+    target,
+    context_shape=@wasmoon_jit.context_shape(module_),
+  )
   for local_index, code in module_.codes {
     let function_index = imported_function_index + local_index
     let function_type = module_.validated_func_type_at(
@@ -308,6 +313,7 @@ fn compile_component_artifact(
       component_semantic_features(actual_memory_max),
     ),
     policy~,
+    context_shape=@wasmoon_jit.context_shape(module_),
   ) catch {
     error => raise NativeCompilationFailed("artifact manifest failed: \{error}")
   }

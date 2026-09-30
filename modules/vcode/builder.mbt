@@ -276,7 +276,10 @@ fn[Inst] Builder::commit_instruction(
     })
   }
   let clobber_start = self.function.clobbers.length()
-  self.function.clobbers.push_iter(clobbers.iter())
+  // Preserve amortized growth across batches instead of reserving the exact length.
+  for reg in clobbers {
+    self.function.clobbers.push(reg)
+  }
   self.function.instructions.push({
     inst,
     parent: block,
@@ -368,7 +371,10 @@ fn[Inst] Builder::commit_unconstrained_body(
     })
   }
   let clobber_start = self.function.clobbers.length()
-  self.function.clobbers.push_iter(clobbers.iter())
+  // Preserve amortized growth across batches instead of reserving the exact length.
+  for reg in clobbers {
+    self.function.clobbers.push(reg)
+  }
   self.function.instructions.push({
     inst,
     parent: block,

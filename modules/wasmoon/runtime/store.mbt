@@ -270,6 +270,10 @@ pub fn Store::close(self : Store) -> Unit {
   self.native_types.views.clear()
   self.native_types.views.shrink_to_fit()
   self.native_types.entries.clear()
+  if self.native_types.native_registry is Some(registry) {
+    registry.clear()
+    self.native_types.native_registry = None
+  }
   self.native_types.heap_types.clear()
   self.funcs.clear()
   self.funcs.shrink_to_fit()

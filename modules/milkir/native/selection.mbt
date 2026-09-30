@@ -14,6 +14,7 @@ priv struct MemoryAddressMatch {
 
 ///|
 priv enum ScalarSelection {
+  CompareImmediate(@milkir.Value, @lowering.IntComparison, UInt64)
   IntImmediate(@milkir.Value, @lowering.IntBinaryOp, UInt64)
   ShiftImmediate(@milkir.Value, @lowering.IntBinaryOp, Int)
   MultiplyAdd(@milkir.Value, @milkir.Value, @milkir.Value)
@@ -21,13 +22,19 @@ priv enum ScalarSelection {
 }
 
 ///|
-priv enum BranchSelection {
+priv enum ComparisonSelection {
   Compare(@milkir.Value, @milkir.Value, @lowering.IntComparison)
-  CompareImmediate(@milkir.Value, UInt64, @lowering.IntComparison)
+  CompareImmediate(
+    @milkir.Value,
+    @milkir.Value,
+    UInt64,
+    @lowering.IntComparison
+  )
 }
 
 ///|
 priv struct SelectionFacts {
+  supports_int_compare_immediate : (@native_types.ValueType, UInt64) -> Bool
   folds_unsigned_index_into_memory : Bool
   uses : Array[Int]
   consumers : Array[Int]
@@ -445,7 +452,16 @@ fn select_right_immediate(
 fn select_scalar_instruction(
   instruction : @milkir.Inst,
   constants : Array[UInt64?],
+  supports_int_compare_immediate : (@native_types.ValueType, UInt64) -> Bool,
 ) -> (ScalarSelection, @milkir.Value)? {
+  if instruction.opcode is Scalar(IntCompare(_)) {
+    return match
+      select_comparison(instruction, constants, supports_int_compare_immediate) {
+      Some(CompareImmediate(input, constant, bits, condition)) =>
+        Some((CompareImmediate(input, condition, bits), constant))
+      _ => None
+    }
+  }
   guard instruction.opcode is Scalar(IntBinary(binary)) else { return None }
   guard binary_operands(instruction) is Some((left, right)) else { return None }
   guard instruction.results is [result] &&
@@ -486,6 +502,7 @@ fn selection_tracks_shared_consumers(
   match definitions[value.id] {
     Some(definition) =>
       match definition.opcode {
+        Vector(Bitwise(Not)) => true
         Scalar(Convert(Bitcast)) =>
           definition.args is [source] && source.ty == Ptr && value.ty == I64
         Scalar(Convert(UnsignedExtend)) =>
@@ -503,6 +520,7 @@ fn selection_tracks_shared_consumers(
 fn build_selection_facts(
   function : @milkir.Function,
   folds_unsigned_index_into_memory : Bool,
+  supports_int_compare_immediate : (@native_types.ValueType, UInt64) -> Bool,
 ) -> SelectionFacts {
   let uses = Array::make(function.next_value_id, 0)
   let consumers = Array::make(function.next_value_id, -2)
@@ -583,6 +601,7 @@ fn build_selection_facts(
     }
   }
   {
+    supports_int_compare_immediate,
     folds_unsigned_index_into_memory,
     uses,
     consumers,
@@ -698,7 +717,11 @@ fn consumer_selects_constant(
   guard consumer_id >= 0 && facts.instructions[consumer_id] is Some(instruction) else {
     return false
   }
-  if select_scalar_instruction(instruction, facts.constants)
+  if select_scalar_instruction(
+      instruction,
+      facts.constants,
+      facts.supports_int_compare_immediate,
+    )
     is Some((_, selected_constant)) &&
     selected_constant == constant {
     return true
@@ -706,7 +729,8 @@ fn consumer_selects_constant(
   if instruction.opcode is Scalar(IntCompare(_)) &&
     instruction.results is [condition] &&
     facts.consumers[condition.id] == -1 &&
-    select_branch_lowering(condition, facts) is Some(CompareImmediate(_, _, _)) {
+    select_branch_lowering(condition, facts)
+    is Some(CompareImmediate(_, _, _, _)) {
     return true
   }
   selected_by_memory_address_use(constant, instruction, facts)
@@ -750,6 +774,9 @@ fn compute_should_defer_instruction(
   facts : SelectionFacts,
 ) -> Bool {
   guard instruction.results is [result] else { return false }
+  if instruction.opcode is Vector(Bitwise(Not)) {
+    return vector_not_is_fully_selected(result, facts)
+  }
   guard result.ty is (I32 | I64) else { return false }
   if instruction.opcode is Scalar(IntConst(_)) {
     return constant_is_fully_selected(result, facts)
@@ -858,31 +885,49 @@ fn select_scalar_lowering(
         }
     }
   }
-  select_scalar_instruction(instruction, facts.constants).map(value => value.0)
+  select_scalar_instruction(
+    instruction,
+    facts.constants,
+    facts.supports_int_compare_immediate,
+  ).map(value => value.0)
+}
+
+///|
+// Both value and branch consumers share operand matching and condition reversal.
+// Branches retain their existing materialization fallback for any constant;
+// value consumers only absorb constants accepted by the target.
+fn select_comparison(
+  instruction : @milkir.Inst,
+  constants : Array[UInt64?],
+  accepts_immediate : (@native_types.ValueType, UInt64) -> Bool,
+) -> ComparisonSelection? {
+  guard instruction.opcode is Scalar(IntCompare(comparison)) else {
+    return None
+  }
+  guard binary_operands(instruction) is Some((left, right)) else { return None }
+  guard left.ty == right.ty && left.ty is (I32 | I64) else { return None }
+  let condition = selection_comparison(comparison)
+  if constants[right.id] is Some(bits) &&
+    accepts_immediate(lower_type(left.ty), bits) {
+    return Some(CompareImmediate(left, right, bits, condition))
+  }
+  if constants[left.id] is Some(bits) &&
+    accepts_immediate(lower_type(right.ty), bits) {
+    return Some(
+      CompareImmediate(right, left, bits, swapped_comparison(condition)),
+    )
+  }
+  Some(Compare(left, right, condition))
 }
 
 ///|
 fn select_branch_lowering(
   condition : @milkir.Value,
   facts : SelectionFacts,
-) -> BranchSelection? {
+) -> ComparisonSelection? {
   guard facts.uses[condition.id] == 1 else { return None }
   guard facts.definitions[condition.id] is Some(instruction) else {
     return None
   }
-  guard instruction.opcode is Scalar(IntCompare(comparison)) else {
-    return None
-  }
-  guard binary_operands(instruction) is Some((left, right)) else { return None }
-  guard left.ty == right.ty && left.ty is (I32 | I64) else { return None }
-  let lowered = selection_comparison(comparison)
-  match facts.constants[right.id] {
-    Some(bits) => Some(CompareImmediate(left, bits, lowered))
-    None =>
-      match facts.constants[left.id] {
-        Some(bits) =>
-          Some(CompareImmediate(right, bits, swapped_comparison(lowered)))
-        None => Some(Compare(left, right, lowered))
-      }
-  }
+  select_comparison(instruction, facts.constants, fn(_, _) { true })
 }

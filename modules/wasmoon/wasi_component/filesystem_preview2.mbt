@@ -605,7 +605,11 @@ fn descriptor_set_times(
       } else {
         filesystem_error()
       }
-    _ => filesystem_error_code(12)
+    // WIT already validates the timestamp shape; conversion overflow is numeric.
+    _ =>
+      filesystem_error_code(
+        filesystem_error_index(@wasi.Errno::Overflow.to_i32()),
+      )
   }
 }
 
@@ -794,7 +798,12 @@ fn add_descriptor_path_methods(
               }
             }
           }
-        _ => [filesystem_error_code(12)]
+        _ =>
+          [
+            filesystem_error_code(
+              filesystem_error_index(@wasi.Errno::Overflow.to_i32()),
+            ),
+          ]
       }
     },
   )

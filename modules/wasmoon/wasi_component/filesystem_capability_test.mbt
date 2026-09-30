@@ -471,3 +471,88 @@ test "Preview 3 filesystem paths preserve UTF-8 names" {
     }
   }
 }
+
+///|
+// Wasmtime v49.0.1 p2_file_settime_overflow / p3_file_settime_overflow.
+test "upstream timestamp overflow is an error for descriptor and path setters" {
+  for version in ["0.2.11", "0.3.0"] {
+    let root = @test_fs.temp_dir() + "/wasmoon-timestamp-overflow-" + version
+    @wasi.native_unlinkat(0, root + "/file", 0) |> ignore
+    @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+    assert_true(@wasi.native_mkdir(root, 0o700))
+    defer @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+    assert_true(create_capability_file(root + "/file"))
+    defer @wasi.native_unlinkat(0, root + "/file", 0) |> ignore
+    let linker = @runtime_impl.ComponentLinker()
+    let ctx = @wasi_component.WasiComponentCtxBuilder()
+      .preopened_directory(root, "/sandbox", false)
+      .build()
+    defer ctx.close()
+    let host = @wasi_component.WasiComponentHost(linker, ctx)
+    let preview3 = version == "0.3.0"
+    if preview3 {
+      host.add_preview3_filesystem()
+    } else {
+      host.add_preview2_filesystem()
+    }
+    guard linker.get_import("wasi:filesystem/preopens@" + version)
+      is Some(Instance(preopens)) &&
+      preopens.call_exported_func("get-directories", [])
+      is [List([Tuple([U32(directory), _])])] &&
+      linker.get_import("wasi:filesystem/types@" + version)
+      is Some(Instance(filesystem)) else {
+      fail("filesystem interfaces were not registered")
+    }
+    guard filesystem.call_exported_func("[method]descriptor.open-at", [
+        U32(directory),
+        U32(0),
+        String("file"),
+        U32(0),
+        U32(3),
+      ])
+      is [Variant(0, Some(U32(file)))] else {
+      fail("test file did not open")
+    }
+    let seconds : @runtime_impl.ComponentValue = if preview3 {
+      S64(9_223_372_036_854_775_807L)
+    } else {
+      U64(-1L)
+    }
+    let zero : @runtime_impl.ComponentValue = if preview3 {
+      S64(0L)
+    } else {
+      U64(0L)
+    }
+    let normal : @runtime_impl.ComponentValue = Variant(
+      2,
+      Some(Tuple([zero, U32(0)])),
+    )
+    let overflow : @runtime_impl.ComponentValue = Variant(
+      2,
+      Some(Tuple([seconds, U32(1_000_000_000)])),
+    )
+    let expected : Array[@runtime_impl.ComponentValue] = [
+      Variant(1, Some(Variant(if preview3 { 29 } else { 30 }, None))),
+    ]
+    for times in [(overflow, normal), (normal, overflow)] {
+      assert_eq(
+        filesystem.call_exported_func("[method]descriptor.set-times", [
+          U32(file),
+          times.0,
+          times.1,
+        ]),
+        expected,
+      )
+      assert_eq(
+        filesystem.call_exported_func("[method]descriptor.set-times-at", [
+          U32(directory),
+          U32(0),
+          String("file"),
+          times.0,
+          times.1,
+        ]),
+        expected,
+      )
+    }
+  }
+}

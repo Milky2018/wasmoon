@@ -331,6 +331,20 @@ async fn main {
       return
     }
   }
+  let uses_http = match matches.subcommand {
+    Some(("serve", _)) => true
+    Some(("component", sub)) =>
+      sub.flags.get("run") is Some(true) && sub.flags.get("http") is Some(true)
+    _ => false
+  }
+  if uses_http {
+    @async_native.install_event_loop() catch {
+      error => {
+        @logger.error("Failed to initialize host event loop: \{error}")
+        @sys.exit(1)
+      }
+    }
+  }
   // The CLI owns stdin for the duration of guest execution. Embedders retain
   // shared-input behavior unless they explicitly claim exclusive consumption.
   let exclusive_input = match matches.subcommand {

@@ -106,6 +106,16 @@ def main():
                                     "exit": result.returncode, "diagnostic": diagnostic})
             (isolated / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
         raise
+    # Exercise the real async foreign-thread wakeup and orderly termination.
+    event_loop_fixture = sources / "wasmoon/testsuite/native_event_loop"
+    with (event_loop_fixture / "moon.pkg").open("a") as config:
+        config.write('\noptions(link: { "native": { "cc": "clang", '
+                     '"cc-flags": "-fsanitize=address,undefined -fno-sanitize-recover=all '
+                     '-fno-omit-frame-pointer", '
+                     '"cc-link-flags": "-fsanitize=address,undefined" } })\n')
+    run(["moon", "run", str(event_loop_fixture), "--target", "native",
+         "--target-dir", str(OUT / "build")],
+        log=OUT / "event-loop.log", env=environment)
     executables = list((OUT / "build").rglob("*.blackbox_test.exe"))
     if not executables:
         raise RuntimeError("No instrumented test executable found")
@@ -140,7 +150,7 @@ def main():
         "source_dirty": bool(subprocess.check_output(
             ["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
         "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-        "tests": "passed", "asan_probe": "detected", "native_asan_probe": "detected",
+        "tests": "passed", "event_loop": "passed", "asan_probe": "detected", "native_asan_probe": "detected",
         "binary": str(binary), "instrumentation": ["address", "undefined"], "allocator": "system",
         "exclusions": ["MoonBit runtime objects", "JIT machine code"],
     }, indent=2) + "\n")

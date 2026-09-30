@@ -235,6 +235,7 @@ pub(all) enum AArch64Inst {
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, AArch64Condition)
+  CompareSetImmediate(GprWidth, AArch64Condition, UInt64)
   ReferenceCompareSet(@native.ValueType, AArch64Condition)
   FloatUnary(@native.ValueType, AArch64FloatUnary)
   FloatBinary(@native.ValueType, AArch64FloatBinary)
@@ -1457,6 +1458,22 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [ty, ty], [], false, 0)
+      }
+      CompareSetImmediate(width, _, bits) => {
+        if add_sub_immediate_shift(bits) is None {
+          raise InvalidInstruction(
+            instruction~,
+            message="comparison immediate cannot be encoded",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [integer_type(width)],
+          [I32],
+          false,
+          0,
+        )
       }
       CompareSet(width, _) => {
         let ty = integer_type(width)

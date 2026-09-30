@@ -675,7 +675,7 @@ fn step_task_once_impl(
 }
 
 ///|
-fn progress_one_subtask_nonblocking(
+pub fn progress_one_subtask_nonblocking(
   async_state : AsyncState,
   store : @runtime.Store,
 ) -> Bool raise ComponentRuntimeError {

@@ -996,3 +996,42 @@ test "Preview 3 socket buffer sizes use application units" {
     }
   }
 }
+
+///|
+// Mirrors the write-permit violation in Wasmtime v49.0.1's HTTP regression
+// against the shared Preview 2 stream contract; this is not a P2 HTTP guest.
+test "upstream output stream over-permit write traps before host delivery" {
+  let output : Array[Bytes] = []
+  let linker = @runtime_impl.ComponentLinker()
+  let ctx = @wasi_component.WasiComponentCtxBuilder()
+    .stdout(fn(bytes) { output.push(bytes) })
+    .build()
+  defer ctx.close()
+  @wasi_component.WasiComponentHost(linker, ctx).add_preview2_io()
+  guard linker.get_import("wasi:cli/stdout@0.2.11") is Some(Instance(stdout)) &&
+    stdout.call_exported_func("get-stdout", []) is [U32(handle)] &&
+    linker.get_import("wasi:io/streams@0.2.11") is Some(Instance(streams)) else {
+    fail("output stream interfaces were not registered")
+  }
+  guard streams.call_exported_func("[method]output-stream.check-write", [
+      U32(handle),
+    ])
+    is [Variant(0, Some(U64(permitted)))] else {
+    fail("output stream did not grant a write permit")
+  }
+  try
+    streams.call_exported_func("[method]output-stream.write", [
+      U32(handle),
+      List(Array::make(permitted.to_int() + 1, U8(0))),
+    ])
+  catch {
+    error =>
+      debug_inspect(
+        error,
+        content="HostCallError(\"write exceeds check-write permit\")",
+      )
+  } noraise {
+    _ => fail("writing more than permitted must trap")
+  }
+  assert_true(output.is_empty())
+}

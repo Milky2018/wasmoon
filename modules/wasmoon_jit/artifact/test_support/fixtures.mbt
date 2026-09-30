@@ -3,6 +3,7 @@ pub fn loader_artifact() -> @artifact.Artifact {
   let source = @native.SourceLocation::new("answer.wasm", 12, 4)
   {
     manifest: {
+      context_shape: Legacy,
       format_version: @artifact.FORMAT_VERSION,
       target: {
         architecture: AArch64,
@@ -81,6 +82,7 @@ pub fn loader_compatibility(
     codegen_revision: artifact.manifest.codegen_revision,
     module_identity: artifact.manifest.module_identity,
     policy: artifact.manifest.policy,
+    context_shape: artifact.manifest.context_shape,
     runtime_symbols: [],
     data_symbols: [],
   }

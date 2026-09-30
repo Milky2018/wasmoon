@@ -1,6 +1,7 @@
 ///|
 priv struct LoweringTrace {
   operations : Array[@lowering.Operation]
+  operands : Array[Array[Int]]
   operation_blocks : Array[Int]
   terminators : Array[@lowering.TargetTerminator]
 }
@@ -9,7 +10,9 @@ priv struct LoweringTrace {
 fn trace_lowering(
   function : @milkir.Function,
   folds_unsigned_index_into_memory? : Bool = false,
+  compare_immediates? : Bool = false,
 ) -> LoweringTrace raise {
+  let operands : Array[Array[Int]] = []
   let operations : Array[@lowering.Operation] = []
   let operation_blocks : Array[Int] = []
   let terminators : Array[@lowering.TargetTerminator] = []
@@ -32,7 +35,8 @@ fn trace_lowering(
     },
     fn(_, _) { 0 },
     fn(_) { () },
-    fn(block, operation, _, result_types, _, _, _) {
+    fn(block, operation, arguments, result_types, _, _, _) {
+      operands.push(arguments)
       operation_blocks.push(block)
       operations.push(operation)
       fresh_values(result_types.length())
@@ -40,9 +44,12 @@ fn trace_lowering(
     fn(_, terminator, _) { terminators.push(terminator) },
     fn() { () },
     folds_unsigned_index_into_memory~,
+    supports_int_compare_immediate=fn(_, bits) {
+      compare_immediates && bits == 42UL
+    },
   )
   lower_core_to_sink(function, sink, verify_input=false)
-  { operations, operation_blocks, terminators, }
+  { operations, operands, operation_blocks, terminators, }
 }
 
 ///|
@@ -398,4 +405,190 @@ test "native demand selection keeps shared addresses in their dominator" {
     .length(),
     content="2",
   )
+}
+
+///|
+test "native vector and-not selection preserves operand order in both canonical forms" {
+  for commuted in [false, true] {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder("andnot")
+    let a = builder.add_param(V128)
+    let b = builder.add_param(V128)
+    builder.add_result(V128)
+    let negated = builder.v128_not(b)
+    let result = if commuted {
+      builder.v128_and(negated, a)
+    } else {
+      builder.v128_and(a, negated)
+    }
+    builder.return_([result])
+    let function = builder.finalize()
+    function.verify()
+    let trace = trace_lowering(function)
+    debug_inspect(trace.operations, content="[Vector(Bitwise(AndNot))]")
+    debug_inspect(trace.operands, content="[[0, 1]]")
+  }
+}
+
+///|
+test "native vector and-not selection absorbs shared negations only when fully consumed" {
+  for returned in [false, true] {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder("shared_not")
+    let a = builder.add_param(V128)
+    let b = builder.add_param(V128)
+    let c = builder.add_param(V128)
+    builder.add_result(V128)
+    builder.add_result(V128)
+    let negated = builder.v128_not(b)
+    let first = builder.v128_and(a, negated)
+    let second = builder.v128_and(negated, c)
+    let results = [first, second]
+    if returned {
+      builder.add_result(V128)
+      results.push(negated)
+    }
+    builder.return_(results)
+    let trace = trace_lowering(builder.finalize())
+    inspect(
+      trace.operations.filter(op => op is Vector(Bitwise(AndNot))).length(),
+      content=if returned { "0" } else { "2" },
+    )
+    inspect(
+      trace.operations.filter(op => op is Vector(Bitwise(Not))).length(),
+      content=if returned { "1" } else { "0" },
+    )
+    let selected = []
+    for i, op in trace.operations {
+      if op is Vector(Bitwise(AndNot)) {
+        selected.push(trace.operands[i])
+      }
+    }
+    if returned {
+      debug_inspect(
+        trace.operations,
+        content="[Vector(Bitwise(Not)), Vector(Bitwise(And)), Vector(Bitwise(And))]",
+      )
+      debug_inspect(trace.operands, content="[[1], [0, 3], [3, 2]]")
+    } else {
+      debug_inspect(selected, content="[[0, 1], [2, 1]]")
+    }
+  }
+}
+
+///|
+test "native vector and-not selection retains the other negation and identical operands" {
+  for identical in [false, true] {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder("two_nots")
+    let a = builder.add_param(V128)
+    let b = builder.add_param(V128)
+    builder.add_result(V128)
+    let left = builder.v128_not(a)
+    let right = if identical { left } else { builder.v128_not(b) }
+    builder.return_([builder.v128_and(left, right)])
+    let trace = trace_lowering(builder.finalize())
+    inspect(
+      trace.operations.filter(op => op is Vector(Bitwise(Not))).length(),
+      content="1",
+    )
+    if identical {
+      debug_inspect(
+        trace.operations,
+        content="[Vector(Bitwise(Not)), Vector(Bitwise(And))]",
+      )
+      debug_inspect(trace.operands, content="[[0], [2, 2]]")
+    } else {
+      debug_inspect(
+        trace.operations,
+        content="[Vector(Bitwise(Not)), Vector(Bitwise(AndNot))]",
+      )
+      debug_inspect(trace.operands, content="[[0], [2, 1]]")
+    }
+  }
+}
+
+///|
+test "native comparison selection respects target eligibility and shared constants" {
+  for enabled in [false, true] {
+    for returned in [false, true] {
+      let builder = @milkir.FunctionBuilder::FunctionBuilder(
+        "compare_constants",
+      )
+      let input = builder.add_param(I32)
+      builder.add_result(I32)
+      builder.add_result(I32)
+      let constant = builder.iconst_i32(42)
+      let left = builder.icmp_slt(input, constant)
+      let right = builder.icmp_slt(constant, input)
+      if returned {
+        builder.add_result(I32)
+        builder.return_([left, right, constant])
+      } else {
+        builder.return_([left, right])
+      }
+      let trace = trace_lowering(builder.finalize(), compare_immediates=enabled)
+      inspect(
+        trace.operations.any(op => {
+          op is IntCompareImmediate(SignedLessThan, 42UL)
+        }) ==
+        enabled,
+        content="true",
+      )
+      inspect(
+        trace.operations.any(op => {
+          op is IntCompareImmediate(SignedGreaterThan, 42UL)
+        }) ==
+        enabled,
+        content="true",
+      )
+      inspect(
+        trace.operations.any(op => op is I32Const(42U)) ==
+        (!enabled || returned),
+        content="true",
+      )
+    }
+  }
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("ineligible_constant")
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let constant = builder.iconst_i32(43)
+  builder.return_([builder.icmp_slt(input, constant)])
+  let trace = trace_lowering(builder.finalize(), compare_immediates=true)
+  inspect(trace.operations.any(op => op is I32Const(43U)), content="true")
+  inspect(trace.operations.any(op => op is IntCompare(_)), content="true")
+}
+
+///|
+test "branch comparison sharing preserves constant-left fallback" {
+  for enabled in [false, true] {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder(
+      "branch_constant_left",
+    )
+    let input = builder.add_param(I64)
+    builder.add_result(I64)
+    let constant = builder.iconst_i64(4097L)
+    let condition = builder.icmp_slt(constant, input)
+    let yes = builder.create_block()
+    let no = builder.create_block()
+    builder.brnz(condition, yes, no)
+    builder.switch_to_block(yes)
+    builder.return_([constant])
+    builder.switch_to_block(no)
+    builder.return_([input])
+    let trace = trace_lowering(builder.finalize(), compare_immediates=enabled)
+    inspect(
+      trace.terminators.any(t => {
+        t is BranchIntCompareImmediate(SignedGreaterThan, _, 4097UL, _, _, _, _)
+      }),
+      content="true",
+    )
+    inspect(
+      trace.operations.filter(op => op is I64Const(4097UL)).length(),
+      content="1",
+    )
+    inspect(
+      trace.operations.any(op => {
+        op is (IntCompare(_) | IntCompareImmediate(_, _))
+      }),
+      content="false",
+    )
+  }
 }

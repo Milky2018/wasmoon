@@ -29,6 +29,7 @@
 
 #include "moonbit.h"
 #include "jit_ffi.h"
+#include "jit_context.h"
 #include "windows_context.h"
 #include "fiber_protocol.h"
 #include "gc_heap.h"
@@ -110,6 +111,10 @@ static inline int wasmoon_address_sanitizer_active(void) { return 0; }
 
 typedef struct jit_trap_activation {
     sigjmp_buf jmp_buf;
+#ifdef __APPLE__
+    sigset_t signal_mask;
+    uintptr_t signal_landing_sp;
+#endif
     volatile sig_atomic_t active;
     volatile sig_atomic_t code;
     volatile sig_atomic_t signal;
@@ -139,19 +144,14 @@ typedef struct jit_trap_activation {
     volatile uintptr_t frames_fp[MAX_TRAP_FRAMES];
     volatile int frame_count;
     jit_context_t *context;
-    jit_context_t *control_context;
+    jit_invocation_controls_t owned_controls;
+    jit_invocation_controls_t *controls;
     int inherit_controls;
     struct jit_trap_activation *previous;
-    void *exception_handler;
-    int32_t exception_tag;
-    int64_t exception_ref;
-    int64_t *exception_values;
-    int32_t exception_value_count;
-    int64_t *spilled_locals;
-    int32_t spilled_locals_count;
-    wasmoon_gc_frame_t *gc_frame_chain_head;
-    wasmoon_gc_root_scope_t *gc_root_scope_head;
+    jit_execution_state_t execution;
+    jit_execution_state_t *previous_execution;
     int32_t debug_current_func_idx;
+    int32_t previous_debug_func_idx;
     int context_detached;
 } jit_trap_activation_t;
 
@@ -220,7 +220,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value);
 #define WASMOON_FIBER_EVENT_ATOMIC_WAIT INT64_C(0x57534d5355535003)
 
 int wasmoon_jit_cancellation_requested(jit_context_t *ctx);
-jit_context_t *jit_execution_control_context(jit_context_t *ctx);
+jit_invocation_controls_t *jit_execution_controls(jit_context_t *ctx);
 int wasmoon_native_fiber_own_waiter(void *waiter);
 void wasmoon_native_fiber_release_waiter(void);
 MOONBIT_FFI_EXPORT void *wasmoon_atomic_wait_begin(wasmoon_memory_t *, int64_t, int32_t, int64_t, int64_t);
@@ -239,7 +239,11 @@ int exec_block_count_internal(void);
 // ============ JIT Context (jit_context.c) ============
 
 // Context allocation/free (internal implementations)
+void ctx_clear_segments_internal(jit_context_t *ctx);
 jit_context_t *alloc_context_internal(int func_count);
+// Consumes the supplied MoonBit external-pointer array, including on failure.
+jit_context_t *alloc_context_with_functions(void **functions);
+jit_context_t *alloc_context_with_layout(void **functions, uint8_t *layout);
 void free_context_internal(jit_context_t *ctx);
 void ctx_refresh_memory0_fast_fields(jit_context_t *ctx);
 
@@ -279,11 +283,11 @@ void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size);
 MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_native_table_empty(void);
 
 // GC heap management
+void ctx_set_globals_internal(jit_context_t *ctx, void *globals, int managed);
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
 void ctx_gc_end_frame_internal(jit_context_t *ctx);
-void ctx_gc_clear_frames_internal(jit_context_t *ctx);
 int32_t ctx_gc_push_root_scope_internal(
     jit_context_t *ctx,
     const int64_t *roots,
@@ -342,7 +346,7 @@ int32_t gc_collect_for_alloc_internal(
 #define GC_KIND_ARRAY  2
 
 // Type cache layout (per type) used by JIT libcalls.
-// Keep this in sync with `jit/gc_helpers.mbt` (setup_type_cache_from_types).
+// Keep this in sync with `gc_helpers.mbt` (gc_type_data).
 #define GC_TYPE_CACHE_STRIDE 6
 #define GC_TYPE_SUPER_IDX_OFF 0
 #define GC_TYPE_KIND_OFF 1
@@ -396,7 +400,6 @@ int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
 int32_t exception_get_value_count_impl(jit_context_t *ctx);
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count);
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);
-void exception_reset_context_state(jit_context_t *ctx);
 
 // Get the context owned by the current trap activation.
 jit_context_t *get_current_jit_context(void);

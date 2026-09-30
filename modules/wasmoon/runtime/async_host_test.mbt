@@ -45,9 +45,7 @@ async test "cancelled async host results cannot retain GC roots" {
   let caller = @runtime.Caller(store, ModuleInstance())
   @runtime.with_async_host_call_driver(async fn(driver) {
     let host : @runtime.AsyncHostFunction = async fn(_caller, _args) {
-      @async.sleep(1000) catch {
-        _ => ()
-      }
+      @async.protect_from_cancel(async fn() { @async.sleep(0) })
       Ok([StructRef(reference)])
     }
     guard driver.poll(0, host, caller, []) is AsyncHostPending else {

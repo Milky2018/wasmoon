@@ -121,12 +121,21 @@ test "artifact producer preserves symbolic imported and internal code targets" {
     data_symbols=[],
   )
   let loaded = verify_artifact(artifact, compatibility)
+  let first = NativeJITContext::try_alloc(3).unwrap()
+  let second = NativeJITContext::try_alloc(3).unwrap()
+  assert_true(loaded.bind_safepoints(first))
+  assert_true(loaded.bind_safepoints(second))
+  inspect(
+    @native_test_support.safepoints_shared(first.handle, second.handle),
+    content="1",
+  )
+
   debug_inspect(
     loaded.artifact(),
     content=(
       #|{
       #|  manifest: {
-      #|    format_version: 10,
+      #|    format_version: 11,
       #|    target: {
       #|      architecture: X64,
       #|      operating_system_abi: MacOS,
@@ -134,8 +143,8 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|      pointer_width: Bits64,
       #|    },
       #|    required_cpu_features: [],
-      #|    jit_abi_version: 6,
-      #|    codegen_revision: "direct-vcode-8",
+      #|    jit_abi_version: 7,
+      #|    codegen_revision: "direct-vcode-9",
       #|    module_identity: {
       #|      name: "artifact-producer",
       #|      source_digest: sha256:211dcf04280f2ac1d686baab63a361ea45dd13543dac493b14e3af963860a86c,
@@ -149,6 +158,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|      cancellation_safepoints: true,
       #|      debug_info: false,
       #|    },
+      #|    context_shape: Legacy,
       #|  },
       #|  imports: [
       #|    {
@@ -211,7 +221,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       External(symbol) if symbol.name == "wasm.func.0" => Some(42L)
       _ => None
     }
-  }).install(loaded)
+  }).install(loaded.verified())
   defer installed.release()
   debug_inspect(installed.entry_address(0), content="Some(42)")
 }

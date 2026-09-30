@@ -18,6 +18,8 @@ pub fn memory_descriptor_grow(
 }
 
 ///|
+/// Return 0 on success, -1 for an invalid descriptor, memory range or destination
+/// buffer length. Rejected operations leave the destination unchanged.
 #borrow(out)
 pub fn memory_descriptor_read(
   mem_desc_ptr : MemoryDescriptor,
@@ -25,10 +27,15 @@ pub fn memory_descriptor_read(
   out : FixedArray[Byte],
   size : Int,
 ) -> Int {
+  if size < 0 || size > out.length() {
+    return -1
+  }
   c_mem_desc_read(mem_desc_ptr, offset, out, size)
 }
 
 ///|
+/// Return 0 on success, -1 for an invalid descriptor, memory range or source
+/// buffer length. Rejected operations leave the destination unchanged.
 #borrow(data)
 pub fn memory_descriptor_write(
   mem_desc_ptr : MemoryDescriptor,
@@ -36,10 +43,17 @@ pub fn memory_descriptor_write(
   data : FixedArray[Byte],
   size : Int,
 ) -> Int {
+  if size < 0 || size > data.length() {
+    return -1
+  }
   c_mem_desc_write(mem_desc_ptr, offset, data, size)
 }
 
 ///|
+/// Return 0 on success, -1 for an invalid descriptor, memory range or source
+/// buffer length. Rejected operations leave the destination unchanged.
+/// Return 0 on success, -1 for an invalid descriptor, memory range or source
+/// buffer length. Rejected operations leave the destination unchanged.
 #borrow(data)
 pub fn memory_descriptor_write_bytes(
   mem_desc_ptr : MemoryDescriptor,
@@ -47,6 +61,9 @@ pub fn memory_descriptor_write_bytes(
   data : Bytes,
   size : Int,
 ) -> Int {
+  if size < 0 || size > data.length() {
+    return -1
+  }
   c_mem_desc_write_bytes(mem_desc_ptr, offset, data, size)
 }
 
@@ -231,7 +248,9 @@ pub fn MemoryInfo::MemoryInfo(
 }
 
 ///|
-/// Allocate linear memory for WASM (returns 0 on failure).
+/// Allocate unmanaged storage for native ABI fixtures (returns 0 on failure).
+/// The caller owns its bounds and must free it exactly once. Use descriptors
+/// for linear-memory access through checked operations.
 pub fn alloc_memory(size : Int64) -> Int64 {
   c_jit_alloc_memory(size)
 }
@@ -285,36 +304,10 @@ pub fn alloc_guarded_memory_desc(
 }
 
 ///|
+/// Release an unmanaged allocation returned by alloc_memory. The caller must
+/// ensure no aliases remain and must not pass a descriptor backing address.
 pub fn free_memory(mem_ptr : Int64) -> Unit {
   c_jit_free_memory(mem_ptr)
-}
-
-///|
-/// Initialize memory with data at offset.
-pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
-  let size = data.length()
-  if size == 0 {
-    return true
-  }
-  c_jit_memory_init_bytes(mem_ptr, offset, data, size) == 0
-}
-
-///|
-/// Read `size` bytes from linear memory at offset.
-pub fn memory_read(mem_ptr : Int64, offset : Int64, size : Int) -> Bytes {
-  if mem_ptr == 0L || size <= 0 {
-    return b""
-  }
-  let out = FixedArray::make(size, b'\x00')
-  let rc = c_jit_memory_read(mem_ptr, offset, out, size)
-  if rc != 0 {
-    return b""
-  }
-  let arr : Array[Byte] = Array::make(size, b'\x00')
-  for i in 0..<size {
-    arr[i] = out[i]
-  }
-  Bytes::from_array(arr)
 }
 
 ///|
@@ -435,8 +428,21 @@ pub fn JITTable::get_max(self : JITTable) -> Int64? {
 
 ///|
 /// Copy checked byte ranges between live memory descriptors.
+pub fn memory_descriptor_copy(
+  destination_memory : MemoryDescriptor,
+  destination : Int64,
+  source_memory : MemoryDescriptor,
+  source : Int64,
+  length : Int64,
+) -> Int {
+  c_memory_descriptor_copy(
+    destination_memory, destination, source_memory, source, length,
+  )
+}
+
+///|
 #borrow(destination_memory, source_memory)
-pub extern "c" fn memory_descriptor_copy(
+extern "c" fn c_memory_descriptor_copy(
   destination_memory : MemoryDescriptor,
   destination : Int64,
   source_memory : MemoryDescriptor,
@@ -446,8 +452,18 @@ pub extern "c" fn memory_descriptor_copy(
 
 ///|
 /// Fill a checked byte range of a live memory descriptor.
+pub fn memory_descriptor_fill64(
+  memory : MemoryDescriptor,
+  destination : Int64,
+  value : Int,
+  length : Int64,
+) -> Int {
+  c_memory_descriptor_fill64(memory, destination, value, length)
+}
+
+///|
 #borrow(memory)
-pub extern "c" fn memory_descriptor_fill64(
+extern "c" fn c_memory_descriptor_fill64(
   memory : MemoryDescriptor,
   destination : Int64,
   value : Int,

@@ -324,6 +324,8 @@ pub fn run_wasm(
   enable_dwarf : Bool,
   readonly_dirs? : Array[String] = [],
 ) -> Int {
+  let run_metrics = begin_run_metrics()
+  defer finish_run_metrics(run_metrics)
   if debug {
     @logger.enable_debug()
   }
@@ -471,6 +473,7 @@ pub fn run_wasm(
       }
     }
   }
+  record_run_phase(run_metrics, "host_setup_and_preloads")
   // Load main module
   let (mod_, wasm_binary) = load_module_with_binary_from_path(wasm_path) catch {
     e => {
@@ -481,12 +484,14 @@ pub fn run_wasm(
   @logger.debug(
     "Module loaded: \{mod_.codes.length()} functions, \{mod_.imports.length()} imports",
   )
+  record_run_phase(run_metrics, "read_and_parse")
   validate_module_for_execution(mod_) catch {
     e => {
       @logger.error("validating main module: \{e}")
       return 1
     }
   }
+  record_run_phase(run_metrics, "validate")
   // Instantiate the main module
   // Note: instantiate_module_with_imports already handles:
   // - Data segment initialization
@@ -508,6 +513,7 @@ pub fn run_wasm(
   if wasi_ctx.get_exit_code() is Some(status) {
     return status
   }
+  record_run_phase(run_metrics, "instantiate_including_start")
   @logger.debug("Module instantiated successfully")
   // Determine which function to call
   let func_name = match invoke {
@@ -567,7 +573,7 @@ pub fn run_wasm(
       // JIT execution path
       let jit_results = run_with_jit(
         mod_, instance, store, func_name, args, debug, dump_on_trap, wasm_binary,
-        opt_level, enable_dwarf,
+        opt_level, enable_dwarf, run_metrics,
       ) catch {
         CommandFailure(status) => return status
       }
@@ -833,7 +839,7 @@ fn run_jit_cache_location() -> RunJitCacheLocation? {
 }
 
 ///|
-let run_jit_cache_version = "v10"
+let run_jit_cache_version = "v11"
 
 ///|
 fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
@@ -922,6 +928,7 @@ fn build_jit_artifact_manifest(
   )
   @wasmoon_jit.build_host_artifact_manifest(
     module_identity=identity,
+    context_shape=@wasmoon_jit.context_shape(mod_),
     policy=jit_artifact_policy(
       opt_level,
       enable_cancellation,
@@ -943,7 +950,7 @@ fn jit_artifact_compatibility(
 }
 
 ///|
-/// Verify a freshly compiled v10 artifact before executable installation.
+/// Verify a freshly compiled v11 artifact before executable installation.
 pub fn verify_compiled_jit_artifact(
   artifact : @artifact.Artifact,
 ) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError {
@@ -1245,6 +1252,7 @@ fn run_with_jit(
   wasm_binary : Bytes?,
   opt_level : Int,
   enable_dwarf : Bool,
+  run_metrics : RunMetrics?,
 ) -> Array[@types.Value] raise CommandFailure {
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
@@ -1297,7 +1305,8 @@ fn run_with_jit(
       None => ()
     }
   }
-  // Compile and verify the same v10 artifact shape used by persisted cache hits.
+  record_run_phase(run_metrics, "jit_plan_and_cache_lookup")
+  // Compile and verify the same v11 artifact shape used by persisted cache hits.
   let compiled = match cached_artifact {
     Some(loaded) => Some((loaded, None, None))
     None => {
@@ -1322,6 +1331,7 @@ fn run_with_jit(
           None
         },
       )
+      record_run_phase(run_metrics, "compile")
       if fresh is None && failure.val is Some(message) {
         @logger.error("JIT compilation failed: \{message}")
         raise CommandFailure(1)
@@ -1342,6 +1352,7 @@ fn run_with_jit(
       }
     }
   }
+  record_run_phase(run_metrics, "artifact_verify")
   match compiled {
     None => {
       @logger.error("JIT compilation failed")
@@ -1364,6 +1375,7 @@ fn run_with_jit(
         }
       }
       report_run_jit_cache(fresh_artifact is Some(_), cache_write_succeeded)
+      record_run_phase(run_metrics, "cache_write_and_report")
       // Build func_signatures array for JITModule::load
       let func_signatures = build_jit_func_signatures(mod_)
       let external_imports = @wast.build_external_imports_for_jit(
@@ -1478,7 +1490,13 @@ fn run_with_jit(
                 }
                 None => ()
               }
-              let results = jm.call_with_context(f, i64_args) catch {
+              record_run_phase(run_metrics, "jit_load_and_prepare")
+              let results = try {
+                defer record_run_phase(
+                  run_metrics, "invoke_including_hostcalls",
+                )
+                jm.call_with_context(f, i64_args)
+              } catch {
                 JITExit(code) => {
                   jm.teardown_gc()
 
@@ -1577,7 +1595,7 @@ fn module_indirect_subtype_check_reason(mod_ : @types.Module) -> String? {
 }
 
 ///|
-/// Compile module bytes into a v10 JIT artifact and emit structured progress.
+/// Compile module bytes into a v11 JIT artifact and emit structured progress.
 pub fn compile_module(
   module_bytes : Bytes,
   opt_level? : Int = 2,
@@ -1667,7 +1685,7 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-/// Compile a WASM module to a v10 JIT artifact in memory.
+/// Compile a WASM module to a v11 JIT artifact in memory.
 ///
 /// Decoded modules are untrusted at this public seam and are fully validated
 /// before frontend translation. `actual_memory_max` overrides the memory limit
@@ -1830,6 +1848,7 @@ fn compile_validated_module_to_jit(
     mod_,
     @wasmoon.wasm_frontend_embedding_environment(
       cancellation_safepoints=enable_cancellation,
+      context_shape=@wasmoon_jit.context_shape(mod_),
     ),
     memory_max_override=actual_memory_max,
   )
@@ -1861,7 +1880,10 @@ fn compile_validated_module_to_jit(
   }
   let imports : Array[@artifact.ImportIdentity] = []
   let functions : Array[@artifact.FunctionCode] = []
-  let native_compiler = @wasmoon_jit.NativeCompiler::new(native_target)
+  let native_compiler = @wasmoon_jit.NativeCompiler::new(
+    native_target,
+    context_shape=@wasmoon_jit.context_shape(mod_),
+  )
   let mut import_func_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {

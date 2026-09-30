@@ -255,7 +255,6 @@ fn lower_vector_operation(operation : @milkir.VectorOp) -> @lowering.Operation {
           match operation {
             Not => Not
             And => And
-            AndNot => AndNot
             Or => Or
             Xor => Xor
             Bitselect => BitSelect
@@ -302,9 +301,17 @@ fn lower_vector_instruction(
   instruction : @milkir.Inst,
   operation : @milkir.VectorOp,
 ) -> Unit raise NativeLowerError {
+  let (selected_operation, operands) = match
+    select_vector_andnot(instruction, facts) {
+    Some((left, right, negated)) if should_defer_instruction(
+        facts.definitions[negated.id].unwrap(),
+        facts,
+      ) => (@lowering.Operation::Vector(Bitwise(AndNot)), [left, right])
+    _ => (lower_vector_operation(operation), instruction.args)
+  }
   let lowered_results = builder.emit_with_metadata(
-    lower_vector_operation(operation),
-    demand_values(builder, values, value_types, facts, instruction.args),
+    selected_operation,
+    demand_values(builder, values, value_types, facts, operands),
     instruction.results.map(value => lower_type(value.ty)),
     instruction_metadata(instruction, []),
   )
@@ -424,4 +431,56 @@ fn lower_vector_memory_instruction(
     instruction_metadata(instruction, []),
   )
   assign_instruction_results(values, instruction, lowered_results)
+}
+
+///|
+// The third value is the negation result absorbed by this selection.
+fn select_vector_andnot(
+  instruction : @milkir.Inst,
+  facts : SelectionFacts,
+) -> (@milkir.Value, @milkir.Value, @milkir.Value)? {
+  guard instruction.opcode is Vector(Bitwise(And)) &&
+    instruction.args is [left, right] &&
+    left != right else {
+    return None
+  }
+  if vector_not_source(right, facts) is Some(source) {
+    return Some((left, source, right))
+  }
+  if vector_not_source(left, facts) is Some(source) {
+    return Some((right, source, left))
+  }
+  None
+}
+
+///|
+fn vector_not_is_fully_selected(
+  value : @milkir.Value,
+  facts : SelectionFacts,
+) -> Bool {
+  fn selected(consumer : Int) -> Bool {
+    guard consumer >= 0 && facts.instructions[consumer] is Some(instruction) else {
+      return false
+    }
+    match select_vector_andnot(instruction, facts) {
+      Some((_, _, absorbed)) => absorbed == value
+      None => false
+    }
+  }
+  if facts.uses[value.id] == 1 {
+    return selected(facts.consumers[value.id])
+  }
+  facts.shared_consumers[value.id] is Some(consumers) && consumers.all(selected)
+}
+
+///|
+fn vector_not_source(
+  value : @milkir.Value,
+  facts : SelectionFacts,
+) -> @milkir.Value? {
+  guard facts.definitions[value.id] is Some(definition) &&
+    definition.opcode is Vector(Bitwise(Not)) else {
+    return None
+  }
+  unary_operand(definition)
 }

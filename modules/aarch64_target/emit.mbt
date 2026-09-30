@@ -240,18 +240,51 @@ fn emit_constant(
   destination : @vcode.PhysicalReg,
   bits : UInt64,
 ) -> Unit {
+  // W-register writes clear the upper half even when the result is i64.
+  let width = if bits >> 32 == 0UL { W32 } else { width }
   let halfword_count = if width == W32 { 2 } else { 4 }
-  let movz_base = if width == W32 { 0x52800000U } else { 0xD2800000U }
+  let mut nonzero = 0
+  let mut nonones = 0
+  for index in 0..<halfword_count {
+    let halfword = (bits >> (index * 16)) & 0xFFFFUL
+    if halfword != 0UL {
+      nonzero += 1
+    }
+    if halfword != 0xFFFFUL {
+      nonones += 1
+    }
+  }
+  let inverted = Int::max(1, nonones) < Int::max(1, nonzero)
+  if Int::min(Int::max(1, nonzero), Int::max(1, nonones)) > 1 &&
+    logical_immediate_bits(bits, width) is Some(encoded) {
+    let base = if width == W32 { 0x320003E0U } else { 0xB20003E0U }
+    buffer.emit_word(
+      base | (encoded.reinterpret_as_uint() << 10) | reg_bits(destination),
+    )
+    return
+  }
+  let seed_base = match (width, inverted) {
+    (W32, false) => 0x52800000U
+    (W64, false) => 0xD2800000U
+    (W32, true) => 0x12800000U
+    (W64, true) => 0x92800000U
+  }
   let movk_base = if width == W32 { 0x72800000U } else { 0xF2800000U }
+  let default_halfword = if inverted { 0xFFFFU } else { 0U }
   let mut first = true
   for index in 0..<halfword_count {
     let halfword = ((bits >> (index * 16)) & 0xFFFFUL).to_uint()
-    if halfword != 0U || (first && index == halfword_count - 1) {
-      let base = if first { movz_base } else { movk_base }
+    if halfword != default_halfword || (first && index == halfword_count - 1) {
+      let base = if first { seed_base } else { movk_base }
+      let immediate = if first && inverted {
+        halfword ^ 0xFFFFU
+      } else {
+        halfword
+      }
       buffer.emit_word(
         base |
         (index.reinterpret_as_uint() << 21) |
-        (halfword << 5) |
+        (immediate << 5) |
         reg_bits(destination),
       )
       first = false
@@ -3232,6 +3265,11 @@ fn emit_instruction(
       buffer.emit_word(0x54000000U | (2U << 5) | 7U)
       metadata_offset = buffer.position()
       buffer.emit_word(0xD4200000U | (AARCH64_INTEGER_OVERFLOW_BRK << 5))
+    }
+    CompareSetImmediate(width, condition, bits) => {
+      buffer.emit_word(encode_compare_immediate(width, bits, reg(0)))
+      let inverse = condition_code(condition) ^ 1U
+      buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(1)))
     }
     CompareSet(width, condition) => {
       let compare_base = if width == W32 { 0x6B00001FU } else { 0xEB00001FU }

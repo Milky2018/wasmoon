@@ -83,7 +83,7 @@ void jit_trap_activation_init(
     activation->brk_imm = -1;
     activation->func_idx = -1;
     activation->context = context;
-    activation->control_context = context;
+    activation->controls = &activation->owned_controls;
     uintptr_t stack_base = 0;
     uintptr_t stack_top = 0;
     uintptr_t guard_base = 0;
@@ -104,54 +104,20 @@ void jit_trap_activation_init(
 static void save_activation_context(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (!context || activation->context_detached) return;
-    activation->exception_handler = context->exception_handler;
-    activation->exception_ref = context->exception_ref;
-    activation->exception_tag = context->exception_tag;
-    activation->exception_values = context->exception_values;
-    activation->exception_value_count = context->exception_value_count;
-    activation->spilled_locals = context->spilled_locals;
-    activation->spilled_locals_count = context->spilled_locals_count;
-    activation->gc_frame_chain_head = context->gc_frame_chain_head;
-    activation->gc_root_scope_head = context->gc_root_scope_head;
-    activation->debug_current_func_idx = context->debug_current_func_idx;
+    if (ctx_runtime(context)->execution != &activation->execution) abort();
+    activation->debug_current_func_idx = ctx_debug_current_func_idx(context);
+    ctx_runtime(context)->execution = activation->previous_execution;
+    ctx_set_debug_current_func_idx(context, activation->previous_debug_func_idx);
     activation->context_detached = 1;
-    context->exception_handler = NULL;
-    context->exception_ref = 0;
-    context->exception_tag = 0;
-    context->exception_values = NULL;
-    context->exception_value_count = 0;
-    context->spilled_locals = NULL;
-    context->spilled_locals_count = 0;
-    context->gc_frame_chain_head = NULL;
-    context->gc_root_scope_head = NULL;
-    context->debug_current_func_idx = -1;
 }
 
 static void restore_activation_context(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (!context || !activation->context_detached) return;
-    if (context->exception_handler ||
-        context->exception_values ||
-        context->spilled_locals ||
-        context->gc_frame_chain_head ||
-        context->gc_root_scope_head) {
-        abort();
-    }
-    context->exception_handler = activation->exception_handler;
-    context->exception_ref = activation->exception_ref;
-    context->exception_tag = activation->exception_tag;
-    context->exception_values = activation->exception_values;
-    context->exception_value_count = activation->exception_value_count;
-    context->spilled_locals = activation->spilled_locals;
-    context->spilled_locals_count = activation->spilled_locals_count;
-    context->gc_frame_chain_head = activation->gc_frame_chain_head;
-    context->gc_root_scope_head = activation->gc_root_scope_head;
-    context->debug_current_func_idx = activation->debug_current_func_idx;
-    activation->exception_handler = NULL;
-    activation->exception_values = NULL;
-    activation->spilled_locals = NULL;
-    activation->gc_frame_chain_head = NULL;
-    activation->gc_root_scope_head = NULL;
+    activation->previous_execution = ctx_runtime(context)->execution;
+    activation->previous_debug_func_idx = ctx_debug_current_func_idx(context);
+    ctx_runtime(context)->execution = &activation->execution;
+    ctx_set_debug_current_func_idx(context, activation->debug_current_func_idx);
     activation->context_detached = 0;
 }
 
@@ -161,18 +127,21 @@ static int32_t activation_root_count(
     if (!activation) return 0;
     int64_t total = 0;
     const wasmoon_gc_root_scope_t *scope =
-        activation->gc_root_scope_head;
+        activation->execution.gc_root_scope_head;
     while (scope) {
         if (scope->root_count > 0) {
             total += scope->root_count;
         }
         scope = scope->prev;
     }
-    if (activation->exception_value_count > 0) {
-        total += activation->exception_value_count;
+    if (activation->execution.exception_value_count > 0) {
+        total += activation->execution.exception_value_count;
     }
-    if (activation->spilled_locals_count > 0) {
-        total += activation->spilled_locals_count;
+    if (activation->execution.spilled_locals_count > 0) {
+        total += activation->execution.spilled_locals_count;
+    }
+    if (activation->execution.gc_root_scratch_len > 0) {
+        total += activation->execution.gc_root_scratch_len;
     }
     return total > INT32_MAX ? -1 : (int32_t)total;
 }
@@ -184,7 +153,7 @@ static int32_t copy_activation_roots(
     if (!activation || !destination) return 0;
     int32_t at = 0;
     const wasmoon_gc_root_scope_t *scope =
-        activation->gc_root_scope_head;
+        activation->execution.gc_root_scope_head;
     while (scope) {
         if (scope->root_count > 0 && scope->roots) {
             memcpy(
@@ -196,23 +165,28 @@ static int32_t copy_activation_roots(
         }
         scope = scope->prev;
     }
-    if (activation->exception_value_count > 0 &&
-        activation->exception_values) {
+    if (activation->execution.exception_value_count > 0 &&
+        activation->execution.exception_values) {
         memcpy(
             &destination[at],
-            activation->exception_values,
-            (size_t)activation->exception_value_count * sizeof(int64_t)
+            activation->execution.exception_values,
+            (size_t)activation->execution.exception_value_count * sizeof(int64_t)
         );
-        at += activation->exception_value_count;
+        at += activation->execution.exception_value_count;
     }
-    if (activation->spilled_locals_count > 0 &&
-        activation->spilled_locals) {
+    if (activation->execution.spilled_locals_count > 0 &&
+        activation->execution.spilled_locals) {
         memcpy(
             &destination[at],
-            activation->spilled_locals,
-            (size_t)activation->spilled_locals_count * sizeof(int64_t)
+            activation->execution.spilled_locals,
+            (size_t)activation->execution.spilled_locals_count * sizeof(int64_t)
         );
-        at += activation->spilled_locals_count;
+        at += activation->execution.spilled_locals_count;
+    }
+    if (activation->execution.gc_root_scratch_len > 0) {
+        memcpy(&destination[at], activation->execution.gc_root_scratch,
+            (size_t)activation->execution.gc_root_scratch_len * sizeof(int64_t));
+        at += activation->execution.gc_root_scratch_len;
     }
     return at;
 }
@@ -223,19 +197,15 @@ void jit_mark_active_gc_roots(GcHeap *heap) {
     for (jit_trap_activation_t *activation = current_activation;
          activation; activation = activation->previous) {
         jit_context_t *context = activation->context;
-        if (!activation->active || !context || context->gc_heap != heap) continue;
-        const wasmoon_gc_root_scope_t *scope = activation->context_detached
-            ? activation->gc_root_scope_head : context->gc_root_scope_head;
-        for (; scope; scope = scope->prev) {
+        if (!activation->active || !context || ctx_gc_heap(context) != heap) continue;
+        const jit_execution_state_t *state = &activation->execution;
+        for (const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
+             scope; scope = scope->prev) {
             gc_heap_mark_roots(heap, scope->roots, scope->root_count);
         }
-        gc_heap_mark_roots(heap,
-            activation->context_detached ? activation->exception_values : context->exception_values,
-            activation->context_detached ? activation->exception_value_count : context->exception_value_count);
-        gc_heap_mark_roots(heap,
-            activation->context_detached ? activation->spilled_locals : context->spilled_locals,
-            activation->context_detached ? activation->spilled_locals_count : context->spilled_locals_count);
-        gc_heap_mark_roots(heap, context->gc_root_scratch, context->gc_root_scratch_len);
+        gc_heap_mark_roots(heap, state->exception_values, state->exception_value_count);
+        gc_heap_mark_roots(heap, state->spilled_locals, state->spilled_locals_count);
+        gc_heap_mark_roots(heap, state->gc_root_scratch, state->gc_root_scratch_len);
     }
 }
 
@@ -249,7 +219,7 @@ int jit_parked_gc_roots_register(
     int32_t root_count = activation_root_count(activation);
     if (root_count < 0) return 0;
     if (root_count == 0) return 1;
-    GcHeap *heap = (GcHeap *)activation->context->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(activation->context);
     if (!heap) return 0;
     int64_t *roots = NULL;
     if (!gc_heap_register_parked_roots(
@@ -272,9 +242,7 @@ void jit_parked_gc_roots_unregister(void *registration) {
     gc_heap_unregister_parked_roots(registration);
 }
 
-// Module environments can recur through another module's native activation.
-// Save and restore the nearest owner of the same context, even across an
-// intervening activation, so parked stacks never borrow another stack's roots.
+// Distinguish an active owner from standalone helper state before fresh entry.
 static jit_trap_activation_t *matching_context_activation(jit_context_t *context) {
     for (jit_trap_activation_t *a = current_activation; a; a = a->previous) {
         if (a->context == context) return a;
@@ -284,14 +252,29 @@ static jit_trap_activation_t *matching_context_activation(jit_context_t *context
 
 void jit_trap_activation_push(jit_trap_activation_t *activation) {
     activation->previous = current_activation;
-    if (activation->inherit_controls && current_activation) {
-        activation->control_context = current_activation->control_context;
+    if (activation->context) {
+        activation->owned_controls = ctx_runtime(activation->context)->control_defaults;
+        if (activation->owned_controls.cancellation_callback_data)
+            moonbit_incref(activation->owned_controls.cancellation_callback_data);
     }
-    jit_trap_activation_t *owner = matching_context_activation(activation->context);
-    if (owner) {
-        save_activation_context(owner);
-    } else if (activation->context) {
-        exception_reset_context_state(activation->context);
+    if (activation->inherit_controls && current_activation) {
+        activation->controls = current_activation->controls;
+    }
+    if (activation->context) {
+        jit_execution_state_t *previous = ctx_runtime(activation->context)->execution;
+        int standalone = !matching_context_activation(activation->context);
+        if (standalone && previous) {
+            exception_reset_execution_state(previous);
+        }
+        activation->previous_execution = previous;
+        activation->previous_debug_func_idx = ctx_debug_current_func_idx(activation->context);
+        ctx_runtime(activation->context)->execution = &activation->execution;
+        ctx_set_debug_current_func_idx(activation->context, -1);
+        // Preserve explicitly configured standalone roots without sharing the
+        // mutable scratch buffer with this invocation or a nested invocation.
+        if (standalone && previous && previous->gc_root_scratch_len > 0 &&
+            !ctx_gc_set_root_scratch_internal(activation->context,
+                previous->gc_root_scratch, previous->gc_root_scratch_len)) abort();
     }
     current_activation = activation;
 }
@@ -333,13 +316,19 @@ void jit_trap_activation_publish(jit_trap_activation_t *activation) {
     observed_activation_valid = 1;
 }
 
+static void release_activation_controls(jit_trap_activation_t *activation) {
+    if (activation->owned_controls.cancellation_callback_data)
+        moonbit_decref(activation->owned_controls.cancellation_callback_data);
+    memset(&activation->owned_controls, 0, sizeof(activation->owned_controls));
+    activation->controls = &activation->owned_controls;
+}
+
 void jit_trap_activation_pop(jit_trap_activation_t *activation) {
     if (current_activation != activation) abort();
+    save_activation_context(activation);
     current_activation = activation->previous;
-    jit_trap_activation_t *owner = matching_context_activation(activation->context);
-    if (owner) {
-        restore_activation_context(owner);
-    }
+    jit_execution_state_clear(&activation->execution);
+    release_activation_controls(activation);
     activation->active = 0;
 }
 
@@ -348,26 +337,16 @@ jit_trap_activation_t *jit_trap_activation_detach(void) {
     if (!activation) return NULL;
     save_activation_context(activation);
     current_activation = activation->previous;
-    jit_trap_activation_t *owner = matching_context_activation(activation->context);
-    if (owner) {
-        restore_activation_context(owner);
-    }
     return activation;
 }
 
 void jit_trap_activation_attach(jit_trap_activation_t *activation) {
     if (!activation) return;
-    // A parked continuation may be resumed after its original dynamic caller
-    // has returned or parked. Preserve the activation current at the actual
-    // resume point before rebinding the continuation to it.
-    jit_trap_activation_t *owner = matching_context_activation(activation->context);
-    if (owner) {
-        save_activation_context(owner);
-    }
     activation->previous = current_activation;
     restore_activation_context(activation);
+    activation->controls = &activation->owned_controls;
     if (activation->inherit_controls && current_activation) {
-        activation->control_context = current_activation->control_context;
+        activation->controls = current_activation->controls;
     }
     current_activation = activation;
 }
@@ -375,49 +354,12 @@ void jit_trap_activation_attach(jit_trap_activation_t *activation) {
 void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
     if (!activation) return;
     if (current_activation == activation) {
+        save_activation_context(activation);
         current_activation = activation->previous;
     }
+    jit_execution_state_clear(&activation->execution);
+    release_activation_controls(activation);
     activation->active = 0;
-    jit_context_t *context = activation->context;
-    if (context && activation->context_detached) {
-        void *saved_handler = context->exception_handler;
-        int64_t saved_ref = context->exception_ref;
-        int32_t saved_tag = context->exception_tag;
-        int64_t *saved_values = context->exception_values;
-        int32_t saved_value_count = context->exception_value_count;
-        int64_t *saved_locals = context->spilled_locals;
-        int32_t saved_locals_count = context->spilled_locals_count;
-        wasmoon_gc_frame_t *saved_frames = context->gc_frame_chain_head;
-        wasmoon_gc_root_scope_t *saved_scopes = context->gc_root_scope_head;
-        context->exception_handler = activation->exception_handler;
-        context->exception_ref = activation->exception_ref;
-        context->exception_tag = activation->exception_tag;
-        context->exception_values = activation->exception_values;
-        context->exception_value_count = activation->exception_value_count;
-        context->spilled_locals = activation->spilled_locals;
-        context->spilled_locals_count = activation->spilled_locals_count;
-        context->gc_frame_chain_head = activation->gc_frame_chain_head;
-        context->gc_root_scope_head = activation->gc_root_scope_head;
-        exception_reset_context_state(context);
-        ctx_gc_clear_frames_internal(context);
-        context->exception_handler = saved_handler;
-        context->exception_ref = saved_ref;
-        context->exception_tag = saved_tag;
-        context->exception_values = saved_values;
-        context->exception_value_count = saved_value_count;
-        context->spilled_locals = saved_locals;
-        context->spilled_locals_count = saved_locals_count;
-        context->gc_frame_chain_head = saved_frames;
-        context->gc_root_scope_head = saved_scopes;
-        activation->exception_handler = NULL;
-        activation->exception_values = NULL;
-        activation->exception_value_count = 0;
-        activation->spilled_locals = NULL;
-        activation->spilled_locals_count = 0;
-        activation->gc_frame_chain_head = NULL;
-        activation->gc_root_scope_head = NULL;
-        activation->context_detached = 0;
-    }
 }
 
 #ifndef _WIN32
@@ -654,8 +596,35 @@ void jit_trap_activation_finalize(jit_trap_activation_t *activation) {
 }
 
 #ifndef _WIN32
-// Signal handler for SIGTRAP (triggered by BRK instruction)
-// Uses SA_SIGINFO to get ucontext and extract BRK immediate
+#ifdef __APPLE__
+// Entered only after sigreturn has restored the interrupted thread's signal
+// mask and alternate-stack status. No guest stack space is needed to recover.
+_Noreturn static void darwin_trap_landing(void) {
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+#endif
+
+static void finish_trap_signal(void *ucontext) {
+#ifdef __APPLE__
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    ucontext_t *uc = ucontext;
+#if defined(__aarch64__)
+    __darwin_arm_thread_state64_set_pc_fptr(uc->uc_mcontext->__ss, darwin_trap_landing);
+    __darwin_arm_thread_state64_set_sp(uc->uc_mcontext->__ss, activation->signal_landing_sp);
+#elif defined(__x86_64__)
+    // SysV function entry has an eight-byte return address below aligned RSP.
+    uintptr_t sp = activation->signal_landing_sp - sizeof(uintptr_t);
+    *(uintptr_t *)sp = 0;
+    uc->uc_mcontext->__ss.__rsp = sp;
+    uc->uc_mcontext->__ss.__rip = (uintptr_t)darwin_trap_landing;
+#endif
+#else
+    (void)ucontext;
+    siglongjmp(g_trap_jmp_buf, 1);
+#endif
+}
+
+// Signal handler for SIGTRAP (BRK/INT3); SA_SIGINFO supplies the fault context.
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
     (void)info;
 
@@ -686,7 +655,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_x11 = 0;
         g_trap_x15 = 0;
         if (ctx) {
-            g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
+            g_trap_func_idx = (sig_atomic_t)ctx_debug_current_func_idx(ctx);
         }
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -769,7 +738,8 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
 
         g_trap_frame_count = 0;
 
-        siglongjmp(g_trap_jmp_buf, 1);
+        finish_trap_signal(ucontext);
+        return;
     }
 }
 
@@ -796,7 +766,7 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_x11 = 0;
         g_trap_x15 = 0;
         if (ctx) {
-            g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
+            g_trap_func_idx = (sig_atomic_t)ctx_debug_current_func_idx(ctx);
         }
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -865,25 +835,29 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             fault >= activation->guard_base &&
             fault < activation->guard_base + activation->guard_size) {
             g_trap_code = 2;
-            siglongjmp(g_trap_jmp_buf, 1);
+            finish_trap_signal(ucontext);
+            return;
         }
 
         // Check for memory guard page access (bounds check elimination)
         // This converts out-of-bounds memory access to a proper trap
         if (ctx && is_memory_guard_page_access(ctx, fault_addr)) {
             g_trap_code = 1;  // out of bounds memory access
-            siglongjmp(g_trap_jmp_buf, 1);
+            finish_trap_signal(ucontext);
+            return;
         }
 
         if (is_stack_overflow(fault_addr)) {
             // Native stack overflow detected for a direct host-stack call.
             g_trap_code = 2;  // call stack exhausted
-            siglongjmp(g_trap_jmp_buf, 1);
+            finish_trap_signal(ucontext);
+            return;
         } else {
             // Could be WASM memory access violation or other error
             // Use unknown trap code since we can't determine the exact cause
             g_trap_code = 99;
-            siglongjmp(g_trap_jmp_buf, 1);
+            finish_trap_signal(ucontext);
+            return;
         }
     }
 
@@ -932,7 +906,7 @@ static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
         else return EXCEPTION_CONTINUE_SEARCH;
     } else return EXCEPTION_CONTINUE_SEARCH;
     activation->func_idx = activation->context
-        ? (sig_atomic_t)activation->context->debug_current_func_idx : -1;
+        ? (sig_atomic_t)ctx_debug_current_func_idx(activation->context) : -1;
     activation->code = trap;
     activation->signal = (sig_atomic_t)code;
     activation->pc = pc;

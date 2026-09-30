@@ -315,6 +315,7 @@ pub(all) enum AArch64Inst {
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, AArch64Condition)
+  CompareSetImmediate(GprWidth, AArch64Condition, UInt64)
   ReferenceCompareSet(@native_types.ValueType, AArch64Condition)
   FloatUnary(@native_types.ValueType, AArch64FloatUnary)
   FloatBinary(@native_types.ValueType, AArch64FloatBinary)

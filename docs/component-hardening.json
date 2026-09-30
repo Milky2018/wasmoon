@@ -2,7 +2,7 @@
   "schema_version": 1,
   "oracle": {
     "name": "wasmtime",
-    "version": "45.0.0",
+    "version": "49.0.1",
     "installer": "scripts/install_wasmtime_oracle.py"
   },
   "source_checks": {

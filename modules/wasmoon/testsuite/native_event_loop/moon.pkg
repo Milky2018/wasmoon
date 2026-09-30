@@ -1,0 +1,7 @@
+import {
+  "Milky2018/wasmoon/async_native",
+  "moonbitlang/async",
+  "moonbitlang/async/socket",
+}
+
+pkgtype(kind: "executable")

@@ -5,8 +5,8 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact/installer",
-  "Milky2018/wasmoon_jit/artifact/loader",
   "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/callable",
   "Milky2018/wasmoon_jit/native/execution",
   "moonbitlang/core/debug",
 }
@@ -78,6 +78,8 @@ pub struct JITFunction {
 type JITModule
 pub fn JITModule::JITModule() -> Self
 pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.MemoryDescriptor
+pub fn JITModule::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int], Array[Int]) -> Unit
+pub fn JITModule::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?, timeout_ms? : Int?) -> JITCallResult
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
@@ -107,8 +109,8 @@ pub fn JITModule::has_callable_metadata(Self) -> Bool
 pub fn JITModule::has_configured_native_fiber_stack_size(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
-pub fn JITModule::load_artifact(@loader.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
-pub fn JITModule::load_artifact_with_imports(@loader.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::load_artifact(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @execution.NativeExecutionState) -> Unit raise JITTrap
 pub fn JITModule::refresh_table_layout(Self, Int) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder

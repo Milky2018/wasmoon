@@ -1,4 +1,6 @@
 import {
+  "Milky2018/wasmoon_jit/context/layout" @context_layout,
+  "Milky2018/wasmoon_jit/native/callable",
   "Milky2018/wasmoon_jit/host_io",
   "Milky2018/wasm_core/types",
 }

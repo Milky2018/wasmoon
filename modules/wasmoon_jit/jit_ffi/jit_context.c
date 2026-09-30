@@ -3,6 +3,7 @@
 // Handles allocation, configuration, and lifecycle of jit_context_t
 
 #include "jit_internal.h"
+#include <assert.h>
 
 static int gc_collect_debug_cached = -1;
 
@@ -30,7 +31,7 @@ static int32_t gc_frame_chain_depth(const jit_context_t *ctx) {
         return 0;
     }
     int32_t depth = 0;
-    const wasmoon_gc_frame_t *cur = ctx->gc_frame_chain_head;
+    const wasmoon_gc_frame_t *cur = ctx_execution(ctx)->gc_frame_chain_head;
     while (cur) {
         depth++;
         cur = cur->prev;
@@ -43,7 +44,7 @@ static int32_t gc_root_scope_count(const jit_context_t *ctx) {
         return 0;
     }
     int64_t total = 0;
-    const wasmoon_gc_root_scope_t *scope = ctx->gc_root_scope_head;
+    const wasmoon_gc_root_scope_t *scope = ctx_execution(ctx)->gc_root_scope_head;
     while (scope) {
         if (scope->root_count > 0) {
             total += scope->root_count;
@@ -64,7 +65,7 @@ static int32_t gc_copy_root_scopes(
         return 0;
     }
     int32_t at = 0;
-    const wasmoon_gc_root_scope_t *scope = ctx->gc_root_scope_head;
+    const wasmoon_gc_root_scope_t *scope = ctx_execution(ctx)->gc_root_scope_head;
     while (scope) {
         if (scope->root_count > 0 && scope->roots) {
             memcpy(
@@ -84,13 +85,13 @@ static int32_t gc_count_table_roots(const jit_context_t *ctx) {
         return 0;
     }
     size_t total = 0;
-    if (ctx->table0_base && ctx->table0_elements > 0) {
-        total += ctx->table0_elements;
+    if (ctx_table0_base(ctx) && ctx_table0_elements(ctx) > 0) {
+        total += ctx_table0_elements(ctx);
     }
-    if (ctx->tables && ctx->table_sizes && ctx->table_count > 1) {
-        for (int i = 1; i < ctx->table_count; i++) {
-            if (ctx->tables[i] && ctx->table_sizes[i] > 0) {
-                total += ctx->table_sizes[i];
+    if (ctx_tables(ctx) && ctx_table_sizes(ctx) && ctx_table_count(ctx) > 1) {
+        for (int i = 1; i < ctx_table_count(ctx); i++) {
+            if (ctx_tables(ctx)[i] && ctx_table_sizes(ctx)[i] > 0) {
+                total += ctx_table_sizes(ctx)[i];
             }
         }
     }
@@ -105,15 +106,15 @@ static int32_t gc_copy_table_roots(const jit_context_t *ctx, int64_t *dst) {
         return 0;
     }
     int32_t at = 0;
-    if (ctx->table0_base && ctx->table0_elements > 0) {
-        for (size_t i = 0; i < ctx->table0_elements; i++) {
-            dst[at++] = (int64_t)(uintptr_t)ctx->table0_base[i * 2];
+    if (ctx_table0_base(ctx) && ctx_table0_elements(ctx) > 0) {
+        for (size_t i = 0; i < ctx_table0_elements(ctx); i++) {
+            dst[at++] = (int64_t)(uintptr_t)ctx_table0_base(ctx)[i * 2];
         }
     }
-    if (ctx->tables && ctx->table_sizes && ctx->table_count > 1) {
-        for (int table_idx = 1; table_idx < ctx->table_count; table_idx++) {
-            void **table_ptr = ctx->tables[table_idx];
-            size_t table_size = ctx->table_sizes[table_idx];
+    if (ctx_tables(ctx) && ctx_table_sizes(ctx) && ctx_table_count(ctx) > 1) {
+        for (int table_idx = 1; table_idx < ctx_table_count(ctx); table_idx++) {
+            void **table_ptr = ctx_tables(ctx)[table_idx];
+            size_t table_size = ctx_table_sizes(ctx)[table_idx];
             if (!table_ptr || table_size == 0) {
                 continue;
             }
@@ -127,22 +128,123 @@ static int32_t gc_copy_table_roots(const jit_context_t *ctx, int64_t *dst) {
 
 // ============ Context Allocation ============
 
-jit_context_t *alloc_context_internal(int func_count) {
-    // Optional callbacks, scheduling and GC state must start disabled, even
-    // when the allocator returns storage previously used by another context.
-    jit_context_t *ctx = calloc(1, sizeof(*ctx));
-    if (!ctx) return NULL;
-    atomic_init(&ctx->memory0_size, 0);
-    ctx->func_table = (void **)calloc(func_count, sizeof(void *));
-    if (!ctx->func_table) {
-        free(ctx);
-        return NULL;
+// Consume a MoonBit external-pointer array. Its entries do not own code.
+jit_context_t *alloc_context_with_layout(void **functions, uint8_t *layout) {
+    size_t abi_size = sizeof(jit_context_t);
+    if (layout) {
+        if (Moonbit_array_length(layout) != 48) goto invalid;
+        int32_t fields[30] = {0};
+        for (int i = 0; i < 18; ++i) fields[i] = context_layout_field(layout, i);
+        for (int i = 23; i < 30; ++i) fields[i] = context_layout_field(layout, i);
+        // The MoonBit layout builder is authoritative. Validate all native spans
+        // before allocation so raw FFI callers cannot construct overlapping views.
+        if (fields[23] < 0) goto invalid;
+        abi_size = (size_t)fields[23];
+        for (int i = 0; i < 18; ++i) {
+            int width = (i == 8 || i == 9 || i == 13 || i == 14) ? 4 : 8;
+            int offset = fields[i];
+            if (offset == -1) continue;
+            if (offset < 0 || offset % width || (size_t)offset + width > abi_size) goto invalid;
+            for (int j = 0; j < i; ++j) {
+                int jw = (j == 8 || j == 9 || j == 13 || j == 14) ? 4 : 8;
+                if (fields[j] >= 0 && offset < fields[j] + jw && fields[j] < offset + width) goto invalid;
+            }
+        }
+        if (fields[3] < 0 || fields[9] < 0 || fields[14] < 0 ||
+            fields[15] < 0 || fields[16] < 0 || fields[17] < 0) goto invalid;
+        for (int i = 24; i <= 27; ++i) {
+            int count = fields[i == 24 ? 28 : 29];
+            if (fields[i] < 0 || fields[i] % 8 || count < 0 ||
+                (uint64_t)fields[i] + (uint64_t)count * 8 > abi_size) goto invalid;
+            for (int j = 0; j < 18; ++j) {
+                int width = (j == 8 || j == 9 || j == 13 || j == 14) ? 4 : 8;
+                if (count && fields[j] >= 0 && fields[j] + width > fields[24]) goto invalid;
+            }
+            if (i > 24 && fields[i] < fields[i - 1] + (int64_t)fields[i == 25 ? 28 : 29] * 8) goto invalid;
+        }
     }
-    ctx->func_count = func_count;
-    ctx->debug_current_func_idx = -1;
-    ctx->continuation_arena = continuation_arena_new();
-    ctx->exception_arena = exception_arena_new();
+    jit_runtime_state_t *runtime = calloc(1, sizeof(*runtime) + abi_size);
+    if (!runtime) goto invalid;
+    runtime->layout = layout;
+    jit_context_t *ctx = (jit_context_t *)(runtime + 1);
+    if (ctx_memory0_size_address(ctx)) atomic_init(ctx_memory0_size_address(ctx), 0);
+    ctx_set_func_table(ctx, functions);
+    ctx_set_func_count(ctx, Moonbit_array_length(functions));
+    ctx_set_debug_current_func_idx(ctx, -1);
     return ctx;
+invalid:
+    moonbit_decref(functions);
+    if (layout) moonbit_decref(layout);
+    return NULL;
+}
+
+jit_context_t *alloc_context_with_functions(void **functions) {
+    return alloc_context_with_layout(functions, NULL);
+}
+
+jit_context_t *alloc_context_internal(int func_count) {
+    if (func_count < 0) return NULL;
+    return alloc_context_with_functions(moonbit_make_extern_ref_array(func_count, NULL));
+}
+
+// RC-owned descriptor storage. Shared tables are immutable; compatibility
+// setters detach a private copy before replacement. Bind only outside execution.
+typedef struct {
+    int32_t count;
+    int32_t shared;
+    wasmoon_gc_safepoint_table_t entries[];
+} jit_safepoint_owner_t;
+
+static jit_safepoint_owner_t *safepoint_owner(wasmoon_gc_safepoint_table_t *entries) {
+    return (jit_safepoint_owner_t *)((char *)entries - offsetof(jit_safepoint_owner_t, entries));
+}
+
+static void gc_release_safepoint_table(wasmoon_gc_safepoint_table_t *table) {
+    if (table->stackmap_blob) moonbit_decref((void *)table->stackmap_blob);
+    if (table->code_offsets) moonbit_decref((void *)table->code_offsets);
+    memset(table, 0, sizeof(*table));
+}
+
+static void finalize_safepoints(void *payload) {
+    jit_safepoint_owner_t *owner = payload;
+    for (int32_t i = 0; i < owner->count; ++i) gc_release_safepoint_table(&owner->entries[i]);
+}
+
+static jit_safepoint_owner_t *new_safepoints(int32_t count, int shared) {
+    size_t size = sizeof(jit_safepoint_owner_t) + (size_t)count * sizeof(wasmoon_gc_safepoint_table_t);
+    jit_safepoint_owner_t *owner = moonbit_make_external_object(finalize_safepoints, size);
+    memset(owner, 0, size);
+    owner->count = count;
+    owner->shared = shared;
+    return owner;
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_jit_prepare_safepoints(uint8_t **blobs, int32_t **offsets) {
+    int32_t count = Moonbit_array_length(blobs);
+    assert(count == Moonbit_array_length(offsets));
+    jit_safepoint_owner_t *owner = new_safepoints(count, 1);
+    for (int32_t i = 0; i < count; ++i) {
+        wasmoon_gc_safepoint_table_t *table = &owner->entries[i];
+        table->stackmap_blob_size = Moonbit_array_length(blobs[i]);
+        table->safepoint_count = Moonbit_array_length(offsets[i]);
+        if (table->stackmap_blob_size) { table->stackmap_blob = blobs[i]; moonbit_incref(blobs[i]); }
+        if (table->safepoint_count) { table->code_offsets = (uint32_t *)offsets[i]; moonbit_incref(offsets[i]); }
+    }
+    return owner;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_bind_prepared_safepoints(void *context, void *payload) {
+    extern int64_t wasmoon_jit_context_ptr(void *context);
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    jit_safepoint_owner_t *owner = payload;
+    if (!ctx || owner->count > ctx_func_count(ctx)) return 0;
+    moonbit_incref(owner);
+    if (ctx_runtime(ctx)->gc_func_safepoint_tables)
+        moonbit_decref(safepoint_owner(ctx_runtime(ctx)->gc_func_safepoint_tables));
+    ctx_runtime(ctx)->gc_func_safepoint_tables = owner->entries;
+    ctx_runtime(ctx)->gc_func_safepoint_table_count = owner->count;
+    ctx_runtime(ctx)->gc_safepoint_table = NULL;
+    return 1;
 }
 
 // ============ Context Free ============
@@ -150,191 +252,138 @@ jit_context_t *alloc_context_internal(int func_count) {
 
 void free_context_internal(jit_context_t *ctx) {
     if (!ctx) return;
-    continuation_arena_release(ctx->continuation_arena);
+    continuation_arena_release(ctx_runtime(ctx)->continuation_arena);
     continuation_types_free(ctx);
-    exception_arena_release(ctx->exception_arena);
+    exception_arena_release(ctx_runtime(ctx)->exception_arena);
     ctx_set_gc_heap_internal(ctx, NULL);
 
-    // Free per-context segment storage (malloc-owned copies).
-    if (ctx->data_segments) {
-        for (int i = 0; i < ctx->data_segment_count; i++) {
-            if (ctx->data_segments[i]) {
-                free(ctx->data_segments[i]);
-            }
-        }
-        free(ctx->data_segments);
-        ctx->data_segments = NULL;
-    }
-    if (ctx->data_segment_sizes) {
-        free(ctx->data_segment_sizes);
-        ctx->data_segment_sizes = NULL;
-    }
-    if (ctx->data_dropped) {
-        free(ctx->data_dropped);
-        ctx->data_dropped = NULL;
-    }
-    ctx->data_segment_count = 0;
-
-    if (ctx->elem_segments) {
-        for (int i = 0; i < ctx->elem_segment_count; i++) {
-            if (ctx->elem_segments[i]) {
-                free(ctx->elem_segments[i]);
-            }
-        }
-        free(ctx->elem_segments);
-        ctx->elem_segments = NULL;
-    }
-    if (ctx->elem_segment_sizes) {
-        free(ctx->elem_segment_sizes);
-        ctx->elem_segment_sizes = NULL;
-    }
-    if (ctx->elem_dropped) {
-        free(ctx->elem_dropped);
-        ctx->elem_dropped = NULL;
-    }
-    ctx->elem_segment_count = 0;
+    ctx_clear_segments_internal(ctx);
 
     // Free context-owned memory0 (guarded allocations are large and must not leak)
-    if (ctx->owns_memory0 && ctx->memory0) {
-        wasmoon_jit_free_memory_desc(ctx->memory0);
-        ctx->memory0 = NULL;
-        ctx->memory0_base = NULL;
-        atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);
-        ctx->owns_memory0 = 0;
+    if (ctx_runtime(ctx)->owns_memory0 && ctx_memory0(ctx)) {
+        wasmoon_jit_free_memory_desc(ctx_memory0(ctx));
+        ctx_set_memory0(ctx, NULL);
+        ctx_set_memory0_base(ctx, NULL);
+        ctx_set_memory0_size(ctx, 0);
+        ctx_runtime(ctx)->owns_memory0 = 0;
     }
 
-    if (ctx->func_table) free(ctx->func_table);
+    if (ctx_func_table(ctx)) moonbit_decref(ctx_func_table(ctx));
     ctx_clear_table_bindings(ctx);
-    if (ctx->tables) free(ctx->tables);
-    if (ctx->table_sizes) free(ctx->table_sizes);
-    if (ctx->table_max_sizes) free(ctx->table_max_sizes);
-    if (ctx->globals) free(ctx->globals);
-    free(ctx->callable_local_types);
-    free(ctx->callable_type_parents);
-    free(ctx->callable_entries);
-    free(ctx->callable_tags);
-    free(ctx->gc_func_table);
+    if (!ctx_runtime(ctx)->layout) {
+        free(ctx_tables(ctx));
+        free(ctx_table_sizes(ctx));
+        free(ctx_table_max_sizes(ctx));
+    }
+    ctx_set_globals_internal(ctx, NULL, 0);
+    if (ctx_runtime(ctx)->callable_local_types)
+        moonbit_decref(ctx_runtime(ctx)->callable_local_types);
+    if (ctx_runtime(ctx)->callable_registry)
+        moonbit_decref(ctx_runtime(ctx)->callable_registry);
+    if (ctx_runtime(ctx)->callable_tags)
+        moonbit_decref(ctx_runtime(ctx)->callable_tags);
+    if (ctx_runtime(ctx)->gc_func_table) moonbit_decref(ctx_runtime(ctx)->gc_func_table);
 
     // Release each managed descriptor retained by the multi-memory array.
-    if (ctx->memories) {
-        for (int i = 0; i < ctx->memory_count; ++i) {
-            if (ctx->memories[i]) moonbit_decref(ctx->memories[i]);
+    if (ctx_memories(ctx)) {
+        for (int i = 0; i < ctx_memory_count(ctx); ++i) {
+            if (ctx_memories(ctx)[i]) moonbit_decref(ctx_memories(ctx)[i]);
         }
-        free(ctx->memories);
+        if (!ctx_runtime(ctx)->layout) free(ctx_memories(ctx));
     }
 
-    if (ctx->gc_type_cache) {
-        free(ctx->gc_type_cache);
+    if (ctx_runtime(ctx)->gc_type_cache) {
+        moonbit_decref(ctx_runtime(ctx)->gc_type_cache);
     }
-    if (ctx->gc_canonical_indices) {
-        free(ctx->gc_canonical_indices);
+    if (ctx_runtime(ctx)->gc_canonical_indices) {
+        moonbit_decref(ctx_runtime(ctx)->gc_canonical_indices);
     }
-    if (ctx->gc_func_type_indices) {
-        free(ctx->gc_func_type_indices);
+    if (ctx_runtime(ctx)->gc_func_type_indices) {
+        moonbit_decref(ctx_runtime(ctx)->gc_func_type_indices);
     }
-    if (ctx->gc_root_scratch) {
-        free(ctx->gc_root_scratch);
-        ctx->gc_root_scratch = NULL;
+    jit_execution_state_clear(ctx_runtime(ctx)->execution);
+    free(ctx_runtime(ctx)->execution);
+    ctx_runtime(ctx)->execution = NULL;
+    if (ctx_runtime(ctx)->gc_func_safepoint_tables) {
+        moonbit_decref(safepoint_owner(ctx_runtime(ctx)->gc_func_safepoint_tables));
+        ctx_runtime(ctx)->gc_func_safepoint_tables = NULL;
     }
-    ctx_gc_clear_frames_internal(ctx);
-    ctx_gc_clear_root_scopes_internal(ctx);
-    if (ctx->gc_func_safepoint_tables) {
-        int32_t count = ctx->gc_func_safepoint_table_count;
-        for (int32_t i = 0; i < count; i++) {
-            if (ctx->gc_func_stackmap_blobs && ctx->gc_func_stackmap_blobs[i]) {
-                free(ctx->gc_func_stackmap_blobs[i]);
-            }
-            if (ctx->gc_func_safepoint_offsets && ctx->gc_func_safepoint_offsets[i]) {
-                free(ctx->gc_func_safepoint_offsets[i]);
-            }
-        }
-        free(ctx->gc_func_safepoint_tables);
-        ctx->gc_func_safepoint_tables = NULL;
-    }
-    if (ctx->gc_func_stackmap_blobs) {
-        free(ctx->gc_func_stackmap_blobs);
-        ctx->gc_func_stackmap_blobs = NULL;
-    }
-    if (ctx->gc_func_safepoint_offsets) {
-        free(ctx->gc_func_safepoint_offsets);
-        ctx->gc_func_safepoint_offsets = NULL;
-    }
-    ctx->gc_func_safepoint_table_count = 0;
-
-    // Free exception handling state
-    if (ctx->exception_values) free(ctx->exception_values);
-    // Free any remaining exception handlers
-    exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
-    while (handler) {
-        exception_handler_t *prev = handler->prev;
-        free(handler);
-        handler = prev;
-    }
-    // Free spilled locals
-    if (ctx->spilled_locals) free(ctx->spilled_locals);
+    ctx_runtime(ctx)->gc_func_safepoint_table_count = 0;
 
     // Free hostcall callback closure (if registered).
-    if (ctx->hostcall_callback_data) {
-        moonbit_decref(ctx->hostcall_callback_data);
-        ctx->hostcall_callback_data = NULL;
+    if (ctx_runtime(ctx)->hostcall_callback_data) {
+        moonbit_decref(ctx_runtime(ctx)->hostcall_callback_data);
+        ctx_runtime(ctx)->hostcall_callback_data = NULL;
     }
-    ctx->hostcall_callback = NULL;
+    ctx_runtime(ctx)->hostcall_callback = NULL;
 
     // Free cancellation callback closure (if registered).
-    if (ctx->cancellation_callback_data) {
-        moonbit_decref(ctx->cancellation_callback_data);
-        ctx->cancellation_callback_data = NULL;
+    if (ctx_runtime(ctx)->control_defaults.cancellation_callback_data) {
+        moonbit_decref(ctx_runtime(ctx)->control_defaults.cancellation_callback_data);
+        ctx_runtime(ctx)->control_defaults.cancellation_callback_data = NULL;
     }
-    ctx->cancellation_callback = NULL;
+    ctx_runtime(ctx)->control_defaults.cancellation_callback = NULL;
 
-    free(ctx);
+    if (ctx_runtime(ctx)->layout) moonbit_decref(ctx_runtime(ctx)->layout);
+    free(ctx_runtime(ctx));
 }
 
 // ============ Context Setters ============
 
 void ctx_refresh_memory0_fast_fields(jit_context_t *ctx) {
     if (!ctx) return;
-    if (!ctx->memory0) {
-        ctx->memory0_base = NULL;
-        atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);
+    if (!ctx_memory0(ctx)) {
+        ctx_set_memory0_base(ctx, NULL);
+        ctx_set_memory0_size(ctx, 0);
         return;
     }
-    ctx->memory0_base = ctx->memory0->base;
+    ctx_set_memory0_base(ctx, ctx_memory0(ctx)->base);
     atomic_store_explicit(
-        &ctx->memory0_size,
-        atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed),
+        ctx_memory0_size_address(ctx),
+        atomic_load_explicit(&ctx_memory0(ctx)->current_length, memory_order_relaxed),
         memory_order_relaxed
     );
 }
 
 void ctx_set_func_internal(jit_context_t *ctx, int idx, void *func_ptr) {
-    if (ctx && idx >= 0 && idx < ctx->func_count) {
-        ctx->func_table[idx] = func_ptr;
+    if (ctx && idx >= 0 && idx < ctx_func_count(ctx)) {
+        ctx_func_table(ctx)[idx] = func_ptr;
     }
 }
 
 void ctx_set_memory_internal(jit_context_t *ctx, wasmoon_memory_t *mem0) {
     if (ctx) {
-        ctx->memory0 = mem0;
+        ctx_set_memory0(ctx, mem0);
         ctx_refresh_memory0_fast_fields(ctx);
     }
 }
 
-void ctx_set_globals_internal(jit_context_t *ctx, void *globals_ptr) {
-    if (ctx) {
-        ctx->globals = globals_ptr;
+// Consume the pointer table; its entries borrow runtime-owned global cells.
+void ctx_set_globals_internal(jit_context_t *ctx, void *globals_ptr, int managed) {
+    if (!ctx || !ctx_globals_address(ctx)) {
+        if (managed && globals_ptr) moonbit_decref(globals_ptr);
+        else free(globals_ptr);
+        return;
     }
+    // A legacy caller may reinstall the same table without transferring a new RC.
+    if (ctx_globals(ctx) == globals_ptr && !managed) return;
+    if (ctx_globals(ctx)) {
+        if (ctx_runtime(ctx)->globals_managed) moonbit_decref(ctx_globals(ctx));
+        else free(ctx_globals(ctx));
+    }
+    ctx_set_globals(ctx, globals_ptr);
+    ctx_runtime(ctx)->globals_managed = managed;
 }
 
 // ============ Indirect Table Management ============
 
 void ctx_set_indirect_internal(jit_context_t *ctx, int table_idx, int func_idx, int type_idx) {
-    if (ctx && ctx->table0_base &&
-        table_idx >= 0 && (size_t)table_idx < ctx->table0_elements &&
-        func_idx >= 0 && func_idx < ctx->func_count) {
+    if (ctx && ctx_table0_base(ctx) &&
+        table_idx >= 0 && (size_t)table_idx < ctx_table0_elements(ctx) &&
+        func_idx >= 0 && func_idx < ctx_func_count(ctx)) {
         // Store func_ptr at offset 0, type_idx at offset 8
-        ctx->table0_base[table_idx * 2] = ctx->func_table[func_idx];
-        ctx->table0_base[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+        ctx_table0_base(ctx)[table_idx * 2] = ctx_func_table(ctx)[func_idx];
+        ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
     }
 }
 
@@ -344,53 +393,47 @@ void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap) {
     if (!ctx) return;
 
     heap = gc_heap_live(heap);
-    if (ctx->gc_heap != heap) {
+    if (ctx_gc_heap(ctx) != heap) {
         if (heap) moonbit_incref(heap);
-        GcHeap *old = ctx->gc_heap;
-        ctx->gc_heap = heap;
+        GcHeap *old = ctx_gc_heap(ctx);
+        ctx_set_gc_heap(ctx, heap);
         if (old) moonbit_decref(old);
     }
     if (heap) {
         // Set up pointers for inline allocation
-        ctx->gc_heap_ptr = heap->data + heap->size;
-        ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
     } else {
-        ctx->gc_heap_ptr = NULL;
-        ctx->gc_heap_limit = NULL;
+        ctx_set_gc_heap_ptr(ctx, NULL);
+        ctx_set_gc_heap_limit(ctx, NULL);
     }
 }
 
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx) {
-    if (!ctx || !ctx->gc_heap) return;
+    if (!ctx || !ctx_gc_heap(ctx)) return;
 
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
-    ctx->gc_heap_ptr = heap->data + heap->size;
-    ctx->gc_heap_limit = heap->data + heap->capacity;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
+    ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+    ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
 }
 
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id) {
     if (!ctx) return;
     wasmoon_gc_frame_t *frame = (wasmoon_gc_frame_t *)malloc(sizeof(wasmoon_gc_frame_t));
     if (!frame) return;
-    frame->prev = ctx->gc_frame_chain_head;
+    frame->prev = ctx_execution(ctx)->gc_frame_chain_head;
     frame->frame_id = frame_id;
-    frame->table = ctx->gc_safepoint_table;
-    ctx->gc_frame_chain_head = frame;
+    frame->table = ctx_runtime(ctx)->gc_safepoint_table;
+    ctx_execution(ctx)->gc_frame_chain_head = frame;
 }
 
 void ctx_gc_end_frame_internal(jit_context_t *ctx) {
-    if (!ctx || !ctx->gc_frame_chain_head) return;
-    wasmoon_gc_frame_t *top = ctx->gc_frame_chain_head;
-    ctx->gc_frame_chain_head = top->prev;
+    if (!ctx || !ctx_execution(ctx)->gc_frame_chain_head) return;
+    wasmoon_gc_frame_t *top = ctx_execution(ctx)->gc_frame_chain_head;
+    ctx_execution(ctx)->gc_frame_chain_head = top->prev;
     free(top);
 }
 
-void ctx_gc_clear_frames_internal(jit_context_t *ctx) {
-    if (!ctx) return;
-    while (ctx->gc_frame_chain_head) {
-        ctx_gc_end_frame_internal(ctx);
-    }
-}
 
 int32_t ctx_gc_push_root_scope_internal(
     jit_context_t *ctx,
@@ -405,7 +448,7 @@ int32_t ctx_gc_push_root_scope_internal(
     if (!scope) {
         return 0;
     }
-    scope->prev = ctx->gc_root_scope_head;
+    scope->prev = ctx_execution(ctx)->gc_root_scope_head;
     scope->roots = NULL;
     scope->root_count = root_count;
     if (root_count > 0) {
@@ -416,16 +459,16 @@ int32_t ctx_gc_push_root_scope_internal(
         }
         memcpy(scope->roots, roots, (size_t)root_count * sizeof(int64_t));
     }
-    ctx->gc_root_scope_head = scope;
+    ctx_execution(ctx)->gc_root_scope_head = scope;
     return 1;
 }
 
 void ctx_gc_pop_root_scope_internal(jit_context_t *ctx) {
-    if (!ctx || !ctx->gc_root_scope_head) {
+    if (!ctx || !ctx_execution(ctx)->gc_root_scope_head) {
         return;
     }
-    wasmoon_gc_root_scope_t *scope = ctx->gc_root_scope_head;
-    ctx->gc_root_scope_head = scope->prev;
+    wasmoon_gc_root_scope_t *scope = ctx_execution(ctx)->gc_root_scope_head;
+    ctx_execution(ctx)->gc_root_scope_head = scope->prev;
     free(scope->roots);
     free(scope);
 }
@@ -437,21 +480,45 @@ void ctx_gc_restore_root_scopes_internal(
     if (!ctx) {
         return;
     }
-    while (ctx->gc_root_scope_head && ctx->gc_root_scope_head != marker) {
+    while (ctx_execution(ctx)->gc_root_scope_head && ctx_execution(ctx)->gc_root_scope_head != marker) {
         ctx_gc_pop_root_scope_internal(ctx);
     }
-    if (marker && ctx->gc_root_scope_head != marker) {
+    if (marker && ctx_execution(ctx)->gc_root_scope_head != marker) {
         ctx_gc_clear_root_scopes_internal(ctx);
     }
 }
 
+void jit_execution_clear_root_scopes(jit_execution_state_t *state) {
+    while (state->gc_root_scope_head) {
+        wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
+        state->gc_root_scope_head = scope->prev;
+        free(scope->roots);
+        free(scope);
+    }
+}
+
 void ctx_gc_clear_root_scopes_internal(jit_context_t *ctx) {
-    if (!ctx) {
-        return;
+    if (ctx && ctx_runtime(ctx)->execution)
+        jit_execution_clear_root_scopes(ctx_runtime(ctx)->execution);
+}
+
+jit_execution_state_t *ctx_execution_fallback(const jit_context_t *ctx) {
+    jit_execution_state_t *state = calloc(1, sizeof(*state));
+    if (!state) abort();
+    ctx_runtime(ctx)->execution = state;
+    return state;
+}
+
+void jit_execution_state_clear(jit_execution_state_t *state) {
+    if (!state) return;
+    exception_reset_execution_state(state);
+    while (state->gc_frame_chain_head) {
+        wasmoon_gc_frame_t *frame = state->gc_frame_chain_head;
+        state->gc_frame_chain_head = frame->prev;
+        free(frame);
     }
-    while (ctx->gc_root_scope_head) {
-        ctx_gc_pop_root_scope_internal(ctx);
-    }
+    free(state->gc_root_scratch);
+    memset(state, 0, sizeof(*state));
 }
 
 void ctx_gc_set_safepoint_table_internal(
@@ -459,143 +526,92 @@ void ctx_gc_set_safepoint_table_internal(
     const wasmoon_gc_safepoint_table_t *table
 ) {
     if (!ctx) return;
-    ctx->gc_safepoint_table = table;
+    ctx_runtime(ctx)->gc_safepoint_table = table;
 }
 
 static int32_t gc_alloc_func_safepoint_tables(jit_context_t *ctx) {
     if (!ctx) {
         return 0;
     }
-    if (ctx->gc_func_safepoint_tables) {
-        return 1;
+    wasmoon_gc_safepoint_table_t *old = ctx_runtime(ctx)->gc_func_safepoint_tables;
+    if (old && !safepoint_owner(old)->shared) return 1;
+    int32_t count = ctx_func_count(ctx);
+    if (count <= 0) return 0;
+    jit_safepoint_owner_t *owner = new_safepoints(count, 0);
+    if (old) {
+        int32_t old_count = ctx_runtime(ctx)->gc_func_safepoint_table_count;
+        for (int32_t i = 0; i < old_count; ++i) {
+            owner->entries[i] = old[i];
+            if (old[i].stackmap_blob) moonbit_incref((void *)old[i].stackmap_blob);
+            if (old[i].code_offsets) moonbit_incref((void *)old[i].code_offsets);
+            if (ctx_runtime(ctx)->gc_safepoint_table == &old[i])
+                ctx_runtime(ctx)->gc_safepoint_table = &owner->entries[i];
+        }
+        moonbit_decref(safepoint_owner(old));
     }
-    int32_t count = ctx->func_count > 0 ? ctx->func_count : 0;
-    if (count <= 0) {
-        return 0;
-    }
-    wasmoon_gc_safepoint_table_t *tables =
-        (wasmoon_gc_safepoint_table_t *)calloc((size_t)count, sizeof(wasmoon_gc_safepoint_table_t));
-    if (!tables) {
-        return 0;
-    }
-    uint8_t **blobs = (uint8_t **)calloc((size_t)count, sizeof(uint8_t *));
-    if (!blobs) {
-        free(tables);
-        return 0;
-    }
-    uint32_t **offsets = (uint32_t **)calloc((size_t)count, sizeof(uint32_t *));
-    if (!offsets) {
-        free(blobs);
-        free(tables);
-        return 0;
-    }
-    ctx->gc_func_safepoint_tables = tables;
-    ctx->gc_func_stackmap_blobs = blobs;
-    ctx->gc_func_safepoint_offsets = offsets;
-    ctx->gc_func_safepoint_table_count = count;
+    ctx_runtime(ctx)->gc_func_safepoint_tables = owner->entries;
+    ctx_runtime(ctx)->gc_func_safepoint_table_count = count;
     return 1;
 }
 
-static void gc_clear_func_safepoint_slot(jit_context_t *ctx, int32_t func_idx) {
-    if (!ctx || !ctx->gc_func_safepoint_tables) {
-        return;
-    }
-    if (func_idx < 0 || func_idx >= ctx->gc_func_safepoint_table_count) {
-        return;
-    }
-    if (ctx->gc_func_stackmap_blobs && ctx->gc_func_stackmap_blobs[func_idx]) {
-        free(ctx->gc_func_stackmap_blobs[func_idx]);
-        ctx->gc_func_stackmap_blobs[func_idx] = NULL;
-    }
-    if (ctx->gc_func_safepoint_offsets && ctx->gc_func_safepoint_offsets[func_idx]) {
-        free(ctx->gc_func_safepoint_offsets[func_idx]);
-        ctx->gc_func_safepoint_offsets[func_idx] = NULL;
-    }
-    memset(&ctx->gc_func_safepoint_tables[func_idx], 0, sizeof(wasmoon_gc_safepoint_table_t));
-}
-
-int32_t ctx_gc_set_func_safepoints_internal(
-    jit_context_t *ctx,
-    int32_t func_idx,
-    const uint8_t *stackmap_blob,
-    int32_t stackmap_blob_size,
-    const int32_t *code_offsets,
-    int32_t safepoint_count
+static int32_t bind_func_safepoints(
+    jit_context_t *ctx, int32_t func_idx, uint8_t *blob, int32_t blob_size,
+    int32_t *offsets, int32_t count
 ) {
-    if (!ctx || func_idx < 0 || func_idx >= ctx->func_count) {
-        return 0;
-    }
-    if (!gc_alloc_func_safepoint_tables(ctx)) {
-        return 0;
-    }
-
-    gc_clear_func_safepoint_slot(ctx, func_idx);
-
-    uint8_t *blob_copy = NULL;
-    uint32_t *offset_copy = NULL;
-    int32_t safe_blob_size = stackmap_blob_size > 0 ? stackmap_blob_size : 0;
-    int32_t safe_count = safepoint_count > 0 ? safepoint_count : 0;
-
-    if (safe_blob_size > 0) {
-        blob_copy = (uint8_t *)malloc((size_t)safe_blob_size);
-        if (!blob_copy) {
-            return 0;
-        }
-        if (stackmap_blob) {
-            memcpy(blob_copy, stackmap_blob, (size_t)safe_blob_size);
-        } else {
-            memset(blob_copy, 0, (size_t)safe_blob_size);
-        }
-    }
-
-    if (safe_count > 0) {
-        offset_copy = (uint32_t *)malloc((size_t)safe_count * sizeof(uint32_t));
-        if (!offset_copy) {
-            if (blob_copy) free(blob_copy);
-            return 0;
-        }
-        if (code_offsets) {
-            for (int32_t i = 0; i < safe_count; i++) {
-                offset_copy[i] = (uint32_t)code_offsets[i];
-            }
-        } else {
-            memset(offset_copy, 0, (size_t)safe_count * sizeof(uint32_t));
-        }
-    }
-
-    if (ctx->gc_func_stackmap_blobs) {
-        ctx->gc_func_stackmap_blobs[func_idx] = blob_copy;
-    }
-    if (ctx->gc_func_safepoint_offsets) {
-        ctx->gc_func_safepoint_offsets[func_idx] = offset_copy;
-    }
-    wasmoon_gc_safepoint_table_t *table = &ctx->gc_func_safepoint_tables[func_idx];
-    table->stackmap_blob = blob_copy;
-    table->stackmap_blob_size = (uint32_t)safe_blob_size;
-    table->code_offsets = offset_copy;
-    table->safepoint_count = (uint32_t)safe_count;
+    if (!ctx || func_idx < 0 || func_idx >= ctx_func_count(ctx)) return 0;
+    if (!blob_size && !count && !ctx_runtime(ctx)->gc_func_safepoint_tables) return 1;
+    if (!gc_alloc_func_safepoint_tables(ctx)) return 0;
+    blob = blob_size ? blob : NULL;
+    offsets = count ? offsets : NULL;
+    // A caller may rebind exactly the currently retained payloads.
+    if (blob) moonbit_incref(blob);
+    if (offsets) moonbit_incref(offsets);
+    wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[func_idx];
+    gc_release_safepoint_table(table);
+    table->stackmap_blob = blob;
+    table->stackmap_blob_size = (uint32_t)blob_size;
+    table->code_offsets = (uint32_t *)offsets;
+    table->safepoint_count = (uint32_t)count;
     return 1;
+}
+
+// Legacy raw-pointer input is copied; it must never be passed to RC primitives.
+int32_t ctx_gc_set_func_safepoints_internal(
+    jit_context_t *ctx, int32_t func_idx, const uint8_t *stackmap_blob,
+    int32_t stackmap_blob_size, const int32_t *code_offsets, int32_t safepoint_count
+) {
+    if (!ctx || func_idx < 0 || func_idx >= ctx_func_count(ctx)) return 0;
+    int32_t blob_size = stackmap_blob_size > 0 ? stackmap_blob_size : 0;
+    int32_t count = safepoint_count > 0 ? safepoint_count : 0;
+    uint8_t *blob = moonbit_make_bytes(blob_size, 0);
+    int32_t *offsets = moonbit_make_int32_array(count, 0);
+    if (blob_size && stackmap_blob) memcpy(blob, stackmap_blob, (size_t)blob_size);
+    if (count && code_offsets) memcpy(offsets, code_offsets, (size_t)count * sizeof(int32_t));
+    int32_t result = bind_func_safepoints(ctx, func_idx, blob, blob_size, offsets, count);
+    moonbit_decref(blob);
+    moonbit_decref(offsets);
+    return result;
 }
 
 void ctx_gc_use_func_safepoints_internal(
     jit_context_t *ctx,
     int32_t func_idx
 ) {
-    if (!ctx || !ctx->gc_func_safepoint_tables) {
+    if (!ctx || !ctx_runtime(ctx)->gc_func_safepoint_tables) {
         if (ctx) {
-            ctx->gc_safepoint_table = NULL;
+            ctx_runtime(ctx)->gc_safepoint_table = NULL;
         }
         return;
     }
-    if (func_idx < 0 || func_idx >= ctx->gc_func_safepoint_table_count) {
-        ctx->gc_safepoint_table = NULL;
+    if (func_idx < 0 || func_idx >= ctx_runtime(ctx)->gc_func_safepoint_table_count) {
+        ctx_runtime(ctx)->gc_safepoint_table = NULL;
         return;
     }
-    wasmoon_gc_safepoint_table_t *table = &ctx->gc_func_safepoint_tables[func_idx];
+    wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[func_idx];
     if (table->safepoint_count == 0 && table->stackmap_blob_size == 0) {
-        ctx->gc_safepoint_table = NULL;
+        ctx_runtime(ctx)->gc_safepoint_table = NULL;
     } else {
-        ctx->gc_safepoint_table = table;
+        ctx_runtime(ctx)->gc_safepoint_table = table;
     }
 }
 
@@ -608,11 +624,11 @@ int32_t ctx_gc_set_root_scratch_internal(
         return 0;
     }
     if (root_count <= 0 || !roots) {
-        ctx->gc_root_scratch_len = 0;
+        ctx_execution(ctx)->gc_root_scratch_len = 0;
         return 1;
     }
-    if (root_count > ctx->gc_root_scratch_cap) {
-        int32_t new_cap = ctx->gc_root_scratch_cap > 0 ? ctx->gc_root_scratch_cap : 16;
+    if (root_count > ctx_execution(ctx)->gc_root_scratch_cap) {
+        int32_t new_cap = ctx_execution(ctx)->gc_root_scratch_cap > 0 ? ctx_execution(ctx)->gc_root_scratch_cap : 16;
         while (new_cap < root_count) {
             if (new_cap > INT32_MAX / 2) {
                 new_cap = root_count;
@@ -620,15 +636,15 @@ int32_t ctx_gc_set_root_scratch_internal(
             }
             new_cap *= 2;
         }
-        int64_t *new_buf = (int64_t *)realloc(ctx->gc_root_scratch, (size_t)new_cap * sizeof(int64_t));
+        int64_t *new_buf = (int64_t *)realloc(ctx_execution(ctx)->gc_root_scratch, (size_t)new_cap * sizeof(int64_t));
         if (!new_buf) {
             return 0;
         }
-        ctx->gc_root_scratch = new_buf;
-        ctx->gc_root_scratch_cap = new_cap;
+        ctx_execution(ctx)->gc_root_scratch = new_buf;
+        ctx_execution(ctx)->gc_root_scratch_cap = new_cap;
     }
-    memcpy(ctx->gc_root_scratch, roots, (size_t)root_count * sizeof(int64_t));
-    ctx->gc_root_scratch_len = root_count;
+    memcpy(ctx_execution(ctx)->gc_root_scratch, roots, (size_t)root_count * sizeof(int64_t));
+    ctx_execution(ctx)->gc_root_scratch_len = root_count;
     return 1;
 }
 
@@ -638,20 +654,20 @@ int32_t gc_collect_for_alloc_internal(
     int32_t root_count
 ) {
     jit_context_t *activation = get_current_jit_context();
-    if (activation && ctx && activation->gc_heap == ctx->gc_heap) ctx = activation;
-    if (!ctx || !ctx->gc_heap) {
+    if (activation && ctx && ctx_gc_heap(activation) == ctx_gc_heap(ctx)) ctx = activation;
+    if (!ctx || !ctx_gc_heap(ctx)) {
         return -1;
     }
-    if (ctx->gc_in_collect) {
+    if (ctx_execution(ctx)->gc_in_collect) {
         return -1;
     }
 
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
     int32_t safe_root_count = root_count > 0 ? root_count : 0;
-    int32_t scratch_count = ctx->gc_root_scratch_len > 0 ? ctx->gc_root_scratch_len : 0;
+    int32_t scratch_count = ctx_execution(ctx)->gc_root_scratch_len > 0 ? ctx_execution(ctx)->gc_root_scratch_len : 0;
     int32_t caller_root_count = gc_root_scope_count(ctx);
-    int32_t exception_root_count = ctx->exception_value_count > 0 ? ctx->exception_value_count : 0;
-    int32_t spilled_root_count = ctx->spilled_locals_count > 0 ? ctx->spilled_locals_count : 0;
+    int32_t exception_root_count = ctx_execution(ctx)->exception_value_count > 0 ? ctx_execution(ctx)->exception_value_count : 0;
+    int32_t spilled_root_count = ctx_execution(ctx)->spilled_locals_count > 0 ? ctx_execution(ctx)->spilled_locals_count : 0;
     int32_t table_root_count = gc_count_table_roots(ctx);
     int64_t stack_root_count64 =
         (int64_t)safe_root_count +
@@ -670,22 +686,22 @@ int32_t gc_collect_for_alloc_internal(
     int32_t store_root_count = (int32_t)store_root_count64;
     int32_t total_roots = (int32_t)total_roots64;
     int32_t collected = 0;
-    const wasmoon_gc_safepoint_table_t *active_table = ctx->gc_safepoint_table;
-    if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
-        active_table = ctx->gc_frame_chain_head->table;
+    const wasmoon_gc_safepoint_table_t *active_table = ctx_runtime(ctx)->gc_safepoint_table;
+    if (ctx_execution(ctx)->gc_frame_chain_head && ctx_execution(ctx)->gc_frame_chain_head->table) {
+        active_table = ctx_execution(ctx)->gc_frame_chain_head->table;
     }
     size_t heap_size_before = heap->size;
     int32_t object_count_before = heap->object_count;
     int32_t free_count_before = heap->free_count;
 
-    ctx->gc_collect_requested = 1;
-    ctx->gc_in_collect = 1;
+    ctx_execution(ctx)->gc_collect_requested = 1;
+    ctx_execution(ctx)->gc_in_collect = 1;
 
     if (total_roots > 0) {
         int64_t *merged = (int64_t *)malloc((size_t)total_roots * sizeof(int64_t));
         if (!merged) {
-            ctx->gc_in_collect = 0;
-            ctx->gc_collect_requested = 0;
+            ctx_execution(ctx)->gc_in_collect = 0;
+            ctx_execution(ctx)->gc_collect_requested = 0;
             return -1;
         }
         int32_t at = 0;
@@ -693,19 +709,19 @@ int32_t gc_collect_for_alloc_internal(
             memcpy(&merged[at], roots, (size_t)safe_root_count * sizeof(int64_t));
             at += safe_root_count;
         }
-        if (scratch_count > 0 && ctx->gc_root_scratch) {
-            memcpy(&merged[at], ctx->gc_root_scratch, (size_t)scratch_count * sizeof(int64_t));
+        if (scratch_count > 0 && ctx_execution(ctx)->gc_root_scratch) {
+            memcpy(&merged[at], ctx_execution(ctx)->gc_root_scratch, (size_t)scratch_count * sizeof(int64_t));
             at += scratch_count;
         }
         if (caller_root_count > 0) {
             at += gc_copy_root_scopes(ctx, &merged[at]);
         }
-        if (exception_root_count > 0 && ctx->exception_values) {
-            memcpy(&merged[at], ctx->exception_values, (size_t)exception_root_count * sizeof(int64_t));
+        if (exception_root_count > 0 && ctx_execution(ctx)->exception_values) {
+            memcpy(&merged[at], ctx_execution(ctx)->exception_values, (size_t)exception_root_count * sizeof(int64_t));
             at += exception_root_count;
         }
-        if (spilled_root_count > 0 && ctx->spilled_locals) {
-            memcpy(&merged[at], ctx->spilled_locals, (size_t)spilled_root_count * sizeof(int64_t));
+        if (spilled_root_count > 0 && ctx_execution(ctx)->spilled_locals) {
+            memcpy(&merged[at], ctx_execution(ctx)->spilled_locals, (size_t)spilled_root_count * sizeof(int64_t));
             at += spilled_root_count;
         }
         if (table_root_count > 0) {
@@ -748,24 +764,24 @@ int32_t gc_collect_for_alloc_internal(
         );
     }
 
-    ctx->gc_in_collect = 0;
-    ctx->gc_collect_requested = 0;
+    ctx_execution(ctx)->gc_in_collect = 0;
+    ctx_execution(ctx)->gc_collect_requested = 0;
     ctx_update_gc_heap_ptr_internal(ctx);
     return collected;
 }
 
 void ctx_clear_table_bindings(jit_context_t *ctx) {
-    if (!ctx->table_bindings) return;
-    for (int i = 0; i < ctx->table_count; ++i) {
-        wasmoon_table_binding_t *binding = &ctx->table_bindings[i];
+    if (!ctx_runtime(ctx)->table_bindings) return;
+    for (int i = 0; i < ctx_table_count(ctx); ++i) {
+        wasmoon_table_binding_t *binding = &ctx_runtime(ctx)->table_bindings[i];
         wasmoon_table_t *owner = binding->owner;
         if (binding->previous) binding->previous->next = binding->next;
         else owner->bindings = binding->next;
         if (binding->next) binding->next->previous = binding->previous;
         moonbit_decref(owner);
     }
-    free(ctx->table_bindings);
-    ctx->table_bindings = NULL;
+    free(ctx_runtime(ctx)->table_bindings);
+    ctx_runtime(ctx)->table_bindings = NULL;
 }
 
 void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size) {
@@ -773,11 +789,120 @@ void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size) {
     table->size = size;
     for (wasmoon_table_binding_t *binding = table->bindings; binding; binding = binding->next) {
         jit_context_t *ctx = binding->context;
-        ctx->tables[binding->index] = entries;
-        ctx->table_sizes[binding->index] = size;
+        ctx_tables(ctx)[binding->index] = entries;
+        ctx_table_sizes(ctx)[binding->index] = size;
         if (binding->index == 0) {
-            ctx->table0_base = entries;
-            ctx->table0_elements = size;
+            ctx_set_table0_base(ctx, entries);
+            ctx_set_table0_elements(ctx, size);
         }
     }
+}
+
+// Compiler layout is derived from the native declarations, once at startup.
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_layout_field(int32_t index) {
+    static const int32_t fields[] = {
+        offsetof(jit_context_t, memory0),
+        offsetof(jit_context_t, memory0_base),
+        offsetof(jit_context_t, memory0_size),
+        offsetof(jit_context_t, func_table),
+        offsetof(jit_context_t, table0_base),
+        offsetof(jit_context_t, table0_elements),
+        offsetof(jit_context_t, globals),
+        offsetof(jit_context_t, tables),
+        offsetof(jit_context_t, table_count),
+        offsetof(jit_context_t, func_count),
+        offsetof(jit_context_t, table_sizes),
+        offsetof(jit_context_t, table_max_sizes),
+        offsetof(jit_context_t, memories),
+        offsetof(jit_context_t, memory_count),
+        offsetof(jit_context_t, debug_current_func_idx),
+        offsetof(jit_context_t, gc_heap_ptr),
+        offsetof(jit_context_t, gc_heap_limit),
+        offsetof(jit_context_t, gc_heap),
+        sizeof(void *),
+        sizeof(int64_t),
+        0,
+        2 * sizeof(void *),
+        sizeof(void *),
+        offsetof(wasmoon_memory_t, base),
+        offsetof(wasmoon_memory_t, current_length),
+    };
+    assert(index >= 0 && (size_t)index < sizeof(fields) / sizeof(fields[0]));
+    return fields[index];
+}
+
+// Managed callable binding shares the context lifecycle translation unit.
+extern int64_t wasmoon_jit_context_ptr(void *context);
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_bind_callable_registry(
+    void *managed_context, void *registry,
+    int32_t *local_types, int32_t local_count,
+    int32_t *tags, int32_t tag_count
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
+    if (!ctx) return;
+    // Preserve the legacy empty-local-map fallback while retaining nonempty arrays.
+    int32_t *locals = local_count ? local_types : NULL;
+    int32_t *tag_map = tag_count ? tags : NULL;
+    moonbit_incref(registry);
+    if (locals) moonbit_incref(locals);
+    if (tag_map) moonbit_incref(tag_map);
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    if (state->callable_registry) moonbit_decref(state->callable_registry);
+    if (state->callable_local_types) moonbit_decref(state->callable_local_types);
+    if (state->callable_tags) moonbit_decref(state->callable_tags);
+    state->callable_registry = registry;
+    state->callable_local_types = locals;
+    state->callable_local_type_count = local_count;
+    state->callable_tags = tag_map;
+    state->callable_tag_count = tag_count;
+}
+
+// The MoonBit owner prepares typed arrays. Native helpers only retain/read them.
+MOONBIT_FFI_EXPORT void wasmoon_jit_bind_gc_metadata(
+    void *managed_context, int32_t *types, int32_t *canonical, int32_t *functions
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
+    if (!ctx) return;
+    int32_t type_slots = Moonbit_array_length(types);
+    int32_t canonical_count = Moonbit_array_length(canonical);
+    int32_t function_count = Moonbit_array_length(functions);
+    // Retain all inputs first, including aliases of the currently bound arrays.
+    types = type_slots ? types : NULL;
+    canonical = canonical_count ? canonical : NULL;
+    functions = function_count ? functions : NULL;
+    if (types) moonbit_incref(types);
+    if (canonical) moonbit_incref(canonical);
+    if (functions) moonbit_incref(functions);
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    if (state->gc_type_cache) moonbit_decref(state->gc_type_cache);
+    if (state->gc_canonical_indices) moonbit_decref(state->gc_canonical_indices);
+    if (state->gc_func_type_indices) moonbit_decref(state->gc_func_type_indices);
+    state->gc_type_cache = types;
+    state->gc_num_types = type_slots / GC_TYPE_CACHE_STRIDE;
+    state->gc_canonical_indices = canonical;
+    state->gc_num_canonical = canonical_count;
+    state->gc_func_type_indices = functions;
+    state->gc_num_funcs = function_count;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_bind_gc_safepoints(
+    void *context, int32_t function, uint8_t *blob, int32_t *offsets
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return bind_func_safepoints(ctx, function, blob, Moonbit_array_length(blob),
+        offsets, Moonbit_array_length(offsets));
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_bind_gc_function_addresses(
+    void *context, int64_t *addresses
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    if (!ctx) return;
+    int32_t count = Moonbit_array_length(addresses);
+    addresses = count ? addresses : NULL;
+    if (addresses) moonbit_incref(addresses);
+    if (ctx_runtime(ctx)->gc_func_table) moonbit_decref(ctx_runtime(ctx)->gc_func_table);
+    ctx_runtime(ctx)->gc_func_table = addresses;
+    ctx_runtime(ctx)->gc_func_table_size = count;
 }

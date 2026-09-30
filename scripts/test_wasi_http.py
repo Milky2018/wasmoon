@@ -7,6 +7,7 @@ import sys
 import http.client
 from pathlib import Path
 import socket
+import shutil
 import subprocess
 import tempfile
 import time
@@ -143,7 +144,59 @@ def startup_cases(binary: Path, fixtures: Path, jit: bool) -> None:
         assert result.returncode != 0, result
 
 
+def mixed_command_case(binary: Path, jit: bool) -> None:
+    # Keep a 60-second native timer pending while an HTTP exchange completes.
+    # The guest cancels that timer after the response. A blocking host pump
+    # cannot finish within the process timeout, independent of relative timing.
+    with tempfile.TemporaryDirectory() as directory, socket.socket() as server:
+        work = Path(directory)
+        server.bind(("127.0.0.1", 0))
+        server.listen()
+        server.settimeout(15)
+        authority = f"127.0.0.1:{server.getsockname()[1]}"
+        wit = work / "wit"
+        shutil.copytree(ROOT / "modules/wasmoon/wasi_http/wit", wit)
+        (wit / "host.wit").write_text(
+            "package wasmoon:http-host;\n"
+            "world mixed { import wasi:http/types@0.3.0; "
+            "import wasi:http/client@0.3.0; "
+            "import wasi:clocks/monotonic-clock@0.3.0; "
+            "export wasi:cli/run@0.3.0; }\n"
+        )
+        source = (ROOT / "tests/http/mixed-command.wat").read_text()
+        source = source.replace("127.0.0.1:PORT", authority)
+        source = source.replace("AUTHORITY_LENGTH", str(len(authority)))
+        (work / "guest.wat").write_text(source)
+        subprocess.run(["wasm-tools", "component", "embed", str(wit), str(work / "guest.wat"),
+                        "--world", "mixed", "-o", str(work / "guest.core.wasm")], check=True)
+        subprocess.run(["wasm-tools", "component", "new", str(work / "guest.core.wasm"),
+                        "-o", str(work / "guest.wasm")], check=True)
+        subprocess.run(["wasm-tools", "validate", "--features", "all", str(work / "guest.wasm")], check=True)
+
+        def respond():
+            with server.accept()[0] as connection:
+                connection.settimeout(15)
+                received = bytearray()
+                while b"\r\n\r\n" not in received:
+                    chunk = connection.recv(4096)
+                    assert chunk, "guest closed before sending HTTP headers"
+                    received.extend(chunk)
+                assert received.startswith(b"GET / HTTP/1.1\r\n"), received
+                connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            response = pool.submit(respond)
+            command = [str(binary), "component", str(work / "guest.wasm"), "--run", "--http", "--network", "loopback"]
+            if not jit:
+                command.append("--no-jit")
+            result = subprocess.run(command, capture_output=True, timeout=15)
+            assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+            response.result(timeout=15)
+    print(f"WASI HTTP {'JIT' if jit else 'interpreter'}: concurrent native timer and HTTP command passed")
+
+
 def run_engine(binary: Path, fixtures: Path, jit: bool) -> None:
+    mixed_command_case(binary, jit)
     startup_cases(binary, fixtures, jit)
     with serving(binary, fixtures / "uri.wasm", jit) as port:
         response = raw_exchange(port, b"POST /valid%2fpath?q=%ff HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\nhi")

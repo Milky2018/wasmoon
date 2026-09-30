@@ -86,26 +86,43 @@ class WindowsPollTests(unittest.TestCase):
             handles = [get_socket(fd) for fd in fds]
             for handle in handles:
                 self.assertFalse(os.get_handle_inheritable(handle))
-            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-            kernel.CreateEventW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p]
-            kernel.CreateEventW.restype = ctypes.c_void_p
-            kernel.CloseHandle.argtypes = [ctypes.c_void_p]
-            control = kernel.CreateEventW(None, True, False, None)
-            self.assertTrue(control)
+            # Handle numbers are process-local and can be reused during child
+            # startup. Compare socket endpoints instead of mere handle validity.
+            def endpoints(handle):
+                probe = socket.socket(fileno=handle)
+                try:
+                    return [list(probe.getsockname()), list(probe.getpeername())]
+                finally:
+                    probe.detach()
+
+            expected = [endpoints(handle) for handle in handles]
+            control, peer = socket.socketpair()
             try:
-                os.set_handle_inheritable(control, True)
-                code = """import ctypes, json, sys
-kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-kernel.GetHandleInformation.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
-flags = ctypes.c_ulong()
-print(json.dumps([bool(kernel.GetHandleInformation(int(h), ctypes.byref(flags))) for h in sys.argv[1:]]))
+                os.set_handle_inheritable(control.fileno(), True)
+                expected.append(endpoints(control.fileno()))
+                code = """import json, socket, sys
+results = []
+for handle in sys.argv[1:]:
+    try:
+        probe = socket.socket(fileno=int(handle))
+        try:
+            results.append([probe.getsockname(), probe.getpeername()])
+        finally:
+            probe.detach()
+    except OSError:
+        results.append(None)
+print(json.dumps(results))
 """
                 result = subprocess.run(
-                    [sys.executable, "-c", code, *map(str, handles), str(control)],
+                    [sys.executable, "-c", code, *map(str, handles), str(control.fileno())],
                     close_fds=False, capture_output=True, text=True, check=True, timeout=30)
-                self.assertEqual(json.loads(result.stdout), [False, False, True])
+                inherited = json.loads(result.stdout)
+                self.assertNotEqual(inherited[0], expected[0])
+                self.assertNotEqual(inherited[1], expected[1])
+                self.assertEqual(inherited[2], expected[2])
             finally:
-                kernel.CloseHandle(control)
+                control.close()
+                peer.close()
         finally:
             for fd in fds:
                 self.close(fd)

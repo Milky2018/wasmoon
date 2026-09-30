@@ -241,9 +241,7 @@ pub fn JITModule::load_artifact_with_imports(
     external_imports,
     function_names,
     debug_db,
-    fn(context, func_idx, safepoints) {
-      context.register_safepoints(func_idx, safepoints)
-    },
+    fn(context) { loaded.bind_safepoints(context.ctx) },
   )
 }
 
@@ -254,25 +252,22 @@ fn load_artifact_with_imports_using_registrar(
   external_imports : Map[String, Map[String, Int64]],
   function_names : Array[String],
   debug_db : @wasmoon_jit.JITDebugDB?,
-  register_safepoints : (JITContext, Int, Array[@code_object.SafepointSite]) -> Bool,
+  register_safepoints : (JITContext) -> Bool,
 ) -> JITModule raise JITModuleLoadError {
   let artifact = loaded.artifact()
   let total_funcs = artifact_context_function_count(
     artifact,
     func_signatures.length(),
   )
-  guard JITContext::try_alloc(total_funcs) is Some(ctx) else {
+  guard JITContext::try_alloc(total_funcs, loaded) is Some(ctx) else {
     raise ContextAllocationFailed(total_funcs~)
   }
   errdefer ctx.close()
-  for function in artifact.functions {
-    let identity = function.identity
-    if !register_safepoints(ctx, identity.function_index, function.safepoints) {
-      raise FunctionMetadataRegistrationFailed(
-        func_idx=identity.function_index,
-        message="failed to register GC safepoints",
-      )
-    }
+  if !register_safepoints(ctx) {
+    raise FunctionMetadataRegistrationFailed(
+      func_idx=0,
+      message="failed to register GC safepoints",
+    )
   }
   let jit_module = JITModule::JITModule()
   errdefer jit_module.close()
@@ -293,7 +288,7 @@ fn load_artifact_with_imports_using_registrar(
       Code(_) | Data(_) => None
     }
   })
-  let installed = installer.install(loaded) catch {
+  let installed = installer.install(loaded.verified()) catch {
     error => raise ArtifactInstallationFailed(cause=error)
   }
   errdefer installed.release()
@@ -1039,7 +1034,20 @@ pub fn JITModule::get_memory_size(self : JITModule, memidx : Int) -> Int64 {
 }
 
 ///|
-/// Set globals array for the JIT context
+/// Install a private table of borrowed runtime global-cell addresses.
+pub fn JITModule::bind_globals(
+  self : JITModule,
+  globals : FixedArray[Int64],
+) -> Int64 {
+  match self.context {
+    Some(ctx) => ctx.ctx.bind_globals(globals)
+    None => 0L
+  }
+}
+
+///|
+/// Transfer a malloc-owned table of borrowed global-cell addresses.
+/// Prefer bind_globals for MoonBit-owned input.
 pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
   if self.context is Some(ctx) {
     ctx.set_globals(globals_ptr)
@@ -1380,6 +1388,18 @@ pub fn JITModule::set_callable_types(
 ) -> Unit {
   if self.context is Some(context) {
     context.ctx.set_callable_types(local_types, parents, entries, tags)
+  }
+}
+
+///|
+pub fn JITModule::bind_callable_registry(
+  self : JITModule,
+  registry : @wasmoon_jit.NativeCallableRegistry,
+  local_types : Array[Int],
+  tags : Array[Int],
+) -> Unit {
+  if self.context is Some(context) {
+    context.ctx.bind_callable_registry(registry, local_types, tags)
   }
 }
 

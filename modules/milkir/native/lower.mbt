@@ -1174,6 +1174,16 @@ fn lower_scalar_instruction(
   facts : SelectionFacts,
 ) -> Unit raise NativeLowerError {
   match select_scalar_lowering(instruction, facts) {
+    Some(CompareImmediate(input, comparison, bits)) => {
+      let results = builder.emit_with_metadata(
+        IntCompareImmediate(comparison, bits),
+        [demand_value(builder, values, value_types, facts, input)],
+        [I32],
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, results)
+      return
+    }
     Some(IntImmediate(input, operation, bits)) => {
       let lowered_results = builder.emit_with_metadata(
         IntBinaryImmediate(operation, bits),
@@ -1340,12 +1350,13 @@ fn lower_instruction(
   dialect : DialectLowering?,
 ) -> Bool raise NativeLowerError {
   if instruction.opcode
-    is Scalar(
+    is (Scalar(
       IntConst(_)
       | IntBinary(Add | Mul | ShiftLeft)
       | IntCompare(_)
       | Convert(UnsignedExtend | Bitcast)
-    ) &&
+    )
+    | Vector(Bitwise(Not))) &&
     should_defer_instruction(instruction, facts) {
     return false
   }
@@ -1535,7 +1546,7 @@ fn lower_terminator(
             lowered_false_target,
             lowered_false_arguments,
           )
-        Some(CompareImmediate(input, bits, comparison)) =>
+        Some(CompareImmediate(input, _, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
             demand_value(builder, values, value_types, facts, input),
@@ -1567,7 +1578,7 @@ fn lower_terminator(
             mapped_block(blocks, false_target),
             [],
           )
-        Some(CompareImmediate(input, bits, comparison)) =>
+        Some(CompareImmediate(input, _, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
             demand_value(builder, values, value_types, facts, input),
@@ -1598,7 +1609,7 @@ fn lower_terminator(
             mapped_block(blocks, true_target),
             [],
           )
-        Some(CompareImmediate(input, bits, comparison)) =>
+        Some(CompareImmediate(input, _, bits, comparison)) =>
           builder.branch_int_compare_immediate(
             comparison,
             demand_value(builder, values, value_types, facts, input),
@@ -1694,6 +1705,7 @@ fn lower_verified_construction(
   let facts = build_selection_facts(
     function,
     sink.folds_unsigned_index_into_memory(),
+    fn(ty, bits) { sink.supports_int_compare_immediate(ty, bits) },
   )
   let gc_roots = if has_gc_references {
     Some(compute_gc_roots(function, cfg))

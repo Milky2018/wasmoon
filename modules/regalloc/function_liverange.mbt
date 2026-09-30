@@ -60,11 +60,13 @@ fn[F : FunctionView] collect_function_liveness(
           instruction_index,
           operand.timing,
         )
-        find_or_create_live_range(ranges, operand.vreg).add_use(
-          UsePosition(point, use_kind_of_role(operand.role), operand.constraint)
-          .with_preference(operand.preference)
-          .with_tie(operand.tie_id),
-        )
+        find_or_create_live_range(ranges, operand.vreg).add_use({
+          point,
+          kind: use_kind_of_role(operand.role),
+          constraint: operand.constraint,
+          preference: operand.preference,
+          tie_id: operand.tie_id,
+        })
         if operand.role is Use {
           if !definitions.contains(operand.vreg.id) {
             uses.set(operand.vreg.id, true)

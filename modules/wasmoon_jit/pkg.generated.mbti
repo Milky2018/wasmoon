@@ -12,7 +12,9 @@ import {
   "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit/artifact/installer",
   "Milky2018/wasmoon_jit/artifact/loader",
+  "Milky2018/wasmoon_jit/context/layout",
   "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/callable",
   "Milky2018/wasmoon_jit/native/execution",
   "Milky2018/wasmoon_jit/perf",
   "Milky2018/x64_target",
@@ -21,9 +23,9 @@ import {
 }
 
 // Values
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-8"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-9"
 
-pub const WASMOON_JIT_ABI_VERSION : Int = 6
+pub const WASMOON_JIT_ABI_VERSION : Int = 7
 
 pub fn alloc_guarded_memory_desc(Int, Int?, is_shared? : Bool) -> @jit_ffi.MemoryDescriptor
 
@@ -41,11 +43,11 @@ pub fn atomic_notify(@jit_ffi.MemoryDescriptor, Int64, Int) -> Int
 
 pub fn atomic_wait_begin(@jit_ffi.MemoryDescriptor, Int64, Int, Int64, Int64) -> NativeAtomicWait?
 
-pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest
+pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature], context_shape? : @layout.ContextShape) -> @artifact.CompatibilityManifest
 
 pub fn build_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> Array[Int] raise HostcallImportTrampolineError
 
-pub fn build_host_artifact_manifest(module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest raise JitPipelineError
+pub fn build_host_artifact_manifest(module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature], context_shape? : @layout.ContextShape) -> @artifact.CompatibilityManifest raise JitPipelineError
 
 pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, NativeTarget) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
@@ -55,9 +57,11 @@ pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
 
-pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
+pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int], context_shape? : @layout.ContextShape) -> @artifact.FunctionCode raise JitPipelineError
 
 pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
+
+pub fn context_shape(@types.Module) -> @layout.ContextShape
 
 pub fn cooperative_idle() -> Unit
 
@@ -143,7 +147,7 @@ pub fn is_wasi_exit_trap_code(Int) -> Bool
 
 pub fn jit_trap_message(Int) -> String
 
-pub fn load_artifact(Bytes, @loader.ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> @loader.LoadedArtifact raise @loader.ArtifactLoadError
+pub fn load_artifact(Bytes, @loader.ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise @loader.ArtifactLoadError
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
@@ -177,10 +181,6 @@ pub fn memory_descriptor_write(@jit_ffi.MemoryDescriptor, Int64, FixedArray[Byte
 
 pub fn memory_descriptor_write_bytes(@jit_ffi.MemoryDescriptor, Int64, Bytes, Int) -> Int
 
-pub fn memory_init(Int64, Int64, Bytes) -> Bool
-
-pub fn memory_read(Int64, Int64, Int) -> Bytes
-
 pub fn native_value_slot_read(Int64, Int) -> Int64
 
 pub fn native_value_slot_write(Int64, Int, Int64) -> Unit
@@ -203,6 +203,8 @@ pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, Stri
 
 pub fn sanitize_debug_filename(String) -> String
 
+pub fn shaped_vmcontext_layout(@layout.ContextShape) -> VMContextLayout
+
 pub fn slot_to_value(GcSlot, @types.ValueType) -> @types.Value
 
 pub fn tag_funcref_ptr(Int64) -> Int64
@@ -217,7 +219,7 @@ pub fn value_to_slot(@types.Value) -> GcSlot
 
 pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
-pub fn verify_artifact(@artifact.Artifact, @loader.ArtifactCompatibility) -> @loader.LoadedArtifact raise @loader.ArtifactLoadError
+pub fn verify_artifact(@artifact.Artifact, @loader.ArtifactCompatibility) -> LoadedArtifact raise @loader.ArtifactLoadError
 
 pub fn vmcontext_layout() -> VMContextLayout
 
@@ -540,6 +542,15 @@ pub struct JitPipelineDiagnostics {
 } derive(@debug.Debug)
 pub fn JitPipelineDiagnostics::to_repr(Self) -> @debug.Repr
 
+pub struct LoadedArtifact {
+  // private fields
+}
+pub fn LoadedArtifact::artifact(Self) -> @artifact.Artifact
+pub fn LoadedArtifact::bind_safepoints(Self, NativeJITContext) -> Bool
+pub fn LoadedArtifact::code_objects(Self) -> Array[@code_object.UnlinkedCodeObject]
+pub fn LoadedArtifact::context_layout(Self) -> @layout.ContextLayout?
+pub fn LoadedArtifact::verified(Self) -> @loader.LoadedArtifact
+
 pub(all) struct MemoryDescriptorLayout {
   base_offset : Int
   current_length_offset : Int
@@ -568,7 +579,7 @@ pub struct NativeCompiler {
   // private fields
 }
 pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
-pub fn NativeCompiler::new(NativeTarget) -> Self
+pub fn NativeCompiler::new(NativeTarget, context_shape? : @layout.ContextShape) -> Self
 
 type NativeFiber
 pub fn NativeFiber::cancel(Self) -> Unit raise NativeFiberError
@@ -614,6 +625,8 @@ type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.MemoryDescriptor
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
 pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise @installer.JitInstallError
+pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int], Array[Int]) -> Unit
+pub fn NativeJITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
@@ -661,7 +674,7 @@ pub fn NativeJITContext::take_wasi_exit_code(Self) -> Int
 pub fn NativeJITContext::teardown_gc(Self) -> Unit
 pub fn NativeJITContext::throw_exception_tag(Self, Int) -> Unit
 pub fn NativeJITContext::throw_exception_values(Self, Int, Array[Int64]) -> Unit
-pub fn NativeJITContext::try_alloc(Int) -> Self?
+pub fn NativeJITContext::try_alloc(Int, layout? : @layout.ContextLayout?) -> Self?
 
 type NativeJITContinuation
 pub fn NativeJITContinuation::cancel(Self) -> Unit raise NativeFiberError
@@ -824,6 +837,10 @@ pub using @loader {type ArtifactIncompatible}
 
 pub using @loader {type ArtifactLoadError}
 
+pub using @layout {type ContextLayout}
+
+pub using @layout {type ContextShape}
+
 pub using @jit_ffi {type GCHeapHandle}
 
 pub using @installer {type InstalledCode}
@@ -838,9 +855,9 @@ pub using @installer {type JitCodeInstaller}
 
 pub using @installer {type JitInstallError}
 
-pub using @loader {type LoadedArtifact}
-
 pub using @jit_ffi {type MemoryDescriptor}
+
+pub using @callable {type NativeCallableRegistry}
 
 pub using @jit_ffi {type NativeContinuationArena}
 

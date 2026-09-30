@@ -66,7 +66,7 @@ test "safepoint registration failure precedes executable installation" {
       Map([]),
       [],
       None,
-      fn(_, _, _) { false },
+      fn(_) { false },
     )
   catch {
     error => error

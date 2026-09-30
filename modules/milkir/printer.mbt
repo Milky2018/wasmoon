@@ -410,7 +410,6 @@ fn format_vector_opcode(opcode : VectorOp, operands : Array[Value]) -> String {
       match bitwise {
         Not => "v128.not"
         And => "v128.and"
-        AndNot => "v128.andnot"
         Or => "v128.or"
         Xor => "v128.xor"
         Bitselect => "v128.bitselect"

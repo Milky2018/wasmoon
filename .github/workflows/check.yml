@@ -109,6 +109,10 @@ jobs:
           VCODE_REGALLOC_VALIDATION=1 \
             moon test --target native ${{ matrix.native_test_args }}
 
+      - name: test native and async event loop integration
+        timeout-minutes: 2
+        run: moon run modules/wasmoon/testsuite/native_event_loop --target native
+
       - name: build Wasmoon
         id: build
         run: |
@@ -120,6 +124,19 @@ jobs:
             exit 1
           fi
           ./install.sh
+
+      - name: test components against the pinned Wasmtime release
+        run: |
+          python3 scripts/install_wasmtime_oracle.py
+          python3 scripts/component_differential.py \
+            --wasmtime target/component-hardening/wasmtime-oracle/wasmtime
+      - name: upload Wasmtime differential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasmtime-differential-${{ matrix.os }}
+          path: target/component-hardening/differential
+          if-no-files-found: warn
 
       - name: install independently packaged modules
         run: |
@@ -330,6 +347,10 @@ jobs:
       - name: install independently packaged modules on Windows
         run: |
           python scripts/test_packaged_install.py
+
+      - name: test Windows native and async event loop integration
+        timeout-minutes: 2
+        run: moon run modules/wasmoon/testsuite/native_event_loop --target native
 
       - name: test Windows HTTP services, middleware and clients on both engines
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}

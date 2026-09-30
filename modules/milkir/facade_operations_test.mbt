@@ -198,3 +198,26 @@ test "public extension descriptors support bounded immediate counts" {
     ),
   )
 }
+
+///|
+test "public andnot builder produces canonical vector bitwise IR" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("canonical_andnot")
+  let a = builder.add_param(V128)
+  let b = builder.add_param(V128)
+  builder.add_result(V128)
+  builder.return_([builder.v128_andnot(a, b)])
+  let function = builder.finalize()
+  function.verify()
+  inspect(
+    function.print(),
+    content=(
+      #|function canonical_andnot(v0:v128, v1:v128) -> v128 {
+      #|block0:
+      #|    v2:v128 = v128.not v1
+      #|    v3:v128 = v128.and v0, v2
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
+}

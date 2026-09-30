@@ -4,6 +4,7 @@ fn sample_artifact() -> @artifact.Artifact {
   let function_signature = @native.Signature::new([I64], [I64])
   {
     manifest: {
+      context_shape: Legacy,
       format_version: @artifact.FORMAT_VERSION,
       target: {
         architecture: AArch64,
@@ -79,7 +80,7 @@ test "artifact preserves the complete unlinked function contract" {
     content=(
       #|{
       #|  manifest: {
-      #|    format_version: 10,
+      #|    format_version: 11,
       #|    target: {
       #|      architecture: AArch64,
       #|      operating_system_abi: MacOS,
@@ -102,6 +103,7 @@ test "artifact preserves the complete unlinked function contract" {
       #|      cancellation_safepoints: true,
       #|      debug_info: true,
       #|    },
+      #|    context_shape: Legacy,
       #|  },
       #|  imports: [
       #|    {

@@ -117,11 +117,11 @@ uint8_t *alloc_shared_memory_external(wasmoon_memory_t *memory, size_t initial_s
 
 // Check if address is in the guard region of memory0
 int is_memory_guard_page_access(jit_context_t *ctx, void *addr) {
-    if (!ctx || !ctx->memory0 || !ctx->memory0->is_guarded || !ctx->memory0->alloc_base) return 0;
+    if (!ctx || !ctx_memory0(ctx) || !ctx_memory0(ctx)->is_guarded || !ctx_memory0(ctx)->alloc_base) return 0;
 
-    uintptr_t alloc_base = (uintptr_t)ctx->memory0->alloc_base;
-    uintptr_t alloc_end = alloc_base + ctx->memory0->alloc_size;
-    uintptr_t guard_start = alloc_base + ctx->memory0->guard_start;
+    uintptr_t alloc_base = (uintptr_t)ctx_memory0(ctx)->alloc_base;
+    uintptr_t alloc_end = alloc_base + ctx_memory0(ctx)->alloc_size;
+    uintptr_t guard_start = alloc_base + ctx_memory0(ctx)->guard_start;
     uintptr_t fault_addr = (uintptr_t)addr;
 
     // Check if fault is in the guard region (after accessible memory, within allocation)
@@ -217,22 +217,22 @@ int64_t memory_grow_desc_internal(wasmoon_memory_t *mem, int64_t delta, int32_t 
 // Helper to get memory object for a given memidx
 static wasmoon_memory_t *get_memory(jit_context_t *ctx, int32_t memidx) {
     if (!ctx || memidx < 0) return NULL;
-    if (memidx == 0) return ctx->memory0;
-    if (!ctx->memories || memidx >= ctx->memory_count) return NULL;
-    return ctx->memories[memidx];
+    if (memidx == 0) return ctx_memory0(ctx);
+    if (!ctx_memories(ctx) || memidx >= ctx_memory_count(ctx)) return NULL;
+    return ctx_memories(ctx)[memidx];
 }
 
 static uint8_t *get_memory_base(jit_context_t *ctx, int32_t memidx) {
     if (!ctx) return NULL;
-    if (memidx == 0) return ctx->memory0_base;
+    if (memidx == 0) return ctx_memory0_base(ctx);
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
     return mem ? mem->base : NULL;
 }
 
 static size_t get_memory_size(jit_context_t *ctx, int32_t memidx) {
     if (!ctx) return 0;
-    if (memidx == 0 && ctx->memory0 && !ctx->memory0->is_shared) {
-        return atomic_load_explicit(&ctx->memory0_size, memory_order_relaxed);
+    if (memidx == 0 && ctx_memory0(ctx) && !ctx_memory0(ctx)->is_shared) {
+        return atomic_load_explicit(ctx_memory0_size_address(ctx), memory_order_relaxed);
     }
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
     return mem ? atomic_load_explicit(&mem->current_length, memory_order_acquire) : 0;
@@ -320,7 +320,7 @@ int64_t WASMOON_GUEST_ABI memory_grow_indexed_internal(jit_context_t *ctx, int32
 int64_t WASMOON_GUEST_ABI memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
     if (!ctx) return 0;
     if (memidx < 0) return 0;
-    if (memidx > 0 && (!ctx->memories || memidx >= ctx->memory_count)) return 0;
+    if (memidx > 0 && (!ctx_memories(ctx) || memidx >= ctx_memory_count(ctx))) return 0;
 
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
     if (!mem) return 0;
@@ -337,7 +337,7 @@ void WASMOON_GUEST_ABI memory_fill_indexed_internal(jit_context_t *ctx, int32_t 
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
-    if (memidx < 0 || (memidx > 0 && (!ctx->memories || memidx >= ctx->memory_count))) {
+    if (memidx < 0 || (memidx > 0 && (!ctx_memories(ctx) || memidx >= ctx_memory_count(ctx)))) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
@@ -377,8 +377,8 @@ void WASMOON_GUEST_ABI memory_copy_indexed_internal(jit_context_t *ctx, int32_t 
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
-    if ((dst_memidx > 0 && (!ctx->memories || dst_memidx >= ctx->memory_count)) ||
-        (src_memidx > 0 && (!ctx->memories || src_memidx >= ctx->memory_count))) {
+    if ((dst_memidx > 0 && (!ctx_memories(ctx) || dst_memidx >= ctx_memory_count(ctx))) ||
+        (src_memidx > 0 && (!ctx_memories(ctx) || src_memidx >= ctx_memory_count(ctx)))) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
@@ -422,11 +422,11 @@ int64_t table_grow_ctx_internal(
     int64_t init_value
 ) {
     if (!ctx || table_idx < 0) return -1;
-    if (table_idx >= ctx->table_count) return -1;
-    if (!ctx->tables || !ctx->table_sizes || !ctx->table_bindings) return -1;
-    if (!ctx->table_bindings[table_idx].owner->entries) return -1;
+    if (table_idx >= ctx_table_count(ctx)) return -1;
+    if (!ctx_tables(ctx) || !ctx_table_sizes(ctx) || !ctx_runtime(ctx)->table_bindings) return -1;
+    if (!ctx_runtime(ctx)->table_bindings[table_idx].owner->entries) return -1;
 
-    size_t old_size = ctx->table_sizes[table_idx];
+    size_t old_size = ctx_table_sizes(ctx)[table_idx];
     if (delta == 0) return (int64_t)old_size;
     size_t new_size = old_size + (size_t)delta;
 
@@ -434,8 +434,8 @@ int64_t table_grow_ctx_internal(
     if (new_size < old_size) return -1;
 
     // Check against max size limit
-    if (ctx->table_max_sizes) {
-        size_t max_size = ctx->table_max_sizes[table_idx];
+    if (ctx_table_max_sizes(ctx)) {
+        size_t max_size = ctx_table_max_sizes(ctx)[table_idx];
         if (new_size > max_size) return -1;
     }
 
@@ -449,7 +449,7 @@ int64_t table_grow_ctx_internal(
     if (new_size > INT32_MAX) return -1;
 
     // Get the old table pointer
-    void **old_table = ctx->tables[table_idx];
+    void **old_table = ctx_tables(ctx)[table_idx];
 
     // Allocate new table (2 slots per entry: func_ptr and type_idx)
     void **new_table = (void **)calloc(new_size * 2, sizeof(void *));
@@ -467,7 +467,7 @@ int64_t table_grow_ctx_internal(
     }
 
     // Publish reallocations to every context retaining this stable owner.
-    table_publish_layout(ctx->table_bindings[table_idx].owner, new_table, new_size);
+    table_publish_layout(ctx_runtime(ctx)->table_bindings[table_idx].owner, new_table, new_size);
 
     // Free old table
     if (old_table) {

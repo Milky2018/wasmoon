@@ -1,7 +1,7 @@
 # Wasmtime misc_testsuite
 
-Complete snapshot of `tests/misc_testsuite` at Wasmtime commit
-[`668016926adfd1b8a79dbce894f1e203d8892599`](https://github.com/bytecodealliance/wasmtime/tree/668016926adfd1b8a79dbce894f1e203d8892599/tests/misc_testsuite),
+Complete snapshot of `tests/misc_testsuite` at Wasmtime 49.0.1 commit
+[`46c23a87dac1465986a8ad53ba6a7ae49372857b`](https://github.com/bytecodealliance/wasmtime/tree/46c23a87dac1465986a8ad53ba6a7ae49372857b/tests/misc_testsuite),
 the same revision as the local P1 corpus. All 382 WAST scripts and four WAT
 auxiliary inputs are retained byte-for-byte. Nine license/host-reference files
 bring the hashed inventory to 395 files. The four WAT inputs are retained but
@@ -25,8 +25,8 @@ python3 scripts/run_wasmtime_misc.py --output tmp/misc-results --timeout 60
 ```
 
 The default selects every WAST script and both execution modes. Filters match
-suite-relative paths and can be repeated. A full scan currently exits nonzero;
-see the initial results below. The runner does not download or rewrite tests.
+suite-relative paths and can be repeated. The refreshed 49.0.1 acceptance runs all scripts on both engines; see
+`docs/upstream-wasmtime-49.md` for current evidence. The runner does not download or rewrite tests.
 
 Each file/mode gets its own subprocess, logs and fresh JIT cache. A 30-second
 file timeout kills the worker process group. Component tools remain in the

@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon/async_native",
   "marianoguerra/uri",
   "marianoguerra/uri/enc" @uri_enc,
   "Milky2018/wasm_component" @component,

@@ -18,8 +18,8 @@ static inline jit_context_t *resolve_ctx(jit_context_t *ctx) {
 
 static inline GcHeap *resolve_heap(jit_context_t *ctx) {
     jit_context_t *actual = resolve_ctx(ctx);
-    if (!actual || !actual->gc_heap) return NULL;
-    return (GcHeap *)actual->gc_heap;
+    if (!actual || !ctx_gc_heap(actual)) return NULL;
+    return (GcHeap *)ctx_gc_heap(actual);
 }
 
 static int64_t trap_allocation_too_large(void) {
@@ -123,14 +123,14 @@ static uint32_t gc_read_u32_le(const uint8_t *ptr) {
 static const wasmoon_gc_safepoint_table_t *gc_func_safepoint_table_for_current(
     jit_context_t *ctx
 ) {
-    if (!ctx || !ctx->gc_func_safepoint_tables) {
+    if (!ctx || !ctx_runtime(ctx)->gc_func_safepoint_tables) {
         return NULL;
     }
-    int32_t func_idx = ctx->debug_current_func_idx;
-    if (func_idx < 0 || func_idx >= ctx->gc_func_safepoint_table_count) {
+    int32_t func_idx = ctx_debug_current_func_idx(ctx);
+    if (func_idx < 0 || func_idx >= ctx_runtime(ctx)->gc_func_safepoint_table_count) {
         return NULL;
     }
-    const wasmoon_gc_safepoint_table_t *table = &ctx->gc_func_safepoint_tables[func_idx];
+    const wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[func_idx];
     if (!table->stackmap_blob || table->stackmap_blob_size < 8) {
         return NULL;
     }
@@ -145,9 +145,9 @@ static const wasmoon_gc_safepoint_table_t *gc_active_safepoint_table(jit_context
     if (table) {
         return table;
     }
-    table = ctx->gc_safepoint_table;
-    if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
-        table = ctx->gc_frame_chain_head->table;
+    table = ctx_runtime(ctx)->gc_safepoint_table;
+    if (ctx_execution(ctx)->gc_frame_chain_head && ctx_execution(ctx)->gc_frame_chain_head->table) {
+        table = ctx_execution(ctx)->gc_frame_chain_head->table;
     }
     return table;
 }
@@ -217,8 +217,8 @@ static int32_t gc_select_alloc_roots(
         return -1;
     }
     const wasmoon_gc_safepoint_table_t *table =
-        function_index >= 0 && function_index < ctx->gc_func_safepoint_table_count
-        ? &ctx->gc_func_safepoint_tables[function_index]
+        function_index >= 0 && function_index < ctx_runtime(ctx)->gc_func_safepoint_table_count
+        ? &ctx_runtime(ctx)->gc_func_safepoint_tables[function_index]
         : gc_active_safepoint_table(ctx);
     if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
         gc_log_precise_root_failure(op, safepoint_id, "missing safepoint table");
@@ -318,13 +318,13 @@ int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, 
     if (
         num_fields == 0 &&
         ctx &&
-        ctx->gc_type_cache &&
+        ctx_runtime(ctx)->gc_type_cache &&
         type_idx >= 0 &&
-        type_idx < ctx->gc_num_types
+        type_idx < ctx_runtime(ctx)->gc_num_types
     ) {
         // Get actual field count from type cache
         // Format: [super_idx, kind, num_fields] per type
-        actual_num_fields = ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
+        actual_num_fields = ctx_runtime(ctx)->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
         if (actual_num_fields > 0) {
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc((size_t)actual_num_fields, sizeof(int64_t));
@@ -358,9 +358,9 @@ int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, 
     gc_log_alloc_retry("struct.new", &alloc_result);
 
     if (ctx) {
-        ctx->gc_heap = heap;
-        ctx->gc_heap_ptr = heap->data + heap->size;
-        ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap(ctx, heap);
+        ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
     }
 
     // Encode for JIT: gc_ref << 1 (1-based gc_ref stays 1-based, just shifted)
@@ -434,9 +434,9 @@ int64_t WASMOON_GUEST_ABI gc_array_new_impl(int32_t type_idx, int32_t len, int64
     gc_log_alloc_retry("array.new", &alloc_result);
 
     if (ctx) {
-        ctx->gc_heap = heap;
-        ctx->gc_heap_ptr = heap->data + heap->size;
-        ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap(ctx, heap);
+        ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
     }
 
     // Encode: gc_ref << 1 (1-based gc_ref, ensures gc_ref=1 -> value=2)
@@ -603,11 +603,11 @@ void WASMOON_GUEST_ABI gc_array_copy_impl(
 int64_t WASMOON_GUEST_ABI gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size) {
     (void)total_size;
     jit_context_t *actual_ctx = resolve_ctx(ctx);
-    if (!actual_ctx || !actual_ctx->gc_heap || !obj_ptr) {
+    if (!actual_ctx || !ctx_gc_heap(actual_ctx) || !obj_ptr) {
         return trap_unreachable_i64();
     }
 
-    GcHeap *heap = (GcHeap *)actual_ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(actual_ctx);
 
     if (!gc_heap_ensure_object_capacity(heap)) return trap_out_of_memory_i64();
 
@@ -620,7 +620,7 @@ int64_t WASMOON_GUEST_ABI gc_register_struct_inline(jit_context_t *ctx, uint8_t 
     heap->total_allocations++;
 
     // Update heap size to match what JIT allocated
-    heap->size = (size_t)(actual_ctx->gc_heap_ptr - heap->data);
+    heap->size = (size_t)(ctx_gc_heap_ptr(actual_ctx) - heap->data);
 
     // Encode: gc_ref << 1
     return ((int64_t)gc_ref) << 1;
@@ -650,14 +650,14 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_slow(
     if (
         num_fields == 0 &&
         actual_ctx &&
-        actual_ctx->gc_type_cache &&
+        ctx_runtime(actual_ctx)->gc_type_cache &&
         type_idx >= 0 &&
-        type_idx < actual_ctx->gc_num_types
+        type_idx < ctx_runtime(actual_ctx)->gc_num_types
     ) {
         // Get actual field count from type cache
         // Format: [super_idx, kind, num_fields] per type
         actual_num_fields =
-            actual_ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
+            ctx_runtime(actual_ctx)->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
         if (actual_num_fields > 0) {
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc((size_t)actual_num_fields, sizeof(int64_t));
@@ -717,9 +717,9 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_slow(
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
     if (actual_ctx) {
-        actual_ctx->gc_heap = heap;
-        actual_ctx->gc_heap_ptr = heap->data + heap->size;
-        actual_ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap(actual_ctx, heap);
+        ctx_set_gc_heap_ptr(actual_ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(actual_ctx, heap->data + heap->capacity);
     }
 
     // Encode: gc_ref << 1
@@ -808,9 +808,9 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_slow(
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
     if (actual_ctx) {
-        actual_ctx->gc_heap = heap;
-        actual_ctx->gc_heap_ptr = heap->data + heap->size;
-        actual_ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap(actual_ctx, heap);
+        ctx_set_gc_heap_ptr(actual_ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(actual_ctx, heap->data + heap->capacity);
     }
 
     // Encode: gc_ref << 1
@@ -872,9 +872,9 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_values_slow(
     gc_log_alloc_retry("alloc_array_from_values_slow", &alloc_result);
 
     if (actual_ctx) {
-        actual_ctx->gc_heap = heap;
-        actual_ctx->gc_heap_ptr = heap->data + heap->size;
-        actual_ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap(actual_ctx, heap);
+        ctx_set_gc_heap_ptr(actual_ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(actual_ctx, heap->data + heap->capacity);
     }
 
     // Encode: gc_ref << 1
@@ -1021,9 +1021,9 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_
     }
 
     if (ctx) {
-        ctx->gc_heap = heap;
-        ctx->gc_heap_ptr = heap->data + heap->size;
-        ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap(ctx, heap);
+        ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
     }
     gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
     return ((int64_t)gc_ref) << 1;
@@ -1049,9 +1049,9 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t
     }
 
     if (ctx) {
-        ctx->gc_heap = heap;
-        ctx->gc_heap_ptr = heap->data + heap->size;
-        ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap(ctx, heap);
+        ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
     }
     gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
     return ((int64_t)gc_ref) << 1;
@@ -1077,9 +1077,9 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, i
     }
 
     if (ctx) {
-        ctx->gc_heap = heap;
-        ctx->gc_heap_ptr = heap->data + heap->size;
-        ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap(ctx, heap);
+        ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
     }
     gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
     return ((int64_t)gc_ref) << 1;

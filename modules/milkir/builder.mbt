@@ -1406,7 +1406,7 @@ pub fn FunctionBuilder::v128_andnot(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(Bitwise(AndNot)), [a, b])
+  self.v128_and(a, self.v128_not(b))
 }
 
 ///|

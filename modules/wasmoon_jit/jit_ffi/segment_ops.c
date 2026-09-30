@@ -32,151 +32,116 @@ static int table_debug_enabled(void) {
     return table_debug_cached;
 }
 
-static void free_data_segments(jit_context_t *ctx) {
-    if (!ctx) return;
+static int segment_count(const void *segments) {
+    return segments ? Moonbit_array_length(segments) : 0;
+}
 
-    if (ctx->data_segments) {
-        for (int i = 0; i < ctx->data_segment_count; i++) {
-            if (ctx->data_segments[i]) {
-                free(ctx->data_segments[i]);
-            }
-        }
-        free(ctx->data_segments);
-        ctx->data_segments = NULL;
-    }
-    if (ctx->data_segment_sizes) { free(ctx->data_segment_sizes); ctx->data_segment_sizes = NULL; }
-    if (ctx->data_dropped) { free(ctx->data_dropped); ctx->data_dropped = NULL; }
-    ctx->data_segment_count = 0;
+static jit_segments_state_t *ensure_segments(jit_context_t *ctx) {
+    if (!ctx_runtime(ctx)->segments)
+        ctx_runtime(ctx)->segments = calloc(1, sizeof(jit_segments_state_t));
+    return ctx_runtime(ctx)->segments;
+}
+
+static void free_data_segments(jit_context_t *ctx) {
+    if (ctx_runtime(ctx)->segments->data_segments)
+        moonbit_decref(ctx_runtime(ctx)->segments->data_segments);
+    ctx_runtime(ctx)->segments->data_segments = NULL;
 }
 
 static void free_elem_segments(jit_context_t *ctx) {
-    if (!ctx) return;
-
-    if (ctx->elem_segments) {
-        for (int i = 0; i < ctx->elem_segment_count; i++) {
-            if (ctx->elem_segments[i]) {
-                free(ctx->elem_segments[i]);
-            }
-        }
-        free(ctx->elem_segments);
-        ctx->elem_segments = NULL;
-    }
-    if (ctx->elem_segment_sizes) { free(ctx->elem_segment_sizes); ctx->elem_segment_sizes = NULL; }
-    if (ctx->elem_dropped) { free(ctx->elem_dropped); ctx->elem_dropped = NULL; }
-    ctx->elem_segment_count = 0;
+    if (ctx_runtime(ctx)->segments->elem_segments)
+        moonbit_decref(ctx_runtime(ctx)->segments->elem_segments);
+    ctx_runtime(ctx)->segments->elem_segments = NULL;
 }
 
+// Legacy raw setters copy inputs into the same RC-managed representation.
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments(int64_t ctx_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx) return;
-
+    if (!ctx || (count <= 0 && !ctx_runtime(ctx)->segments) || !ensure_segments(ctx)) return;
+    uint8_t **segments = count > 0 ?
+        (uint8_t **)moonbit_make_ref_array(count, moonbit_make_bytes(0, 0)) : NULL;
     free_data_segments(ctx);
-    if (count <= 0) return;
-
-    ctx->data_segment_count = count;
-    ctx->data_segments = (uint8_t **)calloc(count, sizeof(uint8_t *));
-    ctx->data_segment_sizes = (size_t *)calloc(count, sizeof(size_t));
-    ctx->data_dropped = (uint8_t *)calloc(count, sizeof(uint8_t));
+    ctx_runtime(ctx)->segments->data_segments = segments;
 }
 
-// data: borrowed MoonBit FixedArray[Byte] payload pointer (may be NULL when size==0).
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment(
-    int64_t ctx_ptr,
-    int idx,
-    uint8_t *data,
-    int size,
-    int is_dropped
+    int64_t ctx_ptr, int idx, uint8_t *data, int size, int is_dropped
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || !ctx->data_segments || idx < 0 || idx >= ctx->data_segment_count) {
-        return;
-    }
-
-    if (ctx->data_segments[idx]) {
-        free(ctx->data_segments[idx]);
-        ctx->data_segments[idx] = NULL;
-    }
-
-    size_t copy_size = size > 0 ? (size_t)size : 0;
-    if (copy_size > 0) {
-        uint8_t *copy = (uint8_t *)malloc(copy_size);
-        if (!copy) {
-            ctx->data_segment_sizes[idx] = 0;
-            ctx->data_dropped[idx] = is_dropped ? 1 : 0;
-            return;
-        }
-        memcpy(copy, data, copy_size);
-        ctx->data_segments[idx] = copy;
-        ctx->data_segment_sizes[idx] = copy_size;
-    } else {
-        ctx->data_segment_sizes[idx] = 0;
-    }
-    ctx->data_dropped[idx] = is_dropped ? 1 : 0;
+    if (!ctx || idx < 0 || idx >= segment_count(ctx_segments_state(ctx)->data_segments)) return;
+    int count = !is_dropped && size > 0 ? size : 0;
+    uint8_t *copy = moonbit_make_bytes(count, 0);
+    if (count) memcpy(copy, data, (size_t)count);
+    uint8_t **segments = ctx_runtime(ctx)->segments->data_segments;
+    moonbit_decref(segments[idx]);
+    segments[idx] = copy;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_elem_segments(int64_t ctx_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx) return;
-
+    if (!ctx || (count <= 0 && !ctx_runtime(ctx)->segments) || !ensure_segments(ctx)) return;
+    int64_t **segments = count > 0 ?
+        (int64_t **)moonbit_make_ref_array(count, moonbit_make_int64_array(0, 0)) : NULL;
     free_elem_segments(ctx);
-    if (count <= 0) return;
-
-    ctx->elem_segment_count = count;
-    ctx->elem_segments = (int64_t **)calloc(count, sizeof(int64_t *));
-    ctx->elem_segment_sizes = (size_t *)calloc(count, sizeof(size_t));
-    ctx->elem_dropped = (uint8_t *)calloc(count, sizeof(uint8_t));
+    ctx_runtime(ctx)->segments->elem_segments = segments;
 }
 
-// data: borrowed MoonBit FixedArray[Int64] payload pointer storing pairs (value,type_idx).
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment(
-    int64_t ctx_ptr,
-    int idx,
-    int64_t *data,
-    int size,
-    int is_dropped
+    int64_t ctx_ptr, int idx, int64_t *data, int size, int is_dropped
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || !ctx->elem_segments || idx < 0 || idx >= ctx->elem_segment_count) {
-        return;
-    }
+    if (!ctx || idx < 0 || idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) return;
+    if (size > INT32_MAX / 2) return;
+    int count = !is_dropped && size > 0 ? size * 2 : 0;
+    int64_t *copy = moonbit_make_int64_array(count, 0);
+    if (count) memcpy(copy, data, (size_t)count * sizeof(int64_t));
+    int64_t **segments = ctx_runtime(ctx)->segments->elem_segments;
+    moonbit_decref(segments[idx]);
+    segments[idx] = copy;
+}
 
-    if (ctx->elem_segments[idx]) {
-        free(ctx->elem_segments[idx]);
-        ctx->elem_segments[idx] = NULL;
-    }
-
-    int64_t nelems = size > 0 ? (int64_t)size : 0;
-    int64_t nslots = nelems * 2;
-    if (nslots > 0) {
-        if ((uint64_t)nslots > (uint64_t)(SIZE_MAX / sizeof(int64_t))) {
-            ctx->elem_segment_sizes[idx] = 0;
-            ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
-            return;
-        }
-        size_t copy_bytes = (size_t)nslots * sizeof(int64_t);
-        int64_t *copy = (int64_t *)malloc(copy_bytes);
-        if (!copy) {
-            ctx->elem_segment_sizes[idx] = 0;
-            ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
-            return;
-        }
-        memcpy(copy, data, copy_bytes);
-        ctx->elem_segments[idx] = copy;
-        ctx->elem_segment_sizes[idx] = (size_t)nelems;
-    } else {
-        ctx->elem_segment_sizes[idx] = 0;
-    }
-    ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
+void ctx_clear_segments_internal(jit_context_t *ctx) {
+    if (!ctx || !ctx_runtime(ctx)->segments) return;
+    free_data_segments(ctx);
+    free_elem_segments(ctx);
+    free(ctx_runtime(ctx)->segments);
+    ctx_runtime(ctx)->segments = NULL;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx) return;
-    free_data_segments(ctx);
-    free_elem_segments(ctx);
+    ctx_clear_segments_internal((jit_context_t *)(uintptr_t)ctx_ptr);
 }
 
 extern int64_t wasmoon_jit_context_ptr(void *jit_context);
+
+// Consume private outer arrays built by MoonBit. Guest drop mutates these
+// arrays, so they must not alias another context's outer arrays.
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_bind_segments(
+    void *context, uint8_t **data, int64_t **elements
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    if (!ctx) {
+        moonbit_decref(data);
+        moonbit_decref(elements);
+        return 0;
+    }
+    if (!segment_count(data) && !segment_count(elements)) {
+        ctx_clear_segments_internal(ctx);
+        moonbit_decref(data);
+        moonbit_decref(elements);
+        return 1;
+    }
+    if (!ensure_segments(ctx)) {
+        moonbit_decref(data);
+        moonbit_decref(elements);
+        return 0;
+    }
+    free_data_segments(ctx);
+    free_elem_segments(ctx);
+    ctx_runtime(ctx)->segments->data_segments = data;
+    ctx_runtime(ctx)->segments->elem_segments = elements;
+    return 1;
+}
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments_managed(
     void *jit_context, int count
@@ -243,7 +208,7 @@ static void WASMOON_GUEST_ABI memory_init_impl(
     }
 
     // Bounds check data segment index
-    if (data_idx < 0 || data_idx >= ctx->data_segment_count) {
+    if (data_idx < 0 || data_idx >= segment_count(ctx_segments_state(ctx)->data_segments)) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
@@ -251,12 +216,9 @@ static void WASMOON_GUEST_ABI memory_init_impl(
 
     uint64_t len_u32 = (uint64_t)(uint32_t)len;
     uint64_t src_u32 = (uint64_t)(uint32_t)src;
-    uint8_t *seg_data = ctx->data_segments ? ctx->data_segments[data_idx] : NULL;
-    size_t seg_size = ctx->data_segment_sizes ? ctx->data_segment_sizes[data_idx] : 0;
-    // A dropped segment has length zero; both ranges must still be checked.
-    if (ctx->data_dropped && ctx->data_dropped[data_idx]) {
-        seg_size = 0;
-    }
+    uint8_t *seg_data = ctx_segments_state(ctx)->data_segments ? ctx_segments_state(ctx)->data_segments[data_idx] : NULL;
+    size_t seg_size = (size_t)Moonbit_array_length(seg_data);
+    // Dropped segments are empty; both ranges must still be checked.
 
     // Bounds check source range in segment
     if ((uint64_t)seg_size < src_u32 || (uint64_t)seg_size - src_u32 < len_u32) {
@@ -269,15 +231,15 @@ static void WASMOON_GUEST_ABI memory_init_impl(
     uint8_t *mem = NULL;
     size_t mem_size = 0;
     if (memidx == 0) {
-        if (!ctx->memory0 || !ctx->memory0->base) {
+        if (!ctx_memory0(ctx) || !ctx_memory0(ctx)->base) {
             g_trap_code = 1;
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
             return;
         }
-        mem = ctx->memory0->base;
-        mem_size = atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed);
-    } else if (memidx > 0 && ctx->memories && memidx < ctx->memory_count) {
-        wasmoon_memory_t *m = ctx->memories[memidx];
+        mem = ctx_memory0(ctx)->base;
+        mem_size = atomic_load_explicit(&ctx_memory0(ctx)->current_length, memory_order_relaxed);
+    } else if (memidx > 0 && ctx_memories(ctx) && memidx < ctx_memory_count(ctx)) {
+        wasmoon_memory_t *m = ctx_memories(ctx)[memidx];
         if (!m || !m->base) {
             g_trap_code = 1;
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -295,7 +257,7 @@ static void WASMOON_GUEST_ABI memory_init_impl(
     // For memory32, treat dst as u32; negative values represent high addresses.
     // For memory64, negative values are invalid and trap.
     uint64_t dst_off;
-    if (memidx == 0 ? ctx->memory0->is_memory64 : ctx->memories[memidx]->is_memory64) {
+    if (memidx == 0 ? ctx_memory0(ctx)->is_memory64 : ctx_memories(ctx)[memidx]->is_memory64) {
         if (dst < 0) {
             g_trap_code = 1;
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -322,11 +284,13 @@ static void WASMOON_GUEST_ABI data_drop_impl(
     jit_context_t *ctx,
     int32_t data_idx
 ) {
-    if (!ctx || !ctx->data_dropped) return;
+    if (!ctx || !ctx_segments_state(ctx)->data_segments) return;
 
     // Bounds check (dropping out-of-bounds is a no-op in spec)
-    if (data_idx >= 0 && data_idx < ctx->data_segment_count) {
-        ctx->data_dropped[data_idx] = 1;
+    if (data_idx >= 0 && data_idx < segment_count(ctx_segments_state(ctx)->data_segments)) {
+        if (Moonbit_array_length(ctx_runtime(ctx)->segments->data_segments[data_idx]) == 0) return;
+        moonbit_decref(ctx_runtime(ctx)->segments->data_segments[data_idx]);
+        ctx_runtime(ctx)->segments->data_segments[data_idx] = moonbit_make_bytes(0, 0);
     }
 }
 
@@ -351,11 +315,11 @@ static void WASMOON_GUEST_ABI table_fill_impl(
     size_t table_size;
 
     if (table_idx == 0) {
-        table = ctx->table0_base;
-        table_size = ctx->table0_elements;
-    } else if (ctx->tables && table_idx < ctx->table_count) {
-        table = ctx->tables[table_idx];
-        table_size = ctx->table_sizes[table_idx];
+        table = ctx_table0_base(ctx);
+        table_size = ctx_table0_elements(ctx);
+    } else if (ctx_tables(ctx) && table_idx < ctx_table_count(ctx)) {
+        table = ctx_tables(ctx)[table_idx];
+        table_size = ctx_table_sizes(ctx)[table_idx];
     } else {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -389,27 +353,27 @@ static void WASMOON_GUEST_ABI table_fill_impl(
         type_idx < 0 &&
         val != 0 &&
         (val & FUNCREF_TAG) != 0 &&
-        ctx->gc_func_table &&
-        ctx->gc_func_type_indices
+        ctx_runtime(ctx)->gc_func_table &&
+        ctx_runtime(ctx)->gc_func_type_indices
     ) {
         void* raw_ptr = (void*)(uintptr_t)(val & ~FUNCREF_TAG);
-        for (int i = 0; i < ctx->gc_func_table_size; i++) {
-            if (ctx->gc_func_table[i] == raw_ptr) {
-                int32_t t = ctx->gc_func_type_indices[i];
-                if (ctx->gc_canonical_indices && t >= 0 && t < ctx->gc_num_canonical) {
-                    t = ctx->gc_canonical_indices[t];
+        for (int i = 0; i < ctx_runtime(ctx)->gc_func_table_size; i++) {
+            if (ctx_runtime(ctx)->gc_func_table[i] == (int64_t)(uintptr_t)raw_ptr) {
+                int32_t t = ctx_runtime(ctx)->gc_func_type_indices[i];
+                if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
+                    t = ctx_runtime(ctx)->gc_canonical_indices[t];
                 }
                 type_idx = (int64_t)t;
                 break;
             }
         }
-    } else if (type_idx < 0 && val < 0 && ctx->gc_func_type_indices) {
+    } else if (type_idx < 0 && val < 0 && ctx_runtime(ctx)->gc_func_type_indices) {
         // IR-encoded funcref index: -(func_idx + 1)
         int32_t func_idx = (int32_t)(-(val + 1));
-        if (func_idx >= 0 && func_idx < ctx->gc_num_funcs) {
-            int32_t t = ctx->gc_func_type_indices[func_idx];
-            if (ctx->gc_canonical_indices && t >= 0 && t < ctx->gc_num_canonical) {
-                t = ctx->gc_canonical_indices[t];
+        if (func_idx >= 0 && func_idx < ctx_runtime(ctx)->gc_num_funcs) {
+            int32_t t = ctx_runtime(ctx)->gc_func_type_indices[func_idx];
+            if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
+                t = ctx_runtime(ctx)->gc_canonical_indices[t];
             }
             type_idx = (int64_t)t;
         }
@@ -460,11 +424,11 @@ static void WASMOON_GUEST_ABI table_copy_impl(
     void **src_table;
     size_t src_size;
     if (src_table_idx == 0) {
-        src_table = ctx->table0_base;
-        src_size = ctx->table0_elements;
-    } else if (ctx->tables && src_table_idx < ctx->table_count) {
-        src_table = ctx->tables[src_table_idx];
-        src_size = ctx->table_sizes[src_table_idx];
+        src_table = ctx_table0_base(ctx);
+        src_size = ctx_table0_elements(ctx);
+    } else if (ctx_tables(ctx) && src_table_idx < ctx_table_count(ctx)) {
+        src_table = ctx_tables(ctx)[src_table_idx];
+        src_size = ctx_table_sizes(ctx)[src_table_idx];
     } else {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -475,11 +439,11 @@ static void WASMOON_GUEST_ABI table_copy_impl(
     void **dst_table;
     size_t dst_size;
     if (dst_table_idx == 0) {
-        dst_table = ctx->table0_base;
-        dst_size = ctx->table0_elements;
-    } else if (ctx->tables && dst_table_idx < ctx->table_count) {
-        dst_table = ctx->tables[dst_table_idx];
-        dst_size = ctx->table_sizes[dst_table_idx];
+        dst_table = ctx_table0_base(ctx);
+        dst_size = ctx_table0_elements(ctx);
+    } else if (ctx_tables(ctx) && dst_table_idx < ctx_table_count(ctx)) {
+        dst_table = ctx_tables(ctx)[dst_table_idx];
+        dst_size = ctx_table_sizes(ctx)[dst_table_idx];
     } else {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -520,17 +484,16 @@ static void WASMOON_GUEST_ABI table_init_impl(
     }
 
     // Bounds check element segment index
-    if (elem_idx < 0 || elem_idx >= ctx->elem_segment_count) {
+    if (elem_idx < 0 || elem_idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
 
     // Get segment data
-    int64_t *seg_data = ctx->elem_segments ? ctx->elem_segments[elem_idx] : NULL;
-    size_t seg_size = ctx->elem_segment_sizes ? ctx->elem_segment_sizes[elem_idx] : 0;
+    int64_t *seg_data = ctx_segments_state(ctx)->elem_segments ? ctx_segments_state(ctx)->elem_segments[elem_idx] : NULL;
+    size_t seg_size = (size_t)Moonbit_array_length(seg_data) / 2;
     // Dropped segments remain subject to source and destination bounds checks.
-    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) seg_size = 0;
 
     // Bounds check source range in segment
     if (src < 0 || len < 0 ||
@@ -545,11 +508,11 @@ static void WASMOON_GUEST_ABI table_init_impl(
     void **table;
     size_t table_size;
     if (table_idx == 0) {
-        table = ctx->table0_base;
-        table_size = ctx->table0_elements;
-    } else if (ctx->tables && table_idx < ctx->table_count) {
-        table = ctx->tables[table_idx];
-        table_size = ctx->table_sizes[table_idx];
+        table = ctx_table0_base(ctx);
+        table_size = ctx_table0_elements(ctx);
+    } else if (ctx_tables(ctx) && table_idx < ctx_table_count(ctx)) {
+        table = ctx_tables(ctx)[table_idx];
+        table_size = ctx_table_sizes(ctx)[table_idx];
     } else {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -581,11 +544,13 @@ static void WASMOON_GUEST_ABI elem_drop_impl(
     jit_context_t *ctx,
     int32_t elem_idx
 ) {
-    if (!ctx || !ctx->elem_dropped) return;
+    if (!ctx || !ctx_segments_state(ctx)->elem_segments) return;
 
     // Bounds check (dropping out-of-bounds is a no-op in spec)
-    if (elem_idx >= 0 && elem_idx < ctx->elem_segment_count) {
-        ctx->elem_dropped[elem_idx] = 1;
+    if (elem_idx >= 0 && elem_idx < segment_count(ctx_segments_state(ctx)->elem_segments)) {
+        if (Moonbit_array_length(ctx_runtime(ctx)->segments->elem_segments[elem_idx]) == 0) return;
+        moonbit_decref(ctx_runtime(ctx)->segments->elem_segments[elem_idx]);
+        ctx_runtime(ctx)->segments->elem_segments[elem_idx] = moonbit_make_int64_array(0, 0);
     }
 }
 
@@ -621,14 +586,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_elem_drop_ptr(void) {
 // Get element size in bytes for array.new_data/array.init_data.
 // Returns 0 when the array element type has no defined byte size (e.g. refs).
 static size_t get_array_elem_byte_size(jit_context_t *ctx, int32_t type_idx) {
-    if (!ctx || !ctx->gc_type_cache || type_idx < 0 || type_idx >= ctx->gc_num_types) {
+    if (!ctx || !ctx_runtime(ctx)->gc_type_cache || type_idx < 0 || type_idx >= ctx_runtime(ctx)->gc_num_types) {
         return 0;
     }
-    int kind = ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_KIND_OFF];
+    int kind = ctx_runtime(ctx)->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_KIND_OFF];
     if (kind != GC_KIND_ARRAY) {
         return 0;
     }
-    int bytes = ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_ARRAY_ELEM_BYTES_OFF];
+    int bytes = ctx_runtime(ctx)->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_ARRAY_ELEM_BYTES_OFF];
     if (bytes <= 0) {
         return 0;
     }
@@ -636,14 +601,14 @@ static size_t get_array_elem_byte_size(jit_context_t *ctx, int32_t type_idx) {
 }
 
 static int get_array_elem_tag(jit_context_t *ctx, int32_t type_idx) {
-    if (!ctx || !ctx->gc_type_cache || type_idx < 0 || type_idx >= ctx->gc_num_types) {
+    if (!ctx || !ctx_runtime(ctx)->gc_type_cache || type_idx < 0 || type_idx >= ctx_runtime(ctx)->gc_num_types) {
         return 0;
     }
-    int kind = ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_KIND_OFF];
+    int kind = ctx_runtime(ctx)->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_KIND_OFF];
     if (kind != GC_KIND_ARRAY) {
         return 0;
     }
-    return ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_ARRAY_ELEM_TAG_OFF];
+    return ctx_runtime(ctx)->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_ARRAY_ELEM_TAG_OFF];
 }
 
 static inline uint16_t read_u16_le(const uint8_t *p) {
@@ -691,15 +656,15 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     int64_t offset,
     int64_t length
 ) {
-    if (!ctx || !ctx->gc_heap) {
+    if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check data segment index
-    if (data_idx < 0 || data_idx >= ctx->data_segment_count) {
+    if (data_idx < 0 || data_idx >= segment_count(ctx_segments_state(ctx)->data_segments)) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
@@ -709,9 +674,8 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     uint32_t len_u32 = (uint32_t)length;
     uint32_t off_u32 = (uint32_t)offset;
     // Get segment data
-    uint8_t *seg_data = ctx->data_segments ? ctx->data_segments[data_idx] : NULL;
-    size_t seg_size = ctx->data_segment_sizes ? ctx->data_segment_sizes[data_idx] : 0;
-    if (ctx->data_dropped && ctx->data_dropped[data_idx]) seg_size = 0;
+    uint8_t *seg_data = ctx_segments_state(ctx)->data_segments ? ctx_segments_state(ctx)->data_segments[data_idx] : NULL;
+    size_t seg_size = (size_t)Moonbit_array_length(seg_data);
 
     // Calculate byte size needed
     size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
@@ -764,15 +728,15 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     int64_t length
 ) {
     (void)type_idx;
-    if (!ctx || !ctx->gc_heap) {
+    if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check element segment index
-    if (elem_idx < 0 || elem_idx >= ctx->elem_segment_count) {
+    if (elem_idx < 0 || elem_idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
@@ -782,9 +746,8 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     uint32_t len_u32 = (uint32_t)length;
     uint32_t off_u32 = (uint32_t)offset;
     // Get segment data
-    int64_t *seg_data = ctx->elem_segments ? ctx->elem_segments[elem_idx] : NULL;
-    size_t seg_size = ctx->elem_segment_sizes ? ctx->elem_segment_sizes[elem_idx] : 0;
-    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) seg_size = 0;
+    int64_t *seg_data = ctx_segments_state(ctx)->elem_segments ? ctx_segments_state(ctx)->elem_segments[elem_idx] : NULL;
+    size_t seg_size = (size_t)Moonbit_array_length(seg_data) / 2;
 
     // Bounds check source range in segment
     if ((uint64_t)seg_size < (uint64_t)off_u32 || (uint64_t)seg_size - (uint64_t)off_u32 < (uint64_t)len_u32) {
@@ -825,15 +788,15 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     int64_t data_offset,
     int64_t length
 ) {
-    if (!ctx || !ctx->gc_heap) {
+    if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check data segment index
-    if (data_idx < 0 || data_idx >= ctx->data_segment_count) {
+    if (data_idx < 0 || data_idx >= segment_count(ctx_segments_state(ctx)->data_segments)) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
@@ -858,9 +821,8 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     }
 
     // Get segment data
-    uint8_t *seg_data = ctx->data_segments ? ctx->data_segments[data_idx] : NULL;
-    size_t seg_size = ctx->data_segment_sizes ? ctx->data_segment_sizes[data_idx] : 0;
-    if (ctx->data_dropped && ctx->data_dropped[data_idx]) seg_size = 0;
+    uint8_t *seg_data = ctx_segments_state(ctx)->data_segments ? ctx_segments_state(ctx)->data_segments[data_idx] : NULL;
+    size_t seg_size = (size_t)Moonbit_array_length(seg_data);
     size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
     int elem_tag = get_array_elem_tag(ctx, type_idx);
     if (elem_size == 0) {
@@ -895,15 +857,15 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
     int64_t length
 ) {
     (void)type_idx;
-    if (!ctx || !ctx->gc_heap) {
+    if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check element segment index
-    if (elem_idx < 0 || elem_idx >= ctx->elem_segment_count) {
+    if (elem_idx < 0 || elem_idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
@@ -928,9 +890,8 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
     }
 
     // Get segment data
-    int64_t *seg_data = ctx->elem_segments ? ctx->elem_segments[elem_idx] : NULL;
-    size_t seg_size = ctx->elem_segment_sizes ? ctx->elem_segment_sizes[elem_idx] : 0;
-    if (ctx->elem_dropped && ctx->elem_dropped[elem_idx]) seg_size = 0;
+    int64_t *seg_data = ctx_segments_state(ctx)->elem_segments ? ctx_segments_state(ctx)->elem_segments[elem_idx] : NULL;
+    size_t seg_size = (size_t)Moonbit_array_length(seg_data) / 2;
 
     // Bounds check source range in segment
     if ((uint64_t)seg_size < (uint64_t)elem_off_u32 || (uint64_t)seg_size - (uint64_t)elem_off_u32 < (uint64_t)len_u32) {

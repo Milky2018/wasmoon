@@ -29,8 +29,8 @@ pub impl Show for JITTrap with fn output(self, logger) {
 /// trampoline passes the full WAST/testsuite production gate, then move this
 /// context into `wasmoon_jit`.
 /// Uses Standard on-demand loading from vmctx:
-/// +0: memory0 descriptor, +8: memory0_base, +16: memory0_size,
-/// +24: func_table, +32: table0_base.
+/// Module-shaped offsets are selected before compilation and retained by the
+/// loaded artifact for instance allocation.
 /// Only pinned vmctx is cached; all other values are loaded on-demand.
 /// Memory is automatically freed when the object is garbage collected
 priv struct JITContext {
@@ -42,10 +42,14 @@ priv struct JITContext {
 
 ///|
 /// Create a new JIT context - GC managed
-fn JITContext::try_alloc(total_funcs : Int) -> JITContext? {
-  @wasmoon_jit.NativeJITContext::try_alloc(total_funcs).map(fn(ctx) {
-    { ctx, trampoline_cache: Map([]), }
-  })
+fn JITContext::try_alloc(
+  total_funcs : Int,
+  loaded : @wasmoon_jit.LoadedArtifact,
+) -> JITContext? {
+  @wasmoon_jit.NativeJITContext::try_alloc(
+    total_funcs,
+    layout=loaded.context_layout(),
+  ).map(fn(ctx) { { ctx, trampoline_cache: Map([]), } })
 }
 
 ///|
@@ -62,15 +66,6 @@ fn JITContext::close(self : JITContext) -> Unit {
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
   self.ctx.set_func(idx, func_ptr)
-}
-
-///|
-fn JITContext::register_safepoints(
-  self : JITContext,
-  func_idx : Int,
-  safepoints : Array[@code_object.SafepointSite],
-) -> Bool {
-  self.ctx.register_safepoints(func_idx, safepoints)
 }
 
 ///|

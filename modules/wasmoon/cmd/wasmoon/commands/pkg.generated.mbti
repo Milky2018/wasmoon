@@ -43,7 +43,7 @@ pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Ar
 
 pub async fn serve_http(String, Array[String], String, String, Bool, envs? : Array[String]) -> Int
 
-pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @loader.LoadedArtifact raise @loader.ArtifactLoadError
+pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedArtifact raise @loader.ArtifactLoadError
 
 // Errors
 

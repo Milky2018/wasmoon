@@ -1,10 +1,13 @@
 import {
   "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/callable",
 }
 
 options(
   "native-stub": [
     "fiber_test_support.c",
+    "context_test_support.c",
+    "trap_test_support.c",
     "msvc_guest_bridges.S",
     "atomic_test_support.c",
     "fiber_register_probe_aarch64.S",

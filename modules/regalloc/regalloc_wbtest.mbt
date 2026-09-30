@@ -5,6 +5,15 @@ test "live range lookup uses a direct per-class dense index" {
   let float_reg : VirtualReg = { id: 4096, class: Float, }
   ranges.add_range(LiveRange(0, int_reg))
   ranges.add_range(LiveRange(1, float_reg))
+  let missing_values : Array[VirtualReg] = [
+    { id: -1, class: Int, },
+    { id: 0, class: Int, },
+    { id: 4097, class: Int, },
+    { id: 4096, class: Vector, },
+  ]
+  for missing in missing_values {
+    assert_true(ranges.get_by_vreg(missing) is None)
+  }
   debug_inspect(
     (
       ranges.int_ranges_by_id.length(),
@@ -904,4 +913,63 @@ test "plan verifier processes a deep diamond join chain once per block" {
   verify_function_allocation(function, MachineEnv::new(registers, []), plan)
   inspect(function.block_visits.val, content="25")
   inspect(function.successor_queries.val, content="25")
+}
+
+///|
+test "liveness retains operand timing preference and tie metadata" {
+  let value : VirtualReg = { id: 0, class: Int, }
+  let preference : PhysicalReg = { id: 1, class: Int, }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0]],
+    operands: [
+      [
+        Operand::use_reg(value)
+        .with_constraint(AnyLocation)
+        .with_preference(preference)
+        .with_tie(7)
+        .with_timing(Late),
+      ],
+    ],
+    successors: [[]],
+    entry_values: [value],
+    parameters: [[]],
+    edge_arguments: [[]],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let range = build_function_live_ranges(function).get_by_vreg(value).unwrap()
+  let position = range.uses.filter(position => position.kind == LiveUse)[0]
+  assert_eq(position.point, ProgramPoint(0, 1))
+  assert_eq(position.constraint, AnyLocation)
+  assert_eq(position.preference, Some(preference))
+  assert_eq(position.tie_id, 7)
+}
+
+///|
+test "natural program points preserve signed ordering and inclusive bounds" {
+  let points = [
+    ProgramPoint(-2_147_483_648, 2_147_483_647),
+    ProgramPoint(-1, -1),
+    ProgramPoint(0, -2_147_483_648),
+    ProgramPoint(0, 2_147_483_647),
+    ProgramPoint(1, -1),
+    ProgramPoint(2_147_483_647, 0),
+  ]
+  for i in 0..<points.length() {
+    for j in 0..<points.length() {
+      let expected = if i < j { -1 } else if i > j { 1 } else { 0 }
+      assert_eq(points[i].compare_natural(points[j]), expected)
+      assert_eq(points[i].compare_with_order(points[j], []), expected)
+    }
+  }
+  let range = ProgramRange(points[1], points[4])
+  for i in 0..<points.length() {
+    assert_eq(range.contains_natural(points[i]), i >= 1 && i <= 4)
+  }
+  // A caller-supplied block permutation must still override numeric order.
+  inspect(
+    ProgramPoint(0, 0).compare_with_order(ProgramPoint(1, 0), [1, 0]),
+    content="1",
+  )
 }

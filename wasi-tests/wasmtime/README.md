@@ -1,7 +1,7 @@
 # Wasmtime WASIp1 guest programs
 
-This snapshot imports all 58 `p1_*.rs` guest programs from Wasmtime commit
-[`668016926adfd1b8a79dbce894f1e203d8892599`](https://github.com/bytecodealliance/wasmtime/tree/668016926adfd1b8a79dbce894f1e203d8892599/crates/test-programs/src/bin).
+This snapshot imports all 58 `p1_*.rs` guest programs from Wasmtime 49.0.1 commit
+[`46c23a87dac1465986a8ad53ba6a7ae49372857b`](https://github.com/bytecodealliance/wasmtime/tree/46c23a87dac1465986a8ad53ba6a7ae49372857b/crates/test-programs/src/bin).
 The guest sources and `preview1.rs` support module are unchanged. The small
 local Cargo manifest builds just these programs, with the upstream snapshot's
 `wasip1` and `libc` versions pinned in `Cargo.lock`. Other Wasmtime dependencies

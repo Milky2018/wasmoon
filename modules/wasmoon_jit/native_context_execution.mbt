@@ -28,35 +28,22 @@ fn setup_segments(
   data_dropped? : Array[Bool] = [],
   elem_dropped? : Array[Bool] = [],
 ) -> Unit {
-  c_jit_ctx_init_data_segments_managed(context, datas.length())
-  for i, data in datas {
-    let bytes = data.init
-    let size = bytes.length()
-    let dropped = if i < data_dropped.length() && data_dropped[i] {
-      1
+  let data = Array::makei(datas.length(), i => {
+    if i < data_dropped.length() && data_dropped[i] {
+      b""
     } else {
-      0
+      datas[i].init
     }
-    let buf = FixedArray::make(size.max(1), b'\x00')
-    for j in 0..<size {
-      buf[j] = bytes[j]
-    }
-    c_jit_ctx_add_data_segment_managed(context, i, buf, size, dropped)
-  }
-
-  c_jit_ctx_init_elem_segments_managed(context, elem_segments.length())
-  for i, seg in elem_segments {
-    let dropped = if i < elem_dropped.length() && elem_dropped[i] {
-      1
+  })
+  let elements = Array::makei(elem_segments.length(), i => {
+    if i < elem_dropped.length() && elem_dropped[i] {
+      []
     } else {
-      0
+      elem_segments[i]
     }
-    let nslots = seg.length()
-    let buf = FixedArray::make(nslots.max(1), 0L)
-    for j in 0..<nslots {
-      buf[j] = seg[j]
-    }
-    c_jit_ctx_add_elem_segment_managed(context, i, buf, nslots / 2, dropped)
+  })
+  guard context.set_segments(data, elements) else {
+    abort("failed to allocate native segment state")
   }
 }
 
@@ -142,6 +129,17 @@ pub fn NativeJITContext::set_indirect(
 }
 
 ///|
+/// Snapshot borrowed global-cell addresses and retain the table until replacement.
+pub fn NativeJITContext::bind_globals(
+  self : NativeJITContext,
+  globals : FixedArray[Int64],
+) -> Int64 {
+  self.handle.bind_globals(FixedArray::makei(globals.length(), i => globals[i]))
+}
+
+///|
+/// Transfer a malloc-owned table of borrowed cell addresses to this context.
+/// Prefer bind_globals for MoonBit-owned input.
 pub fn NativeJITContext::set_globals(
   self : NativeJITContext,
   globals_ptr : Int64,
@@ -211,6 +209,8 @@ pub fn NativeJITContext::clear_hostcall_callback(
 }
 
 ///|
+/// Set the cancellation callback for subsequent invocations. Active and parked
+/// invocations retain their existing callback; mutate its captured signal to cancel.
 pub fn NativeJITContext::set_cancellation_callback(
   self : NativeJITContext,
   callback : () -> Bool,
@@ -226,6 +226,7 @@ pub fn NativeJITContext::set_cancellation_callback(
 }
 
 ///|
+/// Clear the default callback without changing active or parked invocations.
 pub fn NativeJITContext::clear_cancellation_callback(
   self : NativeJITContext,
 ) -> Unit {
@@ -240,7 +241,8 @@ extern "c" fn c_set_cooperative_scheduling(
 ) -> Unit = "wasmoon_jit_set_cooperative_scheduling_managed"
 
 ///|
-/// Enable native scheduling at instrumented guest safepoints. The embedding
+/// Configure native scheduling for subsequent invocations at instrumented
+/// guest safepoints. Active invocations keep their own budget. The embedding
 /// must enter this context through a resumable native invocation.
 pub fn NativeJITContext::set_cooperative_scheduling(
   self : NativeJITContext,

@@ -132,9 +132,56 @@ fn lower_direct_operation(
       ),
     )
   }
+  if operation is IntCompareImmediate(comparison, bits) {
+    guard optional_gpr_width(operand_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    if add_sub_immediate_shift(bits) is Some(_) {
+      return append_unconstrained_body(
+        builder,
+        block,
+        CompareSetImmediate(width, lower_condition(comparison), bits),
+        operands,
+        result_types,
+        direct_source_metadata(
+          source_location,
+          stack_map,
+          roots,
+          operation.semantics(),
+        ),
+      )
+    }
+    let constant = append_body(
+        builder,
+        block,
+        LoadConstant(width, bits),
+        [],
+        [@vcode.Output::any(operand_types[0])],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    return append_unconstrained_body(
+      builder,
+      block,
+      CompareSet(width, lower_condition(comparison)),
+      [operands[0], constant],
+      result_types,
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
   if operation is IntBinaryImmediate(binary, bits) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    // Add/sub wrap at the operand width; negate the constant at that width.
+    let negated_bits = if width == W32 {
+      (0UL - bits) & 0xFFFFFFFFUL
+    } else {
+      0UL - bits
     }
     let selected : AArch64Inst? = match binary {
       UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
@@ -145,6 +192,10 @@ fn lower_direct_operation(
         match lower_binary(binary) {
           Some(lowered) if valid_int_binary_immediate(width, lowered, bits) =>
             Some(IntBinaryImmediate(width, lowered, bits))
+          Some(Add) if valid_int_binary_immediate(width, Sub, negated_bits) =>
+            Some(IntBinaryImmediate(width, Sub, negated_bits))
+          Some(Sub) if valid_int_binary_immediate(width, Add, negated_bits) =>
+            Some(IntBinaryImmediate(width, Add, negated_bits))
           _ => None
         }
     }
@@ -1660,6 +1711,9 @@ pub fn DirectLoweringSession::sink(
     },
     fn() { self.finish_construction() },
     folds_unsigned_index_into_memory=true,
+    supports_int_compare_immediate=fn(ty, bits) {
+      (ty == I32 || ty == I64) && add_sub_immediate_shift(bits) is Some(_)
+    },
   )
 }
 

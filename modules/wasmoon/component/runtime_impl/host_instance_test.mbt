@@ -233,3 +233,40 @@ test "host instance builder rejects invalid function type references" {
     _ => fail("expected invalid host type reference to be rejected")
   }
 }
+
+///|
+async test "cancelling join cancels the component host future exactly once" {
+  let linker = @runtime_impl.ComponentLinker()
+  defer linker.close()
+  let runtime = @runtime_impl.HostRuntimeState()
+  let started = Ref(false)
+  let wake = @async.CondVar::Cond()
+  let cancellations = Ref(0)
+  let builder = linker.host_instance_builder("test:cancel-join", runtime)
+  builder.add_async_func(
+    "wait",
+    { is_async: true, params: [], result: None, },
+    fn(_args, _table) {
+      started.val = true
+      wake.broadcast()
+      HostFuture(() => Pending, () => cancellations.val += 1)
+    },
+  )
+  let invocation = builder.finish().start_exported_func("wait", [])
+  @async.with_task_group(group => {
+    let task = group.spawn(no_wait=true, () => invocation.join())
+    while !started.val {
+      wake.wait()
+    }
+    task.cancel()
+    try task.wait() catch {
+      @async.WaitedTaskAlreadyCancelled => ()
+      error => raise error
+    } noraise {
+      _ => fail("expected cancellation")
+    }
+  })
+  inspect(cancellations.val, content="1")
+  invocation.cancel()
+  inspect(cancellations.val, content="1")
+}

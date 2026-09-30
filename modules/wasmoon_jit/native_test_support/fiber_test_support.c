@@ -116,7 +116,7 @@ static int WASMOON_GUEST_ABI hostcall_probe_trampoline(
     values[0] = slots[0] + 1;
     int mode = (int)(intptr_t)func_ptr;
     if (mode == 999) {
-        ctx->debug_current_func_idx = mode;
+        ctx_set_debug_current_func_idx(ctx, mode);
         uintptr_t guard_base = 0;
         if (!wasmoon_native_fiber_stack_bounds(
                 NULL, NULL, &guard_base, NULL
@@ -244,7 +244,7 @@ static int WASMOON_GUEST_ABI nested_activation_exception_probe(
             exception_try_end_impl(ctx, 17);
             return result;
         }
-        if (ctx->exception_handler) {
+        if (ctx_execution(ctx)->exception_handler) {
             result = wasmoon_jit_hostcall(
                 ctx,
                 47,
@@ -292,7 +292,7 @@ static int WASMOON_GUEST_ABI nested_activation_gc_root_probe(
     void *func_ptr
 ) {
     (void)func_ptr;
-    if (!ctx || !ctx->gc_heap || !values) return 8;
+    if (!ctx || !ctx_gc_heap(ctx) || !values) return 8;
     if (!ctx_gc_push_root_scope_internal(ctx, values, 1)) return 9;
     int64_t slots[1] = {0};
     int result = wasmoon_jit_hostcall(
@@ -314,7 +314,7 @@ static int WASMOON_GUEST_ABI nested_activation_gc_root_probe(
         ctx_gc_pop_root_scope_internal(ctx);
         return 9;
     }
-    values[1] = gc_heap_is_valid((GcHeap *)ctx->gc_heap, gc_ref);
+    values[1] = gc_heap_is_valid((GcHeap *)ctx_gc_heap(ctx), gc_ref);
     ctx_gc_pop_root_scope_internal(ctx);
     return 0;
 }
@@ -330,7 +330,7 @@ static int WASMOON_GUEST_ABI parked_gc_root_probe(
     void *func_ptr
 ) {
     (void)func_ptr;
-    if (!ctx || !ctx->gc_heap || !values) return 8;
+    if (!ctx || !ctx_gc_heap(ctx) || !values) return 8;
     if (!ctx_gc_push_root_scope_internal(ctx, values, 1)) return 9;
     int64_t hostcall_slots[1] = {0};
     int result = wasmoon_jit_hostcall(
@@ -344,7 +344,7 @@ static int WASMOON_GUEST_ABI parked_gc_root_probe(
     int32_t gc_ref = encoded > 0 && (encoded & 1L) == 0
         ? (int32_t)(encoded >> 1)
         : 0;
-    values[1] = gc_heap_is_valid((GcHeap *)ctx->gc_heap, gc_ref);
+    values[1] = gc_heap_is_valid((GcHeap *)ctx_gc_heap(ctx), gc_ref);
     ctx_gc_pop_root_scope_internal(ctx);
     return result;
 }
@@ -450,9 +450,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_fresh_context_scheduling_budget(void) {
     for (int i = 0; i < 64; ++i) {
         jit_context_t *ctx = alloc_context_internal(1);
         if (!ctx) return -1;
-        int32_t budget = ctx->scheduling_budget;
+        int32_t budget = ctx_runtime(ctx)->control_defaults.scheduling_budget;
         // Exercise allocator reuse after a previously enabled context.
-        ctx->scheduling_budget = 1;
+        ctx_runtime(ctx)->control_defaults.scheduling_budget = 1;
         free_context_internal(ctx);
         if (budget != 0) return budget;
     }

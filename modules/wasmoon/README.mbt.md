@@ -287,9 +287,9 @@ rustup target add wasm32-wasip1
 python3 scripts/run_wasmtime_p1.py
 ```
 
-It reports current rights-model differences and polling failures explicitly;
-it is not yet a passing conformance gate. The separate `Upstream WASIp1 programs`
-workflow runs it on demand.
+The unchanged upstream profile reports rights/capability contract differences.
+Regular CI runs the `capabilities` profile with explicitly recorded adaptations;
+the agreed Wasmtime-specific hostcall-fuel case remains not applicable.
 
 The pinned [Wasmtime misc_testsuite](https://github.com/Milky2018/wasmoon/blob/dev/wasm-tests/wasmtime/README.md)
 adds core Wasm and Component Model regression scripts:
@@ -299,10 +299,11 @@ python3 scripts/run_wasmtime_misc.py --check
 python3 scripts/run_wasmtime_misc.py
 ```
 
-The full diagnostic currently reports failures; it preserves them without an
-expected-failure mask. Script-only completions, missing host contracts and
-high-memory deferrals are reported separately. Regular CI runs six explicit
-smoke scripts; the full cross-platform scan has its own manual workflow.
+Regular CI runs the full misc suite, including high-memory cases. Assertion-bearing
+passes and successfully executed scripts without assertions are reported separately.
+The current reference is Wasmtime 49.0.1; see the
+[reference refresh and acceptance report](https://github.com/Milky2018/wasmoon/blob/dev/docs/upstream-wasmtime-49.md) for exact
+versions, coverage, remaining contract differences, and the new performance baseline.
 
 ## Library Usage
 

@@ -37,8 +37,9 @@ pub fn wasm_frontend_embedding_environment(
   runtime_symbol_prefix? : String = "wasmoon",
   hidden_context_type? : @milkir.Type? = Some(Ptr),
   cancellation_safepoints? : Bool = false,
+  context_shape? : @wasmoon_jit.ContextShape = Legacy,
 ) -> @wasm_frontend.EmbeddingEnvironment {
-  let vm = @wasmoon_jit.vmcontext_layout()
+  let vm = @wasmoon_jit.shaped_vmcontext_layout(context_shape)
   let memory = @wasmoon_jit.memory_descriptor_layout()
   EmbeddingEnvironment(
     runtime_symbol_prefix~,

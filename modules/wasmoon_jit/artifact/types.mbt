@@ -1,6 +1,6 @@
 ///|
 /// Cwasm format with an explicit arithmetic NaN compilation policy.
-pub const FORMAT_VERSION : Int = 10
+pub const FORMAT_VERSION : Int = 11
 
 ///|
 /// Operating-system ABI assumed by generated code and unwind metadata.
@@ -112,6 +112,7 @@ pub(all) struct CompatibilityManifest {
   codegen_revision : String
   module_identity : ModuleIdentity
   policy : CompilationPolicy
+  context_shape : @context_layout.ContextShape
 } derive(Eq, Debug)
 
 ///|

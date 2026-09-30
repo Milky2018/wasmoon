@@ -1,4 +1,60 @@
 ///|
+test "module-shaped contexts retain and replace inline memory and table arrays" {
+  let layout = @wasmoon_jit.ContextLayout::new(Module(2, 2, 0)).unwrap()
+  let memory_baseline = memory_live_count()
+  let table_baseline = table_live_count()
+  exercise_shaped_contexts(layout)
+  assert_eq(memory_live_count(), memory_baseline)
+  assert_eq(table_live_count(), table_baseline)
+}
+
+///|
+fn exercise_shaped_contexts(layout : @wasmoon_jit.ContextLayout) -> Unit raise {
+  let first = @wasmoon_jit.alloc_memory_desc(65536L, Some(2L))
+  let second = @wasmoon_jit.alloc_memory_desc(131072L, Some(2L))
+  let table = @wasmoon_jit.JITTableOwner::try_alloc(1, None).unwrap()
+  defer table.close()
+  let a = @wasmoon_jit.NativeJITContext::try_alloc(0, layout=Some(layout)).unwrap()
+  let b = @wasmoon_jit.NativeJITContext::try_alloc(0, layout=Some(layout)).unwrap()
+  for context in [a, b] {
+    context.set_memory_pointers([
+      MemoryInfo(first, 65536L, Some(2)),
+      MemoryInfo(second, 131072L, Some(2)),
+    ])
+    context.set_table_pointers([Some(table.table()), Some(table.table())])
+  }
+  a.set_memory_pointers([
+    MemoryInfo(second, 131072L, Some(2)),
+    MemoryInfo(first, 65536L, Some(2)),
+  ])
+  debug_inspect((a.memory_size(0), a.memory_size(1)), content="(131072, 65536)")
+  debug_inspect((b.memory_size(0), b.memory_size(1)), content="(65536, 131072)")
+  a.set_table_pointers([Some(table.table()), Some(table.table())])
+  table.table().set(0, 123L, 4)
+  assert_true(a.refresh_table_layout(1))
+  assert_true(b.refresh_table_layout(0))
+  a.set_memory_pointers([])
+  a.set_table_pointers([])
+  assert_eq(b.memory_size(0), 65536L)
+  b.set_memory_pointers([])
+  b.set_table_pointers([])
+}
+
+///|
+test "empty shaped context supports cleanup and GC binding without memory fields" {
+  let layout = @wasmoon_jit.ContextLayout::new(Module(0, 0, 0)).unwrap()
+  let context = @wasmoon_jit.NativeJITContext::try_alloc(0, layout=Some(layout)).unwrap()
+  inspect(context.memory_size(0), content="0")
+  context.set_memory_pointers([])
+  context.set_table_pointers([])
+  context.bind_globals([]) |> ignore
+  let heap = @wasmoon_jit.CHeap()
+  context.set_gc_heap_ptr(heap.get_ptr())
+  context.clear_gc_heap()
+  heap.free()
+}
+
+///|
 test "managed memory handles preserve identity and pointer-array ABI" {
   let first = @wasmoon_jit.alloc_memory_desc(65536L, Some(2L))
   guard !first.is_null() else { fail("first memory allocation failed") }
@@ -368,4 +424,517 @@ test "descriptor returned by a context survives that context's finalizer" {
   }
   read_after_context_drop()
   assert_eq(memory_live_count(), baseline)
+}
+
+///|
+test "descriptor access validates ranges before touching memory" {
+  let memory = @wasmoon_jit.alloc_memory_desc(8L, None)
+  let output = FixedArray::make(8, b'\x5A')
+  // This first assertion reproduces the old contract failure without an unsafe access.
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 8L, output, 0), 0)
+  assert_eq(
+    @wasmoon_jit.memory_descriptor_write_bytes(memory, 0L, b"abcdefgh", 8),
+    0,
+  )
+  for
+    (offset, size) in [
+      (-1L, 1),
+      (8L, 1),
+      (9L, 0),
+      (0L, -1),
+      (0L, 9),
+      (9223372036854775807L, 1),
+    ] {
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_read(memory, offset, output, size),
+      -1,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write(memory, offset, output, size),
+      -1,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(
+        memory, offset, b"12345678", size,
+      ),
+      -1,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_fill(memory, offset, 0, size), -1)
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_fill64(memory, offset, 0, size.to_int64()),
+      -1,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_move(memory, 0L, offset, size), -1)
+    assert_eq(@wasmoon_jit.memory_descriptor_move(memory, offset, 0L, size), -1)
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_copy(
+        memory,
+        0L,
+        memory,
+        offset,
+        size.to_int64(),
+      ),
+      -1,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_copy(
+        memory,
+        offset,
+        memory,
+        0L,
+        size.to_int64(),
+      ),
+      -1,
+    )
+  }
+  for byte in output {
+    assert_eq(byte, b'\x5A')
+  }
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"abcdefgh")
+  let small = FixedArray::make(1, b'\x5A')
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, small, 2), -1)
+  assert_eq(small[0], b'\x5A')
+  assert_eq(@wasmoon_jit.memory_descriptor_write(memory, 0L, small, 2), -1)
+  assert_eq(@wasmoon_jit.memory_descriptor_write_bytes(memory, 0L, b"x", 2), -1)
+  assert_eq(
+    @wasmoon_jit.memory_descriptor_fill64(memory, 1L, 0, 9223372036854775807L),
+    -1,
+  )
+  assert_eq(
+    @wasmoon_jit.memory_descriptor_copy(
+      memory, 0L, memory, 1L, 9223372036854775807L,
+    ),
+    -1,
+  )
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"abcdefgh")
+}
+
+///|
+test "descriptor zero-length operations distinguish empty allocations from absent handles" {
+  let memory = @wasmoon_jit.alloc_memory_desc(0L, None)
+  let absent = @wasmoon_jit.MemoryDescriptor::null()
+  let buffer = FixedArray::make(0, b'\x00')
+  for (handle, result) in [(memory, 0), (absent, -1)] {
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_read(handle, 0L, buffer, 0),
+      result,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write(handle, 0L, buffer, 0),
+      result,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(handle, 0L, b"", 0),
+      result,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_move(handle, 0L, 0L, 0), result)
+    assert_eq(@wasmoon_jit.memory_descriptor_fill(handle, 0L, 0, 0), result)
+    assert_eq(@wasmoon_jit.memory_descriptor_fill64(handle, 0L, 0, 0L), result)
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_copy(handle, 0L, memory, 0L, 0L),
+      result,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_copy(memory, 0L, handle, 0L, 0L),
+      result,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_read(handle, 1L, buffer, 0), -1)
+  }
+}
+
+///|
+test "descriptor copy preserves overlap and validates both allocations before mutation" {
+  let memory = @wasmoon_jit.alloc_memory_desc(8L, None)
+  let other = @wasmoon_jit.alloc_memory_desc(2L, None)
+  let output = FixedArray::make(8, b'\x00')
+  assert_eq(
+    @wasmoon_jit.memory_descriptor_write_bytes(memory, 0L, b"abcdefgh", 8),
+    0,
+  )
+  assert_eq(@wasmoon_jit.memory_descriptor_move(memory, 2L, 0L, 6), 0)
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"ababcdef")
+  assert_eq(@wasmoon_jit.memory_descriptor_copy(memory, 0L, memory, 2L, 6L), 0)
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"abcdefef")
+  assert_eq(@wasmoon_jit.memory_descriptor_copy(memory, 0L, other, 0L, 3L), -1)
+  assert_eq(@wasmoon_jit.memory_descriptor_copy(other, 0L, memory, 0L, 3L), -1)
+  assert_eq(@wasmoon_jit.memory_descriptor_read(memory, 0L, output, 8), 0)
+  assert_eq(Bytes::from_array(Array::makei(8, i => output[i])), b"abcdefef")
+  let small = FixedArray::make(2, b'\x01')
+  assert_eq(@wasmoon_jit.memory_descriptor_read(other, 0L, small, 2), 0)
+  assert_eq(small[0], b'\x00')
+  assert_eq(small[1], b'\x00')
+}
+
+///|
+test "guarded and shared descriptor access uses committed length rather than reservation" {
+  for
+    memory in [
+      @wasmoon_jit.alloc_guarded_memory_desc(1, Some(2)),
+      @wasmoon_jit.alloc_memory_desc(65536L, Some(2L), is_shared=true),
+    ] {
+    assert_false(memory.is_null())
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(memory, 65535L, b"x", 1),
+      0,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(memory, 65536L, b"x", 1),
+      -1,
+    )
+    assert_eq(@wasmoon_jit.memory_descriptor_fill64(memory, 65536L, 0, 0L), 0)
+    assert_eq(@wasmoon_jit.memory_descriptor_grow64(memory, 1L), 1L)
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(memory, 65536L, b"x", 1),
+      0,
+    )
+    assert_eq(
+      @wasmoon_jit.memory_descriptor_write_bytes(memory, 131072L, b"x", 1),
+      -1,
+    )
+  }
+}
+
+///|
+test "context allocates optional segment state on demand and releases it on reset" {
+  inspect(@native_test_support.context_optional_state(), content="1")
+}
+
+///|
+test "Store callable registry updates are shared and preserve instance isolation" {
+  let first = @wasmoon_jit.NativeCallableRegistry::new()
+  let second = @wasmoon_jit.NativeCallableRegistry::new()
+  assert_true(first.replace([-1, 0], [(16777216L, 1)]))
+  assert_true(second.replace([-1, 0], [(16777216L, 0)]))
+  let a = @jit_ffi.JITContext::new(1)
+  let b = @jit_ffi.JITContext::new(1)
+  let c = @jit_ffi.JITContext::new(1)
+  a.bind_callable_registry(first, [0], [7])
+  b.bind_callable_registry(first, [1], [8])
+  c.bind_callable_registry(second, [0], [9])
+  inspect(@native_test_support.context_callable_tag(a), content="7")
+  inspect(@native_test_support.context_callable_tag(b), content="8")
+  inspect(
+    @native_test_support.context_callable_lookup(a, 16777216L),
+    content="1",
+  )
+  inspect(
+    @native_test_support.context_callable_lookup(c, 16777216L),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_callable_subtype(a, 16777216L, 0),
+    content="1",
+  )
+  assert_true(first.replace([-1, -1], [(16777216L, 1)]))
+  inspect(
+    @native_test_support.context_callable_subtype(a, 16777216L, 0),
+    content="0",
+  )
+  assert_true(first.replace([-1, 0], [(16777216L, 0)]))
+  inspect(
+    @native_test_support.context_callable_lookup(b, 16777216L),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_callable_subtype(b, 16777216L, 0),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_callable_subtype(a, 16777216L, 2147483647),
+    content="0",
+  )
+  a.bind_callable_registry(second, [0], [10])
+  first.clear()
+  first.clear()
+  inspect(
+    @native_test_support.context_callable_lookup(b, 16777216L),
+    content="-1",
+  )
+  inspect(
+    @native_test_support.context_callable_lookup(a, 16777216L),
+    content="0",
+  )
+  assert_true(second.replace([-1, 0], [(16777216L, 1)]))
+  inspect(
+    @native_test_support.context_callable_lookup(a, 16777216L),
+    content="1",
+  )
+  inspect(@native_test_support.context_callable_tag(a), content="10")
+}
+
+///|
+fn context_outliving_registry() -> @jit_ffi.JITContext {
+  let registry = @wasmoon_jit.NativeCallableRegistry::new()
+  assert_true(registry.replace([-1], [(16L, 0)])) catch {
+    _ => abort("registry setup failed")
+  }
+  let context = @jit_ffi.JITContext::new(1)
+  context.bind_callable_registry(registry, [0], [7])
+  context
+}
+
+///|
+test "context retains MoonBit array storage after registry owner leaves scope" {
+  let context = context_outliving_registry()
+  inspect(
+    @native_test_support.context_callable_lookup(context, 16L),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_callable_subtype(context, 16L, 0),
+    content="1",
+  )
+  inspect(@native_test_support.context_callable_tag(context), content="7")
+}
+
+///|
+test "safepoint tables own copied metadata through replacement and teardown" {
+  inspect(@native_test_support.safepoint_ownership(), content="1")
+}
+
+///|
+test "callable lookup sorts privately and preserves the first duplicate" {
+  let registry = @wasmoon_jit.NativeCallableRegistry::new()
+  let entries = [(48L, 2), (16L, 1), (32L, 0), (16L, 9)]
+  assert_true(registry.replace([-1, 0, 0], entries))
+  assert_eq(entries, [(48L, 2), (16L, 1), (32L, 0), (16L, 9)])
+  for
+    (pointer, expected) in [(16L, 1), (32L, 0), (48L, 2), (24L, -1), (64L, -1)] {
+    assert_eq(@native_test_support.callable_lookup(registry, pointer), expected)
+  }
+  entries[1] = (16L, 7)
+  assert_true(registry.replace([-1, 0, 0], entries))
+  inspect(@native_test_support.callable_lookup(registry, 16L), content="7")
+  let many = Array::makei(1024, i => ((1024 - i).to_int64() * 16, i))
+  assert_true(registry.replace([], many))
+  for i in 0..<1024 {
+    assert_eq(
+      @native_test_support.callable_lookup(registry, (1024 - i).to_int64() * 16),
+      i,
+    )
+  }
+  registry.clear()
+  inspect(@native_test_support.callable_lookup(registry, 16L), content="-1")
+}
+
+///|
+test "activation scratch roots survive reentry and isolate parked abandonment" {
+  inspect(@native_test_support.activation_scratch_isolation(), content="1")
+}
+
+///|
+test "parked scratch roots survive GC and resume restores the actual caller" {
+  inspect(@native_test_support.activation_resume_roots(), content="1")
+}
+
+///|
+fn context_with_owned_gc_metadata() -> @jit_ffi.JITContext {
+  let context = @jit_ffi.JITContext::new(2)
+  let types : FixedArray[Int] = [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  let indices : FixedArray[Int] = [0, 1]
+  context.bind_gc_metadata(types, indices, indices)
+  // Both slots alias one array; rebinding must retain before releasing either.
+  context.bind_gc_metadata(types, indices, indices)
+  assert_eq(
+    @native_test_support.context_gc_metadata_shares(
+      context, types, indices, indices,
+    ),
+    1,
+  ) catch {
+    _ => abort("GC metadata was copied")
+  }
+  context
+}
+
+///|
+test "GC metadata survives MoonBit owners and supports replacement and clearing" {
+  let first = context_with_owned_gc_metadata()
+  let second = context_with_owned_gc_metadata()
+  inspect(@native_test_support.context_gc_legacy_rebind(second), content="1")
+  second.bind_gc_metadata([-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [], [0, 1])
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(first, 1, 0),
+    content="1",
+  )
+  first.bind_gc_metadata([-1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0], [], [0, 1])
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(first, 1, 0),
+    content="0",
+  )
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(second, 1, 0),
+    content="1",
+  )
+  first.bind_gc_metadata([-1, 0, 0, 0, 0, 0], [], [0, 0])
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(first, 1, 0),
+    content="1",
+  )
+  first.bind_gc_metadata([], [], [])
+  first.bind_gc_metadata([], [], [])
+  inspect(
+    @native_test_support.context_gc_funcref_subtype(first, 1, 0),
+    content="0",
+  )
+}
+
+///|
+fn context_with_owned_gc_payloads() -> @jit_ffi.JITContext {
+  let context = @jit_ffi.JITContext::new(2)
+  let blob = Bytes::from_array([1, 2, 3])
+  let offsets : FixedArray[Int] = [4, 12]
+  let addresses : FixedArray[Int64] = [16L, 32L]
+  for _ in 0..<2 {
+    guard context.bind_gc_safepoints(0, blob, offsets) else {
+      abort("binding failed")
+    }
+    context.bind_gc_function_addresses(addresses)
+  }
+  guard @native_test_support.context_gc_payload_shares(
+      context, blob, offsets, addresses,
+    ) ==
+    1 else {
+    abort("GC payloads were copied")
+  }
+  context
+}
+
+///|
+test "GC payloads retain MoonBit owners through replacement and legacy bindings" {
+  let first = context_with_owned_gc_payloads()
+  let second = context_with_owned_gc_payloads()
+  inspect(@native_test_support.context_gc_payload_valid(first), content="1")
+  assert_false(first.bind_gc_safepoints(-1, b"", []))
+  assert_false(first.bind_gc_safepoints(2, b"", []))
+  inspect(@native_test_support.context_gc_payload_valid(first), content="1")
+  inspect(@native_test_support.context_gc_payload_legacy(first), content="1")
+  assert_true(first.bind_gc_safepoints(0, b"", []))
+  first.bind_gc_function_addresses([])
+  inspect(@native_test_support.context_gc_payload_empty(first), content="1")
+  assert_true(first.bind_gc_safepoints(0, b"", []))
+  first.bind_gc_function_addresses([])
+  inspect(@native_test_support.context_gc_payload_valid(second), content="1")
+  assert_true(
+    first.bind_gc_safepoints(0, Bytes::from_array([1, 2, 3]), [4, 12]),
+  )
+  first.bind_gc_function_addresses([16L, 32L])
+  inspect(@native_test_support.context_gc_payload_valid(first), content="1")
+}
+
+///|
+test "invocation controls isolate reentry and retain parked cancellation captures" {
+  inspect(@native_test_support.activation_controls(), content="1")
+}
+
+///|
+fn contexts_with_owned_segments() -> (@jit_ffi.JITContext, @jit_ffi.JITContext) {
+  let first = @jit_ffi.JITContext::new(1)
+  let second = @jit_ffi.JITContext::new(1)
+  let blob = Bytes::from_array([1, 2, 3])
+  let data = [blob]
+  let elements = [[16L, 0L]]
+  guard first.set_segments(data, elements) &&
+    second.set_segments(data, elements) else {
+    abort("segment binding failed")
+  }
+  guard @native_test_support.context_segments_share_data(first, blob) == 1 else {
+    abort("immutable segment data was copied")
+  }
+  data[0] = b"changed"
+  elements[0][0] = 99L
+  (first, second)
+}
+
+///|
+test "segment snapshots retain data and isolate mutable inputs and instance drop state" {
+  let (first, second) = contexts_with_owned_segments()
+  inspect(@native_test_support.context_segments_valid(first), content="1")
+  inspect(@native_test_support.context_segments_valid(second), content="1")
+  inspect(@native_test_support.context_segments_legacy(first), content="1")
+  inspect(@native_test_support.context_segments_valid(second), content="1")
+  assert_true(first.set_segments([], []))
+  assert_true(first.set_segments([], []))
+  inspect(@native_test_support.context_segments_empty(first), content="1")
+  assert_true(
+    first.set_segments([Bytes::from_array([1, 2, 3])], [[16L, 0L, 99L]]),
+  )
+  inspect(@native_test_support.context_segments_valid(first), content="1")
+}
+
+///|
+test "function address arrays retain storage without owning executable pointers" {
+  inspect(
+    @native_test_support.context_function_array(@jit_ffi.JITContext::new(0)),
+    content="1",
+  )
+  inspect(
+    @native_test_support.context_function_array(@jit_ffi.JITContext::new(2)),
+    content="1",
+  )
+  inspect(@native_test_support.raw_context_function_array(), content="1")
+  assert_true(@wasmoon_jit.NativeJITContext::try_alloc(-1) is None)
+}
+
+///|
+test "global pointer tables snapshot addresses and release both ownership modes" {
+  guard @wasmoon_jit.NativeJITContext::try_alloc(0) is Some(context) else {
+    fail("context allocation failed")
+  }
+  let addresses = FixedArray::make(2, 16L)
+  let table = context.bind_globals(addresses)
+  addresses[0] = 32L
+  inspect(@wasmoon_jit.native_value_slot_read(table, 0), content="16")
+  inspect(@wasmoon_jit.native_value_slot_read(table, 1), content="16")
+  context.bind_globals([]) |> ignore
+  context.bind_globals([48L]) |> ignore
+  inspect(@native_test_support.context_globals_ownership(), content="1")
+}
+
+///|
+test "trap recovery preserves thread masks and alternate signal stack" {
+  inspect(@native_test_support.trap_signal_masks(), content="1")
+}
+
+///|
+fn contexts_with_shared_safepoints() -> (
+  @jit_ffi.JITContext,
+  @jit_ffi.JITContext,
+) raise {
+  let offsets : FixedArray[Int] = [4]
+  let owner = @jit_ffi.PreparedSafepoints::new([b"\x01"], [offsets])
+  offsets[0] = 99
+  let a = @jit_ffi.JITContext::new(2)
+  let b = @jit_ffi.JITContext::new(2)
+  assert_true(a.bind_prepared_safepoints(owner))
+  assert_true(b.bind_prepared_safepoints(owner))
+  assert_false(@jit_ffi.JITContext::new(0).bind_prepared_safepoints(owner))
+  (a, b)
+}
+
+///|
+test "empty safepoints allocate no table and clearing still releases an entry" {
+  for count in [1, 1000] {
+    let context = @jit_ffi.JITContext::new(count)
+    for i in 0..<count {
+      assert_true(context.bind_gc_safepoints(i, b"", []))
+    }
+    inspect(@native_test_support.safepoint_slots(context), content="0")
+    assert_true(context.bind_gc_safepoints(0, b"\x01", [4]))
+    assert_eq(@native_test_support.safepoint_slots(context), count)
+    assert_true(context.bind_gc_safepoints(0, b"", []))
+  }
+}
+
+///|
+test "shared safepoints outlive their caller and isolate rebinding from parked frames" {
+  let (a, b) = contexts_with_shared_safepoints()
+  inspect(@native_test_support.safepoints_shared(a, b), content="1")
+  inspect(@native_test_support.safepoint_parked_sharing(a, b), content="1")
+  inspect(@native_test_support.safepoints_shared(a, b), content="0")
+  assert_true(a.bind_gc_safepoints(0, b"", []))
+  assert_true(b.bind_gc_safepoints(0, b"", []))
 }

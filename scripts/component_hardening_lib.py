@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-WASMTIME_VERSION = "45.0.0"
+WASMTIME_VERSION = "49.0.1"
 WASM_TOOLS_VERSION = "1.254.0"
 
 

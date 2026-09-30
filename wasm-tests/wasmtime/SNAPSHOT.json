@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/bytecodealliance/wasmtime",
-  "commit": "668016926adfd1b8a79dbce894f1e203d8892599",
+  "commit": "46c23a87dac1465986a8ad53ba6a7ae49372857b",
   "files": [
     {
       "path": "LICENSE",
@@ -1582,5 +1582,6 @@
       "path": "tests/wast.rs",
       "sha256": "4b7725f821a36297af486283e751f75a69b86ff454c1523fcb1eba44c7a28edf"
     }
-  ]
+  ],
+  "release": "v49.0.1"
 }

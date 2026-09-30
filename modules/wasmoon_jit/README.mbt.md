@@ -3,7 +3,7 @@
 JIT integration and native runtime support for Wasmoon.
 
 `wasmoon_jit` connects the compiler pipeline to Wasmoon's runtime. It provides
-VMContext layouts, native runtime helpers, v10 artifacts, trampolines, WASI
+VMContext layouts, native runtime helpers, v11 artifacts, trampolines, WASI
 bridge glue, and integration planning for loading generated code.
 
 ## Packages
@@ -17,7 +17,7 @@ bridge glue, and integration planning for loading generated code.
 ## When to use it
 
 Use `wasmoon_jit` when integrating generated code with the Wasmoon runtime,
-including VMContext layout, runtime helper symbols, trampolines, v10
+including VMContext layout, runtime helper symbols, trampolines, v11
 artifacts, and installed-code lifecycle management.
 
 `load_artifact` keeps loading separate from installation: it performs bounded
@@ -49,11 +49,20 @@ test "plan a small MilkIR function for x64 JIT integration" {
 
 ## Persisted artifacts
 
-`Milky2018/wasmoon_jit/artifact` defines the v10 ordinary-data format. The live
+`Milky2018/wasmoon_jit/artifact` defines the v11 ordinary-data format. The live
 compiler produces symbolic, unlinked function code; `load_artifact` performs
 bounded decoding and exact compatibility verification; and `JitCodeInstaller`
 owns relocation, executable-memory mutation, and publication. There is no
 compatibility decoder for the removed v8 format.
+
+The root package's `LoadedArtifact` also retains immutable prepared native
+safepoints, shared by contexts bound from that artifact. Modules with no
+safepoints allocate no native descriptor table. `loaded.verified()` exposes the
+portable loader value for `installer.install(loaded.verified())`; the
+`artifact/loader` package itself remains independent of native ownership.
+Contexts retain safepoints after the loaded artifact is released. Compatibility
+setters detach a private table before replacing a shared entry; bind metadata
+only outside execution, including suspended execution of that context.
 
 ## Compiler pipeline
 
@@ -110,3 +119,23 @@ and is idempotent; the MoonBit allocation survives until its last reference is
 released. After close, mutations are ignored and lookup returns None. Repeated
 registration is idempotent; unregister releases the generated buffer and permits
 registration again while the builder remains open.
+
+
+### Checked linear-memory access
+
+Public descriptor read, write, copy, move and fill operations return 0 on
+success and -1 for invalid descriptors, negative offsets/lengths, or ranges
+outside the current committed memory. Reads and writes also reject lengths
+larger than their MoonBit buffer. Rejection leaves the destination unchanged.
+Copies support overlapping ranges.
+
+A zero-length operation succeeds at any in-bounds position, including the end
+of a live zero-byte allocation. It never dereferences a pointer. Empty handles
+and positions past the end are rejected even for zero-length operations.
+The descriptor argument retains the allocation throughout each operation.
+
+The unused raw-address memory_read and memory_init APIs have been removed.
+Use memory_descriptor_read and memory_descriptor_write_bytes instead.
+alloc_memory/free_memory remain low-level unmanaged allocation operations for
+native ABI fixtures; callers must track ownership, capacity and alias lifetime.
+They are not substitutes for checked linear-memory access.

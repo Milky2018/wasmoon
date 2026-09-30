@@ -2,6 +2,32 @@
 using @artifact_test_support {loader_artifact, loader_compatibility}
 
 ///|
+test "artifact loader rejects a mismatched or overflowing context shape" {
+  let original = loader_artifact()
+  let shaped = {
+    ..original,
+    manifest: { ..original.manifest, context_shape: Module(2, 1, 0), },
+  }
+  debug_inspect(
+    compatibility_error(shaped, loader_compatibility(original)),
+    content="ContextLayoutMismatch",
+  )
+  let loaded = load_artifact(
+    @artifact.encode(shaped),
+    loader_compatibility(shaped),
+  )
+  assert_true(loaded.context_layout() is Some(_))
+  let invalid = {
+    ..original,
+    manifest: { ..original.manifest, context_shape: Module(2147483647, 0, 0), },
+  }
+  debug_inspect(
+    compatibility_error(invalid, loader_compatibility(invalid)),
+    content="ContextLayoutMismatch",
+  )
+}
+
+///|
 fn compatibility_error(
   artifact : @artifact.Artifact,
   compatibility : ArtifactCompatibility,
@@ -246,4 +272,30 @@ test "artifact loader preserves structured failure classes" {
       #|]
     ),
   )
+}
+
+///|
+test "artifact indices cannot overflow native metadata extents" {
+  let original = loader_artifact()
+  for index in [-1, 2147483647] {
+    let function = original.functions[0]
+    let invalid = {
+      ..original,
+      functions: [
+        {
+          ..function,
+          identity: { ..function.identity, function_index: index, },
+        },
+      ],
+    }
+    let rejected = try
+      verify_artifact(invalid, loader_compatibility(invalid))
+    catch {
+      Incompatible(cause=InvalidFunctionIndex(index=actual)) => actual == index
+      _ => false
+    } noraise {
+      _ => false
+    }
+    assert_true(rejected)
+  }
 }

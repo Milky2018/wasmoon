@@ -77,9 +77,6 @@ pub async fn serve_http(
     0
   } catch {
     error => {
-      if @async.is_cancellation_error(error) {
-        return 0
-      }
       @logger.error("HTTP server failed: \{error}")
       1
     }

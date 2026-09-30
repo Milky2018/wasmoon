@@ -5,6 +5,7 @@ import {
   "Milky2018/vcode/code_object",
   "Milky2018/vcode/native_types",
   "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasmoon_jit/context/layout",
   "moonbitlang/core/debug",
 }
 
@@ -16,6 +17,8 @@ pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtif
 // Errors
 pub suberror ArtifactIncompatible {
   TargetMismatch(expected~ : @artifact.TargetSpec, actual~ : @artifact.TargetSpec)
+  InvalidFunctionIndex(index~ : Int)
+  ContextLayoutMismatch
   MissingCpuFeature(name~ : String)
   DuplicateCpuFeature(name~ : String)
   JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
@@ -46,6 +49,7 @@ pub(all) struct ArtifactCompatibility {
   jit_abi_version : Int
   codegen_revision : String
   module_identity : @artifact.ModuleIdentity
+  context_shape : @layout.ContextShape
   policy : @artifact.CompilationPolicy
   runtime_symbols : Array[@native_types.ExternalSymbol]
   data_symbols : Array[@native_types.DataSymbol]
@@ -56,10 +60,12 @@ pub fn ArtifactCompatibility::to_repr(Self) -> @debug.Repr
 
 pub struct LoadedArtifact {
   artifact : @artifact.Artifact
+  context_layout : @layout.ContextLayout?
   code_objects : Array[@code_object.UnlinkedCodeObject]
 }
 pub fn LoadedArtifact::artifact(Self) -> @artifact.Artifact
 pub fn LoadedArtifact::code_objects(Self) -> Array[@code_object.UnlinkedCodeObject]
+pub fn LoadedArtifact::context_layout(Self) -> @layout.ContextLayout?
 
 // Type aliases
 

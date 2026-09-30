@@ -376,16 +376,11 @@ fn ComponentInvocation::wait_transport(
 pub async fn ComponentInvocation::join(
   self : ComponentInvocation,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
+  defer (if @async.is_being_cancelled() { self.cancel() catch { _ => () } })
   while true {
     match self.poll() {
       InvocationReady(values) => return values
-      InvocationPending =>
-        @async.pause() catch {
-          _ => {
-            self.cancel()
-            raise Cancelled
-          }
-        }
+      InvocationPending => @async.pause()
     }
   }
   raise CanonCallError("unreachable")

@@ -84,33 +84,7 @@ extern "c" fn c_jit_get_hostcall_num_results() -> Int = "wasmoon_jit_get_hostcal
 // ============ GC-managed JITContext ============
 
 ///|
-/// GC-managed JIT context object
-/// The context is automatically freed when the object is garbage collected
-priv type JITContext
-
-///|
-/// Allocate GC-managed JIT context
-extern "c" fn c_jit_alloc_context_managed(func_count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
-
-///|
-/// Copy bytes to linear memory at offset (zero-copy friendly Bytes path).
-#borrow(data)
-extern "c" fn c_jit_memory_init_bytes(
-  mem_ptr : Int64,
-  offset : Int64,
-  data : Bytes,
-  size : Int,
-) -> Int = "wasmoon_jit_memory_init_bytes"
-
-///|
-/// Copy data from linear memory at offset into `out`
-#borrow(out)
-extern "c" fn c_jit_memory_read(
-  mem_ptr : Int64,
-  offset : Int64,
-  out : FixedArray[Byte],
-  size : Int,
-) -> Int = "wasmoon_jit_memory_read"
+using @jit_ffi {type JITContext}
 
 ///|
 /// Allocate linear memory for generic buffers (globals, etc.)
@@ -1032,40 +1006,6 @@ extern "c" fn c_jit_exception_throw_values_managed(
 
 ///|
 #borrow(jit_context)
-extern "c" fn c_jit_ctx_init_data_segments_managed(
-  jit_context : JITContext,
-  count : Int,
-) -> Unit = "wasmoon_jit_ctx_init_data_segments_managed"
-
-///|
-#borrow(jit_context, data)
-extern "c" fn c_jit_ctx_add_data_segment_managed(
-  jit_context : JITContext,
-  idx : Int,
-  data : FixedArray[Byte],
-  size : Int,
-  dropped : Int,
-) -> Unit = "wasmoon_jit_ctx_add_data_segment_managed"
-
-///|
-#borrow(jit_context)
-extern "c" fn c_jit_ctx_init_elem_segments_managed(
-  jit_context : JITContext,
-  count : Int,
-) -> Unit = "wasmoon_jit_ctx_init_elem_segments_managed"
-
-///|
-#borrow(jit_context, data)
-extern "c" fn c_jit_ctx_add_elem_segment_managed(
-  jit_context : JITContext,
-  idx : Int,
-  data : FixedArray[Int64],
-  size : Int,
-  dropped : Int,
-) -> Unit = "wasmoon_jit_ctx_add_elem_segment_managed"
-
-///|
-#borrow(jit_context)
 extern "c" fn c_jit_ctx_clear_segments_managed(
   jit_context : JITContext,
 ) -> Unit = "wasmoon_jit_ctx_clear_segments_managed"
@@ -1105,38 +1045,6 @@ extern "c" fn c_jit_clear_cancellation_callback_managed(
 extern "c" fn c_jit_gc_environment_is_clear_managed(
   jit_context : JITContext,
 ) -> Int = "wasmoon_jit_gc_environment_is_clear_managed"
-
-///|
-#borrow(jit_context, types_data)
-extern "c" fn c_jit_gc_set_type_cache_managed(
-  jit_context : JITContext,
-  types_data : FixedArray[Int],
-  num_types : Int,
-) -> Unit = "wasmoon_jit_gc_set_type_cache_managed"
-
-///|
-#borrow(jit_context, canonical)
-extern "c" fn c_jit_gc_set_canonical_indices_managed(
-  jit_context : JITContext,
-  canonical : FixedArray[Int],
-  num_types : Int,
-) -> Unit = "wasmoon_jit_gc_set_canonical_indices_managed"
-
-///|
-#borrow(jit_context, func_type_indices)
-extern "c" fn c_jit_gc_set_func_type_indices_managed(
-  jit_context : JITContext,
-  func_type_indices : FixedArray[Int],
-  num_funcs : Int,
-) -> Unit = "wasmoon_jit_gc_set_func_type_indices_managed"
-
-///|
-#borrow(jit_context)
-extern "c" fn c_jit_gc_set_func_table_managed(
-  jit_context : JITContext,
-  func_table_ptr : Int64,
-  num_funcs : Int,
-) -> Unit = "wasmoon_jit_gc_set_func_table_managed"
 
 ///|
 #borrow(jit_context)
@@ -1189,17 +1097,6 @@ extern "c" fn c_jit_gc_set_safepoint_table_managed(
   jit_context : JITContext,
   table_ptr : Int64,
 ) -> Unit = "wasmoon_jit_gc_set_safepoint_table_managed"
-
-///|
-#borrow(jit_context, stackmap_blob, code_offsets)
-extern "c" fn c_jit_gc_set_func_safepoints_managed(
-  jit_context : JITContext,
-  func_idx : Int,
-  stackmap_blob : Bytes,
-  stackmap_blob_size : Int,
-  code_offsets : FixedArray[Int],
-  safepoint_count : Int,
-) -> Int = "wasmoon_jit_gc_set_func_safepoints_managed"
 
 ///|
 #borrow(jit_context)

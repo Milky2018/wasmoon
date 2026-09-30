@@ -292,6 +292,7 @@ pub(all) enum Operation {
   IntHighMultiply(@native_types.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
+  IntCompareImmediate(IntComparison, UInt64)
   FloatUnary(FloatUnaryOp)
   FloatBinary(FloatBinaryOp)
   FloatTernary(FloatTernaryOp)
@@ -364,7 +365,8 @@ pub struct TargetSink {
   // private fields
 }
 pub fn TargetSink::folds_unsigned_index_into_memory(Self) -> Bool
-pub fn TargetSink::new(() -> Array[Int], () -> Int, (Array[@native_types.ValueType]) -> (Int, Array[Int]), (Int, Int) -> Int, (Int) -> Unit, (Int, Operation, Array[Int], Array[@native_types.ValueType], @native_types.SourceLocation?, Array[Int], @native_types.StackMapMetadata?) -> Array[Int], (Int, TargetTerminator, TargetTerminatorMetadata) -> Unit, () -> Unit, folds_unsigned_index_into_memory? : Bool) -> Self
+pub fn TargetSink::new(() -> Array[Int], () -> Int, (Array[@native_types.ValueType]) -> (Int, Array[Int]), (Int, Int) -> Int, (Int) -> Unit, (Int, Operation, Array[Int], Array[@native_types.ValueType], @native_types.SourceLocation?, Array[Int], @native_types.StackMapMetadata?) -> Array[Int], (Int, TargetTerminator, TargetTerminatorMetadata) -> Unit, () -> Unit, folds_unsigned_index_into_memory? : Bool, supports_int_compare_immediate? : (@native_types.ValueType, UInt64) -> Bool) -> Self
+pub fn TargetSink::supports_int_compare_immediate(Self, @native_types.ValueType, UInt64) -> Bool
 
 pub(all) struct TargetSwitchCase {
   bits : UInt64

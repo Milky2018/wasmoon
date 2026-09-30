@@ -29,7 +29,7 @@ class ComponentSecurityAuditTests(unittest.TestCase):
     def create_fixture(self, root: Path) -> None:
         manifest = {
             "schema_version": 1,
-            "oracle": {"name": "wasmtime", "version": "45.0.0"},
+            "oracle": {"name": "wasmtime", "version": "49.0.1"},
             "source_checks": {
                 "stable_interface": "interface.mbti",
                 "validator": "validator.mbt",

@@ -3,9 +3,16 @@ package "Milky2018/wasmoon_jit/native_test_support"
 
 import {
   "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasmoon_jit/native/callable",
 }
 
 // Values
+pub fn activation_controls() -> Int
+
+pub fn activation_resume_roots() -> Int
+
+pub fn activation_scratch_isolation() -> Int
+
 pub fn active_fiber_stack_probe_trampoline() -> Int64
 
 pub fn atomic_counter_finish(Int64, Int) -> Unit
@@ -16,9 +23,49 @@ pub fn atomic_notify_finish(Int64) -> Int
 
 pub fn atomic_notify_start(@jit_ffi.MemoryDescriptor, Int64) -> Int64
 
+pub fn callable_lookup(@callable.NativeCallableRegistry, Int64) -> Int
+
 pub fn callback_capture() -> CallbackCapture
 
 pub fn callback_capture_release_count() -> Int
+
+pub fn context_callable_lookup(@jit_ffi.JITContext, Int64) -> Int
+
+pub fn context_callable_subtype(@jit_ffi.JITContext, Int64, Int) -> Int
+
+pub fn context_callable_tag(@jit_ffi.JITContext) -> Int
+
+pub fn context_function_array(@jit_ffi.JITContext) -> Int
+
+pub fn context_gc_funcref_subtype(@jit_ffi.JITContext, Int, Int) -> Int
+
+pub fn context_gc_legacy_rebind(@jit_ffi.JITContext) -> Int
+
+pub fn context_gc_metadata_shares(@jit_ffi.JITContext, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Int
+
+pub fn context_gc_payload_empty(@jit_ffi.JITContext) -> Int
+
+pub fn context_gc_payload_legacy(@jit_ffi.JITContext) -> Int
+
+pub fn context_gc_payload_shares(@jit_ffi.JITContext, Bytes, FixedArray[Int], FixedArray[Int64]) -> Int
+
+pub fn context_gc_payload_valid(@jit_ffi.JITContext) -> Int
+
+pub fn context_globals_ownership() -> Int
+
+pub fn context_layout_shared(@jit_ffi.JITContext, @jit_ffi.JITContext) -> Int
+
+pub fn context_optional_state() -> Int
+
+pub fn context_segments_empty(@jit_ffi.JITContext) -> Int
+
+pub fn context_segments_legacy(@jit_ffi.JITContext) -> Int
+
+pub fn context_segments_share_data(@jit_ffi.JITContext, Bytes) -> Int
+
+pub fn context_segments_valid(@jit_ffi.JITContext) -> Int
+
+pub fn context_storage_bytes(@jit_ffi.JITContext) -> Int
 
 pub fn fiber_guard_rejects_access(Int64) -> Bool
 
@@ -46,13 +93,25 @@ pub fn nested_trap_probe() -> Int64
 
 pub fn parked_gc_root_probe() -> Int64
 
+pub fn raw_context_function_array() -> Int
+
 pub fn reset_callback_capture() -> Unit
+
+pub fn safepoint_ownership() -> Int
+
+pub fn safepoint_parked_sharing(@jit_ffi.JITContext, @jit_ffi.JITContext) -> Int
+
+pub fn safepoint_slots(@jit_ffi.JITContext) -> Int
+
+pub fn safepoints_shared(@jit_ffi.JITContext, @jit_ffi.JITContext) -> Int
 
 pub fn shared_indirect_table_live_count() -> Int64
 
 pub fn sparse_table(Int) -> @jit_ffi.NativeTableHandle
 
 pub fn transfer_cancellation_callback_to_null_context(() -> Bool) -> Unit
+
+pub fn trap_signal_masks() -> Int
 
 pub fn x64_stack_alignment_probe_ptr() -> Int64
 

@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon_jit/context/layout" @context_layout,
   "Milky2018/vcode/native_types" @native,
   "Milky2018/vcode/code_object",
   "moonbitlang/core/encoding/utf8",

@@ -3,6 +3,8 @@ package "Milky2018/wasmoon_jit/jit_ffi"
 
 import {
   "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_jit/context/layout",
+  "Milky2018/wasmoon_jit/native/callable",
   "moonbitlang/core/debug",
 }
 
@@ -29,6 +31,18 @@ pub fn GCHeapHandle::is_null(Self) -> Bool
 pub fn GCHeapHandle::null() -> Self
 pub fn GCHeapHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for GCHeapHandle
+
+pub type JITContext
+pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::bind_gc_function_addresses(Self, FixedArray[Int64]) -> Unit
+pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::bind_gc_safepoints(Self, Int, Bytes, FixedArray[Int]) -> Bool
+pub fn JITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
+pub fn JITContext::bind_prepared_safepoints(Self, PreparedSafepoints) -> Bool
+pub fn JITContext::new(Int) -> Self
+pub fn JITContext::new_shaped(Int, @layout.ContextLayout?) -> Self
+pub fn JITContext::set_segments(Self, Array[Bytes], Array[Array[Int64]]) -> Bool
+pub fn JITContext::snapshot_gc_function_addresses(Self, Int64, Int) -> Unit
 
 pub type MemoryDescriptor
 pub fn MemoryDescriptor::equal(Self, Self) -> Bool
@@ -57,6 +71,10 @@ pub fn NativeTableHandle::size(Self) -> Int
 pub fn NativeTableHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeTableHandle
 
+pub type PreparedSafepoints
+pub fn PreparedSafepoints::new(FixedArray[Bytes], FixedArray[FixedArray[Int]]) -> Self
+
 // Type aliases
+pub using @layout {type ContextLayout}
 
 // Traits
