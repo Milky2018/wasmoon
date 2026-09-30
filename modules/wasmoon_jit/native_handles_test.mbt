@@ -938,3 +938,8 @@ test "shared safepoints outlive their caller and isolate rebinding from parked f
   assert_true(a.bind_gc_safepoints(0, b"", []))
   assert_true(b.bind_gc_safepoints(0, b"", []))
 }
+
+///|
+test "safepoint allocation respects external object payload bounds" {
+  inspect(@native_test_support.safepoint_allocation_bounds(), content="1")
+}

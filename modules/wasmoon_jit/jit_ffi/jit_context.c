@@ -210,8 +210,19 @@ static void finalize_safepoints(void *payload) {
     for (int32_t i = 0; i < owner->count; ++i) gc_release_safepoint_table(&owner->entries[i]);
 }
 
+uint32_t gc_safepoint_owner_size(int32_t count) {
+    // MoonBit runtime.c stores the external payload size in 30 metadata bits.
+    // Check before multiplication, including on 32-bit hosts.
+    const uint32_t max_payload = (UINT32_C(1) << 30) - 1;
+    if (count < 0 || (size_t)count >
+        (max_payload - sizeof(jit_safepoint_owner_t)) / sizeof(wasmoon_gc_safepoint_table_t)) return 0;
+    return (uint32_t)(sizeof(jit_safepoint_owner_t) +
+                      (size_t)count * sizeof(wasmoon_gc_safepoint_table_t));
+}
+
 static jit_safepoint_owner_t *new_safepoints(int32_t count, int shared) {
-    size_t size = sizeof(jit_safepoint_owner_t) + (size_t)count * sizeof(wasmoon_gc_safepoint_table_t);
+    uint32_t size = gc_safepoint_owner_size(count);
+    if (!size) abort();
     jit_safepoint_owner_t *owner = moonbit_make_external_object(finalize_safepoints, size);
     memset(owner, 0, size);
     owner->count = count;
