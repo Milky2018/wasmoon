@@ -299,6 +299,7 @@ void ctx_gc_restore_root_scopes_internal(
     wasmoon_gc_root_scope_t *marker
 );
 void ctx_gc_clear_root_scopes_internal(jit_context_t *ctx);
+uint32_t gc_safepoint_owner_size(int32_t count);
 void ctx_gc_set_safepoint_table_internal(
     jit_context_t *ctx,
     const wasmoon_gc_safepoint_table_t *table

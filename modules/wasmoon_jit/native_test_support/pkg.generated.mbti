@@ -97,6 +97,8 @@ pub fn raw_context_function_array() -> Int
 
 pub fn reset_callback_capture() -> Unit
 
+pub fn safepoint_allocation_bounds() -> Int
+
 pub fn safepoint_ownership() -> Int
 
 pub fn safepoint_parked_sharing(@jit_ffi.JITContext, @jit_ffi.JITContext) -> Int

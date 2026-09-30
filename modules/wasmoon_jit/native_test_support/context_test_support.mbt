@@ -154,3 +154,6 @@ pub extern "c" fn safepoint_parked_sharing(
   first : @jit_ffi.JITContext,
   second : @jit_ffi.JITContext,
 ) -> Int = "wasmoon_test_safepoint_parked_sharing"
+
+///|
+pub extern "c" fn safepoint_allocation_bounds() -> Int = "wasmoon_test_safepoint_allocation_bounds"

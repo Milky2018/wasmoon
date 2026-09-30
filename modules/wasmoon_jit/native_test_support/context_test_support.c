@@ -464,3 +464,17 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_parked_sharing(void *first, vo
     passed &= ctx_runtime(a)->gc_func_safepoint_tables[0].stackmap_blob[0] == 9;
     return passed;
 }
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_allocation_bounds(void) {
+    const uint32_t limit = (UINT32_C(1) << 30) - 1;
+    const uint32_t header = 2 * sizeof(int32_t);
+    const uint32_t entry = sizeof(wasmoon_gc_safepoint_table_t);
+    const int32_t max_count = (int32_t)((limit - header) / entry);
+    return gc_safepoint_owner_size(-1) == 0 &&
+        gc_safepoint_owner_size(INT32_MIN) == 0 &&
+        gc_safepoint_owner_size(0) == header &&
+        gc_safepoint_owner_size(1) == header + entry &&
+        gc_safepoint_owner_size(max_count) == header + (uint32_t)max_count * entry &&
+        gc_safepoint_owner_size(max_count + 1) == 0 &&
+        gc_safepoint_owner_size(INT32_MAX) == 0;
+}
