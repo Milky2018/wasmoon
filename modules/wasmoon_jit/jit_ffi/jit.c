@@ -425,9 +425,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, wasmoon_memo
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_globals(int64_t ctx_ptr, int64_t globals_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) {
-        ctx->globals = (void *)globals_ptr;
-    }
+    if (ctx) ctx_set_globals_internal(ctx, (void *)globals_ptr, 0);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
@@ -1706,6 +1704,15 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_globals_managed(
     void *jit_context, int64_t globals_ptr
 ) {
     wasmoon_jit_ctx_set_globals(MANAGED_CTX(jit_context), globals_ptr);
+}
+
+// Consume a MoonBit Int64 array of borrowed cell addresses.
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_bind_globals_managed(
+    void *jit_context, int64_t *globals
+) {
+    jit_context_t *ctx = (jit_context_t *)MANAGED_CTX(jit_context);
+    ctx_set_globals_internal(ctx, globals, 1);
+    return ctx ? (int64_t)ctx->globals : 0;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table_managed(

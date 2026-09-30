@@ -127,7 +127,7 @@ typedef struct {
 
     // Medium frequency fields
     size_t table0_elements;    // +40: Number of elements in table 0
-    void *globals;             // +48: Array of global variable values (WasmValue*)
+    void *globals;             // +48: Pointer table of borrowed global cells
 
     // Low frequency fields (multi-table support)
     void ***tables;            // +56: Array of table pointers (for table_idx != 0)

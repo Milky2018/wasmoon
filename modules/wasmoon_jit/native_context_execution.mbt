@@ -129,6 +129,17 @@ pub fn NativeJITContext::set_indirect(
 }
 
 ///|
+/// Snapshot borrowed global-cell addresses and retain the table until replacement.
+pub fn NativeJITContext::bind_globals(
+  self : NativeJITContext,
+  globals : FixedArray[Int64],
+) -> Int64 {
+  self.handle.bind_globals(FixedArray::makei(globals.length(), i => globals[i]))
+}
+
+///|
+/// Transfer a malloc-owned table of borrowed cell addresses to this context.
+/// Prefer bind_globals for MoonBit-owned input.
 pub fn NativeJITContext::set_globals(
   self : NativeJITContext,
   globals_ptr : Int64,

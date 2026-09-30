@@ -36,6 +36,7 @@ pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry
 pub fn JITContext::bind_gc_function_addresses(Self, FixedArray[Int64]) -> Unit
 pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
 pub fn JITContext::bind_gc_safepoints(Self, Int, Bytes, FixedArray[Int]) -> Bool
+pub fn JITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITContext::new(Int) -> Self
 pub fn JITContext::set_segments(Self, Array[Bytes], Array[Array[Int64]]) -> Bool
 pub fn JITContext::snapshot_gc_function_addresses(Self, Int64, Int) -> Unit

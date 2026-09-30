@@ -80,6 +80,7 @@ typedef struct jit_runtime_state {
     // Stable native descriptors retaining MoonBit blob/offset arrays.
     wasmoon_gc_safepoint_table_t *gc_func_safepoint_tables;
     int32_t gc_func_safepoint_table_count;
+    int globals_managed;     // RC array versus legacy malloc-owned pointer table
     // Callable identity metadata persists across execution activations.
     int32_t *callable_local_types;
     int callable_local_type_count;

@@ -822,3 +822,18 @@ test "function address arrays retain storage without owning executable pointers"
   inspect(@native_test_support.raw_context_function_array(), content="1")
   assert_true(@wasmoon_jit.NativeJITContext::try_alloc(-1) is None)
 }
+
+///|
+test "global pointer tables snapshot addresses and release both ownership modes" {
+  guard @wasmoon_jit.NativeJITContext::try_alloc(0) is Some(context) else {
+    fail("context allocation failed")
+  }
+  let addresses = FixedArray::make(2, 16L)
+  let table = context.bind_globals(addresses)
+  addresses[0] = 32L
+  inspect(@wasmoon_jit.native_value_slot_read(table, 0), content="16")
+  inspect(@wasmoon_jit.native_value_slot_read(table, 1), content="16")
+  context.bind_globals([]) |> ignore
+  context.bind_globals([48L]) |> ignore
+  inspect(@native_test_support.context_globals_ownership(), content="1")
+}

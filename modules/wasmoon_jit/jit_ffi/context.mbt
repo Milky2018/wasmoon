@@ -56,3 +56,11 @@ pub fn JITContext::bind_callable_registry(
     tags.length(),
   )
 }
+
+///|
+#borrow(self)
+#owned(globals)
+pub extern "c" fn JITContext::bind_globals(
+  self : JITContext,
+  globals : FixedArray[Int64],
+) -> Int64 = "wasmoon_jit_bind_globals_managed"

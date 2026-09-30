@@ -278,6 +278,7 @@ void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size);
 MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_native_table_empty(void);
 
 // GC heap management
+void ctx_set_globals_internal(jit_context_t *ctx, void *globals, int managed);
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);

@@ -181,7 +181,7 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx->tables) free(ctx->tables);
     if (ctx->table_sizes) free(ctx->table_sizes);
     if (ctx->table_max_sizes) free(ctx->table_max_sizes);
-    if (ctx->globals) free(ctx->globals);
+    ctx_set_globals_internal(ctx, NULL, 0);
     if (ctx_runtime(ctx)->callable_local_types)
         moonbit_decref(ctx_runtime(ctx)->callable_local_types);
     if (ctx_runtime(ctx)->callable_registry)
@@ -267,10 +267,21 @@ void ctx_set_memory_internal(jit_context_t *ctx, wasmoon_memory_t *mem0) {
     }
 }
 
-void ctx_set_globals_internal(jit_context_t *ctx, void *globals_ptr) {
-    if (ctx) {
-        ctx->globals = globals_ptr;
+// Consume the pointer table; its entries borrow runtime-owned global cells.
+void ctx_set_globals_internal(jit_context_t *ctx, void *globals_ptr, int managed) {
+    if (!ctx) {
+        if (managed) moonbit_decref(globals_ptr);
+        else free(globals_ptr);
+        return;
     }
+    // A legacy caller may reinstall the same table without transferring a new RC.
+    if (ctx->globals == globals_ptr && !managed) return;
+    if (ctx->globals) {
+        if (ctx_runtime(ctx)->globals_managed) moonbit_decref(ctx->globals);
+        else free(ctx->globals);
+    }
+    ctx->globals = globals_ptr;
+    ctx_runtime(ctx)->globals_managed = managed;
 }
 
 // ============ Indirect Table Management ============

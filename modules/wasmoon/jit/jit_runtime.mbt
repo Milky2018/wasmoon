@@ -1039,7 +1039,20 @@ pub fn JITModule::get_memory_size(self : JITModule, memidx : Int) -> Int64 {
 }
 
 ///|
-/// Set globals array for the JIT context
+/// Install a private table of borrowed runtime global-cell addresses.
+pub fn JITModule::bind_globals(
+  self : JITModule,
+  globals : FixedArray[Int64],
+) -> Int64 {
+  match self.context {
+    Some(ctx) => ctx.ctx.bind_globals(globals)
+    None => 0L
+  }
+}
+
+///|
+/// Transfer a malloc-owned table of borrowed global-cell addresses.
+/// Prefer bind_globals for MoonBit-owned input.
 pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
   if self.context is Some(ctx) {
     ctx.set_globals(globals_ptr)

@@ -387,3 +387,26 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_raw_context_function_array(void) {
     }
     return passed;
 }
+
+// Exercise RC-to-legacy and legacy-to-RC replacement under sanitizers.
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_globals_ownership(void) {
+    jit_context_t *ctx = alloc_context_internal(0);
+    if (!ctx) return 0;
+    int64_t *managed = moonbit_make_int64_array(2, 0);
+    managed[0] = 16;
+    managed[1] = 32;
+    moonbit_incref(managed);
+    ctx_set_globals_internal(ctx, managed, 1);
+    moonbit_incref(managed);
+    ctx_set_globals_internal(ctx, managed, 1);
+    int passed = ctx->globals == managed && managed[1] == 32;
+    int64_t *legacy = malloc(2 * sizeof(int64_t));
+    if (!legacy) { moonbit_decref(managed); free_context_internal(ctx); return 0; }
+    legacy[0] = 48;
+    ctx_set_globals_internal(ctx, legacy, 0);
+    ctx_set_globals_internal(ctx, legacy, 0);
+    passed &= ((int64_t *)ctx->globals)[0] == 48 && managed[0] == 16;
+    ctx_set_globals_internal(ctx, managed, 1);
+    free_context_internal(ctx);
+    return passed;
+}

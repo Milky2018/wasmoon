@@ -612,6 +612,7 @@ pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.Memor
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
 pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise @installer.JitInstallError
 pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int], Array[Int]) -> Unit
+pub fn NativeJITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit

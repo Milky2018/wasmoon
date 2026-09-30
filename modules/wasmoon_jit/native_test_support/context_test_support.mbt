@@ -122,3 +122,6 @@ pub extern "c" fn context_function_array(context : @jit_ffi.JITContext) -> Int =
 
 ///|
 pub extern "c" fn raw_context_function_array() -> Int = "wasmoon_test_raw_context_function_array"
+
+///|
+pub extern "c" fn context_globals_ownership() -> Int = "wasmoon_test_context_globals_ownership"

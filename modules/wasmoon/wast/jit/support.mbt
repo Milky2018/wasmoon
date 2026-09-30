@@ -134,12 +134,10 @@ pub fn init_jit_globals_from_store(
   }
   let count = instance.global_addrs.length()
   if count == 0 {
+    jit_module.bind_globals([]) |> ignore
     return 0L
   }
-  let pointers = @wasmoon_jit.alloc_memory(count.to_int64() * 8L)
-  if pointers == 0L {
-    return 0L
-  }
+  let pointers = FixedArray::make(count, 0L)
   for i, global_addr in instance.global_addrs {
     let global = store.globals[global_addr]
     let cell = match global.native_binding() {
@@ -147,7 +145,6 @@ pub fn init_jit_globals_from_store(
       None => {
         let cell = @wasmoon_jit.alloc_memory(16L)
         if cell == 0L {
-          @wasmoon_jit.free_memory(pointers)
           raise OutOfMemory
         }
         let value_type = global.get_type().value_type
@@ -162,10 +159,7 @@ pub fn init_jit_globals_from_store(
           @wasmoon_jit.native_value_slot_write(cell, 1, high.unwrap_or(0L))
         }
         {
-          errdefer {
-            @wasmoon_jit.free_memory(cell)
-            @wasmoon_jit.free_memory(pointers)
-          }
+          errdefer @wasmoon_jit.free_memory(cell)
           write(global.get())
         }
         global.bind_native({
@@ -206,10 +200,9 @@ pub fn init_jit_globals_from_store(
         cell
       }
     }
-    @wasmoon_jit.native_value_slot_write(pointers, i, cell)
+    pointers[i] = cell
   }
-  jit_module.set_globals(pointers)
-  pointers
+  jit_module.bind_globals(pointers)
 }
 
 ///|

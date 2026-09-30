@@ -80,6 +80,7 @@ type JITModule
 pub fn JITModule::JITModule() -> Self
 pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.MemoryDescriptor
 pub fn JITModule::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int], Array[Int]) -> Unit
+pub fn JITModule::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?, timeout_ms? : Int?) -> JITCallResult
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
