@@ -128,4 +128,3 @@ in benchmark.json.gz and control.json.gz. source-sha256.json.gz identifies the
 candidate sources; baseline-tracked.patch.gz records tracked pre-optimization
 changes over b141554a. The earlier layout report records its untracked layout
 sources. No remote delivery or clean-worktree claim is made.
-
