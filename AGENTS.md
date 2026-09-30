@@ -31,17 +31,8 @@ Review package organization and project style manually. Add automated style
 audits only with a mature audit framework and well-defined rules, rather than
 ad hoc filename or path matching.
 
-Make all ordinary changes directly on the long-lived `dev` branch. `main` is
-stable and receives periodic `dev` → `main` PRs; do not create topic branches
-unless explicitly requested.
-
-Before editing:
-
-```bash
-git fetch origin --prune
-git switch dev
-git pull --rebase origin dev
-```
+Develop on descriptively named feature or fix branches and merge through pull
+requests after review and CI pass.
 
 Before pushing code changes:
 
@@ -50,14 +41,14 @@ moon info
 moon fmt
 moon check --target native --warn-list +73 --deny-warn
 moon test --target native
-git pull --rebase origin dev
-git push origin dev
 ```
+
+Run regression tests relevant to the change. For documentation-only changes,
+review the diff and check formatting and links.
 
 Keep changes focused, preserve unrelated work, update relevant `issues/ISS-*.md`
 files, and use English for commits, code comments, documentation, and PR text.
-Do not amend commits or force-push. Finish with a clean `dev` matching
-`origin/dev`.
+Report changes, validation results, and delivery status at handoff.
 
 ## Testing
 
