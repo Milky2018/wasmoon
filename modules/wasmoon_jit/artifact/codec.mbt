@@ -902,6 +902,15 @@ fn write_manifest(
   writer.write_bool(manifest.policy.nan_canonicalization)
   writer.write_bool(manifest.policy.cancellation_safepoints)
   writer.write_bool(manifest.policy.debug_info)
+  match manifest.context_shape {
+    Legacy => writer.write_bool(false)
+    Module(memories, tables, globals) => {
+      writer.write_bool(true)
+      writer.write_u32(memories, "context.memories")
+      writer.write_u32(tables, "context.tables")
+      writer.write_u32(globals, "context.globals")
+    }
+  }
 }
 
 ///|
@@ -949,7 +958,19 @@ fn read_manifest(
     ),
     debug_info: reader.read_bool("manifest.policy.debug_info"),
   }
+  let context_shape : @context_layout.ContextShape = if reader.read_bool(
+      "context.shaped",
+    ) {
+    Module(
+      reader.read_u32("context.memories"),
+      reader.read_u32("context.tables"),
+      reader.read_u32("context.globals"),
+    )
+  } else {
+    Legacy
+  }
   {
+    context_shape,
     format_version,
     target,
     required_cpu_features,
@@ -1185,7 +1206,7 @@ fn read_function(
 }
 
 ///|
-/// Encode one v10 Cwasm artifact without resolving symbolic relocations.
+/// Encode one v11 Cwasm artifact without resolving symbolic relocations.
 pub fn encode(artifact : Artifact) -> Bytes raise ArtifactEncodeError {
   let writer = ByteWriter::new()
   writer.write_byte_array([b'c', b'w', b'a', b's'])
@@ -1202,7 +1223,7 @@ pub fn encode(artifact : Artifact) -> Bytes raise ArtifactEncodeError {
 }
 
 ///|
-/// Decode untrusted v10 Cwasm bytes into ordinary artifact data.
+/// Decode untrusted v11 Cwasm bytes into ordinary artifact data.
 ///
 /// This function performs bounded structural decoding only. The native
 /// `wasmoon_jit` facade performs compatibility and code-object verification

@@ -64,3 +64,28 @@ pub extern "c" fn JITContext::bind_globals(
   self : JITContext,
   globals : FixedArray[Int64],
 ) -> Int64 = "wasmoon_jit_bind_globals_managed"
+
+///|
+#owned(functions, layout)
+extern "c" fn allocate_shaped_context(
+  functions : FixedArray[FunctionAddress],
+  layout : Bytes,
+) -> JITContext = "wasmoon_jit_alloc_shaped_context"
+
+///|
+pub fn JITContext::new_shaped(
+  func_count : Int,
+  layout : ContextLayout?,
+) -> JITContext {
+  guard layout is Some(layout) else { return JITContext::new(func_count) }
+  if func_count < 0 {
+    return allocate_legacy_context(-1)
+  }
+  allocate_shaped_context(
+    FixedArray::make(func_count, null_function_address()),
+    layout.words(),
+  )
+}
+
+///|
+pub using @context_layout {type ContextLayout}

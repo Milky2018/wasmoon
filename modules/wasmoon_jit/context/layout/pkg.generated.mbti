@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/context/layout"
+
+import {
+  "Milky2018/wasm_core/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct ContextLayout {
+  // private fields
+}
+pub fn ContextLayout::field(Self, Int) -> Int
+pub fn ContextLayout::new(ContextShape) -> Self?
+pub fn ContextLayout::words(Self) -> Bytes
+
+pub(all) enum ContextShape {
+  Legacy
+  Module(Int, Int, Int)
+} derive(Eq, @debug.Debug)
+pub fn ContextShape::descriptor(Self) -> ReadOnlyArray[Int]?
+pub fn ContextShape::equal(Self, Self) -> Bool
+pub fn ContextShape::from_module(@types.Module) -> Self
+pub fn ContextShape::not_equal(Self, Self) -> Bool
+pub fn ContextShape::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

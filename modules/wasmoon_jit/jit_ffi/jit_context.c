@@ -85,13 +85,13 @@ static int32_t gc_count_table_roots(const jit_context_t *ctx) {
         return 0;
     }
     size_t total = 0;
-    if (ctx->table0_base && ctx->table0_elements > 0) {
-        total += ctx->table0_elements;
+    if (ctx_table0_base(ctx) && ctx_table0_elements(ctx) > 0) {
+        total += ctx_table0_elements(ctx);
     }
-    if (ctx->tables && ctx->table_sizes && ctx->table_count > 1) {
-        for (int i = 1; i < ctx->table_count; i++) {
-            if (ctx->tables[i] && ctx->table_sizes[i] > 0) {
-                total += ctx->table_sizes[i];
+    if (ctx_tables(ctx) && ctx_table_sizes(ctx) && ctx_table_count(ctx) > 1) {
+        for (int i = 1; i < ctx_table_count(ctx); i++) {
+            if (ctx_tables(ctx)[i] && ctx_table_sizes(ctx)[i] > 0) {
+                total += ctx_table_sizes(ctx)[i];
             }
         }
     }
@@ -106,15 +106,15 @@ static int32_t gc_copy_table_roots(const jit_context_t *ctx, int64_t *dst) {
         return 0;
     }
     int32_t at = 0;
-    if (ctx->table0_base && ctx->table0_elements > 0) {
-        for (size_t i = 0; i < ctx->table0_elements; i++) {
-            dst[at++] = (int64_t)(uintptr_t)ctx->table0_base[i * 2];
+    if (ctx_table0_base(ctx) && ctx_table0_elements(ctx) > 0) {
+        for (size_t i = 0; i < ctx_table0_elements(ctx); i++) {
+            dst[at++] = (int64_t)(uintptr_t)ctx_table0_base(ctx)[i * 2];
         }
     }
-    if (ctx->tables && ctx->table_sizes && ctx->table_count > 1) {
-        for (int table_idx = 1; table_idx < ctx->table_count; table_idx++) {
-            void **table_ptr = ctx->tables[table_idx];
-            size_t table_size = ctx->table_sizes[table_idx];
+    if (ctx_tables(ctx) && ctx_table_sizes(ctx) && ctx_table_count(ctx) > 1) {
+        for (int table_idx = 1; table_idx < ctx_table_count(ctx); table_idx++) {
+            void **table_ptr = ctx_tables(ctx)[table_idx];
+            size_t table_size = ctx_table_sizes(ctx)[table_idx];
             if (!table_ptr || table_size == 0) {
                 continue;
             }
@@ -129,18 +129,57 @@ static int32_t gc_copy_table_roots(const jit_context_t *ctx, int64_t *dst) {
 // ============ Context Allocation ============
 
 // Consume a MoonBit external-pointer array. Its entries do not own code.
-jit_context_t *alloc_context_with_functions(void **functions) {
-    jit_context_owner_t *owner = calloc(1, sizeof(*owner));
-    if (!owner) {
-        moonbit_decref(functions);
-        return NULL;
+jit_context_t *alloc_context_with_layout(void **functions, uint8_t *layout) {
+    size_t abi_size = sizeof(jit_context_t);
+    if (layout) {
+        if (Moonbit_array_length(layout) != 48) goto invalid;
+        int32_t fields[30] = {0};
+        for (int i = 0; i < 18; ++i) fields[i] = context_layout_field(layout, i);
+        for (int i = 23; i < 30; ++i) fields[i] = context_layout_field(layout, i);
+        // The MoonBit layout builder is authoritative. Validate all native spans
+        // before allocation so raw FFI callers cannot construct overlapping views.
+        if (fields[23] < 0) goto invalid;
+        abi_size = (size_t)fields[23];
+        for (int i = 0; i < 18; ++i) {
+            int width = (i == 8 || i == 9 || i == 13 || i == 14) ? 4 : 8;
+            int offset = fields[i];
+            if (offset == -1) continue;
+            if (offset < 0 || offset % width || (size_t)offset + width > abi_size) goto invalid;
+            for (int j = 0; j < i; ++j) {
+                int jw = (j == 8 || j == 9 || j == 13 || j == 14) ? 4 : 8;
+                if (fields[j] >= 0 && offset < fields[j] + jw && fields[j] < offset + width) goto invalid;
+            }
+        }
+        if (fields[3] < 0 || fields[9] < 0 || fields[14] < 0 ||
+            fields[15] < 0 || fields[16] < 0 || fields[17] < 0) goto invalid;
+        for (int i = 24; i <= 27; ++i) {
+            int count = fields[i == 24 ? 28 : 29];
+            if (fields[i] < 0 || fields[i] % 8 || count < 0 ||
+                (uint64_t)fields[i] + (uint64_t)count * 8 > abi_size) goto invalid;
+            for (int j = 0; j < 18; ++j) {
+                int width = (j == 8 || j == 9 || j == 13 || j == 14) ? 4 : 8;
+                if (count && fields[j] >= 0 && fields[j] + width > fields[24]) goto invalid;
+            }
+            if (i > 24 && fields[i] < fields[i - 1] + (int64_t)fields[i == 25 ? 28 : 29] * 8) goto invalid;
+        }
     }
-    jit_context_t *ctx = &owner->abi;
-    atomic_init(&ctx->memory0_size, 0);
-    ctx->func_table = functions;
-    ctx->func_count = Moonbit_array_length(functions);
-    ctx->debug_current_func_idx = -1;
+    jit_runtime_state_t *runtime = calloc(1, sizeof(*runtime) + abi_size);
+    if (!runtime) goto invalid;
+    runtime->layout = layout;
+    jit_context_t *ctx = (jit_context_t *)(runtime + 1);
+    if (ctx_memory0_size_address(ctx)) atomic_init(ctx_memory0_size_address(ctx), 0);
+    ctx_set_func_table(ctx, functions);
+    ctx_set_func_count(ctx, Moonbit_array_length(functions));
+    ctx_set_debug_current_func_idx(ctx, -1);
     return ctx;
+invalid:
+    moonbit_decref(functions);
+    if (layout) moonbit_decref(layout);
+    return NULL;
+}
+
+jit_context_t *alloc_context_with_functions(void **functions) {
+    return alloc_context_with_layout(functions, NULL);
 }
 
 jit_context_t *alloc_context_internal(int func_count) {
@@ -148,11 +187,64 @@ jit_context_t *alloc_context_internal(int func_count) {
     return alloc_context_with_functions(moonbit_make_extern_ref_array(func_count, NULL));
 }
 
-// Descriptor addresses stay stable while their RC-owned payloads are replaced.
+// RC-owned descriptor storage. Shared tables are immutable; compatibility
+// setters detach a private copy before replacement. Bind only outside execution.
+typedef struct {
+    int32_t count;
+    int32_t shared;
+    wasmoon_gc_safepoint_table_t entries[];
+} jit_safepoint_owner_t;
+
+static jit_safepoint_owner_t *safepoint_owner(wasmoon_gc_safepoint_table_t *entries) {
+    return (jit_safepoint_owner_t *)((char *)entries - offsetof(jit_safepoint_owner_t, entries));
+}
+
 static void gc_release_safepoint_table(wasmoon_gc_safepoint_table_t *table) {
     if (table->stackmap_blob) moonbit_decref((void *)table->stackmap_blob);
     if (table->code_offsets) moonbit_decref((void *)table->code_offsets);
     memset(table, 0, sizeof(*table));
+}
+
+static void finalize_safepoints(void *payload) {
+    jit_safepoint_owner_t *owner = payload;
+    for (int32_t i = 0; i < owner->count; ++i) gc_release_safepoint_table(&owner->entries[i]);
+}
+
+static jit_safepoint_owner_t *new_safepoints(int32_t count, int shared) {
+    size_t size = sizeof(jit_safepoint_owner_t) + (size_t)count * sizeof(wasmoon_gc_safepoint_table_t);
+    jit_safepoint_owner_t *owner = moonbit_make_external_object(finalize_safepoints, size);
+    memset(owner, 0, size);
+    owner->count = count;
+    owner->shared = shared;
+    return owner;
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_jit_prepare_safepoints(uint8_t **blobs, int32_t **offsets) {
+    int32_t count = Moonbit_array_length(blobs);
+    assert(count == Moonbit_array_length(offsets));
+    jit_safepoint_owner_t *owner = new_safepoints(count, 1);
+    for (int32_t i = 0; i < count; ++i) {
+        wasmoon_gc_safepoint_table_t *table = &owner->entries[i];
+        table->stackmap_blob_size = Moonbit_array_length(blobs[i]);
+        table->safepoint_count = Moonbit_array_length(offsets[i]);
+        if (table->stackmap_blob_size) { table->stackmap_blob = blobs[i]; moonbit_incref(blobs[i]); }
+        if (table->safepoint_count) { table->code_offsets = (uint32_t *)offsets[i]; moonbit_incref(offsets[i]); }
+    }
+    return owner;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_bind_prepared_safepoints(void *context, void *payload) {
+    extern int64_t wasmoon_jit_context_ptr(void *context);
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    jit_safepoint_owner_t *owner = payload;
+    if (!ctx || owner->count > ctx_func_count(ctx)) return 0;
+    moonbit_incref(owner);
+    if (ctx_runtime(ctx)->gc_func_safepoint_tables)
+        moonbit_decref(safepoint_owner(ctx_runtime(ctx)->gc_func_safepoint_tables));
+    ctx_runtime(ctx)->gc_func_safepoint_tables = owner->entries;
+    ctx_runtime(ctx)->gc_func_safepoint_table_count = owner->count;
+    ctx_runtime(ctx)->gc_safepoint_table = NULL;
+    return 1;
 }
 
 // ============ Context Free ============
@@ -168,19 +260,21 @@ void free_context_internal(jit_context_t *ctx) {
     ctx_clear_segments_internal(ctx);
 
     // Free context-owned memory0 (guarded allocations are large and must not leak)
-    if (ctx_runtime(ctx)->owns_memory0 && ctx->memory0) {
-        wasmoon_jit_free_memory_desc(ctx->memory0);
-        ctx->memory0 = NULL;
-        ctx->memory0_base = NULL;
-        atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);
+    if (ctx_runtime(ctx)->owns_memory0 && ctx_memory0(ctx)) {
+        wasmoon_jit_free_memory_desc(ctx_memory0(ctx));
+        ctx_set_memory0(ctx, NULL);
+        ctx_set_memory0_base(ctx, NULL);
+        ctx_set_memory0_size(ctx, 0);
         ctx_runtime(ctx)->owns_memory0 = 0;
     }
 
-    if (ctx->func_table) moonbit_decref(ctx->func_table);
+    if (ctx_func_table(ctx)) moonbit_decref(ctx_func_table(ctx));
     ctx_clear_table_bindings(ctx);
-    if (ctx->tables) free(ctx->tables);
-    if (ctx->table_sizes) free(ctx->table_sizes);
-    if (ctx->table_max_sizes) free(ctx->table_max_sizes);
+    if (!ctx_runtime(ctx)->layout) {
+        free(ctx_tables(ctx));
+        free(ctx_table_sizes(ctx));
+        free(ctx_table_max_sizes(ctx));
+    }
     ctx_set_globals_internal(ctx, NULL, 0);
     if (ctx_runtime(ctx)->callable_local_types)
         moonbit_decref(ctx_runtime(ctx)->callable_local_types);
@@ -191,11 +285,11 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx_runtime(ctx)->gc_func_table) moonbit_decref(ctx_runtime(ctx)->gc_func_table);
 
     // Release each managed descriptor retained by the multi-memory array.
-    if (ctx->memories) {
-        for (int i = 0; i < ctx->memory_count; ++i) {
-            if (ctx->memories[i]) moonbit_decref(ctx->memories[i]);
+    if (ctx_memories(ctx)) {
+        for (int i = 0; i < ctx_memory_count(ctx); ++i) {
+            if (ctx_memories(ctx)[i]) moonbit_decref(ctx_memories(ctx)[i]);
         }
-        free(ctx->memories);
+        if (!ctx_runtime(ctx)->layout) free(ctx_memories(ctx));
     }
 
     if (ctx_runtime(ctx)->gc_type_cache) {
@@ -211,11 +305,7 @@ void free_context_internal(jit_context_t *ctx) {
     free(ctx_runtime(ctx)->execution);
     ctx_runtime(ctx)->execution = NULL;
     if (ctx_runtime(ctx)->gc_func_safepoint_tables) {
-        int32_t count = ctx_runtime(ctx)->gc_func_safepoint_table_count;
-        for (int32_t i = 0; i < count; i++) {
-            gc_release_safepoint_table(&ctx_runtime(ctx)->gc_func_safepoint_tables[i]);
-        }
-        free(ctx_runtime(ctx)->gc_func_safepoint_tables);
+        moonbit_decref(safepoint_owner(ctx_runtime(ctx)->gc_func_safepoint_tables));
         ctx_runtime(ctx)->gc_func_safepoint_tables = NULL;
     }
     ctx_runtime(ctx)->gc_func_safepoint_table_count = 0;
@@ -234,65 +324,66 @@ void free_context_internal(jit_context_t *ctx) {
     }
     ctx_runtime(ctx)->control_defaults.cancellation_callback = NULL;
 
-    free(ctx);
+    if (ctx_runtime(ctx)->layout) moonbit_decref(ctx_runtime(ctx)->layout);
+    free(ctx_runtime(ctx));
 }
 
 // ============ Context Setters ============
 
 void ctx_refresh_memory0_fast_fields(jit_context_t *ctx) {
     if (!ctx) return;
-    if (!ctx->memory0) {
-        ctx->memory0_base = NULL;
-        atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);
+    if (!ctx_memory0(ctx)) {
+        ctx_set_memory0_base(ctx, NULL);
+        ctx_set_memory0_size(ctx, 0);
         return;
     }
-    ctx->memory0_base = ctx->memory0->base;
+    ctx_set_memory0_base(ctx, ctx_memory0(ctx)->base);
     atomic_store_explicit(
-        &ctx->memory0_size,
-        atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed),
+        ctx_memory0_size_address(ctx),
+        atomic_load_explicit(&ctx_memory0(ctx)->current_length, memory_order_relaxed),
         memory_order_relaxed
     );
 }
 
 void ctx_set_func_internal(jit_context_t *ctx, int idx, void *func_ptr) {
-    if (ctx && idx >= 0 && idx < ctx->func_count) {
-        ctx->func_table[idx] = func_ptr;
+    if (ctx && idx >= 0 && idx < ctx_func_count(ctx)) {
+        ctx_func_table(ctx)[idx] = func_ptr;
     }
 }
 
 void ctx_set_memory_internal(jit_context_t *ctx, wasmoon_memory_t *mem0) {
     if (ctx) {
-        ctx->memory0 = mem0;
+        ctx_set_memory0(ctx, mem0);
         ctx_refresh_memory0_fast_fields(ctx);
     }
 }
 
 // Consume the pointer table; its entries borrow runtime-owned global cells.
 void ctx_set_globals_internal(jit_context_t *ctx, void *globals_ptr, int managed) {
-    if (!ctx) {
-        if (managed) moonbit_decref(globals_ptr);
+    if (!ctx || !ctx_globals_address(ctx)) {
+        if (managed && globals_ptr) moonbit_decref(globals_ptr);
         else free(globals_ptr);
         return;
     }
     // A legacy caller may reinstall the same table without transferring a new RC.
-    if (ctx->globals == globals_ptr && !managed) return;
-    if (ctx->globals) {
-        if (ctx_runtime(ctx)->globals_managed) moonbit_decref(ctx->globals);
-        else free(ctx->globals);
+    if (ctx_globals(ctx) == globals_ptr && !managed) return;
+    if (ctx_globals(ctx)) {
+        if (ctx_runtime(ctx)->globals_managed) moonbit_decref(ctx_globals(ctx));
+        else free(ctx_globals(ctx));
     }
-    ctx->globals = globals_ptr;
+    ctx_set_globals(ctx, globals_ptr);
     ctx_runtime(ctx)->globals_managed = managed;
 }
 
 // ============ Indirect Table Management ============
 
 void ctx_set_indirect_internal(jit_context_t *ctx, int table_idx, int func_idx, int type_idx) {
-    if (ctx && ctx->table0_base &&
-        table_idx >= 0 && (size_t)table_idx < ctx->table0_elements &&
-        func_idx >= 0 && func_idx < ctx->func_count) {
+    if (ctx && ctx_table0_base(ctx) &&
+        table_idx >= 0 && (size_t)table_idx < ctx_table0_elements(ctx) &&
+        func_idx >= 0 && func_idx < ctx_func_count(ctx)) {
         // Store func_ptr at offset 0, type_idx at offset 8
-        ctx->table0_base[table_idx * 2] = ctx->func_table[func_idx];
-        ctx->table0_base[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+        ctx_table0_base(ctx)[table_idx * 2] = ctx_func_table(ctx)[func_idx];
+        ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
     }
 }
 
@@ -302,28 +393,28 @@ void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap) {
     if (!ctx) return;
 
     heap = gc_heap_live(heap);
-    if (ctx->gc_heap != heap) {
+    if (ctx_gc_heap(ctx) != heap) {
         if (heap) moonbit_incref(heap);
-        GcHeap *old = ctx->gc_heap;
-        ctx->gc_heap = heap;
+        GcHeap *old = ctx_gc_heap(ctx);
+        ctx_set_gc_heap(ctx, heap);
         if (old) moonbit_decref(old);
     }
     if (heap) {
         // Set up pointers for inline allocation
-        ctx->gc_heap_ptr = heap->data + heap->size;
-        ctx->gc_heap_limit = heap->data + heap->capacity;
+        ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+        ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
     } else {
-        ctx->gc_heap_ptr = NULL;
-        ctx->gc_heap_limit = NULL;
+        ctx_set_gc_heap_ptr(ctx, NULL);
+        ctx_set_gc_heap_limit(ctx, NULL);
     }
 }
 
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx) {
-    if (!ctx || !ctx->gc_heap) return;
+    if (!ctx || !ctx_gc_heap(ctx)) return;
 
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
-    ctx->gc_heap_ptr = heap->data + heap->size;
-    ctx->gc_heap_limit = heap->data + heap->capacity;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
+    ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+    ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
 }
 
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id) {
@@ -442,19 +533,23 @@ static int32_t gc_alloc_func_safepoint_tables(jit_context_t *ctx) {
     if (!ctx) {
         return 0;
     }
-    if (ctx_runtime(ctx)->gc_func_safepoint_tables) {
-        return 1;
+    wasmoon_gc_safepoint_table_t *old = ctx_runtime(ctx)->gc_func_safepoint_tables;
+    if (old && !safepoint_owner(old)->shared) return 1;
+    int32_t count = ctx_func_count(ctx);
+    if (count <= 0) return 0;
+    jit_safepoint_owner_t *owner = new_safepoints(count, 0);
+    if (old) {
+        int32_t old_count = ctx_runtime(ctx)->gc_func_safepoint_table_count;
+        for (int32_t i = 0; i < old_count; ++i) {
+            owner->entries[i] = old[i];
+            if (old[i].stackmap_blob) moonbit_incref((void *)old[i].stackmap_blob);
+            if (old[i].code_offsets) moonbit_incref((void *)old[i].code_offsets);
+            if (ctx_runtime(ctx)->gc_safepoint_table == &old[i])
+                ctx_runtime(ctx)->gc_safepoint_table = &owner->entries[i];
+        }
+        moonbit_decref(safepoint_owner(old));
     }
-    int32_t count = ctx->func_count > 0 ? ctx->func_count : 0;
-    if (count <= 0) {
-        return 0;
-    }
-    wasmoon_gc_safepoint_table_t *tables =
-        (wasmoon_gc_safepoint_table_t *)calloc((size_t)count, sizeof(wasmoon_gc_safepoint_table_t));
-    if (!tables) {
-        return 0;
-    }
-    ctx_runtime(ctx)->gc_func_safepoint_tables = tables;
+    ctx_runtime(ctx)->gc_func_safepoint_tables = owner->entries;
     ctx_runtime(ctx)->gc_func_safepoint_table_count = count;
     return 1;
 }
@@ -463,8 +558,9 @@ static int32_t bind_func_safepoints(
     jit_context_t *ctx, int32_t func_idx, uint8_t *blob, int32_t blob_size,
     int32_t *offsets, int32_t count
 ) {
-    if (!ctx || func_idx < 0 || func_idx >= ctx->func_count ||
-        !gc_alloc_func_safepoint_tables(ctx)) return 0;
+    if (!ctx || func_idx < 0 || func_idx >= ctx_func_count(ctx)) return 0;
+    if (!blob_size && !count && !ctx_runtime(ctx)->gc_func_safepoint_tables) return 1;
+    if (!gc_alloc_func_safepoint_tables(ctx)) return 0;
     blob = blob_size ? blob : NULL;
     offsets = count ? offsets : NULL;
     // A caller may rebind exactly the currently retained payloads.
@@ -484,7 +580,7 @@ int32_t ctx_gc_set_func_safepoints_internal(
     jit_context_t *ctx, int32_t func_idx, const uint8_t *stackmap_blob,
     int32_t stackmap_blob_size, const int32_t *code_offsets, int32_t safepoint_count
 ) {
-    if (!ctx || func_idx < 0 || func_idx >= ctx->func_count) return 0;
+    if (!ctx || func_idx < 0 || func_idx >= ctx_func_count(ctx)) return 0;
     int32_t blob_size = stackmap_blob_size > 0 ? stackmap_blob_size : 0;
     int32_t count = safepoint_count > 0 ? safepoint_count : 0;
     uint8_t *blob = moonbit_make_bytes(blob_size, 0);
@@ -558,15 +654,15 @@ int32_t gc_collect_for_alloc_internal(
     int32_t root_count
 ) {
     jit_context_t *activation = get_current_jit_context();
-    if (activation && ctx && activation->gc_heap == ctx->gc_heap) ctx = activation;
-    if (!ctx || !ctx->gc_heap) {
+    if (activation && ctx && ctx_gc_heap(activation) == ctx_gc_heap(ctx)) ctx = activation;
+    if (!ctx || !ctx_gc_heap(ctx)) {
         return -1;
     }
     if (ctx_execution(ctx)->gc_in_collect) {
         return -1;
     }
 
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
     int32_t safe_root_count = root_count > 0 ? root_count : 0;
     int32_t scratch_count = ctx_execution(ctx)->gc_root_scratch_len > 0 ? ctx_execution(ctx)->gc_root_scratch_len : 0;
     int32_t caller_root_count = gc_root_scope_count(ctx);
@@ -676,7 +772,7 @@ int32_t gc_collect_for_alloc_internal(
 
 void ctx_clear_table_bindings(jit_context_t *ctx) {
     if (!ctx_runtime(ctx)->table_bindings) return;
-    for (int i = 0; i < ctx->table_count; ++i) {
+    for (int i = 0; i < ctx_table_count(ctx); ++i) {
         wasmoon_table_binding_t *binding = &ctx_runtime(ctx)->table_bindings[i];
         wasmoon_table_t *owner = binding->owner;
         if (binding->previous) binding->previous->next = binding->next;
@@ -693,11 +789,11 @@ void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size) {
     table->size = size;
     for (wasmoon_table_binding_t *binding = table->bindings; binding; binding = binding->next) {
         jit_context_t *ctx = binding->context;
-        ctx->tables[binding->index] = entries;
-        ctx->table_sizes[binding->index] = size;
+        ctx_tables(ctx)[binding->index] = entries;
+        ctx_table_sizes(ctx)[binding->index] = size;
         if (binding->index == 0) {
-            ctx->table0_base = entries;
-            ctx->table0_elements = size;
+            ctx_set_table0_base(ctx, entries);
+            ctx_set_table0_elements(ctx, size);
         }
     }
 }

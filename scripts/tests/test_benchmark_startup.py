@@ -38,3 +38,8 @@ class StartupEvidenceTests(unittest.TestCase):
                  'artifact_sha256': e} for e in ['before', 'after']]
         with self.assertRaisesRegex(ValueError, 'artifact bytes differ'):
             summarize(rows)
+        result = summarize(rows, allow_artifact_differences=True)['w']
+        self.assertFalse(result['artifacts_equal'])
+        rows.append({**rows[0], 'artifact_sha256': 'nondeterministic'})
+        with self.assertRaisesRegex(ValueError, 'vary within one build'):
+            summarize(rows, allow_artifact_differences=True)

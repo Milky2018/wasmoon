@@ -97,7 +97,8 @@ typedef struct wasmoon_gc_root_scope {
     int32_t root_count;
 } wasmoon_gc_root_scope_t;
 
-// VMContext fixed prefix. vmcontext_abi.mbt reads these offsets from C.
+// Legacy VMContext layout. vmcontext_abi.mbt reads these offsets from C.
+// Module-shaped contexts use the retained MoonBit descriptor through typed helpers.
 // Changing this prefix requires a JIT artifact codegen revision bump.
 //   +0:   memory0 (wasmoon_memory_t*)  - memory 0 descriptor pointer
 //   +8:   memory0_base (uint8_t*)      - cached memory 0 base pointer (hot)

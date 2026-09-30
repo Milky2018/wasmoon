@@ -243,6 +243,7 @@ void ctx_clear_segments_internal(jit_context_t *ctx);
 jit_context_t *alloc_context_internal(int func_count);
 // Consumes the supplied MoonBit external-pointer array, including on failure.
 jit_context_t *alloc_context_with_functions(void **functions);
+jit_context_t *alloc_context_with_layout(void **functions, uint8_t *layout);
 void free_context_internal(jit_context_t *ctx);
 void ctx_refresh_memory0_fast_fields(jit_context_t *ctx);
 

@@ -192,8 +192,8 @@ static int64_t WASMOON_GUEST_ABI continuation_new(jit_context_t *ctx, int32_t in
     int slots = type->params + type->results;
     body->values = calloc(slots ? slots : 1, sizeof(int64_t));
     if (!body->values) { free(body); continuation_trap(9); }
-    if (type->params && ctx->gc_heap) {
-        if (!gc_heap_register_parked_roots(ctx->gc_heap, type->params,
+    if (type->params && ctx_gc_heap(ctx)) {
+        if (!gc_heap_register_parked_roots(ctx_gc_heap(ctx), type->params,
                 &body->root_registration, &body->roots)) {
             free(body->values); free(body); continuation_trap(9);
         }
@@ -214,8 +214,8 @@ static int64_t WASMOON_GUEST_ABI continuation_bind(jit_context_t *ctx, int32_t i
         void *registration = NULL;
         int64_t *roots = NULL;
         int total = body->input_count + count;
-        if (total && ctx->gc_heap) {
-            if (!gc_heap_register_parked_roots(ctx->gc_heap, total, &registration, &roots))
+        if (total && ctx_gc_heap(ctx)) {
+            if (!gc_heap_register_parked_roots(ctx_gc_heap(ctx), total, &registration, &roots))
                 continuation_trap(9);
             for (int i = 0; i < body->input_count; ++i)
                 roots[i] = body->input_roots ? body->input_roots[i] : 0;

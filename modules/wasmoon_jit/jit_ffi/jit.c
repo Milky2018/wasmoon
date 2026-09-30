@@ -395,8 +395,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_context(int func_count) {
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_func(int64_t ctx_ptr, int idx, int64_t func_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && idx >= 0 && idx < ctx->func_count) {
-        ctx->func_table[idx] = (void *)func_ptr;
+    if (ctx && idx >= 0 && idx < ctx_func_count(ctx)) {
+        ctx_func_table(ctx)[idx] = (void *)func_ptr;
     }
 }
 
@@ -406,18 +406,18 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, wasmoon_memo
         wasmoon_memory_t *new_mem0 = memory_descriptor_live(mem0_ptr);
 
         // If the pointer is unchanged, keep existing ownership state.
-        if (ctx->memory0 == new_mem0) {
+        if (ctx_memory0(ctx) == new_mem0) {
             ctx_refresh_memory0_fast_fields(ctx);
             return;
         }
 
         // Release the previous binding. Every non-null binding owns one RC reference.
-        if (ctx_runtime(ctx)->owns_memory0 && ctx->memory0) {
-            wasmoon_jit_free_memory_desc(ctx->memory0);
+        if (ctx_runtime(ctx)->owns_memory0 && ctx_memory0(ctx)) {
+            wasmoon_jit_free_memory_desc(ctx_memory0(ctx));
         }
 
         if (new_mem0) moonbit_incref(new_mem0);
-        ctx->memory0 = new_mem0;
+        ctx_set_memory0(ctx, new_mem0);
         ctx_runtime(ctx)->owns_memory0 = new_mem0 != NULL;
         ctx_refresh_memory0_fast_fields(ctx);
     }
@@ -430,17 +430,17 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_globals(int64_t ctx_ptr, int64_t glo
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    return ctx ? (int64_t)ctx->func_table : 0;
+    return ctx ? (int64_t)ctx_func_table(ctx) : 0;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_func_count(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    return ctx ? ctx->func_count : 0;
+    return ctx ? ctx_func_count(ctx) : 0;
 }
 
 MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_jit_ctx_get_table_ptr(int64_t ctx_ptr, int table_idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx || table_idx < 0 || table_idx >= ctx->table_count || !ctx_runtime(ctx)->table_bindings)
+    if (!ctx || table_idx < 0 || table_idx >= ctx_table_count(ctx) || !ctx_runtime(ctx)->table_bindings)
         return wasmoon_native_table_empty();
     wasmoon_table_t *owner = ctx_runtime(ctx)->table_bindings[table_idx].owner;
     moonbit_incref(owner);
@@ -449,16 +449,16 @@ MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_jit_ctx_get_table_ptr(int64_t ctx_pt
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_table_size(int64_t ctx_ptr, int table_idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx || table_idx < 0 || table_idx >= ctx->table_count) {
+    if (!ctx || table_idx < 0 || table_idx >= ctx_table_count(ctx)) {
         return 0;
     }
     if (table_idx == 0) {
-        return (int)ctx->table0_elements;
+        return (int)ctx_table0_elements(ctx);
     }
-    if (!ctx->table_sizes) {
+    if (!ctx_table_sizes(ctx)) {
         return 0;
     }
-    return (int)ctx->table_sizes[table_idx];
+    return (int)ctx_table_sizes(ctx)[table_idx];
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
@@ -474,20 +474,20 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_idx, int func_idx, int type_idx) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && ctx->table0_base &&
-        table_idx >= 0 && (size_t)table_idx < ctx->table0_elements &&
-        func_idx >= 0 && func_idx < ctx->func_count) {
-        ctx->table0_base[table_idx * 2] = ctx->func_table[func_idx];
-        ctx->table0_base[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+    if (ctx && ctx_table0_base(ctx) &&
+        table_idx >= 0 && (size_t)table_idx < ctx_table0_elements(ctx) &&
+        func_idx >= 0 && func_idx < ctx_func_count(ctx)) {
+        ctx_table0_base(ctx)[table_idx * 2] = ctx_func_table(ctx)[func_idx];
+        ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
     }
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_indirect_table(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx && ctx->table0_base) {
-        return (int64_t)ctx->table0_base;
+    if (ctx && ctx_table0_base(ctx)) {
+        return (int64_t)ctx_table0_base(ctx);
     }
-    return ctx ? (int64_t)ctx->func_table : 0;
+    return ctx ? (int64_t)ctx_func_table(ctx) : 0;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_free_context(int64_t ctx_ptr) {
@@ -531,6 +531,10 @@ MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_context_with_functions_managed(void *
     return wrap_jit_context((int64_t)(uintptr_t)alloc_context_with_functions(functions));
 }
 
+MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_shaped_context(void **functions, uint8_t *layout) {
+    return wrap_jit_context((int64_t)(uintptr_t)alloc_context_with_layout(functions, layout));
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_context_ptr(void *jit_context) {
     if (!jit_context) return 0;
     return *(int64_t *)jit_context;
@@ -539,9 +543,9 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_context_ptr(void *jit_context) {
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_environment_is_clear(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     if (!ctx) return 0;
-    return ctx->gc_heap == NULL &&
-        ctx->gc_heap_ptr == NULL &&
-        ctx->gc_heap_limit == NULL &&
+    return ctx_gc_heap(ctx) == NULL &&
+        ctx_gc_heap_ptr(ctx) == NULL &&
+        ctx_gc_heap_limit(ctx) == NULL &&
         ctx_runtime(ctx)->gc_type_cache == NULL &&
         ctx_runtime(ctx)->gc_canonical_indices == NULL &&
         ctx_runtime(ctx)->gc_func_type_indices == NULL &&
@@ -741,27 +745,32 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
     if (!ctx || memory_count < 0 || (memory_count > 0 && !memory_ptrs)) return;
     if (memory_count == 0) {
         wasmoon_jit_ctx_set_memory(ctx_ptr, NULL);
-        for (int i = 0; i < ctx->memory_count; ++i) {
-            if (ctx->memories[i]) moonbit_decref(ctx->memories[i]);
+        for (int i = 0; i < ctx_memory_count(ctx); ++i) {
+            if (ctx_memories(ctx)[i]) moonbit_decref(ctx_memories(ctx)[i]);
         }
-        free(ctx->memories);
-        ctx->memories = NULL;
-        ctx->memory_count = 0;
+        if (!ctx_runtime(ctx)->layout) free(ctx_memories(ctx));
+        ctx_set_memories(ctx, NULL);
+        ctx_set_memory_count(ctx, 0);
         return;
     }
-    wasmoon_memory_t **memories = calloc((size_t)memory_count, sizeof(*memories));
+    const uint8_t *layout = ctx_runtime(ctx)->layout;
+    if (layout && memory_count > context_layout_field(layout, 28)) return;
+    wasmoon_memory_t **memories = layout
+        ? (wasmoon_memory_t **)((char *)ctx + context_layout_field(layout, 24))
+        : calloc((size_t)memory_count, sizeof(*memories));
     if (!memories) return;
     for (int i = 0; i < memory_count; ++i) {
-        memories[i] = memory_descriptor_live(memory_ptrs[i]);
-        if (memories[i]) moonbit_incref(memories[i]);
+        wasmoon_memory_t *memory = memory_descriptor_live(memory_ptrs[i]);
+        if (memory) moonbit_incref(memory);
     }
     wasmoon_jit_ctx_set_memory(ctx_ptr, memory_ptrs[0]);
-    for (int i = 0; i < ctx->memory_count; ++i) {
-        if (ctx->memories[i]) moonbit_decref(ctx->memories[i]);
+    for (int i = 0; i < ctx_memory_count(ctx); ++i) {
+        if (ctx_memories(ctx)[i]) moonbit_decref(ctx_memories(ctx)[i]);
     }
-    free(ctx->memories);
-    ctx->memories = memories;
-    ctx->memory_count = memory_count;
+    for (int i = 0; i < memory_count; ++i) memories[i] = memory_descriptor_live(memory_ptrs[i]);
+    if (!layout) free(ctx_memories(ctx));
+    ctx_set_memories(ctx, memories);
+    ctx_set_memory_count(ctx, memory_count);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
@@ -773,25 +782,28 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
     if (!ctx || table_count < 0 || (table_count > 0 && !owners)) return;
     if (table_count == 0) {
         ctx_clear_table_bindings(ctx);
-        free(ctx->tables); free(ctx->table_sizes); free(ctx->table_max_sizes);
-        ctx->tables = NULL; ctx->table_sizes = NULL; ctx->table_max_sizes = NULL;
-        ctx->table_count = 0; ctx->table0_base = NULL; ctx->table0_elements = 0;
+        if (!ctx_runtime(ctx)->layout) { free(ctx_tables(ctx)); free(ctx_table_sizes(ctx)); free(ctx_table_max_sizes(ctx)); }
+        ctx_set_tables(ctx, NULL); ctx_set_table_sizes(ctx, NULL); ctx_set_table_max_sizes(ctx, NULL);
+        ctx_set_table_count(ctx, 0); ctx_set_table0_base(ctx, NULL); ctx_set_table0_elements(ctx, 0);
         return;
     }
-    void ***tables = calloc((size_t)table_count, sizeof(*tables));
-    size_t *sizes = calloc((size_t)table_count, sizeof(*sizes));
-    size_t *maxima = calloc((size_t)table_count, sizeof(*maxima));
+    const uint8_t *layout = ctx_runtime(ctx)->layout;
+    if (layout && table_count > context_layout_field(layout, 29)) return;
+    void ***tables = layout ? (void ***)((char *)ctx + context_layout_field(layout, 25)) : calloc((size_t)table_count, sizeof(*tables));
+    size_t *sizes = layout ? (size_t *)((char *)ctx + context_layout_field(layout, 26)) : calloc((size_t)table_count, sizeof(*sizes));
+    size_t *maxima = layout ? (size_t *)((char *)ctx + context_layout_field(layout, 27)) : calloc((size_t)table_count, sizeof(*maxima));
     wasmoon_table_binding_t *bindings = calloc((size_t)table_count, sizeof(*bindings));
     if (!tables || !sizes || !maxima || !bindings) {
-        free(tables); free(sizes); free(maxima); free(bindings);
+        if (!layout) { free(tables); free(sizes); free(maxima); }
+        free(bindings);
         return;
     }
     // Retain replacements before releasing any old bindings, including aliases.
     for (int i = 0; i < table_count; ++i) moonbit_incref(owners[i]);
     ctx_clear_table_bindings(ctx);
-    free(ctx->tables); free(ctx->table_sizes); free(ctx->table_max_sizes);
-    ctx->tables = tables; ctx->table_sizes = sizes; ctx->table_max_sizes = maxima;
-    ctx_runtime(ctx)->table_bindings = bindings; ctx->table_count = table_count;
+    if (!ctx_runtime(ctx)->layout) { free(ctx_tables(ctx)); free(ctx_table_sizes(ctx)); free(ctx_table_max_sizes(ctx)); }
+    ctx_set_tables(ctx, tables); ctx_set_table_sizes(ctx, sizes); ctx_set_table_max_sizes(ctx, maxima);
+    ctx_runtime(ctx)->table_bindings = bindings; ctx_set_table_count(ctx, table_count);
     for (int i = 0; i < table_count; ++i) {
         wasmoon_table_t *owner = owners[i];
         tables[i] = owner->entries;
@@ -802,7 +814,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
         if (owner->bindings) owner->bindings->previous = &bindings[i];
         owner->bindings = &bindings[i];
     }
-    ctx->table0_base = tables[0]; ctx->table0_elements = sizes[0];
+    ctx_set_table0_base(ctx, tables[0]); ctx_set_table0_elements(ctx, sizes[0]);
 }
 
 // ============ Trampoline-based Call ============
@@ -1238,11 +1250,11 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_ptr(int64_t ctx_ptr, int m
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
 
     if (memidx == 0) {
-        return ctx->memory0_base ? (int64_t)ctx->memory0_base : 0;
+        return ctx_memory0_base(ctx) ? (int64_t)ctx_memory0_base(ctx) : 0;
     }
 
-    if (ctx->memories && ctx->memory_count > 0 && memidx < ctx->memory_count) {
-        wasmoon_memory_t *mem = ctx->memories[memidx];
+    if (ctx_memories(ctx) && ctx_memory_count(ctx) > 0 && memidx < ctx_memory_count(ctx)) {
+        wasmoon_memory_t *mem = ctx_memories(ctx)[memidx];
         return (mem && mem->base) ? (int64_t)mem->base : 0;
     }
 
@@ -1254,11 +1266,11 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_size(int64_t ctx_ptr, int 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
 
     if (memidx == 0) {
-        return (int64_t)atomic_load_explicit(&ctx->memory0_size, memory_order_relaxed);
+        return (int64_t)ctx_memory0_size(ctx);
     }
 
-    if (ctx->memories && ctx->memory_count > 0 && memidx < ctx->memory_count) {
-        wasmoon_memory_t *mem = ctx->memories[memidx];
+    if (ctx_memories(ctx) && ctx_memory_count(ctx) > 0 && memidx < ctx_memory_count(ctx)) {
+        wasmoon_memory_t *mem = ctx_memories(ctx)[memidx];
         return mem ? (int64_t)atomic_load_explicit(&mem->current_length, memory_order_relaxed) : 0;
     }
 
@@ -1588,7 +1600,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_heap_managed(void *jit_context) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_gc_get_heap(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    return (ctx != NULL) ? (int64_t)(uintptr_t)ctx->gc_heap : 0;
+    return (ctx != NULL) ? (int64_t)(uintptr_t)ctx_gc_heap(ctx) : 0;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_gc_heap(int64_t ctx_ptr, GcHeap *heap_ptr) {
@@ -1639,7 +1651,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_collect_heap(
 ) {
     GcHeap *heap = gc_heap_live(heap_ptr);
     jit_context_t *active = get_current_jit_context();
-    if (active && active->gc_heap == heap) {
+    if (active && ctx_gc_heap(active) == heap) {
         return gc_collect_for_alloc_internal(active, roots, root_count);
     }
     jit_mark_active_gc_roots(heap);
@@ -1725,7 +1737,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_bind_globals_managed(
 ) {
     jit_context_t *ctx = (jit_context_t *)MANAGED_CTX(jit_context);
     ctx_set_globals_internal(ctx, globals, 1);
-    return ctx ? (int64_t)ctx->globals : 0;
+    return ctx ? (int64_t)ctx_globals(ctx) : 0;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table_managed(
@@ -1804,8 +1816,8 @@ MOONBIT_FFI_EXPORT wasmoon_memory_t *wasmoon_jit_ctx_get_memory_descriptor_manag
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)MANAGED_CTX(jit_context);
     wasmoon_memory_t *memory = NULL;
     if (ctx && memidx >= 0) {
-        if (memidx == 0) memory = ctx->memory0;
-        else if (memidx < ctx->memory_count) memory = ctx->memories[memidx];
+        if (memidx == 0) memory = ctx_memory0(ctx);
+        else if (memidx < ctx_memory_count(ctx)) memory = ctx_memories(ctx)[memidx];
     }
     if (!memory) return memory_descriptor_new(0);
     moonbit_incref(memory);

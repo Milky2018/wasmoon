@@ -6,6 +6,7 @@ pub(all) struct ArtifactCompatibility {
   jit_abi_version : Int
   codegen_revision : String
   module_identity : @artifact.ModuleIdentity
+  context_shape : @context_layout.ContextShape
   policy : @artifact.CompilationPolicy
   runtime_symbols : Array[@native.ExternalSymbol]
   data_symbols : Array[@native.DataSymbol]
@@ -17,6 +18,8 @@ pub suberror ArtifactIncompatible {
     expected~ : @artifact.TargetSpec,
     actual~ : @artifact.TargetSpec
   )
+  InvalidFunctionIndex(index~ : Int)
+  ContextLayoutMismatch
   MissingCpuFeature(name~ : String)
   DuplicateCpuFeature(name~ : String)
   JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
@@ -45,6 +48,7 @@ pub suberror ArtifactLoadError {
 /// A decoded artifact whose manifest and every code object have been checked.
 pub struct LoadedArtifact {
   artifact : @artifact.Artifact
+  context_layout : @context_layout.ContextLayout?
   code_objects : Array[@code_object.UnlinkedCodeObject]
 }
 
@@ -106,6 +110,13 @@ fn verify_artifact_compatibility(
   expected : ArtifactCompatibility,
 ) -> Unit raise ArtifactIncompatible {
   let manifest = decoded.manifest
+  if manifest.context_shape != expected.context_shape ||
+    (
+      manifest.context_shape != Legacy &&
+      manifest.context_shape.descriptor() is None
+    ) {
+    raise ContextLayoutMismatch
+  }
   if manifest.target != expected.target {
     raise TargetMismatch(expected=expected.target, actual=manifest.target)
   }
@@ -153,6 +164,9 @@ fn verify_artifact_identities(
   let function_indices : Array[Int] = []
   let symbols : Array[String] = []
   for import_ in decoded.imports {
+    if import_.function_index < 0 || import_.function_index == 2147483647 {
+      raise InvalidFunctionIndex(index=import_.function_index)
+    }
     if function_indices.contains(import_.function_index) {
       raise DuplicateFunctionIndex(index=import_.function_index)
     }
@@ -163,6 +177,10 @@ fn verify_artifact_identities(
     symbols.push(import_.symbol.name)
   }
   for function in decoded.functions {
+    if function.identity.function_index < 0 ||
+      function.identity.function_index == 2147483647 {
+      raise InvalidFunctionIndex(index=function.identity.function_index)
+    }
     if function_indices.contains(function.identity.function_index) {
       raise DuplicateFunctionIndex(index=function.identity.function_index)
     }
@@ -232,7 +250,13 @@ pub fn verify_artifact(
   let code_objects = build_verified_code_objects(decoded) catch {
     error => raise CodeObjectInvalid(cause=error)
   }
-  { artifact: decoded, code_objects, }
+  {
+    artifact: decoded,
+    code_objects,
+    context_layout: @context_layout.ContextLayout::new(
+      decoded.manifest.context_shape,
+    ),
+  }
 }
 
 ///|
@@ -249,4 +273,11 @@ pub fn load_artifact(
     error => raise DecodeFailed(cause=error)
   }
   verify_artifact(decoded, compatibility)
+}
+
+///|
+pub fn LoadedArtifact::context_layout(
+  self : LoadedArtifact,
+) -> @context_layout.ContextLayout? {
+  self.context_layout
 }

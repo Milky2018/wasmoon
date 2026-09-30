@@ -195,7 +195,7 @@ static int64_t WASMOON_GUEST_ABI exception_get_ref_impl(jit_context_t *ctx) {
         if (!ctx_runtime(ctx)->exception_arena)
             ctx_runtime(ctx)->exception_arena = exception_arena_new();
         state->exception_ref = exception_arena_insert(ctx_runtime(ctx)->exception_arena,
-            ctx->gc_heap, state->exception_tag, state->exception_values,
+            ctx_gc_heap(ctx), state->exception_tag, state->exception_values,
             state->exception_value_count);
         if (!state->exception_ref) {
             g_trap_code = 9;
@@ -609,7 +609,7 @@ int64_t exception_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t
     jit_context_t *active = exception_activation_context(ctx);
     if (!ctx_runtime(active)->exception_arena)
         ctx_runtime(active)->exception_arena = exception_arena_new();
-    int64_t reference = exception_arena_insert(ctx_runtime(active)->exception_arena, active->gc_heap, tag, values, count);
+    int64_t reference = exception_arena_insert(ctx_runtime(active)->exception_arena, ctx_gc_heap(active), tag, values, count);
     if (!reference) { g_trap_code = 9; siglongjmp(g_trap_jmp_buf, 1); }
     return reference;
 }

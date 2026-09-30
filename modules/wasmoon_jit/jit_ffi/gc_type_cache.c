@@ -188,7 +188,7 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
     }
 
     // Handle struct/array reference (positive even, heap reference)
-    if (!is_heap_ref_value(value) || !ctx || !ctx->gc_heap) {
+    if (!is_heap_ref_value(value) || !ctx || !ctx_gc_heap(ctx)) {
         return 0;
     }
 
@@ -197,7 +197,7 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
         return 0;
     }
 
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
     int32_t obj_kind = gc_heap_get_kind(heap, gc_ref);
     int32_t obj_type_idx = gc_heap_get_type_idx(heap, gc_ref);
 
@@ -271,8 +271,8 @@ int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     uint64_t pointer;
     if (value < 0) {
         int64_t index = -(value + 1);
-        if (index < 0 || index >= ctx->func_count) return -1;
-        pointer = (uint64_t)(uintptr_t)ctx->func_table[index];
+        if (index < 0 || index >= ctx_func_count(ctx)) return -1;
+        pointer = (uint64_t)(uintptr_t)ctx_func_table(ctx)[index];
     } else {
         pointer = (uint64_t)value & ~FUNCREF_TAG;
     }

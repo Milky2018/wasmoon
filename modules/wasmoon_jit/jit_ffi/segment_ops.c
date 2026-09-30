@@ -231,15 +231,15 @@ static void WASMOON_GUEST_ABI memory_init_impl(
     uint8_t *mem = NULL;
     size_t mem_size = 0;
     if (memidx == 0) {
-        if (!ctx->memory0 || !ctx->memory0->base) {
+        if (!ctx_memory0(ctx) || !ctx_memory0(ctx)->base) {
             g_trap_code = 1;
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
             return;
         }
-        mem = ctx->memory0->base;
-        mem_size = atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed);
-    } else if (memidx > 0 && ctx->memories && memidx < ctx->memory_count) {
-        wasmoon_memory_t *m = ctx->memories[memidx];
+        mem = ctx_memory0(ctx)->base;
+        mem_size = atomic_load_explicit(&ctx_memory0(ctx)->current_length, memory_order_relaxed);
+    } else if (memidx > 0 && ctx_memories(ctx) && memidx < ctx_memory_count(ctx)) {
+        wasmoon_memory_t *m = ctx_memories(ctx)[memidx];
         if (!m || !m->base) {
             g_trap_code = 1;
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -257,7 +257,7 @@ static void WASMOON_GUEST_ABI memory_init_impl(
     // For memory32, treat dst as u32; negative values represent high addresses.
     // For memory64, negative values are invalid and trap.
     uint64_t dst_off;
-    if (memidx == 0 ? ctx->memory0->is_memory64 : ctx->memories[memidx]->is_memory64) {
+    if (memidx == 0 ? ctx_memory0(ctx)->is_memory64 : ctx_memories(ctx)[memidx]->is_memory64) {
         if (dst < 0) {
             g_trap_code = 1;
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -315,11 +315,11 @@ static void WASMOON_GUEST_ABI table_fill_impl(
     size_t table_size;
 
     if (table_idx == 0) {
-        table = ctx->table0_base;
-        table_size = ctx->table0_elements;
-    } else if (ctx->tables && table_idx < ctx->table_count) {
-        table = ctx->tables[table_idx];
-        table_size = ctx->table_sizes[table_idx];
+        table = ctx_table0_base(ctx);
+        table_size = ctx_table0_elements(ctx);
+    } else if (ctx_tables(ctx) && table_idx < ctx_table_count(ctx)) {
+        table = ctx_tables(ctx)[table_idx];
+        table_size = ctx_table_sizes(ctx)[table_idx];
     } else {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -424,11 +424,11 @@ static void WASMOON_GUEST_ABI table_copy_impl(
     void **src_table;
     size_t src_size;
     if (src_table_idx == 0) {
-        src_table = ctx->table0_base;
-        src_size = ctx->table0_elements;
-    } else if (ctx->tables && src_table_idx < ctx->table_count) {
-        src_table = ctx->tables[src_table_idx];
-        src_size = ctx->table_sizes[src_table_idx];
+        src_table = ctx_table0_base(ctx);
+        src_size = ctx_table0_elements(ctx);
+    } else if (ctx_tables(ctx) && src_table_idx < ctx_table_count(ctx)) {
+        src_table = ctx_tables(ctx)[src_table_idx];
+        src_size = ctx_table_sizes(ctx)[src_table_idx];
     } else {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -439,11 +439,11 @@ static void WASMOON_GUEST_ABI table_copy_impl(
     void **dst_table;
     size_t dst_size;
     if (dst_table_idx == 0) {
-        dst_table = ctx->table0_base;
-        dst_size = ctx->table0_elements;
-    } else if (ctx->tables && dst_table_idx < ctx->table_count) {
-        dst_table = ctx->tables[dst_table_idx];
-        dst_size = ctx->table_sizes[dst_table_idx];
+        dst_table = ctx_table0_base(ctx);
+        dst_size = ctx_table0_elements(ctx);
+    } else if (ctx_tables(ctx) && dst_table_idx < ctx_table_count(ctx)) {
+        dst_table = ctx_tables(ctx)[dst_table_idx];
+        dst_size = ctx_table_sizes(ctx)[dst_table_idx];
     } else {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -508,11 +508,11 @@ static void WASMOON_GUEST_ABI table_init_impl(
     void **table;
     size_t table_size;
     if (table_idx == 0) {
-        table = ctx->table0_base;
-        table_size = ctx->table0_elements;
-    } else if (ctx->tables && table_idx < ctx->table_count) {
-        table = ctx->tables[table_idx];
-        table_size = ctx->table_sizes[table_idx];
+        table = ctx_table0_base(ctx);
+        table_size = ctx_table0_elements(ctx);
+    } else if (ctx_tables(ctx) && table_idx < ctx_table_count(ctx)) {
+        table = ctx_tables(ctx)[table_idx];
+        table_size = ctx_table_sizes(ctx)[table_idx];
     } else {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -656,12 +656,12 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     int64_t offset,
     int64_t length
 ) {
-    if (!ctx || !ctx->gc_heap) {
+    if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check data segment index
     if (data_idx < 0 || data_idx >= segment_count(ctx_segments_state(ctx)->data_segments)) {
@@ -728,12 +728,12 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     int64_t length
 ) {
     (void)type_idx;
-    if (!ctx || !ctx->gc_heap) {
+    if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) {
@@ -788,12 +788,12 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     int64_t data_offset,
     int64_t length
 ) {
-    if (!ctx || !ctx->gc_heap) {
+    if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check data segment index
     if (data_idx < 0 || data_idx >= segment_count(ctx_segments_state(ctx)->data_segments)) {
@@ -857,12 +857,12 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
     int64_t length
 ) {
     (void)type_idx;
-    if (!ctx || !ctx->gc_heap) {
+    if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
-    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) {

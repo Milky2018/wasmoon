@@ -94,7 +94,7 @@ test "compile api: parse failure emits failed stage" {
 
 ///|
 test "run JIT cache version tracks the artifact format" {
-  inspect(run_jit_cache_version, content="v10")
+  inspect(run_jit_cache_version, content="v11")
 }
 
 ///|
@@ -177,7 +177,7 @@ test "run JIT cache override is authoritative and missing user dirs disable cach
 
 ///|
 fn cache_test_file(label : String) -> String {
-  @test_fs.temp_dir() + "/wasmoon-v10-cache-\{label}.cwasm"
+  @test_fs.temp_dir() + "/wasmoon-v11-cache-\{label}.cwasm"
 }
 
 ///|
@@ -191,7 +191,7 @@ fn write_cache_test_bytes(path : String, bytes : Bytes) -> Unit {
 }
 
 ///|
-test "run JIT cache accepts an exactly compatible v10 artifact" {
+test "run JIT cache accepts an exactly compatible v11 artifact" {
   guard compile_module(minimal_i32_const_module_bytes()) is Some(artifact) else {
     fail("compile returned unsupported")
   }
@@ -311,7 +311,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
   }
   let previous : @artifact.Artifact = {
     ..current,
-    manifest: { ..current.manifest, codegen_revision: "direct-vcode-4", },
+    manifest: { ..current.manifest, codegen_revision: "direct-vcode-8", },
   }
   let path = cache_test_file("previous-codegen")
   inspect(save_run_jit_cache(path, previous) is Ok(_), content="true")
@@ -327,7 +327,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("direct-vcode-8", "direct-vcode-4", true, false)
+      #|("direct-vcode-9", "direct-vcode-8", true, false)
     ),
   )
 }

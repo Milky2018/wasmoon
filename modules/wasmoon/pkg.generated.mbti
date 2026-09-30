@@ -6,6 +6,7 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir/frontend/embedding",
   "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/context/layout",
   "moonbitlang/core/debug",
 }
 
@@ -16,7 +17,7 @@ pub fn plan_wasm_function_with_compiler_infra(@embedding.EmbeddingEnvironment, @
 
 pub fn runtime_assembly() -> RuntimeAssembly
 
-pub fn wasm_frontend_embedding_environment(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?, cancellation_safepoints? : Bool) -> @embedding.EmbeddingEnvironment
+pub fn wasm_frontend_embedding_environment(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?, cancellation_safepoints? : Bool, context_shape? : @layout.ContextShape) -> @embedding.EmbeddingEnvironment
 
 // Errors
 pub suberror WasmCompilerPipelineError {

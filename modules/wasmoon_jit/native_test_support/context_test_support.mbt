@@ -1,4 +1,15 @@
 ///|
+#borrow(context)
+pub extern "c" fn context_storage_bytes(context : @jit_ffi.JITContext) -> Int = "wasmoon_test_context_storage_bytes"
+
+///|
+#borrow(first, second)
+pub extern "c" fn context_layout_shared(
+  first : @jit_ffi.JITContext,
+  second : @jit_ffi.JITContext,
+) -> Int = "wasmoon_test_context_layout_shared"
+
+///|
 pub extern "c" fn context_optional_state() -> Int = "wasmoon_test_context_optional_state"
 
 ///|
@@ -125,3 +136,21 @@ pub extern "c" fn raw_context_function_array() -> Int = "wasmoon_test_raw_contex
 
 ///|
 pub extern "c" fn context_globals_ownership() -> Int = "wasmoon_test_context_globals_ownership"
+
+///|
+#borrow(context)
+pub extern "c" fn safepoint_slots(context : @jit_ffi.JITContext) -> Int = "wasmoon_test_safepoint_slots"
+
+///|
+#borrow(first, second)
+pub extern "c" fn safepoints_shared(
+  first : @jit_ffi.JITContext,
+  second : @jit_ffi.JITContext,
+) -> Int = "wasmoon_test_safepoints_shared"
+
+///|
+#borrow(first, second)
+pub extern "c" fn safepoint_parked_sharing(
+  first : @jit_ffi.JITContext,
+  second : @jit_ffi.JITContext,
+) -> Int = "wasmoon_test_safepoint_parked_sharing"

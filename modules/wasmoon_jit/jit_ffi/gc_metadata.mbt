@@ -59,3 +59,44 @@ pub fn JITContext::snapshot_gc_function_addresses(
 ) -> Unit {
   self.bind_gc_function_addresses(snapshot_function_addresses(table, count))
 }
+
+///|
+/// Immutable native views retaining their MoonBit payloads through a finalizer.
+pub type PreparedSafepoints
+
+///|
+#borrow(blobs, offsets)
+extern "c" fn prepare_safepoints(
+  blobs : FixedArray[Bytes],
+  offsets : FixedArray[FixedArray[Int]],
+) -> PreparedSafepoints = "wasmoon_jit_prepare_safepoints"
+
+///|
+/// Bind outside execution. The context retains the owner independently of callers.
+#borrow(self, prepared)
+pub extern "c" fn JITContext::bind_prepared_safepoints(
+  self : JITContext,
+  prepared : PreparedSafepoints,
+) -> Bool = "wasmoon_jit_bind_prepared_safepoints"
+
+///|
+pub fn PreparedSafepoints::new(
+  blobs : FixedArray[Bytes],
+  offsets : FixedArray[FixedArray[Int]],
+) -> PreparedSafepoints {
+  guard blobs.length() == offsets.length() else {
+    abort("safepoint payload counts differ")
+  }
+  let snapshot : FixedArray[FixedArray[Int]] = FixedArray::makei(
+    offsets.length(),
+    i => {
+      let sites = offsets[i]
+      if sites.is_empty() {
+        []
+      } else {
+        FixedArray::makei(sites.length(), j => sites[j])
+      }
+    },
+  )
+  prepare_safepoints(blobs, snapshot)
+}

@@ -259,6 +259,14 @@ fn gc_set_code_object_safepoints(
   func_idx : Int,
   safepoints : Array[@code_object.SafepointSite],
 ) -> Bool {
+  let (blob, offsets) = prepare_code_object_safepoints(safepoints)
+  context.bind_gc_safepoints(func_idx, blob, offsets)
+}
+
+///|
+fn prepare_code_object_safepoints(
+  safepoints : Array[@code_object.SafepointSite],
+) -> (Bytes, FixedArray[Int]) {
   let entries : Array[GcSafepoint] = []
   let root_counts : Array[Int] = []
   for site in safepoints {
@@ -279,7 +287,7 @@ fn gc_set_code_object_safepoints(
   let offsets = FixedArray::makei(entries.length(), fn(i) {
     entries[i].code_offset
   })
-  context.bind_gc_safepoints(func_idx, stackmap_blob, offsets)
+  (stackmap_blob, offsets)
 }
 
 ///|

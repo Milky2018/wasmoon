@@ -839,7 +839,7 @@ fn run_jit_cache_location() -> RunJitCacheLocation? {
 }
 
 ///|
-let run_jit_cache_version = "v10"
+let run_jit_cache_version = "v11"
 
 ///|
 fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
@@ -928,6 +928,7 @@ fn build_jit_artifact_manifest(
   )
   @wasmoon_jit.build_host_artifact_manifest(
     module_identity=identity,
+    context_shape=@wasmoon_jit.context_shape(mod_),
     policy=jit_artifact_policy(
       opt_level,
       enable_cancellation,
@@ -949,7 +950,7 @@ fn jit_artifact_compatibility(
 }
 
 ///|
-/// Verify a freshly compiled v10 artifact before executable installation.
+/// Verify a freshly compiled v11 artifact before executable installation.
 pub fn verify_compiled_jit_artifact(
   artifact : @artifact.Artifact,
 ) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError {
@@ -1305,7 +1306,7 @@ fn run_with_jit(
     }
   }
   record_run_phase(run_metrics, "jit_plan_and_cache_lookup")
-  // Compile and verify the same v10 artifact shape used by persisted cache hits.
+  // Compile and verify the same v11 artifact shape used by persisted cache hits.
   let compiled = match cached_artifact {
     Some(loaded) => Some((loaded, None, None))
     None => {
@@ -1594,7 +1595,7 @@ fn module_indirect_subtype_check_reason(mod_ : @types.Module) -> String? {
 }
 
 ///|
-/// Compile module bytes into a v10 JIT artifact and emit structured progress.
+/// Compile module bytes into a v11 JIT artifact and emit structured progress.
 pub fn compile_module(
   module_bytes : Bytes,
   opt_level? : Int = 2,
@@ -1684,7 +1685,7 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-/// Compile a WASM module to a v10 JIT artifact in memory.
+/// Compile a WASM module to a v11 JIT artifact in memory.
 ///
 /// Decoded modules are untrusted at this public seam and are fully validated
 /// before frontend translation. `actual_memory_max` overrides the memory limit
@@ -1847,6 +1848,7 @@ fn compile_validated_module_to_jit(
     mod_,
     @wasmoon.wasm_frontend_embedding_environment(
       cancellation_safepoints=enable_cancellation,
+      context_shape=@wasmoon_jit.context_shape(mod_),
     ),
     memory_max_override=actual_memory_max,
   )
@@ -1878,7 +1880,10 @@ fn compile_validated_module_to_jit(
   }
   let imports : Array[@artifact.ImportIdentity] = []
   let functions : Array[@artifact.FunctionCode] = []
-  let native_compiler = @wasmoon_jit.NativeCompiler::new(native_target)
+  let native_compiler = @wasmoon_jit.NativeCompiler::new(
+    native_target,
+    context_shape=@wasmoon_jit.context_shape(mod_),
+  )
   let mut import_func_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {

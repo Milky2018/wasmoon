@@ -1,7 +1,8 @@
 ///|
-/// Fixed VMContext prefix layout accessed by generated JIT code.
+/// VMContext field offsets accessed by generated JIT code.
 ///
-/// Offsets are derived from the native C declarations at initialization.
+/// The standalone legacy layout comes from native C declarations; module-shaped
+/// layouts come from the shared MoonBit layout builder.
 /// Embedders and frontends should query this value instead of copying raw
 /// offsets into lowering code.
 pub(all) struct VMContextLayout {
@@ -83,4 +84,42 @@ let native_memory_layout : MemoryDescriptorLayout = {
 ///|
 pub fn memory_descriptor_layout() -> MemoryDescriptorLayout {
   native_memory_layout
+}
+
+///|
+pub using @context_layout {type ContextShape}
+
+///|
+pub fn context_shape(module_ : @types.Module) -> ContextShape {
+  @context_layout.ContextShape::from_module(module_)
+}
+
+///|
+pub fn shaped_vmcontext_layout(shape : ContextShape) -> VMContextLayout {
+  guard shape.descriptor() is Some(offsets) else { return vmcontext_layout() }
+  {
+    memory0_offset: offsets[0],
+    memory0_base_offset: offsets[1],
+    memory0_size_offset: offsets[2],
+    func_table_offset: offsets[3],
+    table0_base_offset: offsets[4],
+    table0_elements_offset: offsets[5],
+    globals_offset: offsets[6],
+    tables_offset: offsets[7],
+    table_count_offset: offsets[8],
+    func_count_offset: offsets[9],
+    table_sizes_offset: offsets[10],
+    table_max_sizes_offset: offsets[11],
+    memories_offset: offsets[12],
+    memory_count_offset: offsets[13],
+    debug_current_func_idx_offset: offsets[14],
+    gc_heap_ptr_offset: offsets[15],
+    gc_heap_limit_offset: offsets[16],
+    gc_heap_offset: offsets[17],
+    pointer_stride: offsets[18],
+    global_value_stride: offsets[19],
+    table_entry_value_offset: offsets[20],
+    table_entry_stride: offsets[21],
+    func_table_entry_stride: offsets[22],
+  }
 }

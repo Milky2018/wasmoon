@@ -1,6 +1,6 @@
 ///|
 /// Version of the Wasmoon internal JIT calling and runtime contract.
-pub const WASMOON_JIT_ABI_VERSION : Int = 6
+pub const WASMOON_JIT_ABI_VERSION : Int = 7
 
 ///|
 /// Revision of the current direct native target code generator.
@@ -8,7 +8,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int = 6
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-8"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-9"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int = "wasmoon_jit_host_operating_system_abi"
@@ -60,6 +60,7 @@ pub fn build_artifact_manifest(
   module_identity~ : @artifact.ModuleIdentity,
   policy~ : @artifact.CompilationPolicy,
   required_cpu_features? : Array[@artifact.CpuFeature] = [],
+  context_shape? : ContextShape = Legacy,
 ) -> @artifact.CompatibilityManifest {
   {
     format_version: @artifact.FORMAT_VERSION,
@@ -74,6 +75,7 @@ pub fn build_artifact_manifest(
     codegen_revision: WASMOON_CODEGEN_REVISION,
     module_identity,
     policy,
+    context_shape,
   }
 }
 
@@ -95,6 +97,7 @@ pub fn build_host_artifact_manifest(
   module_identity~ : @artifact.ModuleIdentity,
   policy~ : @artifact.CompilationPolicy,
   required_cpu_features? : Array[@artifact.CpuFeature] = [],
+  context_shape? : ContextShape = Legacy,
 ) -> @artifact.CompatibilityManifest raise JitPipelineError {
   build_artifact_manifest(
     host_native_target(),
@@ -102,6 +105,7 @@ pub fn build_host_artifact_manifest(
     module_identity~,
     policy~,
     required_cpu_features~,
+    context_shape~,
   )
 }
 
@@ -119,6 +123,7 @@ pub fn artifact_compatibility(
     codegen_revision: manifest.codegen_revision,
     module_identity: manifest.module_identity,
     policy: manifest.policy,
+    context_shape: manifest.context_shape,
     runtime_symbols: runtime_symbols.copy(),
     data_symbols: data_symbols.copy(),
   }
@@ -227,22 +232,28 @@ fn artifact_function_from_code_object(
 /// artifact representation. Symbolic relocations are retained unchanged.
 pub struct NativeCompiler {
   priv target : NativeTarget
+  priv context_layout : VMContextLayout
   priv aarch64 : @aarch64_target.CompilationSession?
   priv x64 : @x64_target.CompilationSession?
 }
 
 ///|
-pub fn NativeCompiler::new(target : NativeTarget) -> NativeCompiler {
+pub fn NativeCompiler::new(
+  target : NativeTarget,
+  context_shape? : ContextShape = Legacy,
+) -> NativeCompiler {
   match target {
     AArch64 =>
       {
         target,
+        context_layout: shaped_vmcontext_layout(context_shape),
         aarch64: Some(@aarch64_target.CompilationSession::new()),
         x64: None,
       }
     X64 =>
       {
         target,
+        context_layout: shaped_vmcontext_layout(context_shape),
         aarch64: None,
         x64: Some(@x64_target.CompilationSession::new()),
       }
@@ -258,8 +269,9 @@ pub fn compile_wasm_body_artifact_function(
   signature~ : @native.Signature,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
+  context_shape? : ContextShape = Legacy,
 ) -> @artifact.FunctionCode raise JitPipelineError {
-  NativeCompiler::new(target).compile_wasm_body_artifact_function(
+  NativeCompiler::new(target, context_shape~).compile_wasm_body_artifact_function(
     function,
     validation_context,
     function_index~,
@@ -293,6 +305,7 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         canonical_type_indices,
         record_metrics=@perf.enabled(),
         function_index~,
+        context_layout=self.context_layout,
         compilation_session=self.aarch64.unwrap(),
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())
@@ -313,6 +326,7 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         canonical_type_indices,
         record_metrics=@perf.enabled(),
         function_index~,
+        context_layout=self.context_layout,
         compilation_session=self.x64.unwrap(),
       )
       let packaging_tick = detail_metrics_tick(@perf.enabled())

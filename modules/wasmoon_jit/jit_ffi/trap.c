@@ -105,9 +105,9 @@ static void save_activation_context(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (!context || activation->context_detached) return;
     if (ctx_runtime(context)->execution != &activation->execution) abort();
-    activation->debug_current_func_idx = context->debug_current_func_idx;
+    activation->debug_current_func_idx = ctx_debug_current_func_idx(context);
     ctx_runtime(context)->execution = activation->previous_execution;
-    context->debug_current_func_idx = activation->previous_debug_func_idx;
+    ctx_set_debug_current_func_idx(context, activation->previous_debug_func_idx);
     activation->context_detached = 1;
 }
 
@@ -115,9 +115,9 @@ static void restore_activation_context(jit_trap_activation_t *activation) {
     jit_context_t *context = activation->context;
     if (!context || !activation->context_detached) return;
     activation->previous_execution = ctx_runtime(context)->execution;
-    activation->previous_debug_func_idx = context->debug_current_func_idx;
+    activation->previous_debug_func_idx = ctx_debug_current_func_idx(context);
     ctx_runtime(context)->execution = &activation->execution;
-    context->debug_current_func_idx = activation->debug_current_func_idx;
+    ctx_set_debug_current_func_idx(context, activation->debug_current_func_idx);
     activation->context_detached = 0;
 }
 
@@ -197,7 +197,7 @@ void jit_mark_active_gc_roots(GcHeap *heap) {
     for (jit_trap_activation_t *activation = current_activation;
          activation; activation = activation->previous) {
         jit_context_t *context = activation->context;
-        if (!activation->active || !context || context->gc_heap != heap) continue;
+        if (!activation->active || !context || ctx_gc_heap(context) != heap) continue;
         const jit_execution_state_t *state = &activation->execution;
         for (const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
              scope; scope = scope->prev) {
@@ -219,7 +219,7 @@ int jit_parked_gc_roots_register(
     int32_t root_count = activation_root_count(activation);
     if (root_count < 0) return 0;
     if (root_count == 0) return 1;
-    GcHeap *heap = (GcHeap *)activation->context->gc_heap;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(activation->context);
     if (!heap) return 0;
     int64_t *roots = NULL;
     if (!gc_heap_register_parked_roots(
@@ -267,9 +267,9 @@ void jit_trap_activation_push(jit_trap_activation_t *activation) {
             exception_reset_execution_state(previous);
         }
         activation->previous_execution = previous;
-        activation->previous_debug_func_idx = activation->context->debug_current_func_idx;
+        activation->previous_debug_func_idx = ctx_debug_current_func_idx(activation->context);
         ctx_runtime(activation->context)->execution = &activation->execution;
-        activation->context->debug_current_func_idx = -1;
+        ctx_set_debug_current_func_idx(activation->context, -1);
         // Preserve explicitly configured standalone roots without sharing the
         // mutable scratch buffer with this invocation or a nested invocation.
         if (standalone && previous && previous->gc_root_scratch_len > 0 &&
@@ -655,7 +655,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_x11 = 0;
         g_trap_x15 = 0;
         if (ctx) {
-            g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
+            g_trap_func_idx = (sig_atomic_t)ctx_debug_current_func_idx(ctx);
         }
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -766,7 +766,7 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_x11 = 0;
         g_trap_x15 = 0;
         if (ctx) {
-            g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
+            g_trap_func_idx = (sig_atomic_t)ctx_debug_current_func_idx(ctx);
         }
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -906,7 +906,7 @@ static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
         else return EXCEPTION_CONTINUE_SEARCH;
     } else return EXCEPTION_CONTINUE_SEARCH;
     activation->func_idx = activation->context
-        ? (sig_atomic_t)activation->context->debug_current_func_idx : -1;
+        ? (sig_atomic_t)ctx_debug_current_func_idx(activation->context) : -1;
     activation->code = trap;
     activation->signal = (sig_atomic_t)code;
     activation->pc = pc;

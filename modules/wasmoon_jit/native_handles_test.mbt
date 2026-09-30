@@ -1,4 +1,60 @@
 ///|
+test "module-shaped contexts retain and replace inline memory and table arrays" {
+  let layout = @wasmoon_jit.ContextLayout::new(Module(2, 2, 0)).unwrap()
+  let memory_baseline = memory_live_count()
+  let table_baseline = table_live_count()
+  exercise_shaped_contexts(layout)
+  assert_eq(memory_live_count(), memory_baseline)
+  assert_eq(table_live_count(), table_baseline)
+}
+
+///|
+fn exercise_shaped_contexts(layout : @wasmoon_jit.ContextLayout) -> Unit raise {
+  let first = @wasmoon_jit.alloc_memory_desc(65536L, Some(2L))
+  let second = @wasmoon_jit.alloc_memory_desc(131072L, Some(2L))
+  let table = @wasmoon_jit.JITTableOwner::try_alloc(1, None).unwrap()
+  defer table.close()
+  let a = @wasmoon_jit.NativeJITContext::try_alloc(0, layout=Some(layout)).unwrap()
+  let b = @wasmoon_jit.NativeJITContext::try_alloc(0, layout=Some(layout)).unwrap()
+  for context in [a, b] {
+    context.set_memory_pointers([
+      MemoryInfo(first, 65536L, Some(2)),
+      MemoryInfo(second, 131072L, Some(2)),
+    ])
+    context.set_table_pointers([Some(table.table()), Some(table.table())])
+  }
+  a.set_memory_pointers([
+    MemoryInfo(second, 131072L, Some(2)),
+    MemoryInfo(first, 65536L, Some(2)),
+  ])
+  debug_inspect((a.memory_size(0), a.memory_size(1)), content="(131072, 65536)")
+  debug_inspect((b.memory_size(0), b.memory_size(1)), content="(65536, 131072)")
+  a.set_table_pointers([Some(table.table()), Some(table.table())])
+  table.table().set(0, 123L, 4)
+  assert_true(a.refresh_table_layout(1))
+  assert_true(b.refresh_table_layout(0))
+  a.set_memory_pointers([])
+  a.set_table_pointers([])
+  assert_eq(b.memory_size(0), 65536L)
+  b.set_memory_pointers([])
+  b.set_table_pointers([])
+}
+
+///|
+test "empty shaped context supports cleanup and GC binding without memory fields" {
+  let layout = @wasmoon_jit.ContextLayout::new(Module(0, 0, 0)).unwrap()
+  let context = @wasmoon_jit.NativeJITContext::try_alloc(0, layout=Some(layout)).unwrap()
+  inspect(context.memory_size(0), content="0")
+  context.set_memory_pointers([])
+  context.set_table_pointers([])
+  context.bind_globals([]) |> ignore
+  let heap = @wasmoon_jit.CHeap()
+  context.set_gc_heap_ptr(heap.get_ptr())
+  context.clear_gc_heap()
+  heap.free()
+}
+
+///|
 test "managed memory handles preserve identity and pointer-array ABI" {
   let first = @wasmoon_jit.alloc_memory_desc(65536L, Some(2L))
   guard !first.is_null() else { fail("first memory allocation failed") }
@@ -841,4 +897,44 @@ test "global pointer tables snapshot addresses and release both ownership modes"
 ///|
 test "trap recovery preserves thread masks and alternate signal stack" {
   inspect(@native_test_support.trap_signal_masks(), content="1")
+}
+
+///|
+fn contexts_with_shared_safepoints() -> (
+  @jit_ffi.JITContext,
+  @jit_ffi.JITContext,
+) raise {
+  let offsets : FixedArray[Int] = [4]
+  let owner = @jit_ffi.PreparedSafepoints::new([b"\x01"], [offsets])
+  offsets[0] = 99
+  let a = @jit_ffi.JITContext::new(2)
+  let b = @jit_ffi.JITContext::new(2)
+  assert_true(a.bind_prepared_safepoints(owner))
+  assert_true(b.bind_prepared_safepoints(owner))
+  assert_false(@jit_ffi.JITContext::new(0).bind_prepared_safepoints(owner))
+  (a, b)
+}
+
+///|
+test "empty safepoints allocate no table and clearing still releases an entry" {
+  for count in [1, 1000] {
+    let context = @jit_ffi.JITContext::new(count)
+    for i in 0..<count {
+      assert_true(context.bind_gc_safepoints(i, b"", []))
+    }
+    inspect(@native_test_support.safepoint_slots(context), content="0")
+    assert_true(context.bind_gc_safepoints(0, b"\x01", [4]))
+    assert_eq(@native_test_support.safepoint_slots(context), count)
+    assert_true(context.bind_gc_safepoints(0, b"", []))
+  }
+}
+
+///|
+test "shared safepoints outlive their caller and isolate rebinding from parked frames" {
+  let (a, b) = contexts_with_shared_safepoints()
+  inspect(@native_test_support.safepoints_shared(a, b), content="1")
+  inspect(@native_test_support.safepoint_parked_sharing(a, b), content="1")
+  inspect(@native_test_support.safepoints_shared(a, b), content="0")
+  assert_true(a.bind_gc_safepoints(0, b"", []))
+  assert_true(b.bind_gc_safepoints(0, b"", []))
 }

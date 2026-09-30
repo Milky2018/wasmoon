@@ -3,6 +3,7 @@
 #define WASMOON_JIT_CONTEXT_H
 
 #include "jit_ffi.h"
+#include <assert.h>
 #include "../native/callable/registry.h"
 
 // RC-owned reference arrays. Each context owns its mutable outer arrays;
@@ -43,23 +44,16 @@ typedef struct {
 } jit_invocation_controls_t;
 
 typedef struct jit_runtime_state {
+    // Retained immutable MoonBit layout; NULL selects the legacy ABI.
+    uint8_t *layout;
     jit_execution_state_t *execution;
 
     // RC-owned MoonBit GC metadata arrays; native helpers borrow their payloads.
     int32_t *gc_type_cache;
-    int gc_num_types;
     int32_t *gc_canonical_indices;
-    int gc_num_canonical;
     int32_t *gc_func_type_indices;
-    int gc_num_funcs;
     // RC-owned MoonBit Int64 snapshot of native function addresses.
     int64_t *gc_func_table;
-    int gc_func_table_size;
-
-    // Additional fields (not accessed by JIT code directly)
-    int owns_memory0;         // Whether this context owns memory0 (should free it)
-    int wasi_exited;          // WASI: proc_exit called
-    int wasi_exit_code;       // WASI: exit code
 
     // Store-bound continuation and exception arenas
     struct native_continuation_arena *continuation_arena;
@@ -79,28 +73,35 @@ typedef struct jit_runtime_state {
     const wasmoon_gc_safepoint_table_t *gc_safepoint_table;
     // Stable native descriptors retaining MoonBit blob/offset arrays.
     wasmoon_gc_safepoint_table_t *gc_func_safepoint_tables;
-    int32_t gc_func_safepoint_table_count;
-    int globals_managed;     // RC array versus legacy malloc-owned pointer table
     // Callable identity metadata persists across execution activations.
     int32_t *callable_local_types;
-    int callable_local_type_count;
     jit_callable_registry_t *callable_registry;
     int32_t *callable_tags;
-    int callable_tag_count;
 
     wasmoon_table_binding_t *table_bindings;
+    // Pack scalar metadata after pointer fields.
+    int gc_num_types;
+    int gc_num_canonical;
+    int gc_num_funcs;
+    int gc_func_table_size;
+    int owns_memory0;         // Whether this context owns memory0 (should free it)
+    int wasi_exited;          // WASI: proc_exit called
+    int wasi_exit_code;       // WASI: exit code
+    int32_t gc_func_safepoint_table_count;
+    int globals_managed;     // RC array versus legacy malloc-owned pointer table
+    int callable_local_type_count;
+    int callable_tag_count;
 } jit_runtime_state_t;
 
-// A single allocation and finalizer own both the ABI and its private state.
+// Private state precedes the address passed to generated code. Its size is
+// independent of the module; the trailing ABI storage follows the layout.
 typedef struct {
-    jit_context_t abi;
     jit_runtime_state_t runtime;
+    jit_context_t abi;
 } jit_context_owner_t;
 
-// jit_context_t is the initial member of every native context allocation.
-// Recovering the owner keeps helper accesses direct, without a back-pointer load.
 static inline jit_runtime_state_t *ctx_runtime(const jit_context_t *ctx) {
-    return &((jit_context_owner_t *)(void *)ctx)->runtime;
+    return (jit_runtime_state_t *)((char *)(void *)ctx - offsetof(jit_context_owner_t, abi));
 }
 
 // Read/write helper access. Real invocations install their stack-owned state;
@@ -116,6 +117,8 @@ static inline const jit_segments_state_t *ctx_segments_state(const jit_context_t
     return ctx && ctx_runtime(ctx)->segments ? ctx_runtime(ctx)->segments : &empty;
 }
 
-_Static_assert(offsetof(jit_context_owner_t, abi) == 0, "context owner prefix");
+_Static_assert(offsetof(jit_context_owner_t, abi) == sizeof(jit_runtime_state_t), "context ABI alignment");
+
+#include "context_fields.h"
 
 #endif

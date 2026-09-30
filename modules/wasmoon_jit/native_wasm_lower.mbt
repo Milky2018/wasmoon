@@ -9,8 +9,8 @@ priv struct WasmoonNativeEnvironment {
 fn wasmoon_native_environment(
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
+  layout : VMContextLayout,
 ) -> WasmoonNativeEnvironment {
-  let layout = vmcontext_layout()
   let field_paths : Map[String, Array[Int]] = Map([])
   let runtime_symbols = wasm_runtime_symbols()
   let function_table_field = @native.EnvironmentField::new(
@@ -157,13 +157,14 @@ fn compile_wasm_body_x64_target(
   validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
+  context_layout? : VMContextLayout = vmcontext_layout(),
   function_index? : Int = -1,
   record_metrics? : Bool = false,
   compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
 ) -> X64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_native_environment(
-    use_subtype_indirect_check, canonical_type_indices,
+    use_subtype_indirect_check, canonical_type_indices, context_layout,
   )
   let context = wasm_x64_context(environment)
   record_compile_subphase("native_environment", environment_tick)
@@ -247,13 +248,14 @@ fn compile_wasm_body_aarch64_target(
   validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
+  context_layout? : VMContextLayout = vmcontext_layout(),
   function_index? : Int = -1,
   record_metrics? : Bool = false,
   compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
 ) -> AArch64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_native_environment(
-    use_subtype_indirect_check, canonical_type_indices,
+    use_subtype_indirect_check, canonical_type_indices, context_layout,
   )
   let context = wasm_aarch64_context(environment)
   record_compile_subphase("native_environment", environment_tick)
@@ -340,7 +342,9 @@ pub fn compile_wasm_body_diagnostics_for_target(
   canonical_type_indices? : Array[Int] = [],
 ) -> JitPipelineDiagnostics raise JitPipelineError {
   let environment = wasmoon_native_environment(
-    use_subtype_indirect_check, canonical_type_indices,
+    use_subtype_indirect_check,
+    canonical_type_indices,
+    vmcontext_layout(),
   )
   let signature = @milkir_native.function_signature(function, environment_parameters=[
     (0, Ptr64),

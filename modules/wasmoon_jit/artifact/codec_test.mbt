@@ -265,7 +265,7 @@ test "decoder enforces every variable-length resource class" {
     ],
     content=(
       #|[
-      #|  ArtifactTooLarge(size=426, limit=425),
+      #|  ArtifactTooLarge(size=427, limit=426),
       #|  LimitExceeded(
       #|    field="manifest.required_cpu_features.length",
       #|    count=1,

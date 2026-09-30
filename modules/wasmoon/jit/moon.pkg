@@ -1,7 +1,6 @@
 import {
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact",
-  "Milky2018/vcode/code_object",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "moonbitlang/x/fs",
@@ -9,6 +8,7 @@ import {
 
 import {
   "Milky2018/vcode/native_types" @native,
+  "Milky2018/vcode/code_object",
 } for "test"
 
 import {

@@ -115,7 +115,7 @@ def measure(binary: Path, engine: str, source: Path, output: Path,
     return row
 
 
-def summarize(rows: list[dict]) -> dict:
+def summarize(rows: list[dict], *, allow_artifact_differences: bool = False) -> dict:
     summaries = {}
     engines = ['before', 'after'] if any(r['engine'] == 'before' for r in rows) else ['wasmtime', 'wasmoon']
     for workload in dict.fromkeys(r['workload'] for r in rows):
@@ -128,10 +128,16 @@ def summarize(rows: list[dict]) -> dict:
         medians = {e: {metric: statistics.median(r[metric] for r in group)
                        for metric in ['wall_seconds', 'peak_rss_bytes', 'guest_metric']}
                    for e, group in plain.items()}
-        if engines == ['before', 'after'] and len({r['artifact_sha256']
-                for group in plain.values() for r in group}) != 1:
-            raise ValueError(f'CLI artifact bytes differ: {workload}')
+        artifacts_equal = None
+        if engines == ['before', 'after']:
+            hashes = {e: {r['artifact_sha256'] for r in group} for e, group in plain.items()}
+            if any(len(values) != 1 for values in hashes.values()):
+                raise ValueError(f'CLI artifact bytes vary within one build: {workload}')
+            artifacts_equal = hashes['before'] == hashes['after']
+            if not artifacts_equal and not allow_artifact_differences:
+                raise ValueError(f'CLI artifact bytes differ: {workload}')
         summaries[workload] = {
+            'artifacts_equal': artifacts_equal,
             'medians': medians,
             'paired_wall_change_percent': paired_change(
                 [r['wall_seconds'] for r in plain[engines[0]]],
@@ -150,6 +156,8 @@ def main() -> int:
     parser.add_argument('--repetitions', type=int, default=15)
     parser.add_argument('--diagnostics', type=int, default=3)
     parser.add_argument('--timeout', type=int, default=120)
+    parser.add_argument('--allow-artifact-differences', action='store_true',
+                        help='compare intentional codegen/ABI changes; each build must still be deterministic')
     parser.add_argument('workloads', type=Path, nargs='*')
     args = parser.parse_args()
     system = platform.system()
@@ -165,6 +173,7 @@ def main() -> int:
     sources = args.workloads or [Path(f'examples/algorithms/{n}.wasm') for n in DEFAULT_WORKLOADS]
     sources = [p.resolve() for p in sources]
     report = {'schema_version': 1, 'platform': platform.platform(),
+              'allow_artifact_differences': args.allow_artifact_differences,
               'repetitions': args.repetitions, 'diagnostics': args.diagnostics,
               'binary_sha256': {e: digest(p) for e, p in binaries.items()},
               'versions': {e: subprocess.check_output([str(p), '--version'], text=True).strip()
@@ -197,7 +206,7 @@ def main() -> int:
             for iteration in range(args.diagnostics):
                 record(engine, source, 'phases', iteration, index)
             record(engine, source, 'compiler', 0, index)
-    report['summaries'] = summarize(report['rows'])
+    report['summaries'] = summarize(report['rows'], allow_artifact_differences=args.allow_artifact_differences)
     report['failures'] = sum(r['status'] != 'ok' for r in report['rows'])
     (output / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
     return int(report['failures'] != 0)

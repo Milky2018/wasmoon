@@ -65,6 +65,23 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_ownership(void) {
 
 extern int64_t wasmoon_jit_context_ptr(void *context);
 
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_storage_bytes(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    const uint8_t *layout = ctx_runtime(ctx)->layout;
+    if (!layout) return (int32_t)sizeof(jit_context_owner_t);
+    if (ctx_memories(ctx)) assert((char *)ctx_memories(ctx) == (char *)ctx + context_layout_field(layout, 24));
+    if (ctx_tables(ctx)) assert((char *)ctx_tables(ctx) == (char *)ctx + context_layout_field(layout, 25));
+    if (ctx_table_sizes(ctx)) assert((char *)ctx_table_sizes(ctx) == (char *)ctx + context_layout_field(layout, 26));
+    if (ctx_table_max_sizes(ctx)) assert((char *)ctx_table_max_sizes(ctx) == (char *)ctx + context_layout_field(layout, 27));
+    return (int32_t)sizeof(jit_runtime_state_t) + context_layout_field(layout, 23);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_layout_shared(void *first, void *second) {
+    jit_context_t *a = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(first);
+    jit_context_t *b = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(second);
+    return ctx_runtime(a)->layout && ctx_runtime(a)->layout == ctx_runtime(b)->layout;
+}
+
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_callable_lookup(void *view, int64_t value) {
     jit_context_owner_t owner = {0};
     owner.runtime.callable_registry = view;
@@ -125,7 +142,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(void) {
     jit_trap_activation_t parked, caller;
     jit_trap_activation_init(&parked, ctx);
     jit_trap_activation_push(&parked);
-    ctx->debug_current_func_idx = 17;
+    ctx_set_debug_current_func_idx(ctx, 17);
     int passed = ref != 0 && ctx_gc_set_root_scratch_internal(ctx, &root, 1);
     jit_trap_activation_detach();
     void *registration = NULL;
@@ -134,16 +151,16 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(void) {
     passed &= gc_heap_is_valid(heap, ref);
     jit_trap_activation_init(&caller, ctx);
     jit_trap_activation_push(&caller);
-    ctx->debug_current_func_idx = 23;
+    ctx_set_debug_current_func_idx(ctx, 23);
     int64_t other = 1;
     passed &= ctx_gc_set_root_scratch_internal(ctx, &other, 1);
     jit_trap_activation_attach(&parked);
-    passed &= ctx->debug_current_func_idx == 17;
+    passed &= ctx_debug_current_func_idx(ctx) == 17;
     passed &= ctx_execution(ctx)->gc_root_scratch[0] == root;
     jit_parked_gc_roots_unregister(registration);
     registration = NULL;
     jit_trap_activation_pop(&parked);
-    passed &= ctx->debug_current_func_idx == 23;
+    passed &= ctx_debug_current_func_idx(ctx) == 23;
     passed &= ctx_execution(ctx)->gc_root_scratch[0] == other;
     jit_trap_activation_pop(&caller);
     gc_heap_collect(heap, NULL, 0);
@@ -363,12 +380,12 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_empty(void *context) {
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_function_array(void *context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
-    if (!ctx || Moonbit_array_length(ctx->func_table) != ctx->func_count) return 0;
-    for (int i = 0; i < ctx->func_count; ++i) {
-        if (ctx->func_table[i]) return 0;
+    if (!ctx || Moonbit_array_length(ctx_func_table(ctx)) != ctx_func_count(ctx)) return 0;
+    for (int i = 0; i < ctx_func_count(ctx); ++i) {
+        if (ctx_func_table(ctx)[i]) return 0;
         // Array teardown must not treat these borrowed addresses as RC objects.
-        ctx->func_table[i] = (void *)(uintptr_t)(16 + i * 16);
-        if (ctx->func_table[i] != (void *)(uintptr_t)(16 + i * 16)) return 0;
+        ctx_func_table(ctx)[i] = (void *)(uintptr_t)(16 + i * 16);
+        if (ctx_func_table(ctx)[i] != (void *)(uintptr_t)(16 + i * 16)) return 0;
     }
     return 1;
 }
@@ -378,10 +395,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_raw_context_function_array(void) {
     for (int count = 0; count < 3; ++count) {
         jit_context_t *ctx = alloc_context_internal(count);
         if (!ctx) return 0;
-        passed &= Moonbit_array_length(ctx->func_table) == count;
+        passed &= Moonbit_array_length(ctx_func_table(ctx)) == count;
         for (int i = 0; i < count; ++i) {
-            passed &= ctx->func_table[i] == NULL;
-            ctx->func_table[i] = (void *)(uintptr_t)(16 + i * 16);
+            passed &= ctx_func_table(ctx)[i] == NULL;
+            ctx_func_table(ctx)[i] = (void *)(uintptr_t)(16 + i * 16);
         }
         free_context_internal(ctx);
     }
@@ -399,14 +416,51 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_globals_ownership(void) {
     ctx_set_globals_internal(ctx, managed, 1);
     moonbit_incref(managed);
     ctx_set_globals_internal(ctx, managed, 1);
-    int passed = ctx->globals == managed && managed[1] == 32;
+    int passed = ctx_globals(ctx) == managed && managed[1] == 32;
     int64_t *legacy = malloc(2 * sizeof(int64_t));
     if (!legacy) { moonbit_decref(managed); free_context_internal(ctx); return 0; }
     legacy[0] = 48;
     ctx_set_globals_internal(ctx, legacy, 0);
     ctx_set_globals_internal(ctx, legacy, 0);
-    passed &= ((int64_t *)ctx->globals)[0] == 48 && managed[0] == 16;
+    passed &= ((int64_t *)ctx_globals(ctx))[0] == 48 && managed[0] == 16;
     ctx_set_globals_internal(ctx, managed, 1);
     free_context_internal(ctx);
+    return passed;
+}
+
+// Observe allocation/identity without adding counters to production contexts.
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_slots(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return ctx_runtime(ctx)->gc_func_safepoint_table_count;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoints_shared(void *first, void *second) {
+    jit_context_t *a = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(first);
+    jit_context_t *b = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(second);
+    return ctx_runtime(a)->gc_func_safepoint_tables &&
+        ctx_runtime(a)->gc_func_safepoint_tables == ctx_runtime(b)->gc_func_safepoint_tables;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_parked_sharing(void *first, void *second) {
+    jit_context_t *a = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(first);
+    jit_context_t *b = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(second);
+    jit_trap_activation_t parked;
+    jit_trap_activation_init(&parked, b);
+    jit_trap_activation_push(&parked);
+    ctx_gc_use_func_safepoints_internal(b, 0);
+    ctx_gc_begin_frame_internal(b, 123);
+    const wasmoon_gc_frame_t *frame = ctx_execution(b)->gc_frame_chain_head;
+    int passed = frame && frame->table && frame->table->stackmap_blob[0] == 1 && frame->table->code_offsets[0] == 4;
+    jit_trap_activation_detach();
+    uint8_t blob = 9;
+    int32_t offset = 7;
+    passed &= ctx_gc_set_func_safepoints_internal(a, 0, &blob, 1, &offset, 1);
+    passed &= ctx_runtime(a)->gc_func_safepoint_tables != ctx_runtime(b)->gc_func_safepoint_tables;
+    passed &= frame->table->stackmap_blob[0] == 1;
+    jit_trap_activation_attach(&parked);
+    passed &= ctx_execution(b)->gc_frame_chain_head == frame;
+    ctx_gc_end_frame_internal(b);
+    jit_trap_activation_pop(&parked);
+    passed &= ctx_runtime(a)->gc_func_safepoint_tables[0].stackmap_blob[0] == 9;
     return passed;
 }

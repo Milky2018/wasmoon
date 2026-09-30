@@ -124,7 +124,7 @@ test "live artifact and encoded artifact share verification" {
     content=(
       #|{
       #|  manifest: {
-      #|    format_version: 10,
+      #|    format_version: 11,
       #|    target: {
       #|      architecture: X64,
       #|      operating_system_abi: MacOS,
@@ -132,8 +132,8 @@ test "live artifact and encoded artifact share verification" {
       #|      pointer_width: Bits64,
       #|    },
       #|    required_cpu_features: [],
-      #|    jit_abi_version: 6,
-      #|    codegen_revision: "direct-vcode-8",
+      #|    jit_abi_version: 7,
+      #|    codegen_revision: "direct-vcode-9",
       #|    module_identity: {
       #|      name: "artifact-producer",
       #|      source_digest: sha256:211dcf04280f2ac1d686baab63a361ea45dd13543dac493b14e3af963860a86c,
@@ -147,6 +147,7 @@ test "live artifact and encoded artifact share verification" {
       #|      cancellation_safepoints: true,
       #|      debug_info: false,
       #|    },
+      #|    context_shape: Legacy,
       #|  },
       #|  imports: [],
       #|  functions: [
