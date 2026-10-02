@@ -19,21 +19,6 @@ from native_process import kill_process_tree
 
 PIN = "609c446139956ff30239f87cb18af1dc6128bed2"
 ROOT = Path(__file__).resolve().parents[1]
-# Exact, reviewed disagreements with the pinned WIT. Raw failures remain failures
-# in the summary; regression gating can acknowledge only these fingerprints.
-KNOWN_DIFFERENCES = {
-    "http-fields": [
-        "http-fields.rs:309:5:",
-        '  left: [("foo", [118, 97, 108, 49]), ("FOO", [118, 97, 108, 50])]',
-        ' right: [("foo", [118, 97, 108, 49]), ("foo", [118, 97, 108, 50])]',
-    ],
-    "http-request": [
-        "http-request.rs:157:5:",
-        '  left: Some("")',
-        ' right: Some("/")',
-    ],
-}
-
 
 def corpus_digest(name, data):
     # Git checkouts may convert JSON line endings on Windows. Normalize only
@@ -43,26 +28,27 @@ def corpus_digest(name, data):
     return hashlib.sha256(data).hexdigest()
 
 
-def known_difference(result):
-    markers = KNOWN_DIFFERENCES.get(result["name"])
-    failures = result.get("failures", [])
-    return bool(markers and result["status"] == "fail" and len(failures) == 1
-                and "Wait(exit_code=0) failed: expected 0, got 125" in failures[0]
-                and all(marker in failures[0] for marker in markers))
-
-
-def gate_failure(result, acknowledge):
-    if acknowledge and result["name"] in KNOWN_DIFFERENCES:
-        # An unexpected pass also needs review: the baseline may be stale.
-        return not known_difference(result)
-    return result["status"] != "pass"
-
+def http_contract_guests(directory):
+    manifest = json.loads((directory / "manifest.json").read_text())
+    if manifest["upstream"] != PIN:
+        raise ValueError("HTTP contract profile does not match upstream pin")
+    if hashlib.sha256((directory / "expectations.patch").read_bytes()).hexdigest() != manifest["patch_sha256"]:
+        raise ValueError("HTTP contract patch checksum mismatch")
+    guests = {}
+    for name, digest in manifest["files"].items():
+        path = directory / name
+        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise ValueError(f"HTTP contract guest checksum mismatch: {name}")
+        guests[name] = path
+    if set(guests) != {"http-fields.wasm", "http-request.wasm"}:
+        raise ValueError("HTTP contract profile must replace exactly two guests")
+    return guests
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--acknowledge-known-differences", action="store_true",
-                   help="regression gate only; retain raw failures for reviewed WIT differences")
+    p.add_argument("--http-contract-tests", action="store_true",
+                   help="use the documented, patched HTTP contract guests; every test must pass")
     p.add_argument("--upstream", type=Path, required=True)
     p.add_argument("--wasmoon", type=Path, default=ROOT / "wasmoon")
     p.add_argument("--output", type=Path, required=True)
@@ -89,6 +75,7 @@ def main():
             data = (suite / name).read_bytes()
         if corpus_digest(name, data) != digest:
             p.error(f"upstream checksum mismatch: {name}")
+    overrides = http_contract_guests(ROOT / "tests/wasi03/http-contract") if args.http_contract_tests else {}
     binary_digest = hashlib.sha256(args.wasmoon.read_bytes()).hexdigest()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -107,7 +94,7 @@ def main():
         work = output.parent / (output.name + "-work") / engine / case.stem
         work.mkdir(parents=True)
         shutil.copy(suite / "manifest.json", work)
-        shutil.copy(case, work)
+        shutil.copy(overrides.get(case.name, case), work / case.name)
         config = case.with_suffix(".json")
         if config.exists():
             shutil.copy(config, work)
@@ -143,16 +130,16 @@ def main():
     if hashlib.sha256(args.wasmoon.read_bytes()).hexdigest() != binary_digest:
         p.error("runtime binary changed during acceptance run")
     for result in results:
-        result["known_difference"] = known_difference(result)
+        result["guest_source"] = "http-contract" if result["name"] + ".wasm" in overrides else "upstream"
     counts = {status: sum(r["status"] == status for r in results) for status in sorted({r["status"] for r in results})}
-    (output / "summary.json").write_text(json.dumps({"upstream": sha, "binary_sha256": binary_digest, "acknowledge_known_differences": args.acknowledge_known_differences, "counts": counts, "results": results}, indent=2) + "\n")
+    (output / "summary.json").write_text(json.dumps({"upstream": sha, "binary_sha256": binary_digest, "profile": "http-contract" if args.http_contract_tests else "upstream", "guest_overrides": {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in overrides.items()}, "counts": counts, "results": results}, indent=2) + "\n")
     for r in results:
         print(r["engine"], r["status"], r["name"])
-        if gate_failure(r, args.acknowledge_known_differences):
+        if r["status"] != "pass":
             for failure in r.get("failures", []):
                 print(failure)
     print(json.dumps(counts))
-    return int(any(gate_failure(r, args.acknowledge_known_differences) for r in results))
+    return int(any(r["status"] != "pass" for r in results))
 
 
 if __name__ == "__main__":

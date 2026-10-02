@@ -1,4 +1,4 @@
-"""The regression gate never turns startup errors or new failures into passes."""
+"""Verify corpus identity and explicit HTTP contract profile selection."""
 import importlib.util
 import os
 import subprocess
@@ -38,18 +38,22 @@ class GateTests(unittest.TestCase):
         self.assertNotEqual(runner.corpus_digest("case.wasm", lf), runner.corpus_digest("case.wasm", crlf))
         self.assertNotEqual(runner.corpus_digest("case.json", lf), runner.corpus_digest("case.json", lf.replace(b"0", b"1")))
 
-    def test_only_exact_reviewed_failure_is_acknowledged(self):
-        for name, markers in runner.KNOWN_DIFFERENCES.items():
-            result = {"name": name, "status": "fail", "failures": [
-                "Wait(exit_code=0) failed: expected 0, got 125\n" + "\n".join(markers)]}
-            self.assertFalse(runner.gate_failure(result, True))
-            self.assertTrue(runner.gate_failure(result, False))
-            self.assertEqual(result["status"], "fail")
-            result["failures"][0] = "UnknownImport"
-            self.assertTrue(runner.gate_failure(result, True))
+    def test_contract_guests_are_pinned_and_complete(self):
+        guests = runner.http_contract_guests(SCRIPTS.parent / "tests/wasi03/http-contract")
+        self.assertEqual(set(guests), {"http-fields.wasm", "http-request.wasm"})
 
-    def test_timeouts_harness_errors_and_unexpected_passes_fail(self):
-        for status in ["timeout", "harness_error", "pass"]:
-            self.assertTrue(runner.gate_failure({"name": "http-fields", "status": status}, True))
-        self.assertFalse(runner.gate_failure({"name": "random", "status": "pass"}, True))
-        self.assertTrue(runner.gate_failure({"name": "random", "status": "fail"}, True))
+    def test_contract_guest_and_patch_corruption_are_rejected(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "profile"
+            shutil.copytree(SCRIPTS.parent / "tests/wasi03/http-contract", root)
+            guest = root / "http-fields.wasm"
+            original = guest.read_bytes()
+            guest.write_bytes(original + b"corrupt")
+            with self.assertRaisesRegex(ValueError, "guest checksum mismatch"):
+                runner.http_contract_guests(root)
+            guest.write_bytes(original)
+            patch_file = root / "expectations.patch"
+            patch_file.write_bytes(patch_file.read_bytes() + b"corrupt")
+            with self.assertRaisesRegex(ValueError, "patch checksum mismatch"):
+                runner.http_contract_guests(root)

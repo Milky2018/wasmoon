@@ -41,3 +41,17 @@ test "deleting a header validates the name without mutating the collection" {
   debug_inspect(fields.delete("Connection"), content="Err(Forbidden)")
   assert_eq(fields.copy_all(), [("X-Test", b"kept")])
 }
+
+///|
+test "transport-owned headers cannot be installed through fields" {
+  for name in ["http2-settings", "HTTP2-Settings", "host", "Host"] {
+    let fields = @wasi_http.HttpFields::from_list().unwrap()
+    assert_eq(fields.append(name, b"value"), Err(Forbidden))
+    assert_eq(fields.set(name, [b"value"]), Err(Forbidden))
+    assert_eq(fields.copy_all(), [])
+    assert_true(
+      @wasi_http.HttpFields::from_list(entries=[(name, b"value")])
+      is Err(Forbidden),
+    )
+  }
+}

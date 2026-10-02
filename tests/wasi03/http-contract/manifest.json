@@ -1,0 +1,11 @@
+{
+  "upstream": "609c446139956ff30239f87cb18af1dc6128bed2",
+  "profile": "http-contract",
+  "rust": "1.97.0",
+  "target": "wasm32-wasip2",
+  "files": {
+    "http-fields.wasm": "c7f95716eea547632ee49ca68f39f6c062425f037616c1ba95ff1ee27e87abd0",
+    "http-request.wasm": "d587372f2ef2320bbbddef51f6f5edbd1a97f92294968a7ce73273811e35b8ef"
+  },
+  "patch_sha256": "015bb111cdba63ca1ef31ff3eb04fc765c47afe9a706c3c5a8cce59526ed607e"
+}

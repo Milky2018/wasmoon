@@ -20,3 +20,8 @@ modules/wasmoon/wasi_component/wit/** -text
 
 # Preserve the official HTTP WIT snapshot, including upstream whitespace.
 modules/wasmoon/wasi_http/wit/** -text whitespace=-blank-at-eol
+
+# Keep rebuilt HTTP contract guests and their patch hashes stable on Windows.
+tests/wasi03/http-contract/** -text
+tests/wasi03/http-contract/expectations.patch whitespace=-blank-at-eol
+tests/wasi03/http-contract/LICENSE whitespace=-blank-at-eof
