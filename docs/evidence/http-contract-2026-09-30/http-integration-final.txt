@@ -1,0 +1,8 @@
+WASI HTTP interpreter: concurrent native timer and HTTP command passed
+WASI HTTP interpreter: Expect, URI, chunk framing, incremental streaming, trailers, concurrency and 300 disconnects passed
+WASI HTTP interpreter: Expect, URI, chunk framing, incremental streaming, trailers, concurrency and 300 disconnects passed
+WASI HTTP interpreter: URI setter validation, startup rejection, guest traps, middleware order, metadata, proxy and capability denial passed
+WASI HTTP JIT: concurrent native timer and HTTP command passed
+WASI HTTP JIT: Expect, URI, chunk framing, incremental streaming, trailers, concurrency and 300 disconnects passed
+WASI HTTP JIT: Expect, URI, chunk framing, incremental streaming, trailers, concurrency and 300 disconnects passed
+WASI HTTP JIT: URI setter validation, startup rejection, guest traps, middleware order, metadata, proxy and capability denial passed

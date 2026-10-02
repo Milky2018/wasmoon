@@ -24,6 +24,38 @@ test "HTTP URI setters reject invalid syntax without changing the value" {
     is [Tuple([request, _])] else {
     return fail("missing request")
   }
+  let paths : Array[@runtime_impl.ComponentValue] = [
+    Variant(0, None),
+    Variant(1, Some(String(""))),
+    Variant(1, Some(String("/"))),
+  ]
+  for value in paths {
+    assert_eq(
+      types.call_exported_func("[method]request.set-path-with-query", [
+        request, value,
+      ]),
+      [Variant(0, None)],
+    )
+    assert_eq(
+      types.call_exported_func("[method]request.get-path-with-query", [request]),
+      [value],
+    )
+  }
+  // Resource syntax is independent of whether the HTTP transport can use it.
+  for
+    text in [
+      "", "user@host", "user:pass%20@localhost:80", "host:65536", "host:", "[::1]:443",
+    ] {
+    let value : @runtime_impl.ComponentValue = Variant(1, Some(String(text)))
+    assert_eq(
+      types.call_exported_func("[method]request.set-authority", [request, value]),
+      [Variant(0, None)],
+    )
+    assert_eq(
+      types.call_exported_func("[method]request.get-authority", [request]),
+      [value],
+    )
+  }
   for
     (name, valid, invalid) in [
       (
@@ -34,7 +66,7 @@ test "HTTP URI setters reject invalid syntax without changing the value" {
       (
         "authority",
         "[::1]:8080",
-        ["<bad>", "bad%GG", "a/b", "a?b", "[::gg]", "host:65536", "user@host"],
+        ["<bad>", "bad%GG", "a/b", "a?b", "[::gg]", "host:abc", "host#fragment"],
       ),
       ("scheme", "custom+v1", ["1http", "ht<tp", "http:"]),
     ] {
@@ -58,4 +90,18 @@ test "HTTP URI setters reject invalid syntax without changing the value" {
       assert_eq(types.call_exported_func(getter, [request]), [value(valid)])
     }
   }
+}
+
+///|
+test "HTTP transport rejects authorities that only satisfy URI syntax" {
+  for authority in ["", "user@host", "user:pass%20@localhost:80", "host:65536"] {
+    let rejected = try authority_host_port(authority, false) catch {
+      HttpTransportError(19, _) => true
+      _ => false
+    } noraise {
+      _ => false
+    }
+    assert_true(rejected)
+  }
+  assert_eq(authority_host_port("localhost:8080", false), ("localhost", 8080))
 }

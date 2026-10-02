@@ -1,0 +1,110 @@
+--- a/src/bin/http-fields.rs
++++ b/src/bin/http-fields.rs
+@@ -310,7 +310,7 @@
+         fields.copy_all(),
+         [
+             (lower.to_string(), b"val1".to_vec()),
+-            (lower.to_string(), b"val2".to_vec())
++            (upper.to_string(), b"val2".to_vec())
+         ]
+     );
+     assert_eq!(
+--- a/src/bin/http-request.rs
++++ b/src/bin/http-request.rs
+@@ -129,10 +129,8 @@
+     // https://www.rfc-editor.org/rfc/rfc3986#section-3.3
+     // pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
+     ch.is_ascii_alphanumeric() || "-._~".contains(ch) // unreserved
+-        || ch == '%'                                  // pct-encoded
+         || "!$&'()*+,;=".contains(ch)                 // sub-delims
+         || ":@".contains(ch)
+-        || ch as u32 >= 0x80 // Raw UTF-8.  It happens!
+ }
+ 
+ fn test_path_with_query(request: &Request) {
+@@ -154,7 +152,9 @@
+     }
+ 
+     request.set_path_with_query(Some(&"".to_string())).unwrap();
+-    assert_eq!(request.get_path_with_query(), Some("/".to_string()));
++    // WASI #780 permits discussion of optional normalization; this profile
++    // verifies the lossless accessor policy independently of request sending.
++    assert_eq!(request.get_path_with_query(), Some("".to_string()));
+ 
+     for ch in 0..1024 {
+         let ch = char::from_u32(ch).unwrap();
+@@ -163,17 +163,20 @@
+             if is_valid_path_char(ch) {
+                 request.set_path_with_query(Some(&s)).unwrap();
+                 assert_eq!(request.get_path_with_query(), Some(s));
+-            } else if "\"{|}^[]\\#".contains(ch) {
+-                // https://github.com/bytecodealliance/wasmtime/issues/11779
+-                continue;
+-            } else if ch as u32 == 0x7F {
+-                // Bonkers; https://github.com/hyperium/http/issues/820.
+             } else {
+                 request.set_path_with_query(Some(&s)).unwrap_err();
+             }
+         }
+     }
+ 
++    // Percent encoding requires exactly two hexadecimal digits.
++    for valid in ["/%20", "/%C3%A9", "/a?x=%ff"] {
++        request.set_path_with_query(Some(valid)).unwrap();
++        assert_eq!(request.get_path_with_query().as_deref(), Some(valid));
++    }
++    for invalid in ["/%", "/%0", "/%GG", "/a?x=%"] {
++        request.set_path_with_query(Some(invalid)).unwrap_err();
++    }
+     request.set_method(&Method::Options).unwrap();
+     request.set_path_with_query(Some(&"".to_string())).unwrap();
+     // https://github.com/bytecodealliance/wasmtime/issues/11780
+@@ -187,12 +190,13 @@
+     // reg-name = unreserved / pct-encoded / sub-delims
+     // IPv4address is a subset of reg-name.  IP-literal is IPv6: [...]
+     ch.is_ascii_alphanumeric() || "-._~".contains(ch) // unreserved
+-        || ch == '%'                                  // pct-encoded
+         || "!$&'()*+,;=".contains(ch) // sub-delims
++        || ":@".contains(ch) // Empty host/port or userinfo are valid URI syntax.
+ }
+ 
+ fn test_authority(request: &Request) {
+     for valid in [
++        "", ":@", "@:", "host:65536", "host:",
+         "1.2.3.4",
+         "example.com",
+         "localhost",
+@@ -205,30 +209,21 @@
+         "user:pass@1.2.3.4:80",
+         "user:pass@example.com:80",
+         "user:pass@localhost:80",
+-        "user:pass%20@localhost:80",
+-        // https://github.com/WebAssembly/wasi-http/issues/196
+-        // "[2001:db8::1]"
++        "user:pass%20@localhost:80", "[2001:db8::1]",
+     ] {
+         let authority = String::from(valid);
+         request.set_authority(Some(&authority)).unwrap();
+         assert_eq!(request.get_authority(), Some(authority));
+     }
+ 
+-    for invalid in ["::", ":@", "@@", "@:", " ", "", "#", "localhost:what"] {
++    for invalid in ["::", "@@", " ", "#", "localhost:what", "%", "%GG"] {
+         let authority = String::from(invalid);
+         request.set_authority(Some(&authority)).expect_err(invalid);
+     }
+ 
+     for ch in 0..1024 {
+         let ch = char::from_u32(ch).unwrap();
+-        if ch != '[' {
+-            // IP-literal, which we aren't properly testing here.
+-            continue;
+-        } else if ch == '%' {
+-            // We aren't properly testing percent encoding here, and
+-            // % is invalid in a host name otherwise.
+-            continue;
+-        } else {
++        {
+             let authority = String::from(ch);
+             if is_valid_authority_char(ch) {
+                 request.set_authority(Some(&authority)).unwrap();

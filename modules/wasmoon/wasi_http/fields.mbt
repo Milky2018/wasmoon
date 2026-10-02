@@ -64,7 +64,7 @@ fn field_valid(value : Bytes) -> Bool {
 fn field_forbidden(name : String) -> Bool {
   [
     "connection", "proxy-connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
-    "te", "transfer-encoding", "upgrade",
+    "te", "transfer-encoding", "upgrade", "http2-settings", "host",
   ].contains(name.to_lower())
 }
 

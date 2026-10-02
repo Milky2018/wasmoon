@@ -256,6 +256,15 @@ fn path_query_valid(text : String) -> Bool {
 }
 
 ///|
+fn authority_valid(text : String) -> Bool {
+  let parsed = @uri.UriRef::parse("//" + text) catch { _ => return false }
+  parsed.authority is Some(_) &&
+  parsed.path.is_empty() &&
+  parsed.query is None &&
+  parsed.fragment is None
+}
+
+///|
 fn scheme_valid(text : String) -> Bool {
   @uri.Scheme::new(text) is Some(_)
 }
@@ -266,12 +275,7 @@ fn attribute_valid(name : String, value : @runtime_impl.ComponentValue) -> Bool 
     ("method", Variant(9, Some(String(text)))) => field_token(text)
     ("path-with-query", Variant(1, Some(String(text)))) =>
       path_query_valid(text)
-    ("authority", Variant(1, Some(String(text)))) =>
-      try authority_host_port(text, false) catch {
-        _ => false
-      } noraise {
-        _ => true
-      }
+    ("authority", Variant(1, Some(String(text)))) => authority_valid(text)
     ("scheme", Variant(1, Some(Variant(2, Some(String(text)))))) =>
       scheme_valid(text)
     ("status-code", U16(status)) => status >= 100 && status <= 599

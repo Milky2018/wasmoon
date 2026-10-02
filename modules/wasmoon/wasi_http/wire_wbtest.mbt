@@ -64,13 +64,17 @@ async test "HTTP framing accepts duplicate equal lengths and close-delimited res
 test "HTTP authority validation rejects invalid setters before network access" {
   for
     invalid in [
-      "", "user@host", "host/path", "host:65536", "[bad]", "a:b:c", "host:bad", "host\r\nInjected: x",
+      "host/path", "[bad]", "a:b:c", "host:bad", "host\r\nInjected: x",
     ] {
     assert_false(
       attribute_valid("authority", Variant(1, Some(String(invalid)))),
     )
   }
-  for valid in ["localhost", "localhost:80", "127.0.0.1:0", "[::1]:443"] {
+  for
+    valid in [
+      "", "user@host", "host:65536", "localhost", "localhost:80", "127.0.0.1:0",
+      "[::1]:443",
+    ] {
     assert_true(attribute_valid("authority", Variant(1, Some(String(valid)))))
   }
 }
