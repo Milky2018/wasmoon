@@ -239,3 +239,55 @@ test "generic adapter validates selected VCode before allocation" {
     content="InvalidSelected(cause=MissingTerminator(block=block0))",
   )
 }
+
+///|
+test "direct output preserves implicit GC operands and spilled root homes" {
+  let builder : @vcode.Builder[Unit] = @vcode.Builder::new("direct_gc_output", [
+    GcRef64,
+    I64,
+    I64,
+  ])
+  let entry = builder.entry_block()
+  let root = builder.parameter(0)
+  let (call, _) = builder.append_body(
+    entry,
+    (),
+    [],
+    [],
+    [@vcode.PhysicalReg::new(0, Int)],
+    @vcode.InstructionMetadata::safepoint([root]),
+  )
+  builder.set_terminator(
+    entry,
+    (),
+    [
+      @vcode.Input::any_location(root),
+      @vcode.Input::any_location(builder.parameter(1)),
+      @vcode.Input::any_location(builder.parameter(2)),
+    ],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  let environment = @vcode_regalloc.VCodeAllocationEnvironment::new(
+    [@vcode.PhysicalReg::new(0, Int)],
+    [@vcode.PhysicalReg::new(1, Int)],
+  )
+  let session = @vcode_regalloc.AllocationSession::new()
+  let checked = @vcode_regalloc.allocate_vcode(function, environment)
+  let unchecked = session.allocate_selected_vcode(
+    function,
+    environment,
+    verify=false,
+  )
+  assert_eq(checked.summary(), unchecked.summary())
+  assert_true(checked.stack_slot_count() > 0)
+  assert_eq(checked.safepoint_roots(call).length(), 1)
+  // The call has no explicit operands: operand zero is the allocator's GC root.
+  assert_true(checked.allocated_operand_location_at(0, 0) is Some(_))
+  @vcode.verify_allocation_invariants(function, unchecked)
+  let again = session.allocate_selected_vcode(function, environment)
+  assert_eq(again.summary(), checked.summary())
+}

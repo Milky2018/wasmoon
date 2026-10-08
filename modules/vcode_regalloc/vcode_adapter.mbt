@@ -41,20 +41,6 @@ pub impl Show for VCodeAllocationError with fn output(self, logger) {
 }
 
 ///|
-fn[Inst] add_plan_transfer(
-  builder : @vcode.AllocationBuilder[Inst],
-  instruction : Int,
-  placement : @vcode.PointPlacement,
-  value : Int,
-  from : @vcode.AllocationLocation,
-  to : @vcode.AllocationLocation,
-) -> Unit raise VCodeAllocationError {
-  if !builder.add_transfer(instruction, placement, value, from, to) {
-    raise AllocationConstructionRejected
-  }
-}
-
-///|
 /// Allocates VCode that has already passed `@vcode.verify_selected`.
 ///
 /// The caller must not mutate `function` between validation and this call.
@@ -113,7 +99,21 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
     notify(Some("function_view"))
   }
   let function_view = VCodeFunctionView::new(function)
-  let plan = self.core.allocate_function(
+  if on_phase is Some(notify) {
+    notify(Some("output_storage"))
+  }
+  let builder = @vcode.AllocationBuilder::for_selected_function(function)
+  let sink : VCodeAllocationSink[Inst] = {
+    builder,
+    view: function_view,
+    validation_edits: if verify {
+      Some([])
+    } else {
+      None
+    },
+    rejected: false,
+  }
+  self.core.allocate_into(
     function_view,
     @regalloc.MachineEnv::new(
       environment.allocatable_regs,
@@ -121,67 +121,17 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
     )
     .with_operand_scratch_regs([])
     .with_fixed_operand_regs(environment.fixed_operand_regs),
+    sink,
     config=RegallocConfig(verify~, observer~, statistics_observer~),
   ) catch {
     error => raise RegallocFailure(cause=error)
   }
-  let spill_owners : Array[Int] = []
-  let spill_sizes : Array[Int] = []
-  let spill_alignments : Array[Int] = []
-  for slot in 0..<plan.spill_count() {
-    let spec = plan.spill_slot(slot).unwrap()
-    spill_owners.push(plan.spill_slot_owner(slot).unwrap())
-    spill_sizes.push(spec.size)
-    spill_alignments.push(spec.alignment)
-  }
-  guard @vcode.AllocationBuilder::from_plan_storage(
-      function,
-      plan.value_location_storage(),
-      plan.operand_location_storage(),
-      spill_owners,
-      spill_sizes,
-      spill_alignments,
-    )
-    is Some(builder) else {
+  if sink.rejected {
     raise AllocationConstructionRejected
   }
-  for edit_index in 0..<plan.edit_count() {
-    let edit = plan.edit_at(edit_index).unwrap()
-    match edit.position {
-      Before(instruction_id) =>
-        add_plan_transfer(
-          builder,
-          instruction_id,
-          Before,
-          edit.value.id,
-          edit.from,
-          edit.to,
-        )
-      After(instruction_id) =>
-        add_plan_transfer(
-          builder,
-          instruction_id,
-          After,
-          edit.value.id,
-          edit.from,
-          edit.to,
-        )
-      Edge(source_block~, successor_index~) =>
-        if !builder.add_edge_transfer(
-            source_block,
-            successor_index,
-            edit.value.id,
-            edit.from,
-            edit.to,
-          ) {
-          raise AllocationConstructionRejected
-        }
-    }
-  }
-  if !builder.add_function_safepoint_roots() {
+  guard builder.finish_selected() is Some(allocation) else {
     raise AllocationConstructionRejected
   }
-  let allocation = builder.finish()
   if verify {
     @vcode.verify_allocation_invariants(function, allocation) catch {
       error => raise InvalidAllocation(cause=error)

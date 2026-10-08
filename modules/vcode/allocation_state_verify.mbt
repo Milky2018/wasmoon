@@ -150,11 +150,7 @@ fn apply_instruction_state_edits(
   instruction : Instruction,
   placement : PointPlacement,
 ) -> Unit raise AllocationVerifyError {
-  let edits = match placement {
-    Before => allocation.before_edits[instruction.id]
-    After => allocation.after_edits[instruction.id]
-  }
-  for edit in edits {
+  for edit in allocation.edits_at(instruction, placement) {
     apply_state_edit(state, allocation, edit)
   }
 }

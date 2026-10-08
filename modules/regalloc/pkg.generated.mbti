@@ -59,6 +59,7 @@ pub struct AllocationSession {
   // private fields
 }
 pub fn[F : FunctionView] AllocationSession::allocate_function(Self, F, MachineEnv, config? : RegallocConfig) -> AllocationPlan raise VerifyError
+pub fn[F : FunctionView, S : AllocationSink] AllocationSession::allocate_into(Self, F, MachineEnv, S, config? : RegallocConfig) -> Unit raise VerifyError
 pub fn AllocationSession::new() -> Self
 
 pub struct BundleAllocationStatistics {
@@ -220,6 +221,7 @@ pub struct SpillSlotSpec {
   alignment : Int
 } derive(Eq, @debug.Debug)
 pub fn SpillSlotSpec::equal(Self, Self) -> Bool
+pub fn SpillSlotSpec::new(Int, Int) -> Self
 pub fn SpillSlotSpec::not_equal(Self, Self) -> Bool
 pub fn SpillSlotSpec::to_repr(Self) -> @debug.Repr
 
@@ -264,6 +266,17 @@ pub using @allocation_types {type RegClass}
 pub using @allocation_types {type VirtualReg}
 
 // Traits
+pub(open) trait AllocationSink {
+  fn assign_value(Self, @allocation_types.VirtualReg, @allocation_types.AllocationLocation) -> Unit
+  fn assign_operand(Self, Int, Int, @allocation_types.AllocationLocation) -> Unit
+  fn create_spill_slot(Self, Int, Int, Int) -> Int
+  fn value_location(Self, Int) -> @allocation_types.AllocationLocation?
+  fn operand_location(Self, Int, Int) -> @allocation_types.AllocationLocation?
+  fn spill_slot(Self, Int) -> SpillSlotSpec?
+  fn add_edit(Self, AllocationEdit) -> Unit
+  fn edits(Self) -> Array[AllocationEdit]
+}
+
 pub(open) trait FunctionView {
   fn value_count(Self) -> Int
   fn value_class(Self, Int) -> @allocation_types.RegClass

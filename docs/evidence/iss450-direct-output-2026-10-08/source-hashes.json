@@ -1,0 +1,23 @@
+{
+  "baseline": "7f5faf099721d2f6195371e2b3fa0da441797c24",
+  "candidate_files": {
+    "modules/regalloc/allocation_plan.mbt": "839bc548893ec110c9fec211eecd6d30dc1a3d5e1b5c303813c667eb9134f28c",
+    "modules/regalloc/allocation_sink.mbt": "3b34bd7877d8b44893921497a3a4c419f20c011d7b98a8a7b4c2c1b412ae8a43",
+    "modules/regalloc/backtracking_allocate.mbt": "c5d41febba41a787eafbfea1df80bb8067bb388282ea28b73f690ba8f6460ec3",
+    "modules/regalloc/function_allocate.mbt": "a59c2223aa17b634086b5d4c7494cef3a1b13886bc2898f385f35a3cf25719d6",
+    "modules/regalloc/parallel_edits.mbt": "251149a3d8f008a5d2eae1677f10e93da28aa58029b19a63584e9f5500133ed5",
+    "modules/regalloc/pkg.generated.mbti": "9cc85d890b6c26a675aa8c51c7a434e4371991f46cb7fd4472e8e885bbff2fbe",
+    "modules/regalloc/regalloc_wbtest.mbt": "a15e2a9efd211cd3e360d677e6e5907764cedfa214c79ca032cfbd4f0bba539a",
+    "modules/regalloc/verify_plan.mbt": "3860479baf7498fa64a7a4d41e880353397f66273357f1ebbbf7e5e9aab743f6",
+    "modules/vcode/allocation.mbt": "83280a2f2d65ffe8f528b66d0fee7717e6ede6e0596c27b867898e282542dd39",
+    "modules/vcode/allocation_builder.mbt": "66f7a79f79550c8f169f5a86302676df1dcf773f9fb44917415dc82eea1e042a",
+    "modules/vcode/allocation_state_verify.mbt": "a36e5285b76e3c04a65c4b8aec69ff9a661d42167c8f1da8313fc5c02d60baa7",
+    "modules/vcode/pkg.generated.mbti": "4474093876dc3b81c2f7d66f7df780b2aef0210c5daf9d95aa89273d9d51b000",
+    "modules/vcode/vcode_test.mbt": "b89963f405fa5f508762c4ffffc86a03d8bbb5a600e4bd1b176a787813e1a121",
+    "modules/vcode_regalloc/README.mbt.md": "f077c95ed33f39207aaa7e256c0dbe9b4ef278bc27a76a50e31d425cf5ada2f0",
+    "modules/vcode_regalloc/allocation_sink.mbt": "ca35b88bd4f7460091f4097262c9db18f7fcabfd64bcb8cc617c56dac75bde56",
+    "modules/vcode_regalloc/vcode_adapter.mbt": "86b57414ef9507ae3862ed8337f5709e85df86ae8af6dc05ff475b1eb3a157a7",
+    "modules/vcode_regalloc/vcode_adapter_test.mbt": "b28180cffd309cace3b0d2686d202702b6ad40514a9fd60ca420bba4d661f295",
+    "modules/wasmoon_jit/target_metrics.mbt": "b641b7f0de32e5b66544a3cc285c7938a01fe7f3f43907c69e20a92fdb5f9628"
+  }
+}

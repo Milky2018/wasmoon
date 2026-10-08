@@ -151,11 +151,11 @@ fn instruction_edit_key(position : EditPosition) -> (Int, Int)? {
 }
 
 ///|
-fn resolve_instruction_edits(
-  plan : AllocationPlan,
+fn[S : AllocationSink] resolve_instruction_edits(
+  plan : AllocationWork[S],
   environment : MachineEnv,
 ) -> Unit raise VerifyError {
-  let original = plan.edits.copy()
+  let original = plan.edits
   let positions : Array[EditPosition] = []
   let moves_by_position : Map[(Int, Int), Array[PlanMove]] = Map([])
   for edit in original {
@@ -172,12 +172,11 @@ fn resolve_instruction_edits(
       }
     }
   }
-  plan.edits.clear()
   for position in positions {
     let key = instruction_edit_key(position).unwrap()
     let moves = moves_by_position.get(key).unwrap()
     for transfer in resolve_plan_moves(moves, environment) {
-      plan.add_edit({
+      plan.sink.add_edit({
         value: transfer.value,
         from: transfer.from,
         to: transfer.to,
@@ -187,7 +186,7 @@ fn resolve_instruction_edits(
   }
   for edit in original {
     if edit.position is Edge(_) {
-      plan.add_edit(edit)
+      plan.sink.add_edit(edit)
     }
   }
 }

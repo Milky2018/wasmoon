@@ -156,7 +156,9 @@ test "instruction edit resolution preserves position order and edge edits" {
     to: reg_location(r0),
     position: Edge(source_block=3, successor_index=1),
   })
-  resolve_instruction_edits(plan, MachineEnv::new([r0, r1, r2], [r2]))
+  let work = { sink: plan, edits: plan.edits.copy(), }
+  plan.edits.clear()
+  resolve_instruction_edits(work, MachineEnv::new([r0, r1, r2], [r2]))
   debug_inspect(
     plan.edits(),
     content=(
@@ -410,7 +412,7 @@ test "operand assignment reuses a tied group's resident register" {
     segments[segment].location = Some(SegmentReg(r0))
   }
   assign_segment_operands(
-    plan,
+    { sink: plan, edits: plan.edits, },
     function,
     MachineEnv::new([r0], []),
     segments,
@@ -695,7 +697,7 @@ test "any-location definitions materialize in their stable home" {
     },
   ]
   assign_segment_operands(
-    plan,
+    { sink: plan, edits: plan.edits, },
     function,
     MachineEnv::new([register], []),
     segments,

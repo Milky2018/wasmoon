@@ -141,13 +141,13 @@ pub struct Allocation {
   priv source_instruction_count : Int
   priv value_types : Array[ValueType]
   priv operand_counts : Array[Int]
-  priv operand_values : Array[Array[Value]]
+  priv operand_values : Array[Array[Int]]
   priv value_locations : Array[AllocationLocation?]
   priv operand_locations : Array[Array[AllocationLocation?]]
   priv stack_slots : Array[StackSlotData]
   priv edits : Array[Edit]
-  priv before_edits : Array[Array[Edit]]
-  priv after_edits : Array[Array[Edit]]
+  priv before_edits : Array[Array[Edit]?]
+  priv after_edits : Array[Array[Edit]?]
   priv edge_edits : Map[(Int, Int), Array[Edit]]
   priv safepoint_roots : Array[SafepointRootLocation]
 }
@@ -160,15 +160,12 @@ fn[Inst] Allocation::for_function_with_storage(
   stack_slots : Array[StackSlotData],
 ) -> Allocation {
   let operand_counts : Array[Int] = []
-  let operand_values : Array[Array[Value]] = []
+  let operand_values : Array[Array[Int]] = []
   for data in function.instructions {
     operand_counts.push(data.operand_count)
     operand_values.push(
       Array::makei(data.operand_count, operand_index => {
-        Value::new(
-          function.owner,
-          function.operands[data.operand_start + operand_index].vreg.id,
-        )
+        function.operands[data.operand_start + operand_index].vreg.id
       }),
     )
   }
@@ -187,8 +184,8 @@ fn[Inst] Allocation::for_function_with_storage(
     operand_locations,
     stack_slots,
     edits: [],
-    before_edits: Array::makei(function.instruction_count(), _ => []),
-    after_edits: Array::makei(function.instruction_count(), _ => []),
+    before_edits: Array::make(function.instruction_count(), None),
+    after_edits: Array::make(function.instruction_count(), None),
     edge_edits: Map([]),
     safepoint_roots: [],
   }
@@ -417,7 +414,7 @@ pub fn Allocation::assign_operand_location(
   }
   let value = self.operand_values[instruction.id][operand_index]
   guard self.import_location(location) is Some(dense) else { return false }
-  if !self.dense_location_matches(dense, self.value_types[value.id]) {
+  if !self.dense_location_matches(dense, self.value_types[value]) {
     return false
   }
   self.operand_locations[instruction.id][operand_index] = Some(dense)
@@ -516,9 +513,13 @@ fn Allocation::append_edit(self : Allocation, edit : Edit) -> Unit {
     }
     _ =>
       if edit.point is Some(point) {
-        match point.placement {
-          Before => self.before_edits[point.instruction.id].push(edit)
-          After => self.after_edits[point.instruction.id].push(edit)
+        let table = match point.placement {
+          Before => self.before_edits
+          After => self.after_edits
+        }
+        match table[point.instruction.id] {
+          Some(edits) => edits.push(edit)
+          None => table[point.instruction.id] = Some([edit])
         }
       }
   }
@@ -536,12 +537,15 @@ pub fn Allocation::edits_at(
   placement : PointPlacement,
 ) -> ArrayView[Edit] {
   if !self.owns_instruction(instruction) {
-    let empty : Array[Edit] = []
-    return empty[:]
+    return self.edits[0:0]
   }
-  match placement {
-    Before => self.before_edits[instruction.id][:]
-    After => self.after_edits[instruction.id][:]
+  let edits = match placement {
+    Before => self.before_edits[instruction.id]
+    After => self.after_edits[instruction.id]
+  }
+  match edits {
+    Some(edits) => edits[:]
+    None => self.edits[0:0]
   }
 }
 
@@ -557,15 +561,11 @@ pub fn Allocation::edge_edits_at(
   successor_index : Int,
 ) -> ArrayView[Edit] {
   if !self.owns_block(source) || successor_index < 0 {
-    let empty : Array[Edit] = []
-    return empty[:]
+    return self.edits[0:0]
   }
   match self.edge_edits.get((source.id, successor_index)) {
     Some(edits) => edits[:]
-    None => {
-      let empty : Array[Edit] = []
-      empty[:]
-    }
+    None => self.edits[0:0]
   }
 }
 

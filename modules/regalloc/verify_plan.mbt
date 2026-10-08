@@ -65,9 +65,9 @@ fn PlanState::remove_register(self : PlanState, register : PhysicalReg) -> Unit 
 }
 
 ///|
-fn plan_location_is_legal(
+fn[S : AllocationSink] plan_location_is_legal(
   environment : MachineEnv,
-  plan : AllocationPlan,
+  plan : S,
   value : VirtualReg,
   location : Location,
 ) -> Bool {
@@ -90,9 +90,9 @@ fn plan_location_is_legal(
 }
 
 ///|
-fn require_plan_location(
+fn[S : AllocationSink] require_plan_location(
   environment : MachineEnv,
-  plan : AllocationPlan,
+  plan : S,
   value : VirtualReg,
   location : Location,
 ) -> Unit raise VerifyError {
@@ -102,9 +102,9 @@ fn require_plan_location(
 }
 
 ///|
-fn operand_location_is_legal(
+fn[S : AllocationSink] operand_location_is_legal(
   environment : MachineEnv,
-  plan : AllocationPlan,
+  plan : S,
   operand : Operand,
   location : Location,
 ) -> Bool {
@@ -127,9 +127,9 @@ fn operand_location_is_legal(
 }
 
 ///|
-fn require_operand_location(
+fn[S : AllocationSink] require_operand_location(
   environment : MachineEnv,
-  plan : AllocationPlan,
+  plan : S,
   operand : Operand,
   location : Location,
 ) -> Unit raise VerifyError {
@@ -199,11 +199,11 @@ fn apply_position_edits(
 }
 
 ///|
-fn[F : FunctionView] process_operand_phase(
+fn[F : FunctionView, S : AllocationSink] process_operand_phase(
   state : PlanState,
   function : F,
   environment : MachineEnv,
-  plan : AllocationPlan,
+  plan : S,
   instruction : Int,
   timing : OperandTiming,
 ) -> Unit raise VerifyError {
@@ -241,11 +241,11 @@ fn[F : FunctionView] process_operand_phase(
 }
 
 ///|
-fn[F : FunctionView] process_plan_block(
+fn[F : FunctionView, S : AllocationSink] process_plan_block(
   state : PlanState,
   function : F,
   environment : MachineEnv,
-  plan : AllocationPlan,
+  plan : S,
   block : Int,
   edits_at : Map[EditPosition, Array[AllocationEdit]],
 ) -> PlanState raise VerifyError {
@@ -278,10 +278,10 @@ fn[F : FunctionView] process_plan_block(
 }
 
 ///|
-fn[F : FunctionView] initialize_block_parameters(
+fn[F : FunctionView, S : AllocationSink] initialize_block_parameters(
   state : PlanState,
   function : F,
-  plan : AllocationPlan,
+  plan : S,
   block : Int,
 ) -> Unit raise VerifyError {
   for parameter_index in 0..<function.block_parameter_count(block) {
@@ -295,10 +295,10 @@ fn[F : FunctionView] initialize_block_parameters(
 }
 
 ///|
-fn[F : FunctionView] prepare_successor_state(
+fn[F : FunctionView, S : AllocationSink] prepare_successor_state(
   output : PlanState,
   function : F,
-  plan : AllocationPlan,
+  plan : S,
   block : Int,
   successor : Int,
   target : Int,
@@ -335,10 +335,10 @@ fn[F : FunctionView] prepare_successor_state(
 }
 
 ///|
-fn[F : FunctionView] verify_function_allocation(
+fn[F : FunctionView, S : AllocationSink] verify_function_allocation(
   function : F,
   environment : MachineEnv,
-  plan : AllocationPlan,
+  plan : S,
 ) -> Unit raise VerifyError {
   for value in 0..<function.value_count() {
     let vreg : VirtualReg = { id: value, class: function.value_class(value), }
