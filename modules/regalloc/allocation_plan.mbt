@@ -27,6 +27,11 @@ pub struct SpillSlotSpec {
 } derive(Eq, Debug)
 
 ///|
+pub fn SpillSlotSpec::new(size : Int, alignment : Int) -> SpillSlotSpec {
+  { size, alignment, }
+}
+
+///|
 pub struct AllocationPlan {
   priv value_locations : Array[Location?]
   priv operand_locations : Array[Array[Location?]]

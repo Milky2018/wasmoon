@@ -203,6 +203,8 @@ pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int, Int, @allocation
 pub fn[Inst] AllocationBuilder::assign_value(Self[Inst], Int, @allocation_types.AllocationLocation) -> Bool
 pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int, Int, Int) -> Int
 pub fn[Inst] AllocationBuilder::finish(Self[Inst]) -> Allocation
+pub fn[Inst] AllocationBuilder::finish_selected(Self[Inst]) -> Allocation?
+pub fn[Inst] AllocationBuilder::for_selected_function(Function[Inst]) -> Self[Inst]
 pub fn[Inst] AllocationBuilder::from_plan_storage(Function[Inst], Array[@allocation_types.AllocationLocation?], Array[Array[@allocation_types.AllocationLocation?]], Array[Int], Array[Int], Array[Int]) -> Self[Inst]?
 pub fn[Inst] AllocationBuilder::new(Function[Inst]) -> Self[Inst]
 pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int, Int) -> Int

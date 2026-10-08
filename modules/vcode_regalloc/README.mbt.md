@@ -20,17 +20,21 @@ explicit set of allocatable registers and spill scratch registers. The result
 is verified against fixed and tied operands, clobbers, stack slots, insertion
 edits, edge moves, and safepoint roots before it is returned.
 
-The production adapter normalizes Target VCode once into flat tables and offset
-vectors, then exposes non-owning `ArrayView` spans through `FunctionView`; it
-does not build a second nested instruction or CFG graph. The aggregate target
-pipeline can verify selected VCode, run the root bundle-aware allocator,
-materialize its `AllocationPlan` into VCode `Allocation` side tables, and then
-run the independent VCode allocation verifier. Safe public entry points enable
-both the reusable plan verifier and the materialized VCode state verifier; the
-latter follows resident values through edits, clobbers, and CFG joins. The
-Wasmoon JIT skips these redundant checks for compiler-owned VCode in production
-and restores them in strict CI with `VCODE_REGALLOC_VALIDATION=1`. There is no
-second backtracking policy package and no alternate allocation strategy.
+The production adapter exposes non-owning indexed CFG access and borrowed
+operand/clobber `ArrayView`s through `FunctionView`. The allocator writes homes,
+operand locations, stack slots, and resolved transfers directly through a
+statically dispatched `AllocationSink`; production does not create an
+`AllocationPlan` or translate a completed plan into VCode. Standalone allocator
+clients keep the `AllocationPlan` API, backed by the same algorithm and a plan
+sink. Only unresolved parallel edits remain allocator-owned temporary data.
+
+The adapter checks each write and requires complete output even when full
+verification is disabled. VCode owns final safepoint-root construction because
+those roots refer to its instruction metadata. Safe public entry points enable
+both the generic dataflow verifier and the independent VCode state verifier;
+strict mode additionally records generic resolved edits for the former. The
+Wasmoon JIT enables these checks with `VCODE_REGALLOC_VALIDATION=1`. Neither
+mode changes allocation policy or returned results.
 
 Ordinary `Input::any` operands require a register at the instruction. A target
 operation that can consume a register or spill slot directly uses

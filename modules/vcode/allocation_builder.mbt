@@ -19,6 +19,28 @@ pub fn[Inst] AllocationBuilder::new(
 }
 
 ///|
+/// Creates final output tables for selected operands, including implicit GC
+/// roots that are visible to allocation but not ordinary instruction operands.
+pub fn[Inst] AllocationBuilder::for_selected_function(
+  function : Function[Inst],
+) -> AllocationBuilder[Inst] {
+  {
+    function,
+    allocation: Allocation::for_function_with_storage(
+      function,
+      Array::make(function.value_count(), None),
+      Array::makei(function.instruction_count(), instruction => {
+        Array::make(
+          function.instructions[instruction].allocation_operand_count,
+          None,
+        )
+      }),
+      [],
+    ),
+  }
+}
+
+///|
 /// Adopts canonical location tables produced for this exact selected function.
 ///
 /// The caller must stop mutating the source tables after adoption. Shape,
@@ -157,7 +179,8 @@ pub fn[Inst] AllocationBuilder::assign_operand(
     return false
   }
   let data = self.function.instructions[instruction]
-  if operand < 0 || operand >= data.operand_count {
+  if operand < 0 ||
+    operand >= self.allocation.operand_locations[instruction].length() {
     return false
   }
   let value = self.function.operands[data.operand_start + operand].vreg.id
@@ -307,4 +330,28 @@ pub fn[Inst] AllocationBuilder::finish(
   self : AllocationBuilder[Inst],
 ) -> Allocation {
   self.allocation
+}
+
+///|
+/// Completes selected-function output without relying on the optional dataflow
+/// verifier. Every home and implicit operand must have been assigned.
+pub fn[Inst] AllocationBuilder::finish_selected(
+  self : AllocationBuilder[Inst],
+) -> Allocation? {
+  for location in self.allocation.value_locations {
+    if location is None {
+      return None
+    }
+  }
+  for locations in self.allocation.operand_locations {
+    for location in locations {
+      if location is None {
+        return None
+      }
+    }
+  }
+  if !self.add_function_safepoint_roots() {
+    return None
+  }
+  Some(self.allocation)
 }

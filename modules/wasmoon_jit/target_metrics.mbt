@@ -176,10 +176,12 @@ fn target_compile_metrics_observer(
       RegallocPhasesFinished =>
         if detail {
           close_regalloc_phase()
-          // Everything from here to RegallocFinished is plan translation and
+          // Everything from here to RegallocFinished is output finalization and
           // target-level checking, not allocator work. Naming it keeps the
           // phases summing to the measured regalloc stage.
-          regalloc_phase.val = Some(("plan_translation", @perf.tick_now()))
+          regalloc_phase.val = Some(
+            ("allocation_finalization", @perf.tick_now()),
+          )
         }
       RegallocLoopMeasured(statistics) =>
         @perf.record_regalloc_loop(

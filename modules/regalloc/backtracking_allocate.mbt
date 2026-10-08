@@ -444,8 +444,8 @@ fn[F : FunctionView] spill_home_candidates_can_share(
 }
 
 ///|
-fn[F : FunctionView] assign_backtracking_homes(
-  plan : AllocationPlan,
+fn[F : FunctionView, S : AllocationSink] assign_backtracking_homes(
+  plan : AllocationWork[S],
   function : F,
   environment : MachineEnv,
   ranges : LiveRangeSet,
@@ -531,7 +531,7 @@ fn[F : FunctionView] assign_backtracking_homes(
   for value in 0..<function.value_count() {
     let vreg : VirtualReg = { id: value, class: function.value_class(value), }
     if !needs_spill[value] {
-      plan.assign_value(vreg, reg_location(register_homes[value].unwrap()))
+      plan.sink.assign_value(vreg, reg_location(register_homes[value].unwrap()))
       continue
     }
     let group = group_by_value[value]
@@ -555,7 +555,7 @@ fn[F : FunctionView] assign_backtracking_homes(
       }
     }
     if selected < 0 {
-      selected = plan.create_spill_slot(
+      selected = plan.sink.create_spill_slot(
         value,
         function.value_spill_size(value),
         function.value_spill_alignment(value),
@@ -572,7 +572,7 @@ fn[F : FunctionView] assign_backtracking_homes(
     } else {
       slot_values[selected].push(vreg)
     }
-    plan.assign_value(vreg, spill_location(selected))
+    plan.sink.assign_value(vreg, spill_location(selected))
   }
 }
 
@@ -646,8 +646,8 @@ fn live_register_value_at(
 }
 
 ///|
-fn[F : FunctionView] borrow_allocatable_register(
-  plan : AllocationPlan,
+fn[F : FunctionView, S : AllocationSink] borrow_allocatable_register(
+  plan : AllocationWork[S],
   function : F,
   environment : MachineEnv,
   register_home_segments : Array[Array[Int]],
@@ -680,7 +680,7 @@ fn[F : FunctionView] borrow_allocatable_register(
   let slot = match borrow_slots[occupant.id] {
     Some(slot) => slot
     None => {
-      let slot = plan.create_spill_slot(
+      let slot = plan.sink.create_spill_slot(
         occupant.id,
         function.value_spill_size(occupant.id),
         function.value_spill_alignment(occupant.id),
@@ -689,13 +689,13 @@ fn[F : FunctionView] borrow_allocatable_register(
       slot
     }
   }
-  plan.add_edit({
+  plan.edits.push({
     value: occupant,
     from: reg_location(reg),
     to: spill_location(slot),
     position: Before(instruction),
   })
-  plan.add_edit({
+  plan.edits.push({
     value: occupant,
     from: spill_location(slot),
     to: reg_location(reg),
@@ -705,8 +705,8 @@ fn[F : FunctionView] borrow_allocatable_register(
 }
 
 ///|
-fn[F : FunctionView] assign_segment_operands(
-  plan : AllocationPlan,
+fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
+  plan : AllocationWork[S],
   function : F,
   environment : MachineEnv,
   segments : Array[AllocationSegment],
@@ -728,7 +728,7 @@ fn[F : FunctionView] assign_segment_operands(
   }
   for segment in segments {
     if segment.location is Some(_) &&
-      plan
+      plan.sink
       .value_location(segment.value.id)
       .bind(location => location.register())
       is Some(home_reg) &&
@@ -740,7 +740,7 @@ fn[F : FunctionView] assign_segment_operands(
       segment.range.start.block >= 0 &&
       segment.range.start.block < function.block_count() &&
       segment.location is Some(SegmentReg(reg)) &&
-      plan.value_location(segment.value.id) == Some(reg_location(reg)) {
+      plan.sink.value_location(segment.value.id) == Some(reg_location(reg)) {
       block_entry_segments[segment.range.start.block].push(segment.id)
     }
   }
@@ -844,7 +844,7 @@ fn[F : FunctionView] assign_segment_operands(
         }
       }
       for operand_index, operand in operands {
-        let home = plan.value_location(operand.vreg.id).unwrap()
+        let home = plan.sink.value_location(operand.vreg.id).unwrap()
         let segment = segment_at(
           segments,
           segments_by_value,
@@ -884,7 +884,7 @@ fn[F : FunctionView] assign_segment_operands(
         }
       }
       for operand_index, operand in operands {
-        let home = plan.value_location(operand.vreg.id).unwrap()
+        let home = plan.sink.value_location(operand.vreg.id).unwrap()
         let tie_slot = operand_tie_slots[operand_index]
         let tied_location : Location? = match tie_slot {
           Some(slot) => tied_locations[slot]
@@ -965,14 +965,14 @@ fn[F : FunctionView] assign_segment_operands(
             _ => None
           },
         )
-        plan.assign_operand(instruction, operand_index, selected)
+        plan.sink.assign_operand(instruction, operand_index, selected)
       }
       for timing in [OperandTiming::Early, Late] {
         for operand_index, operand in operands {
           if operand.timing != timing {
             continue
           }
-          let home = plan.value_location(operand.vreg.id).unwrap()
+          let home = plan.sink.value_location(operand.vreg.id).unwrap()
           let selected = assigned[operand_index].unwrap()
           if operand.role is Use || operand.role is UseDef {
             match resident_operand_segments[operand_index] {
@@ -1010,10 +1010,10 @@ fn[F : FunctionView] assign_segment_operands(
             !(operand.role is Def || operand.role is UseDef) {
             continue
           }
-          let home = plan.value_location(operand.vreg.id).unwrap()
+          let home = plan.sink.value_location(operand.vreg.id).unwrap()
           let selected = assigned[operand_index].unwrap()
           if home != selected {
-            plan.add_edit({
+            plan.edits.push({
               value: operand.vreg,
               from: selected,
               to: home,
@@ -1048,12 +1048,13 @@ fn[F : FunctionView] assign_segment_operands(
 }
 
 ///|
-fn[F : FunctionView] allocate_bundle_plan(
+fn[F : FunctionView, S : AllocationSink] allocate_bundle_plan(
   function : F,
   environment : MachineEnv,
   session : AllocationSession,
   config : RegallocConfig,
-) -> AllocationPlan raise VerifyError {
+  sink : S,
+) -> AllocationWork[S] raise VerifyError {
   config.enter_phase(Some(LiveRanges))
   let ranges = build_function_live_ranges(function)
   let (segments, segments_by_value, _, _, spill_sets, segment_spill_set) = allocate_segments_with_context(
@@ -1076,7 +1077,7 @@ fn[F : FunctionView] allocate_bundle_plan(
       }
     })
   }
-  let plan = AllocationPlan::new(function.value_count())
+  let plan : AllocationWork[S] = { sink, edits: [], }
   config.enter_phase(Some(HomeAssignment))
   assign_backtracking_homes(
     plan, function, environment, ranges, segments, segments_by_value, spill_sets,
@@ -1093,6 +1094,5 @@ fn[F : FunctionView] allocate_bundle_plan(
   )
   config.enter_phase(Some(EdgeTransfers))
   assign_edge_transfers(plan, function)
-  plan.seal_operand_storage(function)
   plan
 }

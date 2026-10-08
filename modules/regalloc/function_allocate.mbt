@@ -244,8 +244,8 @@ fn find_scratch_reg(
 }
 
 ///|
-fn add_use_transfer(
-  plan : AllocationPlan,
+fn[S] add_use_transfer(
+  plan : AllocationWork[S],
   instruction : Int,
   operand : Operand,
   home : Location,
@@ -254,7 +254,7 @@ fn add_use_transfer(
   if home == selected {
     return
   }
-  plan.add_edit({
+  plan.edits.push({
     value: operand.vreg,
     from: home,
     to: selected,
@@ -266,8 +266,8 @@ fn add_use_transfer(
 /// Values keep one home for their complete live range, so live-through CFG
 /// edges need no transfer. Only SSA block arguments can change value identity
 /// and therefore location at an edge.
-fn[F : FunctionView] assign_edge_transfers(
-  plan : AllocationPlan,
+fn[F : FunctionView, S : AllocationSink] assign_edge_transfers(
+  plan : AllocationWork[S],
   function : F,
 ) -> Unit raise VerifyError {
   for block_index in 0..<function.block_count() {
@@ -281,14 +281,14 @@ fn[F : FunctionView] assign_edge_transfers(
           block_index, successor_index, argument_index,
         )
         let parameter = function.block_parameter_at(target, argument_index)
-        guard plan.value_location(argument.id) is Some(from) else {
+        guard plan.sink.value_location(argument.id) is Some(from) else {
           raise Unassigned(vreg=argument)
         }
-        guard plan.value_location(parameter.id) is Some(to) else {
+        guard plan.sink.value_location(parameter.id) is Some(to) else {
           raise Unassigned(vreg=parameter)
         }
         if from != to {
-          plan.add_edit({
+          plan.edits.push({
             value: argument,
             from,
             to,
@@ -330,20 +330,20 @@ fn[F : FunctionView] verify_operand_preferences(
 /// Split out so the terminating event can be attached to every way this
 /// returns. A single body cannot express that — MoonBit has no `finally`,
 /// and a `raise` runs straight past a trailing call.
-fn[F : FunctionView] run_allocation_phases(
+fn[F : FunctionView, S : AllocationSink] run_allocation_phases(
   function : F,
   environment : MachineEnv,
   session : AllocationSession,
   config : RegallocConfig,
-) -> AllocationPlan raise VerifyError {
-  let plan = allocate_bundle_plan(function, environment, session, config)
+  sink : S,
+) -> Unit raise VerifyError {
+  let plan = allocate_bundle_plan(function, environment, session, config, sink)
   config.enter_phase(Some(EditResolution))
   resolve_instruction_edits(plan, environment)
   if config.verify() {
     config.enter_phase(Some(Verification))
-    verify_function_allocation(function, environment, plan)
+    verify_function_allocation(function, environment, sink)
   }
-  plan
 }
 
 ///|
@@ -371,12 +371,27 @@ pub fn[F : FunctionView] AllocationSession::allocate_function(
   environment : MachineEnv,
   config? : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
-  let plan = {
+  let plan = AllocationPlan::new(function.value_count())
+  self.allocate_into(function, environment, plan, config~)
+  plan.seal_operand_storage(function)
+  plan
+}
+
+///|
+/// Allocate into fresh embedding-owned output storage. On failure, discard the
+/// partially written sink. Verification queries the same output that is returned.
+pub fn[F : FunctionView, S : AllocationSink] AllocationSession::allocate_into(
+  self : AllocationSession,
+  function : F,
+  environment : MachineEnv,
+  sink : S,
+  config? : RegallocConfig = RegallocConfig(),
+) -> Unit raise VerifyError {
+  {
     errdefer config.enter_phase(None)
     config.enter_phase(Some(InputValidation))
     verify_operand_preferences(function, environment)
-    run_allocation_phases(function, environment, self, config)
+    run_allocation_phases(function, environment, self, config, sink)
   }
   config.enter_phase(None)
-  plan
 }

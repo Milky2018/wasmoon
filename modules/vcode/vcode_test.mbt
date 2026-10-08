@@ -954,3 +954,34 @@ test "VCode preserves typed source trap safepoint and symbol metadata" {
     ),
   )
 }
+
+///|
+test "selected allocation output rejects incomplete and invalid assignments" {
+  let source : @vcode.Builder[Unit] = @vcode.Builder::new("sink_validation", [
+    I64,
+  ])
+  source.set_terminator(
+    source.entry_block(),
+    (),
+    [@vcode.Input::any(source.parameter(0))],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let output = @vcode.AllocationBuilder::for_selected_function(source.finish())
+  let location = @vcode.AllocationLocation::reg(@vcode.PhysicalReg::new(0, Int))
+  assert_true(output.finish_selected() is None)
+  assert_false(output.assign_value(0, @vcode.AllocationLocation::spill(0)))
+  assert_false(
+    output.assign_value(
+      0,
+      @vcode.AllocationLocation::reg(@vcode.PhysicalReg::new(0, FpVector)),
+    ),
+  )
+  assert_true(output.assign_value(0, location))
+  assert_true(output.finish_selected() is None)
+  assert_false(output.assign_operand(0, 1, location))
+  assert_true(output.assign_operand(0, 0, location))
+  assert_true(output.finish_selected() is Some(_))
+}
