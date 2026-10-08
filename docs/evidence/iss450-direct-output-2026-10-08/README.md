@@ -5,7 +5,7 @@
 Baseline: `7f5faf099721d2f6195371e2b3fa0da441797c24` (merged PR #525).
 Candidate: the module files pinned by `source-hashes.json`, on
 `milky/verify-iss450-acceptance`. Host: macOS ARM64, Moon 0.1.20260920.
-No native x64 or remote CI result is claimed in this report.
+The subsequent cross-platform acceptance below covers native x64 and ARM64.
 
 The allocator now uses one statically dispatched `AllocationSink`. Production
 writes homes, operands, spill slots, and resolved transfers directly into VCode;
@@ -119,4 +119,30 @@ three-workload acceptance result. The final capture above completed successfully
   sessions, identical checked/unchecked output, and rejected incomplete/invalid
   output. Existing parallel-move and target-specific regressions remain active.
 - Raw test output: `strict-native.txt`, `normal-native.txt`.
-- Fresh native x64/cross-platform CI is still required before closing ISS-450.
+- Cross-platform CI passed; ISS-450 is closed. See the acceptance record below.
+
+## Cross-platform acceptance
+
+[PR #526](https://github.com/Milky2018/wasmoon/pull/526), implementation commit
+`63cd76a75485e33659123428ff7eb19e415ec89c`, passed all five jobs in
+[run 37719673512](https://github.com/Milky2018/wasmoon/actions/runs/37719673512):
+
+| Gate | Result |
+| --- | --- |
+| Linux AMD64 | Passed |
+| macOS ARM64 | Passed |
+| Windows AMD64 (clang) | Passed |
+| Windows AMD64 (MSVC) | Passed |
+| Linux ASan and UBSan | Passed |
+
+`ci-acceptance.json.gz` contains the exact run, head SHA, jobs, and step results.
+Linux and macOS each passed 2,635 native tests, 110 Preview 3 runs using the
+existing documented contract profile, and 692 misc cases plus 72 script-only
+entries, with zero misc failures/timeouts. Both Windows toolchains passed their
+native inventory and external corpus gates. The clang native step spent
+1,103.5 seconds successfully building the test inventory before executing the
+packages; it did not time out. No workflow or timeout changes were needed.
+
+The performance measurements remain local ARM64 measurements; CI establishes
+cross-platform correctness and packaging, not equivalent speedups on x64.
+
