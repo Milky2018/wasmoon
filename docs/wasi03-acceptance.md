@@ -72,7 +72,9 @@ Remaining boundaries:
 
 - ISS-568: async exposes only `TlsError(String)`; structured certificate/protocol/
   alert categories depend on [async issue #620](https://github.com/moonbitlang/async/issues/620).
-- ISS-567: the intermittent macOS misc JIT timeout is outside this repair scope.
+- ISS-567: the macOS misc JIT timeout was subsequently reproduced on the original
+  source and closed as covered by ISS-614's trap repair; see the
+  [original-fixture verification](evidence/iss567-original-fixture-2026-10-08/README.md).
 
 ## Original audit verdict
 
@@ -222,6 +224,13 @@ Linux ASan/UBSan pass. macOS native tests and HTTP tests pass, but misc JIT
 steps are skipped. Prior PR CI passed at the identical source tree, but does not
 replace acceptance of this failed run. ISS-567 tracks diagnosis; local 100-run
 success does not establish its cause or fix it.
+
+Follow-up (2026-10-08): ISS-567 is now closed. The original source and unchanged
+fixture reproduce the signal-mask shutdown deadlock, with sampled threads and
+signal traces. An isolated backport of ISS-614's repair passes 10,000 repetitions;
+the current runtime and standard misc runner also pass. See the
+[verification evidence](evidence/iss567-original-fixture-2026-10-08/README.md).
+This resolves the diagnosis without changing the historical failed CI result.
 
 TLS failures currently collapse to `TLS-protocol-error`; certificate verification
 still rejects bad certificates. Track error-category fidelity in ISS-568.
