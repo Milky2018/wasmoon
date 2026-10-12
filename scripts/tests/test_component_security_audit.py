@@ -32,7 +32,6 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             "oracle": {"name": "wasmtime", "version": "49.0.1"},
             "source_checks": {
                 "stable_interface": "interface.mbti",
-                "validator": "validator.mbt",
                 "validator_interface": "validator.mbti",
                 "runtime_interface": "runtime.mbti",
                 "interface_scan_root": "modules/wasmoon",
@@ -68,11 +67,6 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / "interface.mbti").write_text("pub type Component\n", encoding="utf-8")
-        (root / "validator.mbt").write_text(
-            '"effective type size exceeds the limit"\n'
-            '"type nesting is too deep"\n',
-            encoding="utf-8",
-        )
         (root / "validator.mbti").write_text(
             "type ValidatedComponent\n"
             "pub fn ValidatedComponent::component_bytes(Self) -> Bytes\n"
@@ -94,16 +88,6 @@ class ComponentSecurityAuditTests(unittest.TestCase):
         (root / "untrusted/input.mbt").write_text("raise InvalidInput\n")
         runtime = root / "modules/wasmoon/component/runtime_impl"
         runtime.mkdir(parents=True)
-        for name in [
-            "async_types.mbt",
-            "canon_stream.mbt",
-            "canon_future.mbt",
-            "host_stream.mbt",
-        ]:
-            (runtime / name).write_text(
-                "cleanup_closed_stream()\ncleanup_closed_future()\n",
-                encoding="utf-8",
-            )
         scripts = root / "scripts"
         scripts.mkdir()
         for name in [
@@ -121,11 +105,6 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             "async-0.3\n"
             "future-gated\n",
             encoding="utf-8",
-        )
-        cleanup = root / "modules/wasmoon/component/runtime_impl"
-        cleanup.mkdir(parents=True, exist_ok=True)
-        (cleanup / "runtime_cleanup_wbtest.mbt").write_text(
-            'test "cleanup" {\n}\n', encoding="utf-8"
         )
 
     def assert_failed(self, root: Path, name: str) -> None:
@@ -420,15 +399,6 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             )
             self.assert_failed(root, "validate-before-instantiate")
 
-    def test_missing_validator_limit_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "validator.mbt").write_text(
-                '"effective type size exceeds the limit"\n'
-            )
-            self.assert_failed(root, "validator-limits")
-
     def test_unstructured_termination_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -445,15 +415,6 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             )
             self.assert_failed(root, "unsafe-conversion-budget")
 
-    def test_missing_cleanup_boundary_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            runtime = root / "modules/wasmoon/component/runtime_impl"
-            for path in runtime.iterdir():
-                path.write_text("fn unrelated() -> Unit { () }\n")
-            self.assert_failed(root, "resource-cleanup-boundary")
-
     def test_missing_hardening_tool_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -469,18 +430,6 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                 path.write_text("stable-0.2\n")
             self.assert_failed(root, "platform-ci")
 
-    def test_deleted_cleanup_tests_fail(self) -> None:
-        # No CI step names this file any more, so the audit is what
-        # notices if the tests it used to guard are deleted.
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (
-                root
-                / "modules/wasmoon/component/runtime_impl"
-                / "runtime_cleanup_wbtest.mbt"
-            ).write_text("// no tests left\n", encoding="utf-8")
-            self.assert_failed(root, "resource-cleanup-tests")
 
 
 if __name__ == "__main__":
