@@ -203,7 +203,6 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         ]
     try:
         interface = read_text(root, str(source["stable_interface"]))
-        validator = read_text(root, str(source["validator"]))
         validator_interface = read_text(
             root,
             str(source["validator_interface"]),
@@ -301,14 +300,6 @@ def audit_repo(root: Path) -> list[AuditCheck]:
             "registration must not be public",
         )
     )
-    checks.append(
-        AuditCheck(
-            "validator-limits",
-            "effective type size exceeds the limit" in validator
-            and "type nesting is too deep" in validator,
-            "component type size and nesting limits must remain explicit",
-        )
-    )
     roots = source.get("forbidden_termination_roots", [])
     patterns = source.get("forbidden_termination_patterns", [])
     allowlist = set(source.get("termination_allowlist", []))
@@ -371,23 +362,6 @@ def audit_repo(root: Path) -> list[AuditCheck]:
             else "within reviewed per-file budgets",
         )
     )
-    cleanup_source = "\n".join(
-        read_text(root, path)
-        for path in [
-            "modules/wasmoon/component/runtime_impl/async_types.mbt",
-            "modules/wasmoon/component/runtime_impl/canon_stream.mbt",
-            "modules/wasmoon/component/runtime_impl/canon_future.mbt",
-            "modules/wasmoon/component/runtime_impl/host_stream.mbt",
-        ]
-    )
-    checks.append(
-        AuditCheck(
-            "resource-cleanup-boundary",
-            "cleanup_closed_stream" in cleanup_source
-            and "cleanup_closed_future" in cleanup_source,
-            "stream and future backing state must have explicit cleanup",
-        )
-    )
     scripts = [
         "scripts/component_fuzz.py",
         "scripts/component_differential.py",
@@ -406,16 +380,7 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         ci_text = read_text(root, ".github/workflows/check.yml")
     except OSError:
         ci_text = ""
-    # The sanitizer gate used to name `runtime_cleanup_wbtest.mbt` here and
-    # was itself required by name. Both are gone: the gate was removed, and
-    # with it the only step that named individual test files.
-    #
-    # What that gate guaranteed splits in two. The cleanup tests still run —
-    # `moon test --target native` covers every package — so this asks for
-    # that step and, below, for the file itself, which together say the same
-    # thing without naming a step that no longer exists. What is genuinely
-    # gone is running them *under sanitizers*, and nothing here should
-    # pretend otherwise.
+    # Check workflow references only; execution results are separate evidence.
     required_ci_tokens = [
         "moon test --target native",
         "stable-0.2",
@@ -430,24 +395,6 @@ def audit_repo(root: Path) -> list[AuditCheck]:
             "missing CI references: " + ", ".join(missing_ci)
             if missing_ci
             else "configured",
-        )
-    )
-    # The other half of what `platform-ci` used to cover: deleting the
-    # cleanup tests would otherwise pass unnoticed now that no CI step names
-    # the file.
-    cleanup = root / "modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt"
-    cleanup_tests = (
-        len(re.findall(r"^test ", cleanup.read_text(encoding="utf-8"), re.MULTILINE))
-        if cleanup.is_file()
-        else 0
-    )
-    checks.append(
-        AuditCheck(
-            "resource-cleanup-tests",
-            cleanup_tests > 0,
-            f"{cleanup_tests} tests in {cleanup.name}"
-            if cleanup_tests
-            else f"missing or empty: {cleanup}",
         )
     )
     return checks

@@ -21,10 +21,21 @@ suites remain separate evidence.
 
 ## Continuous integration
 
-`scripts/audit_component_security.py` validates the stable facade boundary,
-validation-before-instantiation ordering, explicit type-size/depth limits,
-structured termination policy, resource cleanup seams, and the platform CI
-coverage. Its source of truth is `docs/component-hardening.json`.
+`scripts/audit_component_security.py` checks generated public interfaces,
+reviewed source-pattern budgets, manifest consistency, tool availability and
+workflow references. Its configuration is `docs/component-hardening.json`.
+These are structural checks, not execution evidence. Termination and unsafe
+conversion scans enforce reviewed textual budgets; they do not prove that all
+runtime paths return structured errors or that conversions are safe.
+
+Type limits are exercised by `validation_limits_wbtest.mbt` in
+`wasm_component/text`: a parsed component at depth 100 or effective size 100000
+is accepted, and the next value is rejected. Logical resource release is
+exercised by `runtime_cleanup_wbtest.mbt`: repeated stream/future operations
+return tables to baseline, cancellation/destructor callbacks run, and failed
+instantiation rolls registration back. These tests run in the native suite.
+The audit no longer treats error strings, cleanup symbol names or test counts
+as proof of these behaviors.
 
 Interface isolation is checked from generated `.mbti` semantics rather than
 alias spellings. The audit resolves every referenced package alias to its full
@@ -34,22 +45,25 @@ native session and WASI host interfaces are explicit reviewed low-level seams;
 adding another implementation-bearing public interface requires an intentional
 manifest change.
 
-Validation ordering is checked inside the effective code of
-`ComponentRuntime::instantiate_component`: comments and literals are removed,
-the function body is isolated with balanced braces, and every linker
-instantiation must follow an unconditional function-body-level component
-validation. Validation inside a nested control-flow block does not establish
-evidence for the gate.
+The validation boundary check inspects generated interface signatures:
+instantiation and registration require abstract `ValidatedComponent` evidence,
+which exposes immutable bytes. This checks the public contract, not internal
+control flow or the correctness of validation itself.
 
 The Linux AMD64 and macOS ARM64 jobs each run the stable 0.2, current 0.3
 async, and future-gated suites through both JIT and interpreter execution, in
 one platform job rather than separate Component Model jobs.
 
-Neither job runs ASan or UBSan. The gate that did was removed with the
-compiler wrapper it depended on; the tests it covered, including
-`runtime_cleanup_wbtest.mbt`, still run under `moon test --target native`,
-but uninstrumented. Treat leak and use-after-free claims about the component
-runtime as unverified by CI until ISS-390 restores that coverage.
+A separate Linux ASan/UBSan job runs `scripts/run_sanitizers.py`. Its selected
+test closure includes `wasmoon_jit/native_handles_test.mbt`, covering retained
+owners, replacement, clearing, parked frames and teardown. The deleted JIT
+context-name blacklist did not establish those lifetime properties. Public
+ownership API changes still require review; behavioral tests and sanitizer
+results are evidence for the cases they execute, not a general lifetime proof.
+
+The component runtime whitebox cleanup suite runs under the ordinary native
+test command; it is not itself part of that selected sanitizer closure.
+Logical table release and native memory diagnostics remain distinct evidence.
 
 The following tools remain available for explicit local diagnostics, but they
 are not pull-request gates or scheduled CI campaigns:
