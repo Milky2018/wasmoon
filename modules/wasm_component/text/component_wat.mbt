@@ -972,7 +972,7 @@ fn prim_type_opcode(name : String) -> Int? {
 fn push_valtype_encoding(payload : ByteBuf, ty : ValTypeEncoding) -> Unit {
   match ty {
     Prim(opcode) => payload.push_u8(opcode)
-    TypeIdx(idx) => payload.push_uleb_u32(idx)
+    TypeIdx(idx) => payload.push_sleb_i32(idx)
   }
 }
 
