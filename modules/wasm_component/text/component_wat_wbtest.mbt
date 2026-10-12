@@ -398,3 +398,32 @@ test "implements feature configuration reaches nested name attributes" {
     ComponentValidationConfig(true, component_implements=false),
   )
 }
+
+///|
+test "component value type references round trip signed LEB boundaries" {
+  let results = []
+  for index in [63, 64, 127, 128] {
+    let declarations = Array::make(index + 1, "(type (list u32))").join(" ")
+    let bytes = parse_component_wat(
+      "(component \{declarations} (type (list \{index})))",
+    )
+    let parsed = try @component.parse_component(bytes) catch {
+      _ => None
+    } noraise {
+      component => Some(component)
+    }
+    match parsed {
+      Some(component) => {
+        @component_model.validate_component(component)
+        results.push(
+          (index, component.types[index + 1] == List(TypeIdx(index))),
+        )
+      }
+      None => results.push((index, false))
+    }
+  }
+  debug_inspect(
+    results,
+    content="[(63, true), (64, true), (127, true), (128, true)]",
+  )
+}
