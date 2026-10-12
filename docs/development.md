@@ -144,6 +144,18 @@ lldb -- ./wasmoon test path/to/test.wast
 
 ### Exploring Compilation Stages
 
+`explore` observes the production native compiler, using the module's context
+layout, absolute function indices (including imports), and selected optimization
+level. Diagnostic text is generated only when requested; ordinary compilation
+uses the same pipeline without rendering checkpoints. Internal verification
+follows `VCODE_REGALLOC_VALIDATION` in both paths.
+
+Comparisons with `run` assume its default compilation policy. `explore` does not
+currently expose cancellation safepoints, NaN canonicalization, or an embedding's
+imported-memory maximum override. Match these settings before treating the
+output as a reproduction of a customized runtime compilation. A cross-target
+report establishes compilation behavior, not execution on that platform.
+
 ```bash
 # View MilkIR
 ./wasmoon explore test.wat --stage milkir

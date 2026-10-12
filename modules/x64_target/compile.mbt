@@ -40,6 +40,7 @@ fn CompilationSession::compile_selected_function(
   function : @vcode.Function[X64Inst],
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
   verify_allocation? : Bool = true,
+  on_diagnostics? : ((String, String) -> Unit)? = None,
 ) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
   on_event(RegallocStarted)
   let allocation = allocate_verified(
@@ -68,6 +69,10 @@ fn CompilationSession::compile_selected_function(
     error => raise EmissionFailed(cause=error)
   }
   on_event(EmissionFinished)
+  if on_diagnostics is Some(observe) {
+    let selected_text = function.summary()
+    observe(selected_text, selected_text + allocation.summary())
+  }
   (object, frame.frame_size())
 }
 
@@ -87,17 +92,20 @@ pub fn compile_selected(
 
 ///|
 /// Compile selected VCode while retaining allocator scratch capacity for the
-/// next serial call on this session.
+/// next serial call on this session. Diagnostic strings are rendered only when
+/// `on_diagnostics` is supplied; the callback observes this same compilation.
 pub fn CompilationSession::compile_selected(
   self : CompilationSession,
   selected : SelectedFunction,
   on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
   verify_allocation? : Bool = true,
+  on_diagnostics? : ((String, String) -> Unit)? = None,
 ) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError {
   self.compile_selected_function(
     selected.constructed.function,
     on_event~,
     verify_allocation~,
+    on_diagnostics~,
   )
 }
 
@@ -112,21 +120,14 @@ pub(all) struct CompilationDiagnostics {
 pub fn diagnose_selected(
   selected : SelectedFunction,
 ) -> CompilationDiagnostics raise X64CompileError {
-  let function = selected.constructed.function
-  let allocation = allocate(function) catch {
-    error => raise AllocationFailed(cause=error)
-  }
-  let frame = plan_frame(function, allocation) catch {
-    error => raise FramePlanningFailed(cause=error)
-  }
-  let object = emit(function, allocation, frame) catch {
-    error => raise EmissionFailed(cause=error)
-  }
-  {
-    target_vcode: function.summary(),
-    allocated_vcode: function.summary() + allocation.summary(),
-    object,
-  }
+  let renderings : Ref[(String, String)] = { val: ("", ""), }
+  let (object, _) = CompilationSession::new().compile_selected(
+    selected,
+    on_diagnostics=Some(fn(target_vcode, allocated_vcode) {
+      renderings.val = (target_vcode, allocated_vcode)
+    }),
+  )
+  { target_vcode: renderings.val.0, allocated_vcode: renderings.val.1, object, }
 }
 
 ///|

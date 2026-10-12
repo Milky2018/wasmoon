@@ -160,6 +160,7 @@ fn compile_wasm_body_x64_target(
   context_layout? : VMContextLayout = vmcontext_layout(),
   function_index? : Int = -1,
   record_metrics? : Bool = false,
+  on_diagnostics? : ((String, String) -> Unit)? = None,
   compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
 ) -> X64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
@@ -228,11 +229,13 @@ fn compile_wasm_body_x64_target(
           selected,
           on_event=observe,
           verify_allocation=compiler_validation(),
+          on_diagnostics~,
         )
       None =>
         compilation_session.compile_selected(
           selected,
           verify_allocation=compiler_validation(),
+          on_diagnostics~,
         )
     }
   } catch {
@@ -251,6 +254,7 @@ fn compile_wasm_body_aarch64_target(
   context_layout? : VMContextLayout = vmcontext_layout(),
   function_index? : Int = -1,
   record_metrics? : Bool = false,
+  on_diagnostics? : ((String, String) -> Unit)? = None,
   compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
 ) -> AArch64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
@@ -319,11 +323,13 @@ fn compile_wasm_body_aarch64_target(
           selected,
           on_event=observe,
           verify_allocation=compiler_validation(),
+          on_diagnostics~,
         )
       None =>
         compilation_session.compile_selected(
           selected,
           verify_allocation=compiler_validation(),
+          on_diagnostics~,
         )
     }
   } catch {
@@ -334,87 +340,53 @@ fn compile_wasm_body_aarch64_target(
 }
 
 ///|
+/// Inspect Wasm MilkIR through the production compiler. Legacy layout and the
+/// unknown owner index remain defaults for existing standalone callers; module
+/// diagnostics should use a shaped NativeCompiler and the absolute function index.
 pub fn compile_wasm_body_diagnostics_for_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   target : NativeTarget,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
+  context_shape? : ContextShape = Legacy,
+  function_index? : Int = -1,
 ) -> JitPipelineDiagnostics raise JitPipelineError {
-  let environment = wasmoon_native_environment(
-    use_subtype_indirect_check,
-    canonical_type_indices,
-    vmcontext_layout(),
-  )
-  let signature = @milkir_native.function_signature(function, environment_parameters=[
-    (0, Ptr64),
-  ])
-  if target is X64 {
-    let context = wasm_x64_context(environment)
-    let session = @x64_target.DirectLoweringSession::new(
-      function.name,
-      Internal,
-      signature.params,
-      signature.results,
-      context,
-    ) catch {
-      error => raise X64LoweringFailed(cause=error)
-    }
-    @wasm_native.lower_to_sink(
-      function,
-      validation_context,
-      environment.wasm,
-      session.sink(),
-      call_abi=wasmoon_call_abi(environment, -1),
-    ) catch {
-      error => raise NativeLoweringFailed(cause=error)
-    }
-    let selected = session.finish_selected() catch {
-      error => raise X64LoweringFailed(cause=error)
-    }
-    let diagnostics = @x64_target.diagnose_selected(selected) catch {
-      error => raise X64CompilationFailed(cause=error)
-    }
-    return {
-      target_vcode: diagnostics.target_vcode,
-      allocated_vcode: diagnostics.allocated_vcode,
-      code_object: code_object_diagnostic_text(diagnostics.object),
-      machine_code: diagnostics.object
-      .code()
-      .map(byte => @types.to_hex_byte(byte.to_int()))
-      .join(" "),
-    }
-  }
-  let context = wasm_aarch64_context(environment)
-  let session = @aarch64_target.DirectLoweringSession::new(
-    function.name,
-    Internal,
-    signature.params,
-    signature.results,
-    context,
-  ) catch {
-    error => raise AArch64LoweringFailed(cause=error)
-  }
-  @wasm_native.lower_to_sink(
+  NativeCompiler::new(target, context_shape~).diagnose_wasm_body(
     function,
     validation_context,
-    environment.wasm,
-    session.sink(),
-    call_abi=wasmoon_call_abi(environment, -1),
-  ) catch {
-    error => raise NativeLoweringFailed(cause=error)
-  }
-  let selected = session.finish_selected() catch {
-    error => raise AArch64LoweringFailed(cause=error)
-  }
-  let diagnostics = @aarch64_target.diagnose_selected(selected) catch {
-    error => raise AArch64CompilationFailed(cause=error)
-  }
+    function_index~,
+    use_subtype_indirect_check~,
+    canonical_type_indices~,
+  )
+}
+
+///|
+/// Observe the production pipeline with this compiler's target and context layout.
+pub fn NativeCompiler::diagnose_wasm_body(
+  self : NativeCompiler,
+  function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
+  function_index~ : Int,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> JitPipelineDiagnostics raise JitPipelineError {
+  let renderings : Ref[(String, String)] = { val: ("", ""), }
+  let (object, _) = self.compile_wasm_body(
+    function,
+    validation_context,
+    function_index~,
+    use_subtype_indirect_check~,
+    canonical_type_indices~,
+    on_diagnostics=Some(fn(target_vcode, allocated_vcode) {
+      renderings.val = (target_vcode, allocated_vcode)
+    }),
+  )
   {
-    target_vcode: diagnostics.target_vcode,
-    allocated_vcode: diagnostics.allocated_vcode,
-    code_object: code_object_diagnostic_text(diagnostics.object),
-    machine_code: diagnostics.object
+    target_vcode: renderings.val.0,
+    allocated_vcode: renderings.val.1,
+    code_object: code_object_diagnostic_text(object),
+    machine_code: object
     .code()
     .map(byte => @types.to_hex_byte(byte.to_int()))
     .join(" "),

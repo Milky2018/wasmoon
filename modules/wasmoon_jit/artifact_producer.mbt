@@ -296,6 +296,36 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
   if function_index < 0 {
     raise InvalidFunctionIndex(index=function_index)
   }
+  let (object, frame_size) = self.compile_wasm_body(
+    function,
+    validation_context,
+    function_index~,
+    use_subtype_indirect_check~,
+    canonical_type_indices~,
+    record_metrics=@perf.enabled(),
+  )
+  let packaging_tick = detail_metrics_tick(@perf.enabled())
+  let result = artifact_function_from_code_object(
+    object,
+    frame_size~,
+    function_index~,
+    signature~,
+  )
+  record_compile_subphase("artifact_packaging", packaging_tick)
+  result
+}
+
+///|
+fn NativeCompiler::compile_wasm_body(
+  self : NativeCompiler,
+  function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
+  function_index~ : Int,
+  use_subtype_indirect_check~ : Bool,
+  canonical_type_indices~ : Array[Int],
+  record_metrics? : Bool = false,
+  on_diagnostics? : ((String, String) -> Unit)? = None,
+) -> (@code_object.UnlinkedCodeObject, Int) raise JitPipelineError {
   match self.target {
     AArch64 => {
       let compiled = compile_wasm_body_aarch64_target(
@@ -303,20 +333,13 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         validation_context,
         use_subtype_indirect_check,
         canonical_type_indices,
-        record_metrics=@perf.enabled(),
+        record_metrics~,
         function_index~,
         context_layout=self.context_layout,
         compilation_session=self.aarch64.unwrap(),
+        on_diagnostics~,
       )
-      let packaging_tick = detail_metrics_tick(@perf.enabled())
-      let result = artifact_function_from_code_object(
-        compiled.object,
-        frame_size=compiled.frame_size,
-        function_index~,
-        signature~,
-      )
-      record_compile_subphase("artifact_packaging", packaging_tick)
-      result
+      (compiled.object, compiled.frame_size)
     }
     X64 => {
       let compiled = compile_wasm_body_x64_target(
@@ -324,20 +347,13 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
         validation_context,
         use_subtype_indirect_check,
         canonical_type_indices,
-        record_metrics=@perf.enabled(),
+        record_metrics~,
         function_index~,
         context_layout=self.context_layout,
         compilation_session=self.x64.unwrap(),
+        on_diagnostics~,
       )
-      let packaging_tick = detail_metrics_tick(@perf.enabled())
-      let result = artifact_function_from_code_object(
-        compiled.object,
-        frame_size=compiled.frame_size,
-        function_index~,
-        signature~,
-      )
-      record_compile_subphase("artifact_packaging", packaging_tick)
-      result
+      (compiled.object, compiled.frame_size)
     }
   }
 }

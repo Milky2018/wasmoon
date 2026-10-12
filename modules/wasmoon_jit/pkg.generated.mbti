@@ -59,7 +59,7 @@ pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int6
 
 pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int], context_shape? : @layout.ContextShape) -> @artifact.FunctionCode raise JitPipelineError
 
-pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
+pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int], context_shape? : @layout.ContextShape, function_index? : Int) -> JitPipelineDiagnostics raise JitPipelineError
 
 pub fn context_shape(@types.Module) -> @layout.ContextShape
 
@@ -579,6 +579,7 @@ pub struct NativeCompiler {
   // private fields
 }
 pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
+pub fn NativeCompiler::diagnose_wasm_body(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
 pub fn NativeCompiler::new(NativeTarget, context_shape? : @layout.ContextShape) -> Self
 
 type NativeFiber
