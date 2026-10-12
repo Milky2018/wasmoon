@@ -31,11 +31,7 @@ pub fn run_explore(
     html_output,
     debug,
     target_name,
-    fn(function, validation_context, target) raise {
-      @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
-        function, validation_context, target,
-      )
-    },
+    fn(compile) raise { compile() },
   )
 }
 
@@ -48,11 +44,7 @@ fn run_explore_with_compiler(
   html_output : Bool,
   debug : Bool,
   target_name : String,
-  compile : (
-    @milkir.Function,
-    @wasm_milkir.WasmValidationContext,
-    @wasmoon_jit.NativeTarget,
-  ) -> @wasmoon_jit.JitPipelineDiagnostics raise,
+  compile : (() -> @wasmoon_jit.JitPipelineDiagnostics raise) -> @wasmoon_jit.JitPipelineDiagnostics raise,
 ) -> Int {
   debug |> ignore
   // Parse stages - empty means show all
@@ -115,10 +107,29 @@ fn run_explore_with_compiler(
     println("Exploring compilation: \{wasm_path}")
     println("=".repeat(60))
   }
+  let context_shape = @wasmoon_jit.context_shape(mod_)
   let translation_context = @wasm_frontend.translation_context_from_module(
     mod_,
-    @wasmoon.wasm_frontend_embedding_environment(),
+    @wasmoon.wasm_frontend_embedding_environment(context_shape~),
   )
+  let target = match target_name {
+    "x64" => @wasmoon_jit.NativeTarget::X64
+    "aarch64" => AArch64
+    _ =>
+      @wasmoon_jit.host_native_target() catch {
+        err => {
+          @logger.error("unsupported host target: \{err}")
+          return 1
+        }
+      }
+  }
+  let compiler = @wasmoon_jit.NativeCompiler::new(target, context_shape~)
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
+  let use_subtype_indirect_check = module_indirect_subtype_check_reason(mod_)
+    is Some(_)
   let wasm_validation_context = @wasm_frontend.wasm_validation_context(
     translation_context,
   )
@@ -175,53 +186,30 @@ fn run_explore_with_compiler(
       }
     }
 
-    let env = @wasmoon.wasm_frontend_embedding_environment()
-    let milk_result = @wasm_frontend.translate_function(
-      env,
-      mod_,
-      local_idx,
-      name=func_name,
-    ) catch {
-      err => {
-        failed = true
-        let text = "Compiler infrastructure error: \{Repr(err)}"
-        @logger.error(text)
-        if html_output {
-          compiled_funcs.push({
-            name: func_name,
-            type_str: format_func_type(func_type),
-            source: source_text,
-            ir: text,
-            ir_opt: text,
-            vcode: text,
-            regalloc: text,
-            code_object: text,
-            mc: text,
-          })
-        }
-        continue
-      }
-    }
+    let code = mod_.codes[local_idx]
+    let milk_result = @wasm_frontend.translate_function_body(
+      translation_context,
+      get_func_name(mod_, actual_func_idx),
+      func_type,
+      code.locals,
+      code.body,
+    )
     let ir_text = milk_result.print()
     @optimize.optimize_with_level(
       milk_result,
-      @optimize.OptLevel::from_int(opt_level),
+      @optimize.OptLevel::from_int(normalize_opt_level(opt_level)),
     )
     |> ignore
     let ir_optimized = milk_result.print()
-    let target = match target_name {
-      "x64" => @wasmoon_jit.NativeTarget::X64
-      "aarch64" => AArch64
-      _ =>
-        @wasmoon_jit.host_native_target() catch {
-          err => {
-            failed = true
-            @logger.error("unsupported host target: \{err}")
-            continue
-          }
-        }
-    }
-    let diagnostics = compile(milk_result, wasm_validation_context, target) catch {
+    let diagnostics = compile(fn() raise {
+      compiler.diagnose_wasm_body(
+        milk_result,
+        wasm_validation_context,
+        function_index=actual_func_idx,
+        use_subtype_indirect_check~,
+        canonical_type_indices~,
+      )
+    }) catch {
       err => {
         failed = true
         let text = "Native pipeline error: \{err}"

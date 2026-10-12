@@ -72,22 +72,29 @@ test "JIT diagnostics return invalid Wasm dialect errors" {
   @wasm_milkir.get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
   builder.return_([])
-  try
-    @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
-      builder.get_function(),
-      @wasm_milkir.WasmValidationContext::empty(),
-      X64,
-    )
-  catch {
-    err =>
-      inspect(
-        err,
-        content=(
-          #|NativeLoweringFailed(cause=InvalidMilkIR(message="UnverifiableInstruction(message=\"unknown Wasm MilkIR extension opcode 'typo'\")"))
-        ),
+  let function = builder.get_function()
+  let context = @wasm_milkir.WasmValidationContext::empty()
+  for target in [@wasmoon_jit.NativeTarget::X64, AArch64] {
+    let compiler = @wasmoon_jit.NativeCompiler::new(target)
+    let production_error = try
+      compiler.compile_wasm_body_artifact_function(
+        function,
+        context,
+        function_index=0,
+        signature=@native.Signature::new([], []),
       )
-  } noraise {
-    _ => fail("expected JIT integration to return a pipeline error")
+    catch {
+      err => err.to_string()
+    } noraise {
+      _ =>
+        fail("expected production compilation to reject invalid Wasm dialect")
+    }
+    assert_true(production_error.contains("NativeLoweringFailed"))
+    try compiler.diagnose_wasm_body(function, context, function_index=0) catch {
+      err => assert_eq(err.to_string(), production_error)
+    } noraise {
+      _ => fail("expected diagnostics to reject invalid Wasm dialect")
+    }
   }
 }
 
