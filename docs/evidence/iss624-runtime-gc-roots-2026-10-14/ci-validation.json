@@ -1,0 +1,203 @@
+{
+  "head_revision": "4cfcc9cfc2760e1b194b5ee51f837d1e7d013207",
+  "head_tree": "77cd5d25d11e6d021e629e7a23fff723a6f5ff19",
+  "base_revision": "02d5d093c8c779f62409497c10c0a56e9e72678e",
+  "ci_checkout_revision": "3208d86550b6b175827b17ca773528ea40ddeea0",
+  "ci_checkout_parents": [
+    "02d5d093c8c779f62409497c10c0a56e9e72678e",
+    "4cfcc9cfc2760e1b194b5ee51f837d1e7d013207"
+  ],
+  "ci_checkout_tree_matches_head": true,
+  "run_id": 38565486199,
+  "run_url": "https://github.com/Milky2018/wasmoon/actions/runs/38565486199",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "Windows AMD64 (msvc)",
+      "id": 115857495201,
+      "conclusion": "success"
+    },
+    {
+      "name": "Linux AMD64",
+      "id": 115857495204,
+      "conclusion": "success"
+    },
+    {
+      "name": "Windows AMD64 (clang)",
+      "id": 115857495275,
+      "conclusion": "success"
+    },
+    {
+      "name": "macOS ARM64",
+      "id": 115857495311,
+      "conclusion": "success"
+    },
+    {
+      "name": "Linux ASan and UBSan",
+      "id": 115857495673,
+      "conclusion": "success"
+    }
+  ],
+  "linux_sanitizers": {
+    "version": "0.16.0",
+    "source_revision": "3208d86550b6b175827b17ca773528ea40ddeea0",
+    "source_dirty": false,
+    "binary_sha256": "5084491532c0a73a4f539287b9da7e2e119ddabfcce2a4813c0ce91f76ad493f",
+    "tests": "passed",
+    "event_loop": "passed",
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "binary": "/home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+    "instrumentation": [
+      "address",
+      "undefined"
+    ],
+    "allocator": "system",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ],
+    "tests_count": 98,
+    "leak_detection": "passed with Linux ASan-integrated LSan defaults and no leak suppressions or detect_leaks override",
+    "leak_detector_symbols": "present in symbols.log",
+    "previous_same_gate_detected_leaks": {
+      "head": "b3a6fbdee1e3fd421ec66a75359b8289d2257c70",
+      "run_id": 38564085593,
+      "bytes": 291808,
+      "allocations": 1520
+    },
+    "tests_log_sha256": "d934786054c3214fbe615e1ce3ca74ce94168c3799f349b8a19ed64d393e7b25"
+  },
+  "windows": {
+    "clang": {
+      "strict_c_and_moon_warnings": "passed",
+      "native_tests": {
+        "inventory": 2638,
+        "executed": 2638,
+        "failed": 0
+      },
+      "shared_lifecycle_fixture_tests": 54,
+      "results_sha256": "bbb6fc2b8e4cf0b28dd216de1d095648d30f25b0f56ed3d441d42780cd217039",
+      "corpus": {
+        "windows-misc": {
+          "counts": {
+            "pass": 692,
+            "script_only": 72,
+            "fail": 0,
+            "timeout": 0,
+            "unsupported": 0,
+            "deferred": 0,
+            "harness_error": 0
+          },
+          "engine_sha256": "a0ae7360def9f1563b182ee7ecd846bbca4f5caf018af7a3ae682b6fd9f59067",
+          "summary_sha256": "d927ab88f39cc3da81ee2e0213eb05a92cfa2595bc53dbdd4af731685366b14d"
+        },
+        "windows-p1-rights": {
+          "counts": {
+            "pass": 116,
+            "fail": 0,
+            "timeout": 0,
+            "unsupported": 0,
+            "not_applicable": 2,
+            "harness_error": 0
+          },
+          "engine_sha256": "a0ae7360def9f1563b182ee7ecd846bbca4f5caf018af7a3ae682b6fd9f59067",
+          "summary_sha256": "4bcf6952097346aa318e9d2fbfb85a645c9897eaaf38739ad30023b2d384efd0"
+        },
+        "windows-p1-smoke": {
+          "counts": {
+            "pass": 4,
+            "fail": 0,
+            "timeout": 0,
+            "unsupported": 0,
+            "not_applicable": 0,
+            "harness_error": 0
+          },
+          "engine_sha256": "a0ae7360def9f1563b182ee7ecd846bbca4f5caf018af7a3ae682b6fd9f59067",
+          "summary_sha256": "702099a540320f708c735892afb9ba03e8f6cecb537230496e6a378bdf64fb8e"
+        }
+      }
+    },
+    "msvc": {
+      "strict_c_and_moon_warnings": "passed",
+      "native_tests": {
+        "inventory": 2638,
+        "executed": 2638,
+        "failed": 0
+      },
+      "shared_lifecycle_fixture_tests": 54,
+      "results_sha256": "6555215da748b62e0ba9aa4d898b8e89c5c39bd95edab2e52921794267557fc2",
+      "corpus": {
+        "windows-misc": {
+          "counts": {
+            "pass": 692,
+            "script_only": 72,
+            "fail": 0,
+            "timeout": 0,
+            "unsupported": 0,
+            "deferred": 0,
+            "harness_error": 0
+          },
+          "engine_sha256": "bebdc11218cf2c5dc4d5053df2c6d1d01bd7fb4d03d3f64d66c758e25661c345",
+          "summary_sha256": "03741e7c85dabc4445ab8e24aa5f19a816bafbda87d933a8062f429664c493dd"
+        },
+        "windows-p1-rights": {
+          "counts": {
+            "pass": 116,
+            "fail": 0,
+            "timeout": 0,
+            "unsupported": 0,
+            "not_applicable": 2,
+            "harness_error": 0
+          },
+          "engine_sha256": "bebdc11218cf2c5dc4d5053df2c6d1d01bd7fb4d03d3f64d66c758e25661c345",
+          "summary_sha256": "00b45978f4028fe3d866bb7e5f7c993471af9d69b8bdcc509e1d632db419a42a"
+        },
+        "windows-p1-smoke": {
+          "counts": {
+            "pass": 4,
+            "fail": 0,
+            "timeout": 0,
+            "unsupported": 0,
+            "not_applicable": 0,
+            "harness_error": 0
+          },
+          "engine_sha256": "bebdc11218cf2c5dc4d5053df2c6d1d01bd7fb4d03d3f64d66c758e25661c345",
+          "summary_sha256": "9d4eb61f127d433e7697297ad3c2b333e9e57dbe4eb8cdc74d75042fef08988a"
+        }
+      }
+    }
+  },
+  "artifacts": [
+    {
+      "digest": "sha256:4bb2ece5c3c0baa39cd311a1ada719e73b8627628dd8cf28021fbf252872038f",
+      "id": 11896657595,
+      "name": "windows-clang-native-evidence",
+      "size_in_bytes": 4630945
+    },
+    {
+      "digest": "sha256:338d71006eb10497d384ac16b002a63fe4cf3c7563d949cc68d075478b8dcf6b",
+      "id": 11896576627,
+      "name": "windows-msvc-native-evidence",
+      "size_in_bytes": 4628836
+    },
+    {
+      "digest": "sha256:aceec8f7cc4d862aaee087708e31077243b069442e8f4892983dfc8b48950673",
+      "id": 11895877946,
+      "name": "wasmtime-misc-ubuntu-latest",
+      "size_in_bytes": 453322
+    },
+    {
+      "digest": "sha256:9152ca1b9c88689d2835d253754bb41005cb4522ad50b45324886df2aa1d90fa",
+      "id": 11895239853,
+      "name": "wasi03-macos-latest",
+      "size_in_bytes": 79017
+    },
+    {
+      "digest": "sha256:4e20c868b0e06365f5ed3a276e55d4016c1764055d4da23892c12f7a8a22301b",
+      "id": 11894182347,
+      "name": "sanitizer-evidence",
+      "size_in_bytes": 398751
+    }
+  ]
+}

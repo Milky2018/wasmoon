@@ -1,9 +1,9 @@
 # ISS-624: Runtime roots and operational reclamation
 
 This review and fix starts from `02d5d093c8c779f62409497c10c0a56e9e72678e`.
-Results below describe the uncommitted implementation on
+The initial local results describe the then-uncommitted implementation on
 `milky/reclaim-runtime-gc-roots`, on macOS ARM64 with MoonBit stable
-0.1.20261012. They are local results, not cross-platform CI acceptance.
+0.1.20261012. The initial record is local; the exact-head CI acceptance is recorded below.
 
 The original [independent reproduction](../runtime-quality-2026-10-14/README.md)
 remains unchanged. Its interpreter loop externalizes and discards 1000 structs.
@@ -83,9 +83,9 @@ pressure. Component stable-0.2 and async-0.3 run through the pinned snapshot.
 The recorded sanitizer closure uses the system allocator and instruments C
 stubs and the fixture package. It excludes MoonBit runtime objects and emitted
 JIT machine code. macOS ASan/UBSan success does **not** establish Linux LSan
-acceptance. The local Docker daemon is unavailable. Linux leak detection and
-Windows Clang/MSVC acceptance therefore remain pending CI, and ISS-624 remains
-in progress until that evidence is obtained.
+acceptance. The local Docker daemon was unavailable. Linux leak detection and
+Windows Clang/MSVC acceptance were therefore deferred to CI; the completed
+results below close that acceptance gap.
 
 See `validation.json` for commands, counts, source identity, and binary hashes.
 
@@ -133,3 +133,38 @@ it must not be removed merely to eliminate the leak.
 After this correction, the local strict native suite passes 2638/2638 tests and
 macOS ASan/UBSan passes its fixtures and instrumentation controls. Linux LSan
 and Windows acceptance require the corrected-head CI rerun.
+
+
+## Completed cross-platform acceptance
+
+[Check and Test 38565486199](https://github.com/Milky2018/wasmoon/actions/runs/38565486199)
+passes all five jobs for head `4cfcc9cfc2760e1b194b5ee51f837d1e7d013207`:
+Linux AMD64, macOS ARM64, Windows AMD64 Clang, Windows AMD64 MSVC, and Linux
+ASan/UBSan. GitHub checked out the synthetic PR merge `3208d865`, whose parents
+are the recorded base and head and whose source tree equals the head tree.
+
+Linux's instrumented system-allocator fixture process passes 98/98 tests without
+an ASan, UBSan, or LSan failure. LSan symbols are present in the executable;
+leak detection uses Linux's ASan-integrated defaults without suppressions or a
+`detect_leaks` override. The preceding run's actual leak report is the observed
+leak-detection control. The two intentional ASan failures still prove generated
+C and native-stub instrumentation. The event-loop and resolver lifecycle checks
+also pass. Runtime-object and dynamically emitted JIT instrumentation exclusions
+remain as documented above; this does not claim every possible leak is absent.
+
+Both Windows compilers pass strict C/MoonBit warning checks and execute all 2638
+native tests. The shared lifecycle/GC package passes 54/54 on each compiler.
+Both pass Core WAST, all three Component Model suites, WASI Preview 3, HTTP,
+independent package installation, and misc/P1 acceptance. Each Windows misc
+result has 692 passes and 72 script-only cases; the capability P1 profile has
+116 passes and two documented not-applicable cases, with zero failures,
+timeouts, unsupported cases, or harness errors. Linux and macOS also pass their
+complete native and external gates.
+
+See [ci-validation.json](ci-validation.json) for job IDs, binary hashes, artifact
+digests, counts, and checkout identity. The initial `validation.json` remains
+historical local evidence rather than being overwritten with a later source
+identity. ISS-624 is closed for the inventory above. Native identity tombstones
+and aggregate resource admission remain ISS-627; the raw public host-reference
+contract and protected handles remain ISS-626. These boundaries do not reclassify
+unreachable payloads as required lifetime roots.
