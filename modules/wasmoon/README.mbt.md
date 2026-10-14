@@ -307,6 +307,24 @@ versions, coverage, remaining contract differences, and the new performance base
 
 ## Library Usage
 
+### API changes for the next minor release
+
+Main removes the migration-era `RuntimeAssembly`, `RuntimeComponent`,
+`CompilerInfrastructureAssembly`, and `WasmCompilerPipelineError` types, plus
+`runtime_assembly`, `compiler_infrastructure_assembly`, and
+`plan_wasm_function_with_compiler_infra`. These were exported in earlier 0.x
+releases; the removal is a source-breaking change for the next minor release,
+not a 0.16.x patch. External callers must migrate before upgrading.
+
+Use the [architecture documentation](../../docs/architecture.md) and package
+imports for ownership information. For compilation, create a translation
+context through `wasm_milkir/frontend` with
+`wasmoon.wasm_frontend_embedding_environment`, then use
+`wasmoon_jit.NativeCompiler::compile_wasm_body_artifact_function`, as the
+production core and component compilers do. This preserves explicit target,
+context shape, validation, and structured compiler errors rather than routing
+through a separate probe pipeline. The embedding-environment API is unchanged.
+
 ### JIT GC Setup
 
 Call `@jit.gc_setup(...)` with the VMContext and function-table data used by typed function references:

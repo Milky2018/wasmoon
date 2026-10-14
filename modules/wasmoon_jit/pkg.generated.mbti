@@ -355,63 +355,6 @@ pub fn CallCounter::reset(Self, Int) -> Unit
 pub fn CallCounter::total(Self) -> Int
 pub fn CallCounter::unique_functions(Self) -> Int
 
-pub(all) enum CompilationDecision {
-  Interpret
-  CompileAndExecute(CompilationMode)
-  ExecuteCompiled
-}
-pub fn CompilationDecision::output(Self, &Logger) -> Unit
-pub fn CompilationDecision::to_string(Self) -> String
-pub impl Show for CompilationDecision
-
-pub(all) enum CompilationMode {
-  Interpret
-  Baseline
-  Optimized
-}
-pub fn CompilationMode::output(Self, &Logger) -> Unit
-pub fn CompilationMode::to_string(Self) -> String
-pub impl Show for CompilationMode
-
-pub(all) struct CompilationQueue {
-  requests : Array[CompilationRequest]
-  max_size : Int
-}
-pub fn CompilationQueue::CompilationQueue(Int) -> Self
-pub fn CompilationQueue::clear(Self) -> Unit
-pub fn CompilationQueue::contains(Self, Int) -> Bool
-pub fn CompilationQueue::dequeue(Self) -> CompilationRequest?
-pub fn CompilationQueue::enqueue(Self, CompilationRequest) -> Bool
-pub fn CompilationQueue::is_empty(Self) -> Bool
-pub fn CompilationQueue::length(Self) -> Int
-
-pub(all) struct CompilationRequest {
-  func_idx : Int
-  mode : CompilationMode
-  priority : Int
-}
-pub fn CompilationRequest::CompilationRequest(Int, CompilationMode) -> Self
-pub fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
-
-pub(all) struct CompilationStrategy {
-  profiler : Profiler
-  queue : CompilationQueue
-  config : TieredConfig
-  mut decisions_interpret : Int
-  mut decisions_compile : Int
-  mut decisions_compiled : Int
-}
-pub fn CompilationStrategy::CompilationStrategy(TieredConfig) -> Self
-pub fn CompilationStrategy::decide(Self, Int) -> CompilationDecision
-pub fn CompilationStrategy::is_compiled(Self, Int) -> Bool
-pub fn CompilationStrategy::mark_compiled(Self, Int) -> Unit
-pub fn CompilationStrategy::next_to_compile(Self) -> CompilationRequest?
-pub fn CompilationStrategy::output(Self, &Logger) -> Unit
-pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
-pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
-pub fn CompilationStrategy::to_string(Self) -> String
-pub impl Show for CompilationStrategy
-
 pub type DWARFBuilder
 pub fn DWARFBuilder::DWARFBuilder() -> Self
 pub fn DWARFBuilder::add_function(Self, String, Int64, Int, Int) -> Unit
@@ -745,16 +688,6 @@ pub fn RuntimeSymbolResolver::resolve(Self, String) -> Int64?
 pub fn RuntimeSymbolResolver::resolve_symbol(Self, String) -> RuntimeSymbol?
 pub fn RuntimeSymbolResolver::to_repr(Self) -> @debug.Repr
 pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> Self
-
-pub(all) struct TieredConfig {
-  baseline_threshold : Int
-  optimize_threshold : Int
-  synchronous : Bool
-  max_concurrent : Int
-}
-pub fn TieredConfig::default() -> Self
-pub fn TieredConfig::deferred() -> Self
-pub fn TieredConfig::eager() -> Self
 
 pub struct TrapDetails {
   signal : Int
