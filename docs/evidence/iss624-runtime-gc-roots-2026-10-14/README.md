@@ -109,3 +109,27 @@ Address, leak, and all other undefined-behavior instrumentation remain enabled
 in root preparation, graph traversal, sweep, and owner retirement. The original
 Linux diagnostic remains evidence of why that adapter is needed; it is not a
 successful leak-detection result.
+
+
+## CI diagnosis: borrowed visitor ownership
+
+The second head `b3a6fbdee1e3fd421ec66a75359b8289d2257c70` ran in
+[Check and Test 38564085593](https://github.com/Milky2018/wasmoon/actions/runs/38564085593).
+Linux passed the nominal callback adapter and reached LeakSanitizer. The combined
+fixture process reported 291808 leaked bytes in 1520 allocations. Isolated runs
+identified leaks in all 18 new root fixtures, including a direct 32-byte visitor
+closure leak and indirect retention of its captured Store. Logical GC assertions
+alone therefore did not establish correct native ownership.
+
+Generated C establishes that the callback borrows its closure environment and
+input fixed array, while returning an owned fixed array. The stub incorrectly
+incremented the closure for every invocation without balancing that increment,
+and never released its allocated input array. The adapter now retains the
+closure only across the call, releases that temporary retain and its input array,
+and transfers the owned result to the existing caller release. The temporary
+retain protects callbacks that clear their registration or close their Store;
+it must not be removed merely to eliminate the leak.
+
+After this correction, the local strict native suite passes 2638/2638 tests and
+macOS ASan/UBSan passes its fixtures and instrumentation controls. Linux LSan
+and Windows acceptance require the corrected-head CI rerun.

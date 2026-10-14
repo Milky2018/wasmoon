@@ -378,7 +378,13 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_heap_bind_root_visitor(GcHeap *heap,
 static WASMOON_NO_FUNCTION_SANITIZE int64_t *call_gc_root_visitor(
     GcRootVisitor callback, void *closure, int32_t phase, int64_t *roots
 ) {
-    return callback(closure, phase, roots);
+    // MoonBit callbacks borrow the closure and input, and return an owned
+    // result. Keep the closure alive if the callback clears its registration.
+    moonbit_incref(closure);
+    int64_t *result = callback(closure, phase, roots);
+    moonbit_decref(closure);
+    moonbit_decref(roots);
+    return result;
 }
 
 static int gc_heap_abort_roots(GcHeap *heap) {
@@ -389,7 +395,6 @@ static int gc_heap_abort_roots(GcHeap *heap) {
     exception_arena_reset_marks(heap->exception_arena);
     continuation_arena_reset_marks(heap->continuation_arena);
     if (heap->root_visitor) {
-        moonbit_incref(heap->root_visitor_data);
         int64_t *result = call_gc_root_visitor(heap->root_visitor, heap->root_visitor_data,
             2, moonbit_make_int64_array(0, 0));
         moonbit_decref(result);
@@ -434,8 +439,7 @@ static int gc_heap_prepare_roots(GcHeap *heap, const int64_t *roots, int32_t cou
     exception_arena_copy_marked(heap->exception_arena, input + at);
     at += exception_arena_marked_count(heap->exception_arena);
     continuation_arena_copy_marked(heap->continuation_arena, input + at);
-    moonbit_incref(heap->root_visitor_data);
-    // The MoonBit trampoline consumes both closure and input, and transfers its result.
+    // The adapter releases its input and transfers the owned result.
     int64_t *expanded = call_gc_root_visitor(heap->root_visitor, heap->root_visitor_data, 0, input);
     int32_t expanded_count = Moonbit_array_length(expanded);
     int ok = !(expanded_count == 1 && expanded[0] == -2);
@@ -448,7 +452,6 @@ static void gc_heap_finish_roots(GcHeap *heap) {
     if (heap->root_visitor) {
         exception_arena_sweep(heap->exception_arena, heap);
         continuation_arena_sweep(heap->continuation_arena);
-        moonbit_incref(heap->root_visitor_data);
         int64_t *result = call_gc_root_visitor(heap->root_visitor, heap->root_visitor_data, 1,
             moonbit_make_int64_array(0, 0));
         moonbit_decref(result);
