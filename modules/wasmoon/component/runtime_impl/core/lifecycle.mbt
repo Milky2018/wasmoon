@@ -1,6 +1,6 @@
 ///|
 struct CoreExecutionLifecycle {
-  active_leases : Ref[Int]
+  active_leases : Ref[Int32]
   closing : Ref[Bool]
   close_when_idle : Ref[(() -> Unit)?]
 }
@@ -97,7 +97,7 @@ fn CoreExecutionLifecycle::finish_outcome(
 pub fn[T] CoreExecutionLifecycle::with_lease(
   self : CoreExecutionLifecycle,
   operation : () -> T raise ComponentRuntimeError,
-  rollback? : () -> Unit = fn() {  },
+  rollback~ : () -> Unit = fn() {  },
 ) -> T raise ComponentRuntimeError {
   self.enter()
   let cancellation_cleanup_armed = [true]

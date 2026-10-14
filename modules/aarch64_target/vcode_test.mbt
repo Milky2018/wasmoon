@@ -422,7 +422,7 @@ test "AArch64 verifier rejects an out-of-range vector shuffle lane" {
     [V128, V128],
   )
   let entry = builder.entry_block()
-  let mask : FixedArray[Int] = [
+  let mask : FixedArray[Int32] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 32,
   ]
   builder.append_body(

@@ -21,7 +21,7 @@ pub enum WastCommand {
   AssertUnlinkable(WastModuleSource, String)
   Register(String, String?)
   Action(WastAction)
-  Thread(String, String?, Array[(WastCommand, Int)])
+  Thread(String, String?, Array[(WastCommand, Int32)])
   Wait(String)
 } derive(Debug)
 
@@ -44,7 +44,7 @@ pub enum WastAction {
 ///|
 /// WAST value (typed constant)
 pub enum WastValue {
-  I32(Int)
+  I32(Int32)
   I64(Int64)
   F32(Float)
   F64(Double)
@@ -56,11 +56,11 @@ pub enum WastValue {
   // SIMD lane patterns for NaN matching
   V128Pattern(Array[WastLaneValue]) // For lane-by-lane comparison with NaN patterns
   RefNull(String)
-  RefExtern(Int)
+  RefExtern(Int32)
   RefExternAny // (ref.extern) without number - matches any non-null externref
-  RefHost(Int) // (ref.host <idx>) - host reference for testing
+  RefHost(Int32) // (ref.host <idx>) - host reference for testing
   RefFunc
-  RefFuncIndex(Int)
+  RefFuncIndex(Int32)
   // GC reference types
   RefArray // (ref.array) - any array reference
   RefStruct // (ref.struct) - any struct reference
@@ -92,5 +92,5 @@ pub enum WastLaneValue {
 ///|
 /// WAST script (collection of commands with line numbers)
 pub struct WastScript {
-  commands : Array[(WastCommand, Int)]
+  commands : Array[(WastCommand, Int32)]
 }

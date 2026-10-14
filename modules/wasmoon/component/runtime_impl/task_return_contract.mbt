@@ -19,7 +19,7 @@ fn install_task_return_contract(
 fn finish_task_children(
   async_state : AsyncState,
   store : @runtime.Store,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   task_id : Int64,
 ) -> TaskStep raise ComponentRuntimeError {
   let task_id = async_state.tasks.resolve(task_id)
@@ -70,7 +70,7 @@ fn discard_task_children(async_state : AsyncState, task_id : Int64) -> Unit {
 fn take_required_task_result(
   async_state : AsyncState,
   store : @runtime.Store,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   task_id : Int64,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   let task_id = async_state.tasks.resolve(task_id)

@@ -2,12 +2,12 @@
 /// Opaque handles used only while one MilkIR function is streamed into a
 /// target selector. They do not own an SSA graph.
 pub(all) struct Value {
-  id : Int
+  id : Int32
 } derive(Debug, Eq, Hash)
 
 ///|
 pub(all) struct Block {
-  id : Int
+  id : Int32
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -84,34 +84,42 @@ pub(all) enum Terminator {
 ///|
 pub(all) struct TargetSwitchCase {
   bits : UInt64
-  target : Int
-  arguments : Array[Int]
+  target : Int32
+  arguments : Array[Int32]
 }
 
 ///|
 pub(all) struct TargetTerminatorMetadata {
   source : @native.SourceLocation?
-  live_gc_roots : Array[Int]
+  live_gc_roots : Array[Int32]
 }
 
 ///|
 pub(all) enum TargetTerminator {
-  Jump(Int, Array[Int])
-  Branch(Int, Int, Array[Int], Int, Array[Int])
-  BranchIntCompare(IntComparison, Int, Int, Int, Array[Int], Int, Array[Int])
+  Jump(Int32, Array[Int32])
+  Branch(Int32, Int32, Array[Int32], Int32, Array[Int32])
+  BranchIntCompare(
+    IntComparison,
+    Int32,
+    Int32,
+    Int32,
+    Array[Int32],
+    Int32,
+    Array[Int32]
+  )
   BranchIntCompareImmediate(
     IntComparison,
-    Int,
+    Int32,
     UInt64,
-    Int,
-    Array[Int],
-    Int,
-    Array[Int]
+    Int32,
+    Array[Int32],
+    Int32,
+    Array[Int32]
   )
-  Switch(Int, Array[TargetSwitchCase], Int, Array[Int])
-  Return(Array[Int])
-  TailCall(@native.NativeCall, Array[Int])
-  NoReturnCall(@native.NativeCall, Array[Int])
+  Switch(Int32, Array[TargetSwitchCase], Int32, Array[Int32])
+  Return(Array[Int32])
+  TailCall(@native.NativeCall, Array[Int32])
+  NoReturnCall(@native.NativeCall, Array[Int32])
   Trap(@native.TrapReason)
 }
 
@@ -122,44 +130,44 @@ pub(all) enum TargetTerminator {
 pub struct TargetSink {
   priv supports_int_compare_immediate : (@native.ValueType, UInt64) -> Bool
   priv folds_unsigned_index_into_memory : Bool
-  priv parameters : () -> Array[Int]
-  priv entry_block : () -> Int
-  priv create_block : (Array[@native.ValueType]) -> (Int, Array[Int])
-  priv create_stack_object : (Int, Int) -> Int
-  priv switch_to_block : (Int) -> Unit
+  priv parameters : () -> Array[Int32]
+  priv entry_block : () -> Int32
+  priv create_block : (Array[@native.ValueType]) -> (Int32, Array[Int32])
+  priv create_stack_object : (Int32, Int32) -> Int32
+  priv switch_to_block : (Int32) -> Unit
   priv emit : (
-    Int,
+    Int32,
     Operation,
-    Array[Int],
+    Array[Int32],
     Array[@native.ValueType],
     @native.SourceLocation?,
-    Array[Int],
+    Array[Int32],
     @native.StackMapMetadata?,
-  ) -> Array[Int]
-  priv terminate : (Int, TargetTerminator, TargetTerminatorMetadata) -> Unit
+  ) -> Array[Int32]
+  priv terminate : (Int32, TargetTerminator, TargetTerminatorMetadata) -> Unit
   priv finish : () -> Unit
 }
 
 ///|
 pub fn TargetSink::new(
-  parameters : () -> Array[Int],
-  entry_block : () -> Int,
-  create_block : (Array[@native.ValueType]) -> (Int, Array[Int]),
-  create_stack_object : (Int, Int) -> Int,
-  switch_to_block : (Int) -> Unit,
+  parameters : () -> Array[Int32],
+  entry_block : () -> Int32,
+  create_block : (Array[@native.ValueType]) -> (Int32, Array[Int32]),
+  create_stack_object : (Int32, Int32) -> Int32,
+  switch_to_block : (Int32) -> Unit,
   emit : (
-    Int,
+    Int32,
     Operation,
-    Array[Int],
+    Array[Int32],
     Array[@native.ValueType],
     @native.SourceLocation?,
-    Array[Int],
+    Array[Int32],
     @native.StackMapMetadata?,
-  ) -> Array[Int],
-  terminate : (Int, TargetTerminator, TargetTerminatorMetadata) -> Unit,
+  ) -> Array[Int32],
+  terminate : (Int32, TargetTerminator, TargetTerminatorMetadata) -> Unit,
   finish : () -> Unit,
-  folds_unsigned_index_into_memory? : Bool = false,
-  supports_int_compare_immediate? : (@native.ValueType, UInt64) -> Bool = fn(
+  folds_unsigned_index_into_memory~ : Bool = false,
+  supports_int_compare_immediate~ : (@native.ValueType, UInt64) -> Bool = fn(
     _,
     _,
   ) {
@@ -206,14 +214,14 @@ pub struct DirectBuilder {
   priv parameter_values : Array[Value]
   priv value_types : Array[@native.ValueType]
   priv integer_constants : Array[Int64?]
-  priv target_values : Array[Int]
+  priv target_values : Array[Int32]
   priv block_parameters : Array[Array[Value]]
-  priv target_blocks : Array[Int]
+  priv target_blocks : Array[Int32]
   priv stack_objects : Array[@native.StackObject]
   priv call_abi : CallAbiElaboration?
-  priv root_scope_capacity : Int
+  priv root_scope_capacity : Int32
   priv mut root_scope_object : @native.StackObject?
-  priv mut next_stack_map_id : Int
+  priv mut next_stack_map_id : Int32
   priv error : Ref[String?]
   priv mut current_block : Block
   priv mut pending_terminator : (Terminator, TerminatorMetadata)?
@@ -222,7 +230,7 @@ pub struct DirectBuilder {
 ///|
 fn DirectBuilder::wrap_target_value(
   self : DirectBuilder,
-  target_value : Int,
+  target_value : Int32,
   ty : @native.ValueType,
 ) -> Value {
   let value : Value = { id: self.value_types.length(), }
@@ -237,7 +245,7 @@ pub fn DirectBuilder::new(
   parameter_types : Array[@native.ValueType],
   sink : TargetSink,
   call_abi? : CallAbiElaboration,
-  root_scope_capacity? : Int = 0,
+  root_scope_capacity~ : Int32 = 0,
 ) -> DirectBuilder {
   let builder = {
     sink,
@@ -315,8 +323,8 @@ fn DirectBuilder::flush_terminator(self : DirectBuilder) -> Unit {
   guard self.pending_terminator is Some((terminator, metadata)) else {
     abort("native lowering block has no terminator")
   }
-  let value_id = fn(value : Value) -> Int { self.target_values[value.id] }
-  let block_id = fn(block : Block) -> Int { self.target_blocks[block.id] }
+  let value_id = fn(value : Value) -> Int32 { self.target_values[value.id] }
+  let block_id = fn(block : Block) -> Int32 { self.target_blocks[block.id] }
   let target_terminator = match terminator {
     Jump(target, arguments) =>
       TargetTerminator::Jump(block_id(target), arguments.map(value_id))
@@ -469,7 +477,7 @@ fn DirectBuilder::hidden_argument_root_count(
   call : @native.NativeCall,
   operands : Array[Value],
   abi : HiddenSafepointAbi,
-) -> Int? {
+) -> Int32? {
   match abi.argument_roots {
     Fixed(count) if count >= 0 => Some(count)
     Fixed(_) => None
@@ -668,8 +676,8 @@ pub fn DirectBuilder::emit_with_metadata(
 ///|
 pub fn DirectBuilder::create_stack_object(
   self : DirectBuilder,
-  size : Int,
-  alignment : Int,
+  size : Int32,
+  alignment : Int32,
 ) -> @native.StackObject {
   let target_id = (self.sink.create_stack_object)(size, alignment)
   let object : @native.StackObject = { id: self.stack_objects.length(), }

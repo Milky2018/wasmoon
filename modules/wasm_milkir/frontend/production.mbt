@@ -7,9 +7,9 @@ pub type TranslationContext = @ir.TranslationContext
 pub fn translate_function(
   embedding_env : EmbeddingEnvironment,
   mod_ : @types.Module,
-  func_local_idx : Int,
+  func_local_idx : Int32,
   name? : String,
-  memory_max_override? : Int? = None,
+  memory_max_override~ : Int32? = None,
 ) -> @milkir.Function raise LowerError {
   get_func_type(mod_, func_local_idx) |> ignore
   get_code(mod_, func_local_idx) |> ignore
@@ -27,9 +27,9 @@ pub fn translate_function(
 pub fn translation_context_from_module(
   mod_ : @types.Module,
   embedding_env : EmbeddingEnvironment,
-  memory_max_override? : Int? = None,
-  func_base? : Int = 0,
-  import_remap? : Array[Int] = [],
+  memory_max_override~ : Int32? = None,
+  func_base~ : Int32 = 0,
+  import_remap~ : Array[Int32] = [],
 ) -> TranslationContext {
   @ir.TranslationContext::from_module(
     mod_,

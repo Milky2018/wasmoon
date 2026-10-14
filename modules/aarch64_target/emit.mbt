@@ -1,11 +1,11 @@
 ///|
-const AARCH64_DIVISION_BY_ZERO_BRK : UInt = 4U
+const AARCH64_DIVISION_BY_ZERO_BRK : UInt32 = 4U
 
 ///|
-const AARCH64_INTEGER_OVERFLOW_BRK : UInt = 5U
+const AARCH64_INTEGER_OVERFLOW_BRK : UInt32 = 5U
 
 ///|
-const AARCH64_INVALID_CONVERSION_BRK : UInt = 3U
+const AARCH64_INVALID_CONVERSION_BRK : UInt32 = 3U
 
 ///|
 /// Where a branch lands.
@@ -17,14 +17,14 @@ const AARCH64_INVALID_CONVERSION_BRK : UInt = 3U
 /// when it turns out not to reach.
 priv enum FixupTarget {
   ToBlock(@vcode.Block)
-  ToLabel(Int)
+  ToLabel(Int32)
 }
 
 ///|
 priv struct BranchFixup {
-  offset : Int
+  offset : Int32
   target : FixupTarget
-  bits : Int
+  bits : Int32
   // Two words were reserved here instead of one, so the patch may spend the
   // second on a long-range form. See `CodeBuffer::long_branches`.
   wide : Bool
@@ -35,7 +35,7 @@ priv struct CodeBuffer {
   code : Array[Byte]
   fixups : Array[BranchFixup]
   // Position of each local label, -1 until bound.
-  labels : Array[Int]
+  labels : Array[Int32]
   relocations : Array[@code_object.Relocation]
   // Reserve a second word after every conditional branch, so one whose target
   // turns out to be beyond imm19's +/-1MB can be rewritten as an inverted
@@ -57,16 +57,16 @@ pub suberror AArch64EmitError {
   MissingStackObjectArea
   MissingResultArea
   MissingEmergencyMoveArea
-  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
-  FrameOffsetOutOfRange(offset~ : Int)
+  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int32)
+  FrameOffsetOutOfRange(offset~ : Int32)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
   InvalidVectorInstruction
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
-  BranchLabelUnbound(label~ : Int)
-  BranchSpanNotFixed(offset~ : Int)
-  BranchOutOfRange(offset~ : Int, bits~ : Int)
+  BranchLabelUnbound(label~ : Int32)
+  BranchSpanNotFixed(offset~ : Int32)
+  BranchOutOfRange(offset~ : Int32, bits~ : Int32)
 } derive(Debug)
 
 ///|
@@ -75,17 +75,17 @@ pub impl Show for AArch64EmitError with fn output(self, logger) {
 }
 
 ///|
-fn CodeBuffer::new(long_branches? : Bool = false) -> CodeBuffer {
+fn CodeBuffer::new(long_branches~ : Bool = false) -> CodeBuffer {
   { code: [], fixups: [], labels: [], relocations: [], long_branches, }
 }
 
 ///|
 /// `nop`, which fills the reserved slot when the short form suffices.
-const AARCH64_NOP : UInt = 0xD503201FU
+const AARCH64_NOP : UInt32 = 0xD503201FU
 
 ///|
 /// `b` with an empty imm26 field.
-const AARCH64_BRANCH : UInt = 0x14000000U
+const AARCH64_BRANCH : UInt32 = 0x14000000U
 
 ///|
 /// Flip a conditional branch to its opposite.
@@ -94,7 +94,7 @@ const AARCH64_BRANCH : UInt = 0x14000000U
 /// what makes the long-range rewrite cheap: `b.cond` keeps its condition in
 /// the low four bits and inverts in the lowest, and `cbz`/`cbnz` differ only
 /// in bit 24 for either operand width.
-fn invert_conditional_branch(word : UInt) -> UInt? {
+fn invert_conditional_branch(word : UInt32) -> UInt32? {
   if (word & 0xFF000000U) == 0x54000000U {
     Some(word ^ 1U)
   } else if (word & 0x7E000000U) == 0x34000000U {
@@ -105,12 +105,12 @@ fn invert_conditional_branch(word : UInt) -> UInt? {
 }
 
 ///|
-fn CodeBuffer::position(self : CodeBuffer) -> Int {
+fn CodeBuffer::position(self : CodeBuffer) -> Int32 {
   self.code.length()
 }
 
 ///|
-fn CodeBuffer::emit_word(self : CodeBuffer, word : UInt) -> Unit {
+fn CodeBuffer::emit_word(self : CodeBuffer, word : UInt32) -> Unit {
   self.code.push((word & 0xFFU).to_byte())
   self.code.push(((word >> 8) & 0xFFU).to_byte())
   self.code.push(((word >> 16) & 0xFFU).to_byte())
@@ -118,7 +118,7 @@ fn CodeBuffer::emit_word(self : CodeBuffer, word : UInt) -> Unit {
 }
 
 ///|
-fn CodeBuffer::read_word(self : CodeBuffer, offset : Int) -> UInt {
+fn CodeBuffer::read_word(self : CodeBuffer, offset : Int32) -> UInt32 {
   self.code[offset].to_uint() |
   (self.code[offset + 1].to_uint() << 8) |
   (self.code[offset + 2].to_uint() << 16) |
@@ -126,7 +126,11 @@ fn CodeBuffer::read_word(self : CodeBuffer, offset : Int) -> UInt {
 }
 
 ///|
-fn CodeBuffer::patch_word(self : CodeBuffer, offset : Int, word : UInt) -> Unit {
+fn CodeBuffer::patch_word(
+  self : CodeBuffer,
+  offset : Int32,
+  word : UInt32,
+) -> Unit {
   self.code[offset] = (word & 0xFFU).to_byte()
   self.code[offset + 1] = ((word >> 8) & 0xFFU).to_byte()
   self.code[offset + 2] = ((word >> 16) & 0xFFU).to_byte()
@@ -135,7 +139,7 @@ fn CodeBuffer::patch_word(self : CodeBuffer, offset : Int, word : UInt) -> Unit 
 
 ///|
 /// Reserve a label whose position is filled in by `bind_label`.
-fn CodeBuffer::new_label(self : CodeBuffer) -> Int {
+fn CodeBuffer::new_label(self : CodeBuffer) -> Int32 {
   self.labels.push(-1)
   self.labels.length() - 1
 }
@@ -143,7 +147,7 @@ fn CodeBuffer::new_label(self : CodeBuffer) -> Int {
 ///|
 /// Fix `label` at the current position. Branches to it may already have been
 /// emitted; they are patched with the rest at the end of the function.
-fn CodeBuffer::bind_label(self : CodeBuffer, label : Int) -> Unit {
+fn CodeBuffer::bind_label(self : CodeBuffer, label : Int32) -> Unit {
   self.labels[label] = self.position()
 }
 
@@ -159,8 +163,8 @@ fn CodeBuffer::bind_label(self : CodeBuffer, label : Int) -> Unit {
 fn CodeBuffer::emit_fixup_branch(
   self : CodeBuffer,
   target : FixupTarget,
-  bits : Int,
-  base : UInt,
+  bits : Int32,
+  base : UInt32,
 ) -> Unit {
   let offset = self.position()
   self.emit_word(base)
@@ -178,8 +182,8 @@ fn CodeBuffer::emit_fixup_branch(
 fn CodeBuffer::emit_branch(
   self : CodeBuffer,
   target : @vcode.Block,
-  bits : Int,
-  base : UInt,
+  bits : Int32,
+  base : UInt32,
 ) -> Unit {
   self.emit_fixup_branch(ToBlock(target), bits, base)
 }
@@ -187,25 +191,25 @@ fn CodeBuffer::emit_branch(
 ///|
 fn CodeBuffer::emit_label_branch(
   self : CodeBuffer,
-  label : Int,
-  bits : Int,
-  base : UInt,
+  label : Int32,
+  bits : Int32,
+  base : UInt32,
 ) -> Unit {
   self.emit_fixup_branch(ToLabel(label), bits, base)
 }
 
 ///|
-fn reg_bits(reg : @vcode.PhysicalReg) -> UInt {
+fn reg_bits(reg : @vcode.PhysicalReg) -> UInt32 {
   reg.id.reinterpret_as_uint() & 31U
 }
 
 ///|
 fn encode_three_register(
-  base : UInt,
+  base : UInt32,
   rd : @vcode.PhysicalReg,
   rn : @vcode.PhysicalReg,
   rm : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   base | (reg_bits(rm) << 16) | (reg_bits(rn) << 5) | reg_bits(rd)
 }
 
@@ -254,8 +258,8 @@ fn emit_constant(
       nonones += 1
     }
   }
-  let inverted = Int::max(1, nonones) < Int::max(1, nonzero)
-  if Int::min(Int::max(1, nonzero), Int::max(1, nonones)) > 1 &&
+  let inverted = Int32::max(1, nonones) < Int32::max(1, nonzero)
+  if Int32::min(Int32::max(1, nonzero), Int32::max(1, nonones)) > 1 &&
     logical_immediate_bits(bits, width) is Some(encoded) {
     let base = if width == W32 { 0x320003E0U } else { 0xB20003E0U }
     buffer.emit_word(
@@ -298,7 +302,7 @@ fn emit_stack_access(
   load : Bool,
   ty : @native.ValueType,
   reg : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit raise AArch64EmitError {
   let (scale, load_base, store_base) = match ty {
     I32 => (4, 0xB9400000U, 0xB9000000U)
@@ -341,7 +345,7 @@ fn emit_result_area_access(
   ty : @native.ValueType,
   address~ : @vcode.PhysicalReg,
   value~ : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit raise AArch64EmitError {
   let width : @native.AccessWidth = match ty {
     I32 | F32 => W32
@@ -391,7 +395,7 @@ fn scalar_memory_scale(width : @native.AccessWidth) -> UInt64? {
 }
 
 ///|
-fn scalar_memory_size_bits(width : @native.AccessWidth) -> UInt? {
+fn scalar_memory_size_bits(width : @native.AccessWidth) -> UInt32? {
   match width {
     W8 => Some(0U)
     W16 => Some(1U)
@@ -403,13 +407,13 @@ fn scalar_memory_size_bits(width : @native.AccessWidth) -> UInt? {
 
 ///|
 fn encode_scalar_uxtw_address(
-  immediate_base : UInt,
+  immediate_base : UInt32,
   width : @native.AccessWidth,
-  shift : Int,
+  shift : Int32,
   value : @vcode.PhysicalReg,
   address : @vcode.PhysicalReg,
   index : @vcode.PhysicalReg,
-) -> UInt raise AArch64EmitError {
+) -> UInt32 raise AArch64EmitError {
   guard scalar_memory_size_bits(width) is Some(size_bits) else {
     raise InvalidScalarMemoryAccess
   }
@@ -435,7 +439,7 @@ fn scalar_memory_address(
   address : @vcode.PhysicalReg,
   width : @native.AccessWidth,
   offset : UInt64,
-) -> (@vcode.PhysicalReg, UInt) raise AArch64EmitError {
+) -> (@vcode.PhysicalReg, UInt32) raise AArch64EmitError {
   guard scalar_memory_scale(width) is Some(scale) else {
     raise InvalidScalarMemoryAccess
   }
@@ -471,10 +475,10 @@ fn vector_structure_address(
 fn vector_lane_memory_word(
   load : Bool,
   lane : @lowering.VectorLane,
-  index : Int,
+  index : Int32,
   address : @vcode.PhysicalReg,
   vector : @vcode.PhysicalReg,
-) -> UInt raise AArch64EmitError {
+) -> UInt32 raise AArch64EmitError {
   let load_bit = if load { 0x00400000U } else { 0U }
   let (base, lane_bits) = match lane {
     I8x16 =>
@@ -512,7 +516,7 @@ fn vector_lane_memory_word(
 }
 
 ///|
-fn vector_splat_load_base(lane : @lowering.VectorLane) -> UInt {
+fn vector_splat_load_base(lane : @lowering.VectorLane) -> UInt32 {
   match lane {
     I8x16 => 0x4D40C000U
     I16x8 => 0x4D40C400U
@@ -522,7 +526,7 @@ fn vector_splat_load_base(lane : @lowering.VectorLane) -> UInt {
 }
 
 ///|
-fn atomic_load_base(width : @native.AccessWidth, exclusive : Bool) -> UInt {
+fn atomic_load_base(width : @native.AccessWidth, exclusive : Bool) -> UInt32 {
   match (width, exclusive) {
     (W8, false) => 0x08DFFC00U
     (W16, false) => 0x48DFFC00U
@@ -537,7 +541,7 @@ fn atomic_load_base(width : @native.AccessWidth, exclusive : Bool) -> UInt {
 }
 
 ///|
-fn atomic_store_base(width : @native.AccessWidth, exclusive : Bool) -> UInt {
+fn atomic_store_base(width : @native.AccessWidth, exclusive : Bool) -> UInt32 {
   match (width, exclusive) {
     (W8, false) => 0x089FFC00U
     (W16, false) => 0x489FFC00U
@@ -568,7 +572,7 @@ fn emit_atomic_rmw(
   address : @vcode.PhysicalReg,
   value : @vcode.PhysicalReg,
   result : @vcode.PhysicalReg,
-) -> Int raise AArch64EmitError {
+) -> Int32 raise AArch64EmitError {
   if width == W128 {
     raise InvalidScalarMemoryAccess
   }
@@ -632,7 +636,7 @@ fn emit_atomic_compare_exchange(
   expected : @vcode.PhysicalReg,
   replacement : @vcode.PhysicalReg,
   result : @vcode.PhysicalReg,
-) -> Int raise AArch64EmitError {
+) -> Int32 raise AArch64EmitError {
   if width == W128 {
     raise InvalidScalarMemoryAccess
   }
@@ -673,7 +677,7 @@ fn scalar_load_base(
   width : @native.AccessWidth,
   extension : @native.LoadExtension,
   result_type : @native.ValueType,
-) -> UInt? {
+) -> UInt32? {
   match (result_type, width, extension) {
     (I32 | I64, W8, Unsigned) => Some(0x39400000U)
     (I32, W8, Signed) => Some(0x39C00000U)
@@ -694,7 +698,7 @@ fn scalar_load_base(
 fn scalar_store_base(
   width : @native.AccessWidth,
   value_type : @native.ValueType,
-) -> UInt? {
+) -> UInt32? {
   match (value_type, width) {
     (I32 | I64, W8) => Some(0x39000000U)
     (I32 | I64, W16) => Some(0x79000000U)
@@ -710,7 +714,7 @@ fn scalar_store_base(
 fn emit_sp_adjust(
   buffer : CodeBuffer,
   subtract : Bool,
-  amount : Int,
+  amount : Int32,
   unwind? : Array[@code_object.UnwindDirective],
 ) -> Unit raise AArch64EmitError {
   if amount == 0 {
@@ -735,7 +739,7 @@ fn emit_sp_adjust(
       emit_stack_access(buffer, true, I64, @vcode.PhysicalReg::new(16, Int), 0)
       remaining -= 4096
     } else {
-      let pages = Int::min(remaining / 4096, 4095)
+      let pages = Int32::min(remaining / 4096, 4095)
       buffer.emit_word(
         base |
         (1U << 22) |
@@ -765,7 +769,7 @@ fn emit_sp_adjust(
 fn emit_stack_address(
   buffer : CodeBuffer,
   destination : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit {
   let pages = offset / 4096
   let remainder = offset % 4096
@@ -805,7 +809,7 @@ fn emit_stack_address(
 }
 
 ///|
-fn condition_code(condition : AArch64Condition) -> UInt {
+fn condition_code(condition : AArch64Condition) -> UInt32 {
   match condition {
     Eq => 0U
     Ne => 1U
@@ -826,7 +830,7 @@ fn encode_int_unary(
   operation : AArch64IntUnary,
   destination : @vcode.PhysicalReg,
   source : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   match (width, operation) {
     (W32, Mvn) => 0x2A2003E0U | (reg_bits(source) << 16) | reg_bits(destination)
     (W64, Mvn) => 0xAA2003E0U | (reg_bits(source) << 16) | reg_bits(destination)
@@ -846,7 +850,7 @@ fn encode_int_binary(
   destination : @vcode.PhysicalReg,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   let base = match (width, operation) {
     (W32, Add) => 0x0B000000U
     (W64, Add) => 0x8B000000U
@@ -875,7 +879,7 @@ fn encode_shift_register(
   destination : @vcode.PhysicalReg,
   input : @vcode.PhysicalReg,
   amount : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   let base = match (width, operation) {
     (W32, Lsl) => 0x1AC02000U
     (W64, Lsl) => 0x9AC02000U
@@ -896,7 +900,7 @@ fn encode_int_multiply_add(
   accumulator : @vcode.PhysicalReg,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   let base = if width == W32 { 0x1B000000U } else { 0x9B000000U }
   base |
   (reg_bits(right) << 16) |
@@ -909,10 +913,10 @@ fn encode_int_multiply_add(
 fn encode_shift_immediate(
   width : GprWidth,
   operation : AArch64Shift,
-  amount : Int,
+  amount : Int32,
   destination : @vcode.PhysicalReg,
   source : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   let bit_width = if width == W32 { 32 } else { 64 }
   match operation {
     Lsl => {
@@ -953,11 +957,11 @@ fn encode_shift_immediate(
 ///|
 fn encode_add_shifted_left(
   width : GprWidth,
-  amount : Int,
+  amount : Int32,
   destination : @vcode.PhysicalReg,
   accumulator : @vcode.PhysicalReg,
   shifted : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   let base = if width == W32 { 0x0B000000U } else { 0x8B000000U }
   base |
   (reg_bits(shifted) << 16) |
@@ -971,7 +975,7 @@ fn encode_compare_immediate(
   width : GprWidth,
   bits : UInt64,
   source : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   let shift = add_sub_immediate_shift(bits).unwrap()
   let immediate = if shift == 0 { bits } else { bits >> 12 }
   let base = if width == W32 { 0x7100001FU } else { 0xF100001FU }
@@ -985,7 +989,7 @@ fn encode_compare_immediate(
 fn emit_overflow_flag(
   buffer : CodeBuffer,
   destination : @vcode.PhysicalReg,
-  condition : UInt,
+  condition : UInt32,
 ) -> Unit {
   buffer.emit_word(
     0x9A9F07E0U | ((condition ^ 1U) << 12) | reg_bits(destination),
@@ -1077,7 +1081,7 @@ fn emit_int_with_overflow(
 fn encode_vector_move(
   destination : @vcode.PhysicalReg,
   source : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   0x4EA01C00U |
   (reg_bits(source) << 16) |
   (reg_bits(source) << 5) |
@@ -1152,7 +1156,7 @@ fn emit_vector_splat(
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
-  let base : UInt = match lane {
+  let base : UInt32 = match lane {
     I8x16 => 0x4E010C00U
     I16x8 => 0x4E020C00U
     I32x4 => 0x4E040C00U
@@ -1167,12 +1171,12 @@ fn emit_vector_splat(
 fn emit_vector_extract_lane(
   buffer : CodeBuffer,
   lane : @lowering.VectorLane,
-  index : Int,
+  index : Int32,
   extension : @native.Signedness?,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
-  let base : UInt = match lane {
+  let base : UInt32 = match lane {
     I8x16 => if extension is Some(Signed) { 0x0E012C00U } else { 0x0E013C00U }
     I16x8 => if extension is Some(Signed) { 0x0E022C00U } else { 0x0E023C00U }
     I32x4 => 0x0E043C00U
@@ -1198,7 +1202,7 @@ fn emit_vector_extract_lane(
 fn emit_vector_replace_lane(
   buffer : CodeBuffer,
   lane : @lowering.VectorLane,
-  index : Int,
+  index : Int32,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
@@ -1240,7 +1244,7 @@ fn emit_vector_table_lookup(
 ///|
 fn emit_vector_shuffle(
   buffer : CodeBuffer,
-  mask : FixedArray[Int],
+  mask : FixedArray[Int32],
   first : @vcode.PhysicalReg,
   second : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1279,11 +1283,11 @@ fn emit_vector_shuffle(
 ///|
 fn vector_lane_encoding(
   lane : @lowering.VectorLane,
-  byte_base : UInt,
-  half_base : UInt,
-  word_base : UInt,
-  double_base : UInt,
-) -> UInt raise AArch64EmitError {
+  byte_base : UInt32,
+  half_base : UInt32,
+  word_base : UInt32,
+  double_base : UInt32,
+) -> UInt32 raise AArch64EmitError {
   match lane {
     I8x16 => byte_base
     I16x8 => half_base
@@ -1855,7 +1859,7 @@ fn emit_vector_int_compare(
 ///|
 fn emit_vector_binary(
   buffer : CodeBuffer,
-  base : UInt,
+  base : UInt32,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1871,9 +1875,9 @@ fn emit_vector_binary(
 ///|
 fn vector_float_lane_encoding(
   lane : @lowering.VectorLane,
-  f32_base : UInt,
-  f64_base : UInt,
-) -> UInt raise AArch64EmitError {
+  f32_base : UInt32,
+  f64_base : UInt32,
+) -> UInt32 raise AArch64EmitError {
   match lane {
     F32x4 => f32_base
     F64x2 => f64_base
@@ -2056,7 +2060,7 @@ fn emit_vector_bitwise(
 fn float_unary_base(
   ty : @native.ValueType,
   operation : AArch64FloatUnary,
-) -> UInt? {
+) -> UInt32? {
   match (ty, operation) {
     (F32, Negate) => Some(0x1E214000U)
     (F64, Negate) => Some(0x1E614000U)
@@ -2080,7 +2084,7 @@ fn float_unary_base(
 fn float_binary_base(
   ty : @native.ValueType,
   operation : AArch64FloatBinary,
-) -> UInt? {
+) -> UInt32? {
   match (ty, operation) {
     (F32, Add) => Some(0x1E202800U)
     (F64, Add) => Some(0x1E602800U)
@@ -2136,7 +2140,7 @@ fn emit_float_copy_sign(
 fn float_ternary_base(
   ty : @native.ValueType,
   operation : AArch64FloatTernary,
-) -> UInt? {
+) -> UInt32? {
   match (ty, operation) {
     (F32, Fmadd) => Some(0x1F000000U)
     (F64, Fmadd) => Some(0x1F400000U)
@@ -2151,7 +2155,7 @@ fn float_ternary_base(
 }
 
 ///|
-fn float_condition_code(condition : AArch64FloatCondition) -> UInt {
+fn float_condition_code(condition : AArch64FloatCondition) -> UInt32 {
   match condition {
     Equal => 0U
     NotEqual => 1U
@@ -2165,7 +2169,7 @@ fn float_condition_code(condition : AArch64FloatCondition) -> UInt {
 }
 
 ///|
-fn float_trap_condition_code(condition : AArch64FloatTrapCondition) -> UInt {
+fn float_trap_condition_code(condition : AArch64FloatTrapCondition) -> UInt32 {
   match condition {
     Unordered => 6U
     LessThan => 4U
@@ -2193,7 +2197,7 @@ fn emit_conversion(
       )
     SignExtend(integer, width) => {
       let base = if integer == I32 { 0x13000000U } else { 0x93400000U }
-      let highest_bit : UInt = match width {
+      let highest_bit : UInt32 = match width {
         W8 => 7U
         W16 => 15U
         W32 => 31U
@@ -2241,7 +2245,7 @@ fn emit_conversion(
           }
       }
     IntToFloat(integer, float, signedness) => {
-      let base : UInt = match (integer, float, signedness) {
+      let base : UInt32 = match (integer, float, signedness) {
         (I32, F32, Signed) => 0x1E220000U
         (I32, F32, Unsigned) => 0x1E230000U
         (I64, F32, Signed) => 0x9E220000U
@@ -2254,7 +2258,7 @@ fn emit_conversion(
       buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
     }
     FloatToInt(float, integer, signedness) => {
-      let base : UInt = match (float, integer, signedness) {
+      let base : UInt32 = match (float, integer, signedness) {
         (F32, I32, Signed) => 0x1E380000U
         (F32, I32, Unsigned) => 0x1E390000U
         (F32, I64, Signed) => 0x9E380000U
@@ -2274,7 +2278,7 @@ fn emit_register_save_or_restore(
   buffer : CodeBuffer,
   load : Bool,
   reg : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit raise AArch64EmitError {
   match reg.class {
     Int => emit_stack_access(buffer, load, I64, reg, offset)
@@ -2285,8 +2289,8 @@ fn emit_register_save_or_restore(
 
 ///|
 fn can_pair_saved_registers(
-  first : (@vcode.PhysicalReg, Int),
-  second : (@vcode.PhysicalReg, Int),
+  first : (@vcode.PhysicalReg, Int32),
+  second : (@vcode.PhysicalReg, Int32),
 ) -> Bool {
   first.0.class == second.0.class &&
   second.1 == first.1 + 8 &&
@@ -2301,9 +2305,9 @@ fn emit_register_pair_save_or_restore(
   load : Bool,
   first : @vcode.PhysicalReg,
   second : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit {
-  let base : UInt = match (first.class, load) {
+  let base : UInt32 = match (first.class, load) {
     (Int, false) => 0xA9000000U
     (Int, true) => 0xA9400000U
     (FpVector, false) => 0x6D000000U
@@ -2323,9 +2327,9 @@ fn emit_register_pair_save_or_restore(
 ///|
 fn record_saved_register_unwind(
   unwind : Array[@code_object.UnwindDirective],
-  code_offset : Int,
-  frame_size : Int,
-  saved : (@vcode.PhysicalReg, Int),
+  code_offset : Int32,
+  frame_size : Int32,
+  saved : (@vcode.PhysicalReg, Int32),
 ) -> Unit {
   let (reg, offset) = saved
   let bank : @code_object.RegisterBank = match reg.class {
@@ -2485,10 +2489,10 @@ fn call_argument_transfers(
   instruction : @vcode.Instruction,
   types : Array[@native.ValueType],
   locations : Array[CallArgumentLocation],
-  operand_start? : Int = 0,
-  stack_base? : Int = 0,
-  callee? : (Int, @vcode.PhysicalReg),
-  result_area? : (Int, @vcode.PhysicalReg),
+  operand_start~ : Int32 = 0,
+  stack_base~ : Int32 = 0,
+  callee? : (Int32, @vcode.PhysicalReg),
+  result_area? : (Int32, @vcode.PhysicalReg),
 ) -> Array[@vcode.CallTransfer] {
   let transfers : Array[@vcode.CallTransfer] = []
   for index, ty in types {
@@ -2535,11 +2539,11 @@ fn emit_call_arguments(
   instruction : @vcode.Instruction,
   types : Array[@native.ValueType],
   locations : Array[CallArgumentLocation],
-  stack_size : Int,
-  operand_start? : Int = 0,
-  stack_base? : Int = 0,
-  callee? : (Int, @vcode.PhysicalReg),
-  result_area? : (Int, @vcode.PhysicalReg),
+  stack_size : Int32,
+  operand_start~ : Int32 = 0,
+  stack_base~ : Int32 = 0,
+  callee? : (Int32, @vcode.PhysicalReg),
+  result_area? : (Int32, @vcode.PhysicalReg),
 ) -> Unit raise AArch64EmitError {
   let plan = @vcode.plan_resolved_call_transfers(
     allocation,
@@ -2594,7 +2598,7 @@ fn emit_call_arguments(
 fn emit_tail_return_thunk_setup(
   buffer : CodeBuffer,
   frame : AArch64Frame,
-  callee_args_size : Int,
+  callee_args_size : Int32,
 ) -> Unit raise AArch64EmitError {
   if callee_args_size > frame.incoming_args_size() {
     emit_sp_adjust(buffer, true, callee_args_size + 16)
@@ -2615,7 +2619,7 @@ fn emit_tail_return_thunk_setup(
 fn emit_tail_return_thunk(
   buffer : CodeBuffer,
   frame : AArch64Frame,
-  callee_args_size : Int,
+  callee_args_size : Int32,
 ) -> Unit raise AArch64EmitError {
   if callee_args_size > frame.incoming_args_size() {
     let return_address = @vcode.PhysicalReg::new(16, Int)
@@ -2646,7 +2650,7 @@ fn value_home(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   instruction : @vcode.Instruction,
-  operand_index : Int,
+  operand_index : Int32,
 ) -> @vcode.Location {
   let value = function
     .instruction_operand_at(instruction, operand_index)
@@ -2659,7 +2663,7 @@ fn function_input_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   body : Array[@vcode.Instruction],
-  start : Int,
+  start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
   let mut index = start
@@ -2714,7 +2718,7 @@ fn emit_function_inputs(
     is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
     return
   }
-  let stack_inputs : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
+  let stack_inputs : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
   let mut index = current_index
   while index < body.length() {
     let input_instruction = body[index]
@@ -2793,7 +2797,7 @@ fn emit_incoming_call_results(
     ) {
     return
   }
-  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
+  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
   let mut index = current_index
   while index < body.length() {
     let result_instruction = body[index]
@@ -2852,7 +2856,7 @@ fn incoming_call_result_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   body : Array[@vcode.Instruction],
-  start : Int,
+  start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
   let mut index = start
@@ -2895,7 +2899,7 @@ fn function_output_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   body : Array[@vcode.Instruction],
-  start : Int,
+  start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
   let mut index = start
@@ -2942,7 +2946,7 @@ fn emit_function_outputs(
     is_function_output(function.instruction(body[current_index - 1]).unwrap()) {
     return
   }
-  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
+  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
   let mut index = current_index
   while index < body.length() {
     let output_instruction = body[index]
@@ -3008,9 +3012,9 @@ fn emit_instruction(
   block : @vcode.Block,
   instruction : @vcode.Instruction,
   next_block : @vcode.Block?,
-) -> Int raise AArch64EmitError {
+) -> Int32 raise AArch64EmitError {
   let instruction_index = function.instruction_index(instruction).unwrap()
-  let reg = fn(index : Int) -> @vcode.PhysicalReg raise AArch64EmitError {
+  let reg = fn(index : Int32) -> @vcode.PhysicalReg raise AArch64EmitError {
     let location = allocation
       .allocated_operand_location_at(instruction_index, index)
       .unwrap()
@@ -3081,7 +3085,7 @@ fn emit_instruction(
     CarrierMove(_, to) => emit_move(buffer, to, reg(1), reg(0))
     Select(ty) => {
       buffer.emit_word(0x7100001FU | (reg_bits(reg(0)) << 5))
-      let base : UInt = match ty {
+      let base : UInt32 = match ty {
         I32 => 0x1A800000U
         I64 | Ptr64 | GcRef64 => 0x9A800000U
         F32 => 0x1E200C00U
@@ -3751,7 +3755,7 @@ fn emit_instruction(
 fn patch_branches(
   buffer : CodeBuffer,
   function : @vcode.Function[AArch64Inst],
-  block_offsets : Array[Int],
+  block_offsets : Array[Int32],
 ) -> Unit raise AArch64EmitError {
   for fixup in buffer.fixups {
     let target = match fixup.target {
@@ -3792,8 +3796,8 @@ fn patch_branches(
 /// ```
 fn patch_wide_conditional_branch(
   buffer : CodeBuffer,
-  offset : Int,
-  target : Int,
+  offset : Int32,
+  target : Int32,
 ) -> Unit raise AArch64EmitError {
   if branch_reaches(offset, target, 19) {
     patch_relative_branch(buffer, offset, target, 19)
@@ -3816,7 +3820,7 @@ fn patch_wide_conditional_branch(
 /// The longest span `patch_fixed_span_branch` accepts. A branch over a fixed
 /// instruction sequence is a handful of words; anything longer means the span
 /// grows with the program and the branch belongs on the fixup path.
-const FIXED_SPAN_LIMIT : Int = 64
+const FIXED_SPAN_LIMIT : Int32 = 64
 
 ///|
 /// Patch a branch that skips a fixed number of instructions.
@@ -3829,9 +3833,9 @@ const FIXED_SPAN_LIMIT : Int = 64
 /// is what keeps that distinction from being a matter of who read the comment.
 fn patch_fixed_span_branch(
   buffer : CodeBuffer,
-  offset : Int,
-  target : Int,
-  bits : Int,
+  offset : Int32,
+  target : Int32,
+  bits : Int32,
 ) -> Unit raise AArch64EmitError {
   let delta = target - offset
   if delta > FIXED_SPAN_LIMIT || delta < -FIXED_SPAN_LIMIT {
@@ -3841,7 +3845,7 @@ fn patch_fixed_span_branch(
 }
 
 ///|
-fn branch_reaches(offset : Int, target : Int, bits : Int) -> Bool {
+fn branch_reaches(offset : Int32, target : Int32, bits : Int32) -> Bool {
   let delta = target - offset
   if delta % 4 != 0 {
     return false
@@ -3853,9 +3857,9 @@ fn branch_reaches(offset : Int, target : Int, bits : Int) -> Bool {
 ///|
 fn patch_relative_branch(
   buffer : CodeBuffer,
-  offset : Int,
-  target : Int,
-  bits : Int,
+  offset : Int32,
+  target : Int32,
+  bits : Int32,
 ) -> Unit raise AArch64EmitError {
   if !branch_reaches(offset, target, bits) {
     raise BranchOutOfRange(offset=target - offset, bits~)
@@ -3879,7 +3883,7 @@ fn emit_single_pass(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
-  long_branches? : Bool = false,
+  long_branches~ : Bool = false,
 ) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
   let buffer = CodeBuffer::new(long_branches~)
   let block_offsets = Array::make(function.block_count(), -1)

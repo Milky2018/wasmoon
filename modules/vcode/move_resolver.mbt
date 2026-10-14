@@ -112,7 +112,7 @@ fn linearize_single_bank(
   let result : Array[ParallelMove] = []
   while !pending.is_empty() {
     let sources = source_locations(pending)
-    let mut ready : Int? = None
+    let mut ready : Int32? = None
     for index, transfer in pending {
       if !sources.contains(transfer.to) {
         ready = Some(index)

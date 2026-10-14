@@ -5,11 +5,11 @@
 ///|
 fn Parser::resolve_heap_type_as_ref_value_type(
   self : Parser,
-  heap_type : Int,
+  heap_type : Int32,
   nullable : Bool,
 ) -> @types.ValueType raise ParserError {
   fn resolve_typed_ref(
-    type_idx : Int,
+    type_idx : Int32,
     nullable : Bool,
   ) -> @types.ValueType raise ParserError {
     if type_idx < 0 || type_idx >= self.types.length() {
@@ -56,14 +56,14 @@ fn Parser::resolve_heap_type_as_ref_value_type(
 ///|
 fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError {
   fn resolve_typed_ref(
-    type_idx : Int,
+    type_idx : Int32,
     nullable : Bool,
   ) -> @types.ValueType raise ParserError {
     self.resolve_heap_type_as_ref_value_type(type_idx, nullable)
   }
 
   fn resolve_abstract_heap(
-    heap_type : Int,
+    heap_type : Int32,
     nullable : Bool,
   ) -> @types.ValueType raise ParserError {
     self.resolve_heap_type_as_ref_value_type(heap_type, nullable)
@@ -130,7 +130,7 @@ fn Parser::read_value_type(self : Parser) -> @types.ValueType raise ParserError 
 
 ///|
 /// Read a heap type (signed LEB128 type index or abstract heap type)
-fn Parser::read_heap_type(self : Parser) -> Int raise ParserError {
+fn Parser::read_heap_type(self : Parser) -> Int32 raise ParserError {
   // Heap types are encoded as signed LEB128
   // Negative values represent abstract heap types:
   //   -0x10 (0x70) = func

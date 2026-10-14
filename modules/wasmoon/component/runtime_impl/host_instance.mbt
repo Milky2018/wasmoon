@@ -84,7 +84,7 @@ pub fn HostRuntimeState::async_state(self : HostRuntimeState) -> AsyncState {
 pub fn HostRuntimeState::set_event_loop(
   self : HostRuntimeState,
   wait : () -> Bool raise ComponentRuntimeError,
-  poll? : () -> Bool raise ComponentRuntimeError = () => false,
+  poll~ : () -> Bool raise ComponentRuntimeError = () => false,
 ) -> Unit raise ComponentRuntimeError {
   if self.async_state.host_event_loop.val is Some(_) {
     raise HostEventLoopAlreadyInstalled
@@ -353,7 +353,7 @@ pub fn HostInstanceBuilder::set_type_space(
 pub fn HostInstanceBuilder::add_type(
   self : HostInstanceBuilder,
   name : String,
-  index : Int,
+  index : Int32,
 ) -> Unit raise ComponentRuntimeError {
   self.require_free_export(name)
   if index < 0 || index >= self.types.length() || self.types[index] is None {
@@ -446,7 +446,7 @@ pub fn HostInstanceBuilder::finish(
 /// free slots are retained, even when the new capacity is smaller.
 pub fn HostRuntimeState::set_max_concurrent_resources(
   self : HostRuntimeState,
-  maximum : UInt,
+  maximum : UInt32,
 ) -> Unit raise ComponentRuntimeError {
   if self.async_state.tasks.closed.val {
     raise Cancelled

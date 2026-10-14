@@ -7,17 +7,17 @@ fn validate_component_section_import(
   counts : Counts,
   type_table : Array[@component.TypeDef?],
   local_resource_types : Array[Bool],
-  resource_ids : Array[Int?],
-  type_sizes : Array[Int],
-  type_depths : Array[Int],
-  component_sizes : Array[Int],
-  instance_sizes : Array[Int],
-  named_types : Map[Int, Int],
-  import_named_types : Map[Int, Int],
-  core_type_exports : Array[Map[String, Int]?],
+  resource_ids : Array[Int32?],
+  type_sizes : Array[Int32],
+  type_depths : Array[Int32],
+  component_sizes : Array[Int32],
+  instance_sizes : Array[Int32],
+  named_types : Map[Int32, Int32],
+  import_named_types : Map[Int32, Int32],
+  core_type_exports : Array[Map[String, Int32]?],
   core_type_module_imports : Array[Array[CoreModuleTypeImport]?],
   core_type_module_export_types : Array[Map[String, CoreExternType]?],
-  core_module_exports : Array[Map[String, Int]?],
+  core_module_exports : Array[Map[String, Int32]?],
   core_module_defs : Array[@types.Module?],
   core_module_export_types : Array[Map[String, CoreExternType]?],
   core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
@@ -25,9 +25,9 @@ fn validate_component_section_import(
   component_import_instance_sigs : Array[Map[String, InstanceSig]?],
   component_import_func_sigs : Array[Map[String, FuncSigShape]?],
   component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int]]?,
+    Map[String, Map[String, Int32]]?,
   ],
-  component_import_core_module_exports : Array[Map[String, Map[String, Int]]?],
+  component_import_core_module_exports : Array[Map[String, Map[String, Int32]]?],
   component_import_core_module_import_sigs : Array[
     Map[String, Map[String, CoreExternType]]?,
   ],
@@ -44,9 +44,9 @@ fn validate_component_section_import(
   component_export_type_sigs : Array[Map[String, TypeSig]?],
   component_export_func_sigs : Array[Map[String, FuncSigShape]?],
   instance_sigs : Array[InstanceSig?],
-  interface_instance_idxs : Map[Int, Int],
-  instance_export_type_idxs : Array[Array[Int]?],
-  instance_export_func_idxs : Array[Array[Int]?],
+  interface_instance_idxs : Map[Int32, Int32],
+  instance_export_type_idxs : Array[Array[Int32]?],
+  instance_export_func_idxs : Array[Array[Int32]?],
   instance_export_type_map : Array[Map[String, ExportedTypeInfo]?],
   instance_export_type_sigs : Array[Map[String, TypeSig]?],
   instance_export_func_sigs : Array[Map[String, FuncSigShape]?],
@@ -57,17 +57,17 @@ fn validate_component_section_import(
   func_types : Array[@component.FuncType?],
   func_sig_shapes : Array[FuncSigShape?],
   seen_import_names : Map[String, String],
-  import_resource_names : Map[String, Int],
+  import_resource_names : Map[String, Int32],
   my_import_sorts : Map[String, @component.Sort],
   my_import_instance_sigs : Map[String, InstanceSig],
   my_import_func_sigs : Map[String, FuncSigShape],
-  my_import_instance_resource_exports : Map[String, Map[String, Int]],
+  my_import_instance_resource_exports : Map[String, Map[String, Int32]],
   my_import_type_bounds : Map[String, @component.TypeBound],
   my_import_type_sigs : Map[String, TypeSig],
   type_outers : Array[Array[@component.TypeDef?]],
-  next_resource_id : Int,
-  imported_funcs : Int,
-) -> (Int, Int) raise ComponentValidationError {
+  next_resource_id : Int32,
+  imported_funcs : Int32,
+) -> (Int32, Int32) raise ComponentValidationError {
   let mut next_resource_id = next_resource_id
   let mut imported_funcs = imported_funcs
   let imports = @component.parse_import_section(payload) catch {
@@ -187,7 +187,7 @@ fn validate_component_section_import(
       InstanceType(tyidx) => {
         let mut type_map : Map[String, ExportedTypeInfo]? = None
         let mut type_sig_map : Map[String, TypeSig]? = None
-        let mut resource_exports : Map[String, Int]? = None
+        let mut resource_exports : Map[String, Int32]? = None
         let mut func_export_sigs : Map[String, FuncSigShape]? = None
         match type_table[tyidx] {
           Some(td) => {
@@ -199,14 +199,14 @@ fn validate_component_section_import(
             match td {
               InstanceType(decls) => {
                 let local_types : Array[@component.TypeDef] = []
-                let local_resource_ids : Array[Int?] = []
+                let local_resource_ids : Array[Int32?] = []
                 let out : Map[String, ExportedTypeInfo] = Map([])
                 let type_sigs : Map[String, TypeSig] = Map([])
-                let res : Map[String, Int] = Map([])
+                let res : Map[String, Int32] = Map([])
                 let fns : Map[String, FuncSigShape] = Map([])
                 let mut any_types = false
                 let mut any_fns = false
-                let visiting : Map[Int, Int] = Map([])
+                let visiting : Map[Int32, Int32] = Map([])
                 fn record_type_slot() -> Unit {
                   local_types.push(InstanceTypeEmpty)
                   local_resource_ids.push(None)
@@ -357,7 +357,7 @@ fn validate_component_section_import(
         String,
         Map[String, CoreExternType],
       ]? = None
-      let mut import_core_module_exports : Map[String, Map[String, Int]]? = None
+      let mut import_core_module_exports : Map[String, Map[String, Int32]]? = None
       let mut import_type_sigs : Map[String, TypeSig]? = None
       let mut import_type_bounds : Map[String, @component.TypeBound]? = None
       let mut export_sorts : Map[String, @component.Sort]? = None

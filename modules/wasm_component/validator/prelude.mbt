@@ -10,49 +10,49 @@
 
 ///|
 pub(all) suberror ComponentValidationError {
-  InvalidTypeIndex(Int)
-  TypeIndexNotFuncType(Int)
-  TypeIndexNotComponentType(Int)
-  TypeIndexNotInstanceType(Int)
-  TypeIndexNotDefinedType(Int)
-  TypeIndexNotResourceType(Int)
-  InvalidFuncIndex(Int)
-  InvalidValueIndex(Int)
-  InvalidComponentIndex(Int)
-  InvalidInstanceIndex(Int)
-  InvalidCoreFuncIndex(Int)
-  InvalidCoreModuleIndex(Int)
-  InvalidCoreInstanceIndex(Int)
-  InvalidCoreTypeIndex(Int)
-  CoreTypeIndexNotModuleType(Int)
-  InvalidCoreTableIndex(Int)
-  InvalidCoreMemoryIndex(Int)
-  InvalidCoreGlobalIndex(Int)
-  InvalidCoreTagIndex(Int)
+  InvalidTypeIndex(Int32)
+  TypeIndexNotFuncType(Int32)
+  TypeIndexNotComponentType(Int32)
+  TypeIndexNotInstanceType(Int32)
+  TypeIndexNotDefinedType(Int32)
+  TypeIndexNotResourceType(Int32)
+  InvalidFuncIndex(Int32)
+  InvalidValueIndex(Int32)
+  InvalidComponentIndex(Int32)
+  InvalidInstanceIndex(Int32)
+  InvalidCoreFuncIndex(Int32)
+  InvalidCoreModuleIndex(Int32)
+  InvalidCoreInstanceIndex(Int32)
+  InvalidCoreTypeIndex(Int32)
+  CoreTypeIndexNotModuleType(Int32)
+  InvalidCoreTableIndex(Int32)
+  InvalidCoreMemoryIndex(Int32)
+  InvalidCoreGlobalIndex(Int32)
+  InvalidCoreTagIndex(Int32)
   DuplicateCanonOption(String)
   MissingCanonOption(String)
-  CanonExpectedFuncType(Int)
-  CanonAsyncTypeMismatch(Int)
-  CanonMemoryNot32Bit(Int)
+  CanonExpectedFuncType(Int32)
+  CanonAsyncTypeMismatch(Int32)
+  CanonMemoryNot32Bit(Int32)
   CanonCoreFuncTypeMismatch(String)
   CanonOptionNotAllowed(String)
-  UnsupportedCoreSort(Int)
+  UnsupportedCoreSort(Int32)
   UnsupportedComponentImport
   UnsupportedComponentExport
-  ExportedImportedFunc(Int)
+  ExportedImportedFunc(Int32)
   InvalidKebabName(String)
   DuplicateImportName(String)
   DuplicateExportName(String)
   FuncParamNameConflict(String, String)
   DuplicateInstantiationArg(String)
-  MissingInstanceExport(Int, String)
-  MissingCoreInstanceExport(Int, String)
+  MissingInstanceExport(Int32, String)
+  MissingCoreInstanceExport(Int32, String)
   MissingComponentImport(String)
   ComponentImportTypeMismatch(String)
   MissingExpectedExport(String)
   AscribedExportTypeIncompatible
   AliasTargetMismatch(String)
-  SectionParseError(Int, String)
+  SectionParseError(Int32, String)
   CoreModuleError(String)
 } derive(Debug, Eq)
 
@@ -80,7 +80,7 @@ pub struct ComponentValidationConfig {
 ///|
 pub fn ComponentValidationConfig::ComponentValidationConfig(
   wit_names : Bool,
-  component_implements? : Bool = true,
+  component_implements~ : Bool = true,
 ) -> ComponentValidationConfig {
   { wit_names, component_implements, }
 }
@@ -111,18 +111,18 @@ pub fn ValidatedComponent::component_bytes(self : ValidatedComponent) -> Bytes {
 
 ///|
 priv struct Counts {
-  mut func : Int
-  mut value : Int
-  mut component : Int
-  mut instance : Int
-  mut core_func : Int
-  mut core_module : Int
-  mut core_instance : Int
-  mut core_type : Int
-  mut core_table : Int
-  mut core_memory : Int
-  mut core_global : Int
-  mut core_tag : Int
+  mut func : Int32
+  mut value : Int32
+  mut component : Int32
+  mut instance : Int32
+  mut core_func : Int32
+  mut core_module : Int32
+  mut core_instance : Int32
+  mut core_type : Int32
+  mut core_table : Int32
+  mut core_memory : Int32
+  mut core_global : Int32
+  mut core_tag : Int32
 }
 
 ///|
@@ -162,8 +162,8 @@ priv struct FuncSigShape {
 
 ///|
 priv enum ExportedTypeInfo {
-  Existing(Int)
-  Resource(Int)
+  Existing(Int32)
+  Resource(Int32)
   Opaque
 }
 
@@ -179,9 +179,9 @@ priv enum TypeSig {
   List(TypeSig)
   Flags(Array[String])
   Enum(Array[String])
-  Resource(Int)
-  Own(Int)
-  Borrow(Int)
+  Resource(Int32)
+  Own(Int32)
+  Borrow(Int32)
   Other
 } derive(Debug, Eq)
 
@@ -201,8 +201,8 @@ priv struct TypeCaseSig {
 fn typeidx_of_typesig(
   sig : TypeSig,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-) -> Int? {
+  resource_ids : Array[Int32?],
+) -> Int32? {
   for i in 0..<type_table.length() {
     if type_sig_of_typeidx(i, type_table, resource_ids) == sig {
       return Some(i)
@@ -215,9 +215,9 @@ fn typeidx_of_typesig(
 fn typeidx_of_typesig_prefer_named(
   sig : TypeSig,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  preferred_named_types : Map[Int, Int]?,
-) -> Int? {
+  resource_ids : Array[Int32?],
+  preferred_named_types : Map[Int32, Int32]?,
+) -> Int32? {
   if preferred_named_types is Some(named_types) {
     for entry in named_types.iter() {
       let (idx, _marker) = entry
@@ -235,8 +235,8 @@ fn typeidx_of_typesig_prefer_named(
 fn valtype_of_typesig(
   sig : TypeSig,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  preferred_named_types : Map[Int, Int]?,
+  resource_ids : Array[Int32?],
+  preferred_named_types : Map[Int32, Int32]?,
 ) -> @component.ValType? {
   match sig {
     Prim(p) => Some(Prim(p))
@@ -255,8 +255,8 @@ fn valtype_of_typesig(
 fn typedef_of_typesig(
   sig : TypeSig,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  preferred_named_types : Map[Int, Int]?,
+  resource_ids : Array[Int32?],
+  preferred_named_types : Map[Int32, Int32]?,
 ) -> @component.TypeDef? {
   match sig {
     Prim(p) => Some(DefValType(p))
@@ -457,7 +457,10 @@ fn InstanceSig::empty() -> InstanceSig {
 ///|
 /// Convert a core index-space (including imports) into a type for validation.
 /// Returns None when the index is out of bounds or for kinds we don't model yet.
-fn core_func_type_of_idx(m : @types.Module, func_idx : Int) -> @types.FuncType? {
+fn core_func_type_of_idx(
+  m : @types.Module,
+  func_idx : Int32,
+) -> @types.FuncType? {
   // The module here has not been validated -- this is what decides whether
   // it will be -- so a type index naming a struct is an answer of `None`,
   // not a crash (ISS-396). The `None` return was already the way to say
@@ -482,7 +485,7 @@ fn core_func_type_of_idx(m : @types.Module, func_idx : Int) -> @types.FuncType? 
 ///|
 fn core_table_type_of_idx(
   m : @types.Module,
-  table_idx : Int,
+  table_idx : Int32,
 ) -> @types.TableType? {
   let mut imported = 0
   for imp in m.imports {
@@ -503,7 +506,7 @@ fn core_table_type_of_idx(
 ///|
 fn core_memory_type_of_idx(
   m : @types.Module,
-  mem_idx : Int,
+  mem_idx : Int32,
 ) -> @types.MemoryType? {
   let mut imported = 0
   for imp in m.imports {
@@ -524,7 +527,7 @@ fn core_memory_type_of_idx(
 ///|
 fn core_global_type_of_idx(
   m : @types.Module,
-  global_idx : Int,
+  global_idx : Int32,
 ) -> @types.GlobalType? {
   let mut imported = 0
   for imp in m.imports {
@@ -543,7 +546,7 @@ fn core_global_type_of_idx(
 }
 
 ///|
-fn core_tag_type_of_idx(m : @types.Module, tag_idx : Int) -> @types.FuncType? {
+fn core_tag_type_of_idx(m : @types.Module, tag_idx : Int32) -> @types.FuncType? {
   let mut imported = 0
   for imp in m.imports {
     if imp.desc is Tag(type_idx) {
@@ -639,7 +642,7 @@ fn core_import_compatible(
 }
 
 ///|
-fn core_kind_of_extern_type(ty : CoreExternType) -> Int {
+fn core_kind_of_extern_type(ty : CoreExternType) -> Int32 {
   match ty {
     Func(_) => 0x00
     Table(_) => 0x01
@@ -676,7 +679,7 @@ fn core_module_import_sig_of_type(
 
 ///|
 fn core_module_import_sig_of_idx(
-  idx : Int,
+  idx : Int32,
   core_module_defs : Array[@types.Module?],
   core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
 ) -> Map[String, CoreExternType]? {
@@ -760,7 +763,7 @@ fn is_semver_ident_char(b : Byte) -> Bool {
 }
 
 ///|
-fn is_lower_kebab_case_range(name : Bytes, start : Int, end_ : Int) -> Bool {
+fn is_lower_kebab_case_range(name : Bytes, start : Int32, end_ : Int32) -> Bool {
   if start < 0 || end_ < 0 || start >= end_ || end_ > name.length() {
     return false
   }
@@ -790,7 +793,7 @@ fn is_lower_kebab_case_range(name : Bytes, start : Int, end_ : Int) -> Bool {
 }
 
 ///|
-fn is_kebab_case_range(name : Bytes, start : Int, end_ : Int) -> Bool {
+fn is_kebab_case_range(name : Bytes, start : Int32, end_ : Int32) -> Bool {
   // wasm-tools' "kebab case" rules are stricter than "any string" but looser
   // than "all lowercase": each dash-separated segment must not mix upper/lower
   // case letters, and the first overall character must be a letter.
@@ -840,7 +843,7 @@ fn is_kebab_case_range(name : Bytes, start : Int, end_ : Int) -> Bool {
 }
 
 ///|
-fn is_canonversion_range(name : Bytes, start : Int, end_ : Int) -> Bool {
+fn is_canonversion_range(name : Bytes, start : Int32, end_ : Int32) -> Bool {
   if start < 0 || end_ <= start || end_ > name.length() {
     return false
   }
@@ -889,7 +892,7 @@ fn is_canonversion_range(name : Bytes, start : Int, end_ : Int) -> Bool {
 }
 
 ///|
-fn is_semver_range(name : Bytes, start : Int, end_ : Int) -> Bool {
+fn is_semver_range(name : Bytes, start : Int32, end_ : Int32) -> Bool {
   // Minimal SemVer parser (enough to match wasm-tools component-spec tests).
   // Accepts: MAJOR.MINOR.PATCH[-prerelease][+build]
   if start < 0 || end_ < 0 || start >= end_ || end_ > name.length() {
@@ -1182,7 +1185,7 @@ fn is_base64ish_char(b : Byte) -> Bool {
 }
 
 ///|
-fn is_integrity_value(name : Bytes, start : Int, end_ : Int) -> Bool {
+fn is_integrity_value(name : Bytes, start : Int32, end_ : Int32) -> Bool {
   // Parse `sha256-...` digests, allowing multiple digests separated by spaces.
   // Content may have leading/trailing whitespace.
   let mut i = start
@@ -1503,7 +1506,7 @@ fn validate_import_name_bytes(
 ///|
 priv struct CoreTypeReader {
   data : Bytes
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
@@ -1519,7 +1522,7 @@ fn CoreTypeReader::is_eof(self : CoreTypeReader) -> Bool {
 ///|
 fn CoreTypeReader::read_u8(
   self : CoreTypeReader,
-) -> Int raise ComponentValidationError {
+) -> Int32 raise ComponentValidationError {
   if self.pos >= self.data.length() {
     raise SectionParseError(3, "unexpected end of core type payload")
   }
@@ -1531,7 +1534,7 @@ fn CoreTypeReader::read_u8(
 ///|
 fn CoreTypeReader::read_leb_u32(
   self : CoreTypeReader,
-) -> Int raise ComponentValidationError {
+) -> Int32 raise ComponentValidationError {
   let mut result = 0
   let mut shift = 0
   while true {
@@ -1551,7 +1554,7 @@ fn CoreTypeReader::read_leb_u32(
 ///|
 fn CoreTypeReader::read_bytes(
   self : CoreTypeReader,
-  n : Int,
+  n : Int32,
 ) -> Bytes raise ComponentValidationError {
   if n < 0 || self.pos + n > self.data.length() {
     raise SectionParseError(3, "unexpected end of core type payload")
@@ -1624,8 +1627,8 @@ fn CoreTypeReader::skip_func_type_body(
 ///|
 fn CoreTypeReader::validate_extern_type(
   self : CoreTypeReader,
-  kind : Int,
-  func_type_bound : Int,
+  kind : Int32,
+  func_type_bound : Int32,
 ) -> Unit raise ComponentValidationError {
   match kind {
     0x00 => {
@@ -1676,7 +1679,7 @@ fn CoreTypeReader::read_core_valtype(
 ) -> @types.ValueType raise ComponentValidationError {
   let op = self.read_u8()
   fn abstract_ref(
-    heap : Int,
+    heap : Int32,
     nullable : Bool,
   ) -> @types.ValueType raise ComponentValidationError {
     match @types.ValueType::from_abstract_heap_type(heap, nullable) {
@@ -1745,9 +1748,9 @@ fn CoreTypeReader::read_core_functype(
 ///|
 fn CoreTypeReader::read_extern_type_sig(
   self : CoreTypeReader,
-  kind : Int,
+  kind : Int32,
   func_types : Array[@types.FuncType?],
-  func_type_bound : Int,
+  func_type_bound : Int32,
 ) -> CoreExternType? raise ComponentValidationError {
   match kind {
     0x00 => {
@@ -1856,12 +1859,12 @@ fn CoreTypeReader::read_extern_type_sig(
 ///|
 fn parse_core_type_module_sig(
   r : CoreTypeReader,
-  max_outer_depth : Int,
-  current_core_type_bound : Int,
-  outer_core_type_bounds : Array[Int],
+  max_outer_depth : Int32,
+  current_core_type_bound : Int32,
+  outer_core_type_bounds : Array[Int32],
 ) -> (Array[CoreModuleTypeImport], Map[String, CoreExternType]) raise ComponentValidationError {
   let ndecls = r.read_leb_u32()
-  let seen_imports : Map[String, Int] = Map([])
+  let seen_imports : Map[String, Int32] = Map([])
   let imports : Array[CoreModuleTypeImport] = []
   let export_types : Map[String, CoreExternType] = Map([])
   let func_types : Array[@types.FuncType?] = []

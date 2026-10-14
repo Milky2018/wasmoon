@@ -3,7 +3,7 @@ fn continuation_roundtrip(source : String) -> Unit raise {
   let module_ = @wat.parse(source)
   @validator.validate_module(module_, stack_switching=true)
   @validator.validate_module_with_context(module_, stack_switching=true)
-  let bytes = Bytes::from_array(@encoder.encode(module_).map(Int::to_byte))
+  let bytes = Bytes::from_array(@encoder.encode(module_).map(Int32::to_byte))
   let decoded = @parser.parse_module(bytes)
   @validator.validate_module(decoded, stack_switching=true)
   assert_eq(@encoder.encode(decoded), @encoder.encode(module_))

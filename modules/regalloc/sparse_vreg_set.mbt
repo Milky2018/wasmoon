@@ -1,7 +1,7 @@
 ///|
 priv enum SparseVRegWords {
-  Small(Array[(Int, UInt64)])
-  Large(Map[Int, UInt64])
+  Small(Array[(Int32, UInt64)])
+  Large(Map[Int32, UInt64])
   Dense(Array[UInt64])
 }
 
@@ -16,12 +16,12 @@ fn SparseVRegSet::new() -> SparseVRegSet {
 }
 
 ///|
-fn SparseVRegSet::dense(value_count : Int) -> SparseVRegSet {
+fn SparseVRegSet::dense(value_count : Int32) -> SparseVRegSet {
   { words: Dense(Array::make((value_count + 63) / 64, 0UL)), }
 }
 
 ///|
-fn SparseVRegSet::word(self : SparseVRegSet, word_id : Int) -> UInt64 {
+fn SparseVRegSet::word(self : SparseVRegSet, word_id : Int32) -> UInt64 {
   match self.words {
     Small(entries) => {
       for entry in entries {
@@ -39,7 +39,7 @@ fn SparseVRegSet::word(self : SparseVRegSet, word_id : Int) -> UInt64 {
 ///|
 fn SparseVRegSet::set_word(
   self : SparseVRegSet,
-  word_id : Int,
+  word_id : Int32,
   bits : UInt64,
 ) -> Unit {
   match self.words {
@@ -60,7 +60,7 @@ fn SparseVRegSet::set_word(
       if entries.length() < 8 {
         entries.push((word_id, bits))
       } else {
-        let words : Map[Int, UInt64] = Map([])
+        let words : Map[Int32, UInt64] = Map([])
         for entry in entries {
           words[entry.0] = entry.1
         }
@@ -82,7 +82,7 @@ fn SparseVRegSet::set_word(
 }
 
 ///|
-fn SparseVRegSet::set(self : SparseVRegSet, id : Int, present : Bool) -> Unit {
+fn SparseVRegSet::set(self : SparseVRegSet, id : Int32, present : Bool) -> Unit {
   if id < 0 {
     return
   }
@@ -94,7 +94,7 @@ fn SparseVRegSet::set(self : SparseVRegSet, id : Int, present : Bool) -> Unit {
 }
 
 ///|
-fn SparseVRegSet::contains(self : SparseVRegSet, id : Int) -> Bool {
+fn SparseVRegSet::contains(self : SparseVRegSet, id : Int32) -> Bool {
   if id < 0 {
     return false
   }
@@ -106,7 +106,7 @@ fn SparseVRegSet::contains(self : SparseVRegSet, id : Int) -> Bool {
 ///|
 fn SparseVRegSet::merge_word(
   self : SparseVRegSet,
-  word_id : Int,
+  word_id : Int32,
   bits : UInt64,
 ) -> Bool {
   if bits == 0UL {
@@ -208,9 +208,13 @@ fn SparseVRegSet::union_without(
 }
 
 ///|
-fn SparseVRegSet::to_sorted_array(self : SparseVRegSet) -> Array[Int] {
-  let values : Array[Int] = []
-  fn append_word(values : Array[Int], word_id : Int, bits : UInt64) -> Unit {
+fn SparseVRegSet::to_sorted_array(self : SparseVRegSet) -> Array[Int32] {
+  let values : Array[Int32] = []
+  fn append_word(
+    values : Array[Int32],
+    word_id : Int32,
+    bits : UInt64,
+  ) -> Unit {
     let mut remaining = bits
     while remaining != 0UL {
       let bit = remaining.ctz()

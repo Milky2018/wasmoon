@@ -5,10 +5,10 @@
 ///|
 /// JIT-compiled function ready for execution
 pub struct JITFunction {
-  func_idx : Int
+  func_idx : Int32
   name : String
   priv func_ptr : Int64
-  priv code_size : Int
+  priv code_size : Int32
   param_types : Array[@types.ValueType] // Parameter types for proper register allocation
   result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
 }
@@ -16,26 +16,26 @@ pub struct JITFunction {
 ///|
 /// Error when loading a precompiled JIT module
 pub suberror JITModuleLoadError {
-  ContextAllocationFailed(total_funcs~ : Int)
+  ContextAllocationFailed(total_funcs~ : Int32)
   UnsupportedImport(
-    import_idx~ : Int,
+    import_idx~ : Int32,
     module_name~ : String,
     func_name~ : String
   )
   ImportTrampolineAllocationFailed(
-    import_idx~ : Int,
+    import_idx~ : Int32,
     module_name~ : String,
     func_name~ : String,
-    code_size~ : Int
+    code_size~ : Int32
   )
   ImportTrampolineCompilationFailed(
-    import_idx~ : Int,
+    import_idx~ : Int32,
     module_name~ : String,
     func_name~ : String,
     message~ : String
   )
   ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
-  FunctionMetadataRegistrationFailed(func_idx~ : Int, message~ : String)
+  FunctionMetadataRegistrationFailed(func_idx~ : Int32, message~ : String)
 } derive(Debug)
 
 ///|
@@ -47,10 +47,10 @@ pub impl Show for JITModuleLoadError with fn output(self, logger) {
 
 ///|
 fn JITFunction::JITFunction(
-  func_idx : Int,
+  func_idx : Int32,
   name : String,
   func_ptr : Int64,
-  code_size : Int,
+  code_size : Int32,
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> JITFunction {
@@ -62,17 +62,17 @@ fn JITFunction::JITFunction(
 struct AddressRange {
   start : Int64 // Function start address
   end : Int64 // Function end address (start + code_size)
-  func_idx : Int // Wasm function index
+  func_idx : Int32 // Wasm function index
 } derive(Debug)
 
 ///|
 /// Loaded precompiled module with executable functions
 struct JITModule {
-  functions : Map[Int, JITFunction]
-  callables : Map[Int, @wasmoon_jit.NativeCallable]
-  mut callable_owners : Int
+  functions : Map[Int32, JITFunction]
+  callables : Map[Int32, @wasmoon_jit.NativeCallable]
+  mut callable_owners : Int32
   mut close_requested : Bool
-  by_name : Map[String, Int]
+  by_name : Map[String, Int32]
   address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
   mut debug_db : @wasmoon_jit.JITDebugDB?
@@ -115,8 +115,8 @@ fn artifact_target_architecture(
 ///|
 fn artifact_context_function_count(
   artifact : @artifact.Artifact,
-  signature_count : Int,
-) -> Int {
+  signature_count : Int32,
+) -> Int32 {
   let mut count = signature_count
   for import_ in artifact.imports {
     if import_.function_index >= count {
@@ -133,7 +133,7 @@ fn artifact_context_function_count(
 
 ///|
 fn artifact_function_name(
-  function_index : Int,
+  function_index : Int32,
   function_names : Array[String],
 ) -> String {
   if function_index >= 0 &&
@@ -214,8 +214,8 @@ fn stage_artifact_imports(
 pub fn JITModule::load_artifact(
   loaded : @wasmoon_jit.LoadedArtifact,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
-  function_names? : Array[String] = [],
-  debug_db? : @wasmoon_jit.JITDebugDB? = None,
+  function_names~ : Array[String] = [],
+  debug_db~ : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
   JITModule::load_artifact_with_imports(
     loaded,
@@ -232,8 +232,8 @@ pub fn JITModule::load_artifact_with_imports(
   loaded : @wasmoon_jit.LoadedArtifact,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   external_imports : Map[String, Map[String, Int64]],
-  function_names? : Array[String] = [],
-  debug_db? : @wasmoon_jit.JITDebugDB? = None,
+  function_names~ : Array[String] = [],
+  debug_db~ : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
   load_artifact_with_imports_using_registrar(
     loaded,
@@ -398,7 +398,7 @@ fn JITModule::release_code(self : JITModule) -> Unit {
 ///|
 /// Get the number of functions in the function table
 /// Returns 0 if no context is available
-pub fn JITModule::get_func_count(self : JITModule) -> Int {
+pub fn JITModule::get_func_count(self : JITModule) -> Int32 {
   match self.context {
     Some(context) => context.ctx.func_count()
     None => 0
@@ -409,7 +409,7 @@ pub fn JITModule::get_func_count(self : JITModule) -> Int {
 /// Refresh one Store-owned table from the context that borrowed it.
 pub fn JITModule::refresh_table_layout(
   self : JITModule,
-  table_idx : Int,
+  table_idx : Int32,
 ) -> Bool {
   match self.context {
     Some(context) => context.refresh_table_layout(table_idx)
@@ -419,7 +419,7 @@ pub fn JITModule::refresh_table_layout(
 
 ///|
 /// Get a function by index
-pub fn JITModule::get_func(self : JITModule, func_idx : Int) -> JITFunction? {
+pub fn JITModule::get_func(self : JITModule, func_idx : Int32) -> JITFunction? {
   self.functions.get(func_idx)
 }
 
@@ -438,7 +438,7 @@ pub fn JITModule::get_func_by_name(
 ///|
 /// Get function pointer by function index (for indirect table initialization)
 /// Returns the executable code pointer for the function, or 0 if not found
-pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
+pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int32) -> Int64 {
   if self.callables.get(func_idx) is Some(callable) {
     return callable.entry_address()
   }
@@ -461,7 +461,7 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
 pub fn JITModule::find_func_by_pc(
   self : JITModule,
   pc : Int64,
-) -> (Int, JITFunction, Int)? {
+) -> (Int32, JITFunction, Int32)? {
   if pc == 0L || self.address_ranges.is_empty() {
     return None
   }
@@ -767,8 +767,8 @@ pub fn JITModule::call_with_context_controlled(
   self : JITModule,
   func : JITFunction,
   args : Array[Int64],
-  cancel? : (() -> Bool)? = None,
-  timeout_ms? : Int? = None,
+  cancel~ : (() -> Bool)? = None,
+  timeout_ms~ : Int32? = None,
 ) -> JITCallResult {
   guard @wasmoon_jit.InvocationControl::new(timeout_ms, cancel) is Some(control) else {
     return InvalidTimeout
@@ -803,7 +803,7 @@ fn JITModule::build_trap_report(
   msg : String,
 ) -> @wasmoon_jit.TrapReport {
   let details = @wasmoon_jit.get_last_trap_details()
-  let mut wasm_func_idx : Int? = None
+  let mut wasm_func_idx : Int32? = None
   let mut wasm_func_name : String? = None
   let mut wasm_offset : Int64? = None
   let wasm_frames : Array[@wasmoon_jit.WasmTrapFrame] = []
@@ -859,7 +859,7 @@ fn JITModule::build_trap_report(
       }
   }
 
-  let mut caller_func_idx : Int? = None
+  let mut caller_func_idx : Int32? = None
   if details.frame_lr != 0L {
     let mut caller_pc = details.frame_lr
     match self.find_func_by_pc(details.frame_lr) {
@@ -1017,7 +1017,7 @@ pub fn JITModule::set_memory(
 
 ///|
 /// Get current memory base pointer for memidx
-pub fn JITModule::get_memory_ptr(self : JITModule, memidx : Int) -> Int64 {
+pub fn JITModule::get_memory_ptr(self : JITModule, memidx : Int32) -> Int64 {
   match self.context {
     Some(ctx) => ctx.get_memory_ptr(memidx)
     None => 0L
@@ -1026,7 +1026,7 @@ pub fn JITModule::get_memory_ptr(self : JITModule, memidx : Int) -> Int64 {
 
 ///|
 /// Get current memory size in bytes for memidx
-pub fn JITModule::get_memory_size(self : JITModule, memidx : Int) -> Int64 {
+pub fn JITModule::get_memory_size(self : JITModule, memidx : Int32) -> Int64 {
   match self.context {
     Some(ctx) => ctx.get_memory_size(memidx)
     None => 0L
@@ -1109,7 +1109,7 @@ pub fn JITModule::gc_set_safepoint_table(
 /// Select currently active function safepoint table (`func_idx < 0` clears).
 pub fn JITModule::gc_use_func_safepoints(
   self : JITModule,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Unit {
   if self.context is Some(context) {
     context.ctx.gc_use_func_safepoints(func_idx)
@@ -1117,7 +1117,10 @@ pub fn JITModule::gc_use_func_safepoints(
 }
 
 ///|
-pub fn JITModule::throw_exception_tag(self : JITModule, tag_addr : Int) -> Unit {
+pub fn JITModule::throw_exception_tag(
+  self : JITModule,
+  tag_addr : Int32,
+) -> Unit {
   if self.context is Some(context) {
     context.ctx.throw_exception_tag(tag_addr)
   }
@@ -1126,7 +1129,7 @@ pub fn JITModule::throw_exception_tag(self : JITModule, tag_addr : Int) -> Unit 
 ///|
 pub fn JITModule::throw_exception_values(
   self : JITModule,
-  tag_addr : Int,
+  tag_addr : Int32,
   values : Array[Int64],
 ) -> Unit {
   if self.context is Some(context) {
@@ -1139,8 +1142,8 @@ pub fn JITModule::setup_gc(
   self : JITModule,
   heap : @wasmoon_jit.CHeap,
   types : Array[@types.SubType],
-  canonical_indices : Array[Int],
-  func_type_indices : Array[Int],
+  canonical_indices : Array[Int32],
+  func_type_indices : Array[Int32],
 ) -> Unit raise @wasmoon_jit.GCSetupError {
   guard self.context is Some(context) else { raise MissingJITContext }
   context.ctx.setup_gc(heap, types, canonical_indices, func_type_indices)
@@ -1151,10 +1154,10 @@ pub fn JITModule::setup_gc_with_func_table(
   self : JITModule,
   heap : @wasmoon_jit.CHeap,
   types : Array[@types.SubType],
-  canonical_indices : Array[Int],
-  func_type_indices : Array[Int],
+  canonical_indices : Array[Int32],
+  func_type_indices : Array[Int32],
   func_table_ptr : Int64,
-  num_funcs : Int,
+  num_funcs : Int32,
 ) -> Unit raise @wasmoon_jit.GCSetupError {
   guard self.context is Some(context) else { raise MissingJITContext }
   context.ctx.setup_gc_with_func_table(
@@ -1190,8 +1193,8 @@ pub fn JITModule::gc_environment_is_clear(self : JITModule) -> Bool {
 /// Returns: memory pointer on success, 0 on failure
 pub fn JITModule::alloc_guarded_memory(
   self : JITModule,
-  initial_pages : Int,
-  max_pages : Int?,
+  initial_pages : Int32,
+  max_pages : Int32?,
 ) -> @wasmoon_jit.MemoryDescriptor {
   match self.context {
     Some(ctx) => ctx.alloc_guarded_memory(initial_pages, max_pages)
@@ -1271,8 +1274,8 @@ pub fn JITModule::clear_hostcall_callback(self : JITModule) -> Unit {
 /// elem_init: array of (table_idx, func_idx, type_idx) triples
 pub fn JITModule::init_indirect_table(
   self : JITModule,
-  table_size : Int,
-  elem_init : Array[(Int, Int, Int)],
+  table_size : Int32,
+  elem_init : Array[(Int32, Int32, Int32)],
 ) -> Unit {
   if self.context is Some(ctx) && ctx.alloc_indirect_table(table_size) {
     for entry in elem_init {
@@ -1296,8 +1299,8 @@ pub fn JITModule::setup_segments(
   self : JITModule,
   datas : Array[@types.Data],
   elem_segments : Array[Array[Int64]],
-  data_dropped? : Array[Bool] = [],
-  elem_dropped? : Array[Bool] = [],
+  data_dropped~ : Array[Bool] = [],
+  elem_dropped~ : Array[Bool] = [],
 ) -> Unit {
   guard self.context is Some(ctx) else { return }
   ctx.ctx.setup_segments(datas, elem_segments, data_dropped~, elem_dropped~)
@@ -1318,7 +1321,7 @@ pub fn JITModule::clear_segments(self : JITModule) -> Unit {
 pub fn JITModule::init_shared_tables(
   self : JITModule,
   jit_tables : Array[@wasmoon_jit.JITTable?],
-  elem_init : Array[(Int, Int, Int?, Int)],
+  elem_init : Array[(Int32, Int32, Int32?, Int32)],
 ) -> Unit {
   if self.context is None {
     return
@@ -1367,7 +1370,7 @@ pub fn JITModule::init_shared_tables(
 /// verbose: if true, print debug info to stderr
 pub fn JITModule::register_dwarf(
   self : JITModule,
-  verbose? : Bool = false,
+  verbose~ : Bool = false,
 ) -> @wasmoon_jit.DWARFBuilder {
   let dwarf = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
   for func_idx, func in self.functions {
@@ -1381,10 +1384,10 @@ pub fn JITModule::register_dwarf(
 ///|
 pub fn JITModule::set_callable_types(
   self : JITModule,
-  local_types : Array[Int],
-  parents : Array[Int],
-  entries : Array[(Int64, Int)],
-  tags : Array[Int],
+  local_types : Array[Int32],
+  parents : Array[Int32],
+  entries : Array[(Int64, Int32)],
+  tags : Array[Int32],
 ) -> Unit {
   if self.context is Some(context) {
     context.ctx.set_callable_types(local_types, parents, entries, tags)
@@ -1395,8 +1398,8 @@ pub fn JITModule::set_callable_types(
 pub fn JITModule::bind_callable_registry(
   self : JITModule,
   registry : @wasmoon_jit.NativeCallableRegistry,
-  local_types : Array[Int],
-  tags : Array[Int],
+  local_types : Array[Int32],
+  tags : Array[Int32],
 ) -> Unit {
   if self.context is Some(context) {
     context.ctx.bind_callable_registry(registry, local_types, tags)

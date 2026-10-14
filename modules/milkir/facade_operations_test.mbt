@@ -156,7 +156,7 @@ test "public extension descriptors support bounded immediate counts" {
       #|}
     ),
   )
-  let accepted_counts : Array[Int] = []
+  let accepted_counts : Array[Int32] = []
   for count in 0..<=4 {
     if descriptor.accepts_immediate_count(count) {
       accepted_counts.push(count)

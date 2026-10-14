@@ -5,15 +5,15 @@
 ///|
 /// Union-Find data structure for grouping LiveRanges into Bundles
 struct UnionFind {
-  parent : Array[Int] // Parent pointer (or self if root)
-  rank : Array[Int] // Rank for union by rank heuristic
+  parent : Array[Int32] // Parent pointer (or self if root)
+  rank : Array[Int32] // Rank for union by rank heuristic
 }
 
 ///|
 /// Create a new UnionFind with n elements (0..n-1)
-pub fn UnionFind::UnionFind(n : Int) -> UnionFind {
-  let parent : Array[Int] = []
-  let rank : Array[Int] = []
+pub fn UnionFind::UnionFind(n : Int32) -> UnionFind {
+  let parent : Array[Int32] = []
+  let rank : Array[Int32] = []
   for i in 0..<n {
     parent.push(i) // Each element is its own parent initially
     rank.push(0)
@@ -24,7 +24,7 @@ pub fn UnionFind::UnionFind(n : Int) -> UnionFind {
 ///|
 /// Find the root of the set containing x
 /// Uses path compression for amortized O(α(n)) time
-pub fn UnionFind::find(self : UnionFind, x : Int) -> Int {
+pub fn UnionFind::find(self : UnionFind, x : Int32) -> Int32 {
   let mut root = x
   while self.parent[root] != root {
     root = self.parent[root]
@@ -42,7 +42,7 @@ pub fn UnionFind::find(self : UnionFind, x : Int) -> Int {
 /// Union the sets containing x and y
 /// Uses union by rank for balanced trees
 /// Returns true if a union was performed (sets were different)
-pub fn UnionFind::union(self : UnionFind, x : Int, y : Int) -> Bool {
+pub fn UnionFind::union(self : UnionFind, x : Int32, y : Int32) -> Bool {
   let root_x = self.find(x)
   let root_y = self.find(y)
   if root_x == root_y {
@@ -65,7 +65,11 @@ pub fn UnionFind::union(self : UnionFind, x : Int, y : Int) -> Bool {
 ///|
 /// Union the set containing `from` into the set containing `to`.
 /// Returns true if a union was performed (sets were different).
-pub fn UnionFind::union_into(self : UnionFind, from : Int, to : Int) -> Bool {
+pub fn UnionFind::union_into(
+  self : UnionFind,
+  from : Int32,
+  to : Int32,
+) -> Bool {
   let from_root = self.find(from)
   let to_root = self.find(to)
   if from_root == to_root {
@@ -77,15 +81,15 @@ pub fn UnionFind::union_into(self : UnionFind, from : Int, to : Int) -> Bool {
 
 ///|
 /// Check if x and y are in the same set
-pub fn UnionFind::same_set(self : UnionFind, x : Int, y : Int) -> Bool {
+pub fn UnionFind::same_set(self : UnionFind, x : Int32, y : Int32) -> Bool {
   self.find(x) == self.find(y)
 }
 
 ///|
 /// Get all elements in the same set as x
-pub fn UnionFind::get_set(self : UnionFind, x : Int) -> Array[Int] {
+pub fn UnionFind::get_set(self : UnionFind, x : Int32) -> Array[Int32] {
   let root = self.find(x)
-  let result : Array[Int] = []
+  let result : Array[Int32] = []
   for i in 0..<self.parent.length() {
     if self.find(i) == root {
       result.push(i)
@@ -96,8 +100,8 @@ pub fn UnionFind::get_set(self : UnionFind, x : Int) -> Array[Int] {
 
 ///|
 /// Get all unique sets (as arrays of their members)
-pub fn UnionFind::get_all_sets(self : UnionFind) -> Array[Array[Int]] {
-  let sets : Map[Int, Array[Int]] = Map([])
+pub fn UnionFind::get_all_sets(self : UnionFind) -> Array[Array[Int32]] {
+  let sets : Map[Int32, Array[Int32]] = Map([])
   for i in 0..<self.parent.length() {
     let root = self.find(i)
     match sets.get(root) {
@@ -105,7 +109,7 @@ pub fn UnionFind::get_all_sets(self : UnionFind) -> Array[Array[Int]] {
       None => sets.set(root, [i])
     }
   }
-  let result : Array[Array[Int]] = []
+  let result : Array[Array[Int32]] = []
   for entry in sets {
     let (_, members) = entry
     result.push(members)
@@ -115,14 +119,14 @@ pub fn UnionFind::get_all_sets(self : UnionFind) -> Array[Array[Int]] {
 
 ///|
 /// Get the number of elements
-pub fn UnionFind::length(self : UnionFind) -> Int {
+pub fn UnionFind::length(self : UnionFind) -> Int32 {
   self.parent.length()
 }
 
 ///|
 /// Count the number of distinct sets
-pub fn UnionFind::num_sets(self : UnionFind) -> Int {
-  let roots : Set[Int] = Set([])
+pub fn UnionFind::num_sets(self : UnionFind) -> Int32 {
+  let roots : Set[Int32] = Set([])
   for i in 0..<self.parent.length() {
     roots.add(self.find(i))
   }

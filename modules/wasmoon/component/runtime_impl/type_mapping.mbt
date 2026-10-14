@@ -18,7 +18,7 @@ fn resolve_valtype(
 }
 
 ///|
-fn discriminant_layout(case_count : Int) -> (Int, Int) {
+fn discriminant_layout(case_count : Int32) -> (Int32, Int32) {
   @component.canonical_discriminant_layout(case_count)
 }
 
@@ -27,7 +27,7 @@ fn canonical_memory_layout(
   ty : ValType,
   types : Array[TypeDef?],
   mem_is_64 : Bool,
-) -> (Int, Int) raise ComponentRuntimeError {
+) -> (Int32, Int32) raise ComponentRuntimeError {
   match @component.canonical_memory_layout(ty, types, mem_is_64) {
     Some(layout) => layout
     None => raise CanonCallError("invalid or oversized canonical memory layout")
@@ -38,7 +38,7 @@ fn canonical_memory_layout(
 fn stream_payload_info(
   payload_ty : ValType?,
   types : Array[TypeDef?],
-) -> (Int, Int?) raise ComponentRuntimeError {
+) -> (Int32, Int32?) raise ComponentRuntimeError {
   // Returns (elem_size_bytes, own_resource_type_id?).
   //
   // Note: `stream.read`/`stream.write` lengths are element counts, not byte counts.
@@ -71,7 +71,7 @@ fn core_types_for_valtype(
   ty : ValType,
   types : Array[TypeDef?],
   mem_is_64 : Bool,
-  max_flat? : Int = 2147483647,
+  max_flat~ : Int32 = 2147483647,
 ) -> Array[@types.ValueType] raise ComponentRuntimeError {
   match @component.canonical_abi_plan(ty, types, mem_is_64, max_flat~) {
     Some(plan) => plan.flat
@@ -102,7 +102,7 @@ fn resolve_canon_resources(
   opts : Array[CanonOpt],
   state : BuildState,
 ) -> CanonResources raise ComponentRuntimeError {
-  let mut mem : Int? = None
+  let mut mem : Int32? = None
   let mut realloc : CanonicalRealloc? = None
   let mut post_return : CoreFuncRef? = None
   let mut encoding = StringEncoding::Utf8

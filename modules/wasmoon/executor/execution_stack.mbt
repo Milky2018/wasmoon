@@ -3,7 +3,7 @@ priv enum ExecutionKind {
   BlockControl
   LoopControl
   TryControl(Array[@types.CatchHandler])
-  FunctionControl(@runtime.ModuleInstance, Int)
+  FunctionControl(@runtime.ModuleInstance, Int32)
 } derive(Debug)
 
 ///|
@@ -11,10 +11,10 @@ priv enum ExecutionKind {
 /// share the same stack, so call, branch, exception and resume all unwind here.
 priv struct ExecutionFrame {
   body : Array[@types.Instruction]
-  mut ip : Int
+  mut ip : Int32
   kind : ExecutionKind
-  arity : Int
-  height : Int
+  arity : Int32
+  height : Int32
 } derive(Debug)
 
 ///|
@@ -55,7 +55,7 @@ fn ExecContext::enter_function(
   instance : @runtime.ModuleInstance,
   code : @types.FunctionCode,
   args : Array[@types.Value],
-  arity : Int,
+  arity : Int32,
 ) -> Unit raise {
   self.check_cancellation()
   self.check_control_capacity()
@@ -153,7 +153,7 @@ fn ExecContext::finish_execution_frame(
 /// Drain the execution stack without recursive guest calls or closure chains.
 fn ExecContext::run_execution(
   self : ExecContext,
-  initial_error? : Error? = None,
+  initial_error~ : Error? = None,
 ) -> Unit raise {
   self.running = true
   defer {
@@ -232,8 +232,8 @@ fn ExecContext::resume_execution(
 /// returns or branches with discarded operands require moving the results.
 fn ExecContext::finish_result_stack(
   self : ExecContext,
-  height : Int,
-  arity : Int,
+  height : Int32,
+  arity : Int32,
 ) -> Unit raise {
   if self.stack.size() == height + arity {
     return

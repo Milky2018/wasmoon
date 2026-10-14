@@ -20,7 +20,7 @@ fn detail_metrics_tick(enabled : Bool) -> @perf.PerfTick? {
 fn record_compile_subphase(
   name : String,
   tick : @perf.PerfTick?,
-  parent? : String = "function",
+  parent~ : String = "function",
 ) -> Unit {
   if tick is Some(start) {
     @perf.record_compile_subphase_us(name, @perf.elapsed_us(start), parent~)

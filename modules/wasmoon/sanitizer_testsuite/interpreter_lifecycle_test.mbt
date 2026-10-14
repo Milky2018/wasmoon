@@ -1,7 +1,7 @@
 ///|
 fn parked_host_call(
   ready : Ref[Bool],
-  close_in_host? : Bool = false,
+  close_in_host~ : Bool = false,
 ) -> (@runtime.Store, @executor.ExecutionContinuation) raise {
   let store = @runtime.Store::Store()
   errdefer store.close()

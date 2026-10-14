@@ -142,7 +142,7 @@ fn resolve_plan_moves(
 }
 
 ///|
-fn instruction_edit_key(position : EditPosition) -> (Int, Int)? {
+fn instruction_edit_key(position : EditPosition) -> (Int32, Int32)? {
   match position {
     Before(instruction) => Some((0, instruction))
     After(instruction) => Some((1, instruction))
@@ -157,7 +157,7 @@ fn[S : AllocationSink] resolve_instruction_edits(
 ) -> Unit raise VerifyError {
   let original = plan.edits
   let positions : Array[EditPosition] = []
-  let moves_by_position : Map[(Int, Int), Array[PlanMove]] = Map([])
+  let moves_by_position : Map[(Int32, Int32), Array[PlanMove]] = Map([])
   for edit in original {
     if instruction_edit_key(edit.position) is Some(key) {
       match moves_by_position.get(key) {

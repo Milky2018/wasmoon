@@ -74,7 +74,7 @@ fn eliminate_dead_code(func : @milkir.Function) -> OptResult {
 fn fold_constants(func : @milkir.Function) -> OptResult {
   let result = OptResult::OptResult()
   // Map from value id to constant value (if known)
-  let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
+  let constants : @hashmap.HashMap[Int32, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst_id in block.instruction_ids() {
       let inst = func.instruction_by_id(inst_id).unwrap()
@@ -121,7 +121,7 @@ fn fold_constants(func : @milkir.Function) -> OptResult {
 ///|
 /// Constant value representation
 priv enum ConstValue {
-  I32(Int)
+  I32(Int32)
   I64(Int64)
   F32(Float)
   F64(Double)
@@ -142,7 +142,7 @@ fn ConstValue::to_opcode(self : ConstValue) -> @milkir.Opcode {
 /// Try to fold an instruction to a constant
 fn try_fold_constant(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   match inst.opcode {
     // Constants are already folded
@@ -182,7 +182,7 @@ fn try_fold_constant(
 /// Get constant value for a value
 fn get_const(
   v : @milkir.Value,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   constants.get(v.id)
 }
@@ -191,7 +191,7 @@ fn get_const(
 /// Fold binary integer operation
 fn fold_binary_int(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
   op : (Int64, Int64) -> Int64,
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
@@ -211,7 +211,7 @@ fn fold_binary_int(
 /// Fold binary float operation
 fn fold_binary_float(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
   op : @milkir.FloatBinaryOp,
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
@@ -256,7 +256,7 @@ fn fold_binary_float(
 /// Fold integer comparison
 fn fold_icmp(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
   cc : @milkir.IntCC,
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
@@ -280,7 +280,7 @@ fn fold_icmp(
 ///|
 fn fold_ishl(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
     return None
@@ -299,7 +299,7 @@ fn fold_ishl(
 ///|
 fn fold_sshr(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
     return None
@@ -318,7 +318,7 @@ fn fold_sshr(
 ///|
 fn fold_ushr(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
     return None
@@ -331,7 +331,7 @@ fn fold_ushr(
     (Some(I32(a)), Some(I32(b))) => {
       let shift = b % 32
       let result = (a.reinterpret_as_uint() >> shift)
-        |> UInt::reinterpret_as_int
+        |> UInt32::reinterpret_as_int
       Some(I32(result))
     }
     (Some(I64(a)), Some(I64(b))) => {
@@ -346,7 +346,7 @@ fn fold_ushr(
 ///|
 fn fold_sdiv(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
     return None
@@ -379,7 +379,7 @@ fn fold_sdiv(
 ///|
 fn fold_udiv(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
     return None
@@ -394,7 +394,7 @@ fn fold_udiv(
         None
       } else {
         let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint())
-          |> UInt::reinterpret_as_int
+          |> UInt32::reinterpret_as_int
         Some(I32(result))
       }
     (Some(I64(a)), Some(I64(b))) =>
@@ -412,7 +412,7 @@ fn fold_udiv(
 ///|
 fn fold_srem(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
     return None
@@ -436,7 +436,7 @@ fn fold_srem(
 ///|
 fn fold_urem(
   inst : @milkir.Inst,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> ConstValue? {
   if inst.operands.length() != 2 {
     return None
@@ -451,7 +451,7 @@ fn fold_urem(
         None
       } else {
         let result = (a.reinterpret_as_uint() % b.reinterpret_as_uint())
-          |> UInt::reinterpret_as_int
+          |> UInt32::reinterpret_as_int
         Some(I32(result))
       }
     (Some(I64(a)), Some(I64(b))) =>
@@ -468,7 +468,7 @@ fn fold_urem(
 
 ///|
 /// Evaluate i32 comparison
-fn eval_icmp_i32(cc : @milkir.IntCC, a : Int, b : Int) -> Bool {
+fn eval_icmp_i32(cc : @milkir.IntCC, a : Int32, b : Int32) -> Bool {
   match cc {
     Eq => a == b
     Ne => a != b
@@ -521,11 +521,11 @@ fn canonicalize_aliases_with_analysis(
   }
   // Active alias environment for the current dominator-tree path.
   let aliases : Array[@milkir.Value?] = Array::make(func.next_value_id, None)
-  fn enter(block_id : Int) -> (Array[Int], Bool) {
+  fn enter(block_id : Int32) -> (Array[Int32], Bool) {
     let idx = analysis.block_idx[block_id]
     let block = func.blocks[idx]
     // Track aliases introduced in this block so we can pop on exit.
-    let local_aliases : Array[Int] = []
+    let local_aliases : Array[Int32] = []
     for inst_id in block.instruction_ids() {
       let inst = func.instruction_by_id(inst_id).unwrap()
       // Canonicalize operands through currently visible alias chain.

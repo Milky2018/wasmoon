@@ -5,7 +5,7 @@ fn payload_test_resources(
   table : ResourceTable,
   memory64 : Bool,
   encoding : StringEncoding,
-  heap_base? : Int64 = 1024L,
+  heap_base~ : Int64 = 1024L,
 ) -> CanonResources raise {
   let pages = (heap_base / 65536L + 1L).to_int()
   let memory = store.alloc_mem(Memory(pages, None, is_memory64=memory64))

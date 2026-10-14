@@ -12,7 +12,7 @@ fn[Inst] VCodeFunctionView::new(
 }
 
 ///|
-fn regalloc_value_size(ty : @native.ValueType) -> Int {
+fn regalloc_value_size(ty : @native.ValueType) -> Int32 {
   match ty {
     I32 | F32 => 4
     I64 | F64 | Ptr64 | GcRef64 => 8
@@ -23,7 +23,7 @@ fn regalloc_value_size(ty : @native.ValueType) -> Int {
 ///|
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn value_count(
   self,
-) -> Int {
+) -> Int32 {
   self.function.value_count()
 }
 
@@ -39,7 +39,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn value_clas
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn value_spill_size(
   self,
   value,
-) -> Int {
+) -> Int32 {
   regalloc_value_size(self.function.allocation_value_type_at(value))
 }
 
@@ -47,7 +47,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn value_spil
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn value_spill_alignment(
   self,
   value,
-) -> Int {
+) -> Int32 {
   regalloc_value_size(self.function.allocation_value_type_at(value))
 }
 
@@ -64,7 +64,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn values_sha
 ///|
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn entry_value_count(
   self,
-) -> Int {
+) -> Int32 {
   self.function.parameter_count()
 }
 
@@ -79,7 +79,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn entry_valu
 ///|
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_count(
   self,
-) -> Int {
+) -> Int32 {
   self.function.block_count()
 }
 
@@ -87,7 +87,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_coun
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_id_at(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.function.allocation_layout_block_id_at(block)
 }
 
@@ -95,7 +95,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_id_a
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_parameter_count(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.function.allocation_block_parameter_count(block)
 }
 
@@ -112,7 +112,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_para
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_instruction_count(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.function.allocation_block_instruction_count(block)
 }
 
@@ -121,7 +121,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_inst
   self,
   block,
   instruction,
-) -> Int {
+) -> Int32 {
   self.function.allocation_block_instruction_at(block, instruction)
 }
 
@@ -129,7 +129,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_inst
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_successor_count(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.function.allocation_block_successor_count(block)
 }
 
@@ -138,7 +138,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_succ
   self,
   block,
   successor,
-) -> Int {
+) -> Int32 {
   self.function.allocation_block_successor_at(block, successor)
 }
 
@@ -147,7 +147,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn edge_argum
   self,
   block,
   successor,
-) -> Int {
+) -> Int32 {
   self.function.allocation_edge_argument_count(block, successor)
 }
 

@@ -7,7 +7,7 @@ fn lowest_set_bit(value : UInt64) -> UInt64 {
 }
 
 ///|
-fn immediate_period_multiplier(period : Int) -> UInt64? {
+fn immediate_period_multiplier(period : Int32) -> UInt64? {
   match period {
     64 => Some(0x0000000000000001UL)
     32 => Some(0x0000000100000001UL)
@@ -20,7 +20,7 @@ fn immediate_period_multiplier(period : Int) -> UInt64? {
 }
 
 ///|
-fn logical_immediate_bits(value : UInt64, width : GprWidth) -> Int? {
+fn logical_immediate_bits(value : UInt64, width : GprWidth) -> Int32? {
   let mut current = if width == W64 {
     value
   } else {
@@ -72,7 +72,7 @@ fn logical_immediate_bits(value : UInt64, width : GprWidth) -> Int? {
 }
 
 ///|
-fn add_sub_immediate_shift(bits : UInt64) -> Int? {
+fn add_sub_immediate_shift(bits : UInt64) -> Int32? {
   if bits <= 4095UL {
     Some(0)
   } else if (bits & 0xFFFUL) == 0UL && bits >> 12 <= 4095UL {
@@ -102,7 +102,7 @@ fn encode_int_binary_immediate(
   bits : UInt64,
   destination : @vcode.PhysicalReg,
   source : @vcode.PhysicalReg,
-) -> UInt {
+) -> UInt32 {
   let base = match (width, operation) {
     (W32, Add) => 0x11000000U
     (W64, Add) => 0x91000000U

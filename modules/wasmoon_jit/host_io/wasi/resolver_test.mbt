@@ -6,7 +6,7 @@ test "resolver managed handle closes repeatedly and rejects later reads" {
   ])
   assert_true(fd >= 0)
   defer @wasi.c_resolver_drop(resolver)
-  let events : FixedArray[Int] = [0]
+  let events : FixedArray[Int32] = [0]
   assert_eq(@wasi.c_poll([fd], [1], events, 1, 5000), 1)
   let family = FixedArray::make(1, b'\x00')
   let address = FixedArray::make(16, b'\x00')

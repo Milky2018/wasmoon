@@ -11,23 +11,23 @@ pub(all) enum StringEncoding {
 ///|
 pub(all) enum CanonOpt {
   StringEncoding(StringEncoding)
-  Memory(Int)
-  Realloc(Int)
-  PostReturn(Int)
-  CoreType(Int)
+  Memory(Int32)
+  Realloc(Int32)
+  PostReturn(Int32)
+  CoreType(Int32)
   Gc
   Async
-  Callback(Int)
+  Callback(Int32)
 } derive(Debug, Eq)
 
 ///|
 pub(all) enum Canon {
-  Lift(Int, Array[CanonOpt], Int) // core funcidx, opts, typeidx
-  Lower(Int, Array[CanonOpt]) // funcidx, opts
+  Lift(Int32, Array[CanonOpt], Int32) // core funcidx, opts, typeidx
+  Lower(Int32, Array[CanonOpt]) // funcidx, opts
   BackpressureInc
   BackpressureDec
-  ContextGet(@types.ValueType, Int) // valtype, context index
-  ContextSet(@types.ValueType, Int) // valtype, context index
+  ContextGet(@types.ValueType, Int32) // valtype, context index
+  ContextSet(@types.ValueType, Int32) // valtype, context index
   TaskReturn(ValType?, Array[CanonOpt]) // result, opts
   TaskCancel
   ThreadIndex
@@ -38,34 +38,34 @@ pub(all) enum Canon {
   ThreadYieldThenPromote(Bool) // cancellable?
   ThreadResumeLater
   ThreadSuspend(Bool) // cancellable?
-  ThreadNewIndirect(Int, Int) // core functype index, core table index
+  ThreadNewIndirect(Int32, Int32) // core functype index, core table index
   WaitableSetNew
-  WaitableSetWait(Bool, Int) // cancellable?, core memidx
-  WaitableSetPoll(Bool, Int) // cancellable?, core memidx
+  WaitableSetWait(Bool, Int32) // cancellable?, core memidx
+  WaitableSetPoll(Bool, Int32) // cancellable?, core memidx
   WaitableSetDrop
   WaitableJoin
   SubtaskCancel(Bool)
   SubtaskDrop
-  StreamNew(Int) // stream typeidx
-  StreamRead(Int, Array[CanonOpt]) // stream typeidx, opts
-  StreamWrite(Int, Array[CanonOpt]) // stream typeidx, opts
-  StreamCancelRead(Int, Bool) // stream typeidx, async?
-  StreamCancelWrite(Int, Bool) // stream typeidx, async?
-  StreamDropReadable(Int) // stream typeidx
-  StreamDropWritable(Int) // stream typeidx
-  FutureNew(Int) // future typeidx
-  FutureRead(Int, Array[CanonOpt]) // future typeidx, opts
-  FutureWrite(Int, Array[CanonOpt]) // future typeidx, opts
-  FutureCancelRead(Int, Bool) // future typeidx, async?
-  FutureCancelWrite(Int, Bool) // future typeidx, async?
-  FutureDropReadable(Int) // future typeidx
-  FutureDropWritable(Int) // future typeidx
+  StreamNew(Int32) // stream typeidx
+  StreamRead(Int32, Array[CanonOpt]) // stream typeidx, opts
+  StreamWrite(Int32, Array[CanonOpt]) // stream typeidx, opts
+  StreamCancelRead(Int32, Bool) // stream typeidx, async?
+  StreamCancelWrite(Int32, Bool) // stream typeidx, async?
+  StreamDropReadable(Int32) // stream typeidx
+  StreamDropWritable(Int32) // stream typeidx
+  FutureNew(Int32) // future typeidx
+  FutureRead(Int32, Array[CanonOpt]) // future typeidx, opts
+  FutureWrite(Int32, Array[CanonOpt]) // future typeidx, opts
+  FutureCancelRead(Int32, Bool) // future typeidx, async?
+  FutureCancelWrite(Int32, Bool) // future typeidx, async?
+  FutureDropReadable(Int32) // future typeidx
+  FutureDropWritable(Int32) // future typeidx
   ErrorContextNew(Array[CanonOpt]) // opts
   ErrorContextDebugMessage(Array[CanonOpt]) // opts
   ErrorContextDrop
-  ResourceNew(Int) // typeidx
-  ResourceDrop(Int) // typeidx
-  ResourceRep(Int) // typeidx
+  ResourceNew(Int32) // typeidx
+  ResourceDrop(Int32) // typeidx
+  ResourceRep(Int32) // typeidx
 } derive(Debug, Eq)
 
 ///|
@@ -85,7 +85,7 @@ fn parse_context_core_valtype(
 }
 
 ///|
-fn parse_prim_valtype_from_sleb(v : Int) -> PrimValType? {
+fn parse_prim_valtype_from_sleb(v : Int32) -> PrimValType? {
   match v {
     -1 => Some(Bool)
     -2 => Some(S8)
@@ -375,9 +375,9 @@ pub fn parse_canon_section(
 
 ///|
 pub(all) struct Start {
-  func_idx : Int
-  args : Array[Int]
-  results : Int
+  func_idx : Int32
+  args : Array[Int32]
+  results : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -390,7 +390,7 @@ pub fn parse_start_section(payload : Bytes) -> Start raise ComponentParseError {
   let reader = Reader::Reader(payload)
   let func_idx = reader.read_leb_u32()
   let n = reader.read_leb_u32()
-  let args : Array[Int] = []
+  let args : Array[Int32] = []
   for _ in 0..<n {
     args.push(reader.read_leb_u32())
   }

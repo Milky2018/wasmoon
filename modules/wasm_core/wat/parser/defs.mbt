@@ -364,7 +364,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
 }
 
 ///|
-fn Parser::parse_optional_page_size_log2(self : Parser) -> Int raise WatError {
+fn Parser::parse_optional_page_size_log2(self : Parser) -> Int32 raise WatError {
   if self.current.token != LParen {
     return 16
   }
@@ -1427,7 +1427,7 @@ fn Parser::parse_import_def(
 /// - (data "<string>"...)  - passive with init
 fn Parser::parse_data_def(
   self : Parser,
-  data_idx? : Int = -1,
+  data_idx~ : Int32 = -1,
 ) -> @types.Data raise WatError {
   self.advance() // skip "data"
 
@@ -1531,7 +1531,7 @@ fn Parser::parse_data_def(
 /// - Declarative: (elem declare func $f $g)
 fn Parser::parse_elem_def(
   self : Parser,
-  elem_idx? : Int = -1,
+  elem_idx~ : Int32 = -1,
 ) -> @types.Element raise WatError {
   self.advance() // skip "elem"
 
@@ -1856,7 +1856,7 @@ fn Parser::parse_tag_def(
 fn Parser::parse_tag_type_spec(
   self : Parser,
   mod_ : @types.Module,
-) -> Int raise WatError {
+) -> Int32 raise WatError {
   if self.current.token == LParen {
     let saved = self.lexer.pos
     let saved_line = self.lexer.line
@@ -1899,7 +1899,7 @@ fn Parser::parse_tag_type_spec(
 
 ///|
 /// Parse a tag index (number or $name)
-fn Parser::parse_tag_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_tag_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(_) => self.parse_u32()
     Id(name) =>

@@ -14,7 +14,7 @@ struct Memory {
   max : Int64? // max size in logical pages
   is_memory64 : Bool // true for memory64 (i64-indexed)
   is_shared : Bool
-  page_size_log2 : Int
+  page_size_log2 : Int32
   page_size_bytes : Int64
 } derive(Debug)
 
@@ -69,7 +69,7 @@ pub fn Memory::page_size_bytes(self : Memory) -> Int64 {
 ///
 /// For memory32, addresses are u32, so negative Int values represent large
 /// addresses (high bit set) and must be treated as unsigned.
-fn Memory::addr_to_offset(self : Memory, addr : Int) -> Int64 {
+fn Memory::addr_to_offset(self : Memory, addr : Int32) -> Int64 {
   if self.is_memory64 {
     addr.to_int64()
   } else {
@@ -80,11 +80,11 @@ fn Memory::addr_to_offset(self : Memory, addr : Int) -> Int64 {
 
 ///|
 pub fn Memory::Memory(
-  min : Int,
-  max : Int?,
-  is_memory64? : Bool = false,
-  is_shared? : Bool = false,
-  page_size_log2? : Int = 16,
+  min : Int32,
+  max : Int32?,
+  is_memory64~ : Bool = false,
+  is_shared~ : Bool = false,
+  page_size_log2~ : Int32 = 16,
 ) -> Memory {
   Memory::allocate(
     min.to_int64() & 0xFFFF_FFFFL,
@@ -101,7 +101,7 @@ fn Memory::allocate(
   max : Int64?,
   is_memory64~ : Bool,
   is_shared~ : Bool,
-  page_size_log2~ : Int,
+  page_size_log2~ : Int32,
 ) -> Memory {
   let l2 = page_size_log2
   if l2 < 0 || l2 > 30 {
@@ -173,9 +173,9 @@ pub fn Memory::from_type(ty : @types.MemoryType) -> Memory raise RuntimeError {
 
 ///|
 pub fn Memory::new_guarded_memory0(
-  min : Int,
-  max : Int?,
-  is_shared? : Bool = false,
+  min : Int32,
+  max : Int32?,
+  is_shared~ : Bool = false,
 ) -> Memory {
   Memory(min, max, is_shared~)
 }
@@ -184,105 +184,126 @@ pub fn Memory::new_guarded_memory0(
 // All typed accesses use the checked 64-bit byte-offset implementation.
 
 ///|
-pub fn Memory::load_byte(self : Memory, addr : Int) -> Byte raise RuntimeError {
+pub fn Memory::load_byte(
+  self : Memory,
+  addr : Int32,
+) -> Byte raise RuntimeError {
   self.load_byte_at(self.addr_to_offset(addr))
 }
 
 ///|
 pub fn Memory::store_byte(
   self : Memory,
-  addr : Int,
+  addr : Int32,
   value : Byte,
 ) -> Unit raise RuntimeError {
   self.store_byte_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-pub fn Memory::load_i32(self : Memory, addr : Int) -> Int raise RuntimeError {
+pub fn Memory::load_i32(
+  self : Memory,
+  addr : Int32,
+) -> Int32 raise RuntimeError {
   self.load_i32_at(self.addr_to_offset(addr))
 }
 
 ///|
 pub fn Memory::store_i32(
   self : Memory,
-  addr : Int,
-  value : Int,
+  addr : Int32,
+  value : Int32,
 ) -> Unit raise RuntimeError {
   self.store_i32_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-pub fn Memory::load_i64(self : Memory, addr : Int) -> Int64 raise RuntimeError {
+pub fn Memory::load_i64(
+  self : Memory,
+  addr : Int32,
+) -> Int64 raise RuntimeError {
   self.load_i64_at(self.addr_to_offset(addr))
 }
 
 ///|
 pub fn Memory::store_i64(
   self : Memory,
-  addr : Int,
+  addr : Int32,
   value : Int64,
 ) -> Unit raise RuntimeError {
   self.store_i64_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-pub fn Memory::load_f32(self : Memory, addr : Int) -> Float raise RuntimeError {
+pub fn Memory::load_f32(
+  self : Memory,
+  addr : Int32,
+) -> Float raise RuntimeError {
   self.load_f32_at(self.addr_to_offset(addr))
 }
 
 ///|
 pub fn Memory::store_f32(
   self : Memory,
-  addr : Int,
+  addr : Int32,
   value : Float,
 ) -> Unit raise RuntimeError {
   self.store_f32_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-pub fn Memory::load_f64(self : Memory, addr : Int) -> Double raise RuntimeError {
+pub fn Memory::load_f64(
+  self : Memory,
+  addr : Int32,
+) -> Double raise RuntimeError {
   self.load_f64_at(self.addr_to_offset(addr))
 }
 
 ///|
 pub fn Memory::store_f64(
   self : Memory,
-  addr : Int,
+  addr : Int32,
   value : Double,
 ) -> Unit raise RuntimeError {
   self.store_f64_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-pub fn Memory::load_i32_8s(self : Memory, addr : Int) -> Int raise RuntimeError {
+pub fn Memory::load_i32_8s(
+  self : Memory,
+  addr : Int32,
+) -> Int32 raise RuntimeError {
   self.load_i32_8s_at(self.addr_to_offset(addr))
 }
 
 ///|
-pub fn Memory::load_i32_8u(self : Memory, addr : Int) -> Int raise RuntimeError {
+pub fn Memory::load_i32_8u(
+  self : Memory,
+  addr : Int32,
+) -> Int32 raise RuntimeError {
   self.load_i32_8u_at(self.addr_to_offset(addr))
 }
 
 ///|
 pub fn Memory::load_i32_16s(
   self : Memory,
-  addr : Int,
-) -> Int raise RuntimeError {
+  addr : Int32,
+) -> Int32 raise RuntimeError {
   self.load_i32_16s_at(self.addr_to_offset(addr))
 }
 
 ///|
 pub fn Memory::load_i32_16u(
   self : Memory,
-  addr : Int,
-) -> Int raise RuntimeError {
+  addr : Int32,
+) -> Int32 raise RuntimeError {
   self.load_i32_16u_at(self.addr_to_offset(addr))
 }
 
 ///|
 pub fn Memory::load_i64_8s(
   self : Memory,
-  addr : Int,
+  addr : Int32,
 ) -> Int64 raise RuntimeError {
   self.load_i64_8s_at(self.addr_to_offset(addr))
 }
@@ -290,7 +311,7 @@ pub fn Memory::load_i64_8s(
 ///|
 pub fn Memory::load_i64_8u(
   self : Memory,
-  addr : Int,
+  addr : Int32,
 ) -> Int64 raise RuntimeError {
   self.load_i64_8u_at(self.addr_to_offset(addr))
 }
@@ -298,7 +319,7 @@ pub fn Memory::load_i64_8u(
 ///|
 pub fn Memory::load_i64_16s(
   self : Memory,
-  addr : Int,
+  addr : Int32,
 ) -> Int64 raise RuntimeError {
   self.load_i64_16s_at(self.addr_to_offset(addr))
 }
@@ -306,7 +327,7 @@ pub fn Memory::load_i64_16s(
 ///|
 pub fn Memory::load_i64_16u(
   self : Memory,
-  addr : Int,
+  addr : Int32,
 ) -> Int64 raise RuntimeError {
   self.load_i64_16u_at(self.addr_to_offset(addr))
 }
@@ -314,7 +335,7 @@ pub fn Memory::load_i64_16u(
 ///|
 pub fn Memory::load_i64_32s(
   self : Memory,
-  addr : Int,
+  addr : Int32,
 ) -> Int64 raise RuntimeError {
   self.load_i64_32s_at(self.addr_to_offset(addr))
 }
@@ -322,7 +343,7 @@ pub fn Memory::load_i64_32s(
 ///|
 pub fn Memory::load_i64_32u(
   self : Memory,
-  addr : Int,
+  addr : Int32,
 ) -> Int64 raise RuntimeError {
   self.load_i64_32u_at(self.addr_to_offset(addr))
 }
@@ -330,8 +351,8 @@ pub fn Memory::load_i64_32u(
 ///|
 pub fn Memory::store_i32_8(
   self : Memory,
-  addr : Int,
-  value : Int,
+  addr : Int32,
+  value : Int32,
 ) -> Unit raise RuntimeError {
   self.store_i32_8_at(self.addr_to_offset(addr), value)
 }
@@ -339,8 +360,8 @@ pub fn Memory::store_i32_8(
 ///|
 pub fn Memory::store_i32_16(
   self : Memory,
-  addr : Int,
-  value : Int,
+  addr : Int32,
+  value : Int32,
 ) -> Unit raise RuntimeError {
   self.store_i32_16_at(self.addr_to_offset(addr), value)
 }
@@ -348,7 +369,7 @@ pub fn Memory::store_i32_16(
 ///|
 pub fn Memory::store_i64_8(
   self : Memory,
-  addr : Int,
+  addr : Int32,
   value : Int64,
 ) -> Unit raise RuntimeError {
   self.store_i64_8_at(self.addr_to_offset(addr), value)
@@ -357,7 +378,7 @@ pub fn Memory::store_i64_8(
 ///|
 pub fn Memory::store_i64_16(
   self : Memory,
-  addr : Int,
+  addr : Int32,
   value : Int64,
 ) -> Unit raise RuntimeError {
   self.store_i64_16_at(self.addr_to_offset(addr), value)
@@ -366,14 +387,14 @@ pub fn Memory::store_i64_16(
 ///|
 pub fn Memory::store_i64_32(
   self : Memory,
-  addr : Int,
+  addr : Int32,
   value : Int64,
 ) -> Unit raise RuntimeError {
   self.store_i64_32_at(self.addr_to_offset(addr), value)
 }
 
 ///|
-pub fn Memory::size_pages(self : Memory) -> Int {
+pub fn Memory::size_pages(self : Memory) -> Int32 {
   let bytes = self.byte_len()
   if self.page_size_bytes <= 0L {
     0
@@ -388,7 +409,7 @@ pub fn Memory::is_memory64(self : Memory) -> Bool {
 }
 
 ///|
-pub fn Memory::grow(self : Memory, delta : Int) -> Int {
+pub fn Memory::grow(self : Memory, delta : Int32) -> Int32 {
   self.grow64(delta.to_int64() & 0xFFFF_FFFFL).to_int()
 }
 
@@ -406,7 +427,7 @@ pub fn Memory::grow64(self : Memory, delta : Int64) -> Int64 {
 /// Initialize memory with data segment
 pub fn Memory::init_data(
   self : Memory,
-  dest : Int,
+  dest : Int32,
   data : Bytes,
 ) -> Unit raise RuntimeError {
   self.init_data_at(self.addr_to_offset(dest), data)
@@ -417,9 +438,9 @@ pub fn Memory::init_data(
 /// Handles overlapping regions correctly
 pub fn Memory::copy(
   self : Memory,
-  dest : Int,
-  src : Int,
-  len : Int,
+  dest : Int32,
+  src : Int32,
+  len : Int32,
 ) -> Unit raise RuntimeError {
   self.copy_at(
     self.addr_to_offset(dest),
@@ -432,16 +453,16 @@ pub fn Memory::copy(
 /// Fill memory region with a byte value
 pub fn Memory::fill(
   self : Memory,
-  dest : Int,
+  dest : Int32,
   value : Byte,
-  len : Int,
+  len : Int32,
 ) -> Unit raise RuntimeError {
   self.fill_at(self.addr_to_offset(dest), value, len.to_int64())
 }
 
 ///|
 /// Read i32 from memory (non-raising version for WASI)
-pub fn Memory::read_i32(self : Memory, addr : Int) -> Int {
+pub fn Memory::read_i32(self : Memory, addr : Int32) -> Int32 {
   let offset = addr.reinterpret_as_uint().to_int64()
   if offset + 4L > self.byte_len() {
     return 0
@@ -453,7 +474,7 @@ pub fn Memory::read_i32(self : Memory, addr : Int) -> Int {
 
 ///|
 /// Write i32 to memory (non-raising version for WASI)
-pub fn Memory::write_i32(self : Memory, addr : Int, value : Int) -> Unit {
+pub fn Memory::write_i32(self : Memory, addr : Int32, value : Int32) -> Unit {
   let offset = addr.reinterpret_as_uint().to_int64()
   if offset + 4L > self.byte_len() {
     return
@@ -465,7 +486,7 @@ pub fn Memory::write_i32(self : Memory, addr : Int, value : Int) -> Unit {
 
 ///|
 /// Read i64 from memory (non-raising version for WASI)
-pub fn Memory::read_i64(self : Memory, addr : Int) -> Int64 {
+pub fn Memory::read_i64(self : Memory, addr : Int32) -> Int64 {
   let offset = addr.reinterpret_as_uint().to_int64()
   if offset + 8L > self.byte_len() {
     return 0L
@@ -477,7 +498,7 @@ pub fn Memory::read_i64(self : Memory, addr : Int) -> Int64 {
 
 ///|
 /// Write i64 to memory (non-raising version for WASI)
-pub fn Memory::write_i64(self : Memory, addr : Int, value : Int64) -> Unit {
+pub fn Memory::write_i64(self : Memory, addr : Int32, value : Int64) -> Unit {
   let offset = addr.reinterpret_as_uint().to_int64()
   if offset + 8L > self.byte_len() {
     return
@@ -489,7 +510,7 @@ pub fn Memory::write_i64(self : Memory, addr : Int, value : Int64) -> Unit {
 
 ///|
 /// Read a byte from memory (non-raising version for WASI)
-pub fn Memory::read_byte(self : Memory, addr : Int) -> Byte {
+pub fn Memory::read_byte(self : Memory, addr : Int32) -> Byte {
   let offset = addr.reinterpret_as_uint().to_int64()
   if offset >= self.byte_len() {
     return b'\x00'
@@ -499,7 +520,7 @@ pub fn Memory::read_byte(self : Memory, addr : Int) -> Byte {
 
 ///|
 /// Write a byte to memory (non-raising version for WASI)
-pub fn Memory::write_byte(self : Memory, addr : Int, value : Byte) -> Unit {
+pub fn Memory::write_byte(self : Memory, addr : Int32, value : Byte) -> Unit {
   let offset = addr.reinterpret_as_uint().to_int64()
   if offset >= self.byte_len() {
     return
@@ -509,7 +530,7 @@ pub fn Memory::write_byte(self : Memory, addr : Int, value : Byte) -> Unit {
 
 ///|
 /// Read bytes from memory (non-raising version for WASI)
-pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
+pub fn Memory::read_bytes(self : Memory, addr : Int32, len : Int32) -> Bytes {
   let offset = addr.reinterpret_as_uint().to_int64()
   if len < 0 || offset + len.to_int64() > self.byte_len() {
     return b""
@@ -537,7 +558,7 @@ pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
 ///|
 /// Legacy 32-bit page counts. Maxima wider than 32 bits are omitted.
 /// Use get_limits64 for module type compatibility.
-pub fn Memory::get_limits(self : Memory) -> (Int, Int?) {
+pub fn Memory::get_limits(self : Memory) -> (Int32, Int32?) {
   (
     self.size_pages(),
     match self.max {

@@ -9,11 +9,11 @@ pub type EmbeddingEnvironment = @embedding.EmbeddingEnvironment
 
 ///|
 pub suberror LowerError {
-  FunctionIndexOutOfRange(index~ : Int)
-  TypeIndexOutOfRange(index~ : Int)
-  NonFunctionType(index~ : Int)
-  MissingCode(index~ : Int)
-  UnsupportedNativeLowering(index~ : Int, reason~ : String)
+  FunctionIndexOutOfRange(index~ : Int32)
+  TypeIndexOutOfRange(index~ : Int32)
+  NonFunctionType(index~ : Int32)
+  MissingCode(index~ : Int32)
+  UnsupportedNativeLowering(index~ : Int32, reason~ : String)
 } derive(Debug, Eq)
 
 ///|

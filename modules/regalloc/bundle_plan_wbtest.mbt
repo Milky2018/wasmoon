@@ -1,18 +1,18 @@
 ///|
 priv struct BundleTestFunction {
   classes : Array[RegClass]
-  spill_kinds : Array[Int]
-  successors : Array[Array[Int]]
+  spill_kinds : Array[Int32]
+  successors : Array[Array[Int32]]
   parameters : Array[Array[VirtualReg]]
   edge_arguments : Array[Array[Array[VirtualReg]]]
 }
 
 ///|
 priv struct BundlePlanSnapshot {
-  range_to_bundle : Array[Int]
-  segment_to_bundle : Array[Int]
-  bundle_ranges : Array[Array[Int]]
-  bundle_segments : Array[Array[Int]]
+  range_to_bundle : Array[Int32]
+  segment_to_bundle : Array[Int32]
+  bundle_ranges : Array[Array[Int32]]
+  bundle_segments : Array[Array[Int32]]
 } derive(Debug)
 
 ///|
@@ -26,7 +26,7 @@ fn bundle_plan_snapshot(plan : ProductionBundlePlan) -> BundlePlanSnapshot {
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn value_count(self) -> Int {
+impl FunctionView for BundleTestFunction with fn value_count(self) -> Int32 {
   self.classes.length()
 }
 
@@ -36,7 +36,7 @@ impl FunctionView for BundleTestFunction with fn value_class(self, value) -> Reg
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn value_spill_size(_self, _value) -> Int {
+impl FunctionView for BundleTestFunction with fn value_spill_size(_self, _value) -> Int32 {
   8
 }
 
@@ -44,7 +44,7 @@ impl FunctionView for BundleTestFunction with fn value_spill_size(_self, _value)
 impl FunctionView for BundleTestFunction with fn value_spill_alignment(
   _self,
   _value,
-) -> Int {
+) -> Int32 {
   8
 }
 
@@ -58,7 +58,7 @@ impl FunctionView for BundleTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn entry_value_count(_self) -> Int {
+impl FunctionView for BundleTestFunction with fn entry_value_count(_self) -> Int32 {
   0
 }
 
@@ -71,12 +71,12 @@ impl FunctionView for BundleTestFunction with fn entry_value_at(
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_count(self) -> Int {
+impl FunctionView for BundleTestFunction with fn block_count(self) -> Int32 {
   self.successors.length()
 }
 
 ///|
-impl FunctionView for BundleTestFunction with fn block_id_at(_self, block) -> Int {
+impl FunctionView for BundleTestFunction with fn block_id_at(_self, block) -> Int32 {
   block
 }
 
@@ -84,7 +84,7 @@ impl FunctionView for BundleTestFunction with fn block_id_at(_self, block) -> In
 impl FunctionView for BundleTestFunction with fn block_parameter_count(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.parameters[block].length()
 }
 
@@ -101,7 +101,7 @@ impl FunctionView for BundleTestFunction with fn block_parameter_at(
 impl FunctionView for BundleTestFunction with fn block_instruction_count(
   _self,
   _block,
-) -> Int {
+) -> Int32 {
   0
 }
 
@@ -110,7 +110,7 @@ impl FunctionView for BundleTestFunction with fn block_instruction_at(
   _self,
   _block,
   _instruction,
-) -> Int {
+) -> Int32 {
   abort("invalid block instruction index")
 }
 
@@ -118,7 +118,7 @@ impl FunctionView for BundleTestFunction with fn block_instruction_at(
 impl FunctionView for BundleTestFunction with fn block_successor_count(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.successors[block].length()
 }
 
@@ -127,7 +127,7 @@ impl FunctionView for BundleTestFunction with fn block_successor_at(
   self,
   block,
   successor,
-) -> Int {
+) -> Int32 {
   self.successors[block][successor]
 }
 
@@ -136,7 +136,7 @@ impl FunctionView for BundleTestFunction with fn edge_argument_count(
   self,
   block,
   successor,
-) -> Int {
+) -> Int32 {
   self.edge_arguments[block][successor].length()
 }
 
@@ -170,10 +170,10 @@ impl FunctionView for BundleTestFunction with fn instruction_clobbers(
 
 ///|
 fn bundle_test_range(
-  id : Int,
+  id : Int32,
   class : RegClass,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
   fixed_uses : Array[(UseKind, PhysicalReg)],
 ) -> LiveRange {
   let range = LiveRange::LiveRange(id, { id, class, })

@@ -302,7 +302,7 @@ pub fn FunctionBuilder::iconst(
 /// Emit an i32 constant
 pub fn FunctionBuilder::iconst_i32(
   self : FunctionBuilder,
-  value : Int,
+  value : Int32,
 ) -> Value {
   self.iconst(I32, value.to_int64())
 }
@@ -1126,7 +1126,7 @@ pub fn FunctionBuilder::store_ptr(
 pub fn FunctionBuilder::load_ptr_narrow(
   self : FunctionBuilder,
   result_ty : Type,
-  bits : Int,
+  bits : Int32,
   signed : Bool,
   base : Value,
   offset : Value,
@@ -1141,7 +1141,7 @@ pub fn FunctionBuilder::load_ptr_narrow(
 /// Stores the low 'bits' bits of value to memory
 pub fn FunctionBuilder::store_ptr_narrow(
   self : FunctionBuilder,
-  bits : Int,
+  bits : Int32,
   base : Value,
   value : Value,
   offset : Value,
@@ -1235,7 +1235,7 @@ pub fn FunctionBuilder::v128_splat_f64(
 pub fn FunctionBuilder::v128_extract8s(
   self : FunctionBuilder,
   vec : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(I32, Vector(ExtractLane(I8, Signed, lane)), [vec])
 }
@@ -1244,7 +1244,7 @@ pub fn FunctionBuilder::v128_extract8s(
 pub fn FunctionBuilder::v128_extract8u(
   self : FunctionBuilder,
   vec : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(I32, Vector(ExtractLane(I8, Unsigned, lane)), [vec])
 }
@@ -1253,7 +1253,7 @@ pub fn FunctionBuilder::v128_extract8u(
 pub fn FunctionBuilder::v128_extract16s(
   self : FunctionBuilder,
   vec : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(I32, Vector(ExtractLane(I16, Signed, lane)), [vec])
 }
@@ -1262,7 +1262,7 @@ pub fn FunctionBuilder::v128_extract16s(
 pub fn FunctionBuilder::v128_extract16u(
   self : FunctionBuilder,
   vec : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(I32, Vector(ExtractLane(I16, Unsigned, lane)), [vec])
 }
@@ -1271,7 +1271,7 @@ pub fn FunctionBuilder::v128_extract16u(
 pub fn FunctionBuilder::v128_extract32(
   self : FunctionBuilder,
   vec : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(I32, Vector(ExtractLane(I32, None, lane)), [vec])
 }
@@ -1280,7 +1280,7 @@ pub fn FunctionBuilder::v128_extract32(
 pub fn FunctionBuilder::v128_extract64(
   self : FunctionBuilder,
   vec : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(I64, Vector(ExtractLane(I64, None, lane)), [vec])
 }
@@ -1289,7 +1289,7 @@ pub fn FunctionBuilder::v128_extract64(
 pub fn FunctionBuilder::v128_extract_f32(
   self : FunctionBuilder,
   vec : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(F32, Vector(ExtractLane(F32, None, lane)), [vec])
 }
@@ -1298,7 +1298,7 @@ pub fn FunctionBuilder::v128_extract_f32(
 pub fn FunctionBuilder::v128_extract_f64(
   self : FunctionBuilder,
   vec : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(F64, Vector(ExtractLane(F64, None, lane)), [vec])
 }
@@ -1309,7 +1309,7 @@ pub fn FunctionBuilder::v128_replace8(
   self : FunctionBuilder,
   vec : Value,
   val : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(V128, Vector(ReplaceLane(I8, lane)), [vec, val])
 }
@@ -1319,7 +1319,7 @@ pub fn FunctionBuilder::v128_replace16(
   self : FunctionBuilder,
   vec : Value,
   val : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(V128, Vector(ReplaceLane(I16, lane)), [vec, val])
 }
@@ -1329,7 +1329,7 @@ pub fn FunctionBuilder::v128_replace32(
   self : FunctionBuilder,
   vec : Value,
   val : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(V128, Vector(ReplaceLane(I32, lane)), [vec, val])
 }
@@ -1339,7 +1339,7 @@ pub fn FunctionBuilder::v128_replace64(
   self : FunctionBuilder,
   vec : Value,
   val : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(V128, Vector(ReplaceLane(I64, lane)), [vec, val])
 }
@@ -1349,7 +1349,7 @@ pub fn FunctionBuilder::v128_replace_f32(
   self : FunctionBuilder,
   vec : Value,
   val : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(V128, Vector(ReplaceLane(F32, lane)), [vec, val])
 }
@@ -1359,7 +1359,7 @@ pub fn FunctionBuilder::v128_replace_f64(
   self : FunctionBuilder,
   vec : Value,
   val : Value,
-  lane : Int,
+  lane : Int32,
 ) -> Value {
   self.emit_inst(V128, Vector(ReplaceLane(F64, lane)), [vec, val])
 }
@@ -1370,7 +1370,7 @@ pub fn FunctionBuilder::v128_shuffle(
   self : FunctionBuilder,
   a : Value,
   b : Value,
-  lanes : FixedArray[Int],
+  lanes : FixedArray[Int32],
 ) -> Value {
   self.emit_inst(V128, Vector(Shuffle(lanes)), [a, b])
 }
@@ -1481,7 +1481,7 @@ pub fn FunctionBuilder::v128_store_lane_with_addr(
 pub fn FunctionBuilder::atomic_load(
   self : FunctionBuilder,
   ty : Type,
-  bits : Int,
+  bits : Int32,
   base : Value,
   offset : Value,
 ) -> Value {
@@ -1491,7 +1491,7 @@ pub fn FunctionBuilder::atomic_load(
 ///|
 pub fn FunctionBuilder::atomic_store(
   self : FunctionBuilder,
-  bits : Int,
+  bits : Int32,
   base : Value,
   value : Value,
   offset : Value,
@@ -1505,7 +1505,7 @@ pub fn FunctionBuilder::atomic_store(
 pub fn FunctionBuilder::atomic_rmw(
   self : FunctionBuilder,
   op : AtomicRmwOp,
-  bits : Int,
+  bits : Int32,
   base : Value,
   value : Value,
   offset : Value,
@@ -1518,7 +1518,7 @@ pub fn FunctionBuilder::atomic_rmw(
 ///|
 pub fn FunctionBuilder::atomic_compare_exchange(
   self : FunctionBuilder,
-  bits : Int,
+  bits : Int32,
   base : Value,
   expected : Value,
   replacement : Value,

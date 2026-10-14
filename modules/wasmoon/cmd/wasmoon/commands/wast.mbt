@@ -1,11 +1,11 @@
 ///|
-let wast_jit_compiled_modules : Ref[Int] = { val: 0, }
+let wast_jit_compiled_modules : Ref[Int32] = { val: 0, }
 
 ///|
-let wast_jit_compiled_functions : Ref[Int] = { val: 0, }
+let wast_jit_compiled_functions : Ref[Int32] = { val: 0, }
 
 ///|
-let wast_jit_attempts : Ref[Int] = { val: 0, }
+let wast_jit_attempts : Ref[Int32] = { val: 0, }
 
 ///|
 fn is_truthy_env(v : String) -> Bool {
@@ -21,7 +21,7 @@ fn run_wast(
   bulk_memory : Bool,
   stack_switching : Bool,
   nan_canonicalization : Bool,
-) -> Int {
+) -> Int32 {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
   wast_jit_attempts.val = 0
@@ -105,7 +105,7 @@ fn run_wast(
 }
 
 ///|
-fn remap_index(idx : Int, alias_map : Map[Int, Int]) -> Int {
+fn remap_index(idx : Int32, alias_map : Map[Int32, Int32]) -> Int32 {
   match alias_map.get(idx) {
     Some(mapped) => mapped
     None => idx
@@ -113,9 +113,9 @@ fn remap_index(idx : Int, alias_map : Map[Int, Int]) -> Int {
 }
 
 ///|
-fn build_alias_map(addrs : Array[Int]) -> Map[Int, Int] {
-  let first_idx_by_addr : Map[Int, Int] = Map([])
-  let alias_map : Map[Int, Int] = Map([])
+fn build_alias_map(addrs : Array[Int32]) -> Map[Int32, Int32] {
+  let first_idx_by_addr : Map[Int32, Int32] = Map([])
+  let alias_map : Map[Int32, Int32] = Map([])
   for idx, addr in addrs {
     match first_idx_by_addr.get(addr) {
       Some(first_idx) => if first_idx != idx { alias_map.set(idx, first_idx) }
@@ -128,8 +128,8 @@ fn build_alias_map(addrs : Array[Int]) -> Map[Int, Int] {
 ///|
 fn rewrite_instr_indices(
   instrs : Array[@types.Instruction],
-  global_alias_map : Map[Int, Int],
-  tag_alias_map : Map[Int, Int],
+  global_alias_map : Map[Int32, Int32],
+  tag_alias_map : Map[Int32, Int32],
 ) -> Array[@types.Instruction] {
   let rewritten : Array[@types.Instruction] = []
   for instr in instrs {
@@ -276,14 +276,14 @@ fn rewrite_module_alias_indices_for_jit(
 }
 
 ///|
-let wast_selective_compile_threshold : Int = 0
+let wast_selective_compile_threshold : Int32 = 0
 
 ///|
 fn mark_wast_reachable_local_func(
-  func_idx : Int,
-  num_imports : Int,
+  func_idx : Int32,
+  num_imports : Int32,
   compile_mask : Array[Bool],
-  pending_locals : Array[Int],
+  pending_locals : Array[Int32],
 ) -> Unit {
   let local_idx = func_idx - num_imports
   if local_idx < 0 || local_idx >= compile_mask.length() {
@@ -298,9 +298,9 @@ fn mark_wast_reachable_local_func(
 ///|
 fn collect_wast_reachable_from_instrs(
   instrs : Array[@types.Instruction],
-  num_imports : Int,
+  num_imports : Int32,
   compile_mask : Array[Bool],
-  pending_locals : Array[Int],
+  pending_locals : Array[Int32],
 ) -> Unit {
   for instr in instrs {
     match instr {
@@ -342,7 +342,7 @@ fn collect_wast_reachable_from_instrs(
 }
 
 ///|
-fn count_true(mask : Array[Bool]) -> Int {
+fn count_true(mask : Array[Bool]) -> Int32 {
   let mut count = 0
   for v in mask {
     if v {
@@ -363,7 +363,7 @@ fn build_wast_compile_mask(mod_ : @types.Module) -> Array[Bool]? {
   for _ in 0..<total_local_funcs {
     compile_mask.push(false)
   }
-  let pending_locals : Array[Int] = []
+  let pending_locals : Array[Int32] = []
 
   for exp in mod_.exports {
     if exp.desc is Func(func_idx) {
@@ -440,7 +440,7 @@ fn try_compile_jit_with_suspension(
   }
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
-  let actual_memory_max : Int? = if instance.mem_addrs.length() > 0 {
+  let actual_memory_max : Int32? = if instance.mem_addrs.length() > 0 {
     let mem = store.get_mem(instance.mem_addrs[0]) catch {
       _ => return Err("WAST JIT strict mode: memory not found")
     }
@@ -561,23 +561,23 @@ fn try_compile_jit_with_suspension(
           }
           // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
           // Store global_addrs and func_addrs for syncing after JIT calls
-          let global_addrs_copy : Array[Int] = []
+          let global_addrs_copy : Array[Int32] = []
           for addr in instance.global_addrs {
             global_addrs_copy.push(addr)
           }
-          let table_addrs_copy : Array[Int] = []
+          let table_addrs_copy : Array[Int32] = []
           for addr in instance.table_addrs {
             table_addrs_copy.push(addr)
           }
-          let func_addrs_copy : Array[Int] = []
+          let func_addrs_copy : Array[Int32] = []
           for addr in instance.func_addrs {
             func_addrs_copy.push(addr)
           }
-          let func_type_indices_copy : Array[Int] = []
+          let func_type_indices_copy : Array[Int32] = []
           for type_idx in instance.func_type_indices {
             func_type_indices_copy.push(type_idx)
           }
-          let canonical_type_indices_copy : Array[Int] = []
+          let canonical_type_indices_copy : Array[Int32] = []
           for canonical_idx in instance.canonical_type_indices {
             canonical_type_indices_copy.push(canonical_idx)
           }
@@ -585,7 +585,7 @@ fn try_compile_jit_with_suspension(
           for subtype in lowered_mod.types {
             module_types_copy.push(subtype)
           }
-          let module_rec_groups_copy : Array[Int] = []
+          let module_rec_groups_copy : Array[Int32] = []
           for group in lowered_mod.type_rec_groups {
             module_rec_groups_copy.push(group)
           }
@@ -632,10 +632,10 @@ pub fn run_testsuite(
   wast_path : String,
   use_jit : Bool,
   show_success : Bool,
-  bulk_memory? : Bool = true,
-  stack_switching? : Bool = false,
-  nan_canonicalization? : Bool = false,
-) -> Int {
+  bulk_memory~ : Bool = true,
+  stack_switching~ : Bool = false,
+  nan_canonicalization~ : Bool = false,
+) -> Int32 {
   run_wast(
     wast_path, use_jit, show_success, bulk_memory, stack_switching, nan_canonicalization,
   )

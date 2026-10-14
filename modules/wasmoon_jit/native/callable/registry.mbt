@@ -2,10 +2,10 @@
 /// Store-local callable identities, built and owned by MoonBit.
 pub struct NativeCallableRegistry {
   priv view : NativeCallableView
-  priv mut parents : FixedArray[Int]
+  priv mut parents : FixedArray[Int32]
   priv mut addresses : FixedArray[Int64]
-  priv mut identities : FixedArray[Int]
-  priv mut ordinals : FixedArray[Int]
+  priv mut identities : FixedArray[Int32]
+  priv mut ordinals : FixedArray[Int32]
 }
 
 ///|
@@ -52,8 +52,8 @@ pub fn NativeCallableRegistry::clear(self : NativeCallableRegistry) -> Unit {
 /// allocator, so there is no separately recoverable native allocation failure.
 pub fn NativeCallableRegistry::replace(
   self : NativeCallableRegistry,
-  parents : Array[Int],
-  entries : Array[(Int64, Int)],
+  parents : Array[Int32],
+  entries : Array[(Int64, Int32)],
 ) -> Bool {
   let mut parents_changed = parents.length() != self.parents.length()
   if !parents_changed {

@@ -50,7 +50,7 @@ pub struct PreflightDiagnostic {
   severity : PreflightSeverity
   stage : PreflightStage
   message : String
-  func_idx : Int?
+  func_idx : Int32?
   func_name : String?
 }
 
@@ -59,8 +59,8 @@ pub fn PreflightDiagnostic::PreflightDiagnostic(
   severity : PreflightSeverity,
   stage : PreflightStage,
   message : String,
-  func_idx? : Int? = None,
-  func_name? : String? = None,
+  func_idx~ : Int32? = None,
+  func_name~ : String? = None,
 ) -> PreflightDiagnostic {
   { severity, stage, message, func_idx, func_name, }
 }
@@ -70,8 +70,8 @@ pub fn PreflightDiagnostic::PreflightDiagnostic(
 pub struct PreflightResult {
   mut ok : Bool
   diagnostics : Array[PreflightDiagnostic]
-  mut total_funcs : Int
-  mut checked_funcs : Int
+  mut total_funcs : Int32
+  mut checked_funcs : Int32
 }
 
 ///|
@@ -84,8 +84,8 @@ pub fn PreflightResult::add_error(
   self : PreflightResult,
   stage : PreflightStage,
   message : String,
-  func_idx? : Int? = None,
-  func_name? : String? = None,
+  func_idx~ : Int32? = None,
+  func_name~ : String? = None,
 ) -> Unit {
   self.ok = false
   self.diagnostics.push(
@@ -98,8 +98,8 @@ pub fn PreflightResult::add_warning(
   self : PreflightResult,
   stage : PreflightStage,
   message : String,
-  func_idx? : Int? = None,
-  func_name? : String? = None,
+  func_idx~ : Int32? = None,
+  func_name~ : String? = None,
 ) -> Unit {
   self.diagnostics.push(
     PreflightDiagnostic(Warning, stage, message, func_idx~, func_name~),
@@ -107,7 +107,7 @@ pub fn PreflightResult::add_warning(
 }
 
 ///|
-fn count_func_imports(imports : Array[@types.Import]) -> Int {
+fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Func(_) {
@@ -118,7 +118,7 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
-fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
+fn get_func_name(mod_ : @types.Module, func_idx : Int32) -> String {
   for exp in mod_.exports {
     if exp.desc is Func(idx) && idx == func_idx {
       return exp.name
@@ -128,7 +128,7 @@ fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
 }
 
 ///|
-fn normalize_opt_level(opt_level : Int) -> Int {
+fn normalize_opt_level(opt_level : Int32) -> Int32 {
   if opt_level < 0 {
     0
   } else if opt_level > 3 {
@@ -182,7 +182,7 @@ pub fn validate_module(module_bytes : Bytes) -> PreflightResult {
 /// It intentionally does not install or execute machine code.
 pub fn validate_jit(
   module_bytes : Bytes,
-  opt_level? : Int = 2,
+  opt_level~ : Int32 = 2,
 ) -> PreflightResult {
   let report = PreflightResult::PreflightResult()
   let mod_ = parse_and_validate_module(module_bytes, report)

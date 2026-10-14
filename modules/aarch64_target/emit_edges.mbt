@@ -3,7 +3,7 @@ fn edge_parallel_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   block : @vcode.Block,
-  successor_index : Int,
+  successor_index : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let transfers : Array[@vcode.ParallelMove] = []
   for edit in allocation.edge_edits_at(block, successor_index) {
@@ -27,7 +27,7 @@ fn resolve_edge_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   block : @vcode.Block,
-  successor_index : Int,
+  successor_index : Int32,
 ) -> @vcode.ResolvedMovePlan raise AArch64EmitError {
   if allocation.edge_edits_at(block, successor_index).is_empty() {
     return @vcode.ResolvedMovePlan::empty()
@@ -153,7 +153,7 @@ fn emit_edge_moves(
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   block : @vcode.Block,
-  successor_index : Int,
+  successor_index : Int32,
 ) -> Unit raise AArch64EmitError {
   emit_resolved_moves(
     buffer,
@@ -170,8 +170,8 @@ fn emit_two_way_edges(
   frame : AArch64Frame,
   block : @vcode.Block,
   instruction : @vcode.Instruction,
-  true_branch_base : UInt,
-  false_branch_base : UInt,
+  true_branch_base : UInt32,
+  false_branch_base : UInt32,
   next_block : @vcode.Block?,
 ) -> Unit raise AArch64EmitError {
   let when_true = function.instruction_successor_at(instruction, 0).unwrap().target
@@ -313,7 +313,7 @@ fn emit_switch_edges(
     let default_moves = resolve_edge_moves(
       function, allocation, block, default_index,
     )
-    let default_branch : Int? = if default_moves.steps.is_empty() {
+    let default_branch : Int32? = if default_moves.steps.is_empty() {
       buffer.emit_branch(
         threaded_branch_target(
           function,
@@ -339,7 +339,7 @@ fn emit_switch_edges(
       add_base | (reg_bits(index) << 16) | (2U << 10) | (16U << 5) | 16U,
     )
     buffer.emit_word(0xD61F0200U)
-    let stubs : Array[(Int, Int)] = []
+    let stubs : Array[(Int32, Int32)] = []
     for key in 0..<cases.length() {
       let mut successor_index = 0
       for index, bits in cases {
@@ -400,7 +400,7 @@ fn emit_switch_edges(
     }
     return
   } else {
-    let case_branches : Array[(Int, Int)] = []
+    let case_branches : Array[(Int32, Int32)] = []
     for successor_index, bits in cases {
       emit_switch_compare(buffer, width, index, bits)
       if allocation.edge_edits_at(block, successor_index).is_empty() {

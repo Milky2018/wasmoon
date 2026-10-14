@@ -1,19 +1,19 @@
 ///|
 priv suberror HttpTransportError {
-  HttpTransportError(Int, String)
+  HttpTransportError(Int32, String)
 } derive(Debug)
 
 ///|
 priv struct HttpInput {
   reader : &@io.Reader
   mut buffer : Bytes
-  mut offset : Int
-  timeout : Int?
+  mut offset : Int32
+  timeout : Int32?
   mut body_deadline : @async.Timer?
 }
 
 ///|
-async fn HttpInput::read(self : HttpInput, maximum : Int) -> Bytes? {
+async fn HttpInput::read(self : HttpInput, maximum : Int32) -> Bytes? {
   if self.offset == self.buffer.length() {
     let result = if self.body_deadline is Some(timer) {
       @async.with_task_group(async fn(group) {
@@ -38,7 +38,7 @@ async fn HttpInput::read(self : HttpInput, maximum : Int) -> Bytes? {
     self.buffer = bytes
     self.offset = 0
   }
-  let count = Int::min(maximum, self.buffer.length() - self.offset)
+  let count = Int32::min(maximum, self.buffer.length() - self.offset)
   let bytes = self.buffer[self.offset:self.offset + count].to_owned()
   self.offset += count
   Some(bytes)
@@ -134,7 +134,7 @@ fn decimal_length(text : String) -> Int64 raise {
   }
   let mut result = 0L
   for char in text {
-    if !(char is ('0'..='9')) {
+    if !(char is ('0'..<='9')) {
       raise HttpTransportError(35, "invalid content length")
     }
     let digit = (char.to_int() - 48).to_int64()
@@ -187,9 +187,9 @@ fn chunk_length(line : Bytes) -> Int64 raise {
   let mut length = 0L
   while index < line.length() {
     let digit = match line[index] {
-      b'0'..=b'9' => line[index].to_int() - 48
-      b'a'..=b'f' => line[index].to_int() - 87
-      b'A'..=b'F' => line[index].to_int() - 55
+      b'0'..<=b'9' => line[index].to_int() - 48
+      b'a'..<=b'f' => line[index].to_int() - 87
+      b'A'..<=b'F' => line[index].to_int() - 55
       _ => break
     }
     if length > (0x7fffffffffffffffL - digit.to_int64()) / 16L {
@@ -266,9 +266,9 @@ fn chunk_length(line : Bytes) -> Int64 raise {
 ///|
 fn chunk_token_byte(byte : Byte) -> Bool {
   byte
-  is (b'a'..=b'z'
-  | b'A'..=b'Z'
-  | b'0'..=b'9'
+  is (b'a'..<=b'z'
+  | b'A'..<=b'Z'
+  | b'0'..<=b'9'
   | b'!'
   | b'#'
   | b'$'

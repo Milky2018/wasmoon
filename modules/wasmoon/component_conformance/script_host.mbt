@@ -109,8 +109,8 @@ fn create_script_host(
   host_exports.set("resource1", Type(resource1_type))
   host_exports.set("resource2", Type(resource2_type))
   host_exports.set("resource1-again", Type(resource1_type))
-  let resource1_drops : Array[Int] = [0]
-  let resource1_last_drop : Array[Int] = [0]
+  let resource1_drops : Array[Int32] = [0]
+  let resource1_last_drop : Array[Int32] = [0]
   let dtor_core_type : @types.FuncType = { params: [I32], results: [], }
   let resource1_dtor = @runtime_impl.alloc_host_core_func(
     store,
@@ -132,7 +132,7 @@ fn create_script_host(
   }
   fn resource1_expect_handle(
     table : @runtime_impl.ResourceTable,
-    handle : Int,
+    handle : Int32,
   ) -> @runtime_impl.ResourceHandle raise @runtime_impl.ComponentRuntimeError {
     match table.get(handle) {
       Some(h) =>

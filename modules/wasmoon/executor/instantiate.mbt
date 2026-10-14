@@ -47,7 +47,7 @@ pub fn instantiate_module(
   try! store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 
   // Allocate functions with their types
-  let func_addrs : Array[Int] = []
+  let func_addrs : Array[Int32] = []
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
     let func_type = mod.validated_func_type_at(type_idx)
@@ -56,7 +56,7 @@ pub fn instantiate_module(
   }
 
   // Allocate memories
-  let mem_addrs : Array[Int] = []
+  let mem_addrs : Array[Int32] = []
   for mem_type in mod.memories {
     let mem = try! @runtime.Memory::from_type(mem_type)
     let addr = try! store.alloc_mem(mem)
@@ -68,7 +68,7 @@ pub fn instantiate_module(
   // create imported global instances first if we have any table init expressions.
   // For simplicity, we'll evaluate table init expressions with an empty globals array
   // since the validator already ensures only imported globals can be referenced.
-  let table_addrs : Array[Int] = []
+  let table_addrs : Array[Int32] = []
   for table_def in mod.tables {
     // Evaluate table init expression if present
     let init_value : @types.Value = if table_def.init is Some(init_expr) {
@@ -90,7 +90,7 @@ pub fn instantiate_module(
   }
 
   // Allocate globals with initialization
-  let global_addrs : Array[Int] = []
+  let global_addrs : Array[Int32] = []
   let global_instances : Array[@runtime.GlobalInstance] = []
   for global in mod.globals {
     // Evaluate init expression with access to already-initialized globals
@@ -114,7 +114,7 @@ pub fn instantiate_module(
   }
 
   // Allocate tags
-  let tag_addrs : Array[Int] = []
+  let tag_addrs : Array[Int32] = []
   for tag in mod.tags {
     let tag_type = mod.validated_func_type_at(tag.type_idx)
     let addr = try! store.alloc_tag(tag_type, type_idx=tag.type_idx)
@@ -168,10 +168,10 @@ pub fn instantiate_module(
 /// and GC instructions (array.new, array.new_default, array.new_fixed, struct.new, struct.new_default)
 pub fn eval_const_expr(
   instrs : Array[@types.Instruction],
-  func_addrs? : Array[Int] = [],
-  globals? : Array[@runtime.GlobalInstance] = [],
-  store? : @runtime.Store? = None,
-  types? : Array[@types.SubType] = [],
+  func_addrs~ : Array[Int32] = [],
+  globals~ : Array[@runtime.GlobalInstance] = [],
+  store~ : @runtime.Store? = None,
+  types~ : Array[@types.SubType] = [],
 ) -> @types.Value raise @runtime.RuntimeError {
   // Use stack-based evaluation for extended constant expressions
   let stack : Array[@types.Value] = []
@@ -511,7 +511,7 @@ fn eval_extended_const_expr(
 /// Helper to get global instances from a store given global addresses
 fn get_global_instances(
   store : @runtime.Store,
-  global_addrs : Array[Int],
+  global_addrs : Array[Int32],
 ) -> Array[@runtime.GlobalInstance] {
   let globals : Array[@runtime.GlobalInstance] = []
   for addr in global_addrs {
@@ -526,8 +526,8 @@ fn get_global_instances(
 fn evaluate_element_segments(
   mod : @types.Module,
   store : @runtime.Store,
-  func_addrs : Array[Int],
-  global_addrs : Array[Int],
+  func_addrs : Array[Int32],
+  global_addrs : Array[Int32],
 ) -> Array[Array[@types.Value]] raise @runtime.RuntimeError {
   let globals = get_global_instances(store, global_addrs)
   let segments : Array[Array[@types.Value]] = []
@@ -630,7 +630,7 @@ pub(all) enum ImportDiagnosticKind {
 ///|
 /// Structured diagnostic for one import check failure.
 pub struct ImportDiagnostic {
-  import_index : Int
+  import_index : Int32
   module_name : String
   name : String
   kind : ImportDiagnosticKind
@@ -654,7 +654,7 @@ pub fn ImportDiagnosticsResult::ImportDiagnosticsResult() -> ImportDiagnosticsRe
 ///|
 fn push_import_diagnostic(
   result : ImportDiagnosticsResult,
-  import_index : Int,
+  import_index : Int32,
   module_name : String,
   name : String,
   kind : ImportDiagnosticKind,
@@ -1236,12 +1236,12 @@ pub fn instantiate_module_with_imports_unstarted(
   )
 
   // Process imports first
-  let func_addrs : Array[Int] = []
-  let func_type_indices : Array[Int] = []
-  let mem_addrs : Array[Int] = []
-  let table_addrs : Array[Int] = []
-  let global_addrs : Array[Int] = []
-  let tag_addrs : Array[Int] = []
+  let func_addrs : Array[Int32] = []
+  let func_type_indices : Array[Int32] = []
+  let mem_addrs : Array[Int32] = []
+  let table_addrs : Array[Int32] = []
+  let global_addrs : Array[Int32] = []
+  let tag_addrs : Array[Int32] = []
 
   // Import functions and memories first (they come before module definitions in the index space)
   for imp in mod.imports {
@@ -1727,18 +1727,18 @@ pub(all) enum CallExportResult {
 /// - `fuel` and `budget` are parsed and surfaced as structured
 ///   `UnsupportedOption` errors for integration-time capability probing.
 pub struct CallExportOptions {
-  timeout_ms : Int?
-  fuel : Int?
-  budget : Int?
+  timeout_ms : Int32?
+  fuel : Int32?
+  budget : Int32?
   cancel : (() -> Bool)?
 }
 
 ///|
 pub fn CallExportOptions::CallExportOptions(
-  timeout_ms? : Int? = None,
-  fuel? : Int? = None,
-  budget? : Int? = None,
-  cancel? : (() -> Bool)? = None,
+  timeout_ms~ : Int32? = None,
+  fuel~ : Int32? = None,
+  budget~ : Int32? = None,
+  cancel~ : (() -> Bool)? = None,
 ) -> CallExportOptions {
   { timeout_ms, fuel, budget, cancel, }
 }
@@ -1747,7 +1747,7 @@ pub fn CallExportOptions::CallExportOptions(
 fn call_export_failure(
   kind : CallExportFailureKind,
   message : String,
-  runtime_error? : @runtime.RuntimeError? = None,
+  runtime_error~ : @runtime.RuntimeError? = None,
 ) -> CallExportFailure {
   { kind, message, runtime_error, }
 }
@@ -1788,7 +1788,7 @@ pub fn call_exported_func_with_options(
   instance : @runtime.ModuleInstance,
   name : String,
   args : Array[@types.Value],
-  options? : CallExportOptions = CallExportOptions(),
+  options~ : CallExportOptions = CallExportOptions(),
 ) -> CallExportResult {
   if check_call_export_options(options) is Some(failure) {
     return Err(failure)
@@ -1921,7 +1921,7 @@ pub fn call_exported_func(
 pub fn call_func_by_index(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise @runtime.RuntimeError {
   let ctx = ExecContext::ExecContext(store, instance)
@@ -1937,7 +1937,7 @@ pub fn call_func_by_index(
 /// `ThrowException(tag_addr, values)` instead of normalizing it to runtime traps.
 pub(all) enum InvokeWithExceptionResult {
   Returned(Array[@types.Value])
-  Thrown(Int, Array[@types.Value]) // (tag_addr, payload values)
+  Thrown(Int32, Array[@types.Value]) // (tag_addr, payload values)
   HostFailed(@runtime.RuntimeError)
 }
 
@@ -1946,7 +1946,7 @@ pub(all) enum InvokeWithExceptionResult {
 pub fn call_func_by_index_with_exception(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
 ) -> InvokeWithExceptionResult raise @runtime.RuntimeError {
   let ctx = ExecContext::ExecContext(store, instance)

@@ -2,7 +2,7 @@
 /// Result of parsing a func definition - can be a regular function or an inline import
 priv enum FuncDefResult {
   /// Regular function definition: (type_idx, code, export_names)
-  FuncDef(Int, @types.FunctionCode, Array[String])
+  FuncDef(Int32, @types.FunctionCode, Array[String])
   /// Inline import: the import definition
   InlineImport(@types.Import, Array[String]) // import, optional export names
 }
@@ -42,24 +42,24 @@ priv struct Parser {
   lexer : Lexer
   mut current : LocatedToken
   // Name resolution maps
-  func_names : Map[String, Int]
-  type_names : Map[String, Int]
-  local_names : Map[String, Int]
-  global_names : Map[String, Int]
-  memory_names : Map[String, Int]
-  table_names : Map[String, Int]
-  tag_names : Map[String, Int]
-  data_names : Map[String, Int]
-  elem_names : Map[String, Int]
+  func_names : Map[String, Int32]
+  type_names : Map[String, Int32]
+  local_names : Map[String, Int32]
+  global_names : Map[String, Int32]
+  memory_names : Map[String, Int32]
+  table_names : Map[String, Int32]
+  tag_names : Map[String, Int32]
+  data_names : Map[String, Int32]
+  elem_names : Map[String, Int32]
   // Label stack for block/loop/if - stores (name, depth) pairs
   // depth is the index from the innermost block (0 = current block)
   label_stack : Array[String?]
   // Reference to module types for inline type resolution in call_indirect
   mut types : Array[@types.SubType]
   // Reference to module type_rec_groups for implicit type matching
-  mut type_rec_groups : Array[Int]
+  mut type_rec_groups : Array[Int32]
   // Field names per type: type_idx -> (field_name -> field_idx)
-  field_names : Map[Int, Map[String, Int]]
+  field_names : Map[Int32, Map[String, Int32]]
 }
 
 ///|
@@ -94,7 +94,10 @@ fn Parser::loc(self : Parser) -> SourceLoc {
 ///|
 /// Check if a type at given index is in a singleton rec group.
 /// Implicit function types should only match singleton rec groups.
-fn is_singleton_rec_group(type_rec_groups : Array[Int], type_idx : Int) -> Bool {
+fn is_singleton_rec_group(
+  type_rec_groups : Array[Int32],
+  type_idx : Int32,
+) -> Bool {
   if type_idx < 0 || type_idx >= type_rec_groups.length() {
     return true // No rec group info, assume singleton
   }
@@ -123,7 +126,7 @@ fn Parser::pop_label(self : Parser) -> Unit {
 ///|
 /// Resolve a named label to its depth index
 /// Returns the number of blocks we need to break out of
-fn Parser::resolve_label(self : Parser, name : String) -> Int? {
+fn Parser::resolve_label(self : Parser, name : String) -> Int32? {
   // Search from the top of the stack (most recent block)
   for i = self.label_stack.length() - 1; i >= 0; i = i - 1 {
     if self.label_stack[i] is Some(label_name) && label_name == name {
@@ -136,7 +139,7 @@ fn Parser::resolve_label(self : Parser, name : String) -> Int? {
 
 ///|
 /// Resolve a named memory to its index
-fn Parser::resolve_memory(self : Parser, name : String) -> Int raise WatError {
+fn Parser::resolve_memory(self : Parser, name : String) -> Int32 raise WatError {
   match self.memory_names.get(name) {
     Some(idx) => idx
     None => raise UndefinedIdentifier("memory $\{name}", self.loc())
@@ -145,7 +148,10 @@ fn Parser::resolve_memory(self : Parser, name : String) -> Int raise WatError {
 
 ///|
 /// Parse field index (numeric or by name for the given type)
-fn Parser::parse_field_idx(self : Parser, type_idx : Int) -> Int raise WatError {
+fn Parser::parse_field_idx(
+  self : Parser,
+  type_idx : Int32,
+) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -177,7 +183,7 @@ fn Parser::parse_field_idx(self : Parser, type_idx : Int) -> Int raise WatError 
 
 ///|
 /// Parse an optional memory index (Id or Number), defaults to 0
-fn Parser::parse_optional_memidx(self : Parser) -> Int raise WatError {
+fn Parser::parse_optional_memidx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Id(name) => {
       let idx = self.resolve_memory(name)
@@ -262,7 +268,7 @@ fn Parser::skip_optional_id(self : Parser) -> Unit raise WatError {
 }
 
 ///|
-fn Parser::parse_u32(self : Parser) -> Int raise WatError {
+fn Parser::parse_u32(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -287,7 +293,7 @@ fn Parser::parse_u64(self : Parser) -> Int64 raise WatError {
 }
 
 ///|
-fn Parser::parse_i32(self : Parser) -> Int raise WatError {
+fn Parser::parse_i32(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -608,7 +614,7 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
 
 ///|
 /// Count the number of function imports
-fn count_func_imports(imports : Array[@types.Import]) -> Int {
+fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Func(_) {
@@ -619,7 +625,7 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
-fn count_table_imports(imports : Array[@types.Import]) -> Int {
+fn count_table_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Table(_) {
@@ -630,7 +636,7 @@ fn count_table_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
-fn count_global_imports(imports : Array[@types.Import]) -> Int {
+fn count_global_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Global(_) {
@@ -641,7 +647,7 @@ fn count_global_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
-fn count_memory_imports(imports : Array[@types.Import]) -> Int {
+fn count_memory_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Memory(_) {
@@ -652,7 +658,7 @@ fn count_memory_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
-fn count_tag_imports(imports : Array[@types.Import]) -> Int {
+fn count_tag_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Tag(_) {
@@ -666,7 +672,7 @@ fn count_tag_imports(imports : Array[@types.Import]) -> Int {
 /// Parse a WAT module from string
 pub fn parse(
   input : String,
-  implicit_module? : Bool = false,
+  implicit_module~ : Bool = false,
 ) -> @types.Module raise WatError {
   let input = if implicit_module {
     let probe = Lexer::Lexer(input)

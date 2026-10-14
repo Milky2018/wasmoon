@@ -2,13 +2,13 @@
 /// @types.Value stack for operands
 struct Stack {
   values : Array[@types.Value]
-  limit : Int
-  mut reserved : Int
-  mut sp : Int // stack pointer
+  limit : Int32
+  mut reserved : Int32
+  mut sp : Int32 // stack pointer
 } derive(Debug)
 
 ///|
-pub fn Stack::Stack(max_values? : Int = 10000) -> Stack {
+pub fn Stack::Stack(max_values~ : Int32 = 10000) -> Stack {
   { values: [], sp: 0, limit: max_values, reserved: 0, }
 }
 
@@ -48,7 +48,7 @@ pub fn Stack::peek(self : Stack) -> @types.Value raise RuntimeError {
 }
 
 ///|
-pub fn Stack::pop_i32(self : Stack) -> Int raise RuntimeError {
+pub fn Stack::pop_i32(self : Stack) -> Int32 raise RuntimeError {
   match self.pop() {
     I32(n) => n
     v => {
@@ -108,7 +108,7 @@ pub fn Stack::pop_v128(self : Stack) -> Bytes raise RuntimeError {
 }
 
 ///|
-pub fn Stack::size(self : Stack) -> Int {
+pub fn Stack::size(self : Stack) -> Int32 {
   self.sp
 }
 
@@ -133,7 +133,7 @@ pub fn Stack::clear(self : Stack) -> Unit {
 /// Pop n values from the stack, returning them in order (first popped is last in array)
 pub fn Stack::pop_n(
   self : Stack,
-  n : Int,
+  n : Int32,
 ) -> Array[@types.Value] raise RuntimeError {
   if n <= 0 {
     return []
@@ -153,7 +153,7 @@ pub fn Stack::pop_n(
 
 ///|
 /// Count frame locals against the same budget as live operand slots.
-pub fn Stack::reserve(self : Stack, count : Int) -> Unit raise RuntimeError {
+pub fn Stack::reserve(self : Stack, count : Int32) -> Unit raise RuntimeError {
   if count < 0 || count > self.limit - self.reserved - self.sp {
     raise StackOverflow
   }
@@ -161,6 +161,6 @@ pub fn Stack::reserve(self : Stack, count : Int) -> Unit raise RuntimeError {
 }
 
 ///|
-pub fn Stack::release(self : Stack, count : Int) -> Unit {
+pub fn Stack::release(self : Stack, count : Int32) -> Unit {
   self.reserved -= count
 }

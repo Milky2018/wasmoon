@@ -16,7 +16,7 @@ priv struct BlockData {
   parameters : Array[Value]
   body : Array[Instruction]
   mut terminator : Instruction?
-  mut layout_index : Int
+  mut layout_index : Int32
 }
 
 ///|
@@ -30,11 +30,11 @@ priv struct InstructionData[Inst] {
   inst : Inst
   parent : Block
   role : InstructionRole
-  operand_start : Int
-  operand_count : Int
-  allocation_operand_count : Int
-  clobber_start : Int
-  clobber_count : Int
+  operand_start : Int32
+  operand_count : Int32
+  allocation_operand_count : Int32
+  clobber_start : Int32
+  clobber_count : Int32
   results : Array[Value]
   successors : Array[Edge]
   metadata : InstructionMetadata
@@ -155,25 +155,25 @@ pub fn[Inst] Function::entry_block(self : Function[Inst]) -> Block {
 }
 
 ///|
-pub fn[Inst] Function::parameter_count(self : Function[Inst]) -> Int {
+pub fn[Inst] Function::parameter_count(self : Function[Inst]) -> Int32 {
   self.parameters.length()
 }
 
 ///|
 pub fn[Inst] Function::parameter_at(
   self : Function[Inst],
-  index : Int,
+  index : Int32,
 ) -> Value? {
   self.parameters.get(index)
 }
 
 ///|
-pub fn[Inst] Function::value_count(self : Function[Inst]) -> Int {
+pub fn[Inst] Function::value_count(self : Function[Inst]) -> Int32 {
   self.values.length()
 }
 
 ///|
-pub fn[Inst] Function::value_at(self : Function[Inst], index : Int) -> Value? {
+pub fn[Inst] Function::value_at(self : Function[Inst], index : Int32) -> Value? {
   if index >= 0 && index < self.values.length() {
     Some(Value::new(self.owner, index))
   } else {
@@ -185,7 +185,7 @@ pub fn[Inst] Function::value_at(self : Function[Inst], index : Int) -> Value? {
 pub fn[Inst] Function::value_index(
   self : Function[Inst],
   value : Value,
-) -> Int? {
+) -> Int32? {
   if self.owns_value(value) {
     Some(value.id)
   } else {
@@ -206,12 +206,12 @@ pub fn[Inst] Function::value_type(
 }
 
 ///|
-pub fn[Inst] Function::block_count(self : Function[Inst]) -> Int {
+pub fn[Inst] Function::block_count(self : Function[Inst]) -> Int32 {
   self.blocks.length()
 }
 
 ///|
-pub fn[Inst] Function::block_at(self : Function[Inst], index : Int) -> Block? {
+pub fn[Inst] Function::block_at(self : Function[Inst], index : Int32) -> Block? {
   if index >= 0 && index < self.blocks.length() {
     Some(Block::new(self.owner, index))
   } else {
@@ -223,7 +223,7 @@ pub fn[Inst] Function::block_at(self : Function[Inst], index : Int) -> Block? {
 pub fn[Inst] Function::block_index(
   self : Function[Inst],
   block : Block,
-) -> Int? {
+) -> Int32? {
   if self.owns_block(block) {
     Some(block.id)
   } else {
@@ -247,7 +247,7 @@ pub fn[Inst] Function::block_parameters(
 pub fn[Inst] Function::block_parameter_count(
   self : Function[Inst],
   block : Block,
-) -> Int {
+) -> Int32 {
   if self.owns_block(block) {
     self.blocks[block.id].parameters.length()
   } else {
@@ -259,7 +259,7 @@ pub fn[Inst] Function::block_parameter_count(
 pub fn[Inst] Function::block_parameter_at(
   self : Function[Inst],
   block : Block,
-  index : Int,
+  index : Int32,
 ) -> Value? {
   if self.owns_block(block) {
     self.blocks[block.id].parameters.get(index)
@@ -297,7 +297,7 @@ pub fn[Inst] Function::block_terminator(
 pub fn[Inst] Function::block_instruction_count(
   self : Function[Inst],
   block : Block,
-) -> Int {
+) -> Int32 {
   if self.owns_block(block) {
     let data = self.blocks[block.id]
     let terminator_count = match data.terminator {
@@ -315,7 +315,7 @@ pub fn[Inst] Function::block_instruction_count(
 pub fn[Inst] Function::block_instruction_at(
   self : Function[Inst],
   block : Block,
-  index : Int,
+  index : Int32,
 ) -> Instruction? {
   if !self.owns_block(block) || index < 0 {
     return None
@@ -331,14 +331,14 @@ pub fn[Inst] Function::block_instruction_at(
 }
 
 ///|
-pub fn[Inst] Function::instruction_count(self : Function[Inst]) -> Int {
+pub fn[Inst] Function::instruction_count(self : Function[Inst]) -> Int32 {
   self.instructions.length()
 }
 
 ///|
 pub fn[Inst] Function::instruction_at(
   self : Function[Inst],
-  index : Int,
+  index : Int32,
 ) -> Instruction? {
   if index >= 0 && index < self.instructions.length() {
     Some(Instruction::new(self.owner, index))
@@ -351,7 +351,7 @@ pub fn[Inst] Function::instruction_at(
 pub fn[Inst] Function::instruction_index(
   self : Function[Inst],
   instruction : Instruction,
-) -> Int? {
+) -> Int32? {
   if self.owns_instruction(instruction) {
     Some(instruction.id)
   } else {
@@ -392,7 +392,7 @@ pub fn[Inst] Function::instruction_operands(
 pub fn[Inst] Function::instruction_operand_count(
   self : Function[Inst],
   instruction : Instruction,
-) -> Int {
+) -> Int32 {
   if self.owns_instruction(instruction) {
     self.instructions[instruction.id].operand_count
   } else {
@@ -404,7 +404,7 @@ pub fn[Inst] Function::instruction_operand_count(
 pub fn[Inst] Function::instruction_operand_at(
   self : Function[Inst],
   instruction : Instruction,
-  index : Int,
+  index : Int32,
 ) -> Operand? {
   if !self.owns_instruction(instruction) {
     return None
@@ -439,7 +439,7 @@ pub fn[Inst] Function::allocation_vreg(
 pub fn[Inst] Function::instruction_allocation_operand_at(
   self : Function[Inst],
   instruction : Instruction,
-  index : Int,
+  index : Int32,
 ) -> AllocationOperand? {
   if !self.owns_instruction(instruction) {
     return None
@@ -467,7 +467,7 @@ pub fn[Inst] Function::instruction_clobbers(
 pub fn[Inst] Function::instruction_clobber_count(
   self : Function[Inst],
   instruction : Instruction,
-) -> Int {
+) -> Int32 {
   if self.owns_instruction(instruction) {
     self.instructions[instruction.id].clobber_count
   } else {
@@ -479,7 +479,7 @@ pub fn[Inst] Function::instruction_clobber_count(
 pub fn[Inst] Function::instruction_clobber_at(
   self : Function[Inst],
   instruction : Instruction,
-  index : Int,
+  index : Int32,
 ) -> PhysicalReg? {
   if !self.owns_instruction(instruction) {
     return None
@@ -528,7 +528,7 @@ pub fn[Inst] Function::instruction_successors(
 pub fn[Inst] Function::instruction_successor_count(
   self : Function[Inst],
   instruction : Instruction,
-) -> Int {
+) -> Int32 {
   if self.owns_instruction(instruction) {
     self.instructions[instruction.id].successors.length()
   } else {
@@ -540,7 +540,7 @@ pub fn[Inst] Function::instruction_successor_count(
 pub fn[Inst] Function::instruction_successor_at(
   self : Function[Inst],
   instruction : Instruction,
-  index : Int,
+  index : Int32,
 ) -> Edge? {
   if !self.owns_instruction(instruction) {
     return None
@@ -555,7 +555,7 @@ pub fn[Inst] Function::instruction_successor_at(
 pub fn[Inst] Function::instruction_successor_target(
   self : Function[Inst],
   instruction : Instruction,
-  successor : Int,
+  successor : Int32,
 ) -> Block? {
   if !self.owns_instruction(instruction) {
     return None
@@ -570,8 +570,8 @@ pub fn[Inst] Function::instruction_successor_target(
 pub fn[Inst] Function::instruction_successor_argument_count(
   self : Function[Inst],
   instruction : Instruction,
-  successor : Int,
-) -> Int {
+  successor : Int32,
+) -> Int32 {
   if !self.owns_instruction(instruction) {
     return 0
   }
@@ -585,8 +585,8 @@ pub fn[Inst] Function::instruction_successor_argument_count(
 pub fn[Inst] Function::instruction_successor_argument_at(
   self : Function[Inst],
   instruction : Instruction,
-  successor : Int,
-  argument : Int,
+  successor : Int32,
+  argument : Int32,
 ) -> Value? {
   if !self.owns_instruction(instruction) {
     return None
@@ -617,7 +617,7 @@ pub fn[Inst] Function::layout(self : Function[Inst]) -> Array[Block] {
 ///|
 pub fn[Inst] Function::layout_block_at(
   self : Function[Inst],
-  index : Int,
+  index : Int32,
 ) -> Block? {
   self.layout.get(index)
 }

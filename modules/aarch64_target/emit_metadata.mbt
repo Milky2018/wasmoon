@@ -28,7 +28,7 @@ fn record_instruction_metadata(
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   instruction : @vcode.Instruction,
-  offset : Int,
+  offset : Int32,
   sources : Array[@code_object.SourceSite],
   traps : Array[@code_object.TrapSite],
   safepoints : Array[@code_object.SafepointSite],

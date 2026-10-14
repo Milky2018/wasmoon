@@ -58,7 +58,7 @@ fn lower_extension(
 }
 
 ///|
-fn bytes_word(bytes : Bytes, offset : Int) -> UInt64 {
+fn bytes_word(bytes : Bytes, offset : Int32) -> UInt64 {
   let mut word = 0UL
   for index in 0..<8 {
     word = word | (bytes[offset + index].to_int().to_uint64() << (index * 8))
@@ -458,7 +458,7 @@ fn vector_not_is_fully_selected(
   value : @milkir.Value,
   facts : SelectionFacts,
 ) -> Bool {
-  fn selected(consumer : Int) -> Bool {
+  fn selected(consumer : Int32) -> Bool {
     guard consumer >= 0 && facts.instructions[consumer] is Some(instruction) else {
       return false
     }

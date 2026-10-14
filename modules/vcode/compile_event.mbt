@@ -1,14 +1,14 @@
 ///|
 /// Deterministic counters for the allocator's bundle-probing loop.
 pub(all) struct RegallocLoopStatistics {
-  queue_pops : Int
-  register_probes : Int
-  occupied_segments_scanned : Int
-  conflicts : Int
-  evictions : Int
-  bundle_splits : Int
-  second_chance_attempts : Int
-  max_queue_length : Int
+  queue_pops : Int32
+  register_probes : Int32
+  occupied_segments_scanned : Int32
+  conflicts : Int32
+  evictions : Int32
+  bundle_splits : Int32
+  second_chance_attempts : Int32
+  max_queue_length : Int32
 } derive(Eq, Debug)
 
 ///|

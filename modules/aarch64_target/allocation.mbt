@@ -12,12 +12,12 @@ pub impl Show for AArch64AllocationError with fn output(self, logger) {
 }
 
 ///|
-fn int_physical(index : Int) -> @vcode.PhysicalReg {
+fn int_physical(index : Int32) -> @vcode.PhysicalReg {
   @vcode.PhysicalReg::new(index, Int)
 }
 
 ///|
-fn fp_physical(index : Int) -> @vcode.PhysicalReg {
+fn fp_physical(index : Int32) -> @vcode.PhysicalReg {
   @vcode.PhysicalReg::new(index, FpVector)
 }
 
@@ -245,11 +245,11 @@ fn verify_target_allocation(
 ///|
 fn allocate_verified(
   function : @vcode.Function[AArch64Inst],
-  on_phase? : ((String?) -> Unit)? = None,
-  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
-  verify_allocation? : Bool = true,
-  allocation_session? : @vcode_regalloc.AllocationSession = @vcode_regalloc.AllocationSession::new(),
-  allocation_environment? : @vcode_regalloc.VCodeAllocationEnvironment = @vcode_regalloc.VCodeAllocationEnvironment::new(
+  on_phase~ : ((String?) -> Unit)? = None,
+  on_statistics~ : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
+  verify_allocation~ : Bool = true,
+  allocation_session~ : @vcode_regalloc.AllocationSession = @vcode_regalloc.AllocationSession::new(),
+  allocation_environment~ : @vcode_regalloc.VCodeAllocationEnvironment = @vcode_regalloc.VCodeAllocationEnvironment::new(
     allocatable_physical_regs(),
     spill_scratch_regs(),
   ),

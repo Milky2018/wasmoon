@@ -50,7 +50,7 @@ test "host collection retains live locals operands and arguments on both engines
       context.close()
       inner_store.close()
     })
-    let collected : Array[Int] = []
+    let collected : Array[Int32] = []
     let observed : Array[@types.Value] = []
     linker.add_host_func(
       "host",
@@ -102,7 +102,7 @@ test "host collection retains detached roots during reentry into the same JIT co
   defer linker.close()
   let reenter : Ref[(() -> Unit raise @runtime.RuntimeError)?] = Ref(None)
   let inside = Ref(false)
-  let collected : Array[Int] = []
+  let collected : Array[Int32] = []
   let observed : Array[@types.Value] = []
   linker.add_host_func(
     "host",

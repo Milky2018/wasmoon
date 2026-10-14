@@ -26,7 +26,7 @@ priv struct FuncEnvironment {
   memory_is_shared : Array[Bool]
   memory_is_64 : Array[Bool]
   // Logical page size log2 for each memory (custom-page-sizes proposal)
-  memory_page_size_log2 : Array[Int]
+  memory_page_size_log2 : Array[Int32]
   // Shared trap block for memory out-of-bounds errors
   // All bounds checks in the same function share this block to reduce CFG size
   mut memory_trap_block : Block?
@@ -46,10 +46,10 @@ priv struct FuncEnvironment {
 fn FuncEnvironment::FuncEnvironment(
   embedding_env : @embedding.EmbeddingEnvironment,
   global_types : Array[@types.GlobalType],
-  memory_mins? : Array[Int64] = [],
-  memory_is_64? : Array[Bool] = [],
-  memory_is_shared? : Array[Bool] = [],
-  memory_page_size_log2? : Array[Int] = [],
+  memory_mins~ : Array[Int64] = [],
+  memory_is_64~ : Array[Bool] = [],
+  memory_is_shared~ : Array[Bool] = [],
+  memory_page_size_log2~ : Array[Int32] = [],
 ) -> FuncEnvironment {
   let runtime_layout = match embedding_env.runtime_layout() {
     Some(layout) => layout
@@ -106,7 +106,7 @@ fn FuncEnvironment::translate_global_get(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  global_idx : Int,
+  global_idx : Int32,
 ) -> Value {
   let global_type = self.global_types[global_idx]
   let ty = type_from_wasm(global_type.value_type)
@@ -135,7 +135,7 @@ fn FuncEnvironment::translate_global_set(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  global_idx : Int,
+  global_idx : Int32,
   value : Value,
 ) -> Unit {
   let global_type = self.global_types[global_idx]
@@ -166,8 +166,8 @@ fn FuncEnvironment::translate_table_size(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  table_idx : Int,
-  is_table64? : Bool = false,
+  table_idx : Int32,
+  is_table64~ : Bool = false,
 ) -> Value {
   let layout = self.runtime_layout
   if table_idx == 0 {
@@ -207,10 +207,10 @@ fn FuncEnvironment::translate_table_get(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  table_idx : Int,
+  table_idx : Int32,
   elem_idx : Value,
   result_type : Type,
-  is_table64? : Bool = false,
+  is_table64~ : Bool = false,
 ) -> Value {
   let layout = self.runtime_layout
   // Get table size for bounds check
@@ -280,10 +280,10 @@ fn FuncEnvironment::translate_table_set(
   _self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  table_idx : Int,
+  table_idx : Int32,
   elem_idx : Value,
   value : Value,
-  is_table64? : Bool = false,
+  is_table64~ : Bool = false,
 ) -> Unit {
   // For the JIT, table entries are "fat" (16 bytes): value bits + type index.
   // Use TableFill with size=1 so the runtime helper can also populate the type
@@ -313,7 +313,7 @@ fn FuncEnvironment::load_memory_size(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  memidx : Int,
+  memidx : Int32,
 ) -> Value {
   let layout = self.runtime_layout
   let shared = memidx < self.memory_is_shared.length() &&
@@ -351,7 +351,7 @@ fn FuncEnvironment::load_memory_size(
 /// Currently only enabled for memory 0 and memory32.
 fn FuncEnvironment::use_guard_pages(
   self : FuncEnvironment,
-  memidx : Int,
+  memidx : Int32,
 ) -> Bool {
   if memidx != 0 {
     return false
@@ -373,7 +373,7 @@ fn FuncEnvironment::use_guard_pages(
 ///|
 fn FuncEnvironment::memory_base_stability(
   self : FuncEnvironment,
-  memidx : Int,
+  memidx : Int32,
 ) -> @milkir.GlobalValueStability {
   if self.use_guard_pages(memidx) {
     Stable
@@ -430,10 +430,10 @@ fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
 fn FuncEnvironment::emit_atomic_alignment_check(
   self : FuncEnvironment,
   builder : FunctionBuilder,
-  memidx : Int,
+  memidx : Int32,
   wasm_addr : Value,
   offset : Int64,
-  access_size : Int,
+  access_size : Int32,
 ) -> Unit {
   if access_size <= 1 {
     return
@@ -462,7 +462,7 @@ fn FuncEnvironment::emit_atomic_alignment_check(
 
 ///|
 /// Get the byte size for a type
-fn type_byte_size(ty : Type) -> Int {
+fn type_byte_size(ty : Type) -> Int32 {
   match ty {
     I32 => 4
     I64 => 8
@@ -479,10 +479,10 @@ fn type_byte_size(ty : Type) -> Int {
 fn FuncEnvironment::can_eliminate_bounds_check(
   self : FuncEnvironment,
   builder : FunctionBuilder,
-  memidx : Int,
+  memidx : Int32,
   wasm_addr : Value,
   offset : Int64,
-  access_size : Int,
+  access_size : Int32,
 ) -> Bool {
   // Get minimum memory size for this memory index
   let memory_min = if memidx < self.memory_mins.length() {
@@ -512,15 +512,15 @@ fn FuncEnvironment::can_eliminate_bounds_check(
 
 ///|
 fn bounds_check_cache_key(
-  block_id : Int,
-  memidx : Int,
-  addr_id : Int,
+  block_id : Int32,
+  memidx : Int32,
+  addr_id : Int32,
 ) -> String {
   "\{block_id}:\{memidx}:\{addr_id}"
 }
 
 ///|
-fn checked_access_end(offset : Int64, access_size : Int) -> Int64? {
+fn checked_access_end(offset : Int64, access_size : Int32) -> Int64? {
   if offset < 0L || access_size < 0 {
     return None
   }
@@ -538,10 +538,10 @@ fn checked_access_end(offset : Int64, access_size : Int) -> Int64? {
 fn FuncEnvironment::can_eliminate_redundant_bounds_check(
   self : FuncEnvironment,
   builder : FunctionBuilder,
-  memidx : Int,
+  memidx : Int32,
   wasm_addr : Value,
   offset : Int64,
-  access_size : Int,
+  access_size : Int32,
 ) -> Bool {
   let block = builder.current_block()
   guard checked_access_end(offset, access_size) is Some(end) else {
@@ -558,10 +558,10 @@ fn FuncEnvironment::can_eliminate_redundant_bounds_check(
 fn FuncEnvironment::record_bounds_check(
   self : FuncEnvironment,
   builder : FunctionBuilder,
-  memidx : Int,
+  memidx : Int32,
   wasm_addr : Value,
   offset : Int64,
-  access_size : Int,
+  access_size : Int32,
 ) -> Unit {
   let block = builder.current_block()
   guard checked_access_end(offset, access_size) is Some(end) else { return }
@@ -579,11 +579,11 @@ fn FuncEnvironment::emit_bounds_check(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  memidx : Int,
+  memidx : Int32,
   wasm_addr : Value,
   offset : Int64,
-  access_size : Int,
-  explicit_check? : Bool = false,
+  access_size : Int32,
+  explicit_check~ : Bool = false,
 ) -> Value {
   if !explicit_check && self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
@@ -679,7 +679,7 @@ fn FuncEnvironment::translate_memory_load(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  memidx : Int,
+  memidx : Int32,
   ty : Type,
   wasm_addr : Value,
   offset : Int64,
@@ -789,7 +789,7 @@ fn FuncEnvironment::translate_memory_store(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  memidx : Int,
+  memidx : Int32,
   ty : Type,
   wasm_addr : Value,
   value : Value,
@@ -889,9 +889,9 @@ fn FuncEnvironment::translate_memory_load_narrow(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  memidx : Int,
+  memidx : Int32,
   result_ty : Type,
-  narrow_bits : Int,
+  narrow_bits : Int32,
   signed : Bool,
   wasm_addr : Value,
   offset : Int64,
@@ -994,8 +994,8 @@ fn FuncEnvironment::translate_memory_store_narrow(
   self : FuncEnvironment,
   builder : FunctionBuilder,
   vmctx : Value,
-  memidx : Int,
-  narrow_bits : Int,
+  memidx : Int32,
+  narrow_bits : Int32,
   wasm_addr : Value,
   value : Value,
   offset : Int64,

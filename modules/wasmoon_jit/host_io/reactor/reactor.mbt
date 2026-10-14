@@ -4,9 +4,9 @@ pub(all) suberror NativeReactorError {
   BlockingWaitInExternalLoop
   UnsupportedPlatform
   AllocationFailed
-  RegistrationFailed(Int)
-  WaitFailed(Int)
-  WakeFailed(Int)
+  RegistrationFailed(Int32)
+  WaitFailed(Int32)
+  WakeFailed(Int32)
 } derive(Debug, Eq)
 
 ///|
@@ -18,7 +18,7 @@ pub impl Show for NativeReactorError with fn output(self, logger) {
 priv type NativeReactorObject
 
 ///|
-extern "c" fn c_reactor_supported() -> Int = "wasmoon_async_reactor_supported"
+extern "c" fn c_reactor_supported() -> Int32 = "wasmoon_async_reactor_supported"
 
 ///|
 extern "c" fn c_reactor_alloc() -> NativeReactorObject = "wasmoon_async_reactor_alloc"
@@ -29,20 +29,20 @@ extern "c" fn c_reactor_close(reactor : NativeReactorObject) -> Unit = "wasmoon_
 
 ///|
 #borrow(reactor)
-extern "c" fn c_reactor_state(reactor : NativeReactorObject) -> Int = "wasmoon_async_reactor_state"
+extern "c" fn c_reactor_state(reactor : NativeReactorObject) -> Int32 = "wasmoon_async_reactor_state"
 
 ///|
 #borrow(reactor)
-extern "c" fn c_reactor_errno(reactor : NativeReactorObject) -> Int = "wasmoon_async_reactor_errno"
+extern "c" fn c_reactor_errno(reactor : NativeReactorObject) -> Int32 = "wasmoon_async_reactor_errno"
 
 ///|
 #borrow(reactor)
 extern "c" fn c_reactor_register_fd(
   reactor : NativeReactorObject,
-  fd : Int,
-  writable : Int,
+  fd : Int32,
+  writable : Int32,
   token : Int64,
-) -> Int = "wasmoon_async_reactor_register_fd"
+) -> Int32 = "wasmoon_async_reactor_register_fd"
 
 ///|
 #borrow(reactor)
@@ -50,14 +50,14 @@ extern "c" fn c_reactor_register_timer(
   reactor : NativeReactorObject,
   delay_ns : Int64,
   token : Int64,
-) -> Int = "wasmoon_async_reactor_register_timer"
+) -> Int32 = "wasmoon_async_reactor_register_timer"
 
 ///|
 #borrow(reactor)
 extern "c" fn c_reactor_cancel(
   reactor : NativeReactorObject,
   token : Int64,
-) -> Int = "wasmoon_async_reactor_cancel"
+) -> Int32 = "wasmoon_async_reactor_cancel"
 
 ///|
 #borrow(reactor, tokens)
@@ -65,12 +65,12 @@ extern "c" fn c_reactor_wait(
   reactor : NativeReactorObject,
   timeout_ns : Int64,
   tokens : FixedArray[Int64],
-  capacity : Int,
-) -> Int = "wasmoon_async_reactor_wait"
+  capacity : Int32,
+) -> Int32 = "wasmoon_async_reactor_wait"
 
 ///|
 #borrow(reactor)
-extern "c" fn c_reactor_wake(reactor : NativeReactorObject) -> Int = "wasmoon_async_reactor_wake"
+extern "c" fn c_reactor_wake(reactor : NativeReactorObject) -> Int32 = "wasmoon_async_reactor_wake"
 
 ///|
 priv enum RegistrationState {
@@ -123,7 +123,7 @@ fn NativeReactor::allocate_token(self : NativeReactor) -> Int64 {
 ///|
 fn NativeReactor::register(
   self : NativeReactor,
-  install : (Int64) -> Int,
+  install : (Int64) -> Int32,
 ) -> NativeRegistration raise NativeReactorError {
   let token = self.allocate_token()
   let status = install(token)
@@ -142,7 +142,7 @@ fn NativeReactor::register(
 /// concurrent registrations for the same descriptor remain isolated.
 pub fn NativeReactor::register_read(
   self : NativeReactor,
-  fd : Int,
+  fd : Int32,
 ) -> NativeRegistration raise NativeReactorError {
   self.register(fn(token) { c_reactor_register_fd(self.raw, fd, 0, token) })
 }
@@ -151,7 +151,7 @@ pub fn NativeReactor::register_read(
 /// Register one one-shot writable event.
 pub fn NativeReactor::register_write(
   self : NativeReactor,
-  fd : Int,
+  fd : Int32,
 ) -> NativeRegistration raise NativeReactorError {
   self.register(fn(token) { c_reactor_register_fd(self.raw, fd, 1, token) })
 }
@@ -214,7 +214,7 @@ pub fn NativeReactor::close(self : NativeReactor) -> Unit {
 pub fn NativeReactor::wait(
   self : NativeReactor,
   timeout_ns : Int64?,
-) -> Int raise NativeReactorError {
+) -> Int32 raise NativeReactorError {
   let capacity = (self.registrations.length() + 1).max(1)
   let tokens = FixedArray::make(capacity, 0L)
   let count = c_reactor_wait(
@@ -289,7 +289,7 @@ pub fn NativeRegistration::cancel(self : NativeRegistration) -> Unit {
 
 ///|
 #owned(reactor)
-extern "c" fn c_external_attach(reactor : NativeReactorObject) -> Int = "wasmoon_async_external_loop_attach"
+extern "c" fn c_external_attach(reactor : NativeReactorObject) -> Int32 = "wasmoon_async_external_loop_attach"
 
 ///|
 extern "c" fn c_external_wake() -> Unit = "wasmoon_async_external_loop_wake"

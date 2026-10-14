@@ -6,22 +6,22 @@ pub(all) enum NativeTarget {
 
 ///|
 priv struct JitFuncAddrFixup {
-  offset : Int
+  offset : Int32
   target : @code_object.RelocationTarget
-  reg : Int
+  reg : Int32
 } derive(Debug)
 
 ///|
 priv struct JitCallFixup {
-  offset : Int
+  offset : Int32
   target : @code_object.RelocationTarget
-  veneer_offset : Int
+  veneer_offset : Int32
 } derive(Debug)
 
 ///|
 pub struct JitCodeObject {
-  priv code : Array[Int]
-  priv frame_size : Int
+  priv code : Array[Int32]
+  priv frame_size : Int32
   priv func_addr_fixups : Array[JitFuncAddrFixup]
   priv call_fixups : Array[JitCallFixup]
   priv gc_safepoints : Array[GcSafepoint]
@@ -29,11 +29,11 @@ pub struct JitCodeObject {
 
 ///|
 fn JitCodeObject::new(
-  code : Array[Int],
-  frame_size : Int,
-  func_addr_fixups? : Array[JitFuncAddrFixup] = [],
-  call_fixups? : Array[JitCallFixup] = [],
-  gc_safepoints? : Array[GcSafepoint] = [],
+  code : Array[Int32],
+  frame_size : Int32,
+  func_addr_fixups~ : Array[JitFuncAddrFixup] = [],
+  call_fixups~ : Array[JitCallFixup] = [],
+  gc_safepoints~ : Array[GcSafepoint] = [],
 ) -> JitCodeObject {
   {
     code: code.copy(),
@@ -45,7 +45,7 @@ fn JitCodeObject::new(
 }
 
 ///|
-pub fn JitCodeObject::get_bytes(self : JitCodeObject) -> Array[Int] {
+pub fn JitCodeObject::get_bytes(self : JitCodeObject) -> Array[Int32] {
   self.code.copy()
 }
 
@@ -71,7 +71,7 @@ fn code_object_gc_safepoints(
 ///|
 fn jit_code_object_from_x64(
   object : @code_object.UnlinkedCodeObject,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> JitCodeObject raise JitPipelineError {
   let plan = @x64_target.prepare_x64_link(object) catch {
     error => raise X64LinkPreparationFailed(cause=error)
@@ -136,7 +136,7 @@ fn jit_code_object_from_x64(
 ///|
 fn jit_code_object_from_aarch64(
   object : @code_object.UnlinkedCodeObject,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> JitCodeObject raise JitPipelineError {
   let plan = @aarch64_target.prepare_aarch64_link(object) catch {
     error => raise AArch64LinkPreparationFailed(cause=error)

@@ -18,19 +18,19 @@ priv struct TaskRecord {
   id : Int64
   mut root_task : CallbackTask?
   mut task_results : Array[ComponentValue]?
-  mut task_result_owner : Int?
+  mut task_result_owner : Int32?
   mut task_return_contracts : TaskReturnContract?
   mut core_start_tasks : Unit?
   mut task_returned : Bool?
   mut task_self_cancelled : Bool?
   mut task_cancelled : Bool?
-  mut task_contexts : Map[Int, @types.Value]?
-  mut task_borrows : Int?
-  mut task_thread : Map[Int, Int]?
-  mut thread_runnable : Array[Int]?
+  mut task_contexts : Map[Int32, @types.Value]?
+  mut task_borrows : Int32?
+  mut task_thread : Map[Int32, Int32]?
+  mut thread_runnable : Array[Int32]?
   mut main_thread_scheduled : Bool?
   mut task_caller : Int64?
-  mut task_instance : Int?
+  mut task_instance : Int32?
   mut task_suspensions : TaskSuspension?
   mut waiting_ws : Int64?
   mut sync_lower_states : SyncLowerState?
@@ -57,7 +57,7 @@ fn TaskRegistry::resolve(self : TaskRegistry, key : Int64) -> Int64 {
 ///|
 fn TaskRegistry::allocate(
   self : TaskRegistry,
-  thread_metadata? : Bool = false,
+  thread_metadata~ : Bool = false,
 ) -> Int64 raise ComponentRuntimeError {
   if self.closed.val {
     raise Cancelled
@@ -145,7 +145,7 @@ fn TaskRegistry::write_task_results(
 fn TaskRegistry::read_task_result_owner(
   self : TaskRegistry,
   key : Int64,
-) -> Int? {
+) -> Int32? {
   match self.records.get(self.resolve(key)) {
     Some(record) => record.task_result_owner
     None => None
@@ -156,7 +156,7 @@ fn TaskRegistry::read_task_result_owner(
 fn TaskRegistry::write_task_result_owner(
   self : TaskRegistry,
   key : Int64,
-  value : Int,
+  value : Int32,
 ) -> Unit {
   if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
     record.task_result_owner = Some(value)
@@ -278,7 +278,7 @@ fn TaskRegistry::write_task_cancelled(
 fn TaskRegistry::read_task_contexts(
   self : TaskRegistry,
   key : Int64,
-) -> Map[Int, @types.Value]? {
+) -> Map[Int32, @types.Value]? {
   match self.records.get(self.resolve(key)) {
     Some(record) => record.task_contexts
     None => None
@@ -289,7 +289,7 @@ fn TaskRegistry::read_task_contexts(
 fn TaskRegistry::write_task_contexts(
   self : TaskRegistry,
   key : Int64,
-  value : Map[Int, @types.Value],
+  value : Map[Int32, @types.Value],
 ) -> Unit {
   if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
     record.task_contexts = Some(value)
@@ -297,7 +297,7 @@ fn TaskRegistry::write_task_contexts(
 }
 
 ///|
-fn TaskRegistry::read_task_borrows(self : TaskRegistry, key : Int64) -> Int? {
+fn TaskRegistry::read_task_borrows(self : TaskRegistry, key : Int64) -> Int32? {
   match self.records.get(self.resolve(key)) {
     Some(record) => record.task_borrows
     None => None
@@ -315,7 +315,7 @@ fn TaskRegistry::clear_task_borrows(self : TaskRegistry, key : Int64) -> Unit {
 fn TaskRegistry::write_task_borrows(
   self : TaskRegistry,
   key : Int64,
-  value : Int,
+  value : Int32,
 ) -> Unit {
   if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
     record.task_borrows = Some(value)
@@ -326,7 +326,7 @@ fn TaskRegistry::write_task_borrows(
 fn TaskRegistry::read_task_thread(
   self : TaskRegistry,
   key : Int64,
-) -> Map[Int, Int]? {
+) -> Map[Int32, Int32]? {
   match self.records.get(self.resolve(key)) {
     Some(record) => record.task_thread
     None => None
@@ -344,7 +344,7 @@ fn TaskRegistry::clear_task_thread(self : TaskRegistry, key : Int64) -> Unit {
 fn TaskRegistry::write_task_thread(
   self : TaskRegistry,
   key : Int64,
-  value : Map[Int, Int],
+  value : Map[Int32, Int32],
 ) -> Unit {
   if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
     record.task_thread = Some(value)
@@ -355,7 +355,7 @@ fn TaskRegistry::write_task_thread(
 fn TaskRegistry::read_thread_runnable(
   self : TaskRegistry,
   key : Int64,
-) -> Array[Int]? {
+) -> Array[Int32]? {
   match self.records.get(self.resolve(key)) {
     Some(record) => record.thread_runnable
     None => None
@@ -376,7 +376,7 @@ fn TaskRegistry::clear_thread_runnable(
 fn TaskRegistry::write_thread_runnable(
   self : TaskRegistry,
   key : Int64,
-  value : Array[Int],
+  value : Array[Int32],
 ) -> Unit {
   if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
     record.thread_runnable = Some(value)
@@ -440,7 +440,7 @@ fn TaskRegistry::entries_task_caller(
 }
 
 ///|
-fn TaskRegistry::read_task_instance(self : TaskRegistry, key : Int64) -> Int? {
+fn TaskRegistry::read_task_instance(self : TaskRegistry, key : Int64) -> Int32? {
   match self.records.get(self.resolve(key)) {
     Some(record) => record.task_instance
     None => None
@@ -451,7 +451,7 @@ fn TaskRegistry::read_task_instance(self : TaskRegistry, key : Int64) -> Int? {
 fn TaskRegistry::write_task_instance(
   self : TaskRegistry,
   key : Int64,
-  value : Int,
+  value : Int32,
 ) -> Unit {
   if !self.closed.val && self.records.get(self.resolve(key)) is Some(record) {
     record.task_instance = Some(value)
@@ -589,7 +589,7 @@ fn TaskRegistry::entries_subtasks(
 
 ///|
 /// Number of guest-visible and detached subtasks still owned by this runtime.
-pub fn TaskRegistry::subtask_count(self : TaskRegistry) -> Int {
+pub fn TaskRegistry::subtask_count(self : TaskRegistry) -> Int32 {
   self.entries_subtasks().length()
 }
 
@@ -637,7 +637,7 @@ fn retire_task(async_state : AsyncState, task_id : Int64) -> Unit {
 ///|
 fn alloc_canon_task_id(
   state : AsyncState,
-  thread_metadata? : Bool = false,
+  thread_metadata~ : Bool = false,
 ) -> Int64 raise @runtime.RuntimeError {
   state.tasks.allocate(thread_metadata~) catch {
     error => {

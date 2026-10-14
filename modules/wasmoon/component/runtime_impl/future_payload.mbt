@@ -1,7 +1,7 @@
 ///|
 fn store_future_payload(
   payload : CanonicalPayload,
-  source_component_id : Int,
+  source_component_id : Int32,
   destination : CanonicalPayloadType,
   async_state : AsyncState,
   store : @runtime.Store,

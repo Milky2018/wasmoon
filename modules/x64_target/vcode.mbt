@@ -159,22 +159,22 @@ pub(all) enum X64Conversion {
 
 ///|
 pub struct X64StackObject {
-  id : Int
-  size : Int
-  alignment : Int
+  id : Int32
+  size : Int32
+  alignment : Int32
 } derive(Eq, Debug)
 
 ///|
 pub fn X64StackObject::new(
-  id : Int,
-  size : Int,
-  alignment : Int,
+  id : Int32,
+  size : Int32,
+  alignment : Int32,
 ) -> X64StackObject {
   { id, size, alignment, }
 }
 
 ///|
-fn is_power_of_two(value : Int) -> Bool {
+fn is_power_of_two(value : Int32) -> Bool {
   value > 0 && (value & (value - 1)) == 0
 }
 
@@ -186,12 +186,12 @@ fn X64StackObject::is_valid(self : X64StackObject) -> Bool {
 ///|
 pub(all) enum X64Inst {
   IncomingReg(@native.ValueType, @vcode.PhysicalReg)
-  IncomingStack(@native.ValueType, Int)
+  IncomingStack(@native.ValueType, Int32)
   IncomingResultArea(@vcode.PhysicalReg)
   IncomingCallResult(@native.ValueType, @vcode.PhysicalReg)
-  IncomingCallAreaResult(@native.ValueType, Int)
+  IncomingCallAreaResult(@native.ValueType, Int32)
   OutgoingReg(@native.ValueType, @vcode.PhysicalReg)
-  OutgoingAreaResult(@native.ValueType, Int)
+  OutgoingAreaResult(@native.ValueType, Int32)
   KeepAlive(@native.ValueType)
   LoadConstant(GprWidth, UInt64)
   LoadVectorConstant(UInt64, UInt64)
@@ -205,9 +205,9 @@ pub(all) enum X64Inst {
   SpectreGuard
   VectorSelect
   VectorSplat(@lowering.VectorLane)
-  VectorExtractLane(@lowering.VectorLane, Int, @native.Signedness?)
-  VectorReplaceLane(@lowering.VectorLane, Int)
-  VectorShuffle(FixedArray[Int])
+  VectorExtractLane(@lowering.VectorLane, Int32, @native.Signedness?)
+  VectorReplaceLane(@lowering.VectorLane, Int32)
+  VectorShuffle(FixedArray[Int32])
   VectorSwizzle
   VectorBitwise(@lowering.VectorBitwiseOp)
   VectorIntUnary(@lowering.VectorLane, X64VectorIntUnary)
@@ -251,8 +251,8 @@ pub(all) enum X64Inst {
   VectorLoadSplat(@lowering.VectorLane, UInt64)
   VectorLoadExtend(@lowering.VectorLane, @native.Signedness, UInt64)
   VectorLoadZero(@native.AccessWidth, UInt64)
-  VectorLoadLane(@lowering.VectorLane, Int, UInt64)
-  VectorStoreLane(@lowering.VectorLane, Int, UInt64)
+  VectorLoadLane(@lowering.VectorLane, Int32, UInt64)
+  VectorStoreLane(@lowering.VectorLane, Int32, UInt64)
   AtomicLoad(@native.AccessWidth, @native.ValueType)
   AtomicStore(@native.AccessWidth, @native.ValueType)
   AtomicRmw(@native.AccessWidth, @native.ValueType, @lowering.AtomicRmwOp)
@@ -287,7 +287,7 @@ pub impl Show for TargetVCodeVerifyError with fn output(self, logger) {
 fn require_fixed_use(
   function : @vcode.Function[X64Inst],
   instruction : @vcode.Instruction,
-  operand_index : Int,
+  operand_index : Int32,
   expected : @vcode.PhysicalReg,
 ) -> Unit raise TargetVCodeVerifyError {
   let operand = function
@@ -305,7 +305,7 @@ fn require_fixed_use(
 fn require_home_def(
   function : @vcode.Function[X64Inst],
   instruction : @vcode.Instruction,
-  operand_index : Int,
+  operand_index : Int32,
 ) -> Unit raise TargetVCodeVerifyError {
   if function.instruction_operand_at(instruction, operand_index).unwrap().constraint !=
     AnyLocation {
@@ -319,28 +319,28 @@ fn require_home_def(
 ///|
 enum CallArgumentLocation {
   CallRegister(@vcode.PhysicalReg)
-  CallStack(Int)
+  CallStack(Int32)
 } derive(Eq, Debug)
 
 ///|
 struct CallLayout {
   arguments : Array[CallArgumentLocation]
-  stack_size : Int
+  stack_size : Int32
 } derive(Eq, Debug)
 
 ///|
-fn call_align_up(value : Int, alignment : Int) -> Int {
+fn call_align_up(value : Int32, alignment : Int32) -> Int32 {
   (value + alignment - 1) / alignment * alignment
 }
 
 ///|
 enum CallResultLocation {
   CallResultRegister(@vcode.PhysicalReg)
-  CallResultArea(Int, @vcode.PhysicalReg)
+  CallResultArea(Int32, @vcode.PhysicalReg)
 } derive(Eq, Debug)
 
 ///|
-fn call_stack_size(ty : @native.ValueType) -> Int {
+fn call_stack_size(ty : @native.ValueType) -> Int32 {
   if ty == V128 {
     16
   } else {
@@ -406,7 +406,7 @@ fn call_preference(location : CallArgumentLocation) -> @vcode.PhysicalReg? {
 fn require_call_argument_inputs(
   function : @vcode.Function[X64Inst],
   instruction : @vcode.Instruction,
-  operand_start : Int,
+  operand_start : Int32,
   locations : Array[CallArgumentLocation],
 ) -> Unit raise TargetVCodeVerifyError {
   for index, location in locations {
@@ -484,7 +484,7 @@ fn require_instruction_shape(
   use_types : Array[@native.ValueType],
   def_types : Array[@native.ValueType],
   terminator : Bool,
-  successor_count : Int,
+  successor_count : Int32,
 ) -> Unit raise TargetVCodeVerifyError {
   let operands = function.instruction_operands(instruction)
   let uses = operands.filter(operand => operand.role == Use)
@@ -515,7 +515,7 @@ fn require_instruction_shape(
 }
 
 ///|
-fn incoming_stack_capacity(function : @vcode.Function[X64Inst]) -> Int {
+fn incoming_stack_capacity(function : @vcode.Function[X64Inst]) -> Int32 {
   let mut size = 0
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
@@ -752,7 +752,7 @@ fn vector_lane_scalar_type(lane : @lowering.VectorLane) -> @native.ValueType {
 }
 
 ///|
-fn vector_lane_count(lane : @lowering.VectorLane) -> Int {
+fn vector_lane_count(lane : @lowering.VectorLane) -> Int32 {
   match lane {
     I8x16 => 16
     I16x8 => 8

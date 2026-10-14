@@ -1,15 +1,15 @@
 ///|
 #borrow(fds)
-extern "c" fn c_test_pipe(fds : FixedArray[Int]) -> Int = "wasmoon_async_test_pipe"
+extern "c" fn c_test_pipe(fds : FixedArray[Int32]) -> Int32 = "wasmoon_async_test_pipe"
 
 ///|
-extern "c" fn c_test_write(fd : Int) -> Int = "wasmoon_async_test_write"
+extern "c" fn c_test_write(fd : Int32) -> Int32 = "wasmoon_async_test_write"
 
 ///|
-extern "c" fn c_test_close(fd : Int) -> Unit = "wasmoon_async_test_close"
+extern "c" fn c_test_close(fd : Int32) -> Unit = "wasmoon_async_test_close"
 
 ///|
-fn test_pipe() -> (Int, Int)? {
+fn test_pipe() -> (Int32, Int32)? {
   let fds = FixedArray::make(2, -1)
   if c_test_pipe(fds) != 0 {
     return None

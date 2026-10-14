@@ -9,7 +9,7 @@ pub fn canonical_flat_types(
   ty : ValType,
   types : Array[TypeDef?],
   pointer_type : @types.ValueType,
-  max_flat? : Int = 2147483647,
+  max_flat~ : Int32 = 2147483647,
 ) -> Array[@types.ValueType]? {
   match pointer_type {
     I32 | I64 => ()
@@ -18,7 +18,7 @@ pub fn canonical_flat_types(
   if max_flat < 1 {
     return None
   }
-  let visiting : Map[Int, Unit] = Map([])
+  let visiting : Map[Int32, Unit] = Map([])
   fn join_flat(a : @types.ValueType, b : @types.ValueType) -> @types.ValueType {
     if a == b {
       return a

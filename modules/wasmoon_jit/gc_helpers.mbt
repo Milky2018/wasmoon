@@ -18,7 +18,7 @@
 
 ///|
 /// Encode an i31 value for JIT (tagged pointer with lowest bit = 1)
-pub fn encode_i31(value : Int) -> Int64 {
+pub fn encode_i31(value : Int32) -> Int64 {
   // i31 stores 31 bits, mask and tag
   let masked = value & @types.I32_MAX
   (masked.to_int64() << 1) | 1L
@@ -26,7 +26,7 @@ pub fn encode_i31(value : Int) -> Int64 {
 
 ///|
 /// Decode an i31 value from JIT representation
-pub fn decode_i31(encoded : Int64) -> Int {
+pub fn decode_i31(encoded : Int64) -> Int32 {
   // Remove tag and get signed 31-bit value
   let value = (encoded >> 1).to_int()
   // Sign extend from 31 bits
@@ -100,7 +100,7 @@ pub fn collect_gc_root_args(
 /// Encode a heap reference (struct or array) for JIT
 /// heap_idx is 0-based (from MoonBit Store/CHeap)
 /// JIT uses 1-based gc_ref internally to avoid collision with null (0)
-pub fn encode_heap_ref(heap_idx : Int) -> Int64 {
+pub fn encode_heap_ref(heap_idx : Int32) -> Int64 {
   // Convert 0-based to 1-based, then shift left by 1
   // This ensures encoded value is never 0 (which is null)
   (heap_idx + 1).to_int64() << 1
@@ -109,7 +109,7 @@ pub fn encode_heap_ref(heap_idx : Int) -> Int64 {
 ///|
 /// Decode a heap reference from JIT representation
 /// Returns 0-based heap_idx for MoonBit Store/CHeap
-pub fn decode_heap_ref(encoded : Int64) -> Int {
+pub fn decode_heap_ref(encoded : Int64) -> Int32 {
   // Shift right to get 1-based gc_ref, then convert to 0-based
   (encoded >> 1).to_int() - 1
 }
@@ -119,7 +119,7 @@ pub fn decode_heap_ref(encoded : Int64) -> Int {
 
 ///|
 /// Encode module types for native subtype and allocation helpers.
-fn gc_type_data(types : Array[@types.SubType]) -> FixedArray[Int] {
+fn gc_type_data(types : Array[@types.SubType]) -> FixedArray[Int32] {
   let num_types = types.length()
   // Extended format (stride = 6, keep in sync with `jit_ffi/jit_internal.h`):
   //   [super_idx, kind, struct_num_fields, array_elem_tag, array_elem_bytes, array_elem_flags]
@@ -241,7 +241,7 @@ fn gc_set_root_scratch(context : JITContext, roots : Array[Int64]) -> Bool {
 
 ///|
 /// Trigger a GC cycle for allocation retry.
-fn gc_collect_for_alloc(context : JITContext, roots : Array[Int64]) -> Int {
+fn gc_collect_for_alloc(context : JITContext, roots : Array[Int64]) -> Int32 {
   let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
   c_jit_gc_collect_for_alloc_managed(context, raw_roots, roots.length())
 }
@@ -256,7 +256,7 @@ fn gc_set_safepoint_table(context : JITContext, table_ptr : Int64) -> Unit {
 /// Install verified code-object safepoints into context-owned GC metadata.
 fn gc_set_code_object_safepoints(
   context : JITContext,
-  func_idx : Int,
+  func_idx : Int32,
   safepoints : Array[@code_object.SafepointSite],
 ) -> Bool {
   let (blob, offsets) = prepare_code_object_safepoints(safepoints)
@@ -266,9 +266,9 @@ fn gc_set_code_object_safepoints(
 ///|
 fn prepare_code_object_safepoints(
   safepoints : Array[@code_object.SafepointSite],
-) -> (Bytes, FixedArray[Int]) {
+) -> (Bytes, FixedArray[Int32]) {
   let entries : Array[GcSafepoint] = []
-  let root_counts : Array[Int] = []
+  let root_counts : Array[Int32] = []
   for site in safepoints {
     let root_count = match site.stack_map {
       Some(stack_map) => stack_map.argument_root_count
@@ -291,7 +291,7 @@ fn prepare_code_object_safepoints(
 }
 
 ///|
-fn gc_use_func_safepoints(context : JITContext, func_idx : Int) -> Unit {
+fn gc_use_func_safepoints(context : JITContext, func_idx : Int32) -> Unit {
   c_jit_gc_use_func_safepoints_managed(context, func_idx)
 }
 
@@ -299,9 +299,12 @@ fn gc_use_func_safepoints(context : JITContext, func_idx : Int) -> Unit {
 /// Error for invalid JIT GC setup context
 pub(all) suberror GCSetupError {
   MissingJITContext
-  InvalidFuncCount(num_funcs~ : Int)
-  FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
-  MissingFunctionTableContext(num_funcs~ : Int)
+  InvalidFuncCount(num_funcs~ : Int32)
+  FuncTypeIndicesLengthMismatch(
+    func_type_indices_len~ : Int32,
+    num_funcs~ : Int32
+  )
+  MissingFunctionTableContext(num_funcs~ : Int32)
 } derive(Debug)
 
 ///|
@@ -318,11 +321,11 @@ pub impl Show for GCSetupError with fn output(self, logger) {
 fn gc_setup(
   heap : CHeap,
   types : Array[@types.SubType],
-  canonical_indices : Array[Int],
+  canonical_indices : Array[Int32],
   context~ : JITContext,
-  func_type_indices~ : Array[Int],
+  func_type_indices~ : Array[Int32],
   func_table_ptr~ : Int64,
-  num_funcs~ : Int,
+  num_funcs~ : Int32,
 ) -> Unit raise GCSetupError {
   if c_jit_context_is_valid(context) == 0 {
     raise MissingJITContext
@@ -355,8 +358,8 @@ pub fn NativeJITContext::setup_gc(
   self : NativeJITContext,
   heap : CHeap,
   types : Array[@types.SubType],
-  canonical_indices : Array[Int],
-  func_type_indices : Array[Int],
+  canonical_indices : Array[Int32],
+  func_type_indices : Array[Int32],
 ) -> Unit raise GCSetupError {
   let num_funcs = context_func_count(self.handle)
   gc_setup(
@@ -375,10 +378,10 @@ pub fn NativeJITContext::setup_gc_with_func_table(
   self : NativeJITContext,
   heap : CHeap,
   types : Array[@types.SubType],
-  canonical_indices : Array[Int],
-  func_type_indices : Array[Int],
+  canonical_indices : Array[Int32],
+  func_type_indices : Array[Int32],
   func_table_ptr : Int64,
-  num_funcs : Int,
+  num_funcs : Int32,
 ) -> Unit raise GCSetupError {
   gc_setup(
     heap,
@@ -437,7 +440,7 @@ pub fn NativeJITContext::gc_set_root_scratch(
 pub fn NativeJITContext::gc_collect_for_alloc(
   self : NativeJITContext,
   roots : Array[Int64],
-) -> Int {
+) -> Int32 {
   gc_collect_for_alloc(self.handle, roots)
 }
 
@@ -452,7 +455,7 @@ pub fn NativeJITContext::gc_set_safepoint_table(
 ///|
 pub fn NativeJITContext::register_safepoints(
   self : NativeJITContext,
-  func_idx : Int,
+  func_idx : Int32,
   safepoints : Array[@code_object.SafepointSite],
 ) -> Bool {
   gc_set_code_object_safepoints(self.handle, func_idx, safepoints)
@@ -461,7 +464,7 @@ pub fn NativeJITContext::register_safepoints(
 ///|
 pub fn NativeJITContext::gc_use_func_safepoints(
   self : NativeJITContext,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Unit {
   gc_use_func_safepoints(self.handle, func_idx)
 }

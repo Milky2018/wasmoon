@@ -3,14 +3,14 @@
 pub struct OptimizationPassMetric {
   name : String
   duration_us : Int64
-  before_insts : Int
-  after_insts : Int
+  before_insts : Int32
+  after_insts : Int32
   changed : Bool
-  rewrite_attempts : Int?
-  rewrite_apps : Int?
-  rewrite_created_insts : Int?
-  work_done : Int?
-  value_lookup_probes : Int?
+  rewrite_attempts : Int32?
+  rewrite_apps : Int32?
+  rewrite_created_insts : Int32?
+  work_done : Int32?
+  value_lookup_probes : Int32?
   budget_exhausted : Bool?
 }
 
@@ -71,16 +71,16 @@ fn perf_elapsed_us(tick : Int64) -> Int64 {
 ///|
 fn perf_record_ir_pass(
   pass_name : String,
-  before : Int,
-  after : Int,
+  before : Int32,
+  after : Int32,
   changed : Bool,
   duration_us : Int64,
-  rewrite_attempts? : Int? = None,
-  rewrite_apps? : Int? = None,
-  rewrite_created_insts? : Int? = None,
-  work_done? : Int? = None,
-  value_lookup_probes? : Int? = None,
-  budget_exhausted? : Bool? = None,
+  rewrite_attempts~ : Int32? = None,
+  rewrite_apps~ : Int32? = None,
+  rewrite_created_insts~ : Int32? = None,
+  work_done~ : Int32? = None,
+  value_lookup_probes~ : Int32? = None,
+  budget_exhausted~ : Bool? = None,
 ) -> Unit {
   if optimization_metrics_sink.val is Some(sink) {
     (sink.record)({

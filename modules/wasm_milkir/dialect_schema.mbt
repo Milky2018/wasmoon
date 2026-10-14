@@ -15,7 +15,7 @@ priv enum WasmTypePattern {
 
 ///|
 priv struct WasmOpcodeSpec {
-  id : Int
+  id : Int32
   typed_constructor : String
   wire_name : String
   immediate_kinds : Array[WasmImmediateKind]
@@ -26,8 +26,8 @@ priv struct WasmOpcodeSpec {
 }
 
 ///|
-let wasm_opcode_ids_by_wire_name : Map[String, Int] = {
-  let ids : Map[String, Int] = Map([])
+let wasm_opcode_ids_by_wire_name : Map[String, Int32] = {
+  let ids : Map[String, Int32] = Map([])
   for spec in wasm_opcode_specs {
     ids[spec.wire_name] = spec.id
   }
@@ -35,7 +35,7 @@ let wasm_opcode_ids_by_wire_name : Map[String, Int] = {
 }
 
 ///|
-fn wasm_opcode_spec(id : Int) -> WasmOpcodeSpec {
+fn wasm_opcode_spec(id : Int32) -> WasmOpcodeSpec {
   if id < 0 || id >= wasm_opcode_specs.length() {
     abort("Wasm opcode id \{id} is absent from the generated opcode table")
   }
@@ -53,7 +53,7 @@ fn wasm_opcode_spec_by_wire_name(name : String) -> WasmOpcodeSpec? {
 ///|
 fn validate_wasm_opcode_immediates(
   spec : WasmOpcodeSpec,
-  immediates : FixedArray[Int],
+  immediates : FixedArray[Int32],
 ) -> String? {
   if immediates.length() != spec.immediate_kinds.length() {
     return Some(

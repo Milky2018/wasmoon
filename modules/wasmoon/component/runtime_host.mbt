@@ -15,8 +15,8 @@ struct ComponentHostInstaller {
 ///|
 fn ComponentHostInstaller::from_linker_installer(
   install : (@runtime_impl.ComponentLinker) -> Unit raise @runtime_impl.ComponentRuntimeError,
-  claim? : () -> Unit raise ComponentRuntimeError = fn() { () },
-  close? : () -> Unit = fn() { () },
+  claim~ : () -> Unit raise ComponentRuntimeError = fn() { () },
+  close~ : () -> Unit = fn() { () },
 ) -> ComponentHostInstaller {
   {
     state: { claim, install, close, consumed: Ref(false), closed: Ref(false), },

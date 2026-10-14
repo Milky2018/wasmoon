@@ -46,7 +46,7 @@ fn Parser::read_table_limits(
   // Valid combinations: 0x00, 0x01, 0x04, 0x05
   // Tables don't support shared bit (0x02)
   let flags = self.read_byte()
-  let valid_table_flags : FixedArray[Int] = [
+  let valid_table_flags : FixedArray[Int32] = [
     LIMITS_NO_MAX,
     LIMITS_HAS_MAX,
     LIMITS_64_NO_MAX,
@@ -93,7 +93,7 @@ fn Parser::read_memory_type(
   let has_custom_page_size = (flags & 0x08) != 0
 
   // Validate flags
-  let valid_memory_flags : FixedArray[Int] = [
+  let valid_memory_flags : FixedArray[Int32] = [
     LIMITS_NO_MAX,
     LIMITS_HAS_MAX,
     LIMITS_SHARED,

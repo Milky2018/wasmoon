@@ -52,8 +52,8 @@ fn lower_direct_operation(
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
-  block_index : Int,
-  instruction_index : Int,
+  block_index : Int32,
+  instruction_index : Int32,
   operation : @lowering.Operation,
   operands : Array[@vcode.Value],
   operand_types : Array[@native.ValueType],
@@ -976,8 +976,8 @@ fn lower_direct_operation(
 
 ///|
 priv struct DirectStackObjectRequest {
-  size : Int
-  alignment : Int
+  size : Int32
+  alignment : Int32
 }
 
 ///|
@@ -993,7 +993,7 @@ pub struct DirectLoweringSession {
   priv stack_objects : Array[DirectStackObjectRequest]
   priv scratch : DirectLoweringScratch
   priv result_area : @vcode.Value?
-  priv mut instruction_index : Int
+  priv mut instruction_index : Int32
   priv mut first_error : AArch64LowerError?
   priv mut constructed : ConstructedFunction?
   priv on_event : (@vcode.TargetCompileEvent) -> Unit
@@ -1101,7 +1101,7 @@ pub fn DirectLoweringSession::new(
   parameter_types : Array[@native.ValueType],
   result_types : Array[@native.ValueType],
   context : LoweringContext,
-  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  on_event~ : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
 ) -> DirectLoweringSession raise AArch64LowerError {
   on_event(TargetConstructionStarted)
   let signature = @native.Signature::new(parameter_types, result_types)
@@ -1147,7 +1147,7 @@ fn DirectLoweringSession::record_error(
 ///|
 fn DirectLoweringSession::target_value(
   self : DirectLoweringSession,
-  id : Int,
+  id : Int32,
 ) -> @vcode.Value {
   self.values[id]
 }
@@ -1155,7 +1155,7 @@ fn DirectLoweringSession::target_value(
 ///|
 fn DirectLoweringSession::target_values_into(
   self : DirectLoweringSession,
-  ids : Array[Int],
+  ids : Array[Int32],
   values : Array[@vcode.Value],
 ) -> Array[@vcode.Value] {
   values.clear()
@@ -1168,7 +1168,7 @@ fn DirectLoweringSession::target_values_into(
 ///|
 fn DirectLoweringSession::target_values(
   self : DirectLoweringSession,
-  ids : Array[Int],
+  ids : Array[Int32],
 ) -> Array[@vcode.Value] {
   ids.map(id => self.target_value(id))
 }
@@ -1177,11 +1177,11 @@ fn DirectLoweringSession::target_values(
 fn DirectLoweringSession::create_block(
   self : DirectLoweringSession,
   parameter_types : Array[@native.ValueType],
-) -> (Int, Array[Int]) {
+) -> (Int32, Array[Int32]) {
   let block = self.builder.create_block(parameter_types)
   let block_id = self.blocks.length()
   self.blocks.push(block)
-  let parameters : Array[Int] = []
+  let parameters : Array[Int32] = []
   for index, ty in parameter_types {
     let value = self.builder.block_parameter(block, index) catch {
       _ => abort("aarch64 direct lowering could not read a new block parameter")
@@ -1196,9 +1196,9 @@ fn DirectLoweringSession::create_block(
 ///|
 fn DirectLoweringSession::create_stack_object(
   self : DirectLoweringSession,
-  size : Int,
-  alignment : Int,
-) -> Int {
+  size : Int32,
+  alignment : Int32,
+) -> Int32 {
   let id = self.stack_objects.length()
   self.stack_objects.push({ size, alignment, })
   id
@@ -1207,7 +1207,7 @@ fn DirectLoweringSession::create_stack_object(
 ///|
 fn DirectLoweringSession::switch_to_block(
   self : DirectLoweringSession,
-  block_id : Int,
+  block_id : Int32,
 ) -> Unit {
   let block = self.blocks[block_id]
   self.layout.push(block)
@@ -1216,14 +1216,14 @@ fn DirectLoweringSession::switch_to_block(
 ///|
 fn DirectLoweringSession::emit(
   self : DirectLoweringSession,
-  block_id : Int,
+  block_id : Int32,
   operation : @lowering.Operation,
-  operand_ids : Array[Int],
+  operand_ids : Array[Int32],
   result_types : Array[@native.ValueType],
   source : @native.SourceLocation?,
-  root_ids : Array[Int],
+  root_ids : Array[Int32],
   stack_map : @native.StackMapMetadata?,
-) -> Array[Int] {
+) -> Array[Int32] {
   let block = self.blocks[block_id]
   // I64 and Ptr64 are the same untraced 64-bit register representation.
   // Preserve the semantic result type without creating another live range.
@@ -1273,7 +1273,7 @@ fn DirectLoweringSession::emit(
     }
   }
   self.instruction_index += 1
-  let ids : Array[Int] = []
+  let ids : Array[Int32] = []
   for index, value in results {
     ids.push(self.values.length())
     self.values.push(value)
@@ -1354,7 +1354,7 @@ fn DirectLoweringSession::lower_return_values(
 ///|
 fn DirectLoweringSession::terminate(
   self : DirectLoweringSession,
-  block_id : Int,
+  block_id : Int32,
   terminator : @lowering.TargetTerminator,
   metadata : @lowering.TargetTerminatorMetadata,
 ) -> Unit {
@@ -1724,7 +1724,7 @@ pub fn DirectLoweringSession::sink(
 /// covered by strict validation in CI. Public callers should keep the default.
 pub fn DirectLoweringSession::finish_selected(
   self : DirectLoweringSession,
-  verify_selected? : Bool = true,
+  verify_selected~ : Bool = true,
 ) -> SelectedFunction raise AArch64LowerError {
   if self.constructed is None {
     self.finish_construction()

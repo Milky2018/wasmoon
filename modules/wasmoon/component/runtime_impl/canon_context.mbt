@@ -5,7 +5,7 @@
 ///|
 fn instantiate_canon_context_get(
   _vt : @types.ValueType,
-  _idx : Int,
+  _idx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
@@ -51,7 +51,7 @@ fn instantiate_canon_context_get(
 ///|
 fn instantiate_canon_context_set(
   _vt : @types.ValueType,
-  _idx : Int,
+  _idx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
@@ -68,7 +68,7 @@ fn instantiate_canon_context_set(
     let m = match async_state.tasks.read_task_contexts(task_id) {
       Some(m) => m
       None => {
-        let m : Map[Int, @types.Value] = Map([])
+        let m : Map[Int32, @types.Value] = Map([])
         async_state.tasks.write_task_contexts(task_id, m)
         m
       }

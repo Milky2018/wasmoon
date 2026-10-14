@@ -1,5 +1,5 @@
 ///|
-fn append_control_test_u32(bytes : Array[Byte], value : Int) -> Unit {
+fn append_control_test_u32(bytes : Array[Byte], value : Int32) -> Unit {
   let mut remaining = value
   while remaining >= 128 {
     bytes.push(((remaining & 127) | 128).to_byte())

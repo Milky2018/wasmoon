@@ -16,7 +16,7 @@ fn wasm_value_type_to_milkir(ty : @types.ValueType) -> @milkir.Type {
 ///|
 fn get_func_type(
   mod_ : @types.Module,
-  func_local_idx : Int,
+  func_local_idx : Int32,
 ) -> @types.FuncType raise LowerError {
   if func_local_idx < 0 || func_local_idx >= mod_.funcs.length() {
     raise FunctionIndexOutOfRange(index=func_local_idx)
@@ -34,7 +34,7 @@ fn get_func_type(
 ///|
 fn get_code(
   mod_ : @types.Module,
-  func_local_idx : Int,
+  func_local_idx : Int32,
 ) -> @types.FunctionCode raise LowerError {
   if func_local_idx < 0 || func_local_idx >= mod_.codes.length() {
     raise MissingCode(index=func_local_idx)
@@ -88,7 +88,7 @@ fn native_lowering_rejection_reason(
 }
 
 ///|
-fn function_name(mod_ : @types.Module, func_local_idx : Int) -> String {
+fn function_name(mod_ : @types.Module, func_local_idx : Int32) -> String {
   match mod_.func_names.get(func_local_idx) {
     Some(name) => name
     None => "wasm_func_\{func_local_idx}"
@@ -99,7 +99,7 @@ fn function_name(mod_ : @types.Module, func_local_idx : Int) -> String {
 pub fn lower_function(
   env : EmbeddingEnvironment,
   mod_ : @types.Module,
-  func_local_idx : Int,
+  func_local_idx : Int32,
 ) -> @milkir.Function raise LowerError {
   if try_lower_linear_function(env, mod_, func_local_idx) is Some(func) {
     return func
@@ -115,7 +115,7 @@ pub fn lower_function(
 pub fn try_lower_native_function(
   env : EmbeddingEnvironment,
   mod_ : @types.Module,
-  func_local_idx : Int,
+  func_local_idx : Int32,
 ) -> @milkir.Function? raise LowerError {
   try_lower_linear_function(env, mod_, func_local_idx)
 }

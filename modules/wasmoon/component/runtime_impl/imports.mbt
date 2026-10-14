@@ -94,7 +94,7 @@ fn component_val_types_match(
   expected_types : Array[TypeDef?],
   actual : ValType,
   actual_types : Array[TypeDef?],
-  depth : Int,
+  depth : Int32,
 ) -> Bool {
   if depth > 64 {
     return false
@@ -123,7 +123,7 @@ fn component_val_types_match(
 }
 
 ///|
-fn type_at(types : Array[TypeDef?], index : Int) -> TypeDef? {
+fn type_at(types : Array[TypeDef?], index : Int32) -> TypeDef? {
   if index < 0 || index >= types.length() {
     None
   } else {
@@ -136,7 +136,7 @@ fn clone_materialized_valtype(
   ty : ValType,
   source_types : Array[TypeDef?],
   dest_types : Array[TypeDef?],
-  remapped : Map[Int, Int],
+  remapped : Map[Int32, Int32],
 ) -> ValType raise ComponentRuntimeError {
   match ty {
     Prim(p) => Prim(p)
@@ -152,7 +152,7 @@ fn clone_materialized_optional_valtype(
   ty : ValType?,
   source_types : Array[TypeDef?],
   dest_types : Array[TypeDef?],
-  remapped : Map[Int, Int],
+  remapped : Map[Int32, Int32],
 ) -> ValType? raise ComponentRuntimeError {
   match ty {
     Some(value) =>
@@ -168,7 +168,7 @@ fn clone_materialized_type_def(
   type_def : TypeDef,
   source_types : Array[TypeDef?],
   dest_types : Array[TypeDef?],
-  remapped : Map[Int, Int],
+  remapped : Map[Int32, Int32],
 ) -> TypeDef raise ComponentRuntimeError {
   match type_def {
     DefValType(p) => DefValType(p)
@@ -290,11 +290,11 @@ fn clone_materialized_type_def(
 
 ///|
 fn clone_materialized_type_index(
-  index : Int,
+  index : Int32,
   source_types : Array[TypeDef?],
   dest_types : Array[TypeDef?],
-  remapped : Map[Int, Int],
-) -> Int raise ComponentRuntimeError {
+  remapped : Map[Int32, Int32],
+) -> Int32 raise ComponentRuntimeError {
   if remapped.get(index) is Some(existing) {
     return existing
   }
@@ -314,15 +314,15 @@ fn clone_materialized_type_index(
 
 ///|
 fn materialize_outer_type(
-  source_index : Int,
+  source_index : Int32,
   source_types : Array[TypeDef?],
   dest_types : Array[TypeDef?],
-  declared_slot : Int,
+  declared_slot : Int32,
 ) -> Unit raise ComponentRuntimeError {
   if source_index < 0 || source_index >= source_types.length() {
     raise InvalidTypeIndex(source_index)
   }
-  let remapped : Map[Int, Int] = Map([(source_index, declared_slot)])
+  let remapped : Map[Int32, Int32] = Map([(source_index, declared_slot)])
   if source_types[source_index] is Some(type_def) {
     dest_types[declared_slot] = Some(
       clone_materialized_type_def(type_def, source_types, dest_types, remapped),
@@ -336,7 +336,7 @@ fn optional_val_types_match(
   expected_types : Array[TypeDef?],
   actual : ValType?,
   actual_types : Array[TypeDef?],
-  depth : Int,
+  depth : Int32,
 ) -> Bool {
   match (expected, actual) {
     (None, None) => true
@@ -354,11 +354,11 @@ fn optional_val_types_match(
 
 ///|
 fn component_type_indices_match(
-  expected_index : Int,
+  expected_index : Int32,
   expected_types : Array[TypeDef?],
-  actual_index : Int,
+  actual_index : Int32,
   actual_types : Array[TypeDef?],
-  depth : Int,
+  depth : Int32,
 ) -> Bool {
   match
     (
@@ -383,7 +383,7 @@ fn component_type_defs_match(
   expected_types : Array[TypeDef?],
   actual : TypeDef,
   actual_types : Array[TypeDef?],
-  depth : Int,
+  depth : Int32,
 ) -> Bool {
   if depth > 64 {
     return false
@@ -536,7 +536,7 @@ fn component_func_types_match(
   expected_types : Array[TypeDef?],
   actual : FuncType,
   actual_types : Array[TypeDef?],
-  depth : Int,
+  depth : Int32,
 ) -> Bool {
   if expected.is_async != actual.is_async ||
     expected.params.length() != actual.params.length() {
@@ -565,7 +565,7 @@ fn component_func_types_match(
 ///|
 fn require_component_func_type(
   name : String,
-  expected_index : Int,
+  expected_index : Int32,
   expected_types : Array[TypeDef?],
   actual_func : ComponentFunc,
 ) -> Unit raise ComponentRuntimeError {
@@ -587,7 +587,7 @@ fn require_component_func_type(
 ///|
 fn validate_instance_import_type(
   import_key : String,
-  tyidx : Int,
+  tyidx : Int32,
   inst : ComponentInstance,
   types : Array[TypeDef?],
   _core_types : Array[Bytes],
@@ -660,7 +660,7 @@ fn validate_instance_import_type(
           Export(name, _attributes, desc) => {
             // Instance type exports of `type` also declare a slot in the local
             // type index space, which later decls can reference (e.g. `own 0`).
-            let type_slot : Int? = match desc {
+            let type_slot : Int32? = match desc {
               Type(_) => Some(next_declared.val)
               _ => None
             }

@@ -1,7 +1,7 @@
 ///|
 test "native execution state keeps parked resources distinct" {
   let state = @execution.NativeExecutionState::NativeExecutionState()
-  let released : Array[Int] = []
+  let released : Array[Int32] = []
   let first = state.begin(release=fn() { released.push(1) })
   first.park()
   let second = state.begin(release=fn() { released.push(2) })

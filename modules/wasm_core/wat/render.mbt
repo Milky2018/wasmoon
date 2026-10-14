@@ -5,16 +5,16 @@
 /// meets shapes a validated module cannot have. It used to abort on them,
 /// which killed the process on the way to a diagnostic (ISS-396).
 pub(all) suberror WatPrintError {
-  NotAFunctionType(Int)
-  FunctionCodeCountMismatch(declarations~ : Int, bodies~ : Int)
-  FunctionIndexOutOfBounds(Int)
-  ImportedFunction(Int)
-  TypeRecGroupCountMismatch(types~ : Int, groups~ : Int)
-  NonContiguousTypeRecGroup(Int)
-  InvalidMemoryPageSizeLog2(Int)
-  InvalidV128ConstantLength(Int)
-  InvalidShuffleLaneCount(Int)
-  InvalidAtomicSubopcode(Int)
+  NotAFunctionType(Int32)
+  FunctionCodeCountMismatch(declarations~ : Int32, bodies~ : Int32)
+  FunctionIndexOutOfBounds(Int32)
+  ImportedFunction(Int32)
+  TypeRecGroupCountMismatch(types~ : Int32, groups~ : Int32)
+  NonContiguousTypeRecGroup(Int32)
+  InvalidMemoryPageSizeLog2(Int32)
+  InvalidV128ConstantLength(Int32)
+  InvalidShuffleLaneCount(Int32)
+  InvalidAtomicSubopcode(Int32)
 }
 
 ///|
@@ -46,7 +46,7 @@ pub impl Show for WatPrintError with fn output(self, logger) {
 }
 
 ///|
-fn imported_function_count(mod_ : @types.Module) -> Int {
+fn imported_function_count(mod_ : @types.Module) -> Int32 {
   let mut count = 0
   for import_ in mod_.imports {
     if import_.desc is Func(_) {
@@ -109,8 +109,8 @@ fn validate_module_shape(mod_ : @types.Module) -> Unit raise WatPrintError {
       groups=mod_.type_rec_groups.length(),
     )
   }
-  let closed_groups : Map[Int, Bool] = Map([])
-  let mut previous_group : Int? = None
+  let closed_groups : Map[Int32, Bool] = Map([])
+  let mut previous_group : Int32? = None
   for group in mod_.type_rec_groups {
     if previous_group is Some(previous) && group != previous {
       closed_groups.set(previous, true)
@@ -157,9 +157,9 @@ fn validate_module_shape(mod_ : @types.Module) -> Unit raise WatPrintError {
 ///|
 fn render_defined_function(
   mod_ : @types.Module,
-  function_index : Int,
-  imported : Int,
-  indent : Int,
+  function_index : Int32,
+  imported : Int32,
+  indent : Int32,
 ) -> String raise WatPrintError {
   if function_index < 0 || function_index >= imported + mod_.funcs.length() {
     raise FunctionIndexOutOfBounds(function_index)
@@ -198,7 +198,7 @@ fn render_defined_function(
 /// Render one defined function, addressed in the module function index space.
 pub fn render_function(
   mod_ : @types.Module,
-  function_index : Int,
+  function_index : Int32,
 ) -> String raise WatPrintError {
   validate_module_shape(mod_)
   render_defined_function(
@@ -598,7 +598,11 @@ fn subtype_to_wat(subtype : @types.SubType) -> String {
 }
 
 ///|
-fn type_to_wat(index : Int, subtype : @types.SubType, indent : Int) -> String {
+fn type_to_wat(
+  index : Int32,
+  subtype : @types.SubType,
+  indent : Int32,
+) -> String {
   "\{"  ".repeat(indent)}(type (;\{index};) \{subtype_to_wat(subtype)})\n"
 }
 
@@ -757,10 +761,10 @@ fn heap_type_to_wat(t : @types.ValueType) -> String {
 ///|
 fn mem_instr(
   name : String,
-  mem : Int,
-  align : Int,
+  mem : Int32,
+  align : Int32,
   offset : Int64,
-  _natural_align : Int,
+  _natural_align : Int32,
 ) -> String {
   let sb = StringBuilder::StringBuilder()
   sb.write_string(name)
@@ -786,7 +790,7 @@ fn format_v128_bytes(bytes : Bytes) -> String {
 }
 
 ///|
-fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
+fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int32) -> String {
   let sb = StringBuilder::StringBuilder()
   let indent_str = "  ".repeat(indent)
   for instr in instrs {
@@ -823,9 +827,9 @@ fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
 ///|
 fn instr_to_wat(instr : @types.Instruction) -> String {
   fn atomic_instr(
-    subop : Int,
-    mem : Int,
-    align : Int,
+    subop : Int32,
+    mem : Int32,
+    align : Int32,
     offset : Int64,
   ) -> String {
     let subop = if subop >= 0x10 { subop - 12 } else { subop }

@@ -5,10 +5,10 @@
 /// so unreachable rooted components remain verifiable. The explicit stack
 /// keeps input-controlled CFG depth off the native call stack.
 fn reverse_postorder_from_roots(
-  successors : Array[Array[Int]],
+  successors : Array[Array[Int32]],
   has_predecessor : Array[Bool],
-) -> Array[Int] {
-  let postorder : Array[Int] = []
+) -> Array[Int32] {
+  let postorder : Array[Int32] = []
   let visited = Array::make(successors.length(), false)
   for root in 0..<successors.length() {
     if root != 0 && has_predecessor[root] {
@@ -17,7 +17,7 @@ fn reverse_postorder_from_roots(
     if visited[root] {
       continue
     }
-    let stack : Array[(Int, Int)] = [(root, 0)]
+    let stack : Array[(Int32, Int32)] = [(root, 0)]
     visited[root] = true
     while stack.length() > 0 {
       let (block, next_successor) = stack[stack.length() - 1]

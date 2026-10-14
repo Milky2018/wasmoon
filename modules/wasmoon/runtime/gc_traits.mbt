@@ -27,42 +27,42 @@ pub(open) trait GcHeap {
 
   /// Allocate a struct with given type index and field values
   /// Returns the object reference index
-  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_struct(Self, Int32, Array[@types.Value]) -> Int32
 
   /// Allocate an array with given type index and elements
   /// Returns the object reference index
-  fn alloc_array(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_array(Self, Int32, Array[@types.Value]) -> Int32
 
   // === Object Access ===
 
   /// Get a struct field value
-  fn struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn struct_get(Self, Int32, Int32) -> @types.Value raise RuntimeError
 
   /// Set a struct field value
-  fn struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn struct_set(Self, Int32, Int32, @types.Value) -> Unit raise RuntimeError
 
   /// Get array length
-  fn array_len(Self, Int) -> Int raise RuntimeError
+  fn array_len(Self, Int32) -> Int32 raise RuntimeError
 
   /// Get an array element
-  fn array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn array_get(Self, Int32, Int32) -> @types.Value raise RuntimeError
 
   /// Set an array element
-  fn array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn array_set(Self, Int32, Int32, @types.Value) -> Unit raise RuntimeError
 
   /// Fill array elements with a value
-  fn array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  fn array_fill(Self, Int32, Int32, @types.Value, Int32) -> Unit raise RuntimeError
 
   /// Copy elements between arrays
-  fn array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  fn array_copy(Self, Int32, Int32, Int32, Int32, Int32) -> Unit raise RuntimeError
 
   // === Type Information ===
 
   /// Get the type index of an object
-  fn get_type_idx(Self, Int) -> Int raise RuntimeError
+  fn get_type_idx(Self, Int32) -> Int32 raise RuntimeError
 
   /// Check if an object reference is valid and alive
-  fn is_valid(Self, Int) -> Bool
+  fn is_valid(Self, Int32) -> Bool
 }
 
 // ============================================================
@@ -84,13 +84,13 @@ pub(open) trait GcHeap {
 /// GC statistics
 pub struct GcStats {
   /// Total allocated objects (including freed slots)
-  total_slots : Int
+  total_slots : Int32
   /// Currently live objects
-  live_objects : Int
+  live_objects : Int32
   /// Free slots available for reuse
-  free_slots : Int
+  free_slots : Int32
   /// Number of GC cycles performed
-  collections : Int
+  collections : Int32
   /// Total bytes allocated (if tracked)
   bytes_allocated : Int64
   /// Total bytes collected (if tracked)
@@ -121,16 +121,16 @@ pub(open) trait GcRuntime {
   /// obj_idx: object being modified
   /// old_value: current value (being overwritten)
   /// new_value: new value being stored
-  fn write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
+  fn write_barrier_pre(Self, Int32, @types.Value, @types.Value) -> Unit
 
   /// Write barrier: called AFTER writing a reference field
   /// Used by some GC algorithms (e.g., remembered sets)
-  fn write_barrier_post(Self, Int, @types.Value) -> Unit
+  fn write_barrier_post(Self, Int32, @types.Value) -> Unit
 
   /// Read barrier: called before reading a reference field
   /// For most GCs, this is a no-op
   /// For concurrent compacting GC, this handles forwarding
-  fn read_barrier(Self, Int) -> @types.Value
+  fn read_barrier(Self, Int32) -> @types.Value
 
   // === Statistics ===
 
@@ -138,13 +138,13 @@ pub(open) trait GcRuntime {
   fn stats(Self) -> GcStats
 
   /// Get number of collections performed
-  fn collection_count(Self) -> Int
+  fn collection_count(Self) -> Int32
 
   /// Set the collection threshold (interpretation depends on implementation)
-  fn set_threshold(Self, Int) -> Unit
+  fn set_threshold(Self, Int32) -> Unit
 
   /// Get current threshold
-  fn get_threshold(Self) -> Int
+  fn get_threshold(Self) -> Int32
 }
 
 // ============================================================
@@ -158,17 +158,17 @@ pub(open) trait GcRuntime {
 /// Combined GC manager interface
 pub(open) trait GcManager {
   // === Heap Operations (delegated) ===
-  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int
-  fn alloc_array(Self, Int, Array[@types.Value]) -> Int
-  fn struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
-  fn struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-  fn array_len(Self, Int) -> Int raise RuntimeError
-  fn array_get(Self, Int, Int) -> @types.Value raise RuntimeError
-  fn array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-  fn array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
-  fn array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
-  fn get_type_idx(Self, Int) -> Int raise RuntimeError
-  fn is_valid(Self, Int) -> Bool
+  fn alloc_struct(Self, Int32, Array[@types.Value]) -> Int32
+  fn alloc_array(Self, Int32, Array[@types.Value]) -> Int32
+  fn struct_get(Self, Int32, Int32) -> @types.Value raise RuntimeError
+  fn struct_set(Self, Int32, Int32, @types.Value) -> Unit raise RuntimeError
+  fn array_len(Self, Int32) -> Int32 raise RuntimeError
+  fn array_get(Self, Int32, Int32) -> @types.Value raise RuntimeError
+  fn array_set(Self, Int32, Int32, @types.Value) -> Unit raise RuntimeError
+  fn array_fill(Self, Int32, Int32, @types.Value, Int32) -> Unit raise RuntimeError
+  fn array_copy(Self, Int32, Int32, Int32, Int32, Int32) -> Unit raise RuntimeError
+  fn get_type_idx(Self, Int32) -> Int32 raise RuntimeError
+  fn is_valid(Self, Int32) -> Bool
 
   // === Runtime Operations (delegated) ===
   fn should_collect(Self) -> Bool
@@ -176,5 +176,5 @@ pub(open) trait GcManager {
   fn stats(Self) -> GcStats
 
   // === Barriers ===
-  fn write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
+  fn write_barrier(Self, Int32, @types.Value, @types.Value) -> Unit
 }

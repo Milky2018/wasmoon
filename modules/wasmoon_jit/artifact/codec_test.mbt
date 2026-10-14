@@ -1,7 +1,7 @@
 ///|
 fn decode_result(
   bytes : Bytes,
-  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+  limits~ : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
 ) -> Result[@artifact.Artifact, @artifact.ArtifactDecodeError] {
   Ok(@artifact.decode(bytes, limits~)) catch {
     error => Err(error)
@@ -11,7 +11,7 @@ fn decode_result(
 ///|
 fn decode_error(
   bytes : Bytes,
-  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+  limits~ : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
 ) -> @artifact.ArtifactDecodeError {
   match decode_result(bytes, limits~) {
     Err(error) => error
@@ -29,7 +29,7 @@ fn copy_bytes(bytes : Bytes) -> Array[Byte] {
 }
 
 ///|
-fn prefix(bytes : Bytes, length : Int) -> Bytes {
+fn prefix(bytes : Bytes, length : Int32) -> Bytes {
   let result : Array[Byte] = []
   for i in 0..<length {
     result.push(bytes[i])

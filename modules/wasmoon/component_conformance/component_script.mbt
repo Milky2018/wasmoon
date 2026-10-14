@@ -58,9 +58,9 @@ priv struct JsonValue {
 
 ///|
 priv struct ScriptResult {
-  mut passed : Int
-  mut failed : Int
-  skipped : Int
+  mut passed : Int32
+  mut failed : Int32
+  skipped : Int32
   failures : Array[String]
 }
 
@@ -149,7 +149,7 @@ fn strip_underscores(s : String) -> String {
 }
 
 ///|
-fn parse_int_string(s : String) -> (Bool, StringView, Int) {
+fn parse_int_string(s : String) -> (Bool, StringView, Int32) {
   let cleaned = strip_underscores(s)
   let mut negative = false
   let mut view : StringView = cleaned[:]
@@ -165,7 +165,7 @@ fn parse_int_string(s : String) -> (Bool, StringView, Int) {
 }
 
 ///|
-fn parse_signed_int(s : String) -> Int raise ComponentTestError {
+fn parse_signed_int(s : String) -> Int32 raise ComponentTestError {
   let (negative, digits, base) = parse_int_string(s)
   let n = @string.parse_int(digits, base~) catch {
     e => raise ParseError(e.to_string())
@@ -178,7 +178,7 @@ fn parse_signed_int(s : String) -> Int raise ComponentTestError {
 }
 
 ///|
-fn parse_unsigned_int(s : String) -> UInt raise ComponentTestError {
+fn parse_unsigned_int(s : String) -> UInt32 raise ComponentTestError {
   let (negative, digits, base) = parse_int_string(s)
   if negative {
     raise ParseError("unsigned value cannot be negative")
@@ -231,7 +231,7 @@ fn parse_char_value(s : String) -> Char raise ComponentTestError {
 }
 
 ///|
-fn parse_enum_case_tag(s : String) -> Int raise ComponentTestError {
+fn parse_enum_case_tag(s : String) -> Int32 raise ComponentTestError {
   parse_signed_int(s) catch {
     _ => {
       let mut idx = 0
@@ -776,7 +776,7 @@ fn load_component(
 /// Produce the validation evidence `ComponentLinker::add_component` requires.
 fn component_import_evidence(
   component : @component_types.Component,
-  component_implements? : Bool = true,
+  component_implements~ : Bool = true,
 ) -> Result[@component_model.ValidatedComponent, String] {
   try
     @component_model.validate_component_for_instantiation_with_config(
@@ -795,7 +795,7 @@ fn instantiate_component(
   linker : @runtime_impl.ComponentLinker,
   name : String,
   component : @component_types.Component,
-  component_implements? : Bool = true,
+  component_implements~ : Bool = true,
 ) -> Result[@runtime_impl.ComponentInstance, String] {
   let validated = try
     @component_model.validate_component_for_instantiation_with_config(
@@ -831,7 +831,7 @@ fn run_invoke(
 }
 
 ///|
-fn make_const_u32_func(value : Int) -> @runtime_impl.ComponentFunc {
+fn make_const_u32_func(value : Int32) -> @runtime_impl.ComponentFunc {
   let func_type : @component_types.FuncType = {
     is_async: false,
     params: [],
@@ -908,7 +908,7 @@ fn run_component_script_impl(
   print_output : Bool,
   use_jit : Bool,
   component_implements : Bool,
-) -> Int {
+) -> Int32 {
   let contents = @fs.read_file_to_string(path) catch {
     IOError(e) => {
       if print_output {
@@ -1295,9 +1295,9 @@ fn run_component_script_impl(
 pub fn run_component_script(
   path : String,
   error_format : ComponentTestOutputFormat,
-  use_jit? : Bool = true,
-  component_implements? : Bool = true,
-) -> Int {
+  use_jit~ : Bool = true,
+  component_implements~ : Bool = true,
+) -> Int32 {
   run_component_script_impl(
     path, error_format, false, use_jit, component_implements,
   )
@@ -1307,9 +1307,9 @@ pub fn run_component_script(
 pub fn run_component_script_cli(
   path : String,
   error_format : ComponentTestOutputFormat,
-  use_jit? : Bool = true,
-  component_implements? : Bool = true,
-) -> Int {
+  use_jit~ : Bool = true,
+  component_implements~ : Bool = true,
+) -> Int32 {
   run_component_script_impl(
     path, error_format, true, use_jit, component_implements,
   )

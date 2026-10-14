@@ -1,5 +1,5 @@
 ///|
-fn request_timeout(message : HttpMessage, index : Int) -> Int {
+fn request_timeout(message : HttpMessage, index : Int32) -> Int32 {
   match message.options {
     Some(options) =>
       match options.values[index] {
@@ -105,8 +105,8 @@ async fn HttpHost::exchange(
 pub fn HttpHost::add_network_client(
   self : HttpHost,
   allow : (String) -> Bool,
-  allow_address? : (@socket.Addr) -> Bool = _ => true,
-  trust? : @tls.TrustedRoot = SystemRoot,
+  allow_address~ : (@socket.Addr) -> Bool = _ => true,
+  trust~ : @tls.TrustedRoot = SystemRoot,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   self.add_client((args, table) => {
     guard args is [handle] &&

@@ -2,7 +2,7 @@
 priv struct MemoryAddressSelection {
   base : @milkir.Value
   index : @milkir.Value?
-  shift : Int
+  shift : Int32
   offset : UInt64
 }
 
@@ -16,9 +16,9 @@ priv struct MemoryAddressMatch {
 priv enum ScalarSelection {
   CompareImmediate(@milkir.Value, @lowering.IntComparison, UInt64)
   IntImmediate(@milkir.Value, @lowering.IntBinaryOp, UInt64)
-  ShiftImmediate(@milkir.Value, @lowering.IntBinaryOp, Int)
+  ShiftImmediate(@milkir.Value, @lowering.IntBinaryOp, Int32)
   MultiplyAdd(@milkir.Value, @milkir.Value, @milkir.Value)
-  AddShiftedLeft(@milkir.Value, @milkir.Value, Int)
+  AddShiftedLeft(@milkir.Value, @milkir.Value, Int32)
 }
 
 ///|
@@ -36,26 +36,26 @@ priv enum ComparisonSelection {
 priv struct SelectionFacts {
   supports_int_compare_immediate : (@native_types.ValueType, UInt64) -> Bool
   folds_unsigned_index_into_memory : Bool
-  uses : Array[Int]
-  consumers : Array[Int]
-  shared_consumers : Array[Array[Int]?]
+  uses : Array[Int32]
+  consumers : Array[Int32]
+  shared_consumers : Array[Array[Int32]?]
   constants : Array[UInt64?]
   definitions : Array[@milkir.Inst?]
   instructions : Array[@milkir.Inst?]
-  instruction_blocks : Array[Int]
+  instruction_blocks : Array[Int32]
   deferred : Array[Bool?]
-  memory_consumers : Array[Int]
+  memory_consumers : Array[Int32]
   memory_selection_computed : Array[Bool]
   memory_selections : Array[MemoryAddressMatch?]
 }
 
 ///|
 fn record_use(
-  uses : Array[Int],
-  consumers : Array[Int],
-  shared_consumers : Array[Array[Int]?],
+  uses : Array[Int32],
+  consumers : Array[Int32],
+  shared_consumers : Array[Array[Int32]?],
   value : @milkir.Value,
-  consumer : Int,
+  consumer : Int32,
   track_shared : Bool,
 ) -> Unit {
   if uses[value.id] == 0 {
@@ -138,7 +138,7 @@ fn extended_i32_source(
 }
 
 ///|
-fn natural_memory_shift(width : @native_types.AccessWidth) -> Int {
+fn natural_memory_shift(width : @native_types.AccessWidth) -> Int32 {
   match width {
     W8 => 0
     W16 => 1
@@ -153,7 +153,7 @@ fn scaled_i32_source(
   facts : SelectionFacts,
   value : @milkir.Value,
   width : @native_types.AccessWidth,
-) -> (@milkir.Value, Int, Array[@milkir.Value]) {
+) -> (@milkir.Value, Int32, Array[@milkir.Value]) {
   let shift = natural_memory_shift(width)
   if shift == 0 {
     return (value, 0, [])
@@ -182,7 +182,7 @@ fn select_index_and_offset(
   facts : SelectionFacts,
   value : @milkir.Value,
   width : @native_types.AccessWidth,
-) -> (@milkir.Value, Int, UInt64, Array[@milkir.Value])? {
+) -> (@milkir.Value, Int32, UInt64, Array[@milkir.Value])? {
   if extended_i32_source(facts, value) is Some(index) {
     let (selected, shift, folded) = scaled_i32_source(facts, index, width)
     let consumed = [value]
@@ -423,7 +423,7 @@ fn swapped_comparison(
 fn select_right_immediate(
   binary : @milkir.IntBinaryOp,
   left : @milkir.Value,
-  width : Int,
+  width : Int32,
   bits : UInt64,
 ) -> ScalarSelection? {
   match binary {
@@ -524,7 +524,7 @@ fn build_selection_facts(
 ) -> SelectionFacts {
   let uses = Array::make(function.next_value_id, 0)
   let consumers = Array::make(function.next_value_id, -2)
-  let shared_consumers : Array[Array[Int]?] = Array::make(
+  let shared_consumers : Array[Array[Int32]?] = Array::make(
     function.next_value_id,
     None,
   )
@@ -618,7 +618,7 @@ fn build_selection_facts(
 }
 
 ///|
-fn memory_consumer_id(value : @milkir.Value, facts : SelectionFacts) -> Int {
+fn memory_consumer_id(value : @milkir.Value, facts : SelectionFacts) -> Int32 {
   if facts.memory_consumers[value.id] != -2 {
     return facts.memory_consumers[value.id]
   }
@@ -711,7 +711,7 @@ fn memory_selection(
 ///|
 fn consumer_selects_constant(
   constant : @milkir.Value,
-  consumer_id : Int,
+  consumer_id : Int32,
   facts : SelectionFacts,
 ) -> Bool {
   guard consumer_id >= 0 && facts.instructions[consumer_id] is Some(instruction) else {

@@ -17,10 +17,10 @@ let socket_rights : Int64 = right_fd_read |
 /// pointer-sized Winsock SOCKET values. No guest network creation is granted.
 pub fn WasiContext::take_socket(
   self : WasiContext,
-  native_fd : Int,
-  rights_base? : Int64 = socket_rights,
-  rights_inheriting? : Int64 = socket_rights,
-) -> Result[Int, Int] {
+  native_fd : Int32,
+  rights_base~ : Int64 = socket_rights,
+  rights_inheriting~ : Int64 = socket_rights,
+) -> Result[Int32, Int32] {
   if (rights_base & socket_rights.lnot()) != 0L ||
     (rights_inheriting & socket_rights.lnot()) != 0L {
     return Err(Errno::Inval.to_i32())
@@ -54,13 +54,13 @@ pub fn WasiContext::take_socket(
 ///|
 fn socket_iovecs(
   mem : @runtime.Memory,
-  ptr : Int,
-  count : Int,
-) -> Result[(Array[(Int, Int)], Int), Int] {
+  ptr : Int32,
+  count : Int32,
+) -> Result[(Array[(Int32, Int32)], Int32), Int32] {
   if !check_iovecs_mem_range(mem, ptr, count) {
     return Err(Errno::Fault.to_i32())
   }
-  let entries : Array[(Int, Int)] = []
+  let entries : Array[(Int32, Int32)] = []
   let mut length = 0L
   for i in 0..<count {
     let start = mem.read_i32(ptr + i * 8)
@@ -78,10 +78,10 @@ fn socket_iovecs(
 fn socket_receive(
   mem : @runtime.Memory,
   file : OpenFile,
-  ri_data_ptr : Int,
-  ri_data_len : Int,
-  ri_flags : Int,
-) -> Result[(Int, Int), Int] {
+  ri_data_ptr : Int32,
+  ri_data_len : Int32,
+  ri_flags : Int32,
+) -> Result[(Int32, Int32), Int32] {
   let (entries, length) = match socket_iovecs(mem, ri_data_ptr, ri_data_len) {
     Ok(value) => value
     Err(errno) => return Err(errno)
@@ -123,9 +123,9 @@ fn socket_receive(
 fn receive_stream(
   file : OpenFile,
   output : FixedArray[Byte],
-  length : Int,
-  flags : Int,
-) -> Result[Int, Int] {
+  length : Int32,
+  flags : Int32,
+) -> Result[Int32, Int32] {
   if length == 0 {
     return Ok(0)
   }

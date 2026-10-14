@@ -35,11 +35,11 @@ pub impl Show for FuncInst with fn output(self, logger) {
 ///|
 /// External value for imports
 pub(all) enum ExternVal {
-  Func(Int) // function address in store
-  Table(Int) // table address in store
-  Memory(Int) // memory address in store
-  Global(Int) // global address in store
-  Tag(Int) // tag address in store (type index)
+  Func(Int32) // function address in store
+  Table(Int32) // table address in store
+  Memory(Int32) // memory address in store
+  Global(Int32) // global address in store
+  Tag(Int32) // tag address in store (type index)
 }
 
 ///|
@@ -58,7 +58,7 @@ pub fn Imports::add_func(
   self : Imports,
   mod_name : String,
   name : String,
-  func_addr : Int,
+  func_addr : Int32,
 ) -> Unit {
   self.entries.push((mod_name, name, Func(func_addr)))
 }
@@ -68,7 +68,7 @@ pub fn Imports::add_memory(
   self : Imports,
   mod_name : String,
   name : String,
-  mem_addr : Int,
+  mem_addr : Int32,
 ) -> Unit {
   self.entries.push((mod_name, name, Memory(mem_addr)))
 }
@@ -78,7 +78,7 @@ pub fn Imports::add_table(
   self : Imports,
   mod_name : String,
   name : String,
-  table_addr : Int,
+  table_addr : Int32,
 ) -> Unit {
   self.entries.push((mod_name, name, Table(table_addr)))
 }
@@ -88,7 +88,7 @@ pub fn Imports::add_global(
   self : Imports,
   mod_name : String,
   name : String,
-  global_addr : Int,
+  global_addr : Int32,
 ) -> Unit {
   self.entries.push((mod_name, name, Global(global_addr)))
 }
@@ -98,7 +98,7 @@ pub fn Imports::add_tag(
   self : Imports,
   mod_name : String,
   name : String,
-  tag_addr : Int,
+  tag_addr : Int32,
 ) -> Unit {
   self.entries.push((mod_name, name, Tag(tag_addr)))
 }

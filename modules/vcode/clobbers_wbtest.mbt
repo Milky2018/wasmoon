@@ -1,7 +1,7 @@
 ///|
 test "repeated call clobbers grow storage geometrically and preserve instruction slices" {
   for unconstrained in [false, true] {
-    let builder : Builder[Int] = Builder::new("calls", [])
+    let builder : Builder[Int32] = Builder::new("calls", [])
     let entry = builder.entry_block()
     let clobbers = [PhysicalReg::new(0, Int), PhysicalReg::new(1, Int)]
     let mut growths = 0

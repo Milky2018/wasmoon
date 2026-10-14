@@ -5,11 +5,11 @@
 ///|
 /// Error type for WASI process exit
 pub(all) suberror WasiExit {
-  WasiExit(Int)
+  WasiExit(Int32)
 }
 
 ///|
-fn check_mem_range(mem : @runtime.Memory, ptr : Int, len : Int) -> Bool {
+fn check_mem_range(mem : @runtime.Memory, ptr : Int32, len : Int32) -> Bool {
   if len < 0 {
     return false
   }
@@ -21,8 +21,8 @@ fn check_mem_range(mem : @runtime.Memory, ptr : Int, len : Int) -> Bool {
 ///|
 fn check_iovecs_mem_range(
   mem : @runtime.Memory,
-  iovs : Int,
-  iovs_len : Int,
+  iovs : Int32,
+  iovs_len : Int32,
 ) -> Bool {
   if iovs_len < 0 || iovs_len > 0x0FFFFFFF {
     return false
@@ -43,7 +43,7 @@ fn check_iovecs_mem_range(
 }
 
 ///|
-fn is_stdio_open(ctx : WasiContext, fd : Int) -> Bool {
+fn is_stdio_open(ctx : WasiContext, fd : Int32) -> Bool {
   match stdio_slot_for_fd(ctx, fd) {
     Some(0) => ctx.stdin_open
     Some(1) => ctx.stdout_open
@@ -53,7 +53,7 @@ fn is_stdio_open(ctx : WasiContext, fd : Int) -> Bool {
 }
 
 ///|
-fn stdio_slot_for_fd(ctx : WasiContext, fd : Int) -> Int? {
+fn stdio_slot_for_fd(ctx : WasiContext, fd : Int32) -> Int32? {
   if fd < 0 {
     return None
   }
@@ -69,12 +69,12 @@ fn stdio_slot_for_fd(ctx : WasiContext, fd : Int) -> Int? {
 }
 
 ///|
-fn is_stdio_descriptor(ctx : WasiContext, fd : Int) -> Bool {
+fn is_stdio_descriptor(ctx : WasiContext, fd : Int32) -> Bool {
   stdio_slot_for_fd(ctx, fd) is Some(_)
 }
 
 ///|
-fn clear_stdio_slot(ctx : WasiContext, slot : Int) -> Unit {
+fn clear_stdio_slot(ctx : WasiContext, slot : Int32) -> Unit {
   if slot == 0 {
     ctx.stdin_open = false
     ctx.stdin_fd = -1
@@ -88,7 +88,7 @@ fn clear_stdio_slot(ctx : WasiContext, slot : Int) -> Unit {
 }
 
 ///|
-fn move_stdio_slot_to_fd(ctx : WasiContext, slot : Int, fd : Int) -> Unit {
+fn move_stdio_slot_to_fd(ctx : WasiContext, slot : Int32, fd : Int32) -> Unit {
   if slot == 0 {
     ctx.stdin_fd = fd
     ctx.stdin_open = true
@@ -102,7 +102,7 @@ fn move_stdio_slot_to_fd(ctx : WasiContext, slot : Int, fd : Int) -> Unit {
 }
 
 ///|
-fn close_stdio_fd(ctx : WasiContext, fd : Int) -> Bool {
+fn close_stdio_fd(ctx : WasiContext, fd : Int32) -> Bool {
   match stdio_slot_for_fd(ctx, fd) {
     Some(0) =>
       if !ctx.stdin_open {
@@ -130,7 +130,7 @@ fn close_stdio_fd(ctx : WasiContext, fd : Int) -> Bool {
 }
 
 ///|
-fn stdio_filetype(ctx : WasiContext, fd : Int) -> Int {
+fn stdio_filetype(ctx : WasiContext, fd : Int32) -> Int32 {
   match stdio_slot_for_fd(ctx, fd) {
     Some(0) => if ctx.stdin_is_native && native_isatty(0) { 2 } else { 0 }
     Some(1) => if ctx.stdout_is_native && native_isatty(1) { 2 } else { 0 }
@@ -140,7 +140,7 @@ fn stdio_filetype(ctx : WasiContext, fd : Int) -> Int {
 }
 
 ///|
-fn open_file_type_from_native(stat_filetype : Int) -> FileType {
+fn open_file_type_from_native(stat_filetype : Int32) -> FileType {
   match stat_filetype {
     3 => Directory
     2 => CharacterDevice
@@ -151,7 +151,7 @@ fn open_file_type_from_native(stat_filetype : Int) -> FileType {
 }
 
 ///|
-fn native_file_type_to_preview1(file_type : Int) -> Int {
+fn native_file_type_to_preview1(file_type : Int32) -> Int32 {
   if file_type >= 1 && file_type <= 7 {
     file_type
   } else {
@@ -162,9 +162,9 @@ fn native_file_type_to_preview1(file_type : Int) -> Int {
 ///|
 fn first_non_empty_iov(
   mem : @runtime.Memory,
-  iovs : Int,
-  iovs_len : Int,
-) -> (Int, Int)? {
+  iovs : Int32,
+  iovs_len : Int32,
+) -> (Int32, Int32)? {
   for i in 0..<iovs_len {
     let iov_offset = iovs + i * 8
     let buf_ptr = mem.read_i32(iov_offset)
@@ -189,11 +189,11 @@ fn first_non_empty_iov(
 pub fn fd_write(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  iovs : Int,
-  iovs_len : Int,
-  nwritten_ptr : Int,
-) -> Int {
+  fd : Int32,
+  iovs : Int32,
+  iovs_len : Int32,
+  nwritten_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, nwritten_ptr, 4) {
     return Errno::Fault.to_i32()
   }
@@ -305,11 +305,11 @@ pub fn fd_write(
 pub fn fd_read(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  iovs : Int,
-  iovs_len : Int,
-  nread_ptr : Int,
-) -> Int {
+  fd : Int32,
+  iovs : Int32,
+  iovs_len : Int32,
+  nread_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, nread_ptr, 4) {
     return Errno::Fault.to_i32()
   }
@@ -416,9 +416,9 @@ pub fn fd_read(
 pub fn args_sizes_get(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  argc_ptr : Int,
-  argv_buf_size_ptr : Int,
-) -> Int {
+  argc_ptr : Int32,
+  argv_buf_size_ptr : Int32,
+) -> Int32 {
   string_table_sizes(mem, ctx.args, argc_ptr, argv_buf_size_ptr)
 }
 
@@ -433,9 +433,9 @@ pub fn args_sizes_get(
 pub fn args_get(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  argv_ptr : Int,
-  argv_buf_ptr : Int,
-) -> Int {
+  argv_ptr : Int32,
+  argv_buf_ptr : Int32,
+) -> Int32 {
   write_string_table(mem, ctx.args, argv_ptr, argv_buf_ptr)
 }
 
@@ -450,9 +450,9 @@ pub fn args_get(
 pub fn environ_sizes_get(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  environc_ptr : Int,
-  environ_buf_size_ptr : Int,
-) -> Int {
+  environc_ptr : Int32,
+  environ_buf_size_ptr : Int32,
+) -> Int32 {
   string_table_sizes(mem, ctx.env, environc_ptr, environ_buf_size_ptr)
 }
 
@@ -467,9 +467,9 @@ pub fn environ_sizes_get(
 pub fn environ_get(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  environ_ptr : Int,
-  environ_buf_ptr : Int,
-) -> Int {
+  environ_ptr : Int32,
+  environ_buf_ptr : Int32,
+) -> Int32 {
   write_string_table(mem, ctx.env, environ_ptr, environ_buf_ptr)
 }
 
@@ -480,7 +480,7 @@ pub fn environ_get(
 /// - exit_code: Exit code
 ///
 /// This function does not return - it raises WasiExit
-pub fn proc_exit(ctx : WasiContext, exit_code : Int) -> Unit raise WasiExit {
+pub fn proc_exit(ctx : WasiContext, exit_code : Int32) -> Unit raise WasiExit {
   ctx.exit_code = Some(exit_code)
   raise WasiExit(exit_code)
 }
@@ -496,10 +496,10 @@ pub fn proc_exit(ctx : WasiContext, exit_code : Int) -> Unit raise WasiExit {
 /// Returns: errno
 pub fn clock_time_get(
   mem : @runtime.Memory,
-  clock_id : Int,
+  clock_id : Int32,
   _precision : Int64,
-  time_ptr : Int,
-) -> Int {
+  time_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, time_ptr, 8) {
     return Errno::Fault.to_i32()
   }
@@ -528,9 +528,9 @@ pub fn clock_time_get(
 pub fn fd_prestat_get(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  prestat_ptr : Int,
-) -> Int {
+  fd : Int32,
+  prestat_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, prestat_ptr, 8) {
     return Errno::Fault.to_i32()
   }
@@ -564,10 +564,10 @@ pub fn fd_prestat_get(
 pub fn fd_prestat_dir_name(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  path_ptr : Int,
-  path_len : Int,
-) -> Int {
+  fd : Int32,
+  path_ptr : Int32,
+  path_len : Int32,
+) -> Int32 {
   if !check_mem_range(mem, path_ptr, path_len) {
     return Errno::Fault.to_i32()
   }
@@ -599,7 +599,7 @@ pub fn fd_prestat_dir_name(
 /// fd_close - Close a file descriptor
 ///
 /// Returns: errno
-pub fn fd_close(ctx : WasiContext, fd : Int) -> Int {
+pub fn fd_close(ctx : WasiContext, fd : Int32) -> Int32 {
   if is_stdio_descriptor(ctx, fd) {
     if close_stdio_fd(ctx, fd) {
       return Errno::Success.to_i32()
@@ -618,7 +618,11 @@ pub fn fd_close(ctx : WasiContext, fd : Int) -> Int {
 /// random_get - Generate random bytes using system entropy
 ///
 /// Returns: errno
-pub fn random_get(mem : @runtime.Memory, buf_ptr : Int, buf_len : Int) -> Int {
+pub fn random_get(
+  mem : @runtime.Memory,
+  buf_ptr : Int32,
+  buf_len : Int32,
+) -> Int32 {
   if buf_len <= 0 {
     return Errno::Success.to_i32()
   }
@@ -657,16 +661,16 @@ pub fn random_get(mem : @runtime.Memory, buf_ptr : Int, buf_len : Int) -> Int {
 pub fn path_open(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  dir_fd : Int,
-  dirflags : Int,
-  path_ptr : Int,
-  path_len : Int,
-  oflags : Int,
+  dir_fd : Int32,
+  dirflags : Int32,
+  path_ptr : Int32,
+  path_len : Int32,
+  oflags : Int32,
   fs_rights_base : Int64,
   fs_rights_inheriting : Int64,
-  fdflags : Int,
-  opened_fd_ptr : Int,
-) -> Int {
+  fdflags : Int32,
+  opened_fd_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, opened_fd_ptr, 4) {
     return Errno::Fault.to_i32()
   }
@@ -851,11 +855,11 @@ pub fn path_open(
 pub fn fd_seek(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
+  fd : Int32,
   offset : Int64,
-  whence : Int,
-  newoffset_ptr : Int,
-) -> Int {
+  whence : Int32,
+  newoffset_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, newoffset_ptr, 8) {
     return Errno::Fault.to_i32()
   }
@@ -915,9 +919,9 @@ pub fn fd_seek(
 pub fn fd_tell(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  offset_ptr : Int,
-) -> Int {
+  fd : Int32,
+  offset_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, offset_ptr, 8) {
     return Errno::Fault.to_i32()
   }
@@ -957,12 +961,12 @@ pub fn fd_tell(
 pub fn fd_pread(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  iovs : Int,
-  iovs_len : Int,
+  fd : Int32,
+  iovs : Int32,
+  iovs_len : Int32,
   offset : Int64,
-  nread_ptr : Int,
-) -> Int {
+  nread_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, nread_ptr, 4) {
     return Errno::Fault.to_i32()
   }
@@ -1036,12 +1040,12 @@ pub fn fd_pread(
 pub fn fd_pwrite(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  iovs : Int,
-  iovs_len : Int,
+  fd : Int32,
+  iovs : Int32,
+  iovs_len : Int32,
   offset : Int64,
-  nwritten_ptr : Int,
-) -> Int {
+  nwritten_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, nwritten_ptr, 4) {
     return Errno::Fault.to_i32()
   }
@@ -1107,7 +1111,7 @@ pub fn fd_pwrite(
 }
 
 ///|
-fn fd_rights_for_stdio_slot(slot : Int) -> Int64 {
+fn fd_rights_for_stdio_slot(slot : Int32) -> Int64 {
   if slot == 0 {
     right_fd_read | right_poll_fd_readwrite | right_fd_filestat_get
   } else if slot == 1 || slot == 2 {
@@ -1194,16 +1198,16 @@ fn fd_rights_for_preopen_directory_inheriting() -> Int64 {
 pub fn fd_fdstat_get(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  fdstat_ptr : Int,
-) -> Int {
+  fd : Int32,
+  fdstat_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, fdstat_ptr, 24) {
     return Errno::Fault.to_i32()
   }
   // Determine file type
   let (file_type, flags, rights_base, rights_inheriting) : (
-    Int,
-    Int,
+    Int32,
+    Int32,
     Int64,
     Int64,
   ) = if stdio_slot_for_fd(ctx, fd) is Some(slot) {
@@ -1269,9 +1273,9 @@ pub fn fd_fdstat_get(
 /// Returns: errno
 pub fn clock_res_get(
   mem : @runtime.Memory,
-  clock_id : Int,
-  resolution_ptr : Int,
-) -> Int {
+  clock_id : Int32,
+  resolution_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, resolution_ptr, 8) {
     return Errno::Fault.to_i32()
   }
@@ -1312,7 +1316,7 @@ pub fn clock_res_get(
 /// sched_yield - Yield the processor
 ///
 /// Returns: errno
-pub fn sched_yield() -> Int {
+pub fn sched_yield() -> Int32 {
   if c_yield() == 0 {
     0
   } else {
@@ -1332,10 +1336,10 @@ pub fn sched_yield() -> Int {
 pub fn path_create_directory(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  dir_fd : Int,
-  path_ptr : Int,
-  path_len : Int,
-) -> Int {
+  dir_fd : Int32,
+  path_ptr : Int32,
+  path_len : Int32,
+) -> Int32 {
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno
@@ -1367,12 +1371,12 @@ pub fn path_create_directory(
 pub fn fd_readdir(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  buf_ptr : Int,
-  buf_len : Int,
+  fd : Int32,
+  buf_ptr : Int32,
+  buf_len : Int32,
   cookie : Int64,
-  bufused_ptr : Int,
-) -> Int {
+  bufused_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, buf_ptr, buf_len) ||
     !check_mem_range(mem, bufused_ptr, 4) {
     return Errno::Fault.to_i32()
@@ -1401,13 +1405,13 @@ pub fn fd_readdir(
 ///|
 fn write_readdir_header(
   mem : @runtime.Memory,
-  ptr : Int,
-  available : Int,
+  ptr : Int32,
+  available : Int32,
   d_next : Int64,
   d_ino : Int64,
-  d_namlen : Int,
-  d_type : Int,
-) -> Int {
+  d_namlen : Int32,
+  d_type : Int32,
+) -> Int32 {
   let to_write = @cmp.minimum(available, 24)
   for i in 0..<to_write {
     let v = if i < 8 {
@@ -1429,14 +1433,14 @@ fn write_readdir_header(
 ///|
 fn emit_readdir_entry(
   mem : @runtime.Memory,
-  buf_ptr : Int,
-  buf_len : Int,
-  offset : Int,
+  buf_ptr : Int32,
+  buf_len : Int32,
+  offset : Int32,
   entry_idx : Int64,
   d_ino : Int64,
   name : String,
-  file_type : Int,
-) -> (Int, Bool) {
+  file_type : Int32,
+) -> (Int32, Bool) {
   if offset >= buf_len {
     return (offset, false)
   }
@@ -1470,12 +1474,12 @@ fn emit_readdir_entry(
 /// Helper: Implement readdir
 fn readdir_impl(
   mem : @runtime.Memory,
-  dir_fd : Int,
-  buf_ptr : Int,
-  buf_len : Int,
+  dir_fd : Int32,
+  buf_ptr : Int32,
+  buf_len : Int32,
   cookie : Int64,
-  bufused_ptr : Int,
-) -> Int {
+  bufused_ptr : Int32,
+) -> Int32 {
   let entries = native_readdir_fd(dir_fd)
   if entries is None {
     mem.write_i32(bufused_ptr, 0)
@@ -1536,7 +1540,7 @@ fn readdir_impl(
 
 ///|
 /// Helper: UTF-8 validation for guest path bytes
-fn is_utf8_continuation_byte(b : Int) -> Bool {
+fn is_utf8_continuation_byte(b : Int32) -> Bool {
   b >= 0x80 && b <= 0xBF
 }
 
@@ -1639,9 +1643,9 @@ fn is_valid_utf8_bytes(bytes : Bytes) -> Bool {
 /// Helper: Read a string from WASM memory
 fn read_path_from_memory(
   mem : @runtime.Memory,
-  ptr : Int,
-  len : Int,
-) -> Result[String, Int] {
+  ptr : Int32,
+  len : Int32,
+) -> Result[String, Int32] {
   if !check_mem_range(mem, ptr, len) {
     return Err(Errno::Fault.to_i32())
   }
@@ -1660,7 +1664,7 @@ fn read_path_from_memory(
 }
 
 ///|
-fn validate_lookupflags(flags : Int) -> Int {
+fn validate_lookupflags(flags : Int32) -> Int32 {
   let known_mask = 0x01
   if (flags & known_mask.lnot()) != 0 {
     Errno::Inval.to_i32()
@@ -1670,7 +1674,7 @@ fn validate_lookupflags(flags : Int) -> Int {
 }
 
 ///|
-fn validate_sock_accept_fdflags(flags : Int) -> Int {
+fn validate_sock_accept_fdflags(flags : Int32) -> Int32 {
   let known_mask = 0x1F
   if (flags & known_mask.lnot()) != 0 {
     Errno::Inval.to_i32()
@@ -1680,7 +1684,7 @@ fn validate_sock_accept_fdflags(flags : Int) -> Int {
 }
 
 ///|
-fn validate_sock_recv_riflags(ri_flags : Int) -> Int {
+fn validate_sock_recv_riflags(ri_flags : Int32) -> Int32 {
   let known_mask = 0x03
   if (ri_flags & known_mask.lnot()) != 0 {
     Errno::Inval.to_i32()
@@ -1690,7 +1694,7 @@ fn validate_sock_recv_riflags(ri_flags : Int) -> Int {
 }
 
 ///|
-fn validate_sock_shutdown_sdflags(how : Int) -> Int {
+fn validate_sock_shutdown_sdflags(how : Int32) -> Int32 {
   let known_mask = 0x03
   if (how & known_mask.lnot()) != 0 {
     Errno::Inval.to_i32()
@@ -1700,7 +1704,7 @@ fn validate_sock_shutdown_sdflags(how : Int) -> Int {
 }
 
 ///|
-fn validate_proc_raise_signal(signal : Int) -> Int {
+fn validate_proc_raise_signal(signal : Int32) -> Int32 {
   // WITX `signal` is an enum with valid tags in range [0, 30].
   if signal < 0 || signal > 30 {
     Errno::Inval.to_i32()
@@ -1712,7 +1716,7 @@ fn validate_proc_raise_signal(signal : Int) -> Int {
 ///|
 // Preserve dot components for the native capability walker: lexical normalization
 // would incorrectly erase symlink traversal and directory-type checks.
-fn capability_path_parts(path : String) -> Result[(String, String), Int] {
+fn capability_path_parts(path : String) -> Result[(String, String), Int32] {
   if path == "" {
     return Err(Errno::NoEnt.to_i32())
   }
@@ -1732,10 +1736,10 @@ fn capability_path_parts(path : String) -> Result[(String, String), Int] {
 ///|
 fn with_capability_parent(
   ctx : WasiContext,
-  dir_fd : Int,
+  dir_fd : Int32,
   path : String,
-  operation : (Int, String) -> Int,
-) -> Int {
+  operation : (Int32, String) -> Int32,
+) -> Int32 {
   let (parent_path, leaf) = match capability_path_parts(path) {
     Ok(parts) => parts
     Err(errno) => return errno
@@ -1760,9 +1764,9 @@ fn with_capability_parent(
 /// Returns `None` for stdio, directories, sockets, and invalid fds.
 fn regular_file_native_fd_with_rights(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   required : Int64,
-) -> Result[Int, Errno] {
+) -> Result[Int32, Errno] {
   if is_stdio_descriptor(ctx, fd) {
     return Err(Badf)
   }
@@ -1786,9 +1790,9 @@ fn regular_file_native_fd_with_rights(
 /// Returns `None` for stdio and invalid fds.
 fn non_stdio_descriptor_native_fd_with_rights(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   required : Int64,
-) -> Result[Int, Errno] {
+) -> Result[Int32, Errno] {
   if is_stdio_descriptor(ctx, fd) {
     return Err(Badf)
   }
@@ -1805,7 +1809,7 @@ fn non_stdio_descriptor_native_fd_with_rights(
 ///|
 fn directory_with_base_rights(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   required : Int64,
 ) -> Result[OpenFile, Errno] {
   if is_stdio_descriptor(ctx, fd) {
@@ -1829,7 +1833,7 @@ fn directory_with_base_rights(
 ///|
 fn socket_with_base_rights(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   required : Int64,
 ) -> Result[OpenFile, Errno] {
   if is_stdio_descriptor(ctx, fd) {
@@ -1859,7 +1863,7 @@ fn socket_with_base_rights(
 
 ///|
 /// fd_sync - Synchronize file to disk
-pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
+pub fn fd_sync_impl(ctx : WasiContext, fd : Int32) -> Int32 {
   let native_fd = match
     regular_file_native_fd_with_rights(ctx, fd, right_fd_sync) {
     Ok(native_fd) => native_fd
@@ -1874,7 +1878,7 @@ pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
 
 ///|
 /// fd_datasync - Synchronize file data to disk
-pub fn fd_datasync_impl(ctx : WasiContext, fd : Int) -> Int {
+pub fn fd_datasync_impl(ctx : WasiContext, fd : Int32) -> Int32 {
   let native_fd = match
     regular_file_native_fd_with_rights(ctx, fd, right_fd_datasync) {
     Ok(native_fd) => native_fd
@@ -1892,10 +1896,10 @@ pub fn fd_datasync_impl(ctx : WasiContext, fd : Int) -> Int {
 pub fn path_unlink_file_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  dir_fd : Int,
-  path_ptr : Int,
-  path_len : Int,
-) -> Int {
+  dir_fd : Int32,
+  path_ptr : Int32,
+  path_len : Int32,
+) -> Int32 {
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno
@@ -1918,10 +1922,10 @@ pub fn path_unlink_file_impl(
 pub fn path_remove_directory_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  dir_fd : Int,
-  path_ptr : Int,
-  path_len : Int,
-) -> Int {
+  dir_fd : Int32,
+  path_ptr : Int32,
+  path_len : Int32,
+) -> Int32 {
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno
@@ -1944,13 +1948,13 @@ pub fn path_remove_directory_impl(
 pub fn path_rename_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  old_fd : Int,
-  old_path_ptr : Int,
-  old_path_len : Int,
-  new_fd : Int,
-  new_path_ptr : Int,
-  new_path_len : Int,
-) -> Int {
+  old_fd : Int32,
+  old_path_ptr : Int32,
+  old_path_len : Int32,
+  new_fd : Int32,
+  new_path_ptr : Int32,
+  new_path_len : Int32,
+) -> Int32 {
   let old_path = match read_path_from_memory(mem, old_path_ptr, old_path_len) {
     Ok(path) => path
     Err(errno) => return errno
@@ -1987,9 +1991,9 @@ pub fn path_rename_impl(
 pub fn fd_filestat_get_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  buf_ptr : Int,
-) -> Int {
+  fd : Int32,
+  buf_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, buf_ptr, 64) {
     return Errno::Fault.to_i32()
   }
@@ -2062,7 +2066,7 @@ pub fn fd_filestat_get_impl(
 /// Helper: Write filestat to memory
 fn write_filestat(
   mem : @runtime.Memory,
-  buf_ptr : Int,
+  buf_ptr : Int32,
   stat : FileStat,
 ) -> Unit {
   mem.write_i64(buf_ptr, stat.dev.reinterpret_as_int64()) // dev
@@ -2086,12 +2090,12 @@ fn write_filestat(
 pub fn path_filestat_get_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  dir_fd : Int,
-  flags : Int,
-  path_ptr : Int,
-  path_len : Int,
-  buf_ptr : Int,
-) -> Int {
+  dir_fd : Int32,
+  flags : Int32,
+  path_ptr : Int32,
+  path_len : Int32,
+  buf_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, buf_ptr, 64) {
     return Errno::Fault.to_i32()
   }
@@ -2143,9 +2147,9 @@ pub fn path_filestat_get_impl(
 /// fd_filestat_set_size - Set file size (truncate)
 pub fn fd_filestat_set_size_impl(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   size : Int64,
-) -> Int {
+) -> Int32 {
   let native_fd = match
     regular_file_native_fd_with_rights(ctx, fd, right_fd_filestat_set_size) {
     Ok(native_fd) => native_fd
@@ -2159,7 +2163,7 @@ pub fn fd_filestat_set_size_impl(
 }
 
 ///|
-fn validate_fst_flags_for_set_times(fst_flags : Int) -> Int {
+fn validate_fst_flags_for_set_times(fst_flags : Int32) -> Int32 {
   // Match wasmtime's systimespec validation:
   // - reject unknown bits
   // - reject conflicting ATIM/ATIM_NOW and MTIM/MTIM_NOW
@@ -2177,11 +2181,11 @@ fn validate_fst_flags_for_set_times(fst_flags : Int) -> Int {
 /// fd_filestat_set_times - Set file times via fd
 pub fn fd_filestat_set_times_impl(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   atim : Int64,
   mtim : Int64,
-  fst_flags : Int,
-) -> Int {
+  fst_flags : Int32,
+) -> Int32 {
   let fst_flags_check = validate_fst_flags_for_set_times(fst_flags)
   if fst_flags_check != Errno::Success.to_i32() {
     return fst_flags_check
@@ -2205,14 +2209,14 @@ pub fn fd_filestat_set_times_impl(
 pub fn path_filestat_set_times_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  dir_fd : Int,
-  flags : Int,
-  path_ptr : Int,
-  path_len : Int,
+  dir_fd : Int32,
+  flags : Int32,
+  path_ptr : Int32,
+  path_len : Int32,
   atim : Int64,
   mtim : Int64,
-  fst_flags : Int,
-) -> Int {
+  fst_flags : Int32,
+) -> Int32 {
   let lookupflags_check = validate_lookupflags(flags)
   if lookupflags_check != Errno::Success.to_i32() {
     return lookupflags_check
@@ -2256,11 +2260,11 @@ pub fn path_filestat_set_times_impl(
 /// fd_advise - Advise on file access patterns (no-op)
 pub fn fd_advise_impl(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   _offset : Int64,
   _len : Int64,
-  advice : Int,
-) -> Int {
+  advice : Int32,
+) -> Int32 {
   if advice < 0 || advice > 5 {
     return Errno::Inval.to_i32()
   }
@@ -2275,10 +2279,10 @@ pub fn fd_advise_impl(
 /// fd_allocate - Allocate space for file
 pub fn fd_allocate_impl(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   offset : Int64,
   len : Int64,
-) -> Int {
+) -> Int32 {
   let native_fd = match
     regular_file_native_fd_with_rights(ctx, fd, right_fd_allocate) {
     Ok(fd) => fd
@@ -2291,9 +2295,9 @@ pub fn fd_allocate_impl(
 /// fd_fdstat_set_flags - Set file descriptor flags
 pub fn fd_fdstat_set_flags_impl(
   ctx : WasiContext,
-  fd : Int,
-  flags : Int,
-) -> Int {
+  fd : Int32,
+  flags : Int32,
+) -> Int32 {
   let known_fdflags_mask = 0x1F
   if (flags & known_fdflags_mask.lnot()) != 0 {
     return Errno::Inval.to_i32()
@@ -2349,10 +2353,10 @@ pub fn fd_fdstat_set_flags_impl(
 /// fd_fdstat_set_rights - Irrevocably reduce descriptor rights
 pub fn fd_fdstat_set_rights_impl(
   ctx : WasiContext,
-  fd : Int,
+  fd : Int32,
   fs_rights_base : Int64,
   fs_rights_inheriting : Int64,
-) -> Int {
+) -> Int32 {
   let stream = stdio_slot_for_fd(ctx, fd)
   let (base, inheriting) = match stream {
     Some(slot) => ctx.stdio_rights[slot]
@@ -2382,7 +2386,7 @@ pub fn fd_fdstat_set_rights_impl(
 }
 
 ///|
-fn preopen_fd_index(ctx : WasiContext, fd : Int) -> Int? {
+fn preopen_fd_index(ctx : WasiContext, fd : Int32) -> Int32? {
   if !ctx.open_files.contains(fd) {
     return None
   }
@@ -2396,7 +2400,11 @@ fn preopen_fd_index(ctx : WasiContext, fd : Int) -> Int? {
 }
 
 ///|
-fn renumber_preopen_entries(ctx : WasiContext, from : Int, to : Int) -> Unit {
+fn renumber_preopen_entries(
+  ctx : WasiContext,
+  from : Int32,
+  to : Int32,
+) -> Unit {
   let mut moved : (String, String)? = None
   let new_preopens : Array[(Fd, String, String)] = []
   for preopen in ctx.preopens {
@@ -2423,7 +2431,7 @@ fn renumber_preopen_entries(ctx : WasiContext, from : Int, to : Int) -> Unit {
 
 ///|
 /// fd_renumber - Renumber file descriptor
-pub fn fd_renumber_impl(ctx : WasiContext, from : Int, to : Int) -> Int {
+pub fn fd_renumber_impl(ctx : WasiContext, from : Int32, to : Int32) -> Int32 {
   if !ctx.is_valid_fd(from) || !ctx.is_valid_fd(to) {
     return Errno::Badf.to_i32()
   }
@@ -2479,12 +2487,12 @@ pub fn fd_renumber_impl(ctx : WasiContext, from : Int, to : Int) -> Int {
 pub fn path_symlink_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  old_path_ptr : Int,
-  old_path_len : Int,
-  dir_fd : Int,
-  new_path_ptr : Int,
-  new_path_len : Int,
-) -> Int {
+  old_path_ptr : Int32,
+  old_path_len : Int32,
+  dir_fd : Int32,
+  new_path_ptr : Int32,
+  new_path_len : Int32,
+) -> Int32 {
   let old_path = match read_path_from_memory(mem, old_path_ptr, old_path_len) {
     Ok(path) => path
     Err(errno) => return errno
@@ -2514,13 +2522,13 @@ pub fn path_symlink_impl(
 pub fn path_readlink_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  dir_fd : Int,
-  path_ptr : Int,
-  path_len : Int,
-  buf_ptr : Int,
-  buf_len : Int,
-  bufused_ptr : Int,
-) -> Int {
+  dir_fd : Int32,
+  path_ptr : Int32,
+  path_len : Int32,
+  buf_ptr : Int32,
+  buf_len : Int32,
+  bufused_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, buf_ptr, buf_len) ||
     !check_mem_range(mem, bufused_ptr, 4) {
     return Errno::Fault.to_i32()
@@ -2554,14 +2562,14 @@ pub fn path_readlink_impl(
 pub fn path_link_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  old_fd : Int,
-  old_flags : Int,
-  old_path_ptr : Int,
-  old_path_len : Int,
-  new_fd : Int,
-  new_path_ptr : Int,
-  new_path_len : Int,
-) -> Int {
+  old_fd : Int32,
+  old_flags : Int32,
+  old_path_ptr : Int32,
+  old_path_len : Int32,
+  new_fd : Int32,
+  new_path_ptr : Int32,
+  new_path_len : Int32,
+) -> Int32 {
   let lookupflags_check = validate_lookupflags(old_flags)
   if lookupflags_check != Errno::Success.to_i32() {
     return lookupflags_check
@@ -2605,13 +2613,13 @@ pub fn path_link_impl(
 pub fn sock_recv_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  ri_data_ptr : Int,
-  ri_data_len : Int,
-  ri_flags : Int,
-  ro_datalen_ptr : Int,
-  ro_flags_ptr : Int,
-) -> Int {
+  fd : Int32,
+  ri_data_ptr : Int32,
+  ri_data_len : Int32,
+  ri_flags : Int32,
+  ro_datalen_ptr : Int32,
+  ro_flags_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, ro_datalen_ptr, 4) ||
     !check_mem_range(mem, ro_flags_ptr, 2) {
     return Errno::Fault.to_i32()
@@ -2643,12 +2651,12 @@ pub fn sock_recv_impl(
 pub fn sock_send_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  si_data_ptr : Int,
-  si_data_len : Int,
-  si_flags : Int,
-  so_datalen_ptr : Int,
-) -> Int {
+  fd : Int32,
+  si_data_ptr : Int32,
+  si_data_len : Int32,
+  si_flags : Int32,
+  so_datalen_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, so_datalen_ptr, 4) {
     return Errno::Fault.to_i32()
   }
@@ -2685,7 +2693,7 @@ pub fn sock_send_impl(
 
 ///|
 /// sock_shutdown - Shutdown socket
-pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
+pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int32, how : Int32) -> Int32 {
   let sdflags_check = validate_sock_shutdown_sdflags(how)
   if sdflags_check != Errno::Success.to_i32() {
     return sdflags_check
@@ -2712,10 +2720,10 @@ pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
 pub fn sock_accept_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  fd : Int,
-  flags : Int,
-  result_fd_ptr : Int,
-) -> Int {
+  fd : Int32,
+  flags : Int32,
+  result_fd_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, result_fd_ptr, 4) {
     return Errno::Fault.to_i32()
   }
@@ -2771,7 +2779,10 @@ pub fn sock_accept_impl(
 
 ///|
 /// proc_raise - Send a signal to the process
-pub fn proc_raise_impl(signal : Int, handler? : ((Int) -> Int)? = None) -> Int {
+pub fn proc_raise_impl(
+  signal : Int32,
+  handler~ : ((Int32) -> Int32)? = None,
+) -> Int32 {
   let signal_check = validate_proc_raise_signal(signal)
   if signal_check != Errno::Success.to_i32() {
     return signal_check

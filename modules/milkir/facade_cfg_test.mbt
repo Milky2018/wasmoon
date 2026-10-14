@@ -30,8 +30,8 @@ test "public CFG reports diamond edges" {
       #|}
     ),
   )
-  let valid_blocks : Array[Int] = []
-  let exit_blocks : Array[Int] = []
+  let valid_blocks : Array[Int32] = []
+  let exit_blocks : Array[Int32] = []
   for block_id in -1..<=4 {
     if cfg.is_valid(block_id) {
       valid_blocks.push(block_id)
@@ -57,7 +57,7 @@ test "public CFG reports diamond edges" {
 ///|
 test "public CFG reports dominance and complete traversals" {
   let cfg = @milkir.CFG::build(build_public_diamond())
-  let dominance : Array[(Int, Int)] = []
+  let dominance : Array[(Int32, Int32)] = []
   for dominator in 0..<cfg.num_blocks {
     for block_id in 0..<cfg.num_blocks {
       if cfg.dominates(dominator, block_id) {

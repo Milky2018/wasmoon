@@ -249,9 +249,9 @@ fn append_alias(
 ///|
 fn resolve_outer_alias(
   outer_stack : Array[ComponentInstance],
-  depth : Int,
+  depth : Int32,
   sort : Sort,
-  idx : Int,
+  idx : Int32,
 ) -> ComponentExtern raise ComponentRuntimeError {
   if depth < 0 || depth >= outer_stack.length() {
     raise OuterAliasOutOfRange(depth)
@@ -308,10 +308,10 @@ fn build_inline_core_instance(
   state : BuildState,
 ) -> CoreInstance raise ComponentRuntimeError {
   let funcs : Map[String, CoreFuncRef] = Map([])
-  let tables : Map[String, Int] = Map([])
-  let memories : Map[String, Int] = Map([])
-  let globals : Map[String, Int] = Map([])
-  let tags : Map[String, Int] = Map([])
+  let tables : Map[String, Int32] = Map([])
+  let memories : Map[String, Int32] = Map([])
+  let globals : Map[String, Int32] = Map([])
+  let tags : Map[String, Int32] = Map([])
   for ex in exports {
     match resolve_sortidx(ex.sortidx, state) {
       CoreFunc(f) => funcs.set(ex.name, f)

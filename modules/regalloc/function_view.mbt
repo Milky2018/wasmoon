@@ -6,25 +6,25 @@
 /// block id for diagnostics and edge edits. The allocator may retain derived
 /// liveness data, but does not retain the view.
 pub(open) trait FunctionView {
-  fn value_count(Self) -> Int
-  fn value_class(Self, Int) -> RegClass
-  fn value_spill_size(Self, Int) -> Int
-  fn value_spill_alignment(Self, Int) -> Int
-  fn values_share_spill_slot(Self, Int, Int) -> Bool
-  fn entry_value_count(Self) -> Int
-  fn entry_value_at(Self, Int) -> VirtualReg
-  fn block_count(Self) -> Int
-  fn block_id_at(Self, Int) -> Int
-  fn block_parameter_count(Self, Int) -> Int
-  fn block_parameter_at(Self, Int, Int) -> VirtualReg
-  fn block_instruction_count(Self, Int) -> Int
-  fn block_instruction_at(Self, Int, Int) -> Int
-  fn block_successor_count(Self, Int) -> Int
-  fn block_successor_at(Self, Int, Int) -> Int
-  fn edge_argument_count(Self, Int, Int) -> Int
-  fn edge_argument_at(Self, Int, Int, Int) -> VirtualReg
-  fn instruction_operands(Self, Int) -> ArrayView[Operand]
-  fn instruction_clobbers(Self, Int) -> ArrayView[PhysicalReg]
+  fn value_count(Self) -> Int32
+  fn value_class(Self, Int32) -> RegClass
+  fn value_spill_size(Self, Int32) -> Int32
+  fn value_spill_alignment(Self, Int32) -> Int32
+  fn values_share_spill_slot(Self, Int32, Int32) -> Bool
+  fn entry_value_count(Self) -> Int32
+  fn entry_value_at(Self, Int32) -> VirtualReg
+  fn block_count(Self) -> Int32
+  fn block_id_at(Self, Int32) -> Int32
+  fn block_parameter_count(Self, Int32) -> Int32
+  fn block_parameter_at(Self, Int32, Int32) -> VirtualReg
+  fn block_instruction_count(Self, Int32) -> Int32
+  fn block_instruction_at(Self, Int32, Int32) -> Int32
+  fn block_successor_count(Self, Int32) -> Int32
+  fn block_successor_at(Self, Int32, Int32) -> Int32
+  fn edge_argument_count(Self, Int32, Int32) -> Int32
+  fn edge_argument_at(Self, Int32, Int32, Int32) -> VirtualReg
+  fn instruction_operands(Self, Int32) -> ArrayView[Operand]
+  fn instruction_clobbers(Self, Int32) -> ArrayView[PhysicalReg]
 }
 
 ///|

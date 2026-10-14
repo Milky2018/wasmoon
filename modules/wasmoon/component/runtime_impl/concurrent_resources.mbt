@@ -23,7 +23,7 @@ fn ConcurrentResources::new() -> ConcurrentResources {
 ///|
 fn ConcurrentResources::set_capacity(
   self : ConcurrentResources,
-  maximum : UInt,
+  maximum : UInt32,
 ) -> Unit {
   self.maximum.val = maximum.to_uint64().reinterpret_as_int64()
 }
@@ -174,6 +174,6 @@ pub extend ConcurrentResources with @debug.Debug::{to_repr}
 pub extend ConcurrentResourceLease with @debug.Debug::{to_repr}
 
 ///|
-pub fn[K, V] ConcurrentMap::length(self : ConcurrentMap[K, V]) -> Int {
+pub fn[K, V] ConcurrentMap::length(self : ConcurrentMap[K, V]) -> Int32 {
   self.entries.length()
 }

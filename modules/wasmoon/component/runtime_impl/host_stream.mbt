@@ -10,7 +10,7 @@ fn HostRuntimeState::new_closed_host_stream(
   self : HostRuntimeState,
   table : ResourceTable,
   bytes : Bytes,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   let stream_id = self.stream_table.next_stream_id[0]
   self.stream_table.next_stream_id[0] = stream_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
@@ -57,7 +57,7 @@ pub fn HostRuntimeState::new_host_byte_stream(
   self : HostRuntimeState,
   table : ResourceTable,
   bytes : Bytes,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   self.new_closed_host_stream(table, bytes)
 }
 
@@ -74,7 +74,7 @@ pub fn HostRuntimeState::new_host_value_stream(
   payload_ty : ValType,
   types : Array[TypeDef?],
   values : Array[ComponentValue],
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   stream_payload_info(Some(payload_ty), types) |> ignore
   let stream_id = self.stream_table.next_stream_id[0]
   self.stream_table.next_stream_id[0] = stream_id + 1
@@ -124,9 +124,9 @@ pub fn HostRuntimeState::new_host_value_stream_source(
   table : ResourceTable,
   payload_ty : ValType,
   types : Array[TypeDef?],
-  pull : (Int) -> HostValueStreamPoll raise ComponentRuntimeError,
+  pull : (Int32) -> HostValueStreamPoll raise ComponentRuntimeError,
   cancel : () -> Unit,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   stream_payload_info(Some(payload_ty), types) |> ignore
   errdefer cancel()
   let stream_id = self.stream_table.next_stream_id[0]
@@ -173,7 +173,7 @@ pub fn HostRuntimeState::new_host_value_future(
   element_type : ValType,
   types : Array[TypeDef?],
   value : ComponentValue,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   stream_payload_info(Some(element_type), types) |> ignore
   let future_id = self.async_state.next_future_id[0]
   self.async_state.next_future_id[0] = future_id + 1
@@ -223,7 +223,7 @@ pub fn HostRuntimeState::new_host_value_future_source(
   types : Array[TypeDef?],
   pull : () -> HostFutureValuePoll raise ComponentRuntimeError,
   cancel : () -> Unit raise ComponentRuntimeError,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   stream_payload_info(Some(element_type), types) |> ignore
   errdefer (cancel() catch { _ => () })
   let future_id = self.async_state.next_future_id[0]
@@ -271,7 +271,7 @@ pub fn HostRuntimeState::new_host_call_future(
   element_type : ValType,
   types : Array[TypeDef?],
   future : HostFuture,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   self.new_host_value_future_source(
     table,
     element_type,
@@ -298,8 +298,8 @@ pub fn HostRuntimeState::new_host_unit_result_future(
   table : ResourceTable,
   element_type : ValType,
   types : Array[TypeDef?],
-  error_case? : Int,
-) -> Int raise ComponentRuntimeError {
+  error_case? : Int32,
+) -> Int32 raise ComponentRuntimeError {
   let value = match error_case {
     Some(error_case) => {
       guard resolve_valtype(element_type, types) is TypeIdx(result_index) &&
@@ -330,7 +330,7 @@ pub fn HostRuntimeState::new_host_unit_result_future(
 pub fn HostRuntimeState::read_host_byte_stream(
   self : HostRuntimeState,
   table : ResourceTable,
-  readable : Int,
+  readable : Int32,
 ) -> HostByteStreamRead raise ComponentRuntimeError {
   let key = handle_key(table.id, readable)
   guard self.stream_table.endpoints.get(key) is Some(endpoint) &&
@@ -362,7 +362,7 @@ pub fn HostRuntimeState::read_host_byte_stream(
       let remaining = write.buf.values.length() - write.sent
       if remaining > 0 || (!write.event_enqueued && write.buf.values.is_empty()) {
         let bytes : Array[Byte] = []
-        let sent = write.sent + Int::min(remaining, 65536)
+        let sent = write.sent + Int32::min(remaining, 65536)
         for i in write.sent..<sent {
           guard write.buf.values[i] is U8(byte) else {
             raise HostCallError("host byte stream payload is not u8")
@@ -413,7 +413,7 @@ pub fn HostRuntimeState::read_host_byte_stream(
 pub fn HostRuntimeState::drop_host_readable_stream(
   self : HostRuntimeState,
   table : ResourceTable,
-  readable : Int,
+  readable : Int32,
 ) -> Unit raise ComponentRuntimeError {
   let key = handle_key(table.id, readable)
   guard self.stream_table.endpoints.get(key) is Some(endpoint) &&
@@ -485,7 +485,7 @@ pub fn HostRuntimeState::drop_host_readable_stream(
 pub fn HostRuntimeState::drop_host_readable_future(
   self : HostRuntimeState,
   table : ResourceTable,
-  readable : Int,
+  readable : Int32,
 ) -> Unit raise ComponentRuntimeError {
   let key = handle_key(table.id, readable)
   guard self.async_state.future_endpoints.get(key) is Some(endpoint) &&
@@ -547,8 +547,8 @@ pub fn HostRuntimeState::move_readable_stream(
   self : HostRuntimeState,
   source : ResourceTable,
   destination : ResourceTable,
-  handle : Int,
-) -> Int raise ComponentRuntimeError {
+  handle : Int32,
+) -> Int32 raise ComponentRuntimeError {
   guard self.async_state.resource_tables.contains(destination.id) &&
     self.async_state.stream_table.endpoints.get(handle_key(source.id, handle))
     is Some(endpoint) &&
@@ -571,8 +571,8 @@ pub fn HostRuntimeState::move_readable_future(
   self : HostRuntimeState,
   source : ResourceTable,
   destination : ResourceTable,
-  handle : Int,
-) -> Int raise ComponentRuntimeError {
+  handle : Int32,
+) -> Int32 raise ComponentRuntimeError {
   guard self.async_state.resource_tables.contains(destination.id) &&
     self.async_state.future_endpoints.get(handle_key(source.id, handle))
     is Some(endpoint) &&

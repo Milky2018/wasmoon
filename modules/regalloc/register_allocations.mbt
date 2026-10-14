@@ -10,21 +10,21 @@
 /// and can therefore be skipped after their first conflict.
 priv struct RegisterAllocationIndex {
   segments : Array[AllocationSegment]
-  segment_owner : Array[Int]
-  owner_run_count : Array[Int]
-  block_order : Array[Int]
-  roots : Array[Int]
-  left : Array[Int]
-  right : Array[Int]
-  parent : Array[Int]
-  previous_order : Array[Int]
-  next_order : Array[Int]
+  segment_owner : Array[Int32]
+  owner_run_count : Array[Int32]
+  block_order : Array[Int32]
+  roots : Array[Int32]
+  left : Array[Int32]
+  right : Array[Int32]
+  parent : Array[Int32]
+  previous_order : Array[Int32]
+  next_order : Array[Int32]
   starts : Array[Int64]
   ends : Array[Int64]
 }
 
 ///|
-fn[T] reset_dense_array(array : Array[T], length : Int, value : T) -> Unit {
+fn[T] reset_dense_array(array : Array[T], length : Int32, value : T) -> Unit {
   array.clear()
   for _ in 0..<length {
     array.push(value)
@@ -34,8 +34,8 @@ fn[T] reset_dense_array(array : Array[T], length : Int, value : T) -> Unit {
 ///|
 fn program_point_block_order(
   point : ProgramPoint,
-  block_order : Array[Int],
-) -> Int {
+  block_order : Array[Int32],
+) -> Int32 {
   if point.block >= 0 && point.block < block_order.length() {
     block_order[point.block]
   } else {
@@ -46,7 +46,7 @@ fn program_point_block_order(
 ///|
 fn ordered_program_point_key(
   point : ProgramPoint,
-  block_order : Array[Int],
+  block_order : Array[Int32],
 ) -> Int64 {
   // Bias the signed instruction into the low 32 bits. The ordered block id in
   // the high 32 bits then preserves ProgramPoint's lexicographic order exactly.
@@ -58,11 +58,11 @@ fn ordered_program_point_key(
 ///|
 fn RegisterAllocationIndex::for_session(
   session : AllocationSession,
-  register_count : Int,
+  register_count : Int32,
   segments : Array[AllocationSegment],
-  segment_owner : Array[Int],
-  owner_run_count : Array[Int],
-  block_order : Array[Int],
+  segment_owner : Array[Int32],
+  owner_run_count : Array[Int32],
+  block_order : Array[Int32],
 ) -> RegisterAllocationIndex {
   session.occupied_block_order.clear()
   for order in block_order {
@@ -99,7 +99,7 @@ fn RegisterAllocationIndex::for_session(
 ///|
 fn RegisterAllocationIndex::refresh_segment(
   self : RegisterAllocationIndex,
-  segment : Int,
+  segment : Int32,
 ) -> Unit {
   let range = self.segments[segment].range
   self.starts[segment] = ordered_program_point_key(
@@ -112,7 +112,7 @@ fn RegisterAllocationIndex::refresh_segment(
 ///|
 fn RegisterAllocationIndex::add_segment(
   self : RegisterAllocationIndex,
-  segment : Int,
+  segment : Int32,
 ) -> Unit {
   while self.left.length() <= segment {
     self.left.push(-1)
@@ -127,7 +127,7 @@ fn RegisterAllocationIndex::add_segment(
 }
 
 ///|
-fn allocation_node_priority(segment : Int) -> UInt {
+fn allocation_node_priority(segment : Int32) -> UInt32 {
   let mut value = (segment + 1).reinterpret_as_uint()
   value = value ^ (value << 13)
   value = value ^ (value >> 17)
@@ -135,7 +135,7 @@ fn allocation_node_priority(segment : Int) -> UInt {
 }
 
 ///|
-fn allocation_node_is_higher(left : Int, right : Int) -> Bool {
+fn allocation_node_is_higher(left : Int32, right : Int32) -> Bool {
   let left_priority = allocation_node_priority(left)
   let right_priority = allocation_node_priority(right)
   left_priority > right_priority ||
@@ -145,9 +145,9 @@ fn allocation_node_is_higher(left : Int, right : Int) -> Bool {
 ///|
 fn RegisterAllocationIndex::compare_segments(
   self : RegisterAllocationIndex,
-  left : Int,
-  right : Int,
-) -> Int {
+  left : Int32,
+  right : Int32,
+) -> Int32 {
   let by_end = self.ends[left].compare(self.ends[right])
   if by_end != 0 {
     by_end
@@ -159,10 +159,10 @@ fn RegisterAllocationIndex::compare_segments(
 ///|
 fn RegisterAllocationIndex::replace_parent_child(
   self : RegisterAllocationIndex,
-  register : Int,
-  parent : Int,
-  old_child : Int,
-  new_child : Int,
+  register : Int32,
+  parent : Int32,
+  old_child : Int32,
+  new_child : Int32,
 ) -> Unit {
   if parent < 0 {
     self.roots[register] = new_child
@@ -179,8 +179,8 @@ fn RegisterAllocationIndex::replace_parent_child(
 ///|
 fn RegisterAllocationIndex::rotate_left(
   self : RegisterAllocationIndex,
-  register : Int,
-  node : Int,
+  register : Int32,
+  node : Int32,
 ) -> Unit {
   let child = self.right[node]
   let previous_parent = self.parent[node]
@@ -197,8 +197,8 @@ fn RegisterAllocationIndex::rotate_left(
 ///|
 fn RegisterAllocationIndex::rotate_right(
   self : RegisterAllocationIndex,
-  register : Int,
-  node : Int,
+  register : Int32,
+  node : Int32,
 ) -> Unit {
   let child = self.left[node]
   let previous_parent = self.parent[node]
@@ -215,8 +215,8 @@ fn RegisterAllocationIndex::rotate_right(
 ///|
 fn RegisterAllocationIndex::insert(
   self : RegisterAllocationIndex,
-  register : Int,
-  segment : Int,
+  register : Int32,
+  segment : Int32,
 ) -> Unit {
   let owner = self.segment_owner[segment]
   while self.owner_run_count.length() <= owner {
@@ -290,8 +290,8 @@ fn RegisterAllocationIndex::insert(
 ///|
 fn RegisterAllocationIndex::remove(
   self : RegisterAllocationIndex,
-  register : Int,
-  segment : Int,
+  register : Int32,
+  segment : Int32,
 ) -> Unit {
   let previous = self.previous_order[segment]
   let next = self.next_order[segment]
@@ -335,9 +335,9 @@ fn RegisterAllocationIndex::remove(
 ///|
 fn RegisterAllocationIndex::seek(
   self : RegisterAllocationIndex,
-  register : Int,
+  register : Int32,
   point : ProgramPoint,
-  stack : Array[Int],
+  stack : Array[Int32],
 ) -> Unit {
   stack.clear()
   let point_key = ordered_program_point_key(point, self.block_order)
@@ -359,8 +359,8 @@ fn RegisterAllocationIndex::seek(
 ///|
 fn RegisterAllocationIndex::segment_end_before_start(
   self : RegisterAllocationIndex,
-  end_segment : Int,
-  start_segment : Int,
+  end_segment : Int32,
+  start_segment : Int32,
 ) -> Bool {
   self.ends[end_segment] < self.starts[start_segment]
 }
@@ -371,10 +371,10 @@ fn RegisterAllocationIndex::segment_end_before_start(
 /// small bundles retain the cheaper sequential path.
 fn RegisterAllocationIndex::first_not_ending_before(
   self : RegisterAllocationIndex,
-  segments : Array[Int],
-  from : Int,
-  occupied : Int,
-) -> Int {
+  segments : Array[Int32],
+  from : Int32,
+  occupied : Int32,
+) -> Int32 {
   let mut low = from
   let mut high = segments.length()
   while low < high {
@@ -391,8 +391,8 @@ fn RegisterAllocationIndex::first_not_ending_before(
 ///|
 fn RegisterAllocationIndex::segment_end_before_or_equal(
   self : RegisterAllocationIndex,
-  left : Int,
-  right : Int,
+  left : Int32,
+  right : Int32,
 ) -> Bool {
   self.ends[left] <= self.ends[right]
 }
@@ -400,8 +400,8 @@ fn RegisterAllocationIndex::segment_end_before_or_equal(
 ///|
 fn RegisterAllocationIndex::next(
   self : RegisterAllocationIndex,
-  stack : Array[Int],
-) -> Int? {
+  stack : Array[Int32],
+) -> Int32? {
   guard stack.pop() is Some(segment) else { return None }
   if self.next_order[segment] >= 0 {
     stack.push(self.next_order[segment])
@@ -412,7 +412,7 @@ fn RegisterAllocationIndex::next(
 ///|
 fn RegisterAllocationIndex::owner_is_contiguous(
   self : RegisterAllocationIndex,
-  owner : Int,
+  owner : Int32,
 ) -> Bool {
   self.owner_run_count[owner] == 1
 }
@@ -420,8 +420,8 @@ fn RegisterAllocationIndex::owner_is_contiguous(
 ///|
 fn RegisterAllocationIndex::skip_after(
   self : RegisterAllocationIndex,
-  segment : Int,
-  stack : Array[Int],
+  segment : Int32,
+  stack : Array[Int32],
 ) -> Unit {
   stack.clear()
   if self.next_order[segment] >= 0 {

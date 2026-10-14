@@ -11,9 +11,9 @@
 /// Stores call counts for each function
 pub(all) struct CallCounter {
   // Function index -> call count
-  counts : Map[Int, Int]
+  counts : Map[Int32, Int32]
   // Total calls tracked
-  mut total_calls : Int
+  mut total_calls : Int32
 }
 
 ///|
@@ -23,7 +23,7 @@ pub fn CallCounter::CallCounter() -> CallCounter {
 
 ///|
 /// Increment the call count for a function
-pub fn CallCounter::increment(self : CallCounter, func_idx : Int) -> Int {
+pub fn CallCounter::increment(self : CallCounter, func_idx : Int32) -> Int32 {
   self.total_calls = self.total_calls + 1
   let current = match self.counts.get(func_idx) {
     Some(n) => n
@@ -36,7 +36,7 @@ pub fn CallCounter::increment(self : CallCounter, func_idx : Int) -> Int {
 
 ///|
 /// Get the call count for a function
-pub fn CallCounter::get_count(self : CallCounter, func_idx : Int) -> Int {
+pub fn CallCounter::get_count(self : CallCounter, func_idx : Int32) -> Int32 {
   match self.counts.get(func_idx) {
     Some(n) => n
     None => 0
@@ -45,7 +45,7 @@ pub fn CallCounter::get_count(self : CallCounter, func_idx : Int) -> Int {
 
 ///|
 /// Reset counter for a specific function
-pub fn CallCounter::reset(self : CallCounter, func_idx : Int) -> Unit {
+pub fn CallCounter::reset(self : CallCounter, func_idx : Int32) -> Unit {
   self.counts.remove(func_idx)
 }
 
@@ -58,13 +58,13 @@ pub fn CallCounter::clear(self : CallCounter) -> Unit {
 
 ///|
 /// Get total number of calls tracked
-pub fn CallCounter::total(self : CallCounter) -> Int {
+pub fn CallCounter::total(self : CallCounter) -> Int32 {
   self.total_calls
 }
 
 ///|
 /// Get the number of unique functions called
-pub fn CallCounter::unique_functions(self : CallCounter) -> Int {
+pub fn CallCounter::unique_functions(self : CallCounter) -> Int32 {
   let mut count = 0
   for _ in self.counts {
     count = count + 1
@@ -78,9 +78,9 @@ pub fn CallCounter::unique_functions(self : CallCounter) -> Int {
 /// Configuration for hot function detection
 pub(all) struct HotThreshold {
   // Number of calls before a function is considered "warm"
-  warm_threshold : Int
+  warm_threshold : Int32
   // Number of calls before a function is considered "hot"
-  hot_threshold : Int
+  hot_threshold : Int32
 }
 
 ///|
@@ -125,7 +125,7 @@ pub impl Show for FunctionTemperature with fn output(self, logger) {
 ///|
 /// Determines the temperature of a function based on its call count
 pub fn get_temperature(
-  count : Int,
+  count : Int32,
   threshold : HotThreshold,
 ) -> FunctionTemperature {
   if count >= threshold.hot_threshold {
@@ -147,11 +147,11 @@ pub(all) struct Profiler {
   // Hot threshold configuration
   threshold : HotThreshold
   // Functions that have been identified as hot
-  hot_functions : @hashset.HashSet[Int]
+  hot_functions : @hashset.HashSet[Int32]
   // Functions that have been marked for compilation
-  pending_compilation : @hashset.HashSet[Int]
+  pending_compilation : @hashset.HashSet[Int32]
   // Functions that have been compiled
-  compiled_functions : @hashset.HashSet[Int]
+  compiled_functions : @hashset.HashSet[Int32]
 }
 
 ///|
@@ -168,7 +168,10 @@ pub fn Profiler::Profiler(threshold : HotThreshold) -> Profiler {
 ///|
 /// Record a function call and return whether it should be compiled
 /// Returns: (new_count, should_compile)
-pub fn Profiler::record_call(self : Profiler, func_idx : Int) -> (Int, Bool) {
+pub fn Profiler::record_call(
+  self : Profiler,
+  func_idx : Int32,
+) -> (Int32, Bool) {
   let count = self.counter.increment(func_idx)
 
   // Check if we've reached the hot threshold
@@ -186,27 +189,27 @@ pub fn Profiler::record_call(self : Profiler, func_idx : Int) -> (Int, Bool) {
 
 ///|
 /// Mark a function as compiled
-pub fn Profiler::mark_compiled(self : Profiler, func_idx : Int) -> Unit {
+pub fn Profiler::mark_compiled(self : Profiler, func_idx : Int32) -> Unit {
   self.pending_compilation.remove(func_idx)
   self.compiled_functions.add(func_idx)
 }
 
 ///|
 /// Check if a function is compiled
-pub fn Profiler::is_compiled(self : Profiler, func_idx : Int) -> Bool {
+pub fn Profiler::is_compiled(self : Profiler, func_idx : Int32) -> Bool {
   self.compiled_functions.contains(func_idx)
 }
 
 ///|
 /// Check if a function should use JIT code
-pub fn Profiler::should_use_jit(self : Profiler, func_idx : Int) -> Bool {
+pub fn Profiler::should_use_jit(self : Profiler, func_idx : Int32) -> Bool {
   self.compiled_functions.contains(func_idx)
 }
 
 ///|
 /// Get list of functions pending compilation
-pub fn Profiler::get_pending(self : Profiler) -> Array[Int] {
-  let result : Array[Int] = []
+pub fn Profiler::get_pending(self : Profiler) -> Array[Int32] {
+  let result : Array[Int32] = []
   for func_idx in self.pending_compilation {
     result.push(func_idx)
   }
@@ -217,7 +220,7 @@ pub fn Profiler::get_pending(self : Profiler) -> Array[Int] {
 /// Get temperature for a specific function
 pub fn Profiler::get_function_temperature(
   self : Profiler,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> FunctionTemperature {
   let count = self.counter.get_count(func_idx)
   get_temperature(count, self.threshold)
@@ -225,7 +228,7 @@ pub fn Profiler::get_function_temperature(
 
 ///|
 /// Get profiling statistics
-pub fn Profiler::stats(self : Profiler) -> (Int, Int, Int, Int) {
+pub fn Profiler::stats(self : Profiler) -> (Int32, Int32, Int32, Int32) {
   // (total_calls, unique_functions, hot_count, compiled_count)
   let mut hot_count = 0
   for _ in self.hot_functions {

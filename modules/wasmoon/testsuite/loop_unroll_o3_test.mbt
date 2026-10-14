@@ -2,7 +2,7 @@
 fn require_o3_jit_match(
   source : String,
   function_name : String,
-  expected_trap? : String? = None,
+  expected_trap~ : String? = None,
 ) -> Unit raise {
   match @testsuite.run_interp_only(source, function_name, []) {
     Ok(_) => if expected_trap is Some(_) { fail("expected interpreter trap") }
@@ -111,8 +111,8 @@ fn generated_counted_loop_wat(
   step : String,
   condition : String,
   update : String,
-  reverse_compare? : Bool = false,
-  continue_on_true? : Bool = false,
+  reverse_compare~ : Bool = false,
+  continue_on_true~ : Bool = false,
 ) -> String {
   let compare_operands = if reverse_compare {
     "        __TYPE__.const __BOUND__\n        local.get $i"

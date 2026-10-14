@@ -26,9 +26,9 @@ fn field_token(text : String) -> Bool {
   }
   for code in text {
     if !(code
-      is ('a'..='z'
-      | 'A'..='Z'
-      | '0'..='9'
+      is ('a'..<='z'
+      | 'A'..<='Z'
+      | '0'..<='9'
       | '!'
       | '#'
       | '$'
@@ -70,7 +70,7 @@ fn field_forbidden(name : String) -> Bool {
 
 ///|
 pub fn HttpFields::from_list(
-  entries? : Array[(String, Bytes)] = [],
+  entries~ : Array[(String, Bytes)] = [],
 ) -> Result[HttpFields, HeaderError] {
   let fields = { entries: [], immutable: false, }
   for entry in entries {

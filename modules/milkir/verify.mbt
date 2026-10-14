@@ -1,21 +1,25 @@
 ///|
 pub suberror VerifyError {
-  MissingTerminator(block_id~ : Int)
+  MissingTerminator(block_id~ : Int32)
   EmptyFunction
-  UndefinedValue(value_id~ : Int)
-  ForeignValue(value_id~ : Int)
-  ForeignBlock(block_id~ : Int)
-  ForeignInstruction(inst_id~ : Int)
-  ForeignGlobalValue(global_value_id~ : Int)
-  DuplicateBlockId(block_id~ : Int)
-  DuplicateValueDefinition(value_id~ : Int)
-  DuplicateInstructionId(inst_id~ : Int)
-  UnplacedInstruction(inst_id~ : Int)
-  InstructionPlacementMismatch(inst_id~ : Int)
-  UseBeforeDefinition(value_id~ : Int)
-  NonDominatingUse(value_id~ : Int, defining_block~ : Int, use_block~ : Int)
-  InstructionOperandMismatch(inst_id~ : Int)
-  InvalidBlockTarget(block_id~ : Int)
+  UndefinedValue(value_id~ : Int32)
+  ForeignValue(value_id~ : Int32)
+  ForeignBlock(block_id~ : Int32)
+  ForeignInstruction(inst_id~ : Int32)
+  ForeignGlobalValue(global_value_id~ : Int32)
+  DuplicateBlockId(block_id~ : Int32)
+  DuplicateValueDefinition(value_id~ : Int32)
+  DuplicateInstructionId(inst_id~ : Int32)
+  UnplacedInstruction(inst_id~ : Int32)
+  InstructionPlacementMismatch(inst_id~ : Int32)
+  UseBeforeDefinition(value_id~ : Int32)
+  NonDominatingUse(
+    value_id~ : Int32,
+    defining_block~ : Int32,
+    use_block~ : Int32
+  )
+  InstructionOperandMismatch(inst_id~ : Int32)
+  InvalidBlockTarget(block_id~ : Int32)
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)
   UnverifiableInstruction(message~ : String)
@@ -23,8 +27,8 @@ pub suberror VerifyError {
 
 ///|
 priv struct InstructionPlacement {
-  block_id : Int
-  position : Int
+  block_id : Int32
+  position : Int32
 }
 
 ///|
@@ -299,8 +303,8 @@ fn verify_defined(
   value : Value,
   func : Function,
   placements : Array[InstructionPlacement?],
-  use_block : Int,
-  use_position : Int,
+  use_block : Int32,
+  use_position : Int32,
   dominance : Dominance,
 ) -> Unit raise VerifyError {
   require_owned_value(func, value)
@@ -365,8 +369,8 @@ fn verify_instruction_operands(inst : Inst) -> Unit raise VerifyError {
 
 ///|
 fn require_arity(
-  actual : Int,
-  expected : Int,
+  actual : Int32,
+  expected : Int32,
   context : String,
 ) -> Unit raise VerifyError {
   if actual != expected {
@@ -389,7 +393,7 @@ fn require_same_type(
 
 ///|
 fn require_block(
-  block_id : Int,
+  block_id : Int32,
   blocks : Array[Block?],
 ) -> Block raise VerifyError {
   if block_id < 0 || block_id >= blocks.length() {
@@ -403,14 +407,14 @@ fn require_block(
 
 ///|
 fn verify_block_args(
-  block_id : Int,
+  block_id : Int32,
   args : Array[Value],
   blocks : Array[Block?],
   func : Function,
   placements : Array[InstructionPlacement?],
   edge : String,
-  use_block : Int,
-  use_position : Int,
+  use_block : Int32,
+  use_position : Int32,
   dominance : Dominance,
 ) -> Unit raise VerifyError {
   let block = require_block(block_id, blocks)
@@ -444,8 +448,8 @@ fn verify_inst(
   func : Function,
   inst : Inst,
   placements : Array[InstructionPlacement?],
-  use_block : Int,
-  use_position : Int,
+  use_block : Int32,
+  use_position : Int32,
   dominance : Dominance,
 ) -> Unit raise VerifyError {
   for arg in inst.args {
@@ -503,8 +507,8 @@ fn verify_terminator(
   placements : Array[InstructionPlacement?],
   blocks : Array[Block?],
   result_types : Array[Type],
-  use_block : Int,
-  use_position : Int,
+  use_block : Int32,
+  use_position : Int32,
   dominance : Dominance,
 ) -> Unit raise VerifyError {
   match term {

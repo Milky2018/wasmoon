@@ -18,18 +18,18 @@ priv struct ValidationContext {
   bulk_memory : Bool
   stack_switching : Bool
   types : Array[@types.SubType] // GC: now stores SubType
-  funcs : Array[Int] // type indices
+  funcs : Array[Int32] // type indices
   tables : Array[@types.TableType]
   mems : Array[@types.MemoryType]
   globals : Array[@types.GlobalType]
   tags : Array[@types.FuncType] // Control tags may also return values when stack switching is enabled.
   elems : Array[@types.ValueType] // element segment types
-  data_count : Int // number of data segments
+  data_count : Int32 // number of data segments
   locals : Array[@types.ValueType] // current function's locals
   labels : Array[LabelInfo] // label stack for control flow
   returns : Array[@types.ValueType] // current function's return types
   local_init : Array[Bool] // tracks which locals have been initialized (for non-nullable refs)
-  declared_funcs : @hashset.HashSet[Int] // functions declared in elem/global (for ref.func validation)
+  declared_funcs : @hashset.HashSet[Int32] // functions declared in elem/global (for ref.func validation)
   subtyping_ctx : @types.SubtypingContext // for subtype checking
 }
 
@@ -51,7 +51,7 @@ priv struct ValidationContext {
 /// Get the function type at `idx`, or reject the module.
 fn ValidationContext::get_func_type(
   self : ValidationContext,
-  idx : Int,
+  idx : Int32,
 ) -> @types.FuncType raise ValidationError {
   if idx < 0 || idx >= self.types.length() {
     raise InvalidTypeIndex(idx)
@@ -66,7 +66,7 @@ fn ValidationContext::get_func_type(
 /// Get the struct type at `idx`, or reject the module.
 fn ValidationContext::get_struct_type(
   self : ValidationContext,
-  idx : Int,
+  idx : Int32,
 ) -> @types.StructType raise ValidationError {
   if idx < 0 || idx >= self.types.length() {
     raise InvalidTypeIndex(idx)
@@ -81,7 +81,7 @@ fn ValidationContext::get_struct_type(
 /// Get the array type at `idx`, or reject the module.
 fn ValidationContext::get_array_type(
   self : ValidationContext,
-  idx : Int,
+  idx : Int32,
 ) -> @types.ArrayType raise ValidationError {
   if idx < 0 || idx >= self.types.length() {
     raise InvalidTypeIndex(idx)
@@ -139,7 +139,7 @@ fn collect_value_types_from_subtype(
 /// Collect function indices referenced by ref.func in an instruction sequence
 fn collect_declared_funcs(
   instrs : Array[@types.Instruction],
-  declared : @hashset.HashSet[Int],
+  declared : @hashset.HashSet[Int32],
 ) -> Unit {
   for instr in instrs {
     if instr is RefFunc(func_idx) {
@@ -151,11 +151,11 @@ fn collect_declared_funcs(
 ///|
 fn ValidationContext::ValidationContext(
   mod : @types.Module,
-  bulk_memory? : Bool = true,
-  stack_switching? : Bool = false,
+  bulk_memory~ : Bool = true,
+  stack_switching~ : Bool = false,
 ) -> ValidationContext raise ValidationError {
   // Collect function types (imports + defined functions)
-  let funcs : Array[Int] = []
+  let funcs : Array[Int32] = []
   for imp in mod.imports {
     if imp.desc is Func(type_idx) {
       funcs.push(type_idx)
@@ -204,7 +204,7 @@ fn ValidationContext::ValidationContext(
   // module to reject here, where the context is still being built, rather
   // than a crash on the way in.
   let tags : Array[@types.FuncType] = []
-  fn tag_type(type_idx : Int) -> @types.FuncType raise ValidationError {
+  fn tag_type(type_idx : Int32) -> @types.FuncType raise ValidationError {
     guard mod.func_type_at(type_idx) is Some(ft) else {
       raise TypeMismatch("tag type at index \{type_idx} is not a function type")
     }
@@ -224,7 +224,7 @@ fn ValidationContext::ValidationContext(
   }
 
   // Collect declared functions from elem segments and global inits
-  let declared_funcs : @hashset.HashSet[Int] = HashSet([])
+  let declared_funcs : @hashset.HashSet[Int32] = HashSet([])
   // Functions referenced in element segments
   for elem in mod.elems {
     for init in elem.init {
@@ -307,13 +307,13 @@ fn is_ref_type(ty : @types.ValueType) -> Bool {
 /// Validate that any type indices in a value type are valid
 fn validate_value_type(
   ty : @types.ValueType,
-  num_types : Int,
-  stack_switching? : Bool = false,
+  num_types : Int32,
+  stack_switching~ : Bool = false,
 ) -> Unit raise ValidationError {
   if ty.is_continuation_ref() && !stack_switching {
     raise TypeMismatch("stack switching is not enabled")
   }
-  let idx : Int? = match ty {
+  let idx : Int32? = match ty {
     RefFuncTyped(i)
     | RefNullFuncTyped(i)
     | RefContTyped(i)
@@ -335,10 +335,10 @@ fn validate_value_type(
 /// must be in the same rec group.
 fn validate_type_forward_refs(
   ty : @types.ValueType,
-  type_idx : Int,
-  type_rec_groups : Array[Int],
+  type_idx : Int32,
+  type_rec_groups : Array[Int32],
 ) -> Unit raise ValidationError {
-  let ref_idx : Int? = match ty {
+  let ref_idx : Int32? = match ty {
     RefFuncTyped(i)
     | RefNullFuncTyped(i)
     | RefContTyped(i)

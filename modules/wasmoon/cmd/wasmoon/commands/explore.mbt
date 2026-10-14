@@ -16,13 +16,13 @@ priv struct CompiledFunc {
 /// Explore WASM compilation process
 pub fn run_explore(
   wasm_path : String,
-  func_index : Int?,
-  opt_level : Int,
+  func_index : Int32?,
+  opt_level : Int32,
   stages : Array[String],
   html_output : Bool,
   debug : Bool,
-  target_name? : String = "host",
-) -> Int {
+  target_name~ : String = "host",
+) -> Int32 {
   run_explore_with_compiler(
     wasm_path,
     func_index,
@@ -38,14 +38,14 @@ pub fn run_explore(
 ///|
 fn run_explore_with_compiler(
   wasm_path : String,
-  func_index : Int?,
-  opt_level : Int,
+  func_index : Int32?,
+  opt_level : Int32,
   stages : Array[String],
   html_output : Bool,
   debug : Bool,
   target_name : String,
   compile : (() -> @wasmoon_jit.JitPipelineDiagnostics raise) -> @wasmoon_jit.JitPipelineDiagnostics raise,
-) -> Int {
+) -> Int32 {
   debug |> ignore
   // Parse stages - empty means show all
   let show_all = stages.is_empty()
@@ -87,7 +87,7 @@ fn run_explore_with_compiler(
   // Determine which functions to explore before emitting any report output.
   // User provides an absolute WebAssembly function index (including imports),
   // matching the indices shown in JIT diagnostics.
-  let func_indices : Array[Int] = match func_index {
+  let func_indices : Array[Int32] = match func_index {
     Some(abs_idx) => {
       let local_idx = abs_idx - num_imports
       if local_idx < 0 || local_idx >= mod_.codes.length() {

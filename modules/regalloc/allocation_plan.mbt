@@ -1,8 +1,8 @@
 ///|
 pub(all) enum EditPosition {
-  Before(Int)
-  After(Int)
-  Edge(source_block~ : Int, successor_index~ : Int)
+  Before(Int32)
+  After(Int32)
+  Edge(source_block~ : Int32, successor_index~ : Int32)
 } derive(Eq, Hash, Debug)
 
 ///|
@@ -15,19 +15,19 @@ pub(all) struct AllocationEdit {
 
 ///|
 pub struct OperandAssignment {
-  instruction : Int
-  operand : Int
+  instruction : Int32
+  operand : Int32
   location : Location
 } derive(Eq, Debug)
 
 ///|
 pub struct SpillSlotSpec {
-  size : Int
-  alignment : Int
+  size : Int32
+  alignment : Int32
 } derive(Eq, Debug)
 
 ///|
-pub fn SpillSlotSpec::new(size : Int, alignment : Int) -> SpillSlotSpec {
+pub fn SpillSlotSpec::new(size : Int32, alignment : Int32) -> SpillSlotSpec {
   { size, alignment, }
 }
 
@@ -37,7 +37,7 @@ pub struct AllocationPlan {
   priv operand_locations : Array[Array[Location?]]
   priv edits : Array[AllocationEdit]
   priv spill_slots : Array[SpillSlotSpec]
-  priv spill_slot_owners : Array[Int]
+  priv spill_slot_owners : Array[Int32]
 }
 
 ///|
@@ -56,7 +56,7 @@ pub impl Show for AllocationPlan with fn output(self, logger) {
 }
 
 ///|
-fn AllocationPlan::new(value_count : Int) -> AllocationPlan {
+fn AllocationPlan::new(value_count : Int32) -> AllocationPlan {
   {
     value_locations: Array::make(value_count, None),
     operand_locations: [],
@@ -80,8 +80,8 @@ fn AllocationPlan::assign_value(
 ///|
 fn AllocationPlan::assign_operand(
   self : AllocationPlan,
-  instruction : Int,
-  operand : Int,
+  instruction : Int32,
+  operand : Int32,
   location : Location,
 ) -> Unit {
   while self.operand_locations.length() <= instruction {
@@ -105,10 +105,10 @@ fn AllocationPlan::add_edit(
 ///|
 fn AllocationPlan::create_spill_slot(
   self : AllocationPlan,
-  owner : Int,
-  size : Int,
-  alignment : Int,
-) -> Int {
+  owner : Int32,
+  size : Int32,
+  alignment : Int32,
+) -> Int32 {
   let slot = self.spill_slots.length()
   self.spill_slots.push({ size, alignment, })
   self.spill_slot_owners.push(owner)
@@ -142,7 +142,7 @@ fn[F : FunctionView] AllocationPlan::seal_operand_storage(
 /// elsewhere until a transition returns it here.
 pub fn AllocationPlan::value_location(
   self : AllocationPlan,
-  value : Int,
+  value : Int32,
 ) -> Location? {
   self.value_locations.get(value).bind(location => location)
 }
@@ -150,8 +150,8 @@ pub fn AllocationPlan::value_location(
 ///|
 pub fn AllocationPlan::operand_location(
   self : AllocationPlan,
-  instruction : Int,
-  operand : Int,
+  instruction : Int32,
+  operand : Int32,
 ) -> Location? {
   self.operand_locations
   .get(instruction)
@@ -174,15 +174,17 @@ pub fn AllocationPlan::operand_assignments(
 }
 
 ///|
-pub fn AllocationPlan::operand_instruction_count(self : AllocationPlan) -> Int {
+pub fn AllocationPlan::operand_instruction_count(
+  self : AllocationPlan,
+) -> Int32 {
   self.operand_locations.length()
 }
 
 ///|
 pub fn AllocationPlan::instruction_operand_count(
   self : AllocationPlan,
-  instruction : Int,
-) -> Int {
+  instruction : Int32,
+) -> Int32 {
   match self.operand_locations.get(instruction) {
     Some(locations) => locations.length()
     None => 0
@@ -195,27 +197,27 @@ pub fn AllocationPlan::edits(self : AllocationPlan) -> Array[AllocationEdit] {
 }
 
 ///|
-pub fn AllocationPlan::edit_count(self : AllocationPlan) -> Int {
+pub fn AllocationPlan::edit_count(self : AllocationPlan) -> Int32 {
   self.edits.length()
 }
 
 ///|
 pub fn AllocationPlan::edit_at(
   self : AllocationPlan,
-  index : Int,
+  index : Int32,
 ) -> AllocationEdit? {
   self.edits.get(index)
 }
 
 ///|
-pub fn AllocationPlan::spill_count(self : AllocationPlan) -> Int {
+pub fn AllocationPlan::spill_count(self : AllocationPlan) -> Int32 {
   self.spill_slots.length()
 }
 
 ///|
 pub fn AllocationPlan::spill_slot(
   self : AllocationPlan,
-  index : Int,
+  index : Int32,
 ) -> SpillSlotSpec? {
   self.spill_slots.get(index)
 }
@@ -223,8 +225,8 @@ pub fn AllocationPlan::spill_slot(
 ///|
 pub fn AllocationPlan::spill_slot_owner(
   self : AllocationPlan,
-  index : Int,
-) -> Int? {
+  index : Int32,
+) -> Int32? {
   self.spill_slot_owners.get(index)
 }
 

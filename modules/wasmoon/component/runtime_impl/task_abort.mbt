@@ -63,8 +63,8 @@ fn abort_task_children(async_state : AsyncState, root : Int64) -> Unit {
       owned_handles.set(handle, true)
     }
   }
-  let slots : Map[Int, Bool] = Map([])
-  let handles : Array[(Int, Int)] = []
+  let slots : Map[Int32, Bool] = Map([])
+  let handles : Array[(Int32, Int32)] = []
   for i = tasks.length() - 1; i > 0; i = i - 1 {
     let id = tasks[i]
     if async_state.tasks.read_subtasks(id) is Some(subtask) {
@@ -80,7 +80,7 @@ fn abort_task_children(async_state : AsyncState, root : Int64) -> Unit {
     cleanup_thread_task(async_state, id)
   }
   discard_task_children(async_state, root)
-  let queue_keys : Array[Int] = []
+  let queue_keys : Array[Int32] = []
   for key, _ in async_state.pending_by_instance {
     queue_keys.push(key)
   }

@@ -8,7 +8,7 @@ test "resource destructor dispatch restores task context on return and trap" {
     push_task(state, caller, true)
     let store = @runtime.Store::Store()
     defer store.close()
-    let observed : Array[(Int?, Bool, Bool)] = []
+    let observed : Array[(Int32?, Bool, Bool)] = []
     let engine = CoreExecutionEngine(fn(_, _, _) { () }, fn(
       _,
       _,

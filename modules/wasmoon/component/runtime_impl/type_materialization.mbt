@@ -29,7 +29,7 @@ fn clone_materialized_optional_type(
 ///|
 fn count_component_type_slots(
   component : Component,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   let mut count = 0
   for section in component.binary.sections {
     try {

@@ -8,21 +8,21 @@ pub(all) suberror ComponentRuntimeError {
   UnknownImport(String)
   ImportTypeMismatch(String)
   UnknownExport(String)
-  InvalidTypeIndex(Int)
-  InvalidFuncIndex(Int)
-  InvalidValueIndex(Int)
-  InvalidComponentIndex(Int)
-  InvalidInstanceIndex(Int)
-  InvalidCoreModuleIndex(Int)
-  InvalidCoreInstanceIndex(Int)
-  InvalidCoreFuncIndex(Int)
-  InvalidCoreTableIndex(Int)
-  InvalidCoreMemoryIndex(Int)
-  InvalidCoreGlobalIndex(Int)
-  InvalidCoreTagIndex(Int)
-  InvalidCoreTypeIndex(Int)
-  InvalidTypeDef(Int)
-  InvalidCanonFuncType(Int)
+  InvalidTypeIndex(Int32)
+  InvalidFuncIndex(Int32)
+  InvalidValueIndex(Int32)
+  InvalidComponentIndex(Int32)
+  InvalidInstanceIndex(Int32)
+  InvalidCoreModuleIndex(Int32)
+  InvalidCoreInstanceIndex(Int32)
+  InvalidCoreFuncIndex(Int32)
+  InvalidCoreTableIndex(Int32)
+  InvalidCoreMemoryIndex(Int32)
+  InvalidCoreGlobalIndex(Int32)
+  InvalidCoreTagIndex(Int32)
+  InvalidCoreTypeIndex(Int32)
+  InvalidTypeDef(Int32)
+  InvalidCanonFuncType(Int32)
   MissingCanonMemory
   MissingCanonRealloc
   UnsupportedStringEncoding
@@ -36,12 +36,12 @@ pub(all) suberror ComponentRuntimeError {
   /// A resumable component invocation was cancelled.
   Cancelled
   /// Structured termination requested by an embedding-provided command host.
-  HostExit(Int)
-  InvalidStartResultCount(Int)
-  OuterAliasOutOfRange(Int)
+  HostExit(Int32)
+  InvalidStartResultCount(Int32)
+  OuterAliasOutOfRange(Int32)
   AliasTargetMismatch(String)
   DuplicateHostExport(String)
-  InvalidHostTypeReference(Int)
+  InvalidHostTypeReference(Int32)
   /// A host readiness source has already been installed on this runtime.
   HostEventLoopAlreadyInstalled
   /// The same component invocation is already executing a scheduling round.

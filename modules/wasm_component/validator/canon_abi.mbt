@@ -102,7 +102,7 @@ fn validate_canon(
   c : @component.Canon,
   type_table : Array[@component.TypeDef?],
   local_resource_types : Array[Bool],
-  type_bound : Int,
+  type_bound : Int32,
   core_memory_types : Array[@types.MemoryType?],
   core_func_types : Array[@types.FuncType?],
   func_types : Array[@component.FuncType?],
@@ -364,7 +364,7 @@ fn validate_canon(
 fn valtype_refers_to_resource(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  visiting : Map[Int, Int],
+  visiting : Map[Int32, Int32],
 ) -> Bool {
   match ty {
     Prim(_) => false
@@ -389,7 +389,7 @@ fn valtype_refers_to_resource(
 fn externdesc_refers_to_resource(
   desc : @component.ExternDesc,
   type_table : Array[@component.TypeDef?],
-  visiting : Map[Int, Int],
+  visiting : Map[Int32, Int32],
 ) -> Bool {
   match desc {
     Type(b) =>
@@ -492,7 +492,7 @@ fn externdesc_refers_to_resource(
 fn typedef_refers_to_resource(
   td : @component.TypeDef,
   type_table : Array[@component.TypeDef?],
-  visiting : Map[Int, Int],
+  visiting : Map[Int32, Int32],
 ) -> Bool {
   match td {
     ResourceType(_, _, _, _) => true
@@ -623,7 +623,7 @@ fn typedef_refers_to_resource(
 /// This is a lightweight check used to reject pathological type graphs that
 /// explode when expanded (wasm-tools' `very-nested.wast`). The component-spec
 /// limit is 100_000.
-fn clamp_type_size(size : Int) -> Int {
+fn clamp_type_size(size : Int32) -> Int32 {
   if size > 100000 {
     100001
   } else {
@@ -632,7 +632,7 @@ fn clamp_type_size(size : Int) -> Int {
 }
 
 ///|
-fn add_type_size(acc : Int, delta : Int) -> Int {
+fn add_type_size(acc : Int32, delta : Int32) -> Int32 {
   if acc > 100000 {
     return 100001
   }
@@ -642,7 +642,7 @@ fn add_type_size(acc : Int, delta : Int) -> Int {
 }
 
 ///|
-fn local_type_size_of(idx : Int, local_sizes : Array[Int]) -> Int {
+fn local_type_size_of(idx : Int32, local_sizes : Array[Int32]) -> Int32 {
   if idx < 0 || idx >= local_sizes.length() {
     return 1
   }
@@ -652,8 +652,8 @@ fn local_type_size_of(idx : Int, local_sizes : Array[Int]) -> Int {
 ///|
 fn externdesc_type_size(
   desc : @component.ExternDesc,
-  local_sizes : Array[Int],
-) -> Int {
+  local_sizes : Array[Int32],
+) -> Int32 {
   match desc {
     ComponentType(tyidx) => local_type_size_of(tyidx, local_sizes)
     InstanceType(tyidx) => local_type_size_of(tyidx, local_sizes)
@@ -667,9 +667,9 @@ fn externdesc_type_size(
 ///|
 fn effective_typedef_size(
   td : @component.TypeDef,
-  outer_sizes : Array[Int],
-) -> Int {
-  fn valtype_size(ty : @component.ValType) -> Int {
+  outer_sizes : Array[Int32],
+) -> Int32 {
+  fn valtype_size(ty : @component.ValType) -> Int32 {
     match ty {
       Prim(_) => 1
       TypeIdx(idx) => local_type_size_of(idx, outer_sizes)
@@ -678,7 +678,7 @@ fn effective_typedef_size(
 
   match td {
     ComponentType(decls) => {
-      let local_sizes : Array[Int] = []
+      let local_sizes : Array[Int32] = []
       let mut total = 1
       for d in decls {
         match d {
@@ -719,7 +719,7 @@ fn effective_typedef_size(
       total
     }
     InstanceType(decls) => {
-      let local_sizes : Array[Int] = []
+      let local_sizes : Array[Int32] = []
       let mut total = 1
       for d in decls {
         match d {

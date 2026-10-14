@@ -34,10 +34,10 @@ pub impl Show for WasmCompilerPipelineError with fn output(self, logger) {
 
 ///|
 pub fn wasm_frontend_embedding_environment(
-  runtime_symbol_prefix? : String = "wasmoon",
-  hidden_context_type? : @milkir.Type? = Some(Ptr),
-  cancellation_safepoints? : Bool = false,
-  context_shape? : @wasmoon_jit.ContextShape = Legacy,
+  runtime_symbol_prefix~ : String = "wasmoon",
+  hidden_context_type~ : @milkir.Type? = Some(Ptr),
+  cancellation_safepoints~ : Bool = false,
+  context_shape~ : @wasmoon_jit.ContextShape = Legacy,
 ) -> @wasm_frontend.EmbeddingEnvironment {
   let vm = @wasmoon_jit.shaped_vmcontext_layout(context_shape)
   let memory = @wasmoon_jit.memory_descriptor_layout()
@@ -130,9 +130,9 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
 pub fn plan_wasm_function_with_compiler_infra(
   env : @wasm_frontend.EmbeddingEnvironment,
   mod_ : @types.Module,
-  func_local_idx : Int,
+  func_local_idx : Int32,
   target : @wasmoon_jit.NativeTarget,
-  opt_level? : Int = 2,
+  opt_level~ : Int32 = 2,
 ) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError {
   try {
     let body_env = wasm_body_embedding_env(env)

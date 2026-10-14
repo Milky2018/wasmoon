@@ -1,7 +1,7 @@
 ///|
 test "CFG order handles a 100000-block chain" {
   let block_count = 100000
-  let successors : Array[Array[Int]] = Array::makei(block_count, block => {
+  let successors : Array[Array[Int32]] = Array::makei(block_count, block => {
     if block + 1 < block_count {
       [block + 1]
     } else {

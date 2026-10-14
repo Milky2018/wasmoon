@@ -71,14 +71,14 @@ pub(all) enum FunctionCompileStage {
 pub struct IRPassMetric {
   name : String
   duration_us : Int64
-  before_insts : Int
-  after_insts : Int
+  before_insts : Int32
+  after_insts : Int32
   changed : Bool
-  rewrite_attempts : Int?
-  rewrite_apps : Int?
-  rewrite_created_insts : Int?
-  work_done : Int?
-  value_lookup_probes : Int?
+  rewrite_attempts : Int32?
+  rewrite_apps : Int32?
+  rewrite_created_insts : Int32?
+  work_done : Int32?
+  value_lookup_probes : Int32?
   budget_exhausted : Bool?
 } derive(ToJson)
 
@@ -97,23 +97,23 @@ pub struct CompileSubphaseMetric {
 
 ///|
 pub struct RegallocLoopMetric {
-  queue_pops : Int
-  register_probes : Int
-  occupied_segments_scanned : Int
-  conflicts : Int
-  evictions : Int
-  bundle_splits : Int
-  second_chance_attempts : Int
-  max_queue_length : Int
+  queue_pops : Int32
+  register_probes : Int32
+  occupied_segments_scanned : Int32
+  conflicts : Int32
+  evictions : Int32
+  bundle_splits : Int32
+  second_chance_attempts : Int32
+  max_queue_length : Int32
 } derive(ToJson)
 
 ///|
 pub struct FunctionMetrics {
-  func_idx : Int
+  func_idx : Int32
   func_name : String
-  opt_level : Int
-  ir_insts_before : Int
-  mut ir_insts_after : Int
+  opt_level : Int32
+  ir_insts_before : Int32
+  mut ir_insts_after : Int32
   mut function_compile_us : Int64
   mut optimize_us : Int64
   mut lower_us : Int64
@@ -122,12 +122,12 @@ pub struct FunctionMetrics {
   mut frame_plan_us : Int64
   mut emit_us : Int64
   compile_subphases : Array[CompileSubphaseMetric]
-  mut code_size : Int
-  mut spill_slots : Int
-  mut spills : Int
-  mut reloads : Int
-  mut reg_moves : Int
-  mut spill_to_spill : Int
+  mut code_size : Int32
+  mut spill_slots : Int32
+  mut spills : Int32
+  mut reloads : Int32
+  mut reg_moves : Int32
+  mut spill_to_spill : Int32
   mut regalloc_loop : RegallocLoopMetric?
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
@@ -135,8 +135,8 @@ pub struct FunctionMetrics {
 
 ///|
 pub struct ModuleMetricsReport {
-  schema_version : Int
-  expected_functions : Int
+  schema_version : Int32
+  expected_functions : Int32
   mut module_compile_us : Int64
   compile_subphases : Array[CompileSubphaseMetric]
   functions : Array[FunctionMetrics]
@@ -175,7 +175,7 @@ fn flush_current_function_if_any() -> Unit {
 }
 
 ///|
-pub fn reset_module(expected_functions : Int) -> Unit {
+pub fn reset_module(expected_functions : Int32) -> Unit {
   guard enabled() else { return }
   module_state.val = Some({
     schema_version: 7,
@@ -215,10 +215,10 @@ pub fn set_module_compile_us(us : Int64) -> Unit {
 
 ///|
 pub fn begin_function(
-  func_idx : Int,
+  func_idx : Int32,
   func_name : String,
-  opt_level : Int,
-  ir_insts_before : Int,
+  opt_level : Int32,
+  ir_insts_before : Int32,
 ) -> Unit {
   guard enabled() else { return }
   flush_current_function_if_any()
@@ -251,16 +251,16 @@ pub fn begin_function(
 ///|
 pub fn record_ir_pass(
   pass_name : String,
-  before_insts : Int,
-  after_insts : Int,
+  before_insts : Int32,
+  after_insts : Int32,
   changed : Bool,
   duration_us : Int64,
-  rewrite_attempts? : Int? = None,
-  rewrite_apps? : Int? = None,
-  rewrite_created_insts? : Int? = None,
-  work_done? : Int? = None,
-  value_lookup_probes? : Int? = None,
-  budget_exhausted? : Bool? = None,
+  rewrite_attempts~ : Int32? = None,
+  rewrite_apps~ : Int32? = None,
+  rewrite_created_insts~ : Int32? = None,
+  work_done~ : Int32? = None,
+  value_lookup_probes~ : Int32? = None,
+  budget_exhausted~ : Bool? = None,
 ) -> Unit {
   guard enabled() else { return }
   guard detail_enabled() else { return }
@@ -427,7 +427,7 @@ pub fn record_regalloc_phase_us(
 pub fn record_compile_subphase_us(
   phase_name : String,
   duration_us : Int64,
-  parent? : String = "function",
+  parent~ : String = "function",
 ) -> Unit {
   guard enabled() && detail_enabled() else { return }
   if current_function_state.val is Some(m) {
@@ -450,11 +450,11 @@ pub fn record_module_subphase_us(
 
 ///|
 pub fn record_regalloc_stats(
-  spill_slots : Int,
-  spills : Int,
-  reloads : Int,
-  reg_moves : Int,
-  spill_to_spill : Int,
+  spill_slots : Int32,
+  spills : Int32,
+  reloads : Int32,
+  reg_moves : Int32,
+  spill_to_spill : Int32,
 ) -> Unit {
   guard enabled() else { return }
   if current_function_state.val is Some(m) {
@@ -468,14 +468,14 @@ pub fn record_regalloc_stats(
 
 ///|
 pub fn record_regalloc_loop(
-  queue_pops : Int,
-  register_probes : Int,
-  occupied_segments_scanned : Int,
-  conflicts : Int,
-  evictions : Int,
-  bundle_splits : Int,
-  second_chance_attempts : Int,
-  max_queue_length : Int,
+  queue_pops : Int32,
+  register_probes : Int32,
+  occupied_segments_scanned : Int32,
+  conflicts : Int32,
+  evictions : Int32,
+  bundle_splits : Int32,
+  second_chance_attempts : Int32,
+  max_queue_length : Int32,
 ) -> Unit {
   guard enabled() else { return }
   if current_function_state.val is Some(m) {
@@ -493,7 +493,7 @@ pub fn record_regalloc_loop(
 }
 
 ///|
-pub fn finish_function(ir_insts_after : Int, code_size : Int) -> Unit {
+pub fn finish_function(ir_insts_after : Int32, code_size : Int32) -> Unit {
   guard enabled() else { return }
   if current_function_state.val is Some(m) {
     m.ir_insts_after = ir_insts_after

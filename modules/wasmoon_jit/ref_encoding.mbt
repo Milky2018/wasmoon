@@ -19,12 +19,12 @@ pub fn encode_null_ref() -> Int64 {
 }
 
 ///|
-pub fn encode_funcref_idx(func_idx : Int) -> Int64 {
+pub fn encode_funcref_idx(func_idx : Int32) -> Int64 {
   -(func_idx.to_int64() + 1L)
 }
 
 ///|
-pub fn decode_funcref_idx(raw : Int64) -> Int? {
+pub fn decode_funcref_idx(raw : Int64) -> Int32? {
   if raw < 0L {
     Some((-(raw + 1L)).to_int())
   } else {
@@ -49,12 +49,12 @@ pub fn untag_funcref_ptr(tagged_ptr : Int64) -> Int64 {
 }
 
 ///|
-pub fn encode_externref(host_idx : Int) -> Int64 {
+pub fn encode_externref(host_idx : Int32) -> Int64 {
   @wasm_milkir.EXTERNREF_TAG | (host_idx.to_int64() << 1)
 }
 
 ///|
-pub fn decode_externref(raw : Int64) -> Int? {
+pub fn decode_externref(raw : Int64) -> Int32? {
   if (raw & @wasm_milkir.EXTERNREF_TAG) != 0L {
     // Clear the tag bit and shift back.
     Some(((raw ^ @wasm_milkir.EXTERNREF_TAG) >> 1).to_int())
@@ -64,12 +64,12 @@ pub fn decode_externref(raw : Int64) -> Int? {
 }
 
 ///|
-pub fn encode_gc_heap_ref(heap_idx0 : Int) -> Int64 {
+pub fn encode_gc_heap_ref(heap_idx0 : Int32) -> Int64 {
   (heap_idx0 + 1).to_int64() << 1
 }
 
 ///|
-pub fn decode_gc_heap_ref(raw : Int64) -> Int? {
+pub fn decode_gc_heap_ref(raw : Int64) -> Int32? {
   if raw == @wasm_milkir.NULL_REF {
     None
   } else if (raw & (@wasm_milkir.FUNCREF_TAG | @wasm_milkir.EXTERNREF_TAG)) !=

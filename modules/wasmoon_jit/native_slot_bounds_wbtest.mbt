@@ -31,7 +31,7 @@ test "native table slots retain byte offsets above signed i32" {
 #borrow(context)
 extern "c" fn grow_context_table(
   context : JITContext,
-  index : Int,
+  index : Int32,
   delta : Int64,
 ) -> Int64 = "wasmoon_test_table_grow"
 

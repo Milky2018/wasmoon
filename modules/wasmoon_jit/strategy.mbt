@@ -38,16 +38,16 @@ pub impl Show for CompilationMode with fn output(self, logger) {
 /// A request to compile a function
 pub(all) struct CompilationRequest {
   // Function index in the module
-  func_idx : Int
+  func_idx : Int32
   // Requested compilation mode
   mode : CompilationMode
   // Priority (higher = compile sooner)
-  priority : Int
+  priority : Int32
 }
 
 ///|
 pub fn CompilationRequest::CompilationRequest(
-  func_idx : Int,
+  func_idx : Int32,
   mode : CompilationMode,
 ) -> CompilationRequest {
   { func_idx, mode, priority: 0, }
@@ -55,9 +55,9 @@ pub fn CompilationRequest::CompilationRequest(
 
 ///|
 pub fn CompilationRequest::with_priority(
-  func_idx : Int,
+  func_idx : Int32,
   mode : CompilationMode,
-  priority : Int,
+  priority : Int32,
 ) -> CompilationRequest {
   { func_idx, mode, priority, }
 }
@@ -70,11 +70,11 @@ pub(all) struct CompilationQueue {
   // Pending requests
   requests : Array[CompilationRequest]
   // Maximum queue size (0 = unlimited)
-  max_size : Int
+  max_size : Int32
 }
 
 ///|
-pub fn CompilationQueue::CompilationQueue(max_size : Int) -> CompilationQueue {
+pub fn CompilationQueue::CompilationQueue(max_size : Int32) -> CompilationQueue {
   { requests: [], max_size, }
 }
 
@@ -148,7 +148,7 @@ pub fn CompilationQueue::dequeue(
 /// Check if a function is in the queue
 pub fn CompilationQueue::contains(
   self : CompilationQueue,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Bool {
   for req in self.requests {
     if req.func_idx == func_idx {
@@ -160,7 +160,7 @@ pub fn CompilationQueue::contains(
 
 ///|
 /// Get queue length
-pub fn CompilationQueue::length(self : CompilationQueue) -> Int {
+pub fn CompilationQueue::length(self : CompilationQueue) -> Int32 {
   self.requests.length()
 }
 
@@ -182,13 +182,13 @@ pub fn CompilationQueue::clear(self : CompilationQueue) -> Unit {
 /// Configuration for tiered compilation
 pub(all) struct TieredConfig {
   // Threshold for baseline compilation
-  baseline_threshold : Int
+  baseline_threshold : Int32
   // Threshold for optimized recompilation
-  optimize_threshold : Int
+  optimize_threshold : Int32
   // Whether to compile synchronously (blocking) or asynchronously
   synchronous : Bool
   // Maximum concurrent compilations (for async mode)
-  max_concurrent : Int
+  max_concurrent : Int32
 }
 
 ///|
@@ -262,9 +262,9 @@ pub(all) struct CompilationStrategy {
   // Tiered configuration
   config : TieredConfig
   // Statistics
-  mut decisions_interpret : Int
-  mut decisions_compile : Int
-  mut decisions_compiled : Int
+  mut decisions_interpret : Int32
+  mut decisions_compile : Int32
+  mut decisions_compiled : Int32
 }
 
 ///|
@@ -289,7 +289,7 @@ pub fn CompilationStrategy::CompilationStrategy(
 /// Make a compilation decision for a function call
 pub fn CompilationStrategy::decide(
   self : CompilationStrategy,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> CompilationDecision {
   // Check if already compiled
   if self.profiler.is_compiled(func_idx) {
@@ -317,7 +317,7 @@ pub fn CompilationStrategy::decide(
 /// Mark a function as compiled
 pub fn CompilationStrategy::mark_compiled(
   self : CompilationStrategy,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Unit {
   self.profiler.mark_compiled(func_idx)
 }
@@ -326,7 +326,7 @@ pub fn CompilationStrategy::mark_compiled(
 /// Check if a function is compiled
 pub fn CompilationStrategy::is_compiled(
   self : CompilationStrategy,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Bool {
   self.profiler.is_compiled(func_idx)
 }
@@ -335,7 +335,7 @@ pub fn CompilationStrategy::is_compiled(
 /// Schedule a function for background compilation
 pub fn CompilationStrategy::schedule_compilation(
   self : CompilationStrategy,
-  func_idx : Int,
+  func_idx : Int32,
   mode : CompilationMode,
 ) -> Bool {
   let priority = self.profiler.counter.get_count(func_idx)
@@ -355,7 +355,7 @@ pub fn CompilationStrategy::next_to_compile(
 /// Get strategy statistics
 pub fn CompilationStrategy::stats(
   self : CompilationStrategy,
-) -> (Int, Int, Int, Int, Int, Int) {
+) -> (Int32, Int32, Int32, Int32, Int32, Int32) {
   // (total_calls, interpreted, compiled_calls, compilations, queue_len, hot)
   let (total, _, hot, compiled) = self.profiler.stats()
   (

@@ -1,6 +1,6 @@
 ///|
 /// Version of the Wasmoon internal JIT calling and runtime contract.
-pub const WASMOON_JIT_ABI_VERSION : Int = 7
+pub const WASMOON_JIT_ABI_VERSION : Int32 = 7
 
 ///|
 /// Revision of the current direct native target code generator.
@@ -11,7 +11,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int = 7
 pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-9"
 
 ///|
-extern "c" fn host_operating_system_abi_tag() -> Int = "wasmoon_jit_host_operating_system_abi"
+extern "c" fn host_operating_system_abi_tag() -> Int32 = "wasmoon_jit_host_operating_system_abi"
 
 ///|
 fn artifact_architecture(target : NativeTarget) -> @code_object.Architecture {
@@ -59,8 +59,8 @@ pub fn build_artifact_manifest(
   operating_system_abi : @artifact.OperatingSystemAbi,
   module_identity~ : @artifact.ModuleIdentity,
   policy~ : @artifact.CompilationPolicy,
-  required_cpu_features? : Array[@artifact.CpuFeature] = [],
-  context_shape? : ContextShape = Legacy,
+  required_cpu_features~ : Array[@artifact.CpuFeature] = [],
+  context_shape~ : ContextShape = Legacy,
 ) -> @artifact.CompatibilityManifest {
   {
     format_version: @artifact.FORMAT_VERSION,
@@ -96,8 +96,8 @@ pub fn host_operating_system_abi() -> @artifact.OperatingSystemAbi raise JitPipe
 pub fn build_host_artifact_manifest(
   module_identity~ : @artifact.ModuleIdentity,
   policy~ : @artifact.CompilationPolicy,
-  required_cpu_features? : Array[@artifact.CpuFeature] = [],
-  context_shape? : ContextShape = Legacy,
+  required_cpu_features~ : Array[@artifact.CpuFeature] = [],
+  context_shape~ : ContextShape = Legacy,
 ) -> @artifact.CompatibilityManifest raise JitPipelineError {
   build_artifact_manifest(
     host_native_target(),
@@ -183,13 +183,13 @@ pub fn wasm_function_signature(
 }
 
 ///|
-fn wasm_function_symbol(function_index : Int) -> String {
+fn wasm_function_symbol(function_index : Int32) -> String {
   "wasm.func.\{function_index}"
 }
 
 ///|
 pub fn wasm_import_identity(
-  function_index : Int,
+  function_index : Int32,
   module_name : String,
   function_name : String,
   function_type : @types.FuncType,
@@ -206,8 +206,8 @@ pub fn wasm_import_identity(
 ///|
 fn artifact_function_from_code_object(
   object : @code_object.UnlinkedCodeObject,
-  frame_size~ : Int,
-  function_index~ : Int,
+  frame_size~ : Int32,
+  function_index~ : Int32,
   signature~ : @native.Signature,
 ) -> @artifact.FunctionCode {
   {
@@ -240,7 +240,7 @@ pub struct NativeCompiler {
 ///|
 pub fn NativeCompiler::new(
   target : NativeTarget,
-  context_shape? : ContextShape = Legacy,
+  context_shape~ : ContextShape = Legacy,
 ) -> NativeCompiler {
   match target {
     AArch64 =>
@@ -265,11 +265,11 @@ pub fn compile_wasm_body_artifact_function(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   target : NativeTarget,
-  function_index~ : Int,
+  function_index~ : Int32,
   signature~ : @native.Signature,
-  use_subtype_indirect_check? : Bool = true,
-  canonical_type_indices? : Array[Int] = [],
-  context_shape? : ContextShape = Legacy,
+  use_subtype_indirect_check~ : Bool = true,
+  canonical_type_indices~ : Array[Int32] = [],
+  context_shape~ : ContextShape = Legacy,
 ) -> @artifact.FunctionCode raise JitPipelineError {
   NativeCompiler::new(target, context_shape~).compile_wasm_body_artifact_function(
     function,
@@ -288,10 +288,10 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
   self : NativeCompiler,
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  function_index~ : Int,
+  function_index~ : Int32,
   signature~ : @native.Signature,
-  use_subtype_indirect_check? : Bool = true,
-  canonical_type_indices? : Array[Int] = [],
+  use_subtype_indirect_check~ : Bool = true,
+  canonical_type_indices~ : Array[Int32] = [],
 ) -> @artifact.FunctionCode raise JitPipelineError {
   if function_index < 0 {
     raise InvalidFunctionIndex(index=function_index)
@@ -320,12 +320,12 @@ fn NativeCompiler::compile_wasm_body(
   self : NativeCompiler,
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  function_index~ : Int,
+  function_index~ : Int32,
   use_subtype_indirect_check~ : Bool,
-  canonical_type_indices~ : Array[Int],
-  record_metrics? : Bool = false,
-  on_diagnostics? : ((String, String) -> Unit)? = None,
-) -> (@code_object.UnlinkedCodeObject, Int) raise JitPipelineError {
+  canonical_type_indices~ : Array[Int32],
+  record_metrics~ : Bool = false,
+  on_diagnostics~ : ((String, String) -> Unit)? = None,
+) -> (@code_object.UnlinkedCodeObject, Int32) raise JitPipelineError {
   match self.target {
     AArch64 => {
       let compiled = compile_wasm_body_aarch64_target(

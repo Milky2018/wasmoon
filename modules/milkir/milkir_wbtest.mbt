@@ -453,7 +453,7 @@ test "instruction identity compares float constants by bit pattern" {
   inspect(nan0 == nan0_again, content="true")
   inspect(nan0 == nan1, content="false")
   inspect(nan0.hash() == nan0_again.hash(), content="true")
-  let expressions : @hashmap.HashMap[Inst, Int] = HashMap([])
+  let expressions : @hashmap.HashMap[Inst, Int32] = HashMap([])
   expressions.set(nan0, 7)
   inspect(expressions.get(nan0_again).unwrap_or(-1), content="7")
 }

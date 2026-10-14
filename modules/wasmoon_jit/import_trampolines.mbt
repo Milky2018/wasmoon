@@ -54,7 +54,7 @@ pub fn resolve_import_function_ptr(
 ///|
 pub(all) enum ImportFunctionResolution {
   DirectImportFunction(Int64)
-  HostImportFunctionAddr(Int)
+  HostImportFunctionAddr(Int32)
   UnsupportedImportFunction
 } derive(Eq, Debug)
 

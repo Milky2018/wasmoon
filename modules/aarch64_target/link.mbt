@@ -2,9 +2,9 @@
 pub suberror AArch64LinkError {
   InvalidCodeObject(message~ : String)
   InvalidCodeBase(address~ : Int64)
-  UnresolvedRelocation(index~ : Int)
-  RelocationOutOfRange(index~ : Int)
-  UnsupportedRelocation(index~ : Int)
+  UnresolvedRelocation(index~ : Int32)
+  RelocationOutOfRange(index~ : Int32)
+  UnsupportedRelocation(index~ : Int32)
 } derive(Eq, Debug)
 
 ///|
@@ -16,7 +16,7 @@ pub impl Show for AArch64LinkError with fn output(self, logger) {
 pub struct AArch64LinkPlan {
   priv code : Array[Byte]
   priv relocations : Array[@code_object.Relocation]
-  priv veneer_offsets : Array[Int]
+  priv veneer_offsets : Array[Int32]
 } derive(Debug)
 
 ///|
@@ -25,12 +25,12 @@ pub fn AArch64LinkPlan::code(self : AArch64LinkPlan) -> Array[Byte] {
 }
 
 ///|
-pub fn AArch64LinkPlan::veneer_offsets(self : AArch64LinkPlan) -> Array[Int] {
+pub fn AArch64LinkPlan::veneer_offsets(self : AArch64LinkPlan) -> Array[Int32] {
   self.veneer_offsets.copy()
 }
 
 ///|
-fn append_branch_veneer(code : Array[Byte]) -> Int {
+fn append_branch_veneer(code : Array[Byte]) -> Int32 {
   let offset = code.length()
   code.append([
     b'\x50', b'\x00', b'\x00', b'\x58', b'\x00', b'\x02', b'\x1f', b'\xd6', b'\x00',
@@ -54,7 +54,7 @@ pub fn prepare_aarch64_link(
   let veneer_offsets = Array::make(relocations.length(), -1)
   let veneer_targets : Array[@code_object.RelocationTarget] = []
   let veneer_addends : Array[Int64] = []
-  let veneers : Array[Int] = []
+  let veneers : Array[Int32] = []
   for index, relocation in relocations {
     if relocation.kind is AArch64Call26 || relocation.kind is AArch64Jump26 {
       let mut veneer = -1
@@ -78,7 +78,7 @@ pub fn prepare_aarch64_link(
 }
 
 ///|
-fn read_word(code : Array[Byte], offset : Int) -> UInt {
+fn read_word(code : Array[Byte], offset : Int32) -> UInt32 {
   code[offset].to_uint() |
   (code[offset + 1].to_uint() << 8) |
   (code[offset + 2].to_uint() << 16) |
@@ -86,7 +86,7 @@ fn read_word(code : Array[Byte], offset : Int) -> UInt {
 }
 
 ///|
-fn write_word(code : Array[Byte], offset : Int, word : UInt) -> Unit {
+fn write_word(code : Array[Byte], offset : Int32, word : UInt32) -> Unit {
   code[offset] = (word & 0xFFU).to_byte()
   code[offset + 1] = ((word >> 8) & 0xFFU).to_byte()
   code[offset + 2] = ((word >> 16) & 0xFFU).to_byte()
@@ -94,7 +94,7 @@ fn write_word(code : Array[Byte], offset : Int, word : UInt) -> Unit {
 }
 
 ///|
-fn write_address(code : Array[Byte], offset : Int, address : Int64) -> Unit {
+fn write_address(code : Array[Byte], offset : Int32, address : Int64) -> Unit {
   let bits = address.reinterpret_as_uint64()
   for byte in 0..<8 {
     code[offset + byte] = ((bits >> (byte * 8)) & 0xFFUL).to_byte()
@@ -104,9 +104,9 @@ fn write_address(code : Array[Byte], offset : Int, address : Int64) -> Unit {
 ///|
 fn patch_branch(
   code : Array[Byte],
-  offset : Int,
+  offset : Int32,
   delta : Int64,
-  relocation_index : Int,
+  relocation_index : Int32,
 ) -> Unit raise AArch64LinkError {
   if delta % 4L != 0L {
     raise RelocationOutOfRange(index=relocation_index)
@@ -124,10 +124,10 @@ fn patch_branch(
 ///|
 fn patch_page21(
   code : Array[Byte],
-  offset : Int,
+  offset : Int32,
   pc : Int64,
   target : Int64,
-  relocation_index : Int,
+  relocation_index : Int32,
 ) -> Unit raise AArch64LinkError {
   let delta = (target >> 12) - (pc >> 12)
   if delta < -0x100000L || delta > 0xFFFFFL {
@@ -145,7 +145,7 @@ fn patch_page21(
 ///|
 fn patch_page_offset12(
   code : Array[Byte],
-  offset : Int,
+  offset : Int32,
   target : Int64,
 ) -> Unit {
   let immediate = (target.reinterpret_as_uint64() & 0xFFFUL).to_int()

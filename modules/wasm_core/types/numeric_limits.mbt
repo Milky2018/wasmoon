@@ -1,34 +1,34 @@
 ///|
 /// Signed i8 max (0x7F).
-pub const I8_MAX : Int = 0x7F
+pub const I8_MAX : Int32 = 0x7F
 
 ///|
 /// Unsigned i8 max (0xFF).
-pub const U8_MAX : Int = 0xFF
+pub const U8_MAX : Int32 = 0xFF
 
 ///|
 /// ASCII DEL (127), the first non-printable codepoint after printable ASCII.
-pub const ASCII_DEL : Int = 0x7F
+pub const ASCII_DEL : Int32 = 0x7F
 
 ///|
 /// IEEE-754 f32 exponent bias.
-pub const F32_EXP_BIAS : Int = 0x7F
+pub const F32_EXP_BIAS : Int32 = 0x7F
 
 ///|
 /// IEEE-754 f32 all-ones exponent field (Inf/NaN).
-pub const F32_EXP_INF_NAN : Int = 0xFF
+pub const F32_EXP_INF_NAN : Int32 = 0xFF
 
 ///|
 /// Canonical f32 NaN bit-pattern used by WebAssembly tests.
-pub const F32_CANONICAL_NAN_BITS : Int = 0x7FC00000
+pub const F32_CANONICAL_NAN_BITS : Int32 = 0x7FC00000
 
 ///|
 /// Signed i32 minimum value.
-pub const I32_MIN : Int = -0x80000000
+pub const I32_MIN : Int32 = -0x80000000
 
 ///|
 /// Signed i32 maximum value.
-pub const I32_MAX : Int = 0x7FFFFFFF
+pub const I32_MAX : Int32 = 0x7FFFFFFF
 
 ///|
 /// Signed i32 minimum value as f64.
@@ -48,7 +48,7 @@ pub const I32_MAX_F32 : Float = 2147483647.0
 
 ///|
 /// Unsigned i32 maximum value.
-pub const U32_MAX : UInt = 0xFFFFFFFFU
+pub const U32_MAX : UInt32 = 0xFFFFFFFFU
 
 ///|
 /// Unsigned i32 maximum value as f64.
@@ -76,7 +76,7 @@ pub const WASM_PAGE_SIZE_BYTES : Int64 = 0x10000L
 
 ///|
 /// One mebibyte in bytes.
-pub const ONE_MIB_BYTES : Int = 1 << 20
+pub const ONE_MIB_BYTES : Int32 = 1 << 20
 
 ///|
 /// Sixteen mebibytes in bytes.

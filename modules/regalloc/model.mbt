@@ -28,12 +28,12 @@ fn reg_location(reg : PhysicalReg) -> Location {
 }
 
 ///|
-fn spill_location(index : Int) -> Location {
+fn spill_location(index : Int32) -> Location {
   Location::spill(index)
 }
 
 ///|
-fn physical_reg_key(reg : PhysicalReg) -> (Int, Int) {
+fn physical_reg_key(reg : PhysicalReg) -> (Int32, Int32) {
   let class = match reg.class {
     Int => 0
     Float => 1

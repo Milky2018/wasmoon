@@ -3,7 +3,7 @@
 pub(all) struct ArtifactCompatibility {
   target : @artifact.TargetSpec
   available_cpu_features : Array[@artifact.CpuFeature]
-  jit_abi_version : Int
+  jit_abi_version : Int32
   codegen_revision : String
   module_identity : @artifact.ModuleIdentity
   context_shape : @context_layout.ContextShape
@@ -18,11 +18,11 @@ pub suberror ArtifactIncompatible {
     expected~ : @artifact.TargetSpec,
     actual~ : @artifact.TargetSpec
   )
-  InvalidFunctionIndex(index~ : Int)
+  InvalidFunctionIndex(index~ : Int32)
   ContextLayoutMismatch
   MissingCpuFeature(name~ : String)
   DuplicateCpuFeature(name~ : String)
-  JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
+  JitAbiVersionMismatch(expected~ : Int32, actual~ : Int32)
   CodegenRevisionMismatch(expected~ : String, actual~ : String)
   ModuleIdentityMismatch(
     expected~ : @artifact.ModuleIdentity,
@@ -32,7 +32,7 @@ pub suberror ArtifactIncompatible {
     expected~ : @artifact.CompilationPolicy,
     actual~ : @artifact.CompilationPolicy
   )
-  DuplicateFunctionIndex(index~ : Int)
+  DuplicateFunctionIndex(index~ : Int32)
   DuplicateSymbol(name~ : String)
   UnknownSymbol(kind~ : String, name~ : String)
 } derive(Eq, Debug)
@@ -161,7 +161,7 @@ fn verify_artifact_identities(
   decoded : @artifact.Artifact,
   expected : ArtifactCompatibility,
 ) -> Unit raise ArtifactIncompatible {
-  let function_indices : Array[Int] = []
+  let function_indices : Array[Int32] = []
   let symbols : Array[String] = []
   for import_ in decoded.imports {
     if import_.function_index < 0 || import_.function_index == 2147483647 {
@@ -267,7 +267,7 @@ pub fn verify_artifact(
 pub fn load_artifact(
   bytes : Bytes,
   compatibility : ArtifactCompatibility,
-  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+  limits~ : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
 ) -> LoadedArtifact raise ArtifactLoadError {
   let decoded = @artifact.decode(bytes, limits~) catch {
     error => raise DecodeFailed(cause=error)

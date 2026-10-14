@@ -1,11 +1,11 @@
 ///|
 pub struct StackSlot {
   priv owner : Ref[Unit]
-  priv id : Int
+  priv id : Int32
 }
 
 ///|
-fn StackSlot::new(owner : Ref[Unit], id : Int) -> StackSlot {
+fn StackSlot::new(owner : Ref[Unit], id : Int32) -> StackSlot {
   { owner, id, }
 }
 
@@ -22,8 +22,8 @@ pub impl Debug for StackSlot with fn to_repr(self) {
 ///|
 priv struct StackSlotData {
   ty : ValueType
-  size : Int
-  alignment : Int
+  size : Int32
+  alignment : Int32
 }
 
 ///|
@@ -47,7 +47,7 @@ pub(all) enum EditKind {
   Move(value~ : Value, from~ : PhysicalReg, to~ : PhysicalReg)
   EdgeMove(
     source~ : Block,
-    successor_index~ : Int,
+    successor_index~ : Int32,
     value~ : Value,
     from~ : Location,
     to~ : Location
@@ -57,11 +57,11 @@ pub(all) enum EditKind {
 ///|
 /// Read-only summary of the transfers introduced by register allocation.
 pub struct AllocationStatistics {
-  spill_slots : Int
-  spills : Int
-  reloads : Int
-  reg_moves : Int
-  spill_to_spill : Int
+  spill_slots : Int32
+  spills : Int32
+  reloads : Int32
+  reg_moves : Int32
+  spill_to_spill : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -113,7 +113,7 @@ pub fn Edit::register_move(
 ///|
 pub fn Edit::edge_move(
   source : Block,
-  successor_index : Int,
+  successor_index : Int32,
   value : Value,
   from : Location,
   to : Location,
@@ -136,19 +136,19 @@ pub struct Allocation {
   priv source_owner : Ref[Unit]
   priv owner : Ref[Unit]
   priv function_name : String
-  priv source_value_count : Int
-  priv source_block_count : Int
-  priv source_instruction_count : Int
+  priv source_value_count : Int32
+  priv source_block_count : Int32
+  priv source_instruction_count : Int32
   priv value_types : Array[ValueType]
-  priv operand_counts : Array[Int]
-  priv operand_values : Array[Array[Int]]
+  priv operand_counts : Array[Int32]
+  priv operand_values : Array[Array[Int32]]
   priv value_locations : Array[AllocationLocation?]
   priv operand_locations : Array[Array[AllocationLocation?]]
   priv stack_slots : Array[StackSlotData]
   priv edits : Array[Edit]
   priv before_edits : Array[Array[Edit]?]
   priv after_edits : Array[Array[Edit]?]
-  priv edge_edits : Map[(Int, Int), Array[Edit]]
+  priv edge_edits : Map[(Int32, Int32), Array[Edit]]
   priv safepoint_roots : Array[SafepointRootLocation]
 }
 
@@ -159,8 +159,8 @@ fn[Inst] Allocation::for_function_with_storage(
   operand_locations : Array[Array[AllocationLocation?]],
   stack_slots : Array[StackSlotData],
 ) -> Allocation {
-  let operand_counts : Array[Int] = []
-  let operand_values : Array[Array[Int]] = []
+  let operand_counts : Array[Int32] = []
+  let operand_values : Array[Array[Int32]] = []
   for data in function.instructions {
     operand_counts.push(data.operand_count)
     operand_values.push(
@@ -285,7 +285,7 @@ fn Allocation::dense_location_matches(
 }
 
 ///|
-pub fn Allocation::source_instruction_count(self : Allocation) -> Int {
+pub fn Allocation::source_instruction_count(self : Allocation) -> Int32 {
   self.source_instruction_count
 }
 
@@ -293,8 +293,8 @@ pub fn Allocation::source_instruction_count(self : Allocation) -> Int {
 pub fn Allocation::create_stack_slot(
   self : Allocation,
   ty : ValueType,
-  size : Int,
-  alignment : Int,
+  size : Int32,
+  alignment : Int32,
 ) -> StackSlot {
   let slot = StackSlot::new(self.owner, self.stack_slots.length())
   self.stack_slots.push({ ty, size, alignment, })
@@ -302,12 +302,15 @@ pub fn Allocation::create_stack_slot(
 }
 
 ///|
-pub fn Allocation::stack_slot_count(self : Allocation) -> Int {
+pub fn Allocation::stack_slot_count(self : Allocation) -> Int32 {
   self.stack_slots.length()
 }
 
 ///|
-pub fn Allocation::stack_slot_at(self : Allocation, index : Int) -> StackSlot? {
+pub fn Allocation::stack_slot_at(
+  self : Allocation,
+  index : Int32,
+) -> StackSlot? {
   if index >= 0 && index < self.stack_slots.length() {
     Some(StackSlot::new(self.owner, index))
   } else {
@@ -328,7 +331,10 @@ pub fn Allocation::stack_slot_type(
 }
 
 ///|
-pub fn Allocation::stack_slot_size(self : Allocation, slot : StackSlot) -> Int? {
+pub fn Allocation::stack_slot_size(
+  self : Allocation,
+  slot : StackSlot,
+) -> Int32? {
   if self.owns_slot(slot) {
     Some(self.stack_slots[slot.id].size)
   } else {
@@ -340,7 +346,7 @@ pub fn Allocation::stack_slot_size(self : Allocation, slot : StackSlot) -> Int? 
 pub fn Allocation::stack_slot_alignment(
   self : Allocation,
   slot : StackSlot,
-) -> Int? {
+) -> Int32? {
   if self.owns_slot(slot) {
     Some(self.stack_slots[slot.id].alignment)
   } else {
@@ -391,7 +397,7 @@ pub fn Allocation::value_location(
 /// call `stack_slot_at` on the same allocation.
 pub fn Allocation::allocated_value_location_at(
   self : Allocation,
-  value : Int,
+  value : Int32,
 ) -> AllocationLocation? {
   if value >= 0 && value < self.value_locations.length() {
     self.value_locations[value]
@@ -404,7 +410,7 @@ pub fn Allocation::allocated_value_location_at(
 pub fn Allocation::assign_operand_location(
   self : Allocation,
   instruction : Instruction,
-  operand_index : Int,
+  operand_index : Int32,
   location : Location,
 ) -> Bool {
   if !self.owns_instruction(instruction) ||
@@ -425,7 +431,7 @@ pub fn Allocation::assign_operand_location(
 pub fn Allocation::assign_operand(
   self : Allocation,
   instruction : Instruction,
-  operand_index : Int,
+  operand_index : Int32,
   reg : PhysicalReg,
 ) -> Bool {
   self.assign_operand_location(instruction, operand_index, Register(reg))
@@ -435,7 +441,7 @@ pub fn Allocation::assign_operand(
 pub fn Allocation::operand_location(
   self : Allocation,
   instruction : Instruction,
-  operand_index : Int,
+  operand_index : Int32,
 ) -> Location? {
   if !self.owns_instruction(instruction) ||
     operand_index < 0 ||
@@ -452,8 +458,8 @@ pub fn Allocation::operand_location(
 /// indices. Spill indices belong to this allocation.
 pub fn Allocation::allocated_operand_location_at(
   self : Allocation,
-  instruction : Int,
-  operand : Int,
+  instruction : Int32,
+  operand : Int32,
 ) -> AllocationLocation? {
   if instruction < 0 || instruction >= self.operand_locations.length() {
     return None
@@ -558,7 +564,7 @@ pub fn Allocation::edits_at(
 pub fn Allocation::edge_edits_at(
   self : Allocation,
   source : Block,
-  successor_index : Int,
+  successor_index : Int32,
 ) -> ArrayView[Edit] {
   if !self.owns_block(source) || successor_index < 0 {
     return self.edits[0:0]
@@ -593,7 +599,7 @@ pub fn Allocation::edits(self : Allocation) -> Array[Edit] {
 }
 
 ///|
-pub fn Allocation::edit_count(self : Allocation) -> Int {
+pub fn Allocation::edit_count(self : Allocation) -> Int32 {
   self.edits.length()
 }
 
@@ -650,18 +656,18 @@ pub suberror AllocationVerifyError {
   MissingValueLocation(value~ : Value)
   ForeignLocation(value~ : Value)
   LocationClassMismatch(value~ : Value)
-  MissingOperandLocation(instruction~ : Instruction, operand~ : Int)
-  OperandClassMismatch(instruction~ : Instruction, operand~ : Int)
-  RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int)
-  FixedConstraintViolation(instruction~ : Instruction, operand~ : Int)
-  PreservedHomeConstraintViolation(instruction~ : Instruction, operand~ : Int)
-  TiedConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  MissingOperandLocation(instruction~ : Instruction, operand~ : Int32)
+  OperandClassMismatch(instruction~ : Instruction, operand~ : Int32)
+  RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int32)
+  FixedConstraintViolation(instruction~ : Instruction, operand~ : Int32)
+  PreservedHomeConstraintViolation(instruction~ : Instruction, operand~ : Int32)
+  TiedConstraintViolation(instruction~ : Instruction, operand~ : Int32)
   Interference(left~ : Value, right~ : Value, location~ : Location)
   ClobberViolation(instruction~ : Instruction, value~ : Value)
   InvalidStackSlotLayout(slot~ : StackSlot)
-  InvalidEdit(index~ : Int)
-  MissingReload(instruction~ : Instruction, operand~ : Int)
-  InvalidEdgeMove(index~ : Int)
+  InvalidEdit(index~ : Int32)
+  MissingReload(instruction~ : Instruction, operand~ : Int32)
+  InvalidEdgeMove(index~ : Int32)
   MissingSafepointRoot(instruction~ : Instruction, value~ : Value)
   UnexpectedSafepointRoot(instruction~ : Instruction, value~ : Value)
 } derive(Eq, Debug)
@@ -675,18 +681,18 @@ pub impl Show for AllocationVerifyError with fn output(self, logger) {
 pub struct FrameLayout {
   priv source_owner : Ref[Unit]
   priv allocation_owner : Ref[Unit]
-  priv source_slot_count : Int
-  priv frame_size : Int
-  priv alignment : Int
-  priv slot_offsets : Array[Int?]
+  priv source_slot_count : Int32
+  priv frame_size : Int32
+  priv alignment : Int32
+  priv slot_offsets : Array[Int32?]
 }
 
 ///|
 pub fn[Inst] FrameLayout::new(
   function : Function[Inst],
   allocation : Allocation,
-  frame_size : Int,
-  alignment : Int,
+  frame_size : Int32,
+  alignment : Int32,
 ) -> FrameLayout {
   {
     source_owner: function.owner,
@@ -702,7 +708,7 @@ pub fn[Inst] FrameLayout::new(
 pub fn FrameLayout::place_slot(
   self : FrameLayout,
   slot : StackSlot,
-  offset : Int,
+  offset : Int32,
 ) -> Bool {
   if !physical_equal(self.allocation_owner, slot.owner) ||
     slot.id < 0 ||
@@ -714,17 +720,17 @@ pub fn FrameLayout::place_slot(
 }
 
 ///|
-pub fn FrameLayout::frame_size(self : FrameLayout) -> Int {
+pub fn FrameLayout::frame_size(self : FrameLayout) -> Int32 {
   self.frame_size
 }
 
 ///|
-pub fn FrameLayout::alignment(self : FrameLayout) -> Int {
+pub fn FrameLayout::alignment(self : FrameLayout) -> Int32 {
   self.alignment
 }
 
 ///|
-pub fn FrameLayout::slot_offset(self : FrameLayout, slot : StackSlot) -> Int? {
+pub fn FrameLayout::slot_offset(self : FrameLayout, slot : StackSlot) -> Int32? {
   if !physical_equal(self.allocation_owner, slot.owner) ||
     slot.id < 0 ||
     slot.id >= self.source_slot_count {
@@ -737,8 +743,8 @@ pub fn FrameLayout::slot_offset(self : FrameLayout, slot : StackSlot) -> Int? {
 pub suberror FrameVerifyError {
   AllocationFailure(cause~ : AllocationVerifyError)
   SourceMismatch
-  InvalidFrameSize(size~ : Int)
-  InvalidFrameAlignment(alignment~ : Int)
+  InvalidFrameSize(size~ : Int32)
+  InvalidFrameAlignment(alignment~ : Int32)
   MissingStackSlot(slot~ : StackSlot)
   MisalignedStackSlot(slot~ : StackSlot)
   OverlappingStackSlots(left~ : StackSlot, right~ : StackSlot)

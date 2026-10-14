@@ -297,8 +297,8 @@ pub fn InstructionContext::create_block(
 ///|
 pub fn InstructionContext::create_stack_object(
   self : InstructionContext,
-  size : Int,
-  alignment : Int,
+  size : Int32,
+  alignment : Int32,
 ) -> @native.StackObject {
   self.builder.create_stack_object(size, alignment)
 }

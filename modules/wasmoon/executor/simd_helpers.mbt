@@ -1,5 +1,5 @@
 ///|
-fn v128_replace_i8(v128 : Bytes, lane : Int, val : Byte) -> Bytes {
+fn v128_replace_i8(v128 : Bytes, lane : Int32, val : Byte) -> Bytes {
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<16 {
     if i == lane {
@@ -12,7 +12,7 @@ fn v128_replace_i8(v128 : Bytes, lane : Int, val : Byte) -> Bytes {
 }
 
 ///|
-fn v128_replace_i16(v128 : Bytes, lane : Int, val : Int) -> Bytes {
+fn v128_replace_i16(v128 : Bytes, lane : Int32, val : Int32) -> Bytes {
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   let offset = lane * 2
   for i in 0..<16 {
@@ -28,7 +28,7 @@ fn v128_replace_i16(v128 : Bytes, lane : Int, val : Int) -> Bytes {
 }
 
 ///|
-fn v128_replace_i32(v128 : Bytes, lane : Int, val : Int) -> Bytes {
+fn v128_replace_i32(v128 : Bytes, lane : Int32, val : Int32) -> Bytes {
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   let offset = lane * 4
   for i in 0..<16 {
@@ -48,7 +48,7 @@ fn v128_replace_i32(v128 : Bytes, lane : Int, val : Int) -> Bytes {
 }
 
 ///|
-fn v128_replace_i64(v128 : Bytes, lane : Int, val : Int64) -> Bytes {
+fn v128_replace_i64(v128 : Bytes, lane : Int32, val : Int64) -> Bytes {
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   let offset = lane * 8
   for i in 0..<16 {
@@ -76,7 +76,7 @@ fn v128_replace_i64(v128 : Bytes, lane : Int, val : Int64) -> Bytes {
 }
 
 ///|
-fn sign_i8(v : Int) -> Int {
+fn sign_i8(v : Int32) -> Int32 {
   if v >= 128 {
     v - 256
   } else {
@@ -87,7 +87,7 @@ fn sign_i8(v : Int) -> Int {
 ///|
 fn ExecContext::exec_v128_cmp_i8(
   self : ExecContext,
-  cmp : (Int, Int) -> Bool,
+  cmp : (Int32, Int32) -> Bool,
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
@@ -102,7 +102,7 @@ fn ExecContext::exec_v128_cmp_i8(
 ///|
 fn ExecContext::exec_v128_binop_i8(
   self : ExecContext,
-  op : (Int, Int) -> Byte,
+  op : (Int32, Int32) -> Byte,
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
@@ -116,7 +116,7 @@ fn ExecContext::exec_v128_binop_i8(
 ///|
 fn ExecContext::exec_v128_unop_i8(
   self : ExecContext,
-  op : (Int) -> Byte,
+  op : (Int32) -> Byte,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
@@ -127,7 +127,7 @@ fn ExecContext::exec_v128_unop_i8(
 }
 
 ///|
-fn sign_i16(v : Int) -> Int {
+fn sign_i16(v : Int32) -> Int32 {
   if v >= 32768 {
     v - 65536
   } else {
@@ -136,13 +136,13 @@ fn sign_i16(v : Int) -> Int {
 }
 
 ///|
-fn get_i16_lane(v : Bytes, lane : Int) -> Int {
+fn get_i16_lane(v : Bytes, lane : Int32) -> Int32 {
   let offset = lane * 2
   v[offset].to_int() | (v[offset + 1].to_int() << 8)
 }
 
 ///|
-fn get_i32_lane(v : Bytes, lane : Int) -> Int {
+fn get_i32_lane(v : Bytes, lane : Int32) -> Int32 {
   let offset = lane * 4
   v[offset].to_int() |
   (v[offset + 1].to_int() << 8) |
@@ -151,7 +151,7 @@ fn get_i32_lane(v : Bytes, lane : Int) -> Int {
 }
 
 ///|
-fn get_i64_lane(v : Bytes, lane : Int) -> Int64 {
+fn get_i64_lane(v : Bytes, lane : Int32) -> Int64 {
   let offset = lane * 8
   v[offset].to_int().to_int64() |
   (v[offset + 1].to_int().to_int64() << 8) |
@@ -164,17 +164,17 @@ fn get_i64_lane(v : Bytes, lane : Int) -> Int64 {
 }
 
 ///|
-fn get_f32_lane(v : Bytes, lane : Int) -> Float {
+fn get_f32_lane(v : Bytes, lane : Int32) -> Float {
   Float::reinterpret_from_int(get_i32_lane(v, lane))
 }
 
 ///|
-fn get_f64_lane(v : Bytes, lane : Int) -> Double {
+fn get_f64_lane(v : Bytes, lane : Int32) -> Double {
   get_i64_lane(v, lane).reinterpret_as_double()
 }
 
 ///|
-fn write_i32_lane(buf : @buffer.Buffer, v : Int) -> Unit {
+fn write_i32_lane(buf : @buffer.Buffer, v : Int32) -> Unit {
   buf.write_byte(v.to_byte())
   buf.write_byte((v >> 8).to_byte())
   buf.write_byte((v >> 16).to_byte())
@@ -204,13 +204,13 @@ fn write_f64_lane(buf : @buffer.Buffer, v : Double) -> Unit {
 }
 
 ///|
-fn write_i16_lane(buf : @buffer.Buffer, v : Int) -> Unit {
+fn write_i16_lane(buf : @buffer.Buffer, v : Int32) -> Unit {
   buf.write_byte(v.to_byte())
   buf.write_byte((v >> 8).to_byte())
 }
 
 ///|
-fn sign_extend_i8(v : Int) -> Int {
+fn sign_extend_i8(v : Int32) -> Int32 {
   if (v & 0x80) != 0 {
     v | 0xFFFFFF00
   } else {
@@ -219,7 +219,7 @@ fn sign_extend_i8(v : Int) -> Int {
 }
 
 ///|
-fn sign_extend_i16(v : Int) -> Int {
+fn sign_extend_i16(v : Int32) -> Int32 {
   if (v & 0x8000) != 0 {
     v | 0xFFFF0000
   } else {
@@ -228,7 +228,7 @@ fn sign_extend_i16(v : Int) -> Int {
 }
 
 ///|
-fn trunc_sat_f32_to_i32_u(f : Float) -> Int {
+fn trunc_sat_f32_to_i32_u(f : Float) -> Int32 {
   if f.is_nan() {
     return 0
   }
@@ -242,7 +242,7 @@ fn trunc_sat_f32_to_i32_u(f : Float) -> Int {
 }
 
 ///|
-fn trunc_sat_f64_to_i32_u(f : Double) -> Int {
+fn trunc_sat_f64_to_i32_u(f : Double) -> Int32 {
   if f.is_nan() {
     return 0
   }
@@ -258,7 +258,7 @@ fn trunc_sat_f64_to_i32_u(f : Double) -> Int {
 ///|
 fn ExecContext::exec_v128_cmp_i16(
   self : ExecContext,
-  cmp : (Int, Int) -> Bool,
+  cmp : (Int32, Int32) -> Bool,
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
@@ -278,7 +278,7 @@ fn ExecContext::exec_v128_cmp_i16(
 ///|
 fn ExecContext::exec_v128_binop_i16(
   self : ExecContext,
-  op : (Int, Int) -> Int,
+  op : (Int32, Int32) -> Int32,
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
@@ -294,7 +294,7 @@ fn ExecContext::exec_v128_binop_i16(
 ///|
 fn ExecContext::exec_v128_unop_i16(
   self : ExecContext,
-  op : (Int) -> Int,
+  op : (Int32) -> Int32,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
@@ -309,7 +309,7 @@ fn ExecContext::exec_v128_unop_i16(
 ///|
 fn ExecContext::exec_v128_cmp_i32(
   self : ExecContext,
-  cmp : (Int, Int) -> Bool,
+  cmp : (Int32, Int32) -> Bool,
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
@@ -328,7 +328,7 @@ fn ExecContext::exec_v128_cmp_i32(
 ///|
 fn ExecContext::exec_v128_binop_i32(
   self : ExecContext,
-  op : (Int, Int) -> Int,
+  op : (Int32, Int32) -> Int32,
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
@@ -342,7 +342,7 @@ fn ExecContext::exec_v128_binop_i32(
 ///|
 fn ExecContext::exec_v128_unop_i32(
   self : ExecContext,
-  op : (Int) -> Int,
+  op : (Int32) -> Int32,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
@@ -491,7 +491,7 @@ fn ExecContext::exec_v128_unop_f64(
 }
 
 ///|
-fn sat_add_i8_s(a : Int, b : Int) -> Byte {
+fn sat_add_i8_s(a : Int32, b : Int32) -> Byte {
   let sa = sign_i8(a)
   let sb = sign_i8(b)
   let result = sa + sb
@@ -505,7 +505,7 @@ fn sat_add_i8_s(a : Int, b : Int) -> Byte {
 }
 
 ///|
-fn sat_add_i8_u(a : Int, b : Int) -> Byte {
+fn sat_add_i8_u(a : Int32, b : Int32) -> Byte {
   let result = a + b
   if result > @types.U8_MAX {
     b'\xFF'
@@ -515,7 +515,7 @@ fn sat_add_i8_u(a : Int, b : Int) -> Byte {
 }
 
 ///|
-fn sat_sub_i8_s(a : Int, b : Int) -> Byte {
+fn sat_sub_i8_s(a : Int32, b : Int32) -> Byte {
   let sa = sign_i8(a)
   let sb = sign_i8(b)
   let result = sa - sb
@@ -529,7 +529,7 @@ fn sat_sub_i8_s(a : Int, b : Int) -> Byte {
 }
 
 ///|
-fn sat_sub_i8_u(a : Int, b : Int) -> Byte {
+fn sat_sub_i8_u(a : Int32, b : Int32) -> Byte {
   let result = a - b
   if result < 0 {
     b'\x00'
@@ -539,7 +539,7 @@ fn sat_sub_i8_u(a : Int, b : Int) -> Byte {
 }
 
 ///|
-fn sat_add_i16_s(a : Int, b : Int) -> Int {
+fn sat_add_i16_s(a : Int32, b : Int32) -> Int32 {
   let sa = sign_i16(a)
   let sb = sign_i16(b)
   let result = sa + sb
@@ -553,7 +553,7 @@ fn sat_add_i16_s(a : Int, b : Int) -> Int {
 }
 
 ///|
-fn sat_add_i16_u(a : Int, b : Int) -> Int {
+fn sat_add_i16_u(a : Int32, b : Int32) -> Int32 {
   let result = a + b
   if result > 65535 {
     65535
@@ -563,7 +563,7 @@ fn sat_add_i16_u(a : Int, b : Int) -> Int {
 }
 
 ///|
-fn sat_sub_i16_s(a : Int, b : Int) -> Int {
+fn sat_sub_i16_s(a : Int32, b : Int32) -> Int32 {
   let sa = sign_i16(a)
   let sb = sign_i16(b)
   let result = sa - sb
@@ -577,7 +577,7 @@ fn sat_sub_i16_s(a : Int, b : Int) -> Int {
 }
 
 ///|
-fn sat_sub_i16_u(a : Int, b : Int) -> Int {
+fn sat_sub_i16_u(a : Int32, b : Int32) -> Int32 {
   let result = a - b
   if result < 0 {
     0
@@ -587,7 +587,7 @@ fn sat_sub_i16_u(a : Int, b : Int) -> Int {
 }
 
 ///|
-fn popcount8(v : Int) -> Int {
+fn popcount8(v : Int32) -> Int32 {
   let mut n = v
   let mut count = 0
   while n != 0 {
@@ -598,7 +598,7 @@ fn popcount8(v : Int) -> Int {
 }
 
 ///|
-fn sat_i16_to_i8_s(v : Int) -> Byte {
+fn sat_i16_to_i8_s(v : Int32) -> Byte {
   let sv = sign_i16(v)
   if sv > @types.I8_MAX {
     b'\x7F'
@@ -610,7 +610,7 @@ fn sat_i16_to_i8_s(v : Int) -> Byte {
 }
 
 ///|
-fn sat_i16_to_u8(v : Int) -> Byte {
+fn sat_i16_to_u8(v : Int32) -> Byte {
   let sv = sign_i16(v)
   if sv > @types.U8_MAX {
     b'\xFF'
@@ -622,7 +622,7 @@ fn sat_i16_to_u8(v : Int) -> Byte {
 }
 
 ///|
-fn sat_i32_to_i16_s(v : Int) -> Int {
+fn sat_i32_to_i16_s(v : Int32) -> Int32 {
   if v > 32767 {
     32767
   } else if v < -32768 {
@@ -633,7 +633,7 @@ fn sat_i32_to_i16_s(v : Int) -> Int {
 }
 
 ///|
-fn sat_i32_to_u16(v : Int) -> Int {
+fn sat_i32_to_u16(v : Int32) -> Int32 {
   if v > 65535 {
     65535
   } else if v < 0 {
@@ -731,7 +731,7 @@ fn f64_max(a : Double, b : Double) -> Double {
 }
 
 ///|
-fn trunc_sat_f32_to_i32_s(f : Float) -> Int {
+fn trunc_sat_f32_to_i32_s(f : Float) -> Int32 {
   if f.is_nan() {
     return 0
   }
@@ -745,7 +745,7 @@ fn trunc_sat_f32_to_i32_s(f : Float) -> Int {
 }
 
 ///|
-fn trunc_sat_f32_to_u32(f : Float) -> UInt {
+fn trunc_sat_f32_to_u32(f : Float) -> UInt32 {
   if f.is_nan() {
     return 0U
   }
@@ -759,7 +759,7 @@ fn trunc_sat_f32_to_u32(f : Float) -> UInt {
 }
 
 ///|
-fn trunc_sat_f64_to_i32_s(f : Double) -> Int {
+fn trunc_sat_f64_to_i32_s(f : Double) -> Int32 {
   if f.is_nan() {
     return 0
   }
@@ -773,7 +773,7 @@ fn trunc_sat_f64_to_i32_s(f : Double) -> Int {
 }
 
 ///|
-fn trunc_sat_f64_to_u32(f : Double) -> UInt {
+fn trunc_sat_f64_to_u32(f : Double) -> UInt32 {
   if f.is_nan() {
     return 0U
   }

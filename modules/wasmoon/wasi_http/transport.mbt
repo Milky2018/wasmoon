@@ -1,7 +1,7 @@
 ///|
 priv struct NetworkBody {
   bytes : Ref[Bytes?]
-  offset : Ref[Int]
+  offset : Ref[Int32]
   eof : Ref[Bool]
   trailers : Ref[@runtime_impl.ComponentValue?]
   cancelled : Ref[Bool]
@@ -23,10 +23,10 @@ fn NetworkBody::NetworkBody(wake : @async.CondVar) -> NetworkBody {
 ///|
 fn NetworkBody::pull(
   self : NetworkBody,
-  maximum : Int,
+  maximum : Int32,
 ) -> @runtime_impl.HostValueStreamPoll {
   if self.bytes.val is Some(bytes) {
-    let end = Int::min(bytes.length(), self.offset.val + maximum)
+    let end = Int32::min(bytes.length(), self.offset.val + maximum)
     let values : Array[@runtime_impl.ComponentValue] = []
     for index in self.offset.val..<end {
       values.push(U8(bytes[index].to_int()))
@@ -184,7 +184,7 @@ fn transport_error(error : Error) -> @runtime_impl.ComponentValue {
 async fn HttpHost::read_body(
   self : HttpHost,
   table : @runtime_impl.ResourceTable,
-  handle : Int,
+  handle : Int32,
 ) -> Bytes? {
   while true {
     match self.runtime.read_host_byte_stream(table, handle) {
@@ -206,7 +206,7 @@ async fn HttpHost::read_body(
 async fn HttpHost::read_future(
   self : HttpHost,
   table : @runtime_impl.ResourceTable,
-  handle : Int,
+  handle : Int32,
 ) -> @runtime_impl.ComponentValue {
   while true {
     match self.runtime.read_host_value_future(table, handle) {
@@ -363,7 +363,7 @@ fn request_authority(message : HttpMessage) -> String raise {
 fn authority_host_port(
   authority : String,
   secure : Bool,
-) -> (String, Int) raise {
+) -> (String, Int32) raise {
   let parsed = @uri.UriRef::parse("//" + authority) catch {
     _ => raise HttpTransportError(19, "invalid authority")
   }

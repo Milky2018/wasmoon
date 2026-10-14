@@ -9,7 +9,7 @@
 ///|
 /// Binary writer for encoding WASM
 priv struct BinaryWriter {
-  buf : Array[Int]
+  buf : Array[Int32]
 }
 
 ///|
@@ -18,12 +18,12 @@ fn BinaryWriter::BinaryWriter() -> BinaryWriter {
 }
 
 ///|
-fn BinaryWriter::write_byte(self : BinaryWriter, b : Int) -> Unit {
+fn BinaryWriter::write_byte(self : BinaryWriter, b : Int32) -> Unit {
   self.buf.push(b & 0xFF)
 }
 
 ///|
-fn BinaryWriter::write_array(self : BinaryWriter, bytes : Array[Int]) -> Unit {
+fn BinaryWriter::write_array(self : BinaryWriter, bytes : Array[Int32]) -> Unit {
   for b in bytes {
     self.buf.push(b & 0xFF)
   }
@@ -31,7 +31,7 @@ fn BinaryWriter::write_array(self : BinaryWriter, bytes : Array[Int]) -> Unit {
 
 ///|
 /// Write unsigned LEB128
-fn BinaryWriter::write_u32(self : BinaryWriter, val : Int) -> Unit {
+fn BinaryWriter::write_u32(self : BinaryWriter, val : Int32) -> Unit {
   let mut v = val & 0x7FFFFFFF // Treat as unsigned
   if val < 0 {
     // For negative values treated as unsigned, we need special handling
@@ -68,7 +68,7 @@ fn BinaryWriter::write_u64(self : BinaryWriter, val : Int64) -> Unit {
 
 ///|
 /// Write signed LEB128 for 32-bit values
-fn BinaryWriter::write_s32(self : BinaryWriter, val : Int) -> Unit {
+fn BinaryWriter::write_s32(self : BinaryWriter, val : Int32) -> Unit {
   let mut v = val
   while true {
     let byte = v & 0x7F
@@ -103,8 +103,8 @@ fn BinaryWriter::write_s64(self : BinaryWriter, val : Int64) -> Unit {
 
 ///|
 /// Convert a MoonBit string to its UTF-8 byte representation.
-fn string_to_bytes(s : String) -> Array[Int] {
-  let result : Array[Int] = []
+fn string_to_bytes(s : String) -> Array[Int32] {
+  let result : Array[Int32] = []
   let len = s.length()
   let mut i = 0
   while i < len {
@@ -179,7 +179,7 @@ fn BinaryWriter::write_f64(self : BinaryWriter, val : Double) -> Unit {
 }
 
 ///|
-fn BinaryWriter::to_bytes(self : BinaryWriter) -> Array[Int] {
+fn BinaryWriter::to_bytes(self : BinaryWriter) -> Array[Int32] {
   self.buf
 }
 
@@ -495,8 +495,8 @@ fn encode_block_type(w : BinaryWriter, bt : @types.BlockType) -> Unit {
 /// Encode a memory argument (align, offset)
 fn encode_memarg(
   w : BinaryWriter,
-  _memidx : Int,
-  align : Int,
+  _memidx : Int32,
+  align : Int32,
   offset : Int64,
 ) -> Unit {
   w.write_u32(align)
@@ -1298,8 +1298,8 @@ fn encode_catch_handler(
 /// Write a section with its content
 fn write_section(
   w : BinaryWriter,
-  section_id : Int,
-  content : Array[Int],
+  section_id : Int32,
+  content : Array[Int32],
 ) -> Unit {
   w.write_byte(section_id)
   w.write_u32(content.length())
@@ -1308,12 +1308,12 @@ fn write_section(
 
 ///|
 /// Encode the type section
-fn encode_type_section(mod : @types.Module) -> Array[Int] {
+fn encode_type_section(mod : @types.Module) -> Array[Int32] {
   if mod.types.is_empty() {
     return []
   }
   let w = BinaryWriter::BinaryWriter()
-  let groups : Array[(Int, Int)] = []
+  let groups : Array[(Int32, Int32)] = []
   let mut start = 0
   while start < mod.types.length() {
     let mut end = start + 1
@@ -1342,7 +1342,7 @@ fn encode_type_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the import section
-fn encode_import_section(mod : @types.Module) -> Array[Int] {
+fn encode_import_section(mod : @types.Module) -> Array[Int32] {
   if mod.imports.is_empty() {
     return []
   }
@@ -1380,7 +1380,7 @@ fn encode_import_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the function section
-fn encode_function_section(mod : @types.Module) -> Array[Int] {
+fn encode_function_section(mod : @types.Module) -> Array[Int32] {
   if mod.funcs.is_empty() {
     return []
   }
@@ -1394,7 +1394,7 @@ fn encode_function_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the table section
-fn encode_table_section(mod : @types.Module) -> Array[Int] {
+fn encode_table_section(mod : @types.Module) -> Array[Int32] {
   if mod.tables.is_empty() {
     return []
   }
@@ -1418,7 +1418,7 @@ fn encode_table_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the memory section
-fn encode_memory_section(mod : @types.Module) -> Array[Int] {
+fn encode_memory_section(mod : @types.Module) -> Array[Int32] {
   if mod.memories.is_empty() {
     return []
   }
@@ -1432,7 +1432,7 @@ fn encode_memory_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the global section
-fn encode_global_section(mod : @types.Module) -> Array[Int] {
+fn encode_global_section(mod : @types.Module) -> Array[Int32] {
   if mod.globals.is_empty() {
     return []
   }
@@ -1448,7 +1448,7 @@ fn encode_global_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the export section
-fn encode_export_section(mod : @types.Module) -> Array[Int] {
+fn encode_export_section(mod : @types.Module) -> Array[Int32] {
   if mod.exports.is_empty() {
     return []
   }
@@ -1484,7 +1484,7 @@ fn encode_export_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the start section
-fn encode_start_section(mod : @types.Module) -> Array[Int] {
+fn encode_start_section(mod : @types.Module) -> Array[Int32] {
   match mod.start {
     Some(func_idx) => {
       let w = BinaryWriter::BinaryWriter()
@@ -1497,7 +1497,7 @@ fn encode_start_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the element section
-fn encode_element_section(mod : @types.Module) -> Array[Int] {
+fn encode_element_section(mod : @types.Module) -> Array[Int32] {
   if mod.elems.is_empty() {
     return []
   }
@@ -1558,7 +1558,7 @@ fn encode_element_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the code section
-fn encode_code_section(mod : @types.Module) -> Array[Int] {
+fn encode_code_section(mod : @types.Module) -> Array[Int32] {
   if mod.codes.is_empty() {
     return []
   }
@@ -1569,7 +1569,7 @@ fn encode_code_section(mod : @types.Module) -> Array[Int] {
     let body_writer = BinaryWriter::BinaryWriter()
 
     // Compress locals: group consecutive same-type locals
-    let compressed_locals : Array[(Int, @types.ValueType)] = []
+    let compressed_locals : Array[(Int32, @types.ValueType)] = []
     let mut i = 0
     while i < code.locals.length() {
       let vt = code.locals[i]
@@ -1603,7 +1603,7 @@ fn encode_code_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the data section
-fn encode_data_section(mod : @types.Module) -> Array[Int] {
+fn encode_data_section(mod : @types.Module) -> Array[Int32] {
   if mod.datas.is_empty() {
     return []
   }
@@ -1636,7 +1636,7 @@ fn encode_data_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the data count section (required for bulk memory)
-fn encode_datacount_section(mod : @types.Module) -> Array[Int] {
+fn encode_datacount_section(mod : @types.Module) -> Array[Int32] {
   if mod.datas.is_empty() {
     return []
   }
@@ -1647,7 +1647,7 @@ fn encode_datacount_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode the tag section
-fn encode_tag_section(mod : @types.Module) -> Array[Int] {
+fn encode_tag_section(mod : @types.Module) -> Array[Int32] {
   if mod.tags.is_empty() {
     return []
   }
@@ -1664,7 +1664,7 @@ fn encode_tag_section(mod : @types.Module) -> Array[Int] {
 
 ///|
 /// Encode a Module to WebAssembly binary format
-pub fn encode(mod : @types.Module) -> Array[Int] {
+pub fn encode(mod : @types.Module) -> Array[Int32] {
   let mod = resolve_block_types(mod)
   let w = BinaryWriter::BinaryWriter()
 

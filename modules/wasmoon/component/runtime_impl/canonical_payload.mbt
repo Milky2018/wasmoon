@@ -16,7 +16,7 @@ fn CanonicalPayloadType::layout(
   self : CanonicalPayloadType,
   resources : CanonResources,
   store : @runtime.Store,
-) -> (Int, Int) raise ComponentRuntimeError {
+) -> (Int32, Int32) raise ComponentRuntimeError {
   guard self.ty is Some(ty) else { return (0, 1) }
   let memory = require_memory(resources, store)
   canonical_memory_layout(ty, self.types, memory.is_memory64())
@@ -28,7 +28,7 @@ fn CanonicalPayloadType::check_transmit_buffer(
   resources : CanonResources,
   store : @runtime.Store,
   ptr : Int64,
-  count : Int,
+  count : Int32,
 ) -> Unit raise ComponentRuntimeError {
   if count.reinterpret_as_uint() > 0x0fffffffU {
     raise CanonCallError("stream read/write count too large")
@@ -53,7 +53,7 @@ fn CanonicalPayloadType::load(
   resources : CanonResources,
   store : @runtime.Store,
   ptr : Int64,
-  count : Int,
+  count : Int32,
   resource_table : ResourceTable,
 ) -> CanonicalPayload raise ComponentRuntimeError {
   let values : Array[ComponentValue] = []
@@ -102,8 +102,8 @@ fn CanonicalPayloadType::load(
 ///|
 fn CanonicalPayload::store(
   self : CanonicalPayload,
-  start : Int,
-  count : Int,
+  start : Int32,
+  count : Int32,
   source_table : ResourceTable,
   destination : CanonicalPayloadType,
   resources : CanonResources,

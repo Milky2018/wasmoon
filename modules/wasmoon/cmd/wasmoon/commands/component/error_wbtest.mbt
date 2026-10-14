@@ -1,5 +1,5 @@
 ///|
-extern "c" fn component_test_executable_mapping_count() -> Int = "wasmoon_jit_exec_mapping_count"
+extern "c" fn component_test_executable_mapping_count() -> Int32 = "wasmoon_jit_exec_mapping_count"
 
 ///|
 test "component error code mapping: enum string is stable" {

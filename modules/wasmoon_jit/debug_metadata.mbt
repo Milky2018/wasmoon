@@ -4,7 +4,7 @@
 /// A resolved wasm frame in a native trap report.
 pub(all) struct WasmTrapFrame {
   pc : Int64
-  func_idx : Int
+  func_idx : Int32
   func_name : String
   wasm_offset : Int64
 }
@@ -14,15 +14,15 @@ pub(all) struct WasmTrapFrame {
 pub(all) struct TrapReport {
   trap_kind : String
   message : String
-  signal : Int
+  signal : Int32
   signal_name : String
   pc : Int64
   lr : Int64
   fp : Int64
   frame_lr : Int64
   fault_addr : Int64
-  brk_imm : Int
-  wasm_func_idx : Int?
+  brk_imm : Int32
+  wasm_func_idx : Int32?
   wasm_func_name : String?
   wasm_offset : Int64?
   wasm_frames : Array[WasmTrapFrame]
@@ -52,7 +52,7 @@ pub fn JITFunctionDebug::JITFunctionDebug(
 ///|
 /// Optional in-memory database of per-function debug dumps.
 pub struct JITDebugDB {
-  entries : Map[Int, JITFunctionDebug]
+  entries : Map[Int32, JITFunctionDebug]
 }
 
 ///|
@@ -63,14 +63,17 @@ pub fn JITDebugDB::JITDebugDB() -> JITDebugDB {
 ///|
 pub fn JITDebugDB::set(
   self : JITDebugDB,
-  func_idx : Int,
+  func_idx : Int32,
   debug : JITFunctionDebug,
 ) -> Unit {
   self.entries.set(func_idx, debug)
 }
 
 ///|
-pub fn JITDebugDB::get(self : JITDebugDB, func_idx : Int) -> JITFunctionDebug? {
+pub fn JITDebugDB::get(
+  self : JITDebugDB,
+  func_idx : Int32,
+) -> JITFunctionDebug? {
   self.entries.get(func_idx)
 }
 

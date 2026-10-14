@@ -59,7 +59,7 @@ fn ExecContext::accept_guest_delivery(self : ExecContext) -> Unit raise {
 ///|
 fn ExecContext::guest_function_type(
   self : ExecContext,
-  index : Int,
+  index : Int32,
 ) -> @types.FuncType {
   guard self.instance.types[index].composite is Cont(function) else {
     abort("validated instruction requires continuation type")

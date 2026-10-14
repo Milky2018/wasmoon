@@ -1,14 +1,14 @@
 /// Execution, callback, exception, fiber-stack, and GC operations for managed JIT contexts.
 
 ///|
-fn throw_exception_tag(context : JITContext, tag_addr : Int) -> Unit {
+fn throw_exception_tag(context : JITContext, tag_addr : Int32) -> Unit {
   c_jit_exception_throw_tag_managed(context, tag_addr)
 }
 
 ///|
 fn throw_exception_values(
   context : JITContext,
-  tag_addr : Int,
+  tag_addr : Int32,
   values : Array[Int64],
 ) -> Unit {
   let payload = FixedArray::makei(values.length(), fn(i) { values[i] })
@@ -25,8 +25,8 @@ fn setup_segments(
   context : JITContext,
   datas : Array[@types.Data],
   elem_segments : Array[Array[Int64]],
-  data_dropped? : Array[Bool] = [],
-  elem_dropped? : Array[Bool] = [],
+  data_dropped~ : Array[Bool] = [],
+  elem_dropped~ : Array[Bool] = [],
 ) -> Unit {
   let data = Array::makei(datas.length(), i => {
     if i < data_dropped.length() && data_dropped[i] {
@@ -53,14 +53,14 @@ fn clear_segments(context : JITContext) -> Unit {
 }
 
 ///|
-pub fn NativeJITContext::func_count(self : NativeJITContext) -> Int {
+pub fn NativeJITContext::func_count(self : NativeJITContext) -> Int32 {
   context_func_count(self.handle)
 }
 
 ///|
 pub fn NativeJITContext::throw_exception_tag(
   self : NativeJITContext,
-  tag_addr : Int,
+  tag_addr : Int32,
 ) -> Unit {
   throw_exception_tag(self.handle, tag_addr)
 }
@@ -68,7 +68,7 @@ pub fn NativeJITContext::throw_exception_tag(
 ///|
 pub fn NativeJITContext::throw_exception_values(
   self : NativeJITContext,
-  tag_addr : Int,
+  tag_addr : Int32,
   values : Array[Int64],
 ) -> Unit {
   throw_exception_values(self.handle, tag_addr, values)
@@ -79,8 +79,8 @@ pub fn NativeJITContext::setup_segments(
   self : NativeJITContext,
   datas : Array[@types.Data],
   elem_segments : Array[Array[Int64]],
-  data_dropped? : Array[Bool] = [],
-  elem_dropped? : Array[Bool] = [],
+  data_dropped~ : Array[Bool] = [],
+  elem_dropped~ : Array[Bool] = [],
 ) -> Unit {
   setup_segments(
     self.handle,
@@ -104,7 +104,7 @@ pub fn NativeJITContext::clear_gc_heap(self : NativeJITContext) -> Unit {
 ///|
 pub fn NativeJITContext::set_func(
   self : NativeJITContext,
-  idx : Int,
+  idx : Int32,
   func_ptr : Int64,
 ) -> Unit {
   c_jit_ctx_set_func_managed(self.handle, idx, func_ptr)
@@ -113,7 +113,7 @@ pub fn NativeJITContext::set_func(
 ///|
 pub fn NativeJITContext::alloc_indirect_table(
   self : NativeJITContext,
-  count : Int,
+  count : Int32,
 ) -> Bool {
   c_jit_ctx_alloc_indirect_table_managed(self.handle, count) != 0
 }
@@ -121,9 +121,9 @@ pub fn NativeJITContext::alloc_indirect_table(
 ///|
 pub fn NativeJITContext::set_indirect(
   self : NativeJITContext,
-  table_idx : Int,
-  func_idx : Int,
-  type_idx : Int,
+  table_idx : Int32,
+  func_idx : Int32,
+  type_idx : Int32,
 ) -> Unit {
   c_jit_ctx_set_indirect_managed(self.handle, table_idx, func_idx, type_idx)
 }
@@ -176,8 +176,8 @@ pub fn NativeJITContext::has_configured_native_fiber_stack_size(
 /// Typed result returned by a JIT hostcall dispatcher.
 pub(all) enum NativeHostcallOutcome {
   HostcallCompleted
-  HostcallExit(Int)
-  HostcallTrap(Int)
+  HostcallExit(Int32)
+  HostcallTrap(Int32)
   HostcallSuspended
 } derive(Debug, Eq)
 
@@ -197,7 +197,9 @@ pub fn NativeJITContext::set_hostcall_callback(
       HostcallSuspended => -1
     }
   }
-  let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
+  let call_closure : FuncRef[(() -> Int32) -> Int32] = fn(f : () -> Int32) {
+    f()
+  }
   c_jit_set_hostcall_callback_managed(self.handle, call_closure, encoded)
 }
 
@@ -215,7 +217,7 @@ pub fn NativeJITContext::set_cancellation_callback(
   self : NativeJITContext,
   callback : () -> Bool,
 ) -> Unit {
-  let call_closure : FuncRef[(() -> Bool) -> Int] = fn(f : () -> Bool) {
+  let call_closure : FuncRef[(() -> Bool) -> Int32] = fn(f : () -> Bool) {
     if f() {
       1
     } else {
@@ -257,9 +259,9 @@ pub fn NativeJITContext::call_trampoline(
   trampoline_ptr : Int64,
   func_ptr : Int64,
   values_vec : FixedArray[Int64],
-  values_len : Int,
+  values_len : Int32,
   use_native_fiber : Bool,
-) -> Int raise NativeFiberError {
+) -> Int32 raise NativeFiberError {
   if use_native_fiber {
     let continuation = self.start_continuation(
       trampoline_ptr, func_ptr, values_vec, values_len,

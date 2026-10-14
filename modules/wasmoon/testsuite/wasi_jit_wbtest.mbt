@@ -45,12 +45,12 @@ fn compare_wasi(source : String, func_name : String) -> WasiCompareResult {
 fn compare_wasi_with_options(
   source : String,
   func_name : String,
-  preopens? : Array[(String, String)] = [],
-  readonly_preopens? : Array[(String, String)] = [],
+  preopens~ : Array[(String, String)] = [],
+  readonly_preopens~ : Array[(String, String)] = [],
   stdin_data? : Bytes,
   stdin_factory? : () -> () -> Bytes,
-  configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
-  signal_handler? : ((Int) -> Int)? = None,
+  configure_wasi~ : ((@wasi.WasiContext) -> Unit raise Error)? = None,
+  signal_handler~ : ((Int32) -> Int32)? = None,
 ) -> WasiCompareResult {
   // Parse the WAT source
   let (mod_, interp_mod) = try {
@@ -130,7 +130,7 @@ fn compare_wasi_with_options(
 ///|
 fn wasi_errno_from_result(
   result : Result[Array[@types.Value], String],
-) -> Int raise {
+) -> Int32 raise {
   match result {
     Ok([I32(errno)]) => errno
     _ =>
@@ -153,7 +153,7 @@ fn wasi_results_trap(result : WasiCompareResult, expected : String) -> Bool {
 }
 
 ///|
-fn wasi_i32_from_result(result : Result[Array[@types.Value], String]) -> Int {
+fn wasi_i32_from_result(result : Result[Array[@types.Value], String]) -> Int32 {
   match result {
     Ok(values) =>
       if values.length() == 1 {
@@ -169,7 +169,7 @@ fn wasi_i32_from_result(result : Result[Array[@types.Value], String]) -> Int {
 }
 
 ///|
-fn find_wasi_func_index(mod_ : @types.Module, name : String) -> Int? {
+fn find_wasi_func_index(mod_ : @types.Module, name : String) -> Int32? {
   for exp in mod_.exports {
     if exp.name == name && exp.desc is Func(idx) {
       return Some(idx)
@@ -184,10 +184,10 @@ fn run_wasi_interp_quiet(
   func_name : String,
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
-  readonly_preopens? : Array[(String, String)] = [],
-  stdin_callback? : (() -> Bytes)? = None,
-  configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
-  signal_handler? : ((Int) -> Int)? = None,
+  readonly_preopens~ : Array[(String, String)] = [],
+  stdin_callback~ : (() -> Bytes)? = None,
+  configure_wasi~ : ((@wasi.WasiContext) -> Unit raise Error)? = None,
+  signal_handler~ : ((Int32) -> Int32)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   try {
     let stdout_buf : Array[Byte] = []
@@ -260,14 +260,14 @@ fn run_wasi_interp_quiet(
 fn run_wasi_jit_quiet(
   mod_ : @types.Module,
   func_name : String,
-  func_idx : Int,
+  func_idx : Int32,
   result_types : Array[@types.ValueType],
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
-  readonly_preopens? : Array[(String, String)] = [],
-  stdin_callback? : (() -> Bytes)? = None,
-  configure_wasi? : ((@wasi.WasiContext) -> Unit raise Error)? = None,
-  signal_handler? : ((Int) -> Int)? = None,
+  readonly_preopens~ : Array[(String, String)] = [],
+  stdin_callback~ : (() -> Bytes)? = None,
+  configure_wasi~ : ((@wasi.WasiContext) -> Unit raise Error)? = None,
+  signal_handler~ : ((Int32) -> Int32)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
   func_name |> ignore
   try {
@@ -374,23 +374,23 @@ fn run_wasi_jit_quiet(
       use_subtype_indirect_check~,
     )
     @wast.sync_tables_to_jit(instance, store, jm, use_subtype_indirect_check~)
-    let global_addrs : Array[Int] = []
+    let global_addrs : Array[Int32] = []
     for addr in instance.global_addrs {
       global_addrs.push(addr)
     }
-    let table_addrs : Array[Int] = []
+    let table_addrs : Array[Int32] = []
     for addr in instance.table_addrs {
       table_addrs.push(addr)
     }
-    let func_addrs : Array[Int] = []
+    let func_addrs : Array[Int32] = []
     for addr in instance.func_addrs {
       func_addrs.push(addr)
     }
-    let func_type_indices : Array[Int] = []
+    let func_type_indices : Array[Int32] = []
     for type_idx in instance.func_type_indices {
       func_type_indices.push(type_idx)
     }
-    let canonical_type_indices : Array[Int] = []
+    let canonical_type_indices : Array[Int32] = []
     for canonical_idx in instance.canonical_type_indices {
       canonical_type_indices.push(canonical_idx)
     }
@@ -398,7 +398,7 @@ fn run_wasi_jit_quiet(
     for subtype in mod_.types {
       module_types.push(subtype)
     }
-    let module_rec_groups : Array[Int] = []
+    let module_rec_groups : Array[Int32] = []
     for group in mod_.type_rec_groups {
       module_rec_groups.push(group)
     }
@@ -1039,7 +1039,7 @@ test "wasi jit: descriptor operations honor rights attenuation" {
     #|    (call $fd_filestat_get (call $attenuated_fd) (i32.const 500)))
     #|  (func (export "set_flags") (result i32)
     #|    (call $set_flags (call $attenuated_fd) (i32.const 0))))
-  let results : Array[(Int, Int)] = []
+  let results : Array[(Int32, Int32)] = []
   for name in ["write", "read", "seek", "filestat", "set_flags"] {
     let result = compare_wasi_with_options(source, name, preopens=[
       (@test_fs.temp_dir(), "/"),
@@ -1055,7 +1055,7 @@ test "wasi jit: descriptor operations honor rights attenuation" {
     results,
     content="[(76, 76), (76, 76), (76, 76), (76, 76), (76, 76)]",
   )
-  let matrix : Array[(Int, Int)] = []
+  let matrix : Array[(Int32, Int32)] = []
   for
     name in [
       "write_allowed", "write_missing", "write_unrelated", "write_attenuated",
@@ -1173,7 +1173,7 @@ test "wasi jit: path rights differential matrix" {
     #|    (call $run (i32.const 1) (i64.const 8192)))
     #|  (func (export "attenuated") (result i32)
     #|    (call $run (i32.const 1) (i64.const 12581888))))
-  let matrix : Array[(Int, Int)] = []
+  let matrix : Array[(Int32, Int32)] = []
   for name in ["allowed", "missing", "unrelated", "attenuated"] {
     let result = compare_wasi_with_options(source, name, preopens=[
       (@test_fs.temp_dir(), "/"),
@@ -3444,7 +3444,7 @@ test "wasi jit: explicit signal policy validates, permits and denies" {
     #| (func (export "test") (result i32)
     #|   (if (i32.ne (call $raise (i32.const 0)) (i32.const 0)) (then unreachable))
     #|   (call $raise (i32.const 15))))
-  let calls : Array[Int] = []
+  let calls : Array[Int32] = []
   let result = compare_wasi_with_options(
     source,
     "test",

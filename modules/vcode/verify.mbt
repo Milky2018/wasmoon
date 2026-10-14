@@ -4,7 +4,7 @@ fn[Inst] Function::definition_dominates(
   value : Value,
   use_instruction : Instruction,
   dominators : Array[Array[UInt64]],
-  instruction_positions : Array[Int],
+  instruction_positions : Array[Int32],
 ) -> Bool {
   let use_data = self.instructions[use_instruction.id]
   match self.values[value.id].definition {
@@ -27,8 +27,8 @@ fn[Inst] Function::definition_dominates(
 }
 
 ///|
-fn[Inst] Function::predecessors(self : Function[Inst]) -> Array[Array[Int]] {
-  let predecessors : Array[Array[Int]] = Array::makei(self.blocks.length(), _ => {
+fn[Inst] Function::predecessors(self : Function[Inst]) -> Array[Array[Int32]] {
+  let predecessors : Array[Array[Int32]] = Array::makei(self.blocks.length(), _ => {
     []
   })
   for block_index, block in self.blocks {
@@ -48,7 +48,7 @@ fn[Inst] Function::predecessors(self : Function[Inst]) -> Array[Array[Int]] {
 ///|
 fn[Inst] Function::compute_dominators(
   self : Function[Inst],
-  predecessors : Array[Array[Int]],
+  predecessors : Array[Array[Int32]],
 ) -> Array[Array[UInt64]] {
   let count = self.blocks.length()
   let dominators = Array::makei(count, block => {
@@ -101,7 +101,7 @@ fn[Inst] Function::verify_instruction(
   self : Function[Inst],
   instruction : Instruction,
   dominators : Array[Array[UInt64]],
-  instruction_positions : Array[Int],
+  instruction_positions : Array[Int32],
 ) -> Unit raise VCodeVerifyError {
   let data = self.instructions[instruction.id]
   let operands = self.instruction_operands(instruction)
@@ -250,7 +250,7 @@ pub fn[Inst] verify_selected(
     let terminator = block.terminator.unwrap()
     instruction_positions[terminator.id] = block.body.length()
   }
-  let stack_map_ids : Array[Int] = []
+  let stack_map_ids : Array[Int32] = []
   for index in 0..<function.instructions.length() {
     let instruction = Instruction::new(function.owner, index)
     function.verify_instruction(instruction, dominators, instruction_positions)
@@ -269,7 +269,7 @@ pub fn[Inst] verify_selected(
 }
 
 ///|
-fn is_power_of_two(value : Int) -> Bool {
+fn is_power_of_two(value : Int32) -> Bool {
   value > 0 && (value & (value - 1)) == 0
 }
 
@@ -277,7 +277,7 @@ fn is_power_of_two(value : Int) -> Bool {
 fn Allocation::assignment_for(
   self : Allocation,
   instruction : Instruction,
-  operand_index : Int,
+  operand_index : Int32,
 ) -> AllocationLocation? {
   if !self.owns_instruction(instruction) ||
     operand_index < 0 ||
@@ -373,23 +373,23 @@ fn[Inst] verify_allocation_edits(
 }
 
 ///|
-fn value_bitset(value_count : Int) -> Array[UInt64] {
+fn value_bitset(value_count : Int32) -> Array[UInt64] {
   Array::make((value_count + 63) / 64, 0UL)
 }
 
 ///|
-fn value_bitset_contains(bits : Array[UInt64], value : Int) -> Bool {
+fn value_bitset_contains(bits : Array[UInt64], value : Int32) -> Bool {
   (bits[value / 64] & (1UL << (value % 64))) != 0UL
 }
 
 ///|
-fn value_bitset_set(bits : Array[UInt64], value : Int) -> Unit {
+fn value_bitset_set(bits : Array[UInt64], value : Int32) -> Unit {
   let word = value / 64
   bits[word] = bits[word] | (1UL << (value % 64))
 }
 
 ///|
-fn value_bitset_clear(bits : Array[UInt64], value : Int) -> Unit {
+fn value_bitset_clear(bits : Array[UInt64], value : Int32) -> Unit {
   let word = value / 64
   bits[word] = bits[word] & (1UL << (value % 64)).lnot()
 }
@@ -452,9 +452,9 @@ fn[Inst] Function::allocation_block_live_out(
 fn[Inst] allocation_location_ids(
   function : Function[Inst],
   allocation : Allocation,
-) -> (Array[Int], Int, Map[(Int, Int), Int]) {
+) -> (Array[Int32], Int32, Map[(Int32, Int32), Int32]) {
   let ids = Array::make(function.value_count(), -1)
-  let ids_by_location : Map[(Int, Int), Int] = Map([])
+  let ids_by_location : Map[(Int32, Int32), Int32] = Map([])
   let mut location_count = 0
   for index in 0..<function.value_count() {
     let location = allocation.value_locations[index].unwrap()
@@ -482,12 +482,12 @@ fn[Inst] allocation_location_ids(
 
 ///|
 fn find_or_add_affected_value(
-  value_index : Int,
+  value_index : Int32,
   live : Array[UInt64],
-  affected_values : Array[Int],
+  affected_values : Array[Int32],
   before_states : Array[Bool],
   middle_states : Array[Bool],
-) -> Int {
+) -> Int32 {
   for index, affected in affected_values {
     if affected == value_index {
       return index
@@ -504,10 +504,10 @@ fn find_or_add_affected_value(
 fn[Inst] transition_live_locations(
   function : Function[Inst],
   allocation : Allocation,
-  location_ids : Array[Int],
+  location_ids : Array[Int32],
   live : Array[UInt64],
-  occupants : Array[Int],
-  affected_values : Array[Int],
+  occupants : Array[Int32],
+  affected_values : Array[Int32],
   desired_states : Array[Bool],
 ) -> Unit raise AllocationVerifyError {
   for index, value_index in affected_values {
@@ -566,7 +566,7 @@ fn[Inst] verify_allocation_interference(
     instructions.push(terminator)
     for reverse_index in 0..<instructions.length() {
       let instruction = instructions[instructions.length() - reverse_index - 1]
-      let affected_values : Array[Int] = []
+      let affected_values : Array[Int32] = []
       let before_states : Array[Bool] = []
       let middle_states : Array[Bool] = []
       for operand in function.instruction_operands(instruction) {

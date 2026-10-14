@@ -13,10 +13,10 @@ priv enum Token {
 ///|
 /// Source span with start and end positions
 priv struct SourceSpan {
-  start_line : Int
-  start_column : Int
-  end_line : Int
-  end_column : Int
+  start_line : Int32
+  start_column : Int32
+  end_line : Int32
+  end_column : Int32
 } derive(Debug)
 
 ///|
@@ -56,7 +56,7 @@ fn LocatedToken::synthetic(token : Token) -> LocatedToken {
 
 ///|
 /// Extract substring from input without raising errors
-fn extract_substring(s : String, start : Int, end : Int) -> String {
+fn extract_substring(s : String, start : Int32, end : Int32) -> String {
   let buf = StringBuilder::StringBuilder()
   for i in start..<end {
     buf.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -68,12 +68,12 @@ fn extract_substring(s : String, start : Int, end : Int) -> String {
 /// WAT Lexer
 priv struct Lexer {
   input : String
-  mut pos : Int
-  mut line : Int
-  mut column : Int
-  mut token_start_line : Int
-  mut token_start_column : Int
-  mut token_start_pos : Int
+  mut pos : Int32
+  mut line : Int32
+  mut column : Int32
+  mut token_start_line : Int32
+  mut token_start_column : Int32
+  mut token_start_pos : Int32
 }
 
 ///|
@@ -474,7 +474,7 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
 fn Lexer::read_id_string(self : Lexer) -> String raise WatError {
   // Accumulate bytes, then decode as UTF-8
   // This ensures $"\ef\98\9a" matches $"" (emoji)
-  let bytes : Array[Int] = []
+  let bytes : Array[Int32] = []
   let start_loc = self.current_loc()
   // Skip opening quote
   self.advance_pos()
@@ -571,7 +571,7 @@ fn Lexer::read_id_string(self : Lexer) -> String raise WatError {
 
 ///|
 /// Encode a Unicode codepoint as UTF-8 bytes
-fn encode_utf8_codepoint(bytes : Array[Int], cp : Int) -> Unit {
+fn encode_utf8_codepoint(bytes : Array[Int32], cp : Int32) -> Unit {
   if cp < 0x80 {
     bytes.push(cp)
   } else if cp < 0x800 {
@@ -591,7 +591,7 @@ fn encode_utf8_codepoint(bytes : Array[Int], cp : Int) -> Unit {
 
 ///|
 /// Decode UTF-8 bytes to a string
-fn decode_utf8_bytes(bytes : Array[Int]) -> String {
+fn decode_utf8_bytes(bytes : Array[Int32]) -> String {
   let buf = StringBuilder::StringBuilder()
   let mut i = 0
   while i < bytes.length() {
@@ -651,7 +651,7 @@ fn is_hex_digit(c : Char) -> Bool {
 }
 
 ///|
-fn parse_hex_codepoint(s : String) -> Int? {
+fn parse_hex_codepoint(s : String) -> Int32? {
   let mut value = 0
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
@@ -668,7 +668,7 @@ fn parse_hex_codepoint(s : String) -> Int? {
 }
 
 ///|
-fn parse_hex_byte(s : String) -> Int? {
+fn parse_hex_byte(s : String) -> Int32? {
   if s.length() != 2 {
     return None
   }
@@ -683,7 +683,7 @@ fn parse_hex_byte(s : String) -> Int? {
 }
 
 ///|
-fn hex_digit_value(c : Char) -> Int? {
+fn hex_digit_value(c : Char) -> Int32? {
   if c >= '0' && c <= '9' {
     Some(c.to_int() - '0'.to_int())
   } else if c >= 'a' && c <= 'f' {

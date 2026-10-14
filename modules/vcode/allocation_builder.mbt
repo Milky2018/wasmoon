@@ -51,9 +51,9 @@ pub fn[Inst] AllocationBuilder::from_plan_storage(
   function : Function[Inst],
   value_locations : Array[AllocationLocation?],
   operand_locations : Array[Array[AllocationLocation?]],
-  spill_owners : Array[Int],
-  spill_sizes : Array[Int],
-  spill_alignments : Array[Int],
+  spill_owners : Array[Int32],
+  spill_sizes : Array[Int32],
+  spill_alignments : Array[Int32],
 ) -> AllocationBuilder[Inst]? {
   if value_locations.length() != function.values.length() ||
     operand_locations.length() != function.instructions.length() ||
@@ -112,7 +112,7 @@ pub fn[Inst] AllocationBuilder::from_plan_storage(
 ///|
 pub fn[Inst] AllocationBuilder::value_type_at(
   self : AllocationBuilder[Inst],
-  value : Int,
+  value : Int32,
 ) -> ValueType {
   self.function.values[value].ty
 }
@@ -120,9 +120,9 @@ pub fn[Inst] AllocationBuilder::value_type_at(
 ///|
 pub fn[Inst] AllocationBuilder::operand_value_at(
   self : AllocationBuilder[Inst],
-  instruction : Int,
-  operand : Int,
-) -> Int {
+  instruction : Int32,
+  operand : Int32,
+) -> Int32 {
   let data = self.function.instructions[instruction]
   self.function.operands[data.operand_start + operand].vreg.id
 }
@@ -130,10 +130,10 @@ pub fn[Inst] AllocationBuilder::operand_value_at(
 ///|
 pub fn[Inst] AllocationBuilder::create_stack_slot(
   self : AllocationBuilder[Inst],
-  value : Int,
-  size : Int,
-  alignment : Int,
-) -> Int {
+  value : Int32,
+  size : Int32,
+  alignment : Int32,
+) -> Int32 {
   let slot = self.allocation.create_stack_slot(
     self.function.values[value].ty,
     size,
@@ -145,7 +145,7 @@ pub fn[Inst] AllocationBuilder::create_stack_slot(
 ///|
 pub fn[Inst] AllocationBuilder::assign_value(
   self : AllocationBuilder[Inst],
-  value : Int,
+  value : Int32,
   location : AllocationLocation,
 ) -> Bool {
   if value < 0 ||
@@ -163,7 +163,7 @@ pub fn[Inst] AllocationBuilder::assign_value(
 ///|
 pub fn[Inst] AllocationBuilder::value_location(
   self : AllocationBuilder[Inst],
-  value : Int,
+  value : Int32,
 ) -> AllocationLocation? {
   self.allocation.value_locations[value]
 }
@@ -171,8 +171,8 @@ pub fn[Inst] AllocationBuilder::value_location(
 ///|
 pub fn[Inst] AllocationBuilder::assign_operand(
   self : AllocationBuilder[Inst],
-  instruction : Int,
-  operand : Int,
+  instruction : Int32,
+  operand : Int32,
   location : AllocationLocation,
 ) -> Bool {
   if instruction < 0 || instruction >= self.function.instructions.length() {
@@ -197,9 +197,9 @@ pub fn[Inst] AllocationBuilder::assign_operand(
 ///|
 pub fn[Inst] AllocationBuilder::add_transfer(
   self : AllocationBuilder[Inst],
-  instruction : Int,
+  instruction : Int32,
   placement : PointPlacement,
-  value : Int,
+  value : Int32,
   from : AllocationLocation,
   to : AllocationLocation,
 ) -> Bool {
@@ -247,9 +247,9 @@ pub fn[Inst] AllocationBuilder::add_transfer(
 ///|
 pub fn[Inst] AllocationBuilder::add_edge_transfer(
   self : AllocationBuilder[Inst],
-  source_block : Int,
-  successor : Int,
-  value : Int,
+  source_block : Int32,
+  successor : Int32,
+  value : Int32,
   from : AllocationLocation,
   to : AllocationLocation,
 ) -> Bool {
@@ -280,8 +280,8 @@ pub fn[Inst] AllocationBuilder::add_edge_transfer(
 ///|
 pub fn[Inst] AllocationBuilder::add_safepoint_root(
   self : AllocationBuilder[Inst],
-  instruction : Int,
-  value : Int,
+  instruction : Int32,
+  value : Int32,
 ) -> Bool {
   if instruction < 0 ||
     instruction >= self.function.instructions.length() ||

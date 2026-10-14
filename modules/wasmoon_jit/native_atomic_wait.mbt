@@ -9,7 +9,7 @@ pub type NativeAtomicWait
 extern "c" fn atomic_wait_new(
   descriptor : MemoryDescriptor,
   offset : Int64,
-  width : Int,
+  width : Int32,
   expected : Int64,
   timeout : Int64,
 ) -> NativeAtomicWait = "wasmoon_atomic_wait_managed"
@@ -22,7 +22,7 @@ extern "c" fn NativeAtomicWait::allocated(self : NativeAtomicWait) -> Bool = "wa
 /// Returns -1 while pending, or the Wasm wait result 0/1/2. After cancellation
 /// returns 3. Polling never blocks the embedding thread.
 #borrow(self)
-pub extern "c" fn NativeAtomicWait::poll(self : NativeAtomicWait) -> Int = "wasmoon_atomic_wait_managed_poll"
+pub extern "c" fn NativeAtomicWait::poll(self : NativeAtomicWait) -> Int32 = "wasmoon_atomic_wait_managed_poll"
 
 ///|
 #borrow(self)
@@ -38,7 +38,7 @@ pub extern "c" fn NativeAtomicWait::pause(self : NativeAtomicWait) -> Unit = "wa
 pub fn atomic_wait_begin(
   descriptor : MemoryDescriptor,
   offset : Int64,
-  width : Int,
+  width : Int32,
   expected : Int64,
   timeout : Int64,
 ) -> NativeAtomicWait? {
@@ -55,8 +55,8 @@ pub fn atomic_wait_begin(
 pub extern "c" fn atomic_notify(
   descriptor : MemoryDescriptor,
   offset : Int64,
-  count : Int,
-) -> Int = "wasmoon_atomic_notify"
+  count : Int32,
+) -> Int32 = "wasmoon_atomic_notify"
 
 ///|
 extern "c" fn c_jit_get_atomic_wait32_ptr() -> Int64 = "wasmoon_jit_get_atomic_wait32_ptr"

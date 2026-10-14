@@ -50,7 +50,7 @@ fn validate_memory_limits(
 /// Validate table limits according to WASM spec
 fn validate_table_limits(
   limits : @types.Limits,
-  is_table64? : Bool = false,
+  is_table64~ : Bool = false,
 ) -> Unit raise ValidationError {
   // For table32, min and max must fit in 32 bits (< 2^32)
   let max_table32_size = 0x100000000L // 2^32
@@ -105,7 +105,7 @@ fn is_non_nullable_ref_type(ty : @types.ValueType) -> Bool {
 fn validate_table_type(
   table : @types.Table,
   ctx : ValidationContext,
-  func_addrs : Array[Int],
+  func_addrs : Array[Int32],
 ) -> Unit raise ValidationError {
   // Validate table limits
   validate_table_limits(table.type_.limits, is_table64=table.type_.is_table64)
@@ -131,7 +131,7 @@ fn validate_table_type(
 }
 
 ///|
-fn count_func_imports(imports : Array[@types.Import]) -> Int {
+fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Func(_) {
@@ -142,7 +142,7 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
-fn count_global_imports(imports : Array[@types.Import]) -> Int {
+fn count_global_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Global(_) {
@@ -153,7 +153,7 @@ fn count_global_imports(imports : Array[@types.Import]) -> Int {
 }
 
 ///|
-fn count_tag_imports(imports : Array[@types.Import]) -> Int {
+fn count_tag_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Tag(_) {

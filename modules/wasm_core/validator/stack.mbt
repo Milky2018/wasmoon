@@ -4,7 +4,7 @@
 priv struct OperandStack {
   stack : Array[@types.ValueType]
   mut polymorphic : Bool // true after unreachable instruction
-  mut underflow_limit : Int // stack height at which polymorphism was enabled
+  mut underflow_limit : Int32 // stack height at which polymorphism was enabled
   subtyping_ctx : @types.SubtypingContext?
 }
 
@@ -319,7 +319,7 @@ fn OperandStack::set_polymorphic(self : OperandStack) -> Unit {
 /// but actual values pushed after unreachable still count.
 fn OperandStack::check_height(
   self : OperandStack,
-  expected : Int,
+  expected : Int32,
   context : String,
 ) -> Unit raise ValidationError {
   let actual = self.stack.length()

@@ -14,20 +14,20 @@
 pub struct SubtypingContext {
   types1 : Array[SubType]
   types2 : Array[SubType]
-  rec_groups1 : Array[Int]
-  rec_groups2 : Array[Int]
-  canonical1 : Array[Int]
-  canonical2 : Array[Int]
+  rec_groups1 : Array[Int32]
+  rec_groups2 : Array[Int32]
+  canonical1 : Array[Int32]
+  canonical2 : Array[Int32]
   cross_module : Bool
-  visited : Map[(Int, Int), Bool]
+  visited : Map[(Int32, Int32), Bool]
 }
 
 ///|
 /// Create a context for same-module subtyping.
 pub fn SubtypingContext::same_module(
   types : Array[SubType],
-  rec_groups? : Array[Int] = [],
-  canonical? : Array[Int] = [],
+  rec_groups~ : Array[Int32] = [],
+  canonical~ : Array[Int32] = [],
 ) -> SubtypingContext {
   {
     types1: types,
@@ -46,10 +46,10 @@ pub fn SubtypingContext::same_module(
 pub fn SubtypingContext::cross_module(
   types1 : Array[SubType],
   types2 : Array[SubType],
-  rec_groups1? : Array[Int] = [],
-  rec_groups2? : Array[Int] = [],
-  canonical1? : Array[Int] = [],
-  canonical2? : Array[Int] = [],
+  rec_groups1~ : Array[Int32] = [],
+  rec_groups2~ : Array[Int32] = [],
+  canonical1~ : Array[Int32] = [],
+  canonical2~ : Array[Int32] = [],
 ) -> SubtypingContext {
   {
     types1,
@@ -72,8 +72,8 @@ pub fn SubtypingContext::cross_module(
 /// Structural subtyping is NOT considered at runtime (only for validation).
 pub fn SubtypingContext::is_subtype(
   self : SubtypingContext,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   // Same index in same module means same type
   if !self.cross_module && idx1 == idx2 {
@@ -136,8 +136,8 @@ fn SubtypingContext::composite_subtype(
   self : SubtypingContext,
   c1 : CompositeType,
   c2 : CompositeType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   match (c1, c2) {
     (Func(f1), Func(f2)) => self.func_subtype(f1, f2, idx1, idx2)
@@ -158,8 +158,8 @@ fn SubtypingContext::func_subtype(
   self : SubtypingContext,
   f1 : FuncType,
   f2 : FuncType,
-  _idx1 : Int,
-  _idx2 : Int,
+  _idx1 : Int32,
+  _idx2 : Int32,
 ) -> Bool {
   // Parameter and result counts must match
   if f1.params.length() != f2.params.length() ||
@@ -190,8 +190,8 @@ fn SubtypingContext::struct_subtype(
   self : SubtypingContext,
   s1 : StructType,
   s2 : StructType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   // Width: subtype must have at least as many fields
   if s1.fields.length() < s2.fields.length() {
@@ -215,8 +215,8 @@ fn SubtypingContext::array_subtype(
   self : SubtypingContext,
   a1 : ArrayType,
   a2 : ArrayType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   self.field_subtype(a1.element, a2.element, idx1, idx2)
 }
@@ -229,8 +229,8 @@ fn SubtypingContext::field_subtype(
   self : SubtypingContext,
   f1 : FieldType,
   f2 : FieldType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   if f2.mutable {
     // Mutable fields require exact type equality (invariance)
@@ -251,8 +251,8 @@ fn SubtypingContext::storage_type_subtype(
   self : SubtypingContext,
   s1 : StorageType,
   s2 : StorageType,
-  _idx1 : Int,
-  _idx2 : Int,
+  _idx1 : Int32,
+  _idx2 : Int32,
 ) -> Bool {
   match (s1, s2) {
     (Val(v1), Val(v2)) => self.value_type_subtype(v1, v2)
@@ -267,8 +267,8 @@ fn SubtypingContext::storage_types_equal(
   self : SubtypingContext,
   s1 : StorageType,
   s2 : StorageType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   match (s1, s2) {
     (Val(v1), Val(v2)) => self.value_types_equal(v1, v2, idx1, idx2)
@@ -283,8 +283,8 @@ pub fn SubtypingContext::value_type_subtype(
   self : SubtypingContext,
   v1 : ValueType,
   v2 : ValueType,
-  _idx1? : Int = 0,
-  _idx2? : Int = 0,
+  _idx1~ : Int32 = 0,
+  _idx2~ : Int32 = 0,
 ) -> Bool {
   match (v1, v2) {
     (RefContTyped(a), RefContTyped(b))
@@ -373,8 +373,8 @@ fn SubtypingContext::value_types_equal(
   self : SubtypingContext,
   v1 : ValueType,
   v2 : ValueType,
-  _idx1 : Int,
-  _idx2 : Int,
+  _idx1 : Int32,
+  _idx2 : Int32,
 ) -> Bool {
   if v1 == v2 {
     return true
@@ -401,8 +401,8 @@ fn SubtypingContext::value_types_equal(
 /// or are structurally identical.
 fn SubtypingContext::types_equivalent(
   self : SubtypingContext,
-  t1 : Int,
-  t2 : Int,
+  t1 : Int32,
+  t2 : Int32,
 ) -> Bool {
   // Same index in same module
   if !self.cross_module && t1 == t2 {
@@ -432,8 +432,8 @@ fn SubtypingContext::types_equivalent(
 /// declares a supertype, the subtype's structure is compatible.
 pub fn SubtypingContext::validate_declared_subtype(
   self : SubtypingContext,
-  sub_idx : Int,
-  super_idx : Int,
+  sub_idx : Int32,
+  super_idx : Int32,
 ) -> Bool {
   if sub_idx < 0 ||
     sub_idx >= self.types1.length() ||

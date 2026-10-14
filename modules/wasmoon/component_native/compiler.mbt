@@ -1,12 +1,12 @@
 ///|
-fn remap_component_index(index : Int, aliases : Map[Int, Int]) -> Int {
+fn remap_component_index(index : Int32, aliases : Map[Int32, Int32]) -> Int32 {
   aliases.get(index).unwrap_or(index)
 }
 
 ///|
-fn component_alias_map(addresses : Array[Int]) -> Map[Int, Int] {
-  let first_by_address : Map[Int, Int] = Map([])
-  let aliases : Map[Int, Int] = Map([])
+fn component_alias_map(addresses : Array[Int32]) -> Map[Int32, Int32] {
+  let first_by_address : Map[Int32, Int32] = Map([])
+  let aliases : Map[Int32, Int32] = Map([])
   for index, address in addresses {
     match first_by_address.get(address) {
       Some(first) => if first != index { aliases[index] = first }
@@ -19,8 +19,8 @@ fn component_alias_map(addresses : Array[Int]) -> Map[Int, Int] {
 ///|
 fn rewrite_component_instr_indices(
   instructions : Array[@types.Instruction],
-  global_aliases : Map[Int, Int],
-  tag_aliases : Map[Int, Int],
+  global_aliases : Map[Int32, Int32],
+  tag_aliases : Map[Int32, Int32],
 ) -> Array[@types.Instruction] {
   let rewritten : Array[@types.Instruction] = []
   for instruction in instructions {
@@ -173,7 +173,7 @@ fn rewrite_component_alias_indices(
 }
 
 ///|
-fn component_function_name(module_ : @types.Module, index : Int) -> String {
+fn component_function_name(module_ : @types.Module, index : Int32) -> String {
   for export_ in module_.exports {
     if export_.desc is Func(exported) && exported == index {
       return export_.name
@@ -184,7 +184,7 @@ fn component_function_name(module_ : @types.Module, index : Int) -> String {
 
 ///|
 fn component_artifact_optimization_level(
-  level : Int,
+  level : Int32,
 ) -> @artifact.OptimizationLevel {
   match level {
     0 => O0
@@ -202,7 +202,7 @@ fn append_component_i64(bytes : Array[Byte], value : Int64) -> Unit {
 }
 
 ///|
-fn component_semantic_features(actual_memory_max : Int?) -> Bytes {
+fn component_semantic_features(actual_memory_max : Int32?) -> Bytes {
   let bytes : Array[Byte] = [1, 1]
   match actual_memory_max {
     Some(max) => {
@@ -225,8 +225,8 @@ fn encoded_component_module(module_ : @types.Module) -> Bytes {
 fn compile_component_artifact(
   module_ : @types.Module,
   target : @wasmoon_jit.NativeTarget,
-  actual_memory_max : Int?,
-  opt_level : Int,
+  actual_memory_max : Int32?,
+  opt_level : Int32,
 ) -> @artifact.Artifact raise @runtime_impl.ComponentRuntimeError {
   @validator.validate_module(module_) catch {
     error =>
@@ -326,7 +326,7 @@ fn load_component_jit_context(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   target : @wasmoon_jit.NativeTarget,
-  opt_level : Int,
+  opt_level : Int32,
   classify_suspension : (@runtime.RuntimeError) -> Bool,
 ) -> (@core_jit.JITModuleContext, @core_jit.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
   let lowered_module = rewrite_component_alias_indices(module_, instance)

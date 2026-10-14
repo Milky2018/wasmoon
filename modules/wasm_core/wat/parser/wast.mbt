@@ -2,7 +2,7 @@
 /// Parse a WAST script (sequence of commands)
 pub fn parse_wast(input : String) -> WastScript raise WatError {
   let parser = Parser::Parser(input)
-  let commands : Array[(WastCommand, Int)] = []
+  let commands : Array[(WastCommand, Int32)] = []
 
   // Check for inline module (module fields without explicit (module ...) wrapper)
   // WebAssembly spec allows this shorthand where (func) (memory 0) is equivalent to (module (func) (memory 0))
@@ -535,7 +535,7 @@ fn Parser::parse_wast_thread(self : Parser) -> WastCommand raise WatError {
   self.advance()
   let name = self.parse_wast_required_id()
   let mut shared = None
-  let commands : Array[(WastCommand, Int)] = []
+  let commands : Array[(WastCommand, Int32)] = []
   while self.current.token != RParen {
     let line = self.lexer.line
     self.expect_lparen()
@@ -1250,7 +1250,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
 }
 
 ///|
-fn Parser::parse_wast_i32(self : Parser) -> Int raise WatError {
+fn Parser::parse_wast_i32(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -1324,7 +1324,7 @@ fn Parser::parse_wast_f64(self : Parser) -> Double raise WatError {
 }
 
 ///|
-fn parse_wast_int(s : String) -> Int raise WatError {
+fn parse_wast_int(s : String) -> Int32 raise WatError {
   if s.length() == 0 {
     raise InvalidNumber(s, { line: 0, column: 0, })
   }
@@ -1366,7 +1366,7 @@ fn parse_wast_int(s : String) -> Int raise WatError {
 }
 
 ///|
-fn parse_wast_hex_int(s : String, start : Int) -> Int raise WatError {
+fn parse_wast_hex_int(s : String, start : Int32) -> Int32 raise WatError {
   let mut result = 0
   for i in start..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
@@ -1430,7 +1430,7 @@ fn parse_wast_int64(s : String) -> Int64 raise WatError {
 }
 
 ///|
-fn parse_wast_hex_int64(s : String, start : Int) -> Int64 raise WatError {
+fn parse_wast_hex_int64(s : String, start : Int32) -> Int64 raise WatError {
   let mut result = 0L
   for i in start..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()

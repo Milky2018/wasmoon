@@ -14,9 +14,9 @@ pub const FUNCREF_TAG : Int64 = @wasm_milkir.FUNCREF_TAG
 ///|
 /// Result of running WAST commands
 pub struct WastResult {
-  mut passed : Int
-  mut failed : Int
-  skipped : Int
+  mut passed : Int32
+  mut failed : Int32
+  skipped : Int32
   failures : Array[String]
 }
 
@@ -63,11 +63,11 @@ pub struct WastContext {
 ///|
 pub fn WastContext::WastContext(
   use_jit : Bool,
-  bulk_memory? : Bool = true,
-  stack_switching? : Bool = false,
-  nan_canonicalization? : Bool = false,
-  jit_compiler? : JITCompiler? = None,
-  register_named_modules? : Bool = false,
+  bulk_memory~ : Bool = true,
+  stack_switching~ : Bool = false,
+  nan_canonicalization~ : Bool = false,
+  jit_compiler~ : JITCompiler? = None,
+  register_named_modules~ : Bool = false,
 ) -> WastContext {
   // Use c_heap when JIT is enabled for GC support
   let store = if use_jit {
@@ -227,11 +227,11 @@ pub fn run_wast_commands(
   base_dir : String,
   use_jit : Bool,
   show_success : Bool,
-  bulk_memory? : Bool = true,
-  stack_switching? : Bool = false,
-  nan_canonicalization? : Bool = false,
-  jit_compiler? : JITCompiler? = None,
-  register_named_modules? : Bool = false,
+  bulk_memory~ : Bool = true,
+  stack_switching~ : Bool = false,
+  nan_canonicalization~ : Bool = false,
+  jit_compiler~ : JITCompiler? = None,
+  register_named_modules~ : Bool = false,
 ) -> WastResult {
   let result = WastResult::WastResult()
   let ctx = WastContext::WastContext(
@@ -263,7 +263,7 @@ pub fn run_wast_commands(
 pub fn run_wast_command(
   ctx : WastContext,
   cmd : @wat.WastCommand,
-  line : Int,
+  line : Int32,
   result : WastResult,
   base_dir : String,
   show_success : Bool,
@@ -662,7 +662,7 @@ pub fn invoke_action(
 ///|
 pub fn wast_value_to_runtime(
   v : @wat.WastValue,
-  func_addrs? : Array[Int] = [],
+  func_addrs~ : Array[Int32] = [],
 ) -> @types.Value raise WastRunnerError {
   match v {
     I32(n) => I32(n)
@@ -697,7 +697,7 @@ pub fn wast_value_to_runtime(
 pub fn values_match(
   actual : @types.Value,
   expected : @wat.WastValue,
-  func_addrs? : Array[Int] = [],
+  func_addrs~ : Array[Int32] = [],
 ) -> Bool {
   match (actual, expected) {
     (I32(a), I32(e)) => a == e
@@ -879,23 +879,23 @@ fn build_partial_instance_for_trapped_module(
   ctx : WastContext,
   mod_ : @types.Module,
   imports : @runtime.Imports,
-  before_funcs : Int,
-  before_tables : Int,
-  before_mems : Int,
-  before_globals : Int,
-  before_tags : Int,
+  before_funcs : Int32,
+  before_tables : Int32,
+  before_mems : Int32,
+  before_globals : Int32,
+  before_tags : Int32,
 ) -> @runtime.ModuleInstance? {
   let after_funcs = ctx.store.funcs.length()
   if after_funcs <= before_funcs {
     return None
   }
 
-  let func_addrs : Array[Int] = []
-  let func_type_indices : Array[Int] = []
-  let table_addrs : Array[Int] = []
-  let mem_addrs : Array[Int] = []
-  let global_addrs : Array[Int] = []
-  let tag_addrs : Array[Int] = []
+  let func_addrs : Array[Int32] = []
+  let func_type_indices : Array[Int32] = []
+  let table_addrs : Array[Int32] = []
+  let mem_addrs : Array[Int32] = []
+  let global_addrs : Array[Int32] = []
+  let tag_addrs : Array[Int32] = []
 
   for imp in mod_.imports {
     match imp.desc {

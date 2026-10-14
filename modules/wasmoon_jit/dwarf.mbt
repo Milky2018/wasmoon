@@ -35,8 +35,8 @@ pub fn DWARFBuilder::add_function(
   self : DWARFBuilder,
   name : String,
   addr : Int64,
-  size : Int,
-  func_idx : Int,
+  size : Int32,
+  func_idx : Int32,
 ) -> Unit {
   // Convert string to null-terminated bytes
   let name_bytes = Bytes::from_array(
@@ -54,7 +54,7 @@ pub fn DWARFBuilder::add_function(
 /// verbose: if true, print debug info to stderr
 pub fn DWARFBuilder::register(
   self : DWARFBuilder,
-  verbose? : Bool = false,
+  verbose~ : Bool = false,
 ) -> Unit {
   c_dwarf_register(self, if verbose { 1 } else { 0 })
   // Set as active for backtrace lookups
@@ -80,7 +80,7 @@ pub fn DWARFBuilder::destroy(self : DWARFBuilder) -> Unit {
 /// Function lookup result
 pub struct FunctionInfo {
   name : String
-  func_idx : Int
+  func_idx : Int32
   offset : Int64
 }
 
@@ -123,7 +123,7 @@ pub struct BacktraceFrame {
   pc : Int64
   name : String
   offset : Int64
-  func_idx : Int
+  func_idx : Int32
 }
 
 ///|

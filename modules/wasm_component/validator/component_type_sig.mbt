@@ -2,11 +2,11 @@
 fn componenttype_import_func_sigs_of_decls(
   decls : Array[@component.ComponentDecl],
   global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int?],
+  global_resource_ids : Array[Int32?],
 ) -> Map[String, FuncSigShape] {
   let out : Map[String, FuncSigShape] = Map([])
   let local_types : Array[@component.TypeDef] = []
-  let local_resource_ids : Array[Int?] = []
+  let local_resource_ids : Array[Int32?] = []
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
@@ -99,11 +99,11 @@ fn componenttype_import_func_sigs_of_decls(
 fn componenttype_import_type_sigs_of_decls(
   decls : Array[@component.ComponentDecl],
   global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int?],
+  global_resource_ids : Array[Int32?],
 ) -> Map[String, TypeSig] {
   let out : Map[String, TypeSig] = Map([])
   let local_types : Array[@component.TypeDef] = []
-  let local_resource_ids : Array[Int?] = []
+  let local_resource_ids : Array[Int32?] = []
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
@@ -111,7 +111,7 @@ fn componenttype_import_type_sigs_of_decls(
       next_rid = v + 1
     }
   }
-  fn record_type_slot(as_resource : Bool) -> Int {
+  fn record_type_slot(as_resource : Bool) -> Int32 {
     let idx = local_types.length()
     if as_resource {
       local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
@@ -212,11 +212,11 @@ fn componenttype_import_type_bounds_of_decls(
 fn componenttype_export_type_sigs_of_decls(
   decls : Array[@component.ComponentDecl],
   global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int?],
+  global_resource_ids : Array[Int32?],
 ) -> Map[String, TypeSig] {
   let out : Map[String, TypeSig] = Map([])
   let local_types : Array[@component.TypeDef] = []
-  let local_resource_ids : Array[Int?] = []
+  let local_resource_ids : Array[Int32?] = []
   let mut next_rid = 0
   for rid in global_resource_ids {
     if rid is Some(value) && value >= next_rid {
@@ -229,7 +229,7 @@ fn componenttype_export_type_sigs_of_decls(
     local_resource_ids.push(None)
   }
 
-  fn push_resource() -> Int {
+  fn push_resource() -> Int32 {
     let idx = local_types.length()
     local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
     local_resource_ids.push(Some(next_rid))
@@ -237,7 +237,7 @@ fn componenttype_export_type_sigs_of_decls(
     idx
   }
 
-  fn push_eq(idx : Int) -> Unit {
+  fn push_eq(idx : Int32) -> Unit {
     if idx >= 0 && idx < local_types.length() {
       local_types.push(local_types[idx])
       local_resource_ids.push(local_resource_ids[idx])
@@ -309,11 +309,11 @@ fn componenttype_export_type_sigs_of_decls(
 fn componenttype_export_func_sigs_of_decls(
   decls : Array[@component.ComponentDecl],
   global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int?],
+  global_resource_ids : Array[Int32?],
 ) -> Map[String, FuncSigShape] {
   let out : Map[String, FuncSigShape] = Map([])
   let local_types : Array[@component.TypeDef] = []
-  let local_resource_ids : Array[Int?] = []
+  let local_resource_ids : Array[Int32?] = []
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
@@ -406,15 +406,15 @@ fn componenttype_export_func_sigs_of_decls(
 /// imports, keyed by the component import name.
 fn component_import_core_module_exports_of(
   c : @component.Component,
-) -> Map[String, Map[String, Int]] raise ComponentValidationError {
-  let core_type_exports : Array[Map[String, Int]?] = []
+) -> Map[String, Map[String, Int32]] raise ComponentValidationError {
+  let core_type_exports : Array[Map[String, Int32]?] = []
   for payload in c.core_types {
     let exports = parse_core_type_section(payload, -1, 0, [])
     for e in exports {
       core_type_exports.push(e)
     }
   }
-  let result : Map[String, Map[String, Int]] = Map([])
+  let result : Map[String, Map[String, Int32]] = Map([])
   for i in c.imports {
     if (importname_to_string(i.name), i.desc)
       is (Some(name), CoreModuleType(tyidx)) &&
@@ -465,9 +465,9 @@ fn component_import_core_module_import_sigs_of(
 ///|
 fn componenttype_import_core_module_sigs_of_decls(
   decls : Array[@component.ComponentDecl],
-) -> (Map[String, Map[String, CoreExternType]], Map[String, Map[String, Int]]) raise ComponentValidationError {
+) -> (Map[String, Map[String, CoreExternType]], Map[String, Map[String, Int32]]) raise ComponentValidationError {
   let local_core_import_sigs : Array[Map[String, CoreExternType]?] = []
-  let local_core_export_kinds : Array[Map[String, Int]?] = []
+  let local_core_export_kinds : Array[Map[String, Int32]?] = []
   let mut core_type_bound = 0
   for d in decls {
     match d {
@@ -485,7 +485,7 @@ fn componenttype_import_core_module_sigs_of_decls(
           for imp in imps {
             imp_map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
           }
-          let exp_kinds : Map[String, Int] = Map([])
+          let exp_kinds : Map[String, Int32] = Map([])
           for kv in exps.iter() {
             let (nm, ty) = kv
             exp_kinds.set(nm, core_kind_of_extern_type(ty))
@@ -521,7 +521,7 @@ fn componenttype_import_core_module_sigs_of_decls(
     }
   }
   let import_sigs : Map[String, Map[String, CoreExternType]] = Map([])
-  let export_kinds : Map[String, Map[String, Int]] = Map([])
+  let export_kinds : Map[String, Map[String, Int32]] = Map([])
   for d in decls {
     if d is Import(name, _attributes, desc) &&
       desc is CoreModuleType(tyidx) &&
@@ -539,7 +539,10 @@ fn componenttype_import_core_module_sigs_of_decls(
 }
 
 ///|
-fn check_typeidx(idx : Int, bound : Int) -> Unit raise ComponentValidationError {
+fn check_typeidx(
+  idx : Int32,
+  bound : Int32,
+) -> Unit raise ComponentValidationError {
   if idx < 0 || idx >= bound {
     raise InvalidTypeIndex(idx)
   }
@@ -549,7 +552,7 @@ fn check_typeidx(idx : Int, bound : Int) -> Unit raise ComponentValidationError 
 fn check_sortidx(
   sortidx : @component.SortIdx,
   counts : Counts,
-  type_bound : Int,
+  type_bound : Int32,
 ) -> Unit raise ComponentValidationError {
   let idx = sortidx.idx
   match sortidx.sort {
@@ -684,8 +687,8 @@ fn validate_valtype(
 
 ///|
 fn check_core_typeidx(
-  idx : Int,
-  bound : Int,
+  idx : Int32,
+  bound : Int32,
 ) -> Unit raise ComponentValidationError {
   if idx < 0 || idx >= bound {
     raise InvalidCoreTypeIndex(idx)
@@ -695,8 +698,8 @@ fn check_core_typeidx(
 ///|
 fn outer_type_of_alias(
   type_outers : Array[Array[@component.TypeDef?]],
-  count : Int,
-  idx : Int,
+  count : Int32,
+  idx : Int32,
 ) -> @component.TypeDef? raise ComponentValidationError {
   if count <= 0 || count > type_outers.length() {
     raise InvalidTypeIndex(idx)
@@ -708,10 +711,10 @@ fn outer_type_of_alias(
 
 ///|
 fn outer_core_type_of_alias(
-  core_type_outers : Array[Array[Map[String, Int]?]],
-  count : Int,
-  idx : Int,
-) -> Map[String, Int]? raise ComponentValidationError {
+  core_type_outers : Array[Array[Map[String, Int32]?]],
+  count : Int32,
+  idx : Int32,
+) -> Map[String, Int32]? raise ComponentValidationError {
   if count <= 0 || count > core_type_outers.length() {
     raise InvalidCoreTypeIndex(idx)
   }
@@ -724,7 +727,7 @@ fn outer_core_type_of_alias(
 fn valtype_contains_borrow(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  visiting : Map[Int, Int],
+  visiting : Map[Int32, Int32],
 ) -> Bool {
   match ty {
     Prim(_) => false
@@ -805,7 +808,7 @@ fn valtype_contains_borrow(
 fn is_map_key_type(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  visiting : Map[Int, Int],
+  visiting : Map[Int32, Int32],
 ) -> Bool {
   match ty {
     Prim(Bool)
@@ -840,9 +843,9 @@ fn validate_typedef(
   td : @component.TypeDef,
   cfg : ComponentValidationConfig,
   type_outers : Array[Array[@component.TypeDef?]],
-  type_outer_depths : Array[Int],
-  component_depth : Int,
-  core_type_outers : Array[Array[Map[String, Int]?]],
+  type_outer_depths : Array[Int32],
+  component_depth : Int32,
+  core_type_outers : Array[Array[Map[String, Int32]?]],
   allow_resource_defs : Bool,
 ) -> Unit raise ComponentValidationError {
   if type_outers.length() == 0 ||
@@ -853,7 +856,7 @@ fn validate_typedef(
     )
   }
   let type_table = type_outers[0]
-  let outer_core_type_bounds : Array[Int] = []
+  let outer_core_type_bounds : Array[Int32] = []
   for i in 0..<core_type_outers.length() {
     outer_core_type_bounds.push(core_type_outers[i].length())
   }
@@ -1018,16 +1021,16 @@ fn validate_typedef(
       // Component type declarations define their own internal type/core-type
       // index spaces referenced by later imports/exports within the same type.
       let local_type_table : Array[@component.TypeDef?] = []
-      let local_resource_ids : Array[Int?] = []
+      let local_resource_ids : Array[Int32?] = []
       let mut local_core_type_bound = 0
       let seen_imports : Map[String, String] = Map([])
       let seen_exports : Map[String, String] = Map([])
-      let local_named_types : Map[Int, Int] = Map([])
-      let local_import_resource_names : Map[String, Int] = Map([])
-      let local_export_resource_names : Map[String, Int] = Map([])
-      let local_import_resource_type_idxs : Map[Int, Int] = Map([])
-      let local_export_resource_type_idxs : Map[Int, Int] = Map([])
-      let local_core_type_exports : Array[Map[String, Int]?] = []
+      let local_named_types : Map[Int32, Int32] = Map([])
+      let local_import_resource_names : Map[String, Int32] = Map([])
+      let local_export_resource_names : Map[String, Int32] = Map([])
+      let local_import_resource_type_idxs : Map[Int32, Int32] = Map([])
+      let local_export_resource_type_idxs : Map[Int32, Int32] = Map([])
+      let local_core_type_exports : Array[Map[String, Int32]?] = []
       for d in decls {
         match d {
           CoreType(bytes) => {
@@ -1289,7 +1292,7 @@ fn validate_typedef(
       let local_type_table : Array[@component.TypeDef?] = []
       let mut local_core_type_bound = 0
       let seen_exports : Map[String, String] = Map([])
-      let local_core_type_exports : Array[Map[String, Int]?] = []
+      let local_core_type_exports : Array[Map[String, Int32]?] = []
       for d in decls {
         match d {
           CoreType(bytes) => {
@@ -1430,7 +1433,7 @@ fn validate_typedef(
 fn validate_externdesc(
   desc : @component.ExternDesc,
   type_table : Array[@component.TypeDef?],
-  core_type_bound : Int,
+  core_type_bound : Int32,
 ) -> Unit raise ComponentValidationError {
   match desc {
     CoreModuleType(tyidx) => check_typeidx(tyidx, core_type_bound)
@@ -1575,7 +1578,7 @@ fn canon_has_post_return(opts : Array[@component.CanonOpt]) -> Bool {
 }
 
 ///|
-fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int? {
+fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int32? {
   for o in opts {
     if o is Memory(idx) {
       return Some(idx)
@@ -1585,7 +1588,7 @@ fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int? {
 }
 
 ///|
-fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int? {
+fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int32? {
   for o in opts {
     if o is Realloc(idx) {
       return Some(idx)
@@ -1595,7 +1598,7 @@ fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int? {
 }
 
 ///|
-fn canon_post_return_idx(opts : Array[@component.CanonOpt]) -> Int? {
+fn canon_post_return_idx(opts : Array[@component.CanonOpt]) -> Int32? {
   for o in opts {
     if o is PostReturn(idx) {
       return Some(idx)
@@ -1677,7 +1680,7 @@ fn functype_async_lift_needs_memory(
 fn valtype_contains_list_or_string(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  visiting : Map[Int, Unit],
+  visiting : Map[Int32, Unit],
 ) -> Bool {
   match ty {
     Prim(String) => true

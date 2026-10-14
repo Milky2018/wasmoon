@@ -17,7 +17,7 @@ pub(all) enum FileType {
 /// Open file entry
 pub(all) struct OpenFile {
   /// Native file descriptor
-  native_fd : Int
+  native_fd : Int32
   /// File type
   file_type : FileType
   /// Host path (for debugging)
@@ -28,7 +28,7 @@ pub(all) struct OpenFile {
   /// Positioned I/O and host append operations never implicitly move it.
   mut position : Int64
   /// File access flags
-  mut flags : Int
+  mut flags : Int32
   /// Effective WASIp1 base rights granted to this descriptor
   mut rights_base : Int64
   /// Effective WASIp1 inheriting rights granted to this descriptor
@@ -67,15 +67,15 @@ pub(all) struct WasiContext {
   /// Environment variables (key=value pairs)
   env : Array[String]
   /// Explicit host signal policy; None denies process signals.
-  signal_handler : ((Int) -> Int)?
+  signal_handler : ((Int32) -> Int32)?
   /// Exit code (set by proc_exit)
-  mut exit_code : Int?
+  mut exit_code : Int32?
   /// Preopen directories: (fd, host_path, guest_path)
   preopens : Array[(Fd, String, String)]
   /// Next available file descriptor
-  mut next_fd : Int
+  mut next_fd : Int32
   /// Open files: wasi_fd -> OpenFile
-  open_files : @hashmap.HashMap[Int, OpenFile]
+  open_files : @hashmap.HashMap[Int32, OpenFile]
   /// Rights follow each stream identity when its descriptor is renumbered.
   stdio_rights : FixedArray[(Int64, Int64)]
   /// Output callback for stdout
@@ -97,11 +97,11 @@ pub(all) struct WasiContext {
   /// Whether stderr descriptor is still open
   mut stderr_open : Bool
   /// Current descriptor number bound to stdin stream (-1 if closed/none)
-  mut stdin_fd : Int
+  mut stdin_fd : Int32
   /// Current descriptor number bound to stdout stream (-1 if closed/none)
-  mut stdout_fd : Int
+  mut stdout_fd : Int32
   /// Current descriptor number bound to stderr stream (-1 if closed/none)
-  mut stderr_fd : Int
+  mut stderr_fd : Int32
 }
 
 ///|
@@ -137,7 +137,7 @@ pub fn WasiContext::WasiContext() -> WasiContext {
 ///|
 /// Builder for WasiContext
 pub(all) struct WasiContextBuilder {
-  mut signal_handler : ((Int) -> Int)?
+  mut signal_handler : ((Int32) -> Int32)?
   mut args : Array[String]
   env : Array[String]
   preopens : Array[(String, String)]
@@ -319,7 +319,7 @@ fn write_native_stderr(bytes : Bytes) -> Unit {
 /// Build the WasiContext
 pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
   let preopens : Array[(Fd, String, String)] = []
-  let open_files : @hashmap.HashMap[Int, OpenFile] = HashMap([])
+  let open_files : @hashmap.HashMap[Int32, OpenFile] = HashMap([])
   let mut fd = 3
   for i, preopen in self.preopens + self.readonly_preopens {
     let read_only = i >= self.preopens.length()
@@ -384,13 +384,13 @@ pub fn WasiContext::has_exited(self : WasiContext) -> Bool {
 
 ///|
 /// Get the exit code (if process has exited)
-pub fn WasiContext::get_exit_code(self : WasiContext) -> Int? {
+pub fn WasiContext::get_exit_code(self : WasiContext) -> Int32? {
   self.exit_code
 }
 
 ///|
 /// Allocate a new file descriptor and register an open file
-pub fn WasiContext::alloc_fd(self : WasiContext, file : OpenFile) -> Int {
+pub fn WasiContext::alloc_fd(self : WasiContext, file : OpenFile) -> Int32 {
   let fd = self.next_fd
   self.next_fd = self.next_fd + 1
   self.open_files.set(fd, file)
@@ -399,7 +399,7 @@ pub fn WasiContext::alloc_fd(self : WasiContext, file : OpenFile) -> Int {
 
 ///|
 /// Get an open file by WASI file descriptor
-pub fn WasiContext::get_file(self : WasiContext, fd : Int) -> OpenFile? {
+pub fn WasiContext::get_file(self : WasiContext, fd : Int32) -> OpenFile? {
   self.open_files.get(fd)
 }
 
@@ -408,7 +408,7 @@ pub fn WasiContext::get_file(self : WasiContext, fd : Int) -> OpenFile? {
 /// right. Stdio descriptors are handled separately by their dedicated paths.
 fn WasiContext::get_file_with_base_rights(
   self : WasiContext,
-  fd : Int,
+  fd : Int32,
   required : Int64,
 ) -> Result[OpenFile, Errno] {
   match self.open_files.get(fd) {
@@ -423,7 +423,7 @@ fn WasiContext::get_file_with_base_rights(
 
 ///|
 /// Close a file descriptor and remove it from tracking
-pub fn WasiContext::close_fd(self : WasiContext, fd : Int) -> Bool {
+pub fn WasiContext::close_fd(self : WasiContext, fd : Int32) -> Bool {
   match self.open_files.get(fd) {
     Some(file) => {
       // Close native file descriptor
@@ -437,7 +437,7 @@ pub fn WasiContext::close_fd(self : WasiContext, fd : Int) -> Bool {
 
 ///|
 /// Check if a file descriptor is valid
-pub fn WasiContext::is_valid_fd(self : WasiContext, fd : Int) -> Bool {
+pub fn WasiContext::is_valid_fd(self : WasiContext, fd : Int32) -> Bool {
   if fd == self.stdin_fd {
     return self.stdin_open
   }
@@ -454,7 +454,7 @@ pub fn WasiContext::is_valid_fd(self : WasiContext, fd : Int) -> Bool {
 /// Get the host path for a preopen directory by fd
 pub fn WasiContext::get_preopen_host_path(
   self : WasiContext,
-  fd : Int,
+  fd : Int32,
 ) -> String? {
   if !self.open_files.contains(fd) {
     return None
@@ -530,7 +530,7 @@ fn normalized_parent_path(normalized : String) -> String {
 ///|
 fn WasiContext::resolve_path_internal(
   self : WasiContext,
-  dir_fd : Int,
+  dir_fd : Int32,
   path : String,
   follow_leaf : Bool,
 ) -> Result[String, ResolvePathError] {
@@ -578,7 +578,7 @@ fn WasiContext::resolve_path_internal(
 /// production path operations must use the held directory descriptor.
 pub fn WasiContext::resolve_path(
   self : WasiContext,
-  dir_fd : Int,
+  dir_fd : Int32,
   path : String,
 ) -> Result[String, ResolvePathError] {
   self.resolve_path_internal(dir_fd, path, true)
@@ -589,7 +589,7 @@ pub fn WasiContext::resolve_path(
 /// containment check. This diagnostic result must not authorize host I/O.
 pub fn WasiContext::resolve_path_nofollow_leaf(
   self : WasiContext,
-  dir_fd : Int,
+  dir_fd : Int32,
   path : String,
 ) -> Result[String, ResolvePathError] {
   self.resolve_path_internal(dir_fd, path, false)

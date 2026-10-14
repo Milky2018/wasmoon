@@ -15,7 +15,7 @@ test "CPU clocks expose positive resolution and monotonic consumed CPU time" {
 ///|
 test "signal policy denies by default and never sees invalid tags" {
   inspect(@wasi.proc_raise_impl(15), content="58")
-  let observed : Array[Int] = []
+  let observed : Array[Int32] = []
   let context = @wasi.WasiContextBuilder::WasiContextBuilder()
     .signal_handler(signal => {
       observed.push(signal)

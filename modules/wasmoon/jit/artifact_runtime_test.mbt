@@ -18,7 +18,7 @@ fn runtime_artifact_manifest() -> @artifact.CompatibilityManifest raise @wasmoon
 
 ///|
 fn runtime_artifact_code(
-  return_value : Int?,
+  return_value : Int32?,
 ) -> Array[Byte] raise @wasmoon_jit.JitPipelineError {
   match (@wasmoon_jit.host_native_target(), return_value) {
     (X64, Some(value)) =>
@@ -51,10 +51,10 @@ fn runtime_artifact_code(
 
 ///|
 fn runtime_artifact_function(
-  function_index : Int,
+  function_index : Int32,
   code : Array[Byte],
   signature : @native.Signature,
-  relocations? : Array[@code_object.Relocation] = [],
+  relocations~ : Array[@code_object.Relocation] = [],
 ) -> @artifact.FunctionCode {
   {
     identity: {
@@ -76,7 +76,7 @@ fn runtime_artifact_function(
 ///|
 fn load_runtime_artifact(
   artifact : @artifact.Artifact,
-  runtime_symbols? : Array[@native.ExternalSymbol] = [],
+  runtime_symbols~ : Array[@native.ExternalSymbol] = [],
 ) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError {
   let compatibility = @wasmoon_jit.artifact_compatibility(
     artifact.manifest,

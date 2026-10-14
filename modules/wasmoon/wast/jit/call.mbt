@@ -1,13 +1,13 @@
 ///|
 /// Structured failure while invoking a prepared JIT module context.
 pub(all) suberror JITCoreCallError {
-  FunctionUnavailable(Int)
-  ArgumentTypeMismatch(Int)
-  ResultTypeMismatch(Int)
+  FunctionUnavailable(Int32)
+  ArgumentTypeMismatch(Int32)
+  ResultTypeMismatch(Int32)
   Trap(String)
   NativeFiberFailure(String)
   Cancelled
-  Exit(Int)
+  Exit(Int32)
   HostInvocation(@runtime.RuntimeError)
   GcSetupFailed(String)
   ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
@@ -274,9 +274,9 @@ fn JITModuleContext::start_core_func_resumable(
   self : JITModuleContext,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
-  async_host_driver? : @runtime.AsyncHostCallDriver? = None,
+  async_host_driver~ : @runtime.AsyncHostCallDriver? = None,
 ) -> JITCoreCallOutcome raise JITCoreCallError {
   guard self.jit_module.get_func(func_idx) is Some(func) else {
     raise FunctionUnavailable(func_idx)
@@ -351,7 +351,7 @@ pub fn JITModuleContext::call_core_func_resumable(
   self : JITModuleContext,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
 ) -> JITCoreCallOutcome raise JITCoreCallError {
   self.start_core_func_resumable(store, instance, func_idx, args)
@@ -367,7 +367,7 @@ pub fn JITModuleContext::call_core_func(
   self : JITModuleContext,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise JITCoreCallError {
   guard self.jit_module.get_func(func_idx) is Some(func) else {
@@ -428,7 +428,7 @@ pub async fn JITModuleContext::call_core_func_async(
   self : JITModuleContext,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise JITCoreCallError {
   @runtime.with_async_host_call_driver(async fn(driver) raise Error {

@@ -7,7 +7,7 @@
 /// Returns (mode, elem_type, init_exprs)
 fn Parser::read_elem_segment(
   self : Parser,
-  flags : Int,
+  flags : Int32,
 ) -> (@types.ElemMode, @types.ValueType, Array[Array[@types.Instruction]]) raise ParserError {
   // Flags encoding:
   // bit 0: 0 = active, 1 = passive/declarative

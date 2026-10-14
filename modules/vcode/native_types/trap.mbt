@@ -1,7 +1,7 @@
 ///|
 /// Stable payload carried by native trap instructions on all targets.
 /// Runtime embeddings decode this payload separately from host error codes.
-pub fn TrapReason::native_payload(self : TrapReason) -> UInt {
+pub fn TrapReason::native_payload(self : TrapReason) -> UInt32 {
   match self {
     Unreachable => 0U
     MemoryOutOfBounds => 1U

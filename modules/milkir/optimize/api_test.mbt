@@ -180,7 +180,7 @@ test "public O2 eliminates a duplicate expression" {
 ///|
 fn build_optimization_boundary_function(
   name : String,
-  instruction_count : Int,
+  instruction_count : Int32,
 ) -> @milkir.Function raise @milkir.VerifyError {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   let value = builder.add_param(I32)

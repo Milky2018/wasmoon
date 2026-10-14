@@ -103,7 +103,7 @@ fn build_entry_trampoline_milkir(
 }
 
 ///|
-pub fn entry_trampoline_value_type_code(ty : @types.ValueType) -> Int {
+pub fn entry_trampoline_value_type_code(ty : @types.ValueType) -> Int32 {
   match ty {
     I32 => 0
     I64 => 1
@@ -148,8 +148,8 @@ pub fn entry_trampoline_value_type_code(ty : @types.ValueType) -> Int {
 ///|
 pub fn entry_trampoline_type_codes(
   types : Array[@types.ValueType],
-) -> Array[Int] {
-  let codes : Array[Int] = []
+) -> Array[Int32] {
+  let codes : Array[Int32] = []
   for ty in types {
     codes.push(entry_trampoline_value_type_code(ty))
   }
@@ -157,7 +157,7 @@ pub fn entry_trampoline_type_codes(
 }
 
 ///|
-pub fn count_entry_trampoline_slots(types : Array[@types.ValueType]) -> Int {
+pub fn count_entry_trampoline_slots(types : Array[@types.ValueType]) -> Int32 {
   let mut slots = 0
   for ty in types {
     if ty is V128 {

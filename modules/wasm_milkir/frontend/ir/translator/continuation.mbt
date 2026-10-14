@@ -1,7 +1,7 @@
 ///|
 fn Translator::continuation_signature(
   self : Translator,
-  index : Int,
+  index : Int32,
 ) -> @types.FuncType {
   guard self.module_types[index].composite is Cont(function_index) else {
     abort("validated continuation type expected")
@@ -12,7 +12,7 @@ fn Translator::continuation_signature(
 ///|
 fn Translator::pop_continuation_arguments(
   self : Translator,
-  count : Int,
+  count : Int32,
 ) -> Array[Value] {
   let arguments : Array[Value] = []
   for _ in 0..<count {
@@ -23,7 +23,7 @@ fn Translator::pop_continuation_arguments(
 }
 
 ///|
-fn Translator::translate_cont_new(self : Translator, index : Int) -> Unit {
+fn Translator::translate_cont_new(self : Translator, index : Int32) -> Unit {
   let function = self.pop()
   self.push(
     @wasm_milkir.continuation_operation(self.builder, ContNew(index), [Ref], [
@@ -35,8 +35,8 @@ fn Translator::translate_cont_new(self : Translator, index : Int) -> Unit {
 ///|
 fn Translator::translate_cont_bind(
   self : Translator,
-  input : Int,
-  output : Int,
+  input : Int32,
+  output : Int32,
 ) -> Unit {
   let reference = self.pop()
   let count = self.continuation_signature(input).params.length() -
@@ -54,7 +54,7 @@ fn Translator::translate_cont_bind(
 }
 
 ///|
-fn Translator::translate_cont_suspend(self : Translator, tag : Int) -> Unit {
+fn Translator::translate_cont_suspend(self : Translator, tag : Int32) -> Unit {
   let signature = self.func_types[self.tags[tag].type_idx]
   let arguments = self.pop_continuation_arguments(signature.params.length())
   self.spill_locals_if_in_try()
@@ -70,7 +70,7 @@ fn Translator::translate_cont_suspend(self : Translator, tag : Int) -> Unit {
 }
 
 ///|
-fn continuation_payload_words(types : Array[Type]) -> Int {
+fn continuation_payload_words(types : Array[Type]) -> Int32 {
   let mut words = 0
   for ty in types {
     words += if ty == V128 { 2 } else { 1 }
@@ -83,8 +83,8 @@ fn continuation_payload_words(types : Array[Type]) -> Int {
 /// handler edge consumes its region; the normal edge consumes function results.
 fn Translator::translate_cont_resume(
   self : Translator,
-  index : Int,
-  exception_tag : Int,
+  index : Int32,
+  exception_tag : Int32,
   handlers : Array[@types.ResumeHandler],
 ) -> Unit {
   let reference = self.pop()
@@ -101,7 +101,7 @@ fn Translator::translate_cont_resume(
   let normal_types = signature.results.map(type_from_wasm)
   let result_types : Array[Type] = [I32]
   result_types.append(normal_types)
-  let regions : Array[(Int, Int)] = []
+  let regions : Array[(Int32, Int32)] = []
   for handler in handlers {
     match handler {
       OnLabel(tag, depth) => {
@@ -172,8 +172,8 @@ fn Translator::translate_cont_resume(
 ///|
 fn Translator::translate_cont_switch(
   self : Translator,
-  index : Int,
-  tag : Int,
+  index : Int32,
+  tag : Int32,
 ) -> Unit {
   let reference = self.pop()
   let signature = self.continuation_signature(index)

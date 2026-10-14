@@ -1,8 +1,8 @@
 ///|
 fn TaskRegistry::entries_thread_runnable(
   self : TaskRegistry,
-) -> Array[(Int64, Array[Int])] {
-  let result : Array[(Int64, Array[Int])] = []
+) -> Array[(Int64, Array[Int32])] {
+  let result : Array[(Int64, Array[Int32])] = []
   for id, record in self.records {
     if record.thread_runnable is Some(value) {
       result.push((id, value))

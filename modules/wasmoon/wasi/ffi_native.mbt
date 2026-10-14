@@ -102,7 +102,7 @@ pub(all) enum OpenFlags {
 
 ///|
 /// Convert OpenFlags to platform-specific int using C functions
-fn open_flags_to_int(flags : Array[OpenFlags]) -> Int {
+fn open_flags_to_int(flags : Array[OpenFlags]) -> Int32 {
   let mut result = 0
   for flag in flags {
     let v = match flag {
@@ -130,7 +130,7 @@ pub(all) enum Whence {
 }
 
 ///|
-fn whence_to_int(w : Whence) -> Int {
+fn whence_to_int(w : Whence) -> Int32 {
   match w {
     Set => 0
     Cur => 1
@@ -141,7 +141,11 @@ fn whence_to_int(w : Whence) -> Int {
 ///|
 /// Open a file with the given path and flags
 /// Returns file descriptor or None on error
-pub fn native_open(path : String, flags : Array[OpenFlags], mode : Int) -> Int? {
+pub fn native_open(
+  path : String,
+  flags : Array[OpenFlags],
+  mode : Int32,
+) -> Int32? {
   guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let flags_int = open_flags_to_int(flags)
   let fd = c_open(path_bytes, flags_int, mode)
@@ -153,7 +157,10 @@ pub fn native_open(path : String, flags : Array[OpenFlags], mode : Int) -> Int? 
 }
 
 ///|
-pub fn native_open_parent_beneath(root_fd : Int, parent_path : String) -> Int? {
+pub fn native_open_parent_beneath(
+  root_fd : Int32,
+  parent_path : String,
+) -> Int32? {
   guard string_to_cstring(parent_path) is Some(path_bytes) else { return None }
   let fd = c_open_parent_beneath(root_fd, path_bytes)
   if fd < 0 {
@@ -165,13 +172,13 @@ pub fn native_open_parent_beneath(root_fd : Int, parent_path : String) -> Int? {
 
 ///|
 pub fn native_openat_beneath(
-  root_fd : Int,
+  root_fd : Int32,
   parent_path : String,
   leaf : String,
   flags : Array[OpenFlags],
-  mode : Int,
+  mode : Int32,
   follow_final : Bool,
-) -> Int? {
+) -> Int32? {
   guard string_to_cstring(parent_path) is Some(parent_bytes) else {
     return None
   }
@@ -196,7 +203,7 @@ pub fn native_openat_beneath(
 }
 
 ///|
-pub fn native_dup(fd : Int) -> Int? {
+pub fn native_dup(fd : Int32) -> Int32? {
   let result = c_dup(fd)
   if result < 0 {
     None
@@ -207,57 +214,57 @@ pub fn native_dup(fd : Int) -> Int? {
 
 ///|
 /// Open a file for reading
-pub fn native_open_read(path : String) -> Int? {
+pub fn native_open_read(path : String) -> Int32? {
   native_open(path, [ReadOnly], 0)
 }
 
 ///|
 /// Open a file for writing (create if not exists, truncate if exists)
-pub fn native_open_write(path : String) -> Int? {
+pub fn native_open_write(path : String) -> Int32? {
   native_open(path, [WriteOnly, Create, Truncate], 0o644)
 }
 
 ///|
-pub fn native_o_rdonly() -> Int {
+pub fn native_o_rdonly() -> Int32 {
   c_o_rdonly()
 }
 
 ///|
-pub fn native_o_wronly() -> Int {
+pub fn native_o_wronly() -> Int32 {
   c_o_wronly()
 }
 
 ///|
-pub fn native_o_rdwr() -> Int {
+pub fn native_o_rdwr() -> Int32 {
   c_o_rdwr()
 }
 
 ///|
-pub fn native_o_append() -> Int {
+pub fn native_o_append() -> Int32 {
   c_o_append()
 }
 
 ///|
-pub fn native_o_nonblock() -> Int {
+pub fn native_o_nonblock() -> Int32 {
   c_o_nonblock()
 }
 
 ///|
-pub fn native_isatty(fd : Int) -> Bool {
+pub fn native_isatty(fd : Int32) -> Bool {
   c_isatty(fd) != 0
 }
 
 ///|
 /// Close a file descriptor
 /// Returns true on success
-pub fn native_close(fd : Int) -> Bool {
+pub fn native_close(fd : Int32) -> Bool {
   c_close(fd) == 0
 }
 
 ///|
 /// Read from a file descriptor into a buffer
 /// Returns number of bytes read or None on error
-pub fn native_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int? {
+pub fn native_read(fd : Int32, buf : FixedArray[Byte], count : Int32) -> Int32? {
   let n = c_read(fd, buf, count)
   if n < 0 {
     None
@@ -269,7 +276,11 @@ pub fn native_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int? {
 ///|
 /// Write to a file descriptor from a buffer
 /// Returns number of bytes written or None on error
-pub fn native_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int? {
+pub fn native_write(
+  fd : Int32,
+  buf : FixedArray[Byte],
+  count : Int32,
+) -> Int32? {
   let n = c_write(fd, buf, count)
   if n < 0 {
     None
@@ -280,11 +291,11 @@ pub fn native_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int? {
 
 ///|
 pub fn native_pread(
-  fd : Int,
+  fd : Int32,
   buf : FixedArray[Byte],
-  count : Int,
+  count : Int32,
   offset : Int64,
-) -> Int? {
+) -> Int32? {
   let result = c_pread(fd, buf, count, offset)
   if result < 0 {
     None
@@ -295,11 +306,11 @@ pub fn native_pread(
 
 ///|
 pub fn native_pwrite(
-  fd : Int,
+  fd : Int32,
   buf : FixedArray[Byte],
-  count : Int,
+  count : Int32,
   offset : Int64,
-) -> Int? {
+) -> Int32? {
   let result = c_pwrite(fd, buf, count, offset)
   if result < 0 {
     None
@@ -311,7 +322,7 @@ pub fn native_pwrite(
 ///|
 /// Seek in a file
 /// Returns new offset or None on error
-pub fn native_seek(fd : Int, offset : Int64, whence : Whence) -> Int64? {
+pub fn native_seek(fd : Int32, offset : Int64, whence : Whence) -> Int64? {
   let pos = c_lseek(fd, offset, whence_to_int(whence))
   if pos < 0L {
     None
@@ -323,7 +334,7 @@ pub fn native_seek(fd : Int, offset : Int64, whence : Whence) -> Int64? {
 ///|
 /// Get current position in a file
 /// Returns current offset or None on error
-pub fn native_tell(fd : Int) -> Int64? {
+pub fn native_tell(fd : Int32) -> Int64? {
   native_seek(fd, 0L, Cur)
 }
 
@@ -336,18 +347,18 @@ pub fn native_get_error_message() -> String {
 
 ///|
 /// Get the last errno value
-pub fn native_get_errno() -> Int {
+pub fn native_get_errno() -> Int32 {
   c_get_errno()
 }
 
 ///|
 /// Convert current native errno to WASI errno
-pub fn native_last_errno_to_wasi() -> Int {
+pub fn native_last_errno_to_wasi() -> Int32 {
   c_errno_to_wasi(c_get_errno())
 }
 
 ///|
-pub fn native_errno_to_wasi(errno : Int) -> Int {
+pub fn native_errno_to_wasi(errno : Int32) -> Int32 {
   c_errno_to_wasi(errno)
 }
 
@@ -369,19 +380,19 @@ pub fn native_path_within_base(
 ///|
 /// Create a directory
 /// Returns true on success
-pub fn native_mkdir(path : String, mode : Int) -> Bool {
+pub fn native_mkdir(path : String, mode : Int32) -> Bool {
   guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_mkdir(path_bytes, mode) == 0
 }
 
 ///|
-pub fn native_mkdirat(dirfd : Int, path : String, mode : Int) -> Bool {
+pub fn native_mkdirat(dirfd : Int32, path : String, mode : Int32) -> Bool {
   guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_mkdirat(dirfd, path_bytes, mode) == 0
 }
 
 ///|
-fn parse_native_readdir(result : Bytes?) -> Array[(String, Int)]? {
+fn parse_native_readdir(result : Bytes?) -> Array[(String, Int32)]? {
   if result is None {
     return None
   }
@@ -394,7 +405,7 @@ fn parse_native_readdir(result : Bytes?) -> Array[(String, Int)]? {
     (bytes[1].to_int() << 8) |
     (bytes[2].to_int() << 16) |
     (bytes[3].to_int() << 24)
-  let entries : Array[(String, Int)] = []
+  let entries : Array[(String, Int32)] = []
   let mut offset = 4
   for _ in 0..<count {
     if offset >= bytes.length() {
@@ -432,7 +443,7 @@ fn parse_native_readdir(result : Bytes?) -> Array[(String, Int)]? {
 ///
 /// Each entry contains its name and native file-type token. Tokens 0-7 match
 /// WASI Preview 1 filetype; token 8 denotes a FIFO.
-pub fn native_readdir(path : String) -> Array[(String, Int)]? {
+pub fn native_readdir(path : String) -> Array[(String, Int32)]? {
   guard string_to_cstring(path) is Some(path_bytes) else { return None }
   parse_native_readdir(c_readdir(path_bytes))
 }
@@ -442,7 +453,7 @@ pub fn native_readdir(path : String) -> Array[(String, Int)]? {
 ///
 /// Each entry contains its name and native file-type token. Tokens 0-7 match
 /// WASI Preview 1 filetype; token 8 denotes a FIFO.
-pub fn native_readdir_fd(fd : Int) -> Array[(String, Int)]? {
+pub fn native_readdir_fd(fd : Int32) -> Array[(String, Int32)]? {
   parse_native_readdir(c_readdir_fd(fd))
 }
 
@@ -471,7 +482,7 @@ fn utf8_bytes_to_string(bytes : Bytes) -> String {
 
 ///|
 /// Print a single character to stdout (public wrapper)
-pub fn putchar(c : Int) -> Unit {
+pub fn putchar(c : Int32) -> Unit {
   c_putchar(c)
 }
 
@@ -489,11 +500,11 @@ pub fn print_string(s : String) -> Unit {
 /// Read from a file descriptor directly into WASM memory
 /// This avoids the FixedArray issue by reading byte by byte
 pub fn native_read_to_memory(
-  fd : Int,
+  fd : Int32,
   mem : @runtime.Memory,
-  buf_ptr : Int,
-  count : Int,
-) -> Int? {
+  buf_ptr : Int32,
+  count : Int32,
+) -> Int32? {
   let buf = FixedArray::make(1, b'\x00')
   let mut total_read = 0
   for i in 0..<count {
@@ -516,23 +527,23 @@ pub fn native_read_to_memory(
 
 ///|
 /// Sync file to disk (returns 0 on success, -1 on error)
-pub fn native_fsync(fd : Int) -> Bool {
+pub fn native_fsync(fd : Int32) -> Bool {
   c_fsync(fd) == 0
 }
 
 ///|
 /// Sync file data to disk (returns 0 on success, -1 on error)
-pub fn native_fdatasync(fd : Int) -> Bool {
+pub fn native_fdatasync(fd : Int32) -> Bool {
   c_fdatasync(fd) == 0
 }
 
 ///|
 /// AT_REMOVEDIR flag for unlinkat
-pub const AT_REMOVEDIR : Int = 0x200
+pub const AT_REMOVEDIR : Int32 = 0x200
 
 ///|
 /// Unlink file (returns 0 on success, -1 on error)
-pub fn native_unlinkat(dirfd : Int, path : String, flags : Int) -> Bool {
+pub fn native_unlinkat(dirfd : Int32, path : String, flags : Int32) -> Bool {
   guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_unlinkat(dirfd, path_bytes, flags) == 0
 }
@@ -540,9 +551,9 @@ pub fn native_unlinkat(dirfd : Int, path : String, flags : Int) -> Bool {
 ///|
 /// Rename file or directory
 pub fn native_renameat(
-  old_dirfd : Int,
+  old_dirfd : Int32,
   old_path : String,
-  new_dirfd : Int,
+  new_dirfd : Int32,
   new_path : String,
 ) -> Bool {
   guard string_to_cstring(old_path) is Some(old_path_bytes) else {
@@ -563,7 +574,7 @@ pub fn native_renameat(
 pub(all) struct FileStat {
   dev : UInt64
   ino : UInt64
-  filetype : Int
+  filetype : Int32
   nlink : UInt64
   size : UInt64
   atim : UInt64
@@ -573,7 +584,7 @@ pub(all) struct FileStat {
 
 ///|
 /// Get file stat via fd
-pub fn native_fstat(fd : Int) -> FileStat? {
+pub fn native_fstat(fd : Int32) -> FileStat? {
   let dev = FixedArray::make(1, 0UL)
   let ino = FixedArray::make(1, 0UL)
   let filetype = FixedArray::make(1, b'\x00')
@@ -600,11 +611,11 @@ pub fn native_fstat(fd : Int) -> FileStat? {
 
 ///|
 /// AT_SYMLINK_NOFOLLOW flag
-pub const AT_SYMLINK_NOFOLLOW : Int = 0x100
+pub const AT_SYMLINK_NOFOLLOW : Int32 = 0x100
 
 ///|
 /// Get file stat via path
-pub fn native_fstatat(dirfd : Int, path : String, flags : Int) -> FileStat? {
+pub fn native_fstatat(dirfd : Int32, path : String, flags : Int32) -> FileStat? {
   guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let dev = FixedArray::make(1, 0UL)
   let ino = FixedArray::make(1, 0UL)
@@ -635,17 +646,17 @@ pub fn native_fstatat(dirfd : Int, path : String, flags : Int) -> FileStat? {
 
 ///|
 /// Truncate file
-pub fn native_ftruncate(fd : Int, size : Int64) -> Bool {
+pub fn native_ftruncate(fd : Int32, size : Int64) -> Bool {
   c_ftruncate(fd, size) == 0
 }
 
 ///|
 /// Set file times via fd
 pub fn native_futimens(
-  fd : Int,
+  fd : Int32,
   atim : Int64,
   mtim : Int64,
-  fst_flags : Int,
+  fst_flags : Int32,
 ) -> Bool {
   c_futimens(fd, atim, mtim, fst_flags) == 0
 }
@@ -653,12 +664,12 @@ pub fn native_futimens(
 ///|
 /// Set file times via path
 pub fn native_utimensat(
-  dirfd : Int,
+  dirfd : Int32,
   path : String,
   atim : Int64,
   mtim : Int64,
-  fst_flags : Int,
-  lookup_flags : Int,
+  fst_flags : Int32,
+  lookup_flags : Int32,
 ) -> Bool {
   guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_utimensat(dirfd, path_bytes, atim, mtim, fst_flags, lookup_flags) == 0
@@ -670,13 +681,13 @@ pub fn native_utimensat(
 
 ///|
 /// Set fd flags
-pub fn native_fcntl_setfl(fd : Int, flags : Int) -> Bool {
+pub fn native_fcntl_setfl(fd : Int32, flags : Int32) -> Bool {
   c_fcntl_setfl(fd, flags) >= 0
 }
 
 ///|
 /// Get fd flags
-pub fn native_fcntl_getfl(fd : Int) -> Int? {
+pub fn native_fcntl_getfl(fd : Int32) -> Int32? {
   let result = c_fcntl_getfl(fd)
   if result >= 0 {
     Some(result)
@@ -687,7 +698,7 @@ pub fn native_fcntl_getfl(fd : Int) -> Int? {
 
 ///|
 /// Duplicate fd to specific number
-pub fn native_dup2(oldfd : Int, newfd : Int) -> Bool {
+pub fn native_dup2(oldfd : Int32, newfd : Int32) -> Bool {
   c_dup2(oldfd, newfd) >= 0
 }
 
@@ -699,7 +710,7 @@ pub fn native_dup2(oldfd : Int, newfd : Int) -> Bool {
 /// Create symbolic link
 pub fn native_symlinkat(
   target : String,
-  dirfd : Int,
+  dirfd : Int32,
   linkpath : String,
 ) -> Bool {
   guard string_to_cstring(target) is Some(target_bytes) else { return false }
@@ -711,7 +722,11 @@ pub fn native_symlinkat(
 
 ///|
 /// Read symbolic link
-pub fn native_readlinkat(dirfd : Int, path : String, bufsize : Int) -> String? {
+pub fn native_readlinkat(
+  dirfd : Int32,
+  path : String,
+  bufsize : Int32,
+) -> String? {
   guard native_readlinkat_bytes(dirfd, path, bufsize) is Some(bytes) else {
     return None
   }
@@ -724,7 +739,11 @@ pub fn native_readlinkat(dirfd : Int, path : String, bufsize : Int) -> String? {
 
 ///|
 // WASI readlink returns bytes and may truncate inside a UTF-8 sequence.
-fn native_readlinkat_bytes(dirfd : Int, path : String, bufsize : Int) -> Bytes? {
+fn native_readlinkat_bytes(
+  dirfd : Int32,
+  path : String,
+  bufsize : Int32,
+) -> Bytes? {
   guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let buf = FixedArray::make(bufsize, b'\x00')
   let result = c_readlinkat(dirfd, path_bytes, buf, bufsize.to_int64())
@@ -738,11 +757,11 @@ fn native_readlinkat_bytes(dirfd : Int, path : String, bufsize : Int) -> Bytes? 
 ///|
 /// Create hard link
 pub fn native_linkat(
-  olddirfd : Int,
+  olddirfd : Int32,
   oldpath : String,
-  newdirfd : Int,
+  newdirfd : Int32,
   newpath : String,
-  flags : Int,
+  flags : Int32,
 ) -> Bool {
   guard string_to_cstring(oldpath) is Some(oldpath_bytes) else { return false }
   guard string_to_cstring(newpath) is Some(newpath_bytes) else { return false }
@@ -796,16 +815,16 @@ pub fn native_clock_getres_realtime() -> Int64? {
 ///|
 /// Poll result
 pub(all) struct PollResult {
-  ready_count : Int
-  revents : Array[Int]
+  ready_count : Int32
+  revents : Array[Int32]
 }
 
 ///|
 /// Poll on file descriptors
 pub fn native_poll(
-  fds : Array[Int],
-  events : Array[Int],
-  timeout_ms : Int,
+  fds : Array[Int32],
+  events : Array[Int32],
+  timeout_ms : Int32,
 ) -> PollResult? {
   let nfds = fds.length()
   if nfds == 0 || nfds != events.length() {
@@ -822,7 +841,7 @@ pub fn native_poll(
   if result < 0 {
     None
   } else {
-    let revents : Array[Int] = []
+    let revents : Array[Int32] = []
     for i in 0..<nfds {
       revents.push(revents_arr[i])
     }
@@ -831,7 +850,7 @@ pub fn native_poll(
 }
 
 ///|
-fn native_socket_bytes_available(fd : Int) -> Int64? {
+fn native_socket_bytes_available(fd : Int32) -> Int64? {
   let available = c_socket_bytes_available(fd)
   if available < 0L {
     None
@@ -842,14 +861,14 @@ fn native_socket_bytes_available(fd : Int) -> Int64? {
 
 ///|
 pub(all) struct NativeSocketAddress {
-  family : Int
+  family : Int32
   address : FixedArray[Byte]
-  port : Int
-  scope_id : Int
+  port : Int32
+  scope_id : Int32
 }
 
 ///|
-pub fn native_socket_create(family : Int, kind : Int) -> Int? {
+pub fn native_socket_create(family : Int32, kind : Int32) -> Int32? {
   let fd = c_socket_create(family, kind)
   if fd < 0 {
     None
@@ -859,7 +878,7 @@ pub fn native_socket_create(family : Int, kind : Int) -> Int? {
 }
 
 ///|
-pub fn native_socket_bind(fd : Int, address : NativeSocketAddress) -> Bool {
+pub fn native_socket_bind(fd : Int32, address : NativeSocketAddress) -> Bool {
   c_socket_bind(
     fd,
     address.family,
@@ -871,7 +890,10 @@ pub fn native_socket_bind(fd : Int, address : NativeSocketAddress) -> Bool {
 }
 
 ///|
-pub fn native_socket_connect(fd : Int, address : NativeSocketAddress) -> Int {
+pub fn native_socket_connect(
+  fd : Int32,
+  address : NativeSocketAddress,
+) -> Int32 {
   c_socket_connect(
     fd,
     address.family,
@@ -882,7 +904,7 @@ pub fn native_socket_connect(fd : Int, address : NativeSocketAddress) -> Int {
 }
 
 ///|
-pub fn native_socket_disconnect(fd : Int) -> Bool {
+pub fn native_socket_disconnect(fd : Int32) -> Bool {
   c_socket_disconnect(fd) == 0
 }
 
@@ -894,8 +916,8 @@ pub(all) struct NativeSocketDatagram {
 
 ///|
 pub fn native_socket_recv_from(
-  fd : Int,
-  capacity : Int,
+  fd : Int32,
+  capacity : Int32,
 ) -> NativeSocketDatagram? {
   if capacity < 0 {
     return None
@@ -929,7 +951,7 @@ pub fn native_socket_recv_from(
 
 ///|
 pub fn native_socket_send_to(
-  fd : Int,
+  fd : Int32,
   data : FixedArray[Byte],
   address : NativeSocketAddress?,
 ) -> Int64 {
@@ -960,12 +982,12 @@ pub fn native_socket_send_to(
 }
 
 ///|
-pub fn native_socket_listen(fd : Int, backlog : Int) -> Bool {
+pub fn native_socket_listen(fd : Int32, backlog : Int32) -> Bool {
   c_socket_listen(fd, backlog) == 0
 }
 
 ///|
-pub fn native_socket_error(fd : Int) -> Int? {
+pub fn native_socket_error(fd : Int32) -> Int32? {
   let error = c_socket_error(fd)
   if error < 0 {
     None
@@ -975,7 +997,7 @@ pub fn native_socket_error(fd : Int) -> Int? {
 }
 
 ///|
-pub fn native_socket_address(fd : Int, peer : Bool) -> NativeSocketAddress? {
+pub fn native_socket_address(fd : Int32, peer : Bool) -> NativeSocketAddress? {
   let family = FixedArray::make(1, b'\x00')
   let address = FixedArray::make(16, b'\x00')
   let port : FixedArray[UInt16] = FixedArray::make(1, 0)
@@ -1005,7 +1027,11 @@ pub fn native_socket_address(fd : Int, peer : Bool) -> NativeSocketAddress? {
 }
 
 ///|
-pub fn native_socket_option_get(fd : Int, family : Int, option : Int) -> Int? {
+pub fn native_socket_option_get(
+  fd : Int32,
+  family : Int32,
+  option : Int32,
+) -> Int32? {
   let value = c_socket_option_get(fd, family, option)
   if value < 0 {
     None
@@ -1016,10 +1042,10 @@ pub fn native_socket_option_get(fd : Int, family : Int, option : Int) -> Int? {
 
 ///|
 pub fn native_socket_option_set(
-  fd : Int,
-  family : Int,
-  option : Int,
-  value : Int,
+  fd : Int32,
+  family : Int32,
+  option : Int32,
+  value : Int32,
 ) -> Bool {
   c_socket_option_set(fd, family, option, value) == 0
 }
@@ -1027,7 +1053,7 @@ pub fn native_socket_option_set(
 ///|
 pub(all) struct NativeResolver {
   handle : NativeResolverHandle
-  poll_fd : Int
+  poll_fd : Int32
 }
 
 ///|
@@ -1081,36 +1107,40 @@ pub fn native_resolver_drop(resolver : NativeResolverHandle) -> Unit {
 
 ///|
 /// Socket recv
-pub fn native_recv(sockfd : Int, buf : FixedArray[Byte], flags : Int) -> Int64 {
+pub fn native_recv(
+  sockfd : Int32,
+  buf : FixedArray[Byte],
+  flags : Int32,
+) -> Int64 {
   c_recv(sockfd, buf, buf.length().to_int64(), flags)
 }
 
 ///|
 /// Socket send
 pub fn native_send(
-  sockfd : Int,
+  sockfd : Int32,
   buf : FixedArray[Byte],
-  len : Int,
-  flags : Int,
+  len : Int32,
+  flags : Int32,
 ) -> Int64 {
   c_send(sockfd, buf, len.to_int64(), flags)
 }
 
 ///|
 /// Socket shutdown
-pub fn native_shutdown(sockfd : Int, how : Int) -> Bool {
+pub fn native_shutdown(sockfd : Int32, how : Int32) -> Bool {
   c_shutdown(sockfd, how) == 0
 }
 
 ///|
 /// Socket accept - returns new socket fd or -1 on error
-pub fn native_accept(sockfd : Int) -> Int {
+pub fn native_accept(sockfd : Int32) -> Int32 {
   c_accept(sockfd)
 }
 
 ///|
 /// Raise signal
-pub fn native_raise(sig : Int) -> Bool {
+pub fn native_raise(sig : Int32) -> Bool {
   c_raise(sig) == 0
 }
 
@@ -1121,15 +1151,15 @@ pub fn native_raise(sig : Int) -> Bool {
 ///|
 /// Get random bytes from system
 /// Returns true on success
-pub fn native_getrandom(buf : FixedArray[Byte], len : Int) -> Bool {
+pub fn native_getrandom(buf : FixedArray[Byte], len : Int32) -> Bool {
   c_getrandom(buf, len) == 0
 }
 
 ///|
 pub fn native_fstat_beneath(
-  dirfd : Int,
+  dirfd : Int32,
   path : String,
-  flags : Int,
+  flags : Int32,
 ) -> FileStat? {
   guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let dev = FixedArray::make(1, 0UL)
@@ -1161,12 +1191,12 @@ pub fn native_fstat_beneath(
 
 ///|
 pub fn native_utimens_beneath(
-  root : Int,
+  root : Int32,
   path : String,
   follow : Bool,
   atim : Int64,
   mtim : Int64,
-  flags : Int,
+  flags : Int32,
 ) -> Bool {
   guard string_to_cstring(path) is Some(bytes) else { return false }
   c_utimens_beneath(root, bytes, if follow { 1 } else { 0 }, atim, mtim, flags) ==

@@ -1,11 +1,11 @@
 ///|
 priv struct SymbolicCell {
   location : Location
-  mut value : Int
+  mut value : Int32
 }
 
 ///|
-fn symbolic_read(state : Array[SymbolicCell], location : Location) -> Int {
+fn symbolic_read(state : Array[SymbolicCell], location : Location) -> Int32 {
   for cell in state {
     if cell.location == location {
       return cell.value
@@ -18,7 +18,7 @@ fn symbolic_read(state : Array[SymbolicCell], location : Location) -> Int {
 fn symbolic_write(
   state : Array[SymbolicCell],
   location : Location,
-  value : Int,
+  value : Int32,
 ) -> Unit {
   for cell in state {
     if cell.location == location {
@@ -60,7 +60,7 @@ fn assert_plan_preserves_parallel_assignment(
   for cell in state {
     initial.push({ location: cell.location, value: cell.value, })
   }
-  let mut emergency : Int? = None
+  let mut emergency : Int32? = None
   for step in plan.steps {
     match step {
       Transfer(transfer) => {

@@ -4,7 +4,7 @@
 
 ///|
 /// Decode unsigned LEB128
-fn Parser::read_leb128_u32(self : Parser) -> Int raise ParserError {
+fn Parser::read_leb128_u32(self : Parser) -> Int32 raise ParserError {
   for result = 0, shift = 0 {
     if shift > 28 {
       raise LEB128TooLarge
@@ -26,7 +26,7 @@ fn Parser::read_leb128_u32(self : Parser) -> Int raise ParserError {
 
 ///|
 /// Decode signed LEB128
-fn Parser::read_leb128_i32(self : Parser) -> Int raise ParserError {
+fn Parser::read_leb128_i32(self : Parser) -> Int32 raise ParserError {
   for result = 0, shift = 0 {
     if shift > 28 {
       raise LEB128TooLarge

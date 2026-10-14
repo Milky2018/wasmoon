@@ -1,8 +1,8 @@
 ///|
 pub(all) struct SpillSlotReservation {
-  slot : Int
-  next_slot : Int
-  slots_used : Int
+  slot : Int32
+  next_slot : Int32
+  slots_used : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -10,7 +10,7 @@ pub(all) struct SpillSlotReservation {
 ///
 /// Vector values require a 16-byte-aligned slot and occupy two 8-byte units.
 pub fn reserve_spill_slot(
-  next_slot : Int,
+  next_slot : Int32,
   class : RegClass,
 ) -> SpillSlotReservation {
   match class {

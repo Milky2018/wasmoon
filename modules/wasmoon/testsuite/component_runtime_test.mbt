@@ -6,7 +6,7 @@ fn append_bytes(dst : Array[Byte], src : Array[Byte]) -> Unit {
 }
 
 ///|
-fn leb_u32(n : Int) -> Array[Byte] {
+fn leb_u32(n : Int32) -> Array[Byte] {
   let mut value = n
   let bytes : Array[Byte] = []
   while true {
@@ -24,7 +24,7 @@ fn leb_u32(n : Int) -> Array[Byte] {
 }
 
 ///|
-fn build_component(sections : Array[(Int, Array[Byte])]) -> Bytes {
+fn build_component(sections : Array[(Int32, Array[Byte])]) -> Bytes {
   let bytes : Array[Byte] = [
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x0d', b'\x00', b'\x01', b'\x00',
   ]
@@ -56,7 +56,7 @@ fn vec_payload(entries : Array[Array[Byte]]) -> Array[Byte] {
 }
 
 ///|
-fn import_entry_func(name_bytes : Array[Byte], type_idx : Int) -> Array[Byte] {
+fn import_entry_func(name_bytes : Array[Byte], type_idx : Int32) -> Array[Byte] {
   let entry : Array[Byte] = []
   append_bytes(entry, encode_name(name_bytes))
   entry.push(b'\x01')
@@ -65,7 +65,7 @@ fn import_entry_func(name_bytes : Array[Byte], type_idx : Int) -> Array[Byte] {
 }
 
 ///|
-fn export_entry_func(name_bytes : Array[Byte], func_idx : Int) -> Array[Byte] {
+fn export_entry_func(name_bytes : Array[Byte], func_idx : Int32) -> Array[Byte] {
   let entry : Array[Byte] = []
   append_bytes(entry, encode_name(name_bytes))
   entry.push(b'\x01')
@@ -77,7 +77,7 @@ fn export_entry_func(name_bytes : Array[Byte], func_idx : Int) -> Array[Byte] {
 ///|
 fn export_entry_core_func(
   name_bytes : Array[Byte],
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Array[Byte] {
   let entry : Array[Byte] = []
   append_bytes(entry, encode_name(name_bytes))
@@ -90,7 +90,7 @@ fn export_entry_core_func(
 
 ///|
 fn alias_core_export_func(
-  core_inst_idx : Int,
+  core_inst_idx : Int32,
   name_bytes : Array[Byte],
 ) -> Array[Byte] {
   let entry : Array[Byte] = []
@@ -104,7 +104,7 @@ fn alias_core_export_func(
 }
 
 ///|
-fn core_instance_instantiate(module_idx : Int) -> Array[Byte] {
+fn core_instance_instantiate(module_idx : Int32) -> Array[Byte] {
   let entry : Array[Byte] = []
   entry.push(b'\x00')
   append_bytes(entry, leb_u32(module_idx))
@@ -113,7 +113,7 @@ fn core_instance_instantiate(module_idx : Int) -> Array[Byte] {
 }
 
 ///|
-fn canon_lift_entry(core_func_idx : Int, type_idx : Int) -> Array[Byte] {
+fn canon_lift_entry(core_func_idx : Int32, type_idx : Int32) -> Array[Byte] {
   let entry : Array[Byte] = []
   entry.push(b'\x00')
   entry.push(b'\x00')
@@ -124,7 +124,7 @@ fn canon_lift_entry(core_func_idx : Int, type_idx : Int) -> Array[Byte] {
 }
 
 ///|
-fn canon_lower_entry(func_idx : Int) -> Array[Byte] {
+fn canon_lower_entry(func_idx : Int32) -> Array[Byte] {
   let entry : Array[Byte] = []
   entry.push(b'\x01')
   entry.push(b'\x00')
@@ -297,9 +297,9 @@ test "component runtime: core execution crosses the configured engine seam" {
   let component = @component_types.parse_component(bytes) catch {
     e => return fail("parse component failed: \{e}")
   }
-  let registrations : Array[(Int, Int)] = []
+  let registrations : Array[(Int32, Int32)] = []
   let calls : Array[
-    (Int, Int, Array[@types.Value], @runtime_impl.CoreExecutionRequest),
+    (Int32, Int32, Array[@types.Value], @runtime_impl.CoreExecutionRequest),
   ] = []
   let closes = Ref(0)
   let engine = @runtime_impl.CoreExecutionEngine(
@@ -929,24 +929,24 @@ test "component runtime: close releases only owned instances" {
 
 ///|
 priv struct CoreStoreAllocationBaseline {
-  funcs : Int
-  func_types : Int
-  func_type_indices : Int
-  func_owners : Int
-  tables : Int
-  jit_tables : Int
-  mems : Int
-  globals : Int
-  tags : Int
-  tag_type_indices : Int
-  tag_owners : Int
-  exns : Int
-  wrapped_externs : Int
-  instances : Int
-  interpreter_heap_slots : Int
-  interpreter_heap_live : Int
+  funcs : Int32
+  func_types : Int32
+  func_type_indices : Int32
+  func_owners : Int32
+  tables : Int32
+  jit_tables : Int32
+  mems : Int32
+  globals : Int32
+  tags : Int32
+  tag_type_indices : Int32
+  tag_owners : Int32
+  exns : Int32
+  wrapped_externs : Int32
+  instances : Int32
+  interpreter_heap_slots : Int32
+  interpreter_heap_live : Int32
   native_heap_size : Int64
-  native_heap_objects : Int
+  native_heap_objects : Int32
 } derive(Eq)
 
 ///|
@@ -979,7 +979,7 @@ fn core_store_allocation_baseline(
 ///|
 fn assert_escaped_gc_ref_is_not_reused(
   store : @runtime.Store,
-  escaped_idx : Int,
+  escaped_idx : Int32,
 ) -> Unit raise {
   let before_reuse = try store.struct_get(escaped_idx, 0) catch {
     UndefinedElement => "undefined element"

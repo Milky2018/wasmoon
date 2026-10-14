@@ -3,7 +3,7 @@
 struct Table {
   elem_type : @types.ValueType
   elements : Array[@types.Value]
-  mut size : Int
+  mut size : Int32
   max : Int64?
   is_table64 : Bool // true for table64 (i64-indexed table)
 } derive(Debug)
@@ -11,10 +11,10 @@ struct Table {
 ///|
 pub fn Table::Table(
   elem_type : @types.ValueType,
-  min : Int,
-  max : Int?,
-  init_value? : @types.Value = Null,
-  is_table64? : Bool = false,
+  min : Int32,
+  max : Int32?,
+  init_value~ : @types.Value = Null,
+  is_table64~ : Bool = false,
 ) -> Table raise RuntimeError {
   Table::allocate(
     elem_type,
@@ -53,7 +53,7 @@ fn Table::allocate(
 /// Allocate a module table without narrowing its declared limits.
 pub fn Table::from_type(
   ty : @types.TableType,
-  init_value? : @types.Value = Null,
+  init_value~ : @types.Value = Null,
 ) -> Table raise RuntimeError {
   Table::allocate(
     ty.elem_type,
@@ -65,7 +65,7 @@ pub fn Table::from_type(
 }
 
 ///|
-pub fn Table::get(self : Table, idx : Int) -> @types.Value raise RuntimeError {
+pub fn Table::get(self : Table, idx : Int32) -> @types.Value raise RuntimeError {
   self.get_at(idx.to_int64() & 0xFFFF_FFFFL)
 }
 
@@ -93,7 +93,7 @@ pub fn Table::get_at(
 ///|
 pub fn Table::set(
   self : Table,
-  idx : Int,
+  idx : Int32,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   self.set_at(idx.to_int64() & 0xFFFF_FFFFL, value)
@@ -110,12 +110,12 @@ pub fn Table::set_at(
 }
 
 ///|
-pub fn Table::size(self : Table) -> Int {
+pub fn Table::size(self : Table) -> Int32 {
   self.size
 }
 
 ///|
-pub fn Table::grow(self : Table, delta : Int, init : @types.Value) -> Int {
+pub fn Table::grow(self : Table, delta : Int32, init : @types.Value) -> Int32 {
   let result = self.grow64(delta.to_int64() & 0xFFFF_FFFFL, init) catch {
     _ => -1L
   }
@@ -156,9 +156,9 @@ pub fn Table::grow64(
 /// table.fill: fill table[d..d+n] with value
 pub fn Table::fill(
   self : Table,
-  dest : Int,
+  dest : Int32,
   value : @types.Value,
-  n : Int,
+  n : Int32,
 ) -> Unit raise RuntimeError {
   self.fill_at(
     dest.to_int64() & 0xFFFF_FFFFL,
@@ -184,10 +184,10 @@ pub fn Table::fill_at(
 ///|
 pub fn Table::copy_from(
   self : Table,
-  dest : Int,
+  dest : Int32,
   src_table : Table,
-  src : Int,
-  n : Int,
+  src : Int32,
+  n : Int32,
 ) -> Unit raise RuntimeError {
   self.copy_from_at(
     dest.to_int64() & 0xFFFF_FFFFL,
@@ -230,7 +230,7 @@ pub fn Table::get_elem_type(self : Table) -> @types.ValueType {
 
 ///|
 /// Get table limits (min, max) for type checking
-pub fn Table::get_limits(self : Table) -> (Int, Int?) {
+pub fn Table::get_limits(self : Table) -> (Int32, Int32?) {
   (
     self.size,
     match self.max {

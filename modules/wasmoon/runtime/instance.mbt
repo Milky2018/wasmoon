@@ -2,15 +2,15 @@
 /// Runtime instance of a WebAssembly module
 pub(all) struct ModuleInstance {
   types : Array[@types.SubType] // GC: now stores SubType
-  type_rec_groups : Array[Int] // rec group IDs for each type
-  canonical_type_indices : Array[Int] // canonical indices for structural equivalence
-  mut store_idx : Int // index in the store's instances array, -1 if not registered
-  func_addrs : Array[Int] // addresses into function store
-  func_type_indices : Array[Int] // type indices for each function
-  table_addrs : Array[Int] // indices into table store
-  mem_addrs : Array[Int] // indices into memory store
-  global_addrs : Array[Int] // indices into global store
-  tag_addrs : Array[Int] // indices into tag store
+  type_rec_groups : Array[Int32] // rec group IDs for each type
+  canonical_type_indices : Array[Int32] // canonical indices for structural equivalence
+  mut store_idx : Int32 // index in the store's instances array, -1 if not registered
+  func_addrs : Array[Int32] // addresses into function store
+  func_type_indices : Array[Int32] // type indices for each function
+  table_addrs : Array[Int32] // indices into table store
+  mem_addrs : Array[Int32] // indices into memory store
+  global_addrs : Array[Int32] // indices into global store
+  tag_addrs : Array[Int32] // indices into tag store
   exports : Array[@types.Export]
   elem_values : Array[Array[@types.Value]]
   elem_segments : Array[@types.Element]
@@ -63,7 +63,7 @@ pub fn ModuleInstance::ModuleInstance() -> ModuleInstance {
 /// The function type at `idx`, in an instance whose module passed validation.
 pub fn ModuleInstance::validated_func_type_at(
   self : ModuleInstance,
-  idx : Int,
+  idx : Int32,
 ) -> @types.FuncType {
   guard idx >= 0 && idx < self.types.length() else {
     abort("validated instance has no type at index \{idx}")
@@ -78,7 +78,7 @@ pub fn ModuleInstance::validated_func_type_at(
 /// The struct type at `idx`, in an instance whose module passed validation.
 pub fn ModuleInstance::validated_struct_type_at(
   self : ModuleInstance,
-  idx : Int,
+  idx : Int32,
 ) -> @types.StructType {
   guard idx >= 0 && idx < self.types.length() else {
     abort("validated instance has no type at index \{idx}")
@@ -93,7 +93,7 @@ pub fn ModuleInstance::validated_struct_type_at(
 /// The array type at `idx`, in an instance whose module passed validation.
 pub fn ModuleInstance::validated_array_type_at(
   self : ModuleInstance,
-  idx : Int,
+  idx : Int32,
 ) -> @types.ArrayType {
   guard idx >= 0 && idx < self.types.length() else {
     abort("validated instance has no type at index \{idx}")

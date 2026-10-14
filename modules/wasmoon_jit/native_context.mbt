@@ -9,8 +9,8 @@ struct NativeJITContext {
 
 ///|
 pub fn NativeJITContext::try_alloc(
-  total_funcs : Int,
-  layout? : @jit_ffi.ContextLayout? = None,
+  total_funcs : Int32,
+  layout~ : @jit_ffi.ContextLayout? = None,
 ) -> NativeJITContext? {
   let context : NativeJITContext = {
     handle: @jit_ffi.JITContext::new_shaped(total_funcs, layout),

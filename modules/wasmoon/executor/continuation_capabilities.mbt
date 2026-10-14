@@ -5,7 +5,7 @@
 pub fn validate_continuation_gc_storage(
   module_ : @types.Module,
 ) -> Unit raise @runtime.RuntimeError {
-  fn check(index : Int) -> Unit raise @runtime.RuntimeError {
+  fn check(index : Int32) -> Unit raise @runtime.RuntimeError {
     guard module_.types.get(index) is Some(subtype) else { return }
     let fields = match subtype.composite {
       Struct(struct_) => struct_.fields

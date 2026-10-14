@@ -5,7 +5,7 @@
 ///
 /// This value is set by `wasmoon_jit_hostcall` right before invoking the
 /// MoonBit hostcall callback.
-pub fn get_hostcall_func_addr() -> Int {
+pub fn get_hostcall_func_addr() -> Int32 {
   c_jit_get_hostcall_func_idx()
 }
 
@@ -16,12 +16,12 @@ fn get_hostcall_values_ptr() -> Int64 {
 }
 
 ///|
-pub fn hostcall_value_slot_read(slot : Int) -> Int64 {
+pub fn hostcall_value_slot_read(slot : Int32) -> Int64 {
   native_value_slot_read(get_hostcall_values_ptr(), slot)
 }
 
 ///|
-pub fn hostcall_value_slot_write(slot : Int, value : Int64) -> Unit {
+pub fn hostcall_value_slot_write(slot : Int32, value : Int64) -> Unit {
   native_value_slot_write(get_hostcall_values_ptr(), slot, value)
 }
 
@@ -29,7 +29,7 @@ pub fn hostcall_value_slot_write(slot : Int, value : Int64) -> Unit {
 /// Get the number of argument *slots* in `values_vec`.
 ///
 /// Note: slots are 8 bytes each; V128 occupies 2 slots.
-pub fn get_hostcall_num_arg_slots() -> Int {
+pub fn get_hostcall_num_arg_slots() -> Int32 {
   c_jit_get_hostcall_num_args()
 }
 
@@ -37,6 +37,6 @@ pub fn get_hostcall_num_arg_slots() -> Int {
 /// Get the number of result *slots* in `values_vec`.
 ///
 /// Note: slots are 8 bytes each; V128 occupies 2 slots.
-pub fn get_hostcall_num_result_slots() -> Int {
+pub fn get_hostcall_num_result_slots() -> Int32 {
   c_jit_get_hostcall_num_results()
 }

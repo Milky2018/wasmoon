@@ -8,7 +8,7 @@
 pub(all) enum BinaryKind {
   CoreModule
   Component
-  UnknownPreamble(Int, Int)
+  UnknownPreamble(Int32, Int32)
 } derive(Debug, Eq)
 
 ///|
@@ -43,14 +43,14 @@ pub fn sniff_binary_kind(bytes : Bytes) -> BinaryKind? {
 
 ///|
 pub struct Section {
-  id : Int
+  id : Int32
   payload : Bytes
 } derive(Debug, Eq)
 
 ///|
 pub struct ComponentBinary {
-  version : Int
-  layer : Int
+  version : Int32
+  layer : Int32
   sections : Array[Section]
 } derive(Debug, Eq)
 
@@ -60,15 +60,15 @@ pub suberror ComponentParseError {
   UnexpectedEndOfInput
   Leb128TooLarge
   NotAComponent
-  UnsupportedComponentPreamble(Int, Int)
+  UnsupportedComponentPreamble(Int32, Int32)
   InvalidTypeSection
   InvalidInstanceSection
   InvalidAliasSection
   InvalidCanonSection
   InvalidStartSection
-  UnsupportedCanonOpcode(Int)
+  UnsupportedCanonOpcode(Int32)
   InvalidUtf8
-  UnsupportedTypeOpcode(Int)
+  UnsupportedTypeOpcode(Int32)
 }
 
 ///|
@@ -99,7 +99,7 @@ pub impl Show for ComponentParseError with fn output(self, logger) {
 ///|
 priv struct Reader {
   data : Bytes
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
@@ -113,7 +113,7 @@ fn Reader::is_eof(self : Reader) -> Bool {
 }
 
 ///|
-fn Reader::read_u8(self : Reader) -> Int raise ComponentParseError {
+fn Reader::read_u8(self : Reader) -> Int32 raise ComponentParseError {
   if self.pos >= self.data.length() {
     raise UnexpectedEndOfInput
   }
@@ -125,7 +125,7 @@ fn Reader::read_u8(self : Reader) -> Int raise ComponentParseError {
 ///|
 fn Reader::read_bytes(
   self : Reader,
-  n : Int,
+  n : Int32,
 ) -> Bytes raise ComponentParseError {
   if self.pos + n > self.data.length() {
     raise UnexpectedEndOfInput
@@ -212,14 +212,14 @@ fn Reader::read_name(self : Reader) -> String raise ComponentParseError {
 }
 
 ///|
-fn Reader::read_u16_le(self : Reader) -> Int raise ComponentParseError {
+fn Reader::read_u16_le(self : Reader) -> Int32 raise ComponentParseError {
   let b0 = self.read_u8()
   let b1 = self.read_u8()
   b0 | (b1 << 8)
 }
 
 ///|
-fn Reader::read_leb_u32(self : Reader) -> Int raise ComponentParseError {
+fn Reader::read_leb_u32(self : Reader) -> Int32 raise ComponentParseError {
   for result = 0, shift = 0 {
     if shift > 28 {
       raise Leb128TooLarge
@@ -238,7 +238,7 @@ fn Reader::read_leb_u32(self : Reader) -> Int raise ComponentParseError {
 }
 
 ///|
-fn Reader::read_sleb_i32(self : Reader) -> Int raise ComponentParseError {
+fn Reader::read_sleb_i32(self : Reader) -> Int32 raise ComponentParseError {
   for result = 0, shift = 0 {
     if shift >= 35 {
       raise Leb128TooLarge
@@ -259,7 +259,7 @@ fn Reader::read_sleb_i32(self : Reader) -> Int raise ComponentParseError {
 }
 
 ///|
-fn Reader::read_typeidx(self : Reader) -> Int raise ComponentParseError {
+fn Reader::read_typeidx(self : Reader) -> Int32 raise ComponentParseError {
   self.read_leb_u32()
 }
 

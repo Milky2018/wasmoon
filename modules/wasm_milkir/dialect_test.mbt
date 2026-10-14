@@ -209,7 +209,7 @@ fn PackedGetProbe::wire_name(self : PackedGetProbe) -> String {
 fn packed_get_verify_error(
   probe : PackedGetProbe,
   result_type : @milkir.Type,
-  byte_width : Int,
+  byte_width : Int32,
 ) -> @milkir.VerifyError {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "invalid_\{probe.wire_name()}",

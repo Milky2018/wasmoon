@@ -5,7 +5,7 @@
 ///|
 struct Parser {
   data : Bytes
-  mut pos : Int
+  mut pos : Int32
   mut has_data_count : Bool // true if data count section was seen
   types : Array[@types.SubType]
 } derive(Debug)
@@ -24,7 +24,7 @@ fn Parser::is_eof(self : Parser) -> Bool {
 
 ///|
 /// Peek at the next byte without consuming
-fn Parser::peek_byte(self : Parser) -> Int raise ParserError {
+fn Parser::peek_byte(self : Parser) -> Int32 raise ParserError {
   if self.is_eof() {
     raise UnexpectedEndOfInput
   }
@@ -33,7 +33,7 @@ fn Parser::peek_byte(self : Parser) -> Int raise ParserError {
 
 ///|
 /// Consume and return the next byte
-fn Parser::read_byte(self : Parser) -> Int raise ParserError {
+fn Parser::read_byte(self : Parser) -> Int32 raise ParserError {
   if self.is_eof() {
     raise UnexpectedEndOfInput
   }
@@ -44,7 +44,7 @@ fn Parser::read_byte(self : Parser) -> Int raise ParserError {
 
 ///|
 /// Skip n bytes
-fn Parser::skip(self : Parser, n : Int) -> Unit raise ParserError {
+fn Parser::skip(self : Parser, n : Int32) -> Unit raise ParserError {
   if self.pos + n > self.data.length() {
     raise UnexpectedEndOfInput
   }
@@ -53,7 +53,7 @@ fn Parser::skip(self : Parser, n : Int) -> Unit raise ParserError {
 
 ///|
 /// Read n bytes
-fn Parser::read_bytes(self : Parser, n : Int) -> Bytes raise ParserError {
+fn Parser::read_bytes(self : Parser, n : Int32) -> Bytes raise ParserError {
   if self.pos + n > self.data.length() {
     raise UnexpectedEndOfInput
   }

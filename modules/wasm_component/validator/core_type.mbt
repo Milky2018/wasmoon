@@ -1,13 +1,13 @@
 ///|
 fn parse_core_type_module_exports(
   r : CoreTypeReader,
-  max_outer_depth : Int,
-  current_core_type_bound : Int,
-  outer_core_type_bounds : Array[Int],
-) -> Map[String, Int] raise ComponentValidationError {
+  max_outer_depth : Int32,
+  current_core_type_bound : Int32,
+  outer_core_type_bounds : Array[Int32],
+) -> Map[String, Int32] raise ComponentValidationError {
   let ndecls = r.read_leb_u32()
-  let exports : Map[String, Int] = Map([])
-  let seen_imports : Map[String, Int] = Map([])
+  let exports : Map[String, Int32] = Map([])
+  let seen_imports : Map[String, Int32] = Map([])
   let mut func_type_bound = 0
   for _i in 0..<ndecls {
     let tag = r.read_u8()
@@ -117,13 +117,13 @@ fn skip_prefixed_core_subtype(
 ///|
 fn parse_core_type_section(
   payload : Bytes,
-  max_outer_depth : Int,
-  base_core_type_bound : Int,
-  outer_core_type_bounds : Array[Int],
-) -> Array[Map[String, Int]?] raise ComponentValidationError {
+  max_outer_depth : Int32,
+  base_core_type_bound : Int32,
+  outer_core_type_bounds : Array[Int32],
+) -> Array[Map[String, Int32]?] raise ComponentValidationError {
   let r = CoreTypeReader::CoreTypeReader(payload)
   let n = r.read_leb_u32()
-  let out : Array[Map[String, Int]?] = []
+  let out : Array[Map[String, Int32]?] = []
   for i in 0..<n {
     let op = r.read_u8()
     if op == 0x50 {
@@ -156,9 +156,9 @@ fn parse_core_type_section(
 ///|
 fn parse_core_type_section_module_sigs(
   payload : Bytes,
-  max_outer_depth : Int,
-  base_core_type_bound : Int,
-  outer_core_type_bounds : Array[Int],
+  max_outer_depth : Int32,
+  base_core_type_bound : Int32,
+  outer_core_type_bounds : Array[Int32],
 ) -> (Array[Array[CoreModuleTypeImport]?], Array[Map[String, CoreExternType]?]) raise ComponentValidationError {
   let r = CoreTypeReader::CoreTypeReader(payload)
   let n = r.read_leb_u32()
@@ -196,9 +196,9 @@ fn parse_core_type_section_module_sigs(
 ///|
 fn validate_single_core_type(
   payload : Bytes,
-  current_core_type_bound : Int,
-  outer_core_type_bounds : Array[Int],
-) -> Map[String, Int]? raise ComponentValidationError {
+  current_core_type_bound : Int32,
+  outer_core_type_bounds : Array[Int32],
+) -> Map[String, Int32]? raise ComponentValidationError {
   let r = CoreTypeReader::CoreTypeReader(payload)
   let op = r.read_u8()
   // For module-type aliases, `depth` counts outward from the module:
@@ -310,7 +310,7 @@ fn utf8_bytes_of_string(s : String) -> Bytes {
 
 ///|
 fn validate_name_attributes(
-  section : Int,
+  section : Int32,
   name : Bytes,
   attributes : Array[@component.NameAttribute],
   sort : @component.Sort,
@@ -391,7 +391,7 @@ fn validate_name_attributes(
 
 ///|
 fn validate_name_attributes_string(
-  section : Int,
+  section : Int32,
   name : String,
   attributes : Array[@component.NameAttribute],
   sort : @component.Sort,
@@ -423,7 +423,7 @@ fn ascii_lower_key(s : String) -> String {
 
 ///|
 fn wit_name_conflict_base(name : String) -> String {
-  fn parse_resource_prefix(name : String, prefix_len : Int) -> String {
+  fn parse_resource_prefix(name : String, prefix_len : Int32) -> String {
     let buf = StringBuilder::StringBuilder()
     let mut i = 0
     let mut saw_dot = false
@@ -564,7 +564,7 @@ fn parse_bracket_resource_name(name : String) -> BracketResourceName? {
 fn own_target_of_valtype(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-) -> Int? {
+) -> Int32? {
   match ty {
     TypeIdx(idx) =>
       if idx >= 0 && idx < type_table.length() {
@@ -583,7 +583,7 @@ fn own_target_of_valtype(
 fn borrow_target_of_valtype(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-) -> Int? {
+) -> Int32? {
   match ty {
     TypeIdx(idx) =>
       if idx >= 0 && idx < type_table.length() {
@@ -600,12 +600,12 @@ fn borrow_target_of_valtype(
 
 ///|
 fn validate_bracketed_func_name(
-  section : Int,
+  section : Int32,
   name : String,
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  known_resources : Map[String, Int],
+  resource_ids : Array[Int32?],
+  known_resources : Map[String, Int32],
 ) -> Unit raise ComponentValidationError {
   let br = parse_bracket_resource_name(name)
   match br {
@@ -699,8 +699,8 @@ fn validate_bracketed_func_name(
 fn valtype_uses_disallowed_resources(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  allowed_resource_type_idxs : Map[Int, Int],
-  visiting : Map[Int, Int],
+  allowed_resource_type_idxs : Map[Int32, Int32],
+  visiting : Map[Int32, Int32],
 ) -> Bool {
   match ty {
     Prim(_) => false
@@ -803,9 +803,9 @@ fn valtype_uses_disallowed_resources(
 fn functype_uses_disallowed_resources(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
-  allowed_resource_type_idxs : Map[Int, Int],
+  allowed_resource_type_idxs : Map[Int32, Int32],
 ) -> Bool {
-  let visiting : Map[Int, Int] = Map([])
+  let visiting : Map[Int32, Int32] = Map([])
   for p in ft.params {
     if valtype_uses_disallowed_resources(
         p.ty,
@@ -829,10 +829,10 @@ fn functype_uses_disallowed_resources(
 fn funcsig_of_functype(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  known_sigs? : Map[Int, TypeSig] = Map([]),
+  resource_ids : Array[Int32?],
+  known_sigs~ : Map[Int32, TypeSig] = Map([]),
 ) -> FuncSigShape {
-  let visiting : Map[Int, Int] = Map([])
+  let visiting : Map[Int32, Int32] = Map([])
   let params : Array[ParamShape] = []
   for p in ft.params {
     params.push({
@@ -860,10 +860,10 @@ fn funcsig_of_functype(
 fn type_sig_of_typedef_lg(
   td : @component.TypeDef,
   local_types : Array[@component.TypeDef],
-  local_resource_ids : Array[Int?],
+  local_resource_ids : Array[Int32?],
   global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int?],
-  visiting : Map[Int, Int],
+  global_resource_ids : Array[Int32?],
+  visiting : Map[Int32, Int32],
 ) -> TypeSig {
   match td {
     DefValType(p) => Prim(p)
@@ -980,10 +980,10 @@ fn type_sig_of_typedef_lg(
 fn type_sig_of_valtype_lg(
   ty : @component.ValType,
   local_types : Array[@component.TypeDef],
-  local_resource_ids : Array[Int?],
+  local_resource_ids : Array[Int32?],
   global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int?],
-  visiting : Map[Int, Int],
+  global_resource_ids : Array[Int32?],
+  visiting : Map[Int32, Int32],
 ) -> TypeSig {
   match ty {
     Prim(p) => Prim(p)
@@ -1031,11 +1031,11 @@ fn type_sig_of_valtype_lg(
 fn funcsig_of_functype_lg(
   ft : @component.FuncType,
   local_types : Array[@component.TypeDef],
-  local_resource_ids : Array[Int?],
+  local_resource_ids : Array[Int32?],
   global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int?],
+  global_resource_ids : Array[Int32?],
 ) -> FuncSigShape {
-  let visiting : Map[Int, Int] = Map([])
+  let visiting : Map[Int32, Int32] = Map([])
   let params : Array[ParamShape] = []
   for p in ft.params {
     params.push({
@@ -1067,9 +1067,9 @@ fn funcsig_of_functype_lg(
 fn type_sig_of_typedef(
   td : @component.TypeDef,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  visiting : Map[Int, Int],
-  known_sigs? : Map[Int, TypeSig] = Map([]),
+  resource_ids : Array[Int32?],
+  visiting : Map[Int32, Int32],
+  known_sigs~ : Map[Int32, TypeSig] = Map([]),
 ) -> TypeSig {
   match td {
     DefValType(p) => Prim(p)
@@ -1177,9 +1177,9 @@ fn type_sig_of_typedef(
 fn type_sig_of_valtype(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  visiting : Map[Int, Int],
-  known_sigs? : Map[Int, TypeSig] = Map([]),
+  resource_ids : Array[Int32?],
+  visiting : Map[Int32, Int32],
+  known_sigs~ : Map[Int32, TypeSig] = Map([]),
 ) -> TypeSig {
   match ty {
     Prim(p) => Prim(p)
@@ -1216,10 +1216,10 @@ fn type_sig_of_valtype(
 
 ///|
 fn type_sig_of_typeidx(
-  idx : Int,
+  idx : Int32,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  known_sigs? : Map[Int, TypeSig] = Map([]),
+  resource_ids : Array[Int32?],
+  known_sigs~ : Map[Int32, TypeSig] = Map([]),
 ) -> TypeSig {
   type_sig_of_valtype(
     TypeIdx(idx),
@@ -1231,7 +1231,10 @@ fn type_sig_of_typeidx(
 }
 
 ///|
-fn type_sig_subst_resources(sig : TypeSig, subst : Map[Int, Int]) -> TypeSig {
+fn type_sig_subst_resources(
+  sig : TypeSig,
+  subst : Map[Int32, Int32],
+) -> TypeSig {
   match sig {
     Prim(p) => Prim(p)
     Tuple(xs) => Tuple(xs.map(fn(x) { type_sig_subst_resources(x, subst) }))
@@ -1360,7 +1363,7 @@ fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool 
 ///|
 fn funcsig_subst_resources(
   sig : FuncSigShape,
-  subst : Map[Int, Int],
+  subst : Map[Int32, Int32],
 ) -> FuncSigShape {
   let params : Array[ParamShape] = []
   for p in sig.params {
@@ -1408,9 +1411,9 @@ fn typedef_requires_name_for_interface(td : @component.TypeDef) -> Bool {
 fn valtype_valid_in_interface(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  named_types : Map[Int, Int],
-  visiting : Map[Int, Int],
+  resource_ids : Array[Int32?],
+  named_types : Map[Int32, Int32],
+  visiting : Map[Int32, Int32],
 ) -> Bool {
   match ty {
     Prim(_) => true
@@ -1530,9 +1533,9 @@ fn valtype_valid_in_interface(
 fn valtype_valid_for_type_import_export(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  named_types : Map[Int, Int],
-  visiting : Map[Int, Int],
+  resource_ids : Array[Int32?],
+  named_types : Map[Int32, Int32],
+  visiting : Map[Int32, Int32],
 ) -> Bool {
   valtype_valid_for_type_import_export_inner(
     ty, type_table, resource_ids, named_types, visiting, false,
@@ -1543,9 +1546,9 @@ fn valtype_valid_for_type_import_export(
 fn valtype_valid_for_type_import_export_inner(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  named_types : Map[Int, Int],
-  visiting : Map[Int, Int],
+  resource_ids : Array[Int32?],
+  named_types : Map[Int32, Int32],
+  visiting : Map[Int32, Int32],
   nested : Bool,
 ) -> Bool {
   match ty {
@@ -1679,10 +1682,10 @@ fn valtype_valid_for_type_import_export_inner(
 fn functype_valid_in_interface(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int?],
-  named_types : Map[Int, Int],
+  resource_ids : Array[Int32?],
+  named_types : Map[Int32, Int32],
 ) -> Bool {
-  let visiting : Map[Int, Int] = Map([])
+  let visiting : Map[Int32, Int32] = Map([])
   for p in ft.params {
     if !valtype_valid_in_interface(
         p.ty,
@@ -1707,7 +1710,7 @@ fn functype_valid_in_interface(
 fn instancetype_sig_of_typedef(
   td : @component.TypeDef,
   type_table : Array[@component.TypeDef?],
-  visiting_global : Map[Int, Int],
+  visiting_global : Map[Int32, Int32],
 ) -> InstanceSig {
   match td {
     InstanceTypeEmpty => InstanceSig::empty()
@@ -1719,9 +1722,9 @@ fn instancetype_sig_of_typedef(
 
 ///|
 fn instancetype_sig_of_global_idx(
-  tyidx : Int,
+  tyidx : Int32,
   type_table : Array[@component.TypeDef?],
-  visiting_global : Map[Int, Int],
+  visiting_global : Map[Int32, Int32],
 ) -> InstanceSig {
   if tyidx < 0 || tyidx >= type_table.length() {
     return InstanceSig::empty()
@@ -1740,11 +1743,11 @@ fn instancetype_sig_of_global_idx(
 
 ///|
 fn instancetype_sig_of_local_idx(
-  tyidx : Int,
+  tyidx : Int32,
   local_types : Array[@component.TypeDef],
   type_table : Array[@component.TypeDef?],
-  visiting_local : Map[Int, Int],
-  visiting_global : Map[Int, Int],
+  visiting_local : Map[Int32, Int32],
+  visiting_global : Map[Int32, Int32],
 ) -> InstanceSig {
   if tyidx < 0 {
     return InstanceSig::empty()
@@ -1770,14 +1773,14 @@ fn instancetype_sig_of_local_idx(
 fn instancetype_sig_of_decls(
   decls : Array[@component.InstanceDecl],
   type_table : Array[@component.TypeDef?],
-  visiting_global : Map[Int, Int],
+  visiting_global : Map[Int32, Int32],
 ) -> InstanceSig {
   let exports : Map[String, @component.Sort] = Map([])
   let nested : Map[String, InstanceSig] = Map([])
   // Instance types define their own internal type index space introduced by
   // `Type(...)` declarations in-order.
   let local_types : Array[@component.TypeDef] = []
-  let visiting_local : Map[Int, Int] = Map([])
+  let visiting_local : Map[Int32, Int32] = Map([])
   for d in decls {
     match d {
       Type(t) => local_types.push(t)
@@ -1802,7 +1805,7 @@ fn instancetype_sig_of_decls(
 
 ///|
 fn instancetype_valid_for_use_as_interface(
-  tyidx : Int,
+  tyidx : Int32,
   type_table : Array[@component.TypeDef?],
   type_outers : Array[Array[@component.TypeDef?]],
 ) -> Bool {
@@ -1813,8 +1816,8 @@ fn instancetype_valid_for_use_as_interface(
     Some(InstanceTypeEmpty) => true
     Some(InstanceType(decls)) => {
       let local_type_table : Array[@component.TypeDef?] = []
-      let local_resource_ids : Array[Int?] = []
-      let local_named_types : Map[Int, Int] = Map([])
+      let local_resource_ids : Array[Int32?] = []
+      let local_named_types : Map[Int32, Int32] = Map([])
       let mut next_rid = 0
       fn push_local(td : @component.TypeDef?) -> Unit {
         local_type_table.push(td)
@@ -1906,8 +1909,8 @@ fn componenttype_signature_of_decls(
   // Component type declarations define their own local type space introduced by
   // `Type(...)` plus type-valued alias/import/export declarations.
   let local_types : Array[@component.TypeDef] = []
-  let visiting_local : Map[Int, Int] = Map([])
-  let visiting_global : Map[Int, Int] = Map([])
+  let visiting_local : Map[Int32, Int32] = Map([])
+  let visiting_global : Map[Int32, Int32] = Map([])
   fn record_type_slot() -> Unit {
     // Placeholder for a type index introduced by an alias/import/export decl.
     local_types.push(InstanceTypeEmpty)
@@ -1988,8 +1991,8 @@ fn check_instance_subtype(
 
 ///|
 fn check_core_module_subtype(
-  actual : Map[String, Int]?,
-  expected : Map[String, Int],
+  actual : Map[String, Int32]?,
+  expected : Map[String, Int32],
 ) -> Unit raise ComponentValidationError {
   if actual is Some(map) {
     for kv in expected.iter() {

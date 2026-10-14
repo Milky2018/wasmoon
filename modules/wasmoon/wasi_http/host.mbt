@@ -1,7 +1,7 @@
 ///|
 priv struct HttpOptions {
   values : Array[@runtime_impl.ComponentValue]
-  mut parent : (Array[Int], Ref[Int])?
+  mut parent : (Array[Int32], Ref[Int32])?
   immutable : Bool
 }
 
@@ -17,12 +17,12 @@ enum HttpResource {
 pub struct HttpHost {
   linker : @runtime_impl.ComponentLinker
   runtime : @runtime_impl.HostRuntimeState
-  resources : Map[Int, HttpResource]
+  resources : Map[Int32, HttpResource]
   bodies : Array[HttpBody]
   wake : @async.CondVar
   pending : Array[HttpInvocation]
   spawn : Ref[((async () -> Unit) -> @async.Task[Unit])?]
-  next_id : Ref[Int]
+  next_id : Ref[Int32]
   types : Array[@component.TypeDef?]
   resource_types : Map[String, @component.TypeDef?]
 }

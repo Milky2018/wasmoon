@@ -479,7 +479,7 @@ async fn main {
       )
     }
     Some(("explore", sub)) => {
-      let func_idx : Int? = match sub.values.get("func") {
+      let func_idx : Int32? = match sub.values.get("func") {
         Some([text]) =>
           Some(@string.parse_int(text)) catch {
             _ => {

@@ -6,8 +6,8 @@ pub async fn serve_http(
   address : String,
   network : String,
   use_jit : Bool,
-  envs? : Array[String] = [],
-) -> Int {
+  envs~ : Array[String] = [],
+) -> Int32 {
   try {
     let parsed_envs = envs.map(entry => {
       guard parse_env_var(entry) is Some(pair) else {
@@ -115,7 +115,7 @@ pub async fn run_http_component_command(
   error_format : ComponentErrorFormat,
   wit_names : Bool,
   component_implements : Bool,
-) -> Int {
+) -> Int32 {
   try {
     let parsed = @component_types.parse_component(@fs.read_file_to_bytes(file))
     let validated = @component_model.validate_component_for_instantiation_with_config(

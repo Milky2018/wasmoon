@@ -5,34 +5,39 @@ pub suberror ArtifactEncodeError {
 
 ///|
 pub suberror ArtifactDecodeError {
-  ArtifactTooLarge(size~ : Int, limit~ : Int)
+  ArtifactTooLarge(size~ : Int32, limit~ : Int32)
   BadMagic
-  UnsupportedVersion(version~ : Int)
-  Truncated(field~ : String, offset~ : Int, needed~ : Int, remaining~ : Int)
-  InvalidTag(field~ : String, tag~ : Int)
+  UnsupportedVersion(version~ : Int32)
+  Truncated(
+    field~ : String,
+    offset~ : Int32,
+    needed~ : Int32,
+    remaining~ : Int32
+  )
+  InvalidTag(field~ : String, tag~ : Int32)
   InvalidValue(field~ : String, message~ : String)
   InvalidUtf8(field~ : String)
-  LimitExceeded(field~ : String, count~ : Int, limit~ : Int)
-  TrailingBytes(count~ : Int)
+  LimitExceeded(field~ : String, count~ : Int32, limit~ : Int32)
+  TrailingBytes(count~ : Int32)
 } derive(Eq, Debug)
 
 ///|
 /// Resource limits applied before allocating variable-length artifact data.
 pub(all) struct DecodeLimits {
-  max_artifact_bytes : Int
-  max_imports : Int
-  max_functions : Int
-  max_cpu_features : Int
-  max_string_bytes : Int
-  max_signature_values : Int
-  max_code_bytes_per_function : Int
-  max_total_code_bytes : Int
-  max_relocations_per_function : Int
-  max_sources_per_function : Int
-  max_traps_per_function : Int
-  max_safepoints_per_function : Int
-  max_unwind_directives_per_function : Int
-  max_roots_per_safepoint : Int
+  max_artifact_bytes : Int32
+  max_imports : Int32
+  max_functions : Int32
+  max_cpu_features : Int32
+  max_string_bytes : Int32
+  max_signature_values : Int32
+  max_code_bytes_per_function : Int32
+  max_total_code_bytes : Int32
+  max_relocations_per_function : Int32
+  max_sources_per_function : Int32
+  max_traps_per_function : Int32
+  max_safepoints_per_function : Int32
+  max_unwind_directives_per_function : Int32
+  max_roots_per_safepoint : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -66,14 +71,14 @@ fn ByteWriter::new() -> ByteWriter {
 }
 
 ///|
-fn ByteWriter::write_u8(self : ByteWriter, value : Int) -> Unit {
+fn ByteWriter::write_u8(self : ByteWriter, value : Int32) -> Unit {
   self.bytes.push((value & 0xFF).to_byte())
 }
 
 ///|
 fn ByteWriter::write_u32(
   self : ByteWriter,
-  value : Int,
+  value : Int32,
   field : String,
 ) -> Unit raise ArtifactEncodeError {
   if value < 0 || value.to_int64() > 0xFFFF_FFFFL {
@@ -134,7 +139,7 @@ fn ByteWriter::finish(self : ByteWriter) -> Bytes {
 ///|
 priv struct ByteReader {
   data : Bytes
-  mut position : Int
+  mut position : Int32
   limits : DecodeLimits
 }
 
@@ -144,7 +149,7 @@ fn ByteReader::new(data : Bytes, limits : DecodeLimits) -> ByteReader {
 }
 
 ///|
-fn ByteReader::remaining(self : ByteReader) -> Int {
+fn ByteReader::remaining(self : ByteReader) -> Int32 {
   self.data.length() - self.position
 }
 
@@ -152,7 +157,7 @@ fn ByteReader::remaining(self : ByteReader) -> Int {
 fn ByteReader::read_u8(
   self : ByteReader,
   field : String,
-) -> Int raise ArtifactDecodeError {
+) -> Int32 raise ArtifactDecodeError {
   if self.remaining() < 1 {
     raise Truncated(field~, offset=self.position, needed=1, remaining=0)
   }
@@ -165,7 +170,7 @@ fn ByteReader::read_u8(
 fn ByteReader::read_u32(
   self : ByteReader,
   field : String,
-) -> Int raise ArtifactDecodeError {
+) -> Int32 raise ArtifactDecodeError {
   if self.remaining() < 4 {
     raise Truncated(
       field~,
@@ -215,7 +220,7 @@ fn ByteReader::read_i64(
 fn ByteReader::read_int_from_i64(
   self : ByteReader,
   field : String,
-) -> Int raise ArtifactDecodeError {
+) -> Int32 raise ArtifactDecodeError {
   let value = self.read_i64(field)
   if value < -0x80000000L || value > 0x7FFFFFFFL {
     raise InvalidValue(
@@ -241,7 +246,7 @@ fn ByteReader::read_bool(
 ///|
 fn ByteReader::read_raw(
   self : ByteReader,
-  count : Int,
+  count : Int32,
   field : String,
 ) -> Bytes raise ArtifactDecodeError {
   if count < 0 {
@@ -263,8 +268,8 @@ fn ByteReader::read_raw(
 fn ByteReader::read_count(
   self : ByteReader,
   field : String,
-  limit : Int,
-) -> Int raise ArtifactDecodeError {
+  limit : Int32,
+) -> Int32 raise ArtifactDecodeError {
   let count = self.read_u32(field)
   if count > limit {
     raise LimitExceeded(field~, count~, limit~)
@@ -1073,7 +1078,7 @@ fn write_function(
 fn read_function(
   reader : ByteReader,
   architecture : @code_object.Architecture,
-  total_code_bytes : Ref[Int],
+  total_code_bytes : Ref[Int32],
 ) -> FunctionCode raise ArtifactDecodeError {
   let identity : FunctionIdentity = {
     function_index: reader.read_u32("function.identity.function_index"),
@@ -1230,7 +1235,7 @@ pub fn encode(artifact : Artifact) -> Bytes raise ArtifactEncodeError {
 /// before installation.
 pub fn decode(
   data : Bytes,
-  limits? : DecodeLimits = DecodeLimits::default(),
+  limits~ : DecodeLimits = DecodeLimits::default(),
 ) -> Artifact raise ArtifactDecodeError {
   if data.length() > limits.max_artifact_bytes {
     raise ArtifactTooLarge(size=data.length(), limit=limits.max_artifact_bytes)

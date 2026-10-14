@@ -6,10 +6,10 @@ priv enum SegmentLocation {
 
 ///|
 priv struct AllocationSegment {
-  id : Int
+  id : Int32
   value : VirtualReg
   range : ProgramRange
-  weight : Int
+  weight : Int32
   has_fixed_constraint : Bool
   fixed_hint : PhysicalReg?
   preference_hint : PhysicalReg?
@@ -18,14 +18,14 @@ priv struct AllocationSegment {
 
 ///|
 priv struct SegmentMetadata {
-  weight : Int
+  weight : Int32
   has_fixed_constraint : Bool
   fixed_hint : PhysicalReg?
   preference_hint : PhysicalReg?
 }
 
 ///|
-fn use_weight(use_position : UsePosition, loop_depths : Array[Int]) -> Int {
+fn use_weight(use_position : UsePosition, loop_depths : Array[Int32]) -> Int32 {
   let mut depth = if use_position.point.block >= 0 &&
     use_position.point.block < loop_depths.length() {
     loop_depths[use_position.point.block]
@@ -60,17 +60,17 @@ fn use_weight(use_position : UsePosition, loop_depths : Array[Int]) -> Int {
 fn segment_metadata(
   range : LiveRange,
   fragment : ProgramRange,
-  loop_depths : Array[Int],
+  loop_depths : Array[Int32],
   ranges : LiveRangeSet,
   allocatable : Array[PhysicalReg],
-  use_start? : Int = 0,
-  use_end? : Int = -1,
+  use_start~ : Int32 = 0,
+  use_end~ : Int32 = -1,
 ) -> SegmentMetadata {
   let mut use_cost = 0
   let mut has_fixed_constraint = false
   let mut fixed_hint : PhysicalReg? = None
   let mut preference_regs : Array[PhysicalReg]? = None
-  let mut preference_counts : Array[Int]? = None
+  let mut preference_counts : Array[Int32]? = None
   let end = if use_end < 0 { range.uses.length() } else { use_end }
   for use_index in use_start..<end {
     let use_position = range.uses[use_index]
@@ -133,7 +133,7 @@ fn AllocationSegment::with_range(
   self : AllocationSegment,
   range : ProgramRange,
   live_range : LiveRange,
-  loop_depths : Array[Int],
+  loop_depths : Array[Int32],
   ranges : LiveRangeSet,
   allocatable : Array[PhysicalReg],
 ) -> AllocationSegment {
@@ -153,12 +153,12 @@ fn AllocationSegment::with_range(
 ///|
 fn build_allocation_segments(
   ranges : LiveRangeSet,
-  loop_depths? : Array[Int] = [],
-  allocatable? : Array[PhysicalReg] = [],
-  preordered? : Bool = false,
-) -> (Array[AllocationSegment], Array[Array[Int]]) {
+  loop_depths~ : Array[Int32] = [],
+  allocatable~ : Array[PhysicalReg] = [],
+  preordered~ : Bool = false,
+) -> (Array[AllocationSegment], Array[Array[Int32]]) {
   let segments : Array[AllocationSegment] = []
-  let segments_by_value : Array[Array[Int]] = []
+  let segments_by_value : Array[Array[Int32]] = []
   let mut max_value = -1
   for range in ranges.ranges {
     if range.vreg.id > max_value {
@@ -231,7 +231,9 @@ fn segment_has_use(range : LiveRange, fragment : ProgramRange) -> Bool {
 }
 
 ///|
-fn[F : FunctionView] compute_allocator_loop_depths(function : F) -> Array[Int] {
+fn[F : FunctionView] compute_allocator_loop_depths(
+  function : F,
+) -> Array[Int32] {
   let block_count = function.block_count()
   let backedge_in = Array::make(block_count, 0)
   let backedge_out = Array::make(block_count, 0)
@@ -244,8 +246,8 @@ fn[F : FunctionView] compute_allocator_loop_depths(function : F) -> Array[Int] {
       }
     }
   }
-  let depths : Array[Int] = []
-  let backedge_stack : Array[Int] = []
+  let depths : Array[Int32] = []
+  let backedge_stack : Array[Int32] = []
   let mut current_depth = 0
   for block in 0..<block_count {
     if backedge_in[block] > 0 {
@@ -268,7 +270,10 @@ fn[F : FunctionView] compute_allocator_loop_depths(function : F) -> Array[Int] {
 }
 
 ///|
-fn register_index(registers : Array[PhysicalReg], target : PhysicalReg) -> Int? {
+fn register_index(
+  registers : Array[PhysicalReg],
+  target : PhysicalReg,
+) -> Int32? {
   for index, reg in registers {
     if reg == target {
       return Some(index)
@@ -283,14 +288,14 @@ fn[F : FunctionView] allocate_segments_with_context(
   environment : MachineEnv,
   ranges : LiveRangeSet,
   session : AllocationSession,
-  config? : RegallocConfig = RegallocConfig(),
+  config~ : RegallocConfig = RegallocConfig(),
 ) -> (
   Array[AllocationSegment],
-  Array[Array[Int]],
+  Array[Array[Int32]],
   AllocationContext,
-  Array[Int],
+  Array[Int32],
   Array[SpillSet],
-  Array[Int],
+  Array[Int32],
 ) raise VerifyError {
   config.enter_phase(Some(SegmentConstruction))
   let loop_depths = compute_allocator_loop_depths(function)
@@ -364,9 +369,9 @@ fn[F : FunctionView] build_spill_home_groups(
   function : F,
   segments : Array[AllocationSegment],
   spill_sets : Array[SpillSet],
-  segment_spill_set : Array[Int],
+  segment_spill_set : Array[Int32],
   needs_spill : Array[Bool],
-) -> (Array[Int], Array[Array[VirtualReg]]) {
+) -> (Array[Int32], Array[Array[VirtualReg]]) {
   let group_by_value = Array::make(function.value_count(), -1)
   let groups : Array[Array[VirtualReg]] = []
   let values_by_spill_set : Array[Array[VirtualReg]] = []
@@ -423,7 +428,7 @@ fn[F : FunctionView] build_spill_home_groups(
 fn[F : FunctionView] spill_home_candidates_can_share(
   function : F,
   ranges : LiveRangeSet,
-  group_by_value : Array[Int],
+  group_by_value : Array[Int32],
   candidates : Array[VirtualReg],
   occupants : Array[VirtualReg],
 ) -> Bool {
@@ -450,16 +455,16 @@ fn[F : FunctionView, S : AllocationSink] assign_backtracking_homes(
   environment : MachineEnv,
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
+  segments_by_value : Array[Array[Int32]],
   spill_sets : Array[SpillSet],
-  segment_spill_set : Array[Int],
+  segment_spill_set : Array[Int32],
 ) -> Unit {
   let needs_spill = Array::make(function.value_count(), false)
   let forbidden_home_regs : Array[Array[PhysicalReg]?] = Array::make(
     function.value_count(),
     None,
   )
-  let home_reg_is_forbidden = fn(value : Int, reg : PhysicalReg) -> Bool {
+  let home_reg_is_forbidden = fn(value : Int32, reg : PhysicalReg) -> Bool {
     match forbidden_home_regs[value] {
       Some(regs) => regs.contains(reg)
       None => false
@@ -527,7 +532,10 @@ fn[F : FunctionView, S : AllocationSink] assign_backtracking_homes(
   let (group_by_value, spill_home_groups) = build_spill_home_groups(
     function, segments, spill_sets, segment_spill_set, needs_spill,
   )
-  let group_slots : Array[Int?] = Array::make(spill_home_groups.length(), None)
+  let group_slots : Array[Int32?] = Array::make(
+    spill_home_groups.length(),
+    None,
+  )
   for value in 0..<function.value_count() {
     let vreg : VirtualReg = { id: value, class: function.value_class(value), }
     if !needs_spill[value] {
@@ -579,10 +587,10 @@ fn[F : FunctionView, S : AllocationSink] assign_backtracking_homes(
 ///|
 fn segment_at(
   segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
+  segments_by_value : Array[Array[Int32]],
   value : VirtualReg,
   point : ProgramPoint,
-) -> Int? {
+) -> Int32? {
   if value.id < 0 || value.id >= segments_by_value.length() {
     return None
   }
@@ -607,9 +615,9 @@ fn segment_at(
 
 ///|
 fn live_home_value_at(
-  register_home_segments : Array[Array[Int]],
+  register_home_segments : Array[Array[Int32]],
   segments : Array[AllocationSegment],
-  register_index : Int,
+  register_index : Int32,
   point : ProgramPoint,
 ) -> VirtualReg? {
   let home_segments = register_home_segments[register_index]
@@ -632,10 +640,10 @@ fn live_home_value_at(
 
 ///|
 fn live_register_value_at(
-  register_home_segments : Array[Array[Int]],
-  resident_by_register : Array[Int],
+  register_home_segments : Array[Array[Int32]],
+  resident_by_register : Array[Int32],
   segments : Array[AllocationSegment],
-  register_index : Int,
+  register_index : Int32,
   point : ProgramPoint,
 ) -> VirtualReg? {
   let resident = resident_by_register[register_index]
@@ -650,11 +658,11 @@ fn[F : FunctionView, S : AllocationSink] borrow_allocatable_register(
   plan : AllocationWork[S],
   function : F,
   environment : MachineEnv,
-  register_home_segments : Array[Array[Int]],
-  resident_by_register : Array[Int],
+  register_home_segments : Array[Array[Int32]],
+  resident_by_register : Array[Int32],
   segments : Array[AllocationSegment],
-  borrow_slots : Array[Int?],
-  instruction : Int,
+  borrow_slots : Array[Int32?],
+  instruction : Int32,
   point : ProgramPoint,
   class : RegClass,
   used : Array[PhysicalReg],
@@ -710,19 +718,19 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   function : F,
   environment : MachineEnv,
   segments : Array[AllocationSegment],
-  segments_by_value : Array[Array[Int]],
-  session? : AllocationSession = AllocationSession::new(),
+  segments_by_value : Array[Array[Int32]],
+  session~ : AllocationSession = AllocationSession::new(),
 ) -> Unit raise VerifyError {
-  let borrow_slots : Array[Int?] = Array::make(function.value_count(), None)
+  let borrow_slots : Array[Int32?] = Array::make(function.value_count(), None)
   let register_indexes = PhysicalRegisterIndex::for_session(
     session,
     environment.allocatable_regs,
   )
-  let register_home_segments : Array[Array[Int]] = []
+  let register_home_segments : Array[Array[Int32]] = []
   for _ in environment.allocatable_regs {
     register_home_segments.push([])
   }
-  let block_entry_segments : Array[Array[Int]] = []
+  let block_entry_segments : Array[Array[Int32]] = []
   for _ in 0..<function.block_count() {
     block_entry_segments.push([])
   }
@@ -758,14 +766,14 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   }
   let assigned : Array[Location?] = []
   let natural_locations : Array[Location] = []
-  let operand_segments : Array[Int?] = []
+  let operand_segments : Array[Int32?] = []
   let used_temps : Array[PhysicalReg] = []
   let borrowed_temps : Array[PhysicalReg] = []
-  let tie_slot_by_id : Map[Int, Int] = Map([])
-  let operand_tie_slots : Array[Int?] = []
+  let tie_slot_by_id : Map[Int32, Int32] = Map([])
+  let operand_tie_slots : Array[Int32?] = []
   let tied_constraints : Array[OperandConstraint?] = []
   let tied_locations : Array[Location?] = []
-  let resident_operand_segments : Array[Int?] = []
+  let resident_operand_segments : Array[Int32?] = []
   let has_predecessor = Array::make(function.block_count(), false)
   for block in 0..<function.block_count() {
     for successor_index in 0..<function.block_successor_count(block) {

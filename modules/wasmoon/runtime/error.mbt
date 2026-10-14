@@ -1,6 +1,6 @@
 ///|
 pub(all) suberror RuntimeError {
-  HostExit(Int)
+  HostExit(Int32)
   StackUnderflow
   StackOverflow
   TypeMismatch
@@ -157,7 +157,7 @@ pub impl Show for RuntimeError with fn output(self, logger) {
 ///|
 /// A stack frame entry for error reporting
 pub(all) struct CallStackEntry {
-  func_idx : Int
+  func_idx : Int32
   func_name : String? // Optional function name from debug info
 }
 
@@ -175,7 +175,7 @@ pub struct RuntimeErrorContext {
   error : RuntimeError
   call_stack : Array[CallStackEntry]
   instruction : String? // The instruction that caused the error
-  func_idx : Int? // The function index where error occurred
+  func_idx : Int32? // The function index where error occurred
 }
 
 ///|
@@ -204,7 +204,7 @@ pub fn RuntimeErrorContext::with_instruction(
 ///|
 pub fn RuntimeErrorContext::with_func_idx(
   self : RuntimeErrorContext,
-  idx : Int,
+  idx : Int32,
 ) -> RuntimeErrorContext {
   { ..self, func_idx: Some(idx), }
 }

@@ -5,9 +5,9 @@
 ///|
 fn current_thread_handle_opt(
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   task_id : Int64,
-) -> Int? {
+) -> Int32? {
   match async_state.tasks.read_task_thread(task_id) {
     Some(m) => m.get(owner_component_id)
     None => None
@@ -17,8 +17,8 @@ fn current_thread_handle_opt(
 ///|
 fn current_thread_info(
   async_state : AsyncState,
-  owner_component_id : Int,
-) -> (Int64, Int, Int64, Bool) raise ComponentRuntimeError {
+  owner_component_id : Int32,
+) -> (Int64, Int32, Int64, Bool) raise ComponentRuntimeError {
   let task_id = current_task_id(async_state)
   ensure_task_thread(async_state, owner_component_id, task_id)
   let current_handle = match
@@ -61,7 +61,7 @@ fn consume_main_scheduled(
 fn remove_from_runnable_queue(
   async_state : AsyncState,
   root_task_id : Int64,
-  handle : Int,
+  handle : Int32,
 ) -> Unit {
   let root_task_id = async_state.tasks.resolve(root_task_id)
   match async_state.tasks.read_thread_runnable(root_task_id) {
@@ -82,9 +82,9 @@ fn remove_from_runnable_queue(
 ///|
 fn schedule_explicit_thread(
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   root_task_id : Int64,
-  handle : Int,
+  handle : Int32,
 ) -> Bool {
   let root_task_id = async_state.tasks.resolve(root_task_id)
   let key = handle_key(owner_component_id, handle)
@@ -99,7 +99,7 @@ fn schedule_explicit_thread(
       let q = match async_state.tasks.read_thread_runnable(root_task_id) {
         Some(xs) => xs
         None => {
-          let xs : Array[Int] = []
+          let xs : Array[Int32] = []
           async_state.tasks.write_thread_runnable(root_task_id, xs)
           xs
         }
@@ -115,9 +115,9 @@ fn schedule_explicit_thread(
 ///|
 fn pop_runnable_explicit_thread(
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   root_task_id : Int64,
-) -> Int? {
+) -> Int32? {
   let root_task_id = async_state.tasks.resolve(root_task_id)
   let q = match async_state.tasks.read_thread_runnable(root_task_id) {
     Some(xs) => xs
@@ -143,11 +143,11 @@ fn pop_runnable_explicit_thread(
 ///|
 fn wake_ready_waiting_threads(
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   root_task_id : Int64,
 ) -> Unit {
   let root_task_id = async_state.tasks.resolve(root_task_id)
-  let to_wake : Array[Int] = []
+  let to_wake : Array[Int32] = []
   for kv in async_state.threads.iter() {
     let (_k, t) = kv
     if t.owner_component_id != owner_component_id ||
@@ -185,9 +185,9 @@ fn cleanup_thread_task(async_state : AsyncState, task_id : Int64) -> Unit {
 fn run_explicit_thread_once(
   async_state : AsyncState,
   store : @runtime.Store,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   root_task_id : Int64,
-  handle : Int,
+  handle : Int32,
 ) -> Unit raise ComponentRuntimeError {
   let root_task_id = async_state.tasks.resolve(root_task_id)
   let key = handle_key(owner_component_id, handle)
@@ -250,7 +250,7 @@ fn run_explicit_thread_once(
 fn dispatch_until_main_scheduled(
   async_state : AsyncState,
   store : @runtime.Store,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   root_task_id : Int64,
 ) -> Bool raise ComponentRuntimeError {
   let root_task_id = async_state.tasks.resolve(root_task_id)
@@ -280,9 +280,9 @@ fn dispatch_until_main_scheduled(
 ///|
 fn require_suspended_thread(
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   root_task_id : Int64,
-  target : Int,
+  target : Int32,
 ) -> Unit raise ComponentRuntimeError {
   let root_task_id = async_state.tasks.resolve(root_task_id)
   let main = current_thread_handle_opt(
@@ -312,9 +312,9 @@ fn require_suspended_thread(
 ///|
 fn schedule_thread_or_main(
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   root_task_id : Int64,
-  handle : Int,
+  handle : Int32,
 ) -> Bool {
   let root_task_id = async_state.tasks.resolve(root_task_id)
   ensure_task_thread(async_state, owner_component_id, root_task_id)
@@ -358,9 +358,9 @@ fn maybe_consume_cancelled(
 fn run_main_target_once(
   async_state : AsyncState,
   store : @runtime.Store,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   root_task_id : Int64,
-  target : Int,
+  target : Int32,
 ) -> Unit raise ComponentRuntimeError {
   let root_task_id = async_state.tasks.resolve(root_task_id)
   if !schedule_thread_or_main(
@@ -380,10 +380,10 @@ fn run_main_target_once(
 fn execute_thread_suspension_intrinsic(
   cancellable : Bool,
   schedule_current : Bool,
-  target : Int?,
+  target : Int32?,
   async_state : AsyncState,
   store : @runtime.Store,
-  owner_component_id : Int,
+  owner_component_id : Int32,
 ) -> Array[@types.Value] raise @runtime.RuntimeError {
   let (task_id, current_handle, root_task_id, is_explicit) = current_thread_info(
     async_state, owner_component_id,
@@ -581,8 +581,8 @@ fn execute_thread_suspension_intrinsic(
 ///|
 fn resolve_start_core_func(
   store : @runtime.Store,
-  table_addr : Int,
-  start_func_idx : Int,
+  table_addr : Int32,
+  start_func_idx : Int32,
   engine : CoreExecutionEngine,
 ) -> CoreFuncRef raise ComponentRuntimeError {
   let table = store.get_table(table_addr) catch {
@@ -868,8 +868,8 @@ fn instantiate_canon_thread_suspend(
 
 ///|
 fn instantiate_canon_thread_new_indirect(
-  _type_idx : Int,
-  table_idx : Int,
+  _type_idx : Int32,
+  table_idx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
@@ -931,7 +931,7 @@ fn instantiate_canon_thread_new_indirect(
     init_task_meta(
       async_state, thread_task_id, owner_component_id, root_task_id,
     )
-    let per_task : Map[Int, Int] = Map([])
+    let per_task : Map[Int32, Int32] = Map([])
     per_task.set(owner_component_id, id)
     async_state.tasks.write_task_thread(thread_task_id, per_task)
 

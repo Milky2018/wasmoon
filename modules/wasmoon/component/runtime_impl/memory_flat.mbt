@@ -76,7 +76,7 @@ fn write_bytes_to_memory_with_align(
   realloc : CanonicalRealloc,
   mem_is_64 : Bool,
   bytes : Bytes,
-  align : Int,
+  align : Int32,
 ) -> Int64 raise ComponentRuntimeError {
   let ptr = alloc_realloc_area(
     store,
@@ -95,7 +95,7 @@ fn write_bytes_to_memory_with_align(
 }
 
 ///|
-fn align_to(n : Int, align : Int) -> Int {
+fn align_to(n : Int32, align : Int32) -> Int32 {
   if align <= 1 {
     return n
   }
@@ -108,7 +108,7 @@ fn align_to(n : Int, align : Int) -> Int {
 }
 
 ///|
-fn core_valtype_align(vt : @types.ValueType) -> Int {
+fn core_valtype_align(vt : @types.ValueType) -> Int32 {
   match vt {
     I32 | F32 => 4
     I64 | F64 => 8
@@ -117,7 +117,7 @@ fn core_valtype_align(vt : @types.ValueType) -> Int {
 }
 
 ///|
-fn core_valtype_size(vt : @types.ValueType) -> Int {
+fn core_valtype_size(vt : @types.ValueType) -> Int32 {
   match vt {
     I32 | F32 => 4
     I64 | F64 => 8
@@ -128,8 +128,8 @@ fn core_valtype_size(vt : @types.ValueType) -> Int {
 ///|
 struct FlatStorageField {
   vt : @types.ValueType
-  size : Int
-  align : Int
+  size : Int32
+  align : Int32
 } derive(Debug)
 
 ///|
@@ -234,8 +234,8 @@ fn flat_storage_for_valtype(
 ///|
 fn layout_of_flat_storage_fields(
   fields : Array[FlatStorageField],
-) -> (Array[Int], Int, Int) {
-  let offsets : Array[Int] = []
+) -> (Array[Int32], Int32, Int32) {
+  let offsets : Array[Int32] = []
   let mut off = 0
   let mut struct_align = 1
   for field in fields {
@@ -257,7 +257,7 @@ fn alloc_realloc_area(
   realloc : CanonicalRealloc,
   mem_is_64 : Bool,
   size : Int64,
-  align : Int,
+  align : Int32,
 ) -> Int64 raise ComponentRuntimeError {
   if size < 0L || (!mem_is_64 && size > 0xffffffffL) {
     raise CanonCallError("realloc size exceeds addressable memory")
@@ -468,12 +468,12 @@ fn require_memory(
 }
 
 ///|
-fn trunc_u8(n : Int) -> Int {
+fn trunc_u8(n : Int32) -> Int32 {
   (n.reinterpret_as_uint() & 0xFFU).reinterpret_as_int()
 }
 
 ///|
-fn trunc_s8(n : Int) -> Int {
+fn trunc_s8(n : Int32) -> Int32 {
   let masked = n.reinterpret_as_uint() & 0xFFU
   if masked >= 0x80U {
     masked.reinterpret_as_int() - 0x100
@@ -483,12 +483,12 @@ fn trunc_s8(n : Int) -> Int {
 }
 
 ///|
-fn trunc_u16(n : Int) -> Int {
+fn trunc_u16(n : Int32) -> Int32 {
   (n.reinterpret_as_uint() & 0xFFFFU).reinterpret_as_int()
 }
 
 ///|
-fn trunc_s16(n : Int) -> Int {
+fn trunc_s16(n : Int32) -> Int32 {
   let masked = n.reinterpret_as_uint() & 0xFFFFU
   if masked >= 0x8000U {
     masked.reinterpret_as_int() - 0x10000
@@ -498,12 +498,12 @@ fn trunc_s16(n : Int) -> Int {
 }
 
 ///|
-fn trunc_u32(n : Int) -> Int {
+fn trunc_u32(n : Int32) -> Int32 {
   n.reinterpret_as_uint().reinterpret_as_int()
 }
 
 ///|
-fn char_from_canon_i32(n : Int) -> Char raise ComponentRuntimeError {
+fn char_from_canon_i32(n : Int32) -> Char raise ComponentRuntimeError {
   // Component model `char` values are Unicode scalar values.
   if n < 0 || n > 0x10FFFF || (n >= 0xD800 && n <= 0xDFFF) {
     raise CanonCallError("invalid `char` bit pattern")
@@ -572,7 +572,7 @@ fn check_canonical_string_span(
   ptr : Int64,
   len : Int64,
   encoding : StringEncoding,
-) -> (Int, Bool, Int) raise ComponentRuntimeError {
+) -> (Int32, Bool, Int32) raise ComponentRuntimeError {
   if ptr < 0 {
     raise CanonCallError(
       "string content out-of-bounds (string pointer/length out of bounds of memory)",

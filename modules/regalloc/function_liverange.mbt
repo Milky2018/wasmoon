@@ -1,7 +1,7 @@
 ///|
 fn operand_program_point(
-  block : Int,
-  instruction : Int,
+  block : Int32,
+  instruction : Int32,
   timing : OperandTiming,
 ) -> ProgramPoint {
   let phase = match timing {
@@ -21,8 +21,8 @@ fn[F : FunctionView] collect_function_liveness(
   let use_dense = block_count == 0 || word_count <= 262144 / block_count
   let block_defs : Array[SparseVRegSet] = []
   let live_in : Array[SparseVRegSet] = []
-  let successors : Array[Array[Int]] = []
-  let block_ids : Array[Int] = []
+  let successors : Array[Array[Int32]] = []
+  let block_ids : Array[Int32] = []
   for block in 0..<function.block_count() {
     let definitions = if use_dense {
       SparseVRegSet::dense(function.value_count())
@@ -109,14 +109,14 @@ fn[F : FunctionView] collect_function_liveness(
 fn[F : FunctionView] build_function_range_fragments(
   ranges : LiveRangeSet,
   function : F,
-  live_out : Array[Array[Int]],
+  live_out : Array[Array[Int32]],
 ) -> Unit {
   let block_ends = Array::make(function.block_count(), 0)
   let open_ends : Array[ProgramPoint?] = Array::make(
     function.value_count(),
     None,
   )
-  let open_values : Array[Int] = []
+  let open_values : Array[Int32] = []
   for block in 0..<function.block_count() {
     let instruction_count = function.block_instruction_count(block)
     let block_start = ProgramPoint(block, -1)

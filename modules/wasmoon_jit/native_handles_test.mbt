@@ -390,8 +390,8 @@ test "GC heap finalizer releases an unclosed owner" {
 ///|
 fn read_context_memory(
   context : @wasmoon_jit.NativeJITContext,
-  index : Int,
-  size : Int,
+  index : Int32,
+  size : Int32,
 ) -> Bytes raise {
   let output = FixedArray::make(size, b'\x00')
   assert_eq(
@@ -734,8 +734,8 @@ test "parked scratch roots survive GC and resume restores the actual caller" {
 ///|
 fn context_with_owned_gc_metadata() -> @jit_ffi.JITContext {
   let context = @jit_ffi.JITContext::new(2)
-  let types : FixedArray[Int] = [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-  let indices : FixedArray[Int] = [0, 1]
+  let types : FixedArray[Int32] = [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  let indices : FixedArray[Int32] = [0, 1]
   context.bind_gc_metadata(types, indices, indices)
   // Both slots alias one array; rebinding must retain before releasing either.
   context.bind_gc_metadata(types, indices, indices)
@@ -786,7 +786,7 @@ test "GC metadata survives MoonBit owners and supports replacement and clearing"
 fn context_with_owned_gc_payloads() -> @jit_ffi.JITContext {
   let context = @jit_ffi.JITContext::new(2)
   let blob = Bytes::from_array([1, 2, 3])
-  let offsets : FixedArray[Int] = [4, 12]
+  let offsets : FixedArray[Int32] = [4, 12]
   let addresses : FixedArray[Int64] = [16L, 32L]
   for _ in 0..<2 {
     guard context.bind_gc_safepoints(0, blob, offsets) else {
@@ -904,7 +904,7 @@ fn contexts_with_shared_safepoints() -> (
   @jit_ffi.JITContext,
   @jit_ffi.JITContext,
 ) raise {
-  let offsets : FixedArray[Int] = [4]
+  let offsets : FixedArray[Int32] = [4]
   let owner = @jit_ffi.PreparedSafepoints::new([b"\x01"], [offsets])
   offsets[0] = 99
   let a = @jit_ffi.JITContext::new(2)

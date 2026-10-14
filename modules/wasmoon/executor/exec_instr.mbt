@@ -860,7 +860,7 @@ fn ExecContext::finish_try_table(
   self : ExecContext,
   result : ExecBlockResult,
   handlers : Array[@types.CatchHandler],
-  stack_height : Int,
+  stack_height : Int32,
 ) -> Unit raise {
   self.pop_label()
   match result {
@@ -926,7 +926,7 @@ fn ExecContext::finish_try_table(
 /// Call a function by index
 pub fn ExecContext::call_func(
   self : ExecContext,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise {
   errdefer self.discard_captured_execution()

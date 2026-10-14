@@ -5,7 +5,7 @@
 
 ///|
 /// Stable index into a function's instruction arena.
-pub type InstId = Int
+pub type InstId = Int32
 
 ///|
 priv struct FunctionOwnerContext {
@@ -18,9 +18,9 @@ priv struct FunctionOwnerContext {
 /// deliberately absent: definitions belong to the DFG while placement belongs
 /// to block layout.
 priv enum ValueDefinition {
-  FunctionParameter(Int)
-  BlockParameter(Int, Int)
-  InstructionResult(InstId, Int)
+  FunctionParameter(Int32)
+  BlockParameter(Int32, Int32)
+  InstructionResult(InstId, Int32)
 } derive(Eq)
 
 ///|
@@ -124,12 +124,16 @@ fn reject_foreign_terminator_values(
 /// Each value is defined exactly once and can be used multiple times
 pub struct Value {
   priv owner : Ref[FunctionOwnerContext]
-  id : Int // Unique identifier within a function
+  id : Int32 // Unique identifier within a function
   ty : Type // The type of this value
 }
 
 ///|
-fn Value::new(owner : Ref[FunctionOwnerContext], id : Int, ty : Type) -> Value {
+fn Value::new(
+  owner : Ref[FunctionOwnerContext],
+  id : Int32,
+  ty : Type,
+) -> Value {
   { owner, id, ty, }
 }
 
@@ -215,16 +219,16 @@ pub struct ExternalSymbol {
 /// on the declared type and optimizer-visible global-value contract.
 pub struct ContextField {
   dialect : String
-  key : Int
-  parameters : FixedArray[Int]
+  key : Int32
+  parameters : FixedArray[Int32]
   ty : Type
 } derive(Debug)
 
 ///|
 pub fn ContextField::new(
   dialect : String,
-  key : Int,
-  parameters : FixedArray[Int],
+  key : Int32,
+  parameters : FixedArray[Int32],
   ty : Type,
 ) -> ContextField {
   { dialect, key, parameters, ty, }
@@ -260,8 +264,8 @@ pub impl Hash for ContextField with fn hash_combine(self, hasher) {
 ///|
 /// Disjoint abstract memory regions used by alias analysis.
 pub(all) enum AliasRegion {
-  Heap(Int)
-  Table(Int)
+  Heap(Int32)
+  Table(Int32)
   Context
   Other
 } derive(Debug, Eq, Hash)
@@ -302,11 +306,14 @@ fn GlobalValueData::result_type(self : GlobalValueData) -> Type {
 /// Function-owned handle to an interned global-value declaration.
 pub struct GlobalValue {
   priv owner : Ref[FunctionOwnerContext]
-  id : Int
+  id : Int32
 }
 
 ///|
-fn GlobalValue::new(owner : Ref[FunctionOwnerContext], id : Int) -> GlobalValue {
+fn GlobalValue::new(
+  owner : Ref[FunctionOwnerContext],
+  id : Int32,
+) -> GlobalValue {
   { owner, id, }
 }
 
@@ -334,22 +341,22 @@ pub fn ExternalSymbol::ExternalSymbol(name : String) -> ExternalSymbol {
 pub struct ExtOp {
   dialect : String
   opcode : String
-  immediates : FixedArray[Int]
+  immediates : FixedArray[Int32]
 } derive(Debug)
 
 ///|
 pub(all) struct ExtOpDescriptor {
   dialect : String
   opcode : String
-  min_immediates : Int
-  max_immediates : Int
+  min_immediates : Int32
+  max_immediates : Int32
 } derive(Eq, Debug, Hash)
 
 ///|
 pub fn ExtOpDescriptor::ExtOpDescriptor(
   dialect : String,
   opcode : String,
-  immediate_count : Int,
+  immediate_count : Int32,
 ) -> ExtOpDescriptor {
   {
     dialect,
@@ -363,8 +370,8 @@ pub fn ExtOpDescriptor::ExtOpDescriptor(
 pub fn ExtOpDescriptor::with_immediate_range(
   dialect : String,
   opcode : String,
-  min_immediates : Int,
-  max_immediates : Int,
+  min_immediates : Int32,
+  max_immediates : Int32,
 ) -> ExtOpDescriptor {
   { dialect, opcode, min_immediates, max_immediates, }
 }
@@ -372,7 +379,7 @@ pub fn ExtOpDescriptor::with_immediate_range(
 ///|
 pub fn ExtOpDescriptor::accepts_immediate_count(
   self : ExtOpDescriptor,
-  count : Int,
+  count : Int32,
 ) -> Bool {
   count >= self.min_immediates && count <= self.max_immediates
 }
@@ -392,7 +399,7 @@ pub fn ExtOpDescriptor::expected_immediate_count(
 pub fn ExtOp::ExtOp(
   dialect : String,
   opcode : String,
-  immediates : FixedArray[Int],
+  immediates : FixedArray[Int32],
 ) -> ExtOp {
   { dialect, opcode, immediates, }
 }
@@ -459,7 +466,7 @@ pub(all) enum Metadata {
 /// `Function::block_instruction_at` to inspect it.
 pub struct Block {
   priv owner : Ref[FunctionOwnerContext]
-  id : Int // Unique block identifier
+  id : Int32 // Unique block identifier
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
   priv mut instructions : Array[InstId] // Stable instruction arena IDs
   mut terminator : Terminator? // How this block ends
@@ -476,7 +483,7 @@ pub impl Debug for Block with fn to_repr(self) {
 }
 
 ///|
-fn Block::Block(owner : Ref[FunctionOwnerContext], id : Int) -> Block {
+fn Block::Block(owner : Ref[FunctionOwnerContext], id : Int32) -> Block {
   { owner, id, params: [], instructions: [], terminator: None, }
 }
 
@@ -520,7 +527,7 @@ fn Block::add_inst(self : Block, inst : Inst) -> Unit {
 
 ///|
 /// Detach an instruction for relocation without marking it deleted.
-pub fn Block::take_inst_at(self : Block, index : Int) -> Int? {
+pub fn Block::take_inst_at(self : Block, index : Int32) -> Int32? {
   if index < 0 || index >= self.instructions.length() {
     return None
   }
@@ -549,7 +556,7 @@ pub fn Block::set_instructions(
 /// Remove instructions rejected by a stable predicate and mark them deleted.
 pub fn Block::retain_instruction_ids(
   self : Block,
-  keep : (Int) -> Bool,
+  keep : (Int32) -> Bool,
 ) -> Unit {
   for inst_id in self.instructions {
     if !keep(inst_id) {
@@ -572,7 +579,7 @@ pub fn Block::append_inst(self : Block, inst : Inst) -> Unit {
 
 ///|
 /// Return the number of instructions placed in this block.
-pub fn Block::instruction_count(self : Block) -> Int {
+pub fn Block::instruction_count(self : Block) -> Int32 {
   self.instructions.length()
 }
 
@@ -722,8 +729,8 @@ pub(all) enum MemoryOp {
   Atomic(AtomicMemoryOp)
   Load(Type)
   Store(Type)
-  LoadNarrow(Type, Int, Bool)
-  StoreNarrow(Int)
+  LoadNarrow(Type, Int32, Bool)
+  StoreNarrow(Int32)
   Vector(VectorMemoryOp)
 } derive(Debug, Eq, Hash)
 
@@ -731,10 +738,10 @@ pub(all) enum MemoryOp {
 /// Sequentially consistent accesses; operands use the same base/offset layout
 /// as ordinary memory operations, with compare-exchange taking two values.
 pub(all) enum AtomicMemoryOp {
-  Load(Type, Int)
-  Store(Type, Int)
-  Rmw(Type, Int, AtomicRmwOp)
-  CompareExchange(Type, Int)
+  Load(Type, Int32)
+  Store(Type, Int32)
+  Rmw(Type, Int32, AtomicRmwOp)
+  CompareExchange(Type, Int32)
   Fence
 } derive(Debug, Eq, Hash)
 
@@ -753,7 +760,7 @@ pub(all) enum AtomicRmwOp {
 /// pointer followed by ordinary arguments.
 pub(all) enum CallOp {
   Direct(ExternalSymbol, Signature)
-  Pointer(Int, Int)
+  Pointer(Int32, Int32)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -906,8 +913,8 @@ pub(all) enum VectorMemoryOp {
   LoadExtend(VectorIntLane, VectorSignedness)
   LoadSplat(VectorIntLane)
   LoadZero(VectorIntLane)
-  LoadLane(VectorIntLane, Int)
-  StoreLane(VectorIntLane, Int)
+  LoadLane(VectorIntLane, Int32)
+  StoreLane(VectorIntLane, Int32)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -935,9 +942,9 @@ pub(all) enum VectorRelaxedOp {
 pub(all) enum VectorOp {
   Const(Bytes)
   Splat(VectorLane)
-  ExtractLane(VectorLane, VectorExtension, Int)
-  ReplaceLane(VectorLane, Int)
-  Shuffle(FixedArray[Int])
+  ExtractLane(VectorLane, VectorExtension, Int32)
+  ReplaceLane(VectorLane, Int32)
+  Shuffle(FixedArray[Int32])
   Swizzle
   Bitwise(VectorBitwiseOp)
   Predicate(VectorPredicateOp)
@@ -1022,7 +1029,7 @@ pub(all) enum ConversionOp {
 ///|
 pub(all) enum ScalarOp {
   IntConst(Int64)
-  FloatConst32(UInt)
+  FloatConst32(UInt32)
   FloatConst64(UInt64)
   IntBinary(IntBinaryOp)
   IntUnary(IntUnaryOp)
@@ -1031,7 +1038,7 @@ pub(all) enum ScalarOp {
   FloatUnary(FloatUnaryOp)
   FloatCompare(FloatCC)
   Convert(ConversionOp)
-  SignExtendFrom(Int)
+  SignExtendFrom(Int32)
   Select
   Copy
 } derive(Debug, Eq, Hash)
@@ -1110,15 +1117,15 @@ pub(all) enum FloatCC {
 /// Terminator - how a basic block ends
 pub(all) enum Terminator {
   // Unconditional jump
-  Jump(Int, Array[Value]) // target block, arguments
+  Jump(Int32, Array[Value]) // target block, arguments
 
   // Conditional branch
-  Branch(Value, Int, Array[Value], Int, Array[Value])
-  Brz(Value, Int, Int) // condition, true block, false block
-  Brnz(Value, Int, Int) // condition, true block, false block
+  Branch(Value, Int32, Array[Value], Int32, Array[Value])
+  Brz(Value, Int32, Int32) // condition, true block, false block
+  Brnz(Value, Int32, Int32) // condition, true block, false block
 
   // Multi-way branch (for br_table)
-  BrTable(Value, Array[Int], Int) // index, targets, default
+  BrTable(Value, Array[Int32], Int32) // index, targets, default
 
   // Return from function
   Return(Array[Value]) // return values
@@ -1146,10 +1153,10 @@ pub struct Function {
   priv instructions : Array[Inst]
   external_symbols : Array[ExternalSymbol]
   global_values : Array[(GlobalValue, GlobalValueData)]
-  mut next_value_id : Int // For generating unique value IDs
-  mut next_inst_id : Int
-  mut next_block_id : Int // For generating unique block IDs
-  mut next_global_value_id : Int
+  mut next_value_id : Int32 // For generating unique value IDs
+  mut next_inst_id : Int32
+  mut next_block_id : Int32 // For generating unique block IDs
+  mut next_global_value_id : Int32
 }
 
 ///|
@@ -1206,7 +1213,7 @@ pub fn Function::with_signature(
 
 ///|
 /// Return a declared function parameter by position.
-pub fn Function::param(self : Function, index : Int) -> Value? {
+pub fn Function::param(self : Function, index : Int32) -> Value? {
   if index >= 0 && index < self.params.length() {
     Some(self.params[index].0)
   } else {
@@ -1272,7 +1279,7 @@ fn Function::add_block_param(
 pub fn Function::retain_block_params(
   self : Function,
   block : Block,
-  keep : Array[Int],
+  keep : Array[Int32],
 ) -> Unit {
   if !self.owns_block(block) {
     self.record_construction_error(ForeignBlock(block_id=block.id))
@@ -1432,7 +1439,7 @@ pub fn Function::block_instruction_ids(
 pub fn Function::block_instruction_at(
   self : Function,
   block : Block,
-  index : Int,
+  index : Int32,
 ) -> Inst? {
   if !self.owns_block(block) ||
     index < 0 ||

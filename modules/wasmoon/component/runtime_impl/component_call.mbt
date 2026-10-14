@@ -36,7 +36,7 @@ struct ComponentInvocation {
 ///|
 fn component_invocation_contract(
   func : ComponentFunc,
-) -> (FuncType, Array[TypeDef?], Int) {
+) -> (FuncType, Array[TypeDef?], Int32) {
   match func {
     Host(func_type, types, _) | HostAsync(func_type, types, _) =>
       (func_type, types, -1)
@@ -407,7 +407,7 @@ pub fn ComponentInstance::start_exported_func(
   self : ComponentInstance,
   name : String,
   args : Array[ComponentValue],
-  caller_table? : ResourceTable = self.resource_table,
+  caller_table~ : ResourceTable = self.resource_table,
 ) -> ComponentInvocation raise ComponentRuntimeError {
   let func = match self.exports.get(name) {
     Some(Func(func)) => func

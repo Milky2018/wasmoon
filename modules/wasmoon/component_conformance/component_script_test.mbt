@@ -1,5 +1,5 @@
 ///|
-fn run_script_fixture(name : String, contents : String) -> Int raise {
+fn run_script_fixture(name : String, contents : String) -> Int32 raise {
   @fs.create_dir("tmp") catch {
     _ => ()
   }

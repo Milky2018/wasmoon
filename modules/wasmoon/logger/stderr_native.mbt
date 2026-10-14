@@ -1,6 +1,6 @@
 ///|
 #borrow(buf)
-extern "c" fn c_write_stderr(buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_logger_write_stderr"
+extern "c" fn c_write_stderr(buf : FixedArray[Byte], count : Int32) -> Int32 = "wasmoon_logger_write_stderr"
 
 ///|
 /// Write a line to the process's standard error.

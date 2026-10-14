@@ -22,9 +22,9 @@
 /// Lay one branch at offset 0 and pad out to `target`, so the patch sees the
 /// distance a real function of that size would produce.
 fn wide_branch_words(
-  base : UInt,
-  target : Int,
-) -> Array[UInt] raise AArch64EmitError {
+  base : UInt32,
+  target : Int32,
+) -> Array[UInt32] raise AArch64EmitError {
   let buffer = CodeBuffer::new(long_branches=true)
   buffer.emit_word(base)
   buffer.emit_word(AARCH64_NOP) // the reserved slot
@@ -37,11 +37,11 @@ fn wide_branch_words(
 
 ///|
 /// `b.eq`, condition 0000.
-const TEST_BEQ : UInt = 0x54000000U
+const TEST_BEQ : UInt32 = 0x54000000U
 
 ///|
 /// `cbz w0`.
-const TEST_CBZ : UInt = 0x34000000U
+const TEST_CBZ : UInt32 = 0x34000000U
 
 ///|
 test "long branch: within imm19 keeps the short form and leaves a nop" {

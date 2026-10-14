@@ -1,12 +1,12 @@
 ///|
 pub(all) enum ComponentValue {
   Bool(Bool)
-  S8(Int)
-  U8(Int)
-  S16(Int)
-  U16(Int)
-  S32(Int)
-  U32(Int)
+  S8(Int32)
+  U8(Int32)
+  S16(Int32)
+  U16(Int32)
+  S32(Int32)
+  U32(Int32)
   S64(Int64)
   U64(Int64)
   F32(Float)
@@ -14,7 +14,7 @@ pub(all) enum ComponentValue {
   Char(Char)
   String(String)
   /// Internal canonical transport; embedding boundaries expose String instead.
-  EncodedString(String, StringEncoding, Int)
+  EncodedString(String, StringEncoding, Int32)
   /// Borrowed only while lowering an immediate synchronous guest call.
   GuestString(CanonicalGuestString)
   ErrorContext(String)
@@ -22,10 +22,10 @@ pub(all) enum ComponentValue {
   Tuple(Array[ComponentValue])
   /// Canonical ABI representation for variants/options/results.
   /// `tag` is the case index, and `payload` is the case payload (if any).
-  Variant(Int, ComponentValue?)
+  Variant(Int32, ComponentValue?)
   // Resource representation after a borrow crosses into the component
   // instance that implements its resource type.
-  ResourceValue(Int)
+  ResourceValue(Int32)
 } derive(Debug, Eq)
 
 ///|
@@ -38,7 +38,7 @@ pub impl Show for ComponentValue with fn output(self, logger) {
 ///|
 /// Embedding-owned cleanup associated with an owned host resource handle.
 struct HostResourceDestructor {
-  drop : (Int) -> Unit
+  drop : (Int32) -> Unit
 }
 
 ///|
@@ -48,7 +48,7 @@ impl Debug for HostResourceDestructor with fn to_repr(_self) {
 
 ///|
 pub fn HostResourceDestructor::HostResourceDestructor(
-  drop : (Int) -> Unit,
+  drop : (Int32) -> Unit,
 ) -> HostResourceDestructor {
   { drop, }
 }
@@ -56,7 +56,7 @@ pub fn HostResourceDestructor::HostResourceDestructor(
 ///|
 pub fn HostResourceDestructor::destroy(
   self : HostResourceDestructor,
-  rep : Int,
+  rep : Int32,
 ) -> Unit {
   (self.drop)(rep)
 }
@@ -66,12 +66,12 @@ struct TaskReturnContract {
   result : ValType?
   types : Array[TypeDef?]
   resources : CanonResources
-  owner_component_id : Int
+  owner_component_id : Int32
 } derive(Debug)
 
 ///|
 struct CanonResources {
-  mem_addr : Int?
+  mem_addr : Int32?
   realloc : CanonicalRealloc?
   post_return : CoreFuncRef?
   encoding : StringEncoding
@@ -79,34 +79,34 @@ struct CanonResources {
 
 ///|
 pub(all) struct ResourceHandle {
-  type_id : Int
-  rep : Int
+  type_id : Int32
+  rep : Int32
   dtor : CoreFuncRef?
   host_dtor : HostResourceDestructor?
   kind : ResourceKind
-  impl_component_id : Int
+  impl_component_id : Int32
   own : Bool
   borrow_scope : Int64?
-  num_lends : Array[Int]
+  num_lends : Array[Int32]
 } derive(Debug)
 
 ///|
 pub(all) struct ResourceTable {
-  id : Int
-  next_handle : Ref[Int]
-  free_handles : Ref[Array[Int]]
-  entries : Ref[Map[Int, ResourceHandle]]
+  id : Int32
+  next_handle : Ref[Int32]
+  free_handles : Ref[Array[Int32]]
+  entries : Ref[Map[Int32, ResourceHandle]]
   // Error contexts use a separate per-component handle namespace.
-  error_contexts : ConcurrentMap[Int, String]
-  next_error_context : Ref[Int]
+  error_contexts : ConcurrentMap[Int32, String]
+  next_error_context : Ref[Int32]
 } derive(Debug)
 
 ///|
-let resource_table_id_counter : Array[Int] = [0]
+let resource_table_id_counter : Array[Int32] = [0]
 
 ///|
 pub fn ResourceTable::ResourceTable(
-  resources? : ConcurrentResources = ConcurrentResources::new(),
+  resources~ : ConcurrentResources = ConcurrentResources::new(),
 ) -> ResourceTable {
   let id = resource_table_id_counter[0]
   resource_table_id_counter[0] = id + 1
@@ -123,9 +123,9 @@ pub fn ResourceTable::ResourceTable(
 
 ///|
 fn alloc_handle_index(
-  next_handle : Ref[Int],
-  free_handles : Ref[Array[Int]],
-) -> (Int, Bool) {
+  next_handle : Ref[Int32],
+  free_handles : Ref[Array[Int32]],
+) -> (Int32, Bool) {
   if free_handles.val.length() > 0 {
     (free_handles.val.remove(free_handles.val.length() - 1), true)
   } else {
@@ -139,7 +139,7 @@ fn alloc_handle_index(
 pub fn ResourceTable::alloc(
   self : ResourceTable,
   entry : ResourceHandle,
-) -> Int {
+) -> Int32 {
   let (handle, _from_free) = alloc_handle_index(
     self.next_handle,
     self.free_handles,
@@ -153,7 +153,7 @@ pub fn ResourceTable::alloc(
 ///|
 pub fn ResourceTable::get(
   self : ResourceTable,
-  handle : Int,
+  handle : Int32,
 ) -> ResourceHandle? {
   self.entries.val.get(handle)
 }
@@ -161,7 +161,7 @@ pub fn ResourceTable::get(
 ///|
 pub fn ResourceTable::free(
   self : ResourceTable,
-  handle : Int,
+  handle : Int32,
 ) -> ResourceHandle? {
   let entry = self.entries.val.get(handle)
   if entry is Some(_) {
@@ -174,7 +174,7 @@ pub fn ResourceTable::free(
 }
 
 ///|
-fn resource_handle_index_text(handle : Int) -> String {
+fn resource_handle_index_text(handle : Int32) -> String {
   handle.reinterpret_as_uint().to_string()
 }
 
@@ -191,7 +191,7 @@ fn registered_resource_table(
 
 ///|
 pub(all) struct StreamEndpoint {
-  stream_id : Int
+  stream_id : Int32
   is_readable : Bool
   // Set once an operation observed that the opposite end was dropped; subsequent
   // reads/writes/lifts should trap (component-spec "done" semantics).
@@ -205,18 +205,18 @@ struct PendingStreamRead {
   // Writes can come from a different component instance/memory, so we must keep
   // enough info to write into the *reader* memory.
   payload_type : CanonicalPayloadType
-  mem_addr : Int?
+  mem_addr : Int32?
   realloc : CanonicalRealloc?
   encoding : StringEncoding
   // Resource table of the reader component instance (used to transfer `own` resources).
   reader_table : ResourceTable
   ptr : Int64
   // Element count requested by the read.
-  len : Int
+  len : Int32
   // Number of elements already written into the buffer.
-  filled : Int
+  filled : Int32
   // Readable endpoint handle (waitable index) that initiated this pending read.
-  reader_handle : Int
+  reader_handle : Int32
   // Whether we've already enqueued a STREAM_READ event for this pending read.
   event_enqueued : Bool
 } derive(Debug)
@@ -228,11 +228,11 @@ struct PendingStreamWrite {
   // Lifted values retain the writer type environment until rendezvous.
   buf : CanonicalPayload
   // Element count is independent of byte length for zero-sized payloads.
-  count : Int
+  count : Int32
   // Number of elements already consumed by a read.
-  sent : Int
+  sent : Int32
   // Writable endpoint handle (waitable index) that initiated this pending write.
-  writer_handle : Int
+  writer_handle : Int32
   // Whether we've already enqueued a STREAM_WRITE event for this pending write.
   event_enqueued : Bool
   // For sync (non-async) stream.write, defer completion by one cooperative yield once
@@ -263,8 +263,8 @@ struct HostValueStream {
   payload_ty : ValType
   types : Array[TypeDef?]
   values : Array[ComponentValue]
-  next : Ref[Int]
-  pull : ((Int) -> HostValueStreamPoll raise ComponentRuntimeError)?
+  next : Ref[Int32]
+  pull : ((Int32) -> HostValueStreamPoll raise ComponentRuntimeError)?
   cancel : (() -> Unit)?
   closed : Ref[Bool]
 }
@@ -277,11 +277,11 @@ impl Debug for HostValueStream with fn to_repr(_self) {
 ///|
 pub(all) struct StreamTable {
   concurrent_resources : ConcurrentResources
-  next_stream_id : Array[Int]
+  next_stream_id : Array[Int32]
   // Keyed by `handle_key(component_id, local_handle)`.
   endpoints : ConcurrentMap[Int64, StreamEndpoint]
-  streams : ConcurrentMap[Int, StreamState]
-  host_values : Map[Int, HostValueStream]
+  streams : ConcurrentMap[Int32, StreamState]
+  host_values : Map[Int32, HostValueStream]
 } derive(Debug)
 
 ///|
@@ -297,7 +297,7 @@ pub fn StreamTable::StreamTable() -> StreamTable {
 }
 
 ///|
-fn cleanup_closed_stream(table : StreamTable, stream_id : Int) -> Unit {
+fn cleanup_closed_stream(table : StreamTable, stream_id : Int32) -> Unit {
   guard table.streams.get(stream_id) is Some(state) &&
     state.readable_dropped &&
     state.writable_dropped else {
@@ -314,7 +314,7 @@ fn cleanup_closed_stream(table : StreamTable, stream_id : Int) -> Unit {
 }
 
 ///|
-fn cleanup_closed_future(async_state : AsyncState, future_id : Int) -> Unit {
+fn cleanup_closed_future(async_state : AsyncState, future_id : Int32) -> Unit {
   guard async_state.futures.get(future_id) is Some(state) &&
     state.readable_dropped &&
     state.writable_dropped else {
@@ -342,11 +342,11 @@ pub(all) struct AsyncState {
   core_engine : CoreExecutionEngine
   // Per-component handle allocator for waitables/streams/futures/subtasks/threads.
   // Handle 0 is invalid; allocation starts at 1 (matches component model ABI).
-  next_handle_by_component : Map[Int, Array[Int]]
-  free_handles_by_component : Map[Int, Array[Int]]
+  next_handle_by_component : Map[Int32, Array[Int32]]
+  free_handles_by_component : Map[Int32, Array[Int32]]
   // Shared stream table (streams share the same handle space as waitables/subtasks).
   stream_table : StreamTable
-  resource_tables : Map[Int, ResourceTable]
+  resource_tables : Map[Int32, ResourceTable]
   // Embedding-owned reactor hook for asynchronous host calls. It blocks until
   // at least one registered external operation may make progress.
   host_event_loop : Ref[HostEventLoop?]
@@ -366,52 +366,52 @@ pub(all) struct AsyncState {
   // Waitable sets and event queues.
   waitable_sets : ConcurrentMap[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
-  event_revision : Ref[Int]
+  event_revision : Ref[Int32]
   waitable_events : Map[Int64, Array[WaitEvent]]
   sync_waitable_users : Map[Int64, Int64]
 
   // Subtasks created by `canon lower ... async`.
-  inflight_by_instance : Map[Int, Int]
-  pending_by_instance : Map[Int, Array[Int64]]
+  inflight_by_instance : Map[Int32, Int32]
+  pending_by_instance : Map[Int32, Array[Int64]]
   // Round-robin cursor for the single-threaded host task scheduler.
   scheduler_cursor : Array[Int64?]
 
   // Futures created by `canon future.new`.
-  next_future_id : Array[Int]
-  futures : ConcurrentMap[Int, FutureState]
+  next_future_id : Array[Int32]
+  futures : ConcurrentMap[Int32, FutureState]
   future_endpoints : ConcurrentMap[Int64, FutureEndpoint]
-  host_future_values : Map[Int, HostFutureValue]
+  host_future_values : Map[Int32, HostFutureValue]
 
   // Per-component backpressure counter used by `canon backpressure.*`.
   // Matches Wasmtime behavior: enabled when > 0; valid range is u16.
-  backpressure_by_instance : Map[Int, Int]
+  backpressure_by_instance : Map[Int32, Int32]
 } derive(Debug)
 
 ///|
 struct WaitEvent {
   // Component instance id where this waitable index is valid.
-  owner_component_id : Int
-  code : Int
-  index : Int
-  payload : Int
+  owner_component_id : Int32
+  code : Int32
+  index : Int32
+  payload : Int32
 } derive(Debug)
 
 ///|
 struct WaitableSet {
   // Local index (per component instance).
-  id : Int
-  members : Map[Int, Bool]
+  id : Int32
+  members : Map[Int32, Bool]
   queue : Array[WaitEvent]
   // Number of active waiters; dropping a set with waiters traps.
-  waiters : Array[Int]
+  waiters : Array[Int32]
 } derive(Debug)
 
 ///|
 struct FutureEndpoint {
-  future_id : Int
+  future_id : Int32
   is_readable : Bool
   // Component instance id where this future was created (resource_table.id).
-  creator_component_id : Int
+  creator_component_id : Int32
   in_waitable_set : Ref[Bool]
 } derive(Debug)
 
@@ -420,7 +420,7 @@ struct PendingFutureRead {
   // Memory where the read pointer lives (from the canonical options of future.read).
   // Writes can come from a different component instance/memory.
   payload_type : CanonicalPayloadType
-  mem_addr : Int?
+  mem_addr : Int32?
   realloc : CanonicalRealloc?
   encoding : StringEncoding
   // Resource table of the reader component instance.
@@ -428,15 +428,15 @@ struct PendingFutureRead {
   // For typed futures, write the payload at `ptr`.
   ptr : Int64
   // The readable endpoint that initiated this pending read.
-  reader_component_id : Int
-  reader_handle : Int
+  reader_component_id : Int32
+  reader_handle : Int32
 } derive(Debug)
 
 ///|
 struct PendingFutureWrite {
   // The writable endpoint that initiated this pending write.
-  writer_component_id : Int
-  writer_handle : Int
+  writer_component_id : Int32
+  writer_handle : Int32
   // Pending write value (already loaded from memory if needed).
   payload : CanonicalPayload
 } derive(Debug)
@@ -487,15 +487,15 @@ enum GuestThreadPhase {
 
 ///|
 struct GuestThread {
-  owner_component_id : Int
+  owner_component_id : Int32
   // Guest-visible local thread handle.
-  handle : Int
+  handle : Int32
   // Root task that owns this thread.
   parent_task_id : Int64
   // Internal task id that owns the explicit thread continuation.
   task_id : Int64
   start_func : CoreFuncRef
-  context : Int
+  context : Int32
   phase : Array[GuestThreadPhase]
   scheduled : Array[Bool]
   waiting_ws : Array[Int64?]
@@ -535,13 +535,13 @@ struct CallbackTask {
   // The component instance id whose handle numbering `args` currently uses.
   // For nested component calls, stream/future readable handles are moved into
   // the callee's local handle space before entering core code.
-  args_owner_component_id : Array[Int]
+  args_owner_component_id : Array[Int32]
   // Whether the initial call has been made (for callback-style tasks).
   started : Array[Bool]
   // The entry function or final callback has exited; guest threads may remain.
   main_finished : Array[Bool]
   // Latest callback code from the core task or callback.
-  code : Array[Int]
+  code : Array[Int32]
   // Waitable-set key (handle_key(owner_component_id, local_index)).
   waiting_set : Array[Int64?]
   // Lazily-created state for an asynchronous host function.
@@ -559,17 +559,17 @@ struct SyncLowerState {
 
 ///|
 struct Subtask {
-  id : Int
+  id : Int32
   // Detached subtasks are internal background tasks (spawned by sync-lowering)
   // that are never exposed as waitables; they are auto-cleaned up on return.
   detached : Bool
   phase : Array[SubtaskPhase]
   caller_table : ResourceTable
-  callee_instance_id : Int
+  callee_instance_id : Int32
   // Backpressure key: only one in-flight subtask per async-lowered core func.
-  bp_key : Int
+  bp_key : Int32
   retptr : Int64
-  mem_addr : Int?
+  mem_addr : Int32?
   result_ty : ValType?
   types : Array[TypeDef?]
   resources : CanonResources
@@ -579,7 +579,7 @@ struct Subtask {
 ///|
 pub fn AsyncState::AsyncState(
   stream_table : StreamTable,
-  core_engine? : CoreExecutionEngine = interpreter_core_execution_engine(),
+  core_engine~ : CoreExecutionEngine = interpreter_core_execution_engine(),
 ) -> AsyncState {
   let concurrent_resources = stream_table.concurrent_resources
   {
@@ -615,24 +615,24 @@ pub fn AsyncState::AsyncState(
 }
 
 ///|
-fn handle_key(component_id : Int, local_handle : Int) -> Int64 {
+fn handle_key(component_id : Int32, local_handle : Int32) -> Int64 {
   (component_id.to_int64() << 32) | (local_handle.to_int64() & 0xFFFFFFFFL)
 }
 
 ///|
-fn key_local(handle_key : Int64) -> Int {
+fn key_local(handle_key : Int64) -> Int32 {
   (handle_key & 0xFFFFFFFFL).to_int()
 }
 
 ///|
-fn key_owner(handle_key : Int64) -> Int {
+fn key_owner(handle_key : Int64) -> Int32 {
   (handle_key >> 32).to_int()
 }
 
 ///|
 fn find_stream_endpoint_key_by_local(
   async_state : AsyncState,
-  local_handle : Int,
+  local_handle : Int32,
   want_readable : Bool,
 ) -> Int64? {
   for kv in async_state.stream_table.endpoints.iter() {
@@ -647,7 +647,7 @@ fn find_stream_endpoint_key_by_local(
 ///|
 fn find_future_endpoint_key_by_local(
   async_state : AsyncState,
-  local_handle : Int,
+  local_handle : Int32,
   want_readable : Bool,
 ) -> Int64? {
   for kv in async_state.future_endpoints.iter() {
@@ -662,8 +662,8 @@ fn find_future_endpoint_key_by_local(
 ///|
 fn remove_waitable_membership(
   async_state : AsyncState,
-  owner_component_id : Int,
-  handle : Int,
+  owner_component_id : Int32,
+  handle : Int32,
 ) -> Unit {
   let wkey = handle_key(owner_component_id, handle)
   if async_state.stream_table.endpoints.get(wkey) is Some(endpoint) {
@@ -692,8 +692,8 @@ fn remove_waitable_membership(
 ///|
 fn waitable_is_in_set(
   async_state : AsyncState,
-  owner_component_id : Int,
-  handle : Int,
+  owner_component_id : Int32,
+  handle : Int32,
 ) -> Bool {
   async_state.waitable_to_set.get(handle_key(owner_component_id, handle))
   is Some(_)
@@ -702,8 +702,8 @@ fn waitable_is_in_set(
 ///|
 fn resume_sync_waitable_use(
   async_state : AsyncState,
-  owner_component_id : Int,
-  handle : Int,
+  owner_component_id : Int32,
+  handle : Int32,
   task_id : Int64,
 ) -> Bool {
   let key = handle_key(owner_component_id, handle)
@@ -719,8 +719,8 @@ fn resume_sync_waitable_use(
 ///|
 fn mark_sync_waitable_blocked(
   async_state : AsyncState,
-  owner_component_id : Int,
-  handle : Int,
+  owner_component_id : Int32,
+  handle : Int32,
   task_id : Int64,
 ) -> Unit {
   async_state.sync_waitable_users.set(
@@ -732,8 +732,8 @@ fn mark_sync_waitable_blocked(
 ///|
 fn waitable_is_in_sync_use(
   async_state : AsyncState,
-  owner_component_id : Int,
-  handle : Int,
+  owner_component_id : Int32,
+  handle : Int32,
 ) -> Bool {
   async_state.sync_waitable_users.get(handle_key(owner_component_id, handle))
   is Some(_)
@@ -745,9 +745,9 @@ fn waitable_is_in_sync_use(
 /// transition (e.g. dropping the peer endpoint) must take precedence.
 fn remove_waitable_events_for(
   async_state : AsyncState,
-  owner_component_id : Int,
-  handle : Int,
-  code : Int,
+  owner_component_id : Int32,
+  handle : Int32,
+  code : Int32,
 ) -> Unit {
   let wkey = handle_key(owner_component_id, handle)
   if async_state.waitable_events.get(wkey) is Some(list0) {
@@ -831,7 +831,7 @@ fn validate_lifted_arguments(
   args : Array[ComponentValue],
   types : Array[TypeDef?],
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
 ) -> Unit raise ComponentRuntimeError {
   for i, param in func_type.params {
     validate_lifted_stream_future(
@@ -850,9 +850,9 @@ fn validate_lifted_stream_future(
   v : ComponentValue,
   types : Array[TypeDef?],
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
 ) -> Unit raise ComponentRuntimeError {
-  fn as_i32(v : ComponentValue) -> Int raise ComponentRuntimeError {
+  fn as_i32(v : ComponentValue) -> Int32 raise ComponentRuntimeError {
     match v {
       U32(n) => n
       S32(n) => n
@@ -1019,10 +1019,10 @@ fn validate_lifted_stream_future(
 ///|
 fn transfer_stream_readable_handle(
   async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
-  handle : Int,
-) -> Int raise ComponentRuntimeError {
+  from_component_id : Int32,
+  to_component_id : Int32,
+  handle : Int32,
+) -> Int32 raise ComponentRuntimeError {
   if from_component_id == to_component_id {
     // Defensive: some call sites (notably sync-lowering + task.return paths) may not
     // precisely know which component instance produced a readable handle. If the
@@ -1077,10 +1077,10 @@ fn transfer_stream_readable_handle(
 ///|
 fn transfer_future_readable_handle(
   async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
-  handle : Int,
-) -> Int raise ComponentRuntimeError {
+  from_component_id : Int32,
+  to_component_id : Int32,
+  handle : Int32,
+) -> Int32 raise ComponentRuntimeError {
   if from_component_id == to_component_id {
     let k0 = handle_key(from_component_id, handle)
     if async_state.future_endpoints.get(k0) is Some(_) {
@@ -1122,8 +1122,8 @@ fn transfer_stream_future_value(
   v : ComponentValue,
   types : Array[TypeDef?],
   async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
+  from_component_id : Int32,
+  to_component_id : Int32,
 ) -> ComponentValue raise ComponentRuntimeError {
   map_canonical_handles(ty, v, types, (definition, v) => {
     match definition {
@@ -1270,9 +1270,9 @@ fn collect_direct_borrow_lends(
   v : ComponentValue,
   types : Array[TypeDef?],
   async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
-  lends : Array[Array[Int]],
+  from_component_id : Int32,
+  to_component_id : Int32,
+  lends : Array[Array[Int32]],
 ) -> Unit raise ComponentRuntimeError {
   map_canonical_handles(ty, v, types, (definition, v) => {
     match definition {
@@ -1308,8 +1308,8 @@ fn collect_direct_borrow_lends(
 ///|
 fn alloc_shared_handle_with_source(
   async_state : AsyncState,
-  component_id : Int,
-) -> (Int, Bool) {
+  component_id : Int32,
+) -> (Int32, Bool) {
   if async_state.resource_tables.get(component_id) is Some(table) {
     return alloc_handle_index(table.next_handle, table.free_handles)
   }
@@ -1324,7 +1324,7 @@ fn alloc_shared_handle_with_source(
   let free = match async_state.free_handles_by_component.get(component_id) {
     Some(xs) => xs
     None => {
-      let xs : Array[Int] = []
+      let xs : Array[Int32] = []
       async_state.free_handles_by_component.set(component_id, xs)
       xs
     }
@@ -1353,8 +1353,8 @@ fn alloc_shared_handle_with_source(
 ///|
 fn backpressure_value_for_instance(
   async_state : AsyncState,
-  component_id : Int,
-) -> Int {
+  component_id : Int32,
+) -> Int32 {
   match async_state.backpressure_by_instance.get(component_id) {
     Some(v) => v
     None => 0
@@ -1364,8 +1364,8 @@ fn backpressure_value_for_instance(
 ///|
 fn set_backpressure_value_for_instance(
   async_state : AsyncState,
-  component_id : Int,
-  value : Int,
+  component_id : Int32,
+  value : Int32,
 ) -> Unit {
   if value <= 0 {
     async_state.backpressure_by_instance.remove(component_id)
@@ -1378,7 +1378,7 @@ fn set_backpressure_value_for_instance(
 fn ResourceTable::alloc_error_context(
   self : ResourceTable,
   message : String,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   let handle = self.next_error_context.val
   self.error_contexts.set(handle, message)
   self.next_error_context.val += 1
@@ -1388,7 +1388,7 @@ fn ResourceTable::alloc_error_context(
 ///|
 fn ResourceTable::drop_error_context(
   self : ResourceTable,
-  handle : Int,
+  handle : Int32,
 ) -> Bool {
   if self.error_contexts.get(handle) is Some(_) {
     self.error_contexts.remove(handle)
@@ -1399,7 +1399,7 @@ fn ResourceTable::drop_error_context(
 }
 
 ///|
-fn alloc_shared_handle(async_state : AsyncState, component_id : Int) -> Int {
+fn alloc_shared_handle(async_state : AsyncState, component_id : Int32) -> Int32 {
   let (h, _from_free) = alloc_shared_handle_with_source(
     async_state, component_id,
   )
@@ -1409,8 +1409,8 @@ fn alloc_shared_handle(async_state : AsyncState, component_id : Int) -> Int {
 ///|
 fn free_shared_handle(
   async_state : AsyncState,
-  component_id : Int,
-  handle : Int,
+  component_id : Int32,
+  handle : Int32,
 ) -> Unit {
   // Handle 0 is invalid; never recycle it.
   if handle > 0 {
@@ -1421,7 +1421,7 @@ fn free_shared_handle(
     let free = match async_state.free_handles_by_component.get(component_id) {
       Some(xs) => xs
       None => {
-        let xs : Array[Int] = []
+        let xs : Array[Int32] = []
         async_state.free_handles_by_component.set(component_id, xs)
         xs
       }
@@ -1443,7 +1443,7 @@ fn current_task_id(async_state : AsyncState) -> Int64 {
 fn init_task_meta(
   async_state : AsyncState,
   task_id : Int64,
-  instance_id : Int,
+  instance_id : Int32,
   caller_task_id : Int64,
 ) -> Unit {
   async_state.tasks.write_task_instance(task_id, instance_id)
@@ -1460,7 +1460,10 @@ fn async_call_can_enter(func : ComponentFunc, async_state : AsyncState) -> Bool 
 }
 
 ///|
-fn instance_has_sync_wait(async_state : AsyncState, instance_id : Int) -> Bool {
+fn instance_has_sync_wait(
+  async_state : AsyncState,
+  instance_id : Int32,
+) -> Bool {
   for entry in async_state.sync_waitable_users {
     let (_, task_id) = entry
     if async_state.tasks.read_task_instance(task_id) == Some(instance_id) {
@@ -1488,13 +1491,13 @@ fn sync_waitables_for_task(
 ///|
 fn ensure_task_thread(
   async_state : AsyncState,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   task_id : Int64,
 ) -> Unit {
   let per_task = match async_state.tasks.read_task_thread(task_id) {
     Some(m) => m
     None => {
-      let m : Map[Int, Int] = Map([])
+      let m : Map[Int32, Int32] = Map([])
       async_state.tasks.write_task_thread(task_id, m)
       m
     }
@@ -1559,7 +1562,7 @@ fn pop_task(async_state : AsyncState) -> Unit {
 fn set_task_result(
   async_state : AsyncState,
   task_id : Int64,
-  owner_component_id : Int,
+  owner_component_id : Int32,
   vals : Array[ComponentValue],
 ) -> Unit {
   async_state.tasks.write_task_results(task_id, vals)

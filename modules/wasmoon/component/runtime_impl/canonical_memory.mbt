@@ -3,7 +3,7 @@ fn variant_payload_layout(
   cases : Array[@component.VariantCase],
   types : Array[TypeDef?],
   mem_is_64 : Bool,
-) -> (Int, Int) raise ComponentRuntimeError {
+) -> (Int32, Int32) raise ComponentRuntimeError {
   let (tag_size, _) = discriminant_layout(cases.length())
   let mut payload_alignment = 1
   for case in cases {
@@ -526,8 +526,8 @@ fn canonical_param_layout(
   params : Array[@component.Param],
   types : Array[TypeDef?],
   mem_is_64 : Bool,
-) -> (Array[Int], Int, Int) raise ComponentRuntimeError {
-  let offsets : Array[Int] = []
+) -> (Array[Int32], Int32, Int32) raise ComponentRuntimeError {
+  let offsets : Array[Int32] = []
   let mut size = 0
   let mut alignment = 1
   for param in params {

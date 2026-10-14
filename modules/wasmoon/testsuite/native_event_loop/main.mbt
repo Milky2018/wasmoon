@@ -1,12 +1,12 @@
 ///|
 #borrow(fds)
-extern "c" fn make_pipe(fds : FixedArray[Int]) -> Int = "wasmoon_async_test_pipe"
+extern "c" fn make_pipe(fds : FixedArray[Int32]) -> Int32 = "wasmoon_async_test_pipe"
 
 ///|
-extern "c" fn write_pipe(fd : Int) -> Int = "wasmoon_async_test_write"
+extern "c" fn write_pipe(fd : Int32) -> Int32 = "wasmoon_async_test_write"
 
 ///|
-extern "c" fn close_pipe(fd : Int) -> Unit = "wasmoon_async_test_close"
+extern "c" fn close_pipe(fd : Int32) -> Unit = "wasmoon_async_test_close"
 
 ///|
 async fn main {

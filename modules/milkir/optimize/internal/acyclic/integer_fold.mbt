@@ -3,7 +3,7 @@ fn fold_pure_integer_binary(
   op : @milkir.IntBinaryOp,
   a : Int64,
   b : Int64,
-  width : Int,
+  width : Int32,
 ) -> Int64? {
   let a = sign_extend_integer(a, width)
   let b = sign_extend_integer(b, width)
@@ -38,7 +38,11 @@ fn fold_pure_integer_binary(
 }
 
 ///|
-fn fold_integer_unary(op : @milkir.IntUnaryOp, a : Int64, width : Int) -> Int64 {
+fn fold_integer_unary(
+  op : @milkir.IntUnaryOp,
+  a : Int64,
+  width : Int32,
+) -> Int64 {
   let a = a.reinterpret_as_uint64() &
     integer_mask(width).reinterpret_as_uint64()
   match op {

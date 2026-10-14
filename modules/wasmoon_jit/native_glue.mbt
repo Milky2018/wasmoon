@@ -47,11 +47,15 @@ pub suberror JitPipelineError {
   X64CompilationFailed(cause~ : @x64_target.X64CompileError)
   AArch64LinkPreparationFailed(cause~ : @aarch64_target.AArch64LinkError)
   X64LinkPreparationFailed(cause~ : @x64_target.X64LinkError)
-  InvalidJitRelocation(target~ : NativeTarget, index~ : Int, message~ : String)
+  InvalidJitRelocation(
+    target~ : NativeTarget,
+    index~ : Int32,
+    message~ : String
+  )
   UnsupportedEntrySignature(message~ : String)
-  UnsupportedHostArchitecture(tag~ : Int)
-  UnsupportedHostOsAbi(tag~ : Int)
-  InvalidFunctionIndex(index~ : Int)
+  UnsupportedHostArchitecture(tag~ : Int32)
+  UnsupportedHostOsAbi(tag~ : Int32)
+  InvalidFunctionIndex(index~ : Int32)
 } derive(Debug)
 
 ///|

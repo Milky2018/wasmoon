@@ -2,7 +2,7 @@
 
 ///|
 /// Get the number of results for a block type
-fn ExecContext::block_arity(self : ExecContext, bt : @types.BlockType) -> Int {
+fn ExecContext::block_arity(self : ExecContext, bt : @types.BlockType) -> Int32 {
   match bt {
     Empty => 0
     Value(_) => 1
@@ -17,7 +17,7 @@ fn ExecContext::block_arity(self : ExecContext, bt : @types.BlockType) -> Int {
 fn ExecContext::block_param_arity(
   self : ExecContext,
   bt : @types.BlockType,
-) -> Int {
+) -> Int32 {
   match bt {
     Empty => 0
     Value(_) => 0 // Single value blocks have no params
@@ -132,8 +132,8 @@ fn ExecContext::exec_control(
 fn ExecContext::finish_block_control(
   self : ExecContext,
   result : ExecBlockResult,
-  arity : Int,
-  stack_height : Int,
+  arity : Int32,
+  stack_height : Int32,
 ) -> Unit raise {
   self.pop_label()
   match result {

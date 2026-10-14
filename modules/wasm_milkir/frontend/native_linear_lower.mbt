@@ -1,5 +1,5 @@
 ///|
-fn type_byte_size(ty : @milkir.Type) -> Int {
+fn type_byte_size(ty : @milkir.Type) -> Int32 {
   match ty {
     I32 | F32 => 4
     I64 | F64 | Ptr | Ref | CallableRef | OpaqueRef => 8
@@ -466,7 +466,7 @@ fn push_select(
 ///|
 fn get_global_func_type(
   mod_ : @types.Module,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> @types.FuncType? {
   if func_idx < 0 {
     return None
@@ -551,7 +551,7 @@ fn push_direct_call(
   env : EmbeddingEnvironment,
   mod_ : @types.Module,
   vmctx : @milkir.Value?,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard env.runtime_layout() is Some(layout) else { return false }
@@ -606,7 +606,7 @@ fn push_global_get(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   global_types : Array[@types.GlobalType],
-  global_idx : Int,
+  global_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard env.runtime_layout() is Some(layout) else { return false }
@@ -632,7 +632,7 @@ fn push_global_set(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   global_types : Array[@types.GlobalType],
-  global_idx : Int,
+  global_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard env.runtime_layout() is Some(layout) else { return false }
@@ -653,7 +653,10 @@ fn push_global_set(
 }
 
 ///|
-fn table_is_64(table_types : Array[@types.TableType], table_idx : Int) -> Bool? {
+fn table_is_64(
+  table_types : Array[@types.TableType],
+  table_idx : Int32,
+) -> Bool? {
   if table_idx < 0 || table_idx >= table_types.length() {
     None
   } else {
@@ -668,7 +671,7 @@ fn push_table_size(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
-  table_idx : Int,
+  table_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard env.runtime_layout() is Some(layout) else { return false }
@@ -710,7 +713,7 @@ fn load_table_size_and_base(
   builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   context : @milkir.Value,
-  table_idx : Int,
+  table_idx : Int32,
 ) -> (@milkir.Value, @milkir.Value)? {
   guard env.runtime_layout() is Some(layout) else { return None }
   if table_idx == 0 {
@@ -752,7 +755,7 @@ fn push_table_get(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
-  table_idx : Int,
+  table_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard env.runtime_layout() is Some(layout) else { return false }
@@ -807,7 +810,7 @@ fn push_table_set(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
-  table_idx : Int,
+  table_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, table_idx) is Some(_) else { return false }
@@ -839,7 +842,7 @@ fn push_table_fill(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
-  table_idx : Int,
+  table_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, table_idx) is Some(_) else { return false }
@@ -859,7 +862,10 @@ fn push_table_fill(
 }
 
 ///|
-fn memory_is_64(memory_types : Array[@types.MemoryType], memidx : Int) -> Bool? {
+fn memory_is_64(
+  memory_types : Array[@types.MemoryType],
+  memidx : Int32,
+) -> Bool? {
   if memidx < 0 || memidx >= memory_types.length() {
     None
   } else {
@@ -870,7 +876,7 @@ fn memory_is_64(memory_types : Array[@types.MemoryType], memidx : Int) -> Bool? 
 ///|
 fn memory_index_type(
   memory_types : Array[@types.MemoryType],
-  memidx : Int,
+  memidx : Int32,
 ) -> @milkir.Type? {
   match memory_is_64(memory_types, memidx) {
     Some(true) => Some(I64)
@@ -884,7 +890,7 @@ fn load_memory_base(
   builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   context : @milkir.Value,
-  memidx : Int,
+  memidx : Int32,
 ) -> @milkir.Value? {
   guard env.runtime_layout() is Some(layout) else { return None }
   if memidx == 0 {
@@ -924,7 +930,7 @@ fn load_memory_size_bytes(
   builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   context : @milkir.Value,
-  memidx : Int,
+  memidx : Int32,
 ) -> @milkir.Value? {
   guard env.runtime_layout() is Some(layout) else { return None }
   if memidx == 0 {
@@ -966,7 +972,7 @@ fn push_memory_size(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
-  memidx : Int,
+  memidx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(result_ty) else {
@@ -1004,7 +1010,7 @@ fn push_memory_grow(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
-  memidx : Int,
+  memidx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(result_ty) else {
@@ -1071,7 +1077,7 @@ fn push_memory_fill(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
-  memidx : Int,
+  memidx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(_) else { return false }
@@ -1089,8 +1095,8 @@ fn push_memory_copy(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
-  dst_memidx : Int,
-  src_memidx : Int,
+  dst_memidx : Int32,
+  src_memidx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, dst_memidx) is Some(_) else {
@@ -1113,8 +1119,8 @@ fn push_memory_init(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
-  memidx : Int,
-  data_idx : Int,
+  memidx : Int32,
+  data_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(_) else { return false }
@@ -1130,7 +1136,7 @@ fn push_data_drop(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
-  data_idx : Int,
+  data_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   let symbol = builder
@@ -1148,7 +1154,7 @@ fn push_table_grow(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
-  table_idx : Int,
+  table_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, table_idx) is Some(is_table64) else {
@@ -1197,8 +1203,8 @@ fn push_table_copy(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
-  dst_table_idx : Int,
-  src_table_idx : Int,
+  dst_table_idx : Int32,
+  src_table_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, dst_table_idx) is Some(_) else { return false }
@@ -1226,8 +1232,8 @@ fn push_table_init(
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
-  table_idx : Int,
-  elem_idx : Int,
+  table_idx : Int32,
+  elem_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, table_idx) is Some(_) else { return false }
@@ -1252,7 +1258,7 @@ fn push_elem_drop(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
-  elem_idx : Int,
+  elem_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   let symbol = builder
@@ -1303,7 +1309,7 @@ fn push_ref_func(
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard env.runtime_layout() is Some(layout) else { return false }
@@ -1717,7 +1723,7 @@ fn push_memory_base(
   builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value,
-  memidx : Int,
+  memidx : Int32,
 ) -> @milkir.Value? {
   load_memory_base(builder, env, vmctx, memidx)
 }
@@ -1726,7 +1732,7 @@ fn push_memory_base(
 fn extend_memory_addr(
   builder : @milkir.FunctionBuilder,
   memory_types : Array[@types.MemoryType],
-  memidx : Int,
+  memidx : Int32,
   addr : @milkir.Value,
 ) -> @milkir.Value? {
   if memory_types[memidx].is_memory64 || addr.ty == I64 {
@@ -1740,11 +1746,11 @@ fn extend_memory_addr(
 fn push_memory_bounds_check(
   builder : @milkir.FunctionBuilder,
   memory_types : Array[@types.MemoryType],
-  memidx : Int,
+  memidx : Int32,
   addr_i64 : @milkir.Value,
   addr_plus_offset : @milkir.Value,
   memory_size : @milkir.Value,
-  access_size : Int,
+  access_size : Int32,
 ) -> Bool {
   let size_value = builder.iconst_i64(access_size.to_int64())
   let end_addr = builder.iadd(addr_plus_offset, size_value)
@@ -1787,10 +1793,10 @@ fn memory_effective_addr(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value,
   memory_types : Array[@types.MemoryType],
-  memidx : Int,
+  memidx : Int32,
   wasm_addr : @milkir.Value,
   offset : Int64,
-  access_size : Int,
+  access_size : Int32,
 ) -> @milkir.Value? {
   guard push_memory_base(builder, env, vmctx, memidx) is Some(base) else {
     return None
@@ -1822,7 +1828,7 @@ fn push_memory_load(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   mod_ : @types.Module,
-  memidx : Int,
+  memidx : Int32,
   ty : @milkir.Type,
   offset : Int64,
 ) -> Bool {
@@ -1855,9 +1861,9 @@ fn push_memory_load_narrow(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   mod_ : @types.Module,
-  memidx : Int,
+  memidx : Int32,
   result_ty : @milkir.Type,
-  bits : Int,
+  bits : Int32,
   signed : Bool,
   offset : Int64,
 ) -> Bool {
@@ -1898,7 +1904,7 @@ fn push_memory_store(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   mod_ : @types.Module,
-  memidx : Int,
+  memidx : Int32,
   ty : @milkir.Type,
   offset : Int64,
 ) -> Bool {
@@ -1932,8 +1938,8 @@ fn push_memory_store_narrow(
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   mod_ : @types.Module,
-  memidx : Int,
-  bits : Int,
+  memidx : Int32,
+  bits : Int32,
   offset : Int64,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
@@ -1963,7 +1969,7 @@ fn push_memory_store_narrow(
 fn finish_linear_return(
   builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
-  result_count : Int,
+  result_count : Int32,
 ) -> Bool {
   if stack.length() < result_count {
     return false
@@ -2080,7 +2086,7 @@ fn flatten_linear_blocks(
 fn try_lower_linear_function(
   env : EmbeddingEnvironment,
   mod_ : @types.Module,
-  func_local_idx : Int,
+  func_local_idx : Int32,
 ) -> @milkir.Function? raise LowerError {
   let func_type = get_func_type(mod_, func_local_idx)
   let code = get_code(mod_, func_local_idx)

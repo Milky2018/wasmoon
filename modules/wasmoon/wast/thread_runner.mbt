@@ -63,7 +63,7 @@ fn start_thread_call(
   ctx : WastContext,
   instance : @runtime.ModuleInstance,
   jit : JITModuleContext?,
-  index : Int,
+  index : Int32,
   args : Array[@types.Value],
 ) -> ThreadCallResult {
   let (instance, jit, index) = resolve_wast_call(ctx, instance, jit, index) catch {
@@ -117,27 +117,27 @@ fn ThreadCall::advance(self : ThreadCall) -> ThreadCallResult {
 
 ///|
 priv enum ThreadCompletion {
-  Action(@wat.WastCommand, @wat.WastAction, Int)
-  Module(PreparedWastModule, Int)
-  ModuleTrap(String, Int)
+  Action(@wat.WastCommand, @wat.WastAction, Int32)
+  Module(PreparedWastModule, Int32)
+  ModuleTrap(String, Int32)
 }
 
 ///|
 priv struct WastThread {
   ctx : WastContext
-  commands : Array[(@wat.WastCommand, Int)]
-  children : Map[String, Int]
-  child_scopes : Array[Int]
-  mut pc : Int
+  commands : Array[(@wat.WastCommand, Int32)]
+  children : Map[String, Int32]
+  child_scopes : Array[Int32]
+  mut pc : Int32
   mut pending : (ThreadCompletion, ThreadCall)?
-  mut joining : Int?
+  mut joining : Int32?
   mut done : Bool
 }
 
 ///|
 fn WastThread::new(
   ctx : WastContext,
-  commands : Array[(@wat.WastCommand, Int)],
+  commands : Array[(@wat.WastCommand, Int32)],
 ) -> WastThread {
   {
     ctx,
@@ -260,10 +260,10 @@ fn start_thread_module(
   thread : WastThread,
   module_ : @types.Module,
   name : String?,
-  line : Int,
+  line : Int32,
   result : WastResult,
   show_success : Bool,
-  trap? : String? = None,
+  trap~ : String? = None,
 ) -> Unit {
   let prepared = prepare_wast_module(
     thread.ctx,
@@ -323,7 +323,7 @@ fn shared_thread_context(
       raise ModuleNotFound(name)
     }
     let instance = @runtime.ModuleInstance::ModuleInstance()
-    let memory_indices : Map[Int, Int] = Map([])
+    let memory_indices : Map[Int32, Int32] = Map([])
     for export_ in original.exports {
       // Store-local functions, globals and tables cannot cross the boundary.
       // Only shared memories are store-independent import capabilities.

@@ -2,12 +2,12 @@
 /// A target physical register identified within one register class.
 #valtype
 pub(all) struct PhysicalReg {
-  id : Int
+  id : Int32
   class : RegClass
 } derive(Eq)
 
 ///|
-pub fn PhysicalReg::new(id : Int, class : RegClass) -> PhysicalReg {
+pub fn PhysicalReg::new(id : Int32, class : RegClass) -> PhysicalReg {
   { id, class, }
 }
 

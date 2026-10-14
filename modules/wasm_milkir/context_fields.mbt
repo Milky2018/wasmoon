@@ -1,8 +1,8 @@
 ///|
-const MEMORY_BASE_CONTEXT_FIELD : Int = 0
+const MEMORY_BASE_CONTEXT_FIELD : Int32 = 0
 
 ///|
-pub fn memory_base_context_field(memory_index : Int) -> @milkir.ContextField {
+pub fn memory_base_context_field(memory_index : Int32) -> @milkir.ContextField {
   @milkir.ContextField::new(
     WASM_DIALECT,
     MEMORY_BASE_CONTEXT_FIELD,
@@ -12,7 +12,7 @@ pub fn memory_base_context_field(memory_index : Int) -> @milkir.ContextField {
 }
 
 ///|
-pub fn decode_memory_base_context_field(field : @milkir.ContextField) -> Int? {
+pub fn decode_memory_base_context_field(field : @milkir.ContextField) -> Int32? {
   if field.dialect != WASM_DIALECT ||
     field.key != MEMORY_BASE_CONTEXT_FIELD ||
     field.parameters.length() != 1 ||

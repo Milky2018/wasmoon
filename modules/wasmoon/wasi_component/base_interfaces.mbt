@@ -16,7 +16,7 @@ fn empty_args(
 ///|
 fn random_length(
   args : Array[@runtime_impl.ComponentValue],
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   match args {
     [U64(len)] =>
       if len < 0L || len > 0x7fffffffL {
@@ -41,7 +41,7 @@ fn bytes_to_component_list(
 
 ///|
 fn secure_random_bytes(
-  len : Int,
+  len : Int32,
 ) -> FixedArray[Byte] raise @runtime_impl.ComponentRuntimeError {
   let bytes = FixedArray::make(len, b'\x00')
   if !@wasi.native_getrandom(bytes, len) {
@@ -60,7 +60,7 @@ fn little_endian_u64(bytes : FixedArray[Byte]) -> Int64 {
 }
 
 ///|
-fn insecure_bytes(ctx : WasiComponentCtx, len : Int) -> FixedArray[Byte] {
+fn insecure_bytes(ctx : WasiComponentCtx, len : Int32) -> FixedArray[Byte] {
   let bytes = FixedArray::make(len, b'\x00')
   let mut offset = 0
   while offset < len {

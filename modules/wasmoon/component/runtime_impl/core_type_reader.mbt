@@ -4,7 +4,7 @@
 ///|
 priv struct Reader {
   data : Bytes
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
@@ -18,7 +18,7 @@ fn Reader::is_eof(self : Reader) -> Bool {
 }
 
 ///|
-fn Reader::read_u8(self : Reader) -> Int raise ComponentRuntimeError {
+fn Reader::read_u8(self : Reader) -> Int32 raise ComponentRuntimeError {
   if self.pos >= self.data.length() {
     raise ComponentParseError("unexpected end of input")
   }
@@ -30,7 +30,7 @@ fn Reader::read_u8(self : Reader) -> Int raise ComponentRuntimeError {
 ///|
 fn Reader::read_bytes(
   self : Reader,
-  n : Int,
+  n : Int32,
 ) -> Bytes raise ComponentRuntimeError {
   if self.pos + n > self.data.length() {
     raise ComponentParseError("unexpected end of input")
@@ -122,7 +122,7 @@ fn Reader::read_label(self : Reader) -> String raise ComponentRuntimeError {
 }
 
 ///|
-fn Reader::read_leb_u32(self : Reader) -> Int raise ComponentRuntimeError {
+fn Reader::read_leb_u32(self : Reader) -> Int32 raise ComponentRuntimeError {
   for result = 0, shift = 0 {
     if shift > 28 {
       raise ComponentParseError("invalid leb128")
@@ -175,7 +175,7 @@ fn skip_core_functype_body(reader : Reader) -> Unit raise ComponentRuntimeError 
 ///|
 fn skip_core_extern_type(
   reader : Reader,
-  kind : Int,
+  kind : Int32,
 ) -> Unit raise ComponentRuntimeError {
   match kind {
     0x00 => reader.read_leb_u32() |> ignore

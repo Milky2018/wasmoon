@@ -754,7 +754,7 @@ test "AArch64 vector permutation encodings use table lookup" {
   let vector1 = @vcode.PhysicalReg::new(1, FpVector)
   let vector2 = @vcode.PhysicalReg::new(2, FpVector)
   emit_vector_table_lookup(buffer, vector0, vector1, vector2)
-  let mask : FixedArray[Int] = [
+  let mask : FixedArray[Int32] = [
     0, 17, 2, 19, 4, 21, 6, 23, 8, 25, 10, 27, 12, 29, 14, 31,
   ]
   emit_vector_shuffle(buffer, mask, vector0, vector1, vector2)
@@ -3391,7 +3391,7 @@ test "aarch64 vector and-not remains one BIC with overlapping outputs" {
 
 ///|
 test "AArch64 constants choose shorter inverted and logical forms" {
-  let cases : Array[(GprWidth, UInt64, Array[UInt])] = [
+  let cases : Array[(GprWidth, UInt64, Array[UInt32])] = [
     (W64, 0xffffffffffffffffUL, [0x92e00000U]),
     (W32, 0xffffffc0UL, [0x128007e0U]),
     (W64, 0x00ff00ff00ff00ffUL, [0xb2009fe0U]),

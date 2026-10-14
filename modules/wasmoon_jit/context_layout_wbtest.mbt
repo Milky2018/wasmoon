@@ -18,7 +18,7 @@ test "native storage uses the shared module descriptor and inline arrays" {
   inspect(@native_test_support.context_storage_bytes(a.handle), content="408")
   a.set_memory_pointers([])
   a.set_table_pointers([])
-  let cases : Array[(ContextShape, Int)] = [
+  let cases : Array[(ContextShape, Int32)] = [
     (Module(0, 0, 0), 256),
     (Module(1, 0, 0), 304),
     (Module(0, 1, 0), 328),

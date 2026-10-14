@@ -2,12 +2,12 @@
 /// Directed GC fuzz cases using deterministic pseudo-random generation.
 /// Each generated module mixes struct/array/reference operations and compares
 /// JIT against interpreter with compare_jit_interp.
-fn fuzz_next_state(seed : Int) -> Int {
+fn fuzz_next_state(seed : Int32) -> Int32 {
   ((seed.to_int64() * 1103515245L + 12345L) & 0x7FFFFFFFL).to_int()
 }
 
 ///|
-fn fuzz_next_in_range(seed : Int, bound : Int) -> (Int, Int) {
+fn fuzz_next_in_range(seed : Int32, bound : Int32) -> (Int32, Int32) {
   let next_seed = fuzz_next_state(seed)
   if bound <= 0 {
     (next_seed, 0)
@@ -17,7 +17,7 @@ fn fuzz_next_in_range(seed : Int, bound : Int) -> (Int, Int) {
 }
 
 ///|
-fn generate_gc_fuzz_case(seed : Int) -> String {
+fn generate_gc_fuzz_case(seed : Int32) -> String {
   let lines : Array[String] = []
   lines.push("(module")
   lines.push(
@@ -112,7 +112,7 @@ test "gc fuzz: directed jit/interpreter comparison" {
 }
 
 ///|
-fn generate_gc_deep_live_case(depth : Int) -> String {
+fn generate_gc_deep_live_case(depth : Int32) -> String {
   let lines : Array[String] = []
   lines.push("(module")
   lines.push(
@@ -150,7 +150,7 @@ test "gc fuzz: deep live chain jit/interpreter comparison" {
 }
 
 ///|
-fn generate_gc_cycle_mix_case(seed : Int) -> String {
+fn generate_gc_cycle_mix_case(seed : Int32) -> String {
   let lines : Array[String] = []
   lines.push("(module")
   lines.push(

@@ -3,7 +3,7 @@ fn build_resumable_lifecycle_context(
   mod_ : @types.Module,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  valid_func_type_indices? : Bool = true,
+  valid_func_type_indices~ : Bool = true,
 ) -> @wast.JITModuleContext raise {
   guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
     is Some((artifact, debug_db)) else {
@@ -17,13 +17,13 @@ fn build_resumable_lifecycle_context(
   )
   jm.configure_native_fiber_stack_size(1024L * 1024L) |> ignore
   let globals_ptr = @wast.init_jit_globals_from_store(instance, store, jm)
-  let func_type_indices : Array[Int] = []
+  let func_type_indices : Array[Int32] = []
   if valid_func_type_indices {
     for type_idx in instance.func_type_indices {
       func_type_indices.push(type_idx)
     }
   }
-  let canonical_type_indices : Array[Int] = []
+  let canonical_type_indices : Array[Int32] = []
   for canonical_idx in instance.canonical_type_indices {
     canonical_type_indices.push(canonical_idx)
   }

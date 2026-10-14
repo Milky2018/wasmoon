@@ -8,7 +8,7 @@ fn lift_component_value_from_flat(
   encoding : StringEncoding,
   resource_table : ResourceTable,
   budget? : CanonicalCopyBudget,
-  borrow_strings? : Bool = false,
+  borrow_strings~ : Bool = false,
 ) -> ComponentValue raise ComponentRuntimeError {
   let mut idx = 0
   fn take(
@@ -516,14 +516,14 @@ fn core_args_to_component(
   resources : CanonResources,
   store : @runtime.Store,
   resource_table : ResourceTable,
-  max_flat_params : Int,
+  max_flat_params : Int32,
   context : String,
-  borrow_strings? : Bool = false,
+  borrow_strings~ : Bool = false,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   fn resource_type_info(
-    tyidx : Int,
+    tyidx : Int32,
     types : Array[TypeDef?],
-  ) -> (Int, ResourceKind) raise ComponentRuntimeError {
+  ) -> (Int32, ResourceKind) raise ComponentRuntimeError {
     match types.get(tyidx) {
       Some(Some(ResourceType(id, _, _, kind))) => (id, kind)
       _ => raise HostCallError("invalid resource type")
@@ -531,8 +531,8 @@ fn core_args_to_component(
   }
 
   fn validate_resource_handle(
-    handle : Int,
-    expected_type_id : Int,
+    handle : Int32,
+    expected_type_id : Int32,
     expected_kind : ResourceKind,
     table : ResourceTable,
   ) -> Unit raise ComponentRuntimeError {

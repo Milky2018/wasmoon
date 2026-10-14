@@ -50,8 +50,8 @@ fn validation_defined_type_contract(
 ///|
 fn TranslationContext::linked_function_contracts(
   self : TranslationContext,
-) -> Map[Int, @wasm_milkir.WasmFunctionContract] {
-  let contracts : Map[Int, @wasm_milkir.WasmFunctionContract] = Map([])
+) -> Map[Int32, @wasm_milkir.WasmFunctionContract] {
+  let contracts : Map[Int32, @wasm_milkir.WasmFunctionContract] = Map([])
   for import_index, type_index in self.import_func_type_indices {
     let linked_index = if import_index < self.import_remap.length() {
       self.import_remap[import_index]

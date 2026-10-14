@@ -5,7 +5,7 @@
 pub extern "c" fn memory_atomic_load(
   descriptor : MemoryDescriptor,
   offset : Int64,
-  width : Int,
+  width : Int32,
 ) -> Int64 = "wasmoon_memory_atomic_load"
 
 ///|
@@ -13,7 +13,7 @@ pub extern "c" fn memory_atomic_load(
 pub extern "c" fn memory_atomic_store(
   descriptor : MemoryDescriptor,
   offset : Int64,
-  width : Int,
+  width : Int32,
   value : Int64,
 ) -> Unit = "wasmoon_memory_atomic_store"
 
@@ -22,8 +22,8 @@ pub extern "c" fn memory_atomic_store(
 pub extern "c" fn memory_atomic_rmw(
   descriptor : MemoryDescriptor,
   offset : Int64,
-  width : Int,
-  operation : Int,
+  width : Int32,
+  operation : Int32,
   value : Int64,
 ) -> Int64 = "wasmoon_memory_atomic_rmw"
 
@@ -32,7 +32,7 @@ pub extern "c" fn memory_atomic_rmw(
 pub extern "c" fn memory_atomic_compare_exchange(
   descriptor : MemoryDescriptor,
   offset : Int64,
-  width : Int,
+  width : Int32,
   expected : Int64,
   replacement : Int64,
 ) -> Int64 = "wasmoon_memory_atomic_compare_exchange"

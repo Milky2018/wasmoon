@@ -1,17 +1,17 @@
 ///|
-const X64_DIVISION_BY_ZERO_BRK : UInt = 4U
+const X64_DIVISION_BY_ZERO_BRK : UInt32 = 4U
 
 ///|
-const X64_INTEGER_OVERFLOW_BRK : UInt = 5U
+const X64_INTEGER_OVERFLOW_BRK : UInt32 = 5U
 
 ///|
-const X64_INVALID_CONVERSION_BRK : UInt = 3U
+const X64_INVALID_CONVERSION_BRK : UInt32 = 3U
 
 ///|
 priv struct X64RelativeFixup {
-  displacement_offset : Int
-  next_instruction_offset : Int
-  target_block : Int
+  displacement_offset : Int32
+  next_instruction_offset : Int32
+  target_block : Int32
 }
 
 ///|
@@ -32,15 +32,15 @@ pub suberror X64EmitError {
   MissingStackObjectArea
   MissingResultArea
   MissingEmergencyMoveArea
-  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
-  FrameOffsetOutOfRange(offset~ : Int)
+  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int32)
+  FrameOffsetOutOfRange(offset~ : Int32)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
   InvalidVectorInstruction
   ScratchRegisterUnavailable
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
-  BranchOutOfRange(offset~ : Int, bits~ : Int)
+  BranchOutOfRange(offset~ : Int32, bits~ : Int32)
 } derive(Debug)
 
 ///|
@@ -60,21 +60,21 @@ fn CodeBuffer::new() -> CodeBuffer {
 }
 
 ///|
-fn CodeBuffer::emit_byte(self : CodeBuffer, byte : Int) -> Unit {
+fn CodeBuffer::emit_byte(self : CodeBuffer, byte : Int32) -> Unit {
   self.code.push((byte & 0xFF).to_byte())
 }
 
 ///|
-fn CodeBuffer::current_pos(self : CodeBuffer) -> Int {
+fn CodeBuffer::current_pos(self : CodeBuffer) -> Int32 {
   self.position()
 }
 
 ///|
 fn CodeBuffer::add_x86_rel32_fixup(
   self : CodeBuffer,
-  target_block : Int,
-  displacement_offset : Int,
-  next_instruction_offset : Int,
+  target_block : Int32,
+  displacement_offset : Int32,
+  next_instruction_offset : Int32,
 ) -> Unit {
   self.x64_fixups.push({
     displacement_offset,
@@ -84,12 +84,16 @@ fn CodeBuffer::add_x86_rel32_fixup(
 }
 
 ///|
-fn CodeBuffer::position(self : CodeBuffer) -> Int {
+fn CodeBuffer::position(self : CodeBuffer) -> Int32 {
   self.code.length()
 }
 
 ///|
-fn CodeBuffer::patch_word(self : CodeBuffer, offset : Int, word : UInt) -> Unit {
+fn CodeBuffer::patch_word(
+  self : CodeBuffer,
+  offset : Int32,
+  word : UInt32,
+) -> Unit {
   self.code[offset] = (word & 0xFFU).to_byte()
   self.code[offset + 1] = ((word >> 8) & 0xFFU).to_byte()
   self.code[offset + 2] = ((word >> 16) & 0xFFU).to_byte()
@@ -135,7 +139,7 @@ fn emit_stack_access(
   load : Bool,
   ty : @native.ValueType,
   reg : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit raise X64EmitError {
   if offset < 0 || offset > 0x7FFFFFFF {
     raise FrameOffsetOutOfRange(offset~)
@@ -163,7 +167,7 @@ fn emit_result_area_access(
   ty : @native.ValueType,
   address~ : @vcode.PhysicalReg,
   value~ : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit raise X64EmitError {
   if offset < 0 || offset > 0x7FFFFFFF {
     raise FrameOffsetOutOfRange(offset~)
@@ -198,7 +202,7 @@ fn scalar_memory_address(
   address : @vcode.PhysicalReg,
   width : @native.AccessWidth,
   offset : UInt64,
-) -> (@vcode.PhysicalReg, Int) {
+) -> (@vcode.PhysicalReg, Int32) {
   ignore(width)
   if offset <= 0x7FFFFFFFUL {
     return (address, offset.to_int())
@@ -218,7 +222,7 @@ fn emit_scalar_load(
   extension : @native.LoadExtension,
   result_type : @native.ValueType,
   address : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
   match (width, extension, result_type) {
@@ -250,7 +254,7 @@ fn emit_scalar_store(
   width : @native.AccessWidth,
   value_type : @native.ValueType,
   address : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
   source : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
   match (width, value_type) {
@@ -287,7 +291,7 @@ fn emit_atomic_rmw(
   address : @vcode.PhysicalReg,
   value : @vcode.PhysicalReg,
   result : @vcode.PhysicalReg,
-) -> Int raise X64EmitError {
+) -> Int32 raise X64EmitError {
   if width == W128 {
     raise InvalidScalarMemoryAccess
   }
@@ -397,7 +401,7 @@ fn emit_atomic_compare_exchange(
   expected : @vcode.PhysicalReg,
   replacement : @vcode.PhysicalReg,
   result : @vcode.PhysicalReg,
-) -> Int raise X64EmitError {
+) -> Int32 raise X64EmitError {
   if width == W128 {
     raise InvalidScalarMemoryAccess
   }
@@ -412,7 +416,7 @@ fn emit_atomic_compare_exchange(
 fn emit_sp_adjust(
   buffer : CodeBuffer,
   subtract : Bool,
-  amount : Int,
+  amount : Int32,
   unwind? : Array[@code_object.UnwindDirective],
 ) -> Unit raise X64EmitError {
   if amount == 0 {
@@ -459,7 +463,7 @@ fn emit_sp_adjust(
 fn emit_stack_address(
   buffer : CodeBuffer,
   destination : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit {
   buffer.encoder.x86_emit_mov_rr(destination.id, 4)
   if offset == 0 {
@@ -494,7 +498,7 @@ fn raw_condition(condition : X64Condition) -> RawCondition {
 fn CodeBuffer::emit_local_jcc(
   self : CodeBuffer,
   condition : RawCondition,
-) -> Int {
+) -> Int32 {
   self.emit_byte(0x0F)
   self.emit_byte(x86_cond_to_jcc_opcode(condition))
   let displacement = self.position()
@@ -505,8 +509,8 @@ fn CodeBuffer::emit_local_jcc(
 ///|
 fn CodeBuffer::patch_local_rel32(
   self : CodeBuffer,
-  displacement_offset : Int,
-  target : Int,
+  displacement_offset : Int32,
+  target : Int32,
 ) -> Unit {
   let displacement = target - (displacement_offset + 4)
   let bits = displacement.reinterpret_as_uint()
@@ -516,7 +520,7 @@ fn CodeBuffer::patch_local_rel32(
 }
 
 ///|
-fn CodeBuffer::emit_local_jmp(self : CodeBuffer) -> Int {
+fn CodeBuffer::emit_local_jmp(self : CodeBuffer) -> Int32 {
   self.emit_byte(0xE9)
   let displacement = self.position()
   emit_u32_le(self.encoder, 0)
@@ -533,7 +537,7 @@ fn emit_reverse_bits(
   let value = @vcode.PhysicalReg::new(10, Int)
   let temporary = @vcode.PhysicalReg::new(11, Int)
   emit_move(buffer, integer_type(width), value, source)
-  let stages : Array[(Int, UInt64)] = if width == W32 {
+  let stages : Array[(Int32, UInt64)] = if width == W32 {
     [
       (1, 0x55555555UL),
       (2, 0x33333333UL),
@@ -960,7 +964,7 @@ fn emit_vector_splat(
 fn emit_vector_extract_lane(
   buffer : CodeBuffer,
   lane : @lowering.VectorLane,
-  index : Int,
+  index : Int32,
   extension : @native.Signedness?,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -1025,7 +1029,7 @@ fn emit_vector_extract_lane(
 fn emit_vector_replace_lane(
   buffer : CodeBuffer,
   lane : @lowering.VectorLane,
-  index : Int,
+  index : Int32,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
@@ -1090,7 +1094,7 @@ fn emit_vector_table_lookup(
 ///|
 fn emit_vector_shuffle(
   buffer : CodeBuffer,
-  mask : FixedArray[Int],
+  mask : FixedArray[Int32],
   first : @vcode.PhysicalReg,
   second : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
@@ -2636,7 +2640,7 @@ fn emit_float_trap(
   condition : X64FloatTrapCondition,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
-) -> Int raise X64EmitError {
+) -> Int32 raise X64EmitError {
   let second = if condition == Unordered { left } else { right }
   if ty == F32 {
     buffer.encoder.x86_emit_ucomiss_xmm_xmm(left.id, second.id)
@@ -2810,7 +2814,7 @@ fn emit_saturating_float_to_int(
   }
   emit_constant(buffer, width, destination, 0UL)
   let zero_done = buffer.emit_local_jmp()
-  let mut minimum_done : Int? = None
+  let mut minimum_done : Int32? = None
   if signedness == Signed {
     buffer.patch_local_rel32(below, buffer.position())
     emit_constant(buffer, width, destination, minimum)
@@ -2950,7 +2954,7 @@ fn emit_register_save_or_restore(
   buffer : CodeBuffer,
   load : Bool,
   reg : @vcode.PhysicalReg,
-  offset : Int,
+  offset : Int32,
 ) -> Unit raise X64EmitError {
   match reg.class {
     Int => emit_stack_access(buffer, load, I64, reg, offset)
@@ -3091,11 +3095,11 @@ fn emit_call_arguments(
   instruction : @vcode.Instruction,
   types : Array[@native.ValueType],
   locations : Array[CallArgumentLocation],
-  stack_size : Int,
-  operand_start? : Int = 0,
-  stack_base? : Int = 0,
-  callee? : (Int, @vcode.PhysicalReg),
-  result_area? : (Int, @vcode.PhysicalReg),
+  stack_size : Int32,
+  operand_start~ : Int32 = 0,
+  stack_base~ : Int32 = 0,
+  callee? : (Int32, @vcode.PhysicalReg),
+  result_area? : (Int32, @vcode.PhysicalReg),
 ) -> Unit raise X64EmitError {
   let transfers : Array[@vcode.CallTransfer] = []
   for index, ty in types {
@@ -3188,7 +3192,7 @@ fn emit_call_arguments(
 fn emit_tail_return_thunk_setup(
   buffer : CodeBuffer,
   plan : TailCallFramePlan,
-) -> Int? raise X64EmitError {
+) -> Int32? raise X64EmitError {
   if plan.synthetic_return_size > 0 {
     emit_sp_adjust(buffer, true, plan.transfer_size)
     emit_rex_w(buffer.encoder, 1, 0)
@@ -3206,7 +3210,7 @@ fn emit_tail_return_thunk_setup(
 fn emit_tail_return_thunk(
   buffer : CodeBuffer,
   plan : TailCallFramePlan,
-  thunk_address : Int?,
+  thunk_address : Int32?,
 ) -> Unit raise X64EmitError {
   if plan.synthetic_return_size > 0 {
     buffer.patch_local_rel32(thunk_address.unwrap(), buffer.position())
@@ -3236,7 +3240,7 @@ fn value_home(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   instruction : @vcode.Instruction,
-  operand_index : Int,
+  operand_index : Int32,
 ) -> @vcode.Location {
   let value = function
     .instruction_operand_at(instruction, operand_index)
@@ -3269,7 +3273,7 @@ fn emit_function_inputs(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let stack_inputs : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
+  let stack_inputs : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
   let mut index = current_index
   while index < body.length() {
     let input_instruction = body[index]
@@ -3370,7 +3374,7 @@ fn emit_incoming_call_results(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
+  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
   let mut index = current_index
   while index < body.length() {
     let result_instruction = body[index]
@@ -3473,7 +3477,7 @@ fn emit_function_outputs(
     return
   }
   let register_moves : Array[@vcode.ParallelMove] = []
-  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int)] = []
+  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
   let mut index = current_index
   while index < body.length() {
     let output_instruction = body[index]
@@ -3552,9 +3556,9 @@ fn emit_instruction(
   block : @vcode.Block,
   instruction : @vcode.Instruction,
   next_block : @vcode.Block?,
-) -> Int raise X64EmitError {
+) -> Int32 raise X64EmitError {
   let instruction_index = function.instruction_index(instruction).unwrap()
-  let reg = fn(index : Int) -> @vcode.PhysicalReg raise X64EmitError {
+  let reg = fn(index : Int32) -> @vcode.PhysicalReg raise X64EmitError {
     let location = allocation
       .allocated_operand_location_at(instruction_index, index)
       .unwrap()
@@ -4301,7 +4305,7 @@ fn emit_instruction(
 fn patch_branches(
   buffer : CodeBuffer,
   function : @vcode.Function[X64Inst],
-  block_offsets : Array[Int],
+  block_offsets : Array[Int32],
 ) -> Unit raise X64EmitError {
   for fixup in buffer.x64_fixups {
     let target = block_offsets[fixup.target_block]
@@ -4323,10 +4327,10 @@ fn patch_branches(
 ///|
 fn patch_relative_branch(
   buffer : CodeBuffer,
-  offset : Int,
-  target : Int,
-  bits : Int,
-  next_instruction_offset? : Int = offset + 4,
+  offset : Int32,
+  target : Int32,
+  bits : Int32,
+  next_instruction_offset~ : Int32 = offset + 4,
 ) -> Unit raise X64EmitError {
   let delta = target - next_instruction_offset
   if bits != 32 || delta < -0x80000000 || delta > 0x7FFFFFFF {
@@ -4420,9 +4424,9 @@ fn CodeBuffer::x86_emit_fma213(
   scalar : Bool,
   f64 : Bool,
   operation : X64FloatTernary,
-  destination : Int,
-  multiplier : Int,
-  addend : Int,
+  destination : Int32,
+  multiplier : Int32,
+  addend : Int32,
 ) -> Unit {
   let r = (destination >> 3) & 1
   let b = (addend >> 3) & 1
@@ -4448,7 +4452,7 @@ fn CodeBuffer::x86_emit_fma213(
 ///|
 fn CodeBuffer::x86_emit_jmp_rel32(
   self : CodeBuffer,
-  target_block : Int,
+  target_block : Int32,
 ) -> Unit {
   // jmp rel32: E9 disp32
   self.emit_byte(0xE9)
@@ -4462,7 +4466,7 @@ fn CodeBuffer::x86_emit_jmp_rel32(
 fn CodeBuffer::x86_emit_jcc_rel32(
   self : CodeBuffer,
   cond : RawCondition,
-  target_block : Int,
+  target_block : Int32,
 ) -> Unit {
   // jcc rel32: 0F 8? disp32
   self.emit_byte(0x0F)

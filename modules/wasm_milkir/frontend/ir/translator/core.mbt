@@ -14,11 +14,11 @@ priv struct Translator {
   // Function types from the module
   func_types : Array[@types.FuncType]
   // Type indices for functions
-  func_type_indices : Array[Int]
+  func_type_indices : Array[Int32]
   // Number of imported functions
-  num_imports : Int
+  num_imports : Int32
   // Type indices for imported functions
-  import_func_type_indices : Array[Int]
+  import_func_type_indices : Array[Int32]
   // Unreachable code flag - set after br/return/unreachable
   // When true, skip translating instructions until block end
   mut is_unreachable : Bool
@@ -27,20 +27,20 @@ priv struct Translator {
   // Function result types - needed for lazy return continuation creation
   func_result_types : Array[Type]
   // Memory max pages limit (None = no limit)
-  memory_max : Int?
+  memory_max : Int32?
   // Memory is 64-bit indexed (for memory64 proposal)
   // memory_is_64[i] = true if memory i uses 64-bit addresses
   memory_is_64 : Array[Bool]
   memory_is_shared : Array[Bool]
   // Number of wasm function parameters (excludes vmctx params)
   // Used to distinguish params from locals in self.locals array
-  num_wasm_params : Int
+  num_wasm_params : Int32
   // Cross-module support: base index for this module's functions
   // All function indices are offset by this value (default 0)
-  func_base : Int
+  func_base : Int32
   // Cross-module support: maps local import indices to global indices
   // If empty, uses local indices directly
-  import_remap : Array[Int]
+  import_remap : Array[Int32]
   // Module composite types (struct/array/func types) for GC support
   module_types : Array[@types.SubType]
   // VMContext value (vmctx parameter) for accessing runtime state
@@ -50,10 +50,10 @@ priv struct Translator {
   // Exception tags for catch handler dispatch
   tags : Array[@types.TagType]
   // Depth of nested try_table blocks - when > 0, need to spill locals before calls
-  mut try_table_depth : Int
+  mut try_table_depth : Int32
   // Active try_table handler IDs in lexical nesting order.
   // Needed to unwind handlers before tail calls (`return_call*`).
-  try_handler_stack : Array[Int]
+  try_handler_stack : Array[Int32]
   // Table is 64-bit indexed (for table64 proposal)
   // table_is_64[i] = true if table i uses 64-bit indices
   table_is_64 : Array[Bool]
@@ -69,11 +69,11 @@ priv struct BlockFrame {
   // Local indices the block carries as parameters, in parameter order, from
   // `region_local_params`. A branch to this frame supplies one argument per
   // entry after the explicit results.
-  local_params : Array[Int]
+  local_params : Array[Int32]
   // Stack height at block entry
-  stack_height : Int
+  stack_height : Int32
   // Number of runtime try_table handlers that remain active at this target.
-  handler_depth : Int
+  handler_depth : Int32
   mut has_predecessor : Bool
 }
 
@@ -81,24 +81,24 @@ priv struct BlockFrame {
 /// Immutable public translation context for Wasm-to-MilkIR frontend lowering.
 struct TranslationContext {
   func_types : Array[@types.FuncType]
-  func_type_indices : Array[Int]
-  num_imports : Int
-  import_func_type_indices : Array[Int]
+  func_type_indices : Array[Int32]
+  num_imports : Int32
+  import_func_type_indices : Array[Int32]
   embedding_env : @embedding.EmbeddingEnvironment
-  memory_max : Int?
+  memory_max : Int32?
   memory_is_64 : Array[Bool]
   memory_is_shared : Array[Bool]
-  memory_page_size_log2 : Array[Int]
+  memory_page_size_log2 : Array[Int32]
   tables : Array[@types.Table]
   global_types : Array[@types.GlobalType]
-  type_rec_groups : Array[Int]
-  func_base : Int
-  import_remap : Array[Int]
+  type_rec_groups : Array[Int32]
+  func_base : Int32
+  import_remap : Array[Int32]
   module_types : Array[@types.SubType]
   tags : Array[@types.TagType]
   memory_mins : Array[Int64]
-  memory_count : Int
-  data_count : Int
+  memory_count : Int32
+  data_count : Int32
   element_types : Array[@types.ValueType]
 }
 
@@ -107,12 +107,12 @@ struct TranslationContext {
 pub fn TranslationContext::from_module(
   mod_ : @types.Module,
   embedding_env : @embedding.EmbeddingEnvironment,
-  memory_max_override? : Int? = None,
-  func_base? : Int = 0,
-  import_remap? : Array[Int] = [],
+  memory_max_override~ : Int32? = None,
+  func_base~ : Int32 = 0,
+  import_remap~ : Array[Int32] = [],
 ) -> TranslationContext {
   let mut num_imports = 0
-  let import_func_type_indices : Array[Int] = []
+  let import_func_type_indices : Array[Int32] = []
   let global_types : Array[@types.GlobalType] = []
   let tags : Array[@types.TagType] = []
   let tables : Array[@types.Table] = []
@@ -141,7 +141,7 @@ pub fn TranslationContext::from_module(
   for memory in mod_.memories {
     memories.push(memory)
   }
-  let memory_max : Int? = match memory_max_override {
+  let memory_max : Int32? = match memory_max_override {
     Some(_) => memory_max_override
     None =>
       if memories.length() > 0 {
@@ -199,7 +199,7 @@ fn module_func_type_table(
 ///|
 fn get_module_func_name(
   mod_ : @types.Module,
-  func_idx : Int,
+  func_idx : Int32,
   name? : String,
 ) -> String {
   if name is Some(n) {
@@ -226,7 +226,10 @@ fn get_module_func_name(
 }
 
 ///|
-fn Translator::mark_block_frame_reachable(self : Translator, idx : Int) -> Unit {
+fn Translator::mark_block_frame_reachable(
+  self : Translator,
+  idx : Int32,
+) -> Unit {
   if idx >= 0 && idx < self.block_stack.length() {
     self.block_stack[idx].has_predecessor = true
   }
@@ -240,22 +243,22 @@ fn Translator::Translator(
   func_type : @types.FuncType,
   locals : Array[@types.ValueType],
   func_types : Array[@types.FuncType],
-  func_type_indices : Array[Int],
-  num_imports : Int,
-  import_func_type_indices : Array[Int],
+  func_type_indices : Array[Int32],
+  num_imports : Int32,
+  import_func_type_indices : Array[Int32],
   embedding_env : @embedding.EmbeddingEnvironment,
-  memory_max? : Int? = None,
-  memory_is_64? : Array[Bool] = [],
-  memory_is_shared? : Array[Bool] = [],
-  memory_page_size_log2? : Array[Int] = [],
-  tables? : Array[@types.Table] = [],
-  global_types? : Array[@types.GlobalType] = [],
-  type_rec_groups? : Array[Int] = [],
-  func_base? : Int = 0,
-  import_remap? : Array[Int] = [],
-  module_types? : Array[@types.SubType] = [],
-  tags? : Array[@types.TagType] = [],
-  memory_mins? : Array[Int64] = [],
+  memory_max~ : Int32? = None,
+  memory_is_64~ : Array[Bool] = [],
+  memory_is_shared~ : Array[Bool] = [],
+  memory_page_size_log2~ : Array[Int32] = [],
+  tables~ : Array[@types.Table] = [],
+  global_types~ : Array[@types.GlobalType] = [],
+  type_rec_groups~ : Array[Int32] = [],
+  func_base~ : Int32 = 0,
+  import_remap~ : Array[Int32] = [],
+  module_types~ : Array[@types.SubType] = [],
+  tags~ : Array[@types.TagType] = [],
+  memory_mins~ : Array[Int64] = [],
 ) -> Translator {
   type_rec_groups |> ignore // Reserved for future canonical type indices
   let builder = FunctionBuilder::FunctionBuilder(name)
@@ -335,10 +338,10 @@ fn Translator::Translator(
 /// Translate a function body from a module.
 pub fn translate_function(
   mod_ : @types.Module,
-  func_local_idx : Int,
+  func_local_idx : Int32,
   embedding_env : @embedding.EmbeddingEnvironment,
   name? : String,
-  memory_max_override? : Int? = None,
+  memory_max_override~ : Int32? = None,
 ) -> Function {
   let ctx = TranslationContext::from_module(
     mod_,
@@ -499,7 +502,7 @@ fn Translator::spill_locals_if_in_try(self : Translator) -> Unit {
 /// The lexical handler stack remains unchanged while other CFG edges are built.
 fn Translator::unwind_try_handlers_to_depth(
   self : Translator,
-  target_depth : Int,
+  target_depth : Int32,
 ) -> Unit {
   guard target_depth >= 0 && target_depth <= self.try_handler_stack.length() else {
     abort("invalid try_table handler target depth: \{target_depth}")
@@ -513,7 +516,10 @@ fn Translator::unwind_try_handlers_to_depth(
 
 ///|
 /// Get the number of fields in a struct type
-fn Translator::get_struct_field_count(self : Translator, type_idx : Int) -> Int {
+fn Translator::get_struct_field_count(
+  self : Translator,
+  type_idx : Int32,
+) -> Int32 {
   if type_idx >= self.module_types.length() {
     abort("Invalid type index: \{type_idx}")
   }
@@ -528,7 +534,7 @@ fn Translator::get_struct_field_count(self : Translator, type_idx : Int) -> Int 
 /// Get the IR type for an array element
 fn Translator::get_array_element_ir_type(
   self : Translator,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Type {
   if type_idx >= self.module_types.length() {
     // Default to I64 for unknown types
@@ -551,8 +557,8 @@ fn Translator::get_array_element_ir_type(
 /// Get the IR type for a struct field
 fn Translator::get_struct_field_ir_type(
   self : Translator,
-  type_idx : Int,
-  field_idx : Int,
+  type_idx : Int32,
+  field_idx : Int32,
 ) -> Type {
   if type_idx >= self.module_types.length() {
     return I64
@@ -578,9 +584,9 @@ fn Translator::get_struct_field_ir_type(
 /// Returns 1 for i8, 2 for i16, 0 for non-packed types
 fn Translator::get_struct_field_byte_width(
   self : Translator,
-  type_idx : Int,
-  field_idx : Int,
-) -> Int {
+  type_idx : Int32,
+  field_idx : Int32,
+) -> Int32 {
   if type_idx >= self.module_types.length() {
     return 0
   }
@@ -608,8 +614,8 @@ fn Translator::get_struct_field_byte_width(
 /// Returns 1 for i8, 2 for i16, 0 for non-packed types
 fn Translator::get_array_element_byte_width(
   self : Translator,
-  type_idx : Int,
-) -> Int {
+  type_idx : Int32,
+) -> Int32 {
   if type_idx >= self.module_types.length() {
     return 0
   }
@@ -633,7 +639,7 @@ fn Translator::get_array_element_byte_width(
 fn Translator::extract_type_idx(
   _self : Translator,
   value_type : @types.ValueType,
-) -> Int {
+) -> Int32 {
   // Abstract types are encoded as negative indices:
   // -1 = anyref (any), -2 = eqref (eq), -3 = i31ref
   // -4 = structref (abstract), -5 = arrayref (abstract)
@@ -883,8 +889,8 @@ fn Translator::get_or_create_return_continuation(self : Translator) -> Block {
 /// Gets exception values for the tag and branches to handler label
 fn Translator::emit_catch_branch(
   self : Translator,
-  tag_idx : Int,
-  label_depth : Int,
+  tag_idx : Int32,
+  label_depth : Int32,
 ) -> Unit {
   // Get the tag's parameter types
   let tag_types = self.get_tag_param_types(tag_idx)
@@ -913,8 +919,8 @@ fn Translator::emit_catch_branch(
 /// Helper for emitting catch_ref branch (includes exnref on stack)
 fn Translator::emit_catch_ref_branch(
   self : Translator,
-  tag_idx : Int,
-  label_depth : Int,
+  tag_idx : Int32,
+  label_depth : Int32,
 ) -> Unit {
   // Get the tag's parameter types
   let tag_types = self.get_tag_param_types(tag_idx)
@@ -943,7 +949,7 @@ fn Translator::emit_catch_ref_branch(
 /// Helper for emitting catch_all branch (no exception values)
 fn Translator::emit_catch_all_branch(
   self : Translator,
-  label_depth : Int,
+  label_depth : Int32,
 ) -> Unit {
   // catch_all doesn't pass exception values, just branches
   let args : Array[Value] = []
@@ -967,7 +973,7 @@ fn Translator::emit_catch_all_branch(
 /// Helper for emitting catch_all_ref branch (includes exnref)
 fn Translator::emit_catch_all_ref_branch(
   self : Translator,
-  label_depth : Int,
+  label_depth : Int32,
 ) -> Unit {
   let args : Array[Value] = []
 
@@ -992,7 +998,7 @@ fn Translator::emit_catch_all_ref_branch(
 /// Get the parameter types for a tag
 fn Translator::get_tag_param_types(
   self : Translator,
-  tag_idx : Int,
+  tag_idx : Int32,
 ) -> Array[@types.ValueType] {
   if tag_idx >= 0 && tag_idx < self.tags.length() {
     let tag = self.tags[tag_idx]
@@ -1165,7 +1171,7 @@ fn Translator::translate_simd_shift(
 /// Emits bounds check and load
 fn Translator::translate_simd_load(
   self : Translator,
-  memidx : Int,
+  memidx : Int32,
   offset : Int64,
   addr : Value,
   opcode : @milkir.VectorMemoryOp,
@@ -1195,7 +1201,7 @@ fn Translator::translate_simd_load(
 /// Helper for SIMD load lane operations (addr, v128 -> v128)
 fn Translator::translate_simd_load_lane(
   self : Translator,
-  memidx : Int,
+  memidx : Int32,
   offset : Int64,
   addr : Value,
   vec : Value,
@@ -1225,7 +1231,7 @@ fn Translator::translate_simd_load_lane(
 /// Helper for SIMD store lane operations (addr, v128 -> void)
 fn Translator::translate_simd_store_lane(
   self : Translator,
-  memidx : Int,
+  memidx : Int32,
   offset : Int64,
   addr : Value,
   vec : Value,

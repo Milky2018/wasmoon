@@ -1,7 +1,7 @@
 /// WASI state and symbol access for managed native JIT contexts.
 
 ///|
-fn take_wasi_exit_code(context : JITContext) -> Int {
+fn take_wasi_exit_code(context : JITContext) -> Int32 {
   let raw_code = c_jit_get_wasi_exit_code_managed(context)
   c_jit_clear_wasi_exit_managed(context)
   // Exit codes are unsigned P1 bits transported in Int; negative values are
@@ -80,7 +80,7 @@ pub fn make_cstring(s : String) -> FixedArray[Byte] {
 }
 
 ///|
-pub fn NativeJITContext::take_wasi_exit_code(self : NativeJITContext) -> Int {
+pub fn NativeJITContext::take_wasi_exit_code(self : NativeJITContext) -> Int32 {
   take_wasi_exit_code(self.handle)
 }
 

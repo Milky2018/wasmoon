@@ -4,8 +4,8 @@
 pub struct FunctionAnalysis {
   cfg : @milkir.CFG
   dominance : @milkir.Dominance
-  domtree : Array[Array[Int]]
-  block_idx : Array[Int]
+  domtree : Array[Array[Int32]]
+  block_idx : Array[Int32]
 }
 
 ///|

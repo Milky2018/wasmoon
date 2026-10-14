@@ -1,6 +1,6 @@
 ///|
 priv suberror CommandFailure {
-  CommandFailure(Int)
+  CommandFailure(Int32)
 }
 
 ///|
@@ -250,10 +250,10 @@ pub impl Show for CompileStage with fn output(self, logger) {
 /// Structured compile progress event.
 pub struct CompileProgress {
   stage : CompileStage
-  func_idx : Int?
+  func_idx : Int32?
   func_name : String?
-  total_funcs : Int
-  compiled_funcs : Int
+  total_funcs : Int32
+  compiled_funcs : Int32
   elapsed_us : Int64
   message : String?
 }
@@ -261,12 +261,12 @@ pub struct CompileProgress {
 ///|
 pub fn CompileProgress::CompileProgress(
   stage : CompileStage,
-  total_funcs : Int,
-  compiled_funcs : Int,
+  total_funcs : Int32,
+  compiled_funcs : Int32,
   elapsed_us : Int64,
-  func_idx? : Int? = None,
-  func_name? : String? = None,
-  message? : String? = None,
+  func_idx~ : Int32? = None,
+  func_name~ : String? = None,
+  message~ : String? = None,
 ) -> CompileProgress {
   {
     stage,
@@ -284,11 +284,11 @@ fn emit_compile_progress(
   on_progress : (CompileProgress) -> Unit?,
   stage : CompileStage,
   compile_start : @perf.PerfTick,
-  total_funcs : Int,
-  compiled_funcs : Int,
-  func_idx? : Int? = None,
-  func_name? : String? = None,
-  message? : String? = None,
+  total_funcs : Int32,
+  compiled_funcs : Int32,
+  func_idx~ : Int32? = None,
+  func_name~ : String? = None,
+  message~ : String? = None,
 ) -> Unit {
   on_progress(
     CompileProgress(
@@ -320,10 +320,10 @@ pub fn run_wasm(
   debug : Bool,
   dump_on_trap : Bool,
   use_jit : Bool,
-  opt_level : Int,
+  opt_level : Int32,
   enable_dwarf : Bool,
-  readonly_dirs? : Array[String] = [],
-) -> Int {
+  readonly_dirs~ : Array[String] = [],
+) -> Int32 {
   let run_metrics = begin_run_metrics()
   defer finish_run_metrics(run_metrics)
   if debug {
@@ -697,7 +697,7 @@ fn find_exported_func_type(
 
 ///|
 /// Find the index of an exported function
-fn find_exported_func_idx(mod_ : @types.Module, func_name : String) -> Int? {
+fn find_exported_func_idx(mod_ : @types.Module, func_name : String) -> Int32? {
   for exp in mod_.exports {
     if exp.name == func_name && exp.desc is Func(idx) {
       return Some(idx)
@@ -709,7 +709,7 @@ fn find_exported_func_idx(mod_ : @types.Module, func_name : String) -> Int? {
 ///|
 fn build_run_compile_mask(
   mod_ : @types.Module,
-  entry_func_idx : Int,
+  entry_func_idx : Int32,
 ) -> Array[Bool]? {
   let total_local_funcs = mod_.codes.length()
   if total_local_funcs == 0 {
@@ -720,7 +720,7 @@ fn build_run_compile_mask(
   for _ in 0..<total_local_funcs {
     compile_mask.push(false)
   }
-  let pending_locals : Array[Int] = []
+  let pending_locals : Array[Int32] = []
 
   mark_wast_reachable_local_func(
     entry_func_idx, num_imports, compile_mask, pending_locals,
@@ -771,7 +771,7 @@ fn build_run_compile_mask(
 }
 
 ///|
-fn int_array_to_bytes(ints : Array[Int]) -> Bytes {
+fn int_array_to_bytes(ints : Array[Int32]) -> Bytes {
   let bytes : Array[Byte] = []
   for value in ints {
     bytes.push((value & 0xFF).to_byte())
@@ -842,7 +842,7 @@ fn run_jit_cache_location() -> RunJitCacheLocation? {
 let run_jit_cache_version = "v11"
 
 ///|
-fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
+fn artifact_optimization_level(level : Int32) -> @artifact.OptimizationLevel {
   match normalize_opt_level(level) {
     0 => O0
     1 => O1
@@ -853,9 +853,9 @@ fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
 
 ///|
 fn jit_artifact_policy(
-  opt_level : Int,
+  opt_level : Int32,
   enable_cancellation : Bool,
-  nan_canonicalization? : Bool = false,
+  nan_canonicalization~ : Bool = false,
 ) -> @artifact.CompilationPolicy {
   {
     optimization_level: artifact_optimization_level(opt_level),
@@ -876,7 +876,7 @@ fn append_i64_identity_bytes(bytes : Array[Byte], value : Int64) -> Unit {
 
 ///|
 fn jit_semantic_feature_bytes(
-  actual_memory_max : Int?,
+  actual_memory_max : Int32?,
   use_subtype_indirect_check : Bool,
   local_compile_mask : Array[Bool]?,
 ) -> Bytes {
@@ -905,13 +905,13 @@ fn jit_semantic_feature_bytes(
 ///|
 fn build_jit_artifact_manifest(
   mod_ : @types.Module,
-  source_module? : Bytes? = None,
-  actual_memory_max? : Int? = None,
-  opt_level : Int,
-  local_compile_mask? : Array[Bool]? = None,
-  force_subtype_indirect_check? : Bool? = None,
-  enable_cancellation? : Bool = false,
-  nan_canonicalization? : Bool = false,
+  source_module~ : Bytes? = None,
+  actual_memory_max~ : Int32? = None,
+  opt_level : Int32,
+  local_compile_mask~ : Array[Bool]? = None,
+  force_subtype_indirect_check~ : Bool? = None,
+  enable_cancellation~ : Bool = false,
+  nan_canonicalization~ : Bool = false,
 ) -> @artifact.CompatibilityManifest raise @wasmoon_jit.JitPipelineError {
   let use_subtype_indirect_check = force_subtype_indirect_check.unwrap_or(
     module_indirect_subtype_check_reason(mod_) is Some(_),
@@ -1075,7 +1075,7 @@ fn ensure_run_jit_cache_dir(location : RunJitCacheLocation) -> Bool {
 fn load_run_jit_cache(
   cache_file : String,
   compatibility : @wasmoon_jit.ArtifactCompatibility,
-  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+  limits~ : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
 ) -> @wasmoon_jit.LoadedArtifact? {
   if !@fs.path_exists(cache_file) {
     return None
@@ -1117,7 +1117,7 @@ fn report_run_jit_cache(fresh : Bool, write_succeeded : Bool?) -> Unit {
     "freshly_compiled": fresh,
     "cache_hit": !fresh,
     "cache_write_succeeded": match write_succeeded {
-      Some(value) => value.to_json()
+      Some(value) => Json(value)
       None => null
     },
   }
@@ -1137,7 +1137,7 @@ fn should_use_run_jit_cache(
 
 ///|
 /// Count function imports
-fn count_func_imports(imports : Array[@types.Import]) -> Int {
+fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Func(_) {
@@ -1149,7 +1149,7 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 
 ///|
 /// Get function name from exports or generate default name
-fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
+fn get_func_name(mod_ : @types.Module, func_idx : Int32) -> String {
   // Look for exported name
   for exp in mod_.exports {
     if exp.desc is Func(idx) && idx == func_idx {
@@ -1162,7 +1162,10 @@ fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
 
 ///|
 /// Get type index for an imported function
-fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
+fn get_import_func_type_idx(
+  imports : Array[@types.Import],
+  idx : Int32,
+) -> Int32? {
   let mut func_count = 0
   for imp in imports {
     if imp.desc is Func(type_idx) {
@@ -1193,12 +1196,12 @@ fn init_jit_tables(
     jit_tables.push(store.get_jit_table(table_addr))
   }
   // Build store func address -> module func index map
-  let func_addr_to_idx : Map[Int, Int] = Map([])
+  let func_addr_to_idx : Map[Int32, Int32] = Map([])
   for i, addr in instance.func_addrs {
     func_addr_to_idx.set(addr, i)
   }
   // Copy table contents into JIT tables as (funcref?, type_idx) pairs
-  let elem_init : Array[(Int, Int, Int?, Int)] = []
+  let elem_init : Array[(Int32, Int32, Int32?, Int32)] = []
   for table_idx, table_addr in instance.table_addrs {
     let runtime_table = store.get_table(table_addr) catch { _ => continue }
     // Avoid writing past the allocated JIT table size (JIT tables are sized at instantiation).
@@ -1250,14 +1253,14 @@ fn run_with_jit(
   debug : Bool,
   dump_on_trap : Bool,
   wasm_binary : Bytes?,
-  opt_level : Int,
+  opt_level : Int32,
   enable_dwarf : Bool,
   run_metrics : RunMetrics?,
 ) -> Array[@types.Value] raise CommandFailure {
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
-  let actual_memory_max : Int? = if instance.mem_addrs.length() > 0 {
+  let actual_memory_max : Int32? = if instance.mem_addrs.length() > 0 {
     let mem = store.get_mem(instance.mem_addrs[0]) catch {
       _ => {
         @logger.error("memory not found")
@@ -1598,11 +1601,11 @@ fn module_indirect_subtype_check_reason(mod_ : @types.Module) -> String? {
 /// Compile module bytes into a v11 JIT artifact and emit structured progress.
 pub fn compile_module(
   module_bytes : Bytes,
-  opt_level? : Int = 2,
-  enable_dwarf? : Bool = false,
-  on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
-  enable_cancellation? : Bool = false,
-  nan_canonicalization? : Bool = false,
+  opt_level~ : Int32 = 2,
+  enable_dwarf~ : Bool = false,
+  on_progress~ : (CompileProgress) -> Unit? = fn(_event) { None },
+  enable_cancellation~ : Bool = false,
+  nan_canonicalization~ : Bool = false,
 ) -> @artifact.Artifact? {
   let compile_start = @perf.tick_now()
   emit_compile_progress(on_progress, Parse, compile_start, 0, 0)
@@ -1674,7 +1677,7 @@ pub fn compile_module(
 }
 
 ///|
-fn normalize_opt_level(opt_level : Int) -> Int {
+fn normalize_opt_level(opt_level : Int32) -> Int32 {
   if opt_level < 0 {
     0
   } else if opt_level > 3 {
@@ -1694,17 +1697,17 @@ pub fn compile_module_to_jit(
   mod_ : @types.Module,
   debug : Bool,
   dump_on_trap : Bool,
-  actual_memory_max? : Int? = None,
-  opt_level : Int,
+  actual_memory_max~ : Int32? = None,
+  opt_level : Int32,
   enable_dwarf : Bool,
-  on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
-  compile_start? : @perf.PerfTick? = None,
-  local_compile_mask? : Array[Bool]? = None,
-  force_subtype_indirect_check? : Bool? = None,
-  use_reusable_pipeline? : Bool = true,
-  enable_cancellation? : Bool = false,
-  nan_canonicalization? : Bool = false,
-  stack_switching? : Bool = false,
+  on_progress~ : (CompileProgress) -> Unit? = fn(_event) { None },
+  compile_start~ : @perf.PerfTick? = None,
+  local_compile_mask~ : Array[Bool]? = None,
+  force_subtype_indirect_check~ : Bool? = None,
+  use_reusable_pipeline~ : Bool = true,
+  enable_cancellation~ : Bool = false,
+  nan_canonicalization~ : Bool = false,
+  stack_switching~ : Bool = false,
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   @validator.validate_module(mod_, stack_switching~) catch {
@@ -1747,17 +1750,17 @@ fn compile_validated_module_to_jit(
   mod_ : @types.Module,
   debug : Bool,
   dump_on_trap : Bool,
-  actual_memory_max? : Int? = None,
-  opt_level : Int,
+  actual_memory_max~ : Int32? = None,
+  opt_level : Int32,
   enable_dwarf : Bool,
-  on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
-  compile_start? : @perf.PerfTick? = None,
-  local_compile_mask? : Array[Bool]? = None,
-  force_subtype_indirect_check? : Bool? = None,
-  use_reusable_pipeline? : Bool = true,
-  enable_cancellation? : Bool = false,
-  nan_canonicalization? : Bool = false,
-  source_module? : Bytes? = None,
+  on_progress~ : (CompileProgress) -> Unit? = fn(_event) { None },
+  compile_start~ : @perf.PerfTick? = None,
+  local_compile_mask~ : Array[Bool]? = None,
+  force_subtype_indirect_check~ : Bool? = None,
+  use_reusable_pipeline~ : Bool = true,
+  enable_cancellation~ : Bool = false,
+  nan_canonicalization~ : Bool = false,
+  source_module~ : Bytes? = None,
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   use_reusable_pipeline |> ignore
   // DWARF registration consumes the completed artifact when the JIT module is

@@ -6,7 +6,7 @@
 let canon_trap_message : Array[String?] = [None]
 
 ///|
-let canon_host_exit : Ref[Int?] = Ref(None)
+let canon_host_exit : Ref[Int32?] = Ref(None)
 
 ///|
 pub fn clear_canon_trap_message() -> Unit {
@@ -69,7 +69,7 @@ pub fn trap_message() -> String? {
 }
 
 ///|
-pub fn host_exit_status() -> Int? {
+pub fn host_exit_status() -> Int32? {
   canon_host_exit.val
 }
 

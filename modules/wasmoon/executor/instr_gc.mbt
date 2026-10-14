@@ -9,7 +9,7 @@
 /// struct.new: Create a new struct with values from the stack
 fn ExecContext::exec_struct_new(
   self : ExecContext,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Unit raise {
   let struct_type = self.instance.validated_struct_type_at(type_idx)
   let num_fields = struct_type.fields.length()
@@ -34,7 +34,7 @@ fn ExecContext::exec_struct_new(
 /// struct.new_default: Create a new struct with default values
 fn ExecContext::exec_struct_new_default(
   self : ExecContext,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Unit raise {
   let struct_type = self.instance.validated_struct_type_at(type_idx)
   let num_fields = struct_type.fields.length()
@@ -61,8 +61,8 @@ fn ExecContext::exec_struct_new_default(
 /// struct.get: Get a field value from a struct
 fn ExecContext::exec_struct_get(
   self : ExecContext,
-  _type_idx : Int,
-  field_idx : Int,
+  _type_idx : Int32,
+  field_idx : Int32,
 ) -> Unit raise {
   let ref_val = self.stack.pop()
   match ref_val {
@@ -79,8 +79,8 @@ fn ExecContext::exec_struct_get(
 /// struct.get_s: Get a signed packed field value from a struct
 fn ExecContext::exec_struct_get_s(
   self : ExecContext,
-  type_idx : Int,
-  field_idx : Int,
+  type_idx : Int32,
+  field_idx : Int32,
 ) -> Unit raise {
   let ref_val = self.stack.pop()
   match ref_val {
@@ -118,8 +118,8 @@ fn ExecContext::exec_struct_get_s(
 /// struct.get_u: Get an unsigned packed field value from a struct
 fn ExecContext::exec_struct_get_u(
   self : ExecContext,
-  type_idx : Int,
-  field_idx : Int,
+  type_idx : Int32,
+  field_idx : Int32,
 ) -> Unit raise {
   let ref_val = self.stack.pop()
   match ref_val {
@@ -145,8 +145,8 @@ fn ExecContext::exec_struct_get_u(
 /// struct.set: Set a field value in a struct
 fn ExecContext::exec_struct_set(
   self : ExecContext,
-  type_idx : Int,
-  field_idx : Int,
+  type_idx : Int32,
+  field_idx : Int32,
 ) -> Unit raise {
   let value = self.stack.pop()
   let ref_val = self.stack.pop()
@@ -176,7 +176,7 @@ fn ExecContext::exec_struct_set(
 /// Native GC objects use signed 32-bit offsets and 16-byte value slots.
 /// Check before constructing the temporary MoonBit array as well as allocating
 /// the GC object, so a guest length never reaches a host allocation assertion.
-fn check_gc_array_length(len : Int) -> Unit raise @runtime.RuntimeError {
+fn check_gc_array_length(len : Int32) -> Unit raise @runtime.RuntimeError {
   if len < 0 || len > (0x7FFFFFFF - 32) / 16 {
     raise AllocationTooLarge
   }
@@ -186,7 +186,7 @@ fn check_gc_array_length(len : Int) -> Unit raise @runtime.RuntimeError {
 /// array.new: Create a new array with a fill value and length
 fn ExecContext::exec_array_new(
   self : ExecContext,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Unit raise {
   let len_val = self.stack.pop()
   let fill_val = self.stack.pop()
@@ -213,7 +213,7 @@ fn ExecContext::exec_array_new(
 /// array.new_default: Create a new array with default values
 fn ExecContext::exec_array_new_default(
   self : ExecContext,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Unit raise {
   let len_val = self.stack.pop()
   let len = match len_val {
@@ -243,8 +243,8 @@ fn ExecContext::exec_array_new_default(
 /// array.new_fixed: Create a new array with fixed number of elements from stack
 fn ExecContext::exec_array_new_fixed(
   self : ExecContext,
-  type_idx : Int,
-  len : Int,
+  type_idx : Int32,
+  len : Int32,
 ) -> Unit raise {
   // Pop elements from stack (in reverse order)
   check_gc_array_length(len)
@@ -267,7 +267,7 @@ fn ExecContext::exec_array_new_fixed(
 /// array.get: Get an element from an array
 fn ExecContext::exec_array_get(
   self : ExecContext,
-  _type_idx : Int,
+  _type_idx : Int32,
 ) -> Unit raise {
   let idx_val = self.stack.pop()
   let ref_val = self.stack.pop()
@@ -289,7 +289,7 @@ fn ExecContext::exec_array_get(
 /// array.get_s: Get a signed packed element from an array
 fn ExecContext::exec_array_get_s(
   self : ExecContext,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Unit raise {
   let idx_val = self.stack.pop()
   let ref_val = self.stack.pop()
@@ -344,7 +344,7 @@ fn ExecContext::exec_array_get_s(
 /// array.get_u: Get an unsigned packed element from an array
 fn ExecContext::exec_array_get_u(
   self : ExecContext,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Unit raise {
   let idx_val = self.stack.pop()
   let ref_val = self.stack.pop()
@@ -383,7 +383,7 @@ fn ExecContext::exec_array_get_u(
 /// array.set: Set an element in an array
 fn ExecContext::exec_array_set(
   self : ExecContext,
-  _type_idx : Int,
+  _type_idx : Int32,
 ) -> Unit raise {
   let value = self.stack.pop()
   let idx_val = self.stack.pop()
@@ -417,7 +417,7 @@ fn ExecContext::exec_array_len(self : ExecContext) -> Unit raise {
 /// array.fill: Fill array elements with a value
 fn ExecContext::exec_array_fill(
   self : ExecContext,
-  _type_idx : Int,
+  _type_idx : Int32,
 ) -> Unit raise {
   let count_val = self.stack.pop()
   let value = self.stack.pop()
@@ -442,8 +442,8 @@ fn ExecContext::exec_array_fill(
 /// array.copy: Copy elements between arrays
 fn ExecContext::exec_array_copy(
   self : ExecContext,
-  _dst_type_idx : Int,
-  _src_type_idx : Int,
+  _dst_type_idx : Int32,
+  _src_type_idx : Int32,
 ) -> Unit raise {
   let count_val = self.stack.pop()
   let src_offset_val = self.stack.pop()
@@ -479,8 +479,8 @@ fn ExecContext::exec_array_copy(
 /// array.new_data: Create a new array from data segment bytes
 fn ExecContext::exec_array_new_data(
   self : ExecContext,
-  type_idx : Int,
-  data_idx : Int,
+  type_idx : Int32,
+  data_idx : Int32,
 ) -> Unit raise {
   let len_val = self.stack.pop()
   let offset_val = self.stack.pop()
@@ -538,8 +538,8 @@ fn ExecContext::exec_array_new_data(
 /// array.new_elem: Create a new array from element segment
 fn ExecContext::exec_array_new_elem(
   self : ExecContext,
-  type_idx : Int,
-  elem_idx : Int,
+  type_idx : Int32,
+  elem_idx : Int32,
 ) -> Unit raise {
   let len_val = self.stack.pop()
   let offset_val = self.stack.pop()
@@ -588,8 +588,8 @@ fn ExecContext::exec_array_new_elem(
 /// array.init_data: Initialize array elements from data segment
 fn ExecContext::exec_array_init_data(
   self : ExecContext,
-  type_idx : Int,
-  data_idx : Int,
+  type_idx : Int32,
+  data_idx : Int32,
 ) -> Unit raise {
   let len_val = self.stack.pop()
   let src_offset_val = self.stack.pop()
@@ -649,8 +649,8 @@ fn ExecContext::exec_array_init_data(
 /// array.init_elem: Initialize array elements from element segment
 fn ExecContext::exec_array_init_elem(
   self : ExecContext,
-  _type_idx : Int,
-  elem_idx : Int,
+  _type_idx : Int32,
+  elem_idx : Int32,
 ) -> Unit raise {
   let len_val = self.stack.pop()
   let src_offset_val = self.stack.pop()
@@ -701,7 +701,7 @@ fn ExecContext::exec_array_init_elem(
 
 ///|
 /// Helper: Get byte size for a storage type
-fn storage_type_byte_size(st : @types.StorageType) -> Int {
+fn storage_type_byte_size(st : @types.StorageType) -> Int32 {
   match st {
     Val(vt) =>
       match vt {
@@ -721,7 +721,7 @@ fn storage_type_byte_size(st : @types.StorageType) -> Int {
 /// Helper: Read a value from bytes based on storage type
 fn read_value_from_bytes(
   bytes : Bytes,
-  offset : Int,
+  offset : Int32,
   st : @types.StorageType,
 ) -> @types.Value {
   match st {
@@ -970,8 +970,8 @@ fn value_matches_type(
 /// Check if type1 is a subtype of type2.
 /// Uses the unified SubtypingContext API for proper isorecursive type checking.
 fn is_subtype(
-  type_idx1 : Int,
-  type_idx2 : Int,
+  type_idx1 : Int32,
+  type_idx2 : Int32,
   instance : @runtime.ModuleInstance,
 ) -> Bool {
   let ctx = @types.SubtypingContext::same_module(
@@ -1059,7 +1059,7 @@ fn ExecContext::exec_ref_cast_null(
 /// br_on_cast: Branch if value matches target type
 fn ExecContext::exec_br_on_cast(
   self : ExecContext,
-  label_idx : Int,
+  label_idx : Int32,
   target_type : @types.ValueType,
 ) -> Unit raise {
   let val = self.stack.pop()
@@ -1088,7 +1088,7 @@ fn ExecContext::exec_br_on_cast(
 /// br_on_cast_fail: Branch if value does NOT match target type
 fn ExecContext::exec_br_on_cast_fail(
   self : ExecContext,
-  label_idx : Int,
+  label_idx : Int32,
   target_type : @types.ValueType,
 ) -> Unit raise {
   let val = self.stack.pop()

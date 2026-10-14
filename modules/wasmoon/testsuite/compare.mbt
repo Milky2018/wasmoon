@@ -301,7 +301,7 @@ pub fn compare_jit_interp_with_opt_level(
   source : String,
   func_name : String,
   args : Array[@types.Value],
-  opt_level : Int,
+  opt_level : Int32,
 ) -> CompareResult {
   // Parse the WAT source
   let mod_ = @wat.parse(source) catch {
@@ -356,7 +356,7 @@ pub fn compare_jit_interp_with_opt_level(
 }
 
 ///|
-fn find_func_index_by_name(mod_ : @types.Module, name : String) -> Int? {
+fn find_func_index_by_name(mod_ : @types.Module, name : String) -> Int32? {
   for exp in mod_.exports {
     if exp.name == name && exp.desc is Func(idx) {
       return Some(idx)
@@ -388,7 +388,7 @@ fn run_interp(
 pub fn run_jit(
   mod_ : @types.Module,
   func_name : String,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
@@ -402,11 +402,11 @@ pub fn run_jit(
 fn run_jit_with_opt_level(
   mod_ : @types.Module,
   func_name : String,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
-  opt_level : Int,
+  opt_level : Int32,
 ) -> Result[Array[@types.Value], String] {
   func_name |> ignore
   try {
@@ -476,23 +476,23 @@ fn run_jit_with_opt_level(
       use_subtype_indirect_check~,
     )
     @wast.sync_tables_to_jit(instance, store, jm, use_subtype_indirect_check~)
-    let global_addrs : Array[Int] = []
+    let global_addrs : Array[Int32] = []
     for addr in instance.global_addrs {
       global_addrs.push(addr)
     }
-    let table_addrs : Array[Int] = []
+    let table_addrs : Array[Int32] = []
     for addr in instance.table_addrs {
       table_addrs.push(addr)
     }
-    let func_addrs : Array[Int] = []
+    let func_addrs : Array[Int32] = []
     for addr in instance.func_addrs {
       func_addrs.push(addr)
     }
-    let func_type_indices : Array[Int] = []
+    let func_type_indices : Array[Int32] = []
     for type_idx in instance.func_type_indices {
       func_type_indices.push(type_idx)
     }
-    let canonical_type_indices : Array[Int] = []
+    let canonical_type_indices : Array[Int32] = []
     for canonical_idx in instance.canonical_type_indices {
       canonical_type_indices.push(canonical_idx)
     }
@@ -500,7 +500,7 @@ fn run_jit_with_opt_level(
     for subtype in mod_.types {
       module_types.push(subtype)
     }
-    let module_rec_groups : Array[Int] = []
+    let module_rec_groups : Array[Int32] = []
     for group in mod_.type_rec_groups {
       module_rec_groups.push(group)
     }

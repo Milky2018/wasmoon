@@ -7,7 +7,7 @@ extern "c" fn write_bound_entry_code(
   context : JITContext,
   target : Int64,
   output : FixedArray[Byte],
-) -> Int = "wasmoon_jit_write_bound_entry_code"
+) -> Int32 = "wasmoon_jit_write_bound_entry_code"
 
 ///|
 /// A native entry bound to the instance environment that owns its code.
@@ -27,7 +27,7 @@ pub fn NativeJITContext::bind_callable(
   if size <= 0 {
     raise TrampolineAllocationFailed(code_size=0)
   }
-  let code : Array[Int] = []
+  let code : Array[Int32] = []
   for i in 0..<size {
     code.push(bytes[i].to_int())
   }
@@ -51,8 +51,8 @@ pub fn NativeCallable::release(self : NativeCallable) -> Unit {
 pub fn NativeJITContext::bind_callable_registry(
   self : NativeJITContext,
   registry : NativeCallableRegistry,
-  local_types : Array[Int],
-  tags : Array[Int],
+  local_types : Array[Int32],
+  tags : Array[Int32],
 ) -> Unit {
   let locals = FixedArray::make(local_types.length(), 0)
   for i, value in local_types {
@@ -69,10 +69,10 @@ pub fn NativeJITContext::bind_callable_registry(
 /// Install an independent callable view for a standalone context.
 pub fn NativeJITContext::set_callable_types(
   self : NativeJITContext,
-  local_types : Array[Int],
-  parents : Array[Int],
-  entries : Array[(Int64, Int)],
-  tags : Array[Int],
+  local_types : Array[Int32],
+  parents : Array[Int32],
+  entries : Array[(Int64, Int32)],
+  tags : Array[Int32],
 ) -> Unit {
   let registry = NativeCallableRegistry::new()
   if !registry.replace(parents, entries) {

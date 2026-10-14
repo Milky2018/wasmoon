@@ -1,7 +1,7 @@
 // Tests for atomic (0xFE) instructions
 
 ///|
-fn exported_func_index(mod_ : @types.Module, name : String) -> Int {
+fn exported_func_index(mod_ : @types.Module, name : String) -> Int32 {
   for exp in mod_.exports {
     if exp.name == name {
       match exp.desc {

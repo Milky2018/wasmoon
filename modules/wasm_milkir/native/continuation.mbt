@@ -23,7 +23,7 @@ fn continuation_call(
 fn lower_cont_new(
   context : @adapter.InstructionContext,
   environment : Environment,
-  index : Int,
+  index : Int32,
 ) -> Unit {
   let args = context.environment()
   args.push(i32_immediate(context, index))
@@ -44,7 +44,7 @@ fn lower_cont_new(
 fn lower_cont_bind(
   context : @adapter.InstructionContext,
   environment : Environment,
-  input : Int,
+  input : Int32,
 ) -> Unit {
   let values = context.operands()
   let types = context.operand_types()
@@ -76,7 +76,7 @@ fn lower_cont_bind(
 fn continuation_result_buffer(
   context : @adapter.InstructionContext,
   types : Array[@native_types.ValueType],
-) -> (@lowering.Value, Int) {
+) -> (@lowering.Value, Int32) {
   let mut words = 0
   for ty in types {
     words += if ty == V128 { 2 } else { 1 }
@@ -165,7 +165,7 @@ fn continuation_read_results(
 fn lower_cont_effect(
   context : @adapter.InstructionContext,
   environment : Environment,
-  tag : Int,
+  tag : Int32,
   switch_ : Bool,
 ) -> Unit {
   let operands = context.operands()
@@ -212,9 +212,9 @@ fn lower_cont_effect(
 fn lower_cont_resume(
   context : @adapter.InstructionContext,
   environment : Environment,
-  inputs : Int,
-  handlers : Int,
-  exception_tag : Int,
+  inputs : Int32,
+  handlers : Int32,
+  exception_tag : Int32,
 ) -> Unit {
   let values = context.operands()
   let operand_types = context.operand_types()

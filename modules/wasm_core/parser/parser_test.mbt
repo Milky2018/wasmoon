@@ -3,8 +3,8 @@
 // Helper to construct WASM binary from bytes
 
 ///|
-fn make_wasm_module(sections : Array[FixedArray[Int]]) -> Bytes {
-  let bytes : Array[Int] = []
+fn make_wasm_module(sections : Array[FixedArray[Int32]]) -> Bytes {
+  let bytes : Array[Int32] = []
   // Magic number and version
   bytes.push(0x00)
   bytes.push(0x61)
@@ -25,7 +25,7 @@ fn make_wasm_module(sections : Array[FixedArray[Int]]) -> Bytes {
 // Helper to parse and get module
 
 ///|
-fn parse_wasm(sections : Array[FixedArray[Int]]) -> @types.Module? {
+fn parse_wasm(sections : Array[FixedArray[Int32]]) -> @types.Module? {
   let data = make_wasm_module(sections)
   try @parser.parse_module(data) catch {
     _ => None
@@ -40,7 +40,7 @@ fn parse_wasm(sections : Array[FixedArray[Int]]) -> @types.Module? {
 
 ///|
 test "binary parse memory32 - flag 0x00" {
-  let mem_section : FixedArray[Int] = [0x05, 0x03, 0x01, 0x00, 0x01]
+  let mem_section : FixedArray[Int32] = [0x05, 0x03, 0x01, 0x00, 0x01]
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories.length(), content="1")
   inspect(m.memories[0].limits.min, content="1")
@@ -50,7 +50,7 @@ test "binary parse memory32 - flag 0x00" {
 
 ///|
 test "binary parse memory32 - flag 0x01" {
-  let mem_section : FixedArray[Int] = [0x05, 0x04, 0x01, 0x01, 0x01, 0x04]
+  let mem_section : FixedArray[Int32] = [0x05, 0x04, 0x01, 0x01, 0x01, 0x04]
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories[0].limits.min, content="1")
   inspect(@debug.to_string(m.memories[0].limits.max), content="Some(4)")
@@ -59,7 +59,7 @@ test "binary parse memory32 - flag 0x01" {
 
 ///|
 test "binary parse memory64 - flag 0x04" {
-  let mem_section : FixedArray[Int] = [0x05, 0x03, 0x01, 0x04, 0x02]
+  let mem_section : FixedArray[Int32] = [0x05, 0x03, 0x01, 0x04, 0x02]
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories.length(), content="1")
   inspect(m.memories[0].limits.min, content="2")
@@ -69,7 +69,7 @@ test "binary parse memory64 - flag 0x04" {
 
 ///|
 test "binary parse memory64 - flag 0x05" {
-  let mem_section : FixedArray[Int] = [0x05, 0x04, 0x01, 0x05, 0x01, 0x0A]
+  let mem_section : FixedArray[Int32] = [0x05, 0x04, 0x01, 0x05, 0x01, 0x0A]
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories[0].limits.min, content="1")
   inspect(@debug.to_string(m.memories[0].limits.max), content="Some(10)")
@@ -82,7 +82,7 @@ test "binary parse memory64 - flag 0x05" {
 
 ///|
 test "binary parse table32 - flag 0x00" {
-  let table_section : FixedArray[Int] = [0x04, 0x04, 0x01, 0x70, 0x00, 0x01]
+  let table_section : FixedArray[Int32] = [0x04, 0x04, 0x01, 0x70, 0x00, 0x01]
   guard parse_wasm([table_section]) is Some(m) else { return }
   inspect(m.tables.length(), content="1")
   inspect(m.tables[0].type_.limits.min, content="1")
@@ -92,7 +92,7 @@ test "binary parse table32 - flag 0x00" {
 
 ///|
 test "binary parse table32 - flag 0x01" {
-  let table_section : FixedArray[Int] = [
+  let table_section : FixedArray[Int32] = [
     0x04, 0x05, 0x01, 0x70, 0x01, 0x01, 0x0A,
   ]
   guard parse_wasm([table_section]) is Some(m) else { return }
@@ -103,7 +103,7 @@ test "binary parse table32 - flag 0x01" {
 
 ///|
 test "binary parse table64 - flag 0x04" {
-  let table_section : FixedArray[Int] = [0x04, 0x04, 0x01, 0x70, 0x04, 0x02]
+  let table_section : FixedArray[Int32] = [0x04, 0x04, 0x01, 0x70, 0x04, 0x02]
   guard parse_wasm([table_section]) is Some(m) else { return }
   inspect(m.tables.length(), content="1")
   inspect(m.tables[0].type_.limits.min, content="2")
@@ -113,7 +113,7 @@ test "binary parse table64 - flag 0x04" {
 
 ///|
 test "binary parse table64 - flag 0x05" {
-  let table_section : FixedArray[Int] = [
+  let table_section : FixedArray[Int32] = [
     0x04, 0x05, 0x01, 0x70, 0x05, 0x01, 0x0A,
   ]
   guard parse_wasm([table_section]) is Some(m) else { return }
@@ -128,19 +128,19 @@ test "binary parse table64 - flag 0x05" {
 
 ///|
 test "binary parse memory - invalid flag 0x08 rejected" {
-  let mem_section : FixedArray[Int] = [0x05, 0x03, 0x01, 0x08, 0x01]
+  let mem_section : FixedArray[Int32] = [0x05, 0x03, 0x01, 0x08, 0x01]
   inspect(parse_wasm([mem_section]) is None, content="true")
 }
 
 ///|
 test "binary parse table - invalid flag 0x08 rejected" {
-  let table_section : FixedArray[Int] = [0x04, 0x04, 0x01, 0x70, 0x08, 0x01]
+  let table_section : FixedArray[Int32] = [0x04, 0x04, 0x01, 0x70, 0x08, 0x01]
   inspect(parse_wasm([table_section]) is None, content="true")
 }
 
 ///|
 test "binary parse table - shared flag 0x03 rejected for tables" {
-  let table_section : FixedArray[Int] = [
+  let table_section : FixedArray[Int32] = [
     0x04, 0x05, 0x01, 0x70, 0x03, 0x01, 0x04,
   ]
   inspect(parse_wasm([table_section]) is None, content="true")
@@ -152,7 +152,9 @@ test "binary parse table - shared flag 0x03 rejected for tables" {
 
 ///|
 test "binary parse multi-memory with mixed 32/64" {
-  let mem_section : FixedArray[Int] = [0x05, 0x05, 0x02, 0x00, 0x01, 0x04, 0x02]
+  let mem_section : FixedArray[Int32] = [
+    0x05, 0x05, 0x02, 0x00, 0x01, 0x04, 0x02,
+  ]
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories.length(), content="2")
   inspect(m.memories[0].is_memory64, content="false")
@@ -163,7 +165,7 @@ test "binary parse multi-memory with mixed 32/64" {
 
 ///|
 test "binary parse multi-table with mixed 32/64" {
-  let table_section : FixedArray[Int] = [
+  let table_section : FixedArray[Int32] = [
     0x04, 0x08, 0x02, 0x70, 0x00, 0x01, 0x70, 0x04, 0x02,
   ]
   guard parse_wasm([table_section]) is Some(m) else { return }
@@ -182,14 +184,14 @@ test "binary parse gc: ref.i31 opcode" {
   //   drop
   //   i32.const 7
   // )
-  let type_section : FixedArray[Int] = [
+  let type_section : FixedArray[Int32] = [
     0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f,
   ]
-  let func_section : FixedArray[Int] = [0x03, 0x02, 0x01, 0x00]
-  let export_section : FixedArray[Int] = [
+  let func_section : FixedArray[Int32] = [0x03, 0x02, 0x01, 0x00]
+  let export_section : FixedArray[Int32] = [
     0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
   ]
-  let code_section : FixedArray[Int] = [
+  let code_section : FixedArray[Int32] = [
     0x0a, 0x0b, 0x01, 0x09, 0x00, 0x41, 0x00, 0xfb, 0x1c, 0x1a, 0x41, 0x07, 0x0b,
   ]
   guard parse_wasm([type_section, func_section, export_section, code_section])
@@ -211,14 +213,14 @@ test "binary parse gc: i31.get_u opcode" {
   //   ref.i31
   //   i31.get_u
   // )
-  let type_section : FixedArray[Int] = [
+  let type_section : FixedArray[Int32] = [
     0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f,
   ]
-  let func_section : FixedArray[Int] = [0x03, 0x02, 0x01, 0x00]
-  let export_section : FixedArray[Int] = [
+  let func_section : FixedArray[Int32] = [0x03, 0x02, 0x01, 0x00]
+  let export_section : FixedArray[Int32] = [
     0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
   ]
-  let code_section : FixedArray[Int] = [
+  let code_section : FixedArray[Int32] = [
     0x0a, 0x0a, 0x01, 0x08, 0x00, 0x41, 0x05, 0xfb, 0x1c, 0xfb, 0x1e, 0x0b,
   ]
   guard parse_wasm([type_section, func_section, export_section, code_section])
@@ -241,7 +243,7 @@ test "binary parse gc: rec group allows forward type refs" {
   //     (type (struct (field (mut (ref null 0)))))
   //   )
   // )
-  let type_section : FixedArray[Int] = [
+  let type_section : FixedArray[Int32] = [
     0x01, 0x0e, 0x01, 0x4e, 0x02, 0x60, 0x01, 0x64, 0x01, 0x01, 0x7f, 0x5f, 0x01,
     0x63, 0x00, 0x01,
   ]
@@ -265,9 +267,9 @@ test "binary parse gc: rec group allows forward type refs" {
 
 ///|
 test "binary parse tag section before global section" {
-  let type_section : FixedArray[Int] = [0x01, 0x04, 0x01, 0x60, 0x00, 0x00]
-  let tag_section : FixedArray[Int] = [0x0d, 0x03, 0x01, 0x00, 0x00]
-  let global_section : FixedArray[Int] = [
+  let type_section : FixedArray[Int32] = [0x01, 0x04, 0x01, 0x60, 0x00, 0x00]
+  let tag_section : FixedArray[Int32] = [0x0d, 0x03, 0x01, 0x00, 0x00]
+  let global_section : FixedArray[Int32] = [
     0x06, 0x06, 0x01, 0x7f, 0x00, 0x41, 0x00, 0x0b,
   ]
   guard parse_wasm([type_section, tag_section, global_section]) is Some(m) else {

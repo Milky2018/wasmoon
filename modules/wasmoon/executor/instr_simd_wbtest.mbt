@@ -3,22 +3,22 @@
 ///|
 /// Helper to create v128 bytes from 16 byte values
 fn make_v128(
-  b0 : Int,
-  b1 : Int,
-  b2 : Int,
-  b3 : Int,
-  b4 : Int,
-  b5 : Int,
-  b6 : Int,
-  b7 : Int,
-  b8 : Int,
-  b9 : Int,
-  b10 : Int,
-  b11 : Int,
-  b12 : Int,
-  b13 : Int,
-  b14 : Int,
-  b15 : Int,
+  b0 : Int32,
+  b1 : Int32,
+  b2 : Int32,
+  b3 : Int32,
+  b4 : Int32,
+  b5 : Int32,
+  b6 : Int32,
+  b7 : Int32,
+  b8 : Int32,
+  b9 : Int32,
+  b10 : Int32,
+  b11 : Int32,
+  b12 : Int32,
+  b13 : Int32,
+  b14 : Int32,
+  b15 : Int32,
 ) -> Bytes {
   Bytes::from_array([
     b0.to_byte(),
@@ -42,7 +42,12 @@ fn make_v128(
 
 ///|
 /// Helper to create v128 from i32x4 lanes
-fn make_i32x4(lane0 : Int, lane1 : Int, lane2 : Int, lane3 : Int) -> Bytes {
+fn make_i32x4(
+  lane0 : Int32,
+  lane1 : Int32,
+  lane2 : Int32,
+  lane3 : Int32,
+) -> Bytes {
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for lane in [lane0, lane1, lane2, lane3] {
     buf.write_byte(lane.to_byte())
@@ -406,7 +411,7 @@ test "exec_i8x16_shuffle" {
   )
 
   // Shuffle: interleave lanes from a and b
-  let lanes : FixedArray[Int] = [
+  let lanes : FixedArray[Int32] = [
     0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23,
   ]
   let mod = @types.Module::simple(

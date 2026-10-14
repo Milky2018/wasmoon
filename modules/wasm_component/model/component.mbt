@@ -55,7 +55,7 @@ pub fn Component::snapshot_bytes(self : Component) -> Bytes {
 }
 
 ///|
-fn append_component_leb_u32(bytes : Array[Byte], value : Int) -> Unit {
+fn append_component_leb_u32(bytes : Array[Byte], value : Int32) -> Unit {
   for remaining = value {
     let byte = remaining & 0x7F
     let next = remaining >> 7

@@ -49,11 +49,11 @@ fn value_type_text(ty : ValueType) -> String {
 ///|
 pub struct Value {
   priv owner : Ref[Unit]
-  priv id : Int
+  priv id : Int32
 }
 
 ///|
-fn Value::new(owner : Ref[Unit], id : Int) -> Value {
+fn Value::new(owner : Ref[Unit], id : Int32) -> Value {
   { owner, id, }
 }
 
@@ -75,11 +75,11 @@ pub impl Show for Value with fn output(self, logger) {
 ///|
 pub struct Block {
   priv owner : Ref[Unit]
-  priv id : Int
+  priv id : Int32
 }
 
 ///|
-fn Block::new(owner : Ref[Unit], id : Int) -> Block {
+fn Block::new(owner : Ref[Unit], id : Int32) -> Block {
   { owner, id, }
 }
 
@@ -101,11 +101,11 @@ pub impl Show for Block with fn output(self, logger) {
 ///|
 pub struct Instruction {
   priv owner : Ref[Unit]
-  priv id : Int
+  priv id : Int32
 }
 
 ///|
-fn Instruction::new(owner : Ref[Unit], id : Int) -> Instruction {
+fn Instruction::new(owner : Ref[Unit], id : Int32) -> Instruction {
   { owner, id, }
 }
 
@@ -177,7 +177,7 @@ pub(all) enum OperandConstraint {
   Any
   AnyLocation
   Fixed(PhysicalReg)
-  TiedTo(Int)
+  TiedTo(Int32)
 } derive(Eq, Debug)
 
 ///|
@@ -247,7 +247,7 @@ pub fn Output::fixed(ty : ValueType, reg : PhysicalReg) -> Output {
 }
 
 ///|
-pub fn Output::tied(ty : ValueType, operand_index : Int) -> Output {
+pub fn Output::tied(ty : ValueType, operand_index : Int32) -> Output {
   { ty, constraint: TiedTo(operand_index), preference: None, timing: Late, }
 }
 
@@ -272,7 +272,7 @@ pub struct Operand {
   constraint : AllocationConstraint
   preference : PhysicalReg?
   timing : OperandTiming
-  tie_id : Int
+  tie_id : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -357,7 +357,7 @@ pub fn InstructionMetadata::new(
   source? : @native.SourceLocation,
   trap? : @native.TrapReason,
   safepoint? : SafepointKind,
-  live_gc_roots? : Array[Value] = [],
+  live_gc_roots~ : Array[Value] = [],
   symbol? : SymbolReference,
   stack_map? : @native.StackMapMetadata,
 ) -> InstructionMetadata {
@@ -385,15 +385,15 @@ fn InstructionMetadata::copy(self : InstructionMetadata) -> InstructionMetadata 
 
 ///|
 pub suberror VCodeBuildError {
-  InvalidParameter(index~ : Int)
-  InvalidBlockParameter(block~ : Block, index~ : Int)
+  InvalidParameter(index~ : Int32)
+  InvalidBlockParameter(block~ : Block, index~ : Int32)
   ForeignBlock(block~ : Block)
   ForeignValue(value~ : Value)
   InvalidOperandConstraint
   DuplicateTerminator(block~ : Block)
   BlockAlreadyTerminated(block~ : Block)
   InvalidEdgeArity(block~ : Block)
-  EdgeClassMismatch(block~ : Block, index~ : Int)
+  EdgeClassMismatch(block~ : Block, index~ : Int32)
   DuplicateClobber(reg~ : PhysicalReg)
   InvalidSafepointRoot(value~ : Value)
   InvalidStackMap
@@ -413,10 +413,10 @@ pub suberror VCodeVerifyError {
   ForeignValue(instruction~ : Instruction, value~ : Value)
   ForeignBlock(instruction~ : Instruction, block~ : Block)
   InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
-  EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
-  InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
-  FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
-  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
+  EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int32)
+  InvalidTie(instruction~ : Instruction, operand~ : Int32, tied_to~ : Int32)
+  FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int32)
+  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int32)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
   InvalidStackMap(instruction~ : Instruction)

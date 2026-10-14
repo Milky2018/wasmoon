@@ -17,7 +17,7 @@ fn timing_text(timing : OperandTiming) -> String {
 }
 
 ///|
-fn operand_text(operand : Operand, tied_to : Int?) -> String {
+fn operand_text(operand : Operand, tied_to : Int32?) -> String {
   let preference = match operand.preference {
     Some(reg) => "(prefer=\{Repr(reg)})"
     None => ""

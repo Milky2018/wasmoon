@@ -102,7 +102,7 @@ fn component_error_json(
   code : ComponentErrorCode?,
   phase : String,
   detail : String,
-  summary? : Array[String]? = None,
+  summary~ : Array[String]? = None,
 ) -> String {
   let mut line = "{\"ok\":"
   line = line + (if ok { "true" } else { "false" })
@@ -144,7 +144,7 @@ fn run_component_command_eval(
   file_path : String,
   validate : Bool,
   wit_names : Bool,
-  component_implements? : Bool = true,
+  component_implements~ : Bool = true,
 ) -> ComponentCommandEvalResult {
   let bytes = @fs.read_file_to_bytes(file_path) catch {
     IOError(_e) =>
@@ -215,8 +215,8 @@ pub fn run_component_command(
   validate : Bool,
   wit_names : Bool,
   error_format : ComponentErrorFormat,
-  component_implements? : Bool = true,
-) -> Int {
+  component_implements~ : Bool = true,
+) -> Int32 {
   let result = run_component_command_eval(
     file_path,
     validate,
@@ -300,7 +300,7 @@ fn run_component_invoke_eval(
   export_path : String,
   args : Array[String],
   wit_names : Bool,
-  component_implements? : Bool = true,
+  component_implements~ : Bool = true,
 ) -> ComponentInvokeEvalResult {
   let bytes = @fs.read_file_to_bytes(file_path) catch {
     IOError(error) =>
@@ -373,8 +373,8 @@ pub fn run_component_invoke_command(
   args : Array[String],
   wit_names : Bool,
   error_format : ComponentErrorFormat,
-  component_implements? : Bool = true,
-) -> Int {
+  component_implements~ : Bool = true,
+) -> Int32 {
   let result = run_component_invoke_eval(
     file_path,
     export_path,
@@ -416,8 +416,8 @@ fn component_command_run_function(
 ///|
 fn component_command_status(
   values : Array[@component_runtime.ComponentValue],
-  requested_exit : Int?,
-) -> Int raise @component_runtime.ComponentRuntimeError {
+  requested_exit : Int32?,
+) -> Int32 raise @component_runtime.ComponentRuntimeError {
   match requested_exit {
     Some(status) => status
     None =>
@@ -437,7 +437,7 @@ fn report_component_run_error(
   format : ComponentErrorFormat,
   phase : String,
   detail : String,
-) -> Int {
+) -> Int32 {
   if format is Json {
     println(
       component_error_json(
@@ -511,8 +511,8 @@ fn run_wasi_component_command_with_evidence(
   error_format : ComponentErrorFormat,
   use_jit : Bool,
   on_execution : ((@component_runtime.NativeComponentExecutionEvent) -> Unit)?,
-  component_implements? : Bool = true,
-) -> Int {
+  component_implements~ : Bool = true,
+) -> Int32 {
   let parsed = run_component_command_eval(
     file_path,
     true,
@@ -577,9 +577,9 @@ pub fn run_wasi_component_command(
   network : String,
   wit_names : Bool,
   error_format : ComponentErrorFormat,
-  use_jit? : Bool = true,
-  component_implements? : Bool = true,
-) -> Int {
+  use_jit~ : Bool = true,
+  component_implements~ : Bool = true,
+) -> Int32 {
   run_wasi_component_command_with_evidence(
     file_path,
     args,

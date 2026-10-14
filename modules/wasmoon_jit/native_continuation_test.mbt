@@ -12,8 +12,8 @@ fn synchronous_call_for_test(
   trampoline_ptr : Int64,
   func_ptr : Int64,
   values : FixedArray[Int64],
-  values_len : Int,
-) -> Int raise @wasmoon_jit.NativeFiberError {
+  values_len : Int32,
+) -> Int32 raise @wasmoon_jit.NativeFiberError {
   context.call_trampoline(trampoline_ptr, func_ptr, values, values_len, true)
 }
 

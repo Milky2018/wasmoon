@@ -17,12 +17,12 @@ fn socket_ok(
 }
 
 ///|
-fn socket_error_code(index : Int) -> @runtime_impl.ComponentValue {
+fn socket_error_code(index : Int32) -> @runtime_impl.ComponentValue {
   Variant(1, Some(Variant(index, None)))
 }
 
 ///|
-fn socket_error_index(preview1_errno : Int) -> Int {
+fn socket_error_index(preview1_errno : Int32) -> Int32 {
   match preview1_errno {
     2 | 63 => 1
     58 => 2
@@ -50,15 +50,15 @@ fn socket_last_error() -> @runtime_impl.ComponentValue {
 }
 
 ///|
-fn socket_native_error(errno : Int) -> @runtime_impl.ComponentValue {
+fn socket_native_error(errno : Int32) -> @runtime_impl.ComponentValue {
   socket_error_code(socket_error_index(@wasi.native_errno_to_wasi(errno)))
 }
 
 ///|
 fn socket_family_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  index : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing socket address family")
   }
@@ -198,7 +198,7 @@ fn network_policy_for(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> WasiNetworkPolicy raise @runtime_impl.ComponentRuntimeError {
   let network_type = host.resolve_resource_type(
     "wasi:sockets@0.2.11/network.network",
@@ -227,7 +227,7 @@ fn tcp_socket_state(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> TcpSocketState raise @runtime_impl.ComponentRuntimeError {
   let socket_type = host.resolve_resource_type(
     "wasi:sockets@0.2.11/tcp.tcp-socket",
@@ -243,10 +243,10 @@ fn tcp_socket_state(
 fn new_tcp_socket_handle(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
-  fd : Int,
-  family : Int,
+  fd : Int32,
+  family : Int32,
   phase : TcpSocketPhase,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   let rep = host.ctx.insert_resource(
     TcpSocket({
       fd,
@@ -270,8 +270,8 @@ fn new_tcp_socket_handle(
 fn tcp_streams(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
-  fd : Int,
-) -> (Int, Int)? raise @runtime_impl.ComponentRuntimeError {
+  fd : Int32,
+) -> (Int32, Int32)? raise @runtime_impl.ComponentRuntimeError {
   match (@wasi.native_dup(fd), @wasi.native_dup(fd)) {
     (Some(input_fd), Some(output_fd)) => {
       let input_rep = host.ctx.insert_resource(
@@ -404,7 +404,7 @@ fn add_preview2_tcp_create(
 ///|
 fn socket_u64_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> Int64 raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing socket integer")
@@ -418,8 +418,8 @@ fn socket_u64_arg(
 ///|
 fn socket_u32_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  index : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing socket integer")
   }
@@ -672,8 +672,8 @@ fn add_tcp_address_methods(
 ///|
 fn socket_option_result(
   state : TcpSocketState,
-  option : Int,
-  transform : (Int) -> @runtime_impl.ComponentValue,
+  option : Int32,
+  transform : (Int32) -> @runtime_impl.ComponentValue,
 ) -> @runtime_impl.ComponentValue {
   match @wasi.native_socket_option_get(state.fd, state.family, option) {
     Some(value) => socket_ok(transform(value))
@@ -684,8 +684,8 @@ fn socket_option_result(
 ///|
 fn set_socket_option_result(
   state : TcpSocketState,
-  option : Int,
-  value : Int,
+  option : Int32,
+  value : Int32,
 ) -> @runtime_impl.ComponentValue {
   if @wasi.native_socket_option_set(state.fd, state.family, option, value) {
     socket_ok_void()
@@ -695,7 +695,7 @@ fn set_socket_option_result(
 }
 
 ///|
-fn duration_seconds(value : Int64) -> Int? {
+fn duration_seconds(value : Int64) -> Int32? {
   if value < 0L {
     None
   } else {
@@ -752,7 +752,7 @@ fn add_tcp_option_methods(
   fn add_duration_option(
     getter : String,
     setter : String,
-    option : Int,
+    option : Int32,
   ) -> Unit raise @runtime_impl.ComponentRuntimeError {
     builder.add_func(getter, preview2_func(interface, getter), (args, table) => {
       [
@@ -847,7 +847,7 @@ fn add_tcp_option_methods(
   fn add_buffer_option(
     getter : String,
     setter : String,
-    option : Int,
+    option : Int32,
   ) -> Unit raise @runtime_impl.ComponentRuntimeError {
     builder.add_func(getter, preview2_func(interface, getter), (args, table) => {
       [

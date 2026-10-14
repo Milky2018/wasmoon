@@ -102,10 +102,10 @@ fn component_native_outcome(
 
 ///|
 fn native_component_session_with_contexts(
-  opt_level : Int,
+  opt_level : Int32,
   on_execution : (NativeComponentExecutionEvent) -> Unit,
-) -> (@runtime_impl.CoreExecutionEngine, Map[Int, ComponentJITContext]) {
-  let contexts : Map[Int, ComponentJITContext] = Map([])
+) -> (@runtime_impl.CoreExecutionEngine, Map[Int32, ComponentJITContext]) {
+  let contexts : Map[Int32, ComponentJITContext] = Map([])
   let rollback_registrar : Ref[@runtime.RollbackRegistrar?] = Ref(None)
   let interpreter = @runtime_impl.interpreter_core_execution_engine()
   let target = try @wasmoon_jit.host_native_target() catch {
@@ -215,7 +215,7 @@ fn native_component_session_with_contexts(
 
 ///|
 fn native_component_session(
-  opt_level : Int,
+  opt_level : Int32,
   on_execution : (NativeComponentExecutionEvent) -> Unit,
 ) -> @runtime_impl.CoreExecutionEngine {
   let (engine, _) = native_component_session_with_contexts(
@@ -226,8 +226,8 @@ fn native_component_session(
 
 ///|
 pub fn open_native_component_session(
-  opt_level? : Int = 2,
-  on_execution? : (NativeComponentExecutionEvent) -> Unit = fn(_event) { () },
+  opt_level~ : Int32 = 2,
+  on_execution~ : (NativeComponentExecutionEvent) -> Unit = fn(_event) { () },
 ) -> @runtime_impl.CoreExecutionEngine {
   let normalized_level = if opt_level < 0 {
     0

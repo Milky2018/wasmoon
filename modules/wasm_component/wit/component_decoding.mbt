@@ -14,7 +14,7 @@
 ///|
 priv enum TypeSlot {
   Def(@component.TypeDef)
-  AliasOuter(Int, Int) // (count, idx)
+  AliasOuter(Int32, Int32) // (count, idx)
   ExportedType(String, @component.TypeBound)
 }
 
@@ -42,8 +42,8 @@ fn prim_name_of(p : @component.PrimValType) -> String {
 fn typeexpr_of_valtype(
   slots : Array[TypeSlot],
   v : @component.ValType,
-  export_name_by_idx : Map[Int, String],
-  resource_by_idx : Map[Int, String],
+  export_name_by_idx : Map[Int32, String],
+  resource_by_idx : Map[Int32, String],
 ) -> TypeExpr raise WitError {
   match v {
     Prim(p) => Id(prim_name_of(p))
@@ -73,8 +73,8 @@ fn typeexpr_of_valtype(
 fn typeexpr_of_typedef(
   slots : Array[TypeSlot],
   td : @component.TypeDef,
-  export_name_by_idx : Map[Int, String],
-  resource_by_idx : Map[Int, String],
+  export_name_by_idx : Map[Int32, String],
+  resource_by_idx : Map[Int32, String],
 ) -> TypeExpr raise WitError {
   match td {
     DefValType(p) => Id(prim_name_of(p))
@@ -240,11 +240,16 @@ fn build_componenttype_type_space(
 ///|
 fn build_instancetype_type_slots(
   decls : Array[@component.InstanceDecl],
-) -> (Array[TypeSlot], Map[String, Int], Map[Int, String], Map[Int, String]) {
+) -> (
+  Array[TypeSlot],
+  Map[String, Int32],
+  Map[Int32, String],
+  Map[Int32, String],
+) {
   let slots : Array[TypeSlot] = []
-  let exported_idx_by_name : Map[String, Int] = Map([])
-  let export_name_by_idx : Map[Int, String] = Map([])
-  let resource_by_idx : Map[Int, String] = Map([])
+  let exported_idx_by_name : Map[String, Int32] = Map([])
+  let export_name_by_idx : Map[Int32, String] = Map([])
+  let resource_by_idx : Map[Int32, String] = Map([])
   for d in decls {
     match d {
       Type(td) => slots.push(Def(td))
@@ -279,7 +284,7 @@ fn decode_interface_from_componenttype(
 ) -> (String, String?, Interface) raise WitError {
   // Find the exported instance under the full interface name.
   let mut full_name : String? = None
-  let mut inst_tyidx : Int? = None
+  let mut inst_tyidx : Int32? = None
   for d in decls {
     if d is Export(name, _attributes, InstanceType(ti)) {
       full_name = Some(name)
@@ -296,8 +301,8 @@ fn decode_interface_from_componenttype(
 
   // Build a small amount of context for resolving `(alias outer 1 <idx>)` in the
   // exported instancetype back to the imported instance's type export.
-  let alias_export_by_typeidx : Map[Int, (Int, String)] = Map([]) // typeidx -> (inst_idx, export_name)
-  let inst_sig_typeidx_by_inst : Map[Int, Int] = Map([]) // inst_idx -> instancetype typeidx (in componenttype space)
+  let alias_export_by_typeidx : Map[Int32, (Int32, String)] = Map([]) // typeidx -> (inst_idx, export_name)
+  let inst_sig_typeidx_by_inst : Map[Int32, Int32] = Map([]) // inst_idx -> instancetype typeidx (in componenttype space)
   let mut cur_typeidx = 0
   let mut cur_instidx = 0
   for d in decls {
@@ -337,16 +342,16 @@ fn decode_interface_from_componenttype(
   )
 
   // Augment resource_by_idx: treat exported types that are eq to an outer resource as resources.
-  let resource_by_idx : Map[Int, String] = Map([])
+  let resource_by_idx : Map[Int32, String] = Map([])
   for kv in resource_by_idx0.iter() {
     let (i, n) = kv
     resource_by_idx.set(i, n)
   }
   fn resolve_outer_export_typedef(
     type_space : Array[@component.TypeDef?],
-    inst_sig_typeidx_by_inst : Map[Int, Int],
-    alias_export_by_typeidx : Map[Int, (Int, String)],
-    outer_typeidx : Int,
+    inst_sig_typeidx_by_inst : Map[Int32, Int32],
+    alias_export_by_typeidx : Map[Int32, (Int32, String)],
+    outer_typeidx : Int32,
   ) -> (@component.TypeDef?, @component.TypeBound?)? raise WitError {
     match alias_export_by_typeidx.get(outer_typeidx) {
       None => None
@@ -625,7 +630,7 @@ fn decode_world_from_componenttype(
   export_short_name : String,
 ) -> (String, String?, World) raise WitError {
   let mut full_name : String? = None
-  let mut comp_tyidx : Int? = None
+  let mut comp_tyidx : Int32? = None
   for d in decls {
     if d is Export(name, _attributes, ComponentType(ti)) {
       full_name = Some(name)

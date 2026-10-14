@@ -329,7 +329,7 @@ fn Parser::parse_plain_instruction(
     "br" => Br(self.parse_label_idx())
     "br_if" => BrIf(self.parse_label_idx())
     "br_table" => {
-      let labels : Array[Int] = []
+      let labels : Array[Int32] = []
       while self.current.token != RParen && self.current.token != Eof {
         match self.current.token {
           Number(_) | Id(_) => labels.push(self.parse_label_idx())
@@ -421,7 +421,7 @@ fn Parser::parse_plain_instruction(
       // (call_indirect (param ...) (result ...) ...)
       // (call_indirect ...)  - empty type
       let mut table_idx = 0
-      let mut type_idx : Int? = None
+      let mut type_idx : Int32? = None
       let inline_params : Array[@types.ValueType] = []
       let inline_results : Array[@types.ValueType] = []
 
@@ -507,7 +507,7 @@ fn Parser::parse_plain_instruction(
     "return_call_indirect" => {
       // return_call_indirect follows the same parsing as call_indirect
       let mut table_idx = 0
-      let mut type_idx : Int? = None
+      let mut type_idx : Int32? = None
       let inline_params : Array[@types.ValueType] = []
       let inline_results : Array[@types.ValueType] = []
 
@@ -871,7 +871,7 @@ fn Parser::parse_atomic_instruction(
 }
 
 ///|
-fn atomic_subopcode(keyword : String) -> Int? {
+fn atomic_subopcode(keyword : String) -> Int32? {
   match keyword {
     "memory.atomic.notify" => Some(0)
     "memory.atomic.wait32" => Some(1)
@@ -946,7 +946,7 @@ fn atomic_subopcode(keyword : String) -> Int? {
 
 ///|
 /// Parse memory arg and return tuple (memidx, align, offset)
-fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
+fn parse_mem_arg_tuple(parser : Parser) -> (Int32, Int32, Int64) raise WatError {
   let mut memidx = 0
   let mut offset = 0L
   let mut align = 0
@@ -1015,8 +1015,8 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
 ///|
 fn parse_mem_arg(
   parser : Parser,
-  instr : (Int, Int, Int64) -> @types.Instruction,
-  default_align? : Int = 0,
+  instr : (Int32, Int32, Int64) -> @types.Instruction,
+  default_align~ : Int32 = 0,
 ) -> @types.Instruction raise WatError {
   let mut memidx = 0
   let mut offset = 0L
@@ -1072,7 +1072,7 @@ fn parse_mem_arg(
 }
 
 ///|
-fn log2(n : Int) -> Int {
+fn log2(n : Int32) -> Int32 {
   let mut v = n.reinterpret_as_uint()
   let mut r = 0
   while v > 1U {
@@ -1086,7 +1086,7 @@ fn log2(n : Int) -> Int {
 fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
   let params : Array[@types.ValueType] = []
   let results : Array[@types.ValueType] = []
-  let mut type_idx : Int? = None
+  let mut type_idx : Int32? = None
 
   // Parse optional (type $idx) and/or (param ...) (result ...)
   while self.current.token == LParen {
@@ -1159,7 +1159,7 @@ fn Parser::find_or_create_func_type(
   self : Parser,
   params : Array[@types.ValueType],
   results : Array[@types.ValueType],
-) -> Int {
+) -> Int32 {
   // Search existing types for a match
   for i, subtype in self.types {
     // Only if against function types

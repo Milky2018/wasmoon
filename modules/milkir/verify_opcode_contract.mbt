@@ -1,7 +1,7 @@
 ///|
 fn require_result_arity(
   inst : Inst,
-  expected : Int,
+  expected : Int32,
   context : String,
 ) -> Unit raise VerifyError {
   if inst.results.length() != expected {
@@ -14,7 +14,7 @@ fn require_result_arity(
 ///|
 fn require_operand_type(
   inst : Inst,
-  index : Int,
+  index : Int32,
   expected : Type,
   context : String,
 ) -> Unit raise VerifyError {
@@ -28,7 +28,7 @@ fn require_operand_type(
 ///|
 fn require_result_type(
   inst : Inst,
-  index : Int,
+  index : Int32,
   expected : Type,
   context : String,
 ) -> Unit raise VerifyError {
@@ -167,7 +167,7 @@ fn verify_bitwise_binary(inst : Inst) -> Unit raise VerifyError {
 fn verify_signature(
   inst : Inst,
   signature : Signature,
-  prefix_operands : Int,
+  prefix_operands : Int32,
   context : String,
 ) -> Unit raise VerifyError {
   require_arity(
@@ -186,8 +186,8 @@ fn verify_signature(
 
 ///|
 fn require_lane(
-  lane : Int,
-  lane_count : Int,
+  lane : Int32,
+  lane_count : Int32,
   context : String,
 ) -> Unit raise VerifyError {
   if lane < 0 || lane >= lane_count {
@@ -219,8 +219,8 @@ fn verify_v128_ternary(inst : Inst, context : String) -> Unit raise VerifyError 
 fn verify_v128_extract(
   inst : Inst,
   result_type : Type,
-  lane : Int,
-  lane_count : Int,
+  lane : Int32,
+  lane_count : Int32,
   context : String,
 ) -> Unit raise VerifyError {
   require_operand_types(inst, [V128], context)
@@ -232,8 +232,8 @@ fn verify_v128_extract(
 fn verify_v128_replace(
   inst : Inst,
   scalar_type : Type,
-  lane : Int,
-  lane_count : Int,
+  lane : Int32,
+  lane_count : Int32,
   context : String,
 ) -> Unit raise VerifyError {
   require_operand_types(inst, [V128, scalar_type], context)
@@ -244,8 +244,8 @@ fn verify_v128_replace(
 ///|
 fn verify_v128_load_lane(
   inst : Inst,
-  lane : Int,
-  lane_count : Int,
+  lane : Int32,
+  lane_count : Int32,
 ) -> Unit raise VerifyError {
   require_arity(inst.args.length(), 2, "v128 load lane")
   require_pointer_value(inst.args[0].ty, "v128 load lane")
@@ -257,8 +257,8 @@ fn verify_v128_load_lane(
 ///|
 fn verify_v128_store_lane(
   inst : Inst,
-  lane : Int,
-  lane_count : Int,
+  lane : Int32,
+  lane_count : Int32,
 ) -> Unit raise VerifyError {
   require_arity(inst.args.length(), 2, "v128 store lane")
   require_pointer_value(inst.args[0].ty, "v128 store lane")

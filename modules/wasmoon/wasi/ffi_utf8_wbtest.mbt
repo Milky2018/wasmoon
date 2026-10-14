@@ -1,5 +1,5 @@
 ///|
-fn append_u32_le(bytes : Array[Byte], value : Int) -> Unit {
+fn append_u32_le(bytes : Array[Byte], value : Int32) -> Unit {
   bytes.push((value & 0xff).to_byte())
   bytes.push(((value >> 8) & 0xff).to_byte())
   bytes.push(((value >> 16) & 0xff).to_byte())

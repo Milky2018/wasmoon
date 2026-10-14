@@ -1,7 +1,7 @@
 ///|
 /// Exception instance - represents a caught exception
 pub struct ExnInstance {
-  tag_addr : Int // Which tag was thrown
+  tag_addr : Int32 // Which tag was thrown
   values : Array[@types.Value] // Exception values
 } derive(Debug)
 
@@ -10,7 +10,7 @@ pub struct ExnInstance {
 pub(all) enum FuncOwner {
   HostFunc // Host function - never has an owner module
   Unowned // WASM function not yet assigned to a module
-  Module(Int) // WASM function owned by module at given index
+  Module(Int32) // WASM function owned by module at given index
 } derive(Debug, Eq)
 
 ///|
@@ -18,15 +18,15 @@ pub(all) enum FuncOwner {
 pub struct Store {
   nan_canonicalization : Bool
   interpreter_limits : InterpreterLimits
-  priv mut interpreter_reentry_depth : Int
+  priv mut interpreter_reentry_depth : Int32
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType] // Type of each function
-  func_type_indices : Array[Int] // Original type index for structural comparison
+  func_type_indices : Array[Int32] // Original type index for structural comparison
   tables : Array[Table]
   mems : Array[Memory]
   globals : Array[GlobalInstance]
   tags : Array[@types.FuncType] // Tag types (params only, no results)
-  tag_type_indices : Array[Int] // Original type index for each tag
+  tag_type_indices : Array[Int32] // Original type index for each tag
   tag_owners : Array[FuncOwner] // Owner module for each tag
   exns : Array[ExnInstance] // Exception instances for exnref
   heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
@@ -35,7 +35,7 @@ pub struct Store {
   // Module types for CHeap type lookups (needed to decode Int64 to Value)
   mut module_types : Array[@types.SubType]
   // Module rec groups for canonical type index computation
-  mut module_rec_groups : Array[Int]
+  mut module_rec_groups : Array[Int32]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
   wrapped_externs : Array[@types.Value]
@@ -51,16 +51,16 @@ pub struct Store {
   priv jit_table_owners : Array[@wasmoon_jit.JITTableOwner?]
   // Current WASI module's memory address (for interpreter mode WASI callbacks)
   // WASI callbacks use this to access the correct memory instead of hardcoded index 0
-  mut wasi_mem_addr : Int?
+  mut wasi_mem_addr : Int32?
   // Opaque WASI context handle (for WAST runner to store WASI context)
   // This avoids circular dependency between runtime and wasi packages
-  mut wasi_ctx_handle : Int
+  mut wasi_ctx_handle : Int32
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
   priv native_types : StoreTypeRegistry
-  priv native_exception_to_store : Map[Int64, Int]
-  priv store_exception_to_native : Map[Int, Int64]
+  priv native_exception_to_store : Map[Int64, Int32]
+  priv store_exception_to_native : Map[Int32, Int64]
   priv suspended_executions : Map[Int64, SuspendedExecutionCleanup]
   priv mut next_suspended_execution_id : Int64
   priv guest_continuations : Array[GuestContinuationBody?]
@@ -99,7 +99,11 @@ fn Store::on_instantiation_rollback(
 }
 
 ///|
-fn[T] Store::push_allocation(self : Store, values : Array[T], value : T) -> Int {
+fn[T] Store::push_allocation(
+  self : Store,
+  values : Array[T],
+  value : T,
+) -> Int32 {
   let index = values.length()
   self.on_instantiation_rollback(fn() { values.truncate(index) })
   values.push(value)
@@ -111,7 +115,7 @@ fn[T] Store::push_allocation(self : Store, values : Array[T], value : T) -> Int 
 const GC_HEAP_CAPACITY_ENV : String = "WASMOON_GC_HEAP_CAPACITY"
 
 ///|
-fn parse_decimal_int(value : String) -> Int? {
+fn parse_decimal_int(value : String) -> Int32? {
   if value.length() == 0 {
     return None
   }
@@ -127,7 +131,7 @@ fn parse_decimal_int(value : String) -> Int? {
 }
 
 ///|
-fn c_heap_initial_capacity() -> Int {
+fn c_heap_initial_capacity() -> Int32 {
   match @env.get_env_var(GC_HEAP_CAPACITY_ENV) {
     Some(raw_value) =>
       match parse_decimal_int(raw_value) {
@@ -140,8 +144,8 @@ fn c_heap_initial_capacity() -> Int {
 
 ///|
 pub fn Store::Store(
-  nan_canonicalization? : Bool = false,
-  interpreter_limits? : InterpreterLimits = InterpreterLimits::default(),
+  nan_canonicalization~ : Bool = false,
+  interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
 ) -> Store {
   {
     nan_canonicalization,
@@ -186,8 +190,8 @@ pub fn Store::Store(
 ///|
 /// Create a store with C heap enabled (for JIT mode)
 pub fn Store::with_c_heap(
-  nan_canonicalization? : Bool = false,
-  interpreter_limits? : InterpreterLimits = InterpreterLimits::default(),
+  nan_canonicalization~ : Bool = false,
+  interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
 ) -> Store {
   let initial_capacity = c_heap_initial_capacity()
   {
@@ -399,7 +403,7 @@ pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
 pub fn Store::set_module_types(
   self : Store,
   types : Array[@types.SubType],
-  rec_groups? : Array[Int] = [],
+  rec_groups~ : Array[Int32] = [],
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   let old_types = self.module_types
@@ -470,9 +474,9 @@ fn Store::alloc_func_inst(
   self : Store,
   func : FuncInst,
   func_type : @types.FuncType,
-  type_idx : Int,
+  type_idx : Int32,
   owner : FuncOwner,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   let idx = self.push_allocation(self.funcs, func)
   self.push_allocation(self.func_types, func_type) |> ignore
@@ -486,9 +490,9 @@ fn Store::alloc_func_inst(
 pub fn Store::alloc_func(
   self : Store,
   func : @types.FunctionCode,
-  func_type? : @types.FuncType = { params: [], results: [], },
-  type_idx? : Int = -1,
-) -> Int raise RuntimeError {
+  func_type~ : @types.FuncType = { params: [], results: [], },
+  type_idx~ : Int32 = -1,
+) -> Int32 raise RuntimeError {
   self.alloc_func_inst(WasmFunc(func), func_type, type_idx, Unowned)
 }
 
@@ -497,9 +501,9 @@ pub fn Store::alloc_func(
 pub fn Store::alloc_host_func(
   self : Store,
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
-  func_type? : @types.FuncType = { params: [], results: [], },
-  type_idx? : Int = -1,
-) -> Int raise RuntimeError {
+  func_type~ : @types.FuncType = { params: [], results: [], },
+  type_idx~ : Int32 = -1,
+) -> Int32 raise RuntimeError {
   // Back-compat: old-style host funcs don't take a Caller.
   let wrapped : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError = (
     _caller,
@@ -513,9 +517,9 @@ pub fn Store::alloc_host_func(
 pub fn Store::alloc_host_func_with_caller(
   self : Store,
   func : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
-  func_type? : @types.FuncType = { params: [], results: [], },
-  type_idx? : Int = -1,
-) -> Int raise RuntimeError {
+  func_type~ : @types.FuncType = { params: [], results: [], },
+  type_idx~ : Int32 = -1,
+) -> Int32 raise RuntimeError {
   self.alloc_func_inst(HostFunc(func), func_type, type_idx, HostFunc)
 }
 
@@ -524,9 +528,9 @@ pub fn Store::alloc_host_func_with_caller(
 pub fn Store::alloc_async_host_func(
   self : Store,
   func : async (Array[@types.Value]) -> Array[@types.Value] raise Error,
-  func_type? : @types.FuncType = { params: [], results: [], },
-  type_idx? : Int = -1,
-) -> Int raise RuntimeError {
+  func_type~ : @types.FuncType = { params: [], results: [], },
+  type_idx~ : Int32 = -1,
+) -> Int32 raise RuntimeError {
   let wrapped : AsyncHostFunction = async fn(_caller, args) {
     try func(args) catch {
       error => Err(error)
@@ -542,9 +546,9 @@ pub fn Store::alloc_async_host_func(
 pub fn Store::alloc_async_host_func_with_caller(
   self : Store,
   func : async (Caller, Array[@types.Value]) -> Array[@types.Value] raise Error,
-  func_type? : @types.FuncType = { params: [], results: [], },
-  type_idx? : Int = -1,
-) -> Int raise RuntimeError {
+  func_type~ : @types.FuncType = { params: [], results: [], },
+  type_idx~ : Int32 = -1,
+) -> Int32 raise RuntimeError {
   let wrapped : AsyncHostFunction = async fn(caller, args) {
     try func(caller, args) catch {
       error => Err(error)
@@ -561,8 +565,8 @@ pub fn Store::alloc_async_host_func_with_caller(
 pub fn Store::alloc_table(
   self : Store,
   table : Table,
-  use_jit? : Bool = true,
-) -> Int raise RuntimeError {
+  use_jit~ : Bool = true,
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   let owner = if use_jit {
     match
@@ -596,7 +600,7 @@ pub fn Store::alloc_table(
 }
 
 ///|
-pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int raise RuntimeError {
+pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int32 raise RuntimeError {
   self.ensure_open()
   mem.require_desc_ptr() |> ignore
   let idx = self.mems.length()
@@ -614,7 +618,7 @@ pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int raise RuntimeError {
 pub fn Store::alloc_global(
   self : Store,
   global : GlobalInstance,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   self.push_allocation(self.globals, global)
 }
@@ -624,8 +628,8 @@ pub fn Store::alloc_global(
 pub fn Store::alloc_tag(
   self : Store,
   tag_type : @types.FuncType,
-  type_idx? : Int = -1,
-) -> Int raise RuntimeError {
+  type_idx~ : Int32 = -1,
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   let idx = self.push_allocation(self.tags, tag_type)
   self.push_allocation(self.tag_type_indices, type_idx) |> ignore
@@ -636,7 +640,7 @@ pub fn Store::alloc_tag(
 ///|
 pub fn Store::get_tag_type(
   self : Store,
-  idx : Int,
+  idx : Int32,
 ) -> @types.FuncType raise RuntimeError {
   if idx < 0 || idx >= self.tags.length() {
     raise UndefinedElement
@@ -646,7 +650,7 @@ pub fn Store::get_tag_type(
 
 ///|
 /// Get the original type index for a tag
-pub fn Store::get_tag_type_idx(self : Store, tag_addr : Int) -> Int {
+pub fn Store::get_tag_type_idx(self : Store, tag_addr : Int32) -> Int32 {
   if tag_addr < 0 || tag_addr >= self.tag_type_indices.length() {
     return -1
   }
@@ -655,7 +659,7 @@ pub fn Store::get_tag_type_idx(self : Store, tag_addr : Int) -> Int {
 
 ///|
 /// Get the owner module for a tag
-pub fn Store::get_tag_owner(self : Store, tag_addr : Int) -> ModuleInstance? {
+pub fn Store::get_tag_owner(self : Store, tag_addr : Int32) -> ModuleInstance? {
   if tag_addr < 0 || tag_addr >= self.tag_owners.length() {
     return None
   }
@@ -674,9 +678,9 @@ pub fn Store::get_tag_owner(self : Store, tag_addr : Int) -> ModuleInstance? {
 /// Allocate an exception instance and return its index
 pub fn Store::alloc_exn(
   self : Store,
-  tag_addr : Int,
+  tag_addr : Int32,
   values : Array[@types.Value],
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   self.push_allocation(self.exns, { tag_addr, values, })
 }
@@ -685,7 +689,7 @@ pub fn Store::alloc_exn(
 /// Get an exception instance by index
 pub fn Store::get_exn(
   self : Store,
-  idx : Int,
+  idx : Int32,
 ) -> ExnInstance raise RuntimeError {
   if idx < 0 || idx >= self.exns.length() {
     raise UndefinedElement
@@ -697,9 +701,9 @@ pub fn Store::get_exn(
 /// Get the field type of a struct from module_types
 fn Store::get_struct_field_type(
   self : Store,
-  type_idx : Int,
-  field_idx : Int,
-  reference : Int,
+  type_idx : Int32,
+  field_idx : Int32,
+  reference : Int32,
 ) -> @types.ValueType {
   guard self.gc_type_definition(reference, type_idx) is Some(definition) else {
     return I64
@@ -722,8 +726,8 @@ fn Store::get_struct_field_type(
 /// Get the element type of an array from module_types
 fn Store::get_array_elem_type(
   self : Store,
-  type_idx : Int,
-  reference : Int,
+  type_idx : Int32,
+  reference : Int32,
 ) -> @types.ValueType {
   guard self.gc_type_definition(reference, type_idx) is Some(definition) else {
     return I64
@@ -742,10 +746,10 @@ fn Store::get_array_elem_type(
 /// Allocate a struct instance and return its reference index
 pub fn Store::alloc_struct(
   self : Store,
-  type_idx : Int,
+  type_idx : Int32,
   fields : Array[@types.Value],
   instance? : ModuleInstance,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   let reference = match self.c_heap {
     Some(heap) => {
@@ -766,10 +770,10 @@ pub fn Store::alloc_struct(
 /// Allocate an array instance and return its reference index
 pub fn Store::alloc_array(
   self : Store,
-  type_idx : Int,
+  type_idx : Int32,
   elements : Array[@types.Value],
   instance? : ModuleInstance,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   let reference = match self.c_heap {
     Some(heap) => {
@@ -790,8 +794,8 @@ pub fn Store::alloc_array(
 /// Get a struct field value
 pub fn Store::struct_get(
   self : Store,
-  struct_idx : Int,
-  field_idx : Int,
+  struct_idx : Int32,
+  field_idx : Int32,
 ) -> @types.Value raise RuntimeError {
   match self.c_heap {
     Some(heap) => {
@@ -811,8 +815,8 @@ pub fn Store::struct_get(
 /// Set a struct field value
 pub fn Store::struct_set(
   self : Store,
-  struct_idx : Int,
-  field_idx : Int,
+  struct_idx : Int32,
+  field_idx : Int32,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
@@ -827,8 +831,8 @@ pub fn Store::struct_set(
 /// Get array length
 pub fn Store::array_len(
   self : Store,
-  array_idx : Int,
-) -> Int raise RuntimeError {
+  array_idx : Int32,
+) -> Int32 raise RuntimeError {
   match self.c_heap {
     Some(heap) => heap.array_len(array_idx)
     None => self.heap.array_len(array_idx)
@@ -839,8 +843,8 @@ pub fn Store::array_len(
 /// Get an array element value
 pub fn Store::array_get(
   self : Store,
-  array_idx : Int,
-  elem_idx : Int,
+  array_idx : Int32,
+  elem_idx : Int32,
 ) -> @types.Value raise RuntimeError {
   match self.c_heap {
     Some(heap) => {
@@ -861,8 +865,8 @@ pub fn Store::array_get(
 /// Set an array element value
 pub fn Store::array_set(
   self : Store,
-  array_idx : Int,
-  elem_idx : Int,
+  array_idx : Int32,
+  elem_idx : Int32,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
@@ -883,10 +887,10 @@ pub fn Store::array_set(
 /// Fill array elements with a value
 pub fn Store::array_fill(
   self : Store,
-  array_idx : Int,
-  offset : Int,
+  array_idx : Int32,
+  offset : Int32,
   value : @types.Value,
-  count : Int,
+  count : Int32,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   match self.c_heap {
@@ -906,11 +910,11 @@ pub fn Store::array_fill(
 /// Copy elements between arrays
 pub fn Store::array_copy(
   self : Store,
-  dst_idx : Int,
-  dst_offset : Int,
-  src_idx : Int,
-  src_offset : Int,
-  count : Int,
+  dst_idx : Int32,
+  dst_offset : Int32,
+  src_idx : Int32,
+  src_offset : Int32,
+  count : Int32,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   match self.c_heap {
@@ -929,8 +933,8 @@ pub fn Store::array_copy(
 /// Get the type index of a GC object
 pub fn Store::get_gc_type_idx(
   self : Store,
-  idx : Int,
-) -> Int raise RuntimeError {
+  idx : Int32,
+) -> Int32 raise RuntimeError {
   match self.c_heap {
     Some(heap) => heap.get_type_idx(idx)
     None => self.heap.get_type_idx(idx)
@@ -939,7 +943,7 @@ pub fn Store::get_gc_type_idx(
 
 ///|
 /// Check if a GC object reference is valid
-pub fn Store::is_gc_valid(self : Store, idx : Int) -> Bool {
+pub fn Store::is_gc_valid(self : Store, idx : Int32) -> Bool {
   match self.c_heap {
     Some(heap) => heap.is_valid(idx)
     None => self.heap.is_valid(idx)
@@ -949,7 +953,7 @@ pub fn Store::is_gc_valid(self : Store, idx : Int) -> Bool {
 ///|
 pub fn Store::get_func_inst(
   self : Store,
-  idx : Int,
+  idx : Int32,
 ) -> FuncInst raise RuntimeError {
   if idx < 0 || idx >= self.funcs.length() {
     raise UndefinedElement
@@ -961,7 +965,7 @@ pub fn Store::get_func_inst(
 /// Get function instance by store address (returns None if out of range).
 ///
 /// This is useful for embedding/JIT callbacks that must not raise.
-pub fn Store::get_func_inst_opt(self : Store, idx : Int) -> FuncInst? {
+pub fn Store::get_func_inst_opt(self : Store, idx : Int32) -> FuncInst? {
   if idx < 0 || idx >= self.funcs.length() {
     None
   } else {
@@ -973,7 +977,7 @@ pub fn Store::get_func_inst_opt(self : Store, idx : Int) -> FuncInst? {
 /// Get function type by store address
 pub fn Store::get_func_type(
   self : Store,
-  idx : Int,
+  idx : Int32,
 ) -> @types.FuncType raise RuntimeError {
   if idx < 0 || idx >= self.func_types.length() {
     raise UndefinedElement
@@ -985,7 +989,7 @@ pub fn Store::get_func_type(
 /// Get function type by store address (returns None if out of range).
 ///
 /// This is useful for embedding/JIT callbacks that must not raise.
-pub fn Store::get_func_type_opt(self : Store, idx : Int) -> @types.FuncType? {
+pub fn Store::get_func_type_opt(self : Store, idx : Int32) -> @types.FuncType? {
   if idx < 0 || idx >= self.func_types.length() {
     None
   } else {
@@ -995,7 +999,7 @@ pub fn Store::get_func_type_opt(self : Store, idx : Int) -> @types.FuncType? {
 
 ///|
 /// Get function type index by store address (for structural comparison)
-pub fn Store::get_func_type_idx(self : Store, idx : Int) -> Int {
+pub fn Store::get_func_type_idx(self : Store, idx : Int32) -> Int32 {
   if idx < 0 || idx >= self.func_type_indices.length() {
     -1
   } else {
@@ -1007,7 +1011,10 @@ pub fn Store::get_func_type_idx(self : Store, idx : Int) -> Int {
 /// Get canonical type index for a function by store address
 /// Returns the canonical type index from the function's owning module
 /// Returns -1 if the function or owner is not found
-pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int {
+pub fn Store::get_func_canonical_type_idx(
+  self : Store,
+  func_addr : Int32,
+) -> Int32 {
   if func_addr < 0 || func_addr >= self.func_owners.length() {
     return -1
   }
@@ -1042,7 +1049,7 @@ pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int 
 /// Get function code for a store address that is known to refer to a Wasm function.
 pub fn Store::get_func(
   self : Store,
-  idx : Int,
+  idx : Int32,
 ) -> @types.FunctionCode raise RuntimeError {
   match self.get_func_inst(idx) {
     WasmFunc(code) => code
@@ -1051,7 +1058,7 @@ pub fn Store::get_func(
 }
 
 ///|
-pub fn Store::get_table(self : Store, idx : Int) -> Table raise RuntimeError {
+pub fn Store::get_table(self : Store, idx : Int32) -> Table raise RuntimeError {
   if idx < 0 || idx >= self.tables.length() {
     raise UndefinedElement
   }
@@ -1060,7 +1067,10 @@ pub fn Store::get_table(self : Store, idx : Int) -> Table raise RuntimeError {
 
 ///|
 /// Get the JIT table corresponding to a runtime table (if exists)
-pub fn Store::get_jit_table(self : Store, idx : Int) -> @wasmoon_jit.JITTable? {
+pub fn Store::get_jit_table(
+  self : Store,
+  idx : Int32,
+) -> @wasmoon_jit.JITTable? {
   if idx < 0 || idx >= self.jit_tables.length() {
     return None
   }
@@ -1068,7 +1078,7 @@ pub fn Store::get_jit_table(self : Store, idx : Int) -> @wasmoon_jit.JITTable? {
 }
 
 ///|
-pub fn Store::get_mem(self : Store, idx : Int) -> Memory raise RuntimeError {
+pub fn Store::get_mem(self : Store, idx : Int32) -> Memory raise RuntimeError {
   if idx < 0 || idx >= self.mems.length() {
     raise UndefinedElement
   }
@@ -1078,7 +1088,7 @@ pub fn Store::get_mem(self : Store, idx : Int) -> Memory raise RuntimeError {
 ///|
 /// Get memory by index (returns None if not found)
 /// This is useful for WASI functions that need memory access
-pub fn Store::get_memory(self : Store, idx : Int) -> Memory {
+pub fn Store::get_memory(self : Store, idx : Int32) -> Memory {
   if idx < 0 || idx >= self.mems.length() {
     // Return a dummy empty memory if not found
     Memory(0, None)
@@ -1102,7 +1112,7 @@ pub fn Store::get_wasi_memory(self : Store) -> Memory {
 /// Should be called after instantiating a module that uses WASI
 pub fn Store::set_wasi_mem_addr(
   self : Store,
-  addr : Int,
+  addr : Int32,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   let old_addr = self.wasi_mem_addr
@@ -1112,7 +1122,7 @@ pub fn Store::set_wasi_mem_addr(
 
 ///|
 /// Get the WASI context handle (for WAST runner to retrieve WASI context)
-pub fn Store::get_wasi_ctx_handle(self : Store) -> Int {
+pub fn Store::get_wasi_ctx_handle(self : Store) -> Int32 {
   self.wasi_ctx_handle
 }
 
@@ -1120,7 +1130,7 @@ pub fn Store::get_wasi_ctx_handle(self : Store) -> Int {
 /// Set the WASI context handle (for WAST runner to store WASI context)
 pub fn Store::set_wasi_ctx_handle(
   self : Store,
-  handle : Int,
+  handle : Int32,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
   self.wasi_ctx_handle = handle
@@ -1129,7 +1139,7 @@ pub fn Store::set_wasi_ctx_handle(
 ///|
 pub fn Store::get_global(
   self : Store,
-  idx : Int,
+  idx : Int32,
 ) -> GlobalInstance raise RuntimeError {
   if idx < 0 || idx >= self.globals.length() {
     raise UndefinedElement
@@ -1144,11 +1154,11 @@ pub fn Store::get_global(
 pub fn Store::register_instance(
   self : Store,
   instance : ModuleInstance,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   let instance_idx = self.instances.length()
-  let owned_funcs : Array[Int] = []
-  let owned_tags : Array[Int] = []
+  let owned_funcs : Array[Int32] = []
+  let owned_tags : Array[Int32] = []
   instance.store_idx = instance_idx
   self.instances.push(instance)
   // Set ownership only for unowned WASM functions
@@ -1189,7 +1199,10 @@ pub fn Store::register_instance(
 
 ///|
 /// Get the owning module instance for a function address
-pub fn Store::get_func_owner(self : Store, func_addr : Int) -> ModuleInstance? {
+pub fn Store::get_func_owner(
+  self : Store,
+  func_addr : Int32,
+) -> ModuleInstance? {
   if func_addr < 0 || func_addr >= self.func_owners.length() {
     return None
   }
@@ -1207,7 +1220,7 @@ pub fn Store::get_func_owner(self : Store, func_addr : Int) -> ModuleInstance? {
 ///|
 /// Get the owning module instance index for a function address
 /// Returns -1 if no owner (host function or unowned)
-pub fn Store::get_func_owner_idx(self : Store, func_addr : Int) -> Int {
+pub fn Store::get_func_owner_idx(self : Store, func_addr : Int32) -> Int32 {
   if func_addr < 0 || func_addr >= self.func_owners.length() {
     return -1
   }
@@ -1310,8 +1323,8 @@ pub fn Store::collect_roots(
 /// Returns the number of objects collected on either heap representation.
 pub fn Store::collect_garbage(
   self : Store,
-  additional_roots? : Array[@types.Value] = [],
-) -> Int {
+  additional_roots~ : Array[@types.Value] = [],
+) -> Int32 {
   let roots = self.collect_roots(additional_roots)
   match self.c_heap {
     Some(heap) => heap.collect(roots)
@@ -1322,7 +1335,7 @@ pub fn Store::collect_garbage(
 ///|
 /// Check if GC should be triggered based on heap usage
 /// Returns true if heap usage exceeds the threshold (default 75%)
-pub fn Store::should_collect(self : Store, threshold? : Double = 0.75) -> Bool {
+pub fn Store::should_collect(self : Store, threshold~ : Double = 0.75) -> Bool {
   match self.c_heap {
     Some(heap) => heap.should_collect(threshold~)
     None => false
@@ -1334,9 +1347,9 @@ pub fn Store::should_collect(self : Store, threshold? : Double = 0.75) -> Bool {
 /// Returns the number of objects collected, or 0 if GC was not triggered
 pub fn Store::maybe_collect(
   self : Store,
-  additional_roots? : Array[@types.Value] = [],
-  threshold? : Double = 0.75,
-) -> Int {
+  additional_roots~ : Array[@types.Value] = [],
+  threshold~ : Double = 0.75,
+) -> Int32 {
   if self.should_collect(threshold~) {
     self.collect_garbage(additional_roots~)
   } else {
@@ -1348,7 +1361,7 @@ pub fn Store::maybe_collect(
 /// Get GC statistics for the C heap
 /// Returns (size, capacity, object_count, total_allocations, total_collections)
 /// or (0, 0, 0, 0, 0) if no C heap is enabled
-pub fn Store::get_gc_stats(self : Store) -> (Int64, Int64, Int, Int, Int) {
+pub fn Store::get_gc_stats(self : Store) -> (Int64, Int64, Int32, Int32, Int32) {
   match self.c_heap {
     Some(heap) =>
       (
@@ -1368,7 +1381,7 @@ pub fn Store::get_gc_stats(self : Store) -> (Int64, Int64, Int, Int, Int) {
 pub fn Store::alloc_shared_mem(
   self : Store,
   memory : Memory,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.ensure_open()
   let owned = memory.share()
   errdefer owned.close()

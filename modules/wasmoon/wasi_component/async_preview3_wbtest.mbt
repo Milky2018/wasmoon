@@ -70,7 +70,7 @@ test "Preview 3 repeated cancellation leaves no host operations" {
 }
 
 ///|
-fn test_descriptor_is_open(fd : Int) -> Bool {
+fn test_descriptor_is_open(fd : Int32) -> Bool {
   match @wasi.native_dup(fd) {
     Some(duplicate) => {
       @wasi.native_close(duplicate) |> ignore
