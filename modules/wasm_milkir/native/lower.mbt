@@ -1133,7 +1133,21 @@ fn lower_spill_locals(
     }
   }
   let values = context.operands()
-  let buffer = emit_runtime_word_buffer(context, values, types)
+  // Preserve restoration words separately from the precise GC root words.
+  // Scalar spill values can have exactly the same bits as a reference.
+  let words = values.copy()
+  let word_types = types.copy()
+  for index, ty in types {
+    words.push(
+      if ty == GcRef64 {
+        values[index]
+      } else {
+        context.emit(I64Const(0UL), [], [I64])[0]
+      },
+    )
+    word_types.push(if ty == GcRef64 { GcRef64 } else { I64 })
+  }
+  let buffer = emit_runtime_word_buffer(context, words, word_types)
   let operands = context.environment()
   operands.push(buffer)
   operands.push(i32_immediate(context, values.length()))

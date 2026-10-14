@@ -11,56 +11,100 @@ pub fn Store::decode_native_exception(
   if self.native_exception_to_store.get(reference) is Some(index) {
     return ExnRef(index)
   }
-  guard self.native_execution.exceptions().snapshot(reference)
-    is Some((tag, words)) else {
-    raise UndefinedElement
-  }
-  let signature = self.get_tag_type(tag)
-  let values : Array[@types.Value] = []
-  let mut slot = 0
-  for ty in signature.params {
-    let width = if ty == V128 { 2 } else { 1 }
-    if slot + width > words.length() {
+  let pending = [reference]
+  let created : Array[(Int64, Int32)] = []
+  errdefer (for (reference, index) in created {
+    self.native_exception_to_store.remove(reference)
+    self.store_exception_to_native.remove(index)
+    self.exns.remove(index)
+  })
+  while !pending.is_empty() {
+    let reference = pending.pop().unwrap()
+    guard self.native_execution.exceptions().snapshot(reference)
+      is Some((tag, words)) else {
+      raise UndefinedElement
+    }
+    let index = match self.native_exception_to_store.get(reference) {
+      Some(index) => index
+      None => {
+        let index = self.alloc_exn(tag, [])
+        self.native_exception_to_store.set(reference, index)
+        self.store_exception_to_native.set(index, reference)
+        created.push((reference, index))
+        index
+      }
+    }
+    let signature = self.get_tag_type(tag)
+    let values : Array[@types.Value] = []
+    let mut slot = 0
+    for ty in signature.params {
+      let width = if ty == V128 { 2 } else { 1 }
+      if slot + width > words.length() {
+        raise TypeMismatch
+      }
+      let raw = words[slot]
+      let value : @types.Value = match ty {
+        ExnRef | NullExnRef =>
+          if raw == 0L {
+            Null
+          } else {
+            let child = match self.native_exception_to_store.get(raw) {
+              Some(index) => index
+              None => {
+                guard self.native_execution.exceptions().snapshot(raw)
+                  is Some((tag, _)) else {
+                  raise UndefinedElement
+                }
+                let index = self.alloc_exn(tag, [])
+                self.native_exception_to_store.set(raw, index)
+                self.store_exception_to_native.set(index, raw)
+                created.push((raw, index))
+                pending.push(raw)
+                index
+              }
+            }
+            ExnRef(child)
+          }
+        FuncRef
+        | RefFunc
+        | RefFuncTyped(_)
+        | RefNullFuncTyped(_)
+        | NullFuncRef =>
+          if raw == 0L {
+            Null
+          } else {
+            guard self.lookup_jit_funcref_store_addr(
+                @wasmoon_jit.untag_funcref_ptr(raw),
+              )
+              is Some(address) else {
+              raise UndefinedElement
+            }
+            FuncRef(address)
+          }
+        ExternRef | RefExtern | NullExternRef =>
+          if raw == 0L {
+            Null
+          } else if @wasmoon_jit.decode_externref(raw) is Some(index) {
+            ExternRef(index)
+          } else {
+            self.wrap_as_extern(self.decode_exception_gc_word(raw))
+          }
+        AnyRef | RefAny | NullRef | RefEq | RefNullEq =>
+          self.decode_exception_gc_word(raw)
+        V128 => V128(@types.int64_pair_to_v128_le(raw, words[slot + 1]))
+        _ => @wasmoon_jit.i64_to_value(raw, ty)
+      }
+      values.push(value)
+      slot = slot + width
+    }
+    if slot != words.length() {
       raise TypeMismatch
     }
-    let raw = words[slot]
-    let value : @types.Value = match ty {
-      ExnRef | NullExnRef => self.decode_native_exception(raw)
-      FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-        if raw == 0L {
-          Null
-        } else {
-          guard self.lookup_jit_funcref_store_addr(
-              @wasmoon_jit.untag_funcref_ptr(raw),
-            )
-            is Some(address) else {
-            raise UndefinedElement
-          }
-          FuncRef(address)
-        }
-      ExternRef | RefExtern | NullExternRef =>
-        if raw == 0L {
-          Null
-        } else if @wasmoon_jit.decode_externref(raw) is Some(index) {
-          ExternRef(index)
-        } else {
-          self.wrap_as_extern(self.decode_exception_gc_word(raw))
-        }
-      AnyRef | RefAny | NullRef | RefEq | RefNullEq =>
-        self.decode_exception_gc_word(raw)
-      V128 => V128(@types.int64_pair_to_v128_le(raw, words[slot + 1]))
-      _ => @wasmoon_jit.i64_to_value(raw, ty)
+    for value in values {
+      self.get_exn(index).values.push(value)
     }
-    values.push(value)
-    slot = slot + width
   }
-  if slot != words.length() {
-    raise TypeMismatch
-  }
-  let index = self.alloc_exn(tag, values)
-  self.native_exception_to_store.set(reference, index)
-  self.store_exception_to_native.set(index, reference)
-  ExnRef(index)
+  ExnRef(self.native_exception_to_store.get(reference).unwrap())
 }
 
 ///|
@@ -87,6 +131,40 @@ pub fn Store::encode_native_exception(
   if self.store_exception_to_native.get(index) is Some(reference) {
     return reference
   }
+  let pending = [(index, false)]
+  let visiting : Map[Int32, Bool] = Map([])
+  while pending.pop() is Some((current, ready)) {
+    if self.store_exception_to_native.contains(current) {
+      continue
+    }
+    let exception = self.get_exn(current)
+    if ready {
+      self.encode_exception_snapshot(current) |> ignore
+      visiting.remove(current)
+    } else {
+      // Wasm snapshots are immutable and acyclic. Reject a forged host cycle
+      // rather than recursing indefinitely or publishing an incomplete token.
+      if visiting.contains(current) {
+        raise TypeMismatch
+      }
+      visiting.set(current, true)
+      pending.push((current, true))
+      for value in exception.values {
+        if value is ExnRef(child) &&
+          !self.store_exception_to_native.contains(child) {
+          pending.push((child, false))
+        }
+      }
+    }
+  }
+  self.store_exception_to_native.get(index).unwrap()
+}
+
+///|
+fn Store::encode_exception_snapshot(
+  self : Store,
+  index : Int32,
+) -> Int64 raise RuntimeError {
   let exception = self.get_exn(index)
   if !self.native_execution
     .exceptions()
@@ -99,7 +177,8 @@ pub fn Store::encode_native_exception(
   let words : Array[Int64] = []
   for value in exception.values {
     match value {
-      ExnRef(index) => words.push(self.encode_native_exception(index))
+      ExnRef(index) =>
+        words.push(self.store_exception_to_native.get(index).unwrap())
       FuncRef(address) => {
         guard self.lookup_jit_funcref_ptr(address) is Some(pointer) else {
           raise UndefinedElement
@@ -135,23 +214,36 @@ pub fn Store::encode_native_exception(
 ///|
 /// CHeap's low-level Value codec carries native exception indices; Store APIs
 /// always expose interpreter indices and translate at this boundary.
-fn Store::encode_heap_exception(
+fn Store::encode_heap_value(
   self : Store,
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
   match value {
     ExnRef(index) => ExnRef((self.encode_native_exception(index) >> 1).to_int())
+    ExternRef(index) if index < 0 => self.unwrap_extern(value)
     _ => value
   }
 }
 
 ///|
-fn Store::decode_heap_exception(
+fn Store::decode_heap_value(
   self : Store,
+  ty : @types.ValueType,
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
-  match value {
-    ExnRef(index) => self.decode_native_exception((index.to_int64() << 1) | 1L)
+  let value = match value {
+    ExnRef(index) =>
+      self.decode_native_exception(@wasmoon_jit.encode_exception_ref(index))
+    StructRef(index) =>
+      match self.c_heap {
+        Some(heap) if heap.is_array(index) => ArrayRef(index)
+        _ => value
+      }
+    _ => value
+  }
+  match (ty, value) {
+    (ExternRef | RefExtern | NullExternRef, StructRef(_) | ArrayRef(_) | I31(_)) =>
+      self.wrap_as_extern(value)
     _ => value
   }
 }

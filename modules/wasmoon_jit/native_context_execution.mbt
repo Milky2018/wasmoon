@@ -288,3 +288,13 @@ pub fn NativeJITContext::call_trampoline(
     )
   }
 }
+
+///|
+/// Share instance-local dropped bits with the interpreter and Store GC.
+pub fn NativeJITContext::bind_segment_drop_flags(
+  self : NativeJITContext,
+  data : FixedArray[Bool],
+  elements : FixedArray[Bool],
+) -> Unit {
+  self.handle.bind_segment_drop_flags(data, elements)
+}

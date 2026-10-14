@@ -11,6 +11,8 @@
 typedef struct {
     uint8_t **data_segments;
     int64_t **elem_segments;
+    uint8_t *data_dropped;
+    uint8_t *elem_dropped;
 } jit_segments_state_t;
 
 // Native control-flow state belongs to one invocation, not one instance.

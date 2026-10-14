@@ -399,6 +399,7 @@ WASMOON_NORETURN void exception_delegate_impl(jit_context_t *ctx, int32_t depth)
 int32_t exception_get_tag_impl(jit_context_t *ctx);
 int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
 int32_t exception_get_value_count_impl(jit_context_t *ctx);
+int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_state_t *state, int64_t *roots);
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count);
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);
 
@@ -458,6 +459,7 @@ void exception_arena_release(struct native_exception_arena *arena);
 void *native_fiber_alloc_c(int64_t (*entry)(void *), void *closure, int64_t stack_size);
 int native_fiber_continue_c(void *fiber, int64_t value);
 void native_fiber_destroy_c(void *fiber);
+void *native_fiber_gc_roots_c(void *fiber);
 int64_t native_fiber_result_c(void *fiber);
 int64_t native_fiber_event_c(void *fiber);
 struct native_continuation_arena *continuation_arena_new(void);

@@ -1467,3 +1467,13 @@ pub fn JITModule::prepare_continuations(
     }
   }
 }
+
+///|
+pub fn JITModule::bind_segment_drop_flags(
+  self : JITModule,
+  data : FixedArray[Bool],
+  elements : FixedArray[Bool],
+) -> Unit {
+  guard self.context is Some(ctx) else { return }
+  ctx.ctx.bind_segment_drop_flags(data, elements)
+}

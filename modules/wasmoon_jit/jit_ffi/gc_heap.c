@@ -28,7 +28,7 @@ static int gc_verify_env_cached = -1;
 // Keep these in sync with types/types.mbt.
 #define GC_EXTERNREF_TAG 0x4000000000000000LL
 #define GC_FUNCREF_TAG   0x2000000000000000LL
-#define GC_REF_TAGS_MASK (GC_EXTERNREF_TAG | GC_FUNCREF_TAG)
+#define GC_REF_TAGS_MASK (GC_EXTERNREF_TAG | GC_FUNCREF_TAG | GC_EXCEPTION_REF_TAG)
 
 static int gc_is_truthy_env(const char* value) {
     if (!value) {
@@ -112,6 +112,7 @@ typedef struct GcParkedRoots {
     struct GcParkedRoots* next;
     int64_t* roots;
     int32_t root_count;
+    int64_t owner_reference;
 } GcParkedRoots;
 
 static int gc_barrier_assert_enabled(void) {
@@ -227,6 +228,7 @@ static void finalize_gc_heap(void *object) {
     GcHeap *heap = object;
     // Each live registration owns a reference, so none can outlive the heap.
     if (heap->parked_jit_roots_head) abort();
+    if (heap->root_visitor_data) moonbit_decref(heap->root_visitor_data);
     free(heap->free_list);
     free(heap->runtime_types);
     free(heap->object_table);
@@ -323,6 +325,141 @@ void gc_heap_unregister_parked_roots(void* opaque_registration) {
     free(registration->roots);
     free(registration);
     moonbit_decref(heap);
+}
+
+GcHeap *gc_heap_registration_heap(void *registration) {
+    return registration ? ((GcParkedRoots *)registration)->heap : NULL;
+}
+
+int32_t gc_heap_bind_exception_roots(void *opaque, struct native_exception_arena *arena, int64_t reference) {
+    GcParkedRoots *registration = opaque;
+    if (!registration || (registration->heap->exception_arena &&
+        registration->heap->exception_arena != arena)) return 0;
+    registration->owner_reference = reference;
+    registration->heap->exception_arena = arena;
+    return 1;
+}
+
+int32_t gc_heap_bind_continuation_roots(void *opaque, struct native_continuation_arena *arena, int64_t reference) {
+    GcParkedRoots *registration = opaque;
+    if (!registration || (registration->heap->continuation_arena &&
+        registration->heap->continuation_arena != arena)) return 0;
+    registration->owner_reference = reference;
+    registration->heap->continuation_arena = arena;
+    return 1;
+}
+
+int32_t gc_heap_registered_root_count(void *opaque) {
+    return opaque ? ((GcParkedRoots *)opaque)->root_count : 0;
+}
+
+void gc_heap_copy_registered_roots(void *opaque, int64_t *roots) {
+    GcParkedRoots *registration = opaque;
+    if (registration && registration->root_count)
+        memcpy(roots, registration->roots, (size_t)registration->root_count * sizeof(int64_t));
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_gc_heap_clear_root_visitor(GcHeap *heap) {
+    void *old = heap->root_visitor_data;
+    heap->root_visitor = NULL;
+    heap->root_visitor_data = NULL;
+    if (old) moonbit_decref(old);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_gc_heap_bind_root_visitor(GcHeap *heap,
+    GcRootVisitor trampoline, void *visitor) {
+    moonbit_incref(visitor);
+    wasmoon_gc_heap_clear_root_visitor(heap);
+    heap->root_visitor = trampoline;
+    heap->root_visitor_data = visitor;
+}
+
+static int gc_heap_abort_roots(GcHeap *heap) {
+    for (int32_t i = 0; i < heap->object_count; ++i) {
+        GcHeader *header = get_object_header(heap, i + 1);
+        if (header) header->flags &= ~GC_FLAG_MARKED;
+    }
+    exception_arena_reset_marks(heap->exception_arena);
+    continuation_arena_reset_marks(heap->continuation_arena);
+    if (heap->root_visitor) {
+        moonbit_incref(heap->root_visitor_data);
+        int64_t *result = heap->root_visitor(heap->root_visitor_data, 2, moonbit_make_int64_array(0, 0));
+        moonbit_decref(result);
+    }
+    return 0;
+}
+
+static int gc_heap_prepare_roots(GcHeap *heap, const int64_t *roots, int32_t count) {
+    if (!heap->root_visitor) {
+        gc_heap_mark_roots(heap, roots, count);
+        for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next) {
+            gc_heap_mark_roots(heap, entry->roots, entry->root_count);
+        }
+        return 1;
+    }
+    int64_t size = count > 0 ? count : 0;
+    for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next)
+        if (!entry->owner_reference) size += entry->root_count;
+    for (int32_t i = 0; i < heap->object_count; ++i) {
+        GcHeader *header = get_object_header(heap, i + 1);
+        if (header && (header->flags & GC_FLAG_MARKED)) ++size;
+    }
+    size += exception_arena_marked_count(heap->exception_arena);
+    size += continuation_arena_marked_count(heap->continuation_arena);
+    if (size > INT32_MAX) return gc_heap_abort_roots(heap);
+    int64_t *input = moonbit_make_int64_array((int32_t)size, 0);
+    int32_t at = 0;
+    if (count > 0 && roots) {
+        memcpy(input, roots, (size_t)count * sizeof(int64_t));
+        at += count;
+    }
+    for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next) {
+        if (!entry->owner_reference) {
+            memcpy(input + at, entry->roots, (size_t)entry->root_count * sizeof(int64_t));
+            at += entry->root_count;
+        }
+    }
+    for (int32_t i = 0; i < heap->object_count; ++i) {
+        GcHeader *header = get_object_header(heap, i + 1);
+        if (header && (header->flags & GC_FLAG_MARKED)) input[at++] = (int64_t)(i + 1) << 1;
+    }
+    exception_arena_copy_marked(heap->exception_arena, input + at);
+    at += exception_arena_marked_count(heap->exception_arena);
+    continuation_arena_copy_marked(heap->continuation_arena, input + at);
+    moonbit_incref(heap->root_visitor_data);
+    // The MoonBit trampoline consumes both closure and input, and transfers its result.
+    int64_t *expanded = heap->root_visitor(heap->root_visitor_data, 0, input);
+    int32_t expanded_count = Moonbit_array_length(expanded);
+    int ok = !(expanded_count == 1 && expanded[0] == -2);
+    if (ok) gc_heap_mark_roots(heap, expanded, expanded_count);
+    moonbit_decref(expanded);
+    return ok ? 1 : gc_heap_abort_roots(heap);
+}
+
+static void gc_heap_finish_roots(GcHeap *heap) {
+    if (heap->root_visitor) {
+        exception_arena_sweep(heap->exception_arena, heap);
+        continuation_arena_sweep(heap->continuation_arena);
+        moonbit_incref(heap->root_visitor_data);
+        int64_t *result = heap->root_visitor(heap->root_visitor_data, 1,
+            moonbit_make_int64_array(0, 0));
+        moonbit_decref(result);
+    } else {
+        exception_arena_reset_marks(heap->exception_arena);
+        continuation_arena_reset_marks(heap->continuation_arena);
+    }
+}
+
+MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_heap_reference_candidates(GcHeap *heap, int32_t reference) {
+    GcHeader *header = get_object_header(heap, reference);
+    if (!header) return moonbit_make_int64_array(0, 0);
+    uint8_t *data = (uint8_t *)header + GC_HEADER_SIZE;
+    int32_t count = header->kind == GC_KIND_ARRAY
+        ? *(int32_t *)data : (int32_t)header->reserved;
+    GcSlot *slots = (GcSlot *)(data + (header->kind == GC_KIND_ARRAY ? GC_ARRAY_DATA_OFFSET : 0));
+    int64_t *result = moonbit_make_int64_array(count, 0);
+    for (int32_t i = 0; i < count; ++i) result[i] = slots[i].lo;
+    return result;
 }
 
 // ============ Struct Operations ============
@@ -764,6 +901,9 @@ void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
     }
 
     header->flags |= GC_FLAG_MARKED;
+    // A Store visitor expands typed edges in MoonBit. Explicit native stack
+    // marking records only seeds until the complete root graph is supplied.
+    if (heap->root_visitor) return;
 
     // Recursively mark referenced objects
     uint8_t* data = ((uint8_t*)header) + GC_HEADER_SIZE;
@@ -808,6 +948,14 @@ void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
 
     for (int32_t i = 0; i < num_roots; i++) {
         int64_t value = roots[i];
+        if (value < 0 && (value & 1)) {
+            continuation_arena_mark(heap->continuation_arena, value);
+            continue;
+        }
+        if (value > 0 && (value & GC_EXCEPTION_REF_TAG)) {
+            exception_arena_mark(heap->exception_arena, value);
+            continue;
+        }
         int32_t ref_gc_ref = 0;
         if (gc_try_decode_heap_ref_candidate(heap, value, &ref_gc_ref)) {
             gc_heap_mark(heap, ref_gc_ref);
@@ -885,14 +1033,10 @@ int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
         return 0;
     }
 
+    // The visitor can retire its embedding owner during a callback.
+    moonbit_incref(heap);
     // Mark phase
-    gc_heap_mark_roots(heap, roots, num_roots);
-    GcParkedRoots* parked =
-        (GcParkedRoots*)heap->parked_jit_roots_head;
-    while (parked) {
-        gc_heap_mark_roots(heap, parked->roots, parked->root_count);
-        parked = parked->next;
-    }
+    if (!gc_heap_prepare_roots(heap, roots, num_roots)) { moonbit_decref(heap); return -1; }
 
     // Sweep phase
     int32_t collected = gc_heap_sweep(heap);
@@ -900,8 +1044,10 @@ int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
     // Compact phase - move surviving objects to eliminate fragmentation
     gc_heap_compact(heap);
 
+    gc_heap_finish_roots(heap);
     heap->total_collections++;
     gc_heap_maybe_verify(heap, "collect");
+    moonbit_decref(heap);
     return collected;
 }
 
@@ -1088,12 +1234,7 @@ int32_t gc_heap_rollback_allocations(
         return 0;
     }
 
-    gc_heap_mark_roots(heap, roots, num_roots);
-    GcParkedRoots* parked = (GcParkedRoots*)heap->parked_jit_roots_head;
-    while (parked) {
-        gc_heap_mark_roots(heap, parked->roots, parked->root_count);
-        parked = parked->next;
-    }
+    if (!gc_heap_prepare_roots(heap, roots, num_roots)) return 0;
 
     for (int32_t i = 0; i < heap->object_count; i++) {
         int32_t offset = heap->object_table[i];
@@ -1119,6 +1260,7 @@ int32_t gc_heap_rollback_allocations(
     } else {
         gc_heap_compact(heap);
     }
+    gc_heap_finish_roots(heap);
     gc_heap_maybe_verify(heap, "rollback_allocations");
     return 1;
 }

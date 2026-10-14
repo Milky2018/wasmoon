@@ -977,8 +977,8 @@ fn build_partial_instance_for_trapped_module(
     mod_.types,
     type_rec_groups=mod_.type_rec_groups,
   )
-  let dropped_elems = Array::make(mod_.elems.length(), false)
-  let dropped_datas = Array::make(mod_.datas.length(), false)
+  let dropped_elems = FixedArray::make(mod_.elems.length(), false)
+  let dropped_datas = FixedArray::make(mod_.datas.length(), false)
 
   Some({
     types: mod_.types,

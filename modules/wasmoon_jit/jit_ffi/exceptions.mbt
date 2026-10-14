@@ -12,6 +12,20 @@ pub extern "c" fn NativeExceptionArena::clear(
 ) -> Unit = "wasmoon_exception_arena_clear"
 
 ///|
+/// Store-managed arenas reclaim snapshots through the heap's root visitor.
+#borrow(self)
+pub extern "c" fn NativeExceptionArena::enable_reclamation(
+  self : NativeExceptionArena,
+) -> Unit = "wasmoon_exception_arena_enable_reclamation"
+
+///|
+#borrow(self)
+pub extern "c" fn NativeExceptionArena::release_snapshot(
+  self : NativeExceptionArena,
+  reference : Int64,
+) -> Unit = "wasmoon_exception_arena_release_snapshot"
+
+///|
 #borrow(self, values, heap)
 extern "c" fn NativeExceptionArena::insert_raw(
   self : NativeExceptionArena,

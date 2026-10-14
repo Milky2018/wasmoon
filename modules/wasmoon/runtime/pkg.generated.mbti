@@ -222,6 +222,7 @@ pub struct GcRootLease {
   // private fields
 }
 pub fn GcRootLease::release(Self) -> Unit
+pub fn GcRootLease::snapshot(Self) -> Array[@types.Value]
 
 pub struct GcStats {
   total_slots : Int
@@ -242,10 +243,14 @@ pub fn GlobalInstance::native_binding(Self) -> NativeGlobalBinding?
 pub fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
 pub fn GlobalInstance::to_repr(Self) -> @debug.Repr
 
-pub(all) struct GuestContinuationBody {
+pub struct GuestContinuationBody {
   run : (GuestContinuationInput) -> Array[@types.Value] raise
   cancel : () -> Unit
+  // private fields
 }
+pub fn GuestContinuationBody::gc_root_leases(Self) -> Array[GcRootLease]
+pub fn GuestContinuationBody::gc_roots(Self) -> Array[@types.Value]
+pub fn GuestContinuationBody::new((GuestContinuationInput) -> Array[@types.Value] raise, () -> Unit, roots? : Array[@types.Value], leases? : Array[GcRootLease]) -> Self
 pub fn GuestContinuationBody::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for GuestContinuationBody
 
@@ -451,10 +456,11 @@ pub(all) struct ModuleInstance {
   elem_values : Array[Array[@types.Value]]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
-  dropped_elems : Array[Bool]
-  dropped_datas : Array[Bool]
+  dropped_elems : FixedArray[Bool]
+  dropped_datas : FixedArray[Bool]
 } derive(@debug.Debug)
 pub fn ModuleInstance::ModuleInstance() -> Self
+pub fn ModuleInstance::drop_element(Self, Int) -> Unit
 pub fn ModuleInstance::output(Self, &Logger) -> Unit
 pub fn ModuleInstance::to_repr(Self) -> @debug.Repr
 pub fn ModuleInstance::to_string(Self) -> String
@@ -558,12 +564,12 @@ pub struct Store {
   tags : Array[@types.FuncType]
   tag_type_indices : Array[Int]
   tag_owners : Array[FuncOwner]
-  exns : Array[ExnInstance]
+  mut exns : Map[Int, ExnInstance]
   heap : MarkSweepHeap
   mut c_heap : @wasmoon_jit.CHeap?
   mut module_types : Array[@types.SubType]
   mut module_rec_groups : Array[Int]
-  wrapped_externs : Array[@types.Value]
+  mut wrapped_externs : Map[Int, @types.Value]
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
   jit_tables : Array[@wasmoon_jit.JITTable?]
@@ -591,6 +597,7 @@ pub fn Store::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise Runtim
 pub fn Store::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::array_len(Self, Int) -> Int raise RuntimeError
 pub fn Store::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::begin_gc_tracing(Self) -> Unit
 pub fn Store::bind_native_callable_view(Self, (Array[Int], Array[(Int64, Int)]) -> Unit) -> Unit
 pub fn Store::close(Self) -> Unit
 pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int
@@ -598,6 +605,7 @@ pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
 pub fn Store::decode_native_exception(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Store::enable_c_heap(Self) -> Unit raise RuntimeError
 pub fn Store::encode_native_exception(Self, Int) -> Int64 raise RuntimeError
+pub fn Store::end_gc_tracing(Self) -> Unit
 pub fn Store::enter_interpreter_boundary(Self) -> Unit raise RuntimeError
 pub fn Store::gc_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
 pub fn Store::get_c_heap_ptr(Self) -> @jit_ffi.GCHeapHandle

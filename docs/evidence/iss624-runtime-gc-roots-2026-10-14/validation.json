@@ -1,0 +1,172 @@
+{
+  "base_revision": "02d5d093c8c779f62409497c10c0a56e9e72678e",
+  "branch": "milky/reclaim-runtime-gc-roots",
+  "source_dirty": true,
+  "source_sha256_manifest": {
+    "modules/wasm_milkir/native/lower.mbt": "ba1a2ee81d2ed14dab5153df9cf4324a96704edc2c124f2a2b07aae09b85d54b",
+    "modules/wasmoon/cmd/wasmoon/commands/run.mbt": "7d977dd0022e5eee92fe4166cbb9d6573ab1f07eb30b315dd07d42dc080a71c5",
+    "modules/wasmoon/executor/guest_continuation.mbt": "b3c1774c8d13f23895e60405ccaa47f6f7481b3305532b621fbed1118eafe7bc",
+    "modules/wasmoon/executor/instantiate.mbt": "36e9fd857e7af0f9c313272244a1937fd63cfd2b07a085a2be05745b7d791bc7",
+    "modules/wasmoon/executor/instr_memory.mbt": "c2a3d809d86055c61a863da72834d231a156881c56d84b291c27acf4ac44fe35",
+    "modules/wasmoon/jit/jit_runtime.mbt": "e367e34fd991caf2228e8df6dcc676d97fc722b814865801028cbd320e9196c4",
+    "modules/wasmoon/jit/pkg.generated.mbti": "4a25e8815372c50a4f86e23ea762a9f55269e45bd226f23477b0fb5b60165274",
+    "modules/wasmoon/runtime/gc_tracing.mbt": "ebd582ae7db0fff407222ef789b1b08f09c62c6d4f68454906f024ca6fe0a961",
+    "modules/wasmoon/runtime/guest_continuation.mbt": "6534a60ba90918d301de3faecc9b0e2a22e91c2a1ff3851bc496e1c4079839ed",
+    "modules/wasmoon/runtime/guest_continuation_test.mbt": "3483d66ec6ab5c7cfa1e9062e39f26843253eb33eb194edecd8e01de9407d877",
+    "modules/wasmoon/runtime/heap.mbt": "1101cef794a97e28aa1973190528279661adf40a6f15e2c3194b1279876a8256",
+    "modules/wasmoon/runtime/instance.mbt": "98d2ff8b816138219d3be50e3f6a174b26123a22d9d81e01e98f886c2a98883c",
+    "modules/wasmoon/runtime/native_exception.mbt": "47f41409b833baa7429accbd218798d8d16d9bfe14a90e63783b480a8cc11e25",
+    "modules/wasmoon/runtime/pkg.generated.mbti": "1c898492425c1374e96db000a80fde15763bd43b4ea66a71ddf35ff7da35c23c",
+    "modules/wasmoon/runtime/store.mbt": "748e9f723074d31e05ec7b348cc4f43dc7d2ac1b8d4d30a9dd32614ed58966cb",
+    "modules/wasmoon/runtime/type_registry.mbt": "6e44e3026947a7754cd8dea94883e2471d5a6cec906a2e3ccc9c27ec6c980969",
+    "modules/wasmoon/sanitizer_testsuite/moon.pkg": "f885af35b163847958e6ebaa17db77c749f8160e3795be781162ebb73c8ad79d",
+    "modules/wasmoon/sanitizer_testsuite/native_gc_roots_test.mbt": "acbaa97da75556d5ae6b0385e1b4b88b566cd5bcda868812c0314775c1ed3699",
+    "modules/wasmoon/sanitizer_testsuite/runtime_gc_roots_test.mbt": "7c5fb9b6bb98c7b5adc741bfb39c87ab5eb838ddff6a13ebca54ce6507cc94f6",
+    "modules/wasmoon/testsuite/exception_reference_test.mbt": "9045053ee0605c9622cbd652d72f9538d206d203392c93a97dc9cc8aa659823f",
+    "modules/wasmoon/wast/jit/call.mbt": "6f66ff06b4efb782983c2089dd31cda05474c480dac4dc46613d8955721f7955",
+    "modules/wasmoon/wast/jit/support.mbt": "0a78994e4f574fb822663c265858afe7cd102f46195e526ba41f6070f08b7bee",
+    "modules/wasmoon/wast/runner.mbt": "8a54a0570762a8ba7d1e90d3595ac0e67264a4b1f99b82bfda4c888ee9e9bca7",
+    "modules/wasmoon_jit/c_heap.mbt": "22b9574c310a6314642d880ec23a227a64e2e4d1b6da9992985034bbda420a1c",
+    "modules/wasmoon_jit/gc_helpers.mbt": "6c58e2687649d3ca928a626206a3efd9493377a0119c0a774e8ba9370c38ad27",
+    "modules/wasmoon_jit/gc_wbtest.mbt": "1a7d0a2d0f2a33e08cf8cc2afbcc042bfdba1e6902a01871ecf26dd0f9e6c0a1",
+    "modules/wasmoon_jit/jit_ffi/continuations.mbt": "b2fefccd4ec11f39332af8664e6a4fd33ab16185daec80870974bb098a858d48",
+    "modules/wasmoon_jit/jit_ffi/exception.c": "04d219e284841aeec51949c49e6b587952ae9b0aac6975ab3666ecc1e263d1e3",
+    "modules/wasmoon_jit/jit_ffi/exceptions.mbt": "35c7e11befd89ade2ae410c056ccee045c1358eef8f9f1f09b7ff14079fc87d8",
+    "modules/wasmoon_jit/jit_ffi/fiber.c": "71cf98278999cb626858c8411138c8f94a52bebb6a687a0876e94102ea333502",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.c": "d8e3d486b92a4b18daa53ec5b834da72585d2868465b77feeb507539e3c92c6b",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.h": "20e43471bb12846a560896df9e694810ceea5b880ef071227e73145e67fefa6f",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.mbt": "b3df66f34008e7f0149ed0b861eb8c950785b3ead01b36407033a5597fd1e35e",
+    "modules/wasmoon_jit/jit_ffi/guest_continuation.c": "19d3f8fd96e9eadd62bab8fe6c6d5bfaa2a042ff20e1ebab5047ae8d8914d326",
+    "modules/wasmoon_jit/jit_ffi/jit_context.c": "c3a746ac9b6ca2cb08e40fb82ca5f6457525b70878388a7eb39f91291e1eff29",
+    "modules/wasmoon_jit/jit_ffi/jit_context.h": "edce34afc2fa88327c48960111e41c01c74a2689b0ca366b128ac443afe63231",
+    "modules/wasmoon_jit/jit_ffi/jit_internal.h": "8c22aa9bb5c369fe602ea58715db8ecbab34a52dcf10447b4ef49cf27ad01dc8",
+    "modules/wasmoon_jit/jit_ffi/pkg.generated.mbti": "1fcc870014b52a55fe0937953f616b66fbff0eb3cad4bca4f1abd07bc6467781",
+    "modules/wasmoon_jit/jit_ffi/segment_ops.c": "68ecc497a9697b8326ec8236fb7831a2b1d7bb839d473fff5993caaf579e4cbf",
+    "modules/wasmoon_jit/jit_ffi/segments.mbt": "d1a8620b981108028886a3b3e91b58e21708981031bdf40e9cc563e1472ca84f",
+    "modules/wasmoon_jit/jit_ffi/trap.c": "5b91c7ad5f0be9b31d51934f2973866d037b3d08f14f8d0f304e259d1a685961",
+    "modules/wasmoon_jit/native_context_execution.mbt": "648c18a81823659b049d0191c3de6cc058096fb75bb78f1350a660a4889d8b13",
+    "modules/wasmoon_jit/pkg.generated.mbti": "1b4cb471a987295d0e622cba1590096b9bb509508ec966fe950e3ed984d9e31e",
+    "modules/wasmoon_jit/ref_encoding.mbt": "e8010b7e73536348f7b8b9a9a727b44dbbbf26a6f6458e1cf83988d2626eb800",
+    "tools/sanitizer/moon.pkg": "3097481fa2ec61ae80f2d983c01c456708698a68487db25ed682d1d82369d033"
+  },
+  "source_manifest_sha256": "89953975e2c97c633998549bc95c0caf9b7050b383d550c60a296838d4a41d7a",
+  "platform": "macOS ARM64",
+  "toolchain": "MoonBit stable 0.1.20261012 (748b63c)",
+  "gates": [
+    {
+      "command": "moon info",
+      "result": "passed"
+    },
+    {
+      "command": "moon fmt",
+      "result": "passed"
+    },
+    {
+      "command": "moon check --target native --warn-list +73 --deny-warn",
+      "result": "passed",
+      "moon_warnings": 0
+    },
+    {
+      "command": "moon test --target native",
+      "result": "passed",
+      "passed": 2638,
+      "failed": 0
+    },
+    {
+      "command": "python3 scripts/audit_module_boundaries.py",
+      "result": "passed"
+    },
+    {
+      "command": "python3 scripts/run_sanitizers.py",
+      "result": "passed",
+      "passed": 98,
+      "failed": 0,
+      "allocator": "system",
+      "instrumentation": [
+        "address",
+        "undefined"
+      ],
+      "binary_sha256": "86a9a9ff980e42be17ff8551ecf4c4c791135b8581e26367504841f302f2d722",
+      "positive_controls": {
+        "fixture": "detected",
+        "native_stub": "detected"
+      },
+      "event_loop": "passed",
+      "exclusions": [
+        "MoonBit runtime objects",
+        "JIT machine code"
+      ],
+      "linux_lsan": "not_run"
+    },
+    {
+      "command": "./install.sh",
+      "result": "passed"
+    },
+    {
+      "command": "python3 scripts/run_all_wast.py --rec --dump-failures",
+      "result": "passed",
+      "interpreter": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0
+      },
+      "jit": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0
+      }
+    },
+    {
+      "command": "WASMOON_GC_HEAP_CAPACITY=65536 python3 scripts/run_all_wast.py --dir spec/gc --rec --dump-failures",
+      "result": "passed",
+      "interpreter": {
+        "files": 17,
+        "passed": 633,
+        "failed": 0
+      },
+      "jit": {
+        "files": 17,
+        "passed": 633,
+        "failed": 0
+      }
+    },
+    {
+      "command": "python3 scripts/run_component_wast.py --suite stable-0.2 --dump-failures",
+      "result": "passed",
+      "files": 23,
+      "passed": 845,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "python3 scripts/run_component_wast.py --suite async-0.3 --dump-failures",
+      "result": "passed",
+      "files": 24,
+      "passed": 153,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "python3 scripts/run_component_wast.py --suite async-0.3 --no-jit --dump-failures",
+      "result": "passed",
+      "files": 24,
+      "passed": 153,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "original_probe": {
+    "source_sha256": "92b4ee2f049173c40a8a90ec80d2bf608359584075728018ee7e4f8e31071f2b",
+    "stdout": "validation_accepted=true\nwrapped=1000\nroots=0\ncollected=1000\nlive_after_gc=0\n"
+  },
+  "cli_sha256": {
+    "wasmoon": "729c9c9c130d877972b9d0c51c6a0558cff1dc500ee623fe7e774c2127395550",
+    "wasmoon-tools": "08fb31a7e7b2569505e30fb271349275a7b8fb9cb1c6018f88cb4b45c446011d"
+  },
+  "ci": "not_run_for_this_branch",
+  "pending": [
+    "Linux leak sanitizer acceptance",
+    "Windows Clang and MSVC acceptance",
+    "exact-head cross-platform CI"
+  ]
+}

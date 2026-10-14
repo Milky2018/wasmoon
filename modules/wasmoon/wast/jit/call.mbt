@@ -106,6 +106,7 @@ fn prepare_jit_core_environment(
         error => raise GcSetupFailed(error.to_string())
       }
       context.jit_module.set_gc_heap(heap.get_ptr())
+      store.begin_gc_tracing()
       true
     }
     None => false
@@ -118,6 +119,7 @@ fn finish_jit_core_environment(
   store : @runtime.Store,
   gc_active : Bool,
 ) -> Unit raise JITCoreCallError {
+  defer (if gc_active { store.end_gc_tracing() })
   if gc_active {
     context.jit_module.teardown_gc()
   }

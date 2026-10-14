@@ -22,7 +22,7 @@ extern "c" fn c_jit_gc_pop_root_scope_managed(context : JITContext) -> Unit = "w
 test "gc: collect root args from reference-typed heap values" {
   inspect(value_type_may_hold_gc_ref(RefStruct(0)), content="true")
   inspect(value_type_may_hold_gc_ref(I64), content="false")
-  inspect(value_type_may_hold_gc_ref(ExternRef), content="false")
+  inspect(value_type_may_hold_gc_ref(ExternRef), content="true")
   debug_inspect(
     collect_gc_root_args([2L, 3L, 4L, 6L], [
       RefStruct(0),

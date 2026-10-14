@@ -24,16 +24,21 @@ fn guest_outcome_values(
 fn guest_resumption_body(
   continuation : ExecutionContinuation,
 ) -> @runtime.GuestContinuationBody {
-  {
-    run: fn(input) raise {
+  let leases = match continuation.captured {
+    Some(captured) => [captured.root_lease]
+    None => []
+  }
+  @runtime.GuestContinuationBody::new(
+    fn(input) raise {
       guard continuation.captured is Some(captured) else {
         raise @runtime.ContinuationAlreadyConsumed
       }
       captured.context.guest_input = Some(input)
       guest_outcome_values(continuation.continue_unchecked())
     },
-    cancel: fn() { continuation.cancel() },
-  }
+    fn() { continuation.cancel() },
+    leases~,
+  )
 }
 
 ///|
@@ -169,8 +174,8 @@ fn ExecContext::exec_guest_continuation(
       let cooperative = self.cooperative
       let function = store.get_func_inst(address)
       let arity = store.func_types[address].results.length()
-      let body : @runtime.GuestContinuationBody = {
-        run: fn(input) raise {
+      let body = @runtime.GuestContinuationBody::new(
+        fn(input) raise {
           let args = match input {
             Values(values) => values
             Exception(tag, values) => raise ThrowException(tag, values)
@@ -200,8 +205,8 @@ fn ExecContext::exec_guest_continuation(
           }
           guest_outcome_values(outcome)
         },
-        cancel: fn() { () },
-      }
+        fn() { () },
+      )
       self.stack.push(ContRef(store.put_guest_continuation(body)))
     }
     ContBind(before, after) => {
@@ -209,10 +214,12 @@ fn ExecContext::exec_guest_continuation(
       let count = self.guest_function_type(before).params.length() -
         self.guest_function_type(after).params.length()
       let bound = self.stack.pop_n(count)
-      let roots = self.store.pin_gc_roots(bound)
-      let rebound : @runtime.GuestContinuationBody = {
-        run: fn(input) raise {
-          defer roots.release()
+      let roots = body.gc_roots()
+      for value in bound {
+        roots.push(value)
+      }
+      let rebound = @runtime.GuestContinuationBody::new(
+        fn(input) raise {
           let input = match input {
             Values(values) => {
               let all = bound.copy()
@@ -225,11 +232,10 @@ fn ExecContext::exec_guest_continuation(
           }
           (body.run)(input)
         },
-        cancel: fn() {
-          roots.release()
-          (body.cancel)()
-        },
-      }
+        fn() { (body.cancel)() },
+        roots~,
+        leases=body.gc_root_leases(),
+      )
       self.stack.push(ContRef(self.store.put_guest_continuation(rebound)))
     }
     Suspend(index) => {

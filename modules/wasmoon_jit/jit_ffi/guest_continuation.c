@@ -1,8 +1,8 @@
 #include "jit_internal.h"
 
 // Typed continuations run only compiled guest code and C frames on fibers.
-// Handles are one-shot generations; the arena owns stacks until completion or
-// Store retirement, independently of the dynamic resumer.
+// Handles are one-shot generations. Reachable handles own paused stacks;
+// active resumers own stacks through their cancellation scopes.
 #define CONT_EVENT 6001
 #define CONT_CONSUMED WASMOON_TRAP_CONTINUATION_CONSUMED
 #define CONT_UNHANDLED WASMOON_TRAP_UNHANDLED_SUSPENSION
@@ -28,6 +28,7 @@ typedef struct {
 
 struct native_continuation_body {
     native_continuation_body_t *next;
+    struct native_continuation_arena *arena;
     jit_context_t *context;
     native_continuation_type_t *type;
     void *fiber;
@@ -44,15 +45,21 @@ struct native_continuation_body {
     int64_t *roots;
     continuation_effect_t effect;
     int started;
+    int marked;
+    int resource_references;
 };
+
+typedef struct { int64_t reference; native_continuation_body_t *body; } native_continuation_handle_t;
 
 typedef struct native_continuation_arena {
     size_t references;
     size_t count;
     size_t capacity;
-    native_continuation_body_t **handles;
+    int64_t next_reference;
+    native_continuation_handle_t *handles;
     native_continuation_body_t *bodies;
     int sealed;
+    GcHeap *heap; // Borrowed while bodies own root registrations
 } native_continuation_arena_t;
 
 static _Thread_local native_continuation_body_t *current_guest;
@@ -78,6 +85,17 @@ struct native_continuation_arena *continuation_arena_new(void) {
 static void release_body(native_continuation_body_t *body) {
     if (body->fiber) native_fiber_destroy_c(body->fiber);
     body->fiber = NULL;
+    GcHeap *heap = gc_heap_registration_heap(body->root_registration);
+    if (!heap) heap = gc_heap_registration_heap(body->input_root_registration);
+    if (heap && body->arena) {
+        int other_roots = 0;
+        for (native_continuation_body_t *other = body->arena->bodies; other; other = other->next) {
+            if (other != body && (gc_heap_registration_heap(other->root_registration) == heap ||
+                gc_heap_registration_heap(other->input_root_registration) == heap)) { other_roots = 1; break; }
+        }
+        // Detach the borrowed arena before dropping its final heap owner.
+        if (!other_roots) { heap->continuation_arena = NULL; body->arena->heap = NULL; }
+    }
     gc_heap_unregister_parked_roots(body->root_registration);
     body->root_registration = NULL;
     body->roots = NULL;
@@ -90,10 +108,17 @@ static void release_body(native_continuation_body_t *body) {
     body->input_roots = NULL;
 }
 
-static void release_owned_body(void *body) { release_body(body); }
+static void release_owned_body(void *opaque) {
+    native_continuation_body_t *body = opaque;
+    release_body(body);
+    --body->resource_references;
+}
 
 static void clear_continuations(native_continuation_arena_t *arena) {
     if (!arena) return;
+    if (arena->heap && arena->heap->continuation_arena == arena)
+        arena->heap->continuation_arena = NULL;
+    arena->heap = NULL;
     // Cancellation scopes may reference other bodies in the same arena.
     // Release all resources before freeing any identity record.
     for (native_continuation_body_t *body = arena->bodies; body; body = body->next)
@@ -127,6 +152,113 @@ void continuation_types_free(jit_context_t *ctx) {
     ctx_runtime(ctx)->continuation_types = NULL;
 }
 
+static native_continuation_body_t *find_continuation(native_continuation_arena_t *arena, int64_t reference) {
+    if (!arena || reference >= 0 || !(reference & 1)) return NULL;
+    size_t low = 0, high = arena->count;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2;
+        if (arena->handles[middle].reference > reference) low = middle + 1;
+        else high = middle;
+    }
+    return low < arena->count && arena->handles[low].reference == reference ? arena->handles[low].body : NULL;
+}
+
+static void bind_body_roots(native_continuation_arena_t *arena, native_continuation_body_t *body, int64_t reference) {
+    void *registrations[] = { body->root_registration, body->input_root_registration,
+        native_fiber_gc_roots_c(body->fiber) };
+    for (size_t i = 0; i < sizeof(registrations) / sizeof(registrations[0]); ++i) {
+        if (registrations[i]) {
+            if (!gc_heap_bind_continuation_roots(registrations[i], arena,
+                    gc_heap_registration_heap(registrations[i])->root_visitor ? reference : 0))
+                continuation_trap(8);
+            arena->heap = gc_heap_registration_heap(registrations[i]);
+        }
+    }
+}
+
+void continuation_arena_mark(native_continuation_arena_t *arena, int64_t reference) {
+    native_continuation_body_t *body = find_continuation(arena, reference);
+    if (body) body->marked = 1;
+}
+
+int32_t continuation_arena_marked_count(native_continuation_arena_t *arena) {
+    int32_t count = 0;
+    if (arena) for (size_t i = 0; i < arena->count; ++i)
+        if (arena->handles[i].body && arena->handles[i].body->marked) ++count;
+    return count;
+}
+
+void continuation_arena_copy_marked(native_continuation_arena_t *arena, int64_t *roots) {
+    if (arena) for (size_t i = 0; i < arena->count; ++i)
+        if (arena->handles[i].body && arena->handles[i].body->marked) *roots++ = arena->handles[i].reference;
+}
+
+void continuation_arena_reset_marks(native_continuation_arena_t *arena) {
+    if (arena) for (size_t i = 0; i < arena->count; ++i)
+        if (arena->handles[i].body) arena->handles[i].body->marked = 0;
+}
+
+static void reclaim_retired_continuations(native_continuation_arena_t *arena) {
+    if (!arena) return;
+    size_t retained = 0;
+    for (size_t i = 0; i < arena->count; ++i) {
+        if (arena->handles[i].body) arena->handles[retained++] = arena->handles[i];
+    }
+    arena->count = retained;
+    if (!retained) { free(arena->handles); arena->handles = NULL; arena->capacity = 0; }
+    native_continuation_body_t **link = &arena->bodies;
+    int has_roots = 0;
+    while (*link) {
+        native_continuation_body_t *body = *link;
+        if (!body->values && !body->fiber && !body->resource_references) {
+            *link = body->next;
+            free(body);
+        } else {
+            has_roots |= body->root_registration != NULL || body->input_root_registration != NULL;
+            link = &body->next;
+        }
+    }
+    if (!has_roots && arena->heap) { arena->heap->continuation_arena = NULL; arena->heap = NULL; }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_continuation_arena_reclaim_retired(void *owner) {
+    reclaim_retired_continuations(*(native_continuation_arena_t **)owner);
+}
+
+void continuation_arena_sweep(native_continuation_arena_t *arena) {
+    if (!arena || !arena->heap || !arena->heap->root_visitor) return;
+    size_t retained = 0;
+    for (size_t i = 0; i < arena->count; ++i) {
+        native_continuation_handle_t handle = arena->handles[i];
+        native_continuation_body_t *body = handle.body;
+        if (!body) continue;
+        if (body->marked) { body->marked = 0; arena->handles[retained++] = handle; }
+        else release_body(body);
+    }
+    arena->count = retained;
+    if (!retained) { free(arena->handles); arena->handles = NULL; arena->capacity = 0; }
+
+}
+
+MOONBIT_FFI_EXPORT int64_t *wasmoon_continuation_arena_gc_roots(void *owner, int64_t reference) {
+    native_continuation_arena_t *arena = *(native_continuation_arena_t **)owner;
+    native_continuation_body_t *body = find_continuation(arena, reference);
+    if (!body) return moonbit_make_int64_array(0, 0);
+    void *registrations[] = { body->root_registration, body->input_root_registration,
+        native_fiber_gc_roots_c(body->fiber) };
+    int32_t count = body->input_exception ? 1 : 0;
+    for (size_t i = 0; i < sizeof(registrations) / sizeof(registrations[0]); ++i)
+        count += gc_heap_registered_root_count(registrations[i]);
+    int64_t *roots = moonbit_make_int64_array(count, 0);
+    int32_t at = 0;
+    if (body->input_exception) roots[at++] = body->input_exception;
+    for (size_t i = 0; i < sizeof(registrations) / sizeof(registrations[0]); ++i) {
+        gc_heap_copy_registered_roots(registrations[i], roots + at);
+        at += gc_heap_registered_root_count(registrations[i]);
+    }
+    return roots;
+}
+
 static int64_t publish_continuation(native_continuation_arena_t *arena,
     native_continuation_body_t *body) {
     if (!arena || arena->sealed) continuation_trap(8);
@@ -138,21 +270,24 @@ static int64_t publish_continuation(native_continuation_arena_t *arena,
         arena->handles = handles;
         arena->capacity = capacity;
     }
-    arena->handles[arena->count] = body;
-    // Native generations occupy the negative half of the opaque reference
-    // namespace; interpreter handles cannot accidentally select a native body.
-    return -1 - ((int64_t)arena->count++ << 1);
+    if (arena->next_reference == INT32_MAX) continuation_trap(9);
+    // References decrease monotonically, independently of the compact live table.
+    int64_t reference = -1 - (arena->next_reference++ << 1);
+    arena->handles[arena->count++] = (native_continuation_handle_t){ reference, body };
+    bind_body_roots(arena, body, reference);
+    return reference;
 }
 
 static native_continuation_body_t *take_continuation(jit_context_t *ctx, int64_t reference) {
     native_continuation_arena_t *arena = ctx_runtime(ctx)->continuation_arena;
     if (!reference) continuation_trap(14);
     if (!arena || reference > 0 || !(reference & 1)) continuation_trap(CONT_CONSUMED);
-    uint64_t index = (uint64_t)(-(reference + 1)) >> 1;
-    if (index >= arena->count) continuation_trap(CONT_CONSUMED);
-    native_continuation_body_t *body = arena->handles[index];
+    native_continuation_body_t *body = find_continuation(arena, reference);
     if (!body) continuation_trap(CONT_CONSUMED);
-    arena->handles[index] = NULL;
+    for (size_t i = 0; i < arena->count; ++i) {
+        if (arena->handles[i].reference == reference) { arena->handles[i].body = NULL; break; }
+    }
+    bind_body_roots(arena, body, 0);
     return body;
 }
 
@@ -186,18 +321,19 @@ static int64_t WASMOON_GUEST_ABI continuation_new(jit_context_t *ctx, int32_t in
     if (!type || !ctx_runtime(ctx)->continuation_arena || ctx_runtime(ctx)->continuation_arena->sealed) continuation_trap(8);
     native_continuation_body_t *body = calloc(1, sizeof(*body));
     if (!body) continuation_trap(9);
+    body->arena = ctx_runtime(ctx)->continuation_arena;
     body->context = ctx;
     body->type = type;
     body->function = function & ~(INT64_C(1) << 61);
     int slots = type->params + type->results;
     body->values = calloc(slots ? slots : 1, sizeof(int64_t));
     if (!body->values) { free(body); continuation_trap(9); }
-    if (type->params && ctx_gc_heap(ctx)) {
-        if (!gc_heap_register_parked_roots(ctx_gc_heap(ctx), type->params,
+    if (ctx_gc_heap(ctx)) {
+        if (!gc_heap_register_parked_roots(ctx_gc_heap(ctx), type->params ? type->params : 1,
                 &body->root_registration, &body->roots)) {
             free(body->values); free(body); continuation_trap(9);
         }
-        memset(body->roots, 0, (size_t)type->params * sizeof(int64_t));
+        memset(body->roots, 0, (size_t)(type->params ? type->params : 1) * sizeof(int64_t));
     }
     body->next = ctx_runtime(ctx)->continuation_arena->bodies;
     ctx_runtime(ctx)->continuation_arena->bodies = body;
@@ -306,6 +442,7 @@ static int32_t WASMOON_GUEST_ABI continuation_resume(jit_context_t *ctx, int64_t
         exception_throw_ref_impl(ctx, exception);
     }
     void *ownership = native_fiber_own_resource(body, release_owned_body);
+    if (ownership) ++body->resource_references;
     prepare_resume(body, values, exception ? 0 : count, exception);
     int64_t resume_value = 0;
     for (;;) {
@@ -319,6 +456,7 @@ static int32_t WASMOON_GUEST_ABI continuation_resume(jit_context_t *ctx, int64_t
             int64_t thrown = body->thrown_exception;
             if (!code && body->type->results)
                 memcpy(outputs, body->values + body->type->params, (size_t)body->type->results * sizeof(int64_t));
+            if (ownership) --body->resource_references;
             native_fiber_disown_resource(ownership);
             release_body(body);
             if (code == 12 && thrown) exception_throw_ref_impl(ctx, thrown);
@@ -344,6 +482,7 @@ static int32_t WASMOON_GUEST_ABI continuation_resume(jit_context_t *ctx, int64_t
                 int64_t *region = outputs + handlers[matched * 3 + 2];
                 if (effect.count) memcpy(region, effect.values, (size_t)effect.count * sizeof(int64_t));
                 region[effect.count] = saved;
+                if (ownership) --body->resource_references;
                 native_fiber_disown_resource(ownership);
                 return matched;
             }
@@ -351,7 +490,9 @@ static int32_t WASMOON_GUEST_ABI continuation_resume(jit_context_t *ctx, int64_t
             if (!input) continuation_trap(9);
             if (effect.count) memcpy(input, effect.values, (size_t)effect.count * sizeof(int64_t));
             input[effect.count] = saved;
+            if (ownership) --body->resource_references;
             body = effect.target;
+            if (ownership) ++body->resource_references;
             native_fiber_replace_resource(ownership, body);
             prepare_resume(body, input, effect.count + 1, 0);
             free(input);
