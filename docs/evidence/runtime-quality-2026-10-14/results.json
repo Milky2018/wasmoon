@@ -1,0 +1,54 @@
+{
+  "revision": "25381fc764c47e805f318012c272fdd51f62c57f",
+  "engine": "interpreter",
+  "results": [
+    {
+      "case": "wrapped",
+      "command": [
+        "<diagnostic-binary>"
+      ],
+      "returncode": 0,
+      "stdout": "validation_accepted=true\nwrapped=1000\nroots=1000\ncollected=0\nlive_after_gc=1000\n",
+      "stderr": ""
+    },
+    {
+      "case": "plain",
+      "command": [
+        "<diagnostic-binary>",
+        "plain"
+      ],
+      "returncode": 0,
+      "stdout": "validation_accepted=true\nwrapped=0\nroots=0\ncollected=1000\nlive_after_gc=0\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid",
+      "command": [
+        "<diagnostic-binary>",
+        "invalid"
+      ],
+      "returncode": -6,
+      "stdout": "validation_rejected=InvalidTypeIndex(99)\nvalidated module has no function type at index 99\n",
+      "stderr": "PanicError\n    at @moonbitlang/core/abort.abort[@Milky2018/wasm_core/types.FuncType] (<moon-home>/lib/core/abort/abort.mbt:50)\n    at @Milky2018/wasm_core/types.Module::validated_func_type_at (<workspace>/modules/wasm_core/types/types.mbt:1443)\n    at @Milky2018/wasmoon/executor.instantiate_module (<workspace>/modules/wasmoon/executor/instantiate.mbt:53)\n    at @Milky2018/wasmoon/executor.instantiate_module_with_init (<workspace>/modules/wasmoon/executor/instantiate.mbt:558)\n    at moonbit_main (<probe>/main.mbt:17)\n    at main (<probe>/main.mbt:2)\n"
+    },
+    {
+      "case": "memory-limit",
+      "command": [
+        "<diagnostic-binary>",
+        "memory-limit"
+      ],
+      "returncode": -6,
+      "stdout": "validation_accepted=true\n",
+      "stderr": "PanicError\n    at @Milky2018/wasmoon/executor.instantiate_module (<workspace>/modules/wasmoon/executor/instantiate.mbt:61)\n    at @Milky2018/wasmoon/executor.instantiate_module_with_init (<workspace>/modules/wasmoon/executor/instantiate.mbt:558)\n    at moonbit_main (<probe>/main.mbt:17)\n    at main (<probe>/main.mbt:2)\n"
+    }
+  ],
+  "platform": "macOS ARM64",
+  "moon_version": "0.1.20261012 (748b63c 2026-10-12)",
+  "probe_sha256": "92b4ee2f049173c40a8a90ec80d2bf608359584075728018ee7e4f8e31071f2b",
+  "path_redaction": {
+    "<workspace>": "checked-out repository",
+    "<moon-home>": "MoonBit installation",
+    "<probe>": "temporary diagnostic project",
+    "<diagnostic-binary>": "native diagnostic executable"
+  }
+}
