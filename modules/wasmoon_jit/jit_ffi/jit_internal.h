@@ -82,14 +82,7 @@ static inline int wasmoon_address_sanitizer_active(void) {
 static inline int wasmoon_address_sanitizer_active(void) { return 0; }
 #endif
 
-#if defined(__clang__) && defined(__has_attribute)
-#if __has_attribute(no_sanitize)
-#define WASMOON_NO_FUNCTION_SANITIZE __attribute__((no_sanitize("function")))
-#endif
-#endif
-#if !defined(WASMOON_NO_FUNCTION_SANITIZE)
-#define WASMOON_NO_FUNCTION_SANITIZE
-#endif
+#include "ffi_callbacks.h"
 
 // ============ Trap Handling (trap.c) ============
 

@@ -88,3 +88,24 @@ Windows Clang/MSVC acceptance therefore remain pending CI, and ISS-624 remains
 in progress until that evidence is obtained.
 
 See `validation.json` for commands, counts, source identity, and binary hashes.
+
+## CI diagnosis: erased closure callback type
+
+The initial PR head `e310d2ff954c2edc84ab3d91163047d0f9cacac2` ran in
+[Check and Test 38562831883](https://github.com/Milky2018/wasmoon/actions/runs/38562831883).
+Linux UBSan stopped before leak acceptance at `gc_heap.c`'s visitor call. Its
+isolated results attribute the same diagnostic to all 18 new root fixtures;
+the existing fixtures did not fail in their isolated processes.
+
+Inspection of the generated C confirms that `FuncRef`'s first callback argument
+is the compiler-generated nominal closure pointer `struct _M0TWiAlEAl *`, while
+the independently compiled stub uses `void *`. The other arguments are
+`int32_t` and `int64_t *`, and the result is `int64_t *` on both sides. This is
+the same erased-closure seam already handled for hostcall, cancellation, and
+fiber-entry callbacks. The GC visitor now uses the existing narrow indirect-call
+adapter convention; the shared attribute is in `jit_ffi/ffi_callbacks.h`.
+Only Clang's nominal function-type check is omitted at that adapter call.
+Address, leak, and all other undefined-behavior instrumentation remain enabled
+in root preparation, graph traversal, sweep, and owner retirement. The original
+Linux diagnostic remains evidence of why that adapter is needed; it is not a
+successful leak-detection result.
