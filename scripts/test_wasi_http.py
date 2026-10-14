@@ -162,7 +162,7 @@ def read_mixed_request(connection: socket.socket, received: bytearray) -> None:
     assert body == b"0\r\n\r\n", body
 
 
-def mixed_command_case(binary: Path, jit: bool, output: Path = ROOT / "target/http-results") -> None:
+def mixed_command_case(binary: Path, jit: bool, output: Path = ROOT / "target/http-results", *, debug: bool = True) -> None:
     # Keep a 60-second native timer pending while an HTTP exchange completes.
     # The guest cancels that timer after the response. A blocking host pump
     # cannot finish within the process timeout, independent of relative timing.
@@ -199,7 +199,7 @@ def mixed_command_case(binary: Path, jit: bool, output: Path = ROOT / "target/ht
             try:
                 with server.accept()[0] as connection:
                     connection.settimeout(15)
-                    peer["stage"] = "read complete empty request"
+                    peer["stage"] = "read request"
                     read_mixed_request(connection, received)
                     peer["stage"] = "send response"
                     connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
@@ -208,7 +208,9 @@ def mixed_command_case(binary: Path, jit: bool, output: Path = ROOT / "target/ht
                 peer["error"] = repr(error)
                 raise
 
-        command = [str(binary), "component", str(work / "guest.wasm"), "--run", "--http", "--debug", "--network", "loopback"]
+        command = [str(binary), "component", str(work / "guest.wasm"), "--run", "--http", "--network", "loopback"]
+        if debug:
+            command.append("--debug")
         if not jit:
             command.append("--no-jit")
         result = None

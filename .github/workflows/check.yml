@@ -113,6 +113,7 @@ jobs:
         run: moon run modules/wasmoon/testsuite/native_event_loop --target native
 
       - name: build Wasmoon
+        id: native_build
         id: build
         run: |
           moon build --target native --release
@@ -144,12 +145,18 @@ jobs:
       - name: test HTTP services, middleware and clients on both engines
         run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
 
+      - name: compare Linux HTTP peer shutdown behavior
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && steps.native_build.outcome == 'success' }}
+        run: python3 scripts/diagnose_http_peer.py --wasmoon ./wasmoon
+
       - name: upload HTTP command evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: http-command-${{ matrix.os }}
-          path: target/http-results
+          path: |
+            target/http-results
+            target/http-peer-diagnostic
           if-no-files-found: warn
 
       - name: check out pinned WASI Preview 3 guests
