@@ -300,6 +300,13 @@ jobs:
         if: matrix.compiler == 'msvc'
         shell: pwsh
         run: . ./scripts/msvc/setup.ps1
+      - name: configure Clang for generated C and direct objects
+        if: matrix.compiler == 'clang'
+        shell: pwsh
+        run: |
+          $compiler = (Get-Command clang-cl.exe -ErrorAction Stop).Source
+          "MOON_CC=$compiler" >> $env:GITHUB_ENV
+          Write-Host "C compiler: $compiler"
       - name: report toolchain
         run: |
           moon version --all
@@ -347,7 +354,7 @@ jobs:
         id: windows_build
         if: ${{ !cancelled() }}
         run: |
-          moon build --target native --release --jobs 2 --target-dir target/windows-build
+          moon build --target native --release --jobs 2 --target-dir target/windows-build --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
