@@ -57,6 +57,10 @@ can enter native code safely. Use `--no-jit` to force interpreter execution:
 ./wasmoon component command.component.wasm --run --no-jit
 ```
 
+For HTTP commands, `--run --http --debug` writes client completion and
+transport-failure diagnostics to stderr, including the exchange phase and
+the original host error before conversion to the WASI HTTP error code.
+
 Filesystem and network authority are denied by default. Grant only the
 capabilities the command requires:
 

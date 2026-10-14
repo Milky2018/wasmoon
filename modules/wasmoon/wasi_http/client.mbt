@@ -119,6 +119,7 @@ pub fn HttpHost::add_network_client(
     let result = Ref(None)
     let wake = self.wake
     let task = spawn(async fn() {
+      let mut phase = "request attributes"
       try {
         let authority = request_authority(message)
         if !allow(authority) {
@@ -135,6 +136,7 @@ pub fn HttpHost::add_network_client(
           _ => raise HttpTransportError(19, "unsupported URI scheme")
         }
         let (host, port) = authority_host_port(authority, secure)
+        phase = "connect"
         let socket = @async.with_timeout(
           request_timeout(message, 0),
           async fn() {
@@ -150,18 +152,24 @@ pub fn HttpHost::add_network_client(
         )
         defer socket.close()
         if secure {
+          phase = "TLS handshake"
           let tls = @async.with_timeout(
             request_timeout(message, 0),
             async fn() { @tls.Tls::client(socket, host~, trust~) },
             error=HttpTransportError(8, "TLS handshake timeout"),
           )
           defer tls.close()
+          phase = "HTTP exchange"
           self.exchange(tls, tls, message, authority, result)
         } else {
+          phase = "HTTP exchange"
           self.exchange(socket, socket, message, authority, result)
         }
       } catch {
         error => {
+          @logger.debug(
+            "HTTP client.send failed during \{phase}: \{Repr(error)}",
+          )
           if result.val is None {
             result.val = Some([transport_error(error)])
           }
@@ -187,10 +195,14 @@ pub fn HttpHost::add_network_client(
               table.alloc(resource)
             }
             result.val = None
+            @logger.debug("HTTP client.send completed with response \{moved}")
             Ready([Variant(0, Some(U32(moved)))])
           }
           Some(value) => {
             result.val = None
+            @logger.debug(
+              "HTTP client.send completed with error \{Repr(value)}",
+            )
             Ready(value)
           }
           None => Pending
