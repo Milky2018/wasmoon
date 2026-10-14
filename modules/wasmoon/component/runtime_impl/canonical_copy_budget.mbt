@@ -6,15 +6,15 @@ priv struct CanonicalCopyBudget {
 }
 
 ///|
-fn CanonicalCopyBudget::new(limit? : Int64 = 134217728L) -> CanonicalCopyBudget {
+fn CanonicalCopyBudget::new(limit~ : Int64 = 134217728L) -> CanonicalCopyBudget {
   { remaining: Ref(limit), }
 }
 
 ///|
 fn CanonicalCopyBudget::consume(
   self : CanonicalCopyBudget,
-  count : Int,
-  unit_size : Int,
+  count : Int32,
+  unit_size : Int32,
 ) -> Unit raise ComponentRuntimeError {
   let cost = count.to_int64() * unit_size.to_int64()
   if count < 0 || unit_size < 0 || cost > self.remaining.val {

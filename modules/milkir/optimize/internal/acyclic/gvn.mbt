@@ -2,8 +2,8 @@
 
 ///|
 priv struct PtrAccess {
-  base_id : Int
-  offset_id : Int
+  base_id : Int32
+  offset_id : Int32
   region : @milkir.AliasRegion
 }
 
@@ -14,22 +14,22 @@ priv struct PtrBaseInfo {
 
 ///|
 priv struct PtrLocationKey {
-  base_id : Int
-  offset_id : Int
+  base_id : Int32
+  offset_id : Int32
   region : @milkir.AliasRegion
 } derive(Eq, Hash)
 
 ///|
 priv struct StoreVersion {
-  block_id : Int
-  inst_id : Int
+  block_id : Int32
+  inst_id : Int32
 } derive(Eq, Hash)
 
 ///|
 priv struct LastStoreState {
-  mut heap : @hashmap.HashMap[Int, StoreVersion]
+  mut heap : @hashmap.HashMap[Int32, StoreVersion]
   mut heap_default : StoreVersion?
-  mut table : @hashmap.HashMap[Int, StoreVersion]
+  mut table : @hashmap.HashMap[Int32, StoreVersion]
   mut table_default : StoreVersion?
   mut context : StoreVersion?
   mut other : StoreVersion?
@@ -51,8 +51,8 @@ priv struct MemoryValueKey {
 
 ///|
 priv struct MemoryValueEntry {
-  def_block_id : Int
-  def_inst_index : Int
+  def_block_id : Int32
+  def_inst_index : Int32
   value : @milkir.Value
 }
 
@@ -75,12 +75,12 @@ fn LastStoreState::LastStoreState() -> LastStoreState {
 
 ///|
 fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
-  let heap : @hashmap.HashMap[Int, StoreVersion] = HashMap([])
+  let heap : @hashmap.HashMap[Int32, StoreVersion] = HashMap([])
   for entry in self.heap.iter() {
     let (memidx, token) = entry
     heap.set(memidx, token)
   }
-  let table : @hashmap.HashMap[Int, StoreVersion] = HashMap([])
+  let table : @hashmap.HashMap[Int32, StoreVersion] = HashMap([])
   for entry in self.table.iter() {
     let (tableidx, token) = entry
     table.set(tableidx, token)
@@ -97,8 +97,8 @@ fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
 
 ///|
 fn indexed_store_maps_equal(
-  left : @hashmap.HashMap[Int, StoreVersion],
-  right : @hashmap.HashMap[Int, StoreVersion],
+  left : @hashmap.HashMap[Int32, StoreVersion],
+  right : @hashmap.HashMap[Int32, StoreVersion],
 ) -> Bool {
   if left.length() != right.length() {
     return false
@@ -132,9 +132,9 @@ fn meet_last_store_token(
 
 ///|
 fn indexed_store_token(
-  entries : @hashmap.HashMap[Int, StoreVersion],
+  entries : @hashmap.HashMap[Int32, StoreVersion],
   default : StoreVersion?,
-  index : Int,
+  index : Int32,
 ) -> StoreVersion? {
   match entries.get(index) {
     Some(token) => Some(token)
@@ -144,14 +144,14 @@ fn indexed_store_token(
 
 ///|
 fn meet_indexed_store_maps(
-  left : @hashmap.HashMap[Int, StoreVersion],
+  left : @hashmap.HashMap[Int32, StoreVersion],
   left_default : StoreVersion?,
-  right : @hashmap.HashMap[Int, StoreVersion],
+  right : @hashmap.HashMap[Int32, StoreVersion],
   right_default : StoreVersion?,
   merged_default : StoreVersion?,
   join_token : StoreVersion,
-) -> @hashmap.HashMap[Int, StoreVersion] {
-  let merged : @hashmap.HashMap[Int, StoreVersion] = HashMap([])
+) -> @hashmap.HashMap[Int32, StoreVersion] {
+  let merged : @hashmap.HashMap[Int32, StoreVersion] = HashMap([])
   for entry in left.iter() {
     let token = meet_last_store_token(
       Some(entry.1),
@@ -303,16 +303,16 @@ fn update_last_store_state(
 fn compute_block_input_last_store_states(
   func : @milkir.Function,
   cfg : @milkir.CFG,
-  block_idx : Array[Int],
+  block_idx : Array[Int32],
   ptr_base_infos : Array[PtrBaseInfo?],
-  block_instructions : (Int) -> ArrayView[@milkir.InstId],
-) -> @hashmap.HashMap[Int, LastStoreState] {
-  let block_input : @hashmap.HashMap[Int, LastStoreState] = HashMap([])
+  block_instructions : (Int32) -> ArrayView[@milkir.InstId],
+) -> @hashmap.HashMap[Int32, LastStoreState] {
+  let block_input : @hashmap.HashMap[Int32, LastStoreState] = HashMap([])
   if !cfg.is_valid(0) {
     return block_input
   }
-  let queue : Array[Int] = [0]
-  let queue_set : @hashset.HashSet[Int] = HashSet([])
+  let queue : Array[Int32] = [0]
+  let queue_set : @hashset.HashSet[Int32] = HashSet([])
   queue_set.add(0)
   while queue.length() > 0 {
     let block_id = queue.pop().unwrap()
@@ -518,12 +518,12 @@ fn collect_ptr_base_infos(
 ///|
 fn gvn_instruction_prefix(
   func : @milkir.Function,
-  work_budget : Int,
+  work_budget : Int32,
   analysis : FunctionAnalysis,
-  block_instructions : (Int) -> ArrayView[@milkir.InstId],
+  block_instructions : (Int32) -> ArrayView[@milkir.InstId],
 ) -> Array[@milkir.Inst] {
   let prefix : Array[@milkir.Inst] = []
-  fn enter(block_id : Int) -> (Unit, Bool) {
+  fn enter(block_id : Int32) -> (Unit, Bool) {
     if prefix.length() >= work_budget {
       return ((), false)
     }
@@ -542,7 +542,7 @@ fn gvn_instruction_prefix(
 }
 
 ///|
-fn is_known_iconst(value_id : Int, iconst_values : Array[Int64?]) -> Bool {
+fn is_known_iconst(value_id : Int32, iconst_values : Array[Int64?]) -> Bool {
   value_id >= 0 &&
   value_id < iconst_values.length() &&
   iconst_values[value_id] is Some(_)
@@ -550,7 +550,7 @@ fn is_known_iconst(value_id : Int, iconst_values : Array[Int64?]) -> Bool {
 
 ///|
 fn ptr_base_region(
-  value_id : Int,
+  value_id : Int32,
   ptr_base_infos : Array[PtrBaseInfo?],
 ) -> @milkir.AliasRegion {
   if value_id >= 0 && value_id < ptr_base_infos.length() {
@@ -622,10 +622,10 @@ fn memory_key_from_access(
 
 ///|
 fn inst_dominates(
-  def_block_id : Int,
-  def_inst_index : Int,
-  use_block_id : Int,
-  use_inst_index : Int,
+  def_block_id : Int32,
+  def_inst_index : Int32,
+  use_block_id : Int32,
+  use_inst_index : Int32,
   dominance : @milkir.Dominance,
 ) -> Bool {
   if def_block_id == use_block_id {
@@ -676,13 +676,13 @@ fn gvn_memory_dependency(
 ///|
 pub struct AcyclicOptimizeStats {
   changed : Bool
-  work_done : Int
+  work_done : Int32
   budget_exhausted : Bool
-  value_lookup_probes : Int
+  value_lookup_probes : Int32
   rewrite_changed : Bool
-  rewrite_attempts : Int
-  rewrite_applied : Int
-  rewrite_created_instructions : Int
+  rewrite_attempts : Int32
+  rewrite_applied : Int32
+  rewrite_created_instructions : Int32
 }
 
 ///|
@@ -691,10 +691,10 @@ priv struct AvailableExpression {
   value : @milkir.Value
   dependency : @milkir.AliasRegion?
   memory_version : StoreVersion?
-  def_block_id : Int
-  def_inst_index : Int
-  position : Int
-  reuse_count : Int
+  def_block_id : Int32
+  def_inst_index : Int32
+  position : Int32
+  reuse_count : Int32
 }
 
 ///|
@@ -702,7 +702,7 @@ priv struct AvailableExpression {
 /// object is recorded directly so rollback never has to hash a mutable `Inst`.
 priv enum ValueTableChange {
   Inserted(Array[AvailableExpression])
-  Updated(Array[AvailableExpression], Int, AvailableExpression)
+  Updated(Array[AvailableExpression], Int32, AvailableExpression)
 }
 
 ///|
@@ -710,27 +710,27 @@ priv struct AcyclicOptimizer {
   func : @milkir.Function
   analysis : FunctionAnalysis
   session : OptimizerSession
-  memory_work_budget : Int
+  memory_work_budget : Int32
   ptr_base_infos : Array[PtrBaseInfo?]
-  block_input_state : @hashmap.HashMap[Int, LastStoreState]
+  block_input_state : @hashmap.HashMap[Int32, LastStoreState]
   value_table : @hashmap.HashMap[@milkir.Inst, Array[AvailableExpression]]
   value_table_changes : Array[ValueTableChange]
   memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry]
   mut changed : Bool
-  mut work_done : Int
+  mut work_done : Int32
   mut budget_exhausted : Bool
-  mut instruction_position : Int
-  mut value_lookup_probes : Int
+  mut instruction_position : Int32
+  mut value_lookup_probes : Int32
 }
 
 ///|
 /// Keep post-budget rematerializable context values inside short live ranges.
 /// Extending one AEGIS memory-base value across the complete function adds
 /// enough spill traffic to outweigh the eliminated loads.
-const GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_DISTANCE : Int = 16
+const GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_DISTANCE : Int32 = 16
 
 ///|
-const GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_LIMIT : Int = 1
+const GVN_POST_BUDGET_STABLE_GLOBAL_REUSE_LIMIT : Int32 = 1
 
 ///|
 fn is_stable_global_value(func : @milkir.Function, inst : @milkir.Inst) -> Bool {
@@ -744,9 +744,9 @@ fn is_stable_global_value(func : @milkir.Function, inst : @milkir.Inst) -> Bool 
 ///|
 fn AcyclicOptimizer::new(
   func : @milkir.Function,
-  work_budget : Int,
+  work_budget : Int32,
   analysis : FunctionAnalysis,
-  source_block_instructions : (Int) -> ArrayView[@milkir.InstId],
+  source_block_instructions : (Int32) -> ArrayView[@milkir.InstId],
 ) -> AcyclicOptimizer {
   let memory_work_budget = if work_budget > 0 { work_budget } else { 0 }
   let mut total_instructions = 0
@@ -803,14 +803,14 @@ fn AcyclicOptimizer::new(
 }
 
 ///|
-fn AcyclicOptimizer::begin_value_scope(self : AcyclicOptimizer) -> Int {
+fn AcyclicOptimizer::begin_value_scope(self : AcyclicOptimizer) -> Int32 {
   self.value_table_changes.length()
 }
 
 ///|
 fn AcyclicOptimizer::end_value_scope(
   self : AcyclicOptimizer,
-  marker : Int,
+  marker : Int32,
 ) -> Unit {
   while self.value_table_changes.length() > marker {
     match self.value_table_changes.pop().unwrap() {
@@ -841,7 +841,7 @@ fn AcyclicOptimizer::insert_available_expression(
 ///|
 fn AcyclicOptimizer::process_block(
   self : AcyclicOptimizer,
-  block_id : Int,
+  block_id : Int32,
   instructions : ArrayView[@milkir.InstId],
 ) -> Array[@milkir.Inst] {
   let last_store_state = match self.block_input_state.get(block_id) {
@@ -883,8 +883,8 @@ fn AcyclicOptimizer::process_block(
 ///|
 fn AcyclicOptimizer::process_inst(
   self : AcyclicOptimizer,
-  block_id : Int,
-  inst_index : Int,
+  block_id : Int32,
+  inst_index : Int32,
   inst : @milkir.Inst,
   last_store_state : LastStoreState,
   charge_memory_work : Bool,
@@ -1057,16 +1057,16 @@ fn AcyclicOptimizer::finish(self : AcyclicOptimizer) -> AcyclicOptimizeStats {
 ///|
 pub fn run_acyclic_optimization_with_budget_and_analysis(
   func : @milkir.Function,
-  work_budget : Int,
+  work_budget : Int32,
   analysis : FunctionAnalysis,
 ) -> AcyclicOptimizeStats {
-  let block_instructions = fn(block_id : Int) -> ArrayView[@milkir.InstId] {
+  let block_instructions = fn(block_id : Int32) -> ArrayView[@milkir.InstId] {
     func.blocks[analysis.block_idx[block_id]].instruction_ids()
   }
   let stream = AcyclicOptimizer::new(
     func, work_budget, analysis, block_instructions,
   )
-  fn enter(block_id : Int) -> ((Int, Int), Bool) {
+  fn enter(block_id : Int32) -> ((Int32, Int32), Bool) {
     let union_scope = stream.session.begin_scope()
     let value_scope = stream.begin_value_scope()
     func.blocks[analysis.block_idx[block_id]].set_instructions(

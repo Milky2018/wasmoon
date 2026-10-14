@@ -11,15 +11,15 @@ priv struct PollClockSubscription {
 
 ///|
 priv enum PollFdSource {
-  Native(Int)
+  Native(Int32)
   Immediate
 }
 
 ///|
 priv struct PollFdSubscription {
   userdata : Int64
-  wasi_fd : Int
-  event_type : Int
+  wasi_fd : Int32
+  event_type : Int32
   source : PollFdSource
 }
 
@@ -32,29 +32,29 @@ priv enum PollSubscription {
 ///|
 priv struct PollEvent {
   userdata : Int64
-  error : Int
-  event_type : Int
+  error : Int32
+  event_type : Int32
   nbytes : Int64
-  flags : Int
+  flags : Int32
 }
 
 ///|
 priv enum PollHostResult {
-  HostReady(Array[Int])
+  HostReady(Array[Int32])
   HostInterrupted
-  HostFailed(Int)
+  HostFailed(Int32)
 }
 
 ///|
-fn read_poll_u16(mem : @runtime.Memory, addr : Int) -> Int {
+fn read_poll_u16(mem : @runtime.Memory, addr : Int32) -> Int32 {
   mem.read_byte(addr).to_int() | (mem.read_byte(addr + 1).to_int() << 8)
 }
 
 ///|
 fn check_poll_array_range(
   mem : @runtime.Memory,
-  ptr : Int,
-  count : UInt,
+  ptr : Int32,
+  count : UInt32,
   element_size : UInt64,
 ) -> Bool {
   let start = ptr.reinterpret_as_uint().to_uint64()
@@ -66,7 +66,7 @@ fn check_poll_array_range(
 }
 
 ///|
-fn poll_stdio_is_native(ctx : WasiContext, slot : Int) -> Bool {
+fn poll_stdio_is_native(ctx : WasiContext, slot : Int32) -> Bool {
   match slot {
     0 => ctx.stdin_is_native
     1 => ctx.stdout_is_native
@@ -78,8 +78,8 @@ fn poll_stdio_is_native(ctx : WasiContext, slot : Int) -> Bool {
 ///|
 fn resolve_poll_fd_source(
   ctx : WasiContext,
-  fd : Int,
-  event_type : Int,
+  fd : Int32,
+  event_type : Int32,
 ) -> Result[PollFdSource, Errno] {
   if stdio_slot_for_fd(ctx, fd) is Some(slot) {
     if !is_stdio_open(ctx, fd) {
@@ -125,8 +125,8 @@ fn resolve_poll_fd_source(
 fn decode_poll_subscriptions(
   descriptors : WasiContext,
   mem : @runtime.Memory,
-  in_ptr : Int,
-  nsubscriptions : Int,
+  in_ptr : Int32,
+  nsubscriptions : Int32,
 ) -> Result[Array[PollSubscription], Errno] {
   let subscriptions : Array[PollSubscription] = []
   for i in 0..<nsubscriptions {
@@ -223,7 +223,7 @@ fn PollClockSubscription::remaining_ns(
 }
 
 ///|
-fn poll_timeout_ms(remaining_ns : UInt64) -> Int {
+fn poll_timeout_ms(remaining_ns : UInt64) -> Int32 {
   if remaining_ns == 0UL {
     return 0
   }
@@ -253,9 +253,9 @@ fn poll_sleep_ns(remaining_ns : UInt64) -> Int64 {
 
 ///|
 fn poll_native_once(
-  fds : Array[Int],
-  events : Array[Int],
-  timeout_ms : Int,
+  fds : Array[Int32],
+  events : Array[Int32],
+  timeout_ms : Int32,
 ) -> PollHostResult {
   let nfds = fds.length()
   let fds_arr = FixedArray::make(nfds, 0)
@@ -274,7 +274,7 @@ fn poll_native_once(
       HostFailed(errno)
     }
   } else {
-    let revents : Array[Int] = []
+    let revents : Array[Int32] = []
     for i in 0..<nfds {
       revents.push(revents_arr[i])
     }
@@ -283,7 +283,10 @@ fn poll_native_once(
 }
 
 ///|
-fn poll_fd_read_nbytes_and_flags(ctx : WasiContext, fd : Int) -> (Int64, Int) {
+fn poll_fd_read_nbytes_and_flags(
+  ctx : WasiContext,
+  fd : Int32,
+) -> (Int64, Int32) {
   if stdio_slot_for_fd(ctx, fd) is Some(_) {
     return (1L, 0)
   }
@@ -317,7 +320,7 @@ fn poll_fd_read_nbytes_and_flags(ctx : WasiContext, fd : Int) -> (Int64, Int) {
 fn poll_fd_event(
   descriptors : WasiContext,
   sub : PollFdSubscription,
-  revents : Int,
+  revents : Int32,
 ) -> PollEvent? {
   let poll_error = 0x08
   let poll_hangup = 0x10
@@ -425,7 +428,7 @@ fn mark_ready_clocks(
 ///|
 fn write_poll_event(
   mem : @runtime.Memory,
-  event_ptr : Int,
+  event_ptr : Int32,
   event : PollEvent,
 ) -> Unit {
   mem.write_i64(event_ptr, event.userdata)
@@ -452,11 +455,11 @@ fn write_poll_event(
 pub fn poll_oneoff_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
-  in_ptr : Int,
-  out_ptr : Int,
-  nsubscriptions : Int,
-  nevents_ptr : Int,
-) -> Int {
+  in_ptr : Int32,
+  out_ptr : Int32,
+  nsubscriptions : Int32,
+  nevents_ptr : Int32,
+) -> Int32 {
   let subscription_count = nsubscriptions.reinterpret_as_uint()
   if subscription_count == 0U {
     return Errno::Inval.to_i32()
@@ -477,11 +480,11 @@ pub fn poll_oneoff_impl(
     Err(errno) => return errno.to_i32()
   }
   let ready : Array[PollEvent?] = Array::make(count, None)
-  let fds : Array[Int] = []
-  let fd_events : Array[Int] = []
-  let fd_subscription_indices : Array[Int] = []
-  let fd_subscription_poll_indices : Array[Int] = []
-  let poll_index_by_fd : Map[Int, Int] = Map([])
+  let fds : Array[Int32] = []
+  let fd_events : Array[Int32] = []
+  let fd_subscription_indices : Array[Int32] = []
+  let fd_subscription_poll_indices : Array[Int32] = []
+  let poll_index_by_fd : Map[Int32, Int32] = Map([])
   for i, subscription in subscriptions {
     if subscription is FdPoll(fd_sub) {
       match fd_sub.source {

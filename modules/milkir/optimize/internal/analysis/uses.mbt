@@ -1,6 +1,6 @@
 ///|
 /// Compute use counts for all values in a function
-pub fn compute_use_counts(func : @milkir.Function) -> Array[Int] {
+pub fn compute_use_counts(func : @milkir.Function) -> Array[Int32] {
   let counts = Array::make(func.next_value_id, 0)
   fn count(value : @milkir.Value) -> Unit {
     counts[value.id] = counts[value.id] + 1

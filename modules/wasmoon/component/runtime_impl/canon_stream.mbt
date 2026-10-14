@@ -4,7 +4,7 @@
 
 ///|
 fn instantiate_canon_stream_new(
-  _tyidx : Int,
+  _tyidx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
@@ -98,7 +98,7 @@ fn store_host_stream_value(
 ///|
 fn poll_host_value_stream(
   source : HostValueStream,
-  max_elements : Int,
+  max_elements : Int32,
 ) -> HostValueStreamPoll raise ComponentRuntimeError {
   let remaining = source.values.length() - source.next.val
   if remaining > 0 {
@@ -234,7 +234,7 @@ fn progress_host_stream_sources(
 
 ///|
 fn instantiate_canon_stream_read(
-  _tyidx : Int,
+  _tyidx : Int32,
   opts : Array[CanonOpt],
   state : BuildState,
   store : @runtime.Store,
@@ -261,7 +261,7 @@ fn instantiate_canon_stream_read(
       trap_canon("cannot leave component instance")
     }
     let task_id = current_task_id(async_state)
-    fn ret_i32(code : Int) -> Array[@types.Value] {
+    fn ret_i32(code : Int32) -> Array[@types.Value] {
       [I32(code)]
     }
 
@@ -712,7 +712,7 @@ fn instantiate_canon_stream_read(
 
 ///|
 fn instantiate_canon_stream_write(
-  _tyidx : Int,
+  _tyidx : Int32,
   opts : Array[CanonOpt],
   state : BuildState,
   store : @runtime.Store,
@@ -739,7 +739,7 @@ fn instantiate_canon_stream_write(
       trap_canon("cannot leave component instance")
     }
     let task_id = current_task_id(async_state)
-    fn ret_i32(code : Int) -> Array[@types.Value] {
+    fn ret_i32(code : Int32) -> Array[@types.Value] {
       [I32(code)]
     }
 
@@ -1129,7 +1129,7 @@ fn instantiate_canon_stream_write(
 
 ///|
 fn instantiate_canon_stream_cancel_read(
-  _tyidx : Int,
+  _tyidx : Int32,
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
@@ -1210,7 +1210,7 @@ fn instantiate_canon_stream_cancel_read(
 
 ///|
 fn instantiate_canon_stream_cancel_write(
-  _tyidx : Int,
+  _tyidx : Int32,
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
@@ -1291,7 +1291,7 @@ fn instantiate_canon_stream_cancel_write(
 
 ///|
 fn instantiate_canon_stream_drop_readable(
-  _tyidx : Int,
+  _tyidx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
@@ -1407,7 +1407,7 @@ fn instantiate_canon_stream_drop_readable(
 
 ///|
 fn instantiate_canon_stream_drop_writable(
-  _tyidx : Int,
+  _tyidx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {

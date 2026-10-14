@@ -64,7 +64,7 @@ fn resolve_address_stream_state(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> ResolveAddressStreamState raise @runtime_impl.ComponentRuntimeError {
   let resource_type = host.resolve_resource_type(
     "wasi:sockets@0.2.11/ip-name-lookup.resolve-address-stream",

@@ -1,7 +1,7 @@
 ///|
 fn resource_type_id(
   ty : @component.TypeDef?,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   match ty {
     Some(ResourceType(id, _, _, HostDefined)) => id
     _ => raise HostCallError("invalid host resource type")
@@ -13,8 +13,8 @@ fn allocate_resource_handle(
   ctx : WasiComponentCtx,
   table : @runtime_impl.ResourceTable,
   ty : @component.TypeDef?,
-  rep : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  rep : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   let type_id = resource_type_id(ty)
   table.alloc({
     type_id,
@@ -32,9 +32,9 @@ fn allocate_resource_handle(
 ///|
 fn resource_rep(
   table : @runtime_impl.ResourceTable,
-  handle : Int,
+  handle : Int32,
   ty : @component.TypeDef?,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   let type_id = resource_type_id(ty)
   match table.get(handle) {
     Some(resource) =>
@@ -50,8 +50,8 @@ fn resource_rep(
 ///|
 fn resource_handle_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  index : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing resource argument")
   }
@@ -117,8 +117,8 @@ fn component_list_to_bytes(
 ///|
 fn bytes_to_list_range(
   bytes : Bytes,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
 ) -> @runtime_impl.ComponentValue {
   let values : Array[@runtime_impl.ComponentValue] = []
   for i in start..<end {
@@ -130,8 +130,8 @@ fn bytes_to_list_range(
 ///|
 fn stream_length_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  index : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing stream length")
   }
@@ -150,8 +150,8 @@ fn stream_length_arg(
 fn read_input_stream(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
-  rep : Int,
-  len : Int,
+  rep : Int32,
+  len : Int32,
   blocking : Bool,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
   guard host.ctx.get_resource(rep) is Some(InputStream(state)) else {
@@ -228,8 +228,8 @@ fn read_input_stream(
 fn skip_input_stream(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
-  rep : Int,
-  len : Int,
+  rep : Int32,
+  len : Int32,
   blocking : Bool,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
   match read_input_stream(host, table, rep, len, blocking) {
@@ -242,7 +242,7 @@ fn skip_input_stream(
 ///|
 fn output_stream_state(
   ctx : WasiComponentCtx,
-  rep : Int,
+  rep : Int32,
 ) -> OutputStreamState raise @runtime_impl.ComponentRuntimeError {
   match ctx.get_resource(rep) {
     Some(OutputStream(state)) => state
@@ -252,7 +252,7 @@ fn output_stream_state(
 
 ///|
 priv enum OutputWriteAttempt {
-  Written(Int)
+  Written(Int32)
   WouldBlock
   WriteFailed
 }
@@ -269,7 +269,7 @@ fn drain_output_stream_with(
   state : OutputStreamState,
   blocking : Bool,
   wait_writable : () -> Bool,
-  write_once : (Bytes, Int) -> OutputWriteAttempt,
+  write_once : (Bytes, Int32) -> OutputWriteAttempt,
 ) -> OutputDrainStatus {
   while state.pending.val is Some((bytes, offset)) {
     if blocking && !wait_writable() {
@@ -295,7 +295,7 @@ fn drain_output_stream_with(
 fn native_output_write_once(
   state : OutputStreamState,
   bytes : Bytes,
-  offset : Int,
+  offset : Int32,
 ) -> OutputWriteAttempt {
   guard state.native_fd is Some(fd) else { return WriteFailed }
   let remaining = bytes.length() - offset
@@ -537,7 +537,7 @@ fn block_poll_source(
 }
 
 ///|
-fn poll_timeout_ms(deadline : Int64?, now : Int64) -> Int {
+fn poll_timeout_ms(deadline : Int64?, now : Int64) -> Int32 {
   match deadline {
     None => -1
     Some(deadline) =>
@@ -560,8 +560,8 @@ fn block_poll_sources(
   ctx : WasiComponentCtx,
   sources : Array[PollSource],
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
-  let fds : Array[Int] = []
-  let events : Array[Int] = []
+  let fds : Array[Int32] = []
+  let events : Array[Int32] = []
   let mut nearest_deadline : Int64? = None
   for source in sources {
     match source {
@@ -621,7 +621,7 @@ fn block_poll_sources(
 fn pollable_source(
   ctx : WasiComponentCtx,
   table : @runtime_impl.ResourceTable,
-  handle : Int,
+  handle : Int32,
   pollable_type : @component.TypeDef?,
 ) -> PollSource raise @runtime_impl.ComponentRuntimeError {
   let rep = resource_rep(table, handle, pollable_type)
@@ -634,7 +634,7 @@ fn pollable_source(
 ///|
 fn monotonic_instant_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> Int64 raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing monotonic clock value")
@@ -1165,7 +1165,7 @@ fn add_stdio_interface(
   interface_name : String,
   export_name : String,
   resource_type : @component.TypeDef?,
-  rep : Int,
+  rep : Int32,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   let builder = host.linker.host_instance_builder(
     "wasi:cli/\{interface_name}@\{preview2_version}",

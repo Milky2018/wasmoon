@@ -6,20 +6,20 @@
 
 ///|
 priv struct RecGroupIndex {
-  group_by_type : Array[Int]
-  position_by_type : Array[Int]
-  groups : Array[Array[Int]]
+  group_by_type : Array[Int32]
+  position_by_type : Array[Int32]
+  groups : Array[Array[Int32]]
 }
 
 ///|
 fn RecGroupIndex::new(
-  type_count : Int,
-  rec_group_ids : Array[Int],
+  type_count : Int32,
+  rec_group_ids : Array[Int32],
 ) -> RecGroupIndex {
   let group_by_type = Array::make(type_count, -1)
   let position_by_type = Array::make(type_count, 0)
-  let groups : Array[Array[Int]] = []
-  let group_by_id : Map[Int, Int] = Map([])
+  let groups : Array[Array[Int32]] = []
+  let group_by_id : Map[Int32, Int32] = Map([])
   for type_idx in 0..<type_count {
     let group = if rec_group_ids.length() == 0 ||
       type_idx >= rec_group_ids.length() {
@@ -46,7 +46,7 @@ fn RecGroupIndex::new(
 }
 
 ///|
-fn RecGroupIndex::group_at(self : RecGroupIndex, type_idx : Int) -> Int {
+fn RecGroupIndex::group_at(self : RecGroupIndex, type_idx : Int32) -> Int32 {
   if type_idx >= 0 && type_idx < self.group_by_type.length() {
     self.group_by_type[type_idx]
   } else {
@@ -55,7 +55,10 @@ fn RecGroupIndex::group_at(self : RecGroupIndex, type_idx : Int) -> Int {
 }
 
 ///|
-fn RecGroupIndex::info_at(self : RecGroupIndex, type_idx : Int) -> (Int, Int) {
+fn RecGroupIndex::info_at(
+  self : RecGroupIndex,
+  type_idx : Int32,
+) -> (Int32, Int32) {
   let group = self.group_at(type_idx)
   if group >= 0 {
     (self.position_by_type[type_idx], self.groups[group].length())
@@ -73,14 +76,14 @@ struct TypeEquivalenceContext {
   rec_groups1 : RecGroupIndex
   rec_groups2 : RecGroupIndex
   cross_module : Bool
-  visited : Map[(Int, Int), Bool]
+  visited : Map[(Int32, Int32), Bool]
 }
 
 ///|
 /// Create a context for same-module type comparison.
 pub fn TypeEquivalenceContext::same_module(
   types : Array[SubType],
-  type_rec_groups? : Array[Int] = [],
+  type_rec_groups~ : Array[Int32] = [],
 ) -> TypeEquivalenceContext {
   let rec_groups = RecGroupIndex::new(types.length(), type_rec_groups)
   {
@@ -98,8 +101,8 @@ pub fn TypeEquivalenceContext::same_module(
 pub fn TypeEquivalenceContext::cross_module(
   types1 : Array[SubType],
   types2 : Array[SubType],
-  rec_groups1? : Array[Int] = [],
-  rec_groups2? : Array[Int] = [],
+  rec_groups1~ : Array[Int32] = [],
+  rec_groups2~ : Array[Int32] = [],
 ) -> TypeEquivalenceContext {
   {
     types1,
@@ -118,8 +121,8 @@ pub fn TypeEquivalenceContext::cross_module(
 /// pairwise-equivalent rec groups at the same position.
 pub fn TypeEquivalenceContext::types_equivalent(
   self : TypeEquivalenceContext,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   // Same index in same module is trivially equivalent
   if !self.cross_module && idx1 == idx2 {
@@ -158,8 +161,8 @@ pub fn TypeEquivalenceContext::types_equivalent(
 /// Use types_equivalent for full equivalence checking including rec groups.
 fn TypeEquivalenceContext::types_structurally_equal(
   self : TypeEquivalenceContext,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   // Same index in same module means same type
   if !self.cross_module && idx1 == idx2 {
@@ -220,10 +223,10 @@ fn TypeEquivalenceContext::types_structurally_equal(
 /// - External references (outside rec group) must refer to equivalent types
 fn TypeEquivalenceContext::supertypes_equal_with_context(
   self : TypeEquivalenceContext,
-  s1 : Array[Int],
-  s2 : Array[Int],
-  idx1 : Int,
-  idx2 : Int,
+  s1 : Array[Int32],
+  s2 : Array[Int32],
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   if s1.length() != s2.length() {
     return false
@@ -243,8 +246,8 @@ fn TypeEquivalenceContext::composite_types_equal(
   self : TypeEquivalenceContext,
   c1 : CompositeType,
   c2 : CompositeType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   match (c1, c2) {
     (Func(f1), Func(f2)) => self.func_types_equal(f1, f2, idx1, idx2)
@@ -261,8 +264,8 @@ fn TypeEquivalenceContext::func_types_equal(
   self : TypeEquivalenceContext,
   t1 : FuncType,
   t2 : FuncType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   // Check param/result counts
   if t1.params.length() != t2.params.length() ||
@@ -290,8 +293,8 @@ fn TypeEquivalenceContext::struct_types_equal(
   self : TypeEquivalenceContext,
   s1 : StructType,
   s2 : StructType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   // Must have same number of fields
   if s1.fields.length() != s2.fields.length() {
@@ -312,8 +315,8 @@ fn TypeEquivalenceContext::array_types_equal(
   self : TypeEquivalenceContext,
   a1 : ArrayType,
   a2 : ArrayType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   self.field_types_equal(a1.element, a2.element, idx1, idx2)
 }
@@ -324,8 +327,8 @@ fn TypeEquivalenceContext::field_types_equal(
   self : TypeEquivalenceContext,
   f1 : FieldType,
   f2 : FieldType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   // Mutability must match
   if f1.mutable != f2.mutable {
@@ -341,8 +344,8 @@ fn TypeEquivalenceContext::storage_types_equal(
   self : TypeEquivalenceContext,
   s1 : StorageType,
   s2 : StorageType,
-  idx1 : Int,
-  idx2 : Int,
+  idx1 : Int32,
+  idx2 : Int32,
 ) -> Bool {
   match (s1, s2) {
     (Val(v1), Val(v2)) => self.value_types_equal(v1, v2, idx1, idx2)
@@ -357,8 +360,8 @@ fn TypeEquivalenceContext::value_types_equal(
   self : TypeEquivalenceContext,
   v1 : ValueType,
   v2 : ValueType,
-  self_idx : Int,
-  other_idx : Int,
+  self_idx : Int32,
+  other_idx : Int32,
 ) -> Bool {
   match (v1, v2) {
     // Basic types must match exactly
@@ -411,10 +414,10 @@ fn TypeEquivalenceContext::value_types_equal(
 /// - References to types OUTSIDE the rec group must refer to equivalent types
 fn TypeEquivalenceContext::type_refs_equal(
   self : TypeEquivalenceContext,
-  ref1 : Int,
-  ref2 : Int,
-  self_idx : Int,
-  other_idx : Int,
+  ref1 : Int32,
+  ref2 : Int32,
+  self_idx : Int32,
+  other_idx : Int32,
 ) -> Bool {
   // Get rec group info for the types being compared
   let rec_id1 = self.rec_groups1.group_at(self_idx)
@@ -452,9 +455,9 @@ fn TypeEquivalenceContext::type_refs_equal(
 /// Get rec group info (position, size) for a type at given index.
 /// Returns (position_in_group, group_size) tuple.
 pub fn get_rec_group_info(
-  rec_groups : Array[Int],
-  type_idx : Int,
-) -> (Int, Int) {
+  rec_groups : Array[Int32],
+  type_idx : Int32,
+) -> (Int32, Int32) {
   if type_idx < 0 || rec_groups.length() == 0 || type_idx >= rec_groups.length() {
     return (0, 1) // Default to singleton rec group
   }
@@ -479,9 +482,9 @@ pub fn get_rec_group_info(
 /// For isorecursive typing, entire rec groups must be pairwise equivalent.
 pub fn compute_canonical_type_indices(
   types : Array[SubType],
-  type_rec_groups? : Array[Int] = [],
-) -> Array[Int] {
-  let canonical : Array[Int] = Array::make(types.length(), -1)
+  type_rec_groups~ : Array[Int32] = [],
+) -> Array[Int32] {
+  let canonical : Array[Int32] = Array::make(types.length(), -1)
   let ctx = TypeEquivalenceContext::same_module(types, type_rec_groups~)
   for group_index, members in ctx.rec_groups1.groups {
     let mut canonical_first = members[0]
@@ -515,8 +518,8 @@ fn rec_groups_equivalent(
   ctx : TypeEquivalenceContext,
   rec_groups1 : RecGroupIndex,
   rec_groups2 : RecGroupIndex,
-  rec_id1 : Int,
-  rec_id2 : Int,
+  rec_id1 : Int32,
+  rec_id2 : Int32,
 ) -> Bool {
   let types1 = if rec_id1 >= 0 { rec_groups1.groups[rec_id1] } else { [] }
   let types2 = if rec_id2 >= 0 { rec_groups2.groups[rec_id2] } else { [] }

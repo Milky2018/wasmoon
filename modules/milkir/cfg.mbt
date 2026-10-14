@@ -1,9 +1,9 @@
 ///|
 pub struct CFG {
-  size : Int
-  num_blocks : Int
-  successors : Array[Array[Int]]
-  predecessors : Array[Array[Int]]
+  size : Int32
+  num_blocks : Int32
+  successors : Array[Array[Int32]]
+  predecessors : Array[Array[Int32]]
   valid : Array[Bool]
 } derive(Debug)
 
@@ -17,8 +17,8 @@ pub fn CFG::build(func : Function) -> CFG {
     }
   }
   let size = max_id + 1
-  let successors : Array[Array[Int]] = []
-  let predecessors : Array[Array[Int]] = []
+  let successors : Array[Array[Int32]] = []
+  let predecessors : Array[Array[Int32]] = []
   let valid : Array[Bool] = []
   for _ in 0..<size {
     successors.push([])
@@ -43,14 +43,14 @@ pub fn CFG::build(func : Function) -> CFG {
 
 ///|
 /// Return successor block IDs in terminator order, including duplicate edges.
-pub fn Terminator::targets(self : Terminator) -> Array[Int] {
+pub fn Terminator::targets(self : Terminator) -> Array[Int32] {
   match self {
     Jump(target, _) => [target]
     Branch(_, true_target, _, false_target, _) => [true_target, false_target]
     Brz(_, true_target, false_target) | Brnz(_, true_target, false_target) =>
       [true_target, false_target]
     BrTable(_, targets, default_target) => {
-      let out : Array[Int] = []
+      let out : Array[Int32] = []
       for target in targets {
         out.push(target)
       }
@@ -62,12 +62,12 @@ pub fn Terminator::targets(self : Terminator) -> Array[Int] {
 }
 
 ///|
-pub fn CFG::is_valid(self : CFG, block_id : Int) -> Bool {
+pub fn CFG::is_valid(self : CFG, block_id : Int32) -> Bool {
   block_id >= 0 && block_id < self.size && self.valid[block_id]
 }
 
 ///|
-pub fn CFG::get_successors(self : CFG, block_id : Int) -> Array[Int] {
+pub fn CFG::get_successors(self : CFG, block_id : Int32) -> Array[Int32] {
   if self.is_valid(block_id) {
     self.successors[block_id]
   } else {
@@ -76,7 +76,7 @@ pub fn CFG::get_successors(self : CFG, block_id : Int) -> Array[Int] {
 }
 
 ///|
-pub fn CFG::get_predecessors(self : CFG, block_id : Int) -> Array[Int] {
+pub fn CFG::get_predecessors(self : CFG, block_id : Int32) -> Array[Int32] {
   if self.is_valid(block_id) {
     self.predecessors[block_id]
   } else {
@@ -85,7 +85,7 @@ pub fn CFG::get_predecessors(self : CFG, block_id : Int) -> Array[Int] {
 }
 
 ///|
-pub fn CFG::is_entry_or_unreachable(self : CFG, block_id : Int) -> Bool {
+pub fn CFG::is_entry_or_unreachable(self : CFG, block_id : Int32) -> Bool {
   if self.is_valid(block_id) {
     self.predecessors[block_id].length() == 0
   } else {
@@ -94,7 +94,7 @@ pub fn CFG::is_entry_or_unreachable(self : CFG, block_id : Int) -> Bool {
 }
 
 ///|
-pub fn CFG::is_exit_block(self : CFG, block_id : Int) -> Bool {
+pub fn CFG::is_exit_block(self : CFG, block_id : Int32) -> Bool {
   if self.is_valid(block_id) {
     self.successors[block_id].length() == 0
   } else {
@@ -110,9 +110,9 @@ pub fn CFG::is_exit_block(self : CFG, block_id : Int) -> Bool {
 /// blocks is ordinary in generated code, and a native recursion turns one
 /// into a stack overflow inside the optimizer rather than a diagnosable
 /// error (ISS-380, ISS-401).
-pub fn CFG::postorder(self : CFG) -> Array[Int] {
+pub fn CFG::postorder(self : CFG) -> Array[Int32] {
   let visited = Array::make(self.size, false)
-  let result : Array[Int] = []
+  let result : Array[Int32] = []
   if self.size == 0 || !self.valid[0] {
     return result
   }
@@ -145,14 +145,14 @@ pub fn CFG::postorder(self : CFG) -> Array[Int] {
 }
 
 ///|
-pub fn CFG::reverse_postorder(self : CFG) -> Array[Int] {
+pub fn CFG::reverse_postorder(self : CFG) -> Array[Int32] {
   let po = self.postorder()
   po.rev_in_place()
   po
 }
 
 ///|
-pub fn CFG::compute_dominators(self : CFG) -> Array[Int] {
+pub fn CFG::compute_dominators(self : CFG) -> Array[Int32] {
   let idom = Array::make(self.size, -1)
   if self.size == 0 || !self.valid[0] {
     return idom
@@ -191,11 +191,11 @@ pub fn CFG::compute_dominators(self : CFG) -> Array[Int] {
 
 ///|
 fn intersect_dominators(
-  idom : Array[Int],
-  rpo_num : Array[Int],
-  b1_init : Int,
-  b2_init : Int,
-) -> Int {
+  idom : Array[Int32],
+  rpo_num : Array[Int32],
+  b1_init : Int32,
+  b2_init : Int32,
+) -> Int32 {
   let mut b1 = b1_init
   let mut b2 = b2_init
   while b1 != b2 {
@@ -210,16 +210,16 @@ fn intersect_dominators(
 }
 
 ///|
-pub fn CFG::dominates(self : CFG, a : Int, b : Int) -> Bool {
+pub fn CFG::dominates(self : CFG, a : Int32, b : Int32) -> Bool {
   self.compute_dominance().dominates(a, b)
 }
 
 ///|
 /// Dominator facts for one CFG snapshot; rebuild after changing successors.
 pub struct Dominance {
-  idom : Array[Int]
-  priv preorder : Array[Int]
-  priv subtree_end : Array[Int]
+  idom : Array[Int32]
+  priv preorder : Array[Int32]
+  priv subtree_end : Array[Int32]
 }
 
 ///|
@@ -244,7 +244,7 @@ pub fn CFG::compute_dominance(self : CFG) -> Dominance {
 }
 
 ///|
-pub fn Dominance::dominates(self : Dominance, a : Int, b : Int) -> Bool {
+pub fn Dominance::dominates(self : Dominance, a : Int32, b : Int32) -> Bool {
   if a == b {
     return true
   }
@@ -263,8 +263,8 @@ pub fn Dominance::dominates(self : Dominance, a : Int, b : Int) -> Bool {
 
 ///|
 /// Build ordered child lists from an immediate-dominator table.
-pub fn build_dominator_tree(idom : Array[Int]) -> Array[Array[Int]] {
-  let children : Array[Array[Int]] = []
+pub fn build_dominator_tree(idom : Array[Int32]) -> Array[Array[Int32]] {
+  let children : Array[Array[Int32]] = []
   for _ in 0..<idom.length() {
     children.push([])
   }
@@ -281,7 +281,7 @@ pub fn build_dominator_tree(idom : Array[Int]) -> Array[Array[Int]] {
 /// schedules its children, `Exit` carries the scope state that node
 /// introduced so it can be unwound once the subtree below it is finished.
 priv enum DomWalkEvent[Scope] {
-  Enter(Int)
+  Enter(Int32)
   Exit(Scope)
 }
 
@@ -300,9 +300,9 @@ priv enum DomWalkEvent[Scope] {
 /// meant "does this survive a deep function?" got answered independently at
 /// each site — and answered wrong at all but one of them (ISS-401).
 pub fn[Scope] visit_dominator_tree(
-  domtree : Array[Array[Int]],
-  root : Int,
-  enter : (Int) -> (Scope, Bool),
+  domtree : Array[Array[Int32]],
+  root : Int32,
+  enter : (Int32) -> (Scope, Bool),
   exit : (Scope) -> Unit,
 ) -> Unit {
   let events : Array[DomWalkEvent[Scope]] = [Enter(root)]
@@ -326,9 +326,9 @@ pub fn[Scope] visit_dominator_tree(
 }
 
 ///|
-pub fn CFG::find_back_edges(self : CFG) -> Array[(Int, Int)] {
+pub fn CFG::find_back_edges(self : CFG) -> Array[(Int32, Int32)] {
   let dominance = self.compute_dominance()
-  let back_edges : Array[(Int, Int)] = []
+  let back_edges : Array[(Int32, Int32)] = []
   for block_id in 0..<self.size {
     if !self.valid[block_id] {
       continue
@@ -344,9 +344,9 @@ pub fn CFG::find_back_edges(self : CFG) -> Array[(Int, Int)] {
 
 ///|
 pub struct Loop {
-  header : Int
-  blocks : Array[Int]
-  back_edges : Array[(Int, Int)]
+  header : Int32
+  blocks : Array[Int32]
+  back_edges : Array[(Int32, Int32)]
 } derive(Debug)
 
 ///|
@@ -354,7 +354,7 @@ pub fn CFG::find_loops(self : CFG) -> Array[Loop] {
   let loops : Array[Loop] = []
   let back_edges = self.find_back_edges()
   // Preserve back-edge discovery order in the public loop array.
-  let grouped : Map[Int, Array[(Int, Int)]] = Map([])
+  let grouped : Map[Int32, Array[(Int32, Int32)]] = Map([])
   for edge in back_edges {
     let (_, header) = edge
     match grouped.get(header) {
@@ -375,13 +375,13 @@ pub fn CFG::find_loops(self : CFG) -> Array[Loop] {
 ///|
 fn CFG::find_loop_body(
   self : CFG,
-  header : Int,
-  back_edges : Array[(Int, Int)],
-) -> Array[Int] {
+  header : Int32,
+  back_edges : Array[(Int32, Int32)],
+) -> Array[Int32] {
   // Preserve the header-first reverse-CFG discovery order.
-  let body : Map[Int, Bool] = Map([])
+  let body : Map[Int32, Bool] = Map([])
   body.set(header, true)
-  let worklist : Array[Int] = []
+  let worklist : Array[Int32] = []
   for edge in back_edges {
     let (source, _) = edge
     if source != header {
@@ -398,13 +398,13 @@ fn CFG::find_loop_body(
       }
     }
   }
-  let result : Array[Int] = []
+  let result : Array[Int32] = []
   body.each(fn(block_id, _) { result.push(block_id) })
   result
 }
 
 ///|
-pub fn Loop::contains(self : Loop, block_id : Int) -> Bool {
+pub fn Loop::contains(self : Loop, block_id : Int32) -> Bool {
   for block in self.blocks {
     if block == block_id {
       return true
@@ -414,8 +414,8 @@ pub fn Loop::contains(self : Loop, block_id : Int) -> Bool {
 }
 
 ///|
-pub fn CFG::get_loop_preheader(self : CFG, loop_ : Loop) -> Int? {
-  let mut preheader : Int? = None
+pub fn CFG::get_loop_preheader(self : CFG, loop_ : Loop) -> Int32? {
+  let mut preheader : Int32? = None
   for pred in self.predecessors[loop_.header] {
     if !loop_.contains(pred) {
       match preheader {

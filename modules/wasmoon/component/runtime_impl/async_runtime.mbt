@@ -7,10 +7,10 @@ fn transfer_args_if_needed(
   func_type : FuncType,
   types : Array[TypeDef?],
   async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
-) -> (Array[ComponentValue], Array[Array[Int]]) raise ComponentRuntimeError {
-  let lends : Array[Array[Int]] = []
+  from_component_id : Int32,
+  to_component_id : Int32,
+) -> (Array[ComponentValue], Array[Array[Int32]]) raise ComponentRuntimeError {
+  let lends : Array[Array[Int32]] = []
   for i, param in func_type.params {
     let v = if i < args.length() { args[i] } else { raise InvalidValueIndex(i) }
     collect_direct_borrow_lends(
@@ -52,7 +52,7 @@ fn transfer_args_if_needed(
 }
 
 ///|
-fn release_direct_borrow_lends(lends : Array[Array[Int]]) -> Unit {
+fn release_direct_borrow_lends(lends : Array[Array[Int32]]) -> Unit {
   for counter in lends {
     counter[0] -= 1
   }
@@ -64,8 +64,8 @@ fn transfer_results_if_needed(
   result_ty : ValType?,
   types : Array[TypeDef?],
   async_state : AsyncState,
-  from_component_id : Int,
-  to_component_id : Int,
+  from_component_id : Int32,
+  to_component_id : Int32,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   match result_ty {
     None => vals
@@ -176,7 +176,7 @@ fn drive_core_to_completion(
 }
 
 ///|
-fn runnable_subtask_count(async_state : AsyncState) -> Int {
+fn runnable_subtask_count(async_state : AsyncState) -> Int32 {
   let mut count = 0
   for entry in async_state.tasks.entries_subtasks() {
     let (_task_id, subtask) = entry
@@ -215,12 +215,12 @@ fn waitable_set_has_event(async_state : AsyncState, ws_key : Int64) -> Bool {
 
 ///|
 struct DecodedCallbackCode {
-  tag : Int
-  payload : Int
+  tag : Int32
+  payload : Int32
 } derive(Debug)
 
 ///|
-fn decode_callback_code(code : Int) -> DecodedCallbackCode {
+fn decode_callback_code(code : Int32) -> DecodedCallbackCode {
   let u = code.reinterpret_as_uint()
   let tag = (u & 0xFU).reinterpret_as_int()
   let payload = (u >> 4).reinterpret_as_int()
@@ -264,7 +264,7 @@ fn step_task_once_impl(
   caller_table : ResourceTable,
   async_state : AsyncState,
 ) -> TaskStep raise ComponentRuntimeError {
-  fn task_owner_component_id() -> Int {
+  fn task_owner_component_id() -> Int32 {
     match task.func {
       Host(_, _, _) => caller_table.id
       HostAsync(_, _, _) => caller_table.id
@@ -272,7 +272,7 @@ fn step_task_once_impl(
     }
   }
 
-  fn ws_key_from_local(ws : Int) -> Int64 {
+  fn ws_key_from_local(ws : Int32) -> Int64 {
     handle_key(task_owner_component_id(), ws)
   }
 
@@ -746,8 +746,8 @@ pub fn progress_one_subtask_nonblocking(
   // If multiple subtasks are eligible across different `bp_key`s, choose the oldest
   // (by subtask handle ordering) to match Wasmtime scheduling.
   let mut admitted_task : Int64? = None
-  let candidates : Array[(Int, Int64)] = []
-  let pending_keys : Array[Int] = []
+  let candidates : Array[(Int32, Int64)] = []
+  let pending_keys : Array[Int32] = []
   for kv in async_state.pending_by_instance.iter() {
     let (key, _queue) = kv
     pending_keys.push(key)

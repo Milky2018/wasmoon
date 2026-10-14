@@ -1,5 +1,5 @@
 ///|
-fn parse_int(s : String) -> Int raise WatError {
+fn parse_int(s : String) -> Int32 raise WatError {
   let trimmed = s
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
     if trimmed.length() > 2 {
@@ -41,7 +41,7 @@ fn parse_int(s : String) -> Int raise WatError {
 }
 
 ///|
-fn parse_hex_int(s : String) -> Int raise WatError {
+fn parse_hex_int(s : String) -> Int32 raise WatError {
   let mut result = 0
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
@@ -60,7 +60,7 @@ fn parse_hex_int(s : String) -> Int raise WatError {
 /// Parse an unsigned 32-bit integer (for offset/align values)
 /// Returns Int but interprets large values as unsigned
 /// Raises error if value exceeds u32 max (4294967295)
-fn parse_u32(s : String) -> Int raise WatError {
+fn parse_u32(s : String) -> Int32 raise WatError {
   let trimmed = s
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
     if trimmed.length() > 2 {
@@ -86,7 +86,7 @@ fn parse_u32(s : String) -> Int raise WatError {
 }
 
 ///|
-fn parse_hex_u32(s : String) -> Int raise WatError {
+fn parse_hex_u32(s : String) -> Int32 raise WatError {
   let mut result : UInt64 = 0UL
   let mut overflow = false
   for i in 0..<s.length() {
@@ -273,7 +273,7 @@ priv struct BigUInt {
 }
 
 ///|
-fn BigUInt::from_int(n : Int) -> BigUInt {
+fn BigUInt::from_int(n : Int32) -> BigUInt {
   if n == 0 {
     { limbs: [0UL], }
   } else {
@@ -357,7 +357,7 @@ fn BigUInt::add(self : BigUInt, other : BigUInt) -> BigUInt {
 
 ///|
 /// Compare two BigUInts: returns -1 if self < other, 0 if equal, 1 if self > other
-fn BigUInt::compare(self : BigUInt, other : BigUInt) -> Int {
+fn BigUInt::compare(self : BigUInt, other : BigUInt) -> Int32 {
   // Remove leading zeros for comparison
   let mut self_len = self.limbs.length()
   while self_len > 1 && self.limbs[self_len - 1] == 0UL {
@@ -447,7 +447,7 @@ impl Shr for BigUInt with fn shr(self, n) {
 
 ///|
 /// Get the highest set bit position (0-indexed from LSB), -1 if zero
-fn BigUInt::bit_length(self : BigUInt) -> Int {
+fn BigUInt::bit_length(self : BigUInt) -> Int32 {
   let mut idx = self.limbs.length() - 1
   while idx >= 0 && self.limbs[idx] == 0UL {
     idx -= 1
@@ -466,7 +466,11 @@ fn BigUInt::bit_length(self : BigUInt) -> Int {
 
 ///|
 /// Extract bits [start, start+count) as UInt64, where bit 0 is LSB
-fn BigUInt::extract_bits(self : BigUInt, start : Int, count : Int) -> UInt64 {
+fn BigUInt::extract_bits(
+  self : BigUInt,
+  start : Int32,
+  count : Int32,
+) -> UInt64 {
   if count == 0 || count > 64 {
     return 0UL
   }
@@ -493,7 +497,7 @@ fn BigUInt::extract_bits(self : BigUInt, start : Int, count : Int) -> UInt64 {
 
 ///|
 /// Check if any bit below position n is set (for sticky bit calculation)
-fn BigUInt::has_bits_below(self : BigUInt, n : Int) -> Bool {
+fn BigUInt::has_bits_below(self : BigUInt, n : Int32) -> Bool {
   if n <= 0 {
     return false
   }
@@ -530,7 +534,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
   }
 
   // Collect all significant digits and track decimal point position
-  let digits : Array[Int] = []
+  let digits : Array[Int32] = []
   let mut decimal_pos = -1
   let mut seen_digit = false
   let mut leading_zeros_after_dot = 0
@@ -749,7 +753,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
       // Underflow to zero, but check if we should round up to 1
       if extra_round && (extra_sticky || true) {
         // Round up from 0 to 1
-        let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+        let sign_bit : UInt32 = if neg { 0x80000000U } else { 0U }
         let result_bits = sign_bit | 1U
         return Float::reinterpret_from_uint(result_bits)
       }
@@ -774,7 +778,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
         let result_bits = if neg { 0x80800000U } else { 0x00800000U }
         return Float::reinterpret_from_uint(result_bits)
       }
-      let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+      let sign_bit : UInt32 = if neg { 0x80000000U } else { 0U }
       let result_bits = sign_bit | final_mantissa.reinterpret_as_uint()
       return Float::reinterpret_from_uint(result_bits)
     }
@@ -804,7 +808,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
       let result_bits = if neg { 0x80800000U } else { 0x00800000U }
       return Float::reinterpret_from_uint(result_bits)
     }
-    let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+    let sign_bit : UInt32 = if neg { 0x80000000U } else { 0U }
     let result_bits = sign_bit | final_mantissa.reinterpret_as_uint()
     return Float::reinterpret_from_uint(result_bits)
   }
@@ -854,7 +858,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
   }
 
   // Construct IEEE 754 bit pattern
-  let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+  let sign_bit : UInt32 = if neg { 0x80000000U } else { 0U }
   let exp_bits = ((final_exp & 0xFF) << 23).reinterpret_as_uint()
   let mantissa_bits_u = (final_mantissa & 0x7FFFFF).reinterpret_as_uint()
   Float::reinterpret_from_uint(sign_bit | exp_bits | mantissa_bits_u)
@@ -1094,7 +1098,7 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
       }
       return Float::reinterpret_from_uint(bits)
     }
-    let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+    let sign_bit : UInt32 = if neg { 0x80000000U } else { 0U }
     let bits = sign_bit | mantissa_rounded.reinterpret_as_uint()
     return Float::reinterpret_from_uint(bits)
   }
@@ -1133,7 +1137,7 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
   }
 
   // Construct IEEE 754 bit pattern
-  let sign_bit : UInt = if neg { 0x80000000U } else { 0U }
+  let sign_bit : UInt32 = if neg { 0x80000000U } else { 0U }
   let exp_bits = ((final_exp & 0xFF) << 23).reinterpret_as_uint()
   let bits = sign_bit | exp_bits | final_mantissa.reinterpret_as_uint()
   Float::reinterpret_from_uint(bits)

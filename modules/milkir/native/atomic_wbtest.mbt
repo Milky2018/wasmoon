@@ -1,6 +1,6 @@
 ///|
 test "native lowering preserves every sequentially consistent atomic operation" {
-  let shapes : Array[(@milkir.Type, Int)] = [
+  let shapes : Array[(@milkir.Type, Int32)] = [
     (I32, 8),
     (I32, 16),
     (I32, 32),

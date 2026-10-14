@@ -88,7 +88,7 @@ fn NativeExecutionState::allocate_resource_id(
 ///|
 pub fn NativeExecutionState::begin(
   self : NativeExecutionState,
-  release? : () -> Unit = fn() { () },
+  release~ : () -> Unit = fn() { () },
 ) -> NativeInvocationHandle raise NativeExecutionStateError {
   if !self.accepting_new_invocations {
     raise ExecutionStateSealed
@@ -223,12 +223,12 @@ pub fn NativeExecutionState::current_invocation(
 }
 
 ///|
-pub fn NativeExecutionState::active_depth(self : NativeExecutionState) -> Int {
+pub fn NativeExecutionState::active_depth(self : NativeExecutionState) -> Int32 {
   self.active.length()
 }
 
 ///|
-pub fn NativeExecutionState::parked_count(self : NativeExecutionState) -> Int {
+pub fn NativeExecutionState::parked_count(self : NativeExecutionState) -> Int32 {
   let mut count = 0
   for entry in self.invocations.iter() {
     if entry.1.phase == Parked {
@@ -239,7 +239,7 @@ pub fn NativeExecutionState::parked_count(self : NativeExecutionState) -> Int {
 }
 
 ///|
-pub fn NativeExecutionState::live_count(self : NativeExecutionState) -> Int {
+pub fn NativeExecutionState::live_count(self : NativeExecutionState) -> Int32 {
   self.invocations.length()
 }
 

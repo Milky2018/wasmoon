@@ -111,7 +111,7 @@ test "AArch64 direct arithmetic selects modular negative immediates" {
     [0, 1, 2, 3, 4, 5, 6, 7],
     [0, 1, 2, 3, 4, 5, 6, 7],
   )
-  let cases : Array[(@native.ValueType, @lowering.IntBinaryOp, UInt64, UInt?)] = [
+  let cases : Array[(@native.ValueType, @lowering.IntBinaryOp, UInt64, UInt32?)] = [
     (I32, Add, 0xffffffc0UL, Some(0x51010020U)),
     (I32, Sub, 0xffffffc0UL, Some(0x11010020U)),
     (I64, Add, 0xffffffffffffffc0UL, Some(0xd1010020U)),
@@ -177,7 +177,7 @@ test "AArch64 value comparisons use immediate encoding only when eligible" {
     [0, 1, 2, 3, 4, 5, 6, 7],
   )
 
-  let cases : Array[(@native.ValueType, UInt64, UInt?)] = [
+  let cases : Array[(@native.ValueType, UInt64, UInt32?)] = [
     (I32, 42UL, Some(0x7100a83fU)),
     (I64, 42UL, Some(0xf100a83fU)),
     (I64, 4096UL, Some(0xf140043fU)),

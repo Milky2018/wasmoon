@@ -1,7 +1,7 @@
 ///|
 priv struct BuildState {
   types : Array[TypeDef?]
-  next_declared_type : Ref[Int]
+  next_declared_type : Ref[Int32]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
   components : Array[ComponentClosure]
@@ -13,10 +13,10 @@ priv struct BuildState {
   core_instances : Array[CoreInstance]
   core_funcs : Array[CoreFuncRef]
   core_types : Array[Bytes]
-  core_tables : Array[Int]
-  core_mems : Array[Int]
-  core_globals : Array[Int]
-  core_tags : Array[Int]
+  core_tables : Array[Int32]
+  core_mems : Array[Int32]
+  core_globals : Array[Int32]
+  core_tags : Array[Int32]
   exports : Map[String, ComponentExtern]
 }
 
@@ -194,7 +194,7 @@ fn encode_utf8_string(s : String) -> Bytes {
 fn encode_string_for_canon(
   s : String,
   encoding : StringEncoding,
-) -> (Bytes, Int, Int) {
+) -> (Bytes, Int32, Int32) {
   match encoding {
     Utf8 => {
       let bytes = encode_utf8_string(s)
@@ -268,7 +268,7 @@ fn decode_export_name(name : ExportName) -> String raise ComponentRuntimeError {
 ///|
 fn synthesize_trivial_instance_import(
   key : String,
-  tyidx : Int,
+  tyidx : Int32,
   types : Array[TypeDef?],
   store : @runtime.Store,
 ) -> ComponentInstance? raise ComponentRuntimeError {
@@ -277,7 +277,7 @@ fn synthesize_trivial_instance_import(
   }
   fn resolve_inst_typedef(
     local_types : Array[TypeDef?],
-    idx : Int,
+    idx : Int32,
   ) -> TypeDef? {
     if idx >= 0 && idx < local_types.length() {
       return local_types[idx]

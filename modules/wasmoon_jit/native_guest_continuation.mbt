@@ -17,22 +17,22 @@ pub fn NativeJITContext::set_continuation_arena(
 #borrow(context, roots)
 extern "c" fn define_continuation_type(
   context : JITContext,
-  index : Int,
+  index : Int32,
   trampoline : Int64,
-  params : Int,
-  results : Int,
-  roots : FixedArray[Int],
-) -> Int = "wasmoon_continuation_define_type"
+  params : Int32,
+  results : Int32,
+  roots : FixedArray[Int32],
+) -> Int32 = "wasmoon_continuation_define_type"
 
 ///|
 pub fn NativeJITContext::define_continuation_type(
   self : NativeJITContext,
-  index : Int,
+  index : Int32,
   trampoline : Int64,
   params : Array[@types.ValueType],
   results : Array[@types.ValueType],
 ) -> Bool {
-  let roots : Array[Int] = []
+  let roots : Array[Int32] = []
   for ty in params {
     match ty {
       I32 | I64 | F32 | F64 => roots.push(0)

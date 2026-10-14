@@ -9,7 +9,7 @@ test "F32 numeric constants preserve their value" {
 
 ///|
 test "floating constants preserve zero signs and NaN payloads" {
-  let f32_bits : Array[UInt] = [0U, 0x80000000U, 0x7FC00001U]
+  let f32_bits : Array[UInt32] = [0U, 0x80000000U, 0x7FC00001U]
   let f32_builder = FunctionBuilder::FunctionBuilder("f32_bits")
   for bits in f32_bits {
     f32_builder.fconst_f32(Float::reinterpret_from_uint(bits)) |> ignore

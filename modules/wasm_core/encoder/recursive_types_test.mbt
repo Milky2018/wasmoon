@@ -1,5 +1,5 @@
 ///|
-fn type_module(payload : Array[Int]) -> Bytes {
+fn type_module(payload : Array[Int32]) -> Bytes {
   let bytes = [0, 97, 115, 109, 1, 0, 0, 0, 1, payload.length()]
   bytes.append(payload)
   Bytes::makei(bytes.length(), i => bytes[i].to_byte())

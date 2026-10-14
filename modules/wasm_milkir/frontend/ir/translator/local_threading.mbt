@@ -51,7 +51,7 @@ fn mark_written_locals(
 fn Translator::region_local_params(
   self : Translator,
   bodies : Array[Array[@types.Instruction]],
-) -> Array[Int] {
+) -> Array[Int32] {
   let written = Array::make(self.locals.length(), false)
   for body in bodies {
     mark_written_locals(body, written)
@@ -71,7 +71,7 @@ fn Translator::region_local_params(
 fn Translator::add_local_block_params(
   self : Translator,
   block : Block,
-  local_params : Array[Int],
+  local_params : Array[Int32],
 ) -> Unit {
   for idx in local_params {
     self.builder.add_block_param(block, self.locals[idx].ty) |> ignore
@@ -84,7 +84,7 @@ fn Translator::add_local_block_params(
 fn Translator::push_local_args(
   self : Translator,
   args : Array[Value],
-  local_params : Array[Int],
+  local_params : Array[Int32],
 ) -> Unit {
   for idx in local_params {
     args.push(self.locals[idx])
@@ -98,8 +98,8 @@ fn Translator::push_local_args(
 fn Translator::adopt_local_params(
   self : Translator,
   block : Block,
-  local_params : Array[Int],
-  start : Int,
+  local_params : Array[Int32],
+  start : Int32,
 ) -> Unit {
   for i, idx in local_params {
     self.locals[idx] = block.params[start + i].0

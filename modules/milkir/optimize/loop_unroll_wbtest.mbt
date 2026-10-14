@@ -31,9 +31,9 @@ priv enum TestBranchPolarity {
 
 ///|
 fn make_canonical_i32_loop(
-  initial : Int,
-  bound_value : Int,
-  step_value : Int,
+  initial : Int32,
+  bound_value : Int32,
+  step_value : Int32,
 ) -> CanonicalI32LoopFixture {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("canonical_i32_loop")
   let preheader = builder.current_block()
@@ -72,7 +72,7 @@ fn make_canonical_i32_loop(
 }
 
 ///|
-fn make_carried_effect_loop(bound_value : Int) -> CarriedEffectLoopFixture {
+fn make_carried_effect_loop(bound_value : Int32) -> CarriedEffectLoopFixture {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("carried_effect_loop")
   let address = builder.add_param(Ptr)
   let preheader = builder.current_block()
@@ -205,7 +205,7 @@ fn require_counted_loop_plan(func : @milkir.Function) -> CountedLoopPlan raise {
 ///|
 fn require_counted_trip_count(
   func : @milkir.Function,
-  expected : Int,
+  expected : Int32,
 ) -> Unit raise {
   let plan = require_counted_loop_plan(func)
   if plan.trip_count != expected {
@@ -229,8 +229,8 @@ fn require_unroll_skip_without_mutation(func : @milkir.Function) -> Unit raise {
 ///|
 fn evaluate_canonical_instructions(
   instructions : Array[@milkir.Inst],
-  values : @hashmap.HashMap[Int, Int64],
-) -> Int raise {
+  values : @hashmap.HashMap[Int32, Int64],
+) -> Int32 raise {
   let mut body_executions = 0
   for inst in instructions {
     match inst.opcode {
@@ -255,8 +255,8 @@ fn evaluate_canonical_instructions(
 ///|
 fn evaluate_canonical_i32_loop(
   fixture : CanonicalI32LoopFixture,
-) -> (Int64, Int) raise {
-  let values : @hashmap.HashMap[Int, Int64] = HashMap([])
+) -> (Int64, Int32) raise {
+  let values : @hashmap.HashMap[Int32, Int64] = HashMap([])
   let mut body_executions = evaluate_canonical_instructions(
     test_block_instructions(fixture.func, fixture.preheader),
     values,
@@ -632,7 +632,7 @@ test "counted-loop analysis supports signed and unsigned I32 and I64 relations" 
       Int64,
       @milkir.IntCC,
       @milkir.Opcode,
-      Int,
+      Int32,
       String,
     ),
   ] = [

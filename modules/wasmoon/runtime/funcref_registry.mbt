@@ -1,20 +1,20 @@
 ///|
 priv struct StoreFuncrefMappingOwner {
-  registration : Int
-  store_addr : Int
+  registration : Int32
+  store_addr : Int32
   func_ptr : Int64
 } derive(Debug)
 
 ///|
 /// One Store-local function address and its native executable pointer.
 pub struct StoreFuncrefEntry {
-  store_addr : Int
+  store_addr : Int32
   func_ptr : Int64
 } derive(Debug, Eq)
 
 ///|
 pub fn StoreFuncrefEntry::StoreFuncrefEntry(
-  store_addr~ : Int,
+  store_addr~ : Int32,
   func_ptr~ : Int64,
 ) -> StoreFuncrefEntry {
   { store_addr, func_ptr, }
@@ -22,16 +22,16 @@ pub fn StoreFuncrefEntry::StoreFuncrefEntry(
 
 ///|
 priv struct StoreFuncrefRegistry {
-  store_to_ptr : Map[Int, Array[StoreFuncrefMappingOwner]]
+  store_to_ptr : Map[Int32, Array[StoreFuncrefMappingOwner]]
   ptr_to_store : Map[Int64, Array[StoreFuncrefMappingOwner]]
-  next_registration : Ref[Int]
+  next_registration : Ref[Int32]
   owners : Array[NativeCallableOwner]
 } derive(Debug)
 
 ///|
 struct StoreFuncrefRegistration {
   registry : StoreFuncrefRegistry
-  registration : Int
+  registration : Int32
   entries : Array[StoreFuncrefEntry]
   active : Ref[Bool]
 }
@@ -49,7 +49,7 @@ fn StoreFuncrefRegistry::new() -> StoreFuncrefRegistry {
 ///|
 fn remove_store_funcref_owner(
   owners : Array[StoreFuncrefMappingOwner],
-  registration : Int,
+  registration : Int32,
 ) -> Unit {
   for i in 0..<owners.length() {
     if owners[i].registration == registration {
@@ -112,7 +112,7 @@ pub fn StoreFuncrefRegistration::release(
 ///|
 fn StoreFuncrefRegistry::lookup_ptr(
   self : StoreFuncrefRegistry,
-  store_addr : Int,
+  store_addr : Int32,
 ) -> Int64? {
   match self.store_to_ptr.get(store_addr) {
     Some(owners) if !owners.is_empty() =>
@@ -125,7 +125,7 @@ fn StoreFuncrefRegistry::lookup_ptr(
 fn StoreFuncrefRegistry::lookup_store_addr(
   self : StoreFuncrefRegistry,
   func_ptr : Int64,
-) -> Int? {
+) -> Int32? {
   match self.ptr_to_store.get(func_ptr) {
     Some(owners) if !owners.is_empty() =>
       Some(owners[owners.length() - 1].store_addr)
@@ -165,14 +165,17 @@ fn StoreFuncrefRegistry::clear(self : StoreFuncrefRegistry) -> Unit {
 pub fn Store::register_jit_funcrefs(
   self : Store,
   entries : Array[StoreFuncrefEntry],
-  release_owner? : () -> Unit = fn() {  },
+  release_owner~ : () -> Unit = fn() {  },
 ) -> StoreFuncrefRegistration {
   self.funcref_registry.owners.push({ release: release_owner, })
   self.funcref_registry.register(entries)
 }
 
 ///|
-pub fn Store::lookup_jit_funcref_ptr(self : Store, store_addr : Int) -> Int64? {
+pub fn Store::lookup_jit_funcref_ptr(
+  self : Store,
+  store_addr : Int32,
+) -> Int64? {
   self.funcref_registry.lookup_ptr(store_addr)
 }
 
@@ -180,7 +183,7 @@ pub fn Store::lookup_jit_funcref_ptr(self : Store, store_addr : Int) -> Int64? {
 pub fn Store::lookup_jit_funcref_store_addr(
   self : Store,
   func_ptr : Int64,
-) -> Int? {
+) -> Int32? {
   self.funcref_registry.lookup_store_addr(func_ptr)
 }
 

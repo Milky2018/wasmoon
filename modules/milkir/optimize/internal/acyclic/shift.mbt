@@ -69,7 +69,7 @@ fn OptimizerSession::rewrite_rotation(
 }
 
 ///|
-fn low_bits_mask(bits : Int) -> Int64 {
+fn low_bits_mask(bits : Int32) -> Int64 {
   match bits {
     64 => -1L
     63 => 0x7FFFFFFFFFFFFFFFL

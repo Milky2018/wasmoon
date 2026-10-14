@@ -182,7 +182,7 @@ fn Translator::translate_if(
 ///|
 /// Translate a br instruction
 /// We need to pass both explicit params AND current local values
-fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
+fn Translator::translate_br(self : Translator, depth : Int32) -> Unit {
   let idx = self.block_stack.length() - 1 - depth
   if idx >= 0 && idx < self.block_stack.length() {
     // Jump to a block within the function
@@ -223,7 +223,7 @@ fn Translator::branch_with_unwind(
   target : Block,
   arguments : Array[Value],
   fallthrough : Block,
-  target_handler_depth : Int,
+  target_handler_depth : Int32,
 ) -> Unit {
   if target_handler_depth == self.try_handler_stack.length() {
     self.builder.branch(condition, target, arguments, fallthrough, [])
@@ -238,7 +238,7 @@ fn Translator::branch_with_unwind(
 
 ///|
 /// Translate a br_if instruction.
-fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
+fn Translator::translate_br_if(self : Translator, depth : Int32) -> Unit {
   let cond = self.pop()
   let idx = self.block_stack.length() - 1 - depth
   let fallthrough = self.builder.create_block()
@@ -288,7 +288,7 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
 ///|
 /// Translate a br_on_null instruction
 /// br_on_null: pop ref, branch if null, otherwise push non-null ref and continue
-fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
+fn Translator::translate_br_on_null(self : Translator, depth : Int32) -> Unit {
   let ref_val = self.pop()
   let idx = self.block_stack.length() - 1 - depth
 
@@ -349,7 +349,10 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
 ///|
 /// Translate a br_on_non_null instruction
 /// br_on_non_null: pop ref, branch with ref if non-null, otherwise continue
-fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit {
+fn Translator::translate_br_on_non_null(
+  self : Translator,
+  depth : Int32,
+) -> Unit {
   let ref_val = self.pop()
   let idx = self.block_stack.length() - 1 - depth
 
@@ -420,7 +423,7 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
 /// otherwise push the original value and continue
 fn Translator::translate_br_on_cast(
   self : Translator,
-  depth : Int,
+  depth : Int32,
   target_type : @types.ValueType,
 ) -> Unit {
   let ref_val = self.pop()
@@ -505,7 +508,7 @@ fn Translator::translate_br_on_cast(
 /// otherwise push the cast value and continue
 fn Translator::translate_br_on_cast_fail(
   self : Translator,
-  depth : Int,
+  depth : Int32,
   target_type : @types.ValueType,
 ) -> Unit {
   let ref_val = self.pop()
@@ -591,8 +594,8 @@ fn Translator::translate_br_on_cast_fail(
 /// Uses critical edge splitting to pass block arguments properly
 fn Translator::translate_br_table(
   self : Translator,
-  labels : Array[Int],
-  default_ : Int,
+  labels : Array[Int32],
+  default_ : Int32,
 ) -> Unit {
   let index = self.pop()
 
@@ -601,8 +604,8 @@ fn Translator::translate_br_table(
   // Returns (target_block, result_types, local_params, handler_depth)
   fn get_target(
     self : Translator,
-    depth : Int,
-  ) -> (Block, Array[Type], Array[Int], Int) {
+    depth : Int32,
+  ) -> (Block, Array[Type], Array[Int32], Int32) {
     let idx = self.block_stack.length() - 1 - depth
     if idx >= 0 && idx < self.block_stack.length() {
       let frame = self.block_stack[idx]
@@ -637,7 +640,10 @@ fn Translator::translate_br_table(
       )
     }
   }
-  fn target_args(self : Translator, local_params : Array[Int]) -> Array[Value] {
+  fn target_args(
+    self : Translator,
+    local_params : Array[Int32],
+  ) -> Array[Value] {
     let args = result_args.copy()
     self.push_local_args(args, local_params)
     args
@@ -649,8 +655,8 @@ fn Translator::translate_br_table(
   // unique intermediate block per target depth keeps IR size bounded and avoids
   // O(table_size) extra blocks in translator hot paths.
   let intermediate_blocks : Array[Block] = []
-  let unique_depths : Array[Int] = []
-  let depth_to_intermediate : Map[Int, Block] = Map([])
+  let unique_depths : Array[Int32] = []
+  let depth_to_intermediate : Map[Int32, Block] = Map([])
   let default_intermediate = self.builder.create_block()
   for depth in labels {
     if depth == default_ {
@@ -695,7 +701,7 @@ fn Translator::translate_br_table(
 /// Remap a local function index to global function index for cross-module calls
 /// - For imports: use import_remap if available
 /// - For local functions: add func_base
-fn Translator::remap_func_idx(self : Translator, func_idx : Int) -> Int {
+fn Translator::remap_func_idx(self : Translator, func_idx : Int32) -> Int32 {
   if func_idx < self.num_imports {
     // Import function - use remap if available
     if self.import_remap.length() > 0 && func_idx < self.import_remap.length() {
@@ -711,7 +717,7 @@ fn Translator::remap_func_idx(self : Translator, func_idx : Int) -> Int {
 
 ///|
 /// Translate a direct call
-fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
+fn Translator::translate_call(self : Translator, func_idx : Int32) -> Unit {
   // Get function type
   let type_idx = if func_idx < self.num_imports {
     // Look up import function type
@@ -758,8 +764,8 @@ fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
 /// Translate an indirect call
 fn Translator::translate_call_indirect(
   self : Translator,
-  type_idx : Int,
-  table_idx : Int,
+  type_idx : Int32,
+  table_idx : Int32,
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
@@ -797,7 +803,7 @@ fn Translator::translate_call_indirect(
 
 ///|
 /// Translate a call through function reference
-fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
+fn Translator::translate_call_ref(self : Translator, type_idx : Int32) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
     // Pop the function reference
@@ -849,7 +855,10 @@ fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
 
 ///|
 /// Translate a tail call
-fn Translator::translate_return_call(self : Translator, func_idx : Int) -> Unit {
+fn Translator::translate_return_call(
+  self : Translator,
+  func_idx : Int32,
+) -> Unit {
   // Get function type
   let type_idx = if func_idx < self.num_imports {
     // Look up import function type
@@ -889,8 +898,8 @@ fn Translator::translate_return_call(self : Translator, func_idx : Int) -> Unit 
 /// Translate a tail call indirect
 fn Translator::translate_return_call_indirect(
   self : Translator,
-  type_idx : Int,
-  table_idx : Int,
+  type_idx : Int32,
+  table_idx : Int32,
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]
@@ -925,7 +934,7 @@ fn Translator::translate_return_call_indirect(
 /// Translate a tail call through function reference
 fn Translator::translate_return_call_ref(
   self : Translator,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Unit {
   if type_idx < self.func_types.length() {
     let func_type = self.func_types[type_idx]

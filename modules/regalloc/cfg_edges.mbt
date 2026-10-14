@@ -1,13 +1,13 @@
 ///|
 struct DenseCfgEdges {
-  preds : Array[Array[Int]]
-  succs : Array[Array[Int]]
+  preds : Array[Array[Int32]]
+  succs : Array[Array[Int32]]
 } derive(Debug)
 
 ///|
 fn build_dense_successor_edges(
-  block_ids : Array[Int],
-  block_successor_ids : Array[Array[Int]],
+  block_ids : Array[Int32],
+  block_successor_ids : Array[Array[Int32]],
 ) -> DenseCfgEdges {
   let n = block_ids.length()
   let mut max_block_id = -1
@@ -27,8 +27,8 @@ fn build_dense_successor_edges(
     }
   }
 
-  let preds : Array[Array[Int]] = []
-  let succs : Array[Array[Int]] = []
+  let preds : Array[Array[Int32]] = []
+  let succs : Array[Array[Int32]] = []
   for _ in 0..<n {
     preds.push([])
     succs.push([])
@@ -38,7 +38,7 @@ fn build_dense_successor_edges(
     if block_idx >= n {
       break
     }
-    let block_succs : Array[Int] = []
+    let block_succs : Array[Int32] = []
     for succ_id in successor_ids {
       if succ_id >= 0 && succ_id < block_id_to_index.length() {
         let succ_idx = block_id_to_index[succ_id]

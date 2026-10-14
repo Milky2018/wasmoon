@@ -1,6 +1,6 @@
 ///|
 priv struct PlanState {
-  values : Map[(Int, Int), VirtualReg]
+  values : Map[(Int32, Int32), VirtualReg]
 }
 
 ///|
@@ -10,7 +10,7 @@ fn PlanState::new() -> PlanState {
 
 ///|
 fn PlanState::copy(self : PlanState) -> PlanState {
-  let values : Map[(Int, Int), VirtualReg] = Map([])
+  let values : Map[(Int32, Int32), VirtualReg] = Map([])
   for key, value in self.values {
     values[key] = value
   }
@@ -35,7 +35,7 @@ fn PlanState::equals(self : PlanState, other : PlanState) -> Bool {
 
 ///|
 fn PlanState::meet_with(self : PlanState, other : PlanState) -> Unit {
-  let removed : Array[(Int, Int)] = []
+  let removed : Array[(Int32, Int32)] = []
   for key, value in self.values {
     if other.values.get(key) != Some(value) {
       removed.push(key)
@@ -48,7 +48,7 @@ fn PlanState::meet_with(self : PlanState, other : PlanState) -> Unit {
 
 ///|
 fn PlanState::remove_value(self : PlanState, value : VirtualReg) -> Unit {
-  let removed : Array[(Int, Int)] = []
+  let removed : Array[(Int32, Int32)] = []
   for key, existing in self.values {
     if existing == value {
       removed.push(key)
@@ -204,7 +204,7 @@ fn[F : FunctionView, S : AllocationSink] process_operand_phase(
   function : F,
   environment : MachineEnv,
   plan : S,
-  instruction : Int,
+  instruction : Int32,
   timing : OperandTiming,
 ) -> Unit raise VerifyError {
   for operand_index, operand in function.instruction_operands(instruction) {
@@ -246,7 +246,7 @@ fn[F : FunctionView, S : AllocationSink] process_plan_block(
   function : F,
   environment : MachineEnv,
   plan : S,
-  block : Int,
+  block : Int32,
   edits_at : Map[EditPosition, Array[AllocationEdit]],
 ) -> PlanState raise VerifyError {
   let current = state.copy()
@@ -282,7 +282,7 @@ fn[F : FunctionView, S : AllocationSink] initialize_block_parameters(
   state : PlanState,
   function : F,
   plan : S,
-  block : Int,
+  block : Int32,
 ) -> Unit raise VerifyError {
   for parameter_index in 0..<function.block_parameter_count(block) {
     let parameter = function.block_parameter_at(block, parameter_index)
@@ -299,9 +299,9 @@ fn[F : FunctionView, S : AllocationSink] prepare_successor_state(
   output : PlanState,
   function : F,
   plan : S,
-  block : Int,
-  successor : Int,
-  target : Int,
+  block : Int32,
+  successor : Int32,
+  target : Int32,
   edits_at : Map[EditPosition, Array[AllocationEdit]],
 ) -> PlanState raise VerifyError {
   let state = output.copy()

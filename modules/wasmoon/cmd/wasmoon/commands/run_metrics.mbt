@@ -33,8 +33,8 @@ fn finish_run_metrics(metrics : RunMetrics?) -> Unit {
     record_run_phase(metrics, "finish_or_early_return")
     let report : Json = {
       "schema_version": 1,
-      "command_us": m.last_us.to_json(),
-      "phases_us": m.phases.to_json(),
+      "command_us": Json(m.last_us),
+      "phases_us": Json(m.phases),
     }
     @fs.write_string_to_file(m.path, report.stringify()) catch {
       IOError(message) =>

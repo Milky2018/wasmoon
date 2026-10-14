@@ -6,20 +6,20 @@ using @artifact_test_support {loader_artifact, loader_compatibility}
 
 ///|
 struct InstalledImportSnapshot {
-  function_index : Int
+  function_index : Int32
   symbol : String
 } derive(Eq, Debug)
 
 ///|
 struct InstalledFunctionSnapshot {
-  function_index : Int
+  function_index : Int32
   symbol : String
-  code_size : Int
-  entry_offset : Int
-  source_count : Int
-  trap_count : Int
-  safepoint_count : Int
-  unwind_count : Int
+  code_size : Int32
+  entry_offset : Int32
+  source_count : Int32
+  trap_count : Int32
+  safepoint_count : Int32
+  unwind_count : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -49,7 +49,7 @@ fn installation_snapshot(installed : InstalledCode) -> InstallationSnapshot {
 }
 
 ///|
-extern "c" fn executable_mapping_count() -> Int = "wasmoon_jit_exec_mapping_count"
+extern "c" fn executable_mapping_count() -> Int32 = "wasmoon_jit_exec_mapping_count"
 
 ///|
 fn installer_for_tests() -> JitCodeInstaller {

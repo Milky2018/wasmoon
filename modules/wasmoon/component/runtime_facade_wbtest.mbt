@@ -16,7 +16,7 @@ fn component_runtime_async_import_fixture() -> Bytes raise @component_text.Compo
 ///|
 fn component_runtime_async_host(
   ready : Ref[Bool],
-  cancellations : Ref[Int],
+  cancellations : Ref[Int32],
 ) -> ComponentHostInstaller {
   ComponentHostInstaller::from_linker_installer(fn(
     linker,

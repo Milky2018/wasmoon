@@ -1,7 +1,7 @@
 ///|
 pub suberror PolycallError {
-  InputNumber(Int, Int)
-  OutputNumber(Int, Int)
+  InputNumber(Int32, Int32)
+  OutputNumber(Int32, Int32)
   JIT(JITTrap)
 }
 

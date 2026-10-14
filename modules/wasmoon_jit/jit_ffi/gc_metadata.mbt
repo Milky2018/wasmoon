@@ -2,9 +2,9 @@
 #borrow(context, types, canonical, functions)
 extern "c" fn bind_gc_metadata(
   context : JITContext,
-  types : FixedArray[Int],
-  canonical : FixedArray[Int],
-  functions : FixedArray[Int],
+  types : FixedArray[Int32],
+  canonical : FixedArray[Int32],
+  functions : FixedArray[Int32],
 ) -> Unit = "wasmoon_jit_bind_gc_metadata"
 
 ///|
@@ -13,9 +13,9 @@ extern "c" fn bind_gc_metadata(
 /// Bind outside guest execution and do not mutate arrays while they are bound.
 pub fn JITContext::bind_gc_metadata(
   self : JITContext,
-  types : FixedArray[Int],
-  canonical : FixedArray[Int],
-  functions : FixedArray[Int],
+  types : FixedArray[Int32],
+  canonical : FixedArray[Int32],
+  functions : FixedArray[Int32],
 ) -> Unit {
   guard types.length() % 6 == 0 else {
     abort("invalid GC type metadata stride")
@@ -29,9 +29,9 @@ pub fn JITContext::bind_gc_metadata(
 #borrow(self, blob, offsets)
 pub extern "c" fn JITContext::bind_gc_safepoints(
   self : JITContext,
-  function : Int,
+  function : Int32,
   blob : Bytes,
-  offsets : FixedArray[Int],
+  offsets : FixedArray[Int32],
 ) -> Bool = "wasmoon_jit_bind_gc_safepoints"
 
 ///|
@@ -46,7 +46,7 @@ pub extern "c" fn JITContext::bind_gc_function_addresses(
 ///|
 extern "c" fn snapshot_function_addresses(
   table : Int64,
-  count : Int,
+  count : Int32,
 ) -> FixedArray[Int64] = "wasmoon_jit_snapshot_gc_function_addresses"
 
 ///|
@@ -55,7 +55,7 @@ extern "c" fn snapshot_function_addresses(
 pub fn JITContext::snapshot_gc_function_addresses(
   self : JITContext,
   table : Int64,
-  count : Int,
+  count : Int32,
 ) -> Unit {
   self.bind_gc_function_addresses(snapshot_function_addresses(table, count))
 }
@@ -68,7 +68,7 @@ pub type PreparedSafepoints
 #borrow(blobs, offsets)
 extern "c" fn prepare_safepoints(
   blobs : FixedArray[Bytes],
-  offsets : FixedArray[FixedArray[Int]],
+  offsets : FixedArray[FixedArray[Int32]],
 ) -> PreparedSafepoints = "wasmoon_jit_prepare_safepoints"
 
 ///|
@@ -82,12 +82,12 @@ pub extern "c" fn JITContext::bind_prepared_safepoints(
 ///|
 pub fn PreparedSafepoints::new(
   blobs : FixedArray[Bytes],
-  offsets : FixedArray[FixedArray[Int]],
+  offsets : FixedArray[FixedArray[Int32]],
 ) -> PreparedSafepoints {
   guard blobs.length() == offsets.length() else {
     abort("safepoint payload counts differ")
   }
-  let snapshot : FixedArray[FixedArray[Int]] = FixedArray::makei(
+  let snapshot : FixedArray[FixedArray[Int32]] = FixedArray::makei(
     offsets.length(),
     i => {
       let sites = offsets[i]

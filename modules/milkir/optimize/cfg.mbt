@@ -4,7 +4,7 @@
 /// Abstract value for block parameters during constant-phi analysis
 priv enum PhiAbstractValue {
   None
-  One(Int)
+  One(Int32)
   Many
 } derive(Eq)
 
@@ -27,7 +27,7 @@ fn PhiAbstractValue::join(
 ///|
 fn build_value_array(
   func : @milkir.Function,
-  value_count : Int,
+  value_count : Int32,
 ) -> Array[@milkir.Value?] {
   let values : Array[@milkir.Value?] = Array::make(value_count, None)
   for param in func.params {
@@ -56,9 +56,9 @@ fn build_value_array(
 }
 
 ///|
-fn build_block_index_array(func : @milkir.Function) -> Array[Int] {
+fn build_block_index_array(func : @milkir.Function) -> Array[Int32] {
   let block_count = func.next_block_id
-  let block_idx : Array[Int] = Array::make(block_count, -1)
+  let block_idx : Array[Int32] = Array::make(block_count, -1)
   for i, block in func.blocks {
     if block.id >= 0 && block.id < block_count {
       block_idx[block.id] = i
@@ -68,14 +68,14 @@ fn build_block_index_array(func : @milkir.Function) -> Array[Int] {
 }
 
 ///|
-fn compress_replace_array(replace_ids : Array[Int]) -> Unit {
+fn compress_replace_array(replace_ids : Array[Int32]) -> Unit {
   let count = replace_ids.length()
   for key in 0..<count {
     if replace_ids[key] < 0 {
       continue
     }
     let mut current = key
-    let path : Array[Int] = []
+    let path : Array[Int32] = []
     let mut steps = 0
     while steps < 1024 {
       path.push(current)
@@ -99,11 +99,11 @@ fn compress_replace_array(replace_ids : Array[Int]) -> Unit {
 
 ///|
 fn append_block_argument_pairs(
-  pairs : Array[(Int, Int)],
-  target : Int,
+  pairs : Array[(Int32, Int32)],
+  target : Int32,
   arguments : Array[@milkir.Value],
   func : @milkir.Function,
-  block_idx : Array[Int],
+  block_idx : Array[Int32],
 ) -> Unit {
   if target < 0 || target >= block_idx.length() || block_idx[target] < 0 {
     return
@@ -118,9 +118,9 @@ fn append_block_argument_pairs(
 ///|
 fn collect_block_argument_pairs(
   func : @milkir.Function,
-  block_idx : Array[Int],
-) -> Array[(Int, Int)] {
-  let pairs : Array[(Int, Int)] = []
+  block_idx : Array[Int32],
+) -> Array[(Int32, Int32)] {
+  let pairs : Array[(Int32, Int32)] = []
   for block in func.blocks {
     match block.terminator {
       Some(Jump(target, arguments)) =>
@@ -141,10 +141,10 @@ fn collect_block_argument_pairs(
 
 ///|
 fn retained_block_arguments(
-  target : Int,
+  target : Int32,
   arguments : Array[@milkir.Value],
-  block_idx : Array[Int],
-  params_to_keep : Array[Array[Int]],
+  block_idx : Array[Int32],
+  params_to_keep : Array[Array[Int32]],
 ) -> Array[@milkir.Value]? {
   if target < 0 || target >= block_idx.length() {
     return None
@@ -201,7 +201,7 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
   // Precompute jump-argument -> target-formal propagation pairs once.
   // This mirrors Cranelift's block-summary approach and avoids repeated
   // block/edge lookup work in each solver iteration.
-  let propagation_pairs : Array[(Int, Int)] = []
+  let propagation_pairs : Array[(Int32, Int32)] = []
   for pair in collect_block_argument_pairs(func, block_idx) {
     let (formal_id, actual_id) = pair
     if formal_id >= 0 && formal_id < value_count && state[formal_id] is Some(_) {
@@ -215,7 +215,7 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
   // - process each propagation pair once
   // - when a formal changes, only reprocess pairs that depend on it
   // This avoids repeatedly scanning all edges until fixed-point.
-  let dependent_pairs : Array[Array[Int]?] = Array::make(value_count, None)
+  let dependent_pairs : Array[Array[Int32]?] = Array::make(value_count, None)
   for pair_idx, pair in propagation_pairs {
     let (_, actual_id) = pair
     if actual_id >= 0 && actual_id < value_count && state[actual_id] is Some(_) {
@@ -224,7 +224,7 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
       dependent_pairs[actual_id] = Some(deps)
     }
   }
-  let queue : Array[Int] = []
+  let queue : Array[Int32] = []
   let in_queue : Array[Bool] = Array::make(propagation_pairs.length(), false)
   for pair_idx, _ in propagation_pairs {
     queue.push(pair_idx)
@@ -267,11 +267,11 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
       }
     }
   }
-  let params_to_keep : Array[Array[Int]] = []
-  let replace_ids : Array[Int] = Array::make(value_count, -1)
+  let params_to_keep : Array[Array[Int32]] = []
+  let replace_ids : Array[Int32] = Array::make(value_count, -1)
   let mut will_change = false
   for block in func.blocks {
-    let keep : Array[Int] = []
+    let keep : Array[Int32] = []
     for i, param in block.params {
       let (v, _) = param
       if v.id >= 0 && v.id < value_count {
@@ -491,9 +491,9 @@ fn eliminate_dead_block_params(func : @milkir.Function) -> OptResult {
   let used_params = compute_used_block_params(func, block_idx)
 
   // Track which parameter indices to keep for each block
-  let params_to_keep : Array[Array[Int]] = []
+  let params_to_keep : Array[Array[Int32]] = []
   for block in func.blocks {
-    let keep : Array[Int] = []
+    let keep : Array[Int32] = []
     for i, param in block.params {
       let (v, _) = param
       if v.id >= 0 && v.id < used_params.length() && used_params[v.id] {
@@ -586,14 +586,14 @@ fn eliminate_dead_block_params(func : @milkir.Function) -> OptResult {
 /// Uses iterative dataflow analysis
 fn compute_used_block_params(
   func : @milkir.Function,
-  block_idx : Array[Int],
+  block_idx : Array[Int32],
 ) -> Array[Bool] {
   let value_count = func.next_value_id
   if value_count <= 0 {
     return []
   }
   let used = Array::make(value_count, false)
-  let propagation_edges : Array[Array[Int]?] = Array::make(value_count, None)
+  let propagation_edges : Array[Array[Int32]?] = Array::make(value_count, None)
   for pair in collect_block_argument_pairs(func, block_idx) {
     let (formal_id, actual_id) = pair
     if formal_id >= 0 && formal_id < value_count {
@@ -653,7 +653,7 @@ fn compute_used_block_params(
 
   // Worklist propagation: if a block parameter is used, propagate that mark to
   // incoming jump arguments for the corresponding edge position.
-  let worklist : Array[Int] = []
+  let worklist : Array[Int32] = []
   for value_id in 0..<value_count {
     if used[value_id] {
       worklist.push(value_id)
@@ -684,7 +684,7 @@ fn compute_used_block_params(
 fn simplify_branches(func : @milkir.Function) -> OptResult {
   let result = OptResult::OptResult()
   // Build constant map from constant folding
-  let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
+  let constants : @hashmap.HashMap[Int32, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst_id in block.instruction_ids() {
       let inst = func.instruction_by_id(inst_id).unwrap()
@@ -770,7 +770,7 @@ fn eliminate_unreachable_code(func : @milkir.Function) -> OptResult {
   }
   let block_idx = build_block_index_array(func)
   let reachable = Array::make(func.next_block_id, false)
-  let worklist : Array[Int] = []
+  let worklist : Array[Int32] = []
   if block_idx.length() > 0 && block_idx[0] >= 0 {
     reachable[0] = true
     worklist.push(0)
@@ -894,7 +894,7 @@ fn rewrite_jump_args_through_block(
   if block_params.length() != incoming_args.length() {
     return None
   }
-  let param_to_arg : @hashmap.HashMap[Int, @milkir.Value] = HashMap([])
+  let param_to_arg : @hashmap.HashMap[Int32, @milkir.Value] = HashMap([])
   for i in 0..<block_params.length() {
     let (param, _) = block_params[i]
     param_to_arg.set(param.id, incoming_args[i])
@@ -908,21 +908,21 @@ fn rewrite_jump_args_through_block(
 
 ///|
 fn resolve_jump_target_with_args(
-  target : Int,
+  target : Int32,
   args : Array[@milkir.Value],
   func : @milkir.Function,
-  block_idx : @hashmap.HashMap[Int, Int],
-  empty_jump_targets : Array[Int],
+  block_idx : @hashmap.HashMap[Int32, Int32],
+  empty_jump_targets : Array[Int32],
   forward_only_params : Array[Bool],
-) -> (Int, Array[@milkir.Value]) {
+) -> (Int32, Array[@milkir.Value]) {
   if args.length() == 0 &&
     target >= 0 &&
     target < empty_jump_targets.length() &&
     empty_jump_targets[target] >= 0 {
     return (empty_jump_targets[target], [])
   }
-  let visited : @hashmap.HashMap[Int, Bool] = HashMap([])
-  let empty_path : Array[Int] = []
+  let visited : @hashmap.HashMap[Int32, Bool] = HashMap([])
+  let empty_path : Array[Int32] = []
   let mut current_target = target
   let mut current_args = args
   let mut cacheable = args.length() == 0
@@ -994,7 +994,7 @@ fn resolve_jump_target_with_args(
 /// Bypasses blocks that only contain an unconditional jump
 fn thread_jumps(func : @milkir.Function) -> OptResult {
   let result = OptResult::OptResult()
-  let block_idx : @hashmap.HashMap[Int, Int] = HashMap([])
+  let block_idx : @hashmap.HashMap[Int32, Int32] = HashMap([])
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
@@ -1113,7 +1113,7 @@ fn thread_jumps(func : @milkir.Function) -> OptResult {
         }
       }
       Some(BrTable(index, targets, default_target)) => {
-        let new_targets : Array[Int] = []
+        let new_targets : Array[Int32] = []
         let mut any_changed = false
         for t in targets {
           let (resolved_t, resolved_args) = resolve_jump_target_with_args(

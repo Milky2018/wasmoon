@@ -41,14 +41,14 @@ pub impl Show for RegallocPhase with fn output(self, logger) {
 /// These count allocator decisions rather than elapsed time, so callers can
 /// compare runs without making this reusable module own a clock.
 pub struct BundleAllocationStatistics {
-  mut queue_pops : Int
-  mut register_probes : Int
-  mut occupied_segments_scanned : Int
-  mut conflicts : Int
-  mut evictions : Int
-  mut bundle_splits : Int
-  mut second_chance_attempts : Int
-  mut max_queue_length : Int
+  mut queue_pops : Int32
+  mut register_probes : Int32
+  mut occupied_segments_scanned : Int32
+  mut conflicts : Int32
+  mut evictions : Int32
+  mut bundle_splits : Int32
+  mut second_chance_attempts : Int32
+  mut max_queue_length : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -68,56 +68,56 @@ fn BundleAllocationStatistics::new() -> BundleAllocationStatistics {
 ///|
 pub fn BundleAllocationStatistics::queue_pops(
   self : BundleAllocationStatistics,
-) -> Int {
+) -> Int32 {
   self.queue_pops
 }
 
 ///|
 pub fn BundleAllocationStatistics::register_probes(
   self : BundleAllocationStatistics,
-) -> Int {
+) -> Int32 {
   self.register_probes
 }
 
 ///|
 pub fn BundleAllocationStatistics::occupied_segments_scanned(
   self : BundleAllocationStatistics,
-) -> Int {
+) -> Int32 {
   self.occupied_segments_scanned
 }
 
 ///|
 pub fn BundleAllocationStatistics::conflicts(
   self : BundleAllocationStatistics,
-) -> Int {
+) -> Int32 {
   self.conflicts
 }
 
 ///|
 pub fn BundleAllocationStatistics::evictions(
   self : BundleAllocationStatistics,
-) -> Int {
+) -> Int32 {
   self.evictions
 }
 
 ///|
 pub fn BundleAllocationStatistics::bundle_splits(
   self : BundleAllocationStatistics,
-) -> Int {
+) -> Int32 {
   self.bundle_splits
 }
 
 ///|
 pub fn BundleAllocationStatistics::second_chance_attempts(
   self : BundleAllocationStatistics,
-) -> Int {
+) -> Int32 {
   self.second_chance_attempts
 }
 
 ///|
 pub fn BundleAllocationStatistics::max_queue_length(
   self : BundleAllocationStatistics,
-) -> Int {
+) -> Int32 {
   self.max_queue_length
 }
 
@@ -137,44 +137,44 @@ pub struct RegallocConfig {
 /// must own independent sessions; callers compiling functions serially may
 /// reuse one session to retain scratch capacity between functions.
 pub struct AllocationSession {
-  priv context_priorities : Array[Int]
-  priv context_weights : Array[Int]
+  priv context_priorities : Array[Int32]
+  priv context_weights : Array[Int32]
   priv context_fixed_constraints : Array[Bool]
-  priv context_boundary_costs : Array[Int]
+  priv context_boundary_costs : Array[Int32]
   priv context_minimals : Array[Bool]
-  priv context_spill_sets : Array[Int]
-  priv segment_owner : Array[Int]
-  priv segment_spill_set : Array[Int]
-  priv owner_run_count : Array[Int]
-  priv occupied_block_order : Array[Int]
-  priv occupied_roots : Array[Int]
-  priv occupied_left : Array[Int]
-  priv occupied_right : Array[Int]
-  priv occupied_parent : Array[Int]
-  priv occupied_previous : Array[Int]
-  priv occupied_next : Array[Int]
+  priv context_spill_sets : Array[Int32]
+  priv segment_owner : Array[Int32]
+  priv segment_spill_set : Array[Int32]
+  priv owner_run_count : Array[Int32]
+  priv occupied_block_order : Array[Int32]
+  priv occupied_roots : Array[Int32]
+  priv occupied_left : Array[Int32]
+  priv occupied_right : Array[Int32]
+  priv occupied_parent : Array[Int32]
+  priv occupied_previous : Array[Int32]
+  priv occupied_next : Array[Int32]
   priv occupied_starts : Array[Int64]
   priv occupied_ends : Array[Int64]
-  priv occupied_stack : Array[Int]
-  priv preferred_by_value : Array[Int]
-  priv conflict_marks : Array[Int]
-  priv probe_conflicts : Array[Int]
-  priv eviction_conflicts : Array[Int]
-  priv register_order : Array[Int]
+  priv occupied_stack : Array[Int32]
+  priv preferred_by_value : Array[Int32]
+  priv conflict_marks : Array[Int32]
+  priv probe_conflicts : Array[Int32]
+  priv eviction_conflicts : Array[Int32]
+  priv register_order : Array[Int32]
   priv register_order_marks : Array[Bool]
-  priv physical_register_indexes : Array[Int]
-  priv queue_items : Array[Int]
-  priv queue_priorities : Array[Int]
-  priv queue_weights : Array[Int]
+  priv physical_register_indexes : Array[Int32]
+  priv queue_items : Array[Int32]
+  priv queue_priorities : Array[Int32]
+  priv queue_weights : Array[Int32]
   priv queue_in_queue : Array[Bool]
-  priv queue_hints : Array[Int]
+  priv queue_hints : Array[Int32]
 }
 
 ///|
 pub fn RegallocConfig::RegallocConfig(
-  verify? : Bool = true,
-  observer? : ((RegallocPhase?) -> Unit)? = None,
-  statistics_observer? : ((BundleAllocationStatistics) -> Unit)? = None,
+  verify~ : Bool = true,
+  observer~ : ((RegallocPhase?) -> Unit)? = None,
+  statistics_observer~ : ((BundleAllocationStatistics) -> Unit)? = None,
 ) -> RegallocConfig {
   { verify, observer, statistics_observer, }
 }

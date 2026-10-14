@@ -16,7 +16,7 @@ pub(all) struct InlineExport {
 
 ///|
 pub(all) enum InstanceExpr {
-  Instantiate(Int, Array[InstantiateArg])
+  Instantiate(Int32, Array[InstantiateArg])
   InlineExports(Array[InlineExport])
 } derive(Debug, Eq)
 
@@ -107,9 +107,9 @@ pub fn parse_instance_section(
 
 ///|
 pub(all) enum AliasTarget {
-  Export(Int, String)
-  CoreExport(Int, String)
-  Outer(Int, Int)
+  Export(Int32, String)
+  CoreExport(Int32, String)
+  Outer(Int32, Int32)
 } derive(Debug, Eq)
 
 ///|

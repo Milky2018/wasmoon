@@ -12,7 +12,7 @@ pub(all) enum AtomicRmwOp {
 fn Memory::checked_atomic_descriptor(
   self : Memory,
   offset : Int64,
-  width : Int,
+  width : Int32,
 ) -> @wasmoon_jit.MemoryDescriptor raise RuntimeError {
   let descriptor = self.require_desc_ptr()
   if width != 1 && width != 2 && width != 4 && width != 8 {
@@ -29,7 +29,7 @@ fn Memory::checked_atomic_descriptor(
 pub fn Memory::atomic_load(
   self : Memory,
   offset : Int64,
-  width : Int,
+  width : Int32,
 ) -> Int64 raise RuntimeError {
   @wasmoon_jit.memory_atomic_load(
     self.checked_atomic_descriptor(offset, width),
@@ -42,7 +42,7 @@ pub fn Memory::atomic_load(
 pub fn Memory::atomic_store(
   self : Memory,
   offset : Int64,
-  width : Int,
+  width : Int32,
   value : Int64,
 ) -> Unit raise RuntimeError {
   @wasmoon_jit.memory_atomic_store(
@@ -58,7 +58,7 @@ pub fn Memory::atomic_rmw(
   self : Memory,
   operation : AtomicRmwOp,
   offset : Int64,
-  width : Int,
+  width : Int32,
   value : Int64,
 ) -> Int64 raise RuntimeError {
   let code = match operation {
@@ -82,7 +82,7 @@ pub fn Memory::atomic_rmw(
 pub fn Memory::atomic_compare_exchange(
   self : Memory,
   offset : Int64,
-  width : Int,
+  width : Int32,
   expected : Int64,
   replacement : Int64,
 ) -> Int64 raise RuntimeError {
@@ -106,7 +106,7 @@ pub fn atomic_fence() -> Unit {
 pub fn Memory::atomic_wait_begin(
   self : Memory,
   offset : Int64,
-  width : Int,
+  width : Int32,
   expected : Int64,
   timeout : Int64,
 ) -> @wasmoon_jit.NativeAtomicWait raise RuntimeError {
@@ -128,8 +128,8 @@ pub fn Memory::atomic_wait_begin(
 pub fn Memory::atomic_notify(
   self : Memory,
   offset : Int64,
-  count : UInt,
-) -> UInt raise RuntimeError {
+  count : UInt32,
+) -> UInt32 raise RuntimeError {
   @wasmoon_jit.atomic_notify(
     self.checked_atomic_descriptor(offset, 4),
     offset,

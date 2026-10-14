@@ -1,6 +1,6 @@
 ///|
 test "canonical string lowering preserves allocation sequence and encoded bytes" {
-  let cases : Array[(ComponentValue, StringEncoding, Array[Int])] = [
+  let cases : Array[(ComponentValue, StringEncoding, Array[Int32])] = [
     (String("àà"), Utf16, [8, 4]),
     (EncodedString("AΣ", Utf16, 2), Latin1Utf16, [2, 4]),
     (EncodedString("AA", Latin1Utf16, -2147483646), Latin1Utf16, [4, 2]),
@@ -12,7 +12,7 @@ test "canonical string lowering preserves allocation sequence and encoded bytes"
     let store = @runtime.Store::Store()
     defer store.close()
     let memory = store.get_mem(store.alloc_mem(Memory(1, None)))
-    let seen : Array[Int] = []
+    let seen : Array[Int32] = []
     let realloc = alloc_host_core_func(
       store,
       { params: [I32, I32, I32, I32], results: [I32], },

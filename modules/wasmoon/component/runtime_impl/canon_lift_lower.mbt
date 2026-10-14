@@ -17,9 +17,9 @@ fn store_async_lower_result(
 
 ///|
 fn instantiate_canon_lift(
-  core_func_idx : Int,
+  core_func_idx : Int32,
   opts : Array[CanonOpt],
-  type_idx : Int,
+  type_idx : Int32,
   state : BuildState,
   entry_state : ComponentInstanceEntryState,
 ) -> Unit raise ComponentRuntimeError {
@@ -55,7 +55,7 @@ fn instantiate_canon_lift(
 
 ///|
 fn instantiate_canon_lower(
-  func_idx : Int,
+  func_idx : Int32,
   opts : Array[CanonOpt],
   state : BuildState,
   store : @runtime.Store,

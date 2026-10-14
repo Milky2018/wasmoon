@@ -54,7 +54,7 @@ pub(all) enum CallProtocol {
 /// Function-local stack-object request used during native lowering. The id is
 /// interpreted only by the current target-lowering session.
 pub(all) struct StackObject {
-  id : Int
+  id : Int32
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -274,7 +274,7 @@ pub fn CallBehavior::new(
   may_unwind : Bool,
   gc_safepoint : Bool,
   cancellation_safepoint : Bool,
-  returns_twice? : Bool = false,
+  returns_twice~ : Bool = false,
 ) -> CallBehavior {
   {
     memory,
@@ -321,21 +321,21 @@ pub(all) enum TrapReason {
   AtomicWaitNonSharedMemory
   UnsupportedOperation
   StackOverflow
-  User(Int)
+  User(Int32)
 } derive(Debug, Eq, Hash)
 
 ///|
 pub(all) struct SourceLocation {
   file : String
-  line : Int
-  column : Int
+  line : Int32
+  column : Int32
 } derive(Debug, Eq, Hash)
 
 ///|
 pub fn SourceLocation::new(
   file : String,
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
 ) -> SourceLocation {
   { file, line, column, }
 }

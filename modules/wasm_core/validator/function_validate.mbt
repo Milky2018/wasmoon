@@ -4,7 +4,7 @@ fn validate_function_with_offset(
   ctx : ValidationContext,
   func_type : @types.FuncType,
   code : @types.FunctionCode,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Unit raise ValidationError {
   let num_types = ctx.types.length()
 
@@ -84,7 +84,7 @@ fn validate_expr_with_offset(
   ctx : ValidationContext,
   stack : OperandStack,
   instrs : Array[@types.Instruction],
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Unit raise ValidationError {
   for i, instr in instrs {
     validate_expr(ctx, stack, [instr]) catch {

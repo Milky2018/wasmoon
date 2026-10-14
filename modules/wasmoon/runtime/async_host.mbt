@@ -15,8 +15,8 @@ pub(all) enum AsyncHostPoll {
 ///|
 priv enum AsyncHostCallState {
   Idle
-  Waiting(Int, @async.Task[AsyncHostCompletion], Ref[Bool])
-  Result(Int, AsyncHostCompletion)
+  Waiting(Int32, @async.Task[AsyncHostCompletion], Ref[Bool])
+  Result(Int32, AsyncHostCompletion)
   Delivered(GcRootLease)
 }
 
@@ -68,7 +68,7 @@ pub async fn[X] with_async_host_call_driver(
 /// `wait_pending` has returned.
 pub fn AsyncHostCallDriver::poll(
   self : AsyncHostCallDriver,
-  func_addr : Int,
+  func_addr : Int32,
   func : AsyncHostFunction,
   caller : Caller,
   args : Array[@types.Value],

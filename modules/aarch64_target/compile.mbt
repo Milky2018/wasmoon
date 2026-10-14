@@ -38,10 +38,10 @@ pub fn CompilationSession::new() -> CompilationSession {
 fn CompilationSession::compile_selected_function(
   self : CompilationSession,
   function : @vcode.Function[AArch64Inst],
-  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
-  verify_allocation? : Bool = true,
-  on_diagnostics? : ((String, String) -> Unit)? = None,
-) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError {
+  on_event~ : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation~ : Bool = true,
+  on_diagnostics~ : ((String, String) -> Unit)? = None,
+) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError {
   on_event(RegallocStarted)
   let allocation = allocate_verified(
     function,
@@ -80,9 +80,9 @@ fn CompilationSession::compile_selected_function(
 /// Compile VCode produced by `select` without repeating target validation.
 pub fn compile_selected(
   selected : SelectedFunction,
-  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
-  verify_allocation? : Bool = true,
-) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError {
+  on_event~ : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation~ : Bool = true,
+) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError {
   CompilationSession::new().compile_selected_function(
     selected.constructed.function,
     on_event~,
@@ -97,10 +97,10 @@ pub fn compile_selected(
 pub fn CompilationSession::compile_selected(
   self : CompilationSession,
   selected : SelectedFunction,
-  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
-  verify_allocation? : Bool = true,
-  on_diagnostics? : ((String, String) -> Unit)? = None,
-) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError {
+  on_event~ : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation~ : Bool = true,
+  on_diagnostics~ : ((String, String) -> Unit)? = None,
+) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError {
   self.compile_selected_function(
     selected.constructed.function,
     on_event~,
@@ -134,9 +134,9 @@ pub fn diagnose_selected(
 /// Compile externally supplied AArch64 VCode through the safe validated entry.
 pub fn compile(
   function : @vcode.Function[AArch64Inst],
-  on_event? : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
-  verify_allocation? : Bool = true,
-) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError {
+  on_event~ : (@vcode.TargetCompileEvent) -> Unit = fn(_) { () },
+  verify_allocation~ : Bool = true,
+) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError {
   verify_vcode(function) catch {
     error => raise TargetValidationFailed(cause=error)
   }

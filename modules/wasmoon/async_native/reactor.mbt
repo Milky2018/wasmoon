@@ -48,7 +48,7 @@ fn NativeReactor::check_open(
 ///|
 pub fn NativeReactor::register_read(
   self : NativeReactor,
-  fd : Int,
+  fd : Int32,
 ) -> NativeRegistration raise NativeReactorError {
   self.check_open()
   self.retain(self.reactor.register_read(fd))
@@ -57,7 +57,7 @@ pub fn NativeReactor::register_read(
 ///|
 pub fn NativeReactor::register_write(
   self : NativeReactor,
-  fd : Int,
+  fd : Int32,
 ) -> NativeRegistration raise NativeReactorError {
   self.check_open()
   self.retain(self.reactor.register_write(fd))
@@ -81,7 +81,7 @@ pub fn NativeReactor::has_pending(self : NativeReactor) -> Bool {
 pub fn NativeReactor::wait(
   self : NativeReactor,
   timeout_ns : Int64?,
-) -> Int raise NativeReactorError {
+) -> Int32 raise NativeReactorError {
   self.check_open()
   if !self.shared {
     return self.reactor.wait(timeout_ns)

@@ -42,7 +42,7 @@ pub fn atomic_wait(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  memidx : Int,
+  memidx : Int32,
   pointer : @milkir.Value,
   expected : @milkir.Value,
   timeout : @milkir.Value,
@@ -62,7 +62,7 @@ pub fn atomic_notify(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  memidx : Int,
+  memidx : Int32,
   pointer : @milkir.Value,
   count : @milkir.Value,
 ) -> @milkir.Value {
@@ -111,7 +111,7 @@ fn append_multi_result_inst(
 pub fn load_mem_base(
   builder : @milkir.FunctionBuilder,
   vmctx : @milkir.Value,
-  memidx : Int,
+  memidx : Int32,
   stability : @milkir.GlobalValueStability,
 ) -> @milkir.Value {
   let global_value = builder
@@ -131,10 +131,10 @@ pub fn memory_grow(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  memidx : Int,
+  memidx : Int32,
   delta : @milkir.Value,
-  max_pages? : Int,
-  is_memory64? : Bool = false,
+  max_pages? : Int32,
+  is_memory64~ : Bool = false,
 ) -> @milkir.Value {
   let max_pages_value = max_pages.unwrap_or(-1)
   let call_result = call_runtime(
@@ -164,8 +164,8 @@ pub fn memory_size(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  memidx : Int,
-  is_memory64? : Bool = false,
+  memidx : Int32,
+  is_memory64~ : Bool = false,
 ) -> @milkir.Value {
   let call_result = call_runtime(
     builder,
@@ -185,7 +185,7 @@ pub fn memory_fill(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  memidx : Int,
+  memidx : Int32,
   dst : @milkir.Value,
   val : @milkir.Value,
   size : @milkir.Value,
@@ -213,8 +213,8 @@ pub fn memory_copy(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  dst_memidx : Int,
-  src_memidx : Int,
+  dst_memidx : Int32,
+  src_memidx : Int32,
   dst : @milkir.Value,
   src : @milkir.Value,
   size : @milkir.Value,
@@ -247,8 +247,8 @@ pub fn memory_init(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  memidx : Int,
-  data_idx : Int,
+  memidx : Int32,
+  data_idx : Int32,
   dst : @milkir.Value,
   src : @milkir.Value,
   size : @milkir.Value,
@@ -281,7 +281,7 @@ pub fn data_drop(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  data_idx : Int,
+  data_idx : Int32,
 ) -> Unit {
   call_runtime(builder, runtime_symbols.symbol_name(DataDrop), None, [
     vmctx,
@@ -295,10 +295,10 @@ pub fn table_grow(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  table_idx : Int,
+  table_idx : Int32,
   delta : @milkir.Value,
   init_value : @milkir.Value,
-  is_table64? : Bool = false,
+  is_table64~ : Bool = false,
 ) -> @milkir.Value {
   let runtime_delta = if delta.ty == I64 {
     delta
@@ -323,7 +323,7 @@ pub fn table_fill(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  table_idx : Int,
+  table_idx : Int32,
   dst : @milkir.Value,
   val : @milkir.Value,
   size : @milkir.Value,
@@ -343,8 +343,8 @@ pub fn table_copy(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  dst_table_idx : Int,
-  src_table_idx : Int,
+  dst_table_idx : Int32,
+  src_table_idx : Int32,
   dst : @milkir.Value,
   src : @milkir.Value,
   size : @milkir.Value,
@@ -365,8 +365,8 @@ pub fn table_init(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  table_idx : Int,
-  elem_idx : Int,
+  table_idx : Int32,
+  elem_idx : Int32,
   dst : @milkir.Value,
   src : @milkir.Value,
   size : @milkir.Value,
@@ -387,7 +387,7 @@ pub fn elem_drop(
   builder : @milkir.FunctionBuilder,
   runtime_symbols : RuntimeSymbols,
   vmctx : @milkir.Value,
-  elem_idx : Int,
+  elem_idx : Int32,
 ) -> Unit {
   call_runtime(builder, runtime_symbols.symbol_name(ElemDrop), None, [
     vmctx,
@@ -399,7 +399,7 @@ pub fn elem_drop(
 ///|
 pub fn get_func_ref(
   builder : @milkir.FunctionBuilder,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, wasm_funcref_type(), GetFuncRef(func_idx), [])
 }
@@ -407,7 +407,7 @@ pub fn get_func_ref(
 ///|
 pub fn call_multi(
   builder : @milkir.FunctionBuilder,
-  func_idx : Int,
+  func_idx : Int32,
   result_types : Array[@milkir.Type],
   args : Array[@milkir.Value],
 ) -> Array[@milkir.Value] {
@@ -417,7 +417,7 @@ pub fn call_multi(
 ///|
 pub fn return_call_multi(
   builder : @milkir.FunctionBuilder,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@milkir.Value],
 ) -> Unit {
   emit_void_wasm_inst(builder, ReturnCall(func_idx), args)
@@ -426,8 +426,8 @@ pub fn return_call_multi(
 ///|
 pub fn return_call_indirect_multi(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  table_idx : Int,
+  type_idx : Int32,
+  table_idx : Int32,
   callee : @milkir.Value,
   args : Array[@milkir.Value],
 ) -> Unit {
@@ -445,7 +445,7 @@ pub fn return_call_indirect_multi(
 ///|
 pub fn return_call_ref_multi(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   func_ref : @milkir.Value,
   args : Array[@milkir.Value],
 ) -> Unit {
@@ -459,8 +459,8 @@ pub fn return_call_ref_multi(
 ///|
 pub fn call_indirect_multi(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  table_idx : Int,
+  type_idx : Int32,
+  table_idx : Int32,
   result_types : Array[@milkir.Type],
   callee : @milkir.Value,
   args : Array[@milkir.Value],
@@ -480,7 +480,7 @@ pub fn call_indirect_multi(
 ///|
 pub fn call_ref_multi(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   result_types : Array[@milkir.Type],
   func_ref : @milkir.Value,
   args : Array[@milkir.Value],
@@ -495,7 +495,7 @@ pub fn call_ref_multi(
 ///|
 pub fn struct_new(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   fields : Array[@milkir.Value],
 ) -> @milkir.Value {
   emit_wasm_inst(builder, Ref, StructNew(type_idx), fields)
@@ -504,7 +504,7 @@ pub fn struct_new(
 ///|
 pub fn struct_new_default(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, Ref, StructNewDefault(type_idx), [])
 }
@@ -512,8 +512,8 @@ pub fn struct_new_default(
 ///|
 pub fn struct_get(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  field_idx : Int,
+  type_idx : Int32,
+  field_idx : Int32,
   struct_ref : @milkir.Value,
   field_type : @milkir.Type,
 ) -> @milkir.Value {
@@ -525,10 +525,10 @@ pub fn struct_get(
 ///|
 pub fn struct_get_s(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  field_idx : Int,
+  type_idx : Int32,
+  field_idx : Int32,
   struct_ref : @milkir.Value,
-  byte_width : Int,
+  byte_width : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, I32, StructGetS(type_idx, field_idx, byte_width), [
     struct_ref,
@@ -538,10 +538,10 @@ pub fn struct_get_s(
 ///|
 pub fn struct_get_u(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  field_idx : Int,
+  type_idx : Int32,
+  field_idx : Int32,
   struct_ref : @milkir.Value,
-  byte_width : Int,
+  byte_width : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, I32, StructGetU(type_idx, field_idx, byte_width), [
     struct_ref,
@@ -551,8 +551,8 @@ pub fn struct_get_u(
 ///|
 pub fn struct_set(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  field_idx : Int,
+  type_idx : Int32,
+  field_idx : Int32,
   struct_ref : @milkir.Value,
   value : @milkir.Value,
 ) -> Unit {
@@ -564,7 +564,7 @@ pub fn struct_set(
 ///|
 pub fn array_new(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   init_value : @milkir.Value,
   length : @milkir.Value,
 ) -> @milkir.Value {
@@ -574,7 +574,7 @@ pub fn array_new(
 ///|
 pub fn array_new_default(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   length : @milkir.Value,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, Ref, ArrayNewDefault(type_idx), [length])
@@ -583,8 +583,8 @@ pub fn array_new_default(
 ///|
 pub fn array_new_fixed(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  count : Int,
+  type_idx : Int32,
+  count : Int32,
   elements : Array[@milkir.Value],
 ) -> @milkir.Value {
   emit_wasm_inst(builder, Ref, ArrayNewFixed(type_idx, count), elements)
@@ -593,7 +593,7 @@ pub fn array_new_fixed(
 ///|
 pub fn array_get(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   array_ref : @milkir.Value,
   index : @milkir.Value,
   element_type : @milkir.Type,
@@ -604,10 +604,10 @@ pub fn array_get(
 ///|
 pub fn array_get_s(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   array_ref : @milkir.Value,
   index : @milkir.Value,
-  byte_width : Int,
+  byte_width : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, I32, ArrayGetS(type_idx, byte_width), [
     array_ref, index,
@@ -617,10 +617,10 @@ pub fn array_get_s(
 ///|
 pub fn array_get_u(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   array_ref : @milkir.Value,
   index : @milkir.Value,
-  byte_width : Int,
+  byte_width : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, I32, ArrayGetU(type_idx, byte_width), [
     array_ref, index,
@@ -630,7 +630,7 @@ pub fn array_get_u(
 ///|
 pub fn array_set(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   array_ref : @milkir.Value,
   index : @milkir.Value,
   value : @milkir.Value,
@@ -649,7 +649,7 @@ pub fn array_len(
 ///|
 pub fn array_fill(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   array_ref : @milkir.Value,
   offset : @milkir.Value,
   value : @milkir.Value,
@@ -663,8 +663,8 @@ pub fn array_fill(
 ///|
 pub fn array_copy(
   builder : @milkir.FunctionBuilder,
-  dst_type_idx : Int,
-  src_type_idx : Int,
+  dst_type_idx : Int32,
+  src_type_idx : Int32,
   dst : @milkir.Value,
   dst_offset : @milkir.Value,
   src : @milkir.Value,
@@ -679,8 +679,8 @@ pub fn array_copy(
 ///|
 pub fn array_new_data(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  data_idx : Int,
+  type_idx : Int32,
+  data_idx : Int32,
   data_offset : @milkir.Value,
   length : @milkir.Value,
 ) -> @milkir.Value {
@@ -692,8 +692,8 @@ pub fn array_new_data(
 ///|
 pub fn array_new_elem(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  elem_idx : Int,
+  type_idx : Int32,
+  elem_idx : Int32,
   elem_offset : @milkir.Value,
   length : @milkir.Value,
 ) -> @milkir.Value {
@@ -705,8 +705,8 @@ pub fn array_new_elem(
 ///|
 pub fn array_init_data(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  data_idx : Int,
+  type_idx : Int32,
+  data_idx : Int32,
   array_ref : @milkir.Value,
   arr_offset : @milkir.Value,
   data_offset : @milkir.Value,
@@ -720,8 +720,8 @@ pub fn array_init_data(
 ///|
 pub fn array_init_elem(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
-  elem_idx : Int,
+  type_idx : Int32,
+  elem_idx : Int32,
   array_ref : @milkir.Value,
   arr_offset : @milkir.Value,
   elem_offset : @milkir.Value,
@@ -759,7 +759,7 @@ pub fn i31_get_u(
 ///|
 pub fn ref_test(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   nullable : Bool,
   ref_val : @milkir.Value,
 ) -> @milkir.Value {
@@ -769,7 +769,7 @@ pub fn ref_test(
 ///|
 pub fn ref_cast(
   builder : @milkir.FunctionBuilder,
-  type_idx : Int,
+  type_idx : Int32,
   nullable : Bool,
   ref_val : @milkir.Value,
   result_type : @milkir.Type,
@@ -805,7 +805,7 @@ pub fn ref_eq(
 ///|
 pub fn emit_throw(
   builder : @milkir.FunctionBuilder,
-  tag_idx : Int,
+  tag_idx : Int32,
   values : Array[@milkir.Value],
 ) -> Unit {
   emit_void_wasm_inst(builder, Throw(tag_idx), values)
@@ -822,7 +822,7 @@ pub fn emit_throw_ref(
 ///|
 pub fn try_table_begin(
   builder : @milkir.FunctionBuilder,
-  handler_id : Int,
+  handler_id : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, i32_type(), TryTableBegin(handler_id), [])
 }
@@ -830,7 +830,7 @@ pub fn try_table_begin(
 ///|
 pub fn try_table_end(
   builder : @milkir.FunctionBuilder,
-  handler_id : Int,
+  handler_id : Int32,
 ) -> Unit {
   emit_void_wasm_inst(builder, TryTableEnd(handler_id), [])
 }
@@ -843,7 +843,7 @@ pub fn get_exception_tag(builder : @milkir.FunctionBuilder) -> @milkir.Value {
 ///|
 pub fn get_exception_value(
   builder : @milkir.FunctionBuilder,
-  idx : Int,
+  idx : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, i64_type(), GetExceptionValue(idx), [])
 }
@@ -856,7 +856,7 @@ pub fn get_exception_value_count(
 }
 
 ///|
-pub fn delegate(builder : @milkir.FunctionBuilder, depth : Int) -> Unit {
+pub fn delegate(builder : @milkir.FunctionBuilder, depth : Int32) -> Unit {
   emit_void_wasm_inst(builder, Delegate(depth), [])
 }
 
@@ -871,7 +871,7 @@ pub fn spill_locals_for_throw(
 ///|
 pub fn get_spilled_local(
   builder : @milkir.FunctionBuilder,
-  idx : Int,
+  idx : Int32,
 ) -> @milkir.Value {
   emit_wasm_inst(builder, i64_type(), GetSpilledLocal(idx), [])
 }

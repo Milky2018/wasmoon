@@ -81,7 +81,7 @@ test "TypeEquivalenceContext: different referenced types" {
 
 ///|
 test "get_rec_group_info: singleton rec group" {
-  let rec_groups : Array[Int] = [0, 1, 2]
+  let rec_groups : Array[Int32] = [0, 1, 2]
   debug_inspect(get_rec_group_info(rec_groups, 0), content="(0, 1)")
   debug_inspect(get_rec_group_info(rec_groups, 1), content="(0, 1)")
   debug_inspect(get_rec_group_info(rec_groups, 2), content="(0, 1)")
@@ -91,7 +91,7 @@ test "get_rec_group_info: singleton rec group" {
 test "get_rec_group_info: multi-type rec group" {
   // (rec (type $t0 ...) (type $t1 ...))
   // (type $t2 ...)
-  let rec_groups : Array[Int] = [0, 0, 1]
+  let rec_groups : Array[Int32] = [0, 0, 1]
   debug_inspect(get_rec_group_info(rec_groups, 0), content="(0, 2)")
   debug_inspect(get_rec_group_info(rec_groups, 1), content="(1, 2)")
   debug_inspect(get_rec_group_info(rec_groups, 2), content="(0, 1)")
@@ -99,7 +99,7 @@ test "get_rec_group_info: multi-type rec group" {
 
 ///|
 test "get_rec_group_info: empty rec groups" {
-  let rec_groups : Array[Int] = []
+  let rec_groups : Array[Int32] = []
   debug_inspect(get_rec_group_info(rec_groups, 0), content="(0, 1)")
 }
 
@@ -113,7 +113,7 @@ test "TypeEquivalenceContext: rec group position matters" {
   // t1 is at position 0 in a 2-type rec group
   // t2 is at position 1 in a 2-type rec group
   // t3 is at position 0 in a 1-type rec group
-  let rec_groups : Array[Int] = [0, 0, 1]
+  let rec_groups : Array[Int32] = [0, 0, 1]
   let ctx = TypeEquivalenceContext::same_module(
     types,
     type_rec_groups=rec_groups,
@@ -153,7 +153,7 @@ test "compute_canonical_type_indices: with rec groups" {
   let t3 : FuncType = { params: [], results: [], }
   let types : Array[FuncType] = [t1, t2, t3]
   // t1 and t2 are in same rec group, t3 is separate
-  let rec_groups : Array[Int] = [0, 0, 1]
+  let rec_groups : Array[Int32] = [0, 0, 1]
   let canonical = compute_canonical_type_indices(
     func_types_to_subtypes(types),
     type_rec_groups=rec_groups,
@@ -183,7 +183,7 @@ test "compute_canonical_type_indices: equivalent rec groups share indices" {
 ///|
 test "compute_canonical_type_indices: many explicit singleton groups" {
   let types : Array[SubType] = []
-  let rec_groups : Array[Int] = []
+  let rec_groups : Array[Int32] = []
   for i in 0..<512 {
     types.push(
       SubType::simple(

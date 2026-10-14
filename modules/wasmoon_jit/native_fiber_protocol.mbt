@@ -2,9 +2,9 @@
 priv enum NativeFiberProtocolFailure {
   FiberWrongThread
   FiberInvalidTransition(NativeFiberPhase)
-  FiberInvalidState(Int)
+  FiberInvalidState(Int32)
   FiberUnexpectedYield(Int64)
-  FiberNativeFailure(Int)
+  FiberNativeFailure(Int32)
 }
 
 ///|
@@ -16,7 +16,7 @@ priv enum NativeFiberAdvanceCode {
   FiberAdvanceWrongThread
   FiberAdvanceInvalidTransition
   FiberAdvanceInvalidState
-  FiberAdvanceNativeFailure(Int)
+  FiberAdvanceNativeFailure(Int32)
 } derive(Debug)
 
 ///|
@@ -32,19 +32,21 @@ priv enum NativeFiberCancelCode {
   FiberDidCancel
   FiberCancelWrongThread
   FiberCancelInvalidTransition
-  FiberCancelNativeFailure(Int)
+  FiberCancelNativeFailure(Int32)
 } derive(Debug)
 
 ///|
 priv enum NativeJITAdvanceResult {
   JITSuspended(NativeSuspensionReason)
   JITCompleted
-  JITTrapped(Int)
+  JITTrapped(Int32)
   JITAdvanceFailed(NativeFiberProtocolFailure)
 }
 
 ///|
-fn decode_native_fiber_state_code(code : Int) -> Result[NativeFiberPhase, Int] {
+fn decode_native_fiber_state_code(
+  code : Int32,
+) -> Result[NativeFiberPhase, Int32] {
   match code {
     0 => Ok(Ready)
     1 => Ok(Running)
@@ -57,7 +59,7 @@ fn decode_native_fiber_state_code(code : Int) -> Result[NativeFiberPhase, Int] {
 
 ///|
 fn decode_native_fiber_advance_code(
-  status_code : Int,
+  status_code : Int32,
 ) -> NativeFiberAdvanceCode {
   match status_code {
     0 => FiberDidSuspend
@@ -70,7 +72,9 @@ fn decode_native_fiber_advance_code(
 }
 
 ///|
-fn decode_native_fiber_cancel_code(status_code : Int) -> NativeFiberCancelCode {
+fn decode_native_fiber_cancel_code(
+  status_code : Int32,
+) -> NativeFiberCancelCode {
   match status_code {
     0 => FiberDidCancel
     -2 => FiberCancelWrongThread
@@ -90,7 +94,9 @@ fn native_fiber_invalid_transition(
 }
 
 ///|
-fn native_fiber_state(raw : NativeFiberObject) -> Result[NativeFiberPhase, Int] {
+fn native_fiber_state(
+  raw : NativeFiberObject,
+) -> Result[NativeFiberPhase, Int32] {
   decode_native_fiber_state_code(c_native_fiber_state_code(raw))
 }
 

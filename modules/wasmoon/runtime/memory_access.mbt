@@ -19,7 +19,7 @@ fn Memory::check_bounds_at(
 fn Memory::read_fixed_at(
   self : Memory,
   addr : Int64,
-  len : Int,
+  len : Int32,
 ) -> FixedArray[Byte] {
   let pointer = self.desc_ptr()
   if pointer.is_null() || len <= 0 {
@@ -35,7 +35,7 @@ fn Memory::write_fixed_at(
   self : Memory,
   addr : Int64,
   data : FixedArray[Byte],
-  len : Int,
+  len : Int32,
 ) -> Unit {
   let pointer = self.desc_ptr()
   if pointer.is_null() || len <= 0 {
@@ -87,7 +87,7 @@ pub fn Memory::store_byte_at(
 pub fn Memory::load_i32_at(
   self : Memory,
   addr : Int64,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.check_bounds_at(addr, 4)
   let b = self.read_fixed_at(addr, 4)
   let b0 = b[0].to_int()
@@ -101,7 +101,7 @@ pub fn Memory::load_i32_at(
 pub fn Memory::store_i32_at(
   self : Memory,
   addr : Int64,
-  value : Int,
+  value : Int32,
 ) -> Unit raise RuntimeError {
   self.check_bounds_at(addr, 4)
   let data = FixedArray::make(4, b'\x00')
@@ -183,7 +183,7 @@ pub fn Memory::store_f64_at(
 pub fn Memory::load_i32_8s_at(
   self : Memory,
   addr : Int64,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   let byte = self.load_byte_at(addr).to_int()
   if byte >= 128 {
     byte - 256
@@ -197,7 +197,7 @@ pub fn Memory::load_i32_8s_at(
 pub fn Memory::load_i32_8u_at(
   self : Memory,
   addr : Int64,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.load_byte_at(addr).to_int()
 }
 
@@ -206,7 +206,7 @@ pub fn Memory::load_i32_8u_at(
 pub fn Memory::load_i32_16s_at(
   self : Memory,
   addr : Int64,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.check_bounds_at(addr, 2)
   let b = self.read_fixed_at(addr, 2)
   let b0 = b[0].to_int()
@@ -224,7 +224,7 @@ pub fn Memory::load_i32_16s_at(
 pub fn Memory::load_i32_16u_at(
   self : Memory,
   addr : Int64,
-) -> Int raise RuntimeError {
+) -> Int32 raise RuntimeError {
   self.check_bounds_at(addr, 2)
   let b = self.read_fixed_at(addr, 2)
   let b0 = b[0].to_int()
@@ -299,7 +299,7 @@ pub fn Memory::load_i64_32u_at(
 pub fn Memory::store_i32_8_at(
   self : Memory,
   addr : Int64,
-  value : Int,
+  value : Int32,
 ) -> Unit raise RuntimeError {
   self.store_byte_at(addr, value.land(0xFF).to_byte())
 }
@@ -309,7 +309,7 @@ pub fn Memory::store_i32_8_at(
 pub fn Memory::store_i32_16_at(
   self : Memory,
   addr : Int64,
-  value : Int,
+  value : Int32,
 ) -> Unit raise RuntimeError {
   self.check_bounds_at(addr, 2)
   let data = FixedArray::make(2, b'\x00')

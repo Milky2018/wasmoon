@@ -6,7 +6,7 @@
 pub struct CheckedBuilder[Inst] {
   priv builder : Builder[Inst]
   priv stack_map_ids : Array[Bool]
-  priv mut stack_map_count : Int
+  priv mut stack_map_count : Int32
 }
 
 ///|
@@ -55,7 +55,7 @@ pub fn[Inst] CheckedBuilder::entry_block(self : CheckedBuilder[Inst]) -> Block {
 ///|
 pub fn[Inst] CheckedBuilder::parameter(
   self : CheckedBuilder[Inst],
-  index : Int,
+  index : Int32,
 ) -> Value raise VCodeBuildError {
   self.builder.parameter(index)
 }
@@ -72,7 +72,7 @@ pub fn[Inst] CheckedBuilder::create_block(
 pub fn[Inst] CheckedBuilder::block_parameter(
   self : CheckedBuilder[Inst],
   block : Block,
-  index : Int,
+  index : Int32,
 ) -> Value raise VCodeBuildError {
   self.builder.block_parameter(block, index)
 }
@@ -83,7 +83,7 @@ fn[Inst] CheckedBuilder::validate_local_facts(
   successors : Array[Edge],
   clobbers : Array[PhysicalReg],
   metadata : InstructionMetadata,
-) -> Int? raise VCodeBuildError {
+) -> Int32? raise VCodeBuildError {
   let function = self.builder.function
   for index, reg in clobbers {
     for earlier in 0..<index {
@@ -132,7 +132,7 @@ fn[Inst] CheckedBuilder::validate_local_facts(
 ///|
 fn[Inst] CheckedBuilder::record_stack_map(
   self : CheckedBuilder[Inst],
-  stack_map_id : Int?,
+  stack_map_id : Int32?,
 ) -> Unit {
   if stack_map_id is Some(id) {
     while self.stack_map_ids.length() <= id {

@@ -2,7 +2,7 @@
 /// Encode once so capacity checks and writes use identical UTF-8 byte counts.
 fn encode_string_table(
   strings : Array[String],
-) -> Result[(Array[FixedArray[Byte]], Int), Int] {
+) -> Result[(Array[FixedArray[Byte]], Int32), Int32] {
   let encoded : Array[FixedArray[Byte]] = []
   let mut size = 0L
   for string in strings {
@@ -23,9 +23,9 @@ fn encode_string_table(
 fn string_table_sizes(
   mem : @runtime.Memory,
   strings : Array[String],
-  count_ptr : Int,
-  size_ptr : Int,
-) -> Int {
+  count_ptr : Int32,
+  size_ptr : Int32,
+) -> Int32 {
   if !check_mem_range(mem, count_ptr, 4) || !check_mem_range(mem, size_ptr, 4) {
     return Errno::Fault.to_i32()
   }
@@ -42,9 +42,9 @@ fn string_table_sizes(
 fn write_string_table(
   mem : @runtime.Memory,
   strings : Array[String],
-  pointers : Int,
-  data : Int,
-) -> Int {
+  pointers : Int32,
+  data : Int32,
+) -> Int32 {
   if strings.length() > 0x1FFFFFFF ||
     !check_mem_range(mem, pointers, strings.length() * 4) {
     return Errno::Fault.to_i32()

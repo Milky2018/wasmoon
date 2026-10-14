@@ -10,8 +10,8 @@
 /// Run `validate` and hand back whatever it raised.
 fn validate_plan_error(
   plan : ProductionBundlePlan,
-  range_count : Int,
-  segment_count : Int,
+  range_count : Int32,
+  segment_count : Int32,
 ) -> VerifyError? {
   try {
     plan.validate(range_count, segment_count)

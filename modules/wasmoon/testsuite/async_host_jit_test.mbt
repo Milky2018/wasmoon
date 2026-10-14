@@ -3,7 +3,7 @@ fn prepare_async_jit_context(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  cooperative? : Bool = false,
+  cooperative~ : Bool = false,
 ) -> @wast.JITModuleContext raise {
   guard @commands.compile_module_to_jit(
       mod_,

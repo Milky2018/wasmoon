@@ -4,7 +4,7 @@
 
 ///|
 /// Read a u32
-fn Parser::read_u32(self : Parser) -> Int raise ParserError {
+fn Parser::read_u32(self : Parser) -> Int32 raise ParserError {
   self.read_leb128_u32()
 }
 
@@ -20,7 +20,9 @@ fn Parser::read_u64(self : Parser) -> Int64 raise ParserError {
 /// Alignment values >= 32 are reserved and should be rejected as malformed
 /// The flags byte must not have continuation bit set (must fit in single byte)
 /// offset is read as u64 to support memory64 64-bit offsets
-fn Parser::read_memarg(self : Parser) -> (Int, Int, Int64) raise ParserError {
+fn Parser::read_memarg(
+  self : Parser,
+) -> (Int32, Int32, Int64) raise ParserError {
   // Read first byte directly - must not have continuation bit (0x80) set
   let flags_byte = self.read_byte()
   if (flags_byte & 0x80) != 0 {
@@ -42,7 +44,7 @@ fn Parser::read_memarg(self : Parser) -> (Int, Int, Int64) raise ParserError {
 
 ///|
 /// Read an i32
-fn Parser::read_i32(self : Parser) -> Int raise ParserError {
+fn Parser::read_i32(self : Parser) -> Int32 raise ParserError {
   self.read_leb128_i32()
 }
 

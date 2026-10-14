@@ -6,10 +6,10 @@ fn validate_const_expr(
   globals : ArrayView[@types.GlobalType],
   expr : Array[@types.Instruction],
   expected_type : @types.ValueType,
-  funcs? : Array[Int] = [],
-  types? : Array[@types.SubType] = [],
-  subtyping_ctx? : @types.SubtypingContext? = None,
-  stack_switching? : Bool = false,
+  funcs~ : Array[Int32] = [],
+  types~ : Array[@types.SubType] = [],
+  subtyping_ctx~ : @types.SubtypingContext? = None,
+  stack_switching~ : Bool = false,
 ) -> Unit raise ValidationError {
   if expr.is_empty() {
     raise TypeMismatch("empty constant expression")
@@ -167,7 +167,7 @@ fn const_expr_storage_type_to_value_type(
 ///|
 fn get_const_expr_struct_type(
   types : Array[@types.SubType],
-  type_idx : Int,
+  type_idx : Int32,
 ) -> @types.StructType raise ValidationError {
   if type_idx < 0 || type_idx >= types.length() {
     raise InvalidTypeIndex(type_idx)
@@ -184,7 +184,7 @@ fn get_const_expr_struct_type(
 ///|
 fn get_const_expr_array_type(
   types : Array[@types.SubType],
-  type_idx : Int,
+  type_idx : Int32,
 ) -> @types.ArrayType raise ValidationError {
   if type_idx < 0 || type_idx >= types.length() {
     raise InvalidTypeIndex(type_idx)
@@ -203,7 +203,7 @@ fn get_const_expr_array_type(
 fn is_const_expr_type_compatible(
   result : @types.ValueType,
   expected : @types.ValueType,
-  subtyping_ctx? : @types.SubtypingContext? = None,
+  subtyping_ctx~ : @types.SubtypingContext? = None,
 ) -> Bool {
   if subtyping_ctx is Some(ctx) {
     if ctx.value_type_subtype(result, expected) {

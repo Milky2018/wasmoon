@@ -6,7 +6,7 @@
 
 ///|
 pub(all) enum Sort {
-  Core(Int) // core:sort opcode (0x00..)
+  Core(Int32) // core:sort opcode (0x00..)
   Func
   Value
   Type
@@ -17,7 +17,7 @@ pub(all) enum Sort {
 ///|
 pub(all) struct SortIdx {
   sort : Sort
-  idx : Int
+  idx : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -27,24 +27,24 @@ pub impl Show for SortIdx with fn output(self, logger) {
 
 ///|
 pub(all) enum TypeBound {
-  Eq(Int)
+  Eq(Int32)
   SubResource
 } derive(Debug, Eq)
 
 ///|
 pub(all) enum ValueBound {
-  Eq(Int)
+  Eq(Int32)
   Type(ValType)
 } derive(Debug, Eq)
 
 ///|
 pub(all) enum ExternDesc {
-  CoreModuleType(Int) // core:typeidx (u32)
-  FuncType(Int) // typeidx
+  CoreModuleType(Int32) // core:typeidx (u32)
+  FuncType(Int32) // typeidx
   Value(ValueBound)
   Type(TypeBound)
-  ComponentType(Int) // typeidx
-  InstanceType(Int) // typeidx
+  ComponentType(Int32) // typeidx
+  InstanceType(Int32) // typeidx
 } derive(Debug, Eq)
 
 ///|

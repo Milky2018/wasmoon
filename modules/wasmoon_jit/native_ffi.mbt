@@ -6,7 +6,7 @@
 
 ///|
 /// Get trap code (0 = no trap, 1 = out of bounds memory access, 9 = out of memory, 10 = gc precise roots unavailable)
-extern "c" fn c_jit_get_trap_code() -> Int = "wasmoon_jit_get_trap_code"
+extern "c" fn c_jit_get_trap_code() -> Int32 = "wasmoon_jit_get_trap_code"
 
 ///|
 /// Clear trap code
@@ -14,7 +14,7 @@ extern "c" fn c_jit_clear_trap() -> Unit = "wasmoon_jit_clear_trap"
 
 ///|
 /// Get last trap signal number (e.g. SIGSEGV/SIGBUS/SIGTRAP), or 0 if none
-extern "c" fn c_jit_get_trap_signal() -> Int = "wasmoon_jit_get_trap_signal"
+extern "c" fn c_jit_get_trap_signal() -> Int32 = "wasmoon_jit_get_trap_signal"
 
 ///|
 /// Get last trap PC (instruction address), or 0 if unavailable
@@ -38,22 +38,22 @@ extern "c" fn c_jit_get_trap_fault_addr() -> Int64 = "wasmoon_jit_get_trap_fault
 
 ///|
 /// Get BRK immediate decoded for SIGTRAP, or -1 if N/A
-extern "c" fn c_jit_get_trap_brk_imm() -> Int = "wasmoon_jit_get_trap_brk_imm"
+extern "c" fn c_jit_get_trap_brk_imm() -> Int32 = "wasmoon_jit_get_trap_brk_imm"
 
 ///|
 /// Get best-effort wasm func_idx at trap time, or -1 if unknown
-extern "c" fn c_jit_get_trap_func_idx() -> Int = "wasmoon_jit_get_trap_func_idx"
+extern "c" fn c_jit_get_trap_func_idx() -> Int32 = "wasmoon_jit_get_trap_func_idx"
 
 ///|
 /// Get best-effort captured x-register value at trap time (JIT ABI numbering).
 /// Supported indices: 0,1,2,3,6,7,8,9,10,11,15. Others return 0.
-extern "c" fn c_jit_get_trap_xreg(idx : Int) -> Int64 = "wasmoon_jit_get_trap_xreg"
+extern "c" fn c_jit_get_trap_xreg(idx : Int32) -> Int64 = "wasmoon_jit_get_trap_xreg"
 
 // ============ Host Target ============
 
 ///|
 /// Host target architecture tag: 1=x86_64, 2=aarch64.
-extern "c" fn c_jit_host_target_arch() -> Int = "wasmoon_jit_host_target_arch"
+extern "c" fn c_jit_host_target_arch() -> Int32 = "wasmoon_jit_host_target_arch"
 
 // ============ Hostcall Bridge (JIT -> Host) ============
 
@@ -67,7 +67,7 @@ extern "c" fn c_jit_get_cancel_poll_ptr() -> Int64 = "wasmoon_jit_get_cancel_pol
 
 ///|
 /// Current hostcall func_idx (thread-local).
-extern "c" fn c_jit_get_hostcall_func_idx() -> Int = "wasmoon_jit_get_hostcall_func_idx"
+extern "c" fn c_jit_get_hostcall_func_idx() -> Int32 = "wasmoon_jit_get_hostcall_func_idx"
 
 ///|
 /// Current hostcall values_vec pointer (thread-local).
@@ -75,11 +75,11 @@ extern "c" fn c_jit_get_hostcall_values_ptr() -> Int64 = "wasmoon_jit_get_hostca
 
 ///|
 /// Current hostcall num_args (thread-local).
-extern "c" fn c_jit_get_hostcall_num_args() -> Int = "wasmoon_jit_get_hostcall_num_args"
+extern "c" fn c_jit_get_hostcall_num_args() -> Int32 = "wasmoon_jit_get_hostcall_num_args"
 
 ///|
 /// Current hostcall num_results (thread-local).
-extern "c" fn c_jit_get_hostcall_num_results() -> Int = "wasmoon_jit_get_hostcall_num_results"
+extern "c" fn c_jit_get_hostcall_num_results() -> Int32 = "wasmoon_jit_get_hostcall_num_results"
 
 // ============ GC-managed JITContext ============
 
@@ -96,9 +96,9 @@ extern "c" fn c_jit_alloc_memory(size : Int64) -> Int64 = "wasmoon_jit_alloc_mem
 extern "c" fn c_jit_alloc_memory_desc(
   size_bytes : Int64,
   max_pages : Int64,
-  is_memory64 : Int,
-  page_size_log2 : Int,
-  is_shared : Int,
+  is_memory64 : Int32,
+  page_size_log2 : Int32,
+  is_shared : Int32,
 ) -> MemoryDescriptor = "wasmoon_jit_alloc_memory_desc"
 
 ///|
@@ -116,7 +116,7 @@ extern "c" fn c_mem_desc_get_len(mem_desc_ptr : MemoryDescriptor) -> Int64 = "wa
 extern "c" fn c_mem_desc_grow(
   mem_desc_ptr : MemoryDescriptor,
   delta_pages : Int64,
-  max_pages : Int,
+  max_pages : Int32,
 ) -> Int64 = "wasmoon_mem_desc_grow"
 
 ///|
@@ -126,8 +126,8 @@ extern "c" fn c_mem_desc_read(
   mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   out : FixedArray[Byte],
-  size : Int,
-) -> Int = "wasmoon_mem_desc_read"
+  size : Int32,
+) -> Int32 = "wasmoon_mem_desc_read"
 
 ///|
 /// Copy bytes from `data` into memory descriptor at offset.
@@ -136,8 +136,8 @@ extern "c" fn c_mem_desc_write(
   mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   data : FixedArray[Byte],
-  size : Int,
-) -> Int = "wasmoon_mem_desc_write"
+  size : Int32,
+) -> Int32 = "wasmoon_mem_desc_write"
 
 ///|
 /// Copy bytes from `data` into memory descriptor at offset (Bytes fast path).
@@ -146,8 +146,8 @@ extern "c" fn c_mem_desc_write_bytes(
   mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   data : Bytes,
-  size : Int,
-) -> Int = "wasmoon_mem_desc_write_bytes"
+  size : Int32,
+) -> Int32 = "wasmoon_mem_desc_write_bytes"
 
 ///|
 /// memmove within the same memory descriptor.
@@ -156,8 +156,8 @@ extern "c" fn c_mem_desc_memmove(
   mem_desc_ptr : MemoryDescriptor,
   dst : Int64,
   src : Int64,
-  size : Int,
-) -> Int = "wasmoon_mem_desc_memmove"
+  size : Int32,
+) -> Int32 = "wasmoon_mem_desc_memmove"
 
 ///|
 /// memset within the same memory descriptor.
@@ -165,9 +165,9 @@ extern "c" fn c_mem_desc_memmove(
 extern "c" fn c_mem_desc_memset(
   mem_desc_ptr : MemoryDescriptor,
   dst : Int64,
-  val : Int,
-  size : Int,
-) -> Int = "wasmoon_mem_desc_memset"
+  val : Int32,
+  size : Int32,
+) -> Int32 = "wasmoon_mem_desc_memset"
 
 ///|
 /// Allocate guarded memory into a standalone descriptor.
@@ -175,7 +175,7 @@ extern "c" fn c_mem_desc_memset(
 extern "c" fn c_jit_alloc_guarded_memory_desc(
   initial_pages : Int64,
   max_pages : Int64,
-  is_shared : Int,
+  is_shared : Int32,
 ) -> MemoryDescriptor = "wasmoon_jit_alloc_guarded_memory_desc"
 
 ///|
@@ -246,7 +246,7 @@ extern "c" fn c_jit_get_elem_drop_ptr() -> Int64 = "wasmoon_jit_get_elem_drop_pt
 ///|
 /// Allocate a shared indirect table that can be used by multiple JIT modules
 extern "c" fn c_jit_alloc_shared_indirect_table(
-  count : Int,
+  count : Int32,
 ) -> NativeTableHandle = "wasmoon_jit_alloc_shared_indirect_table"
 
 ///|
@@ -254,9 +254,9 @@ extern "c" fn c_jit_alloc_shared_indirect_table(
 #borrow(table_ptr)
 extern "c" fn c_jit_shared_table_set(
   table_ptr : NativeTableHandle,
-  table_idx : Int,
+  table_idx : Int32,
   func_ptr : Int64,
-  type_hash : Int,
+  type_hash : Int32,
 ) -> Unit = "wasmoon_jit_shared_table_set"
 
 ///|
@@ -269,8 +269,8 @@ extern "c" fn c_jit_call_trampoline_managed(
   trampoline_ptr : Int64,
   func_ptr : Int64,
   values_vec : FixedArray[Int64],
-  values_len : Int,
-) -> Int = "wasmoon_jit_call_trampoline_managed"
+  values_len : Int32,
+) -> Int32 = "wasmoon_jit_call_trampoline_managed"
 
 // ============ Store-Owned Native Fibers ============
 
@@ -292,7 +292,7 @@ extern "c" fn c_native_jit_continuation_alloc(
   trampoline_ptr : Int64,
   func_ptr : Int64,
   values : FixedArray[Int64],
-  values_len : Int,
+  values_len : Int32,
   stack_size : Int64,
 ) -> NativeFiberObject = "wasmoon_native_jit_continuation_alloc"
 
@@ -301,18 +301,18 @@ extern "c" fn c_native_jit_continuation_alloc(
 extern "c" fn c_native_fiber_continue_code(
   fiber : NativeFiberObject,
   resume_value : Int64,
-) -> Int = "wasmoon_native_fiber_continue"
+) -> Int32 = "wasmoon_native_fiber_continue"
 
 ///|
 extern "c" fn c_native_fiber_yield(value : Int64) -> Int64 = "wasmoon_native_fiber_yield"
 
 ///|
 #borrow(fiber)
-extern "c" fn c_native_fiber_cancel_code(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_cancel"
+extern "c" fn c_native_fiber_cancel_code(fiber : NativeFiberObject) -> Int32 = "wasmoon_native_fiber_cancel"
 
 ///|
 #borrow(fiber)
-extern "c" fn c_native_fiber_state_code(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_state"
+extern "c" fn c_native_fiber_state_code(fiber : NativeFiberObject) -> Int32 = "wasmoon_native_fiber_state"
 
 ///|
 #borrow(fiber)
@@ -541,18 +541,18 @@ extern "c" fn c_gc_heap_new(capacity : Int64) -> GCHeapHandle = "wasmoon_gc_heap
 #borrow(fields, heap)
 extern "c" fn c_gc_heap_alloc_struct_wide(
   heap : GCHeapHandle,
-  type_idx : Int,
+  type_idx : Int32,
   fields : FixedArray[Int64],
-  num_fields : Int,
-) -> Int = "wasmoon_gc_heap_alloc_struct_wide"
+  num_fields : Int32,
+) -> Int32 = "wasmoon_gc_heap_alloc_struct_wide"
 
 ///|
 /// Read a struct field into `out` as [lo, hi]
 #borrow(out, heap)
 extern "c" fn c_gc_heap_struct_get_wide(
   heap : GCHeapHandle,
-  gc_ref : Int,
-  field_idx : Int,
+  gc_ref : Int32,
+  field_idx : Int32,
   out : FixedArray[Int64],
 ) -> Unit = "wasmoon_gc_heap_struct_get_wide"
 
@@ -561,8 +561,8 @@ extern "c" fn c_gc_heap_struct_get_wide(
 #borrow(heap)
 extern "c" fn c_gc_heap_struct_set_wide(
   heap : GCHeapHandle,
-  gc_ref : Int,
-  field_idx : Int,
+  gc_ref : Int32,
+  field_idx : Int32,
   lo : Int64,
   hi : Int64,
 ) -> Unit = "wasmoon_gc_heap_struct_set_wide"
@@ -575,11 +575,11 @@ extern "c" fn c_gc_heap_struct_set_wide(
 #borrow(heap)
 extern "c" fn c_gc_heap_alloc_array_wide(
   heap : GCHeapHandle,
-  type_idx : Int,
-  len : Int,
+  type_idx : Int32,
+  len : Int32,
   lo : Int64,
   hi : Int64,
-) -> Int = "wasmoon_gc_heap_alloc_array_wide"
+) -> Int32 = "wasmoon_gc_heap_alloc_array_wide"
 
 ///|
 /// Allocate a new array from existing values
@@ -589,23 +589,23 @@ extern "c" fn c_gc_heap_alloc_array_wide(
 #borrow(values, heap)
 extern "c" fn c_gc_heap_alloc_array_from_slots(
   heap : GCHeapHandle,
-  type_idx : Int,
+  type_idx : Int32,
   values : FixedArray[Int64],
-  len : Int,
-) -> Int = "wasmoon_gc_heap_alloc_array_from_slots"
+  len : Int32,
+) -> Int32 = "wasmoon_gc_heap_alloc_array_from_slots"
 
 ///|
 /// Get array length
 #borrow(heap)
-extern "c" fn c_gc_heap_array_len(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_array_len"
+extern "c" fn c_gc_heap_array_len(heap : GCHeapHandle, gc_ref : Int32) -> Int32 = "wasmoon_gc_heap_array_len"
 
 ///|
 /// Read an array element into `out` as [lo, hi]
 #borrow(out, heap)
 extern "c" fn c_gc_heap_array_get_wide(
   heap : GCHeapHandle,
-  gc_ref : Int,
-  idx : Int,
+  gc_ref : Int32,
+  idx : Int32,
   out : FixedArray[Int64],
 ) -> Unit = "wasmoon_gc_heap_array_get_wide"
 
@@ -614,8 +614,8 @@ extern "c" fn c_gc_heap_array_get_wide(
 #borrow(heap)
 extern "c" fn c_gc_heap_array_set_wide(
   heap : GCHeapHandle,
-  gc_ref : Int,
-  idx : Int,
+  gc_ref : Int32,
+  idx : Int32,
   lo : Int64,
   hi : Int64,
 ) -> Unit = "wasmoon_gc_heap_array_set_wide"
@@ -625,11 +625,11 @@ extern "c" fn c_gc_heap_array_set_wide(
 #borrow(heap)
 extern "c" fn c_gc_heap_array_fill_wide(
   heap : GCHeapHandle,
-  gc_ref : Int,
-  offset : Int,
+  gc_ref : Int32,
+  offset : Int32,
   lo : Int64,
   hi : Int64,
-  count : Int,
+  count : Int32,
 ) -> Unit = "wasmoon_gc_heap_array_fill_wide"
 
 ///|
@@ -637,11 +637,11 @@ extern "c" fn c_gc_heap_array_fill_wide(
 #borrow(heap)
 extern "c" fn c_gc_heap_array_copy(
   heap : GCHeapHandle,
-  dst_ref : Int,
-  dst_offset : Int,
-  src_ref : Int,
-  src_offset : Int,
-  count : Int,
+  dst_ref : Int32,
+  dst_offset : Int32,
+  src_ref : Int32,
+  src_offset : Int32,
+  count : Int32,
 ) -> Unit = "wasmoon_gc_heap_array_copy"
 
 // ============ Type Information ============
@@ -649,17 +649,20 @@ extern "c" fn c_gc_heap_array_copy(
 ///|
 /// Get the type index of an object
 #borrow(heap)
-extern "c" fn c_gc_heap_get_type_idx(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_type_idx"
+extern "c" fn c_gc_heap_get_type_idx(
+  heap : GCHeapHandle,
+  gc_ref : Int32,
+) -> Int32 = "wasmoon_gc_heap_get_type_idx"
 
 ///|
 /// Get the kind of an object (1=struct, 2=array)
 #borrow(heap)
-extern "c" fn c_gc_heap_get_kind(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_kind"
+extern "c" fn c_gc_heap_get_kind(heap : GCHeapHandle, gc_ref : Int32) -> Int32 = "wasmoon_gc_heap_get_kind"
 
 ///|
 /// Check if a gc_ref is valid (non-null and within bounds)
 #borrow(heap)
-extern "c" fn c_gc_heap_is_valid(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_is_valid"
+extern "c" fn c_gc_heap_is_valid(heap : GCHeapHandle, gc_ref : Int32) -> Int32 = "wasmoon_gc_heap_is_valid"
 
 // ============ GC Operations ============
 
@@ -670,31 +673,31 @@ extern "c" fn c_gc_heap_is_valid(heap : GCHeapHandle, gc_ref : Int) -> Int = "wa
 extern "c" fn c_gc_heap_collect(
   heap : GCHeapHandle,
   roots : FixedArray[Int64],
-  num_roots : Int,
-) -> Int = "wasmoon_jit_collect_heap"
+  num_roots : Int32,
+) -> Int32 = "wasmoon_jit_collect_heap"
 
 ///|
 /// Discard unreachable objects allocated after the supplied object-table boundary.
 #borrow(roots, heap)
 extern "c" fn c_gc_heap_rollback_allocations(
   heap : GCHeapHandle,
-  object_count : Int,
+  object_count : Int32,
   roots : FixedArray[Int64],
-  num_roots : Int,
-) -> Int = "wasmoon_gc_heap_rollback_allocations"
+  num_roots : Int32,
+) -> Int32 = "wasmoon_gc_heap_rollback_allocations"
 
 ///|
 /// Verify C heap invariants (returns 1 when valid, 0 on failure)
 #borrow(heap)
-extern "c" fn c_gc_heap_verify(heap : GCHeapHandle, verbose : Int) -> Int = "wasmoon_gc_heap_verify"
+extern "c" fn c_gc_heap_verify(heap : GCHeapHandle, verbose : Int32) -> Int32 = "wasmoon_gc_heap_verify"
 
 ///|
 /// Configure allocation fault injection:
 /// - fail_at > 0: fail exactly on Nth allocation attempt
 /// - fail_every > 0: fail on every Kth allocation attempt
 extern "c" fn c_gc_heap_debug_set_fail_alloc(
-  fail_at : Int,
-  fail_every : Int,
+  fail_at : Int32,
+  fail_every : Int32,
 ) -> Unit = "wasmoon_gc_heap_debug_set_fail_alloc"
 
 // ============ JIT Utilities ============
@@ -707,7 +710,10 @@ extern "c" fn c_gc_heap_get_base(heap : GCHeapHandle) -> Int64 = "wasmoon_gc_hea
 ///|
 /// Get object offset in heap (for JIT inline access)
 #borrow(heap)
-extern "c" fn c_gc_heap_get_offset(heap : GCHeapHandle, gc_ref : Int) -> Int = "wasmoon_gc_heap_get_offset"
+extern "c" fn c_gc_heap_get_offset(
+  heap : GCHeapHandle,
+  gc_ref : Int32,
+) -> Int32 = "wasmoon_gc_heap_get_offset"
 
 ///|
 /// Get current heap size (bytes used)
@@ -722,22 +728,22 @@ extern "c" fn c_gc_heap_get_capacity(heap : GCHeapHandle) -> Int64 = "wasmoon_gc
 ///|
 /// Get number of objects in heap
 #borrow(heap)
-extern "c" fn c_gc_heap_get_object_count(heap : GCHeapHandle) -> Int = "wasmoon_gc_heap_get_object_count"
+extern "c" fn c_gc_heap_get_object_count(heap : GCHeapHandle) -> Int32 = "wasmoon_gc_heap_get_object_count"
 
 ///|
 /// Get total number of write-barrier calls recorded
 #borrow(heap)
-extern "c" fn c_gc_heap_get_barrier_writes(heap : GCHeapHandle) -> Int = "wasmoon_gc_heap_get_barrier_writes"
+extern "c" fn c_gc_heap_get_barrier_writes(heap : GCHeapHandle) -> Int32 = "wasmoon_gc_heap_get_barrier_writes"
 
 ///|
 /// Get total number of allocations since heap creation
 #borrow(heap)
-extern "c" fn c_gc_heap_get_total_allocations(heap : GCHeapHandle) -> Int = "wasmoon_gc_heap_get_total_allocations"
+extern "c" fn c_gc_heap_get_total_allocations(heap : GCHeapHandle) -> Int32 = "wasmoon_gc_heap_get_total_allocations"
 
 ///|
 /// Get total number of GC cycles performed
 #borrow(heap)
-extern "c" fn c_gc_heap_get_total_collections(heap : GCHeapHandle) -> Int = "wasmoon_gc_heap_get_total_collections"
+extern "c" fn c_gc_heap_get_total_collections(heap : GCHeapHandle) -> Int32 = "wasmoon_gc_heap_get_total_collections"
 
 // ============ Exception Handling ============
 
@@ -824,8 +830,8 @@ extern "c" fn c_dwarf_add_function(
   dwarf : DWARFBuilder,
   name : Bytes,
   addr : Int64,
-  size : Int,
-  func_idx : Int,
+  size : Int32,
+  func_idx : Int32,
 ) -> Unit = "wasmoon_dwarf_add_function"
 
 ///|
@@ -834,7 +840,7 @@ extern "c" fn c_dwarf_add_function(
 /// via the GDB JIT interface
 /// verbose: if true, print debug info to stderr
 #borrow(dwarf)
-extern "c" fn c_dwarf_register(dwarf : DWARFBuilder, verbose : Int) -> Unit = "wasmoon_dwarf_register"
+extern "c" fn c_dwarf_register(dwarf : DWARFBuilder, verbose : Int32) -> Unit = "wasmoon_dwarf_register"
 
 ///|
 /// Unregister DWARF debug info from the debugger
@@ -862,10 +868,10 @@ extern "c" fn c_dwarf_lookup_address(
   dwarf : DWARFBuilder,
   addr : Int64,
   name_out : FixedArray[Byte],
-  name_size : Int,
-  func_idx_out : FixedArray[Int],
+  name_size : Int32,
+  func_idx_out : FixedArray[Int32],
   offset_out : FixedArray[Int64],
-) -> Int = "wasmoon_dwarf_lookup_address"
+) -> Int32 = "wasmoon_dwarf_lookup_address"
 
 ///|
 /// Capture a backtrace with LR fallback (for when FP is 0)
@@ -877,20 +883,20 @@ extern "c" fn c_dwarf_capture_backtrace_ex(
   initial_fp : Int64,
   initial_lr : Int64,
   frames_out : FixedArray[Int64],
-  max_frames : Int,
-) -> Int = "wasmoon_dwarf_capture_backtrace_ex"
+  max_frames : Int32,
+) -> Int32 = "wasmoon_dwarf_capture_backtrace_ex"
 
 // ============ Managed JITContext Operations ============
 
 ///|
 #borrow(jit_context)
-extern "c" fn c_jit_context_is_valid(jit_context : JITContext) -> Int = "wasmoon_jit_context_is_valid"
+extern "c" fn c_jit_context_is_valid(jit_context : JITContext) -> Int32 = "wasmoon_jit_context_is_valid"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_set_func_managed(
   jit_context : JITContext,
-  idx : Int,
+  idx : Int32,
   func_ptr : Int64,
 ) -> Unit = "wasmoon_jit_ctx_set_func_managed"
 
@@ -916,36 +922,38 @@ extern "c" fn c_jit_ctx_get_func_table_managed(
 
 ///|
 #borrow(jit_context)
-extern "c" fn c_jit_ctx_get_func_count_managed(jit_context : JITContext) -> Int = "wasmoon_jit_ctx_get_func_count_managed"
+extern "c" fn c_jit_ctx_get_func_count_managed(
+  jit_context : JITContext,
+) -> Int32 = "wasmoon_jit_ctx_get_func_count_managed"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_get_table_ptr_managed(
   jit_context : JITContext,
-  table_idx : Int,
+  table_idx : Int32,
 ) -> NativeTableHandle = "wasmoon_jit_ctx_get_table_ptr_managed"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_get_table_size_managed(
   jit_context : JITContext,
-  table_idx : Int,
-) -> Int = "wasmoon_jit_ctx_get_table_size_managed"
+  table_idx : Int32,
+) -> Int32 = "wasmoon_jit_ctx_get_table_size_managed"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_alloc_indirect_table_managed(
   jit_context : JITContext,
-  count : Int,
-) -> Int = "wasmoon_jit_ctx_alloc_indirect_table_managed"
+  count : Int32,
+) -> Int32 = "wasmoon_jit_ctx_alloc_indirect_table_managed"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_set_indirect_managed(
   jit_context : JITContext,
-  table_idx : Int,
-  func_idx : Int,
-  type_idx : Int,
+  table_idx : Int32,
+  func_idx : Int32,
+  type_idx : Int32,
 ) -> Unit = "wasmoon_jit_ctx_set_indirect_managed"
 
 ///|
@@ -953,7 +961,7 @@ extern "c" fn c_jit_ctx_set_indirect_managed(
 extern "c" fn c_jit_ctx_set_memory_pointers_managed(
   jit_context : JITContext,
   memory_ptrs : FixedArray[MemoryDescriptor],
-  memory_count : Int,
+  memory_count : Int32,
 ) -> Unit = "wasmoon_jit_ctx_set_memory_pointers_managed"
 
 ///|
@@ -961,9 +969,9 @@ extern "c" fn c_jit_ctx_set_memory_pointers_managed(
 extern "c" fn c_jit_ctx_set_table_pointers_managed(
   jit_context : JITContext,
   table_ptrs : FixedArray[NativeTableHandle],
-  table_sizes : FixedArray[Int],
+  table_sizes : FixedArray[Int32],
   table_max_sizes : FixedArray[Int64],
-  table_count : Int,
+  table_count : Int32,
 ) -> Unit = "wasmoon_jit_ctx_set_table_pointers_managed"
 
 ///|
@@ -978,30 +986,30 @@ extern "c" fn c_jit_ctx_alloc_guarded_memory_managed(
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_get_memory_ptr_managed(
   jit_context : JITContext,
-  memidx : Int,
+  memidx : Int32,
 ) -> Int64 = "wasmoon_jit_ctx_get_memory_ptr_managed"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_get_memory_size_managed(
   jit_context : JITContext,
-  memidx : Int,
+  memidx : Int32,
 ) -> Int64 = "wasmoon_jit_ctx_get_memory_size_managed"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_exception_throw_tag_managed(
   jit_context : JITContext,
-  tag_addr : Int,
+  tag_addr : Int32,
 ) -> Unit = "wasmoon_jit_exception_throw_tag_managed"
 
 ///|
 #borrow(jit_context, values)
 extern "c" fn c_jit_exception_throw_values_managed(
   jit_context : JITContext,
-  tag_addr : Int,
+  tag_addr : Int32,
   values : FixedArray[Int64],
-  count : Int,
+  count : Int32,
 ) -> Unit = "wasmoon_jit_exception_throw_values_managed"
 
 ///|
@@ -1015,8 +1023,8 @@ extern "c" fn c_jit_ctx_clear_segments_managed(
 #owned(closure)
 extern "c" fn c_jit_set_hostcall_callback_managed(
   jit_context : JITContext,
-  call_closure : FuncRef[(() -> Int) -> Int],
-  closure : () -> Int,
+  call_closure : FuncRef[(() -> Int32) -> Int32],
+  closure : () -> Int32,
 ) -> Unit = "wasmoon_jit_set_hostcall_callback_managed"
 
 ///|
@@ -1030,7 +1038,7 @@ extern "c" fn c_jit_clear_hostcall_callback_managed(
 #owned(closure)
 extern "c" fn c_jit_set_cancellation_callback_managed(
   jit_context : JITContext,
-  call_closure : FuncRef[(() -> Bool) -> Int],
+  call_closure : FuncRef[(() -> Bool) -> Int32],
   closure : () -> Bool,
 ) -> Unit = "wasmoon_jit_set_cancellation_callback_managed"
 
@@ -1044,7 +1052,7 @@ extern "c" fn c_jit_clear_cancellation_callback_managed(
 #borrow(jit_context)
 extern "c" fn c_jit_gc_environment_is_clear_managed(
   jit_context : JITContext,
-) -> Int = "wasmoon_jit_gc_environment_is_clear_managed"
+) -> Int32 = "wasmoon_jit_gc_environment_is_clear_managed"
 
 ///|
 #borrow(jit_context)
@@ -1080,16 +1088,16 @@ extern "c" fn c_jit_gc_end_frame_managed(jit_context : JITContext) -> Unit = "wa
 extern "c" fn c_jit_gc_collect_for_alloc_managed(
   jit_context : JITContext,
   roots : FixedArray[Int64],
-  root_count : Int,
-) -> Int = "wasmoon_jit_gc_collect_for_alloc_managed"
+  root_count : Int32,
+) -> Int32 = "wasmoon_jit_gc_collect_for_alloc_managed"
 
 ///|
 #borrow(jit_context, roots)
 extern "c" fn c_jit_gc_set_root_scratch_managed(
   jit_context : JITContext,
   roots : FixedArray[Int64],
-  root_count : Int,
-) -> Int = "wasmoon_jit_gc_set_root_scratch_managed"
+  root_count : Int32,
+) -> Int32 = "wasmoon_jit_gc_set_root_scratch_managed"
 
 ///|
 #borrow(jit_context)
@@ -1102,12 +1110,14 @@ extern "c" fn c_jit_gc_set_safepoint_table_managed(
 #borrow(jit_context)
 extern "c" fn c_jit_gc_use_func_safepoints_managed(
   jit_context : JITContext,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Unit = "wasmoon_jit_gc_use_func_safepoints_managed"
 
 ///|
 #borrow(jit_context)
-extern "c" fn c_jit_get_wasi_exit_code_managed(jit_context : JITContext) -> Int = "wasmoon_jit_get_wasi_exit_code_managed"
+extern "c" fn c_jit_get_wasi_exit_code_managed(
+  jit_context : JITContext,
+) -> Int32 = "wasmoon_jit_get_wasi_exit_code_managed"
 
 ///|
 #borrow(jit_context)
@@ -1120,12 +1130,12 @@ extern "c" fn c_jit_get_exception_get_ref_ptr() -> Int64 = "wasmoon_jit_get_exce
 #borrow(jit_context)
 extern "c" fn c_jit_set_wasi_exit_code_managed(
   jit_context : JITContext,
-  code : Int,
+  code : Int32,
 ) -> Unit = "wasmoon_jit_set_wasi_exit_code_managed"
 
 ///|
 #borrow(jit_context)
 extern "c" fn c_jit_ctx_get_memory_descriptor_managed(
   jit_context : JITContext,
-  memidx : Int,
+  memidx : Int32,
 ) -> MemoryDescriptor = "wasmoon_jit_ctx_get_memory_descriptor_managed"

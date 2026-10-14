@@ -12,26 +12,26 @@ pub(all) enum RegisterBank {
 
 ///|
 pub(all) enum RootLocation {
-  Register(RegisterBank, Int)
-  Stack(offset~ : Int, ty~ : @native.ValueType)
+  Register(RegisterBank, Int32)
+  Stack(offset~ : Int32, ty~ : @native.ValueType)
 } derive(Eq, Debug)
 
 ///|
 pub(all) enum UnwindOperation {
-  StackAlloc(size~ : Int)
-  SetFramePointer(RegisterBank, Int, cfa_offset~ : Int)
-  SaveRegister(RegisterBank, Int, cfa_offset~ : Int)
+  StackAlloc(size~ : Int32)
+  SetFramePointer(RegisterBank, Int32, cfa_offset~ : Int32)
+  SaveRegister(RegisterBank, Int32, cfa_offset~ : Int32)
 } derive(Eq, Debug)
 
 ///|
 pub struct UnwindDirective {
-  offset : Int
+  offset : Int32
   operation : UnwindOperation
 } derive(Eq, Debug)
 
 ///|
 pub fn UnwindDirective::new(
-  offset : Int,
+  offset : Int32,
   operation : UnwindOperation,
 ) -> UnwindDirective {
   { offset, operation, }
@@ -56,7 +56,7 @@ pub(all) enum RelocationKind {
 
 ///|
 pub struct Relocation {
-  offset : Int
+  offset : Int32
   kind : RelocationKind
   target : RelocationTarget
   addend : Int64
@@ -64,24 +64,24 @@ pub struct Relocation {
 
 ///|
 pub fn Relocation::new(
-  offset : Int,
+  offset : Int32,
   kind : RelocationKind,
   target : RelocationTarget,
-  addend? : Int64 = 0L,
+  addend~ : Int64 = 0L,
 ) -> Relocation {
   { offset, kind, target, addend, }
 }
 
 ///|
 pub struct TrapSite {
-  offset : Int
+  offset : Int32
   reason : @native.TrapReason
   source : @native.SourceLocation?
 } derive(Eq, Debug)
 
 ///|
 pub fn TrapSite::new(
-  offset : Int,
+  offset : Int32,
   reason : @native.TrapReason,
   source? : @native.SourceLocation,
 ) -> TrapSite {
@@ -90,13 +90,13 @@ pub fn TrapSite::new(
 
 ///|
 pub struct SourceSite {
-  offset : Int
+  offset : Int32
   source : @native.SourceLocation
 } derive(Eq, Debug)
 
 ///|
 pub fn SourceSite::new(
-  offset : Int,
+  offset : Int32,
   source : @native.SourceLocation,
 ) -> SourceSite {
   { offset, source, }
@@ -104,7 +104,7 @@ pub fn SourceSite::new(
 
 ///|
 pub struct SafepointSite {
-  offset : Int
+  offset : Int32
   kind : @native.SafepointKind
   roots : Array[RootLocation]
   source : @native.SourceLocation?
@@ -113,7 +113,7 @@ pub struct SafepointSite {
 
 ///|
 pub fn SafepointSite::new(
-  offset : Int,
+  offset : Int32,
   kind : @native.SafepointKind,
   roots : Array[RootLocation],
   source? : @native.SourceLocation,

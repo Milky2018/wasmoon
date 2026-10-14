@@ -15,14 +15,14 @@ const GC_VALUE_SLOT_BYTES : Int64 = 8L
 ///|
 /// Struct instance - stores field values
 pub(all) struct StructInstance {
-  type_idx : Int // Index of the struct type in the module
+  type_idx : Int32 // Index of the struct type in the module
   fields : Array[@types.Value] // Field values
 } derive(Debug)
 
 ///|
 /// Array instance - stores element values and length
 pub(all) struct ArrayInstance {
-  type_idx : Int // Index of the array type in the module
+  type_idx : Int32 // Index of the array type in the module
   elements : Array[@types.Value] // Element values
 } derive(Debug)
 
@@ -48,10 +48,10 @@ pub impl Show for GCObject with fn output(self, logger) {
 pub struct MarkSweepHeap {
   objects : Array[GCObject?] // None means slot is free (tombstone)
   marks : Array[Bool] // Mark bits for GC
-  free_list : Array[Int] // List of free slot indices for reuse
-  mut total_live : Int // Count of live objects
-  mut gc_threshold : Int // Trigger GC when total_live exceeds this
-  mut collections : Int // Number of GC cycles performed
+  free_list : Array[Int32] // List of free slot indices for reuse
+  mut total_live : Int32 // Count of live objects
+  mut gc_threshold : Int32 // Trigger GC when total_live exceeds this
+  mut collections : Int32 // Number of GC cycles performed
   mut bytes_allocated : Int64 // Cumulative allocated bytes
   mut bytes_collected : Int64 // Cumulative collected bytes
 } derive(Debug)
@@ -59,10 +59,10 @@ pub struct MarkSweepHeap {
 ///|
 /// GC statistics
 pub struct GCStats {
-  total_objects : Int // Total slots in heap
-  live_objects : Int // Number of live objects
-  free_slots : Int // Number of free slots
-  collections : Int // Number of GC cycles performed
+  total_objects : Int32 // Total slots in heap
+  live_objects : Int32 // Number of live objects
+  free_slots : Int32 // Number of free slots
+  collections : Int32 // Number of GC cycles performed
   bytes_allocated : Int64 // Cumulative allocated bytes
   bytes_collected : Int64 // Cumulative collected bytes
 } derive(Debug)
@@ -84,7 +84,7 @@ pub fn MarkSweepHeap::MarkSweepHeap() -> MarkSweepHeap {
 
 ///|
 /// Create a new GC heap with custom threshold
-pub fn MarkSweepHeap::with_threshold(threshold : Int) -> MarkSweepHeap {
+pub fn MarkSweepHeap::with_threshold(threshold : Int32) -> MarkSweepHeap {
   {
     objects: [],
     marks: [],
@@ -174,9 +174,9 @@ fn MarkSweepHeap::clear(self : MarkSweepHeap) -> Unit {
 /// Allocate a struct instance and return its reference index
 pub fn MarkSweepHeap::alloc_struct(
   self : MarkSweepHeap,
-  type_idx : Int,
+  type_idx : Int32,
   fields : Array[@types.Value],
-) -> Int {
+) -> Int32 {
   let obj = GCObject::Struct({ type_idx, fields, })
   self.alloc_object(obj)
 }
@@ -185,9 +185,9 @@ pub fn MarkSweepHeap::alloc_struct(
 /// Allocate an array instance and return its reference index
 pub fn MarkSweepHeap::alloc_array(
   self : MarkSweepHeap,
-  type_idx : Int,
+  type_idx : Int32,
   elements : Array[@types.Value],
-) -> Int {
+) -> Int32 {
   let obj = GCObject::Array({ type_idx, elements, })
   self.alloc_object(obj)
 }
@@ -206,7 +206,7 @@ fn gc_object_size_bytes(obj : GCObject) -> Int64 {
 
 ///|
 /// Internal: allocate an object, reusing free slots if available
-fn MarkSweepHeap::alloc_object(self : MarkSweepHeap, obj : GCObject) -> Int {
+fn MarkSweepHeap::alloc_object(self : MarkSweepHeap, obj : GCObject) -> Int32 {
   self.total_live += 1
   self.bytes_allocated += gc_object_size_bytes(obj)
   // Try to reuse a free slot
@@ -227,7 +227,7 @@ fn MarkSweepHeap::alloc_object(self : MarkSweepHeap, obj : GCObject) -> Int {
 /// Get an object by reference index
 pub fn MarkSweepHeap::get(
   self : MarkSweepHeap,
-  idx : Int,
+  idx : Int32,
 ) -> GCObject raise RuntimeError {
   if idx < 0 || idx >= self.objects.length() {
     raise UndefinedElement
@@ -242,7 +242,7 @@ pub fn MarkSweepHeap::get(
 /// Get a struct instance by reference index
 pub fn MarkSweepHeap::get_struct(
   self : MarkSweepHeap,
-  idx : Int,
+  idx : Int32,
 ) -> StructInstance raise RuntimeError {
   match self.get(idx) {
     Struct(s) => s
@@ -254,7 +254,7 @@ pub fn MarkSweepHeap::get_struct(
 /// Get an array instance by reference index
 pub fn MarkSweepHeap::get_array(
   self : MarkSweepHeap,
-  idx : Int,
+  idx : Int32,
 ) -> ArrayInstance raise RuntimeError {
   match self.get(idx) {
     Array(a) => a
@@ -266,8 +266,8 @@ pub fn MarkSweepHeap::get_array(
 /// Get a struct field value
 pub fn MarkSweepHeap::struct_get(
   self : MarkSweepHeap,
-  struct_idx : Int,
-  field_idx : Int,
+  struct_idx : Int32,
+  field_idx : Int32,
 ) -> @types.Value raise RuntimeError {
   let s = self.get_struct(struct_idx)
   if field_idx < 0 || field_idx >= s.fields.length() {
@@ -280,8 +280,8 @@ pub fn MarkSweepHeap::struct_get(
 /// Set a struct field value
 pub fn MarkSweepHeap::struct_set(
   self : MarkSweepHeap,
-  struct_idx : Int,
-  field_idx : Int,
+  struct_idx : Int32,
+  field_idx : Int32,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   let s = self.get_struct(struct_idx)
@@ -295,8 +295,8 @@ pub fn MarkSweepHeap::struct_set(
 /// Get array length
 pub fn MarkSweepHeap::array_len(
   self : MarkSweepHeap,
-  array_idx : Int,
-) -> Int raise RuntimeError {
+  array_idx : Int32,
+) -> Int32 raise RuntimeError {
   let a = self.get_array(array_idx)
   a.elements.length()
 }
@@ -305,8 +305,8 @@ pub fn MarkSweepHeap::array_len(
 /// Get an array element value
 pub fn MarkSweepHeap::array_get(
   self : MarkSweepHeap,
-  array_idx : Int,
-  elem_idx : Int,
+  array_idx : Int32,
+  elem_idx : Int32,
 ) -> @types.Value raise RuntimeError {
   let a = self.get_array(array_idx)
   if elem_idx < 0 || elem_idx >= a.elements.length() {
@@ -319,8 +319,8 @@ pub fn MarkSweepHeap::array_get(
 /// Set an array element value
 pub fn MarkSweepHeap::array_set(
   self : MarkSweepHeap,
-  array_idx : Int,
-  elem_idx : Int,
+  array_idx : Int32,
+  elem_idx : Int32,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   let a = self.get_array(array_idx)
@@ -334,10 +334,10 @@ pub fn MarkSweepHeap::array_set(
 /// Fill array elements with a value
 pub fn MarkSweepHeap::array_fill(
   self : MarkSweepHeap,
-  array_idx : Int,
-  offset : Int,
+  array_idx : Int32,
+  offset : Int32,
   value : @types.Value,
-  count : Int,
+  count : Int32,
 ) -> Unit raise RuntimeError {
   let a = self.get_array(array_idx)
   if offset < 0 || count < 0 || offset + count > a.elements.length() {
@@ -352,11 +352,11 @@ pub fn MarkSweepHeap::array_fill(
 /// Copy elements between arrays
 pub fn MarkSweepHeap::array_copy(
   self : MarkSweepHeap,
-  dst_idx : Int,
-  dst_offset : Int,
-  src_idx : Int,
-  src_offset : Int,
-  count : Int,
+  dst_idx : Int32,
+  dst_offset : Int32,
+  src_idx : Int32,
+  src_offset : Int32,
+  count : Int32,
 ) -> Unit raise RuntimeError {
   let dst = self.get_array(dst_idx)
   let src = self.get_array(src_idx)
@@ -385,8 +385,8 @@ pub fn MarkSweepHeap::array_copy(
 /// Get the type index of an object
 pub fn MarkSweepHeap::get_type_idx(
   self : MarkSweepHeap,
-  idx : Int,
-) -> Int raise RuntimeError {
+  idx : Int32,
+) -> Int32 raise RuntimeError {
   match self.get(idx) {
     Struct(s) => s.type_idx
     Array(a) => a.type_idx
@@ -395,7 +395,7 @@ pub fn MarkSweepHeap::get_type_idx(
 
 ///|
 /// Get total number of allocated objects (including free slots)
-pub fn MarkSweepHeap::length(self : MarkSweepHeap) -> Int {
+pub fn MarkSweepHeap::length(self : MarkSweepHeap) -> Int32 {
   self.objects.length()
 }
 
@@ -405,7 +405,7 @@ pub fn MarkSweepHeap::length(self : MarkSweepHeap) -> Int {
 
 ///|
 /// Check if an object index is valid and alive
-pub fn MarkSweepHeap::is_alive(self : MarkSweepHeap, idx : Int) -> Bool {
+pub fn MarkSweepHeap::is_alive(self : MarkSweepHeap, idx : Int32) -> Bool {
   if idx < 0 || idx >= self.objects.length() {
     return false
   }
@@ -414,7 +414,7 @@ pub fn MarkSweepHeap::is_alive(self : MarkSweepHeap, idx : Int) -> Bool {
 
 ///|
 /// Mark an object as reachable (and recursively mark referenced objects)
-pub fn MarkSweepHeap::mark(self : MarkSweepHeap, idx : Int) -> Unit {
+pub fn MarkSweepHeap::mark(self : MarkSweepHeap, idx : Int32) -> Unit {
   // Bounds check
   if idx < 0 || idx >= self.objects.length() {
     return
@@ -465,7 +465,7 @@ pub fn MarkSweepHeap::mark_roots(
 
 ///|
 /// Sweep phase: collect all unmarked objects
-pub fn MarkSweepHeap::sweep(self : MarkSweepHeap) -> Int {
+pub fn MarkSweepHeap::sweep(self : MarkSweepHeap) -> Int32 {
   let mut collected = 0
   for i in 0..<self.objects.length() {
     if self.objects[i] is Some(object) && !self.marks[i] {
@@ -488,7 +488,7 @@ pub fn MarkSweepHeap::sweep(self : MarkSweepHeap) -> Int {
 pub fn MarkSweepHeap::collect(
   self : MarkSweepHeap,
   roots : Array[@types.Value],
-) -> Int {
+) -> Int32 {
   // Mark phase
   self.mark_roots(roots)
   // Sweep phase
@@ -507,20 +507,20 @@ pub fn MarkSweepHeap::should_collect(self : MarkSweepHeap) -> Bool {
 /// Set the GC threshold
 pub fn MarkSweepHeap::set_threshold(
   self : MarkSweepHeap,
-  threshold : Int,
+  threshold : Int32,
 ) -> Unit {
   self.gc_threshold = threshold
 }
 
 ///|
 /// Get the current GC threshold
-pub fn MarkSweepHeap::get_threshold(self : MarkSweepHeap) -> Int {
+pub fn MarkSweepHeap::get_threshold(self : MarkSweepHeap) -> Int32 {
   self.gc_threshold
 }
 
 ///|
 /// Check if an object reference is valid and alive
-pub fn MarkSweepHeap::is_valid(self : MarkSweepHeap, idx : Int) -> Bool {
+pub fn MarkSweepHeap::is_valid(self : MarkSweepHeap, idx : Int32) -> Bool {
   self.is_alive(idx)
 }
 
@@ -529,12 +529,12 @@ pub fn MarkSweepHeap::is_valid(self : MarkSweepHeap, idx : Int) -> Bool {
 // ============================================================
 
 ///|
-pub impl GcHeap for MarkSweepHeap with fn alloc_struct(self, type_idx, fields) -> Int {
+pub impl GcHeap for MarkSweepHeap with fn alloc_struct(self, type_idx, fields) -> Int32 {
   MarkSweepHeap::alloc_struct(self, type_idx, fields)
 }
 
 ///|
-pub impl GcHeap for MarkSweepHeap with fn alloc_array(self, type_idx, elements) -> Int {
+pub impl GcHeap for MarkSweepHeap with fn alloc_array(self, type_idx, elements) -> Int32 {
   MarkSweepHeap::alloc_array(self, type_idx, elements)
 }
 
@@ -558,7 +558,7 @@ pub impl GcHeap for MarkSweepHeap with fn struct_set(
 }
 
 ///|
-pub impl GcHeap for MarkSweepHeap with fn array_len(self, array_idx) -> Int {
+pub impl GcHeap for MarkSweepHeap with fn array_len(self, array_idx) -> Int32 {
   MarkSweepHeap::array_len(self, array_idx)
 }
 
@@ -603,7 +603,7 @@ pub impl GcHeap for MarkSweepHeap with fn array_copy(
 }
 
 ///|
-pub impl GcHeap for MarkSweepHeap with fn get_type_idx(self, idx) -> Int {
+pub impl GcHeap for MarkSweepHeap with fn get_type_idx(self, idx) -> Int32 {
   MarkSweepHeap::get_type_idx(self, idx)
 }
 
@@ -670,7 +670,7 @@ pub impl GcRuntime for MarkSweepHeap with fn stats(self) -> GcStats {
 }
 
 ///|
-pub impl GcRuntime for MarkSweepHeap with fn collection_count(self) -> Int {
+pub impl GcRuntime for MarkSweepHeap with fn collection_count(self) -> Int32 {
   self.collections
 }
 
@@ -680,7 +680,7 @@ pub impl GcRuntime for MarkSweepHeap with fn set_threshold(self, threshold) -> U
 }
 
 ///|
-pub impl GcRuntime for MarkSweepHeap with fn get_threshold(self) -> Int {
+pub impl GcRuntime for MarkSweepHeap with fn get_threshold(self) -> Int32 {
   MarkSweepHeap::get_threshold(self)
 }
 
@@ -693,7 +693,7 @@ pub impl GcManager for MarkSweepHeap with fn alloc_struct(
   self,
   type_idx,
   fields,
-) -> Int {
+) -> Int32 {
   MarkSweepHeap::alloc_struct(self, type_idx, fields)
 }
 
@@ -702,7 +702,7 @@ pub impl GcManager for MarkSweepHeap with fn alloc_array(
   self,
   type_idx,
   elements,
-) -> Int {
+) -> Int32 {
   MarkSweepHeap::alloc_array(self, type_idx, elements)
 }
 
@@ -726,7 +726,7 @@ pub impl GcManager for MarkSweepHeap with fn struct_set(
 }
 
 ///|
-pub impl GcManager for MarkSweepHeap with fn array_len(self, array_idx) -> Int {
+pub impl GcManager for MarkSweepHeap with fn array_len(self, array_idx) -> Int32 {
   MarkSweepHeap::array_len(self, array_idx)
 }
 
@@ -775,7 +775,7 @@ pub impl GcManager for MarkSweepHeap with fn array_copy(
 }
 
 ///|
-pub impl GcManager for MarkSweepHeap with fn get_type_idx(self, idx) -> Int {
+pub impl GcManager for MarkSweepHeap with fn get_type_idx(self, idx) -> Int32 {
   MarkSweepHeap::get_type_idx(self, idx)
 }
 

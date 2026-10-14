@@ -6,30 +6,30 @@ fn validate_component_section_export(
   is_root : Bool,
   counts : Counts,
   type_table : Array[@component.TypeDef?],
-  known_type_sigs : Map[Int, TypeSig],
+  known_type_sigs : Map[Int32, TypeSig],
   local_resource_types : Array[Bool],
-  resource_ids : Array[Int?],
-  type_sizes : Array[Int],
-  type_depths : Array[Int],
-  component_sizes : Array[Int],
-  instance_sizes : Array[Int],
-  export_size : Int,
-  named_types : Map[Int, Int],
-  core_module_exports : Array[Map[String, Int]?],
+  resource_ids : Array[Int32?],
+  type_sizes : Array[Int32],
+  type_depths : Array[Int32],
+  component_sizes : Array[Int32],
+  instance_sizes : Array[Int32],
+  export_size : Int32,
+  named_types : Map[Int32, Int32],
+  core_module_exports : Array[Map[String, Int32]?],
   core_module_defs : Array[@types.Module?],
   core_func_types : Array[@types.FuncType?],
   core_module_export_types : Array[Map[String, CoreExternType]?],
   core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
-  core_instance_exports : Array[Map[String, Int]?],
+  core_instance_exports : Array[Map[String, Int32]?],
   core_instance_export_types : Array[Map[String, CoreExternType]?],
   core_memory_types : Array[@types.MemoryType?],
   component_import_sorts : Array[Map[String, @component.Sort]?],
   component_import_instance_sigs : Array[Map[String, InstanceSig]?],
   component_import_func_sigs : Array[Map[String, FuncSigShape]?],
   component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int]]?,
+    Map[String, Map[String, Int32]]?,
   ],
-  component_import_core_module_exports : Array[Map[String, Map[String, Int]]?],
+  component_import_core_module_exports : Array[Map[String, Map[String, Int32]]?],
   component_import_core_module_import_sigs : Array[
     Map[String, Map[String, CoreExternType]]?,
   ],
@@ -46,9 +46,9 @@ fn validate_component_section_export(
   component_export_type_sigs : Array[Map[String, TypeSig]?],
   component_export_func_sigs : Array[Map[String, FuncSigShape]?],
   instance_sigs : Array[InstanceSig?],
-  interface_instance_idxs : Map[Int, Int],
-  instance_export_type_idxs : Array[Array[Int]?],
-  instance_export_func_idxs : Array[Array[Int]?],
+  interface_instance_idxs : Map[Int32, Int32],
+  instance_export_type_idxs : Array[Array[Int32]?],
+  instance_export_func_idxs : Array[Array[Int32]?],
   instance_export_type_map : Array[Map[String, ExportedTypeInfo]?],
   instance_export_type_sigs : Array[Map[String, TypeSig]?],
   instance_export_func_sigs : Array[Map[String, FuncSigShape]?],
@@ -58,9 +58,9 @@ fn validate_component_section_export(
   ],
   func_types : Array[@component.FuncType?],
   func_sig_shapes : Array[FuncSigShape?],
-  imported_funcs : Int,
+  imported_funcs : Int32,
   seen_export_names : Map[String, String],
-  export_resource_names : Map[String, Int],
+  export_resource_names : Map[String, Int32],
   my_export_sorts : Map[String, @component.Sort],
   my_export_instance_sigs : Map[String, InstanceSig],
   my_export_instance_type_sigs : Map[String, Map[String, TypeSig]],
@@ -68,8 +68,8 @@ fn validate_component_section_export(
   my_export_type_sigs : Map[String, TypeSig],
   my_export_func_sigs : Map[String, FuncSigShape],
   type_outers : Array[Array[@component.TypeDef?]],
-  next_resource_id : Int,
-) -> (Int, Int) raise ComponentValidationError {
+  next_resource_id : Int32,
+) -> (Int32, Int32) raise ComponentValidationError {
   let mut export_size = export_size
   let mut next_resource_id = next_resource_id
   let exports = @component.parse_export_section(payload) catch {
@@ -119,7 +119,7 @@ fn validate_component_section_export(
       raise ExportedImportedFunc(e.sortidx.idx)
     }
     check_sortidx(e.sortidx, counts, type_table.length())
-    let mut ascribed_resource_id : Int? = None
+    let mut ascribed_resource_id : Int32? = None
     if e.sortidx.sort is Type && e.desc is Some(Type(SubResource)) {
       if !(type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids)
         is Resource(_)) {
@@ -250,8 +250,8 @@ fn validate_component_section_export(
       Instance => {
         let inst_idx = e.sortidx.idx
         if inst_idx >= 0 && inst_idx < counts.instance {
-          let exported_type_idxs : Array[Int] = []
-          let seen : Map[Int, Int] = Map([])
+          let exported_type_idxs : Array[Int32] = []
+          let seen : Map[Int32, Int32] = Map([])
           if inst_idx >= 0 && inst_idx < instance_export_type_idxs.length() {
             match instance_export_type_idxs[inst_idx] {
               Some(t_idxs) =>
@@ -298,7 +298,7 @@ fn validate_component_section_export(
               None => ()
             }
           }
-          let inst_named : Map[Int, Int] = Map([])
+          let inst_named : Map[Int32, Int32] = Map([])
           for kv in named_types.iter() {
             let (k, v) = kv
             inst_named.set(k, v)

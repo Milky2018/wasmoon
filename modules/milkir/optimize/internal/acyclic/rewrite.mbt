@@ -1,5 +1,5 @@
 ///|
-fn integer_width(ty : @milkir.Type) -> Int? {
+fn integer_width(ty : @milkir.Type) -> Int32? {
   match ty {
     I32 => Some(32)
     I64 => Some(64)
@@ -8,7 +8,7 @@ fn integer_width(ty : @milkir.Type) -> Int? {
 }
 
 ///|
-fn integer_mask(width : Int) -> Int64 {
+fn integer_mask(width : Int32) -> Int64 {
   match width {
     32 => 0xFFFFFFFFL
     64 => -1L
@@ -17,7 +17,7 @@ fn integer_mask(width : Int) -> Int64 {
 }
 
 ///|
-fn sign_extend_integer(value : Int64, width : Int) -> Int64 {
+fn sign_extend_integer(value : Int64, width : Int32) -> Int64 {
   if width >= 64 {
     value
   } else {
@@ -33,12 +33,12 @@ fn sign_extend_integer(value : Int64, width : Int) -> Int64 {
 }
 
 ///|
-fn normalized_shift(value : Int64, width : Int) -> Int {
+fn normalized_shift(value : Int64, width : Int32) -> Int32 {
   (value & (width - 1).to_int64()).to_int()
 }
 
 ///|
-fn power_of_two_shift(value : Int64) -> Int? {
+fn power_of_two_shift(value : Int64) -> Int32? {
   if value <= 0L || (value & (value - 1L)) != 0L {
     return None
   }

@@ -4,29 +4,29 @@ fn validate_component_section_alias(
   payload : Bytes,
   counts : Counts,
   type_table : Array[@component.TypeDef?],
-  known_type_sigs : Map[Int, TypeSig],
+  known_type_sigs : Map[Int32, TypeSig],
   local_resource_types : Array[Bool],
-  resource_ids : Array[Int?],
-  type_sizes : Array[Int],
-  type_depths : Array[Int],
-  component_sizes : Array[Int],
-  instance_sizes : Array[Int],
-  named_types : Map[Int, Int],
-  core_module_exports : Array[Map[String, Int]?],
+  resource_ids : Array[Int32?],
+  type_sizes : Array[Int32],
+  type_depths : Array[Int32],
+  component_sizes : Array[Int32],
+  instance_sizes : Array[Int32],
+  named_types : Map[Int32, Int32],
+  core_module_exports : Array[Map[String, Int32]?],
   core_module_defs : Array[@types.Module?],
   core_func_types : Array[@types.FuncType?],
   core_module_export_types : Array[Map[String, CoreExternType]?],
   core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
-  core_instance_exports : Array[Map[String, Int]?],
+  core_instance_exports : Array[Map[String, Int32]?],
   core_instance_export_types : Array[Map[String, CoreExternType]?],
   core_memory_types : Array[@types.MemoryType?],
   component_import_sorts : Array[Map[String, @component.Sort]?],
   component_import_instance_sigs : Array[Map[String, InstanceSig]?],
   component_import_func_sigs : Array[Map[String, FuncSigShape]?],
   component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int]]?,
+    Map[String, Map[String, Int32]]?,
   ],
-  component_import_core_module_exports : Array[Map[String, Map[String, Int]]?],
+  component_import_core_module_exports : Array[Map[String, Map[String, Int32]]?],
   component_import_core_module_import_sigs : Array[
     Map[String, Map[String, CoreExternType]]?,
   ],
@@ -43,9 +43,9 @@ fn validate_component_section_alias(
   component_export_type_sigs : Array[Map[String, TypeSig]?],
   component_export_func_sigs : Array[Map[String, FuncSigShape]?],
   instance_sigs : Array[InstanceSig?],
-  interface_instance_idxs : Map[Int, Int],
-  instance_export_type_idxs : Array[Array[Int]?],
-  instance_export_func_idxs : Array[Array[Int]?],
+  interface_instance_idxs : Map[Int32, Int32],
+  instance_export_type_idxs : Array[Array[Int32]?],
+  instance_export_func_idxs : Array[Array[Int32]?],
   instance_export_type_map : Array[Map[String, ExportedTypeInfo]?],
   instance_export_type_sigs : Array[Map[String, TypeSig]?],
   instance_export_func_sigs : Array[Map[String, FuncSigShape]?],
@@ -56,7 +56,7 @@ fn validate_component_section_alias(
   func_types : Array[@component.FuncType?],
   func_sig_shapes : Array[FuncSigShape?],
   type_outers : Array[Array[@component.TypeDef?]],
-  component_size_outers : Array[Array[Int]],
+  component_size_outers : Array[Array[Int32]],
 ) -> Unit raise ComponentValidationError {
   let aliases = @component.parse_alias_section(payload) catch {
     e => raise SectionParseError(6, "\{e}")
@@ -216,7 +216,7 @@ fn validate_component_section_alias(
     if a.sort is Type {
       let mut new_td : @component.TypeDef? = None
       let mut new_local_resource = false
-      let mut new_rid : Int? = None
+      let mut new_rid : Int32? = None
       let mut new_size = 1
       let mut new_depth = 1
       match a.target {

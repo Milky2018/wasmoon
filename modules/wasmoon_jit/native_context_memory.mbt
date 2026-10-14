@@ -11,9 +11,9 @@ pub fn memory_descriptor_length(mem_desc_ptr : MemoryDescriptor) -> Int64 {
 ///|
 pub fn memory_descriptor_grow(
   mem_desc_ptr : MemoryDescriptor,
-  delta_pages : Int,
-  max_pages : Int,
-) -> Int {
+  delta_pages : Int32,
+  max_pages : Int32,
+) -> Int32 {
   c_mem_desc_grow(mem_desc_ptr, delta_pages.to_int64(), max_pages).to_int()
 }
 
@@ -25,8 +25,8 @@ pub fn memory_descriptor_read(
   mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   out : FixedArray[Byte],
-  size : Int,
-) -> Int {
+  size : Int32,
+) -> Int32 {
   if size < 0 || size > out.length() {
     return -1
   }
@@ -41,8 +41,8 @@ pub fn memory_descriptor_write(
   mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   data : FixedArray[Byte],
-  size : Int,
-) -> Int {
+  size : Int32,
+) -> Int32 {
   if size < 0 || size > data.length() {
     return -1
   }
@@ -59,8 +59,8 @@ pub fn memory_descriptor_write_bytes(
   mem_desc_ptr : MemoryDescriptor,
   offset : Int64,
   data : Bytes,
-  size : Int,
-) -> Int {
+  size : Int32,
+) -> Int32 {
   if size < 0 || size > data.length() {
     return -1
   }
@@ -72,8 +72,8 @@ pub fn memory_descriptor_move(
   mem_desc_ptr : MemoryDescriptor,
   destination : Int64,
   source : Int64,
-  size : Int,
-) -> Int {
+  size : Int32,
+) -> Int32 {
   c_mem_desc_memmove(mem_desc_ptr, destination, source, size)
 }
 
@@ -81,9 +81,9 @@ pub fn memory_descriptor_move(
 pub fn memory_descriptor_fill(
   mem_desc_ptr : MemoryDescriptor,
   destination : Int64,
-  value : Int,
-  size : Int,
-) -> Int {
+  value : Int32,
+  size : Int32,
+) -> Int32 {
   c_mem_desc_memset(mem_desc_ptr, destination, value, size)
 }
 
@@ -93,20 +93,20 @@ fn context_func_table_ptr(context : JITContext) -> Int64 {
 }
 
 ///|
-fn context_func_count(context : JITContext) -> Int {
+fn context_func_count(context : JITContext) -> Int32 {
   c_jit_ctx_get_func_count_managed(context)
 }
 
 ///|
 fn context_table_ptr(
   context : JITContext,
-  table_idx : Int,
+  table_idx : Int32,
 ) -> NativeTableHandle {
   c_jit_ctx_get_table_ptr_managed(context, table_idx)
 }
 
 ///|
-fn context_table_size(context : JITContext, table_idx : Int) -> Int {
+fn context_table_size(context : JITContext, table_idx : Int32) -> Int32 {
   c_jit_ctx_get_table_size_managed(context, table_idx)
 }
 
@@ -121,8 +121,8 @@ pub fn NativeJITContext::set_memory(
 ///|
 pub fn NativeJITContext::alloc_guarded_memory(
   self : NativeJITContext,
-  initial_pages : Int,
-  max_pages : Int?,
+  initial_pages : Int32,
+  max_pages : Int32?,
 ) -> MemoryDescriptor {
   c_jit_ctx_alloc_guarded_memory_managed(
     self.handle,
@@ -134,7 +134,7 @@ pub fn NativeJITContext::alloc_guarded_memory(
 ///|
 pub fn NativeJITContext::func_ptr(
   self : NativeJITContext,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Int64 {
   let table_ptr = context_func_table_ptr(self.handle)
   let count = context_func_count(self.handle)
@@ -184,7 +184,7 @@ pub fn NativeJITContext::set_table_pointers(
 /// The context supplies both the table identity and its live C-side layout.
 pub fn NativeJITContext::refresh_table_layout(
   self : NativeJITContext,
-  table_idx : Int,
+  table_idx : Int32,
 ) -> Bool {
   if table_idx < 0 || table_idx >= self.jit_tables.length() {
     return false
@@ -216,7 +216,7 @@ pub fn NativeJITContext::set_memory_pointers(
 /// retain the allocation independently of this context.
 pub fn NativeJITContext::memory_ptr(
   self : NativeJITContext,
-  memidx : Int,
+  memidx : Int32,
 ) -> Int64 {
   c_jit_ctx_get_memory_ptr_managed(self.handle, memidx)
 }
@@ -224,7 +224,7 @@ pub fn NativeJITContext::memory_ptr(
 ///|
 pub fn NativeJITContext::memory_size(
   self : NativeJITContext,
-  memidx : Int,
+  memidx : Int32,
 ) -> Int64 {
   c_jit_ctx_get_memory_size_managed(self.handle, memidx)
 }
@@ -234,7 +234,7 @@ pub fn NativeJITContext::memory_size(
 pub struct MemoryInfo {
   ptr : MemoryDescriptor // Pointer to `wasmoon_memory_t` (memory descriptor)
   size : Int64 // Initial size in bytes (informational)
-  max_pages : Int? // Max pages (None = unlimited)
+  max_pages : Int32? // Max pages (None = unlimited)
 }
 
 ///|
@@ -242,7 +242,7 @@ pub struct MemoryInfo {
 pub fn MemoryInfo::MemoryInfo(
   ptr : MemoryDescriptor,
   size : Int64,
-  max_pages : Int?,
+  max_pages : Int32?,
 ) -> MemoryInfo {
   { ptr, size, max_pages, }
 }
@@ -260,9 +260,9 @@ pub fn alloc_memory(size : Int64) -> Int64 {
 pub fn alloc_memory_desc(
   size_bytes : Int64,
   max_pages : Int64?,
-  is_memory64? : Bool = false,
-  page_size_log2? : Int = 16,
-  is_shared? : Bool = false,
+  is_memory64~ : Bool = false,
+  page_size_log2~ : Int32 = 16,
+  is_shared~ : Bool = false,
 ) -> MemoryDescriptor {
   c_jit_alloc_memory_desc(
     size_bytes,
@@ -288,9 +288,9 @@ pub fn alloc_memory_desc(
 /// Allocate a guarded (reserved) memory descriptor for memory32 memory0.
 /// This is required for bounds-check elimination; out-of-bounds accesses trap via guard pages.
 pub fn alloc_guarded_memory_desc(
-  initial_pages : Int,
-  max_pages : Int?,
-  is_shared? : Bool = false,
+  initial_pages : Int32,
+  max_pages : Int32?,
+  is_shared~ : Bool = false,
 ) -> MemoryDescriptor {
   c_jit_alloc_guarded_memory_desc(
     initial_pages.to_int64(),
@@ -317,8 +317,8 @@ pub using @jit_ffi {type NativeTableHandle}
 #borrow(table)
 extern "c" fn table_entry_word(
   table : NativeTableHandle,
-  index : Int,
-  word : Int,
+  index : Int32,
+  word : Int32,
 ) -> Int64 = "wasmoon_native_table_entry_word"
 
 ///|
@@ -337,7 +337,7 @@ struct JITTableOwner {
 ///|
 /// Create a new owned shared JIT table.
 /// Note: size 0 is valid (empty table that can grow later).
-pub fn JITTableOwner::try_alloc(size : Int, max : Int64?) -> JITTableOwner? {
+pub fn JITTableOwner::try_alloc(size : Int32, max : Int64?) -> JITTableOwner? {
   if size < 0 {
     return None
   }
@@ -367,9 +367,9 @@ pub fn JITTableOwner::close(self : JITTableOwner) -> Unit {
 /// Set an entry in the shared table.
 pub fn JITTable::set(
   self : JITTable,
-  table_idx : Int,
+  table_idx : Int32,
   func_ptr : Int64,
-  type_hash : Int,
+  type_hash : Int32,
 ) -> Unit {
   if table_idx < 0 || table_idx >= self.get_size() {
     return
@@ -379,7 +379,7 @@ pub fn JITTable::set(
 
 ///|
 /// Read raw entry value bits from the shared table.
-pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int) -> Int64 {
+pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int32) -> Int64 {
   if table_idx < 0 || table_idx >= self.get_size() {
     return 0L
   }
@@ -388,7 +388,7 @@ pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int) -> Int64 {
 
 ///|
 /// Read raw entry type index from the shared table.
-pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int) -> Int {
+pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int32) -> Int32 {
   if table_idx < 0 || table_idx >= self.get_size() {
     return -1
   }
@@ -397,7 +397,7 @@ pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int) -> Int {
 
 ///|
 /// Get the table size.
-pub fn JITTable::get_size(self : JITTable) -> Int {
+pub fn JITTable::get_size(self : JITTable) -> Int32 {
   self.table_ptr.size()
 }
 
@@ -412,7 +412,7 @@ pub fn JITTable::raw_ptr(self : JITTable) -> NativeTableHandle {
 fn JITTable::refresh_layout(
   self : JITTable,
   table_ptr : NativeTableHandle,
-  size : Int,
+  size : Int32,
 ) -> Unit {
   if self.table_ptr.is_null() || table_ptr.is_null() || size < 0 {
     return
@@ -434,7 +434,7 @@ pub fn memory_descriptor_copy(
   source_memory : MemoryDescriptor,
   source : Int64,
   length : Int64,
-) -> Int {
+) -> Int32 {
   c_memory_descriptor_copy(
     destination_memory, destination, source_memory, source, length,
   )
@@ -448,16 +448,16 @@ extern "c" fn c_memory_descriptor_copy(
   source_memory : MemoryDescriptor,
   source : Int64,
   length : Int64,
-) -> Int = "wasmoon_mem_desc_copy64"
+) -> Int32 = "wasmoon_mem_desc_copy64"
 
 ///|
 /// Fill a checked byte range of a live memory descriptor.
 pub fn memory_descriptor_fill64(
   memory : MemoryDescriptor,
   destination : Int64,
-  value : Int,
+  value : Int32,
   length : Int64,
-) -> Int {
+) -> Int32 {
   c_memory_descriptor_fill64(memory, destination, value, length)
 }
 
@@ -466,9 +466,9 @@ pub fn memory_descriptor_fill64(
 extern "c" fn c_memory_descriptor_fill64(
   memory : MemoryDescriptor,
   destination : Int64,
-  value : Int,
+  value : Int32,
   length : Int64,
-) -> Int = "wasmoon_mem_desc_memset64"
+) -> Int32 = "wasmoon_mem_desc_memset64"
 
 ///|
 pub fn memory_descriptor_grow64(
@@ -484,7 +484,7 @@ pub fn memory_descriptor_grow64(
 /// allocation alive throughout the operation.
 pub fn NativeJITContext::memory_descriptor(
   self : NativeJITContext,
-  memidx : Int,
+  memidx : Int32,
 ) -> MemoryDescriptor {
   c_jit_ctx_get_memory_descriptor_managed(self.handle, memidx)
 }

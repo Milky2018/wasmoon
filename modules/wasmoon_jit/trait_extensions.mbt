@@ -2,15 +2,6 @@
 pub extend CHeap with Debug::{to_repr}
 
 ///|
-pub extend CompilationDecision with Show::{output}
-
-///|
-pub extend CompilationMode with Show::{output}
-
-///|
-pub extend CompilationStrategy with Show::{output}
-
-///|
 pub extend FunctionTemperature with Show::{output}
 
 ///|

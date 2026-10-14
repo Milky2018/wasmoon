@@ -34,8 +34,8 @@ pub impl Show for WatError with fn output(self, logger) {
 ///|
 /// Source location for error reporting
 pub(all) struct SourceLoc {
-  line : Int
-  column : Int
+  line : Int32
+  column : Int32
 }
 
 ///|

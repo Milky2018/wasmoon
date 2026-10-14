@@ -102,7 +102,7 @@ fn Parser::parse_i8x16_instruction(
     // SIMD shuffle and swizzle
     "i8x16.shuffle" => {
       // Parse 16 lane indices
-      let lanes : FixedArray[Int] = FixedArray::make(16, 0)
+      let lanes : FixedArray[Int32] = FixedArray::make(16, 0)
       for i in 0..<16 {
         lanes[i] = self.parse_u32()
       }

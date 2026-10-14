@@ -3,9 +3,9 @@
 ///|
 fn ExecContext::exec_atomic(
   self : ExecContext,
-  subopcode : Int,
-  memidx : Int,
-  _align : Int,
+  subopcode : Int32,
+  memidx : Int32,
+  _align : Int32,
   offset : Int64,
 ) -> Unit raise {
   // atomic.fence has no memarg and no stack operands.
@@ -68,7 +68,7 @@ fn ExecContext::exec_atomic(
         self.stack.push(I32(waiter.poll()))
       }
     }
-    4..=66 => {
+    4..<=66 => {
       let shape = if op <= 10 {
         op - 4
       } else if op <= 17 {

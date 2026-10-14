@@ -1,7 +1,7 @@
 ///|
 priv struct AArch64TargetCompilation {
   object : @code_object.UnlinkedCodeObject
-  frame_size : Int
+  frame_size : Int32
 }
 
 ///|

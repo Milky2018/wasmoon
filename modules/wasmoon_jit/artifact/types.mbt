@@ -1,6 +1,6 @@
 ///|
 /// Cwasm format with an explicit arithmetic NaN compilation policy.
-pub const FORMAT_VERSION : Int = 11
+pub const FORMAT_VERSION : Int32 = 11
 
 ///|
 /// Operating-system ABI assumed by generated code and unwind metadata.
@@ -105,10 +105,10 @@ pub(all) struct CompilationPolicy {
 /// Every field matches exactly except `required_cpu_features`, for which the
 /// installing host may provide a strict superset.
 pub(all) struct CompatibilityManifest {
-  format_version : Int
+  format_version : Int32
   target : TargetSpec
   required_cpu_features : Array[CpuFeature]
-  jit_abi_version : Int
+  jit_abi_version : Int32
   codegen_revision : String
   module_identity : ModuleIdentity
   policy : CompilationPolicy
@@ -118,7 +118,7 @@ pub(all) struct CompatibilityManifest {
 ///|
 /// Stable identity and logical signature for an imported function.
 pub(all) struct ImportIdentity {
-  function_index : Int
+  function_index : Int32
   module_name : String
   function_name : String
   symbol : @native.ExternalSymbol
@@ -128,7 +128,7 @@ pub(all) struct ImportIdentity {
 ///|
 /// Stable identity and logical signature for a defined function.
 pub(all) struct FunctionIdentity {
-  function_index : Int
+  function_index : Int32
   symbol : @native.CodeSymbol
   signature : @native.Signature
 } derive(Eq, Debug)
@@ -141,8 +141,8 @@ pub(all) struct FunctionIdentity {
 /// verifies `UnlinkedCodeObject` values from these fields before installation.
 pub(all) struct FunctionCode {
   identity : FunctionIdentity
-  entry_offset : Int
-  frame_size : Int
+  entry_offset : Int32
+  frame_size : Int32
   code : Array[Byte]
   relocations : Array[@code_object.Relocation]
   sources : Array[@code_object.SourceSite]

@@ -37,7 +37,7 @@ fn resolve_labels(buffer : CodeBuffer) -> Unit raise AArch64EmitError {
 
 ///|
 /// `b.eq`, condition 0000.
-const LABEL_TEST_BEQ : UInt = 0x54000000U
+const LABEL_TEST_BEQ : UInt32 = 0x54000000U
 
 ///|
 /// A conditional branch to a label reserves its second word, which is the

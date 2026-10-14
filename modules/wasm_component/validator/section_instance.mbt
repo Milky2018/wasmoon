@@ -5,20 +5,20 @@ fn validate_component_section_instance(
   cfg : ComponentValidationConfig,
   counts : Counts,
   type_table : Array[@component.TypeDef?],
-  known_type_sigs : Map[Int, TypeSig],
-  resource_ids : Array[Int?],
-  component_sizes : Array[Int],
-  instance_sizes : Array[Int],
-  core_module_exports : Array[Map[String, Int]?],
+  known_type_sigs : Map[Int32, TypeSig],
+  resource_ids : Array[Int32?],
+  component_sizes : Array[Int32],
+  instance_sizes : Array[Int32],
+  core_module_exports : Array[Map[String, Int32]?],
   core_module_defs : Array[@types.Module?],
   core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
   component_import_sorts : Array[Map[String, @component.Sort]?],
   component_import_instance_sigs : Array[Map[String, InstanceSig]?],
   component_import_func_sigs : Array[Map[String, FuncSigShape]?],
   component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int]]?,
+    Map[String, Map[String, Int32]]?,
   ],
-  component_import_core_module_exports : Array[Map[String, Map[String, Int]]?],
+  component_import_core_module_exports : Array[Map[String, Map[String, Int32]]?],
   component_import_core_module_import_sigs : Array[
     Map[String, Map[String, CoreExternType]]?,
   ],
@@ -35,8 +35,8 @@ fn validate_component_section_instance(
   component_export_type_sigs : Array[Map[String, TypeSig]?],
   component_export_func_sigs : Array[Map[String, FuncSigShape]?],
   instance_sigs : Array[InstanceSig?],
-  instance_export_type_idxs : Array[Array[Int]?],
-  instance_export_func_idxs : Array[Array[Int]?],
+  instance_export_type_idxs : Array[Array[Int32]?],
+  instance_export_func_idxs : Array[Array[Int32]?],
   instance_export_type_map : Array[Map[String, ExportedTypeInfo]?],
   instance_export_type_sigs : Array[Map[String, TypeSig]?],
   instance_export_func_sigs : Array[Map[String, FuncSigShape]?],
@@ -46,8 +46,8 @@ fn validate_component_section_instance(
   ],
   func_types : Array[@component.FuncType?],
   func_sig_shapes : Array[FuncSigShape?],
-  next_resource_id : Int,
-) -> Int raise ComponentValidationError {
+  next_resource_id : Int32,
+) -> Int32 raise ComponentValidationError {
   let mut next_resource_id = next_resource_id
   let instances = @component.parse_instance_section(payload) catch {
     e => raise SectionParseError(5, "\{e}")
@@ -55,8 +55,8 @@ fn validate_component_section_instance(
   for inst in instances {
     let mut inst_sig : InstanceSig? = None
     let mut inst_size = 1
-    let mut inst_type_idxs : Array[Int]? = None
-    let mut inst_func_idxs : Array[Int]? = None
+    let mut inst_type_idxs : Array[Int32]? = None
+    let mut inst_func_idxs : Array[Int32]? = None
     let mut inst_type_map : Map[String, ExportedTypeInfo]? = None
     let mut inst_type_sig_map : Map[String, TypeSig]? = None
     let mut inst_func_sig_map : Map[String, FuncSigShape]? = None
@@ -122,10 +122,10 @@ fn validate_component_section_instance(
         } else {
           None
         }
-        let pending_type_args : Array[(String, Int)] = []
-        let pending_func_args : Array[(String, Int)] = []
-        let pending_instance_args : Array[(String, Int)] = []
-        let seen_args : Map[String, Int] = Map([])
+        let pending_type_args : Array[(String, Int32)] = []
+        let pending_func_args : Array[(String, Int32)] = []
+        let pending_instance_args : Array[(String, Int32)] = []
+        let seen_args : Map[String, Int32] = Map([])
         for a in args {
           check_sortidx(a.sortidx, counts, type_table.length())
           if seen_args.get(a.name) is Some(_) {
@@ -215,7 +215,7 @@ fn validate_component_section_instance(
 
         // Validate type/function arguments that may depend on type-argument
         // substitution (notably for nominal resource types).
-        let rid_subst : Map[Int, Int] = Map([])
+        let rid_subst : Map[Int32, Int32] = Map([])
         match expected_import_instance_resource_exports {
           Some(inst_map) =>
             for kv in pending_instance_args {
@@ -439,7 +439,7 @@ fn validate_component_section_instance(
                 match sig0 {
                   Resource(rid0) => {
                     let actual_rid = rid_subst.get(rid0).unwrap()
-                    let mut found : Int? = None
+                    let mut found : Int32? = None
                     for i in 0..<type_table.length() {
                       if type_sig_of_typeidx(
                           i,
@@ -459,7 +459,7 @@ fn validate_component_section_instance(
                   }
                   _ => {
                     let sig = type_sig_subst_resources(sig0, rid_subst)
-                    let mut found : Int? = None
+                    let mut found : Int32? = None
                     for i in 0..<type_table.length() {
                       if type_sig_of_typeidx(
                           i,
@@ -541,8 +541,8 @@ fn validate_component_section_instance(
       InlineExports(inline_exports) => {
         let map : Map[String, @component.Sort] = Map([])
         let mut size = 1
-        let t_idxs : Array[Int] = []
-        let f_idxs : Array[Int] = []
+        let t_idxs : Array[Int32] = []
+        let f_idxs : Array[Int32] = []
         let type_map : Map[String, ExportedTypeInfo] = Map([])
         let type_sig_map : Map[String, TypeSig] = Map([])
         let func_map : Map[String, FuncSigShape] = Map([])

@@ -11,7 +11,7 @@ fn prepare_wast_module(
   ctx : WastContext,
   module_ : @types.Module,
   name : String?,
-  cooperative? : Bool = false,
+  cooperative~ : Bool = false,
 ) -> PreparedWastModule raise WastRunnerError {
   ctx.validate_core_module(module_) catch {
     error => raise RuntimeError("module validation failed: \{error}")
@@ -67,7 +67,7 @@ fn run_wast_module(
   ctx : WastContext,
   module_ : @types.Module,
   name : String?,
-  line : Int,
+  line : Int32,
   result : WastResult,
 ) -> Unit {
   try {
@@ -107,8 +107,8 @@ fn resolve_wast_call(
   ctx : WastContext,
   instance : @runtime.ModuleInstance,
   jit : JITModuleContext?,
-  index : Int,
-) -> (@runtime.ModuleInstance, JITModuleContext?, Int) raise WastRunnerError {
+  index : Int32,
+) -> (@runtime.ModuleInstance, JITModuleContext?, Int32) raise WastRunnerError {
   guard jit is Some(compiled) else { return (instance, None, index) }
   if compiled.jit_module.get_func(index) is Some(_) {
     return (instance, jit, index)
@@ -160,7 +160,7 @@ fn finish_wast_action(
   ctx : WastContext,
   command : @wat.WastCommand,
   action : @wat.WastAction,
-  line : Int,
+  line : Int32,
   result : WastResult,
   show_success : Bool,
   outcome : Result[Array[@types.Value], WastRunnerError],

@@ -9,7 +9,7 @@ fn hoist_loop_invariants(func : @milkir.Function) -> OptResult {
   let loops = cfg.find_loops()
 
   // Build a map from value id to the block where it's defined
-  let value_to_block : @hashmap.HashMap[Int, Int] = HashMap([])
+  let value_to_block : @hashmap.HashMap[Int32, Int32] = HashMap([])
   for block in func.blocks {
     // Function parameters are defined in entry block
     for param in func.params {
@@ -57,9 +57,9 @@ fn hoist_loop_invariants(func : @milkir.Function) -> OptResult {
 ///|
 /// Check if a value is defined outside the loop
 fn is_defined_outside_loop(
-  value_id : Int,
+  value_id : Int32,
   loop_ : @milkir.Loop,
-  value_to_block : @hashmap.HashMap[Int, Int],
+  value_to_block : @hashmap.HashMap[Int32, Int32],
 ) -> Bool {
   match value_to_block.get(value_id) {
     Some(block_id) => !loop_.contains(block_id)
@@ -75,8 +75,8 @@ fn is_defined_outside_loop(
 fn is_loop_invariant(
   inst : @milkir.Inst,
   loop_ : @milkir.Loop,
-  value_to_block : @hashmap.HashMap[Int, Int],
-  invariant_values : @hashmap.HashMap[Int, Bool],
+  value_to_block : @hashmap.HashMap[Int32, Int32],
+  invariant_values : @hashmap.HashMap[Int32, Bool],
 ) -> Bool {
   // Instructions with observable effects or traps cannot be hoisted.
   if opcode_semantics(inst.opcode).must_preserve_if_unused() {
@@ -104,10 +104,10 @@ fn hoist_from_loop(
   func : @milkir.Function,
   loop_ : @milkir.Loop,
   preheader : @milkir.Block,
-  value_to_block : @hashmap.HashMap[Int, Int],
+  value_to_block : @hashmap.HashMap[Int32, Int32],
 ) -> Bool {
   let mut any_hoisted = false
-  let invariant_values : @hashmap.HashMap[Int, Bool] = HashMap([])
+  let invariant_values : @hashmap.HashMap[Int32, Bool] = HashMap([])
 
   // Iterate until no more invariants found
   let mut changed = true
@@ -171,7 +171,7 @@ fn reduce_strength(func : @milkir.Function) -> OptResult {
   let result = OptResult::OptResult()
 
   // Build constant map
-  let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
+  let constants : @hashmap.HashMap[Int32, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst_id in block.instruction_ids() {
       let inst = func.instruction_by_id(inst_id).unwrap()
@@ -292,7 +292,7 @@ fn append_iconst(
 ///|
 fn power_of_two_mask(
   value : @milkir.Value,
-  constants : @hashmap.HashMap[Int, ConstValue],
+  constants : @hashmap.HashMap[Int32, ConstValue],
 ) -> Int64? {
   match constants.get(value.id) {
     Some(I32(v)) => Some((v - 1).to_int64())
@@ -305,8 +305,8 @@ fn power_of_two_mask(
 /// Find an operand that is a power of 2, returns (operand_index, log2_value) or (-1, -1)
 fn find_power_of_two_operand(
   operands : Array[@milkir.Value],
-  constants : @hashmap.HashMap[Int, ConstValue],
-) -> (Int, Int) {
+  constants : @hashmap.HashMap[Int32, ConstValue],
+) -> (Int32, Int32) {
   for i, op in operands {
     match constants.get(op.id) {
       Some(I32(v)) => if v > 0 && is_power_of_two(v) { return (i, log2_int(v)) }
@@ -322,7 +322,7 @@ fn find_power_of_two_operand(
 
 ///|
 /// Check if an integer is a power of 2
-fn is_power_of_two(n : Int) -> Bool {
+fn is_power_of_two(n : Int32) -> Bool {
   n > 0 && (n & (n - 1)) == 0
 }
 
@@ -334,7 +334,7 @@ fn is_power_of_two_64(n : Int64) -> Bool {
 
 ///|
 /// Compute log2 of a power of 2
-fn log2_int(n : Int) -> Int {
+fn log2_int(n : Int32) -> Int32 {
   let mut v = n
   let mut r = 0
   while v > 1 {
@@ -346,7 +346,7 @@ fn log2_int(n : Int) -> Int {
 
 ///|
 /// Compute log2 of a 64-bit power of 2
-fn log2_int64(n : Int64) -> Int {
+fn log2_int64(n : Int64) -> Int32 {
   let mut v = n
   let mut r = 0
   while v > 1L {

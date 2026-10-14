@@ -54,7 +54,7 @@ pub fn Caller::get_exported_memory(
 
 ///|
 /// Look up an exported function address from the caller instance.
-pub fn Caller::get_exported_func_addr(self : Caller, name : String) -> Int? {
+pub fn Caller::get_exported_func_addr(self : Caller, name : String) -> Int32? {
   match self.find_export_desc(name) {
     Some(Func(func_idx)) => {
       if func_idx < 0 || func_idx >= self.instance.func_addrs.length() {

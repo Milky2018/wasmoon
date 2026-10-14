@@ -28,12 +28,12 @@ fn some_program_point(point : ProgramPoint) -> OptionalProgramPoint {
 
 ///|
 priv struct PhysicalRegisterIndex {
-  stride : Int
-  indexes : Array[Int]
+  stride : Int32
+  indexes : Array[Int32]
 }
 
 ///|
-fn physical_register_class_index(class : RegClass) -> Int {
+fn physical_register_class_index(class : RegClass) -> Int32 {
   match class {
     Int => 0
     Float => 1
@@ -75,7 +75,7 @@ fn PhysicalRegisterIndex::find(
   self : PhysicalRegisterIndex,
   registers : Array[PhysicalReg],
   register : PhysicalReg,
-) -> Int? {
+) -> Int32? {
   if self.stride > 0 && register.id >= 0 && register.id < self.stride {
     let index = self.indexes[physical_register_class_index(register.class) *
       self.stride +
@@ -89,7 +89,7 @@ fn PhysicalRegisterIndex::find(
 }
 
 ///|
-fn RegisterClobberIndex::new(register_count : Int) -> RegisterClobberIndex {
+fn RegisterClobberIndex::new(register_count : Int32) -> RegisterClobberIndex {
   let by_register : Array[RegisterClobberPoints] = []
   for _ in 0..<register_count {
     by_register.push({ points: [], keys: [], })
@@ -100,7 +100,7 @@ fn RegisterClobberIndex::new(register_count : Int) -> RegisterClobberIndex {
 ///|
 fn RegisterClobberIndex::reset(
   self : RegisterClobberIndex,
-  register_count : Int,
+  register_count : Int32,
 ) -> Unit {
   while self.by_register.length() < register_count {
     self.by_register.push({ points: [], keys: [], })
@@ -115,9 +115,9 @@ fn RegisterClobberIndex::reset(
 fn[F : FunctionView] build_register_clobber_index(
   function : F,
   environment : MachineEnv,
-  block_order : Array[Int],
+  block_order : Array[Int32],
   register_indexes : PhysicalRegisterIndex,
-  index? : RegisterClobberIndex = RegisterClobberIndex::new(0),
+  index~ : RegisterClobberIndex = RegisterClobberIndex::new(0),
 ) -> RegisterClobberIndex {
   index.reset(environment.allocatable_regs.length())
   fn record(
@@ -198,8 +198,8 @@ fn[F : FunctionView] build_register_clobber_index(
 ///|
 fn RegisterClobberIndex::first_intersection(
   self : RegisterClobberIndex,
-  register : Int,
-  segment_ids : Array[Int],
+  register : Int32,
+  segment_ids : Array[Int32],
   segments : RegisterAllocationIndex,
 ) -> OptionalProgramPoint {
   guard !segment_ids.is_empty() else { return no_program_point() }
@@ -246,7 +246,7 @@ fn find_scratch_reg(
 ///|
 fn[S] add_use_transfer(
   plan : AllocationWork[S],
-  instruction : Int,
+  instruction : Int32,
   operand : Operand,
   home : Location,
   selected : Location,
@@ -357,7 +357,7 @@ fn[F : FunctionView, S : AllocationSink] run_allocation_phases(
 pub fn[F : FunctionView] allocate_function(
   function : F,
   environment : MachineEnv,
-  config? : RegallocConfig = RegallocConfig(),
+  config~ : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
   AllocationSession::new().allocate_function(function, environment, config~)
 }
@@ -369,7 +369,7 @@ pub fn[F : FunctionView] AllocationSession::allocate_function(
   self : AllocationSession,
   function : F,
   environment : MachineEnv,
-  config? : RegallocConfig = RegallocConfig(),
+  config~ : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
   let plan = AllocationPlan::new(function.value_count())
   self.allocate_into(function, environment, plan, config~)
@@ -385,7 +385,7 @@ pub fn[F : FunctionView, S : AllocationSink] AllocationSession::allocate_into(
   function : F,
   environment : MachineEnv,
   sink : S,
-  config? : RegallocConfig = RegallocConfig(),
+  config~ : RegallocConfig = RegallocConfig(),
 ) -> Unit raise VerifyError {
   {
     errdefer config.enter_phase(None)

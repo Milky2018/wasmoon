@@ -19,7 +19,7 @@ async fn HttpHost::serve_exchange(
   socket : @socket.Tcp,
   instance : @runtime_impl.ComponentInstance,
   started : Ref[Bool],
-  error_status : Ref[Int],
+  error_status : Ref[Int32],
 ) -> Unit {
   let input = HttpInput::{
     reader: socket,

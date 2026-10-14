@@ -3,7 +3,7 @@
 /// resources to be configured after allocation and retain the fixed public ABI.
 pub(all) enum ContextShape {
   Legacy
-  Module(Int, Int, Int)
+  Module(Int32, Int32, Int32)
 } derive(Eq, Debug)
 
 ///|
@@ -25,7 +25,7 @@ pub fn ContextShape::from_module(module_ : @types.Module) -> ContextShape {
 ///|
 /// Includes the trailing pointer arrays, with checked arithmetic before native
 /// allocation. The descriptor itself is shared immutable module metadata.
-pub fn ContextShape::descriptor(self : ContextShape) -> ReadOnlyArray[Int]? {
+pub fn ContextShape::descriptor(self : ContextShape) -> ReadOnlyArray[Int32]? {
   guard self is Module(memories, tables, globals) else { return None }
   // Bound byte offsets to signed 32-bit displacement/allocation arithmetic.
   if memories < 0 ||
@@ -101,7 +101,7 @@ pub fn ContextLayout::new(shape : ContextShape) -> ContextLayout? {
 }
 
 ///|
-pub fn ContextLayout::field(self : ContextLayout, index : Int) -> Int {
+pub fn ContextLayout::field(self : ContextLayout, index : Int32) -> Int32 {
   if index < 18 {
     let offset = self.fields[index].to_int()
     if offset == 255 {

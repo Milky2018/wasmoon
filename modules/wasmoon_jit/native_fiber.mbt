@@ -33,7 +33,7 @@ pub extend NativeSuspensionReason with Eq::{equal, not_equal}
 pub(all) enum NativeJITContinuationEvent {
   NativeSuspended(NativeSuspensionReason)
   NativeJITCompleted
-  NativeJITTrapped(Int)
+  NativeJITTrapped(Int32)
 } derive(Debug, Eq)
 
 ///|
@@ -41,9 +41,9 @@ pub suberror NativeFiberError {
   StackAllocationFailed(Int64)
   WrongThread
   InvalidTransition(NativeFiberPhase)
-  InvalidState(Int)
+  InvalidState(Int32)
   UnexpectedYield(Int64)
-  NativeFailure(Int)
+  NativeFailure(Int32)
 } derive(Debug, Eq)
 
 ///|
@@ -71,7 +71,7 @@ struct NativeJITContinuation {
 ///|
 pub fn NativeFiber::new(
   entry : () -> Int64,
-  stack_size? : Int64 = 1024L * 1024L,
+  stack_size~ : Int64 = 1024L * 1024L,
 ) -> NativeFiber raise NativeFiberError {
   let call_closure : FuncRef[(() -> Int64) -> Int64] = fn(f) { f() }
   let raw = c_native_fiber_alloc(call_closure, entry, stack_size)
@@ -88,8 +88,8 @@ pub fn NativeJITContext::start_continuation(
   trampoline_ptr : Int64,
   func_ptr : Int64,
   values : FixedArray[Int64],
-  values_len : Int,
-  stack_size? : Int64 = 1024L * 1024L,
+  values_len : Int32,
+  stack_size~ : Int64 = 1024L * 1024L,
 ) -> NativeJITContinuation raise NativeFiberError {
   let effective_stack_size = if self.configured_native_fiber_stack_size > 0L {
     self.configured_native_fiber_stack_size
@@ -119,7 +119,7 @@ pub fn NativeFiber::phase(self : NativeFiber) -> NativeFiberPhase {
 ///|
 pub fn NativeFiber::continue_with(
   self : NativeFiber,
-  value? : Int64 = 0L,
+  value~ : Int64 = 0L,
 ) -> NativeFiberEvent raise NativeFiberError {
   match native_fiber_advance(self.raw, value) {
     FiberSuspended(value) => Yielded(value)
@@ -131,7 +131,7 @@ pub fn NativeFiber::continue_with(
 ///|
 pub fn NativeJITContinuation::continue_with(
   self : NativeJITContinuation,
-  value? : Int64 = 0L,
+  value~ : Int64 = 0L,
 ) -> NativeJITContinuationEvent raise NativeFiberError {
   match native_jit_continuation_advance(self.raw, value) {
     JITSuspended(reason) => NativeSuspended(reason)

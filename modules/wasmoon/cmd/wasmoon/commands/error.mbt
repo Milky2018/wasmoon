@@ -5,7 +5,7 @@ priv suberror CliError {
   ParseWatError(String)
   ValidateModuleError(String)
   ComponentModelNotSupported
-  FuncArgNumError(Int, Int)
+  FuncArgNumError(Int32, Int32)
   ArgTypeError(@types.ValueType, String)
   UnsupportedArgTypeError(@types.ValueType, String)
 }

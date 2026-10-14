@@ -4,7 +4,7 @@
 
 ///|
 fn instantiate_canon_future_new(
-  _tyidx : Int,
+  _tyidx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
@@ -96,7 +96,7 @@ fn instantiate_canon_future_new(
 
 ///|
 fn instantiate_canon_future_read(
-  _tyidx : Int,
+  _tyidx : Int32,
   _opts : Array[CanonOpt],
   state : BuildState,
   store : @runtime.Store,
@@ -120,7 +120,7 @@ fn instantiate_canon_future_read(
       trap_canon("cannot leave component instance")
     }
     let task_id = current_task_id(async_state)
-    fn ret_i32(n : Int) -> Array[@types.Value] {
+    fn ret_i32(n : Int32) -> Array[@types.Value] {
       [I32(n)]
     }
     match args {
@@ -496,7 +496,7 @@ fn progress_host_future_sources(
 
 ///|
 fn instantiate_canon_future_write(
-  _tyidx : Int,
+  _tyidx : Int32,
   _opts : Array[CanonOpt],
   state : BuildState,
   store : @runtime.Store,
@@ -521,7 +521,7 @@ fn instantiate_canon_future_write(
       trap_canon("cannot leave component instance")
     }
     let task_id = current_task_id(async_state)
-    fn ret_i32(n : Int) -> Array[@types.Value] {
+    fn ret_i32(n : Int32) -> Array[@types.Value] {
       [I32(n)]
     }
     match args {
@@ -774,7 +774,7 @@ fn instantiate_canon_future_write(
 
 ///|
 fn instantiate_canon_future_cancel_read(
-  _tyidx : Int,
+  _tyidx : Int32,
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
@@ -865,7 +865,7 @@ fn instantiate_canon_future_cancel_read(
 
 ///|
 fn instantiate_canon_future_cancel_write(
-  _tyidx : Int,
+  _tyidx : Int32,
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
@@ -958,7 +958,7 @@ fn instantiate_canon_future_cancel_write(
 
 ///|
 fn instantiate_canon_future_drop_readable(
-  _tyidx : Int,
+  _tyidx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
@@ -1058,7 +1058,7 @@ fn instantiate_canon_future_drop_readable(
 
 ///|
 fn instantiate_canon_future_drop_writable(
-  _tyidx : Int,
+  _tyidx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {

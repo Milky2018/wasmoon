@@ -27,7 +27,7 @@ priv enum SExpr {
 ///|
 priv struct TextReader {
   input : String
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
@@ -143,7 +143,7 @@ fn is_hex_digit(ch : Char) -> Bool {
 }
 
 ///|
-fn hex_digit_value(ch : Char) -> Int {
+fn hex_digit_value(ch : Char) -> Int32 {
   if '0' <= ch && ch <= '9' {
     ch.to_int() - '0'.to_int()
   } else if 'a' <= ch && ch <= 'f' {
@@ -264,8 +264,8 @@ fn parse_sexpr(reader : TextReader) -> SExpr raise ComponentTextError {
 
 ///|
 priv enum ValTypeEncoding {
-  Prim(Int)
-  TypeIdx(Int)
+  Prim(Int32)
+  TypeIdx(Int32)
 } derive(Eq)
 
 ///|
@@ -290,14 +290,14 @@ priv struct ImportEntry {
 
 ///|
 priv struct TypeEntry {
-  idx : Int
+  idx : Int32
   bytes : Bytes
   func_sig : FuncTypeSig?
 }
 
 ///|
 priv struct CoreTypeEntry {
-  idx : Int
+  idx : Int32
   bytes : Bytes
 }
 
@@ -305,49 +305,49 @@ priv struct CoreTypeEntry {
 priv struct ExportEntry {
   name : String
   attributes : Bytes?
-  sort_tag : Int
-  core_kind : Int?
-  idx : Int
+  sort_tag : Int32
+  core_kind : Int32?
+  idx : Int32
   desc : Bytes?
 }
 
 ///|
 priv struct NamedBinding {
   name : String
-  idx : Int
+  idx : Int32
 }
 
 ///|
 priv struct CoreAliasBinding {
-  kind : Int
-  instance_idx : Int
+  kind : Int32
+  instance_idx : Int32
   name : String
-  idx : Int
+  idx : Int32
 }
 
 ///|
 priv struct SectionChunk {
-  section_id : Int
+  section_id : Int32
   payload : Bytes
 }
 
 ///|
 priv struct CoreSortRef {
   name : String
-  kind : Int
-  idx : Int
+  kind : Int32
+  idx : Int32
 }
 
 ///|
 priv struct AliasSortSpec {
-  sort_tag : Int
-  core_kind : Int?
+  sort_tag : Int32
+  core_kind : Int32?
   name_opt : String?
 }
 
 ///|
 priv enum CoreInstanceExprEntry {
-  Instantiate(Int, Array[CoreSortRef])
+  Instantiate(Int32, Array[CoreSortRef])
   InlineExports(Array[CoreSortRef])
 }
 
@@ -360,14 +360,14 @@ priv struct CoreInstanceEntry {
 priv struct SortRef {
   name : String
   attributes : Bytes?
-  sort_tag : Int
-  core_kind : Int?
-  idx : Int
+  sort_tag : Int32
+  core_kind : Int32?
+  idx : Int32
 }
 
 ///|
 priv enum InstanceExprEntry {
-  Instantiate(Int, Array[SortRef])
+  Instantiate(Int32, Array[SortRef])
   InlineExports(Array[SortRef])
 }
 
@@ -401,18 +401,18 @@ priv struct ComponentBuildState {
   outer_core_type_scopes : Array[Array[NamedBinding]]
   outer_component_scopes : Array[Array[NamedBinding]]
   outer_core_module_scopes : Array[Array[NamedBinding]]
-  mut next_type_idx : Int
-  mut next_func_idx : Int
-  mut next_core_type_idx : Int
-  mut next_core_module_idx : Int
-  mut next_core_instance_idx : Int
-  mut next_component_idx : Int
-  mut next_instance_idx : Int
-  mut next_core_func_idx : Int
-  mut next_core_table_idx : Int
-  mut next_core_memory_idx : Int
-  mut next_core_global_idx : Int
-  mut next_core_tag_idx : Int
+  mut next_type_idx : Int32
+  mut next_func_idx : Int32
+  mut next_core_type_idx : Int32
+  mut next_core_module_idx : Int32
+  mut next_core_instance_idx : Int32
+  mut next_component_idx : Int32
+  mut next_instance_idx : Int32
+  mut next_core_func_idx : Int32
+  mut next_core_table_idx : Int32
+  mut next_core_memory_idx : Int32
+  mut next_core_global_idx : Int32
+  mut next_core_tag_idx : Int32
 }
 
 ///|
@@ -472,7 +472,7 @@ fn ByteBuf::ByteBuf() -> ByteBuf {
 }
 
 ///|
-fn ByteBuf::push_u8(self : ByteBuf, value : Int) -> Unit {
+fn ByteBuf::push_u8(self : ByteBuf, value : Int32) -> Unit {
   self.bytes.push(value.to_byte())
 }
 
@@ -484,7 +484,7 @@ fn ByteBuf::push_bytes(self : ByteBuf, data : Bytes) -> Unit {
 }
 
 ///|
-fn ByteBuf::push_uleb_u32(self : ByteBuf, value : Int) -> Unit {
+fn ByteBuf::push_uleb_u32(self : ByteBuf, value : Int32) -> Unit {
   let mut remaining = value
   while true {
     let byte_value = remaining & 0x7f
@@ -499,7 +499,7 @@ fn ByteBuf::push_uleb_u32(self : ByteBuf, value : Int) -> Unit {
 }
 
 ///|
-fn ByteBuf::push_sleb_i32(self : ByteBuf, value : Int) -> Unit {
+fn ByteBuf::push_sleb_i32(self : ByteBuf, value : Int32) -> Unit {
   let mut remaining = value
   let mut has_more = true
   while has_more {
@@ -560,7 +560,7 @@ fn expr_head_atom(expr : SExpr) -> String? {
 }
 
 ///|
-fn parse_decimal_index(atom : String) -> Int? {
+fn parse_decimal_index(atom : String) -> Int32? {
   if atom.length() == 0 {
     return None
   }
@@ -575,7 +575,7 @@ fn parse_decimal_index(atom : String) -> Int? {
 }
 
 ///|
-fn lookup_named_index(bindings : Array[NamedBinding], name : String) -> Int? {
+fn lookup_named_index(bindings : Array[NamedBinding], name : String) -> Int32? {
   let mut i = bindings.length()
   while i > 0 {
     i -= 1
@@ -591,7 +591,7 @@ fn lookup_named_index(bindings : Array[NamedBinding], name : String) -> Int? {
 fn bind_named_index(
   bindings : Array[NamedBinding],
   name_opt : String?,
-  idx : Int,
+  idx : Int32,
 ) -> Unit {
   if name_opt is Some(name) {
     bindings.push({ name, idx, })
@@ -633,7 +633,10 @@ fn collect_dollar_atom_names(expr : SExpr, names : Array[String]) -> Unit {
 }
 
 ///|
-fn collect_inline_ref_names(desc : Array[SExpr], start : Int) -> Array[String] {
+fn collect_inline_ref_names(
+  desc : Array[SExpr],
+  start : Int32,
+) -> Array[String] {
   let names : Array[String] = []
   for i in start..<desc.length() {
     collect_dollar_atom_names(desc[i], names)
@@ -679,8 +682,8 @@ fn parse_name_text(
 ///|
 fn parse_name_attributes(
   field : Array[SExpr],
-  start : Int,
-) -> (Bytes?, Int) raise ComponentTextError {
+  start : Int32,
+) -> (Bytes?, Int32) raise ComponentTextError {
   let encoded = ByteBuf::ByteBuf()
   let attributes = ByteBuf::ByteBuf()
   let mut cursor = start
@@ -753,7 +756,7 @@ fn push_name_attributes(
 }
 
 ///|
-fn parse_optional_identifier(field : Array[SExpr], at : Int) -> String? {
+fn parse_optional_identifier(field : Array[SExpr], at : Int32) -> String? {
   if at < field.length() {
     if field[at] is Atom(name) && name.has_prefix("$") {
       return Some(name)
@@ -767,7 +770,7 @@ fn resolve_reference(
   expr : SExpr,
   bindings : Array[NamedBinding],
   context : String,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(text) {
     if text.has_prefix("$") {
       if lookup_named_index(bindings, text) is Some(idx) {
@@ -787,7 +790,7 @@ fn resolve_reference(
 fn resolve_type_reference(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(name) && name.has_prefix("$") {
     if lookup_named_index(state.type_names, name) is Some(idx) {
       return idx
@@ -812,7 +815,7 @@ fn resolve_type_reference(
 fn resolve_component_reference(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(name) && name.has_prefix("$") {
     if lookup_named_index(state.component_names, name) is Some(idx) {
       return idx
@@ -838,7 +841,7 @@ fn resolve_component_reference(
 fn resolve_core_type_reference(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(name) && name.has_prefix("$") {
     if lookup_named_index(state.core_type_names, name) is Some(idx) {
       return idx
@@ -869,7 +872,7 @@ fn resolve_core_type_reference(
 fn resolve_core_module_reference(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(name) && name.has_prefix("$") {
     if lookup_named_index(state.core_module_names, name) is Some(idx) {
       return idx
@@ -897,7 +900,7 @@ fn resolve_core_module_reference(
 }
 
 ///|
-fn int_array_to_bytes(values : Array[Int]) -> Bytes {
+fn int_array_to_bytes(values : Array[Int32]) -> Bytes {
   let bytes : Array[Byte] = []
   for value in values {
     bytes.push((value & 0xff).to_byte())
@@ -949,7 +952,7 @@ fn sexpr_to_wat(expr : SExpr) -> String {
 }
 
 ///|
-fn prim_type_opcode(name : String) -> Int? {
+fn prim_type_opcode(name : String) -> Int32? {
   match name {
     "bool" => Some(0x7f)
     "s8" => Some(0x7e)
@@ -1165,7 +1168,7 @@ fn add_type_entry(
   type_bytes : Bytes,
   func_sig : FuncTypeSig?,
   name_opt : String?,
-) -> Int {
+) -> Int32 {
   let idx = state.next_type_idx
   state.next_type_idx += 1
   state.types.push({ idx, bytes: type_bytes, func_sig, })
@@ -1175,7 +1178,7 @@ fn add_type_entry(
 }
 
 ///|
-fn ensure_func_type(state : ComponentBuildState, sig : FuncTypeSig) -> Int {
+fn ensure_func_type(state : ComponentBuildState, sig : FuncTypeSig) -> Int32 {
   for type_index in 0..<state.types.length() {
     let entry = state.types[type_index]
     if entry.func_sig is Some(existing) && existing == sig {
@@ -1186,7 +1189,7 @@ fn ensure_func_type(state : ComponentBuildState, sig : FuncTypeSig) -> Int {
 }
 
 ///|
-fn ensure_type_bytes(state : ComponentBuildState, type_bytes : Bytes) -> Int {
+fn ensure_type_bytes(state : ComponentBuildState, type_bytes : Bytes) -> Int32 {
   for i in 0..<state.types.length() {
     if state.types[i].bytes == type_bytes {
       return state.types[i].idx
@@ -1199,7 +1202,7 @@ fn ensure_type_bytes(state : ComponentBuildState, type_bytes : Bytes) -> Int {
 fn ensure_core_type_bytes(
   state : ComponentBuildState,
   type_bytes : Bytes,
-) -> Int {
+) -> Int32 {
   for i in 0..<state.core_types.length() {
     if state.core_types[i].bytes == type_bytes {
       return state.core_types[i].idx
@@ -1213,7 +1216,7 @@ fn ensure_core_type_bytes(
 }
 
 ///|
-fn ensure_empty_component_type(state : ComponentBuildState) -> Int {
+fn ensure_empty_component_type(state : ComponentBuildState) -> Int32 {
   let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x41)
   payload.push_uleb_u32(0)
@@ -1221,7 +1224,7 @@ fn ensure_empty_component_type(state : ComponentBuildState) -> Int {
 }
 
 ///|
-fn ensure_empty_instance_type(state : ComponentBuildState) -> Int {
+fn ensure_empty_instance_type(state : ComponentBuildState) -> Int32 {
   let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x42)
   payload.push_uleb_u32(0)
@@ -1229,7 +1232,7 @@ fn ensure_empty_instance_type(state : ComponentBuildState) -> Int {
 }
 
 ///|
-fn ensure_empty_core_module_type(state : ComponentBuildState) -> Int {
+fn ensure_empty_core_module_type(state : ComponentBuildState) -> Int32 {
   let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x50)
   payload.push_u8(0x00)
@@ -1240,7 +1243,7 @@ fn ensure_empty_core_module_type(state : ComponentBuildState) -> Int {
 fn parse_type_use(
   field : Array[SExpr],
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if field.length() != 2 {
     raise Unsupported("type use must be `(type <index-or-id>)`")
   }
@@ -1251,7 +1254,7 @@ fn parse_type_use(
 fn parse_core_type_use(
   field : Array[SExpr],
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if field.length() != 2 {
     raise Unsupported("core type use must be `(type <index-or-id>)`")
   }
@@ -1286,9 +1289,9 @@ fn parse_core_type_use(
 fn parse_import_func_desc(
   desc : Array[SExpr],
   state : ComponentBuildState,
-) -> (String?, Int) raise ComponentTextError {
+) -> (String?, Int32) raise ComponentTextError {
   let mut func_name : String? = None
-  let mut type_use : Int? = None
+  let mut type_use : Int32? = None
   let filtered : Array[SExpr] = [Atom("func")]
 
   let mut start = 1
@@ -1317,7 +1320,7 @@ fn resolve_inline_type_ref(
   expr : SExpr,
   state : ComponentBuildState,
   local_type_names : Array[NamedBinding],
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(name) && name.has_prefix("$") {
     if lookup_named_index(local_type_names, name) is Some(idx) {
       return idx
@@ -1331,7 +1334,7 @@ fn parse_type_use_inline(
   field : Array[SExpr],
   state : ComponentBuildState,
   local_type_names : Array[NamedBinding],
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if field.length() != 2 {
     raise Unsupported("type use must be `(type <index-or-id>)`")
   }
@@ -1369,9 +1372,9 @@ fn parse_inline_valtype_encoding(
   expr : SExpr,
   state : ComponentBuildState,
   decls : ByteBuf,
-  local_type_count : Int,
+  local_type_count : Int32,
   local_type_names : Array[NamedBinding],
-) -> (ValTypeEncoding, Int, Int) raise ComponentTextError {
+) -> (ValTypeEncoding, Int32, Int32) raise ComponentTextError {
   if expr is Atom(name) {
     if prim_type_opcode(name) is Some(opcode) {
       return (Prim(opcode), local_type_count, 0)
@@ -1581,9 +1584,9 @@ fn parse_inline_func_sig(
   desc : Array[SExpr],
   state : ComponentBuildState,
   decls : ByteBuf,
-  local_type_count : Int,
+  local_type_count : Int32,
   local_type_names : Array[NamedBinding],
-) -> (FuncTypeSig, Int, Int) raise ComponentTextError {
+) -> (FuncTypeSig, Int32, Int32) raise ComponentTextError {
   let params : Array[FuncParam] = []
   let mut result_ty : ValTypeEncoding? = None
   let mut is_async = false
@@ -1674,8 +1677,8 @@ fn parse_inline_type_decl(
   state : ComponentBuildState,
   local_type_names : Array[NamedBinding],
   decls : ByteBuf,
-  local_type_count : Int,
-) -> (String?, Bytes, Int, Int) raise ComponentTextError {
+  local_type_count : Int32,
+) -> (String?, Bytes, Int32, Int32) raise ComponentTextError {
   let name_opt = parse_optional_identifier(field, 1)
   let body_index = if name_opt is Some(_) { 2 } else { 1 }
   let mut next_type_count = local_type_count
@@ -2024,10 +2027,10 @@ fn parse_inline_externdesc_from_type_desc(
   desc : Array[SExpr],
   state : ComponentBuildState,
   decls : ByteBuf,
-  local_type_count : Int,
-  local_core_type_count : Int,
+  local_type_count : Int32,
+  local_core_type_count : Int32,
   local_type_names : Array[NamedBinding],
-) -> (Bytes, Int, Int, Int) raise ComponentTextError {
+) -> (Bytes, Int32, Int32, Int32) raise ComponentTextError {
   if desc.length() == 0 {
     raise Unsupported("empty type descriptor")
   }
@@ -2036,7 +2039,7 @@ fn parse_inline_externdesc_from_type_desc(
   let mut decl_count = 0
 
   if desc[0] is Atom("func") {
-    let mut type_use : Int? = None
+    let mut type_use : Int32? = None
     let filtered : Array[SExpr] = [Atom("func")]
     let mut start = 1
     if parse_optional_identifier(desc, 1) is Some(name) {
@@ -2198,7 +2201,7 @@ fn parse_inline_externdesc_from_type_desc(
 ///|
 fn inline_externdesc_sort(
   desc : Array[SExpr],
-) -> (Int, Int?, String?) raise ComponentTextError {
+) -> (Int32, Int32?, String?) raise ComponentTextError {
   if desc.length() == 0 {
     raise Unsupported("empty type descriptor")
   }
@@ -2226,10 +2229,10 @@ fn parse_inline_alias_decl(
   state : ComponentBuildState,
   local_type_names : Array[NamedBinding],
   local_instance_names : Array[NamedBinding],
-  local_type_count : Int,
-  local_core_type_count : Int,
-  local_instance_count : Int,
-) -> (Bytes, Int, Int, Int) raise ComponentTextError {
+  local_type_count : Int32,
+  local_core_type_count : Int32,
+  local_instance_count : Int32,
+) -> (Bytes, Int32, Int32, Int32) raise ComponentTextError {
   if field.length() == 5 && field[1] is Atom("export") {
     let instance_idx = resolve_reference(
       field[2],
@@ -2295,7 +2298,7 @@ fn parse_inline_alias_decl(
         if lookup_named_index(state.type_names, target_name) is Some(_) {
           Some(1)
         } else {
-          let mut found : Int? = None
+          let mut found : Int32? = None
           for depth in 0..<state.outer_type_scopes.length() {
             if lookup_named_index(state.outer_type_scopes[depth], target_name)
               is Some(_) {
@@ -2309,7 +2312,7 @@ fn parse_inline_alias_decl(
         if lookup_named_index(state.core_type_names, target_name) is Some(_) {
           Some(1)
         } else {
-          let mut found : Int? = None
+          let mut found : Int32? = None
           for depth in 0..<state.outer_core_type_scopes.length() {
             if lookup_named_index(
                 state.outer_core_type_scopes[depth],
@@ -2326,7 +2329,7 @@ fn parse_inline_alias_decl(
         if lookup_named_index(state.component_names, target_name) is Some(_) {
           Some(1)
         } else {
-          let mut found : Int? = None
+          let mut found : Int32? = None
           for depth in 0..<state.outer_component_scopes.length() {
             if lookup_named_index(
                 state.outer_component_scopes[depth],
@@ -2343,7 +2346,7 @@ fn parse_inline_alias_decl(
         is Some(_) {
         Some(1)
       } else {
-        let mut found : Int? = None
+        let mut found : Int32? = None
         for depth in 0..<state.outer_core_module_scopes.length() {
           if lookup_named_index(
               state.outer_core_module_scopes[depth],
@@ -2477,7 +2480,7 @@ fn parse_inline_alias_decl(
 ///|
 fn build_inline_instance_type_bytes_with_ambient(
   desc : Array[SExpr],
-  start : Int,
+  start : Int32,
   state : ComponentBuildState,
   ambient_type_names : Array[NamedBinding],
 ) -> Bytes raise ComponentTextError {
@@ -2644,7 +2647,7 @@ fn build_inline_instance_type_bytes_with_ambient(
 ///|
 fn build_inline_instance_type_bytes(
   desc : Array[SExpr],
-  start : Int,
+  start : Int32,
   state : ComponentBuildState,
 ) -> Bytes raise ComponentTextError {
   let ambient_type_names = copy_named_bindings(state.type_names)
@@ -2656,7 +2659,7 @@ fn build_inline_instance_type_bytes(
 ///|
 fn build_inline_component_type_bytes_with_ambient(
   desc : Array[SExpr],
-  start : Int,
+  start : Int32,
   state : ComponentBuildState,
   ambient_type_names : Array[NamedBinding],
 ) -> Bytes raise ComponentTextError {
@@ -2835,7 +2838,7 @@ fn build_inline_component_type_bytes_with_ambient(
 ///|
 fn build_inline_component_type_bytes(
   desc : Array[SExpr],
-  start : Int,
+  start : Int32,
   state : ComponentBuildState,
 ) -> Bytes raise ComponentTextError {
   let ambient_type_names = copy_named_bindings(state.type_names)
@@ -2847,9 +2850,9 @@ fn build_inline_component_type_bytes(
 ///|
 fn parse_inline_instance_type(
   desc : Array[SExpr],
-  start : Int,
+  start : Int32,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   add_type_entry(
     state,
     build_inline_instance_type_bytes(desc, start, state),
@@ -2861,9 +2864,9 @@ fn parse_inline_instance_type(
 ///|
 fn parse_inline_component_type(
   desc : Array[SExpr],
-  start : Int,
+  start : Int32,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   add_type_entry(
     state,
     build_inline_component_type_bytes(desc, start, state),
@@ -3087,8 +3090,8 @@ fn encode_import_decl(import_item : ImportEntry) -> Bytes {
 ///|
 fn push_sort_prefix(
   payload : ByteBuf,
-  sort_tag : Int,
-  core_kind : Int?,
+  sort_tag : Int32,
+  core_kind : Int32?,
 ) -> Unit raise ComponentTextError {
   if sort_tag == 0x00 {
     payload.push_u8(0x00)
@@ -3144,7 +3147,7 @@ fn wrap_single_decl(decl : Bytes) -> Bytes {
 ///|
 fn push_ordered_section(
   state : ComponentBuildState,
-  section_id : Int,
+  section_id : Int32,
   decl : Bytes,
 ) -> Unit {
   state.sections_ordered.push({ section_id, payload: wrap_single_decl(decl), })
@@ -3208,8 +3211,8 @@ fn encode_instance_decl(
 
 ///|
 fn encode_alias_core_export_decl(
-  kind : Int,
-  instance_idx : Int,
+  kind : Int32,
+  instance_idx : Int32,
   name : String,
 ) -> Bytes {
   let payload = ByteBuf::ByteBuf()
@@ -3223,9 +3226,9 @@ fn encode_alias_core_export_decl(
 
 ///|
 fn encode_alias_instance_export_decl(
-  sort_tag : Int,
-  core_kind : Int?,
-  instance_idx : Int,
+  sort_tag : Int32,
+  core_kind : Int32?,
+  instance_idx : Int32,
   name : String,
 ) -> Bytes raise ComponentTextError {
   let payload = ByteBuf::ByteBuf()
@@ -3238,10 +3241,10 @@ fn encode_alias_instance_export_decl(
 
 ///|
 fn encode_alias_outer_decl(
-  sort_tag : Int,
-  core_kind : Int?,
-  count : Int,
-  idx : Int,
+  sort_tag : Int32,
+  core_kind : Int32?,
+  count : Int32,
+  idx : Int32,
 ) -> Bytes raise ComponentTextError {
   let payload = ByteBuf::ByteBuf()
   if sort_tag == 0x00 && core_kind is Some(0x05) {
@@ -3258,8 +3261,8 @@ fn encode_alias_outer_decl(
 
 ///|
 fn encode_module_type_alias_outer_core_type_decl(
-  count : Int,
-  idx : Int,
+  count : Int32,
+  idx : Int32,
 ) -> Bytes {
   let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x10)
@@ -3331,7 +3334,7 @@ fn parse_record_type_bytes(
 fn resolve_variant_case_ref(
   expr : SExpr,
   case_ids : Array[NamedBinding],
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(text) {
     if text.has_prefix("$") {
       if lookup_named_index(case_ids, text) is Some(idx) {
@@ -3420,7 +3423,7 @@ fn parse_tuple_type_bytes(
 
 ///|
 fn parse_flags_or_enum_type_bytes(
-  opcode : Int,
+  opcode : Int32,
   body : Array[SExpr],
 ) -> Bytes raise ComponentTextError {
   let payload = ByteBuf::ByteBuf()
@@ -3472,7 +3475,7 @@ fn parse_result_type_bytes(
 
 ///|
 fn parse_future_or_stream_type_bytes(
-  opcode : Int,
+  opcode : Int32,
   body : Array[SExpr],
   state : ComponentBuildState,
 ) -> Bytes raise ComponentTextError {
@@ -3507,7 +3510,7 @@ fn parse_resource_type_bytes(
     raise Unsupported("resource representation must be `(rep <corevaltype>)`")
   }
   let rep = parse_core_valtype_opcode(rep_field[1])
-  let mut dtor_idx : Int? = None
+  let mut dtor_idx : Int32? = None
   for i in 2..<body.length() {
     let field = if body[i] is List(items) {
       items
@@ -3560,7 +3563,9 @@ fn parse_type_field(
     raise Unsupported("type declaration currently supports one body expression")
   }
 
-  let push_type_exports = fn(type_idx : Int) -> Unit raise ComponentTextError {
+  let push_type_exports = fn(
+    type_idx : Int32,
+  ) -> Unit raise ComponentTextError {
     for export_name in exports {
       push_export_decl(state, {
         name: export_name,
@@ -3805,10 +3810,10 @@ fn parse_alias_sort_spec(
 ///|
 fn bind_alias_name(
   state : ComponentBuildState,
-  sort_tag : Int,
-  core_kind : Int?,
+  sort_tag : Int32,
+  core_kind : Int32?,
   name_opt : String?,
-  idx : Int,
+  idx : Int32,
 ) -> Unit raise ComponentTextError {
   if sort_tag == 0x00 {
     let kind = match core_kind {
@@ -3840,10 +3845,10 @@ fn bind_alias_name(
 ///|
 fn allocate_alias_index(
   state : ComponentBuildState,
-  sort_tag : Int,
-  core_kind : Int?,
+  sort_tag : Int32,
+  core_kind : Int32?,
   alias_name_opt : String?,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   let idx = if sort_tag == 0x00 {
     let kind = match core_kind {
       Some(kind) => kind
@@ -3924,11 +3929,11 @@ fn allocate_alias_index(
 ///|
 fn parse_core_alias_binding(
   state : ComponentBuildState,
-  kind : Int,
-  instance_idx : Int,
+  kind : Int32,
+  instance_idx : Int32,
   export_name : String,
   alias_name_opt : String?,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   for binding in state.core_alias_bindings {
     if binding.kind == kind &&
       binding.instance_idx == instance_idx &&
@@ -3950,7 +3955,7 @@ fn parse_core_alias_binding(
 fn parse_core_func_ref(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(_) {
     return resolve_reference(expr, state.core_func_names, "core func")
   }
@@ -3988,7 +3993,7 @@ fn parse_core_func_ref(
 fn parse_core_memory_ref(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(_) {
     return resolve_reference(expr, state.core_memory_names, "core memory")
   }
@@ -4003,7 +4008,7 @@ fn parse_core_memory_ref(
 fn parse_core_func_ref_expr(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(_) {
     resolve_reference(expr, state.core_func_names, "core func")
   } else {
@@ -4015,7 +4020,7 @@ fn parse_core_func_ref_expr(
 fn parse_component_func_ref(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(_) {
     return resolve_reference(expr, state.func_names, "function")
   }
@@ -4140,10 +4145,10 @@ fn parse_canon_option(
 ///|
 fn parse_canon_options(
   canon_items : Array[SExpr],
-  start : Int,
-  end_exclusive : Int,
+  start : Int32,
+  end_exclusive : Int32,
   state : ComponentBuildState,
-) -> (Int, Bytes) raise ComponentTextError {
+) -> (Int32, Bytes) raise ComponentTextError {
   let option_bytes = ByteBuf::ByteBuf()
   let mut option_count = 0
   for i in start..<end_exclusive {
@@ -4157,7 +4162,7 @@ fn parse_canon_options(
 fn parse_canon_lift(
   canon_items : Array[SExpr],
   state : ComponentBuildState,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Bytes raise ComponentTextError {
   if canon_items.length() < 3 {
     raise Unsupported("`canon lift` requires a core function reference")
@@ -4183,7 +4188,7 @@ fn parse_canon_lift(
 fn parse_canon_lower(
   canon_items : Array[SExpr],
   state : ComponentBuildState,
-  options_end : Int,
+  options_end : Int32,
 ) -> Bytes raise ComponentTextError {
   if canon_items.length() < 3 {
     raise Unsupported("`canon lower` requires a function reference")
@@ -4202,7 +4207,7 @@ fn parse_canon_lower(
 }
 
 ///|
-fn canon_prim_sleb(opcode : Int) -> Int raise ComponentTextError {
+fn canon_prim_sleb(opcode : Int32) -> Int32 raise ComponentTextError {
   match opcode {
     0x7f => -1
     0x7e => -2
@@ -4269,7 +4274,7 @@ fn parse_canon_result(
 fn parse_component_type_ref(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is List(items) && items.length() >= 2 && items[0] is Atom("type") {
     if items.length() == 2 {
       return resolve_type_reference(items[1], state)
@@ -4287,7 +4292,7 @@ fn parse_component_type_ref(
 fn parse_core_type_ref(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(_) {
     return resolve_reference(expr, state.core_type_names, "core type")
   }
@@ -4302,7 +4307,7 @@ fn parse_core_type_ref(
 fn parse_core_table_ref(
   expr : SExpr,
   state : ComponentBuildState,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(_) {
     return resolve_reference(expr, state.core_table_names, "core table")
   }
@@ -4327,7 +4332,7 @@ fn parse_canon_bool_flag(expr : SExpr) -> Bool raise ComponentTextError {
 fn parse_trailing_core_func_target(
   canon_items : Array[SExpr],
   allow_target : Bool,
-) -> (Int, String?) raise ComponentTextError {
+) -> (Int32, String?) raise ComponentTextError {
   if !allow_target || canon_items.length() < 3 {
     return (canon_items.length(), None)
   }
@@ -4543,7 +4548,7 @@ fn parse_canon_decl(
   }
   if op_name == "waitable-set.wait" || op_name == "waitable-set.poll" {
     let mut cancellable = false
-    let mut memory_idx_opt : Int? = None
+    let mut memory_idx_opt : Int32? = None
     for i in 2..<decl_end {
       let arg = canon_items[i]
       if arg is Atom(_) {
@@ -4687,8 +4692,8 @@ fn parse_canon_decl(
 ///|
 fn bump_sort_index_after_export(
   state : ComponentBuildState,
-  sort_tag : Int,
-  core_kind : Int?,
+  sort_tag : Int32,
+  core_kind : Int32?,
 ) -> Unit raise ComponentTextError {
   if sort_tag == 0x00 {
     let kind = match core_kind {
@@ -4720,9 +4725,9 @@ fn bump_sort_index_after_export(
 ///|
 fn current_sort_index_for_export(
   state : ComponentBuildState,
-  sort_tag : Int,
-  core_kind : Int?,
-) -> Int raise ComponentTextError {
+  sort_tag : Int32,
+  core_kind : Int32?,
+) -> Int32 raise ComponentTextError {
   if sort_tag == 0x00 {
     let kind = match core_kind {
       Some(kind) => kind
@@ -4752,8 +4757,8 @@ fn current_sort_index_for_export(
 ///|
 fn finalize_export(
   state : ComponentBuildState,
-  sort_tag : Int,
-  core_kind : Int?,
+  sort_tag : Int32,
+  core_kind : Int32?,
   export_id_opt : String?,
 ) -> Unit raise ComponentTextError {
   if export_id_opt is Some(name) {
@@ -4775,7 +4780,7 @@ fn parse_func_field(
   if name_opt is Some(name) {
     sig_items.push(Atom(name))
   }
-  let mut type_idx_opt : Int? = None
+  let mut type_idx_opt : Int32? = None
   let mut canon_items_opt : Array[SExpr]? = None
   let mut import_name_opt : SExpr? = None
   let mut alias_items_opt : Array[SExpr]? = None
@@ -4929,8 +4934,8 @@ fn parse_func_field(
 ///|
 fn parse_export_ascribed_desc(
   ascribed_expr_opt : SExpr?,
-  sort_tag : Int,
-  core_kind : Int?,
+  sort_tag : Int32,
+  core_kind : Int32?,
   state : ComponentBuildState,
 ) -> Bytes? raise ComponentTextError {
   let ascribed_expr = match ascribed_expr_opt {
@@ -4949,7 +4954,7 @@ fn parse_export_ascribed_desc(
     if !(ascribed[0] is Atom("func")) {
       raise Unsupported("function export ascription must be `(func ...)`")
     }
-    let mut type_idx_opt : Int? = None
+    let mut type_idx_opt : Int32? = None
     let mut start = 1
     if parse_optional_identifier(ascribed, 1) is Some(_) {
       start = 2
@@ -5406,7 +5411,7 @@ fn parse_core_module_field(
 }
 
 ///|
-fn parse_core_valtype_opcode(expr : SExpr) -> Int raise ComponentTextError {
+fn parse_core_valtype_opcode(expr : SExpr) -> Int32 raise ComponentTextError {
   if expr is Atom(name) {
     match name {
       "i32" => 0x7f
@@ -5427,7 +5432,7 @@ fn parse_core_valtype_opcode(expr : SExpr) -> Int raise ComponentTextError {
 fn parse_core_heap_type_sleb(
   expr : SExpr,
   core_type_names : Array[NamedBinding],
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(name) {
     if name.has_prefix("$") {
       if lookup_named_index(core_type_names, name) is Some(idx) {
@@ -5564,7 +5569,7 @@ fn parse_core_func_type_bytes(
 fn parse_u32_literal(
   expr : SExpr,
   context : String,
-) -> Int raise ComponentTextError {
+) -> Int32 raise ComponentTextError {
   if expr is Atom(text) {
     if parse_decimal_index(text) is Some(value) {
       return value
@@ -5577,9 +5582,9 @@ fn parse_u32_literal(
 fn parse_core_extern_type_for_module_type(
   desc : Array[SExpr],
   decls : ByteBuf,
-  func_type_count : Int,
+  func_type_count : Int32,
   func_type_names : Array[NamedBinding],
-) -> (Bytes, Int, Int) raise ComponentTextError {
+) -> (Bytes, Int32, Int32) raise ComponentTextError {
   if desc.length() == 0 {
     raise Unsupported("core module extern type descriptor is empty")
   }
@@ -5593,7 +5598,7 @@ fn parse_core_extern_type_for_module_type(
   }
 
   if head == "func" {
-    let mut type_use_opt : Int? = None
+    let mut type_use_opt : Int32? = None
     let filtered : Array[SExpr] = [Atom("func")]
     let mut start = 1
     if parse_optional_identifier(desc, 1) is Some(_) {
@@ -5787,7 +5792,7 @@ fn parse_core_extern_type_for_module_type(
 ///|
 fn parse_core_module_type_bytes(
   items : Array[SExpr],
-  start : Int,
+  start : Int32,
   state : ComponentBuildState,
 ) -> Bytes raise ComponentTextError {
   let decls = ByteBuf::ByteBuf()
@@ -5819,7 +5824,7 @@ fn parse_core_module_type_bytes(
           if lookup_named_index(state.core_type_names, target_name) is Some(_) {
             Some(1)
           } else {
-            let mut found : Int? = None
+            let mut found : Int32? = None
             for depth in 0..<state.outer_core_type_scopes.length() {
               if lookup_named_index(
                   state.outer_core_type_scopes[depth],
@@ -6007,7 +6012,7 @@ fn parse_core_type_field(
 }
 
 ///|
-fn parse_component_sort_tag(sort_name : String) -> Int? {
+fn parse_component_sort_tag(sort_name : String) -> Int32? {
   match sort_name {
     "func" => Some(0x01)
     "value" => Some(0x02)
@@ -6454,7 +6459,7 @@ fn parse_instance_field(
 }
 
 ///|
-fn parse_core_sort_kind(sort_name : String) -> Int? {
+fn parse_core_sort_kind(sort_name : String) -> Int32? {
   match sort_name {
     "func" => Some(0x00)
     "table" => Some(0x01)
@@ -6914,9 +6919,9 @@ fn parse_core_func_field(
 fn resolve_alias_sort_index(
   expr : SExpr,
   state : ComponentBuildState,
-  sort_tag : Int,
-  core_kind : Int?,
-) -> Int raise ComponentTextError {
+  sort_tag : Int32,
+  core_kind : Int32?,
+) -> Int32 raise ComponentTextError {
   if expr is Atom(atom) {
     if parse_decimal_index(atom) is Some(idx) {
       return idx
@@ -7014,7 +7019,7 @@ fn parse_alias_field(
     let inferred_outer_count = if field[3] is Atom(target_name) &&
       target_name.has_prefix("$") {
       if sort_spec.sort_tag == 0x03 {
-        let mut found : Int? = None
+        let mut found : Int32? = None
         for depth in 0..<state.outer_type_scopes.length() {
           if lookup_named_index(state.outer_type_scopes[depth], target_name)
             is Some(_) {
@@ -7024,7 +7029,7 @@ fn parse_alias_field(
         }
         found
       } else if sort_spec.sort_tag == 0x00 && sort_spec.core_kind is Some(0x05) {
-        let mut found : Int? = None
+        let mut found : Int32? = None
         for depth in 0..<state.outer_core_type_scopes.length() {
           if lookup_named_index(
               state.outer_core_type_scopes[depth],
@@ -7200,7 +7205,11 @@ fn parse_canon_field(
 }
 
 ///|
-fn append_section(output : ByteBuf, section_id : Int, payload : Bytes) -> Unit {
+fn append_section(
+  output : ByteBuf,
+  section_id : Int32,
+  payload : Bytes,
+) -> Unit {
   output.push_u8(section_id)
   output.push_uleb_u32(payload.length())
   output.push_bytes(payload)

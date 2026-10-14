@@ -30,7 +30,7 @@ fn lower_canonical_string(
   memory : @runtime.Memory,
   realloc : CanonicalRealloc,
   memory64 : Bool,
-) -> (Int64, Int) raise ComponentRuntimeError {
+) -> (Int64, Int32) raise ComponentRuntimeError {
   let source = CanonicalStringSource::from_value(value)
   let units = source.units.to_int64()
   let source_latin1 = source.encoding == Latin1Utf16 && !source.utf16
@@ -81,12 +81,15 @@ fn lower_canonical_string(
   let mut all_latin1 = true
   let mut position = 0
   let mut written = 0L
-  fn put(offset : Int64, byte : Int) -> Unit raise ComponentRuntimeError {
+  fn put(offset : Int64, byte : Int32) -> Unit raise ComponentRuntimeError {
     memory.store_byte_at(ptr + offset, byte.to_byte()) catch {
       error => raise CanonCallError(error.to_string())
     }
   }
-  fn put_utf16(offset : Int64, unit : Int) -> Unit raise ComponentRuntimeError {
+  fn put_utf16(
+    offset : Int64,
+    unit : Int32,
+  ) -> Unit raise ComponentRuntimeError {
     put(offset, unit & 0xff)
     put(offset + 1L, unit >> 8)
   }

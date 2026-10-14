@@ -1,5 +1,5 @@
 ///|
-extern "c" fn executable_mapping_count() -> Int = "wasmoon_jit_exec_mapping_count"
+extern "c" fn executable_mapping_count() -> Int32 = "wasmoon_jit_exec_mapping_count"
 
 ///|
 fn transaction_test_artifact() -> @artifact.Artifact raise @wasmoon_jit.JitPipelineError {

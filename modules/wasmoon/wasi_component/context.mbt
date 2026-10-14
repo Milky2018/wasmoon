@@ -12,16 +12,16 @@ struct WasiComponentCtx {
   args : Array[String]
   environment : Array[(String, String)]
   initial_cwd : String?
-  exit_status : Ref[Int?]
+  exit_status : Ref[Int32?]
   insecure_state : Ref[Int64]
   insecure_seed : (Int64, Int64)
-  resources : Map[Int, WasiHostResourceEntry]
-  next_resource_rep : Ref[Int]
+  resources : Map[Int32, WasiHostResourceEntry]
+  next_resource_rep : Ref[Int32]
   native_reactor : @async_native.NativeReactor?
-  stdin_rep : Int
-  stdout_rep : Int
-  stderr_rep : Int
-  network_rep : Int
+  stdin_rep : Int32
+  stdout_rep : Int32
+  stderr_rep : Int32
+  network_rep : Int32
   preopens : Array[PreopenState]
   runtime_owner_claimed : Ref[Bool]
   closed : Ref[Bool]
@@ -52,8 +52,8 @@ struct WasiComponentCtxBuilder {
   mut inherit_stdin : Bool
   mut stdout : (Bytes) -> Bool
   mut stderr : (Bytes) -> Bool
-  mut stdout_fd : Int?
-  mut stderr_fd : Int?
+  mut stdout_fd : Int32?
+  mut stderr_fd : Int32?
   mut network_policy : WasiNetworkPolicy
   preopens : Array[PreopenState]
 }
@@ -242,7 +242,7 @@ pub fn WasiComponentCtxBuilder::build(
   } else {
     low ^ high
   }
-  let resources : Map[Int, WasiHostResourceEntry] = Map([])
+  let resources : Map[Int32, WasiHostResourceEntry] = Map([])
   let stdin_rep = 1
   let stdout_rep = 2
   let stderr_rep = 3
@@ -364,7 +364,7 @@ pub fn WasiComponentCtx::initial_cwd(self : WasiComponentCtx) -> String? {
 }
 
 ///|
-pub fn WasiComponentCtx::exit_status(self : WasiComponentCtx) -> Int? {
+pub fn WasiComponentCtx::exit_status(self : WasiComponentCtx) -> Int32? {
   self.exit_status.val
 }
 
@@ -418,7 +418,7 @@ fn WasiComponentCtx::close_resources(self : WasiComponentCtx) -> Unit {
 ///|
 fn WasiComponentCtx::request_exit(
   self : WasiComponentCtx,
-  status : Int,
+  status : Int32,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   self.exit_status.val = Some(status)
   raise HostExit(status)
@@ -437,8 +437,8 @@ fn WasiComponentCtx::next_insecure_u64(self : WasiComponentCtx) -> Int64 {
 ///|
 priv struct InputStreamState {
   bytes : Ref[Bytes]
-  offset : Ref[Int]
-  native_fd : Int?
+  offset : Ref[Int32]
+  native_fd : Int32?
   file_position : Ref[Int64]?
   owns_fd : Bool
   closed : Ref[Bool]
@@ -447,12 +447,12 @@ priv struct InputStreamState {
 ///|
 priv struct OutputStreamState {
   write : (Bytes) -> Bool
-  native_fd : Int?
+  native_fd : Int32?
   file_position : Ref[Int64]?
   append : Bool
   owns_fd : Bool
   permit : Ref[Int64]
-  pending : Ref[(Bytes, Int)?]
+  pending : Ref[(Bytes, Int32)?]
   failure : Ref[String?]
   closed : Ref[Bool]
 }
@@ -460,10 +460,10 @@ priv struct OutputStreamState {
 ///|
 priv enum PollSource {
   Deadline(Int64)
-  Input(Int)
-  Output(Int)
-  Socket(Int, Int)
-  OwnedSocket(Int, Int)
+  Input(Int32)
+  Output(Int32)
+  Socket(Int32, Int32)
+  OwnedSocket(Int32, Int32)
 }
 
 ///|
@@ -480,10 +480,10 @@ priv enum TcpSocketPhase {
 
 ///|
 priv struct TcpSocketState {
-  fd : Int
-  family : Int
+  fd : Int32
+  family : Int32
   phase : Ref[TcpSocketPhase]
-  backlog : Ref[Int]
+  backlog : Ref[Int32]
   send_taken : Ref[Bool]
   receive_taken : Ref[Bool]
   closed : Ref[Bool]
@@ -499,10 +499,10 @@ priv enum UdpSocketPhase {
 
 ///|
 priv struct UdpSocketState {
-  fd : Int
-  family : Int
+  fd : Int32
+  family : Int32
   phase : Ref[UdpSocketPhase]
-  generation : Ref[Int]
+  generation : Ref[Int32]
   remote : Ref[@wasi.NativeSocketAddress?]
   policy : Ref[WasiNetworkPolicy]
   closed : Ref[Bool]
@@ -510,18 +510,18 @@ priv struct UdpSocketState {
 
 ///|
 priv struct IncomingDatagramStreamState {
-  fd : Int
-  generation : Ref[Int]
-  expected_generation : Int
+  fd : Int32
+  generation : Ref[Int32]
+  expected_generation : Int32
   closed : Ref[Bool]
 }
 
 ///|
 priv struct OutgoingDatagramStreamState {
-  fd : Int
-  family : Int
-  generation : Ref[Int]
-  expected_generation : Int
+  fd : Int32
+  family : Int32
+  generation : Ref[Int32]
+  expected_generation : Int32
   remote : @wasi.NativeSocketAddress?
   permit : Ref[Int64]
   closed : Ref[Bool]
@@ -530,56 +530,56 @@ priv struct OutgoingDatagramStreamState {
 ///|
 priv struct ResolveAddressStreamState {
   resolver : @wasi.NativeResolverHandle
-  poll_fd : Int
+  poll_fd : Int32
   policy : WasiNetworkPolicy
   closed : Ref[Bool]
 }
 
 ///|
-let descriptor_read : Int = 0x01
+let descriptor_read : Int32 = 0x01
 
 ///|
-let descriptor_write : Int = 0x02
+let descriptor_write : Int32 = 0x02
 
 ///|
-let descriptor_mutate_directory : Int = 0x20
+let descriptor_mutate_directory : Int32 = 0x20
 
 ///|
-let descriptor_all : Int = descriptor_read |
+let descriptor_all : Int32 = descriptor_read |
   descriptor_write |
   descriptor_mutate_directory
 
 ///|
 priv struct PreopenState {
-  fd : Int
+  fd : Int32
   guest_path : String
-  flags : Int
+  flags : Int32
   closed : Ref[Bool]
 }
 
 ///|
 priv struct DescriptorState {
-  fd : Int
-  flags : Int
-  file_type : Int
+  fd : Int32
+  flags : Int32
+  file_type : Int32
   closed : Ref[Bool]
 }
 
 ///|
 priv struct DirectoryEntryState {
   name : String
-  file_type : Int
+  file_type : Int32
 }
 
 ///|
 priv struct DirectoryEntryStreamState {
   entries : Array[DirectoryEntryState]
-  index : Ref[Int]
+  index : Ref[Int32]
 }
 
 ///|
 priv enum WasiHostResource {
-  IoError(String, Int?)
+  IoError(String, Int32?)
   InputStream(InputStreamState)
   OutputStream(OutputStreamState)
   Pollable(PollSource)
@@ -596,7 +596,7 @@ priv enum WasiHostResource {
 ///|
 priv struct WasiHostResourceEntry {
   resource : WasiHostResource
-  references : Ref[Int]
+  references : Ref[Int32]
 }
 
 ///|
@@ -608,7 +608,7 @@ fn new_resource_entry(resource : WasiHostResource) -> WasiHostResourceEntry {
 fn WasiComponentCtx::insert_resource(
   self : WasiComponentCtx,
   resource : WasiHostResource,
-) -> Int {
+) -> Int32 {
   let rep = self.next_resource_rep.val
   self.next_resource_rep.val = rep + 1
   self.resources.set(rep, new_resource_entry(resource))
@@ -618,7 +618,7 @@ fn WasiComponentCtx::insert_resource(
 ///|
 fn WasiComponentCtx::get_resource(
   self : WasiComponentCtx,
-  rep : Int,
+  rep : Int32,
 ) -> WasiHostResource? {
   match self.resources.get(rep) {
     Some(entry) => Some(entry.resource)
@@ -629,8 +629,8 @@ fn WasiComponentCtx::get_resource(
 ///|
 fn WasiComponentCtx::clone_resource(
   self : WasiComponentCtx,
-  rep : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  rep : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   match self.resources.get(rep) {
     Some(entry) => {
       entry.references.val = entry.references.val + 1
@@ -644,7 +644,10 @@ fn WasiComponentCtx::clone_resource(
 }
 
 ///|
-fn WasiComponentCtx::drop_resource(self : WasiComponentCtx, rep : Int) -> Unit {
+fn WasiComponentCtx::drop_resource(
+  self : WasiComponentCtx,
+  rep : Int32,
+) -> Unit {
   guard self.resources.get(rep) is Some(entry) else { return }
   self.resources.remove(rep)
   entry.references.val = entry.references.val - 1
@@ -757,8 +760,8 @@ fn WasiComponentCtx::cancel_async_operation(
 ///|
 fn WasiComponentCtx::register_async_fd(
   self : WasiComponentCtx,
-  fd : Int,
-  events : Int,
+  fd : Int32,
+  events : Int32,
 ) -> WasiAsyncOperation raise @runtime_impl.ComponentRuntimeError {
   if self.closed.val {
     raise HostCallError("WASI component context is closed")

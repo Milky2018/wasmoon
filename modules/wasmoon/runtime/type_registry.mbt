@@ -1,13 +1,13 @@
 ///|
 /// Store-local identities retain recursive-group equivalence across modules.
 priv struct StoreTypeRegistry {
-  representatives : Array[(ModuleInstance, Int)]
-  mappings : Map[Int, (Array[@types.SubType], Array[Int], Array[Int])]
-  parents : Array[Int]
+  representatives : Array[(ModuleInstance, Int32)]
+  mappings : Map[Int32, (Array[@types.SubType], Array[Int32], Array[Int32])]
+  parents : Array[Int32]
   views : Array[NativeCallableTypeView]
   mut native_registry : @wasmoon_jit.NativeCallableRegistry?
-  entries : Map[Int64, Int]
-  heap_types : Map[Int, Int]
+  entries : Map[Int64, Int32]
+  heap_types : Map[Int32, Int32]
 } derive(Debug)
 
 ///|
@@ -27,14 +27,14 @@ fn StoreTypeRegistry::new() -> StoreTypeRegistry {
 fn StoreTypeRegistry::register(
   self : StoreTypeRegistry,
   instance : ModuleInstance,
-) -> Array[Int] {
+) -> Array[Int32] {
   if instance.store_idx >= 0 &&
     self.mappings.get(instance.store_idx) is Some((types, groups, mapping)) &&
     types == instance.types &&
     groups == instance.type_rec_groups {
     return mapping
   }
-  let mapping : Array[Int] = []
+  let mapping : Array[Int32] = []
   let first_new = self.representatives.length()
   for type_index in 0..<instance.types.length() {
     let mut identity = -1
@@ -80,18 +80,18 @@ fn StoreTypeRegistry::register(
 pub fn Store::native_type_indices(
   self : Store,
   instance : ModuleInstance,
-) -> Array[Int] {
+) -> Array[Int32] {
   self.native_types.register(instance).copy()
 }
 
 ///|
-pub fn Store::native_type_parents(self : Store) -> Array[Int] {
+pub fn Store::native_type_parents(self : Store) -> Array[Int32] {
   self.native_types.parents.copy()
 }
 
 ///|
 priv struct NativeCallableTypeView {
-  refresh : (Array[Int], Array[(Int64, Int)]) -> Unit
+  refresh : (Array[Int32], Array[(Int64, Int32)]) -> Unit
 }
 
 ///|
@@ -103,7 +103,7 @@ impl Debug for NativeCallableTypeView with fn to_repr(_self) {
 /// Publish the complete Store type universe to all installed callable contexts.
 pub fn Store::bind_native_callable_view(
   self : Store,
-  refresh : (Array[Int], Array[(Int64, Int)]) -> Unit,
+  refresh : (Array[Int32], Array[(Int64, Int32)]) -> Unit,
 ) -> Unit {
   self.native_types.views.push({ refresh, })
   for entry in self.jit_funcref_entries() {
@@ -147,9 +147,9 @@ pub fn Store::native_callable_registry(
 ///|
 fn Store::record_gc_type(
   self : Store,
-  index : Int,
+  index : Int32,
   instance : ModuleInstance?,
-  type_index : Int,
+  type_index : Int32,
 ) -> Unit {
   let identity = match instance {
     Some(instance) => self.native_types.register(instance)[type_index]
@@ -164,9 +164,9 @@ fn Store::record_gc_type(
 ///|
 pub fn Store::gc_type_is_subtype(
   self : Store,
-  reference : Int,
+  reference : Int32,
   instance : ModuleInstance,
-  expected : Int,
+  expected : Int32,
 ) -> Bool {
   let actual = match self.c_heap {
     Some(heap) => heap.runtime_type(reference)
@@ -188,8 +188,8 @@ pub fn Store::gc_type_is_subtype(
 ///|
 fn StoreTypeRegistry::is_subtype(
   self : StoreTypeRegistry,
-  actual : Int,
-  expected : Int,
+  actual : Int32,
+  expected : Int32,
 ) -> Bool {
   for current = actual; current >= 0 && current < self.parents.length(); {
     if current == expected {
@@ -207,8 +207,8 @@ fn StoreTypeRegistry::is_subtype(
 ///|
 fn Store::gc_type_definition(
   self : Store,
-  reference : Int,
-  fallback : Int,
+  reference : Int32,
+  fallback : Int32,
 ) -> @types.SubType? {
   let identity = match self.c_heap {
     Some(heap) => heap.runtime_type(reference)
@@ -230,7 +230,7 @@ fn StoreTypeRegistry::publish(self : StoreTypeRegistry) -> Unit {
   if self.native_registry is None && self.views.is_empty() {
     return
   }
-  let entries : Array[(Int64, Int)] = []
+  let entries : Array[(Int64, Int32)] = []
   for pointer, identity in self.entries {
     entries.push((pointer, identity))
   }

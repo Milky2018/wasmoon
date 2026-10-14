@@ -1,8 +1,8 @@
 ///|
 pub suberror X64LowerError {
   UnsupportedOperation(
-    block_index~ : Int,
-    instruction_index~ : Int,
+    block_index~ : Int32,
+    instruction_index~ : Int32,
     operation~ : @lowering.Operation
   )
   UnsupportedAbi(message~ : String)
@@ -16,7 +16,7 @@ pub impl Show for X64LowerError with fn output(self, logger) {
 }
 
 ///|
-fn align_up(value : Int, alignment : Int) -> Int {
+fn align_up(value : Int32, alignment : Int32) -> Int32 {
   (value + alignment - 1) / alignment * alignment
 }
 
@@ -193,7 +193,7 @@ fn append_body(
   inputs : Array[@vcode.Input],
   outputs : Array[@vcode.Output],
   metadata : @vcode.InstructionMetadata,
-  clobbers? : Array[@vcode.PhysicalReg] = [],
+  clobbers~ : Array[@vcode.PhysicalReg] = [],
 ) -> Array[@vcode.Value] raise X64LowerError {
   // The instruction's own encoding constraints are authoritative; a caller may
   // only add to them. See `X64Inst::mandatory_clobbers`.
@@ -438,7 +438,7 @@ fn set_terminator(
   inputs : Array[@vcode.Input],
   successors : Array[@vcode.Edge],
   metadata : @vcode.InstructionMetadata,
-  clobbers? : Array[@vcode.PhysicalReg] = [],
+  clobbers~ : Array[@vcode.PhysicalReg] = [],
 ) -> Unit raise X64LowerError {
   (builder.set_terminator(
     block, instruction, inputs, successors, clobbers, metadata,

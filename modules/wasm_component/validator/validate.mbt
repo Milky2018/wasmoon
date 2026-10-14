@@ -5,8 +5,8 @@
 /// when effective size is small (e.g. 101 nested `list` types).
 fn valtype_nesting_depth(
   ty : @component.ValType,
-  type_depths : Array[Int],
-) -> Int {
+  type_depths : Array[Int32],
+) -> Int32 {
   match ty {
     Prim(_) => 0
     TypeIdx(idx) =>
@@ -21,8 +21,8 @@ fn valtype_nesting_depth(
 ///|
 fn effective_typedef_depth(
   td : @component.TypeDef,
-  type_depths : Array[Int],
-) -> Int {
+  type_depths : Array[Int32],
+) -> Int32 {
   match td {
     // Base types contribute depth=1 so that chains like 101 nested `list`
     // typedefs trip the component-spec limit.
@@ -90,14 +90,14 @@ fn effective_typedef_depth(
 
 ///|
 priv struct ValidatedComponentInfo {
-  size : Int
+  size : Int32
   import_sorts : Map[String, @component.Sort]
   import_instance_sigs : Map[String, InstanceSig]
   import_func_sigs : Map[String, FuncSigShape]
-  import_instance_resource_exports : Map[String, Map[String, Int]]
+  import_instance_resource_exports : Map[String, Map[String, Int32]]
   import_type_bounds : Map[String, @component.TypeBound]
   import_type_sigs : Map[String, TypeSig]
-  import_core_module_exports : Map[String, Map[String, Int]]
+  import_core_module_exports : Map[String, Map[String, Int32]]
   import_core_module_import_sigs : Map[String, Map[String, CoreExternType]]
   export_sorts : Map[String, @component.Sort]
   export_instance_sigs : Map[String, InstanceSig]
@@ -113,53 +113,53 @@ fn validate_component_inner(
   component : @component.Component,
   is_root : Bool,
   cfg : ComponentValidationConfig,
-  depth : Int,
+  depth : Int32,
   type_outers : Array[Array[@component.TypeDef?]],
-  type_outer_depths : Array[Int],
-  core_type_bound_outers : Array[Int],
-  component_size_outers : Array[Array[Int]],
+  type_outer_depths : Array[Int32],
+  core_type_bound_outers : Array[Int32],
+  component_size_outers : Array[Array[Int32]],
 ) -> ValidatedComponentInfo raise ComponentValidationError {
   let counts = Counts::Counts()
   let type_table : Array[@component.TypeDef?] = []
-  let known_type_sigs : Map[Int, TypeSig] = Map([])
+  let known_type_sigs : Map[Int32, TypeSig] = Map([])
   // Track which type indices correspond to resource types defined in the
   // current concrete component (as opposed to imported/aliased resource types).
   let local_resource_types : Array[Bool] = []
   // Nominal identity ids for resource types (both defined and imported via `sub resource`).
   // These are local to this validation run, but used to detect mismatches across instantiation.
-  let resource_ids : Array[Int?] = []
+  let resource_ids : Array[Int32?] = []
   let mut next_resource_id = 0
-  let type_sizes : Array[Int] = []
-  let type_depths : Array[Int] = []
+  let type_sizes : Array[Int32] = []
+  let type_depths : Array[Int32] = []
   // Approximate export-signature size (used for wasm-tools' very-nested.wast).
-  let component_sizes : Array[Int] = []
-  let instance_sizes : Array[Int] = []
+  let component_sizes : Array[Int32] = []
+  let instance_sizes : Array[Int32] = []
   let mut export_size = 1
   // Type indices that have names in the current interface namespace (type imports/exports).
-  let named_types : Map[Int, Int] = Map([])
+  let named_types : Map[Int32, Int32] = Map([])
   // Type indices named by imports only (used to validate imports even if the
   // component's sections are reordered).
-  let import_named_types : Map[Int, Int] = Map([])
-  let core_type_exports : Array[Map[String, Int]?] = []
+  let import_named_types : Map[Int32, Int32] = Map([])
+  let core_type_exports : Array[Map[String, Int32]?] = []
   let core_type_module_imports : Array[Array[CoreModuleTypeImport]?] = []
   let core_type_module_export_types : Array[Map[String, CoreExternType]?] = []
-  let core_module_exports : Array[Map[String, Int]?] = []
+  let core_module_exports : Array[Map[String, Int32]?] = []
   // Align core module definitions to the core-module index space (imports get None).
   let core_module_defs : Array[@types.Module?] = []
   let core_func_types : Array[@types.FuncType?] = []
   let core_module_export_types : Array[Map[String, CoreExternType]?] = []
   let core_module_type_imports : Array[Array[CoreModuleTypeImport]?] = []
-  let core_instance_exports : Array[Map[String, Int]?] = []
+  let core_instance_exports : Array[Map[String, Int32]?] = []
   let core_instance_export_types : Array[Map[String, CoreExternType]?] = []
   let core_memory_types : Array[@types.MemoryType?] = []
   let component_import_sorts : Array[Map[String, @component.Sort]?] = []
   let component_import_instance_sigs : Array[Map[String, InstanceSig]?] = []
   let component_import_func_sigs : Array[Map[String, FuncSigShape]?] = []
   let component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int]]?,
+    Map[String, Map[String, Int32]]?,
   ] = []
   let component_import_core_module_exports : Array[
-    Map[String, Map[String, Int]]?,
+    Map[String, Map[String, Int32]]?,
   ] = []
   let component_import_core_module_import_sigs : Array[
     Map[String, Map[String, CoreExternType]]?,
@@ -179,9 +179,9 @@ fn validate_component_inner(
   let instance_sigs : Array[InstanceSig?] = []
   // Instances that are part of this component's interface namespace (imports
   // plus export-introduced instance aliases).
-  let interface_instance_idxs : Map[Int, Int] = Map([])
-  let instance_export_type_idxs : Array[Array[Int]?] = []
-  let instance_export_func_idxs : Array[Array[Int]?] = []
+  let interface_instance_idxs : Map[Int32, Int32] = Map([])
+  let instance_export_type_idxs : Array[Array[Int32]?] = []
+  let instance_export_func_idxs : Array[Array[Int32]?] = []
   let instance_export_type_map : Array[Map[String, ExportedTypeInfo]?] = []
   let instance_export_type_sigs : Array[Map[String, TypeSig]?] = []
   let instance_export_func_sigs : Array[Map[String, FuncSigShape]?] = []
@@ -197,14 +197,14 @@ fn validate_component_inner(
   let seen_import_names : Map[String, String] = Map([])
   let seen_export_names : Map[String, String] = Map([])
   // Resource-type names in the WIT interface namespace.
-  let import_resource_names : Map[String, Int] = Map([])
-  let export_resource_names : Map[String, Int] = Map([])
+  let import_resource_names : Map[String, Int32] = Map([])
+  let export_resource_names : Map[String, Int32] = Map([])
 
   // Signature tables for this component (returned to parent for instantiation validation).
   let my_import_sorts : Map[String, @component.Sort] = Map([])
   let my_import_instance_sigs : Map[String, InstanceSig] = Map([])
   let my_import_func_sigs : Map[String, FuncSigShape] = Map([])
-  let my_import_instance_resource_exports : Map[String, Map[String, Int]] = Map([],
+  let my_import_instance_resource_exports : Map[String, Map[String, Int32]] = Map([],
   )
   let my_import_type_bounds : Map[String, @component.TypeBound] = Map([])
   let my_import_type_sigs : Map[String, TypeSig] = Map([])
@@ -227,7 +227,7 @@ fn validate_component_inner(
           e => raise CoreModuleError("parse core module: \{e}")
         }
         // wasm-tools expects duplicate import names in core modules to be invalid.
-        let seen_imports : Map[String, Int] = Map([])
+        let seen_imports : Map[String, Int32] = Map([])
         for imp in core_mod.imports {
           let key = "\{imp.mod_name}:\{imp.name}"
           if seen_imports.get(key) is Some(_) {
@@ -238,7 +238,7 @@ fn validate_component_inner(
         @core_validator.validate_module(core_mod) catch {
           e => raise CoreModuleError("validate core module: \{e}")
         }
-        let exports : Map[String, Int] = Map([])
+        let exports : Map[String, Int32] = Map([])
         let export_types : Map[String, CoreExternType] = Map([])
         for ex in core_mod.exports {
           match ex.desc {
@@ -264,7 +264,7 @@ fn validate_component_inner(
           e => raise SectionParseError(2, "\{e}")
         }
         for inst in core_instances {
-          let mut export_map : Map[String, Int]? = None
+          let mut export_map : Map[String, Int32]? = None
           let mut export_types : Map[String, CoreExternType]? = None
           match inst.expr {
             Instantiate(module_idx, args) => {
@@ -281,8 +281,8 @@ fn validate_component_inner(
               // Validate that instantiation args satisfy the core module's
               // imports when we have enough type information (either a full
               // core module body, or a core module type signature).
-              let providers : Map[String, Int] = Map([])
-              let seen_arg_names : Map[String, Int] = Map([])
+              let providers : Map[String, Int32] = Map([])
+              let seen_arg_names : Map[String, Int32] = Map([])
               for a in args {
                 check_sortidx(a.sortidx, counts, type_table.length())
                 if seen_arg_names.get(a.name) is Some(_) {
@@ -426,7 +426,7 @@ fn validate_component_inner(
               }
             }
             InlineExports(inline_exports) => {
-              let map : Map[String, Int] = Map([])
+              let map : Map[String, Int32] = Map([])
               let type_map : Map[String, CoreExternType] = Map([])
               for ex in inline_exports {
                 check_sortidx(ex.sortidx, counts, type_table.length())

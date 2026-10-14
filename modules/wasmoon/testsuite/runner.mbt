@@ -19,7 +19,7 @@ priv struct JsonTestFile {
 /// JSON command structure
 priv struct JsonCommand {
   type_ : String
-  line : Int?
+  line : Int32?
   filename : String?
   name : String?
   as_ : String?
@@ -60,7 +60,7 @@ pub enum TestCommand {
 ///|
 /// Test command with line number information
 pub struct TestCommandWithLine {
-  line : Int?
+  line : Int32?
   command : TestCommand
 } derive(Debug)
 
@@ -81,9 +81,9 @@ pub struct TestValue {
 ///|
 /// Test result
 pub(all) struct TestResult {
-  mut passed : Int
-  mut failed : Int
-  mut skipped : Int
+  mut passed : Int32
+  mut failed : Int32
+  mut skipped : Int32
   failures : Array[String]
   skip_reasons : Array[String]
   mut source_filename : String? // Source .wast filename for better error reporting
@@ -142,7 +142,7 @@ fn bytes_to_string(bytes : Bytes) -> String {
 ///|
 /// Parse integer from string with error handling
 /// Handles both signed and unsigned representations
-fn parse_int_safe(s : String) -> Int {
+fn parse_int_safe(s : String) -> Int32 {
   // First try parsing as unsigned (for values like 4294967295)
   let uint_result = @string.parse_uint(s) catch { _ => 0U }
   if uint_result != 0U {

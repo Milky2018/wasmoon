@@ -11,8 +11,8 @@
 extern "c" fn c_jit_gc_push_root_scope_managed(
   context : JITContext,
   roots : FixedArray[Int64],
-  count : Int,
-) -> Int = "wasmoon_jit_gc_push_root_scope_managed"
+  count : Int32,
+) -> Int32 = "wasmoon_jit_gc_push_root_scope_managed"
 
 ///|
 #borrow(context)

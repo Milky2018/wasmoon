@@ -88,7 +88,7 @@ test "canonical renderer preserves try_table catch handlers" {
 
 ///|
 test "canonical renderer preserves floating-point bits" {
-  let f32_bits : Array[UInt] = [
+  let f32_bits : Array[UInt32] = [
     0x00000001U, 0x007fffffU, 0x3f800001U, 0x7f7fffffU, 0x80000000U, 0xff800000U,
     0x7fc12345U, 0xff812345U,
   ]

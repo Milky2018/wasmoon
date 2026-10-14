@@ -1,7 +1,7 @@
 ///|
 pub(all) enum TokenKind {
   Ident(String)
-  IntLit(Int)
+  IntLit(Int32)
   StrLit(String)
   KwPackage
   KwInterface
@@ -48,8 +48,8 @@ pub(all) enum TokenKind {
 ///|
 priv struct Token {
   kind : TokenKind
-  line : Int
-  col : Int
+  line : Int32
+  col : Int32
 }
 
 ///|
@@ -63,9 +63,9 @@ pub fn parse_package(src : String) -> Package raise WitError {
 ///|
 priv struct Lexer {
   src : String
-  mut i : Int
-  mut line : Int
-  mut col : Int
+  mut i : Int32
+  mut line : Int32
+  mut col : Int32
 }
 
 ///|
@@ -88,7 +88,7 @@ fn Lexer::lex_all(self : Lexer) -> Array[Token] raise WitError {
 }
 
 ///|
-fn Lexer::peek(self : Lexer, off : Int) -> Int? {
+fn Lexer::peek(self : Lexer, off : Int32) -> Int32? {
   let j = self.i + off
   if j >= self.src.length() {
     None
@@ -98,7 +98,7 @@ fn Lexer::peek(self : Lexer, off : Int) -> Int? {
 }
 
 ///|
-fn Lexer::bump(self : Lexer) -> Int? {
+fn Lexer::bump(self : Lexer) -> Int32? {
   if self.i >= self.src.length() {
     return None
   }
@@ -158,7 +158,7 @@ fn Lexer::skip_ws_and_comments(self : Lexer) -> Unit raise WitError {
 }
 
 ///|
-fn Lexer::lex_one(self : Lexer) -> (TokenKind, Int, Int) raise WitError {
+fn Lexer::lex_one(self : Lexer) -> (TokenKind, Int32, Int32) raise WitError {
   let line = self.line
   let col = self.col
   let cu = self.src.code_unit_at(self.i).to_int()
@@ -300,7 +300,7 @@ fn Lexer::lex_ident(self : Lexer) -> String {
 }
 
 ///|
-fn Lexer::lex_int(self : Lexer) -> Int {
+fn Lexer::lex_int(self : Lexer) -> Int32 {
   let mut n = 0
   while self.i < self.src.length() {
     let cu = self.src.code_unit_at(self.i).to_int()
@@ -344,24 +344,24 @@ fn Lexer::lex_string(self : Lexer) -> String raise WitError {
 }
 
 ///|
-fn is_digit(cu : Int) -> Bool {
+fn is_digit(cu : Int32) -> Bool {
   cu >= 48 && cu <= 57
 }
 
 ///|
-fn is_ident_start(cu : Int) -> Bool {
+fn is_ident_start(cu : Int32) -> Bool {
   (cu >= 65 && cu <= 90) || (cu >= 97 && cu <= 122) || cu == 95 // _
 }
 
 ///|
-fn is_ident_continue(cu : Int) -> Bool {
+fn is_ident_continue(cu : Int32) -> Bool {
   is_ident_start(cu) || is_digit(cu) || cu == 45 // -
 }
 
 ///|
 priv struct Parser {
   toks : Array[Token]
-  mut i : Int
+  mut i : Int32
 }
 
 ///|

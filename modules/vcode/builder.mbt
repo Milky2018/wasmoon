@@ -38,7 +38,7 @@ pub fn[Inst] Builder::entry_block(self : Builder[Inst]) -> Block {
 ///|
 pub fn[Inst] Builder::parameter(
   self : Builder[Inst],
-  index : Int,
+  index : Int32,
 ) -> Value raise VCodeBuildError {
   match self.function.parameter_at(index) {
     Some(value) => value
@@ -61,7 +61,7 @@ pub fn[Inst] Builder::create_block(
 pub fn[Inst] Builder::block_parameter(
   self : Builder[Inst],
   block : Block,
-  index : Int,
+  index : Int32,
 ) -> Value raise VCodeBuildError {
   if !self.function.owns_block(block) {
     raise ForeignBlock(block~)
@@ -115,7 +115,7 @@ fn[Inst] Builder::validate_instruction(
   outputs : Array[Output],
   successors : Array[Edge],
   metadata : InstructionMetadata,
-) -> Array[Int]? raise VCodeBuildError {
+) -> Array[Int32]? raise VCodeBuildError {
   self.validate_inputs(inputs, metadata)
   for input in inputs {
     let expected = reg_class_for_value_type(
@@ -131,7 +131,7 @@ fn[Inst] Builder::validate_instruction(
       raise InvalidOperandConstraint
     }
   }
-  let mut input_tie_ids : Array[Int]? = None
+  let mut input_tie_ids : Array[Int32]? = None
   for output in outputs {
     let expected = reg_class_for_value_type(output.ty)
     match output.constraint {
@@ -204,7 +204,7 @@ fn[Inst] Builder::commit_instruction(
   successors : Array[Edge],
   clobbers : Array[PhysicalReg],
   metadata : InstructionMetadata,
-  input_tie_ids : Array[Int]?,
+  input_tie_ids : Array[Int32]?,
   payloads_owned : Bool,
 ) -> (Instruction, Array[Value]) raise VCodeBuildError {
   let instruction = Instruction::new(

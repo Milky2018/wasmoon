@@ -2,7 +2,7 @@
 struct CanonicalRealloc {
   func : CoreFuncRef
   async_state : AsyncState
-  owner_component_id : Int
+  owner_component_id : Int32
 }
 
 ///|

@@ -319,7 +319,7 @@ pub(all) enum VectorLoadKind {
   Splat(VectorLane)
   Extend(VectorLane, @native.Signedness)
   Zero(@native.AccessWidth)
-  Lane(VectorLane, Int)
+  Lane(VectorLane, Int32)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -343,7 +343,7 @@ pub fn VectorLoadSpec::new(
 ///|
 pub struct VectorStoreLaneSpec {
   lane : VectorLane
-  lane_index : Int
+  lane_index : Int32
   offset : UInt64
   endianness : @native.Endianness
   trap : @native.TrapReason?
@@ -352,7 +352,7 @@ pub struct VectorStoreLaneSpec {
 ///|
 pub fn VectorStoreLaneSpec::new(
   lane : VectorLane,
-  lane_index : Int,
+  lane_index : Int32,
   offset : UInt64,
   endianness : @native.Endianness,
   trap : @native.TrapReason?,
@@ -363,9 +363,9 @@ pub fn VectorStoreLaneSpec::new(
 ///|
 pub(all) enum VectorOp {
   Splat(VectorLane)
-  ExtractLane(VectorLane, Int, @native.Signedness?)
-  ReplaceLane(VectorLane, Int)
-  Shuffle(FixedArray[Int])
+  ExtractLane(VectorLane, Int32, @native.Signedness?)
+  ReplaceLane(VectorLane, Int32)
+  Shuffle(FixedArray[Int32])
   Swizzle
   Bitwise(VectorBitwiseOp)
   IntUnary(VectorLane, VectorIntUnaryOp)
@@ -383,9 +383,9 @@ pub(all) enum VectorOp {
 
 ///|
 pub(all) enum Operation {
-  I32Const(UInt)
+  I32Const(UInt32)
   I64Const(UInt64)
-  F32Const(UInt)
+  F32Const(UInt32)
   F64Const(UInt64)
   V128Const(UInt64, UInt64)
   NullPtr
@@ -409,9 +409,9 @@ pub(all) enum Operation {
   IntUnary(IntUnaryOp)
   IntBinary(IntBinaryOp)
   IntBinaryImmediate(IntBinaryOp, UInt64)
-  IntShiftImmediate(IntBinaryOp, Int)
+  IntShiftImmediate(IntBinaryOp, Int32)
   IntMultiplyAdd
-  IntAddShiftedLeft(Int)
+  IntAddShiftedLeft(Int32)
   IntHighMultiply(@native.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
@@ -422,9 +422,9 @@ pub(all) enum Operation {
   FloatCompare(FloatComparison)
   Convert(ConversionOp)
   Load(LoadSpec)
-  LoadIndexed(LoadSpec, Int)
+  LoadIndexed(LoadSpec, Int32)
   Store(StoreSpec)
-  StoreIndexed(StoreSpec, Int)
+  StoreIndexed(StoreSpec, Int32)
   AtomicLoad(AtomicSpec)
   AtomicStore(AtomicSpec)
   AtomicRmw(AtomicSpec, AtomicRmwOp)
@@ -565,7 +565,7 @@ fn is_float_lane(lane : VectorLane) -> Bool {
 }
 
 ///|
-fn lane_count(lane : VectorLane) -> Int {
+fn lane_count(lane : VectorLane) -> Int32 {
   match lane {
     I8x16 => 16
     I16x8 => 8
@@ -711,7 +711,7 @@ fn verify_relaxed_vector_operation(
 }
 
 ///|
-fn width_bits(width : @native.AccessWidth) -> Int {
+fn width_bits(width : @native.AccessWidth) -> Int32 {
   match width {
     W8 => 8
     W16 => 16
@@ -722,7 +722,7 @@ fn width_bits(width : @native.AccessWidth) -> Int {
 }
 
 ///|
-fn value_type_bits(ty : @native.ValueType) -> Int {
+fn value_type_bits(ty : @native.ValueType) -> Int32 {
   match ty {
     I32 | F32 => 32
     I64 | F64 | Ptr64 | GcRef64 => 64

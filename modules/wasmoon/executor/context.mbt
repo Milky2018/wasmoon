@@ -28,7 +28,7 @@ fn gc_stress_enabled() -> Bool {
 }
 
 ///|
-fn parse_decimal_int(value : String) -> Int? {
+fn parse_decimal_int(value : String) -> Int32? {
   if value.length() == 0 {
     return None
   }
@@ -44,7 +44,7 @@ fn parse_decimal_int(value : String) -> Int? {
 }
 
 ///|
-fn gc_stress_every() -> Int {
+fn gc_stress_every() -> Int32 {
   match @env.get_env_var(GC_STRESS_EVERY_ENV) {
     Some(raw_value) =>
       match parse_decimal_int(raw_value) {
@@ -62,8 +62,8 @@ fn gc_stress_every() -> Int {
 /// stack_height: stack depth when the block was entered (for stack unwinding)
 priv struct LabelInfo {
   is_loop : Bool
-  arity : Int
-  stack_height : Int
+  arity : Int32
+  stack_height : Int32
 } derive(Debug)
 
 ///|
@@ -106,18 +106,18 @@ struct ExecContext {
   execution : Array[ExecutionFrame]
   mut running : Bool
   frames : Array[@runtime.Frame]
-  mut current_frame : Int
+  mut current_frame : Int32
   labels : Array[LabelInfo] // Stack of labels for tracking branch arities
   gc_stress : Bool
-  gc_stress_every : Int
-  mut gc_stress_alloc_count : Int
+  gc_stress_every : Int32
+  mut gc_stress_alloc_count : Int32
   cancel : CancellationPoller?
   suspension_classifier : SuspensionClassifier?
   async_host_driver : @runtime.AsyncHostCallDriver?
   mut resume_action : ResumeAction?
   mut suspension_reason : SuspensionReason?
   cooperative : Bool
-  mut instructions_left : Int
+  mut instructions_left : Int32
   mut guest_input : @runtime.GuestContinuationInput?
   mut guest_pending : @runtime.GuestContinuationBody?
   mut suspension_roots : Array[@types.Value]
@@ -127,10 +127,10 @@ struct ExecContext {
 fn ExecContext::ExecContext(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  cancel? : (() -> Bool)? = None,
-  classify_suspension? : (@runtime.RuntimeError) -> Int64? = fn(_) { None },
-  async_host_driver? : @runtime.AsyncHostCallDriver? = None,
-  cooperative? : Bool = false,
+  cancel~ : (() -> Bool)? = None,
+  classify_suspension~ : (@runtime.RuntimeError) -> Int64? = fn(_) { None },
+  async_host_driver~ : @runtime.AsyncHostCallDriver? = None,
+  cooperative~ : Bool = false,
 ) -> ExecContext {
   {
     stack: Stack(max_values=store.interpreter_limits.max_values),
@@ -170,7 +170,7 @@ fn ExecContext::check_cancellation(self : ExecContext) -> Unit raise {
 fn ExecContext::push_label(
   self : ExecContext,
   is_loop : Bool,
-  arity : Int,
+  arity : Int32,
 ) -> Unit {
   self.labels.push({ is_loop, arity, stack_height: self.stack.size(), })
 }
@@ -185,7 +185,7 @@ fn ExecContext::pop_label(self : ExecContext) -> Unit {
 
 ///|
 /// Get the arity for a branch to the given depth
-fn ExecContext::get_branch_arity(self : ExecContext, depth : Int) -> Int {
+fn ExecContext::get_branch_arity(self : ExecContext, depth : Int32) -> Int32 {
   let label_idx = self.labels.length() - 1 - depth
   if label_idx >= 0 && label_idx < self.labels.length() {
     self.labels[label_idx].arity
@@ -196,7 +196,7 @@ fn ExecContext::get_branch_arity(self : ExecContext, depth : Int) -> Int {
 
 ///|
 /// Restore stack to the given height (discard values above it)
-fn ExecContext::restore_stack_to(self : ExecContext, height : Int) -> Unit {
+fn ExecContext::restore_stack_to(self : ExecContext, height : Int32) -> Unit {
   while self.stack.size() > height {
     try self.stack.pop() |> ignore catch {
       _ => break

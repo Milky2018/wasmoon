@@ -9,7 +9,7 @@ fn string_to_utf8(s : String) -> Bytes {
 
 ///|
 /// Convert UTF-8 bytes to string
-fn utf8_to_string(bytes : Bytes, len : Int) -> String {
+fn utf8_to_string(bytes : Bytes, len : Int32) -> String {
   @utf8.decode_lossy(bytes[:len])
 }
 

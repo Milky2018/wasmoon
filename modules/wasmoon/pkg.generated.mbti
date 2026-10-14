@@ -3,60 +3,16 @@ package "Milky2018/wasmoon"
 
 import {
   "Milky2018/milkir",
-  "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir/frontend/embedding",
-  "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/context/layout",
-  "moonbitlang/core/debug",
 }
 
 // Values
-pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly raise WasmCompilerPipelineError
-
-pub fn plan_wasm_function_with_compiler_infra(@embedding.EmbeddingEnvironment, @types.Module, Int, @wasmoon_jit.NativeTarget, opt_level? : Int) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError
-
-pub fn runtime_assembly() -> RuntimeAssembly
-
 pub fn wasm_frontend_embedding_environment(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?, cancellation_safepoints? : Bool, context_shape? : @layout.ContextShape) -> @embedding.EmbeddingEnvironment
 
 // Errors
-pub suberror WasmCompilerPipelineError {
-  WasmCompilerPipelineFailure(message~ : String)
-} derive(Eq, @debug.Debug)
-pub fn WasmCompilerPipelineError::equal(Self, Self) -> Bool
-pub fn WasmCompilerPipelineError::not_equal(Self, Self) -> Bool
-pub fn WasmCompilerPipelineError::output(Self, &Logger) -> Unit
-pub fn WasmCompilerPipelineError::to_repr(Self) -> @debug.Repr
-pub fn WasmCompilerPipelineError::to_string(Self) -> String
-pub impl Show for WasmCompilerPipelineError
 
 // Types and methods
-pub(all) struct CompilerInfrastructureAssembly {
-  signature : @milkir.Signature
-  milkir_function : @milkir.Function
-  code_object : @wasmoon_jit.JitCodeObject
-}
-
-pub(all) struct RuntimeAssembly {
-  product_module : String
-  owned_components : Array[RuntimeComponent]
-  product_support_modules : Array[String]
-  reusable_modules : Array[String]
-} derive(Eq, @debug.Debug)
-pub fn RuntimeAssembly::equal(Self, Self) -> Bool
-pub fn RuntimeAssembly::not_equal(Self, Self) -> Bool
-pub fn RuntimeAssembly::to_repr(Self) -> @debug.Repr
-
-pub(all) enum RuntimeComponent {
-  Cli
-  RuntimeObjects
-  InterpreterExecutor
-  WasiPreview1
-  JitSelection
-} derive(Eq, @debug.Debug)
-pub fn RuntimeComponent::equal(Self, Self) -> Bool
-pub fn RuntimeComponent::not_equal(Self, Self) -> Bool
-pub fn RuntimeComponent::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

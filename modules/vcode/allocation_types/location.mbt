@@ -9,7 +9,7 @@ pub(all) struct AllocationLocation {
 } derive(Eq)
 
 ///|
-fn reg_class_code(class : RegClass) -> Int {
+fn reg_class_code(class : RegClass) -> Int32 {
   match class {
     Int => 0
     Float => 1
@@ -19,7 +19,7 @@ fn reg_class_code(class : RegClass) -> Int {
 }
 
 ///|
-fn reg_class_from_code(code : Int) -> RegClass {
+fn reg_class_from_code(code : Int32) -> RegClass {
   match code {
     0 => Int
     1 => Float
@@ -34,7 +34,7 @@ pub fn AllocationLocation::reg(reg : PhysicalReg) -> AllocationLocation {
 }
 
 ///|
-pub fn AllocationLocation::spill(index : Int) -> AllocationLocation {
+pub fn AllocationLocation::spill(index : Int32) -> AllocationLocation {
   { encoded: (index.to_int64() << 3) | 4L, }
 }
 
@@ -59,7 +59,7 @@ pub fn AllocationLocation::register_unchecked(
 }
 
 ///|
-pub fn AllocationLocation::spill_index(self : AllocationLocation) -> Int? {
+pub fn AllocationLocation::spill_index(self : AllocationLocation) -> Int32? {
   if self.is_spill() {
     Some(self.spill_index_unchecked())
   } else {
@@ -71,7 +71,7 @@ pub fn AllocationLocation::spill_index(self : AllocationLocation) -> Int? {
 /// Decode a spill location after `is_spill` has been established.
 pub fn AllocationLocation::spill_index_unchecked(
   self : AllocationLocation,
-) -> Int {
+) -> Int32 {
   (self.encoded >> 3).to_int()
 }
 

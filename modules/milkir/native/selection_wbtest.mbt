@@ -1,24 +1,24 @@
 ///|
 priv struct LoweringTrace {
   operations : Array[@lowering.Operation]
-  operands : Array[Array[Int]]
-  operation_blocks : Array[Int]
+  operands : Array[Array[Int32]]
+  operation_blocks : Array[Int32]
   terminators : Array[@lowering.TargetTerminator]
 }
 
 ///|
 fn trace_lowering(
   function : @milkir.Function,
-  folds_unsigned_index_into_memory? : Bool = false,
-  compare_immediates? : Bool = false,
+  folds_unsigned_index_into_memory~ : Bool = false,
+  compare_immediates~ : Bool = false,
 ) -> LoweringTrace raise {
-  let operands : Array[Array[Int]] = []
+  let operands : Array[Array[Int32]] = []
   let operations : Array[@lowering.Operation] = []
-  let operation_blocks : Array[Int] = []
+  let operation_blocks : Array[Int32] = []
   let terminators : Array[@lowering.TargetTerminator] = []
   let next_value = Ref(0)
   let next_block = Ref(1)
-  let fresh_values = fn(count : Int) -> Array[Int] {
+  let fresh_values = fn(count : Int32) -> Array[Int32] {
     Array::makei(count, _ => {
       let value = next_value.val
       next_value.val += 1

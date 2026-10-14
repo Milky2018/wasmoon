@@ -231,6 +231,9 @@ fn build_command() -> @argparse.Command {
           FlagArg("http", about="Enable WASI HTTP interfaces for the command", requires=[
             "run",
           ]),
+          FlagArg("debug", about="Enable HTTP command diagnostics", requires=[
+            "http",
+          ]),
           FlagArg(
             "run",
             about="Run a pinned WASI Preview 2 or Preview 3 command component",
@@ -338,6 +341,10 @@ async fn main {
     _ => false
   }
   if uses_http {
+    if matches.subcommand is Some(("component", sub)) &&
+      sub.flags.get("debug") is Some(true) {
+      @logger.enable_debug()
+    }
     @async_native.install_event_loop() catch {
       error => {
         @logger.error("Failed to initialize host event loop: \{error}")
@@ -479,7 +486,7 @@ async fn main {
       )
     }
     Some(("explore", sub)) => {
-      let func_idx : Int? = match sub.values.get("func") {
+      let func_idx : Int32? = match sub.values.get("func") {
         Some([text]) =>
           Some(@string.parse_int(text)) catch {
             _ => {

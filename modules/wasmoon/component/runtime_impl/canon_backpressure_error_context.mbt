@@ -3,7 +3,7 @@
 /// (group: backpressure + error-context)
 
 ///|
-fn parse_i32_like_arg(v : @types.Value) -> Int? {
+fn parse_i32_like_arg(v : @types.Value) -> Int32? {
   match v {
     I32(n) => Some(n)
     _ => None

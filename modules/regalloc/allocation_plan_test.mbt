@@ -1,24 +1,24 @@
 ///|
 priv struct TestFunction {
-  value_count : Int
+  value_count : Int32
   instructions : Array[Array[@regalloc.Operand]]
   block_parameters : Array[@regalloc.VirtualReg]
 }
 
 ///|
 priv struct CfgTestFunction {
-  value_count : Int
-  blocks : Array[Array[Int]]
+  value_count : Int32
+  blocks : Array[Array[Int32]]
   instructions : Array[Array[@regalloc.Operand]]
   clobbers : Array[Array[@regalloc.PhysicalReg]]
-  successors : Array[Array[Int]]
+  successors : Array[Array[Int32]]
   entry_values : Array[@regalloc.VirtualReg]
   parameters : Array[Array[@regalloc.VirtualReg]]
   edge_arguments : Array[Array[Array[@regalloc.VirtualReg]]]
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn value_count(self) -> Int {
+impl FunctionView for CfgTestFunction with fn value_count(self) -> Int32 {
   self.value_count
 }
 
@@ -28,7 +28,7 @@ impl FunctionView for CfgTestFunction with fn value_class(_self, _value) -> @reg
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn value_spill_size(_self, _value) -> Int {
+impl FunctionView for CfgTestFunction with fn value_spill_size(_self, _value) -> Int32 {
   8
 }
 
@@ -36,7 +36,7 @@ impl FunctionView for CfgTestFunction with fn value_spill_size(_self, _value) ->
 impl FunctionView for CfgTestFunction with fn value_spill_alignment(
   _self,
   _value,
-) -> Int {
+) -> Int32 {
   8
 }
 
@@ -50,7 +50,7 @@ impl FunctionView for CfgTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn entry_value_count(self) -> Int {
+impl FunctionView for CfgTestFunction with fn entry_value_count(self) -> Int32 {
   self.entry_values.length()
 }
 
@@ -60,17 +60,17 @@ impl FunctionView for CfgTestFunction with fn entry_value_at(self, parameter) ->
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_count(self) -> Int {
+impl FunctionView for CfgTestFunction with fn block_count(self) -> Int32 {
   self.blocks.length()
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_id_at(_self, index) -> Int {
+impl FunctionView for CfgTestFunction with fn block_id_at(_self, index) -> Int32 {
   index
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_parameter_count(self, block) -> Int {
+impl FunctionView for CfgTestFunction with fn block_parameter_count(self, block) -> Int32 {
   self.parameters[block].length()
 }
 
@@ -87,7 +87,7 @@ impl FunctionView for CfgTestFunction with fn block_parameter_at(
 impl FunctionView for CfgTestFunction with fn block_instruction_count(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.blocks[block].length()
 }
 
@@ -96,12 +96,12 @@ impl FunctionView for CfgTestFunction with fn block_instruction_at(
   self,
   block,
   instruction,
-) -> Int {
+) -> Int32 {
   self.blocks[block][instruction]
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_successor_count(self, block) -> Int {
+impl FunctionView for CfgTestFunction with fn block_successor_count(self, block) -> Int32 {
   self.successors[block].length()
 }
 
@@ -110,7 +110,7 @@ impl FunctionView for CfgTestFunction with fn block_successor_at(
   self,
   block,
   successor,
-) -> Int {
+) -> Int32 {
   self.successors[block][successor]
 }
 
@@ -119,7 +119,7 @@ impl FunctionView for CfgTestFunction with fn edge_argument_count(
   self,
   block,
   successor,
-) -> Int {
+) -> Int32 {
   self.edge_arguments[block][successor].length()
 }
 
@@ -150,7 +150,7 @@ impl FunctionView for CfgTestFunction with fn instruction_clobbers(
 }
 
 ///|
-impl FunctionView for TestFunction with fn value_count(self) -> Int {
+impl FunctionView for TestFunction with fn value_count(self) -> Int32 {
   self.value_count
 }
 
@@ -160,12 +160,12 @@ impl FunctionView for TestFunction with fn value_class(_self, _value) -> @regall
 }
 
 ///|
-impl FunctionView for TestFunction with fn value_spill_size(_self, _value) -> Int {
+impl FunctionView for TestFunction with fn value_spill_size(_self, _value) -> Int32 {
   8
 }
 
 ///|
-impl FunctionView for TestFunction with fn value_spill_alignment(_self, _value) -> Int {
+impl FunctionView for TestFunction with fn value_spill_alignment(_self, _value) -> Int32 {
   8
 }
 
@@ -179,7 +179,7 @@ impl FunctionView for TestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for TestFunction with fn entry_value_count(self) -> Int {
+impl FunctionView for TestFunction with fn entry_value_count(self) -> Int32 {
   self.block_parameters.length()
 }
 
@@ -189,17 +189,17 @@ impl FunctionView for TestFunction with fn entry_value_at(self, parameter) -> @r
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_count(_self) -> Int {
+impl FunctionView for TestFunction with fn block_count(_self) -> Int32 {
   1
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_id_at(_self, index) -> Int {
+impl FunctionView for TestFunction with fn block_id_at(_self, index) -> Int32 {
   index
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_parameter_count(_self, _block) -> Int {
+impl FunctionView for TestFunction with fn block_parameter_count(_self, _block) -> Int32 {
   0
 }
 
@@ -213,7 +213,7 @@ impl FunctionView for TestFunction with fn block_parameter_at(
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_instruction_count(self, _block) -> Int {
+impl FunctionView for TestFunction with fn block_instruction_count(self, _block) -> Int32 {
   self.instructions.length()
 }
 
@@ -222,12 +222,12 @@ impl FunctionView for TestFunction with fn block_instruction_at(
   _self,
   _block,
   instruction,
-) -> Int {
+) -> Int32 {
   instruction
 }
 
 ///|
-impl FunctionView for TestFunction with fn block_successor_count(_self, _block) -> Int {
+impl FunctionView for TestFunction with fn block_successor_count(_self, _block) -> Int32 {
   0
 }
 
@@ -236,7 +236,7 @@ impl FunctionView for TestFunction with fn block_successor_at(
   _self,
   _block,
   _successor,
-) -> Int {
+) -> Int32 {
   abort("invalid block successor index")
 }
 
@@ -245,7 +245,7 @@ impl FunctionView for TestFunction with fn edge_argument_count(
   _self,
   _block,
   _successor,
-) -> Int {
+) -> Int32 {
   0
 }
 
@@ -277,12 +277,12 @@ impl FunctionView for TestFunction with fn instruction_clobbers(
 }
 
 ///|
-fn value(id : Int) -> @regalloc.VirtualReg {
+fn value(id : Int32) -> @regalloc.VirtualReg {
   { id, class: Int, }
 }
 
 ///|
-fn int_reg(id : Int) -> @regalloc.PhysicalReg {
+fn int_reg(id : Int32) -> @regalloc.PhysicalReg {
   { id, class: Int, }
 }
 

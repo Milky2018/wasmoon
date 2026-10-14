@@ -1,15 +1,15 @@
 ///|
 pub suberror CodeObjectVerifyError {
   EmptyCode
-  MisalignedCodeSize(size~ : Int)
-  InvalidRelocation(index~ : Int, message~ : String)
-  DuplicateRelocationOffset(offset~ : Int)
-  InvalidSourceSite(index~ : Int, offset~ : Int)
-  InvalidTrapSite(index~ : Int, offset~ : Int)
-  InvalidSafepointSite(index~ : Int, offset~ : Int)
-  InvalidRootLocation(safepoint~ : Int, root~ : Int)
-  InvalidStackMap(safepoint~ : Int)
-  InvalidUnwindDirective(index~ : Int, message~ : String)
+  MisalignedCodeSize(size~ : Int32)
+  InvalidRelocation(index~ : Int32, message~ : String)
+  DuplicateRelocationOffset(offset~ : Int32)
+  InvalidSourceSite(index~ : Int32, offset~ : Int32)
+  InvalidTrapSite(index~ : Int32, offset~ : Int32)
+  InvalidSafepointSite(index~ : Int32, offset~ : Int32)
+  InvalidRootLocation(safepoint~ : Int32, root~ : Int32)
+  InvalidStackMap(safepoint~ : Int32)
+  InvalidUnwindDirective(index~ : Int32, message~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -18,7 +18,7 @@ pub impl Show for CodeObjectVerifyError with fn output(self, logger) {
 }
 
 ///|
-fn instruction_alignment(architecture : Architecture) -> Int {
+fn instruction_alignment(architecture : Architecture) -> Int32 {
   match architecture {
     AArch64 => 4
     X64 => 1
@@ -26,7 +26,7 @@ fn instruction_alignment(architecture : Architecture) -> Int {
 }
 
 ///|
-fn relocation_width(kind : RelocationKind) -> Int {
+fn relocation_width(kind : RelocationKind) -> Int32 {
   match kind {
     AArch64Call26
     | AArch64Jump26
@@ -59,8 +59,8 @@ fn relocation_matches_architecture(
 ///|
 fn valid_code_offset(
   architecture : Architecture,
-  code_size : Int,
-  offset : Int,
+  code_size : Int32,
+  offset : Int32,
 ) -> Bool {
   offset >= 0 &&
   offset < code_size &&
@@ -71,7 +71,7 @@ fn valid_code_offset(
 fn valid_unwind_register(
   architecture : Architecture,
   bank : RegisterBank,
-  id : Int,
+  id : Int32,
 ) -> Bool {
   match (architecture, bank) {
     (AArch64, Int) => id >= 0 && id < 31
@@ -83,14 +83,14 @@ fn valid_unwind_register(
 ///|
 fn verify_unwind(
   architecture : Architecture,
-  code_size : Int,
+  code_size : Int32,
   unwind : Array[UnwindDirective],
 ) -> Unit raise CodeObjectVerifyError {
   let mut previous_offset = 0
   let mut stack_depth = 0
   let cfa_bias = if architecture == X64 { 8 } else { 0 }
-  let saved_registers : Array[(RegisterBank, Int)] = []
-  let saved_locations : Array[Int] = []
+  let saved_registers : Array[(RegisterBank, Int32)] = []
+  let saved_locations : Array[Int32] = []
   let mut frame_pointer_defined = false
   for index, directive in unwind {
     if directive.offset <= 0 ||
@@ -149,7 +149,7 @@ fn verify_unwind(
 }
 
 ///|
-fn read_u32_le(code : Array[Byte], offset : Int) -> UInt {
+fn read_u32_le(code : Array[Byte], offset : Int32) -> UInt32 {
   code[offset].to_uint() |
   (code[offset + 1].to_uint() << 8) |
   (code[offset + 2].to_uint() << 16) |
@@ -181,7 +181,7 @@ pub fn UnlinkedCodeObject::verify(
   if self.architecture == AArch64 && code_size % 4 != 0 {
     raise MisalignedCodeSize(size=code_size)
   }
-  let relocation_offsets : Array[Int] = []
+  let relocation_offsets : Array[Int32] = []
   for index, relocation in self.relocations {
     let width = relocation_width(relocation.kind)
     if !relocation_matches_architecture(self.architecture, relocation.kind) ||
@@ -229,7 +229,7 @@ pub fn UnlinkedCodeObject::verify(
       raise InvalidStackMap(safepoint=index)
     }
   }
-  let stack_map_ids : Array[Int] = []
+  let stack_map_ids : Array[Int32] = []
   for index, safepoint in self.safepoints {
     if safepoint.stack_map is Some(stack_map) {
       if stack_map_ids.contains(stack_map.id) {
@@ -250,11 +250,11 @@ pub fn UnlinkedCodeObject::verify(
 pub fn build(
   architecture : Architecture,
   code : Array[Byte],
-  relocations? : Array[Relocation] = [],
-  sources? : Array[SourceSite] = [],
-  traps? : Array[TrapSite] = [],
-  safepoints? : Array[SafepointSite] = [],
-  unwind? : Array[UnwindDirective] = [],
+  relocations~ : Array[Relocation] = [],
+  sources~ : Array[SourceSite] = [],
+  traps~ : Array[TrapSite] = [],
+  safepoints~ : Array[SafepointSite] = [],
+  unwind~ : Array[UnwindDirective] = [],
 ) -> UnlinkedCodeObject raise CodeObjectVerifyError {
   let object = {
     architecture,

@@ -22,10 +22,10 @@ pub(all) suberror CHeapError {
 // Object kinds (must match GC_KIND_* in gc_heap.h)
 
 ///|
-const GC_KIND_STRUCT : Int = 1
+const GC_KIND_STRUCT : Int32 = 1
 
 ///|
-const GC_KIND_ARRAY : Int = 2
+const GC_KIND_ARRAY : Int32 = 2
 
 // ============================================================
 // CHeap Type
@@ -43,7 +43,7 @@ pub struct CHeap {
 
 ///|
 /// Create a new C heap with the given initial capacity
-pub fn CHeap::CHeap(capacity? : Int = @types.ONE_MIB_BYTES) -> CHeap {
+pub fn CHeap::CHeap(capacity~ : Int32 = @types.ONE_MIB_BYTES) -> CHeap {
   let ptr = c_gc_heap_new(capacity.to_int64())
   { ptr, }
 }
@@ -259,9 +259,9 @@ fn slots_to_words(values : Array[@types.Value]) -> FixedArray[Int64] {
 /// Returns gc_ref (0-based index for external use)
 pub fn CHeap::alloc_struct(
   self : CHeap,
-  type_idx : Int,
+  type_idx : Int32,
   fields : Array[@types.Value],
-) -> Int raise CHeapError {
+) -> Int32 raise CHeapError {
   let num_fields = fields.length()
   let raw_fields = slots_to_words(fields)
   let gc_ref = c_gc_heap_alloc_struct_wide(
@@ -281,8 +281,8 @@ pub fn CHeap::alloc_struct(
 /// Get a struct field value
 pub fn CHeap::struct_get(
   self : CHeap,
-  struct_idx : Int,
-  field_idx : Int,
+  struct_idx : Int32,
+  field_idx : Int32,
   field_type : @types.ValueType,
 ) -> @types.Value {
   // Convert 0-based to 1-based for C heap
@@ -296,8 +296,8 @@ pub fn CHeap::struct_get(
 /// Set a struct field value
 pub fn CHeap::struct_set(
   self : CHeap,
-  struct_idx : Int,
-  field_idx : Int,
+  struct_idx : Int32,
+  field_idx : Int32,
   value : @types.Value,
 ) -> Unit {
   let gc_ref = struct_idx + 1
@@ -314,10 +314,10 @@ pub fn CHeap::struct_set(
 /// Returns gc_ref (0-based index for external use)
 pub fn CHeap::alloc_array(
   self : CHeap,
-  type_idx : Int,
-  len : Int,
+  type_idx : Int32,
+  len : Int32,
   init_value : @types.Value,
-) -> Int raise CHeapError {
+) -> Int32 raise CHeapError {
   let slot = value_to_slot(init_value)
   let gc_ref = c_gc_heap_alloc_array_wide(
     self.ptr,
@@ -337,9 +337,9 @@ pub fn CHeap::alloc_array(
 /// Returns gc_ref (0-based index for external use)
 pub fn CHeap::alloc_array_from_values(
   self : CHeap,
-  type_idx : Int,
+  type_idx : Int32,
   elements : Array[@types.Value],
-) -> Int raise CHeapError {
+) -> Int32 raise CHeapError {
   let len = elements.length()
   let raw_values = slots_to_words(elements)
   let gc_ref = c_gc_heap_alloc_array_from_slots(
@@ -356,7 +356,7 @@ pub fn CHeap::alloc_array_from_values(
 
 ///|
 /// Get array length
-pub fn CHeap::array_len(self : CHeap, array_idx : Int) -> Int {
+pub fn CHeap::array_len(self : CHeap, array_idx : Int32) -> Int32 {
   let gc_ref = array_idx + 1
   c_gc_heap_array_len(self.ptr, gc_ref)
 }
@@ -365,8 +365,8 @@ pub fn CHeap::array_len(self : CHeap, array_idx : Int) -> Int {
 /// Get an array element
 pub fn CHeap::array_get(
   self : CHeap,
-  array_idx : Int,
-  elem_idx : Int,
+  array_idx : Int32,
+  elem_idx : Int32,
   elem_type : @types.ValueType,
 ) -> @types.Value raise CHeapError {
   let gc_ref = array_idx + 1
@@ -384,8 +384,8 @@ pub fn CHeap::array_get(
 /// Set an array element
 pub fn CHeap::array_set(
   self : CHeap,
-  array_idx : Int,
-  elem_idx : Int,
+  array_idx : Int32,
+  elem_idx : Int32,
   value : @types.Value,
 ) -> Unit raise CHeapError {
   let gc_ref = array_idx + 1
@@ -402,10 +402,10 @@ pub fn CHeap::array_set(
 /// Fill array elements with a value
 pub fn CHeap::array_fill(
   self : CHeap,
-  array_idx : Int,
-  offset : Int,
+  array_idx : Int32,
+  offset : Int32,
   value : @types.Value,
-  count : Int,
+  count : Int32,
 ) -> Unit raise CHeapError {
   let gc_ref = array_idx + 1
   // Check bounds before filling
@@ -421,11 +421,11 @@ pub fn CHeap::array_fill(
 /// Copy array elements
 pub fn CHeap::array_copy(
   self : CHeap,
-  dst_idx : Int,
-  dst_offset : Int,
-  src_idx : Int,
-  src_offset : Int,
-  count : Int,
+  dst_idx : Int32,
+  dst_offset : Int32,
+  src_idx : Int32,
+  src_offset : Int32,
+  count : Int32,
 ) -> Unit raise CHeapError {
   let dst_ref = dst_idx + 1
   let src_ref = src_idx + 1
@@ -455,33 +455,33 @@ pub fn CHeap::array_copy(
 
 ///|
 /// Get the type index of an object
-pub fn CHeap::get_type_idx(self : CHeap, idx : Int) -> Int {
+pub fn CHeap::get_type_idx(self : CHeap, idx : Int32) -> Int32 {
   let gc_ref = idx + 1
   c_gc_heap_get_type_idx(self.ptr, gc_ref)
 }
 
 ///|
 /// Get the kind of an object (1=struct, 2=array)
-pub fn CHeap::get_kind(self : CHeap, idx : Int) -> Int {
+pub fn CHeap::get_kind(self : CHeap, idx : Int32) -> Int32 {
   let gc_ref = idx + 1
   c_gc_heap_get_kind(self.ptr, gc_ref)
 }
 
 ///|
 /// Check if this is a struct
-pub fn CHeap::is_struct(self : CHeap, idx : Int) -> Bool {
+pub fn CHeap::is_struct(self : CHeap, idx : Int32) -> Bool {
   self.get_kind(idx) == GC_KIND_STRUCT
 }
 
 ///|
 /// Check if this is an array
-pub fn CHeap::is_array(self : CHeap, idx : Int) -> Bool {
+pub fn CHeap::is_array(self : CHeap, idx : Int32) -> Bool {
   self.get_kind(idx) == GC_KIND_ARRAY
 }
 
 ///|
 /// Check if an object reference is valid
-pub fn CHeap::is_valid(self : CHeap, idx : Int) -> Bool {
+pub fn CHeap::is_valid(self : CHeap, idx : Int32) -> Bool {
   let gc_ref = idx + 1
   c_gc_heap_is_valid(self.ptr, gc_ref) != 0
 }
@@ -493,7 +493,7 @@ pub fn CHeap::is_valid(self : CHeap, idx : Int) -> Bool {
 ///|
 /// Perform garbage collection with given roots
 /// Returns the number of objects collected
-pub fn CHeap::collect(self : CHeap, roots : Array[@types.Value]) -> Int {
+pub fn CHeap::collect(self : CHeap, roots : Array[@types.Value]) -> Int32 {
   let num_roots = roots.length()
   let raw_roots = FixedArray::makei(num_roots, fn(i) { value_to_i64(roots[i]) })
   c_gc_heap_collect(self.ptr, raw_roots, num_roots)
@@ -501,7 +501,7 @@ pub fn CHeap::collect(self : CHeap, roots : Array[@types.Value]) -> Int {
 
 ///|
 /// Verify heap invariants (for debugging)
-pub fn CHeap::verify(self : CHeap, verbose? : Bool = false) -> Bool {
+pub fn CHeap::verify(self : CHeap, verbose~ : Bool = false) -> Bool {
   c_gc_heap_verify(self.ptr, if verbose { 1 } else { 0 }) != 0
 }
 
@@ -517,7 +517,7 @@ pub fn CHeap::get_base(self : CHeap) -> Int64 {
 
 ///|
 /// Get object offset in heap (for JIT inline access)
-pub fn CHeap::get_offset(self : CHeap, idx : Int) -> Int {
+pub fn CHeap::get_offset(self : CHeap, idx : Int32) -> Int32 {
   let gc_ref = idx + 1
   c_gc_heap_get_offset(self.ptr, gc_ref)
 }
@@ -552,63 +552,69 @@ pub fn CHeap::get_usage_ratio(self : CHeap) -> Double {
 
 ///|
 /// Get number of objects in heap
-pub fn CHeap::get_object_count(self : CHeap) -> Int {
+pub fn CHeap::get_object_count(self : CHeap) -> Int32 {
   c_gc_heap_get_object_count(self.ptr)
 }
 
 ///|
 /// Get total number of write-barrier calls recorded
-pub fn CHeap::get_barrier_writes(self : CHeap) -> Int {
+pub fn CHeap::get_barrier_writes(self : CHeap) -> Int32 {
   c_gc_heap_get_barrier_writes(self.ptr)
 }
 
 ///|
 /// Get total number of allocations since heap creation
-pub fn CHeap::get_total_allocations(self : CHeap) -> Int {
+pub fn CHeap::get_total_allocations(self : CHeap) -> Int32 {
   c_gc_heap_get_total_allocations(self.ptr)
 }
 
 ///|
 /// Get total number of GC cycles performed
-pub fn CHeap::get_total_collections(self : CHeap) -> Int {
+pub fn CHeap::get_total_collections(self : CHeap) -> Int32 {
   c_gc_heap_get_total_collections(self.ptr)
 }
 
 ///|
 /// Check if GC should be triggered based on heap usage
 /// Default threshold is 75% of capacity
-pub fn CHeap::should_collect(self : CHeap, threshold? : Double = 0.75) -> Bool {
+pub fn CHeap::should_collect(self : CHeap, threshold~ : Double = 0.75) -> Bool {
   self.get_usage_ratio() >= threshold
 }
 
 ///|
 /// Configure allocation fault injection for debugging
-pub fn gc_debug_set_fail_alloc(fail_at : Int, fail_every? : Int = 0) -> Unit {
+pub fn gc_debug_set_fail_alloc(
+  fail_at : Int32,
+  fail_every~ : Int32 = 0,
+) -> Unit {
   c_gc_heap_debug_set_fail_alloc(fail_at, fail_every)
 }
 
 ///|
 #borrow(pointer)
-extern "c" fn get_runtime_type(pointer : GCHeapHandle, reference : Int) -> Int = "wasmoon_gc_heap_get_runtime_type"
+extern "c" fn get_runtime_type(
+  pointer : GCHeapHandle,
+  reference : Int32,
+) -> Int32 = "wasmoon_gc_heap_get_runtime_type"
 
 ///|
 #borrow(pointer)
 extern "c" fn set_runtime_type(
   pointer : GCHeapHandle,
-  reference : Int,
-  identity : Int,
+  reference : Int32,
+  identity : Int32,
 ) -> Unit = "wasmoon_gc_heap_set_runtime_type"
 
 ///|
-pub fn CHeap::runtime_type(self : CHeap, index : Int) -> Int {
+pub fn CHeap::runtime_type(self : CHeap, index : Int32) -> Int32 {
   get_runtime_type(self.ptr, index + 1)
 }
 
 ///|
 pub fn CHeap::set_runtime_type(
   self : CHeap,
-  index : Int,
-  identity : Int,
+  index : Int32,
+  identity : Int32,
 ) -> Unit {
   set_runtime_type(self.ptr, index + 1, identity)
 }

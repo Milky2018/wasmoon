@@ -2,12 +2,12 @@
 pub suberror NativeLowerError {
   InvalidMilkIR(message~ : String)
   UnsupportedOperation(
-    block_id~ : Int,
-    instruction_id~ : Int,
+    block_id~ : Int32,
+    instruction_id~ : Int32,
     message~ : String
   )
-  MissingValue(value_id~ : Int)
-  MissingBlock(block_id~ : Int)
+  MissingValue(value_id~ : Int32)
+  MissingBlock(block_id~ : Int32)
   InvalidTargetLowering(message~ : String)
 } derive(Debug, Eq)
 
@@ -19,7 +19,7 @@ pub impl Show for NativeLowerError with fn output(self, logger) {
 ///|
 priv struct DialectLowering {
   name : String
-  environment_parameters : Array[(Int, @native_types.ValueType)]
+  environment_parameters : Array[(Int32, @native_types.ValueType)]
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?
   resolve_context_field : (@milkir.ContextField) -> @native_types.EnvironmentField?
 }
@@ -40,7 +40,7 @@ fn lower_type(ty : @milkir.Type) -> @native_types.ValueType {
 ///|
 pub fn function_signature(
   function : @milkir.Function,
-  environment_parameters? : Array[(Int, @native_types.ValueType)] = [],
+  environment_parameters~ : Array[(Int32, @native_types.ValueType)] = [],
 ) -> @native_types.Signature {
   let parameters = function.params.map(parameter => lower_type(parameter.1))
   for binding in environment_parameters {
@@ -162,7 +162,7 @@ fn lower_float_comparison(op : @milkir.FloatCC) -> @lowering.FloatComparison {
 }
 
 ///|
-fn lower_width(bits : Int) -> @native_types.AccessWidth? {
+fn lower_width(bits : Int32) -> @native_types.AccessWidth? {
   match bits {
     8 => Some(W8)
     16 => Some(W16)
@@ -224,7 +224,7 @@ fn lower_conversion(
 ///|
 fn mapped_block(
   blocks : Array[@lowering.Block?],
-  block_id : Int,
+  block_id : Int32,
 ) -> @lowering.Block raise NativeLowerError {
   if block_id < 0 || block_id >= blocks.length() {
     raise MissingBlock(block_id~)
@@ -268,7 +268,7 @@ fn emit_one(
   operands : Array[@lowering.Value],
   result_type : @native_types.ValueType,
   source : @native_types.SourceLocation?,
-  instruction_id : Int,
+  instruction_id : Int32,
 ) -> @lowering.Value raise NativeLowerError {
   let results = builder.emit_with_metadata(
     operation,
@@ -291,7 +291,7 @@ fn lower_bitcast_value(
   source_type : @milkir.Type,
   result_type : @milkir.Type,
   source : @native_types.SourceLocation?,
-  instruction_id : Int,
+  instruction_id : Int32,
 ) -> @lowering.Value raise NativeLowerError {
   let from = lower_type(source_type)
   let to = lower_type(result_type)
@@ -370,7 +370,7 @@ fn lower_pointer_value(
   facts : SelectionFacts,
   source : @milkir.Value,
   location : @native_types.SourceLocation?,
-  instruction_id : Int,
+  instruction_id : Int32,
 ) -> @lowering.Value raise NativeLowerError {
   let mapped = demand_value(builder, values, value_types, facts, source)
   match value_types[source.id] {
@@ -401,7 +401,7 @@ fn lower_address(
   base : @milkir.Value,
   offset : @milkir.Value,
   source : @native_types.SourceLocation?,
-  instruction_id : Int,
+  instruction_id : Int32,
 ) -> @lowering.Value raise NativeLowerError {
   let pointer = lower_pointer_value(
     builder, values, value_types, facts, base, source, instruction_id,
@@ -459,7 +459,7 @@ fn lower_memory_instruction(
   let selected_address = fn(
     base : @milkir.Value,
     offset : @milkir.Value,
-  ) -> (Array[@lowering.Value], UInt64, Int?) raise NativeLowerError {
+  ) -> (Array[@lowering.Value], UInt64, Int32?) raise NativeLowerError {
     match memory_selection(instruction, facts) {
       Some(matched) => {
         let selected = matched.selection
@@ -715,8 +715,8 @@ fn is_gc_reference_type(ty : @milkir.Type) -> Bool {
 }
 
 ///|
-fn clone_int_set(source : @hashset.HashSet[Int]) -> @hashset.HashSet[Int] {
-  let result : @hashset.HashSet[Int] = HashSet([])
+fn clone_int_set(source : @hashset.HashSet[Int32]) -> @hashset.HashSet[Int32] {
+  let result : @hashset.HashSet[Int32] = HashSet([])
   for value in source {
     result.add(value)
   }
@@ -725,8 +725,8 @@ fn clone_int_set(source : @hashset.HashSet[Int]) -> @hashset.HashSet[Int] {
 
 ///|
 fn int_sets_equal(
-  left : @hashset.HashSet[Int],
-  right : @hashset.HashSet[Int],
+  left : @hashset.HashSet[Int32],
+  right : @hashset.HashSet[Int32],
 ) -> Bool {
   for value in left {
     if !right.contains(value) {
@@ -744,8 +744,8 @@ fn int_sets_equal(
 ///|
 fn add_gc_use(
   value : @milkir.Value,
-  definitions : @hashset.HashSet[Int],
-  uses : @hashset.HashSet[Int],
+  definitions : @hashset.HashSet[Int32],
+  uses : @hashset.HashSet[Int32],
 ) -> Unit {
   if is_gc_reference_type(value.ty) && !definitions.contains(value.id) {
     uses.add(value.id)
@@ -773,18 +773,18 @@ fn terminator_values(terminator : @milkir.Terminator) -> Array[@milkir.Value] {
 fn compute_gc_roots(
   function : @milkir.Function,
   cfg : @milkir.CFG,
-) -> Array[Array[Int]] {
-  let block_uses : Array[@hashset.HashSet[Int]] = Array::makei(
+) -> Array[Array[Int32]] {
+  let block_uses : Array[@hashset.HashSet[Int32]] = Array::makei(
     function.next_block_id,
     _ => HashSet([]),
   )
-  let block_definitions : Array[@hashset.HashSet[Int]] = Array::makei(
+  let block_definitions : Array[@hashset.HashSet[Int32]] = Array::makei(
     function.next_block_id,
     _ => HashSet([]),
   )
   for block_index, block in function.blocks {
-    let definitions : @hashset.HashSet[Int] = HashSet([])
-    let uses : @hashset.HashSet[Int] = HashSet([])
+    let definitions : @hashset.HashSet[Int32] = HashSet([])
+    let uses : @hashset.HashSet[Int32] = HashSet([])
     if block_index == 0 {
       for parameter in function.params {
         if is_gc_reference_type(parameter.1) {
@@ -816,15 +816,15 @@ fn compute_gc_roots(
     block_uses[block.id] = uses
     block_definitions[block.id] = definitions
   }
-  let live_in : Array[@hashset.HashSet[Int]] = Array::makei(
+  let live_in : Array[@hashset.HashSet[Int32]] = Array::makei(
     function.next_block_id,
     _ => HashSet([]),
   )
-  let live_out : Array[@hashset.HashSet[Int]] = Array::makei(
+  let live_out : Array[@hashset.HashSet[Int32]] = Array::makei(
     function.next_block_id,
     _ => HashSet([]),
   )
-  let worklist : Array[Int] = []
+  let worklist : Array[Int32] = []
   let queued = Array::make(function.next_block_id, false)
   let mut block_index = function.blocks.length() - 1
   while block_index >= 0 {
@@ -838,7 +838,7 @@ fn compute_gc_roots(
     let block_id = worklist[cursor]
     cursor += 1
     queued[block_id] = false
-    let output : @hashset.HashSet[Int] = HashSet([])
+    let output : @hashset.HashSet[Int32] = HashSet([])
     for successor in cfg.get_successors(block_id) {
       for value in live_in[successor] {
         output.add(value)
@@ -888,7 +888,7 @@ fn compute_gc_roots(
           live.add(operand.id)
         }
       }
-      let instruction_roots : Array[Int] = []
+      let instruction_roots : Array[Int32] = []
       for value in live {
         instruction_roots.push(value)
       }
@@ -902,9 +902,9 @@ fn compute_gc_roots(
 
 ///|
 fn gc_roots_for_instruction(
-  roots : Array[Array[Int]]?,
-  instruction : Int,
-) -> Array[Int] {
+  roots : Array[Array[Int32]]?,
+  instruction : Int32,
+) -> Array[Int32] {
   match roots {
     Some(roots) => roots[instruction]
     None => []
@@ -919,7 +919,7 @@ fn lower_call_instruction(
   facts : SelectionFacts,
   instruction : @milkir.Inst,
   call : @milkir.CallOp,
-  root_ids : Array[Int],
+  root_ids : Array[Int32],
 ) -> Unit raise NativeLowerError {
   let (semantic_call, operands) = match call {
     Direct(symbol, signature) =>
@@ -987,7 +987,7 @@ fn lower_call_instruction(
 ///|
 fn mapped_gc_roots(
   values : Array[@lowering.Value?],
-  root_ids : Array[Int],
+  root_ids : Array[Int32],
 ) -> Array[@lowering.Value] raise NativeLowerError {
   let roots : Array[@lowering.Value] = []
   for value_id in root_ids {
@@ -1009,8 +1009,8 @@ fn lower_dialect_instruction(
   instruction : @milkir.Inst,
   function_result_types : Array[@native_types.ValueType],
   ext : @milkir.ExtOp,
-  block_id : Int,
-  root_ids : Array[Int],
+  block_id : Int32,
+  root_ids : Array[Int32],
   lowering : DialectLowering,
 ) -> Bool raise NativeLowerError {
   if ext.dialect != lowering.name {
@@ -1059,7 +1059,7 @@ fn lower_dialect_instruction(
 fn lower_scalar_operation(
   scalar : @milkir.ScalarOp,
   instruction : @milkir.Inst,
-  block_id : Int,
+  block_id : Int32,
 ) -> @lowering.Operation raise NativeLowerError {
   match scalar {
     IntConst(bits) =>
@@ -1170,7 +1170,7 @@ fn lower_scalar_instruction(
   values : Array[@lowering.Value?],
   value_types : Array[@native_types.ValueType?],
   instruction : @milkir.Inst,
-  block_id : Int,
+  block_id : Int32,
   facts : SelectionFacts,
 ) -> Unit raise NativeLowerError {
   match select_scalar_lowering(instruction, facts) {
@@ -1342,9 +1342,9 @@ fn lower_instruction(
   values : Array[@lowering.Value?],
   value_types : Array[@native_types.ValueType?],
   instruction : @milkir.Inst,
-  block_id : Int,
+  block_id : Int32,
   facts : SelectionFacts,
-  gc_roots : Array[Array[Int]]?,
+  gc_roots : Array[Array[Int32]]?,
   function_result_types : Array[@native_types.ValueType],
   environment : Array[@lowering.Value],
   dialect : DialectLowering?,
@@ -1510,7 +1510,7 @@ fn lower_terminator(
   values : Array[@lowering.Value?],
   value_types : Array[@native_types.ValueType?],
   blocks : Array[@lowering.Block?],
-  block_id : Int,
+  block_id : Int32,
   terminator : @milkir.Terminator,
   facts : SelectionFacts,
 ) -> Unit raise NativeLowerError {
@@ -1835,8 +1835,8 @@ pub fn lower_core_to_sink(
   function : @milkir.Function,
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
-  verify_input? : Bool = true,
-  on_event? : (NativeLowerEvent) -> Unit = fn(_) { () },
+  verify_input~ : Bool = true,
+  on_event~ : (NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise NativeLowerError {
   if verify_input {
     on_event(InputValidationStarted)
@@ -1869,13 +1869,13 @@ pub fn lower_dialect_to_sink(
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
   global_value_validator : (@milkir.GlobalValueData) -> String?,
-  environment_parameters : Array[(Int, @native_types.ValueType)],
+  environment_parameters : Array[(Int32, @native_types.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
   resolve_context_field : (@milkir.ContextField) -> @native_types.EnvironmentField?,
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
-  verify_input? : Bool = true,
-  on_event? : (NativeLowerEvent) -> Unit = fn(_) { () },
+  verify_input~ : Bool = true,
+  on_event~ : (NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise NativeLowerError {
   if verify_input {
     on_event(InputValidationStarted)

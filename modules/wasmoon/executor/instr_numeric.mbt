@@ -42,7 +42,7 @@ fn ExecContext::exec_i32_numeric(
         raise @runtime.DivisionByZero
       }
       let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint())
-        |> UInt::reinterpret_as_int
+        |> UInt32::reinterpret_as_int
       self.stack.push(I32(result))
     }
     I32RemS => {
@@ -66,7 +66,7 @@ fn ExecContext::exec_i32_numeric(
         raise @runtime.DivisionByZero
       }
       let result = (a.reinterpret_as_uint() % b.reinterpret_as_uint())
-        |> UInt::reinterpret_as_int
+        |> UInt32::reinterpret_as_int
       self.stack.push(I32(result))
     }
     // i32 comparison operations
@@ -135,7 +135,7 @@ fn ExecContext::exec_i32_numeric(
       let a = self.stack.pop_i32()
       let shift = b % 32
       let result = (a.reinterpret_as_uint() >> shift)
-        |> UInt::reinterpret_as_int
+        |> UInt32::reinterpret_as_int
       self.stack.push(I32(result))
     }
     I32Rotl => {

@@ -47,7 +47,7 @@ fn instantiate_canon_waitable_set_new(
 ///|
 fn instantiate_canon_waitable_set_wait(
   _cancellable : Bool,
-  memidx : Int,
+  memidx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
@@ -232,7 +232,7 @@ fn instantiate_canon_waitable_set_wait(
 ///|
 fn instantiate_canon_waitable_set_poll(
   _cancellable : Bool,
-  memidx : Int,
+  memidx : Int32,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {

@@ -69,7 +69,7 @@ fn Parser::read_subtype(self : Parser) -> @types.SubType raise ParserError {
     if (flags & 0xFC) != 0 {
       raise ParseError("malformed subtype flags")
     }
-    let supertypes : Array[Int] = if has_supertype {
+    let supertypes : Array[Int32] = if has_supertype {
       [self.read_u32()]
     } else {
       []
@@ -83,7 +83,7 @@ fn Parser::read_subtype(self : Parser) -> @types.SubType raise ParserError {
     if (flags & 0xFE) != 0 {
       raise ParseError("malformed subtype flags")
     }
-    let supertypes : Array[Int] = if has_supertype {
+    let supertypes : Array[Int32] = if has_supertype {
       [self.read_u32()]
     } else {
       []
@@ -106,7 +106,7 @@ fn Parser::read_rec_group(
   self : Parser,
 ) -> Array[@types.SubType] raise ParserError {
   fn placeholder_subtype_by_composite_tag(
-    composite_tag : Int,
+    composite_tag : Int32,
   ) -> @types.SubType raise ParserError {
     let composite : @types.CompositeType = match composite_tag {
       0x60 => Func({ params: [], results: [], })
@@ -168,7 +168,7 @@ fn Parser::read_rec_group(
     }
   }
 
-  fn skip_composite_type_no_resolve(self : Parser) -> Int raise ParserError {
+  fn skip_composite_type_no_resolve(self : Parser) -> Int32 raise ParserError {
     let tag = self.read_byte()
     match tag {
       0x60 => {
@@ -206,7 +206,7 @@ fn Parser::read_rec_group(
 
   fn skip_subtype_and_get_composite_tag(
     self : Parser,
-  ) -> Int raise ParserError {
+  ) -> Int32 raise ParserError {
     let tag = self.peek_byte()
     if tag == 0x50 {
       self.skip(1)
@@ -252,7 +252,7 @@ fn Parser::read_rec_group(
     has_data_count: self.has_data_count,
     types: [],
   }
-  let composite_tags : Array[Int] = []
+  let composite_tags : Array[Int32] = []
   for _ in 0..<n {
     composite_tags.push(skip_subtype_and_get_composite_tag(scan))
   }

@@ -5,6 +5,7 @@ import concurrent.futures
 import contextlib
 import sys
 import http.client
+import json
 from pathlib import Path
 import socket
 import shutil
@@ -144,18 +145,36 @@ def startup_cases(binary: Path, fixtures: Path, jit: bool) -> None:
         assert result.returncode != 0, result
 
 
-def mixed_command_case(binary: Path, jit: bool) -> None:
+def read_mixed_request(connection: socket.socket, received: bytearray) -> None:
+    """Consume this fixture's complete, empty chunked request before closing."""
+    while b"\r\n\r\n" not in received:
+        chunk = connection.recv(4096)
+        assert chunk, "guest closed before sending HTTP headers"
+        received.extend(chunk)
+    headers, body = received.split(b"\r\n\r\n", 1)
+    assert headers.startswith(b"GET / HTTP/1.1\r\n"), headers
+    assert b"transfer-encoding: chunked" in headers.lower(), headers
+    while len(body) < 5:
+        chunk = connection.recv(4096)
+        assert chunk, "guest closed before terminating its empty chunked body"
+        received.extend(chunk)
+        body.extend(chunk)
+    assert body == b"0\r\n\r\n", body
+
+
+def mixed_command_case(binary: Path, jit: bool, output: Path = ROOT / "target/http-results", *, debug: bool = True) -> None:
     # Keep a 60-second native timer pending while an HTTP exchange completes.
     # The guest cancels that timer after the response. A blocking host pump
     # cannot finish within the process timeout, independent of relative timing.
-    with tempfile.TemporaryDirectory() as directory, socket.socket() as server:
-        work = Path(directory)
+    work = output / ("mixed-jit" if jit else "mixed-interpreter")
+    work.mkdir(parents=True, exist_ok=True)
+    with socket.socket() as server:
         server.bind(("127.0.0.1", 0))
         server.listen()
         server.settimeout(15)
         authority = f"127.0.0.1:{server.getsockname()[1]}"
         wit = work / "wit"
-        shutil.copytree(ROOT / "modules/wasmoon/wasi_http/wit", wit)
+        shutil.copytree(ROOT / "modules/wasmoon/wasi_http/wit", wit, dirs_exist_ok=True)
         (wit / "host.wit").write_text(
             "package wasmoon:http-host;\n"
             "world mixed { import wasi:http/types@0.3.0; "
@@ -173,30 +192,57 @@ def mixed_command_case(binary: Path, jit: bool) -> None:
                         "-o", str(work / "guest.wasm")], check=True)
         subprocess.run(["wasm-tools", "validate", "--features", "all", str(work / "guest.wasm")], check=True)
 
-        def respond():
-            with server.accept()[0] as connection:
-                connection.settimeout(15)
-                received = bytearray()
-                while b"\r\n\r\n" not in received:
-                    chunk = connection.recv(4096)
-                    assert chunk, "guest closed before sending HTTP headers"
-                    received.extend(chunk)
-                assert received.startswith(b"GET / HTTP/1.1\r\n"), received
-                connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        received = bytearray()
+        peer = {"stage": "accept", "error": None}
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            response = pool.submit(respond)
-            command = [str(binary), "component", str(work / "guest.wasm"), "--run", "--http", "--network", "loopback"]
-            if not jit:
-                command.append("--no-jit")
-            result = subprocess.run(command, capture_output=True, timeout=15)
-            assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
-            response.result(timeout=15)
+        def respond():
+            try:
+                with server.accept()[0] as connection:
+                    connection.settimeout(15)
+                    peer["stage"] = "read request"
+                    read_mixed_request(connection, received)
+                    peer["stage"] = "send response"
+                    connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                peer["stage"] = "closed"
+            except Exception as error:
+                peer["error"] = repr(error)
+                raise
+
+        command = [str(binary), "component", str(work / "guest.wasm"), "--run", "--http", "--network", "loopback"]
+        if debug:
+            command.append("--debug")
+        if not jit:
+            command.append("--no-jit")
+        result = None
+        failure = None
+        stdout = stderr = b""
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                response = pool.submit(respond)
+                result = subprocess.run(command, capture_output=True, timeout=15)
+                stdout, stderr = result.stdout, result.stderr
+                assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+                response.result(timeout=15)
+        except Exception as error:
+            if isinstance(error, subprocess.TimeoutExpired):
+                stdout, stderr = error.stdout or b"", error.stderr or b""
+            failure = repr(error)
+            raise
+        finally:
+            (work / "request.bin").write_bytes(received)
+            (work / "stdout.log").write_bytes(stdout)
+            (work / "stderr.log").write_bytes(stderr)
+            evidence = {"jit": jit, "command": command,
+                        "returncode": result.returncode if result else None,
+                        "peer": peer, "failure": failure}
+            (work / "result.json").write_text(json.dumps(evidence, indent=2) + "\n")
+            if failure:
+                print(f"HTTP command evidence: {work}; peer={peer}", flush=True)
     print(f"WASI HTTP {'JIT' if jit else 'interpreter'}: concurrent native timer and HTTP command passed")
 
 
-def run_engine(binary: Path, fixtures: Path, jit: bool) -> None:
-    mixed_command_case(binary, jit)
+def run_engine(binary: Path, fixtures: Path, jit: bool, output: Path = ROOT / "target/http-results") -> None:
+    mixed_command_case(binary, jit, output)
     startup_cases(binary, fixtures, jit)
     with serving(binary, fixtures / "uri.wasm", jit) as port:
         response = raw_exchange(port, b"POST /valid%2fpath?q=%ff HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\nhi")
@@ -275,10 +321,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--wasmoon", type=Path, required=True)
     parser.add_argument("--fixtures", type=Path, default=ROOT / "target/http-fixtures")
+    parser.add_argument("--output", type=Path, default=ROOT / "target/http-results")
     args = parser.parse_args()
     subprocess.run([sys.executable, str(ROOT / "tests/http/build_fixtures.py"), "--output", str(args.fixtures)], check=True)
     for jit in [False, True]:
-        run_engine(args.wasmoon.resolve(), args.fixtures.resolve(), jit)
+        run_engine(args.wasmoon.resolve(), args.fixtures.resolve(), jit, args.output.resolve())
 
 
 if __name__ == "__main__":

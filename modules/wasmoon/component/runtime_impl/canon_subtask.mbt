@@ -5,9 +5,9 @@
 ///|
 fn take_subtask_terminal_status(
   async_state : AsyncState,
-  owner : Int,
-  id : Int,
-) -> Int raise @runtime.RuntimeError {
+  owner : Int32,
+  id : Int32,
+) -> Int32 raise @runtime.RuntimeError {
   let key = handle_key(owner, id)
   if async_state.waitable_events.get(key) is Some(events) {
     for event in events {
@@ -201,7 +201,7 @@ fn instantiate_canon_subtask_drop(
         retire_task(async_state, skey)
 
         // Remove from pending queues if it was still STARTING.
-        let inst_ids : Array[Int] = []
+        let inst_ids : Array[Int32] = []
         for kv in async_state.pending_by_instance.iter() {
           let (inst_id, _q) = kv
           inst_ids.push(inst_id)

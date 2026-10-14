@@ -20,6 +20,20 @@ Use `wasmoon_jit` when integrating generated code with the Wasmoon runtime,
 including VMContext layout, runtime helper symbols, trampolines, v11
 artifacts, and installed-code lifecycle management.
 
+### API changes for the next minor release
+
+The unused `CompilationMode`, `CompilationRequest`, `CompilationQueue`,
+`TieredConfig`, `CompilationDecision`, and `CompilationStrategy` APIs have
+been removed on main. They were published in earlier 0.x releases, so this is
+a source-breaking change reserved for the next minor release, not a 0.16.x
+patch. Repository consumer inspection cannot rule out external callers.
+
+These APIs maintained standalone decisions and queues; the runtime never
+consumed them to implement lazy or tiered compilation. Use `NativeCompiler`
+for explicit compilation and the runtime's interpreter/JIT selection for
+execution. The CLI selects JIT by default and provides `--no-jit` for the
+interpreter. `Profiler` and its independent call-counting APIs remain available.
+
 `load_artifact` keeps loading separate from installation: it performs bounded
 decoding, exact manifest and CPU-feature compatibility checks, symbolic target
 validation, and code-object verification without resolving an address or

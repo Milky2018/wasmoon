@@ -12,23 +12,23 @@ suberror ParserError {
   LengthOutOfBounds // Section size exceeds available data
   InvalidMagicNumber
   UnsupportedVersion
-  InvalidValueType(Int)
+  InvalidValueType(Int32)
   LEB128TooLarge
   SectionSizeMismatch
-  UnknownOpcode(Int)
-  InvalidImportKind(Int)
-  InvalidExportKind(Int)
+  UnknownOpcode(Int32)
+  InvalidImportKind(Int32)
+  InvalidExportKind(Int32)
   MalformedMemopFlags // alignment value too large
   TooManyLocals // local count exceeds reasonable limit
-  MalformedSectionId(Int) // invalid section id
-  MalformedLimitsFlags(Int) // invalid limits flags
+  MalformedSectionId(Int32) // invalid section id
+  MalformedLimitsFlags(Int32) // invalid limits flags
   FunctionCodeMismatch // function and code section counts differ
   DataCountMismatch // data count and data section have inconsistent lengths
   UnexpectedContent // unexpected content after last section
-  DuplicateSection(Int) // non-custom section appears multiple times or out of order
-  MalformedReferenceType(Int) // element segment has non-reference type
-  MalformedMutability(Int) // mutability must be 0 or 1
-  MalformedDataSegmentFlags(Int) // data segment flags must be 0, 1, or 2
+  DuplicateSection(Int32) // non-custom section appears multiple times or out of order
+  MalformedReferenceType(Int32) // element segment has non-reference type
+  MalformedMutability(Int32) // mutability must be 0 or 1
+  MalformedDataSegmentFlags(Int32) // data segment flags must be 0, 1, or 2
   DataCountRequired // memory.init/data.drop require data count section
   ParseError(String) // Generic error with message
 }
@@ -40,30 +40,30 @@ suberror ParserError {
 // Common flags
 
 ///|
-const LIMITS_NO_MAX : Int = 0x00
+const LIMITS_NO_MAX : Int32 = 0x00
 
 ///|
-const LIMITS_HAS_MAX : Int = 0x01
+const LIMITS_HAS_MAX : Int32 = 0x01
 
 // Memory-specific flags
 
 ///|
-const LIMITS_SHARED : Int = 0x03 // shared, has max (memory only)
+const LIMITS_SHARED : Int32 = 0x03 // shared, has max (memory only)
 
 // 64-bit flags
 
 ///|
-const LIMITS_64_NO_MAX : Int = 0x04
+const LIMITS_64_NO_MAX : Int32 = 0x04
 
 ///|
-const LIMITS_64_HAS_MAX : Int = 0x05
+const LIMITS_64_HAS_MAX : Int32 = 0x05
 
 ///|
-const LIMITS_64_SHARED : Int = 0x07 // shared, has max, 64-bit (memory only)
+const LIMITS_64_SHARED : Int32 = 0x07 // shared, has max, 64-bit (memory only)
 
 ///|
 /// Convert int to hex string
-fn int_to_hex(n : Int) -> String {
+fn int_to_hex(n : Int32) -> String {
   @types.int_to_hex(n)
 }
 

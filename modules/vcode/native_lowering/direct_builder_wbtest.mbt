@@ -1,20 +1,20 @@
 ///|
 priv struct SinkTrace {
   operations : Array[Operation]
-  operands : Array[Array[Int]]
-  roots : Array[Array[Int]]
+  operands : Array[Array[Int32]]
+  roots : Array[Array[Int32]]
   stack_maps : Array[@native.StackMapMetadata?]
-  stack_objects : Array[(Int, Int)]
-  terminated_blocks : Array[Int]
+  stack_objects : Array[(Int32, Int32)]
+  terminated_blocks : Array[Int32]
   terminators : Array[TargetTerminator]
-  mut next_value : Int
+  mut next_value : Int32
   mut finished : Bool
 }
 
 ///|
 fn traced_sink(
-  parameters : Array[Int],
-  entry_block : Int,
+  parameters : Array[Int32],
+  entry_block : Int32,
 ) -> (TargetSink, SinkTrace) {
   let trace : SinkTrace = {
     operations: [],
@@ -70,7 +70,7 @@ fn platform_call(
   symbol : String,
   parameters : Array[@native.ValueType],
   results : Array[@native.ValueType],
-  gc_safepoint? : Bool = false,
+  gc_safepoint~ : Bool = false,
 ) -> @native.NativeCall {
   @native.NativeCall::new(
     External(@native.ExternalSymbol::new(symbol)),

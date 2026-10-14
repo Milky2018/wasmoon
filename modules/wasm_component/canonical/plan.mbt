@@ -8,7 +8,7 @@ pub(all) struct CanonicalAbiPlan {
   types : Array[TypeDef?]
   memory64 : Bool
   flat : Array[@types.ValueType]
-  layout : (Int, Int)?
+  layout : (Int32, Int32)?
   contains_memory : Bool
 }
 
@@ -17,7 +17,7 @@ pub fn canonical_abi_plan(
   ty : ValType,
   types : Array[TypeDef?],
   memory64 : Bool,
-  max_flat? : Int = 2147483647,
+  max_flat~ : Int32 = 2147483647,
 ) -> CanonicalAbiPlan? {
   guard canonical_flat_types(
       ty,
@@ -47,7 +47,7 @@ pub fn canonical_value_contains_memory(
   ty : ValType,
   types : Array[TypeDef?],
 ) -> Bool {
-  let visited : Map[Int, Unit] = Map([])
+  let visited : Map[Int32, Unit] = Map([])
   fn contains(ty : ValType) -> Bool {
     match ty {
       Prim(String) => true

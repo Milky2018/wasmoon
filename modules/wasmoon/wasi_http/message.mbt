@@ -1,9 +1,9 @@
 ///|
 struct HttpBody {
   table : @runtime_impl.ResourceTable
-  mut contents : Int?
-  mut trailers : Int?
-  mut receipt : Int?
+  mut contents : Int32?
+  mut trailers : Int32?
+  mut receipt : Int32?
   completion : Ref[@runtime_impl.ComponentValue?]
   trailer_status : Ref[@runtime_impl.ComponentValue?]
   trailer_result : Ref[@runtime_impl.ComponentValue?]
@@ -18,13 +18,13 @@ struct HttpBody {
 priv struct HttpMessage {
   headers : HttpFields
   options : HttpOptions?
-  option_children : Ref[Int]
+  option_children : Ref[Int32]
   body : HttpBody
   attributes : Map[String, @runtime_impl.ComponentValue]
 }
 
 ///|
-fn http_error(code : Int) -> @runtime_impl.ComponentValue {
+fn http_error(code : Int32) -> @runtime_impl.ComponentValue {
   let payload : @runtime_impl.ComponentValue? = match code {
     17 | 21 | 22 | 23 | 26 | 28 | 29 | 31 | 32 | 38 => Some(Variant(0, None))
     1 | 14 | 24 | 27 | 30 => Some(Tuple([Variant(0, None), Variant(0, None)]))
@@ -36,7 +36,7 @@ fn http_error(code : Int) -> @runtime_impl.ComponentValue {
 ///|
 fn component_handle(
   value : @runtime_impl.ComponentValue,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   guard value is U32(handle) else { raise HostCallError("expected handle") }
   handle
 }
@@ -44,7 +44,7 @@ fn component_handle(
 ///|
 fn optional_handle(
   value : @runtime_impl.ComponentValue,
-) -> Int? raise @runtime_impl.ComponentRuntimeError {
+) -> Int32? raise @runtime_impl.ComponentRuntimeError {
   match value {
     Variant(0, None) => None
     Variant(1, Some(value)) => Some(component_handle(value))
@@ -58,7 +58,7 @@ fn HttpHost::take(
   table : @runtime_impl.ResourceTable,
   value : @runtime_impl.ComponentValue,
   name : String,
-  consume_body? : Bool = false,
+  consume_body~ : Bool = false,
 ) -> HttpResource raise @runtime_impl.ComponentRuntimeError {
   let resource = self.get(table, value, name)
   let handle = component_handle(value)
@@ -82,7 +82,7 @@ fn HttpHost::take(
 ///|
 fn HttpHost::future_payload(
   self : HttpHost,
-  parameter : Int,
+  parameter : Int32,
 ) -> @component.ValType raise @runtime_impl.ComponentRuntimeError {
   let signature = wasi_http_func_type(
     "wasi:http@0.3.0/types", "[static]response.consume-body",
@@ -183,7 +183,7 @@ fn HttpHost::new_message(
 fn HttpHost::consume_body(
   self : HttpHost,
   message : HttpMessage,
-  receipt : Int,
+  receipt : Int32,
   table : @runtime_impl.ResourceTable,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
   let body = message.body
@@ -198,7 +198,7 @@ fn HttpHost::consume_body(
     [],
     maximum => {
       if !body.buffer.is_empty() {
-        let count = Int::min(maximum, body.buffer.length())
+        let count = Int32::min(maximum, body.buffer.length())
         let values = body.buffer[:count].to_owned()
         let remaining = body.buffer[count:].to_owned()
         body.buffer.clear()

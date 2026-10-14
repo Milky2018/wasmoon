@@ -22,7 +22,7 @@ pub(all) enum ResumableCallOutcome {
 pub(all) enum ResumableCallWithExceptionOutcome {
   ResumableReturned(Array[@types.Value])
   ResumableSuspended(ExecutionContinuation)
-  ResumableThrown(Int, Array[@types.Value])
+  ResumableThrown(Int32, Array[@types.Value])
   ResumableHostFailed(@runtime.RuntimeError)
 }
 
@@ -41,7 +41,7 @@ struct ExecutionContinuation {
 ///|
 priv struct CapturedExecution {
   context : ExecContext
-  return_arity : Int
+  return_arity : Int32
   root_lease : @runtime.GcRootLease
   registration : Int64
 }
@@ -56,7 +56,7 @@ fn ExecContext::set_base_resume_action(
   self : ExecContext,
   reason : SuspensionReason,
   action : (ExecContext) -> Unit raise,
-  cancel? : () -> Unit = fn() { () },
+  cancel~ : () -> Unit = fn() { () },
 ) -> Unit {
   self.suspension_reason = Some(reason)
   self.resume_action = Some({ run: action, cancel, })
@@ -67,7 +67,7 @@ fn ExecContext::suspend_host_call(
   self : ExecContext,
   error : @runtime.RuntimeError,
   retry : (ExecContext) -> Unit raise,
-  roots? : Array[@types.Value] = [],
+  roots~ : Array[@types.Value] = [],
 ) -> Unit raise {
   match self.suspension_classifier {
     Some(classifier) =>
@@ -86,7 +86,7 @@ fn ExecContext::suspend_host_call(
 ///|
 fn ExecContext::collect_call_results(
   self : ExecContext,
-  return_arity : Int,
+  return_arity : Int32,
 ) -> Array[@types.Value] raise @runtime.RuntimeError {
   let results : Array[@types.Value] = []
   for _ in 0..<return_arity {
@@ -99,7 +99,7 @@ fn ExecContext::collect_call_results(
 ///|
 fn suspended_outcome(
   context : ExecContext,
-  return_arity : Int,
+  return_arity : Int32,
 ) -> ResumableCallOutcome raise @runtime.RuntimeError {
   errdefer context.discard_captured_execution()
   guard context.suspension_reason is Some(reason) else {
@@ -201,10 +201,10 @@ pub fn ExecutionContinuation::cancel(self : ExecutionContinuation) -> Unit {
 pub fn call_func_by_index_resumable(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
   classify_suspension : (@runtime.RuntimeError) -> Int64?,
-  cooperative? : Bool = false,
+  cooperative~ : Bool = false,
 ) -> ResumableCallOutcome raise @runtime.RuntimeError {
   let context = ExecContext(store, instance, classify_suspension~, cooperative~)
   let store_addr = instance.func_addrs[func_idx]
@@ -228,7 +228,7 @@ pub fn call_func_by_index_resumable(
 fn start_async_host_call_unchecked(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
   driver : @runtime.AsyncHostCallDriver,
 ) -> ResumableCallOutcome raise {
@@ -254,7 +254,7 @@ fn start_async_host_call_unchecked(
 fn start_async_host_call(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
   driver : @runtime.AsyncHostCallDriver,
 ) -> ResumableCallOutcome raise @runtime.RuntimeError {
@@ -269,7 +269,7 @@ fn start_async_host_call(
 pub fn call_func_by_index_resumable_async_with_exception(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
   driver : @runtime.AsyncHostCallDriver,
 ) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError {
@@ -299,7 +299,7 @@ pub fn call_func_by_index_resumable_async_with_exception(
 pub async fn call_func_by_index_async(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise @runtime.RuntimeError {
   @runtime.with_async_host_call_driver(async fn(driver) raise Error {

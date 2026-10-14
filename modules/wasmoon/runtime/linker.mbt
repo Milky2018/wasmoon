@@ -33,7 +33,7 @@ pub fn Linker::register_rollback(
 }
 
 ///|
-fn Linker::host_module(self : Linker, name : String) -> (ModuleInstance, Int) {
+fn Linker::host_module(self : Linker, name : String) -> (ModuleInstance, Int32) {
   let modules = self.modules.length()
   for entry in self.modules {
     let (module_name, instance) = entry
@@ -49,7 +49,7 @@ fn Linker::host_module(self : Linker, name : String) -> (ModuleInstance, Int) {
 ///|
 fn Linker::rollback_module_change(
   self : Linker,
-  modules : Int,
+  modules : Int32,
   rollback : () -> Unit,
 ) -> Unit {
   self.store.on_instantiation_rollback(fn() {
@@ -134,7 +134,7 @@ fn Linker::add_func_export(
   self : Linker,
   mod_name : String,
   name : String,
-  func_addr : Int,
+  func_addr : Int32,
 ) -> Unit {
   let (instance, modules) = self.host_module(mod_name)
   let func_addrs = instance.func_addrs.length()
@@ -155,7 +155,7 @@ pub fn Linker::add_host_func(
   mod_name : String,
   name : String,
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
-  func_type? : @types.FuncType = { params: [], results: [], },
+  func_type~ : @types.FuncType = { params: [], results: [], },
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_host_func(func, func_type~)
@@ -169,7 +169,7 @@ pub fn Linker::add_host_func_with_caller(
   mod_name : String,
   name : String,
   func : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
-  func_type? : @types.FuncType = { params: [], results: [], },
+  func_type~ : @types.FuncType = { params: [], results: [], },
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_host_func_with_caller(func, func_type~)
@@ -186,7 +186,7 @@ pub fn Linker::add_async_host_func(
   mod_name : String,
   name : String,
   func : async (Array[@types.Value]) -> Array[@types.Value] raise Error,
-  func_type? : @types.FuncType = { params: [], results: [], },
+  func_type~ : @types.FuncType = { params: [], results: [], },
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_async_host_func(func, func_type~)
@@ -200,7 +200,7 @@ pub fn Linker::add_async_host_func_with_caller(
   mod_name : String,
   name : String,
   func : async (Caller, Array[@types.Value]) -> Array[@types.Value] raise Error,
-  func_type? : @types.FuncType = { params: [], results: [], },
+  func_type~ : @types.FuncType = { params: [], results: [], },
 ) -> Unit raise RuntimeError {
   self.store.ensure_open()
   let func_addr = self.store.alloc_async_host_func_with_caller(func, func_type~)

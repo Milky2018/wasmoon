@@ -15,7 +15,7 @@ pub(all) enum OptLevel {
 
 ///|
 /// Parse optimization level from integer
-pub fn OptLevel::from_int(n : Int) -> OptLevel {
+pub fn OptLevel::from_int(n : Int32) -> OptLevel {
   match n {
     0 => O0
     1 => O1
@@ -26,7 +26,7 @@ pub fn OptLevel::from_int(n : Int) -> OptLevel {
 
 ///|
 /// Count IR instructions in a function.
-pub fn instruction_count(func : @milkir.Function) -> Int {
+pub fn instruction_count(func : @milkir.Function) -> Int32 {
   let mut count = 0
   for block in func.blocks {
     count = count + block.instruction_count()
@@ -53,13 +53,13 @@ fn run_opt_pass(
 }
 
 ///|
-const O2_MEMORY_ANALYSIS_LIMIT : Int = 300
+const O2_MEMORY_ANALYSIS_LIMIT : Int32 = 300
 
 ///|
-const O3_MEMORY_ANALYSIS_LIMIT : Int = 1200
+const O3_MEMORY_ANALYSIS_LIMIT : Int32 = 1200
 
 ///|
-fn acyclic_memory_work_budget(insts : Int, level : OptLevel) -> Int {
+fn acyclic_memory_work_budget(insts : Int32, level : OptLevel) -> Int32 {
   let limit = if level is O3 {
     O3_MEMORY_ANALYSIS_LIMIT
   } else {

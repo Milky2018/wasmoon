@@ -1,22 +1,22 @@
 ///|
 struct DenseLiveSets {
-  live_in : Array[Array[Int]]
-  live_out : Array[Array[Int]]
+  live_in : Array[Array[Int32]]
+  live_out : Array[Array[Int32]]
 } derive(Debug)
 
 ///|
 priv struct LivenessWorklist {
-  queue : Array[Int]
+  queue : Array[Int32]
   in_worklist : Array[Bool]
 }
 
 ///|
-fn LivenessWorklist::LivenessWorklist(size : Int) -> LivenessWorklist {
+fn LivenessWorklist::LivenessWorklist(size : Int32) -> LivenessWorklist {
   { queue: [], in_worklist: Array::make(size, false), }
 }
 
 ///|
-fn LivenessWorklist::push(self : LivenessWorklist, block_id : Int) -> Unit {
+fn LivenessWorklist::push(self : LivenessWorklist, block_id : Int32) -> Unit {
   if block_id >= 0 &&
     block_id < self.in_worklist.length() &&
     !self.in_worklist[block_id] {
@@ -26,7 +26,7 @@ fn LivenessWorklist::push(self : LivenessWorklist, block_id : Int) -> Unit {
 }
 
 ///|
-fn LivenessWorklist::pop(self : LivenessWorklist) -> Int? {
+fn LivenessWorklist::pop(self : LivenessWorklist) -> Int32? {
   match self.queue.pop() {
     Some(id) => {
       self.in_worklist[id] = false
@@ -38,7 +38,7 @@ fn LivenessWorklist::pop(self : LivenessWorklist) -> Int? {
 
 ///|
 fn propagate_live_sets(
-  num_blocks : Int,
+  num_blocks : Int32,
   cfg : DenseCfgEdges,
   block_defs : Array[SparseVRegSet],
   live_in : Array[SparseVRegSet],

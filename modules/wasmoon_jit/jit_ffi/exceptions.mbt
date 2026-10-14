@@ -16,9 +16,9 @@ pub extern "c" fn NativeExceptionArena::clear(
 extern "c" fn NativeExceptionArena::insert_raw(
   self : NativeExceptionArena,
   heap : GCHeapHandle,
-  tag : Int,
+  tag : Int32,
   values : FixedArray[Int64],
-  count : Int,
+  count : Int32,
 ) -> Int64 = "wasmoon_exception_arena_insert"
 
 ///|
@@ -26,28 +26,28 @@ extern "c" fn NativeExceptionArena::insert_raw(
 extern "c" fn NativeExceptionArena::tag(
   self : NativeExceptionArena,
   reference : Int64,
-) -> Int = "wasmoon_exception_arena_tag"
+) -> Int32 = "wasmoon_exception_arena_tag"
 
 ///|
 #borrow(self)
 extern "c" fn NativeExceptionArena::count(
   self : NativeExceptionArena,
   reference : Int64,
-) -> Int = "wasmoon_exception_arena_count"
+) -> Int32 = "wasmoon_exception_arena_count"
 
 ///|
 #borrow(self)
 extern "c" fn NativeExceptionArena::value(
   self : NativeExceptionArena,
   reference : Int64,
-  index : Int,
+  index : Int32,
 ) -> Int64 = "wasmoon_exception_arena_value"
 
 ///|
 pub fn NativeExceptionArena::snapshot(
   self : NativeExceptionArena,
   reference : Int64,
-) -> (Int, Array[Int64])? {
+) -> (Int32, Array[Int64])? {
   let count = self.count(reference)
   if count < 0 {
     return None
@@ -64,7 +64,7 @@ pub fn NativeExceptionArena::snapshot(
 pub fn NativeExceptionArena::insert(
   self : NativeExceptionArena,
   heap : GCHeapHandle,
-  tag : Int,
+  tag : Int32,
   values : Array[Int64],
 ) -> Int64 {
   let buffer = FixedArray::make(values.length(), 0L)
@@ -78,20 +78,20 @@ pub fn NativeExceptionArena::insert(
 #borrow(self, roots)
 extern "c" fn NativeExceptionArena::define_tag_raw(
   self : NativeExceptionArena,
-  tag : Int,
-  roots : FixedArray[Int],
-  count : Int,
-) -> Int = "wasmoon_exception_arena_define_tag"
+  tag : Int32,
+  roots : FixedArray[Int32],
+  count : Int32,
+) -> Int32 = "wasmoon_exception_arena_define_tag"
 
 ///|
 /// Describe reference-bearing payload words; scalar and SIMD words are never
 /// retained as accidental GC roots.
 pub fn NativeExceptionArena::define_tag(
   self : NativeExceptionArena,
-  tag : Int,
+  tag : Int32,
   params : Array[@types.ValueType],
 ) -> Bool {
-  let roots : Array[Int] = []
+  let roots : Array[Int32] = []
   for ty in params {
     match ty {
       I32 | I64 | F32 | F64 => roots.push(0)

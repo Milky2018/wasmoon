@@ -132,7 +132,7 @@ struct CoreExecutionEngine {
   invoke_fn : (
     @runtime.Store,
     @runtime.ModuleInstance,
-    Int,
+    Int32,
     Array[@types.Value],
     CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError
@@ -169,15 +169,15 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
   invoke : (
     @runtime.Store,
     @runtime.ModuleInstance,
-    Int,
+    Int32,
     Array[@types.Value],
     CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError,
-  prepare_store? : (@runtime.Store) -> Unit = fn(_store) { () },
-  register_rollback? : (@runtime.RollbackRegistrar) -> Unit = fn(_registrar) {
+  prepare_store~ : (@runtime.Store) -> Unit = fn(_store) { () },
+  register_rollback~ : (@runtime.RollbackRegistrar) -> Unit = fn(_registrar) {
     ()
   },
-  close? : () -> Unit = fn() { () },
+  close~ : () -> Unit = fn() { () },
 ) -> CoreExecutionEngine {
   {
     prepare_store_fn: prepare_store,
@@ -228,7 +228,7 @@ pub fn CoreExecutionEngine::invoke(
   self : CoreExecutionEngine,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  func_idx : Int,
+  func_idx : Int32,
   args : Array[@types.Value],
   request : CoreExecutionRequest,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {

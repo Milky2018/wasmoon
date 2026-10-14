@@ -1,5 +1,5 @@
 ///|
-fn valid_immediates(spec : WasmOpcodeSpec) -> FixedArray[Int] {
+fn valid_immediates(spec : WasmOpcodeSpec) -> FixedArray[Int32] {
   FixedArray::makei(spec.immediate_kinds.length(), i => {
     match spec.immediate_kinds[i] {
       IntegerImmediate => spec.id + i + 1

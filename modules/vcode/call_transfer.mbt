@@ -1,7 +1,7 @@
 ///|
 priv enum CallTransferDestination {
   TransferRegister(PhysicalReg)
-  TransferOutgoingStack(Int)
+  TransferOutgoingStack(Int32)
 }
 
 ///|
@@ -25,7 +25,7 @@ pub fn CallTransfer::to_register(
 pub fn CallTransfer::to_stack(
   ty : ValueType,
   source : Location,
-  offset : Int,
+  offset : Int32,
 ) -> CallTransfer {
   { ty, source, destination: TransferOutgoingStack(offset), }
 }
@@ -34,7 +34,7 @@ pub fn CallTransfer::to_stack(
 pub struct StackArgumentTransfer {
   ty : ValueType
   source : Location
-  offset : Int
+  offset : Int32
   scratch : PhysicalReg?
 } derive(Eq, Debug)
 
@@ -52,26 +52,26 @@ pub struct ResolvedCallTransferPlan {
 
 ///|
 pub suberror CallTransferError {
-  InvalidSourceClass(index~ : Int)
-  ForeignSourceStack(index~ : Int)
+  InvalidSourceClass(index~ : Int32)
+  ForeignSourceStack(index~ : Int32)
   InvalidSourceStackType(
-    index~ : Int,
+    index~ : Int32,
     expected~ : ValueType,
     actual~ : ValueType
   )
-  InvalidSourceStackLayout(index~ : Int)
-  InvalidDestinationClass(index~ : Int)
-  InvalidStackOffset(index~ : Int, offset~ : Int)
-  InvalidOutgoingStackRange(start~ : Int, size~ : Int)
-  OutgoingStackDestinationOutOfRange(index~ : Int, offset~ : Int)
-  DuplicateRegisterDestination(index~ : Int, register~ : PhysicalReg)
-  OverlappingStackDestination(first~ : Int, second~ : Int)
-  ProtectedLocationOverwrite(index~ : Int, location~ : Location)
+  InvalidSourceStackLayout(index~ : Int32)
+  InvalidDestinationClass(index~ : Int32)
+  InvalidStackOffset(index~ : Int32, offset~ : Int32)
+  InvalidOutgoingStackRange(start~ : Int32, size~ : Int32)
+  OutgoingStackDestinationOutOfRange(index~ : Int32, offset~ : Int32)
+  DuplicateRegisterDestination(index~ : Int32, register~ : PhysicalReg)
+  OverlappingStackDestination(first~ : Int32, second~ : Int32)
+  ProtectedLocationOverwrite(index~ : Int32, location~ : Location)
   MoveResolutionFailed(cause~ : MoveResolveError)
 } derive(Eq, Debug)
 
 ///|
-fn transfer_size(ty : ValueType) -> Int {
+fn transfer_size(ty : ValueType) -> Int32 {
   match ty {
     I32 | F32 => 4
     I64 | F64 | Ptr64 | GcRef64 => 8
@@ -81,10 +81,10 @@ fn transfer_size(ty : ValueType) -> Int {
 
 ///|
 fn ranges_overlap(
-  left : Int,
-  left_size : Int,
-  right : Int,
-  right_size : Int,
+  left : Int32,
+  left_size : Int32,
+  right : Int32,
+  right_size : Int32,
 ) -> Bool {
   left < right + right_size && right < left + left_size
 }
@@ -123,8 +123,8 @@ fn stack_transfer_scratch(
 fn prepare_call_transfers(
   allocation : Allocation,
   transfers : Array[CallTransfer],
-  outgoing_stack_start : Int,
-  outgoing_stack_size : Int,
+  outgoing_stack_start : Int32,
+  outgoing_stack_size : Int32,
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
   protected_locations : Array[Location],
@@ -145,7 +145,7 @@ fn prepare_call_transfers(
   let stack_transfers : Array[StackArgumentTransfer] = []
   let register_moves : Array[ParallelMove] = []
   let register_destinations : Array[PhysicalReg] = []
-  let stack_indices : Array[Int] = []
+  let stack_indices : Array[Int32] = []
   let scratch_reserved = protected_locations.copy()
   for transfer in transfers {
     if transfer.source is Register(source) &&
@@ -258,8 +258,8 @@ fn prepare_call_transfers(
 pub fn plan_call_transfers(
   allocation : Allocation,
   transfers : Array[CallTransfer],
-  outgoing_stack_start : Int,
-  outgoing_stack_size : Int,
+  outgoing_stack_start : Int32,
+  outgoing_stack_size : Int32,
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
   protected_locations : Array[Location],
@@ -282,8 +282,8 @@ pub fn plan_call_transfers(
 pub fn plan_resolved_call_transfers(
   allocation : Allocation,
   transfers : Array[CallTransfer],
-  outgoing_stack_start : Int,
-  outgoing_stack_size : Int,
+  outgoing_stack_start : Int32,
+  outgoing_stack_size : Int32,
   stack_scratch_int : Array[PhysicalReg],
   stack_scratch_fp : Array[PhysicalReg],
   move_scratch_int : PhysicalReg,

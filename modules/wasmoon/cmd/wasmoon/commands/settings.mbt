@@ -1,6 +1,6 @@
 ///|
 /// Display available compiler settings
-pub fn run_settings() -> Int {
+pub fn run_settings() -> Int32 {
   println("Wasmoon Compiler Settings")
   println("=".repeat(60))
   println("")

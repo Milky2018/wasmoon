@@ -4,7 +4,7 @@
 pub fn HostRuntimeState::read_host_value_future(
   self : HostRuntimeState,
   table : ResourceTable,
-  readable : Int,
+  readable : Int32,
 ) -> HostFutureValuePoll raise ComponentRuntimeError {
   guard self.async_state.future_endpoints.get(handle_key(table.id, readable))
     is Some(endpoint) &&

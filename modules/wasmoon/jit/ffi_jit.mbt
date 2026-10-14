@@ -9,7 +9,7 @@
 pub suberror JITTrap {
   JITTrap(String)
   JITNativeFiberFailure(String)
-  JITExit(Int)
+  JITExit(Int32)
   JITCancelled
 } derive(Debug)
 
@@ -43,7 +43,7 @@ priv struct JITContext {
 ///|
 /// Create a new JIT context - GC managed
 fn JITContext::try_alloc(
-  total_funcs : Int,
+  total_funcs : Int32,
   loaded : @wasmoon_jit.LoadedArtifact,
 ) -> JITContext? {
   @wasmoon_jit.NativeJITContext::try_alloc(
@@ -64,13 +64,17 @@ fn JITContext::close(self : JITContext) -> Unit {
 
 ///|
 /// Set a function pointer in the context
-fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
+fn JITContext::set_func(
+  self : JITContext,
+  idx : Int32,
+  func_ptr : Int64,
+) -> Unit {
   self.ctx.set_func(idx, func_ptr)
 }
 
 ///|
 /// Allocate indirect table for call_indirect
-fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
+fn JITContext::alloc_indirect_table(self : JITContext, count : Int32) -> Bool {
   self.ctx.alloc_indirect_table(count)
 }
 
@@ -78,9 +82,9 @@ fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
 /// Set an entry in indirect table (maps table_idx to func_idx with type_idx for type checking)
 fn JITContext::set_indirect(
   self : JITContext,
-  table_idx : Int,
-  func_idx : Int,
-  type_idx : Int,
+  table_idx : Int32,
+  func_idx : Int32,
+  type_idx : Int32,
 ) -> Unit {
   self.ctx.set_indirect(table_idx, func_idx, type_idx)
 }
@@ -107,8 +111,8 @@ fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
 /// Returns: memory pointer on success, 0 on failure
 fn JITContext::alloc_guarded_memory(
   self : JITContext,
-  initial_pages : Int,
-  max_pages : Int?,
+  initial_pages : Int32,
+  max_pages : Int32?,
 ) -> @wasmoon_jit.MemoryDescriptor {
   self.ctx.alloc_guarded_memory(initial_pages, max_pages)
 }
@@ -125,7 +129,10 @@ fn JITContext::set_table_pointers(
 }
 
 ///|
-fn JITContext::refresh_table_layout(self : JITContext, table_idx : Int) -> Bool {
+fn JITContext::refresh_table_layout(
+  self : JITContext,
+  table_idx : Int32,
+) -> Bool {
   self.ctx.refresh_table_layout(table_idx)
 }
 
@@ -139,12 +146,12 @@ fn JITContext::set_memory_pointers(
 }
 
 ///|
-fn JITContext::get_memory_ptr(self : JITContext, memidx : Int) -> Int64 {
+fn JITContext::get_memory_ptr(self : JITContext, memidx : Int32) -> Int64 {
   self.ctx.memory_ptr(memidx)
 }
 
 ///|
-fn JITContext::get_memory_size(self : JITContext, memidx : Int) -> Int64 {
+fn JITContext::get_memory_size(self : JITContext, memidx : Int32) -> Int64 {
   self.ctx.memory_size(memidx)
 }
 
@@ -289,8 +296,8 @@ priv struct JITContextContinuation {
   raw : @wasmoon_jit.NativeJITContinuation
   context : @wasmoon_jit.NativeJITContext
   values : FixedArray[Int64]
-  num_arg_slots : Int
-  num_result_slots : Int
+  num_arg_slots : Int32
+  num_result_slots : Int32
   active : Array[Bool]
 }
 

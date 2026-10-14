@@ -25,7 +25,7 @@ pub(all) struct WasmFieldContract {
 /// The contextual contract for a WebAssembly indexed type.
 pub(all) enum WasmDefinedTypeContract {
   Function(WasmFunctionContract)
-  Continuation(Int)
+  Continuation(Int32)
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
 } derive(Eq, Debug)
@@ -44,25 +44,25 @@ pub(all) struct WasmTableContract {
 /// stored in MilkIR. Linked direct functions use their remapped global index;
 /// indexed types, tables, tags, and segments use module-local indices.
 struct WasmValidationContext {
-  function_contract : (Int) -> WasmFunctionContract?
-  defined_type_contract : (Int) -> WasmDefinedTypeContract?
-  table_contract : (Int) -> WasmTableContract?
-  tag_contract : (Int) -> WasmFunctionContract?
-  memory_exists : (Int) -> Bool
-  data_segment_exists : (Int) -> Bool
-  element_segment_type : (Int) -> @milkir.Type?
+  function_contract : (Int32) -> WasmFunctionContract?
+  defined_type_contract : (Int32) -> WasmDefinedTypeContract?
+  table_contract : (Int32) -> WasmTableContract?
+  tag_contract : (Int32) -> WasmFunctionContract?
+  memory_exists : (Int32) -> Bool
+  data_segment_exists : (Int32) -> Bool
+  element_segment_type : (Int32) -> @milkir.Type?
 }
 
 ///|
 /// Resolver interface used to construct a contextual-validation adapter.
 pub(all) struct WasmValidationResolvers {
-  function_contract : (Int) -> WasmFunctionContract?
-  defined_type_contract : (Int) -> WasmDefinedTypeContract?
-  table_contract : (Int) -> WasmTableContract?
-  tag_contract : (Int) -> WasmFunctionContract?
-  memory_exists : (Int) -> Bool
-  data_segment_exists : (Int) -> Bool
-  element_segment_type : (Int) -> @milkir.Type?
+  function_contract : (Int32) -> WasmFunctionContract?
+  defined_type_contract : (Int32) -> WasmDefinedTypeContract?
+  table_contract : (Int32) -> WasmTableContract?
+  tag_contract : (Int32) -> WasmFunctionContract?
+  memory_exists : (Int32) -> Bool
+  data_segment_exists : (Int32) -> Bool
+  element_segment_type : (Int32) -> @milkir.Type?
 }
 
 ///|
@@ -107,7 +107,7 @@ fn WasmStorageContract::carrier(self : WasmStorageContract) -> @milkir.Type {
 }
 
 ///|
-fn WasmStorageContract::packed_width(self : WasmStorageContract) -> Int? {
+fn WasmStorageContract::packed_width(self : WasmStorageContract) -> Int32? {
   match self {
     Value(_) => None
     Packed8 => Some(1)
@@ -133,7 +133,7 @@ fn contextual_error(opcode : String, message : String) -> String? {
 ///|
 fn types_equal(
   actual : ReadOnlyArray[@milkir.Type],
-  offset : Int,
+  offset : Int32,
   expected : Array[@milkir.Type],
 ) -> Bool {
   if actual.length() - offset != expected.length() {
@@ -171,7 +171,7 @@ fn type_array_text(types : Array[@milkir.Type]) -> String {
 ///|
 fn actual_type_suffix_text(
   types : ReadOnlyArray[@milkir.Type],
-  offset : Int,
+  offset : Int32,
 ) -> String {
   let names : Array[String] = []
   for i in offset..<types.length() {
@@ -184,7 +184,7 @@ fn actual_type_suffix_text(
 fn validate_signature(
   wire_name : String,
   view : @milkir.ExtensionInstView,
-  operand_offset : Int,
+  operand_offset : Int32,
   contract : WasmFunctionContract,
   expected_results : Array[@milkir.Type],
 ) -> String? {
@@ -208,7 +208,7 @@ fn validate_direct_call(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  function_index : Int,
+  function_index : Int32,
   tail_results : Array[@milkir.Type]?,
 ) -> String? {
   let contract = match (context.function_contract)(function_index) {
@@ -242,7 +242,7 @@ fn validate_direct_call(
 fn function_type_contract(
   wire_name : String,
   context : WasmValidationContext,
-  type_index : Int,
+  type_index : Int32,
 ) -> Result[WasmFunctionContract, String] {
   match (context.defined_type_contract)(type_index) {
     Some(Function(contract)) => Ok(contract)
@@ -262,8 +262,8 @@ fn validate_indirect_call(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  type_index : Int,
-  table_index : Int?,
+  type_index : Int32,
+  table_index : Int32?,
   tail_results : Array[@milkir.Type]?,
 ) -> String? {
   let contract = match function_type_contract(wire_name, context, type_index) {
@@ -311,7 +311,7 @@ fn validate_indirect_call(
 fn struct_fields(
   wire_name : String,
   context : WasmValidationContext,
-  type_index : Int,
+  type_index : Int32,
 ) -> Result[Array[WasmFieldContract], String] {
   match (context.defined_type_contract)(type_index) {
     Some(Struct(fields)) => Ok(fields)
@@ -330,8 +330,8 @@ fn struct_fields(
 fn struct_field(
   wire_name : String,
   context : WasmValidationContext,
-  type_index : Int,
-  field_index : Int,
+  type_index : Int32,
+  field_index : Int32,
 ) -> Result[WasmFieldContract, String] {
   let fields = match struct_fields(wire_name, context, type_index) {
     Ok(fields) => fields
@@ -350,7 +350,7 @@ fn struct_field(
 fn array_element(
   wire_name : String,
   context : WasmValidationContext,
-  type_index : Int,
+  type_index : Int32,
 ) -> Result[WasmFieldContract, String] {
   match (context.defined_type_contract)(type_index) {
     Some(Array(element)) => Ok(element)
@@ -370,7 +370,7 @@ fn validate_struct_new(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  type_index : Int,
+  type_index : Int32,
   use_default : Bool,
 ) -> String? {
   let fields = match struct_fields(wire_name, context, type_index) {
@@ -403,9 +403,9 @@ fn validate_struct_get(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  type_index : Int,
-  field_index : Int,
-  packed_width : Int?,
+  type_index : Int32,
+  field_index : Int32,
+  packed_width : Int32?,
 ) -> String? {
   let field = match struct_field(wire_name, context, type_index, field_index) {
     Ok(field) => field
@@ -432,8 +432,8 @@ fn validate_struct_set(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  type_index : Int,
-  field_index : Int,
+  type_index : Int32,
+  field_index : Int32,
 ) -> String? {
   let field = match struct_field(wire_name, context, type_index, field_index) {
     Ok(field) => field
@@ -460,9 +460,9 @@ fn validate_array_new(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  type_index : Int,
+  type_index : Int32,
   use_default : Bool,
-  fixed_count : Int?,
+  fixed_count : Int32?,
 ) -> String? {
   let element = match array_element(wire_name, context, type_index) {
     Ok(element) => element
@@ -495,8 +495,8 @@ fn validate_array_get(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  type_index : Int,
-  packed_width : Int?,
+  type_index : Int32,
+  packed_width : Int32?,
 ) -> String? {
   let element = match array_element(wire_name, context, type_index) {
     Ok(element) => element
@@ -523,8 +523,8 @@ fn validate_mutable_array_value(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  type_index : Int,
-  value_index : Int,
+  type_index : Int32,
+  value_index : Int32,
 ) -> String? {
   let element = match array_element(wire_name, context, type_index) {
     Ok(element) => element
@@ -547,8 +547,8 @@ fn validate_mutable_array_value(
 fn validate_array_copy(
   wire_name : String,
   context : WasmValidationContext,
-  destination_type : Int,
-  source_type : Int,
+  destination_type : Int32,
+  source_type : Int32,
 ) -> String? {
   let destination = match array_element(wire_name, context, destination_type) {
     Ok(element) => element
@@ -585,8 +585,8 @@ fn data_compatible(storage : WasmStorageContract) -> Bool {
 fn validate_array_segment(
   wire_name : String,
   context : WasmValidationContext,
-  type_index : Int,
-  segment_index : Int,
+  type_index : Int32,
+  segment_index : Int32,
   data_segment : Bool,
   require_mutable : Bool,
 ) -> String? {
@@ -634,7 +634,7 @@ fn validate_reference_type(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  type_index : Int,
+  type_index : Int32,
   check_result : Bool,
 ) -> String? {
   let carrier : @milkir.Type = if type_index < 0 {
@@ -666,7 +666,7 @@ fn validate_throw(
   wire_name : String,
   view : @milkir.ExtensionInstView,
   context : WasmValidationContext,
-  tag_index : Int,
+  tag_index : Int32,
 ) -> String? {
   let contract = match (context.tag_contract)(tag_index) {
     Some(contract) => contract

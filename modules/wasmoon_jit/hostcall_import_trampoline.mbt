@@ -2,7 +2,7 @@
 /// Machine-code bytes for Wasm-ABI import trampolines that call the
 /// `wasmoon_jit_hostcall` C bridge.
 pub(all) struct HostcallImportTrampolineCode {
-  code : Array[Int]
+  code : Array[Int32]
 }
 
 ///|
@@ -12,7 +12,7 @@ pub suberror HostcallImportTrampolineError {
 
 ///|
 priv enum RuntimeValueBridge {
-  Hostcall(Int)
+  Hostcall(Int32)
 }
 
 ///|
@@ -25,18 +25,20 @@ priv enum HostcallRegClass {
 
 ///|
 priv struct HostcallPReg {
-  index : Int
+  index : Int32
 }
 
 ///|
 priv enum HostcallAbiValueLocation {
   Reg(HostcallPReg)
-  Stack(offset~ : Int, size~ : Int)
-  ReturnArea(offset~ : Int, size~ : Int)
+  Stack(offset~ : Int32, size~ : Int32)
+  ReturnArea(offset~ : Int32, size~ : Int32)
 }
 
 ///|
-fn hostcall_abi_location_stack_size(location : HostcallAbiValueLocation) -> Int {
+fn hostcall_abi_location_stack_size(
+  location : HostcallAbiValueLocation,
+) -> Int32 {
   match location {
     Reg(_) => 0
     Stack(size~, ..) | ReturnArea(size~, ..) => size
@@ -81,7 +83,7 @@ fn hostcall_scalar_class(ty : @types.ValueType) -> HostcallRegClass {
 }
 
 ///|
-fn hostcall_abi_stack_align(ty : @types.ValueType) -> Int {
+fn hostcall_abi_stack_align(ty : @types.ValueType) -> Int32 {
   match ty {
     V128 => 16
     _ => 8
@@ -91,7 +93,7 @@ fn hostcall_abi_stack_align(ty : @types.ValueType) -> Int {
 ///|
 fn hostcall_abi_stack_location(
   ty : @types.ValueType,
-  offset : Int,
+  offset : Int32,
 ) -> HostcallAbiValueLocation {
   let size = hostcall_value_byte_count(ty)
   let align = hostcall_abi_stack_align(ty)
@@ -102,8 +104,8 @@ fn hostcall_abi_stack_location(
 ///|
 fn hostcall_param_locations(
   param_types : Array[@types.ValueType],
-  int_arg_regs : Array[Int],
-  float_arg_reg_count : Int,
+  int_arg_regs : Array[Int32],
+  float_arg_reg_count : Int32,
 ) -> Array[HostcallAbiValueLocation] {
   let locations : Array[HostcallAbiValueLocation] = []
   let mut int_seen = 0
@@ -143,7 +145,7 @@ fn hostcall_param_locations(
 ///|
 fn hostcall_abi_return_area_location(
   ty : @types.ValueType,
-  offset : Int,
+  offset : Int32,
 ) -> HostcallAbiValueLocation {
   let size = hostcall_value_byte_count(ty)
   let align = hostcall_abi_stack_align(ty)
@@ -154,8 +156,8 @@ fn hostcall_abi_return_area_location(
 ///|
 fn hostcall_result_locations(
   result_types : Array[@types.ValueType],
-  int_result_regs : Array[Int],
-  float_result_reg_count : Int,
+  int_result_regs : Array[Int32],
+  float_result_reg_count : Int32,
 ) -> Array[HostcallAbiValueLocation] {
   let locations : Array[HostcallAbiValueLocation] = []
   let mut int_seen = 0
@@ -195,7 +197,9 @@ fn hostcall_result_locations(
 }
 
 ///|
-fn hostcall_stack_arg_size(locations : Array[HostcallAbiValueLocation]) -> Int {
+fn hostcall_stack_arg_size(
+  locations : Array[HostcallAbiValueLocation],
+) -> Int32 {
   let mut size = 0
   for location in locations {
     if location is Stack(offset~, ..) {
@@ -211,7 +215,7 @@ fn hostcall_stack_arg_size(locations : Array[HostcallAbiValueLocation]) -> Int {
 ///|
 fn hostcall_return_area_size(
   locations : Array[HostcallAbiValueLocation],
-) -> Int {
+) -> Int32 {
   let mut size = 0
   for location in locations {
     if location is ReturnArea(offset~, ..) {
@@ -234,7 +238,7 @@ fn validate_hostcall_import_signature(
 }
 
 ///|
-fn hostcall_append_u32_le(code : Array[Int], word : Int) -> Unit {
+fn hostcall_append_u32_le(code : Array[Int32], word : Int32) -> Unit {
   code.push(word & 0xff)
   code.push((word >> 8) & 0xff)
   code.push((word >> 16) & 0xff)
@@ -242,7 +246,7 @@ fn hostcall_append_u32_le(code : Array[Int], word : Int) -> Unit {
 }
 
 ///|
-fn hostcall_append_u64_le(code : Array[Int], word : Int64) -> Unit {
+fn hostcall_append_u64_le(code : Array[Int32], word : Int64) -> Unit {
   let mut x = word
   for _ in 0..<8 {
     code.push((x & 0xffL).to_int())
@@ -251,7 +255,7 @@ fn hostcall_append_u64_le(code : Array[Int], word : Int64) -> Unit {
 }
 
 ///|
-fn align_to(value : Int, align : Int) -> Int {
+fn align_to(value : Int32, align : Int32) -> Int32 {
   if value == 0 {
     0
   } else {
@@ -260,16 +264,16 @@ fn align_to(value : Int, align : Int) -> Int {
 }
 
 ///|
-fn a64_emit(code : Array[Int], word : Int) -> Unit {
+fn a64_emit(code : Array[Int32], word : Int32) -> Unit {
   hostcall_append_u32_le(code, word)
 }
 
 ///|
 fn a64_emit_add_imm(
-  code : Array[Int],
-  rd : Int,
-  rn : Int,
-  imm : Int,
+  code : Array[Int32],
+  rd : Int32,
+  rn : Int32,
+  imm : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if imm < 0 {
     unsupported_hostcall_import(
@@ -293,10 +297,10 @@ fn a64_emit_add_imm(
 
 ///|
 fn a64_emit_sub_imm(
-  code : Array[Int],
-  rd : Int,
-  rn : Int,
-  imm : Int,
+  code : Array[Int32],
+  rd : Int32,
+  rn : Int32,
+  imm : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if imm < 0 {
     unsupported_hostcall_import(
@@ -319,7 +323,12 @@ fn a64_emit_sub_imm(
 }
 
 ///|
-fn a64_emit_movz(code : Array[Int], rd : Int, imm16 : Int, shift : Int) -> Unit {
+fn a64_emit_movz(
+  code : Array[Int32],
+  rd : Int32,
+  imm16 : Int32,
+  shift : Int32,
+) -> Unit {
   let hw = shift / 16
   a64_emit(
     code,
@@ -328,7 +337,12 @@ fn a64_emit_movz(code : Array[Int], rd : Int, imm16 : Int, shift : Int) -> Unit 
 }
 
 ///|
-fn a64_emit_movk(code : Array[Int], rd : Int, imm16 : Int, shift : Int) -> Unit {
+fn a64_emit_movk(
+  code : Array[Int32],
+  rd : Int32,
+  imm16 : Int32,
+  shift : Int32,
+) -> Unit {
   let hw = shift / 16
   a64_emit(
     code,
@@ -338,8 +352,8 @@ fn a64_emit_movk(code : Array[Int], rd : Int, imm16 : Int, shift : Int) -> Unit 
 
 ///|
 fn a64_emit_load_imm64_fixed(
-  code : Array[Int],
-  rd : Int,
+  code : Array[Int32],
+  rd : Int32,
   value : Int64,
 ) -> Unit {
   a64_emit_movz(code, rd, (value & 0xffffL).to_int(), 0)
@@ -350,10 +364,10 @@ fn a64_emit_load_imm64_fixed(
 
 ///|
 fn a64_emit_add_byte_offset(
-  code : Array[Int],
-  rd : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rd : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset < 0 {
     unsupported_hostcall_import(
@@ -364,7 +378,7 @@ fn a64_emit_add_byte_offset(
 }
 
 ///|
-fn a64_scratch_gpr_for(rt : Int) -> Int {
+fn a64_scratch_gpr_for(rt : Int32) -> Int32 {
   if rt == 16 {
     17
   } else {
@@ -374,10 +388,10 @@ fn a64_scratch_gpr_for(rt : Int) -> Int {
 
 ///|
 fn a64_emit_ldr_x(
-  code : Array[Int],
-  rt : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rt : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
     let scratch = a64_scratch_gpr_for(rt)
@@ -393,10 +407,10 @@ fn a64_emit_ldr_x(
 
 ///|
 fn a64_emit_str_x(
-  code : Array[Int],
-  rt : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rt : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
     let scratch = a64_scratch_gpr_for(rt)
@@ -412,10 +426,10 @@ fn a64_emit_str_x(
 
 ///|
 fn a64_emit_ldr_s(
-  code : Array[Int],
-  rt : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rt : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 4 != 0 || offset < 0 || offset / 4 > 4095 {
     a64_emit_add_byte_offset(code, 16, rn, offset)
@@ -430,10 +444,10 @@ fn a64_emit_ldr_s(
 
 ///|
 fn a64_emit_str_s(
-  code : Array[Int],
-  rt : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rt : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 4 != 0 || offset < 0 || offset / 4 > 4095 {
     a64_emit_add_byte_offset(code, 16, rn, offset)
@@ -448,10 +462,10 @@ fn a64_emit_str_s(
 
 ///|
 fn a64_emit_ldr_d(
-  code : Array[Int],
-  rt : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rt : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
     a64_emit_add_byte_offset(code, 16, rn, offset)
@@ -466,10 +480,10 @@ fn a64_emit_ldr_d(
 
 ///|
 fn a64_emit_str_d(
-  code : Array[Int],
-  rt : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rt : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
     a64_emit_add_byte_offset(code, 16, rn, offset)
@@ -484,10 +498,10 @@ fn a64_emit_str_d(
 
 ///|
 fn a64_emit_ldr_q(
-  code : Array[Int],
-  rt : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rt : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 16 != 0 || offset < 0 || offset / 16 > 4095 {
     a64_emit_add_byte_offset(code, 16, rn, offset)
@@ -502,10 +516,10 @@ fn a64_emit_ldr_q(
 
 ///|
 fn a64_emit_str_q(
-  code : Array[Int],
-  rt : Int,
-  rn : Int,
-  offset : Int,
+  code : Array[Int32],
+  rt : Int32,
+  rn : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 16 != 0 || offset < 0 || offset / 16 > 4095 {
     a64_emit_add_byte_offset(code, 16, rn, offset)
@@ -519,32 +533,32 @@ fn a64_emit_str_q(
 }
 
 ///|
-fn a64_emit_blr(code : Array[Int], rn : Int) -> Unit {
+fn a64_emit_blr(code : Array[Int32], rn : Int32) -> Unit {
   a64_emit(code, 0xd63f0000 | ((rn & 31) << 5))
 }
 
 ///|
-fn a64_emit_ret(code : Array[Int]) -> Unit {
+fn a64_emit_ret(code : Array[Int32]) -> Unit {
   a64_emit(code, 0xd65f03c0)
 }
 
 ///|
 fn a64_emit_store_slot(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
-  reg : Int,
-  offset : Int,
+  reg : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   a64_emit_store_slot_base(code, ty, reg, 31, offset)
 }
 
 ///|
 fn a64_emit_store_slot_base(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
-  reg : Int,
-  base : Int,
-  offset : Int,
+  reg : Int32,
+  base : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match ty {
     F32 => a64_emit_str_s(code, reg, base, offset)
@@ -556,21 +570,21 @@ fn a64_emit_store_slot_base(
 
 ///|
 fn a64_emit_load_slot(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
-  reg : Int,
-  offset : Int,
+  reg : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   a64_emit_load_slot_base(code, ty, reg, 31, offset)
 }
 
 ///|
 fn a64_emit_load_slot_base(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
-  reg : Int,
-  base : Int,
-  offset : Int,
+  reg : Int32,
+  base : Int32,
+  offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match ty {
     F32 => a64_emit_ldr_s(code, reg, base, offset)
@@ -582,11 +596,11 @@ fn a64_emit_load_slot_base(
 
 ///|
 fn a64_emit_store_arg_to_values_vec(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
   location : HostcallAbiValueLocation,
-  values_offset : Int,
-  caller_stack_base_offset : Int,
+  values_offset : Int32,
+  caller_stack_base_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
     Reg(preg) => a64_emit_store_slot(code, ty, preg.index, values_offset)
@@ -607,10 +621,10 @@ fn a64_emit_store_arg_to_values_vec(
 
 ///|
 fn a64_emit_load_result_from_values_vec(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
   location : HostcallAbiValueLocation,
-  values_offset : Int,
+  values_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
     Reg(preg) => a64_emit_load_slot(code, ty, preg.index, values_offset)
@@ -631,11 +645,11 @@ fn a64_emit_load_result_from_values_vec(
 
 ///|
 fn a64_emit_store_result_to_values_vec(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
   location : HostcallAbiValueLocation,
-  values_offset : Int,
-  return_area_offset : Int,
+  values_offset : Int32,
+  return_area_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
     Reg(preg) =>
@@ -662,7 +676,7 @@ fn build_aarch64_hostcall_import_trampoline(
   bridge : RuntimeValueBridge,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
   validate_hostcall_import_signature(param_types, result_types)
-  let code : Array[Int] = []
+  let code : Array[Int32] = []
   let param_locations = hostcall_param_locations(
     param_types,
     [1, 2, 3, 4, 5, 6, 7],
@@ -722,24 +736,33 @@ fn build_aarch64_hostcall_import_trampoline(
 }
 
 ///|
-fn x64_rex(code : Array[Int], w : Bool, r : Int, b : Int) -> Unit {
+fn x64_rex(code : Array[Int32], w : Bool, r : Int32, b : Int32) -> Unit {
   code.push(
     (if w { 0x48 } else { 0x40 }) | (((r >> 3) & 1) << 2) | ((b >> 3) & 1),
   )
 }
 
 ///|
-fn x64_modrm(code : Array[Int], mod_ : Int, reg : Int, rm : Int) -> Unit {
+fn x64_modrm(
+  code : Array[Int32],
+  mod_ : Int32,
+  reg : Int32,
+  rm : Int32,
+) -> Unit {
   code.push(((mod_ & 3) << 6) | ((reg & 7) << 3) | (rm & 7))
 }
 
 ///|
-fn x64_sib_base(code : Array[Int], base : Int) -> Unit {
+fn x64_sib_base(code : Array[Int32], base : Int32) -> Unit {
   code.push(0x20 | (base & 7))
 }
 
 ///|
-fn x64_modrm_base_disp32(code : Array[Int], reg : Int, base : Int) -> Unit {
+fn x64_modrm_base_disp32(
+  code : Array[Int32],
+  reg : Int32,
+  base : Int32,
+) -> Unit {
   x64_modrm(code, 2, reg, if (base & 7) == 4 { 4 } else { base })
   if (base & 7) == 4 {
     x64_sib_base(code, base)
@@ -747,21 +770,21 @@ fn x64_modrm_base_disp32(code : Array[Int], reg : Int, base : Int) -> Unit {
 }
 
 ///|
-fn x64_mov_rr(code : Array[Int], dst : Int, src : Int) -> Unit {
+fn x64_mov_rr(code : Array[Int32], dst : Int32, src : Int32) -> Unit {
   x64_rex(code, true, src, dst)
   code.push(0x89)
   x64_modrm(code, 3, src, dst)
 }
 
 ///|
-fn x64_mov_imm64(code : Array[Int], dst : Int, value : Int64) -> Unit {
+fn x64_mov_imm64(code : Array[Int32], dst : Int32, value : Int64) -> Unit {
   x64_rex(code, true, 0, dst)
   code.push(0xb8 + (dst & 7))
   hostcall_append_u64_le(code, value)
 }
 
 ///|
-fn x64_add_rsp(code : Array[Int], imm : Int) -> Unit {
+fn x64_add_rsp(code : Array[Int32], imm : Int32) -> Unit {
   code.push(0x48)
   code.push(0x81)
   code.push(0xc4)
@@ -769,7 +792,7 @@ fn x64_add_rsp(code : Array[Int], imm : Int) -> Unit {
 }
 
 ///|
-fn x64_sub_rsp(code : Array[Int], imm : Int) -> Unit {
+fn x64_sub_rsp(code : Array[Int32], imm : Int32) -> Unit {
   code.push(0x48)
   code.push(0x81)
   code.push(0xec)
@@ -777,7 +800,7 @@ fn x64_sub_rsp(code : Array[Int], imm : Int) -> Unit {
 }
 
 ///|
-fn x64_lea_rsp_disp32(code : Array[Int], dst : Int, offset : Int) -> Unit {
+fn x64_lea_rsp_disp32(code : Array[Int32], dst : Int32, offset : Int32) -> Unit {
   x64_rex(code, true, dst, 4)
   code.push(0x8d)
   x64_modrm_base_disp32(code, dst, 4)
@@ -786,10 +809,10 @@ fn x64_lea_rsp_disp32(code : Array[Int], dst : Int, offset : Int) -> Unit {
 
 ///|
 fn x64_mov_m64_r64_base(
-  code : Array[Int],
-  base : Int,
-  offset : Int,
-  src : Int,
+  code : Array[Int32],
+  base : Int32,
+  offset : Int32,
+  src : Int32,
 ) -> Unit {
   x64_rex(code, true, src, base)
   code.push(0x89)
@@ -799,10 +822,10 @@ fn x64_mov_m64_r64_base(
 
 ///|
 fn x64_mov_r64_m64_base(
-  code : Array[Int],
-  dst : Int,
-  base : Int,
-  offset : Int,
+  code : Array[Int32],
+  dst : Int32,
+  base : Int32,
+  offset : Int32,
 ) -> Unit {
   x64_rex(code, true, dst, base)
   code.push(0x8b)
@@ -812,10 +835,10 @@ fn x64_mov_r64_m64_base(
 
 ///|
 fn x64_movsd_m64_xmm_base(
-  code : Array[Int],
-  base : Int,
-  offset : Int,
-  src : Int,
+  code : Array[Int32],
+  base : Int32,
+  offset : Int32,
+  src : Int32,
 ) -> Unit {
   code.push(0xf2)
   x64_rex(code, false, src, base)
@@ -827,10 +850,10 @@ fn x64_movsd_m64_xmm_base(
 
 ///|
 fn x64_movsd_xmm_m64_base(
-  code : Array[Int],
-  dst : Int,
-  base : Int,
-  offset : Int,
+  code : Array[Int32],
+  dst : Int32,
+  base : Int32,
+  offset : Int32,
 ) -> Unit {
   code.push(0xf2)
   x64_rex(code, false, dst, base)
@@ -842,10 +865,10 @@ fn x64_movsd_xmm_m64_base(
 
 ///|
 fn x64_movdqu_m128_xmm_base(
-  code : Array[Int],
-  base : Int,
-  offset : Int,
-  src : Int,
+  code : Array[Int32],
+  base : Int32,
+  offset : Int32,
+  src : Int32,
 ) -> Unit {
   code.push(0xf3)
   x64_rex(code, false, src, base)
@@ -857,10 +880,10 @@ fn x64_movdqu_m128_xmm_base(
 
 ///|
 fn x64_movdqu_xmm_m128_base(
-  code : Array[Int],
-  dst : Int,
-  base : Int,
-  offset : Int,
+  code : Array[Int32],
+  dst : Int32,
+  base : Int32,
+  offset : Int32,
 ) -> Unit {
   code.push(0xf3)
   x64_rex(code, false, dst, base)
@@ -871,34 +894,34 @@ fn x64_movdqu_xmm_m128_base(
 }
 
 ///|
-fn x64_call_reg(code : Array[Int], reg : Int) -> Unit {
+fn x64_call_reg(code : Array[Int32], reg : Int32) -> Unit {
   x64_rex(code, false, 0, reg)
   code.push(0xff)
   x64_modrm(code, 3, 2, reg)
 }
 
 ///|
-fn x64_ret(code : Array[Int]) -> Unit {
+fn x64_ret(code : Array[Int32]) -> Unit {
   code.push(0xc3)
 }
 
 ///|
 fn x64_emit_store_slot(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
-  reg : Int,
-  offset : Int,
+  reg : Int32,
+  offset : Int32,
 ) -> Unit {
   x64_emit_store_slot_base(code, ty, reg, 4, offset)
 }
 
 ///|
 fn x64_emit_store_slot_base(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
-  reg : Int,
-  base : Int,
-  offset : Int,
+  reg : Int32,
+  base : Int32,
+  offset : Int32,
 ) -> Unit {
   match ty {
     V128 => x64_movdqu_m128_xmm_base(code, base, offset, reg)
@@ -909,21 +932,21 @@ fn x64_emit_store_slot_base(
 
 ///|
 fn x64_emit_load_slot(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
-  reg : Int,
-  offset : Int,
+  reg : Int32,
+  offset : Int32,
 ) -> Unit {
   x64_emit_load_slot_base(code, ty, reg, 4, offset)
 }
 
 ///|
 fn x64_emit_load_slot_base(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
-  reg : Int,
-  base : Int,
-  offset : Int,
+  reg : Int32,
+  base : Int32,
+  offset : Int32,
 ) -> Unit {
   match ty {
     V128 => x64_movdqu_xmm_m128_base(code, reg, base, offset)
@@ -934,11 +957,11 @@ fn x64_emit_load_slot_base(
 
 ///|
 fn x64_emit_store_arg_to_values_vec(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
   location : HostcallAbiValueLocation,
-  values_offset : Int,
-  caller_stack_base_offset : Int,
+  values_offset : Int32,
+  caller_stack_base_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
     Reg(preg) => x64_emit_store_slot(code, ty, preg.index, values_offset)
@@ -959,10 +982,10 @@ fn x64_emit_store_arg_to_values_vec(
 
 ///|
 fn x64_emit_load_result_from_values_vec(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
   location : HostcallAbiValueLocation,
-  values_offset : Int,
+  values_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
     Reg(preg) => x64_emit_load_slot(code, ty, preg.index, values_offset)
@@ -983,11 +1006,11 @@ fn x64_emit_load_result_from_values_vec(
 
 ///|
 fn x64_emit_store_result_to_values_vec(
-  code : Array[Int],
+  code : Array[Int32],
   ty : @types.ValueType,
   location : HostcallAbiValueLocation,
-  values_offset : Int,
-  return_area_offset : Int,
+  values_offset : Int32,
+  return_area_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
     Reg(preg) =>
@@ -1008,7 +1031,7 @@ fn x64_emit_store_result_to_values_vec(
 }
 
 ///|
-fn x64_hostcall_stack_adjust(values_vec_bytes : Int) -> Int {
+fn x64_hostcall_stack_adjust(values_vec_bytes : Int32) -> Int32 {
   // SysV x64 enters a function with rsp % 16 == 8. Keep the adjustment at
   // 8 modulo 16 so rsp is 16-byte aligned before calling the C bridge.
   align_to(values_vec_bytes, 16) + 8
@@ -1021,7 +1044,7 @@ fn build_x64_hostcall_import_trampoline(
   bridge : RuntimeValueBridge,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
   validate_hostcall_import_signature(param_types, result_types)
-  let code : Array[Int] = []
+  let code : Array[Int32] = []
   let int_arg_regs = [6, 2, 1, 8, 9]
   let param_locations = hostcall_param_locations(param_types, int_arg_regs, 8)
   let result_locations = hostcall_result_locations(
@@ -1070,7 +1093,7 @@ fn build_x64_hostcall_import_trampoline(
 pub fn build_hostcall_import_trampoline_for_target(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
-  host_func_addr : Int,
+  host_func_addr : Int32,
   target : NativeTarget,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
   match target {
@@ -1101,9 +1124,9 @@ fn validate_entry_trampoline_signature(
 fn build_aarch64_entry_trampoline(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
-) -> Array[Int] raise HostcallImportTrampolineError {
+) -> Array[Int32] raise HostcallImportTrampolineError {
   validate_entry_trampoline_signature(param_types, result_types)
-  let code : Array[Int] = []
+  let code : Array[Int32] = []
   let param_locations = hostcall_param_locations(
     param_types,
     [1, 2, 3, 4, 5, 6, 7],
@@ -1176,9 +1199,9 @@ fn build_aarch64_entry_trampoline(
 fn build_x64_entry_trampoline(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
-) -> Array[Int] raise HostcallImportTrampolineError {
+) -> Array[Int32] raise HostcallImportTrampolineError {
   validate_entry_trampoline_signature(param_types, result_types)
-  let code : Array[Int] = []
+  let code : Array[Int32] = []
   let int_arg_regs = [6, 2, 1, 8, 9]
   let param_locations = hostcall_param_locations(param_types, int_arg_regs, 8)
   let result_locations = hostcall_result_locations(
@@ -1268,7 +1291,7 @@ pub fn build_entry_trampoline_for_target(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
   target : NativeTarget,
-) -> Array[Int] raise HostcallImportTrampolineError {
+) -> Array[Int32] raise HostcallImportTrampolineError {
   match target {
     AArch64 => build_aarch64_entry_trampoline(param_types, result_types)
     X64 => build_x64_entry_trampoline(param_types, result_types)

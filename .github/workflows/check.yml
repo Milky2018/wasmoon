@@ -144,6 +144,20 @@ jobs:
       - name: test HTTP services, middleware and clients on both engines
         run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
 
+      - name: compare Linux HTTP peer shutdown behavior
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && steps.build.outcome == 'success' }}
+        run: python3 scripts/diagnose_http_peer.py --wasmoon ./wasmoon
+
+      - name: upload HTTP command evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-command-${{ matrix.os }}
+          path: |
+            target/http-results
+            target/http-peer-diagnostic
+          if-no-files-found: warn
+
       - name: check out pinned WASI Preview 3 guests
         uses: actions/checkout@v4
         with:
@@ -279,7 +293,7 @@ jobs:
     timeout-minutes: 60
     env:
       MOONBIT_INSTALL_VERSION: latest
-      MOON_CC: clang
+      MOON_CC: clang-cl.exe
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
@@ -292,10 +306,17 @@ jobs:
         if: matrix.compiler == 'msvc'
         shell: pwsh
         run: . ./scripts/msvc/setup.ps1
+      - name: configure Clang for generated C and direct objects
+        if: matrix.compiler == 'clang'
+        shell: pwsh
+        run: |
+          $compiler = (Get-Command clang-cl.exe -ErrorAction Stop).Source
+          "MOON_CC=$compiler" >> $env:GITHUB_ENV
+          Write-Host "C compiler: $compiler"
       - name: report toolchain
         run: |
           moon version --all
-          clang --version
+          clang-cl --version
           python scripts/msvc/generate_guest_bridges.py --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           moon update
@@ -339,7 +360,7 @@ jobs:
         id: windows_build
         if: ${{ !cancelled() }}
         run: |
-          moon build --target native --release --jobs 2 --target-dir target/windows-build
+          moon build --target native --release --jobs 2 --target-dir target/windows-build --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
           Copy-Item target/windows-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe wasmoon-tools.exe
@@ -354,6 +375,14 @@ jobs:
       - name: test Windows HTTP services, middleware and clients on both engines
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: python scripts/test_wasi_http.py --wasmoon ./wasmoon.exe
+
+      - name: upload Windows HTTP command evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-command-windows-${{ matrix.compiler }}
+          path: target/http-results
+          if-no-files-found: warn
 
       - name: check out pinned WASI Preview 3 guests
         if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}

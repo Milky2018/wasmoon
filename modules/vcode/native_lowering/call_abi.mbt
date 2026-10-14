@@ -1,8 +1,8 @@
 ///|
 /// How a hidden safepoint describes GC roots already present in its arguments.
 pub(all) enum StackMapArgumentRoots {
-  Fixed(Int)
-  I32ConstantOperand(Int)
+  Fixed(Int32)
+  I32ConstantOperand(Int32)
   AllocationOperands
 } derive(Debug, Eq)
 
@@ -10,14 +10,14 @@ pub(all) enum StackMapArgumentRoots {
 pub struct HiddenSafepointAbi {
   priv symbol : @native.ExternalSymbol
   priv argument_roots : StackMapArgumentRoots
-  priv owner : Int?
+  priv owner : Int32?
 }
 
 ///|
 pub fn HiddenSafepointAbi::new(
   symbol : @native.ExternalSymbol,
   argument_roots : StackMapArgumentRoots,
-  owner? : Int,
+  owner? : Int32,
 ) -> HiddenSafepointAbi {
   { symbol, argument_roots, owner, }
 }
@@ -45,7 +45,7 @@ pub struct CallAbiElaboration {
 ///|
 pub fn CallAbiElaboration::new(
   root_scope? : CallerRootScopeAbi,
-  hidden_safepoints? : Array[HiddenSafepointAbi] = [],
+  hidden_safepoints~ : Array[HiddenSafepointAbi] = [],
 ) -> CallAbiElaboration {
   { root_scope, hidden_safepoints: hidden_safepoints.copy(), }
 }

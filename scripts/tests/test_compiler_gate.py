@@ -339,8 +339,8 @@ class WorkflowGateTests(unittest.TestCase):
             self.assertNotIn(token, workflow)
         # Windows selects the real Clang compiler, not an interception shim.
         compiler_lines = [line.strip() for line in workflow.splitlines()
-                          if "MOON_CC" in line]
-        self.assertEqual(compiler_lines, ["MOON_CC: clang"])
+                          if line.strip().startswith("MOON_CC:")]
+        self.assertEqual(compiler_lines, ["MOON_CC: clang-cl.exe"])
         for path in (
             "scripts/native_sanitizer_cc.sh",
             "scripts/verify_native_sanitizers.py",

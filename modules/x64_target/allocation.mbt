@@ -12,12 +12,12 @@ pub impl Show for X64AllocationError with fn output(self, logger) {
 }
 
 ///|
-fn int_physical(index : Int) -> @vcode.PhysicalReg {
+fn int_physical(index : Int32) -> @vcode.PhysicalReg {
   @vcode.PhysicalReg::new(index, Int)
 }
 
 ///|
-fn fp_physical(index : Int) -> @vcode.PhysicalReg {
+fn fp_physical(index : Int32) -> @vcode.PhysicalReg {
   @vcode.PhysicalReg::new(index, FpVector)
 }
 
@@ -173,7 +173,7 @@ fn require_legal_value_register(
 fn require_legal_operand_register(
   function : @vcode.Function[X64Inst],
   instruction : @vcode.Instruction,
-  operand_index : Int,
+  operand_index : Int32,
   reg : @vcode.PhysicalReg,
 ) -> Unit raise X64AllocationError {
   let role = allocation_register_role(reg)
@@ -293,11 +293,11 @@ fn verify_target_allocation(
 ///|
 fn allocate_verified(
   function : @vcode.Function[X64Inst],
-  on_phase? : ((String?) -> Unit)? = None,
-  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
-  verify_allocation? : Bool = true,
-  allocation_session? : @vcode_regalloc.AllocationSession = @vcode_regalloc.AllocationSession::new(),
-  allocation_environment? : @vcode_regalloc.VCodeAllocationEnvironment = @vcode_regalloc.VCodeAllocationEnvironment::new(
+  on_phase~ : ((String?) -> Unit)? = None,
+  on_statistics~ : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
+  verify_allocation~ : Bool = true,
+  allocation_session~ : @vcode_regalloc.AllocationSession = @vcode_regalloc.AllocationSession::new(),
+  allocation_environment~ : @vcode_regalloc.VCodeAllocationEnvironment = @vcode_regalloc.VCodeAllocationEnvironment::new(
     allocatable_physical_regs(),
     spill_scratch_regs(),
   ).with_fixed_operand_regs(fixed_operand_only_regs()),

@@ -4,7 +4,7 @@ priv suberror CanonicalLayoutError {
 }
 
 ///|
-pub fn canonical_discriminant_layout(case_count : Int) -> (Int, Int) {
+pub fn canonical_discriminant_layout(case_count : Int32) -> (Int32, Int32) {
   if case_count <= 0x100 {
     (1, 1)
   } else if case_count <= 0x10000 {
@@ -19,9 +19,12 @@ pub fn canonical_memory_layout(
   ty : ValType,
   types : Array[TypeDef?],
   mem_is_64 : Bool,
-) -> (Int, Int)? {
-  let visiting : Map[Int, Unit] = Map([])
-  fn align_to(size : Int, alignment : Int) -> Int raise CanonicalLayoutError {
+) -> (Int32, Int32)? {
+  let visiting : Map[Int32, Unit] = Map([])
+  fn align_to(
+    size : Int32,
+    alignment : Int32,
+  ) -> Int32 raise CanonicalLayoutError {
     let result = (size.to_int64() + alignment.to_int64() - 1L) /
       alignment.to_int64() *
       alignment.to_int64()
@@ -30,13 +33,13 @@ pub fn canonical_memory_layout(
     }
     result.to_int()
   }
-  fn add(a : Int, b : Int) -> Int raise CanonicalLayoutError {
+  fn add(a : Int32, b : Int32) -> Int32 raise CanonicalLayoutError {
     if a > 2147483647 - b {
       raise CanonicalLayoutError
     }
     a + b
   }
-  fn layout(ty : ValType) -> (Int, Int) raise CanonicalLayoutError {
+  fn layout(ty : ValType) -> (Int32, Int32) raise CanonicalLayoutError {
     match ty {
       Prim(p) =>
         match p {

@@ -6,9 +6,9 @@
 ///|
 priv struct AcyclicRewriteStats {
   mut changed : Bool
-  mut attempts : Int
-  mut applied : Int
-  mut created_instructions : Int
+  mut attempts : Int32
+  mut applied : Int32
+  mut created_instructions : Int32
 }
 
 ///|
@@ -24,9 +24,9 @@ priv struct OptimizerSession {
   // dominator scope. Keep these arrays inline: canonical lookup is one of the
   // hottest operations in the optimizer.
   union_parents : Array[@milkir.Value?]
-  union_changes : Array[(Int, @milkir.Value?)]
+  union_changes : Array[(Int32, @milkir.Value?)]
   constants : Array[Int64?]
-  use_counts : Array[Int]
+  use_counts : Array[Int32]
   mut staged_candidates : Array[@milkir.Inst]?
   stats : AcyclicRewriteStats
 }
@@ -52,7 +52,7 @@ fn OptimizerSession::new(func : @milkir.Function) -> OptimizerSession {
 }
 
 ///|
-fn OptimizerSession::begin_candidates(self : OptimizerSession) -> Int {
+fn OptimizerSession::begin_candidates(self : OptimizerSession) -> Int32 {
   match self.staged_candidates {
     Some(candidates) => candidates.length()
     None => 0
@@ -100,7 +100,7 @@ fn OptimizerSession::stage_pure_candidate(
 ///|
 fn OptimizerSession::commit_candidates(
   self : OptimizerSession,
-  marker : Int,
+  marker : Int32,
   output : Array[@milkir.Inst],
 ) -> Unit {
   guard self.staged_candidates is Some(candidates) else { return }
@@ -114,7 +114,7 @@ fn OptimizerSession::commit_candidates(
 ///|
 fn OptimizerSession::discard_candidates(
   self : OptimizerSession,
-  marker : Int,
+  marker : Int32,
 ) -> Unit {
   guard self.staged_candidates is Some(candidates) else { return }
   for index in marker..<candidates.length() {
@@ -124,7 +124,7 @@ fn OptimizerSession::discard_candidates(
 }
 
 ///|
-fn pure_candidate_cost(opcode : @milkir.Opcode) -> Int {
+fn pure_candidate_cost(opcode : @milkir.Opcode) -> Int32 {
   match opcode {
     Scalar(IntConst(_) | FloatConst32(_) | FloatConst64(_) | Copy) => 0
     // This is an IR-complexity cost, not a target latency table. Integer
@@ -139,8 +139,8 @@ fn pure_candidate_cost(opcode : @milkir.Opcode) -> Int {
 ///|
 fn OptimizerSession::commit_candidates_if_cheaper(
   self : OptimizerSession,
-  marker : Int,
-  original_cost : Int,
+  marker : Int32,
+  original_cost : Int32,
   output : Array[@milkir.Inst],
 ) -> Bool {
   guard self.staged_candidates is Some(candidates) else { return false }
@@ -173,12 +173,12 @@ fn OptimizerSession::stage_int_binary_with_constant(
 }
 
 ///|
-fn OptimizerSession::begin_scope(self : OptimizerSession) -> Int {
+fn OptimizerSession::begin_scope(self : OptimizerSession) -> Int32 {
   self.union_changes.length()
 }
 
 ///|
-fn OptimizerSession::end_scope(self : OptimizerSession, marker : Int) -> Unit {
+fn OptimizerSession::end_scope(self : OptimizerSession, marker : Int32) -> Unit {
   while self.union_changes.length() > marker {
     let (value_id, previous) = self.union_changes.pop().unwrap()
     self.union_parents[value_id] = previous
@@ -188,7 +188,7 @@ fn OptimizerSession::end_scope(self : OptimizerSession, marker : Int) -> Unit {
 ///|
 fn OptimizerSession::ensure_value_capacity(
   self : OptimizerSession,
-  value_id : Int,
+  value_id : Int32,
 ) -> Unit {
   while self.union_parents.length() <= value_id {
     self.union_parents.push(None)

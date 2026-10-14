@@ -1,5 +1,5 @@
 ///|
-fn preview3_filesystem_error_index(preview1_errno : Int) -> Int {
+fn preview3_filesystem_error_index(preview1_errno : Int32) -> Int32 {
   match preview1_errno {
     2 => 0
     7 => 1
@@ -42,7 +42,9 @@ fn preview3_filesystem_error_index(preview1_errno : Int) -> Int {
 }
 
 ///|
-fn preview3_filesystem_error_code(index : Int) -> @runtime_impl.ComponentValue {
+fn preview3_filesystem_error_code(
+  index : Int32,
+) -> @runtime_impl.ComponentValue {
   Variant(
     1,
     Some(
@@ -146,7 +148,7 @@ fn preview3_descriptor_state(
   table : @runtime_impl.ResourceTable,
   descriptor_type : @component.TypeDef?,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> DescriptorState raise @runtime_impl.ComponentRuntimeError {
   descriptor_state(
     host.ctx,
@@ -169,7 +171,7 @@ fn preview3_descriptor_stat_value(
 }
 
 ///|
-fn preview3_descriptor_type(file_type : Int) -> @runtime_impl.ComponentValue {
+fn preview3_descriptor_type(file_type : Int32) -> @runtime_impl.ComponentValue {
   match file_type {
     1 => Variant(0, None)
     2 => Variant(1, None)
@@ -197,9 +199,9 @@ fn preview3_instant_value(timestamp : UInt64) -> @runtime_impl.ComponentValue {
 ///|
 fn parse_preview3_new_timestamp(
   value : @runtime_impl.ComponentValue,
-  set_flag : Int,
-  now_flag : Int,
-) -> (Int64, Int)? {
+  set_flag : Int32,
+  now_flag : Int32,
+) -> (Int64, Int32)? {
   match value {
     Variant(0, None) => Some((0L, 0))
     Variant(1, None) => Some((0L, now_flag))
@@ -235,8 +237,8 @@ fn preview3_result_future(
   table : @runtime_impl.ResourceTable,
   interface : String,
   function : String,
-  error_case? : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  error_case? : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   let (element, types) = preview3_future_element(host, interface, function)
   match error_case {
     Some(error_case) =>
@@ -251,7 +253,10 @@ fn preview3_result_future(
 }
 
 ///|
-fn preview3_read_file(state : DescriptorState, offset : Int64) -> (Bytes, Int?) {
+fn preview3_read_file(
+  state : DescriptorState,
+  offset : Int64,
+) -> (Bytes, Int32?) {
   if !descriptor_has(state, descriptor_read) {
     return (
       b"",
@@ -294,7 +299,7 @@ fn preview3_file_write_future(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   state : DescriptorState,
-  readable : Int,
+  readable : Int32,
   initial_offset : Int64,
   append : Bool,
 ) -> @runtime_impl.HostFuture {

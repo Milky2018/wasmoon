@@ -60,9 +60,9 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
   self : AllocationSession,
   function : @vcode.Function[Inst],
   environment : VCodeAllocationEnvironment,
-  on_phase? : ((String?) -> Unit)? = None,
-  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
-  verify? : Bool = true,
+  on_phase~ : ((String?) -> Unit)? = None,
+  on_statistics~ : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
+  verify~ : Bool = true,
 ) -> @vcode.Allocation raise VCodeAllocationError {
   // Translate the allocator's phase enum to a name here so neither the
   // allocator nor the event enum has to know about the other (ISS-371).
@@ -145,9 +145,9 @@ pub fn[Inst] AllocationSession::allocate_selected_vcode(
 pub fn[Inst] allocate_selected_vcode(
   function : @vcode.Function[Inst],
   environment : VCodeAllocationEnvironment,
-  on_phase? : ((String?) -> Unit)? = None,
-  on_statistics? : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
-  verify? : Bool = true,
+  on_phase~ : ((String?) -> Unit)? = None,
+  on_statistics~ : ((@vcode.RegallocLoopStatistics) -> Unit)? = None,
+  verify~ : Bool = true,
 ) -> @vcode.Allocation raise VCodeAllocationError {
   AllocationSession::new().allocate_selected_vcode(
     function,

@@ -1607,11 +1607,11 @@ fn Translator::translate_instruction(
 ///|
 fn Translator::translate_atomic(
   self : Translator,
-  subopcode : Int,
-  memidx : Int,
+  subopcode : Int32,
+  memidx : Int32,
   offset : Int64,
 ) -> Unit {
-  fn bounds_ptr(addr : Value, access_size : Int) -> Value {
+  fn bounds_ptr(addr : Value, access_size : Int32) -> Value {
     self.func_env.emit_bounds_check(
       self.builder,
       self.vmctx,
@@ -1623,7 +1623,7 @@ fn Translator::translate_atomic(
     )
   }
 
-  fn align_check(addr : Value, access_size : Int) -> Unit {
+  fn align_check(addr : Value, access_size : Int32) -> Unit {
     self.func_env.emit_atomic_alignment_check(
       self.builder,
       memidx,
@@ -1680,7 +1680,7 @@ fn Translator::translate_atomic(
 
     // atomic.fence
     3 => self.builder.atomic_fence()
-    4..=66 => {
+    4..<=66 => {
       let shape = if op <= 10 {
         op - 4
       } else if op <= 17 {
@@ -1688,7 +1688,7 @@ fn Translator::translate_atomic(
       } else {
         (op - 18) % 7
       }
-      let (ty, bits) : (Type, Int) = match shape {
+      let (ty, bits) : (Type, Int32) = match shape {
         0 => (I32, 32)
         1 => (I64, 64)
         2 => (I32, 8)

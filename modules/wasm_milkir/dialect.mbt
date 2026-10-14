@@ -3,12 +3,12 @@
 pub const WASM_DIALECT : String = "wasm"
 
 ///|
-fn imm(values : Array[Int]) -> FixedArray[Int] {
+fn imm(values : Array[Int32]) -> FixedArray[Int32] {
   FixedArray::makei(values.length(), fn(i) { values[i] })
 }
 
 ///|
-fn bool_imm(value : Bool) -> Int {
+fn bool_imm(value : Bool) -> Int32 {
   if value {
     1
   } else {
@@ -17,7 +17,7 @@ fn bool_imm(value : Bool) -> Int {
 }
 
 ///|
-fn imm_bool(value : Int) -> Bool {
+fn imm_bool(value : Int32) -> Bool {
   value != 0
 }
 

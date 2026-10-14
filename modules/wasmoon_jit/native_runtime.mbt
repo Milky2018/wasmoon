@@ -4,27 +4,31 @@
 
 ///|
 /// Read an i64-sized slot from a JIT-owned native value area.
-pub fn native_value_slot_read(base : Int64, slot : Int) -> Int64 {
+pub fn native_value_slot_read(base : Int64, slot : Int32) -> Int64 {
   c_jit_read_i64(base + slot.to_int64() * 8L)
 }
 
 ///|
 /// Write an i64-sized slot in a JIT-owned native value area.
-pub fn native_value_slot_write(base : Int64, slot : Int, value : Int64) -> Unit {
+pub fn native_value_slot_write(
+  base : Int64,
+  slot : Int32,
+  value : Int64,
+) -> Unit {
   c_jit_write_i64(base + slot.to_int64() * 8L, value)
 }
 
 ///|
 /// Low-level trap detail captured by the JIT signal handlers (best-effort).
 pub struct TrapDetails {
-  signal : Int
+  signal : Int32
   pc : Int64
   lr : Int64
   fp : Int64
   frame_lr : Int64
   fault_addr : Int64
-  brk_imm : Int
-  func_idx : Int
+  brk_imm : Int32
+  func_idx : Int32
   x0 : Int64
   x1 : Int64
   x2 : Int64
@@ -91,7 +95,7 @@ pub fn get_last_trap_details() -> TrapDetails {
 }
 
 ///|
-pub fn format_signal_name(sig : Int) -> String {
+pub fn format_signal_name(sig : Int32) -> String {
   match sig {
     5 => "SIGTRAP(5)"
     10 => "SIGBUS(10)"
@@ -102,7 +106,7 @@ pub fn format_signal_name(sig : Int) -> String {
 }
 
 ///|
-pub fn jit_trap_message(code : Int) -> String {
+pub fn jit_trap_message(code : Int32) -> String {
   match code {
     1 => "out of bounds memory access"
     2 => "call stack exhausted"
@@ -133,7 +137,7 @@ pub fn jit_trap_message(code : Int) -> String {
 }
 
 ///|
-pub fn is_cancelled_trap_code(code : Int) -> Bool {
+pub fn is_cancelled_trap_code(code : Int32) -> Bool {
   code == 11
 }
 
@@ -141,7 +145,7 @@ pub fn is_cancelled_trap_code(code : Int) -> Bool {
 /// Map Wasm trap reasons to the payload consumed by Wasmoon's native trap
 /// handler. Native lowering only carries the integer payload; this module owns the
 /// Wasmoon-specific reason-to-payload policy.
-pub fn wasm_trap_payload(reason : String) -> Int {
+pub fn wasm_trap_payload(reason : String) -> Int32 {
   if reason == "unreachable" {
     0
   } else if reason.contains("out of bounds") {
@@ -171,6 +175,6 @@ pub fn take_pending_trap_message() -> String? {
 }
 
 ///|
-pub fn is_wasi_exit_trap_code(code : Int) -> Bool {
+pub fn is_wasi_exit_trap_code(code : Int32) -> Bool {
   code == 100
 }

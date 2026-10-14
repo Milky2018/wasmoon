@@ -2,7 +2,7 @@
 
 ///|
 /// Execute call instruction: direct function call
-fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
+fn ExecContext::exec_call(self : ExecContext, func_idx : Int32) -> Unit raise {
   // Get the function type from the module instance
   // func_addrs[func_idx] gives us the store address
   let store_addr = self.instance.func_addrs[func_idx]
@@ -30,8 +30,8 @@ fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
 /// Execute call_indirect instruction: indirect function call through table
 fn ExecContext::exec_call_indirect(
   self : ExecContext,
-  type_idx : Int,
-  table_idx : Int,
+  type_idx : Int32,
+  table_idx : Int32,
 ) -> Unit raise {
   // Get the table address from instance
   let table_addr = self.instance.table_addrs[table_idx]
@@ -123,7 +123,10 @@ fn ExecContext::exec_call_indirect(
 
 ///|
 /// Execute call_ref instruction: call function through typed reference
-fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise {
+fn ExecContext::exec_call_ref(
+  self : ExecContext,
+  type_idx : Int32,
+) -> Unit raise {
   // Pop the function reference from the stack
   let func_ref = self.stack.pop()
 
@@ -199,10 +202,10 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
 /// Call a function instance with proper context switching for cross-module calls
 fn ExecContext::call_func_inst_with_context(
   self : ExecContext,
-  store_addr : Int,
+  store_addr : Int32,
   func_inst : @runtime.FuncInst,
   args : Array[@types.Value],
-  num_results : Int,
+  num_results : Int32,
 ) -> Unit raise {
   match func_inst {
     WasmFunc(code) => {
@@ -261,7 +264,7 @@ fn ExecContext::invoke_host_func(
 ///|
 fn ExecContext::invoke_async_host_func(
   self : ExecContext,
-  store_addr : Int,
+  store_addr : Int32,
   host_fn : @runtime.AsyncHostFunction,
   caller_instance : @runtime.ModuleInstance,
   args : Array[@types.Value],
@@ -309,7 +312,7 @@ fn ExecContext::call_wasm_func_with_instance(
   target_instance : @runtime.ModuleInstance,
   func : @types.FunctionCode,
   args : Array[@types.Value],
-  num_results : Int,
+  num_results : Int32,
 ) -> Unit raise {
   self.enter_function(target_instance, func, args, num_results)
   if !self.running {
@@ -322,7 +325,7 @@ fn ExecContext::call_wasm_func(
   self : ExecContext,
   func : @types.FunctionCode,
   args : Array[@types.Value],
-  num_results : Int,
+  num_results : Int32,
 ) -> Unit raise {
   self.call_wasm_func_with_instance(self.instance, func, args, num_results)
 }
@@ -336,7 +339,7 @@ fn ExecContext::call_wasm_func(
 /// Wasmtime style: raise TailCall signal instead of recursively calling
 pub fn ExecContext::exec_tail_call(
   self : ExecContext,
-  func_idx : Int,
+  func_idx : Int32,
 ) -> Unit raise {
   // Get function address and type from current module
   let store_addr = self.instance.func_addrs[func_idx]
@@ -367,8 +370,8 @@ pub fn ExecContext::exec_tail_call(
 /// Includes type checking like call_indirect
 pub fn ExecContext::exec_tail_call_indirect(
   self : ExecContext,
-  type_idx : Int,
-  table_idx : Int,
+  type_idx : Int32,
+  table_idx : Int32,
 ) -> Unit raise {
   // Get table
   let table_addr = self.instance.table_addrs[table_idx]
@@ -460,7 +463,7 @@ pub fn ExecContext::exec_tail_call_indirect(
 /// Takes a function reference from the stack and tail-calls it
 pub fn ExecContext::exec_tail_call_ref(
   self : ExecContext,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> Unit raise {
   // Pop the function reference from stack
   let func_ref = self.stack.pop()

@@ -1,11 +1,11 @@
 ///|
-const MAX_FULL_UNROLL_TRIP_COUNT : Int = 8
+const MAX_FULL_UNROLL_TRIP_COUNT : Int32 = 8
 
 ///|
-const MAX_FACTOR_TWO_TRIP_COUNT : Int = 1000000
+const MAX_FACTOR_TWO_TRIP_COUNT : Int32 = 1000000
 
 ///|
-const MAX_FULL_UNROLL_CLONED_INSTRUCTIONS : Int = 64
+const MAX_FULL_UNROLL_CLONED_INSTRUCTIONS : Int32 = 64
 
 ///|
 const I32_SIGNED_MIN : Int64 = -2147483648L
@@ -22,7 +22,7 @@ priv struct CountedLoopPlan {
   initial_args : Array[@milkir.Value]
   iteration_blocks : Array[@milkir.Block]
   latch_args : Array[@milkir.Value]
-  trip_count : Int
+  trip_count : Int32
 }
 
 ///|
@@ -44,7 +44,10 @@ priv enum CountedSignedness {
 }
 
 ///|
-fn find_unroll_block(func : @milkir.Function, block_id : Int) -> @milkir.Block? {
+fn find_unroll_block(
+  func : @milkir.Function,
+  block_id : Int32,
+) -> @milkir.Block? {
   for block in func.blocks {
     if block.id == block_id {
       return Some(block)
@@ -89,7 +92,7 @@ fn find_integer_constant_outside_loop(
   if value.ty != I32 && value.ty != I64 {
     return None
   }
-  let visited : @hashset.HashSet[Int] = HashSet([])
+  let visited : @hashset.HashSet[Int32] = HashSet([])
   let mut current = value
   while !visited.contains(current.id) {
     visited.add(current.id)
@@ -114,7 +117,7 @@ fn find_integer_constant_outside_loop(
 fn find_iteration_definition(
   func : @milkir.Function,
   iteration_blocks : Array[@milkir.Block],
-  value_id : Int,
+  value_id : Int32,
 ) -> @milkir.Inst? {
   for block in iteration_blocks {
     for inst_id in block.instruction_ids() {
@@ -133,7 +136,7 @@ fn find_iteration_definition(
 fn is_defined_in_unroll_loop(
   func : @milkir.Function,
   loop_ : @milkir.Loop,
-  value_id : Int,
+  value_id : Int32,
 ) -> Bool {
   for block in func.blocks {
     if !loop_.contains(block.id) {
@@ -315,7 +318,7 @@ fn bounded_trip_quotient(
   distance : UInt64,
   step : UInt64,
   inclusive : Bool,
-  max_trip_count : Int,
+  max_trip_count : Int32,
 ) -> UInt64? {
   let quotient = distance / step
   let remainder = distance % step
@@ -341,8 +344,8 @@ fn checked_counted_trip_count(
   direction : CountedDirection,
   condition : @milkir.IntCC,
   domain_max : UInt64,
-  max_trip_count : Int,
-) -> Int? {
+  max_trip_count : Int32,
+) -> Int32? {
   if counted_condition_direction(condition) != Some(direction) {
     return None
   }
@@ -385,7 +388,7 @@ fn analyze_counted_loop(
   func : @milkir.Function,
   cfg : @milkir.CFG,
   loop_ : @milkir.Loop,
-  max_trip_count : Int,
+  max_trip_count : Int32,
 ) -> CountedLoopDecision {
   if loop_.back_edges.length() != 1 {
     return Skip("loop must have one back edge")
@@ -568,14 +571,14 @@ fn analyze_counted_loop(
       return Skip("initial slice does not support body parameters")
     }
   }
-  let header_param_ids : @hashset.HashSet[Int] = HashSet([])
+  let header_param_ids : @hashset.HashSet[Int32] = HashSet([])
   let header_params : Array[@milkir.Value] = []
   for item in header.params {
     let (param, _) = item
     header_param_ids.add(param.id)
     header_params.push(param)
   }
-  let clone_available : @hashset.HashSet[Int] = HashSet([])
+  let clone_available : @hashset.HashSet[Int32] = HashSet([])
   for block in iteration_blocks {
     for inst_id in block.instruction_ids() {
       let inst = func.instruction_by_id(inst_id).unwrap()
@@ -706,7 +709,7 @@ fn analyze_counted_loop(
 ///|
 fn remap_unrolled_value(
   value : @milkir.Value,
-  values : @hashmap.HashMap[Int, @milkir.Value],
+  values : @hashmap.HashMap[Int32, @milkir.Value],
 ) -> @milkir.Value {
   values.get(value.id).unwrap_or(value)
 }
@@ -715,7 +718,7 @@ fn remap_unrolled_value(
 fn clone_unrolled_instruction(
   func : @milkir.Function,
   inst : @milkir.Inst,
-  values : @hashmap.HashMap[Int, @milkir.Value],
+  values : @hashmap.HashMap[Int32, @milkir.Value],
 ) -> @milkir.Inst {
   let args = inst.args.map(fn(value) { remap_unrolled_value(value, values) })
   let results : Array[@milkir.Value] = []
@@ -753,7 +756,7 @@ fn clone_unrolled_transition(
   start_args : Array[@milkir.Value],
   destination : @milkir.Block,
 ) -> Array[@milkir.Value] {
-  let values : @hashmap.HashMap[Int, @milkir.Value] = HashMap([])
+  let values : @hashmap.HashMap[Int32, @milkir.Value] = HashMap([])
   for i, param in plan.header_params {
     values.set(param.id, start_args[i])
   }
@@ -819,7 +822,7 @@ fn apply_factor_two_unroll(
 }
 
 ///|
-fn factor_two_growth(plan : CountedLoopPlan, instructions : Int) -> Int64 {
+fn factor_two_growth(plan : CountedLoopPlan, instructions : Int32) -> Int64 {
   if plan.trip_count <= 1 {
     instructions.to_int64() * plan.trip_count.to_int64()
   } else {

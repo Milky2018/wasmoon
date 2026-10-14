@@ -16,10 +16,10 @@ extern "c" fn allocate_context(
 ) -> JITContext = "wasmoon_jit_alloc_context_with_functions_managed"
 
 ///|
-extern "c" fn allocate_legacy_context(count : Int) -> JITContext = "wasmoon_jit_alloc_context_managed"
+extern "c" fn allocate_legacy_context(count : Int32) -> JITContext = "wasmoon_jit_alloc_context_managed"
 
 ///|
-pub fn JITContext::new(func_count : Int) -> JITContext {
+pub fn JITContext::new(func_count : Int32) -> JITContext {
   if func_count < 0 {
     // Keep the legacy nullable result for invalid counts.
     return allocate_legacy_context(func_count)
@@ -32,10 +32,10 @@ pub fn JITContext::new(func_count : Int) -> JITContext {
 extern "c" fn bind_callable_view(
   context : JITContext,
   view : @callable.NativeCallableView,
-  locals : FixedArray[Int],
-  local_count : Int,
-  tags : FixedArray[Int],
-  tag_count : Int,
+  locals : FixedArray[Int32],
+  local_count : Int32,
+  tags : FixedArray[Int32],
+  tag_count : Int32,
 ) -> Unit = "wasmoon_jit_bind_callable_registry"
 
 ///|
@@ -44,8 +44,8 @@ extern "c" fn bind_callable_view(
 pub fn JITContext::bind_callable_registry(
   self : JITContext,
   registry : @callable.NativeCallableRegistry,
-  locals : FixedArray[Int],
-  tags : FixedArray[Int],
+  locals : FixedArray[Int32],
+  tags : FixedArray[Int32],
 ) -> Unit {
   bind_callable_view(
     self,
@@ -74,7 +74,7 @@ extern "c" fn allocate_shaped_context(
 
 ///|
 pub fn JITContext::new_shaped(
-  func_count : Int,
+  func_count : Int32,
   layout : ContextLayout?,
 ) -> JITContext {
   guard layout is Some(layout) else { return JITContext::new(func_count) }

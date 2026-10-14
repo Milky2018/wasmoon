@@ -2,7 +2,7 @@
 /// Resolve an abstract binary heap type while preserving explicit nullability.
 /// Nonnegative indices refer to concrete module types and are resolved separately.
 pub fn ValueType::from_abstract_heap_type(
-  heap_type : Int,
+  heap_type : Int32,
   nullable : Bool,
 ) -> ValueType? {
   Some(

@@ -1,17 +1,17 @@
 ///|
 priv struct WasmoonNativeEnvironment {
   wasm : @wasm_native.Environment
-  field_paths : Map[String, Array[Int]]
+  field_paths : Map[String, Array[Int32]]
   runtime_symbols : @wasm_milkir.RuntimeSymbols
 }
 
 ///|
 fn wasmoon_native_environment(
   use_subtype_indirect_check : Bool,
-  canonical_type_indices : Array[Int],
+  canonical_type_indices : Array[Int32],
   layout : VMContextLayout,
 ) -> WasmoonNativeEnvironment {
-  let field_paths : Map[String, Array[Int]] = Map([])
+  let field_paths : Map[String, Array[Int32]] = Map([])
   let runtime_symbols = wasm_runtime_symbols()
   let function_table_field = @native.EnvironmentField::new(
     "wasmoon.vmctx.function_table",
@@ -92,7 +92,7 @@ fn wasmoon_allocation_symbols(
 ///|
 fn wasmoon_call_abi(
   environment : WasmoonNativeEnvironment,
-  function_index : Int,
+  function_index : Int32,
 ) -> @native_lowering.CallAbiElaboration {
   let hidden_safepoints : Array[@native_lowering.HiddenSafepointAbi] = []
   for symbol in wasmoon_allocation_symbols(environment) {
@@ -156,12 +156,12 @@ fn compile_wasm_body_x64_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
-  canonical_type_indices : Array[Int],
-  context_layout? : VMContextLayout = vmcontext_layout(),
-  function_index? : Int = -1,
-  record_metrics? : Bool = false,
-  on_diagnostics? : ((String, String) -> Unit)? = None,
-  compilation_session? : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
+  canonical_type_indices : Array[Int32],
+  context_layout~ : VMContextLayout = vmcontext_layout(),
+  function_index~ : Int32 = -1,
+  record_metrics~ : Bool = false,
+  on_diagnostics~ : ((String, String) -> Unit)? = None,
+  compilation_session~ : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
 ) -> X64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_native_environment(
@@ -250,12 +250,12 @@ fn compile_wasm_body_aarch64_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
-  canonical_type_indices : Array[Int],
-  context_layout? : VMContextLayout = vmcontext_layout(),
-  function_index? : Int = -1,
-  record_metrics? : Bool = false,
-  on_diagnostics? : ((String, String) -> Unit)? = None,
-  compilation_session? : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
+  canonical_type_indices : Array[Int32],
+  context_layout~ : VMContextLayout = vmcontext_layout(),
+  function_index~ : Int32 = -1,
+  record_metrics~ : Bool = false,
+  on_diagnostics~ : ((String, String) -> Unit)? = None,
+  compilation_session~ : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
 ) -> AArch64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
   let environment = wasmoon_native_environment(
@@ -347,10 +347,10 @@ pub fn compile_wasm_body_diagnostics_for_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   target : NativeTarget,
-  use_subtype_indirect_check? : Bool = true,
-  canonical_type_indices? : Array[Int] = [],
-  context_shape? : ContextShape = Legacy,
-  function_index? : Int = -1,
+  use_subtype_indirect_check~ : Bool = true,
+  canonical_type_indices~ : Array[Int32] = [],
+  context_shape~ : ContextShape = Legacy,
+  function_index~ : Int32 = -1,
 ) -> JitPipelineDiagnostics raise JitPipelineError {
   NativeCompiler::new(target, context_shape~).diagnose_wasm_body(
     function,
@@ -367,9 +367,9 @@ pub fn NativeCompiler::diagnose_wasm_body(
   self : NativeCompiler,
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  function_index~ : Int,
-  use_subtype_indirect_check? : Bool = true,
-  canonical_type_indices? : Array[Int] = [],
+  function_index~ : Int32,
+  use_subtype_indirect_check~ : Bool = true,
+  canonical_type_indices~ : Array[Int32] = [],
 ) -> JitPipelineDiagnostics raise JitPipelineError {
   let renderings : Ref[(String, String)] = { val: ("", ""), }
   let (object, _) = self.compile_wasm_body(
@@ -397,8 +397,8 @@ pub fn NativeCompiler::diagnose_wasm_body(
 pub fn plan_wasm_body_aarch64_code_object(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  use_subtype_indirect_check? : Bool = true,
-  canonical_type_indices? : Array[Int] = [],
+  use_subtype_indirect_check~ : Bool = true,
+  canonical_type_indices~ : Array[Int32] = [],
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
   compile_wasm_body_aarch64_target(
     function, validation_context, use_subtype_indirect_check, canonical_type_indices,
@@ -409,8 +409,8 @@ pub fn plan_wasm_body_aarch64_code_object(
 pub fn plan_wasm_body_x64_code_object(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  use_subtype_indirect_check? : Bool = true,
-  canonical_type_indices? : Array[Int] = [],
+  use_subtype_indirect_check~ : Bool = true,
+  canonical_type_indices~ : Array[Int32] = [],
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
   compile_wasm_body_x64_target(
     function, validation_context, use_subtype_indirect_check, canonical_type_indices,

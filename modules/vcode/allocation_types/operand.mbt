@@ -54,7 +54,7 @@ pub extend AllocationConstraint with Eq::{not_equal, equal}
 /// A dense virtual-register identity within one allocation session.
 #valtype
 pub(all) struct VirtualReg {
-  id : Int
+  id : Int32
   class : RegClass
 } derive(Eq, Debug)
 
@@ -71,7 +71,7 @@ pub(all) struct AllocationOperand {
   role : OperandRole
   constraint : AllocationConstraint
   preference : PhysicalReg?
-  tie_id : Int
+  tie_id : Int32
   timing : OperandTiming
 } derive(Eq, Debug)
 
@@ -120,7 +120,7 @@ pub fn AllocationOperand::with_preference(
 /// Tie operands in one instruction by a shared nonnegative label.
 pub fn AllocationOperand::with_tie(
   self : AllocationOperand,
-  tie_id : Int,
+  tie_id : Int32,
 ) -> AllocationOperand {
   { ..self, tie_id, }
 }

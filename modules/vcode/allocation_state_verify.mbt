@@ -1,10 +1,10 @@
 ///|
 priv struct AllocationState {
-  values : Map[(Int, Int), Value]
+  values : Map[(Int32, Int32), Value]
 }
 
 ///|
-fn allocation_location_key(location : AllocationLocation) -> (Int, Int) {
+fn allocation_location_key(location : AllocationLocation) -> (Int32, Int32) {
   if location.is_register() {
     let reg = location.register_unchecked()
     match reg.class {
@@ -25,7 +25,7 @@ fn AllocationState::new() -> AllocationState {
 
 ///|
 fn AllocationState::copy(self : AllocationState) -> AllocationState {
-  let values : Map[(Int, Int), Value] = Map([])
+  let values : Map[(Int32, Int32), Value] = Map([])
   for key, value in self.values {
     values[key] = value
   }
@@ -56,7 +56,7 @@ fn AllocationState::meet_with(
   self : AllocationState,
   other : AllocationState,
 ) -> Unit {
-  let removed : Array[(Int, Int)] = []
+  let removed : Array[(Int32, Int32)] = []
   for key, value in self.values {
     if other.values.get(key) != Some(value) {
       removed.push(key)
@@ -69,7 +69,7 @@ fn AllocationState::meet_with(
 
 ///|
 fn AllocationState::remove_value(self : AllocationState, value : Value) -> Unit {
-  let removed : Array[(Int, Int)] = []
+  let removed : Array[(Int32, Int32)] = []
   for key, current in self.values {
     if current == value {
       removed.push(key)
@@ -107,7 +107,7 @@ fn AllocationState::set(
 }
 
 ///|
-fn Allocation::edit_index(self : Allocation, edit : Edit) -> Int {
+fn Allocation::edit_index(self : Allocation, edit : Edit) -> Int32 {
   for index, candidate in self.edits {
     if candidate.point == edit.point && candidate.kind == edit.kind {
       return index
@@ -234,7 +234,7 @@ fn[Inst] prepare_allocation_successor_state(
   function : Function[Inst],
   allocation : Allocation,
   source : Block,
-  successor_index : Int,
+  successor_index : Int32,
   edge : Edge,
 ) -> AllocationState raise AllocationVerifyError {
   let state = output.copy()
@@ -275,7 +275,7 @@ fn[Inst] verify_allocation_state(
     function.block_count(),
     None,
   )
-  let worklist : Array[Int] = []
+  let worklist : Array[Int32] = []
   for block_id in 0..<function.block_count() {
     if block_id == 0 || predecessors[block_id].is_empty() {
       let state = AllocationState::new()

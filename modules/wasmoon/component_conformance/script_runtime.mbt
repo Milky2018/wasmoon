@@ -4,23 +4,23 @@
 priv struct ScriptHost {
   linker : @runtime_impl.ComponentLinker
   runtime : @runtime_impl.HostRuntimeState
-  resource_types : Map[(Int, Int), @component_types.TypeDef?]
+  resource_types : Map[(Int32, Int32), @component_types.TypeDef?]
 }
 
 ///|
 priv struct ComponentScriptRuntime {
   use_jit : Bool
   component_implements : Bool
-  linkers : Map[Int, @runtime_impl.ComponentLinker]
+  linkers : Map[Int32, @runtime_impl.ComponentLinker]
   definitions : Map[String, @component_types.Component]
   instances : Map[String, @runtime_impl.ComponentInstance]
-  resource_origins : Map[(Int, Int), (Int, Int)]
+  resource_origins : Map[(Int32, Int32), (Int32, Int32)]
 }
 
 ///|
 fn ComponentScriptRuntime::new(
   use_jit : Bool,
-  component_implements? : Bool = true,
+  component_implements~ : Bool = true,
 ) -> ComponentScriptRuntime {
   {
     use_jit,
@@ -52,7 +52,7 @@ fn ComponentScriptRuntime::release_unreferenced(
   self : ComponentScriptRuntime,
   current : @runtime_impl.ComponentInstance?,
 ) -> Unit {
-  let live : Map[Int, Bool] = Map([])
+  let live : Map[Int32, Bool] = Map([])
   for entry in self.instances {
     let (_, instance) = entry
     live.set(instance.resource_table.id, true)
@@ -60,7 +60,7 @@ fn ComponentScriptRuntime::release_unreferenced(
   if current is Some(instance) {
     live.set(instance.resource_table.id, true)
   }
-  let retired : Array[Int] = []
+  let retired : Array[Int32] = []
   for entry in self.linkers {
     let (id, linker) = entry
     if !live.contains(id) {

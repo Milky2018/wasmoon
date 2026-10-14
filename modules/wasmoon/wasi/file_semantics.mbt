@@ -5,7 +5,7 @@ using @native_io {c_allocate}
 // Synchronization belongs to the descriptor contract rather than F_SETFL:
 // several supported kernels cannot change O_SYNC after a file is opened.
 // A full flush is a valid stronger implementation of data-only synchronization.
-fn OpenFile::synchronize(self : OpenFile, before_read : Bool) -> Int {
+fn OpenFile::synchronize(self : OpenFile, before_read : Bool) -> Int32 {
   if before_read && (self.flags & 0x08) == 0 {
     return 0
   }

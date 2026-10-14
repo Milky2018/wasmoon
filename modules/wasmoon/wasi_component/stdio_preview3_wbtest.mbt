@@ -41,10 +41,10 @@ test "Preview 3 inherited regular-file stdin remains synchronous" {
 
 ///|
 #borrow(fds)
-extern "c" fn c_preview3_test_pipe(fds : FixedArray[Int]) -> Int = "wasmoon_async_test_pipe"
+extern "c" fn c_preview3_test_pipe(fds : FixedArray[Int32]) -> Int32 = "wasmoon_async_test_pipe"
 
 ///|
-extern "c" fn c_preview3_test_close(fd : Int) -> Unit = "wasmoon_async_test_close"
+extern "c" fn c_preview3_test_close(fd : Int32) -> Unit = "wasmoon_async_test_close"
 
 ///|
 test "Preview 3 output failures use an enum error payload" {

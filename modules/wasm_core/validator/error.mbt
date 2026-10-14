@@ -6,30 +6,30 @@ pub(all) suberror ValidationError {
   TypeMismatch(String) // Expected vs actual type mismatch
   StackUnderflow(String) // Not enough values on validation stack
   StackHeightMismatch(String) // Stack height doesn't match expected
-  InvalidFunctionIndex(Int)
-  InvalidTypeIndex(Int)
-  InvalidLocalIndex(Int)
-  InvalidGlobalIndex(Int)
-  InvalidTableIndex(Int)
-  InvalidMemoryIndex(Int)
-  InvalidLabelIndex(Int)
-  InvalidElemIndex(Int)
-  InvalidDataIndex(Int) // Unknown data segment index
-  UnknownTag(Int) // Unknown tag index
-  UnknownType(Int) // Forward type reference outside rec group
+  InvalidFunctionIndex(Int32)
+  InvalidTypeIndex(Int32)
+  InvalidLocalIndex(Int32)
+  InvalidGlobalIndex(Int32)
+  InvalidTableIndex(Int32)
+  InvalidMemoryIndex(Int32)
+  InvalidLabelIndex(Int32)
+  InvalidElemIndex(Int32)
+  InvalidDataIndex(Int32) // Unknown data segment index
+  UnknownTag(Int32) // Unknown tag index
+  UnknownType(Int32) // Forward type reference outside rec group
   UnreachableCode
   MultipleMemories // More than one memory is not allowed in MVP
   MultipleTables // More than one table is not allowed in MVP
   InvalidLimits(String) // Invalid limits (e.g., min > max)
   InvalidAlignment(String) // Alignment must not be larger than natural
-  InvalidLaneIndex(Int, Int) // lane index, max lanes
+  InvalidLaneIndex(Int32, Int32) // lane index, max lanes
   ConstantExpressionRequired // Non-constant instruction in init expression
   MutableGlobalInConstExpr // Mutable global referenced in constant expression
   DuplicateExportName(String) // Same export name used more than once
   UnknownExport(String) // Export references unknown entity
-  UninitializedLocal(Int) // Non-nullable ref local read before initialization
+  UninitializedLocal(Int32) // Non-nullable ref local read before initialization
   InvalidStartFunction(String) // Start function has invalid signature
-  UndeclaredFunctionReference(Int) // ref.func used on function not declared in elem/global
+  UndeclaredFunctionReference(Int32) // ref.func used on function not declared in elem/global
   UnsupportedInstruction(String) // Instruction missing from validator dispatch
   // Error with location context
   WithContext(ValidationErrorContext)
@@ -46,8 +46,8 @@ pub impl Show for ValidationError with fn output(self, logger) {
 /// Validation error with location context for debugging
 pub(all) struct ValidationErrorContext {
   error_msg : String // The original error message
-  func_idx : Int? // The function index where validation failed
-  instr_offset : Int? // The instruction offset within the function body
+  func_idx : Int32? // The function index where validation failed
+  instr_offset : Int32? // The instruction offset within the function body
   instruction : String? // The instruction that caused the error
 } derive(Debug)
 
@@ -100,7 +100,7 @@ pub fn ValidationErrorContext::from_error(
 ///|
 pub fn ValidationErrorContext::with_func_idx(
   self : ValidationErrorContext,
-  idx : Int,
+  idx : Int32,
 ) -> ValidationErrorContext {
   { ..self, func_idx: Some(idx), }
 }
@@ -108,7 +108,7 @@ pub fn ValidationErrorContext::with_func_idx(
 ///|
 pub fn ValidationErrorContext::with_instr_offset(
   self : ValidationErrorContext,
-  offset : Int,
+  offset : Int32,
 ) -> ValidationErrorContext {
   { ..self, instr_offset: Some(offset), }
 }

@@ -2,7 +2,7 @@
 fn context_global_fixture(
   name : String,
   stability : @milkir.GlobalValueStability,
-  memidx : Int,
+  memidx : Int32,
 ) -> (@milkir.FunctionBuilder, @milkir.Value, @milkir.GlobalValue) {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   let context = builder.add_param(Ptr)

@@ -2,7 +2,7 @@
 
 ///|
 fn encode_extern_value(
-  idx : Int,
+  idx : Int32,
   store : @runtime.Store,
 ) -> Int64 raise @runtime.RuntimeError {
   match store.unwrap_extern(ExternRef(idx)) {
@@ -87,7 +87,7 @@ pub fn FuncrefRegistration::release(self : FuncrefRegistration) -> Unit {
 }
 
 ///|
-fn registered_funcref_ptr(store : @runtime.Store, store_addr : Int) -> Int64? {
+fn registered_funcref_ptr(store : @runtime.Store, store_addr : Int32) -> Int64? {
   store.lookup_jit_funcref_ptr(store_addr)
 }
 
@@ -95,15 +95,15 @@ fn registered_funcref_ptr(store : @runtime.Store, store_addr : Int) -> Int64? {
 fn registered_funcref_store_addr(
   store : @runtime.Store,
   func_ptr : Int64,
-) -> Int? {
+) -> Int32? {
   store.lookup_jit_funcref_store_addr(func_ptr)
 }
 
 ///|
 fn store_addr_to_module_func_idx(
-  store_addr : Int,
+  store_addr : Int32,
   instance : @runtime.ModuleInstance,
-) -> Int? {
+) -> Int32? {
   for i, addr in instance.func_addrs {
     if addr == store_addr {
       return Some(i)
@@ -254,8 +254,8 @@ pub fn register_owned_instance_funcrefs_for_jit(
 /// Used to build a store-wide GC funcref/type view for cross-module indirect calls.
 pub fn collect_registered_funcref_entries(
   store : @runtime.Store,
-) -> Array[(Int64, Int)] {
-  let entries : Array[(Int64, Int)] = []
+) -> Array[(Int64, Int32)] {
+  let entries : Array[(Int64, Int32)] = []
   for entry in store.jit_funcref_entries() {
     let func_ptr = entry.func_ptr
     let store_addr = entry.store_addr
@@ -352,7 +352,7 @@ pub fn exports_shared_resources(mod_ : @types.Module) -> Bool {
 
 ///|
 /// Get function name from exports or generate default name "func_N"
-pub fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
+pub fn get_func_name(mod_ : @types.Module, func_idx : Int32) -> String {
   for exp in mod_.exports {
     if exp.desc is Func(idx) && idx == func_idx {
       return exp.name
@@ -365,7 +365,7 @@ pub fn get_func_name(mod_ : @types.Module, func_idx : Int) -> String {
 fn read_native_global(
   offset : Int64,
   value_type : @types.ValueType,
-  func_addrs : Array[Int],
+  func_addrs : Array[Int32],
   store : @runtime.Store,
 ) -> @types.Value raise @runtime.RuntimeError {
   let raw_value = @wasmoon_jit.native_value_slot_read(offset, 0)
@@ -450,7 +450,7 @@ fn encode_global_value_for_jit(
   value : @types.Value,
   store : @runtime.Store,
   jit_module : @compiled_jit.JITModule,
-  func_addrs : Array[Int],
+  func_addrs : Array[Int32],
 ) -> (Int64, Int64?) raise @runtime.RuntimeError {
   match value {
     ContRef(_) => (@wasmoon_jit.value_to_i64(value), None)
@@ -459,7 +459,7 @@ fn encode_global_value_for_jit(
     F32(f) => (@types.ToInt64::to_int64_bits(f), None)
     F64(d) => (@types.ToInt64::to_int64_bits(d), None)
     FuncRef(store_addr) => {
-      let mut module_func_idx : Int? = None
+      let mut module_func_idx : Int32? = None
       for i, addr in func_addrs {
         if addr == store_addr {
           module_func_idx = Some(i)
@@ -522,7 +522,7 @@ fn decode_funcref_from_jit_ctx(
         let store_addr = match registered_funcref_store_addr(store, ptr) {
           Some(addr) => Some(addr)
           None => {
-            let mut found : Int? = None
+            let mut found : Int32? = None
             for idx, addr in jit_ctx.func_addrs {
               if jit_ctx.jit_module.get_func_ptr(idx) == ptr {
                 found = Some(addr)
@@ -645,7 +645,7 @@ pub fn sync_tables_to_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   jit_module : @compiled_jit.JITModule,
-  use_subtype_indirect_check? : Bool = false,
+  use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
   // Iterate over all tables in the instance
   for table_addr in instance.table_addrs {
@@ -674,8 +674,8 @@ pub fn sync_tables_to_jit(
 pub fn eval_elem_offset_expr(
   instrs : Array[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
-) -> Int raise @runtime.RuntimeError {
-  let stack : Array[Int] = []
+) -> Int32 raise @runtime.RuntimeError {
+  let stack : Array[Int32] = []
   for instr in instrs {
     match instr {
       I32Const(n) => stack.push(n)
@@ -741,7 +741,7 @@ pub fn init_elem_segments(
   jm : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  use_subtype_indirect_check? : Bool = false,
+  use_subtype_indirect_check~ : Bool = false,
 ) -> Unit {
   // Get global instances for evaluating offset expressions
   let globals : Array[@runtime.GlobalInstance] = []
@@ -764,7 +764,7 @@ pub fn init_elem_segments(
   // Build function index -> table entry type mapping.
   // - subtype mode: keep raw type indices
   // - exact mode: use canonical indices for structural equivalence
-  let func_table_types : Array[Int] = []
+  let func_table_types : Array[Int32] = []
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
       let mapped_type = if use_subtype_indirect_check {
@@ -796,7 +796,7 @@ pub fn init_elem_segments(
   }
 
   // Build store func address -> module func index map.
-  let func_addr_to_idx : Map[Int, Int] = Map([])
+  let func_addr_to_idx : Map[Int32, Int32] = Map([])
   for i, addr in instance.func_addrs {
     func_addr_to_idx.set(addr, i)
   }
@@ -806,7 +806,7 @@ pub fn init_elem_segments(
   // - table declaration init expressions
   // - active element segment effects
   // - imported/exported table sharing behavior
-  let elem_init : Array[(Int, Int, Int?, Int)] = []
+  let elem_init : Array[(Int32, Int32, Int32?, Int32)] = []
   for table_idx, table_addr in instance.table_addrs {
     let runtime_table = store.get_table(table_addr) catch { _ => continue }
     let max_entries = match jit_tables[table_idx] {
@@ -854,7 +854,7 @@ pub fn init_bulk_segments(
   jm : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  use_subtype_indirect_check? : Bool = false,
+  use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
   jm.prepare_continuations(mod_.types, store.native_execution_state()) catch {
     error =>
@@ -869,7 +869,7 @@ pub fn init_bulk_segments(
   // Build func_idx -> table entry type idx mapping in module index space.
   // - subtype mode: raw indices
   // - exact mode: canonical indices
-  let func_table_types : Array[Int] = []
+  let func_table_types : Array[Int32] = []
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
       let mapped = if use_subtype_indirect_check {
@@ -894,7 +894,7 @@ pub fn init_bulk_segments(
   }
 
   // Build store func_addr -> module func_idx map (for GlobalGet funcref).
-  let func_addr_to_idx : Map[Int, Int] = Map([])
+  let func_addr_to_idx : Map[Int32, Int32] = Map([])
   for i, addr in instance.func_addrs {
     func_addr_to_idx.set(addr, i)
   }
@@ -1006,7 +1006,7 @@ pub fn build_func_signatures(
 
 ///|
 /// Count the number of function imports in the import list
-pub fn count_func_imports(imports : Array[@types.Import]) -> Int {
+pub fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Func(_) {
@@ -1031,7 +1031,7 @@ pub fn sync_table_to_jit(
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  use_subtype_indirect_check? : Bool = false,
+  use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
   use_subtype_indirect_check |> ignore
   let runtime_size = table.size()
@@ -1040,7 +1040,7 @@ pub fn sync_table_to_jit(
   for i in 0..<size {
     let value = table.get(i) catch { _ => continue }
     let mut encoded : Int64 = NULL_REF
-    let mut type_idx : Int = -1
+    let mut type_idx : Int32 = -1
     match value {
       ContRef(_) => encoded = @wasmoon_jit.value_to_i64(value)
       ExnRef(index) => encoded = store.encode_native_exception(index)
@@ -1071,7 +1071,7 @@ pub fn sync_table_to_jit(
 // ============================================================
 
 ///|
-fn slot_count_for_type(ty : @types.ValueType) -> Int {
+fn slot_count_for_type(ty : @types.ValueType) -> Int32 {
   match ty {
     V128 => 2
     _ => 1
@@ -1079,7 +1079,7 @@ fn slot_count_for_type(ty : @types.ValueType) -> Int {
 }
 
 ///|
-fn sum_slot_count(types : Array[@types.ValueType]) -> Int {
+fn sum_slot_count(types : Array[@types.ValueType]) -> Int32 {
   let mut n = 0
   for ty in types {
     n = n + slot_count_for_type(ty)
@@ -1088,14 +1088,14 @@ fn sum_slot_count(types : Array[@types.ValueType]) -> Int {
 }
 
 ///|
-fn low_u32_bits(raw : Int64) -> Int {
+fn low_u32_bits(raw : Int64) -> Int32 {
   (raw & 0xFFFFFFFFL).to_int()
 }
 
 ///|
 fn lookup_funcref_ptr_for_store_addr(
   store : @runtime.Store,
-  store_addr : Int,
+  store_addr : Int32,
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int64? {
@@ -1117,7 +1117,7 @@ fn lookup_store_addr_for_funcref_ptr(
   func_ptr : Int64,
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
-) -> Int? {
+) -> Int32? {
   match registered_funcref_store_addr(store, func_ptr) {
     Some(addr) => return Some(addr)
     None => ()
@@ -1279,11 +1279,11 @@ fn decode_ref_value(
 ///|
 fn decode_value(
   ty : @types.ValueType,
-  slot_idx : Int,
+  slot_idx : Int32,
   store : @runtime.Store,
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
-) -> (@types.Value, Int) raise @runtime.RuntimeError {
+) -> (@types.Value, Int32) raise @runtime.RuntimeError {
   match ty {
     I32 =>
       (I32(low_u32_bits(@wasmoon_jit.hostcall_value_slot_read(slot_idx))), 1)
@@ -1415,7 +1415,7 @@ fn encode_value(
 }
 
 ///|
-fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
+fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int32 {
   match err {
     OutOfBoundsMemoryAccess => 1
     OutOfBoundsTableAccess => 13
@@ -1492,8 +1492,8 @@ pub fn build_external_imports_for_jit(
 ///|
 fn find_local_tag_idx(
   caller_instance : @runtime.ModuleInstance,
-  tag_addr : Int,
-) -> Int? {
+  tag_addr : Int32,
+) -> Int32? {
   for i, addr in caller_instance.tag_addrs {
     if addr == tag_addr {
       return Some(i)
@@ -1505,7 +1505,7 @@ fn find_local_tag_idx(
 ///|
 priv enum ImportedCallOutcome {
   ImportedReturned(Array[@types.Value])
-  ImportedThrown(Int, Array[@types.Value])
+  ImportedThrown(Int32, Array[@types.Value])
   ImportedPending
   ImportedHostFailed(@runtime.RuntimeError)
 }
@@ -1519,15 +1519,15 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
   self : JITModuleContext,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
-  before_dispatch? : () -> Unit raise @runtime.RuntimeError = fn() { () },
-  after_dispatch? : () -> Unit raise @runtime.RuntimeError = fn() { () },
-  classify_suspension? : (@runtime.RuntimeError) -> Bool = fn(_error) { false },
+  before_dispatch~ : () -> Unit raise @runtime.RuntimeError = fn() { () },
+  after_dispatch~ : () -> Unit raise @runtime.RuntimeError = fn() { () },
+  classify_suspension~ : (@runtime.RuntimeError) -> Bool = fn(_error) { false },
 ) -> Unit {
   let jit_module = self.jit_module
   fn call_func_by_addr(
     store : @runtime.Store,
     caller_instance : @runtime.ModuleInstance,
-    func_addr : Int,
+    func_addr : Int32,
     args : Array[@types.Value],
   ) -> ImportedCallOutcome raise @runtime.RuntimeError {
     let inst = store.get_func_inst(func_addr)

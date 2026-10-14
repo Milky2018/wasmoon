@@ -7,13 +7,13 @@
 /// released while stackful execution is suspended. Shared poison rejects new
 /// host calls without preventing admitted tasks from resuming.
 struct ComponentInstanceEntryState {
-  active_depth : Ref[Int]
+  active_depth : Ref[Int32]
   poisoned : Ref[Bool]
 } derive(Debug)
 
 ///|
 pub fn ComponentInstanceEntryState::new(
-  poisoned? : Ref[Bool] = Ref(false),
+  poisoned~ : Ref[Bool] = Ref(false),
 ) -> ComponentInstanceEntryState {
   { active_depth: Ref(0), poisoned, }
 }

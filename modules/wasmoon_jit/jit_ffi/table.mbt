@@ -11,7 +11,7 @@ pub extern "c" fn NativeTableHandle::is_null(self : NativeTableHandle) -> Bool =
 
 ///|
 #borrow(self)
-pub extern "c" fn NativeTableHandle::size(self : NativeTableHandle) -> Int = "wasmoon_native_table_size"
+pub extern "c" fn NativeTableHandle::size(self : NativeTableHandle) -> Int32 = "wasmoon_native_table_size"
 
 ///|
 pub impl Debug for NativeTableHandle with fn to_repr(_self) {

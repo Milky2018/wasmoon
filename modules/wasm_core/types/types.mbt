@@ -17,12 +17,12 @@ pub(all) enum ValueType {
   RefFunc // non-null function reference (ref func)
   RefExtern // non-null external reference (ref extern)
   // Typed function references
-  RefFuncTyped(Int) // non-null typed function reference (ref $t)
-  RefNullFuncTyped(Int) // nullable typed function reference (ref null $t)
+  RefFuncTyped(Int32) // non-null typed function reference (ref $t)
+  RefNullFuncTyped(Int32) // nullable typed function reference (ref null $t)
   ContRef // nullable abstract continuation reference
   RefCont // non-null abstract continuation reference
-  RefContTyped(Int)
-  RefNullContTyped(Int)
+  RefContTyped(Int32)
+  RefNullContTyped(Int32)
   NullContRef // nullable bottom of the continuation hierarchy
   RefNoCont // non-null bottom of the continuation hierarchy
   // GC reference types
@@ -31,10 +31,10 @@ pub(all) enum ValueType {
   // GC struct/array references
   StructRef // nullable struct reference (ref null struct)
   ArrayRef // nullable array reference (ref null array)
-  RefStruct(Int) // non-null typed struct reference (ref $t)
-  RefNullStruct(Int) // nullable typed struct reference (ref null $t)
-  RefArray(Int) // non-null typed array reference (ref $t)
-  RefNullArray(Int) // nullable typed array reference (ref null $t)
+  RefStruct(Int32) // non-null typed struct reference (ref $t)
+  RefNullStruct(Int32) // nullable typed struct reference (ref null $t)
+  RefArray(Int32) // non-null typed array reference (ref $t)
+  RefNullArray(Int32) // nullable typed array reference (ref null $t)
   // GC abstract heap types
   RefAny // non-null any reference (ref any)
   RefEq // non-null eq reference (ref eq) - comparable
@@ -124,14 +124,14 @@ pub(all) enum CompositeType {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
-  Cont(Int)
+  Cont(Int32)
 } derive(Eq, Debug)
 
 ///|
 /// Subtype definition with optional supertype
 pub(all) struct SubType {
   final_ : Bool // true if type cannot be subtyped further
-  supertypes : Array[Int] // indices of supertypes (0 or 1 for MVP)
+  supertypes : Array[Int32] // indices of supertypes (0 or 1 for MVP)
   composite : CompositeType
 } derive(Eq, Debug)
 
@@ -169,19 +169,19 @@ pub fn func_types_to_subtypes(func_types : Array[FuncType]) -> Array[SubType] {
 ///|
 /// Runtime values
 pub(all) enum Value {
-  I32(Int)
+  I32(Int32)
   I64(Int64)
   F32(Float)
   F64(Double)
   V128(Bytes) // SIMD 128-bit vector (16 bytes)
-  FuncRef(Int) // function index
-  ExternRef(Int) // external reference
-  ExnRef(Int) // exception reference (index into exception store)
+  FuncRef(Int32) // function index
+  ExternRef(Int32) // external reference
+  ExnRef(Int32) // exception reference (index into exception store)
   ContRef(Int64) // Store-owned one-shot continuation handle
   // GC values
-  StructRef(Int) // struct reference (index into GC heap)
-  ArrayRef(Int) // array reference (index into GC heap)
-  I31(Int) // i31ref value (31-bit integer, stored directly)
+  StructRef(Int32) // struct reference (index into GC heap)
+  ArrayRef(Int32) // array reference (index into GC heap)
+  I31(Int32) // i31ref value (31-bit integer, stored directly)
   Null
 } derive(Eq, Debug)
 
@@ -198,28 +198,28 @@ pub(all) enum Instruction {
   Block(BlockType, Array[Instruction])
   Loop(BlockType, Array[Instruction])
   If(BlockType, Array[Instruction], Array[Instruction])
-  Br(Int) // label index
-  BrIf(Int)
-  BrTable(Array[Int], Int) // labels, default
+  Br(Int32) // label index
+  BrIf(Int32)
+  BrTable(Array[Int32], Int32) // labels, default
   Return
-  Call(Int) // function index
-  CallIndirect(Int, Int) // type index, table index
-  CallRef(Int) // type index (WasmGC)
-  ReturnCall(Int) // function index (tail call)
-  ReturnCallIndirect(Int, Int) // type index, table index (tail call)
-  ReturnCallRef(Int) // type index (tail call, WasmGC)
+  Call(Int32) // function index
+  CallIndirect(Int32, Int32) // type index, table index
+  CallRef(Int32) // type index (WasmGC)
+  ReturnCall(Int32) // function index (tail call)
+  ReturnCallIndirect(Int32, Int32) // type index, table index (tail call)
+  ReturnCallRef(Int32) // type index (tail call, WasmGC)
 
   // Exception handling instructions
-  Throw(Int) // tag index - throw exception with tag
+  Throw(Int32) // tag index - throw exception with tag
   ThrowRef // throw exception from exnref on stack
   TryTable(BlockType, Array[CatchHandler], Array[Instruction]) // block type, handlers, body
-  ContNew(Int)
-  ContBind(Int, Int)
-  Suspend(Int)
-  Resume(Int, Array[ResumeHandler])
-  ResumeThrow(Int, Int, Array[ResumeHandler])
-  ResumeThrowRef(Int, Array[ResumeHandler])
-  Switch(Int, Int)
+  ContNew(Int32)
+  ContBind(Int32, Int32)
+  Suspend(Int32)
+  Resume(Int32, Array[ResumeHandler])
+  ResumeThrow(Int32, Int32, Array[ResumeHandler])
+  ResumeThrowRef(Int32, Array[ResumeHandler])
+  Switch(Int32, Int32)
 
   // Parametric instructions
   Drop
@@ -227,70 +227,70 @@ pub(all) enum Instruction {
   SelectTyped(Array[ValueType]) // select with explicit result type
 
   // Variable instructions
-  LocalGet(Int)
-  LocalSet(Int)
-  LocalTee(Int)
-  GlobalGet(Int)
-  GlobalSet(Int)
+  LocalGet(Int32)
+  LocalSet(Int32)
+  LocalTee(Int32)
+  GlobalGet(Int32)
+  GlobalSet(Int32)
 
   // Table instructions
-  TableGet(Int) // table index
-  TableSet(Int) // table index
-  TableSize(Int) // table index
-  TableGrow(Int) // table index
-  TableFill(Int) // table index
-  TableCopy(Int, Int) // dest table index, src table index
-  TableInit(Int, Int) // table index, elem index
+  TableGet(Int32) // table index
+  TableSet(Int32) // table index
+  TableSize(Int32) // table index
+  TableGrow(Int32) // table index
+  TableFill(Int32) // table index
+  TableCopy(Int32, Int32) // dest table index, src table index
+  TableInit(Int32, Int32) // table index, elem index
 
   // Memory instructions - (memidx, align, offset)
   // offset is Int64 to support memory64 64-bit offsets
-  I32Load(Int, Int, Int64) // memidx, align, offset
-  I64Load(Int, Int, Int64)
-  F32Load(Int, Int, Int64)
-  F64Load(Int, Int, Int64)
-  I32Load8S(Int, Int, Int64)
-  I32Load8U(Int, Int, Int64)
-  I32Load16S(Int, Int, Int64)
-  I32Load16U(Int, Int, Int64)
-  I64Load8S(Int, Int, Int64)
-  I64Load8U(Int, Int, Int64)
-  I64Load16S(Int, Int, Int64)
-  I64Load16U(Int, Int, Int64)
-  I64Load32S(Int, Int, Int64)
-  I64Load32U(Int, Int, Int64)
-  I32Store(Int, Int, Int64)
-  I64Store(Int, Int, Int64)
-  F32Store(Int, Int, Int64)
-  F64Store(Int, Int, Int64)
-  I32Store8(Int, Int, Int64)
-  I32Store16(Int, Int, Int64)
-  I64Store8(Int, Int, Int64)
-  I64Store16(Int, Int, Int64)
-  I64Store32(Int, Int, Int64)
-  MemorySize(Int) // memidx
-  MemoryGrow(Int) // memidx
-  MemoryInit(Int, Int) // memidx, data segment index
-  DataDrop(Int) // data segment index
-  MemoryCopy(Int, Int) // dest memidx, src memidx
-  MemoryFill(Int) // memidx
-  ElemDrop(Int) // element segment index
+  I32Load(Int32, Int32, Int64) // memidx, align, offset
+  I64Load(Int32, Int32, Int64)
+  F32Load(Int32, Int32, Int64)
+  F64Load(Int32, Int32, Int64)
+  I32Load8S(Int32, Int32, Int64)
+  I32Load8U(Int32, Int32, Int64)
+  I32Load16S(Int32, Int32, Int64)
+  I32Load16U(Int32, Int32, Int64)
+  I64Load8S(Int32, Int32, Int64)
+  I64Load8U(Int32, Int32, Int64)
+  I64Load16S(Int32, Int32, Int64)
+  I64Load16U(Int32, Int32, Int64)
+  I64Load32S(Int32, Int32, Int64)
+  I64Load32U(Int32, Int32, Int64)
+  I32Store(Int32, Int32, Int64)
+  I64Store(Int32, Int32, Int64)
+  F32Store(Int32, Int32, Int64)
+  F64Store(Int32, Int32, Int64)
+  I32Store8(Int32, Int32, Int64)
+  I32Store16(Int32, Int32, Int64)
+  I64Store8(Int32, Int32, Int64)
+  I64Store16(Int32, Int32, Int64)
+  I64Store32(Int32, Int32, Int64)
+  MemorySize(Int32) // memidx
+  MemoryGrow(Int32) // memidx
+  MemoryInit(Int32, Int32) // memidx, data segment index
+  DataDrop(Int32) // data segment index
+  MemoryCopy(Int32, Int32) // dest memidx, src memidx
+  MemoryFill(Int32) // memidx
+  ElemDrop(Int32) // element segment index
 
   // Atomic instructions (0xFE prefix)
   // subopcode: wasm threads/atomics subopcode
   // memarg: (memidx, align, offset)
-  Atomic(Int, Int, Int, Int64)
+  Atomic(Int32, Int32, Int32, Int64)
 
   // Reference type instructions
   RefNull(ValueType) // ref.null: push null reference of given type
   RefIsNull // ref.is_null: test if reference is null
-  RefFunc(Int) // ref.func: push reference to function by index
+  RefFunc(Int32) // ref.func: push reference to function by index
   RefAsNonNull // ref.as_non_null: convert nullable ref to non-null ref
   RefEqInstr // ref.eq: compare two references for equality
-  BrOnNull(Int) // br_on_null: branch if reference is null
-  BrOnNonNull(Int) // br_on_non_null: branch if reference is non-null
+  BrOnNull(Int32) // br_on_null: branch if reference is null
+  BrOnNonNull(Int32) // br_on_non_null: branch if reference is non-null
 
   // Numeric instructions - Constants
-  I32Const(Int)
+  I32Const(Int32)
   I64Const(Int64)
   F32Const(Float)
   F64Const(Double)
@@ -450,36 +450,36 @@ pub(all) enum Instruction {
   I64TruncSatF64U
 
   // GC instructions - struct operations
-  StructNew(Int) // type index
-  StructNewDefault(Int) // type index
-  StructGet(Int, Int) // type index, field index
-  StructGetS(Int, Int) // type index, field index (signed packed)
-  StructGetU(Int, Int) // type index, field index (unsigned packed)
-  StructSet(Int, Int) // type index, field index
+  StructNew(Int32) // type index
+  StructNewDefault(Int32) // type index
+  StructGet(Int32, Int32) // type index, field index
+  StructGetS(Int32, Int32) // type index, field index (signed packed)
+  StructGetU(Int32, Int32) // type index, field index (unsigned packed)
+  StructSet(Int32, Int32) // type index, field index
 
   // GC instructions - array operations
-  ArrayNew(Int) // type index
-  ArrayNewDefault(Int) // type index
-  ArrayNewFixed(Int, Int) // type index, length
-  ArrayNewData(Int, Int) // type index, data index
-  ArrayNewElem(Int, Int) // type index, elem index
-  ArrayGet(Int) // type index
-  ArrayGetS(Int) // type index (signed packed)
-  ArrayGetU(Int) // type index (unsigned packed)
-  ArraySet(Int) // type index
+  ArrayNew(Int32) // type index
+  ArrayNewDefault(Int32) // type index
+  ArrayNewFixed(Int32, Int32) // type index, length
+  ArrayNewData(Int32, Int32) // type index, data index
+  ArrayNewElem(Int32, Int32) // type index, elem index
+  ArrayGet(Int32) // type index
+  ArrayGetS(Int32) // type index (signed packed)
+  ArrayGetU(Int32) // type index (unsigned packed)
+  ArraySet(Int32) // type index
   ArrayLen // get array length
-  ArrayFill(Int) // type index
-  ArrayCopy(Int, Int) // dest type index, src type index
-  ArrayInitData(Int, Int) // type index, data index
-  ArrayInitElem(Int, Int) // type index, elem index
+  ArrayFill(Int32) // type index
+  ArrayCopy(Int32, Int32) // dest type index, src type index
+  ArrayInitData(Int32, Int32) // type index, data index
+  ArrayInitElem(Int32, Int32) // type index, elem index
 
   // GC instructions - reference casting
   RefTest(ValueType) // test if ref matches type
   RefTestNull(ValueType) // test if ref matches nullable type
   RefCast(ValueType) // cast ref to type (trap if fails)
   RefCastNull(ValueType) // cast ref to nullable type (trap if fails)
-  BrOnCast(Int, ValueType, ValueType) // label, from type, to type
-  BrOnCastFail(Int, ValueType, ValueType) // label, from type, to type
+  BrOnCast(Int32, ValueType, ValueType) // label, from type, to type
+  BrOnCastFail(Int32, ValueType, ValueType) // label, from type, to type
 
   // GC instructions - i31
   RefI31 // create i31ref from i32
@@ -498,33 +498,33 @@ pub(all) enum Instruction {
   V128Const(Bytes) // 16-byte constant
 
   // SIMD load/store - (memidx, align, offset)
-  V128Load(Int, Int, Int64)
-  V128Load8x8S(Int, Int, Int64)
-  V128Load8x8U(Int, Int, Int64)
-  V128Load16x4S(Int, Int, Int64)
-  V128Load16x4U(Int, Int, Int64)
-  V128Load32x2S(Int, Int, Int64)
-  V128Load32x2U(Int, Int, Int64)
-  V128Load8Splat(Int, Int, Int64)
-  V128Load16Splat(Int, Int, Int64)
-  V128Load32Splat(Int, Int, Int64)
-  V128Load64Splat(Int, Int, Int64)
-  V128Load32Zero(Int, Int, Int64)
-  V128Load64Zero(Int, Int, Int64)
-  V128Store(Int, Int, Int64)
+  V128Load(Int32, Int32, Int64)
+  V128Load8x8S(Int32, Int32, Int64)
+  V128Load8x8U(Int32, Int32, Int64)
+  V128Load16x4S(Int32, Int32, Int64)
+  V128Load16x4U(Int32, Int32, Int64)
+  V128Load32x2S(Int32, Int32, Int64)
+  V128Load32x2U(Int32, Int32, Int64)
+  V128Load8Splat(Int32, Int32, Int64)
+  V128Load16Splat(Int32, Int32, Int64)
+  V128Load32Splat(Int32, Int32, Int64)
+  V128Load64Splat(Int32, Int32, Int64)
+  V128Load32Zero(Int32, Int32, Int64)
+  V128Load64Zero(Int32, Int32, Int64)
+  V128Store(Int32, Int32, Int64)
 
   // SIMD load/store lane - (memidx, align, offset, lane)
-  V128Load8Lane(Int, Int, Int64, Int)
-  V128Load16Lane(Int, Int, Int64, Int)
-  V128Load32Lane(Int, Int, Int64, Int)
-  V128Load64Lane(Int, Int, Int64, Int)
-  V128Store8Lane(Int, Int, Int64, Int)
-  V128Store16Lane(Int, Int, Int64, Int)
-  V128Store32Lane(Int, Int, Int64, Int)
-  V128Store64Lane(Int, Int, Int64, Int)
+  V128Load8Lane(Int32, Int32, Int64, Int32)
+  V128Load16Lane(Int32, Int32, Int64, Int32)
+  V128Load32Lane(Int32, Int32, Int64, Int32)
+  V128Load64Lane(Int32, Int32, Int64, Int32)
+  V128Store8Lane(Int32, Int32, Int64, Int32)
+  V128Store16Lane(Int32, Int32, Int64, Int32)
+  V128Store32Lane(Int32, Int32, Int64, Int32)
+  V128Store64Lane(Int32, Int32, Int64, Int32)
 
   // SIMD shuffle/swizzle
-  I8x16Shuffle(FixedArray[Int]) // 16 lane indices
+  I8x16Shuffle(FixedArray[Int32]) // 16 lane indices
   I8x16Swizzle
 
   // SIMD splat (scalar -> vector)
@@ -536,22 +536,22 @@ pub(all) enum Instruction {
   F64x2Splat
 
   // SIMD extract lane (vector -> scalar)
-  I8x16ExtractLaneS(Int)
-  I8x16ExtractLaneU(Int)
-  I16x8ExtractLaneS(Int)
-  I16x8ExtractLaneU(Int)
-  I32x4ExtractLane(Int)
-  I64x2ExtractLane(Int)
-  F32x4ExtractLane(Int)
-  F64x2ExtractLane(Int)
+  I8x16ExtractLaneS(Int32)
+  I8x16ExtractLaneU(Int32)
+  I16x8ExtractLaneS(Int32)
+  I16x8ExtractLaneU(Int32)
+  I32x4ExtractLane(Int32)
+  I64x2ExtractLane(Int32)
+  F32x4ExtractLane(Int32)
+  F64x2ExtractLane(Int32)
 
   // SIMD replace lane (vector, scalar -> vector)
-  I8x16ReplaceLane(Int)
-  I16x8ReplaceLane(Int)
-  I32x4ReplaceLane(Int)
-  I64x2ReplaceLane(Int)
-  F32x4ReplaceLane(Int)
-  F64x2ReplaceLane(Int)
+  I8x16ReplaceLane(Int32)
+  I16x8ReplaceLane(Int32)
+  I32x4ReplaceLane(Int32)
+  I64x2ReplaceLane(Int32)
+  F32x4ReplaceLane(Int32)
+  F64x2ReplaceLane(Int32)
 
   // i8x16 comparisons
   I8x16Eq
@@ -802,22 +802,22 @@ pub(all) enum BlockType {
   Value(ValueType)
   MultiValue(Array[ValueType]) // Multi-value results only (e.g., result i32 i64)
   InlineType(Array[ValueType], Array[ValueType]) // (params, results) for blocks with params
-  TypeIndex(Int)
+  TypeIndex(Int32)
 } derive(Eq, Debug)
 
 ///|
 /// Catch handler for try_table instruction
 pub(all) enum CatchHandler {
-  Catch(Int, Int) // (tag_idx, label_idx) - catch specific tag
-  CatchRef(Int, Int) // (tag_idx, label_idx) - catch specific tag with exnref
-  CatchAll(Int) // (label_idx) - catch any exception
-  CatchAllRef(Int) // (label_idx) - catch any exception with exnref
+  Catch(Int32, Int32) // (tag_idx, label_idx) - catch specific tag
+  CatchRef(Int32, Int32) // (tag_idx, label_idx) - catch specific tag with exnref
+  CatchAll(Int32) // (label_idx) - catch any exception
+  CatchAllRef(Int32) // (label_idx) - catch any exception with exnref
 } derive(Eq, Debug)
 
 ///|
 pub(all) enum ResumeHandler {
-  OnLabel(Int, Int) // tag index and branch label
-  OnSwitch(Int) // switch tag index
+  OnLabel(Int32, Int32) // tag index and branch label
+  OnSwitch(Int32) // switch tag index
 } derive(Eq, Debug)
 
 // ============================================================
@@ -834,7 +834,7 @@ pub(all) struct FuncType {
 ///|
 /// Compute a hash for structural type equivalence.
 /// Two FuncTypes with the same params and results will have the same hash.
-pub fn FuncType::structural_hash(self : FuncType) -> Int {
+pub fn FuncType::structural_hash(self : FuncType) -> Int32 {
   let mut h = 0
   // Encode params
   for param in self.params {
@@ -856,7 +856,7 @@ pub fn FuncType::structural_hash(self : FuncType) -> Int {
 
 ///|
 /// Get a numeric code for a value type (for hashing)
-fn ValueType::type_code(self : ValueType) -> Int {
+fn ValueType::type_code(self : ValueType) -> Int32 {
   match self {
     I32 => 0
     I64 => 1
@@ -906,8 +906,8 @@ fn ValueType::type_code(self : ValueType) -> Int {
 pub fn FuncType::structurally_equal(
   self : FuncType,
   other : FuncType,
-  self_idx : Int,
-  other_idx : Int,
+  self_idx : Int32,
+  other_idx : Int32,
 ) -> Bool {
   // Check param count
   if self.params.length() != other.params.length() {
@@ -940,8 +940,8 @@ pub fn FuncType::structurally_equal(
 fn ValueType::structurally_equal(
   self : ValueType,
   other : ValueType,
-  self_idx : Int,
-  other_idx : Int,
+  self_idx : Int32,
+  other_idx : Int32,
 ) -> Bool {
   match (self, other) {
     // Basic types must match exactly
@@ -1011,7 +1011,7 @@ pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool // true for i64-indexed memory (memory64 proposal)
   is_shared : Bool
-  page_size_log2 : Int // custom-page-sizes proposal (default: 16 for 64KiB)
+  page_size_log2 : Int32 // custom-page-sizes proposal (default: 16 for 64KiB)
 } derive(Eq, Debug)
 
 ///|
@@ -1050,17 +1050,17 @@ pub(all) struct GlobalType {
 /// Tag type (for exception handling)
 /// Tags define the signature of exceptions - they can only have parameters, not results
 pub(all) struct TagType {
-  type_idx : Int // Index into the types array (must be a function type with no results)
+  type_idx : Int32 // Index into the types array (must be a function type with no results)
 } derive(Eq, Debug)
 
 ///|
 /// Import descriptor
 pub(all) enum ImportDesc {
-  Func(Int) // type index
+  Func(Int32) // type index
   Table(TableType)
   Memory(MemoryType)
   Global(GlobalType)
-  Tag(Int) // type index for exception tag
+  Tag(Int32) // type index for exception tag
 } derive(Eq, Debug)
 
 ///|
@@ -1074,11 +1074,11 @@ pub(all) struct Import {
 ///|
 /// Export descriptor
 pub(all) enum ExportDesc {
-  Func(Int) // function index
-  Table(Int) // table index
-  Memory(Int) // memory index
-  Global(Int) // global index
-  Tag(Int) // tag index
+  Func(Int32) // function index
+  Table(Int32) // table index
+  Memory(Int32) // memory index
+  Global(Int32) // global index
+  Tag(Int32) // tag index
 } derive(Eq, Debug)
 
 ///|
@@ -1106,7 +1106,7 @@ pub(all) struct Global {
 /// Element segment mode
 pub(all) enum ElemMode {
   /// Active segment: copied to table at instantiation
-  Active(Int, Array[Instruction]) // table_idx, offset_expr
+  Active(Int32, Array[Instruction]) // table_idx, offset_expr
   /// Passive segment: can be copied via table.init
   Passive
   /// Declarative segment: only for validation
@@ -1124,7 +1124,7 @@ pub(all) struct Element {
 ///|
 /// Data segment
 pub(all) struct Data {
-  memory_idx : Int
+  memory_idx : Int32
   offset : Array[Instruction]
   init : Bytes
 } derive(Eq, Debug)
@@ -1136,21 +1136,21 @@ pub(all) struct Module {
   /// For each type, stores the rec group ID it belongs to.
   /// Types in the same rec group have the same ID.
   /// Used to validate that forward type references are only within rec groups.
-  type_rec_groups : Array[Int]
+  type_rec_groups : Array[Int32]
   imports : Array[Import]
-  funcs : Array[Int] // type indices for functions
+  funcs : Array[Int32] // type indices for functions
   tables : Array[Table]
   memories : Array[MemoryType]
   globals : Array[Global]
   exports : Array[Export]
-  mut start : Int? // start function index
+  mut start : Int32? // start function index
   elems : Array[Element]
   codes : Array[FunctionCode]
   datas : Array[Data]
   tags : Array[TagType] // exception tags
   /// Function index -> internal name (e.g., 0 -> "some_func" from $some_func)
   /// Populated from WAT parsing, empty for binary modules without name section
-  func_names : Map[Int, String]
+  func_names : Map[Int32, String]
 } derive(Debug)
 
 ///|
@@ -1386,7 +1386,7 @@ pub fn Module::simple(
 ///|
 /// The function type at `idx`, or `None` if the index is out of range or
 /// names a type of another kind.
-pub fn Module::func_type_at(self : Module, idx : Int) -> FuncType? {
+pub fn Module::func_type_at(self : Module, idx : Int32) -> FuncType? {
   if idx < 0 || idx >= self.types.length() {
     return None
   }
@@ -1399,7 +1399,7 @@ pub fn Module::func_type_at(self : Module, idx : Int) -> FuncType? {
 ///|
 /// The struct type at `idx`, or `None` if the index is out of range or
 /// names a type of another kind.
-pub fn Module::struct_type_at(self : Module, idx : Int) -> StructType? {
+pub fn Module::struct_type_at(self : Module, idx : Int32) -> StructType? {
   if idx < 0 || idx >= self.types.length() {
     return None
   }
@@ -1412,7 +1412,7 @@ pub fn Module::struct_type_at(self : Module, idx : Int) -> StructType? {
 ///|
 /// The array type at `idx`, or `None` if the index is out of range or names
 /// a type of another kind.
-pub fn Module::array_type_at(self : Module, idx : Int) -> ArrayType? {
+pub fn Module::array_type_at(self : Module, idx : Int32) -> ArrayType? {
   if idx < 0 || idx >= self.types.length() {
     return None
   }
@@ -1438,7 +1438,7 @@ pub fn Module::array_type_at(self : Module, idx : Int) -> ArrayType? {
 
 ///|
 /// The function type at `idx` in a module that has passed validation.
-pub fn Module::validated_func_type_at(self : Module, idx : Int) -> FuncType {
+pub fn Module::validated_func_type_at(self : Module, idx : Int32) -> FuncType {
   guard self.func_type_at(idx) is Some(ft) else {
     abort("validated module has no function type at index \{idx}")
   }
@@ -1447,7 +1447,10 @@ pub fn Module::validated_func_type_at(self : Module, idx : Int) -> FuncType {
 
 ///|
 /// The struct type at `idx` in a module that has passed validation.
-pub fn Module::validated_struct_type_at(self : Module, idx : Int) -> StructType {
+pub fn Module::validated_struct_type_at(
+  self : Module,
+  idx : Int32,
+) -> StructType {
   guard self.struct_type_at(idx) is Some(st) else {
     abort("validated module has no struct type at index \{idx}")
   }
@@ -1456,7 +1459,7 @@ pub fn Module::validated_struct_type_at(self : Module, idx : Int) -> StructType 
 
 ///|
 /// The array type at `idx` in a module that has passed validation.
-pub fn Module::validated_array_type_at(self : Module, idx : Int) -> ArrayType {
+pub fn Module::validated_array_type_at(self : Module, idx : Int32) -> ArrayType {
   guard self.array_type_at(idx) is Some(at) else {
     abort("validated module has no array type at index \{idx}")
   }
@@ -1465,7 +1468,7 @@ pub fn Module::validated_array_type_at(self : Module, idx : Int) -> ArrayType {
 
 ///|
 /// Check if the type at the given index is a function type.
-pub fn Module::is_func_type(self : Module, idx : Int) -> Bool {
+pub fn Module::is_func_type(self : Module, idx : Int32) -> Bool {
   match self.types[idx].composite {
     Func(_) => true
     _ => false
@@ -1474,7 +1477,7 @@ pub fn Module::is_func_type(self : Module, idx : Int) -> Bool {
 
 ///|
 /// Check if the type at the given index is a struct type.
-pub fn Module::is_struct_type(self : Module, idx : Int) -> Bool {
+pub fn Module::is_struct_type(self : Module, idx : Int32) -> Bool {
   match self.types[idx].composite {
     Struct(_) => true
     _ => false
@@ -1483,7 +1486,7 @@ pub fn Module::is_struct_type(self : Module, idx : Int) -> Bool {
 
 ///|
 /// Check if the type at the given index is an array type.
-pub fn Module::is_array_type(self : Module, idx : Int) -> Bool {
+pub fn Module::is_array_type(self : Module, idx : Int32) -> Bool {
   match self.types[idx].composite {
     Array(_) => true
     _ => false

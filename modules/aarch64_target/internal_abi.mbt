@@ -12,16 +12,16 @@ pub struct InternalAbi {
 pub struct InternalCallPlan {
   priv arguments : Array[CallArgumentLocation]
   priv results : Array[CallResultLocation]
-  priv stack_size : Int
-  priv result_area_size : Int
+  priv stack_size : Int32
+  priv result_area_size : Int32
 } derive(Eq, Debug)
 
 ///|
 pub suberror InternalAbiError {
-  InvalidRegister(role~ : String, index~ : Int)
-  DuplicateRegister(role~ : String, index~ : Int)
-  ContextRegisterReused(index~ : Int)
-  ResultAreaRegisterReused(index~ : Int)
+  InvalidRegister(role~ : String, index~ : Int32)
+  DuplicateRegister(role~ : String, index~ : Int32)
+  ContextRegisterReused(index~ : Int32)
+  ResultAreaRegisterReused(index~ : Int32)
   InvalidSignature(message~ : String)
 } derive(Eq, Debug)
 
@@ -33,7 +33,7 @@ pub impl Show for InternalAbiError with fn output(self, logger) {
 ///|
 fn checked_registers(
   role : String,
-  indices : Array[Int],
+  indices : Array[Int32],
   class : @vcode.RegClass,
 ) -> Array[@vcode.PhysicalReg] raise InternalAbiError {
   let registers : Array[@vcode.PhysicalReg] = []
@@ -51,12 +51,12 @@ fn checked_registers(
 
 ///|
 pub fn InternalAbi::new(
-  context_argument : Int,
-  result_area_argument : Int,
-  integer_arguments : Array[Int],
-  fp_arguments : Array[Int],
-  integer_results : Array[Int],
-  fp_results : Array[Int],
+  context_argument : Int32,
+  result_area_argument : Int32,
+  integer_arguments : Array[Int32],
+  fp_arguments : Array[Int32],
+  integer_results : Array[Int32],
+  fp_results : Array[Int32],
 ) -> InternalAbi raise InternalAbiError {
   if context_argument < 0 || context_argument >= 16 {
     raise InvalidRegister(role="context argument", index=context_argument)
@@ -167,7 +167,7 @@ fn InternalAbi::call_layout(
 fn InternalAbi::result_layout(
   self : InternalAbi,
   result_types : Array[@native.ValueType],
-) -> (Array[CallResultLocation], Int) {
+) -> (Array[CallResultLocation], Int32) {
   let locations : Array[CallResultLocation] = []
   let mut integer_index = 0
   let mut fp_index = 0

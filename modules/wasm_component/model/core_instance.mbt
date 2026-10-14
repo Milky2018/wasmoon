@@ -15,7 +15,7 @@ pub(all) struct CoreInlineExport {
 
 ///|
 pub(all) enum CoreInstanceExpr {
-  Instantiate(Int, Array[CoreInstantiateArg])
+  Instantiate(Int32, Array[CoreInstantiateArg])
   InlineExports(Array[CoreInlineExport])
 } derive(Debug, Eq)
 

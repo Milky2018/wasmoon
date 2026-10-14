@@ -206,19 +206,19 @@ test "reserve spill slots aligns vector slots" {
 
 ///|
 priv struct VerifierCfgView {
-  value_count : Int
-  blocks : Array[Array[Int]]
+  value_count : Int32
+  blocks : Array[Array[Int32]]
   operands : Array[Array[Operand]]
-  successors : Array[Array[Int]]
+  successors : Array[Array[Int32]]
   entry_values : Array[VirtualReg]
   parameters : Array[Array[VirtualReg]]
   edge_arguments : Array[Array[Array[VirtualReg]]]
-  successor_queries : Ref[Int]
-  block_visits : Ref[Int]
+  successor_queries : Ref[Int32]
+  block_visits : Ref[Int32]
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn value_count(self) -> Int {
+impl FunctionView for VerifierCfgView with fn value_count(self) -> Int32 {
   self.value_count
 }
 
@@ -228,7 +228,7 @@ impl FunctionView for VerifierCfgView with fn value_class(_self, _value) -> RegC
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn value_spill_size(_self, _value) -> Int {
+impl FunctionView for VerifierCfgView with fn value_spill_size(_self, _value) -> Int32 {
   8
 }
 
@@ -236,7 +236,7 @@ impl FunctionView for VerifierCfgView with fn value_spill_size(_self, _value) ->
 impl FunctionView for VerifierCfgView with fn value_spill_alignment(
   _self,
   _value,
-) -> Int {
+) -> Int32 {
   8
 }
 
@@ -250,7 +250,7 @@ impl FunctionView for VerifierCfgView with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn entry_value_count(self) -> Int {
+impl FunctionView for VerifierCfgView with fn entry_value_count(self) -> Int32 {
   self.entry_values.length()
 }
 
@@ -260,17 +260,17 @@ impl FunctionView for VerifierCfgView with fn entry_value_at(self, parameter) ->
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_count(self) -> Int {
+impl FunctionView for VerifierCfgView with fn block_count(self) -> Int32 {
   self.blocks.length()
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_id_at(_self, block) -> Int {
+impl FunctionView for VerifierCfgView with fn block_id_at(_self, block) -> Int32 {
   block
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_parameter_count(self, block) -> Int {
+impl FunctionView for VerifierCfgView with fn block_parameter_count(self, block) -> Int32 {
   self.parameters[block].length()
 }
 
@@ -287,7 +287,7 @@ impl FunctionView for VerifierCfgView with fn block_parameter_at(
 impl FunctionView for VerifierCfgView with fn block_instruction_count(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.block_visits.val = self.block_visits.val + 1
   self.blocks[block].length()
 }
@@ -297,12 +297,12 @@ impl FunctionView for VerifierCfgView with fn block_instruction_at(
   self,
   block,
   instruction,
-) -> Int {
+) -> Int32 {
   self.blocks[block][instruction]
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_successor_count(self, block) -> Int {
+impl FunctionView for VerifierCfgView with fn block_successor_count(self, block) -> Int32 {
   self.successor_queries.val = self.successor_queries.val + 1
   self.successors[block].length()
 }
@@ -312,7 +312,7 @@ impl FunctionView for VerifierCfgView with fn block_successor_at(
   self,
   block,
   successor,
-) -> Int {
+) -> Int32 {
   self.successors[block][successor]
 }
 
@@ -321,7 +321,7 @@ impl FunctionView for VerifierCfgView with fn edge_argument_count(
   self,
   block,
   successor,
-) -> Int {
+) -> Int32 {
   self.edge_arguments[block][successor].length()
 }
 
@@ -430,8 +430,8 @@ test "operand assignment reuses a tied group's resident register" {
 ///|
 fn verify_wrong_location(
   function : VerifierCfgView,
-  def_instruction : Int?,
-  use_instruction : Int,
+  def_instruction : Int32?,
+  use_instruction : Int32,
 ) -> VerifyError? {
   let value : VirtualReg = { id: 0, class: Int, }
   let r0 : PhysicalReg = { id: 0, class: Int, }
@@ -785,8 +785,8 @@ test "production register allocation index orders updates by range end" {
   debug_inspect(allocations.owner_is_contiguous(0), content="true")
   allocations.insert(0, 1)
   debug_inspect(allocations.owner_is_contiguous(0), content="false")
-  let stack : Array[Int] = []
-  let ordered : Array[Int] = []
+  let stack : Array[Int32] = []
+  let ordered : Array[Int32] = []
   allocations.seek(0, ProgramPoint(0, -1), stack)
   while allocations.next(stack) is Some(segment) {
     ordered.push(segment)
@@ -870,8 +870,8 @@ test "plan verifier processes a deep diamond join chain once per block" {
     id,
     class: Int,
   })
-  let blocks : Array[Array[Int]] = Array::makei(block_count, _ => [])
-  let successors : Array[Array[Int]] = Array::makei(block_count, _ => [])
+  let blocks : Array[Array[Int32]] = Array::makei(block_count, _ => [])
+  let successors : Array[Array[Int32]] = Array::makei(block_count, _ => [])
   let parameters : Array[Array[VirtualReg]] = Array::makei(block_count, _ => [])
   let edge_arguments : Array[Array[Array[VirtualReg]]] = Array::makei(
     block_count,

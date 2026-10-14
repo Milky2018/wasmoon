@@ -2,7 +2,7 @@
 /// Delivery at a guest suspension point, including exception injection.
 pub(all) enum GuestContinuationInput {
   Values(Array[@types.Value])
-  Exception(Int, Array[@types.Value])
+  Exception(Int32, Array[@types.Value])
 } derive(Debug)
 
 ///|
@@ -65,8 +65,8 @@ pub fn Store::take_guest_continuation(
 
 ///|
 pub(all) enum GuestContinuationEffect {
-  Suspend(Int, Array[@types.Value])
-  Switch(Int, GuestContinuationBody, Array[@types.Value])
+  Suspend(Int32, Array[@types.Value])
+  Switch(Int32, GuestContinuationBody, Array[@types.Value])
 } derive(Debug)
 
 ///|

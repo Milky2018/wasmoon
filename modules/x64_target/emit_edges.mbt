@@ -3,7 +3,7 @@ fn edge_parallel_moves(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   block : @vcode.Block,
-  successor_index : Int,
+  successor_index : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let transfers : Array[@vcode.ParallelMove] = []
   for edit in allocation.edge_edits_at(block, successor_index) {
@@ -27,7 +27,7 @@ fn resolve_edge_moves(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   block : @vcode.Block,
-  successor_index : Int,
+  successor_index : Int32,
 ) -> @vcode.ResolvedMovePlan raise X64EmitError {
   if allocation.edge_edits_at(block, successor_index).is_empty() {
     return @vcode.ResolvedMovePlan::empty()
@@ -101,7 +101,7 @@ fn emit_edge_moves(
   allocation : @vcode.Allocation,
   frame : X64Frame,
   block : @vcode.Block,
-  successor_index : Int,
+  successor_index : Int32,
 ) -> Unit raise X64EmitError {
   emit_resolved_moves(
     buffer,
@@ -281,7 +281,7 @@ fn emit_switch_edges(
     )
     return
   }
-  let case_branches : Array[(Int, Int)] = []
+  let case_branches : Array[(Int32, Int32)] = []
   for successor_index, bits in cases {
     emit_switch_compare(buffer, width, index, bits)
     buffer.emit_byte(0x0F)

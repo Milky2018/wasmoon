@@ -1,5 +1,5 @@
 ///|
-fn filesystem_error_index(preview1_errno : Int) -> Int {
+fn filesystem_error_index(preview1_errno : Int32) -> Int32 {
   match preview1_errno {
     2 => 0
     6 => 1
@@ -53,7 +53,7 @@ fn filesystem_error() -> @runtime_impl.ComponentValue {
 }
 
 ///|
-fn filesystem_error_code(index : Int) -> @runtime_impl.ComponentValue {
+fn filesystem_error_code(index : Int32) -> @runtime_impl.ComponentValue {
   Variant(1, Some(Variant(index, None)))
 }
 
@@ -72,8 +72,8 @@ fn filesystem_ok(
 ///|
 fn filesystem_flags_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  index : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing filesystem flags")
   }
@@ -86,7 +86,7 @@ fn filesystem_flags_arg(
 ///|
 fn filesystem_u64_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> Int64 raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing filesystem integer")
@@ -100,7 +100,7 @@ fn filesystem_u64_arg(
 ///|
 fn filesystem_string_arg(
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> String raise @runtime_impl.ComponentRuntimeError {
   if index < 0 || index >= args.length() {
     raise HostCallError("missing filesystem path")
@@ -135,7 +135,7 @@ fn capability_parent_and_leaf(path : String) -> (String, String)? {
 ///|
 fn descriptor_state(
   ctx : WasiComponentCtx,
-  rep : Int,
+  rep : Int32,
 ) -> DescriptorState raise @runtime_impl.ComponentRuntimeError {
   match ctx.get_resource(rep) {
     Some(Descriptor(state)) if !state.closed.val => state
@@ -144,12 +144,12 @@ fn descriptor_state(
 }
 
 ///|
-fn descriptor_has(state : DescriptorState, flags : Int) -> Bool {
+fn descriptor_has(state : DescriptorState, flags : Int32) -> Bool {
   (state.flags & flags) == flags
 }
 
 ///|
-fn native_file_type_to_component(file_type : Int) -> Int {
+fn native_file_type_to_component(file_type : Int32) -> Int32 {
   match file_type {
     1 => 1
     2 => 2
@@ -187,7 +187,7 @@ fn descriptor_stat_value(stat : @wasi.FileStat) -> @runtime_impl.ComponentValue 
 }
 
 ///|
-fn descriptor_flags_to_open(flags : Int) -> Array[@wasi.OpenFlags] {
+fn descriptor_flags_to_open(flags : Int32) -> Array[@wasi.OpenFlags] {
   let open_flags : Array[@wasi.OpenFlags] = []
   if (flags & descriptor_read) != 0 && (flags & descriptor_write) != 0 {
     open_flags.push(ReadWrite)
@@ -203,7 +203,7 @@ fn descriptor_flags_to_open(flags : Int) -> Array[@wasi.OpenFlags] {
 fn open_capability_parent(
   state : DescriptorState,
   path : String,
-) -> (Int, String)? {
+) -> (Int32, String)? {
   match capability_parent_and_leaf(path) {
     None => None
     Some((parent, leaf)) =>
@@ -226,8 +226,8 @@ fn new_descriptor_resource(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   descriptor_type : @component.TypeDef?,
-  fd : Int,
-  flags : Int,
+  fd : Int32,
+  flags : Int32,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
   match @wasi.native_fstat(fd) {
     None => {
@@ -563,9 +563,9 @@ fn add_descriptor_basic_methods(
 ///|
 fn parse_new_timestamp(
   value : @runtime_impl.ComponentValue,
-  set_flag : Int,
-  now_flag : Int,
-) -> (Int64, Int)? {
+  set_flag : Int32,
+  now_flag : Int32,
+) -> (Int64, Int32)? {
   match value {
     Variant(0, None) => Some((0L, 0))
     Variant(1, None) => Some((0L, now_flag))
@@ -677,7 +677,7 @@ fn add_descriptor_path_methods(
   fn state_for(
     args : Array[@runtime_impl.ComponentValue],
     table : @runtime_impl.ResourceTable,
-    index : Int,
+    index : Int32,
   ) -> DescriptorState raise @runtime_impl.ComponentRuntimeError {
     descriptor_state(
       host.ctx,
@@ -894,7 +894,7 @@ fn add_descriptor_path_methods(
   fn unlink_at(
     args : Array[@runtime_impl.ComponentValue],
     table : @runtime_impl.ResourceTable,
-    flags : Int,
+    flags : Int32,
   ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
     let state = state_for(args, table, 0)
     if !descriptor_has(state, descriptor_mutate_directory) {

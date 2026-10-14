@@ -140,7 +140,7 @@ fn VectorIntLane::ir_name(self : VectorIntLane) -> String {
 }
 
 ///|
-fn VectorIntLane::bits(self : VectorIntLane) -> Int {
+fn VectorIntLane::bits(self : VectorIntLane) -> Int32 {
   match self {
     I8 => 8
     I16 => 16
@@ -178,7 +178,7 @@ fn VectorFloatLane::ir_name(self : VectorFloatLane) -> String {
 }
 
 ///|
-fn VectorFloatLane::bits(self : VectorFloatLane) -> Int {
+fn VectorFloatLane::bits(self : VectorFloatLane) -> Int32 {
   match self {
     F32 => 32
     F64 => 64

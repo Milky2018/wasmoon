@@ -81,7 +81,7 @@ fn Store::decode_exception_gc_word(self : Store, raw : Int64) -> @types.Value {
 ///|
 pub fn Store::encode_native_exception(
   self : Store,
-  index : Int,
+  index : Int32,
 ) -> Int64 raise RuntimeError {
   self.ensure_open()
   if self.store_exception_to_native.get(index) is Some(reference) {

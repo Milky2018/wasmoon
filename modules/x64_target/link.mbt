@@ -2,9 +2,9 @@
 pub suberror X64LinkError {
   InvalidCodeObject(message~ : String)
   InvalidCodeBase(address~ : Int64)
-  UnresolvedRelocation(index~ : Int)
-  RelocationOutOfRange(index~ : Int)
-  UnsupportedRelocation(index~ : Int)
+  UnresolvedRelocation(index~ : Int32)
+  RelocationOutOfRange(index~ : Int32)
+  UnsupportedRelocation(index~ : Int32)
 } derive(Eq, Debug)
 
 ///|
@@ -16,7 +16,7 @@ pub impl Show for X64LinkError with fn output(self, logger) {
 pub struct X64LinkPlan {
   priv code : Array[Byte]
   priv relocations : Array[@code_object.Relocation]
-  priv veneer_offsets : Array[Int]
+  priv veneer_offsets : Array[Int32]
 } derive(Debug)
 
 ///|
@@ -25,12 +25,12 @@ pub fn X64LinkPlan::code(self : X64LinkPlan) -> Array[Byte] {
 }
 
 ///|
-pub fn X64LinkPlan::veneer_offsets(self : X64LinkPlan) -> Array[Int] {
+pub fn X64LinkPlan::veneer_offsets(self : X64LinkPlan) -> Array[Int32] {
   self.veneer_offsets.copy()
 }
 
 ///|
-fn append_call_veneer(code : Array[Byte]) -> Int {
+fn append_call_veneer(code : Array[Byte]) -> Int32 {
   let offset = code.length()
   // jmp qword ptr [rip + 0], followed by the absolute target address.
   code.append([
@@ -55,7 +55,7 @@ pub fn prepare_x64_link(
   let veneer_offsets = Array::make(relocations.length(), -1)
   let veneer_targets : Array[@code_object.RelocationTarget] = []
   let veneer_addends : Array[Int64] = []
-  let veneers : Array[Int] = []
+  let veneers : Array[Int32] = []
   for index, relocation in relocations {
     if relocation.kind is X64PcRelative32 {
       let mut veneer = -1
@@ -79,14 +79,14 @@ pub fn prepare_x64_link(
 }
 
 ///|
-fn write_u32(code : Array[Byte], offset : Int, value : UInt) -> Unit {
+fn write_u32(code : Array[Byte], offset : Int32, value : UInt32) -> Unit {
   for byte in 0..<4 {
     code[offset + byte] = ((value >> (byte * 8)) & 0xFFU).to_byte()
   }
 }
 
 ///|
-fn write_address(code : Array[Byte], offset : Int, address : Int64) -> Unit {
+fn write_address(code : Array[Byte], offset : Int32, address : Int64) -> Unit {
   let bits = address.reinterpret_as_uint64()
   for byte in 0..<8 {
     code[offset + byte] = ((bits >> (byte * 8)) & 0xFFUL).to_byte()

@@ -609,7 +609,7 @@ fn validate_leaf_instr(
         I32
       }
       fn check_align(
-        natural : Int,
+        natural : Int32,
         name : String,
       ) -> Unit raise ValidationError {
         if align != natural {

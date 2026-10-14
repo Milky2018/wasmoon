@@ -21,8 +21,8 @@ pub fn interpreter_component_engine() -> ComponentEngine {
 
 ///|
 pub fn native_component_engine(
-  opt_level? : Int = 2,
-  on_execution? : (NativeComponentExecutionEvent) -> Unit = fn(_event) { () },
+  opt_level~ : Int32 = 2,
+  on_execution~ : (NativeComponentExecutionEvent) -> Unit = fn(_event) { () },
 ) -> ComponentEngine {
   {
     open_session: fn() {

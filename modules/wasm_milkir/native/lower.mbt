@@ -3,7 +3,7 @@
 ///
 /// Two words, so that a v128 fits. Everything else uses the low word and
 /// leaves the high one zero.
-const GC_SLOT_BYTES : Int = 16
+const GC_SLOT_BYTES : Int32 = 16
 
 ///|
 /// Embedding-owned identities required by WebAssembly semantic lowering.
@@ -11,21 +11,21 @@ const GC_SLOT_BYTES : Int = 16
 /// Symbols remain unresolved and target-neutral. Address resolution belongs to
 /// the embedding product after target emission.
 struct Environment {
-  function_symbol : (Int) -> @native_types.CodeSymbol
-  memory_base_field : (Int) -> @native_types.EnvironmentField
+  function_symbol : (Int32) -> @native_types.CodeSymbol
+  memory_base_field : (Int32) -> @native_types.EnvironmentField
   function_table_field : @native_types.EnvironmentField
-  table_base_field : (Int) -> @native_types.EnvironmentField
-  table_size_field : (Int) -> @native_types.EnvironmentField
+  table_base_field : (Int32) -> @native_types.EnvironmentField
+  table_size_field : (Int32) -> @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
 }
 
 ///|
 pub fn Environment::new(
-  function_symbol : (Int) -> @native_types.CodeSymbol,
-  memory_base_field : (Int) -> @native_types.EnvironmentField,
+  function_symbol : (Int32) -> @native_types.CodeSymbol,
+  memory_base_field : (Int32) -> @native_types.EnvironmentField,
   function_table_field : @native_types.EnvironmentField,
-  table_base_field : (Int) -> @native_types.EnvironmentField,
-  table_size_field : (Int) -> @native_types.EnvironmentField,
+  table_base_field : (Int32) -> @native_types.EnvironmentField,
+  table_size_field : (Int32) -> @native_types.EnvironmentField,
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
 ) -> Environment {
   {
@@ -41,7 +41,7 @@ pub fn Environment::new(
 ///|
 fn direct_call_contract(
   context : @adapter.InstructionContext,
-  function_index : Int,
+  function_index : Int32,
   environment : Environment,
   result_types : Array[@native_types.ValueType],
 ) -> (@native_types.NativeCall, Array[@lowering.Value]) {
@@ -67,7 +67,7 @@ fn direct_call_contract(
 ///|
 fn lower_direct_call(
   context : @adapter.InstructionContext,
-  function_index : Int,
+  function_index : Int32,
   environment : Environment,
 ) -> Unit {
   let (call, operands) = direct_call_contract(
@@ -82,7 +82,7 @@ fn lower_direct_call(
 ///|
 fn lower_direct_tail_call(
   context : @adapter.InstructionContext,
-  function_index : Int,
+  function_index : Int32,
   environment : Environment,
 ) -> Unit {
   let (call, operands) = direct_call_contract(
@@ -199,7 +199,7 @@ fn lower_i31_get(context : @adapter.InstructionContext, signed : Bool) -> Unit {
 ///|
 fn lower_get_function_reference(
   context : @adapter.InstructionContext,
-  function_index : Int,
+  function_index : Int32,
   environment : Environment,
 ) -> Unit {
   let execution_environment = context.environment()[0]
@@ -228,7 +228,7 @@ fn lower_get_function_reference(
 ///|
 fn table_entry_address(
   context : @adapter.InstructionContext,
-  table_index : Int,
+  table_index : Int32,
   environment : Environment,
 ) -> @lowering.Value {
   let source_index = context.operands()[0]
@@ -270,7 +270,7 @@ fn table_entry_address(
 fn check_indirect_type(
   context : @adapter.InstructionContext,
   entry : @lowering.Value,
-  type_index : Int,
+  type_index : Int32,
   environment : Environment,
 ) -> Unit {
   let actual = context.emit(
@@ -295,8 +295,8 @@ fn check_indirect_type(
 ///|
 fn lower_indirect_call(
   context : @adapter.InstructionContext,
-  type_index : Int,
-  table_index : Int,
+  type_index : Int32,
+  table_index : Int32,
   environment : Environment,
   tail : Bool,
 ) -> Unit {
@@ -375,7 +375,7 @@ fn finish_runtime_call(
 ///|
 fn i32_immediate(
   context : @adapter.InstructionContext,
-  value : Int,
+  value : Int32,
 ) -> @lowering.Value {
   context.emit(I32Const(value.reinterpret_as_uint()), [], [I32])[0]
 }
@@ -392,7 +392,7 @@ fn bool_immediate(
 fn lower_ref_test(
   context : @adapter.InstructionContext,
   environment : Environment,
-  type_index : Int,
+  type_index : Int32,
   nullable : Bool,
 ) -> Unit {
   let operands = context.environment()
@@ -415,7 +415,7 @@ fn lower_ref_test(
 fn lower_ref_cast(
   context : @adapter.InstructionContext,
   environment : Environment,
-  type_index : Int,
+  type_index : Int32,
   nullable : Bool,
 ) -> Unit {
   let operands = context.environment()
@@ -548,8 +548,8 @@ fn lower_aggregate_get(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
-  type_index : Int,
-  field_index : Int?,
+  type_index : Int32,
+  field_index : Int32?,
 ) -> String? {
   let source_operands = context.operands()
   let operands : Array[@lowering.Value] = [source_operands[0]]
@@ -606,7 +606,7 @@ fn v128_helper(
 fn finish_packed_runtime_word(
   context : @adapter.InstructionContext,
   word : @lowering.Value,
-  byte_width : Int,
+  byte_width : Int32,
   signed : Bool,
 ) -> Unit {
   let narrowed = context.emit(Convert(I32WrapI64), [word], [I32])[0]
@@ -632,9 +632,9 @@ fn lower_packed_aggregate_get(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
-  type_index : Int,
-  field_index : Int?,
-  byte_width : Int,
+  type_index : Int32,
+  field_index : Int32?,
+  byte_width : Int32,
   signed : Bool,
 ) -> Unit {
   let source_operands = context.operands()
@@ -662,8 +662,8 @@ fn lower_aggregate_set(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
-  type_index : Int,
-  field_index : Int?,
+  type_index : Int32,
+  field_index : Int32?,
 ) -> String? {
   let source_operands = context.operands()
   let source_types = context.operand_types()
@@ -773,7 +773,7 @@ fn emit_gc_allocation(
 fn lower_array_new(
   context : @adapter.InstructionContext,
   environment : Environment,
-  type_index : Int,
+  type_index : Int32,
   use_default : Bool,
 ) -> String? {
   let source_operands = context.operands()
@@ -810,7 +810,7 @@ fn lower_array_new(
 fn lower_struct_new_default(
   context : @adapter.InstructionContext,
   environment : Environment,
-  type_index : Int,
+  type_index : Int32,
 ) -> Unit {
   let operands = context.environment()
   operands.push(i32_immediate(context, type_index))
@@ -831,8 +831,8 @@ fn lower_array_segment_new(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
-  type_index : Int,
-  segment_index : Int,
+  type_index : Int32,
+  segment_index : Int32,
 ) -> Unit {
   let operands = context.environment()
   operands.push(i32_immediate(context, type_index))
@@ -855,8 +855,8 @@ fn lower_array_segment_init(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
-  type_index : Int,
-  segment_index : Int,
+  type_index : Int32,
+  segment_index : Int32,
 ) -> Unit {
   let operands = context.environment()
   operands.push(i32_immediate(context, type_index))
@@ -901,7 +901,7 @@ fn emit_v128_to_scratch(
 fn store_v128(
   context : @adapter.InstructionContext,
   address : @lowering.Value,
-  offset : Int,
+  offset : Int32,
   value : @lowering.Value,
 ) -> Unit {
   context.emit(
@@ -990,7 +990,7 @@ fn emit_payload_word_buffer(
   context : @adapter.InstructionContext,
   values : Array[@lowering.Value],
   types : Array[@native_types.ValueType],
-) -> (@lowering.Value, Int) {
+) -> (@lowering.Value, Int32) {
   let mut words = 0
   for ty in types {
     words += if ty is V128 { 2 } else { 1 }
@@ -1000,7 +1000,7 @@ fn emit_payload_word_buffer(
   }
   let object = context.create_stack_object(words * 8, 16)
   let address = context.emit(StackAddress(object), [], [Ptr64])[0]
-  fn store_word(offset : Int, word : @lowering.Value) {
+  fn store_word(offset : Int32, word : @lowering.Value) {
     context.emit(
       Store(
         @lowering.StoreSpec::new(W64, I64, offset.to_uint64(), Little, None),
@@ -1069,7 +1069,7 @@ fn lower_fixed_allocation(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
-  type_index : Int,
+  type_index : Int32,
 ) -> String? {
   let types = context.operand_types()
   let mut has_vector = false
@@ -1171,7 +1171,7 @@ fn finish_noreturn_runtime_call(
 fn lower_throw(
   context : @adapter.InstructionContext,
   environment : Environment,
-  tag_index : Int,
+  tag_index : Int32,
 ) -> String? {
   let types = context.operand_types()
   let values = context.operands()
@@ -1223,7 +1223,7 @@ fn lower_throw_ref(
 fn lower_delegate(
   context : @adapter.InstructionContext,
   environment : Environment,
-  depth : Int,
+  depth : Int32,
 ) -> Unit {
   let operands = context.environment()
   operands.push(i32_immediate(context, depth))
@@ -1241,7 +1241,7 @@ fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
-  immediate : Int?,
+  immediate : Int32?,
 ) -> Unit {
   let operands = context.environment()
   let parameter_types : Array[@native_types.ValueType] = [Ptr64]
@@ -1265,7 +1265,7 @@ fn lower_exception_query(
 fn lower_try_table_end(
   context : @adapter.InstructionContext,
   environment : Environment,
-  handler_id : Int,
+  handler_id : Int32,
 ) -> Unit {
   let operands = context.environment()
   operands.push(
@@ -1285,7 +1285,7 @@ fn lower_try_table_end(
 fn lower_try_table_begin(
   context : @adapter.InstructionContext,
   environment : Environment,
-  handler_id : Int,
+  handler_id : Int32,
 ) -> Unit {
   let operands = context.environment()
   operands.push(i32_immediate(context, handler_id))
@@ -1614,8 +1614,8 @@ pub fn lower_to_sink(
   environment : Environment,
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
-  verify_input? : Bool = true,
-  on_event? : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
+  verify_input~ : Bool = true,
+  on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
   fn validate(view : @milkir.ExtensionInstView) -> String? {
     validation_context.validate_extension(view, function.results)

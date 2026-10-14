@@ -2,7 +2,7 @@
 let preview3_sockets_interface : String = "wasi:sockets@0.3.0/types"
 
 ///|
-fn preview3_socket_error_case(preview1_errno : Int) -> Int {
+fn preview3_socket_error_case(preview1_errno : Int32) -> Int32 {
   if preview1_errno == 64 {
     return 10
   }
@@ -32,14 +32,14 @@ fn preview3_socket_error() -> @runtime_impl.ComponentValue {
 }
 
 ///|
-fn preview3_socket_native_error(errno : Int) -> @runtime_impl.ComponentValue {
+fn preview3_socket_native_error(errno : Int32) -> @runtime_impl.ComponentValue {
   preview3_socket_error_code(
     preview3_socket_error_case(@wasi.native_errno_to_wasi(errno)),
   )
 }
 
 ///|
-fn preview3_socket_error_code(index : Int) -> @runtime_impl.ComponentValue {
+fn preview3_socket_error_code(index : Int32) -> @runtime_impl.ComponentValue {
   Variant(
     1,
     Some(
@@ -67,7 +67,7 @@ fn preview3_socket_ok(
 ///|
 fn preview3_socket_family(
   value : @runtime_impl.ComponentValue,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   match value {
     U32(0) => 4
     U32(1) => 6
@@ -90,7 +90,7 @@ fn preview3_tcp_socket_state(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> TcpSocketState raise @runtime_impl.ComponentRuntimeError {
   let resource_type = host.resolve_resource_type(
     "wasi:sockets@0.3.0/types.tcp-socket",
@@ -107,7 +107,7 @@ fn preview3_udp_socket_state(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> UdpSocketState raise @runtime_impl.ComponentRuntimeError {
   let resource_type = host.resolve_resource_type(
     "wasi:sockets@0.3.0/types.udp-socket",
@@ -123,10 +123,10 @@ fn preview3_udp_socket_state(
 fn preview3_new_tcp_socket(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
-  fd : Int,
-  family : Int,
+  fd : Int32,
+  family : Int32,
   phase : TcpSocketPhase,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   let rep = host.ctx.insert_resource(
     TcpSocket({
       fd,
@@ -150,9 +150,9 @@ fn preview3_new_tcp_socket(
 fn preview3_new_udp_socket(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
-  fd : Int,
-  family : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  fd : Int32,
+  family : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   let rep = host.ctx.insert_resource(
     UdpSocket({
       fd,
@@ -233,7 +233,7 @@ fn preview3_tcp_address_valid(
 }
 
 ///|
-fn preview3_positive_socket_size(value : Int64) -> Int {
+fn preview3_positive_socket_size(value : Int64) -> Int32 {
   if value < 0L || value > 0x7fffffffL {
     0x7fffffff
   } else {
@@ -252,8 +252,8 @@ fn preview3_socket_address_allowed(
 ///|
 fn preview3_socket_fd_future(
   ctx : WasiComponentCtx,
-  fd : Int,
-  events : Int,
+  fd : Int32,
+  events : Int32,
   step : () -> @runtime_impl.ComponentValue? raise @runtime_impl.ComponentRuntimeError,
   cancel : () -> Unit,
 ) -> @runtime_impl.HostFuture {
@@ -443,7 +443,7 @@ fn preview3_tcp_send_future(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   state : TcpSocketState,
-  readable : Int,
+  readable : Int32,
 ) -> @runtime_impl.HostFuture {
   if state.phase.val != Connected || state.send_taken.val {
     host.runtime.drop_host_readable_stream(table, readable) catch {
@@ -452,7 +452,7 @@ fn preview3_tcp_send_future(
     return preview3_ready_future([preview3_socket_error_code(5)])
   }
   state.send_taken.val = true
-  let pending : Ref[(Bytes, Int)?] = Ref(None)
+  let pending : Ref[(Bytes, Int32)?] = Ref(None)
   let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let done = Ref(false)
   fn cleanup() -> Unit raise @runtime_impl.ComponentRuntimeError {
@@ -467,7 +467,7 @@ fn preview3_tcp_send_future(
       host.runtime.drop_host_readable_stream(table, readable)
     }
   }
-  fn write(bytes : Bytes, offset : Int) -> Int {
+  fn write(bytes : Bytes, offset : Int32) -> Int32 {
     let remaining = bytes.length() - offset
     let buffer = FixedArray::makei(remaining, i => bytes[offset + i])
     match @wasi.native_write(state.fd, buffer, remaining) {
@@ -566,7 +566,7 @@ fn preview3_tcp_receive(
       operation.val = None
     }
   }
-  fn pump(capacity : Int) -> Unit raise @runtime_impl.ComponentRuntimeError {
+  fn pump(capacity : Int32) -> Unit raise @runtime_impl.ComponentRuntimeError {
     if completion.val is Some(_) || next.val < buffered.length() {
       return
     }
@@ -656,10 +656,10 @@ fn preview3_tcp_receive(
 
 ///|
 fn preview3_socket_option(
-  fd : Int,
-  family : Int,
-  option : Int,
-  convert : (Int) -> @runtime_impl.ComponentValue,
+  fd : Int32,
+  family : Int32,
+  option : Int32,
+  convert : (Int32) -> @runtime_impl.ComponentValue,
 ) -> @runtime_impl.ComponentValue {
   match @wasi.native_socket_option_get(fd, family, option) {
     Some(value) => preview3_socket_ok(convert(value))
@@ -669,10 +669,10 @@ fn preview3_socket_option(
 
 ///|
 fn preview3_set_socket_option(
-  fd : Int,
-  family : Int,
-  option : Int,
-  value : Int,
+  fd : Int32,
+  family : Int32,
+  option : Int32,
+  value : Int32,
 ) -> @runtime_impl.ComponentValue {
   for clamped = value {
     if @wasi.native_socket_option_set(fd, family, option, clamped) {
@@ -705,7 +705,7 @@ fn add_preview3_tcp_options(
   fn add_bool(
     getter : String,
     setter : String,
-    option : Int,
+    option : Int32,
   ) -> Unit raise @runtime_impl.ComponentRuntimeError {
     builder.add_func(
       getter,
@@ -745,7 +745,7 @@ fn add_preview3_tcp_options(
   fn add_u64(
     getter : String,
     setter : String,
-    option : Int,
+    option : Int32,
   ) -> Unit raise @runtime_impl.ComponentRuntimeError {
     builder.add_func(
       getter,
@@ -1106,7 +1106,7 @@ fn add_preview3_tcp(
 fn preview3_udp_async_future(
   host : WasiComponentHost,
   state : UdpSocketState,
-  events : Int,
+  events : Int32,
   step : () -> @runtime_impl.ComponentValue? raise @runtime_impl.ComponentRuntimeError,
 ) -> @runtime_impl.HostFuture {
   preview3_socket_fd_future(host.ctx, state.fd, events, step, () => ())
@@ -1120,7 +1120,7 @@ fn add_preview3_udp_options(
   fn add_u64(
     getter : String,
     setter : String,
-    option : Int,
+    option : Int32,
   ) -> Unit raise @runtime_impl.ComponentRuntimeError {
     builder.add_func(
       getter,
@@ -1400,7 +1400,7 @@ fn add_preview3_udp(
 }
 
 ///|
-fn preview3_lookup_error(index : Int) -> @runtime_impl.ComponentValue {
+fn preview3_lookup_error(index : Int32) -> @runtime_impl.ComponentValue {
   Variant(
     1,
     Some(

@@ -6,33 +6,33 @@
 /// Embedders and frontends should query this value instead of copying raw
 /// offsets into lowering code.
 pub(all) struct VMContextLayout {
-  memory0_offset : Int
-  memory0_base_offset : Int
-  memory0_size_offset : Int
-  func_table_offset : Int
-  table0_base_offset : Int
-  table0_elements_offset : Int
-  globals_offset : Int
-  tables_offset : Int
-  table_count_offset : Int
-  func_count_offset : Int
-  table_sizes_offset : Int
-  table_max_sizes_offset : Int
-  memories_offset : Int
-  memory_count_offset : Int
-  debug_current_func_idx_offset : Int
-  gc_heap_ptr_offset : Int
-  gc_heap_limit_offset : Int
-  gc_heap_offset : Int
-  pointer_stride : Int
-  global_value_stride : Int
-  table_entry_value_offset : Int
-  table_entry_stride : Int
-  func_table_entry_stride : Int
+  memory0_offset : Int32
+  memory0_base_offset : Int32
+  memory0_size_offset : Int32
+  func_table_offset : Int32
+  table0_base_offset : Int32
+  table0_elements_offset : Int32
+  globals_offset : Int32
+  tables_offset : Int32
+  table_count_offset : Int32
+  func_count_offset : Int32
+  table_sizes_offset : Int32
+  table_max_sizes_offset : Int32
+  memories_offset : Int32
+  memory_count_offset : Int32
+  debug_current_func_idx_offset : Int32
+  gc_heap_ptr_offset : Int32
+  gc_heap_limit_offset : Int32
+  gc_heap_offset : Int32
+  pointer_stride : Int32
+  global_value_stride : Int32
+  table_entry_value_offset : Int32
+  table_entry_stride : Int32
+  func_table_entry_stride : Int32
 }
 
 ///|
-extern "C" fn native_layout_field(index : Int) -> Int = "wasmoon_jit_layout_field"
+extern "C" fn native_layout_field(index : Int32) -> Int32 = "wasmoon_jit_layout_field"
 
 ///|
 let native_vmcontext_layout : VMContextLayout = {
@@ -71,8 +71,8 @@ pub fn vmcontext_layout() -> VMContextLayout {
 ///
 /// Offsets are derived from the native C declarations at initialization.
 pub(all) struct MemoryDescriptorLayout {
-  base_offset : Int
-  current_length_offset : Int
+  base_offset : Int32
+  current_length_offset : Int32
 }
 
 ///|

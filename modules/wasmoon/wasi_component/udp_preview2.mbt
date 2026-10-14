@@ -57,7 +57,7 @@ fn udp_socket_state(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> UdpSocketState raise @runtime_impl.ComponentRuntimeError {
   let resource_type = host.resolve_resource_type(
     "wasi:sockets@0.2.11/udp.udp-socket",
@@ -74,7 +74,7 @@ fn incoming_datagram_stream_state(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> IncomingDatagramStreamState raise @runtime_impl.ComponentRuntimeError {
   let resource_type = host.resolve_resource_type(
     "wasi:sockets@0.2.11/udp.incoming-datagram-stream",
@@ -92,7 +92,7 @@ fn outgoing_datagram_stream_state(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   args : Array[@runtime_impl.ComponentValue],
-  index : Int,
+  index : Int32,
 ) -> OutgoingDatagramStreamState raise @runtime_impl.ComponentRuntimeError {
   let resource_type = host.resolve_resource_type(
     "wasi:sockets@0.2.11/udp.outgoing-datagram-stream",
@@ -109,9 +109,9 @@ fn outgoing_datagram_stream_state(
 fn new_udp_socket_handle(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
-  fd : Int,
-  family : Int,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+  fd : Int32,
+  family : Int32,
+) -> Int32 raise @runtime_impl.ComponentRuntimeError {
   let rep = host.ctx.insert_resource(
     UdpSocket({
       fd,
@@ -313,8 +313,8 @@ fn add_udp_bind_stream_methods(
 ///|
 fn udp_option_result(
   state : UdpSocketState,
-  option : Int,
-  transform : (Int) -> @runtime_impl.ComponentValue,
+  option : Int32,
+  transform : (Int32) -> @runtime_impl.ComponentValue,
 ) -> @runtime_impl.ComponentValue {
   match @wasi.native_socket_option_get(state.fd, state.family, option) {
     Some(value) => socket_ok(transform(value))
@@ -325,8 +325,8 @@ fn udp_option_result(
 ///|
 fn set_udp_option_result(
   state : UdpSocketState,
-  option : Int,
-  value : Int,
+  option : Int32,
+  value : Int32,
 ) -> @runtime_impl.ComponentValue {
   if @wasi.native_socket_option_set(state.fd, state.family, option, value) {
     socket_ok_void()
@@ -416,7 +416,7 @@ fn add_udp_address_option_methods(
   fn add_buffer_option(
     getter : String,
     setter : String,
-    option : Int,
+    option : Int32,
   ) -> Unit raise @runtime_impl.ComponentRuntimeError {
     builder.add_func(getter, preview2_func(interface, getter), (args, table) => {
       [

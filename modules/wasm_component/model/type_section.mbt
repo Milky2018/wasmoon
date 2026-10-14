@@ -24,7 +24,7 @@ pub(all) enum PrimValType {
 
 ///|
 pub(all) enum ValType {
-  TypeIdx(Int)
+  TypeIdx(Int32)
   Prim(PrimValType)
 } derive(Debug, Eq)
 
@@ -57,10 +57,10 @@ pub(all) enum InstanceDecl {
   Type(TypeDef)
   // (alias outer ...) inside an instance type declaration.
   // `kind` is the component model external kind discriminator (e.g. Type=0x03).
-  AliasOuter(Int, Int, Int)
+  AliasOuter(Int32, Int32, Int32)
   // (alias export ...) inside an instance type declaration.
   // `kind` is the component model external kind discriminator.
-  AliasInstanceExport(Int, Int, String)
+  AliasInstanceExport(Int32, Int32, String)
   Export(String, Array[NameAttribute], ExternDesc)
 } derive(Debug, Eq)
 
@@ -71,9 +71,9 @@ pub(all) enum ComponentDecl {
   CoreType(Bytes)
   Type(TypeDef)
   // (alias outer ...) inside a component type declaration.
-  AliasOuter(Int, Int, Int)
+  AliasOuter(Int32, Int32, Int32)
   // (alias export ...) inside a component type declaration.
-  AliasInstanceExport(Int, Int, String)
+  AliasInstanceExport(Int32, Int32, String)
   Import(String, Array[NameAttribute], ExternDesc)
   Export(String, Array[NameAttribute], ExternDesc)
 } derive(Debug, Eq)
@@ -83,7 +83,7 @@ pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
   List(ValType)
-  FixedList(ValType, Int)
+  FixedList(ValType, Int32)
   MapType(ValType, ValType)
   Record(Array[RecordField])
   Variant(Array[VariantCase])
@@ -92,15 +92,15 @@ pub(all) enum TypeDef {
   Enum(Array[String])
   Option(ValType)
   Result(ValType?, ValType?)
-  Own(Int)
-  Borrow(Int)
+  Own(Int32)
+  Borrow(Int32)
   Stream(ValType?)
   Future(ValType?)
   // Nominal resource type. `id` is filled at instantiation time.
   // `rep` is the core wasm value type (e.g. i32=0x7f).
   // `dtor` is an optional destructor core func index.
   // `kind` tracks whether the resource originates from the component or host.
-  ResourceType(Int, Int, Int?, ResourceKind)
+  ResourceType(Int32, Int32, Int32?, ResourceKind)
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
@@ -122,7 +122,7 @@ pub(all) struct VariantCase {
   label : String
   ty : ValType?
   // `refines` points at a previously defined case index.
-  refines : Int?
+  refines : Int32?
 } derive(Debug, Eq)
 
 ///|
@@ -135,7 +135,7 @@ fn Reader::read_label(self : Reader) -> String raise ComponentParseError {
 }
 
 ///|
-fn parse_prim_valtype(op : Int) -> PrimValType? {
+fn parse_prim_valtype(op : Int32) -> PrimValType? {
   match op {
     0x7f => Some(Bool)
     0x7e => Some(S8)
@@ -199,7 +199,7 @@ fn parse_resultlist(reader : Reader) -> ValType? raise ComponentParseError {
 ///|
 fn parse_functype(
   reader : Reader,
-  op : Int,
+  op : Int32,
 ) -> FuncType raise ComponentParseError {
   let is_async = op == 0x43
   let params = parse_paramlist(reader)
@@ -284,7 +284,7 @@ fn parse_externdesc_for_instancedecl(
 }
 
 ///|
-fn parse_alias_kind(reader : Reader) -> Int raise ComponentParseError {
+fn parse_alias_kind(reader : Reader) -> Int32 raise ComponentParseError {
   // Alias kinds use the same encoding as Sort in the import/export sections:
   // 0x00 <core_sort> for core items, or a single-byte tag for component items.
   let tag = reader.read_u8()
@@ -338,7 +338,7 @@ fn skip_core_valtype(reader : Reader) -> Unit raise ComponentParseError {
 ///|
 fn skip_core_extern_type(
   reader : Reader,
-  kind : Int,
+  kind : Int32,
 ) -> Unit raise ComponentParseError {
   match kind {
     0x00 => reader.read_leb_u32() |> ignore // func type index
@@ -420,7 +420,7 @@ fn skip_core_typedef(reader : Reader) -> Unit raise ComponentParseError {
 }
 
 ///|
-fn bytes_sub(bytes : Bytes, start : Int, end : Int) -> Bytes {
+fn bytes_sub(bytes : Bytes, start : Int32, end : Int32) -> Bytes {
   let out : Array[Byte] = []
   for i in start..<end {
     out.push(bytes[i])

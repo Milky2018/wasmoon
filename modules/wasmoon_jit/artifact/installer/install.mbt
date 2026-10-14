@@ -2,12 +2,12 @@
 /// Structured failures from the Wasmoon-owned executable-code transaction.
 pub(all) suberror JitInstallError {
   ResolutionFailed(kind~ : String, name~ : String)
-  AllocationFailed(function_index~ : Int)
-  RelocationFailed(function_index~ : Int, message~ : String)
-  ProtectionFailed(function_index~ : Int)
-  RegistrationFailed(function_index~ : Int, message~ : String)
+  AllocationFailed(function_index~ : Int32)
+  RelocationFailed(function_index~ : Int32, message~ : String)
+  ProtectionFailed(function_index~ : Int32)
+  RegistrationFailed(function_index~ : Int32, message~ : String)
   PublicationFailed(message~ : String)
-  TrampolineAllocationFailed(code_size~ : Int)
+  TrampolineAllocationFailed(code_size~ : Int32)
 } derive(Eq, Debug)
 
 ///|
@@ -38,9 +38,9 @@ pub struct InstalledFunction {
   priv identity : @artifact.FunctionIdentity
   priv code_address : Int64
   priv entry_address : Int64
-  priv code_size : Int
-  priv entry_offset : Int
-  priv frame_size : Int
+  priv code_size : Int32
+  priv entry_offset : Int32
+  priv frame_size : Int32
   priv sources : Array[@code_object.SourceSite]
   priv traps : Array[@code_object.TrapSite]
   priv safepoints : Array[@code_object.SafepointSite]
@@ -65,17 +65,17 @@ pub fn InstalledFunction::entry_address(self : InstalledFunction) -> Int64 {
 }
 
 ///|
-pub fn InstalledFunction::code_size(self : InstalledFunction) -> Int {
+pub fn InstalledFunction::code_size(self : InstalledFunction) -> Int32 {
   self.code_size
 }
 
 ///|
-pub fn InstalledFunction::entry_offset(self : InstalledFunction) -> Int {
+pub fn InstalledFunction::entry_offset(self : InstalledFunction) -> Int32 {
   self.entry_offset
 }
 
 ///|
-pub fn InstalledFunction::frame_size(self : InstalledFunction) -> Int {
+pub fn InstalledFunction::frame_size(self : InstalledFunction) -> Int32 {
   self.frame_size
 }
 
@@ -136,7 +136,7 @@ pub fn InstalledCode::functions(
 ///|
 pub fn InstalledCode::entry_address(
   self : InstalledCode,
-  function_index : Int,
+  function_index : Int32,
 ) -> Int64? {
   for import_ in self.imports {
     if import_.identity.function_index == function_index {
@@ -205,7 +205,7 @@ pub fn JitCodeInstaller::current(self : JitCodeInstaller) -> InstalledCode? {
 /// copying, permission changes, or instruction-cache mutation.
 pub fn JitCodeInstaller::install_trampoline(
   self : JitCodeInstaller,
-  code : Array[Int],
+  code : Array[Int32],
 ) -> InstalledTrampoline raise JitInstallError {
   self.resolver |> ignore
   match ExecCode::try_alloc(code) {
@@ -362,7 +362,7 @@ fn release_staged_code(staged : Array[ExecCode]) -> Unit {
 }
 
 ///|
-fn first_function_index(artifact : @artifact.Artifact) -> Int {
+fn first_function_index(artifact : @artifact.Artifact) -> Int32 {
   if artifact.functions.length() == 0 {
     -1
   } else {

@@ -63,8 +63,8 @@ test "task reservations roll back and retirement returns both task and thread sl
 test "typed concurrent maps share capacity and updates do not allocate" {
   let pool = ConcurrentResources::new()
   pool.set_capacity(1U)
-  let first : ConcurrentMap[Int, String] = ConcurrentMap::new(pool)
-  let second : ConcurrentMap[String, Int] = ConcurrentMap::new(pool)
+  let first : ConcurrentMap[Int32, String] = ConcurrentMap::new(pool)
+  let second : ConcurrentMap[String, Int32] = ConcurrentMap::new(pool)
   first.set(0, "first")
   let full = try {
     second.set("second", 2)

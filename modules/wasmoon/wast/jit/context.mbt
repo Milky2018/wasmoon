@@ -1,6 +1,6 @@
 ///|
 priv struct ImportedWasmCallContinuation {
-  func_addr : Int
+  func_addr : Int32
   continuation : @executor.ExecutionContinuation
 }
 
@@ -10,18 +10,18 @@ pub struct JITModuleContext {
   jit_module : @compiled_jit.JITModule
   // For syncing globals back to store after JIT calls
   globals_ptr : Int64
-  global_addrs : Array[Int]
+  global_addrs : Array[Int32]
   // Tables owned/imported by this module instance
-  table_addrs : Array[Int]
+  table_addrs : Array[Int32]
   // For converting module function indices to store addresses
-  func_addrs : Array[Int]
+  func_addrs : Array[Int32]
   // Function type indices in module index space (imports + locals)
-  func_type_indices : Array[Int]
+  func_type_indices : Array[Int32]
   // Module canonical type indices
-  canonical_type_indices : Array[Int]
+  canonical_type_indices : Array[Int32]
   // Module-local type graph used by GC type checks
   module_types : Array[@types.SubType]
-  module_rec_groups : Array[Int]
+  module_rec_groups : Array[Int32]
   // Whether this module uses subtype helper for call_indirect checks
   use_subtype_indirect_check : Bool
   priv async_host_drivers : Map[Int64, @runtime.AsyncHostCallDriver]
@@ -33,13 +33,13 @@ pub struct JITModuleContext {
 pub fn JITModuleContext::JITModuleContext(
   jit_module : @compiled_jit.JITModule,
   globals_ptr : Int64,
-  global_addrs : Array[Int],
-  table_addrs : Array[Int],
-  func_addrs : Array[Int],
-  func_type_indices : Array[Int],
-  canonical_type_indices : Array[Int],
+  global_addrs : Array[Int32],
+  table_addrs : Array[Int32],
+  func_addrs : Array[Int32],
+  func_type_indices : Array[Int32],
+  canonical_type_indices : Array[Int32],
   module_types : Array[@types.SubType],
-  module_rec_groups : Array[Int],
+  module_rec_groups : Array[Int32],
   use_subtype_indirect_check : Bool,
 ) -> JITModuleContext {
   {

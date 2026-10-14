@@ -3,8 +3,8 @@ pub fn alloc_host_core_func(
   store : @runtime.Store,
   core_type : @types.FuncType,
   host : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError,
-  may_suspend? : Bool = false,
-  native_eligible? : Bool = true,
+  may_suspend~ : Bool = false,
+  native_eligible~ : Bool = true,
 ) -> CoreFuncRef raise @runtime.RuntimeError {
   let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0)
   let instance : @runtime.ModuleInstance = {
@@ -40,8 +40,8 @@ pub fn alloc_component_host_core_func(
   store : @runtime.Store,
   core_type : @types.FuncType,
   host : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError,
-  may_suspend? : Bool = false,
-  native_eligible? : Bool = true,
+  may_suspend~ : Bool = false,
+  native_eligible~ : Bool = true,
 ) -> CoreFuncRef raise ComponentRuntimeError {
   alloc_host_core_func(store, core_type, host, may_suspend~, native_eligible~) catch {
     error => raise CoreModuleInstantiateError(error.to_string())
@@ -78,7 +78,7 @@ pub fn call_core_func(
   store : @runtime.Store,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
-  style? : CoreCallStyle = RunToCompletion,
+  style~ : CoreCallStyle = RunToCompletion,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   let outcome = call_core_func_outcome(store, core_func, args, style)
   match outcome {
@@ -190,7 +190,7 @@ pub fn call_core_func_guarded(
   entry : ComponentInstanceEntryState,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
-  style? : CoreCallStyle = RunToCompletion,
+  style~ : CoreCallStyle = RunToCompletion,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   entry.enter()
   let out = {

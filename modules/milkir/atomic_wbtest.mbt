@@ -1,6 +1,11 @@
 ///|
 test "atomic verifier rejects noninteger and oversized access contracts" {
-  let shapes : Array[(Type, Int)] = [(F64, 64), (I32, 64), (I64, 128), (I32, 7)]
+  let shapes : Array[(Type, Int32)] = [
+    (F64, 64),
+    (I32, 64),
+    (I64, 128),
+    (I32, 7),
+  ]
   for pair in shapes {
     let (ty, bits) = pair
     let builder = FunctionBuilder("bad_atomic")

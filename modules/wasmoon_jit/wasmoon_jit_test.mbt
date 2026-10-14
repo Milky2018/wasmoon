@@ -501,7 +501,7 @@ test "hostcall trampolines support V128 registers" {
 }
 
 ///|
-fn code_contains_x64_rsp_int_load(code : Array[Int]) -> Bool {
+fn code_contains_x64_rsp_int_load(code : Array[Int32]) -> Bool {
   if code.length() < 4 {
     return false
   }
@@ -517,7 +517,7 @@ fn code_contains_x64_rsp_int_load(code : Array[Int]) -> Bool {
 }
 
 ///|
-fn code_contains_byte(code : Array[Int], byte : Int) -> Bool {
+fn code_contains_byte(code : Array[Int32], byte : Int32) -> Bool {
   for b in code {
     if b == byte {
       return true
@@ -527,7 +527,7 @@ fn code_contains_byte(code : Array[Int], byte : Int) -> Bool {
 }
 
 ///|
-fn code_contains_pair(code : Array[Int], b0 : Int, b1 : Int) -> Bool {
+fn code_contains_pair(code : Array[Int32], b0 : Int32, b1 : Int32) -> Bool {
   if code.length() < 2 {
     return false
   }
@@ -540,7 +540,7 @@ fn code_contains_pair(code : Array[Int], b0 : Int, b1 : Int) -> Bool {
 }
 
 ///|
-fn code_contains_x64_rsp_int_store(code : Array[Int]) -> Bool {
+fn code_contains_x64_rsp_int_store(code : Array[Int32]) -> Bool {
   if code.length() < 4 {
     return false
   }
@@ -556,7 +556,7 @@ fn code_contains_x64_rsp_int_store(code : Array[Int]) -> Bool {
 }
 
 ///|
-fn code_contains_x64_r12_int_store(code : Array[Int]) -> Bool {
+fn code_contains_x64_r12_int_store(code : Array[Int32]) -> Bool {
   if code.length() < 4 {
     return false
   }
@@ -572,7 +572,7 @@ fn code_contains_x64_r12_int_store(code : Array[Int]) -> Bool {
 }
 
 ///|
-fn code_contains_x64_r14_int_load(code : Array[Int]) -> Bool {
+fn code_contains_x64_r14_int_load(code : Array[Int32]) -> Bool {
   if code.length() < 3 {
     return false
   }
@@ -585,7 +585,7 @@ fn code_contains_x64_r14_int_load(code : Array[Int]) -> Bool {
 }
 
 ///|
-fn code_contains_x64_r14_int_store(code : Array[Int]) -> Bool {
+fn code_contains_x64_r14_int_store(code : Array[Int32]) -> Bool {
   if code.length() < 3 {
     return false
   }
@@ -598,7 +598,10 @@ fn code_contains_x64_r14_int_store(code : Array[Int]) -> Bool {
 }
 
 ///|
-fn code_contains_a64_x16_load_from_base(code : Array[Int], base : Int) -> Bool {
+fn code_contains_a64_x16_load_from_base(
+  code : Array[Int32],
+  base : Int32,
+) -> Bool {
   if code.length() < 4 {
     return false
   }
@@ -617,7 +620,10 @@ fn code_contains_a64_x16_load_from_base(code : Array[Int], base : Int) -> Bool {
 }
 
 ///|
-fn code_contains_a64_x16_store_to_base(code : Array[Int], base : Int) -> Bool {
+fn code_contains_a64_x16_store_to_base(
+  code : Array[Int32],
+  base : Int32,
+) -> Bool {
   if code.length() < 4 {
     return false
   }

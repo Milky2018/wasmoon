@@ -27,7 +27,7 @@ fn ByteBuf::ByteBuf() -> ByteBuf {
 }
 
 ///|
-fn ByteBuf::push_u8(self : ByteBuf, b : Int) -> Unit {
+fn ByteBuf::push_u8(self : ByteBuf, b : Int32) -> Unit {
   self.data.push(b.to_byte())
 }
 
@@ -39,7 +39,7 @@ fn ByteBuf::push_bytes(self : ByteBuf, bs : Bytes) -> Unit {
 }
 
 ///|
-fn ByteBuf::push_uleb_u32(self : ByteBuf, n : Int) -> Unit {
+fn ByteBuf::push_uleb_u32(self : ByteBuf, n : Int32) -> Unit {
   // Standard unsigned LEB128 encoding.
   let mut x = n
   let mut more = true
@@ -55,7 +55,7 @@ fn ByteBuf::push_uleb_u32(self : ByteBuf, n : Int) -> Unit {
 }
 
 ///|
-fn ByteBuf::push_sleb_i32(self : ByteBuf, n : Int) -> Unit {
+fn ByteBuf::push_sleb_i32(self : ByteBuf, n : Int32) -> Unit {
   // Standard signed LEB128 encoding for 32-bit-ish ints.
   let mut x = n
   let mut more = true
@@ -95,7 +95,7 @@ fn ByteBuf::to_bytes(self : ByteBuf) -> Bytes {
 }
 
 ///|
-fn wit_type_to_prim_opcode(t : TypeExpr) -> Int raise WitError {
+fn wit_type_to_prim_opcode(t : TypeExpr) -> Int32 raise WitError {
   match t {
     Id(n) =>
       match n {
@@ -123,8 +123,8 @@ fn wit_type_to_prim_opcode(t : TypeExpr) -> Int raise WitError {
 
 ///|
 priv enum EncValType {
-  Prim(Int)
-  TypeIdx(Int)
+  Prim(Int32)
+  TypeIdx(Int32)
 }
 
 ///|
@@ -166,7 +166,7 @@ fn encode_functype(buf : ByteBuf, f : EncFuncType) -> Unit {
 }
 
 ///|
-fn typedef_prim(op : Int) -> Bytes {
+fn typedef_prim(op : Int32) -> Bytes {
   let b = ByteBuf::ByteBuf()
   b.push_u8(op)
   b.to_bytes()
@@ -275,7 +275,7 @@ fn typedef_enum(names : Array[String]) -> Bytes {
 }
 
 ///|
-fn typedef_own(resource_typeidx : Int) -> Bytes {
+fn typedef_own(resource_typeidx : Int32) -> Bytes {
   let b = ByteBuf::ByteBuf()
   b.push_u8(0x69)
   b.push_uleb_u32(resource_typeidx)
@@ -283,7 +283,7 @@ fn typedef_own(resource_typeidx : Int) -> Bytes {
 }
 
 ///|
-fn typedef_borrow(resource_typeidx : Int) -> Bytes {
+fn typedef_borrow(resource_typeidx : Int32) -> Bytes {
   let b = ByteBuf::ByteBuf()
   b.push_u8(0x68)
   b.push_uleb_u32(resource_typeidx)
@@ -326,26 +326,26 @@ fn encode_exportname_string_plain(buf : ByteBuf, name : String) -> Unit {
 }
 
 ///|
-fn encode_externdesc_functype(buf : ByteBuf, idx : Int) -> Unit {
+fn encode_externdesc_functype(buf : ByteBuf, idx : Int32) -> Unit {
   buf.push_u8(0x01)
   buf.push_uleb_u32(idx)
 }
 
 ///|
-fn encode_externdesc_instancetype(buf : ByteBuf, idx : Int) -> Unit {
+fn encode_externdesc_instancetype(buf : ByteBuf, idx : Int32) -> Unit {
   buf.push_u8(0x05)
   buf.push_uleb_u32(idx)
 }
 
 ///|
-fn encode_externdesc_componenttype(buf : ByteBuf, idx : Int) -> Unit {
+fn encode_externdesc_componenttype(buf : ByteBuf, idx : Int32) -> Unit {
   buf.push_u8(0x04)
   buf.push_uleb_u32(idx)
 }
 
 ///|
 priv enum EncTypeBound {
-  Eq(Int)
+  Eq(Int32)
   SubResource
 }
 
@@ -358,7 +358,7 @@ fn instancedecl_type(typedef : Bytes) -> Bytes {
 }
 
 ///|
-fn instancedecl_alias_outer_type(count : Int, idx : Int) -> Bytes {
+fn instancedecl_alias_outer_type(count : Int32, idx : Int32) -> Bytes {
   let b = ByteBuf::ByteBuf()
   b.push_u8(0x02)
   // kind = Type
@@ -388,7 +388,7 @@ fn instancedecl_export_type(name : String, bound : EncTypeBound) -> Bytes {
 }
 
 ///|
-fn instancedecl_export_func(name : String, functype_idx : Int) -> Bytes {
+fn instancedecl_export_func(name : String, functype_idx : Int32) -> Bytes {
   let b = ByteBuf::ByteBuf()
   b.push_u8(0x04)
   encode_exportname_string_plain(b, name)
@@ -418,7 +418,7 @@ fn componentdecl_type(typedef : Bytes) -> Bytes {
 ///|
 fn componentdecl_import_instance(
   name : String,
-  instancetype_typeidx : Int,
+  instancetype_typeidx : Int32,
 ) -> Bytes {
   let b = ByteBuf::ByteBuf()
   b.push_u8(0x03)
@@ -430,7 +430,7 @@ fn componentdecl_import_instance(
 ///|
 fn componentdecl_export_instance(
   name : String,
-  instancetype_typeidx : Int,
+  instancetype_typeidx : Int32,
 ) -> Bytes {
   let b = ByteBuf::ByteBuf()
   b.push_u8(0x04)
@@ -443,7 +443,7 @@ fn componentdecl_export_instance(
 
 ///|
 fn componentdecl_alias_instance_export_type(
-  instance_idx : Int,
+  instance_idx : Int32,
   name : String,
 ) -> Bytes {
   let b = ByteBuf::ByteBuf()
@@ -490,19 +490,19 @@ fn is_prim_id(name : String) -> Bool {
 }
 
 ///|
-fn prim_opcode_of_id(name : String) -> Int raise WitError {
+fn prim_opcode_of_id(name : String) -> Int32 raise WitError {
   wit_type_to_prim_opcode(Id(name))
 }
 
 ///|
 priv struct TypeEnv {
-  next_typeidx : Array[Int]
+  next_typeidx : Array[Int32]
   // Exported type/resource name -> nominal type index (the one created by type export decl).
-  named_typeidx : Map[String, Int]
+  named_typeidx : Map[String, Int32]
   // local-name -> true iff it's a resource type.
   resources : Map[String, Bool]
   // cache key -> type index (for anonymous/compound types).
-  cache : Map[String, Int]
+  cache : Map[String, Int32]
   decls : Array[Bytes]
 }
 
@@ -518,7 +518,7 @@ fn TypeEnv::TypeEnv() -> TypeEnv {
 }
 
 ///|
-fn TypeEnv::alloc_type(self : TypeEnv, typedef : Bytes) -> Int {
+fn TypeEnv::alloc_type(self : TypeEnv, typedef : Bytes) -> Int32 {
   let idx = self.next_typeidx[0]
   self.next_typeidx[0] = self.next_typeidx[0] + 1
   self.decls.push(instancedecl_type(typedef))
@@ -526,7 +526,7 @@ fn TypeEnv::alloc_type(self : TypeEnv, typedef : Bytes) -> Int {
 }
 
 ///|
-fn TypeEnv::alloc_alias_outer(self : TypeEnv, outer_typeidx : Int) -> Int {
+fn TypeEnv::alloc_alias_outer(self : TypeEnv, outer_typeidx : Int32) -> Int32 {
   let idx = self.next_typeidx[0]
   self.next_typeidx[0] = self.next_typeidx[0] + 1
   self.decls.push(instancedecl_alias_outer_type(1, outer_typeidx))
@@ -537,8 +537,8 @@ fn TypeEnv::alloc_alias_outer(self : TypeEnv, outer_typeidx : Int) -> Int {
 fn TypeEnv::export_type_eq(
   self : TypeEnv,
   name : String,
-  target_idx : Int,
-) -> Int {
+  target_idx : Int32,
+) -> Int32 {
   // Exporting a type introduces a fresh nominal type index.
   self.decls.push(instancedecl_export_type(name, Eq(target_idx)))
   let idx = self.next_typeidx[0]
@@ -548,7 +548,7 @@ fn TypeEnv::export_type_eq(
 }
 
 ///|
-fn TypeEnv::export_resource(self : TypeEnv, name : String) -> Int {
+fn TypeEnv::export_resource(self : TypeEnv, name : String) -> Int32 {
   self.decls.push(instancedecl_export_type(name, SubResource))
   let idx = self.next_typeidx[0]
   self.next_typeidx[0] = self.next_typeidx[0] + 1
@@ -566,7 +566,7 @@ fn typeexpr_key_of_valtype(vt : EncValType) -> String {
 }
 
 ///|
-fn ensure_compound_type(env : TypeEnv, key : String, typedef : Bytes) -> Int {
+fn ensure_compound_type(env : TypeEnv, key : String, typedef : Bytes) -> Int32 {
   match env.cache.get(key) {
     Some(i) => i
     None => {
@@ -750,7 +750,7 @@ fn lower_valtype_in_value(
 ///|
 fn encode_interface_instancetype_full(
   iface : Interface,
-  imported_types : Array[(String, Int, Bool)],
+  imported_types : Array[(String, Int32, Bool)],
 ) -> Bytes raise WitError {
   // imported_types: (local_name, outer_typeidx, is_resource)
   let env = TypeEnv::TypeEnv()
@@ -850,7 +850,7 @@ fn encode_interface_instancetype_full(
   }
 
   // DFS topo sort.
-  let state : Map[String, Int] = Map([])
+  let state : Map[String, Int32] = Map([])
   let order : Array[String] = []
   fn dfs(n : String) -> Unit raise WitError {
     let st = state.get(n).unwrap_or(0)
@@ -1092,7 +1092,7 @@ fn encode_interface_instancetype_types_only(
   iface : Interface,
 ) -> Bytes raise WitError {
   // Only local type defs + resources; ignore `use` for now.
-  let imported : Array[(String, Int, Bool)] = []
+  let imported : Array[(String, Int32, Bool)] = []
   // We can reuse the full encoder but omit functions by passing an interface copy?
   // Keep it simple: build a synthetic interface containing only type items.
   let items : Array[InterfaceItem] = []
@@ -1153,7 +1153,7 @@ fn encode_componenttype_wrapper_for_interface(
   let decls : Array[Bytes] = []
   let mut next_typeidx = 0
   let mut next_instanceidx = 0
-  let imported_types : Array[(String, Int, Bool)] = []
+  let imported_types : Array[(String, Int32, Bool)] = []
 
   // Encode dependencies as imported instances and alias their type exports.
   for kv in deps.iter() {
@@ -1311,7 +1311,7 @@ fn encode_type_section_one(typedef_bytes : Bytes) -> Bytes {
 }
 
 ///|
-fn encode_export_section_one(name : String, typeidx : Int) -> Bytes {
+fn encode_export_section_one(name : String, typeidx : Int32) -> Bytes {
   let p = ByteBuf::ByteBuf()
   p.push_uleb_u32(1)
   // exportname = 0x00 + name
@@ -1326,7 +1326,7 @@ fn encode_export_section_one(name : String, typeidx : Int) -> Bytes {
 }
 
 ///|
-fn encode_section(id : Int, payload : Bytes) -> Bytes {
+fn encode_section(id : Int32, payload : Bytes) -> Bytes {
   let b = ByteBuf::ByteBuf()
   b.push_u8(id)
   b.push_uleb_u32(payload.length())

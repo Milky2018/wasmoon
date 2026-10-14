@@ -10,6 +10,6 @@ pub fn CodeBuffer::new(code : Array[Byte]) -> CodeBuffer {
 }
 
 ///|
-fn CodeBuffer::emit_byte(self : CodeBuffer, byte : Int) -> Unit {
+fn CodeBuffer::emit_byte(self : CodeBuffer, byte : Int32) -> Unit {
   self.code.push((byte & 0xFF).to_byte())
 }

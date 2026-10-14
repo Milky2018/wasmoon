@@ -1,30 +1,30 @@
 /// Compiled function lifecycle support owned by Wasmoon JIT.
 
 ///|
-const STACKMAP_I32_MAX : Int = 0x7FFFFFFF
+const STACKMAP_I32_MAX : Int32 = 0x7FFFFFFF
 
 ///|
 /// Information about a GC safepoint in generated code.
 pub struct GcSafepoint {
   /// Offset in generated machine code where this safepoint is.
-  code_offset : Int
+  code_offset : Int32
   /// Which virtual registers contain live GC references at this point.
-  live_refs : Array[Int]
+  live_refs : Array[Int32]
   /// Additional metadata, such as return address for stack unwinding.
   metadata : Int64
 } derive(Debug)
 
 ///|
 pub fn GcSafepoint::GcSafepoint(
-  code_offset : Int,
-  live_refs : Array[Int],
+  code_offset : Int32,
+  live_refs : Array[Int32],
   metadata : Int64,
 ) -> GcSafepoint {
   { code_offset, live_refs, metadata, }
 }
 
 ///|
-fn compiled_append_u32_le(buf : Array[Byte], value : Int) -> Unit {
+fn compiled_append_u32_le(buf : Array[Byte], value : Int32) -> Unit {
   buf.push((value & 0xFF).to_byte())
   buf.push(((value >> 8) & 0xFF).to_byte())
   buf.push(((value >> 16) & 0xFF).to_byte())
@@ -32,7 +32,7 @@ fn compiled_append_u32_le(buf : Array[Byte], value : Int) -> Unit {
 }
 
 ///|
-fn safepoint_metadata_to_root_count(metadata : Int64) -> Int {
+fn safepoint_metadata_to_root_count(metadata : Int64) -> Int32 {
   if metadata <= 0L {
     return 0
   }
@@ -44,7 +44,7 @@ fn safepoint_metadata_to_root_count(metadata : Int64) -> Int {
 }
 
 ///|
-fn compiled_encode_stackmap_root_count(root_count : Int) -> Int {
+fn compiled_encode_stackmap_root_count(root_count : Int32) -> Int32 {
   if root_count <= 0 {
     0
   } else if root_count > STACKMAP_I32_MAX {
@@ -65,7 +65,7 @@ fn compiled_encode_stackmap_root_count(root_count : Int) -> Int {
 ///     u32 root_indices[root_index_count]
 fn compiled_build_gc_stackmap_blob_v2(
   safepoints : Array[GcSafepoint],
-  default_root_counts : Array[Int],
+  default_root_counts : Array[Int32],
 ) -> Bytes {
   if safepoints.length() == 0 {
     return b""
@@ -89,7 +89,7 @@ fn compiled_build_gc_stackmap_blob_v2(
         default_root_count
       },
     )
-    let valid_indices : Array[Int] = []
+    let valid_indices : Array[Int32] = []
     for live_ref in safepoint.live_refs {
       if live_ref >= 0 && live_ref <= STACKMAP_I32_MAX {
         valid_indices.push(live_ref)

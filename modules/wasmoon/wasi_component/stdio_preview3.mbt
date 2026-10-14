@@ -14,7 +14,7 @@ fn preview3_future_element(
 }
 
 ///|
-fn preview3_stdin_snapshot(ctx : WasiComponentCtx) -> (Bytes, Int?) {
+fn preview3_stdin_snapshot(ctx : WasiComponentCtx) -> (Bytes, Int32?) {
   match ctx.get_resource(ctx.stdin_rep) {
     Some(InputStream(state)) if !state.closed.val && state.native_fd is None => {
       let bytes : Array[Byte] = []
@@ -32,9 +32,9 @@ fn preview3_stdin_snapshot(ctx : WasiComponentCtx) -> (Bytes, Int?) {
 priv struct Preview3StdinSource {
   ctx : WasiComponentCtx
   state : InputStreamState
-  fd : Int
+  fd : Int32
   buffered : Array[Byte]
-  next : Ref[Int]
+  next : Ref[Int32]
   always_ready : Bool
   operation : Ref[WasiAsyncOperation?]
   completion : Ref[@runtime_impl.ComponentValue?]
@@ -44,7 +44,7 @@ priv struct Preview3StdinSource {
 fn Preview3StdinSource::new(
   ctx : WasiComponentCtx,
   state : InputStreamState,
-  fd : Int,
+  fd : Int32,
 ) -> Preview3StdinSource raise @runtime_impl.ComponentRuntimeError {
   let stat = @wasi.native_fstat(fd)
   let invalid = stat is None
@@ -108,7 +108,7 @@ fn Preview3StdinSource::complete(
 ///|
 fn Preview3StdinSource::pump(
   self : Preview3StdinSource,
-  capacity : Int,
+  capacity : Int32,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   if self.completion.val is Some(_) || self.next.val < self.buffered.length() {
     return
@@ -161,7 +161,7 @@ fn Preview3StdinSource::pump(
 ///|
 fn Preview3StdinSource::pull(
   self : Preview3StdinSource,
-  maximum : Int,
+  maximum : Int32,
 ) -> @runtime_impl.HostValueStreamPoll raise @runtime_impl.ComponentRuntimeError {
   if maximum <= 0 {
     return Values([])
@@ -192,7 +192,7 @@ fn preview3_native_stdin(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
   state : InputStreamState,
-  fd : Int,
+  fd : Int32,
   stream_element : @component.ValType,
   future_element : @component.ValType,
   types : Array[@component.TypeDef?],
@@ -237,8 +237,8 @@ fn preview3_native_stdin(
 fn preview3_output_write_once(
   state : OutputStreamState,
   bytes : Bytes,
-  offset : Int,
-) -> Int {
+  offset : Int32,
+) -> Int32 {
   if state.closed.val || offset < 0 || offset > bytes.length() {
     return -1
   }
@@ -267,13 +267,13 @@ fn preview3_output_error() -> @runtime_impl.ComponentValue {
 fn preview3_output_future(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
-  readable : Int,
-  output_rep : Int,
+  readable : Int32,
+  output_rep : Int32,
 ) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError {
   guard host.ctx.get_resource(output_rep) is Some(OutputStream(output)) else {
     raise HostCallError("Preview 3 output stream is unavailable")
   }
-  let pending : Ref[(Bytes, Int)?] = Ref(None)
+  let pending : Ref[(Bytes, Int32)?] = Ref(None)
   let fd_operation : Ref[WasiAsyncOperation?] = Ref(None)
   let done = Ref(false)
   fn register_fd() raise @runtime_impl.ComponentRuntimeError {
@@ -450,7 +450,7 @@ fn add_preview3_stdin(
 fn add_preview3_output(
   host : WasiComponentHost,
   name : String,
-  output_rep : Int,
+  output_rep : Int32,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   let interface = "wasi:cli@\{preview3_version}/\{name}"
   let builder = host.linker.host_instance_builder(

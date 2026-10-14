@@ -7,10 +7,10 @@ fn core_instance_from_module(
   native_eligible : Bool,
 ) -> CoreInstance {
   let funcs : Map[String, CoreFuncRef] = Map([])
-  let tables : Map[String, Int] = Map([])
-  let memories : Map[String, Int] = Map([])
-  let globals : Map[String, Int] = Map([])
-  let tags : Map[String, Int] = Map([])
+  let tables : Map[String, Int32] = Map([])
+  let memories : Map[String, Int32] = Map([])
+  let globals : Map[String, Int32] = Map([])
+  let tags : Map[String, Int32] = Map([])
   for exp in instance.exports {
     match exp.desc {
       Func(idx) =>
@@ -58,7 +58,7 @@ priv struct CoreModuleTypeSpec {
 }
 
 ///|
-fn bytes_sub(bytes : Bytes, start : Int, end : Int) -> Bytes {
+fn bytes_sub(bytes : Bytes, start : Int32, end : Int32) -> Bytes {
   let out : Array[Byte] = []
   for i in start..<end {
     out.push(bytes[i])
@@ -116,7 +116,7 @@ fn parse_core_valtype(
 ///|
 fn parse_limits_u32(
   reader : Reader,
-) -> (@types.Limits, Int) raise ComponentRuntimeError {
+) -> (@types.Limits, Int32) raise ComponentRuntimeError {
   let flags = reader.read_u8() catch {
     e => raise ComponentParseError(e.to_string())
   }
@@ -165,7 +165,7 @@ fn parse_core_functype(
 ///|
 fn parse_core_extern_type_in_moduletype(
   reader : Reader,
-  kind : Int,
+  kind : Int32,
   func_types : Array[@types.FuncType],
 ) -> CoreExternType raise ComponentRuntimeError {
   match kind {

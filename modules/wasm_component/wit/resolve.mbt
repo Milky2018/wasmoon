@@ -139,7 +139,7 @@ pub fn importize_world(world : World, out_name : String) -> World {
 pub fn importize_resolved_package(
   res : ResolveResult,
   world_name : String,
-  out_world_name? : String? = None,
+  out_world_name~ : String? = None,
 ) -> Package raise WitError {
   let mut target : World? = None
   let non_world_items : Array[TopItem] = []
@@ -168,7 +168,7 @@ pub fn importize_resolved_package(
 /// This is primarily used for `--importize` with a component binary input.
 pub fn importize_first_world_in_package(
   pkg : Package,
-  out_world_name? : String? = None,
+  out_world_name~ : String? = None,
 ) -> Package raise WitError {
   let mut target : World? = None
   let non_world_items : Array[TopItem] = []
@@ -332,7 +332,7 @@ fn topo_sort_graph(
   deps_map : Map[String, Array[String]],
   cycle_msg : (String) -> String,
 ) -> Array[String] raise WitError {
-  let state : Map[String, Int] = Map([]) // 0=unseen,1=visiting,2=done
+  let state : Map[String, Int32] = Map([]) // 0=unseen,1=visiting,2=done
   let out : Array[String] = []
   fn dfs(k : String) -> Unit raise WitError {
     let st = state.get(k).unwrap_or(0)
@@ -1150,7 +1150,7 @@ fn compute_iface_closure(
   iface_deps : Map[String, Array[IfaceRef]],
 ) -> Map[String, IfaceRef] raise WitError {
   let out : Map[String, IfaceRef] = Map([])
-  let state : Map[String, Int] = Map([]) // 0=unseen,1=visiting,2=done
+  let state : Map[String, Int32] = Map([]) // 0=unseen,1=visiting,2=done
   fn dfs(k : String, r : IfaceRef) -> Unit raise WitError {
     let st = state.get(k).unwrap_or(0)
     if st == 2 {
@@ -1580,8 +1580,8 @@ fn split_use_path(path : UsePath) -> (String?, String, String?) {
 }
 
 ///|
-fn find_last_code_unit(s : String, cu : Int) -> Int? {
-  let mut found : Int? = None
+fn find_last_code_unit(s : String, cu : Int32) -> Int32? {
+  let mut found : Int32? = None
   for i in 0..<s.length() {
     if s.code_unit_at(i).to_int() == cu {
       found = Some(i)
@@ -1591,7 +1591,7 @@ fn find_last_code_unit(s : String, cu : Int) -> Int? {
 }
 
 ///|
-fn slice_ascii(s : String, start : Int, end : Int) -> String {
+fn slice_ascii(s : String, start : Int32, end : Int32) -> String {
   let sb = StringBuilder::StringBuilder()
   let mut i = start
   while i < end && i < s.length() {

@@ -14,7 +14,7 @@ struct ExecCode(ExecCodeHandle)
 
 ///|
 /// Allocate and copy code to executable memory (GC-managed).
-fn ExecCode::try_alloc(code : Array[Int]) -> ExecCode? {
+fn ExecCode::try_alloc(code : Array[Int32]) -> ExecCode? {
   let size = code.length()
   if size == 0 {
     return None
@@ -32,7 +32,7 @@ fn ExecCode::try_alloc(code : Array[Int]) -> ExecCode? {
 }
 
 ///|
-fn ExecCode::try_stage(size : Int) -> ExecCode? {
+fn ExecCode::try_stage(size : Int32) -> ExecCode? {
   if size <= 0 {
     return None
   }

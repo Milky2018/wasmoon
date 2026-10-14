@@ -1,43 +1,43 @@
 ///|
 priv struct SavedRegister {
   reg : @vcode.PhysicalReg
-  offset : Int
+  offset : Int32
 }
 
 ///|
 priv struct StackObjectArea {
-  offset : Int
-  size : Int
-  alignment : Int
+  offset : Int32
+  size : Int32
+  alignment : Int32
 }
 
 ///|
 priv struct ResultArea {
-  offset : Int
-  size : Int
+  offset : Int32
+  size : Int32
 }
 
 ///|
 priv struct StackObjectRequirements {
-  size : Int
-  alignment : Int
-  offsets : Array[Int]
+  size : Int32
+  alignment : Int32
+  offsets : Array[Int32]
 }
 
 ///|
 pub struct AArch64Frame {
   priv layout : @vcode.FrameLayout
-  priv local_size : Int
-  priv incoming_args_size : Int
-  priv tail_args_size : Int
-  priv outgoing_args_size : Int
+  priv local_size : Int32
+  priv incoming_args_size : Int32
+  priv tail_args_size : Int32
+  priv outgoing_args_size : Int32
   priv result_area : ResultArea?
   priv stack_objects : StackObjectArea?
-  priv stack_object_offsets : Array[Int]
-  priv emergency_move_offset : Int?
+  priv stack_object_offsets : Array[Int32]
+  priv emergency_move_offset : Int32?
   priv requires_emergency_moves : Bool
-  priv allocation_edit_count : Int
-  priv slots : Array[(@vcode.StackSlot, Int)]
+  priv allocation_edit_count : Int32
+  priv slots : Array[(@vcode.StackSlot, Int32)]
   priv saved_registers : Array[SavedRegister]
 }
 
@@ -45,20 +45,20 @@ pub struct AArch64Frame {
 pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
-  InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int32)
   InvalidStackSlot(slot~ : @vcode.StackSlot)
-  OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
-  ResultAreaMismatch(expected~ : Int, actual~ : Int)
+  OutgoingAreaMismatch(expected~ : Int32, actual~ : Int32)
+  ResultAreaMismatch(expected~ : Int32, actual~ : Int32)
   TailAreaMismatch(
-    expected_incoming~ : Int,
-    actual_incoming~ : Int,
-    expected_tail~ : Int,
-    actual_tail~ : Int
+    expected_incoming~ : Int32,
+    actual_incoming~ : Int32,
+    expected_tail~ : Int32,
+    actual_tail~ : Int32
   )
   InvalidStackObjectArea(message~ : String)
   MovePlanningFailed(cause~ : @vcode.MoveResolveError)
-  InvalidEmergencyMoveArea(offset~ : Int?)
-  StaleAllocation(expected_edits~ : Int, actual_edits~ : Int)
+  InvalidEmergencyMoveArea(offset~ : Int32?)
+  StaleAllocation(expected_edits~ : Int32, actual_edits~ : Int32)
   SavedRegisterSetMismatch
 } derive(Debug)
 
@@ -76,7 +76,7 @@ fn is_callee_saved(reg : @vcode.PhysicalReg) -> Bool {
 }
 
 ///|
-fn register_save_size(reg : @vcode.PhysicalReg) -> Int {
+fn register_save_size(reg : @vcode.PhysicalReg) -> Int32 {
   ignore(reg)
   8
 }
@@ -161,7 +161,7 @@ fn used_callee_saved_registers(
 }
 
 ///|
-fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
+fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int32 {
   let mut maximum = 0
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
@@ -188,7 +188,7 @@ fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
 }
 
 ///|
-fn maximum_tail_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
+fn maximum_tail_args_size(function : @vcode.Function[AArch64Inst]) -> Int32 {
   let mut maximum = incoming_stack_capacity(function)
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
@@ -205,7 +205,7 @@ fn maximum_tail_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
 }
 
 ///|
-fn maximum_result_area_size(function : @vcode.Function[AArch64Inst]) -> Int {
+fn maximum_result_area_size(function : @vcode.Function[AArch64Inst]) -> Int32 {
   let mut maximum = 0
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
@@ -250,7 +250,7 @@ fn stack_object_area_requirements(
   if objects.is_empty() {
     return None
   }
-  let offsets : Array[Int] = []
+  let offsets : Array[Int32] = []
   let mut cursor = 0
   let mut area_alignment = 1
   for object in objects {
@@ -306,7 +306,7 @@ fn edge_edits_require_emergency(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   block : @vcode.Block,
-  successor_index : Int,
+  successor_index : Int32,
 ) -> Bool raise AArch64FrameError {
   if allocation.edge_edits_at(block, successor_index).is_empty() {
     return false
@@ -367,25 +367,25 @@ fn requires_emergency_move_area(
 }
 
 ///|
-pub fn AArch64Frame::frame_size(self : AArch64Frame) -> Int {
+pub fn AArch64Frame::frame_size(self : AArch64Frame) -> Int32 {
   self.layout.frame_size()
 }
 
 ///|
-pub fn AArch64Frame::incoming_args_size(self : AArch64Frame) -> Int {
+pub fn AArch64Frame::incoming_args_size(self : AArch64Frame) -> Int32 {
   self.incoming_args_size
 }
 
 ///|
-pub fn AArch64Frame::tail_args_size(self : AArch64Frame) -> Int {
+pub fn AArch64Frame::tail_args_size(self : AArch64Frame) -> Int32 {
   self.tail_args_size
 }
 
 ///|
 fn AArch64Frame::tail_call_stack_base(
   self : AArch64Frame,
-  callee_args_size : Int,
-) -> Int {
+  callee_args_size : Int32,
+) -> Int32 {
   if callee_args_size <= self.incoming_args_size {
     self.frame_size()
   } else {
@@ -395,9 +395,9 @@ fn AArch64Frame::tail_call_stack_base(
 
 ///|
 fn tail_cleanup_area_size(
-  incoming_args_size : Int,
-  tail_args_size : Int,
-) -> Int {
+  incoming_args_size : Int32,
+  tail_args_size : Int32,
+) -> Int32 {
   if tail_args_size > incoming_args_size {
     tail_args_size + 16
   } else {
@@ -406,22 +406,22 @@ fn tail_cleanup_area_size(
 }
 
 ///|
-pub fn AArch64Frame::alignment(self : AArch64Frame) -> Int {
+pub fn AArch64Frame::alignment(self : AArch64Frame) -> Int32 {
   self.layout.alignment()
 }
 
 ///|
-pub fn AArch64Frame::outgoing_args_size(self : AArch64Frame) -> Int {
+pub fn AArch64Frame::outgoing_args_size(self : AArch64Frame) -> Int32 {
   self.outgoing_args_size
 }
 
 ///|
-fn AArch64Frame::result_area_offset(self : AArch64Frame) -> Int? {
+fn AArch64Frame::result_area_offset(self : AArch64Frame) -> Int32? {
   self.result_area.map(area => area.offset)
 }
 
 ///|
-pub fn AArch64Frame::emergency_move_offset(self : AArch64Frame) -> Int? {
+pub fn AArch64Frame::emergency_move_offset(self : AArch64Frame) -> Int32? {
   self.emergency_move_offset
 }
 
@@ -429,7 +429,7 @@ pub fn AArch64Frame::emergency_move_offset(self : AArch64Frame) -> Int? {
 pub fn AArch64Frame::stack_object_offset(
   self : AArch64Frame,
   object : AArch64StackObject,
-) -> Int? {
+) -> Int32? {
   match self.stack_objects {
     Some(area) if object.is_valid() &&
       object.id < self.stack_object_offsets.length() =>
@@ -442,14 +442,14 @@ pub fn AArch64Frame::stack_object_offset(
 pub fn AArch64Frame::slot_offset(
   self : AArch64Frame,
   slot : @vcode.StackSlot,
-) -> Int? {
+) -> Int32? {
   self.layout.slot_offset(slot)
 }
 
 ///|
 pub fn AArch64Frame::saved_registers(
   self : AArch64Frame,
-) -> Array[(@vcode.PhysicalReg, Int)] {
+) -> Array[(@vcode.PhysicalReg, Int32)] {
   self.saved_registers.map(saved => (saved.reg, saved.offset))
 }
 
@@ -592,7 +592,7 @@ fn verify_target_frame(
   if frame.saved_registers.map(saved => saved.reg) != expected {
     raise SavedRegisterSetMismatch
   }
-  let occupied : Array[(Int, Int)] = []
+  let occupied : Array[(Int32, Int32)] = []
   if frame.outgoing_args_size > 0 {
     occupied.push((0, frame.outgoing_args_size))
   }
@@ -670,7 +670,7 @@ fn plan_frame_verified(
   } else {
     None
   }
-  let slot_offsets : Array[Int] = []
+  let slot_offsets : Array[Int32] = []
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
     let alignment = allocation.stack_slot_alignment(slot).unwrap()

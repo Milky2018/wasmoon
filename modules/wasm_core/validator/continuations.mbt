@@ -53,8 +53,8 @@ fn validate_continuation_types(
 ///|
 fn ValidationContext::continuation_function_index(
   self : ValidationContext,
-  index : Int,
-) -> Int raise ValidationError {
+  index : Int32,
+) -> Int32 raise ValidationError {
   if index < 0 || index >= self.types.length() {
     raise InvalidTypeIndex(index)
   }
@@ -68,7 +68,7 @@ fn ValidationContext::continuation_function_index(
 ///|
 fn ValidationContext::continuation_function_type(
   self : ValidationContext,
-  index : Int,
+  index : Int32,
 ) -> @types.FuncType raise ValidationError {
   self.get_func_type(self.continuation_function_index(index))
 }
@@ -76,7 +76,7 @@ fn ValidationContext::continuation_function_type(
 ///|
 fn ValidationContext::control_tag_type(
   self : ValidationContext,
-  index : Int,
+  index : Int32,
 ) -> @types.FuncType raise ValidationError {
   if index < 0 || index >= self.tags.length() {
     raise UnknownTag(index)
@@ -87,7 +87,7 @@ fn ValidationContext::control_tag_type(
 ///|
 fn ValidationContext::exception_tag_type(
   self : ValidationContext,
-  index : Int,
+  index : Int32,
 ) -> @types.FuncType raise ValidationError {
   let signature = self.control_tag_type(index)
   if !signature.results.is_empty() {
@@ -124,7 +124,7 @@ fn ValidationContext::signature_subtype(
 ///|
 fn ValidationContext::check_resume_handlers(
   self : ValidationContext,
-  index : Int,
+  index : Int32,
   handlers : Array[@types.ResumeHandler],
 ) -> @types.FuncType raise ValidationError {
   let resumed = self.continuation_function_type(index)

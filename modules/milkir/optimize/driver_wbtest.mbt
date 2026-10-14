@@ -1,5 +1,5 @@
 ///|
-fn dead_constant_function(name : String, count : Int) -> @milkir.Function {
+fn dead_constant_function(name : String, count : Int32) -> @milkir.Function {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   for i in 0..<count {
     builder.iconst_i32(i) |> ignore
@@ -9,7 +9,7 @@ fn dead_constant_function(name : String, count : Int) -> @milkir.Function {
 }
 
 ///|
-fn copy_chain_function(name : String, count : Int) -> @milkir.Function {
+fn copy_chain_function(name : String, count : Int32) -> @milkir.Function {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   let input = builder.add_param(I32)
   builder.add_result(I32)
@@ -22,7 +22,7 @@ fn copy_chain_function(name : String, count : Int) -> @milkir.Function {
 }
 
 ///|
-fn foldable_chain_function(name : String, count : Int) -> @milkir.Function {
+fn foldable_chain_function(name : String, count : Int32) -> @milkir.Function {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   builder.add_result(I32)
   let zero = builder.iconst_i32(0)
@@ -37,7 +37,7 @@ fn foldable_chain_function(name : String, count : Int) -> @milkir.Function {
 ///|
 fn duplicate_expression_function(
   name : String,
-  count : Int,
+  count : Int32,
 ) -> @milkir.Function {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   let lhs = builder.add_param(I32)
@@ -77,7 +77,7 @@ test "O1 folds a 300-instruction live arithmetic chain" {
 ///|
 test "O0 O1 and O2 mandatory cleanup cross size boundaries" {
   let counts = [299, 300, 301, 599, 600, 601]
-  let remaining : Array[Int] = []
+  let remaining : Array[Int32] = []
   for level in [O0, O1, O2] {
     for count in counts {
       let func = dead_constant_function("dead_boundary", count)
@@ -251,7 +251,7 @@ test "rewrite insertion preserves cross-block memory versions" {
 
 ///|
 test "bounded memory GVN keeps unknown block entries conservative" {
-  let build = fn(name : String, trailing : Int) -> @milkir.Function {
+  let build = fn(name : String, trailing : Int32) -> @milkir.Function {
     let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
     let pointer = builder.add_param(Ptr)
     let stored = builder.add_param(I32)
@@ -397,7 +397,7 @@ test "O3 runs one acyclic pipeline after structural loop transforms" {
 ///|
 /// A single straight-line chain of `count` blocks, each jumping to the next.
 /// The dominator tree is one long spine, so optimizer walks must be iterative.
-fn deep_block_chain_function(name : String, count : Int) -> @milkir.Function {
+fn deep_block_chain_function(name : String, count : Int32) -> @milkir.Function {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   let input = builder.add_param(I32)
   builder.add_result(I32)
@@ -419,7 +419,7 @@ fn deep_block_chain_function(name : String, count : Int) -> @milkir.Function {
 /// so this locks down the non-recursive traversal at extreme depth.
 fn deep_empty_block_chain_function(
   name : String,
-  count : Int,
+  count : Int32,
 ) -> @milkir.Function {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   let input = builder.add_param(I32)
@@ -451,7 +451,10 @@ test "global value numbering survives a deep spine of empty blocks" {
 
 ///|
 /// One long chain of `iadd`s, each consuming the previous result.
-fn deep_operand_chain_function(name : String, count : Int) -> @milkir.Function {
+fn deep_operand_chain_function(
+  name : String,
+  count : Int32,
+) -> @milkir.Function {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
   let input = builder.add_param(I32)
   builder.add_result(I32)

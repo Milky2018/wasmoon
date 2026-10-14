@@ -182,7 +182,7 @@ fn write_bytes_file(path : String, data : Bytes) -> Unit {
 }
 
 ///|
-fn write_binary_file(path : String, data : Array[Int]) -> Unit {
+fn write_binary_file(path : String, data : Array[Int32]) -> Unit {
   let byte_arr : Array[Byte] = []
   for b in data {
     byte_arr.push(b.to_byte())
@@ -725,7 +725,7 @@ fn pkg_stem(pkg : @wit.Package) -> String {
     None => "package"
   }
   // Use the package field as the filename stem (e.g. local:demo -> demo.wit).
-  let mut last_colon : Int? = None
+  let mut last_colon : Int32? = None
   for i in 0..<name.length() {
     if name.code_unit_at(i).to_int() == 58 { // ':'
       last_colon = Some(i)
@@ -738,7 +738,7 @@ fn pkg_stem(pkg : @wit.Package) -> String {
 }
 
 ///|
-fn slice_ascii(s : String, start : Int, end : Int) -> String {
+fn slice_ascii(s : String, start : Int32, end : Int32) -> String {
   let sb = StringBuilder::StringBuilder()
   let mut i = start
   while i < end && i < s.length() {

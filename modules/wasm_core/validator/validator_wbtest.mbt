@@ -1515,7 +1515,7 @@ test "regression: param with non-nullable ref type should be initialized" {
 /// Helper: create a simple module with only types for validation testing
 fn module_with_types(
   types : Array[@types.SubType],
-  rec_groups : Array[Int],
+  rec_groups : Array[Int32],
 ) -> @types.Module {
   {
     types,
@@ -1539,7 +1539,7 @@ fn module_with_types(
 /// Helper: create a FieldType
 fn field(
   storage : @types.StorageType,
-  mutable? : Bool = false,
+  mutable~ : Bool = false,
 ) -> @types.FieldType {
   { storage_type: storage, mutable, }
 }
@@ -1692,7 +1692,7 @@ test "validator: mixed func, struct, array types should pass" {
 fn module_with_memory(
   body : Array[@types.Instruction],
   results : Array[@types.ValueType],
-  is_memory64? : Bool = false,
+  is_memory64~ : Bool = false,
 ) -> @types.Module {
   let func_type : @types.FuncType = { params: [], results, }
   let mem_type : @types.MemoryType = {
@@ -1723,7 +1723,7 @@ fn module_with_memory(
 fn module_with_table(
   body : Array[@types.Instruction],
   results : Array[@types.ValueType],
-  is_table64? : Bool = false,
+  is_table64~ : Bool = false,
 ) -> @types.Module {
   let func_type : @types.FuncType = { params: [], results, }
   let table_type : @types.TableType = {

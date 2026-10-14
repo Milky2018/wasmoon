@@ -12,7 +12,7 @@ pub impl ToInt64 for Int64 with fn to_int64_bits(self) {
 }
 
 ///|
-pub impl ToInt64 for Int with fn to_int64_bits(self) {
+pub impl ToInt64 for Int32 with fn to_int64_bits(self) {
   self.to_int64()
 }
 
@@ -37,7 +37,7 @@ pub impl FromInt64 for Int64 with fn from_int64_bits(v) {
 }
 
 ///|
-pub impl FromInt64 for Int with fn from_int64_bits(v) {
+pub impl FromInt64 for Int32 with fn from_int64_bits(v) {
   v.to_int()
 }
 
@@ -53,7 +53,7 @@ pub impl FromInt64 for Float with fn from_int64_bits(v) {
 
 ///|
 /// Decode 8 bytes at the given offset as a little-endian Int64 bit pattern.
-pub fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
+pub fn bytes_to_int64_le(bytes : Bytes, offset : Int32) -> Int64 {
   let mut result = 0L
   for i in 0..<8 {
     let b = bytes[offset + i].to_int64() & 0xFFL
@@ -79,7 +79,7 @@ pub fn int64_pair_to_v128_le(low : Int64, high : Int64) -> Bytes {
 
 ///|
 /// Convert a single byte (0-255) to a 2-character hex string
-pub fn to_hex_byte(b : Int) -> String {
+pub fn to_hex_byte(b : Int32) -> String {
   let hi = (b >> 4) & 0xF
   let lo = b & 0xF
   let hi_c = if hi < 10 {
@@ -97,13 +97,13 @@ pub fn to_hex_byte(b : Int) -> String {
 
 ///|
 /// Convert a 16-bit value to a 4-character hex string
-pub fn to_hex_u16(n : Int) -> String {
+pub fn to_hex_u16(n : Int32) -> String {
   to_hex_byte((n >> 8) & 0xFF) + to_hex_byte(n & 0xFF)
 }
 
 ///|
 /// Convert an integer to a variable-length hex string (no leading zeros)
-pub fn int_to_hex(n : Int) -> String {
+pub fn int_to_hex(n : Int32) -> String {
   if n == 0 {
     return "0"
   }

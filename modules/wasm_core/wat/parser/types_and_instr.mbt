@@ -1,7 +1,7 @@
 ///|
 fn Parser::parse_type_def(
   self : Parser,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> @types.SubType raise WatError {
   self.advance() // skip "type"
   // Optional type name
@@ -21,7 +21,7 @@ fn Parser::parse_type_def(
       false
     }
     // Check for optional supertype index
-    let supertypes : Array[Int] = []
+    let supertypes : Array[Int32] = []
     if self.current.token is Id(name) {
       match self.type_names.get(name) {
         Some(idx) => {
@@ -291,7 +291,7 @@ fn Parser::parse_heap_type(
 /// Parse struct type: (field ...) (field ...) ...
 fn Parser::parse_struct_type(
   self : Parser,
-  type_idx : Int,
+  type_idx : Int32,
 ) -> @types.StructType raise WatError {
   let fields : Array[@types.FieldType] = []
   // Initialize field names map for this type
@@ -307,7 +307,7 @@ fn Parser::parse_struct_type(
 /// Parse field types - handles abbreviated form (field i32 i32) which produces multiple fields
 fn Parser::parse_field_types(
   self : Parser,
-  type_idx : Int,
+  type_idx : Int32,
   fields : Array[@types.FieldType],
 ) -> Unit raise WatError {
   // Check if this is a full field definition with (field ...)
@@ -375,7 +375,7 @@ fn Parser::parse_array_type(self : Parser) -> @types.ArrayType raise WatError {
 }
 
 ///|
-fn placeholder_subtype_for_rec_kind(kind : Int) -> @types.SubType {
+fn placeholder_subtype_for_rec_kind(kind : Int32) -> @types.SubType {
   match kind {
     // struct
     1 => @types.SubType::simple(Struct({ fields: [], }))
@@ -393,7 +393,7 @@ fn placeholder_subtype_for_rec_kind(kind : Int) -> @types.SubType {
 ///|
 /// Peek the composite kind for a single `(type ...)` body.
 /// Returns: 0=func, 1=struct, 2=array, 3=cont.
-fn Parser::peek_rec_type_kind(self : Parser) -> Int raise WatError {
+fn Parser::peek_rec_type_kind(self : Parser) -> Int32 raise WatError {
   // Save lexer state
   let saved_pos = self.lexer.pos
   let saved_line = self.lexer.line
@@ -467,7 +467,7 @@ fn Parser::parse_rec_group(
   // Scan through all type definitions in this rec group to register names
   let start_type_idx = mod_.types.length()
   let mut type_count = 0
-  let rec_type_kinds : Array[Int] = []
+  let rec_type_kinds : Array[Int32] = []
   while self.current.token == LParen {
     self.advance()
     if self.current.token == Keyword("type") {
@@ -912,7 +912,7 @@ fn Parser::parse_func_def(
 }
 
 ///|
-fn Parser::parse_type_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_type_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -931,7 +931,7 @@ fn Parser::parse_type_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
-fn Parser::parse_func_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_func_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -950,7 +950,7 @@ fn Parser::parse_func_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
-fn Parser::parse_local_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_local_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -969,7 +969,7 @@ fn Parser::parse_local_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
-fn Parser::parse_global_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_global_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -988,7 +988,7 @@ fn Parser::parse_global_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
-fn Parser::parse_table_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_table_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -1012,7 +1012,7 @@ fn Parser::parse_table_idx(self : Parser) -> Int raise WatError {
 /// Parse an index for memory.init instruction.
 /// This handles the ambiguity where the first index could be either memidx or dataidx.
 /// We parse it as a raw number/id and resolve based on context.
-fn Parser::parse_index_for_memory_init(self : Parser) -> Int raise WatError {
+fn Parser::parse_index_for_memory_init(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -1036,7 +1036,7 @@ fn Parser::parse_index_for_memory_init(self : Parser) -> Int raise WatError {
 }
 
 ///|
-fn Parser::parse_data_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_data_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -1055,7 +1055,7 @@ fn Parser::parse_data_idx(self : Parser) -> Int raise WatError {
 }
 
 ///|
-fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_elem_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
@@ -1077,7 +1077,7 @@ fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
 /// Get the appropriate typed reference for a type index
 fn Parser::get_typed_ref(
   self : Parser,
-  type_idx : Int,
+  type_idx : Int32,
   is_nullable : Bool,
 ) -> @types.ValueType {
   // Check if we have type info for this index
@@ -1306,7 +1306,7 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
 }
 
 ///|
-fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
+fn Parser::parse_label_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()

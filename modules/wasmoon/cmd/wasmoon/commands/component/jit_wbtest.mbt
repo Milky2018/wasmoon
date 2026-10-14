@@ -1,8 +1,8 @@
 ///|
 priv struct ComponentJITExecutionEvidence {
-  native_run_to_return : Ref[Int]
-  native_resumable : Ref[Int]
-  explicit_interpreter : Ref[Int]
+  native_run_to_return : Ref[Int32]
+  native_resumable : Ref[Int32]
+  explicit_interpreter : Ref[Int32]
 }
 
 ///|

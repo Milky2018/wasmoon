@@ -88,10 +88,10 @@ pub impl Show for ComponentFunc with fn output(self, logger) {
 ///|
 pub(all) struct CoreInstance {
   funcs : Map[String, CoreFuncRef]
-  tables : Map[String, Int]
-  memories : Map[String, Int]
-  globals : Map[String, Int]
-  tags : Map[String, Int]
+  tables : Map[String, Int32]
+  memories : Map[String, Int32]
+  globals : Map[String, Int32]
+  tags : Map[String, Int32]
 }
 
 ///|
@@ -128,10 +128,10 @@ pub(all) enum ComponentExtern {
   CoreModule(@types.Module)
   CoreInstance(CoreInstance)
   CoreFunc(CoreFuncRef)
-  CoreTable(Int)
-  CoreMemory(Int)
-  CoreGlobal(Int)
-  CoreTag(Int)
+  CoreTable(Int32)
+  CoreMemory(Int32)
+  CoreGlobal(Int32)
+  CoreTag(Int32)
   CoreType(Bytes)
 }
 
@@ -169,10 +169,10 @@ pub(all) struct ComponentInstance {
   core_instances : Array[CoreInstance]
   core_funcs : Array[CoreFuncRef]
   core_types : Array[Bytes]
-  core_tables : Array[Int]
-  core_mems : Array[Int]
-  core_globals : Array[Int]
-  core_tags : Array[Int]
+  core_tables : Array[Int32]
+  core_mems : Array[Int32]
+  core_globals : Array[Int32]
+  core_tags : Array[Int32]
   exports : Map[String, ComponentExtern]
   store : @runtime.Store
 }
@@ -243,7 +243,7 @@ pub fn ComponentInstance::call_exported_func(
 ///|
 pub fn ComponentInstance::get_core_instance(
   self : ComponentInstance,
-  idx : Int,
+  idx : Int32,
 ) -> CoreInstance? {
   if idx < 0 || idx >= self.core_instances.length() {
     None
@@ -270,7 +270,7 @@ struct ComponentLinker {
   instantiating : Ref[Bool]
   // Mutable counter stored in a 1-element array so methods can bump it without
   // requiring `mut self`.
-  resource_id_counter : Array[Int]
+  resource_id_counter : Array[Int32]
 }
 
 ///|
@@ -317,7 +317,7 @@ fn ComponentLinker::core_engine(self : ComponentLinker) -> CoreExecutionEngine {
 }
 
 ///|
-fn ComponentLinker::alloc_resource_id(self : ComponentLinker) -> Int {
+fn ComponentLinker::alloc_resource_id(self : ComponentLinker) -> Int32 {
   let id = self.resource_id_counter[0]
   self.resource_id_counter[0] = id + 1
   id

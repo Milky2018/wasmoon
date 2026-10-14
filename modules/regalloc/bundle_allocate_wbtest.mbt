@@ -16,10 +16,10 @@ priv enum SegmentLocationSnapshot {
 
 ///|
 priv struct BundleSnapshot {
-  id : Int
-  segments : Array[Int]
-  priority : Int
-  weight : Int
+  id : Int32
+  segments : Array[Int32]
+  priority : Int32
+  weight : Int32
   has_fixed_constraint : Bool
   state : BundleStateSnapshot
 } derive(Debug)
@@ -27,20 +27,20 @@ priv struct BundleSnapshot {
 ///|
 priv struct BundleQueueSnapshot {
   bundles : Array[BundleSnapshot]
-  order : Array[Int]
+  order : Array[Int32]
 } derive(Debug)
 
 ///|
 priv struct BundleAllocationSnapshot {
   bundles : Array[BundleSnapshot]
-  segment_owner : Array[Int]
+  segment_owner : Array[Int32]
   segment_locations : Array[SegmentLocationSnapshot]
 } derive(Debug)
 
 ///|
 priv struct BundleProbeSnapshot {
-  conflicts : Array[Int]
-  conflict_cost : Int
+  conflicts : Array[Int32]
+  conflict_cost : Int32
   first_conflict : ProgramPoint?
   clobbered : Bool
   can_evict : Bool
@@ -50,20 +50,20 @@ priv struct BundleProbeSnapshot {
 priv struct BundleEvictionSnapshot {
   bundles : Array[BundleSnapshot]
   segment_locations : Array[SegmentLocationSnapshot]
-  occupied : Array[Array[Int]]
-  requeued : Array[Int]
+  occupied : Array[Array[Int32]]
+  requeued : Array[Int32]
 } derive(Debug)
 
 ///|
 priv struct GapSplitSnapshot {
-  before : Int?
-  spill : Int
-  after : Int?
+  before : Int32?
+  spill : Int32
+  after : Int32?
   ranges : Array[ProgramRange]
-  owners : Array[Int]
-  spill_sets : Array[Int]
+  owners : Array[Int32]
+  spill_sets : Array[Int32]
   use_free : Array[Bool]
-  weights : Array[Int]
+  weights : Array[Int32]
 } derive(Debug)
 
 ///|
@@ -124,7 +124,7 @@ fn snapshot_bundles(context : AllocationContext) -> Array[BundleSnapshot] {
 fn snapshot_bundle_allocation(
   context : AllocationContext,
   segments : Array[AllocationSegment],
-  segment_owner : Array[Int],
+  segment_owner : Array[Int32],
 ) -> BundleAllocationSnapshot {
   {
     bundles: snapshot_bundles(context),
@@ -137,9 +137,9 @@ fn snapshot_bundle_allocation(
 
 ///|
 fn test_allocation_context(
-  bundle_segments : Array[Array[Int]],
+  bundle_segments : Array[Array[Int32]],
   segments : Array[AllocationSegment],
-  block_order : Array[Int],
+  block_order : Array[Int32],
 ) -> AllocationContext {
   let context = AllocationContext::for_session([], AllocationSession::new())
   for spill_set, segment_ids in bundle_segments {
@@ -273,7 +273,7 @@ test "spill bundle is normalized before conflict probes" {
     [0, 1],
   )
   occupied.insert(0, 0)
-  let probe_conflicts : Array[Int] = []
+  let probe_conflicts : Array[Int32] = []
   let probe = BundleRegisterProbe::new(probe_conflicts)
   let statistics = BundleAllocationStatistics::new()
   probe_bundle_register(
@@ -625,8 +625,8 @@ test "production eviction accounts for and removes every conflicting bundle" {
   )
   occupied.insert(0, 0)
   occupied.insert(0, 1)
-  let occupied_stack : Array[Int] = []
-  let probe_conflicts : Array[Int] = []
+  let occupied_stack : Array[Int32] = []
+  let probe_conflicts : Array[Int32] = []
   let probe = BundleRegisterProbe::new(probe_conflicts)
   let statistics = BundleAllocationStatistics::new()
   probe_bundle_register(
@@ -680,11 +680,11 @@ test "production eviction accounts for and removes every conflicting bundle" {
     queue,
     statistics,
   )
-  let requeued : Array[Int] = []
+  let requeued : Array[Int32] = []
   while queue.pop() is Some((bundle, _)) {
     requeued.push(bundle)
   }
-  let remaining : Array[Int] = []
+  let remaining : Array[Int32] = []
   occupied.seek(0, ProgramPoint(0, -1), occupied_stack)
   while occupied.next(occupied_stack) is Some(segment) {
     remaining.push(segment)
@@ -748,7 +748,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
   )
   cutoff_occupied.insert(0, 0)
   cutoff_occupied.insert(0, 1)
-  let cutoff_conflicts : Array[Int] = []
+  let cutoff_conflicts : Array[Int32] = []
   let cutoff_probe = BundleRegisterProbe::new(cutoff_conflicts)
   probe_bundle_register(
     2,
@@ -820,7 +820,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
   for bundle in 0..<context.states.length() {
     queue.push(bundle, context, -1)
   }
-  let order : Array[Int] = []
+  let order : Array[Int32] = []
   while queue.pop() is Some((bundle, _)) {
     order.push(bundle)
   }
@@ -894,13 +894,13 @@ test "two-fragment bundle keeps density eviction cost" {
 
 ///|
 priv struct ClobberIndexTestFunction {
-  blocks : Array[Array[Int]]
+  blocks : Array[Array[Int32]]
   operands : Array[Array[Operand]]
   clobbers : Array[Array[PhysicalReg]]
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn value_count(_self) -> Int {
+impl FunctionView for ClobberIndexTestFunction with fn value_count(_self) -> Int32 {
   1
 }
 
@@ -916,7 +916,7 @@ impl FunctionView for ClobberIndexTestFunction with fn value_class(
 impl FunctionView for ClobberIndexTestFunction with fn value_spill_size(
   _self,
   _value,
-) -> Int {
+) -> Int32 {
   8
 }
 
@@ -924,7 +924,7 @@ impl FunctionView for ClobberIndexTestFunction with fn value_spill_size(
 impl FunctionView for ClobberIndexTestFunction with fn value_spill_alignment(
   _self,
   _value,
-) -> Int {
+) -> Int32 {
   8
 }
 
@@ -938,7 +938,7 @@ impl FunctionView for ClobberIndexTestFunction with fn values_share_spill_slot(
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn entry_value_count(_self) -> Int {
+impl FunctionView for ClobberIndexTestFunction with fn entry_value_count(_self) -> Int32 {
   0
 }
 
@@ -951,12 +951,12 @@ impl FunctionView for ClobberIndexTestFunction with fn entry_value_at(
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn block_count(self) -> Int {
+impl FunctionView for ClobberIndexTestFunction with fn block_count(self) -> Int32 {
   self.blocks.length()
 }
 
 ///|
-impl FunctionView for ClobberIndexTestFunction with fn block_id_at(_self, block) -> Int {
+impl FunctionView for ClobberIndexTestFunction with fn block_id_at(_self, block) -> Int32 {
   block + 100
 }
 
@@ -964,7 +964,7 @@ impl FunctionView for ClobberIndexTestFunction with fn block_id_at(_self, block)
 impl FunctionView for ClobberIndexTestFunction with fn block_parameter_count(
   _self,
   _block,
-) -> Int {
+) -> Int32 {
   0
 }
 
@@ -981,7 +981,7 @@ impl FunctionView for ClobberIndexTestFunction with fn block_parameter_at(
 impl FunctionView for ClobberIndexTestFunction with fn block_instruction_count(
   self,
   block,
-) -> Int {
+) -> Int32 {
   self.blocks[block].length()
 }
 
@@ -990,7 +990,7 @@ impl FunctionView for ClobberIndexTestFunction with fn block_instruction_at(
   self,
   block,
   instruction,
-) -> Int {
+) -> Int32 {
   self.blocks[block][instruction]
 }
 
@@ -998,7 +998,7 @@ impl FunctionView for ClobberIndexTestFunction with fn block_instruction_at(
 impl FunctionView for ClobberIndexTestFunction with fn block_successor_count(
   _self,
   _block,
-) -> Int {
+) -> Int32 {
   0
 }
 
@@ -1007,7 +1007,7 @@ impl FunctionView for ClobberIndexTestFunction with fn block_successor_at(
   _self,
   _block,
   _successor,
-) -> Int {
+) -> Int32 {
   abort("invalid block successor index")
 }
 
@@ -1016,7 +1016,7 @@ impl FunctionView for ClobberIndexTestFunction with fn edge_argument_count(
   _self,
   _block,
   _successor,
-) -> Int {
+) -> Int32 {
   0
 }
 

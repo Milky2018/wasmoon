@@ -26,10 +26,10 @@ extern "c" fn c_nested_trap_probe() -> Int64 = "wasmoon_test_nested_trap_probe"
 extern "c" fn c_parked_gc_root_probe() -> Int64 = "wasmoon_test_parked_gc_root_probe"
 
 ///|
-extern "c" fn c_fiber_guard_rejects_access(stack_size : Int64) -> Int = "wasmoon_test_fiber_guard_rejects_access"
+extern "c" fn c_fiber_guard_rejects_access(stack_size : Int64) -> Int32 = "wasmoon_test_fiber_guard_rejects_access"
 
 ///|
-extern "c" fn c_fiber_preserves_registers() -> Int = "wasmoon_test_fiber_preserves_registers"
+extern "c" fn c_fiber_preserves_registers() -> Int32 = "wasmoon_test_fiber_preserves_registers"
 
 ///|
 extern "c" fn c_x64_stack_alignment_probe_ptr() -> Int64 = "wasmoon_test_x64_stack_alignment_probe_ptr"
@@ -48,13 +48,13 @@ extern "c" fn c_callback_capture_touch(capture : CallbackCapture) -> Unit = "was
 extern "c" fn c_callback_capture_reset() -> Unit = "wasmoon_test_callback_capture_reset"
 
 ///|
-extern "c" fn c_callback_capture_release_count() -> Int = "wasmoon_test_callback_capture_release_count"
+extern "c" fn c_callback_capture_release_count() -> Int32 = "wasmoon_test_callback_capture_release_count"
 
 ///|
 #owned(closure)
 extern "c" fn c_set_null_cancellation_callback(
   ctx_ptr : Int64,
-  call_closure : FuncRef[(() -> Bool) -> Int],
+  call_closure : FuncRef[(() -> Bool) -> Int32],
   closure : () -> Bool,
 ) -> Unit = "wasmoon_jit_set_cancellation_callback"
 
@@ -74,7 +74,7 @@ pub fn reset_callback_capture() -> Unit {
 }
 
 ///|
-pub fn callback_capture_release_count() -> Int {
+pub fn callback_capture_release_count() -> Int32 {
   c_callback_capture_release_count()
 }
 
@@ -82,7 +82,7 @@ pub fn callback_capture_release_count() -> Int {
 pub fn transfer_cancellation_callback_to_null_context(
   callback : () -> Bool,
 ) -> Unit {
-  let call_closure : FuncRef[(() -> Bool) -> Int] = fn(f : () -> Bool) {
+  let call_closure : FuncRef[(() -> Bool) -> Int32] = fn(f : () -> Bool) {
     if f() {
       1
     } else {
@@ -153,4 +153,4 @@ pub fn x64_stack_alignment_probe_ptr() -> Int64 {
 }
 
 ///|
-pub extern "c" fn fresh_context_scheduling_budget() -> Int = "wasmoon_test_fresh_context_scheduling_budget"
+pub extern "c" fn fresh_context_scheduling_budget() -> Int32 = "wasmoon_test_fresh_context_scheduling_budget"

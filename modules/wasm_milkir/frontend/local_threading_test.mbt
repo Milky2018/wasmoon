@@ -12,7 +12,7 @@
 /// the translator has to build and hold before an optimizer ever sees it.
 
 ///|
-fn count_block_params(func : @milkir.Function) -> Int {
+fn count_block_params(func : @milkir.Function) -> Int32 {
   let mut total = 0
   for block in func.blocks {
     total = total + block.params.length()
@@ -25,9 +25,9 @@ fn count_block_params(func : @milkir.Function) -> Int {
 /// `if`s, each writing the first `written_per_merge` of them. The locals are
 /// the function's parameters, which is what the translator threads.
 fn locals_by_merges(
-  num_locals : Int,
-  num_merges : Int,
-  written_per_merge : Int,
+  num_locals : Int32,
+  num_merges : Int32,
+  written_per_merge : Int32,
 ) -> @types.Module {
   let params : Array[@types.ValueType] = []
   for _ in 0..<num_locals {
@@ -49,7 +49,11 @@ fn locals_by_merges(
 ///|
 /// Merge parameters beyond what the function's own entry block carries, so the
 /// signature contributes nothing to the comparison.
-fn merge_params(num_locals : Int, num_merges : Int, written : Int) -> Int raise {
+fn merge_params(
+  num_locals : Int32,
+  num_merges : Int32,
+  written : Int32,
+) -> Int32 raise {
   let baseline = count_block_params(
     @frontend.translate_function(
       native_test_env(),

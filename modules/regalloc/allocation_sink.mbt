@@ -5,11 +5,11 @@
 /// for location queries. `edits` is needed only when verification is enabled.
 pub(open) trait AllocationSink {
   fn assign_value(Self, VirtualReg, Location) -> Unit
-  fn assign_operand(Self, Int, Int, Location) -> Unit
-  fn create_spill_slot(Self, Int, Int, Int) -> Int
-  fn value_location(Self, Int) -> Location?
-  fn operand_location(Self, Int, Int) -> Location?
-  fn spill_slot(Self, Int) -> SpillSlotSpec?
+  fn assign_operand(Self, Int32, Int32, Location) -> Unit
+  fn create_spill_slot(Self, Int32, Int32, Int32) -> Int32
+  fn value_location(Self, Int32) -> Location?
+  fn operand_location(Self, Int32, Int32) -> Location?
+  fn spill_slot(Self, Int32) -> SpillSlotSpec?
   fn add_edit(Self, AllocationEdit) -> Unit
   fn edits(Self) -> Array[AllocationEdit]
 }

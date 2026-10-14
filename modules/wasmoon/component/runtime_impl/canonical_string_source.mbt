@@ -30,8 +30,8 @@ priv enum CanonicalStringBytes {
 priv struct CanonicalStringSource {
   bytes : CanonicalStringBytes
   encoding : StringEncoding
-  units : Int
-  byte_len : Int
+  units : Int32
+  byte_len : Int32
   utf16 : Bool
 }
 
@@ -90,8 +90,8 @@ fn CanonicalStringSource::from_value(
 ///|
 fn CanonicalStringSource::byte(
   self : CanonicalStringSource,
-  index : Int,
-) -> Int raise ComponentRuntimeError {
+  index : Int32,
+) -> Int32 raise ComponentRuntimeError {
   match self.bytes {
     Owned(bytes) => bytes[index].to_int()
     Guest(memory, ptr) => {
@@ -107,8 +107,8 @@ fn CanonicalStringSource::byte(
 /// Decode one scalar without reading or allocating the remainder of the string.
 fn CanonicalStringSource::scalar(
   self : CanonicalStringSource,
-  position : Int,
-) -> (Int, Int) raise ComponentRuntimeError {
+  position : Int32,
+) -> (Int32, Int32) raise ComponentRuntimeError {
   let first = self.byte(position)
   if self.utf16 {
     let unit = first | (self.byte(position + 1) << 8)
@@ -159,8 +159,8 @@ fn CanonicalStringSource::scalar(
 /// In particular, malformed input is diagnosed only after the UTF-16 growth.
 fn CanonicalStringSource::latin1_scalar(
   self : CanonicalStringSource,
-  position : Int,
-) -> (Int, Int)? raise ComponentRuntimeError {
+  position : Int32,
+) -> (Int32, Int32)? raise ComponentRuntimeError {
   let first = self.byte(position)
   if self.utf16 {
     if self.byte(position + 1) == 0 {

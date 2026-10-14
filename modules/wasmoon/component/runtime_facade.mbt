@@ -38,7 +38,7 @@ pub(all) enum ComponentValueType {
   String
   ErrorContext
   List(ComponentValueType)
-  FixedList(ComponentValueType, Int)
+  FixedList(ComponentValueType, Int32)
   MapType(ComponentValueType, ComponentValueType)
   Tuple(Array[ComponentValueType])
   Record(Array[ComponentField])
@@ -131,14 +131,14 @@ pub impl Show for ComponentFuncType with fn output(self, logger) {
 pub fn ComponentFuncType::ComponentFuncType(
   params : Array[ComponentParam],
   result : ComponentValueType?,
-  is_async? : Bool = false,
+  is_async~ : Bool = false,
 ) -> ComponentFuncType {
   { is_async, params, result, }
 }
 
 ///|
 struct ComponentResource {
-  handle : Int
+  handle : Int32
   type_ : ComponentResourceType
 } derive(Debug, Eq)
 
@@ -152,12 +152,12 @@ pub fn ComponentResource::type_(
 ///|
 pub(all) enum ComponentValue {
   Bool(Bool)
-  S8(Int)
-  U8(Int)
-  S16(Int)
-  U16(Int)
-  S32(Int)
-  U32(UInt)
+  S8(Int32)
+  U8(Int32)
+  S16(Int32)
+  U16(Int32)
+  S32(Int32)
+  U32(UInt32)
   S64(Int64)
   U64(UInt64)
   F32(Float)
@@ -197,7 +197,7 @@ pub(all) suberror ComponentRuntimeError {
     expected~ : ComponentFuncType,
     actual~ : ComponentFuncType
   )
-  ArgumentCountMismatch(expected~ : Int, actual~ : Int)
+  ArgumentCountMismatch(expected~ : Int32, actual~ : Int32)
   TypeMismatch(path~ : String, expected~ : ComponentValueType, actual~ : String)
   InvocationFailed(String)
   NativeEngineUnavailable(String)
@@ -208,7 +208,7 @@ pub(all) suberror ComponentRuntimeError {
   CallAlreadyActive
   RuntimeClosed
   Cancelled
-  HostExit(Int)
+  HostExit(Int32)
   JsonValueError(String)
 } derive(Debug, Eq)
 
@@ -223,10 +223,10 @@ priv struct ComponentRuntimeState {
   wit_names : Bool
   component_implements : Bool
   closed : Ref[Bool]
-  execution_depth : Ref[Int]
+  execution_depth : Ref[Int32]
   teardown_complete : Ref[Bool]
-  next_call_id : Ref[Int]
-  active_calls : Map[Int, @runtime_impl.ComponentInvocation]
+  next_call_id : Ref[Int32]
+  active_calls : Map[Int32, @runtime_impl.ComponentInvocation]
   host_installers : Array[ComponentHostInstaller]
 }
 
@@ -253,7 +253,7 @@ struct ComponentFunction {
 struct ComponentCall {
   inner : @runtime_impl.ComponentInvocation
   runtime : ComponentRuntimeState
-  call_id : Int
+  call_id : Int32
   result_type : ComponentValueType?
   active : Ref[Bool]
 }
@@ -266,9 +266,9 @@ pub(all) enum ComponentCallPoll {
 
 ///|
 pub fn ComponentRuntime::ComponentRuntime(
-  engine? : ComponentEngine = native_component_engine(),
-  wit_names? : Bool = true,
-  component_implements? : Bool = true,
+  engine~ : ComponentEngine = native_component_engine(),
+  wit_names~ : Bool = true,
+  component_implements~ : Bool = true,
 ) -> ComponentRuntime {
   {
     state: {
@@ -300,7 +300,7 @@ fn ComponentRuntimeState::ensure_open(
 fn ComponentRuntimeState::register_call(
   self : ComponentRuntimeState,
   call : @runtime_impl.ComponentInvocation,
-) -> Int raise ComponentRuntimeError {
+) -> Int32 raise ComponentRuntimeError {
   self.ensure_open()
   let call_id = self.next_call_id.val
   self.next_call_id.val = call_id + 1
@@ -311,7 +311,7 @@ fn ComponentRuntimeState::register_call(
 ///|
 fn ComponentRuntimeState::retire_call(
   self : ComponentRuntimeState,
-  call_id : Int,
+  call_id : Int32,
 ) -> Unit {
   self.active_calls.remove(call_id)
 }
@@ -458,7 +458,7 @@ fn component_primitive_type(ty : @model.PrimValType) -> ComponentValueType {
 }
 
 ///|
-fn component_resource_identity(index : Int) -> ComponentResourceType {
+fn component_resource_identity(index : Int32) -> ComponentResourceType {
   { identity: "type[\{index}]", }
 }
 
@@ -883,7 +883,7 @@ fn find_component_field(
 }
 
 ///|
-fn component_case_index(cases : Array[ComponentCase], name : String) -> Int? {
+fn component_case_index(cases : Array[ComponentCase], name : String) -> Int32? {
   for index, case in cases {
     if case.name == name {
       return Some(index)
@@ -893,7 +893,7 @@ fn component_case_index(cases : Array[ComponentCase], name : String) -> Int? {
 }
 
 ///|
-fn component_label_index(labels : Array[String], name : String) -> Int? {
+fn component_label_index(labels : Array[String], name : String) -> Int32? {
   for index, label in labels {
     if label == name {
       return Some(index)

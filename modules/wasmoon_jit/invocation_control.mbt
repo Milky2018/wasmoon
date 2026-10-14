@@ -11,7 +11,7 @@ pub struct InvocationControl {
 ///|
 /// A negative timeout is invalid; zero expires before guest execution.
 pub fn InvocationControl::new(
-  timeout_ms : Int?,
+  timeout_ms : Int32?,
   cancel : (() -> Bool)?,
 ) -> InvocationControl? {
   if timeout_ms is Some(ms) && ms < 0 {

@@ -2,8 +2,8 @@
 /// Validate a complete module
 pub fn validate_module(
   mod : @types.Module,
-  bulk_memory? : Bool = true,
-  stack_switching? : Bool = false,
+  bulk_memory~ : Bool = true,
+  stack_switching~ : Bool = false,
 ) -> Unit raise ValidationError {
   let ctx = ValidationContext::ValidationContext(
     mod,
@@ -263,8 +263,8 @@ pub fn validate_module(
 /// Validate a complete module and return detailed error context on failure
 pub fn validate_module_with_context(
   mod : @types.Module,
-  bulk_memory? : Bool = true,
-  stack_switching? : Bool = false,
+  bulk_memory~ : Bool = true,
+  stack_switching~ : Bool = false,
 ) -> Unit raise ValidationError {
   let ctx = ValidationContext::ValidationContext(
     mod,

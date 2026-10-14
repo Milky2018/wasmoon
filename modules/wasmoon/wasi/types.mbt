@@ -159,7 +159,7 @@ pub(all) enum Errno {
 }
 
 ///|
-pub fn Errno::to_i32(self : Errno) -> Int {
+pub fn Errno::to_i32(self : Errno) -> Int32 {
   match self {
     Success => 0
     TooBig => 1
@@ -243,7 +243,7 @@ pub fn Errno::to_i32(self : Errno) -> Int {
 
 ///|
 /// File descriptor type
-pub(all) struct Fd(Int) derive(Eq, Debug)
+pub(all) struct Fd(Int32) derive(Eq, Debug)
 
 ///|
 /// Standard file descriptors
@@ -256,12 +256,12 @@ pub let stdout : Fd = Fd(1)
 pub let stderr : Fd = Fd(2)
 
 ///|
-pub fn Fd::to_int(self : Fd) -> Int {
+pub fn Fd::to_int(self : Fd) -> Int32 {
   self.0
 }
 
 ///|
-pub fn Fd::from_int(n : Int) -> Fd {
+pub fn Fd::from_int(n : Int32) -> Fd {
   Fd(n)
 }
 
@@ -279,7 +279,7 @@ pub(all) enum ClockId {
 }
 
 ///|
-pub fn ClockId::from_i32(n : Int) -> ClockId? {
+pub fn ClockId::from_i32(n : Int32) -> ClockId? {
   match n {
     0 => Some(Realtime)
     1 => Some(Monotonic)
@@ -300,10 +300,10 @@ pub fn Timestamp::to_int64(self : Timestamp) -> Int64 {
 
 ///|
 /// Size type (corresponds to wasi size)
-pub(all) struct Size(Int) derive(Debug, Eq)
+pub(all) struct Size(Int32) derive(Debug, Eq)
 
 ///|
-pub fn Size::to_int(self : Size) -> Int {
+pub fn Size::to_int(self : Size) -> Int32 {
   self.0
 }
 
@@ -320,18 +320,18 @@ pub fn FileSize::to_int64(self : FileSize) -> Int64 {
 /// iovec structure for scatter/gather I/O
 pub(all) struct IoVec {
   /// Pointer to buffer in WASM memory
-  buf : Int
+  buf : Int32
   /// Length of buffer
-  buf_len : Int
+  buf_len : Int32
 }
 
 ///|
 /// ciovec structure (const iovec)
 pub(all) struct CIoVec {
   /// Pointer to buffer in WASM memory
-  buf : Int
+  buf : Int32
   /// Length of buffer
-  buf_len : Int
+  buf_len : Int32
 }
 
 ///|

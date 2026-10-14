@@ -5,7 +5,7 @@ using @native_io {c_cpu_clock, c_yield, c_raise_signal}
 /// Deliver a P1 signal to the hosting process. This can terminate the entire
 /// embedder. Only call from an explicitly authorized host signal policy.
 /// Unsupported native signals return NOTSUP; signal zero has no effect.
-pub fn raise_host_signal(signal : Int) -> Int {
+pub fn raise_host_signal(signal : Int32) -> Int32 {
   if c_raise_signal(signal) == 0 {
     0
   } else {
@@ -19,7 +19,7 @@ pub fn raise_host_signal(signal : Int) -> Int {
 /// invoke raise_host_signal. The default context has no signal handler.
 pub fn WasiContextBuilder::signal_handler(
   self : WasiContextBuilder,
-  handler : (Int) -> Int,
+  handler : (Int32) -> Int32,
 ) -> WasiContextBuilder {
   self.signal_handler = Some(handler)
   self

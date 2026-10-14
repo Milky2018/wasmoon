@@ -22,11 +22,11 @@ fn prepare_loaded_artifact(
     let mut count = 0
     for function in functions {
       if !function.safepoints.is_empty() {
-        count = Int::max(count, function.identity.function_index + 1)
+        count = Int32::max(count, function.identity.function_index + 1)
       }
     }
     let blobs = FixedArray::make(count, b"")
-    let offsets : FixedArray[FixedArray[Int]] = FixedArray::make(count, [])
+    let offsets : FixedArray[FixedArray[Int32]] = FixedArray::make(count, [])
     for function in functions {
       if !function.safepoints.is_empty() {
         let (blob, sites) = prepare_code_object_safepoints(function.safepoints)
@@ -55,7 +55,7 @@ pub fn verify_artifact(
 pub fn load_artifact(
   bytes : Bytes,
   compatibility : ArtifactCompatibility,
-  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+  limits~ : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
 ) -> LoadedArtifact raise ArtifactLoadError {
   prepare_loaded_artifact(
     @artifact_loader.load_artifact(bytes, compatibility, limits~),

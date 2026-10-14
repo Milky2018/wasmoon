@@ -13,7 +13,7 @@ pub suberror VerifyError {
 } derive(Debug)
 
 ///|
-fn location_key(location : Location) -> (Int, Int) {
+fn location_key(location : Location) -> (Int32, Int32) {
   match location.register() {
     Some(reg) => physical_reg_key(reg)
     None => (3, location.spill_index().unwrap())
