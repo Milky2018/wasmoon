@@ -113,7 +113,6 @@ jobs:
         run: moon run modules/wasmoon/testsuite/native_event_loop --target native
 
       - name: build Wasmoon
-        id: native_build
         id: build
         run: |
           moon build --target native --release
@@ -146,7 +145,7 @@ jobs:
         run: python3 scripts/test_wasi_http.py --wasmoon ./wasmoon
 
       - name: compare Linux HTTP peer shutdown behavior
-        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && steps.native_build.outcome == 'success' }}
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && steps.build.outcome == 'success' }}
         run: python3 scripts/diagnose_http_peer.py --wasmoon ./wasmoon
 
       - name: upload HTTP command evidence
