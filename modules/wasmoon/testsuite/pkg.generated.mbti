@@ -104,7 +104,7 @@ pub struct TestContext {
   mut current_module : @runtime.ModuleInstance?
   named_modules : Map[String, @runtime.ModuleInstance]
 }
-pub fn TestContext::TestContext() -> Self
+pub fn TestContext::TestContext() -> Self raise @runtime.RuntimeError
 pub fn TestContext::get_current_module(Self) -> @runtime.ModuleInstance?
 pub fn TestContext::get_global(Self, String?, String) -> @types.Value raise
 pub fn TestContext::invoke(Self, String?, String, Array[@types.Value]) -> Array[@types.Value] raise

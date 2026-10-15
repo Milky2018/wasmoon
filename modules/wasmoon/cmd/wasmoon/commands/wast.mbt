@@ -515,11 +515,11 @@ fn try_compile_jit_with_suspension(
           // with `wasmoon run`.
           jm.configure_native_fiber_stack_size(16L * 1024L * 1024L) |> ignore
           // Initialize all memories (multi-memory support)
-          guard @wast.init_jit_memories_from_store(instance, store, jm)
-            is Some(_) else {
-            return Err(
-              "WAST JIT strict mode: failed to initialize JIT memories from store",
-            )
+          let _ = @wast.init_jit_memories_from_store(instance, store, jm) catch {
+            error =>
+              return Err(
+                "WAST JIT strict mode: memory initialization failed: \{error}",
+              )
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = @wast.init_jit_globals_from_store(
@@ -538,7 +538,9 @@ fn try_compile_jit_with_suspension(
             instance,
             store,
             use_subtype_indirect_check~,
-          )
+          ) catch {
+            error => return Err("WAST JIT table preparation failed: \{error}")
+          }
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
           @wast.init_bulk_segments(
             lowered_mod,

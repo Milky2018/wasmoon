@@ -198,7 +198,9 @@ fn native_component_session_with_contexts(
         }
       }
     },
-    prepare_store=fn(store) { try! store.enable_c_heap() },
+    prepare_store=fn(store) raise @runtime.RuntimeError {
+      store.enable_c_heap()
+    },
     register_rollback=fn(registrar) {
       rollback_registrar.val = Some(registrar)
       registrar.on_finish(fn() { rollback_registrar.val = None })

@@ -3,6 +3,7 @@
 // same files into one isolated package with declarative ASan/UBSan link flags;
 // the instrumentation configuration lives in tools/sanitizer/moon.pkg.
 import {
+  "Milky2018/wasmoon_jit",
   "Milky2018/wasm_component" @component_types,
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_core/validator",

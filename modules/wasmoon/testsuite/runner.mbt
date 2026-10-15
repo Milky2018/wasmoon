@@ -608,7 +608,10 @@ pub fn run_json_tests(
   let parsed = parse_json_test_file(json_content)
   let result = TestResult::TestResult()
   result.source_filename = parsed.source_filename
-  let ctx = TestContext::TestContext()
+  let ctx = TestContext::TestContext() catch {
+    error => raise ModuleLoadError(error.to_string())
+  }
+  defer ctx.linker.close()
   for cmd in parsed.commands {
     run_test_command_with_line(ctx, cmd, result, base_dir, read_file_fn)
   }

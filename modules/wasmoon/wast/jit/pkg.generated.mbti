@@ -32,11 +32,11 @@ pub fn has_unsupported_instructions_for_wast(@types.Module) -> Bool
 
 pub fn init_bulk_segments(@types.Module, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
-pub fn init_elem_segments(@types.Module, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
+pub fn init_elem_segments(@types.Module, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
 pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Int64 raise @runtime.RuntimeError
 
-pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo]?
+pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo] raise @runtime.RuntimeError
 
 pub fn register_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
 

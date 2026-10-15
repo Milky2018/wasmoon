@@ -4,6 +4,7 @@ pub(all) suberror ComponentRuntimeError {
   ComponentParseError(String)
   CoreModuleParseError(String)
   CoreModuleInstantiateError(String)
+  ResourceExhausted(String)
   InvalidUtf8
   UnknownImport(String)
   ImportTypeMismatch(String)
@@ -61,4 +62,21 @@ pub impl Show for ComponentRuntimeError with fn output(self, logger) {
       @types.compact_show_repr(Repr(self).to_string())
     },
   )
+}
+
+///|
+/// Preserve capacity denial and host exit while adapting core instantiation.
+pub fn ComponentRuntimeError::from_core(
+  error : @runtime.RuntimeError,
+) -> ComponentRuntimeError {
+  match error {
+    OutOfMemory
+    | AllocationTooLarge
+    | MemoryMinimumExceedsLimits(_)
+    | TableAllocationOverflow
+    | TableAllocationFailed => ResourceExhausted(error.to_string())
+    HostExit(code) => HostExit(code)
+    AsyncHostCallCancelled => Cancelled
+    _ => CoreModuleInstantiateError(error.to_string())
+  }
 }

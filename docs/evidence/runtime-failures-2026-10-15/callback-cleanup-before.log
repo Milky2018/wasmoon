@@ -1,0 +1,9 @@
+[Milky2018/wasmoon] test sanitizer_testsuite/runtime_failures_test.mbt:316 ("native exception delivery returns through MoonBit cleanup before unwinding guest code") failed
+expect test failed at /Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/runtime_failures_test.mbt:341:3-341:39
+Diff: (- expected, + actual)
+----
+-true
++false
+----
+
+Total tests: 1, passed: 0, failed: 1.

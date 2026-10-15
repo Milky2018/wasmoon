@@ -3,6 +3,9 @@ test "sanitizer instrumentation positive control" {
   if @env.get_env_var("WASMOON_SANITIZER_PROBE") == Some("native") {
     native_probe()
   }
+  if @env.get_env_var("WASMOON_SANITIZER_PROBE") == Some("lsan") {
+    leak_probe()
+  }
   // This branch is run only by the gate's separate expected-failure process.
   // The unsafe load must reach generated MoonBit C, not a native test stub.
   if @env.get_env_var("WASMOON_SANITIZER_PROBE") == Some("asan") {
@@ -13,3 +16,6 @@ test "sanitizer instrumentation positive control" {
 
 ///|
 extern "c" fn native_probe() -> Unit = "wasmoon_sanitizer_native_probe"
+
+///|
+extern "c" fn leak_probe() -> Unit = "wasmoon_sanitizer_leak_probe"

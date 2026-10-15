@@ -6,6 +6,7 @@
 #define JIT_INTERNAL_H
 
 #include "trap_codes.h"
+#include "native_alloc.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -154,7 +155,7 @@ void jit_trap_activation_init(
     jit_trap_activation_t *activation,
     jit_context_t *context
 );
-void jit_trap_activation_push(jit_trap_activation_t *activation);
+int jit_trap_activation_push(jit_trap_activation_t *activation);
 void jit_trap_activation_finalize(jit_trap_activation_t *activation);
 void jit_trap_activation_publish(jit_trap_activation_t *activation);
 void jit_trap_activation_pop(jit_trap_activation_t *activation);
@@ -197,7 +198,7 @@ void jit_parked_gc_roots_unregister(void *registration);
 #define g_trap_frames_fp (jit_current_trap_activation()->frames_fp)
 #define g_trap_frame_count (jit_current_trap_activation()->frame_count)
 
-void install_trap_handler(void);
+int install_trap_handler(void);
 
 int wasmoon_native_fiber_stack_bounds(
     uintptr_t *stack_base,
@@ -269,7 +270,7 @@ int64_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t d
 
 // Managed shared tables
 MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_jit_alloc_shared_indirect_table(int count);
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(int64_t ctx_ptr, wasmoon_table_t **owners,
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_ctx_set_table_pointers(int64_t ctx_ptr, wasmoon_table_t **owners,
     int32_t *sizes, int64_t *max_sizes, int count);
 void ctx_clear_table_bindings(jit_context_t *ctx);
 void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size);
@@ -279,7 +280,7 @@ MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_native_table_empty(void);
 void ctx_set_globals_internal(jit_context_t *ctx, void *globals, int managed);
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
-void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
+int32_t ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
 void ctx_gc_end_frame_internal(jit_context_t *ctx);
 int32_t ctx_gc_push_root_scope_internal(
     jit_context_t *ctx,
@@ -377,6 +378,11 @@ typedef struct exception_handler {
     wasmoon_gc_root_scope_t *gc_root_scope_marker;
 } exception_handler_t;
 
+// Managed callbacks stage exceptions; only native guest frames may unwind.
+int jit_hostcall_is_active(const jit_context_t *ctx);
+int exception_has_pending_hostcall(jit_context_t *ctx);
+void exception_raise_pending_hostcall(jit_context_t *ctx);
+
 // Exception handling functions
 #if defined(_MSC_VER) && !defined(__clang__)
 #define WASMOON_NORETURN __declspec(noreturn)
@@ -392,6 +398,7 @@ WASMOON_NORETURN void exception_delegate_impl(jit_context_t *ctx, int32_t depth)
 int32_t exception_get_tag_impl(jit_context_t *ctx);
 int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
 int32_t exception_get_value_count_impl(jit_context_t *ctx);
+void exception_mark_activation_roots(GcHeap *heap, jit_context_t *ctx, const jit_execution_state_t *state);
 int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_state_t *state, int64_t *roots);
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count);
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);

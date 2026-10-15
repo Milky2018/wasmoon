@@ -1,0 +1,179 @@
+{
+  "issue": "ISS-625",
+  "date": "2026-10-15",
+  "platform": "Darwin arm64",
+  "baseline": "a694f4aabe26ce8fd9d72b15f2bbfe2488b48ee6",
+  "branch": "milky/propagate-runtime-failures",
+  "source_state": "uncommitted working tree",
+  "source_digest": {
+    "algorithm": "SHA-256 over sorted paths, NUL, and SHA-256 file digests in modules/scripts/tools (tracked plus non-ignored untracked files)",
+    "sha256": "061fc4bdbf4a579120c61e53fad9c7314b11a30952268a59dd0ff3f1d5ccf135"
+  },
+  "wasmoon_sha256": "c83b42f55b9199c2e23541de2bedc77dad9e4527d5e860c21d683003c21b424e",
+  "wasmoon_tools_sha256": "857773628acf2442992071b0c2e0705fae1c99c769c3a3cd7af6f11a8f7d5859",
+  "checks": {
+    "info": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-info.log"
+    },
+    "fmt": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-fmt.log"
+    },
+    "check": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-check.log"
+    },
+    "c-check": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-c-check.log"
+    },
+    "boundaries": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-boundaries.log"
+    },
+    "native": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-native.log",
+      "tests": [
+        2664,
+        2664,
+        0
+      ]
+    },
+    "core-wast": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-core-wast.log",
+      "passed_tests_by_engine": [
+        62563,
+        62563
+      ]
+    },
+    "misc": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-misc.log",
+      "counts": {
+        "pass": 692,
+        "script_only": 72,
+        "fail": 0,
+        "timeout": 0,
+        "unsupported": 0,
+        "deferred": 0,
+        "harness_error": 0
+      }
+    },
+    "p1": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-p1.log",
+      "counts": {
+        "pass": 116,
+        "fail": 0,
+        "timeout": 0,
+        "unsupported": 0,
+        "not_applicable": 2,
+        "harness_error": 0
+      }
+    },
+    "wasi03": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-wasi03.log",
+      "counts": {
+        "pass": 110
+      }
+    },
+    "http": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-http.log"
+    },
+    "jit-cache": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-jit-cache.log"
+    },
+    "wasi-allocation": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-wasi-allocation.log"
+    },
+    "gc-faults": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-gc-faults.log",
+      "fault_non_pass": "3/17 (expected injected failures, no crash/mismatch/regression)"
+    },
+    "sanitizer": {
+      "status": "passed",
+      "log": "/tmp/wasmoon-iss625-sanitizer.log",
+      "tests": [
+        124,
+        124,
+        0
+      ],
+      "binary_sha256": "05a59dd0beef1f318024aad79ed5427fa3a8a6e8da18fa2fb961d958aaf3dddd",
+      "instrumentation": [
+        "address",
+        "undefined"
+      ],
+      "allocator": "system",
+      "exclusions": [
+        "MoonBit runtime objects",
+        "JIT machine code"
+      ],
+      "event_loop": "passed",
+      "asan_probe": "detected",
+      "native_asan_probe": "detected"
+    },
+    "components": {
+      "stable-0.2": {
+        "interp": {
+          "files_passed": 23,
+          "files_total": 23,
+          "commands_passed": 845,
+          "commands_failed": 0
+        },
+        "jit": {
+          "files_passed": 23,
+          "files_total": 23,
+          "commands_passed": 845,
+          "commands_failed": 0
+        }
+      },
+      "async-0.3": {
+        "interp": {
+          "files_passed": 24,
+          "files_total": 24,
+          "commands_passed": 153,
+          "commands_failed": 0
+        },
+        "jit": {
+          "files_passed": 24,
+          "files_total": 24,
+          "commands_passed": 153,
+          "commands_failed": 0
+        }
+      },
+      "future-gated": {
+        "interp": {
+          "files_passed": 12,
+          "files_total": 12,
+          "commands_passed": 387,
+          "commands_failed": 0
+        },
+        "jit": {
+          "files_passed": 12,
+          "files_total": 12,
+          "commands_passed": 387,
+          "commands_failed": 0
+        }
+      }
+    }
+  },
+  "pending_acceptance": [
+    "Linux ASan/UBSan with LSan",
+    "Windows AMD64 Clang",
+    "Windows AMD64 MSVC"
+  ],
+  "limits": [
+    "MoonBit runtime objects and JIT machine code are not ASan-instrumented",
+    "MoonBit allocator termination and OS process killing are not catchable here",
+    "Required monotonic clock support and thread restoration fatal guards remain",
+    "ISS-634 tracks stale transitive C-header object reuse in incremental builds"
+  ]
+}

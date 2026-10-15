@@ -25,7 +25,7 @@ pub impl Show for NativeExecutionStateError
 
 // Types and methods
 type NativeExecutionState
-pub fn NativeExecutionState::NativeExecutionState() -> Self
+pub fn NativeExecutionState::NativeExecutionState() -> Self raise @jit_ffi.NativeAllocationError
 pub fn NativeExecutionState::active_depth(Self) -> Int
 pub fn NativeExecutionState::begin(Self, release? : () -> Unit) -> NativeInvocationHandle raise NativeExecutionStateError
 pub fn NativeExecutionState::continuations(Self) -> @jit_ffi.NativeContinuationArena

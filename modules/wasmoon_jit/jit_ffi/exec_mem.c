@@ -36,6 +36,7 @@ static int ensure_code_block_capacity(void) {
         return 1;
     }
 
+    if (code_blocks_capacity > INT32_MAX / 2) return 0;
     int new_capacity = (code_blocks_capacity == 0)
         ? INITIAL_CODE_BLOCK_CAPACITY
         : code_blocks_capacity * 2;
@@ -47,7 +48,7 @@ static int ensure_code_block_capacity(void) {
     }
 
     jit_code_block_t *new_blocks =
-        (jit_code_block_t *)realloc(code_blocks, (size_t)new_capacity * sizeof(jit_code_block_t));
+        (jit_code_block_t *)wasmoon_native_realloc(code_blocks, (size_t)new_capacity * sizeof(jit_code_block_t));
     if (!new_blocks) {
         return 0;
     }
@@ -71,13 +72,14 @@ static size_t get_page_size(void) {
 
 static size_t round_up_to_page(size_t size) {
     size_t page_size = get_page_size();
+    if (!page_size || size > SIZE_MAX - (page_size - 1)) return 0;
     return (size + page_size - 1) & ~(page_size - 1);
 }
 
 // ============ Executable Memory Allocation ============
 
 int64_t alloc_exec_internal(int size) {
-    if (size <= 0) {
+    if (size <= 0 || !wasmoon_native_allocation_allowed()) {
         return 0;
     }
     lock_code_blocks();
@@ -87,6 +89,7 @@ int64_t alloc_exec_internal(int size) {
     }
 
     size_t alloc_size = round_up_to_page((size_t)size);
+    if (!alloc_size) { unlock_code_blocks(); return 0; }
 
 #ifdef _WIN32
     void *ptr = VirtualAlloc(NULL, alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);

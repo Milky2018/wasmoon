@@ -121,7 +121,7 @@ pub(all) enum CoreExecutionOutcome {
 /// or JIT adapter according to the typed execution request. Implementations
 /// are thread-confined to the Store supplied by the component linker.
 struct CoreExecutionEngine {
-  prepare_store_fn : (@runtime.Store) -> Unit
+  prepare_store_fn : (@runtime.Store) -> Unit raise @runtime.RuntimeError
   close_fn : () -> Unit
   register_rollback_fn : (@runtime.RollbackRegistrar) -> Unit
   register_instance_fn : (
@@ -173,7 +173,11 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
     Array[@types.Value],
     CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError,
-  prepare_store~ : (@runtime.Store) -> Unit = fn(_store) { () },
+  prepare_store~ : (@runtime.Store) -> Unit raise @runtime.RuntimeError = fn(
+    _store,
+  ) {
+    ()
+  },
   register_rollback~ : (@runtime.RollbackRegistrar) -> Unit = fn(_registrar) {
     ()
   },
@@ -201,7 +205,7 @@ pub fn CoreExecutionEngine::close(self : CoreExecutionEngine) -> Unit {
 pub fn CoreExecutionEngine::prepare_store(
   self : CoreExecutionEngine,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   (self.prepare_store_fn)(store)
 }
 

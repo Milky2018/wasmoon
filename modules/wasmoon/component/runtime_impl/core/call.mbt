@@ -44,7 +44,7 @@ pub fn alloc_component_host_core_func(
   native_eligible~ : Bool = true,
 ) -> CoreFuncRef raise ComponentRuntimeError {
   alloc_host_core_func(store, core_type, host, may_suspend~, native_eligible~) catch {
-    error => raise CoreModuleInstantiateError(error.to_string())
+    error => raise ComponentRuntimeError::from_core(error)
   }
 }
 

@@ -226,7 +226,9 @@ pub fn CoreExecutionEngine::with_lifecycle(
       }
       lifecycle.finish_outcome(outcome)
     },
-    prepare_store=fn(store) { self.prepare_store(store) },
+    prepare_store=fn(store) raise @runtime.RuntimeError {
+      self.prepare_store(store)
+    },
     register_rollback=fn(registrar) { self.register_rollback(registrar) },
     close=fn() { self.close() },
   )

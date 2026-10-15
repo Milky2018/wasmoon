@@ -51,14 +51,18 @@ pub fn DWARFBuilder::add_function(
 /// and registers it with LLDB/GDB via the standard JIT interface.
 /// After calling this, function names will appear in stack traces.
 /// Also sets this builder as the active one for backtrace lookups.
+/// Returns false on an empty/closed builder, exceeded function capacity, or native allocation failure.
 /// verbose: if true, print debug info to stderr
 pub fn DWARFBuilder::register(
   self : DWARFBuilder,
   verbose~ : Bool = false,
-) -> Unit {
-  c_dwarf_register(self, if verbose { 1 } else { 0 })
+) -> Bool {
+  guard c_dwarf_register(self, if verbose { 1 } else { 0 }) else {
+    return false
+  }
   // Set as active for backtrace lookups
   c_dwarf_set_active(self)
+  true
 }
 
 ///|

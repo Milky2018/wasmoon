@@ -41,25 +41,27 @@ fn find_export_by_name(
 /// Create a simple module instance from a parsed module
 pub fn instantiate_module(
   mod : @types.Module,
-) -> (@runtime.Store, @runtime.ModuleInstance) {
+) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
   let store = @runtime.Store::Store()
+  errdefer store.close()
+  validate_continuation_gc_storage(mod)
   // Set module types for GC support
-  try! store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
+  store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 
   // Allocate functions with their types
   let func_addrs : Array[Int32] = []
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
     let func_type = mod.validated_func_type_at(type_idx)
-    let addr = try! store.alloc_func(code, func_type~, type_idx~)
+    let addr = store.alloc_func(code, func_type~, type_idx~)
     func_addrs.push(addr)
   }
 
   // Allocate memories
   let mem_addrs : Array[Int32] = []
   for mem_type in mod.memories {
-    let mem = try! @runtime.Memory::from_type(mem_type)
-    let addr = try! store.alloc_mem(mem)
+    let mem = @runtime.Memory::from_type(mem_type)
+    let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
 
@@ -78,14 +80,12 @@ pub fn instantiate_module(
         globals=[],
         store=Some(store),
         types=mod.types,
-      ) catch {
-        e => abort(e.to_string())
-      }
+      )
     } else {
       Null
     }
-    let table = try! @runtime.Table::from_type(table_def.type_, init_value~)
-    let addr = try! store.alloc_table(table)
+    let table = @runtime.Table::from_type(table_def.type_, init_value~)
+    let addr = store.alloc_table(table)
     table_addrs.push(addr)
   }
 
@@ -101,14 +101,12 @@ pub fn instantiate_module(
       globals=global_instances,
       store=Some(store),
       types=mod.types,
-    ) catch {
-      e => abort(e.to_string())
-    }
+    )
     let global_inst = @runtime.GlobalInstance::GlobalInstance(
       global.type_,
       init_value,
     )
-    let addr = try! store.alloc_global(global_inst)
+    let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
     global_instances.push(global_inst)
   }
@@ -117,7 +115,7 @@ pub fn instantiate_module(
   let tag_addrs : Array[Int32] = []
   for tag in mod.tags {
     let tag_type = mod.validated_func_type_at(tag.type_idx)
-    let addr = try! store.alloc_tag(tag_type, type_idx=tag.type_idx)
+    let addr = store.alloc_tag(tag_type, type_idx=tag.type_idx)
     tag_addrs.push(addr)
   }
 
@@ -137,7 +135,7 @@ pub fn instantiate_module(
     mod.types,
     type_rec_groups=mod.type_rec_groups,
   )
-  let elem_values = try! evaluate_element_segments(
+  let elem_values = evaluate_element_segments(
     mod, store, func_addrs, global_addrs,
   )
   let instance : @runtime.ModuleInstance = {
@@ -162,7 +160,7 @@ pub fn instantiate_module(
       dropped_datas[i]
     }),
   }
-  try! (store.register_instance(instance) |> ignore)
+  store.register_instance(instance) |> ignore
   (store, instance)
 }
 
@@ -558,8 +556,8 @@ fn evaluate_element_segments(
 pub fn instantiate_module_with_init(
   mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
-  validate_continuation_gc_storage(mod)
   let (store, instance) = instantiate_module(mod)
+  errdefer store.close()
 
   // Per WebAssembly spec: element segments are initialized BEFORE data segments
   // This ensures that if data segment initialization traps, the element segment

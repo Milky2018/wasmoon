@@ -1,0 +1,24 @@
+Warning: [0020]
+    ╭─[ /Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/runtime_failures_test.mbt:21:5 ]
+    │
+ 21 │     @executor.call_exported_func(store, instance, "run", []),
+    │     ────────────────────────────┬───────────────────────────
+    │                                 ╰───────────────────────────── Warning (deprecated): Use Debug instead of Show for debugging purposes. See https://github.com/moonbitlang/core/blob/main/debug/README.mbt.md
+────╯
+PanicError
+    at @Milky2018/wasmoon/executor.instantiate_module (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/executor/instantiate.mbt:61)
+    at @Milky2018/wasmoon/executor.instantiate_module_with_init (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/executor/instantiate.mbt:562)
+    at @Milky2018/wasmoon/sanitizer_testsuite_blackbox_test.__test_72756e74696d655f6661696c757265735f746573742e6d6274_0 (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/runtime_failures_test.mbt:6)
+    at ??? (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/__generated_driver_for_blackbox_test.mbt:0)
+    at @Milky2018/wasmoon/sanitizer_testsuite_blackbox_test.moonbit_test_driver_internal_catch_error (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/__generated_driver_for_blackbox_test.mbt:432)
+    at impl @Milky2018/wasmoon/sanitizer_testsuite_blackbox_test.MoonBit_Test_Driver for @Milky2018/wasmoon/sanitizer_testsuite_blackbox_test.MoonBit_Test_Driver_Internal_No_Args with run_test (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/__generated_driver_for_blackbox_test.mbt:537)
+    at @Milky2018/wasmoon/sanitizer_testsuite_blackbox_test.moonbit_test_driver_internal_do_execute (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/__generated_driver_for_blackbox_test.mbt:794)
+    at moonbit_main (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/__generated_driver_for_blackbox_test.mbt:637)
+    at main (/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/__generated_driver_for_blackbox_test.mbt:635)
+Error: failed to run test for target Native
+
+Caused by:
+    Failed to run the test: /Users/zhengyu/Documents/projects/wasmoon/_build/native/debug/test/Milky2018/wasmoon/sanitizer_testsuite/sanitizer_testsuite.blackbox_test.exe
+    The test executable exited with signal: 6 (SIGABRT)
+    Active test at executable exit:
+      - /Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/runtime_failures_test.mbt:2 "valid capacity denial is catchable and leaves the process usable"

@@ -22,6 +22,23 @@ pub fn release_exec_managed(ExecCodeHandle) -> Int
 pub fn stage_exec_managed(Int) -> ExecCodeHandle
 
 // Errors
+pub suberror GCMetadataError {
+  InvalidTypeStride
+  PayloadCountMismatch
+  PayloadTooLarge
+} derive(@debug.Debug)
+pub fn GCMetadataError::output(Self, &Logger) -> Unit
+pub fn GCMetadataError::to_repr(Self) -> @debug.Repr
+pub fn GCMetadataError::to_string(Self) -> String
+pub impl Show for GCMetadataError
+
+pub(all) suberror NativeAllocationError {
+  OutOfMemory
+} derive(@debug.Debug)
+pub fn NativeAllocationError::output(Self, &Logger) -> Unit
+pub fn NativeAllocationError::to_repr(Self) -> @debug.Repr
+pub fn NativeAllocationError::to_string(Self) -> String
+pub impl Show for NativeAllocationError
 
 // Types and methods
 type ExecCodeHandle
@@ -38,7 +55,7 @@ pub impl @debug.Debug for GCHeapHandle
 pub type JITContext
 pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int], FixedArray[Int]) -> Unit
 pub fn JITContext::bind_gc_function_addresses(Self, FixedArray[Int64]) -> Unit
-pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit raise GCMetadataError
 pub fn JITContext::bind_gc_safepoints(Self, Int, Bytes, FixedArray[Int]) -> Bool
 pub fn JITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITContext::bind_prepared_safepoints(Self, PreparedSafepoints) -> Bool
@@ -60,7 +77,7 @@ pub impl @debug.Debug for MemoryDescriptor
 type NativeContinuationArena
 pub fn NativeContinuationArena::clear(Self) -> Unit
 pub fn NativeContinuationArena::gc_roots(Self, Int64) -> FixedArray[Int64]
-pub fn NativeContinuationArena::new() -> Self
+pub fn NativeContinuationArena::new() -> Self raise NativeAllocationError
 pub fn NativeContinuationArena::reclaim_retired(Self) -> Unit
 
 type NativeExceptionArena
@@ -68,7 +85,7 @@ pub fn NativeExceptionArena::clear(Self) -> Unit
 pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> Bool
 pub fn NativeExceptionArena::enable_reclamation(Self) -> Unit
 pub fn NativeExceptionArena::insert(Self, GCHeapHandle, Int, Array[Int64]) -> Int64
-pub fn NativeExceptionArena::new() -> Self
+pub fn NativeExceptionArena::new() -> Self raise NativeAllocationError
 pub fn NativeExceptionArena::release_snapshot(Self, Int64) -> Unit
 pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int, Array[Int64])?
 
@@ -80,7 +97,8 @@ pub fn NativeTableHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeTableHandle
 
 pub type PreparedSafepoints
-pub fn PreparedSafepoints::new(FixedArray[Bytes], FixedArray[FixedArray[Int]]) -> Self
+pub fn PreparedSafepoints::check_count(Int) -> Unit raise GCMetadataError
+pub fn PreparedSafepoints::new(FixedArray[Bytes], FixedArray[FixedArray[Int]]) -> Self raise GCMetadataError
 
 // Type aliases
 pub using @layout {type ContextLayout}

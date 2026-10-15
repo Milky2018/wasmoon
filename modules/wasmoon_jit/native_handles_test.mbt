@@ -146,7 +146,7 @@ extern "c" fn active_dwarf_low_pc() -> UInt64 = "wasmoon_dwarf_get_low_pc"
 fn retained_dwarf_lookup() -> () -> Bool {
   let builder = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
   builder.add_function("retained", 8192L, 16, 3)
-  builder.register()
+  builder.register() |> ignore
   fn() { builder.lookup_address(8193L) is Some(_) }
 }
 
@@ -170,19 +170,19 @@ test "DWARF close invalidates aliases without clearing another active builder" {
   let first = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
   let retained = first
   first.add_function("first", 4096L, 16, 1)
-  first.register()
-  first.register()
+  first.register() |> ignore
+  first.register() |> ignore
   first.unregister()
   first.unregister()
-  first.register()
+  first.register() |> ignore
   assert_eq(active_dwarf_low_pc(), 4096UL)
   let second = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
   second.add_function("second", 8192L, 16, 2)
-  second.register()
+  second.register() |> ignore
   first.destroy()
   retained.destroy()
   retained.add_function("closed", 8192L, 16, 9)
-  retained.register()
+  retained.register() |> ignore
   retained.unregister()
   assert_true(retained.lookup_address(4097L) is None)
   assert_true(retained.lookup_address(8193L) is None)
@@ -732,7 +732,7 @@ test "parked scratch roots survive GC and resume restores the actual caller" {
 }
 
 ///|
-fn context_with_owned_gc_metadata() -> @jit_ffi.JITContext {
+fn context_with_owned_gc_metadata() -> @jit_ffi.JITContext raise {
   let context = @jit_ffi.JITContext::new(2)
   let types : FixedArray[Int32] = [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   let indices : FixedArray[Int32] = [0, 1]
@@ -942,4 +942,227 @@ test "shared safepoints outlive their caller and isolate rebinding from parked f
 ///|
 test "safepoint allocation respects external object payload bounds" {
   inspect(@native_test_support.safepoint_allocation_bounds(), content="1")
+}
+
+///|
+extern "c" fn fail_native_allocation_for_tests(attempt : Int32) -> Unit = "wasmoon_native_fail_allocation_for_tests"
+
+///|
+test "native allocation denial restores invocation state and remains recoverable" {
+  inspect(@native_test_support.native_failure_recovery(), content="1")
+}
+
+///|
+test "native segment allocation failure leaves the context reusable" {
+  let context = @jit_ffi.JITContext::new(0)
+  fail_native_allocation_for_tests(1)
+  defer fail_native_allocation_for_tests(0)
+  inspect(context.set_segments([b"abc"], [[1L, 2L]]), content="false")
+  inspect(context.set_segments([b"abc"], [[1L, 2L]]), content="true")
+}
+
+///|
+test "invalid native metadata is rejected before a valid replacement" {
+  let context = @jit_ffi.JITContext::new(1)
+  let invalid_stride = try {
+    context.bind_gc_metadata([1], [], [])
+    false
+  } catch {
+    _ => true
+  }
+  inspect(invalid_stride, content="true")
+  context.bind_gc_metadata([-1, 0, 0, 0, 0, 0], [0], [0])
+  let mismatch = try {
+    @jit_ffi.PreparedSafepoints::new([b""], []) |> ignore
+    false
+  } catch {
+    _ => true
+  }
+  inspect(mismatch, content="true")
+  let oversized = try {
+    @jit_ffi.PreparedSafepoints::check_count(0x7fffffff)
+    false
+  } catch {
+    _ => true
+  }
+  inspect(oversized, content="true")
+  @jit_ffi.PreparedSafepoints::new([], []) |> ignore
+}
+
+///|
+test "DWARF allocation denial does not publish partial debugger metadata" {
+  let active = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
+  defer active.destroy()
+  active.add_function("existing", 4096L, 16, 0)
+  assert_true(active.register())
+  let mut rejected = 0
+  let mut accepted = 0
+  for attempt in 1..<=24 {
+    let builder = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
+    for index in 0..<40 {
+      builder.add_function(
+        "long_function_name_for_allocation_recovery_\{index}",
+        8192L + index.to_int64() * 16L,
+        16,
+        index,
+      )
+    }
+    fail_native_allocation_for_tests(attempt)
+    let registered = builder.register()
+    fail_native_allocation_for_tests(0)
+    if registered {
+      accepted += 1
+    } else {
+      rejected += 1
+      inspect(active_dwarf_low_pc(), content="4096")
+    }
+    assert_true(builder.register())
+    assert_true(builder.lookup_address(8193L) is Some(_))
+    builder.destroy()
+    assert_true(active.register())
+  }
+  assert_true(rejected >= 4)
+  assert_true(accepted > 0)
+}
+
+///|
+test "native memory and table replacement denial preserves both ownership views" {
+  let first = @wasmoon_jit.alloc_memory_desc(65536L, Some(2L))
+  let second = @wasmoon_jit.alloc_memory_desc(131072L, Some(2L))
+  let context = @wasmoon_jit.NativeJITContext::try_alloc(0).unwrap()
+  context.set_memory_pointers([MemoryInfo(first, 65536L, Some(2))])
+  fail_native_allocation_for_tests(1)
+  defer fail_native_allocation_for_tests(0)
+  let memory_denied = try {
+    context.set_memory_pointers([MemoryInfo(second, 131072L, Some(2))])
+    false
+  } catch {
+    MemoryBindingAllocationFailed => true
+    _ => false
+  }
+  inspect(memory_denied, content="true")
+  inspect(context.memory_size(0), content="65536")
+  context.set_memory_pointers([MemoryInfo(second, 131072L, Some(2))])
+  inspect(context.memory_size(0), content="131072")
+  let first_table = @wasmoon_jit.JITTableOwner::try_alloc(1, None).unwrap()
+  let second_table = @wasmoon_jit.JITTableOwner::try_alloc(2, None).unwrap()
+  defer first_table.close()
+  defer second_table.close()
+  context.set_table_pointers([Some(first_table.table())])
+  for attempt in 1..<=4 {
+    fail_native_allocation_for_tests(attempt)
+    let table_denied = try {
+      context.set_table_pointers([Some(second_table.table())])
+      false
+    } catch {
+      TableBindingAllocationFailed => true
+      _ => false
+    }
+    inspect(table_denied, content="true")
+    assert_true(context.refresh_table_layout(0))
+    inspect(first_table.table().get_size(), content="1")
+    inspect(second_table.table().get_size(), content="2")
+  }
+  context.set_table_pointers([Some(second_table.table())])
+  assert_true(context.refresh_table_layout(0))
+  context.set_memory_pointers([])
+  context.set_table_pointers([])
+}
+
+///|
+test "native binding layout rejection preserves the previous valid bindings" {
+  let layout = @wasmoon_jit.ContextLayout::new(Module(1, 0, 0)).unwrap()
+  let context = @wasmoon_jit.NativeJITContext::try_alloc(0, layout=Some(layout)).unwrap()
+  let memory = @wasmoon_jit.alloc_memory_desc(1L, None, is_memory64=true)
+  let info = @wasmoon_jit.MemoryInfo::MemoryInfo(memory, 1L, None)
+  context.set_memory_pointers([info])
+  let invalid = try {
+    context.set_memory_pointers([info, info])
+    false
+  } catch {
+    InvalidBinding(_) => true
+    _ => false
+  }
+  inspect(invalid, content="true")
+  inspect(context.memory_size(0), content="1")
+  context.set_memory_pointers([])
+}
+
+///|
+test "executable allocation denial is typed and a later installation succeeds" {
+  let installer = @wasmoon_jit.JitCodeInstaller::new(fn(_) { None })
+  let code = match @wasmoon_jit.host_native_target() {
+    AArch64 => [0xC0, 0x03, 0x5F, 0xD6]
+    X64 => [0xC3]
+  }
+  fail_native_allocation_for_tests(1)
+  defer fail_native_allocation_for_tests(0)
+  let denied = try {
+    installer.install_trampoline(code).release()
+    false
+  } catch {
+    TrampolineAllocationFailed(code_size~) => code_size == code.length()
+    _ => false
+  }
+  inspect(denied, content="true")
+  let installed = installer.install_trampoline(code)
+  assert_true(installed.entry_address() != 0L)
+  installed.release()
+}
+
+///|
+test "Windows fiber preparation failure returns to the host without running its entry" {
+  if @jit_ffi.is_windows() {
+    let entered = Ref(false)
+    let fiber = @wasmoon_jit.NativeFiber::new(fn() {
+      entered.val = true
+      37L
+    })
+    fail_native_allocation_for_tests(1)
+    defer fail_native_allocation_for_tests(0)
+    let rejected = try {
+      fiber.continue_with() |> ignore
+      false
+    } catch {
+      NativeFailure(-5) => true
+      _ => false
+    }
+    inspect(rejected, content="true")
+    inspect(entered.val, content="false")
+    debug_inspect(fiber.phase(), content="Ready")
+    debug_inspect(fiber.continue_with(), content="Finished(37)")
+    let started = Ref(false)
+    let second = @wasmoon_jit.NativeFiber::new(fn() {
+      started.val = true
+      42L
+    })
+    fail_native_allocation_for_tests(2)
+    let startup_failed = try {
+      second.continue_with() |> ignore
+      false
+    } catch {
+      NativeFailure(-5) => true
+      _ => false
+    }
+    inspect(startup_failed, content="true")
+    inspect(started.val, content="false")
+    debug_inspect(second.phase(), content="Cancelled")
+    let next = @wasmoon_jit.NativeFiber::new(fn() { 42L })
+    debug_inspect(next.continue_with(), content="Finished(42)")
+  }
+}
+
+///|
+test "DWARF function capacity denial does not register a truncated object" {
+  let active = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
+  defer active.destroy()
+  active.add_function("existing", 4096L, 16, 0)
+  assert_true(active.register())
+  let builder = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
+  defer builder.destroy()
+  for index in 0..<1025 {
+    builder.add_function("function", 8192L + index.to_int64() * 16L, 16, index)
+  }
+  inspect(builder.register(), content="false")
+  inspect(active_dwarf_low_pc(), content="4096")
 }

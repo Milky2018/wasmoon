@@ -2,7 +2,20 @@
 type NativeContinuationArena
 
 ///|
-pub extern "c" fn NativeContinuationArena::new() -> NativeContinuationArena = "wasmoon_continuation_arena_new"
+extern "c" fn NativeContinuationArena::allocate() -> NativeContinuationArena = "wasmoon_continuation_arena_new"
+
+///|
+#borrow(self)
+extern "c" fn NativeContinuationArena::is_available(
+  self : NativeContinuationArena,
+) -> Bool = "wasmoon_continuation_arena_is_available"
+
+///|
+pub fn NativeContinuationArena::new() -> NativeContinuationArena raise NativeAllocationError {
+  let arena = NativeContinuationArena::allocate()
+  guard arena.is_available() else { raise OutOfMemory }
+  arena
+}
 
 ///|
 #borrow(self)

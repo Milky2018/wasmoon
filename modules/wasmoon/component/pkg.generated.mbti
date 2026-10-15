@@ -49,6 +49,7 @@ pub(all) suberror ComponentRuntimeError {
   ParseFailed(String)
   ValidationFailed(String)
   InstantiationFailed(String)
+  ResourceExhausted(String)
   InvalidExportPath(String)
   UnknownExport(String)
   ExportNotFunction(String)
@@ -166,7 +167,7 @@ pub fn ComponentResourceType::not_equal(Self, Self) -> Bool
 pub fn ComponentResourceType::to_repr(Self) -> @debug.Repr
 
 type ComponentRuntime
-pub fn ComponentRuntime::ComponentRuntime(engine? : ComponentEngine, wit_names? : Bool, component_implements? : Bool) -> Self
+pub fn ComponentRuntime::ComponentRuntime(engine? : ComponentEngine, wit_names? : Bool, component_implements? : Bool) -> Self raise ComponentRuntimeError
 pub fn ComponentRuntime::close(Self) -> Unit
 pub fn ComponentRuntime::install(Self, ComponentHostInstaller) -> Unit raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance raise ComponentRuntimeError

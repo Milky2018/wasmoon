@@ -136,14 +136,14 @@ fn run_component_sections(
                   }
                   match @core.trap_message() {
                     Some(msg) => raise CoreModuleInstantiateError(msg)
-                    None => raise CoreModuleInstantiateError(e.to_string())
+                    None => raise ComponentRuntimeError::from_core(e)
                   }
                 }
               }
               pop_task(async_state)
               retire_task(async_state, inst_task_id)
               linker.core_linker.register(module_name, instance) catch {
-                error => raise CoreModuleInstantiateError(error.to_string())
+                error => raise ComponentRuntimeError::from_core(error)
               }
               linker.core_engine().register_instance(store, mod_, instance)
               state.core_instances.push(

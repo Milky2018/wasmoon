@@ -39,10 +39,19 @@ pub suberror ArtifactIncompatible {
 
 ///|
 pub suberror ArtifactLoadError {
+  NativePreparationFailed(message~ : String)
   DecodeFailed(cause~ : @artifact.ArtifactDecodeError)
   Incompatible(cause~ : ArtifactIncompatible)
   CodeObjectInvalid(cause~ : @code_object.CodeObjectVerifyError)
 } derive(Eq, Debug)
+
+///|
+/// Report a checked failure while preparing native metadata for verified input.
+pub fn ArtifactLoadError::native_preparation_failed(
+  message : String,
+) -> ArtifactLoadError {
+  NativePreparationFailed(message~)
+}
 
 ///|
 /// A decoded artifact whose manifest and every code object have been checked.

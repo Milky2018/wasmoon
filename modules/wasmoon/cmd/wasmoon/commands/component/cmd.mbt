@@ -309,7 +309,15 @@ fn run_component_invoke_eval(
   let runtime = @component_runtime.ComponentRuntime(
     wit_names~,
     component_implements~,
-  )
+  ) catch {
+    error =>
+      return {
+        ok: false,
+        phase: "configure",
+        detail: error.to_string(),
+        values: [],
+      }
+  }
   defer runtime.close()
   let instance = runtime.instantiate("invoke", bytes) catch {
     error =>
@@ -534,7 +542,14 @@ fn run_wasi_component_command_with_evidence(
     engine=component_execution_engine(use_jit, on_execution),
     wit_names~,
     component_implements~,
-  )
+  ) catch {
+    error =>
+      return report_component_run_error(
+        error_format,
+        "configure",
+        error.to_string(),
+      )
+  }
   defer runtime.close()
   runtime.install(@component_runtime.wasi_command_component_host(ctx)) catch {
     e =>

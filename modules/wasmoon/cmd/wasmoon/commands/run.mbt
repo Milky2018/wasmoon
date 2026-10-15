@@ -333,7 +333,21 @@ pub fn run_wasm(
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   @logger.debug("JIT: \{jit_status}")
   // Create linker for module linking
-  let linker = @runtime.Linker::Linker()
+  let linker = @runtime.Linker::Linker() catch {
+    error => {
+      @logger.error("Failed to initialize runtime: \{error}")
+      return 1
+    }
+  }
+  defer linker.close()
+  if use_jit {
+    linker.get_store().enable_c_heap() catch {
+      error => {
+        @logger.error("Failed to initialize native GC heap: \{error}")
+        return 1
+      }
+    }
+  }
 
   // Parse WASI options
   let mut inherit_env = false
@@ -435,10 +449,25 @@ pub fn run_wasm(
   let wasi_ctx = wasi_builder.build()
 
   // Register WASI functions
-  try! @wasi.register_wasi(linker, wasi_ctx)
+  @wasi.register_wasi(linker, wasi_ctx) catch {
+    error => {
+      @logger.error("Failed to register WASI imports: \{error}")
+      return 1
+    }
+  }
   // Register spectest module (standard test functions)
-  let spectest_instance = try! @wast.create_spectest_module(linker.get_store())
-  try! linker.register("spectest", spectest_instance)
+  let spectest_instance = @wast.create_spectest_module(linker.get_store()) catch {
+    error => {
+      @logger.error("Failed to initialize spectest imports: \{error}")
+      return 1
+    }
+  }
+  linker.register("spectest", spectest_instance) catch {
+    error => {
+      @logger.error("Failed to register spectest imports: \{error}")
+      return 1
+    }
+  }
   // Load preloaded modules
   for preload in preloads {
     // Parse NAME=PATH format
@@ -465,7 +494,12 @@ pub fn run_wasm(
             return 1
           }
         }
-        try! linker.register(name, preload_instance)
+        linker.register(name, preload_instance) catch {
+          error => {
+            @logger.error("Failed to register preloaded module: \{error}")
+            return 1
+          }
+        }
       }
       None => {
         @logger.error("invalid preload format '\{preload}', expected NAME=PATH")
@@ -498,10 +532,6 @@ pub fn run_wasm(
   // - Element segment initialization
   // - Start function execution
   let store = linker.get_store()
-  // Enable C heap for JIT mode (required for GC operations)
-  if use_jit {
-    try! store.enable_c_heap()
-  }
   let imports = linker.build_imports()
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {
     HostExit(code) => return code
@@ -1186,7 +1216,7 @@ fn init_jit_tables(
   store : @runtime.Store,
   jm : @jit.JITModule,
   use_subtype_indirect_check : Bool,
-) -> Unit {
+) -> Unit raise @wasmoon_jit.NativeSetupError {
   if instance.table_addrs.is_empty() {
     return
   }
@@ -1415,15 +1445,25 @@ fn run_with_jit(
           // Register DWARF debug info with debugger if enabled
           // The DWARF info must stay registered for the duration of JIT execution
           let dwarf_builder : @wasmoon_jit.DWARFBuilder? = if enable_dwarf {
-            Some(jm.register_dwarf(verbose=@logger.is_debug_enabled()))
+            Some(
+              jm.register_dwarf(verbose=@logger.is_debug_enabled()) catch {
+                error => {
+                  @logger.error(
+                    "Failed to register JIT debug metadata: \{error}",
+                  )
+                  raise CommandFailure(1)
+                }
+              },
+            )
           } else {
             None
           }
           // Initialize all memories (multi-memory support)
-          guard @wast.init_jit_memories_from_store(instance, store, jm)
-            is Some(_) else {
-            @logger.error("Failed to initialize JIT memories")
-            raise CommandFailure(1)
+          let _ = @wast.init_jit_memories_from_store(instance, store, jm) catch {
+            error => {
+              @logger.error("Failed to initialize JIT memories: \{error}")
+              raise CommandFailure(1)
+            }
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = @wast.init_jit_globals_from_store(
@@ -1439,7 +1479,12 @@ fn run_with_jit(
               mod_,
             )
             is Some(_)
-          init_jit_tables(instance, store, jm, use_subtype_indirect_check)
+          init_jit_tables(instance, store, jm, use_subtype_indirect_check) catch {
+            error => {
+              @logger.error("Failed to initialize JIT table bindings: \{error}")
+              raise CommandFailure(1)
+            }
+          }
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
           @wast.init_bulk_segments(mod_, jm, instance, store) catch {
             error => {

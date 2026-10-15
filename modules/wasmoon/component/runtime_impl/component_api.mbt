@@ -274,7 +274,7 @@ struct ComponentLinker {
 }
 
 ///|
-pub fn ComponentLinker::ComponentLinker() -> ComponentLinker {
+pub fn ComponentLinker::ComponentLinker() -> ComponentLinker raise ComponentRuntimeError {
   ComponentLinker::with_core_execution_engine(
     interpreter_core_execution_engine(),
   )
@@ -284,11 +284,17 @@ pub fn ComponentLinker::ComponentLinker() -> ComponentLinker {
 /// Create a component linker with an embedding-provided core execution engine.
 pub fn ComponentLinker::with_core_execution_engine(
   core_engine : CoreExecutionEngine,
-) -> ComponentLinker {
-  let core_linker = @runtime.Linker::Linker()
+) -> ComponentLinker raise ComponentRuntimeError {
   let core_execution_lifecycle = CoreExecutionLifecycle::new()
   let managed_core_engine = core_engine.with_lifecycle(core_execution_lifecycle)
-  managed_core_engine.prepare_store(core_linker.get_store())
+  errdefer managed_core_engine.close()
+  let core_linker = @runtime.Linker::Linker() catch {
+    error => raise ComponentRuntimeError::from_core(error)
+  }
+  errdefer core_linker.close()
+  managed_core_engine.prepare_store(core_linker.get_store()) catch {
+    error => raise ComponentRuntimeError::from_core(error)
+  }
   {
     core_linker,
     core_engine_slot: Ref(Some(managed_core_engine)),

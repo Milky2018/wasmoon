@@ -1,4 +1,34 @@
 ///|
+/// Invalid native metadata must be rejected before publishing any pointers.
+pub suberror GCMetadataError {
+  InvalidTypeStride
+  PayloadCountMismatch
+  PayloadTooLarge
+} derive(Debug)
+
+///|
+pub extend GCMetadataError with Debug::{to_repr}
+
+///|
+pub extend GCMetadataError with Show::{output, to_string}
+
+///|
+pub impl Show for GCMetadataError with fn output(self, logger) {
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
+}
+
+///|
+extern "c" fn safepoint_payload_fits(count : Int32) -> Bool = "wasmoon_jit_safepoint_payload_fits"
+
+///|
+/// Check the native descriptor's representable size before allocating arrays.
+pub fn PreparedSafepoints::check_count(
+  count : Int32,
+) -> Unit raise GCMetadataError {
+  guard safepoint_payload_fits(count) else { raise PayloadTooLarge }
+}
+
+///|
 #borrow(context, types, canonical, functions)
 extern "c" fn bind_gc_metadata(
   context : JITContext,
@@ -16,10 +46,8 @@ pub fn JITContext::bind_gc_metadata(
   types : FixedArray[Int32],
   canonical : FixedArray[Int32],
   functions : FixedArray[Int32],
-) -> Unit {
-  guard types.length() % 6 == 0 else {
-    abort("invalid GC type metadata stride")
-  }
+) -> Unit raise GCMetadataError {
+  guard types.length() % 6 == 0 else { raise InvalidTypeStride }
   bind_gc_metadata(self, types, canonical, functions)
 }
 
@@ -83,10 +111,9 @@ pub extern "c" fn JITContext::bind_prepared_safepoints(
 pub fn PreparedSafepoints::new(
   blobs : FixedArray[Bytes],
   offsets : FixedArray[FixedArray[Int32]],
-) -> PreparedSafepoints {
-  guard blobs.length() == offsets.length() else {
-    abort("safepoint payload counts differ")
-  }
+) -> PreparedSafepoints raise GCMetadataError {
+  guard blobs.length() == offsets.length() else { raise PayloadCountMismatch }
+  PreparedSafepoints::check_count(blobs.length())
   let snapshot : FixedArray[FixedArray[Int32]] = FixedArray::makei(
     offsets.length(),
     i => {

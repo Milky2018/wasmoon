@@ -248,6 +248,7 @@ pub(all) suberror CHeapError {
 
 pub(all) suberror GCSetupError {
   MissingJITContext
+  InvalidMetadata
   InvalidFuncCount(num_funcs~ : Int)
   FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
   MissingFunctionTableContext(num_funcs~ : Int)
@@ -303,6 +304,20 @@ pub fn NativeFiberError::to_repr(Self) -> @debug.Repr
 pub fn NativeFiberError::to_string(Self) -> String
 pub impl Show for NativeFiberError
 
+pub(all) suberror NativeSetupError {
+  SegmentAllocationFailed
+  RootFrameAllocationFailed
+  ExceptionPayloadAllocationFailed
+  DebugRegistrationFailed
+  MemoryBindingAllocationFailed
+  TableBindingAllocationFailed
+  InvalidBinding(String)
+} derive(@debug.Debug)
+pub fn NativeSetupError::output(Self, &Logger) -> Unit
+pub fn NativeSetupError::to_repr(Self) -> @debug.Repr
+pub fn NativeSetupError::to_string(Self) -> String
+pub impl Show for NativeSetupError
+
 // Types and methods
 pub struct BacktraceFrame {
   pc : Int64
@@ -314,7 +329,7 @@ pub struct BacktraceFrame {
 pub struct CHeap {
   // private fields
 } derive(@debug.Debug)
-pub fn CHeap::CHeap(capacity? : Int) -> Self
+pub fn CHeap::CHeap(capacity? : Int) -> Self raise CHeapError
 pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
 pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
 pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
@@ -372,7 +387,7 @@ pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]
 pub fn DWARFBuilder::destroy(Self) -> Unit
 pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
 pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
-pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
+pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Bool
 pub fn DWARFBuilder::unregister(Self) -> Unit
 
 pub struct FunctionInfo {
@@ -592,7 +607,7 @@ pub fn NativeJITContext::configure_native_fiber_stack_size(Self, Int64) -> Bool
 pub fn NativeJITContext::define_continuation_type(Self, Int, Int64, Array[@types.ValueType], Array[@types.ValueType]) -> Bool
 pub fn NativeJITContext::func_count(Self) -> Int
 pub fn NativeJITContext::func_ptr(Self, Int) -> Int64
-pub fn NativeJITContext::gc_begin_frame(Self, Int64) -> Unit
+pub fn NativeJITContext::gc_begin_frame(Self, Int64) -> Unit raise NativeSetupError
 pub fn NativeJITContext::gc_collect_for_alloc(Self, Array[Int64]) -> Int
 pub fn NativeJITContext::gc_end_frame(Self) -> Unit
 pub fn NativeJITContext::gc_environment_is_clear(Self) -> Bool
@@ -619,16 +634,17 @@ pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
 pub fn NativeJITContext::set_hostcall_callback(Self, () -> NativeHostcallOutcome) -> Unit
 pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
 pub fn NativeJITContext::set_memory(Self, @jit_ffi.MemoryDescriptor) -> Unit
-pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
-pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit
+pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit raise NativeSetupError
+pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit raise NativeSetupError
 pub fn NativeJITContext::setup_gc(Self, CHeap, Array[@types.SubType], Array[Int], Array[Int]) -> Unit raise GCSetupError
 pub fn NativeJITContext::setup_gc_with_func_table(Self, CHeap, Array[@types.SubType], Array[Int], Array[Int], Int64, Int) -> Unit raise GCSetupError
-pub fn NativeJITContext::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
+pub fn NativeJITContext::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit raise NativeSetupError
 pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int, stack_size? : Int64) -> NativeJITContinuation raise NativeFiberError
 pub fn NativeJITContext::take_wasi_exit_code(Self) -> Int
 pub fn NativeJITContext::teardown_gc(Self) -> Unit
-pub fn NativeJITContext::throw_exception_tag(Self, Int) -> Unit
-pub fn NativeJITContext::throw_exception_values(Self, Int, Array[Int64]) -> Unit
+pub fn NativeJITContext::throw_exception_tag(Self, Int) -> Unit raise NativeSetupError
+pub fn NativeJITContext::throw_exception_values(Self, Int, Array[Int64]) -> Unit raise NativeSetupError
+pub fn NativeJITContext::throw_store_exception_values(Self, Int, Array[Int64]) -> Unit raise NativeSetupError
 pub fn NativeJITContext::try_alloc(Int, layout? : @layout.ContextLayout?) -> Self?
 
 type NativeJITContinuation

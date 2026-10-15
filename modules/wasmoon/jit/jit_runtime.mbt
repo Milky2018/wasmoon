@@ -557,9 +557,7 @@ pub fn JITModule::call_with_context(
         args,
         func.param_types,
       )
-      self.gc_set_root_scratch(frame_roots) |> ignore
-      self.gc_use_func_safepoints(func.func_idx)
-      self.gc_begin_frame(func.func_idx.to_int64())
+      self.begin_call_gc(func.func_idx, frame_roots)
       ctx.call_multi_return(
         func.func_ptr,
         args,
@@ -663,9 +661,7 @@ fn JITCallContinuation::advance(
     raise JITTrap("native JIT continuation is no longer active")
   }
   if self.first_entry[0] {
-    self.jit_module.gc_set_root_scratch(self.entry_roots) |> ignore
-    self.jit_module.gc_use_func_safepoints(self.func.func_idx)
-    self.jit_module.gc_begin_frame(self.func.func_idx.to_int64())
+    self.jit_module.begin_call_gc(self.func.func_idx, self.entry_roots)
     self.gc_frame_active[0] = true
     self.first_entry[0] = false
   }
@@ -1068,10 +1064,31 @@ pub fn JITModule::set_gc_heap(
 
 ///|
 /// Push a GC frame node in current JIT context.
-pub fn JITModule::gc_begin_frame(self : JITModule, frame_id : Int64) -> Unit {
-  if self.context is Some(context) {
-    context.ctx.gc_begin_frame(frame_id)
+pub fn JITModule::gc_begin_frame(
+  self : JITModule,
+  frame_id : Int64,
+) -> Unit raise JITTrap {
+  guard self.context is Some(context) else {
+    raise JITTrap("missing JIT context")
   }
+  context.ctx.gc_begin_frame(frame_id) catch {
+    _ => raise JITTrap("out of memory")
+  }
+}
+
+///|
+fn JITModule::begin_call_gc(
+  self : JITModule,
+  function : Int32,
+  roots : Array[Int64],
+) -> Unit raise JITTrap {
+  guard self.gc_set_root_scratch(roots) else { raise JITTrap("out of memory") }
+  errdefer {
+    self.gc_use_func_safepoints(-1)
+    self.gc_set_root_scratch([]) |> ignore
+  }
+  self.gc_use_func_safepoints(function)
+  self.gc_begin_frame(function.to_int64())
 }
 
 ///|
@@ -1120,10 +1137,11 @@ pub fn JITModule::gc_use_func_safepoints(
 pub fn JITModule::throw_exception_tag(
   self : JITModule,
   tag_addr : Int32,
-) -> Unit {
-  if self.context is Some(context) {
-    context.ctx.throw_exception_tag(tag_addr)
+) -> Unit raise @wasmoon_jit.NativeSetupError {
+  guard self.context is Some(context) else {
+    raise InvalidBinding("missing JIT context")
   }
+  context.ctx.throw_exception_tag(tag_addr)
 }
 
 ///|
@@ -1131,10 +1149,23 @@ pub fn JITModule::throw_exception_values(
   self : JITModule,
   tag_addr : Int32,
   values : Array[Int64],
-) -> Unit {
-  if self.context is Some(context) {
-    context.ctx.throw_exception_values(tag_addr, values)
+) -> Unit raise @wasmoon_jit.NativeSetupError {
+  guard self.context is Some(context) else {
+    raise InvalidBinding("missing JIT context")
   }
+  context.ctx.throw_exception_values(tag_addr, values)
+}
+
+///|
+pub fn JITModule::throw_store_exception_values(
+  self : JITModule,
+  tag_addr : Int32,
+  values : Array[Int64],
+) -> Unit raise @wasmoon_jit.NativeSetupError {
+  guard self.context is Some(context) else {
+    raise InvalidBinding("missing JIT context")
+  }
+  context.ctx.throw_store_exception_values(tag_addr, values)
 }
 
 ///|
@@ -1207,10 +1238,11 @@ pub fn JITModule::alloc_guarded_memory(
 pub fn JITModule::set_memory_pointers(
   self : JITModule,
   memories : Array[@wasmoon_jit.MemoryInfo],
-) -> Unit {
-  if self.context is Some(ctx) {
-    ctx.set_memory_pointers(memories)
+) -> Unit raise @wasmoon_jit.NativeSetupError {
+  guard self.context is Some(ctx) else {
+    raise InvalidBinding("missing JIT context")
   }
+  ctx.set_memory_pointers(memories)
 }
 
 ///|
@@ -1301,8 +1333,10 @@ pub fn JITModule::setup_segments(
   elem_segments : Array[Array[Int64]],
   data_dropped~ : Array[Bool] = [],
   elem_dropped~ : Array[Bool] = [],
-) -> Unit {
-  guard self.context is Some(ctx) else { return }
+) -> Unit raise @wasmoon_jit.NativeSetupError {
+  guard self.context is Some(ctx) else {
+    raise InvalidBinding("missing JIT context")
+  }
   ctx.ctx.setup_segments(datas, elem_segments, data_dropped~, elem_dropped~)
 }
 
@@ -1322,13 +1356,9 @@ pub fn JITModule::init_shared_tables(
   self : JITModule,
   jit_tables : Array[@wasmoon_jit.JITTable?],
   elem_init : Array[(Int32, Int32, Int32?, Int32)],
-) -> Unit {
-  if self.context is None {
-    return
-  }
-  let ctx = match self.context {
-    Some(c) => c
-    None => return
+) -> Unit raise @wasmoon_jit.NativeSetupError {
+  guard self.context is Some(ctx) else {
+    raise InvalidBinding("missing JIT context")
   }
   // Set up context to use the shared tables
   ctx.set_table_pointers(jit_tables)
@@ -1371,13 +1401,15 @@ pub fn JITModule::init_shared_tables(
 pub fn JITModule::register_dwarf(
   self : JITModule,
   verbose~ : Bool = false,
-) -> @wasmoon_jit.DWARFBuilder {
+) -> @wasmoon_jit.DWARFBuilder raise @wasmoon_jit.NativeSetupError {
   let dwarf = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
   for func_idx, func in self.functions {
     let addr = self.get_func_ptr(func_idx)
     dwarf.add_function(func.name, addr, func.code_size, func_idx)
   }
-  dwarf.register(verbose~)
+  if !self.functions.is_empty() && !dwarf.register(verbose~) {
+    raise DebugRegistrationFailed
+  }
   dwarf
 }
 

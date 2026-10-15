@@ -33,6 +33,10 @@ fn Table::allocate(
   init_value : @types.Value,
   is_table64 : Bool,
 ) -> Table raise RuntimeError {
+  if max is Some(maximum) &&
+    maximum.reinterpret_as_uint64() < min.reinterpret_as_uint64() {
+    raise InvalidTableType("maximum is below minimum")
+  }
   // A native reference occupies one pointer-sized slot. Check multiplication
   // before narrowing to the backing MoonBit array's supported element count.
   if min.reinterpret_as_uint64() > 0x1FFF_FFFF_FFFF_FFFFUL {

@@ -163,7 +163,7 @@ pub(all) enum ComponentInvocationProgress {
 }
 
 type ComponentLinker
-pub fn ComponentLinker::ComponentLinker() -> Self
+pub fn ComponentLinker::ComponentLinker() -> Self raise @core.ComponentRuntimeError
 pub fn ComponentLinker::add_component(Self, String, @validator.ValidatedComponent) -> Unit raise @core.ComponentRuntimeError
 pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit raise @core.ComponentRuntimeError
 pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit raise @core.ComponentRuntimeError
@@ -179,7 +179,7 @@ pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) ->
 pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState raise @core.ComponentRuntimeError
 pub fn ComponentLinker::instantiate(Self, String, @validator.ValidatedComponent) -> ComponentInstance raise @core.ComponentRuntimeError
 pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
-pub fn ComponentLinker::with_core_execution_engine(@core.CoreExecutionEngine) -> Self
+pub fn ComponentLinker::with_core_execution_engine(@core.CoreExecutionEngine) -> Self raise @core.ComponentRuntimeError
 
 pub(all) enum ComponentValue {
   Bool(Bool)

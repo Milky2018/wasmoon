@@ -11,7 +11,7 @@ pub struct TestContext {
 }
 
 ///|
-pub fn TestContext::TestContext() -> TestContext {
+pub fn TestContext::TestContext() -> TestContext raise @runtime.RuntimeError {
   let linker = @runtime.Linker::Linker()
   {
     store: linker.get_store(),

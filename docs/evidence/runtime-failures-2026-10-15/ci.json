@@ -1,0 +1,109 @@
+{
+  "pull_request": "https://github.com/Milky2018/wasmoon/pull/535",
+  "accepted_head": "664991612aa9105f78dd3cb8aae2f5533595364a",
+  "base": "main",
+  "run_id": 38678211823,
+  "run_url": "https://github.com/Milky2018/wasmoon/actions/runs/38678211823",
+  "conclusion": "success",
+  "merge_commit": "816fa634d08eabf14ec834448d597f4990968326",
+  "merge_parents": [
+    "a694f4aabe26ce8fd9d72b15f2bbfe2488b48ee6",
+    "664991612aa9105f78dd3cb8aae2f5533595364a"
+  ],
+  "jobs": [
+    {
+      "databaseId": 116236639363,
+      "name": "Windows AMD64 (clang)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-15T03:49:21Z",
+      "completedAt": "2026-10-15T04:05:59Z",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38678211823/job/116236639363"
+    },
+    {
+      "databaseId": 116236639618,
+      "name": "macOS ARM64",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-15T03:49:23Z",
+      "completedAt": "2026-10-15T04:03:56Z",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38678211823/job/116236639618"
+    },
+    {
+      "databaseId": 116236639822,
+      "name": "Linux AMD64",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-15T03:49:21Z",
+      "completedAt": "2026-10-15T04:07:35Z",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38678211823/job/116236639822"
+    },
+    {
+      "databaseId": 116236639848,
+      "name": "Linux ASan and UBSan",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-15T03:49:21Z",
+      "completedAt": "2026-10-15T03:51:36Z",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38678211823/job/116236639848"
+    },
+    {
+      "databaseId": 116236639859,
+      "name": "Windows AMD64 (msvc)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-15T03:49:21Z",
+      "completedAt": "2026-10-15T04:07:05Z",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38678211823/job/116236639859"
+    }
+  ],
+  "linux_sanitizer": {
+    "version": "0.16.0",
+    "source_revision": "816fa634d08eabf14ec834448d597f4990968326",
+    "source_dirty": false,
+    "binary_sha256": "f3c7e9b1ab2307255a6ba90d739b9169d463f08c70392a45a94b0f36e61810e1",
+    "tests": "passed",
+    "event_loop": "passed",
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "lsan_probe": "detected",
+    "leak_detection": true,
+    "binary": "/home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+    "instrumentation": [
+      "address",
+      "undefined"
+    ],
+    "allocator": "system",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ]
+  },
+  "linux_sanitizer_tests": {
+    "total": 124,
+    "passed": 124,
+    "failed": 0,
+    "normal_run_has_leak_report": false,
+    "positive_control_leaked_bytes": 17
+  },
+  "windows": {
+    "clang": {
+      "strict_c_stubs": 41,
+      "native_test_summary_records": 57,
+      "native_tests": {
+        "total": 2664,
+        "passed": 2664,
+        "failed": 0
+      }
+    },
+    "msvc": {
+      "strict_c_stubs": 41,
+      "native_test_summary_records": 57,
+      "native_tests": {
+        "total": 2664,
+        "passed": 2664,
+        "failed": 0
+      }
+    }
+  }
+}

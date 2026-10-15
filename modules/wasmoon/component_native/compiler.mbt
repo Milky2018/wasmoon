@@ -366,20 +366,29 @@ fn load_component_jit_context(
       fn(index) { component_function_name(lowered_module, index) },
     ),
   ) catch {
+    ContextAllocationFailed(..)
+    | ImportTrampolineAllocationFailed(..) as error =>
+      raise ResourceExhausted(error.to_string())
+    ArtifactInstallationFailed(cause~) as error =>
+      match cause {
+        AllocationFailed(_) | TrampolineAllocationFailed(_) =>
+          raise ResourceExhausted(error.to_string())
+        _ =>
+          raise NativeCompilationFailed(
+            "artifact installation failed: \{error}",
+          )
+      }
     error =>
       raise NativeCompilationFailed("artifact installation failed: \{error}")
   }
+  errdefer jit_module.close()
   let funcrefs = @core_jit.register_owned_instance_funcrefs_for_jit(
     jit_module, instance, store,
   )
+  errdefer funcrefs.release()
   jit_module.configure_native_fiber_stack_size(16L * 1024L * 1024L) |> ignore
-  guard @core_jit.init_jit_memories_from_store(instance, store, jit_module)
-    is Some(_) else {
-    funcrefs.release()
-    jit_module.close()
-    raise NativeCompilationFailed(
-      "failed to initialize component core memories",
-    )
+  let _ = @core_jit.init_jit_memories_from_store(instance, store, jit_module) catch {
+    error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
   }
   let globals_pointer = @core_jit.init_jit_globals_from_store(
     instance, store, jit_module,
@@ -393,7 +402,9 @@ fn load_component_jit_context(
     instance,
     store,
     use_subtype_indirect_check=true,
-  )
+  ) catch {
+    error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+  }
   @core_jit.init_bulk_segments(
     lowered_module,
     jit_module,

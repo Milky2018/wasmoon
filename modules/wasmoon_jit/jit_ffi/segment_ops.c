@@ -38,7 +38,7 @@ static int segment_count(const void *segments) {
 
 static jit_segments_state_t *ensure_segments(jit_context_t *ctx) {
     if (!ctx_runtime(ctx)->segments)
-        ctx_runtime(ctx)->segments = calloc(1, sizeof(jit_segments_state_t));
+        ctx_runtime(ctx)->segments = wasmoon_native_calloc(1, sizeof(jit_segments_state_t));
     return ctx_runtime(ctx)->segments;
 }
 

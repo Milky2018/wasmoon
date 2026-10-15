@@ -188,6 +188,7 @@ pub(all) suberror ComponentRuntimeError {
   ParseFailed(String)
   ValidationFailed(String)
   InstantiationFailed(String)
+  ResourceExhausted(String)
   InvalidExportPath(String)
   UnknownExport(String)
   ExportNotFunction(String)
@@ -269,12 +270,17 @@ pub fn ComponentRuntime::ComponentRuntime(
   engine~ : ComponentEngine = native_component_engine(),
   wit_names~ : Bool = true,
   component_implements~ : Bool = true,
-) -> ComponentRuntime {
+) -> ComponentRuntime raise ComponentRuntimeError {
   {
     state: {
       linker: @runtime_impl.ComponentLinker::with_core_execution_engine(
         engine.open_session(),
-      ),
+      ) catch {
+        ResourceExhausted(message) => raise ResourceExhausted(message)
+        HostExit(code) => raise HostExit(code)
+        Cancelled => raise Cancelled
+        error => raise InstantiationFailed(error.to_string())
+      },
       wit_names,
       component_implements,
       closed: Ref(false),
@@ -422,6 +428,9 @@ pub fn ComponentRuntime::instantiate_component(
     error => {
       self.state.end_execution()
       match error {
+        ResourceExhausted(message) => raise ResourceExhausted(message)
+        HostExit(code) => raise HostExit(code)
+        Cancelled => raise Cancelled
         NativeEngineUnavailable(message) =>
           raise NativeEngineUnavailable(message)
         NativeCompilationFailed(message) =>

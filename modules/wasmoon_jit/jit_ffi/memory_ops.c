@@ -36,7 +36,7 @@ static size_t host_page_size(void) {
 // Allocate memory with guard pages using mmap
 // Returns memory base on success, NULL on failure
 static uint8_t *alloc_reserved_memory(wasmoon_memory_t *memory, size_t initial_size, size_t reserve_size) {
-    if (!memory || initial_size > reserve_size) return NULL;
+    if (!memory || initial_size > reserve_size || !wasmoon_native_allocation_allowed()) return NULL;
     size_t logical_size = initial_size;
     size_t page_size = host_page_size();
     if (reserve_size > SIZE_MAX - (page_size - 1)) return NULL;
@@ -183,7 +183,7 @@ static int64_t memory_grow_desc_locked(wasmoon_memory_t *mem, int64_t delta, int
         return current_pages;
     }
 
-    uint8_t *new_base = (uint8_t *)realloc(mem->base, new_size);
+    uint8_t *new_base = (uint8_t *)wasmoon_native_realloc(mem->base, new_size);
     if (!new_base) return -1;
 
     memset(new_base + current_size, 0, new_size - current_size);
@@ -452,7 +452,7 @@ int64_t table_grow_ctx_internal(
     void **old_table = ctx_tables(ctx)[table_idx];
 
     // Allocate new table (2 slots per entry: func_ptr and type_idx)
-    void **new_table = (void **)calloc(new_size * 2, sizeof(void *));
+    void **new_table = (void **)wasmoon_native_calloc(new_size * 2, sizeof(void *));
     if (!new_table) return -1;
 
     // Copy existing elements

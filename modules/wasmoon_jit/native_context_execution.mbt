@@ -1,23 +1,49 @@
+///|
+/// Recoverable failure while preparing per-instance native state.
+pub(all) suberror NativeSetupError {
+  SegmentAllocationFailed
+  RootFrameAllocationFailed
+  ExceptionPayloadAllocationFailed
+  DebugRegistrationFailed
+  MemoryBindingAllocationFailed
+  TableBindingAllocationFailed
+  InvalidBinding(String)
+} derive(Debug)
+
+///|
+pub extend NativeSetupError with Debug::{to_repr}
+
+///|
+pub extend NativeSetupError with Show::{output, to_string}
+
+///|
+pub impl Show for NativeSetupError with fn output(self, logger) {
+  logger.write_string(
+    match self {
+      SegmentAllocationFailed => "native segment allocation failed"
+      RootFrameAllocationFailed => "native root frame allocation failed"
+      ExceptionPayloadAllocationFailed =>
+        "native exception payload allocation failed"
+      DebugRegistrationFailed => "native debug metadata registration failed"
+      MemoryBindingAllocationFailed => "native memory binding allocation failed"
+      TableBindingAllocationFailed => "native table binding allocation failed"
+      InvalidBinding(message) => "invalid native binding: \{message}"
+    },
+  )
+}
+
 /// Execution, callback, exception, fiber-stack, and GC operations for managed JIT contexts.
 
 ///|
-fn throw_exception_tag(context : JITContext, tag_addr : Int32) -> Unit {
-  c_jit_exception_throw_tag_managed(context, tag_addr)
-}
-
-///|
-fn throw_exception_values(
-  context : JITContext,
-  tag_addr : Int32,
-  values : Array[Int64],
-) -> Unit {
-  let payload = FixedArray::makei(values.length(), fn(i) { values[i] })
-  c_jit_exception_throw_values_managed(
-    context,
-    tag_addr,
-    payload,
-    values.length(),
-  )
+fn check_exception_status(status : Int32) -> Unit raise NativeSetupError {
+  match status {
+    1 => ()
+    0 => raise ExceptionPayloadAllocationFailed
+    _ =>
+      raise InvalidBinding(
+        "exception delivery requires the active host callback and a valid tag",
+      )
+  }
 }
 
 ///|
@@ -27,7 +53,7 @@ fn setup_segments(
   elem_segments : Array[Array[Int64]],
   data_dropped~ : Array[Bool] = [],
   elem_dropped~ : Array[Bool] = [],
-) -> Unit {
+) -> Unit raise NativeSetupError {
   let data = Array::makei(datas.length(), i => {
     if i < data_dropped.length() && data_dropped[i] {
       b""
@@ -43,7 +69,7 @@ fn setup_segments(
     }
   })
   guard context.set_segments(data, elements) else {
-    abort("failed to allocate native segment state")
+    raise SegmentAllocationFailed
   }
 }
 
@@ -58,20 +84,50 @@ pub fn NativeJITContext::func_count(self : NativeJITContext) -> Int32 {
 }
 
 ///|
+/// Stage a module-local exception. Guest delivery occurs after the callback returns.
 pub fn NativeJITContext::throw_exception_tag(
   self : NativeJITContext,
   tag_addr : Int32,
-) -> Unit {
-  throw_exception_tag(self.handle, tag_addr)
+) -> Unit raise NativeSetupError {
+  check_exception_status(
+    c_jit_exception_throw_tag_managed(self.handle, tag_addr),
+  )
 }
 
 ///|
+/// Stage a module-local exception. Guest delivery occurs after the callback returns.
 pub fn NativeJITContext::throw_exception_values(
   self : NativeJITContext,
   tag_addr : Int32,
   values : Array[Int64],
-) -> Unit {
-  throw_exception_values(self.handle, tag_addr, values)
+) -> Unit raise NativeSetupError {
+  let payload = FixedArray::makei(values.length(), i => values[i])
+  check_exception_status(
+    c_jit_exception_throw_values_managed(
+      self.handle,
+      tag_addr,
+      payload,
+      values.length(),
+    ),
+  )
+}
+
+///|
+/// Stage an imported exception using its Store tag identity.
+pub fn NativeJITContext::throw_store_exception_values(
+  self : NativeJITContext,
+  tag_addr : Int32,
+  values : Array[Int64],
+) -> Unit raise NativeSetupError {
+  let payload = FixedArray::makei(values.length(), i => values[i])
+  check_exception_status(
+    c_jit_exception_throw_store_values_managed(
+      self.handle,
+      tag_addr,
+      payload,
+      values.length(),
+    ),
+  )
 }
 
 ///|
@@ -81,7 +137,7 @@ pub fn NativeJITContext::setup_segments(
   elem_segments : Array[Array[Int64]],
   data_dropped~ : Array[Bool] = [],
   elem_dropped~ : Array[Bool] = [],
-) -> Unit {
+) -> Unit raise NativeSetupError {
   setup_segments(
     self.handle,
     datas,
