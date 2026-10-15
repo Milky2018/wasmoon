@@ -119,7 +119,7 @@ errors covered above into guest traps or process aborts.
 ## Validation
 
 Validation results are recorded below after running the final source tree.
-Linux LSan and Windows Clang/MSVC must be validated on those platforms; a macOS
+Linux LSan and Windows Clang/MSVC results are recorded separately below; a macOS
 ASan run is not evidence that they passed.
 
 An intermediate incremental build mixed old/new private struct layouts. ASan
@@ -156,5 +156,32 @@ uncommitted source digest and executable/sanitizer hashes:
 The sanitizer uses the system allocator and instruments native stubs and the
 MoonBit test closure. It excludes MoonBit runtime object code and emitted JIT
 machine code. macOS ASan/UBSan results do not establish Linux leak freedom.
-Linux LSan and Windows Clang/MSVC acceptance remain pending. No commit, push or
-PR was created during this implementation request.
+The local `results.json` is the pre-submission snapshot; its pending-acceptance
+fields are superseded by the CI receipt below.
+
+## Cross-platform CI acceptance
+
+[Run 38678211823](https://github.com/Milky2018/wasmoon/actions/runs/38678211823)
+passed all five jobs for PR head
+`664991612aa9105f78dd3cb8aae2f5533595364a`, targeting `main`:
+
+- Linux AMD64 and macOS ARM64: complete configured jobs passed.
+- Windows AMD64 Clang and MSVC: each passed 41 strict C stubs and 2664/2664 native
+  tests, as well as the configured Core/Component/misc/WASI and operational checks.
+- Linux ASan/UBSan/LSan: 124/124 passed with explicit leak detection and the system
+  allocator. The normal run had no leak report. Both ASan positive controls
+  detected their intentional faults; the independent LSan control detected its
+  intentional 17-byte leak.
+
+[ci.json](ci.json) records exact job identities, the sanitizer binary hash and
+merge provenance. The artifact's source revision
+`816fa634d08eabf14ec834448d597f4990968326` is GitHub's test merge commit with
+`a694f4aa` and the accepted PR head as its parents. The source tree was clean.
+See [normal sanitizer output](ci-linux-sanitizer-tests.log) and the
+[expected LSan control failure](ci-linux-lsan-positive-control.log).
+The latter is a separate deliberate-leak process, not a failure of the runtime
+test closure. Instrumentation exclusions remain the ones listed above.
+
+ISS-625 is closed on this implementation evidence. A subsequent acceptance-only
+documentation commit does not change the tested runtime sources; its own CI is
+checked separately before final handoff.
