@@ -22,20 +22,6 @@ pub fn validate_module(
     ignore(i)
   }
 
-  // Validate type indices in function types (parameters and results)
-  for subtype in mod.types {
-    for vt in collect_value_types_from_subtype(subtype) {
-      validate_value_type(vt, num_types, stack_switching~)
-    }
-  }
-
-  // Validate forward type references are only within rec groups
-  for type_idx, subtype in mod.types {
-    for vt in collect_value_types_from_subtype(subtype) {
-      validate_type_forward_refs(vt, type_idx, mod.type_rec_groups)
-    }
-  }
-
   // Validate subtype declarations: supertypes must not be final, must have matching kind,
   // and must satisfy structural subtyping rules
   let canonical = @types.compute_canonical_type_indices(
@@ -83,17 +69,17 @@ pub fn validate_module(
 
   // Validate type indices in global types
   for global in mod.globals {
-    validate_value_type(global.type_.value_type, num_types, stack_switching~)
+    validate_value_type(global.type_.value_type, ctx.types, stack_switching~)
   }
 
   // Validate type indices in table element types
   for table in mod.tables {
-    validate_value_type(table.type_.elem_type, num_types, stack_switching~)
+    validate_value_type(table.type_.elem_type, ctx.types, stack_switching~)
   }
 
   // Validate type indices in elem segment types
   for elem in mod.elems {
-    validate_value_type(elem.type_, num_types, stack_switching~)
+    validate_value_type(elem.type_, ctx.types, stack_switching~)
   }
 
   // Multi-memory support is now enabled
@@ -155,7 +141,7 @@ pub fn validate_module(
     // Validate offset expression for active elem segments
     if elem.mode is Active(table_idx, offset_expr) {
       // Check table index is valid
-      if table_idx >= ctx.tables.length() {
+      if table_idx < 0 || table_idx >= ctx.tables.length() {
         raise InvalidTableIndex(table_idx)
       }
       // Check element type matches table element type
@@ -205,19 +191,19 @@ pub fn validate_module(
     // Check that export references a valid entity
     match exp.desc {
       Func(idx) =>
-        if idx >= ctx.funcs.length() {
+        if idx < 0 || idx >= ctx.funcs.length() {
           raise UnknownExport("unknown function \{idx}")
         }
       Global(idx) =>
-        if idx >= ctx.globals.length() {
+        if idx < 0 || idx >= ctx.globals.length() {
           raise UnknownExport("unknown global \{idx}")
         }
       Table(idx) =>
-        if idx >= ctx.tables.length() {
+        if idx < 0 || idx >= ctx.tables.length() {
           raise UnknownExport("unknown table \{idx}")
         }
       Memory(idx) =>
-        if idx >= ctx.mems.length() {
+        if idx < 0 || idx >= ctx.mems.length() {
           raise UnknownExport("unknown memory \{idx}")
         }
       Tag(idx) => {
@@ -234,7 +220,7 @@ pub fn validate_module(
   // Validate start function if present
   if mod.start is Some(start_idx) {
     // Check that the function index is valid
-    if start_idx >= ctx.funcs.length() {
+    if start_idx < 0 || start_idx >= ctx.funcs.length() {
       raise InvalidFunctionIndex(start_idx)
     }
     // Get the function type
@@ -390,7 +376,7 @@ pub fn validate_module_with_context(
     // Validate offset expression for active elem segments
     if elem.mode is Active(table_idx, offset_expr) {
       // Check table index is valid
-      if table_idx >= ctx.tables.length() {
+      if table_idx < 0 || table_idx >= ctx.tables.length() {
         raise WithContext(
           ValidationErrorContext::from_error(InvalidTableIndex(table_idx)),
         )
@@ -442,7 +428,7 @@ pub fn validate_module_with_context(
   // Validate start function if present
   if mod.start is Some(start_idx) {
     // Check that the function index is valid
-    if start_idx >= ctx.funcs.length() {
+    if start_idx < 0 || start_idx >= ctx.funcs.length() {
       raise WithContext(
         ValidationErrorContext::from_error(InvalidFunctionIndex(start_idx)),
       )

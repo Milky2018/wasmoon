@@ -7,7 +7,7 @@ async test "completed async host results remain GC roots until consumed" {
   }
   store.set_module_types([@types.SubType::simple(Struct(struct_type))])
   let reference = store.alloc_struct(0, [I32(42)])
-  let caller = @runtime.Caller(store, ModuleInstance())
+  let caller = @runtime.Caller(store, store.host_exports([]))
   let returned_reference = @runtime.with_async_host_call_driver(async fn(
     driver,
   ) {
@@ -42,7 +42,7 @@ async test "cancelled async host results cannot retain GC roots" {
   }
   store.set_module_types([@types.SubType::simple(Struct(struct_type))])
   let reference = store.alloc_struct(0, [I32(42)])
-  let caller = @runtime.Caller(store, ModuleInstance())
+  let caller = @runtime.Caller(store, store.host_exports([]))
   @runtime.with_async_host_call_driver(async fn(driver) {
     let host : @runtime.AsyncHostFunction = async fn(_caller, _args) {
       @async.protect_from_cancel(async fn() { @async.sleep(0) })

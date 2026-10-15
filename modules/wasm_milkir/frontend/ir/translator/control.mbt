@@ -9,8 +9,8 @@
 fn Translator::translate_if(
   self : Translator,
   block_type : @types.BlockType,
-  then_body : Array[@types.Instruction],
-  else_body : Array[@types.Instruction],
+  then_body : ArrayView[@types.Instruction],
+  else_body : ArrayView[@types.Instruction],
 ) -> Unit {
   // Save the unreachable state from outer context
   let outer_is_unreachable = self.is_unreachable
@@ -594,7 +594,7 @@ fn Translator::translate_br_on_cast_fail(
 /// Uses critical edge splitting to pass block arguments properly
 fn Translator::translate_br_table(
   self : Translator,
-  labels : Array[Int32],
+  labels : ArrayView[Int32],
   default_ : Int32,
 ) -> Unit {
   let index = self.pop()
@@ -743,7 +743,7 @@ fn Translator::translate_call(self : Translator, func_idx : Int32) -> Unit {
     }
     args.rev_in_place()
     // Get result types
-    let result_types : Array[Type] = func_type.results.map(type_from_wasm)
+    let result_types : Array[Type] = func_type.results[:].map(type_from_wasm)
     // Remap function index for cross-module calls
     let global_func_idx = self.remap_func_idx(func_idx)
     // Emit call with multi-value support
@@ -783,7 +783,7 @@ fn Translator::translate_call_indirect(
     }
     args.rev_in_place()
     // Get result types
-    let result_types : Array[Type] = func_type.results.map(type_from_wasm)
+    let result_types : Array[Type] = func_type.results[:].map(type_from_wasm)
     // Emit call_indirect with original type_idx
     // is_subtype_cached handles canonical indices for structural equivalence
     let results = @wasm_milkir.call_indirect_multi(
@@ -835,7 +835,7 @@ fn Translator::translate_call_ref(self : Translator, type_idx : Int32) -> Unit {
     args.rev_in_place()
 
     // Get result types
-    let result_types : Array[Type] = func_type.results.map(type_from_wasm)
+    let result_types : Array[Type] = func_type.results[:].map(type_from_wasm)
 
     // Emit call_ref instruction
     let results = @wasm_milkir.call_ref_multi(

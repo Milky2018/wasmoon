@@ -7,24 +7,7 @@ pub fn alloc_host_core_func(
   native_eligible~ : Bool = true,
 ) -> CoreFuncRef raise @runtime.RuntimeError {
   let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0)
-  let instance : @runtime.ModuleInstance = {
-    types: [@types.SubType::from_func(core_type)],
-    type_rec_groups: [],
-    canonical_type_indices: [0],
-    store_idx: -1,
-    func_addrs: [func_addr],
-    func_type_indices: [0],
-    table_addrs: [],
-    mem_addrs: [],
-    global_addrs: [],
-    tag_addrs: [],
-    exports: [],
-    elem_values: [],
-    elem_segments: [],
-    data_segments: [],
-    dropped_elems: [],
-    dropped_datas: [],
-  }
+  let instance = store.host_call_instance(func_addr)
   {
     instance,
     func_idx: 0,
@@ -167,7 +150,7 @@ pub fn call_core_func_outcome(
           }
           if inst_name == "" {
             raise CanonCallError(
-              "\{trap_msg} (core store_idx=\{core_func.instance.store_idx} func_idx=\{core_func.func_idx})\{dbg}",
+              "\{trap_msg} (core store_idx=\{core_func.instance.store_index()} func_idx=\{core_func.func_idx})\{dbg}",
             )
           } else {
             raise CanonCallError(

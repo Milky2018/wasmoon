@@ -88,7 +88,7 @@ fn ExecContext::resume_guest_body(
   self : ExecContext,
   initial_body : @runtime.GuestContinuationBody,
   initial_input : @runtime.GuestContinuationInput,
-  handlers : Array[@types.ResumeHandler],
+  handlers : ArrayView[@types.ResumeHandler],
 ) -> Unit raise {
   let mut body = initial_body
   let mut input = initial_input
@@ -173,7 +173,7 @@ fn ExecContext::exec_guest_continuation(
       let async_host_driver = self.async_host_driver
       let cooperative = self.cooperative
       let function = store.get_func_inst(address)
-      let arity = store.func_types[address].results.length()
+      let arity = store.get_func_type(address).results.length()
       let body = @runtime.GuestContinuationBody::new(
         fn(input) raise {
           let args = match input {

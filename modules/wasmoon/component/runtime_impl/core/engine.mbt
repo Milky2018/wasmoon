@@ -224,6 +224,9 @@ pub fn CoreExecutionEngine::register_instance(
   module_ : @types.Module,
   instance : @runtime.ModuleInstance,
 ) -> Unit raise ComponentRuntimeError {
+  store.check_instance(instance) catch {
+    error => raise ComponentRuntimeError::from_core(error)
+  }
   (self.register_instance_fn)(store, module_, instance)
 }
 
@@ -236,6 +239,9 @@ pub fn CoreExecutionEngine::invoke(
   args : Array[@types.Value],
   request : CoreExecutionRequest,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
+  store.check_instance(instance) catch {
+    error => raise ComponentRuntimeError::from_core(error)
+  }
   (self.invoke_fn)(store, instance, func_idx, args, request)
 }
 

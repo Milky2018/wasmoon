@@ -261,7 +261,7 @@ fn run_wasi_jit_quiet(
   mod_ : @types.Module,
   func_name : String,
   func_idx : Int32,
-  result_types : Array[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   preopens : Array[(String, String)],
   stdin_data : Bytes?,
   readonly_preopens~ : Array[(String, String)] = [],

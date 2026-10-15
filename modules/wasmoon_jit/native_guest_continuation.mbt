@@ -29,8 +29,8 @@ pub fn NativeJITContext::define_continuation_type(
   self : NativeJITContext,
   index : Int32,
   trampoline : Int64,
-  params : Array[@types.ValueType],
-  results : Array[@types.ValueType],
+  params : ArrayView[@types.ValueType],
+  results : ArrayView[@types.ValueType],
 ) -> Bool {
   let roots : Array[Int32] = []
   for ty in params {

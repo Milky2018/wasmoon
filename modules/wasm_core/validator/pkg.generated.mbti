@@ -51,6 +51,14 @@ pub fn ValidationError::to_string(Self) -> String
 pub impl Show for ValidationError
 
 // Types and methods
+pub struct ValidatedModule {
+  // private fields
+}
+pub fn ValidatedModule::function(Self, Int) -> (@types.FunctionCode, Int, @types.FuncType)?
+pub fn ValidatedModule::new(@types.Module, bulk_memory? : Bool, stack_switching? : Bool) -> Self raise ValidationError
+pub fn ValidatedModule::snapshot(Self) -> @types.Module
+pub fn ValidatedModule::start(Self) -> Int?
+
 pub(all) struct ValidationErrorContext {
   error_msg : String
   func_idx : Int?

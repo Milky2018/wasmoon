@@ -24,42 +24,42 @@ pub struct Store {
   priv mut gc_in_collect : Bool
   priv mut gc_trace : GcTrace?
   priv mut interpreter_reentry_depth : Int32
-  funcs : Array[FuncInst]
-  func_types : Array[@types.FuncType] // Type of each function
-  func_type_indices : Array[Int32] // Original type index for structural comparison
-  tables : Array[Table]
-  mems : Array[Memory]
-  globals : Array[GlobalInstance]
-  tags : Array[@types.FuncType] // Tag types (params only, no results)
-  tag_type_indices : Array[Int32] // Original type index for each tag
-  tag_owners : Array[FuncOwner] // Owner module for each tag
-  mut exns : Map[Int32, ExnInstance] // Live exception snapshots, with non-reused handles
-  heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
+  priv funcs : Array[StoredFunction]
+  priv func_types : Array[@types.FuncType] // Type of each function
+  priv func_type_indices : Array[Int32] // Original type index for structural comparison
+  priv tables : Array[Table]
+  priv mems : Array[Memory]
+  priv globals : Array[GlobalInstance]
+  priv tags : Array[@types.FuncType] // Tag types (params only, no results)
+  priv tag_type_indices : Array[Int32] // Original type index for each tag
+  priv tag_owners : Array[FuncOwner] // Owner module for each tag
+  priv mut exns : Map[Int32, ExnInstance] // Live exception snapshots, with non-reused handles
+  priv heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
   // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
-  mut c_heap : @wasmoon_jit.CHeap?
+  priv mut c_heap : @wasmoon_jit.CHeap?
   // Module types for CHeap type lookups (needed to decode Int64 to Value)
-  mut module_types : Array[@types.SubType]
+  priv mut module_types : Array[@types.SubType]
   // Module rec groups for canonical type index computation
-  mut module_rec_groups : Array[Int32]
+  priv mut module_rec_groups : Array[Int32]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
-  mut wrapped_externs : Map[Int32, @types.Value]
+  priv mut wrapped_externs : Map[Int32, @types.Value]
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
-  func_owners : Array[FuncOwner]
+  priv func_owners : Array[FuncOwner]
   // Registered module instances by their address/index
-  instances : Array[ModuleInstance]
+  priv instances : Array[ModuleInstance]
   // JIT tables corresponding to runtime tables (for cross-module sharing)
   // jit_tables[i] is the JIT table for tables[i], or None if not using JIT
-  jit_tables : Array[@wasmoon_jit.JITTable?]
+  priv jit_tables : Array[@wasmoon_jit.JITTable?]
   // Store-only destruction capabilities corresponding to jit_tables.
   priv jit_table_owners : Array[@wasmoon_jit.JITTableOwner?]
   // Current WASI module's memory address (for interpreter mode WASI callbacks)
   // WASI callbacks use this to access the correct memory instead of hardcoded index 0
-  mut wasi_mem_addr : Int32?
+  priv mut wasi_mem_addr : Int32?
   // Opaque WASI context handle (for WAST runner to store WASI context)
   // This avoids circular dependency between runtime and wasi packages
-  mut wasi_ctx_handle : Int32
+  priv mut wasi_ctx_handle : Int32
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
@@ -310,6 +310,9 @@ pub fn Store::close(self : Store) -> Unit {
     self.native_types.native_registry = None
   }
   self.native_types.heap_types.clear()
+  for function in self.funcs {
+    function.lifetime.active.val = false
+  }
   self.funcs.clear()
   self.funcs.shrink_to_fit()
   self.func_types.clear()
@@ -320,6 +323,9 @@ pub fn Store::close(self : Store) -> Unit {
   self.func_owners.shrink_to_fit()
   self.instances.clear()
   self.instances.shrink_to_fit()
+  for table in self.tables {
+    table.close()
+  }
   self.tables.clear()
   self.tables.shrink_to_fit()
   for memory in self.mems {
@@ -476,8 +482,8 @@ pub fn Store::set_module_types(
     self.module_types = old_types
     self.module_rec_groups = old_rec_groups
   })
-  self.module_types = types
-  self.module_rec_groups = rec_groups
+  self.module_types = types.copy()
+  self.module_rec_groups = rec_groups.copy()
 }
 
 ///|
@@ -521,6 +527,7 @@ pub fn Store::unwrap_extern(
   self : Store,
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
+  self.ensure_open()
   match value {
     ExternRef(idx) =>
       if idx < 0 {
@@ -548,7 +555,9 @@ fn Store::alloc_func_inst(
   owner : FuncOwner,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
-  let idx = self.push_allocation(self.funcs, func)
+  let lifetime = FunctionIdentity::{ active: Ref(true), }
+  self.on_instantiation_rollback(fn() { lifetime.active.val = false })
+  let idx = self.push_allocation(self.funcs, { callable: func, lifetime, })
   self.push_allocation(self.func_types, func_type) |> ignore
   self.push_allocation(self.func_type_indices, type_idx) |> ignore
   self.push_allocation(self.func_owners, owner) |> ignore
@@ -559,11 +568,14 @@ fn Store::alloc_func_inst(
 /// Allocate a WASM function with its type
 pub fn Store::alloc_func(
   self : Store,
-  func : @types.FunctionCode,
-  func_type~ : @types.FuncType = { params: [], results: [], },
-  type_idx~ : Int32 = -1,
+  module_ : @validator.ValidatedModule,
+  index : Int32,
 ) -> Int32 raise RuntimeError {
-  self.alloc_func_inst(WasmFunc(func), func_type, type_idx, Unowned)
+  self.ensure_open()
+  guard module_.function(index) is Some((code, type_idx, signature)) else {
+    raise UndefinedElement
+  }
+  self.alloc_func_inst(WasmFunc(code), signature, type_idx, Unowned)
 }
 
 ///|
@@ -638,6 +650,12 @@ pub fn Store::alloc_table(
   use_jit~ : Bool = true,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
+  let binding = resource_binding(table.binding, self.closed)
+  for index, existing in self.tables {
+    if physical_equal(existing, table) {
+      return index
+    }
+  }
   let owner = if use_jit {
     match
       @wasmoon_jit.JITTableOwner::try_alloc(
@@ -651,13 +669,16 @@ pub fn Store::alloc_table(
     None
   }
   let idx = self.tables.length()
+  table.binding = Some(binding)
   self.on_instantiation_rollback(fn() {
+    binding.active.val = false
     if idx < self.jit_table_owners.length() {
       match self.jit_table_owners[idx] {
         Some(owner) => owner.close()
         None => ()
       }
     }
+    table.close()
     self.tables.truncate(idx)
     self.tables.shrink_to_fit()
     self.jit_tables.truncate(idx)
@@ -675,9 +696,17 @@ pub fn Store::alloc_table(
 ///|
 pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int32 raise RuntimeError {
   self.ensure_open()
+  let binding = resource_binding(mem.binding, self.closed)
+  for index, existing in self.mems {
+    if physical_equal(existing, mem) {
+      return index
+    }
+  }
   mem.require_desc_ptr() |> ignore
   let idx = self.mems.length()
+  mem.binding = Some(binding)
   self.on_instantiation_rollback(fn() {
+    binding.active.val = false
     if idx < self.mems.length() {
       self.mems[idx].close()
     }
@@ -694,6 +723,17 @@ pub fn Store::alloc_global(
   global : GlobalInstance,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
+  let binding = resource_binding(global.binding, self.closed)
+  guard value_fits_kind(global.value, global.type_.value_type) else {
+    raise TypeMismatch
+  }
+  for index, existing in self.globals {
+    if physical_equal(existing, global) {
+      return index
+    }
+  }
+  global.binding = Some(binding)
+  self.on_instantiation_rollback(fn() { binding.active.val = false })
   self.push_allocation(self.globals, global)
 }
 
@@ -716,6 +756,7 @@ pub fn Store::get_tag_type(
   self : Store,
   idx : Int32,
 ) -> @types.FuncType raise RuntimeError {
+  self.ensure_open()
   if idx < 0 || idx >= self.tags.length() {
     raise UndefinedElement
   }
@@ -772,8 +813,9 @@ pub fn Store::get_exn(
   self : Store,
   idx : Int32,
 ) -> ExnInstance raise RuntimeError {
+  self.ensure_open()
   match self.exns.get(idx) {
-    Some(exception) => exception
+    Some(exception) => { ..exception, values: exception.values.copy(), }
     None => raise UndefinedElement
   }
 }
@@ -832,6 +874,9 @@ pub fn Store::alloc_struct(
   instance? : ModuleInstance,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
+  if instance is Some(instance) {
+    self.check_instance(instance)
+  }
   let reference = match self.c_heap {
     Some(heap) => {
       let encoded = fields.map(value => self.encode_heap_value(value))
@@ -856,6 +901,9 @@ pub fn Store::alloc_array(
   instance? : ModuleInstance,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
+  if instance is Some(instance) {
+    self.check_instance(instance)
+  }
   let reference = match self.c_heap {
     Some(heap) => {
       let encoded = elements.map(value => self.encode_heap_value(value))
@@ -878,6 +926,7 @@ pub fn Store::struct_get(
   struct_idx : Int32,
   field_idx : Int32,
 ) -> @types.Value raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(struct_idx)
@@ -915,6 +964,7 @@ pub fn Store::array_len(
   self : Store,
   array_idx : Int32,
 ) -> Int32 raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) => heap.array_len(array_idx)
     None => self.heap.array_len(array_idx)
@@ -928,6 +978,7 @@ pub fn Store::array_get(
   array_idx : Int32,
   elem_idx : Int32,
 ) -> @types.Value raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(array_idx)
@@ -1017,6 +1068,7 @@ pub fn Store::get_gc_type_idx(
   self : Store,
   idx : Int32,
 ) -> Int32 raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) => heap.get_type_idx(idx)
     None => self.heap.get_type_idx(idx)
@@ -1037,10 +1089,11 @@ pub fn Store::get_func_inst(
   self : Store,
   idx : Int32,
 ) -> FuncInst raise RuntimeError {
+  self.ensure_open()
   if idx < 0 || idx >= self.funcs.length() {
     raise UndefinedElement
   }
-  self.funcs[idx]
+  self.funcs[idx].callable
 }
 
 ///|
@@ -1048,10 +1101,13 @@ pub fn Store::get_func_inst(
 ///
 /// This is useful for embedding/JIT callbacks that must not raise.
 pub fn Store::get_func_inst_opt(self : Store, idx : Int32) -> FuncInst? {
+  if self.closed.val {
+    return None
+  }
   if idx < 0 || idx >= self.funcs.length() {
     None
   } else {
-    Some(self.funcs[idx])
+    Some(self.funcs[idx].callable)
   }
 }
 
@@ -1061,6 +1117,7 @@ pub fn Store::get_func_type(
   self : Store,
   idx : Int32,
 ) -> @types.FuncType raise RuntimeError {
+  self.ensure_open()
   if idx < 0 || idx >= self.func_types.length() {
     raise UndefinedElement
   }
@@ -1072,6 +1129,9 @@ pub fn Store::get_func_type(
 ///
 /// This is useful for embedding/JIT callbacks that must not raise.
 pub fn Store::get_func_type_opt(self : Store, idx : Int32) -> @types.FuncType? {
+  if self.closed.val {
+    return None
+  }
   if idx < 0 || idx >= self.func_types.length() {
     None
   } else {
@@ -1141,6 +1201,7 @@ pub fn Store::get_func(
 
 ///|
 pub fn Store::get_table(self : Store, idx : Int32) -> Table raise RuntimeError {
+  self.ensure_open()
   if idx < 0 || idx >= self.tables.length() {
     raise UndefinedElement
   }
@@ -1161,6 +1222,7 @@ pub fn Store::get_jit_table(
 
 ///|
 pub fn Store::get_mem(self : Store, idx : Int32) -> Memory raise RuntimeError {
+  self.ensure_open()
   if idx < 0 || idx >= self.mems.length() {
     raise UndefinedElement
   }
@@ -1220,6 +1282,7 @@ pub fn Store::get_global(
   self : Store,
   idx : Int32,
 ) -> GlobalInstance raise RuntimeError {
+  self.ensure_open()
   if idx < 0 || idx >= self.globals.length() {
     raise UndefinedElement
   }
@@ -1238,6 +1301,11 @@ pub fn Store::register_instance(
   let instance_idx = self.instances.length()
   let owned_funcs : Array[Int32] = []
   let owned_tags : Array[Int32] = []
+  if instance.owner is Some(_) {
+    self.check_instance(instance)
+    return instance.store_idx
+  }
+  instance.owner = Some(self.closed)
   instance.store_idx = instance_idx
   self.instances.push(instance)
   // Set ownership only for unowned WASM functions

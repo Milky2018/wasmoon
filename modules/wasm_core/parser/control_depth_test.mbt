@@ -36,5 +36,5 @@ test "binary parser: deeply nested blocks use bounded host stack" {
     }
     instructions = inner
   }
-  inspect(@debug.to_string(instructions), content="[Nop]")
+  inspect(@debug.to_string(instructions[:].to_owned()), content="[Nop]")
 }

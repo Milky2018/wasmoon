@@ -41,8 +41,13 @@ test "execute function with local variables" {
     I32Mul, // tmp * 2
   ]
   let mod = {
-    ..@types.Module::simple([I32, I32], [I32], body, "double_sum"),
-    codes: [{ locals: [I32], body, }],
+    ..@types.Module::simple(
+      [I32, I32],
+      [I32],
+      ReadOnlyArray::from_array(body),
+      "double_sum",
+    ),
+    codes: [{ locals: [I32], body: ReadOnlyArray::from_array(body), }],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "double_sum", [
@@ -532,8 +537,8 @@ test "control flow: loop with br" {
     LocalGet(1),
   ]
   let mod = {
-    ..@types.Module::simple([], [I32], body, "test"),
-    codes: [{ locals: [I32, I32], body, }],
+    ..@types.Module::simple([], [I32], ReadOnlyArray::from_array(body), "test"),
+    codes: [{ locals: [I32, I32], body: ReadOnlyArray::from_array(body), }],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -823,7 +828,7 @@ test "host function: simple call" {
   }
 
   // Set up imports
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("env", "double", host_addr)
 
   // Instantiate with the existing store
@@ -900,7 +905,7 @@ test "host function: caller can access exported memory" {
     tags: [],
     func_names: Map([]),
   }
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("env", "write_mem0", host_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
   let results = call_exported_func(store, instance, "main", [])
@@ -958,7 +963,7 @@ test "memory import: shared memory between modules" {
   }
 
   // Set up imports
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_memory("env", "memory", mem_addr)
 
   // Instantiate with the existing store
@@ -1011,7 +1016,7 @@ test "memory import: write to imported memory" {
     tags: [],
     func_names: Map([]),
   }
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_memory("env", "mem", mem_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
   call_exported_func(store, instance, "write", []) |> ignore
@@ -1050,7 +1055,7 @@ test "import validation: missing import raises error" {
   }
 
   // Empty imports - should fail
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
 
   // Should raise UnknownImport
   inspect(

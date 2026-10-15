@@ -27,7 +27,7 @@ priv struct ValidationContext {
   data_count : Int32 // number of data segments
   locals : Array[@types.ValueType] // current function's locals
   labels : Array[LabelInfo] // label stack for control flow
-  returns : Array[@types.ValueType] // current function's return types
+  returns : ReadOnlyArray[@types.ValueType] // current function's return types
   local_init : Array[Bool] // tracks which locals have been initialized (for non-nullable refs)
   declared_funcs : @hashset.HashSet[Int32] // functions declared in elem/global (for ref.func validation)
   subtyping_ctx : @types.SubtypingContext // for subtype checking
@@ -138,7 +138,7 @@ fn collect_value_types_from_subtype(
 ///|
 /// Collect function indices referenced by ref.func in an instruction sequence
 fn collect_declared_funcs(
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
   declared : @hashset.HashSet[Int32],
 ) -> Unit {
   for instr in instrs {
@@ -154,6 +154,45 @@ fn ValidationContext::ValidationContext(
   bulk_memory~ : Bool = true,
   stack_switching~ : Bool = false,
 ) -> ValidationContext raise ValidationError {
+  if mod.funcs.length() != mod.codes.length() {
+    raise TypeMismatch("function and code section lengths differ")
+  }
+  if !mod.type_rec_groups.is_empty() &&
+    mod.type_rec_groups.length() != mod.types.length() {
+    raise TypeMismatch("recursive group map length differs from type section")
+  }
+  // A recursive group occupies one contiguous range in the type index space.
+  let groups : @hashset.HashSet[Int32] = HashSet([])
+  let mut previous_group = -1
+  for group in mod.type_rec_groups {
+    guard group >= 0 else { raise TypeMismatch("negative recursive group ID") }
+    if group != previous_group {
+      guard !groups.contains(group) else {
+        raise TypeMismatch("non-contiguous recursive group")
+      }
+      groups.add(group)
+      previous_group = group
+    }
+  }
+  for index, subtype in mod.types {
+    guard subtype.supertypes.length() <= 1 else {
+      raise TypeMismatch("multiple supertypes are not supported by Core Wasm")
+    }
+    for parent in subtype.supertypes {
+      guard parent >= 0 && parent < index else {
+        raise TypeMismatch("supertypes must be defined before subtypes")
+      }
+    }
+    for type_ in collect_value_types_from_subtype(subtype) {
+      validate_value_type(type_, mod.types, stack_switching~)
+      validate_type_forward_refs(type_, index, mod.type_rec_groups)
+    }
+  }
+  for data in mod.datas {
+    guard data.memory_idx >= -1 else {
+      raise InvalidMemoryIndex(data.memory_idx)
+    }
+  }
   // Collect function types (imports + defined functions)
   let funcs : Array[Int32] = []
   for imp in mod.imports {
@@ -163,6 +202,14 @@ fn ValidationContext::ValidationContext(
   }
   for type_idx in mod.funcs {
     funcs.push(type_idx)
+  }
+  for index in funcs {
+    guard index >= 0 && index < mod.types.length() else {
+      raise InvalidTypeIndex(index)
+    }
+    guard mod.types[index].composite is Func(_) else {
+      raise TypeMismatch("function declaration must name a function type")
+    }
   }
   // Collect tables
   let tables : Array[@types.TableType] = []
@@ -193,6 +240,22 @@ fn ValidationContext::ValidationContext(
   }
   for global in mod.globals {
     globals.push(global.type_)
+  }
+  for global in globals {
+    validate_value_type(global.value_type, mod.types, stack_switching~)
+  }
+  for table in tables {
+    validate_value_type(table.elem_type, mod.types, stack_switching~)
+    guard (match table.elem_type {
+      I32 | I64 | F32 | F64 | V128 => false
+      _ => true
+    }) else {
+      raise TypeMismatch("table element type must be a reference")
+    }
+    validate_table_limits(table.limits, is_table64=table.is_table64)
+  }
+  for element in mod.elems {
+    validate_value_type(element.type_, mod.types, stack_switching~)
   }
   // Collect elem segment types
   let elems : Array[@types.ValueType] = []
@@ -307,7 +370,7 @@ fn is_ref_type(ty : @types.ValueType) -> Bool {
 /// Validate that any type indices in a value type are valid
 fn validate_value_type(
   ty : @types.ValueType,
-  num_types : Int32,
+  types : ArrayView[@types.SubType],
   stack_switching~ : Bool = false,
 ) -> Unit raise ValidationError {
   if ty.is_continuation_ref() && !stack_switching {
@@ -320,12 +383,24 @@ fn validate_value_type(
     | RefNullContTyped(i) => Some(i)
     // Ref(Null)Struct/Array(-1) encode abstract heap types (struct/array),
     // which do not refer to a concrete type index.
-    RefStruct(i) | RefNullStruct(i) => if i < 0 { None } else { Some(i) }
-    RefArray(i) | RefNullArray(i) => if i < 0 { None } else { Some(i) }
+    RefStruct(i) | RefNullStruct(i) => if i == -1 { None } else { Some(i) }
+    RefArray(i) | RefNullArray(i) => if i == -1 { None } else { Some(i) }
     _ => None
   }
-  if idx is Some(i) && (i < 0 || i >= num_types) {
+  if idx is Some(i) && (i < 0 || i >= types.length()) {
     raise InvalidTypeIndex(i)
+  }
+  if idx is Some(i) {
+    let matches = match (ty, types[i].composite) {
+      (RefFuncTyped(_) | RefNullFuncTyped(_), Func(_)) => true
+      (RefContTyped(_) | RefNullContTyped(_), Cont(_)) => true
+      (RefStruct(_) | RefNullStruct(_), Struct(_)) => true
+      (RefArray(_) | RefNullArray(_), Array(_)) => true
+      _ => false
+    }
+    if !matches {
+      raise TypeMismatch("reference type does not match the indexed type kind")
+    }
   }
 }
 
@@ -344,8 +419,8 @@ fn validate_type_forward_refs(
     | RefContTyped(i)
     | RefNullContTyped(i) => Some(i)
     // Ref(Null)Struct/Array(-1) are abstract heap types, not forward refs.
-    RefStruct(i) | RefNullStruct(i) => if i < 0 { None } else { Some(i) }
-    RefArray(i) | RefNullArray(i) => if i < 0 { None } else { Some(i) }
+    RefStruct(i) | RefNullStruct(i) => if i == -1 { None } else { Some(i) }
+    RefArray(i) | RefNullArray(i) => if i == -1 { None } else { Some(i) }
     _ => None
   }
   guard ref_idx is Some(ref_idx) else { return }

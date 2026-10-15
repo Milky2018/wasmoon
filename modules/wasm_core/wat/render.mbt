@@ -65,7 +65,7 @@ fn validate_memory_type(memory : @types.MemoryType) -> Unit raise WatPrintError 
 
 ///|
 fn validate_instructions(
-  instructions : Array[@types.Instruction],
+  instructions : ArrayView[@types.Instruction],
 ) -> Unit raise WatPrintError {
   for instruction in instructions {
     match instruction {
@@ -616,7 +616,7 @@ fn storage_type_to_wat(st : @types.StorageType) -> String {
 }
 
 ///|
-fn instrs_to_wat_inline(instrs : Array[@types.Instruction]) -> String {
+fn instrs_to_wat_inline(instrs : ArrayView[@types.Instruction]) -> String {
   let parts : Array[String] = []
   for instr in instrs {
     parts.push(instr_to_wat(instr))
@@ -790,7 +790,10 @@ fn format_v128_bytes(bytes : Bytes) -> String {
 }
 
 ///|
-fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int32) -> String {
+fn instrs_to_wat(
+  instrs : ArrayView[@types.Instruction],
+  indent : Int32,
+) -> String {
   let sb = StringBuilder::StringBuilder()
   let indent_str = "  ".repeat(indent)
   for instr in instrs {
@@ -1575,7 +1578,7 @@ fn instr_to_wat(instr : @types.Instruction) -> String {
 }
 
 ///|
-fn resume_handlers_to_wat(handlers : Array[@types.ResumeHandler]) -> String {
+fn resume_handlers_to_wat(handlers : ArrayView[@types.ResumeHandler]) -> String {
   handlers
   .map(handler => {
     match handler {

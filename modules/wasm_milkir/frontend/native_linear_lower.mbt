@@ -579,7 +579,7 @@ fn push_direct_call(
   for arg in wasm_args {
     args.push(arg)
   }
-  let result_types = func_type.results.map(wasm_value_type_to_milkir)
+  let result_types = func_type.results[:].map(wasm_value_type_to_milkir)
   if result_types.length() == 0 {
     emit_void_op(builder, Call(Pointer(func_type.params.length() + 1, 0)), args)
   } else {
@@ -1674,7 +1674,7 @@ fn push_simple_expr_instr(
 fn push_simple_expr_body_value(
   builder : @milkir.FunctionBuilder,
   locals : Array[@milkir.Value],
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
   expected_ty : @milkir.Type,
 ) -> @milkir.Value? {
   let expr_stack : Array[@milkir.Value] = []
@@ -1696,8 +1696,8 @@ fn push_simple_if_select(
   stack : Array[@milkir.Value],
   locals : Array[@milkir.Value],
   block_type : @types.BlockType,
-  then_body : Array[@types.Instruction],
-  else_body : Array[@types.Instruction],
+  then_body : ArrayView[@types.Instruction],
+  else_body : ArrayView[@types.Instruction],
 ) -> Bool {
   guard single_block_result_type(block_type) is Some(result_ty) else {
     return false
@@ -1990,7 +1990,7 @@ fn finish_linear_return(
 ///|
 fn append_linear_block_body(
   out : Array[@types.Instruction],
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
 ) -> Bool {
   for instr in body {
     match instr {
@@ -2020,7 +2020,7 @@ fn append_linear_block_body(
 ///|
 fn append_linear_exit_block_body(
   out : Array[@types.Instruction],
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
 ) -> Bool {
   for i, instr in body {
     match instr {
@@ -2066,13 +2066,13 @@ fn append_linear_exit_block_body(
 }
 
 ///|
-fn body_is_nop_only(body : Array[@types.Instruction]) -> Bool {
+fn body_is_nop_only(body : ArrayView[@types.Instruction]) -> Bool {
   body.all(instr => instr is Nop)
 }
 
 ///|
 fn flatten_linear_blocks(
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
 ) -> Array[@types.Instruction]? {
   let out : Array[@types.Instruction] = []
   if append_linear_block_body(out, body) {

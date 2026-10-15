@@ -47,17 +47,17 @@ pub fn atomic_wait_begin(@jit_ffi.MemoryDescriptor, Int64, Int, Int64, Int64) ->
 
 pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature], context_shape? : @layout.ContextShape) -> @artifact.CompatibilityManifest
 
-pub fn build_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> Array[Int] raise HostcallImportTrampolineError
+pub fn build_entry_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], NativeTarget) -> Array[Int] raise HostcallImportTrampolineError
 
 pub fn build_host_artifact_manifest(module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature], context_shape? : @layout.ContextShape) -> @artifact.CompatibilityManifest raise JitPipelineError
 
-pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, NativeTarget) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
+pub fn build_hostcall_import_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], Int, NativeTarget) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
-pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.ValueType]) -> Bool
+pub fn can_use_reusable_entry_trampoline(ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Bool
 
 pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
-pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
+pub fn collect_gc_root_args(Array[Int64], ArrayView[@types.ValueType]) -> Array[Int64]
 
 pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int], context_shape? : @layout.ContextShape) -> @artifact.FunctionCode raise JitPipelineError
 
@@ -67,7 +67,7 @@ pub fn context_shape(@types.Module) -> @layout.ContextShape
 
 pub fn cooperative_idle() -> Unit
 
-pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
+pub fn count_entry_trampoline_slots(ArrayView[@types.ValueType]) -> Int
 
 pub fn decode_externref(Int64) -> Int?
 
@@ -93,9 +93,9 @@ pub fn encode_i31(Int) -> Int64
 
 pub fn encode_null_ref() -> Int64
 
-pub fn entry_trampoline_signature_hash(Array[@types.ValueType], Array[@types.ValueType]) -> Int64
+pub fn entry_trampoline_signature_hash(ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Int64
 
-pub fn entry_trampoline_type_codes(Array[@types.ValueType]) -> Array[Int]
+pub fn entry_trampoline_type_codes(ArrayView[@types.ValueType]) -> Array[Int]
 
 pub fn entry_trampoline_value_type_code(@types.ValueType) -> Int
 
@@ -191,9 +191,9 @@ pub fn native_value_slot_read(Int64, Int) -> Int64
 
 pub fn native_value_slot_write(Int64, Int, Int64) -> Unit
 
-pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> JitIntegrationPlan raise JitPipelineError
+pub fn plan_entry_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
+pub fn plan_hostcall_import_trampoline_layout(ArrayView[@types.ValueType], ArrayView[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
@@ -604,7 +604,7 @@ pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
 pub fn NativeJITContext::clear_segments(Self) -> Unit
 #alias(alloc_wasm_stack, deprecated)
 pub fn NativeJITContext::configure_native_fiber_stack_size(Self, Int64) -> Bool
-pub fn NativeJITContext::define_continuation_type(Self, Int, Int64, Array[@types.ValueType], Array[@types.ValueType]) -> Bool
+pub fn NativeJITContext::define_continuation_type(Self, Int, Int64, ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Bool
 pub fn NativeJITContext::func_count(Self) -> Int
 pub fn NativeJITContext::func_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::gc_begin_frame(Self, Int64) -> Unit raise NativeSetupError

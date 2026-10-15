@@ -4,6 +4,9 @@ pub(all) suberror RuntimeError {
   StackUnderflow
   StackOverflow
   TypeMismatch
+  InvalidModule(String)
+  ForeignStore
+  InvalidHandle
   StoreClosed
   MemoryClosed
   InvalidMemoryType(String)
@@ -62,6 +65,9 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     StackUnderflow => Some(StackUnderflow)
     StackOverflow => Some(StackOverflow)
     TypeMismatch => Some(TypeMismatch)
+    InvalidModule(detail) => Some(InvalidModule(detail))
+    ForeignStore => Some(ForeignStore)
+    InvalidHandle => Some(InvalidHandle)
     StoreClosed => Some(StoreClosed)
     MemoryClosed => Some(MemoryClosed)
     InvalidMemoryType(_) as error => Some(error)
@@ -112,6 +118,9 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     StackUnderflow => "stack underflow"
     StackOverflow => "stack overflow"
     TypeMismatch => "type mismatch"
+    InvalidModule(detail) => "invalid module: \{detail}"
+    ForeignStore => "instance belongs to another store"
+    InvalidHandle => "invalid or stale runtime handle"
     StoreClosed => "store is closed"
     MemoryClosed => "memory is closed"
     InvalidMemoryType(detail) => "invalid memory type: \{detail}"

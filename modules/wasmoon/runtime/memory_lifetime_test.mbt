@@ -11,12 +11,18 @@ test "Store close invalidates retained Memory aliases" {
 }
 
 ///|
-test "Memory aliases shared by Stores are released exactly once" {
+test "Memory aliases retain one Store owner and are released exactly once" {
   let first = @runtime.Store::Store()
   let second = @runtime.Store::Store()
   let memory = @runtime.Memory::Memory(1, None)
   first.alloc_mem(memory) |> ignore
-  second.alloc_mem(memory) |> ignore
+  first.alloc_mem(memory) |> ignore
+  try second.alloc_mem(memory) catch {
+    ForeignStore => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("ordinary Memory must not acquire a second Store owner")
+  }
   first.close()
   second.close()
   memory.write_i32(0, 42)

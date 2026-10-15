@@ -210,8 +210,8 @@ fn JITContext::clear_cancellation_callback(self : JITContext) -> Unit {
 ///|
 fn JITContext::entry_trampoline(
   self : JITContext,
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Int64 raise JITTrap {
   let sig_hash = @wasmoon_jit.entry_trampoline_signature_hash(
     param_types, result_types,
@@ -248,9 +248,9 @@ fn JITContext::call_multi_return(
   self : JITContext,
   func_ptr : Int64,
   args : Array[Int64],
-  param_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
   results : Array[Int64],
-  result_types : Array[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Unit raise JITTrap {
   let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
   let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
@@ -312,8 +312,8 @@ fn JITContext::start_continuation(
   self : JITContext,
   func_ptr : Int64,
   args : Array[Int64],
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> JITContextContinuation raise JITTrap {
   let num_arg_slots = args.length()
   let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)

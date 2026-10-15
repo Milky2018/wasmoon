@@ -31,8 +31,14 @@ test "build a module with one exported function" {
   let mod_ = @wasm_core.simple_module([I32], [I64], [I64Const(7L)], "answer")
   inspect(mod_.funcs.length(), content="1")
   inspect(mod_.exports.length(), content="1")
-  debug_inspect(mod_.func_type_at(0).unwrap().params, content="[I32]")
-  debug_inspect(mod_.func_type_at(0).unwrap().results, content="[I64]")
+  debug_inspect(
+    mod_.func_type_at(0).unwrap().params[:].to_owned(),
+    content="[I32]",
+  )
+  debug_inspect(
+    mod_.func_type_at(0).unwrap().results[:].to_owned(),
+    content="[I64]",
+  )
 }
 ```
 
@@ -74,6 +80,9 @@ test "construct function subtypes for a module type section" {
   mod_.types.push(binary)
   inspect(mod_.is_func_type(0), content="true")
   inspect(mod_.is_func_type(1), content="true")
-  debug_inspect(mod_.func_type_at(1).unwrap().params, content="[I32, I32]")
+  debug_inspect(
+    mod_.func_type_at(1).unwrap().params[:].to_owned(),
+    content="[I32, I32]",
+  )
 }
 ```

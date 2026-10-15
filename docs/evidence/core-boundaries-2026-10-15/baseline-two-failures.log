@@ -1,0 +1,23 @@
+libtool: warning: 'msvc_guest_bridges.o' has no symbols
+libtool: warning: 'fiber_register_probe_x86_64.o' has no symbols
+libtool: warning: 'trampoline_call_x86_64.o' has no symbols
+libtool: warning: 'windows_context_x86_64.o' has no symbols
+libtool: warning: 'msvc_guest_bridges.o' has no symbols
+libtool: warning: 'stack_switch_x86_64.o' has no symbols
+[Milky2018/wasmoon] test testsuite/core_boundary_test.mbt:2 ("Core boundary: instance rejects a different Store") failed
+expect test failed at /Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/testsuite/core_boundary_test.mbt:17:3-17:63
+Diff: (- expected, + actual)
+----
+-instance belongs to another store
++accepted
+----
+
+[Milky2018/wasmoon] test testsuite/core_boundary_test.mbt:21 ("Core boundary: instantiation owns its function code") failed
+expect test failed at /Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/testsuite/core_boundary_test.mbt:28:3-31:4
+Diff: (- expected, + actual)
+----
+-[I32(11)]
++[I32(22)]
+----
+
+Total tests: 2, passed: 0, failed: 2.

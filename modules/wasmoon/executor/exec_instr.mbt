@@ -193,7 +193,7 @@ fn ExecContext::exec_instr(
 
       // Check if segment has been dropped or is declarative
       // Declarative elem segments behave as if they have been dropped
-      let is_dropped = self.instance.dropped_elems[elem_idx]
+      let is_dropped = self.instance.element_dropped(elem_idx)
       let is_declarative = elem_segment.mode is Declarative
       // Check bounds
       let elem_len = if is_dropped || is_declarative {
@@ -213,7 +213,7 @@ fn ExecContext::exec_instr(
 
       // Copy elements from elem segment to table
       for i in 0..<n {
-        let value = self.instance.elem_values[elem_idx][s + i]
+        let value = self.instance.element_value(elem_idx, s + i)
         table.set(d.to_int() + i, value)
       }
     }
@@ -859,7 +859,7 @@ fn ExecContext::exec_instr(
 fn ExecContext::finish_try_table(
   self : ExecContext,
   result : ExecBlockResult,
-  handlers : Array[@types.CatchHandler],
+  handlers : ArrayView[@types.CatchHandler],
   stack_height : Int32,
 ) -> Unit raise {
   self.pop_label()
@@ -930,13 +930,17 @@ pub fn ExecContext::call_func(
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise {
   errdefer self.discard_captured_execution()
+  let func_type = check_call_arguments(
+    self.store,
+    self.instance,
+    func_idx,
+    args,
+  )
   // Get the store address from instance
   let store_addr = self.instance.func_addrs[func_idx]
   let func_inst = self.store.get_func_inst(store_addr)
 
   // Get the function type to determine return arity
-  let type_idx = self.instance.func_type_indices[func_idx]
-  let func_type = self.instance.validated_func_type_at(type_idx)
   let return_arity = func_type.results.length()
 
   // Use the same context-switching logic as exec_call

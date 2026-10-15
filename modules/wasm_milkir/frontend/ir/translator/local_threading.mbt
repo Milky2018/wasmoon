@@ -24,7 +24,7 @@
 /// Mark every local index written anywhere in `body`, nested regions included.
 /// `local.set` and `local.tee` are the only instructions that write a local.
 fn mark_written_locals(
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
   written : Array[Bool],
 ) -> Unit {
   for instr in body {
@@ -50,7 +50,7 @@ fn mark_written_locals(
 /// instruction sequence the region covers -- two of them for an `if`.
 fn Translator::region_local_params(
   self : Translator,
-  bodies : Array[Array[@types.Instruction]],
+  bodies : Array[ArrayView[@types.Instruction]],
 ) -> Array[Int32] {
   let written = Array::make(self.locals.length(), false)
   for body in bodies {

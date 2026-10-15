@@ -36,8 +36,8 @@ test "native function references retain closed owner code until Store retirement
     caller_code.call_core_func(store, caller, 0, []),
     content="[I32(22)]",
   )
-  inspect(store.globals[owner.global_addrs[0]].get(), content="I32(22)")
-  store.globals[owner.global_addrs[0]].set(I32(100))
+  inspect(store.get_global(owner.global_addrs[0]).get(), content="I32(22)")
+  store.get_global(owner.global_addrs[0]).set(I32(100))
   debug_inspect(
     caller_code.call_core_func(store, caller, 0, []),
     content="[I32(111)]",

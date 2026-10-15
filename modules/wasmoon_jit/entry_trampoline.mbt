@@ -48,8 +48,8 @@ fn entry_trampoline_type(
 
 ///|
 fn build_entry_trampoline_milkir(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> @milkir.Function raise JitPipelineError {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("entry_trampoline")
   let vmctx = builder.add_param(Ptr)
@@ -147,7 +147,7 @@ pub fn entry_trampoline_value_type_code(ty : @types.ValueType) -> Int32 {
 
 ///|
 pub fn entry_trampoline_type_codes(
-  types : Array[@types.ValueType],
+  types : ArrayView[@types.ValueType],
 ) -> Array[Int32] {
   let codes : Array[Int32] = []
   for ty in types {
@@ -157,7 +157,9 @@ pub fn entry_trampoline_type_codes(
 }
 
 ///|
-pub fn count_entry_trampoline_slots(types : Array[@types.ValueType]) -> Int32 {
+pub fn count_entry_trampoline_slots(
+  types : ArrayView[@types.ValueType],
+) -> Int32 {
   let mut slots = 0
   for ty in types {
     if ty is V128 {
@@ -171,8 +173,8 @@ pub fn count_entry_trampoline_slots(types : Array[@types.ValueType]) -> Int32 {
 
 ///|
 pub fn entry_trampoline_signature_hash(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Int64 {
   let mut hash = 0xcbf29ce484222325L
   let fnv_prime = 0x100000001b3L
@@ -195,8 +197,8 @@ pub fn entry_trampoline_signature_hash(
 
 ///|
 pub fn can_use_reusable_entry_trampoline(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Bool {
   // Keep the MilkIR-planned entry trampoline conservative. The direct
   // machine-code entry trampoline covers the broader production ABI; this path
@@ -210,8 +212,8 @@ pub fn can_use_reusable_entry_trampoline(
 
 ///|
 pub fn plan_entry_trampoline_for_target(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   target : NativeTarget,
 ) -> JitIntegrationPlan raise JitPipelineError {
   plan_milkir_integration_for_target(

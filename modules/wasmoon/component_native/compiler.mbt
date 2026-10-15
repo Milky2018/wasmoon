@@ -4,7 +4,7 @@ fn remap_component_index(index : Int32, aliases : Map[Int32, Int32]) -> Int32 {
 }
 
 ///|
-fn component_alias_map(addresses : Array[Int32]) -> Map[Int32, Int32] {
+fn component_alias_map(addresses : ArrayView[Int32]) -> Map[Int32, Int32] {
   let first_by_address : Map[Int32, Int32] = Map([])
   let aliases : Map[Int32, Int32] = Map([])
   for index, address in addresses {
@@ -18,10 +18,10 @@ fn component_alias_map(addresses : Array[Int32]) -> Map[Int32, Int32] {
 
 ///|
 fn rewrite_component_instr_indices(
-  instructions : Array[@types.Instruction],
+  instructions : ArrayView[@types.Instruction],
   global_aliases : Map[Int32, Int32],
   tag_aliases : Map[Int32, Int32],
-) -> Array[@types.Instruction] {
+) -> ReadOnlyArray[@types.Instruction] {
   let rewritten : Array[@types.Instruction] = []
   for instruction in instructions {
     match instruction {
@@ -54,7 +54,7 @@ fn rewrite_component_instr_indices(
         rewritten.push(
           TryTable(
             block_type,
-            rewritten_handlers,
+            ReadOnlyArray::from_array(rewritten_handlers),
             rewrite_component_instr_indices(body, global_aliases, tag_aliases),
           ),
         )
@@ -88,7 +88,7 @@ fn rewrite_component_instr_indices(
       _ => rewritten.push(instruction)
     }
   }
-  rewritten
+  ReadOnlyArray::from_array(rewritten)
 }
 
 ///|
@@ -329,6 +329,9 @@ fn load_component_jit_context(
   opt_level : Int32,
   classify_suspension : (@runtime.RuntimeError) -> Bool,
 ) -> (@core_jit.JITModuleContext, @core_jit.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
+  store.check_instance(instance) catch {
+    error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+  }
   let lowered_module = rewrite_component_alias_indices(module_, instance)
   let actual_memory_max = if instance.mem_addrs.length() > 0 {
     let memory = store.get_mem(instance.mem_addrs[0]) catch {
@@ -384,7 +387,9 @@ fn load_component_jit_context(
   errdefer jit_module.close()
   let funcrefs = @core_jit.register_owned_instance_funcrefs_for_jit(
     jit_module, instance, store,
-  )
+  ) catch {
+    error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+  }
   errdefer funcrefs.release()
   jit_module.configure_native_fiber_stack_size(16L * 1024L * 1024L) |> ignore
   let _ = @core_jit.init_jit_memories_from_store(instance, store, jit_module) catch {
@@ -427,11 +432,11 @@ fn load_component_jit_context(
   let context = @core_jit.JITModuleContext(
     jit_module,
     globals_pointer,
-    instance.global_addrs.copy(),
-    instance.table_addrs.copy(),
-    instance.func_addrs.copy(),
-    instance.func_type_indices.copy(),
-    instance.canonical_type_indices.copy(),
+    instance.global_addrs[:].to_owned(),
+    instance.table_addrs[:].to_owned(),
+    instance.func_addrs[:].to_owned(),
+    instance.func_type_indices[:].to_owned(),
+    instance.canonical_type_indices[:].to_owned(),
     lowered_module.types.copy(),
     lowered_module.type_rec_groups.copy(),
     true,
@@ -449,6 +454,8 @@ fn load_component_jit_context(
       )
     },
     classify_suspension~,
-  )
+  ) catch {
+    error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+  }
   (context, funcrefs)
 }

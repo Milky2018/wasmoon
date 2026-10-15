@@ -101,7 +101,7 @@ test "guest continuation interpreter: parked locals root GC values until complet
     let instance = @executor.instantiate_module_with_imports(
       store,
       module_,
-      Imports(),
+      Imports(store),
     )
     let rooted = store.alloc_struct(0, [I32(42)])
     @executor.call_exported_func(store, instance, "start", [StructRef(rooted)])

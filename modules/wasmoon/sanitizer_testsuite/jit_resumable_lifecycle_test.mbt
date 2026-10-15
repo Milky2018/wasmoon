@@ -36,7 +36,7 @@ fn build_resumable_lifecycle_context(
     globals_ptr,
     [],
     [],
-    instance.func_addrs.copy(),
+    instance.func_addrs[:].to_owned(),
     func_type_indices,
     canonical_type_indices,
     module_types,
@@ -77,7 +77,7 @@ test "resumable JIT leaves GC state clear when execution admission is sealed" {
 }
 
 ///|
-test "resumable JIT releases execution admission when GC setup fails" {
+test "resumable JIT rejects inconsistent function metadata before admission" {
   let mod_ = @wat.parse("(module (func (export \"run\")))")
   let linker = @runtime.Linker::Linker()
   let store = linker.get_store()
@@ -105,14 +105,7 @@ test "resumable JIT releases execution admission when GC setup fails" {
       state.live_count(),
       context.jit_module.gc_environment_is_clear(),
     ),
-    content=(
-      #|(
-      #|  "GcSetupFailed(\"FuncTypeIndicesLengthMismatch(func_type_indices_len=0, num_funcs=1)\")",
-      #|  0,
-      #|  0,
-      #|  true,
-      #|)
-    ),
+    content="(\"HostInvocation(InvalidHandle)\", 0, 0, true)",
   )
   store.close()
   context.close()

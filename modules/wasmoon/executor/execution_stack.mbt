@@ -2,7 +2,7 @@
 priv enum ExecutionKind {
   BlockControl
   LoopControl
-  TryControl(Array[@types.CatchHandler])
+  TryControl(ReadOnlyArray[@types.CatchHandler])
   FunctionControl(@runtime.ModuleInstance, Int32)
 } derive(Debug)
 
@@ -10,7 +10,7 @@ priv enum ExecutionKind {
 /// A structured instruction sequence and its exit action. Function entries
 /// share the same stack, so call, branch, exception and resume all unwind here.
 priv struct ExecutionFrame {
-  body : Array[@types.Instruction]
+  body : ArrayView[@types.Instruction]
   mut ip : Int32
   kind : ExecutionKind
   arity : Int32
@@ -28,7 +28,7 @@ fn ExecContext::check_control_capacity(self : ExecContext) -> Unit raise {
 fn ExecContext::enter_control(
   self : ExecContext,
   bt : @types.BlockType,
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
   kind : ExecutionKind,
 ) -> Unit raise {
   self.check_control_capacity()
@@ -135,7 +135,7 @@ fn ExecContext::finish_execution_frame(
               let owner = self.store.get_func_owner(address).unwrap_or(caller)
               self.enter_function(owner, code, args, arity)
             }
-            HostFunc(host) => self.invoke_host_func(host, caller, args)
+            HostFunc(host) => self.invoke_host_func(address, host, caller, args)
             AsyncHostFunc(host) =>
               self.invoke_async_host_func(address, host, caller, args)
           }

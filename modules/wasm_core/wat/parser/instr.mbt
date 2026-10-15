@@ -51,7 +51,7 @@ fn Parser::parse_folded_instructions(
         let body = self.parse_instructions()
         self.pop_label()
         self.expect_rparen() // close block in folded form (no 'end' keyword)
-        return [Block(bt, body)]
+        return [Block(bt, ReadOnlyArray::from_array(body))]
       }
       // Special handling for "loop" in folded form
       if kw == "loop" {
@@ -69,7 +69,7 @@ fn Parser::parse_folded_instructions(
         let body = self.parse_instructions()
         self.pop_label()
         self.expect_rparen() // close loop in folded form (no 'end' keyword)
-        return [Loop(bt, body)]
+        return [Loop(bt, ReadOnlyArray::from_array(body))]
       }
       // Special handling for "if" in folded form
       if kw == "if" {
@@ -140,7 +140,13 @@ fn Parser::parse_folded_instructions(
         }
         self.pop_label()
         self.expect_rparen() // close if
-        result.push(If(bt, then_body, else_body))
+        result.push(
+          If(
+            bt,
+            ReadOnlyArray::from_array(then_body),
+            ReadOnlyArray::from_array(else_body),
+          ),
+        )
         return result
       }
       // Special handling for "try_table" in folded form
@@ -199,7 +205,13 @@ fn Parser::parse_folded_instructions(
         let body = self.parse_instructions()
         self.pop_label()
         self.expect_rparen() // close try_table in folded form (no 'end' keyword)
-        return [TryTable(bt, handlers, body)]
+        return [
+          TryTable(
+            bt,
+            ReadOnlyArray::from_array(handlers),
+            ReadOnlyArray::from_array(body),
+          ),
+        ]
       }
       let instr = self.parse_plain_instruction(kw)
       // For control instructions, we've already handled them
@@ -278,7 +290,7 @@ fn Parser::parse_plain_instruction(
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
       self.skip_optional_id()
-      Block(bt, body)
+      Block(bt, ReadOnlyArray::from_array(body))
     }
     "loop" => {
       // Optional label name
@@ -296,7 +308,7 @@ fn Parser::parse_plain_instruction(
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
       self.skip_optional_id()
-      Loop(bt, body)
+      Loop(bt, ReadOnlyArray::from_array(body))
     }
     "if" => {
       // Optional label name
@@ -324,7 +336,11 @@ fn Parser::parse_plain_instruction(
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
       self.skip_optional_id()
-      If(bt, then_body, else_body)
+      If(
+        bt,
+        ReadOnlyArray::from_array(then_body),
+        ReadOnlyArray::from_array(else_body),
+      )
     }
     "br" => Br(self.parse_label_idx())
     "br_if" => BrIf(self.parse_label_idx())
@@ -340,7 +356,7 @@ fn Parser::parse_plain_instruction(
         raise ParseError("br_table requires at least one label", self.loc())
       }
       let default_label = labels.pop().unwrap()
-      BrTable(labels, default_label)
+      BrTable(ReadOnlyArray::from_array(labels), default_label)
     }
     "return" => Return
     // Exception handling instructions
@@ -349,15 +365,22 @@ fn Parser::parse_plain_instruction(
     "cont.new" => ContNew(self.parse_type_idx())
     "cont.bind" => ContBind(self.parse_type_idx(), self.parse_type_idx())
     "suspend" => Suspend(self.parse_tag_idx())
-    "resume" => Resume(self.parse_type_idx(), self.parse_resume_handlers())
+    "resume" =>
+      Resume(
+        self.parse_type_idx(),
+        ReadOnlyArray::from_array(self.parse_resume_handlers()),
+      )
     "resume_throw" =>
       ResumeThrow(
         self.parse_type_idx(),
         self.parse_tag_idx(),
-        self.parse_resume_handlers(),
+        ReadOnlyArray::from_array(self.parse_resume_handlers()),
       )
     "resume_throw_ref" =>
-      ResumeThrowRef(self.parse_type_idx(), self.parse_resume_handlers())
+      ResumeThrowRef(
+        self.parse_type_idx(),
+        ReadOnlyArray::from_array(self.parse_resume_handlers()),
+      )
     "switch" => Switch(self.parse_type_idx(), self.parse_tag_idx())
     "try_table" => {
       // try_table has a block type followed by catch handlers and a body
@@ -406,7 +429,11 @@ fn Parser::parse_plain_instruction(
       let body = self.parse_instructions()
       self.expect_keyword("end")
       self.skip_optional_id()
-      TryTable(bt, handlers, body)
+      TryTable(
+        bt,
+        ReadOnlyArray::from_array(handlers),
+        ReadOnlyArray::from_array(body),
+      )
     }
     "call" => Call(self.parse_func_idx())
     "call_ref" => {
@@ -617,7 +644,7 @@ fn Parser::parse_plain_instruction(
       if result_types.is_empty() {
         Select
       } else {
-        SelectTyped(result_types)
+        SelectTyped(ReadOnlyArray::from_array(result_types))
       }
     }
 
@@ -1142,13 +1169,16 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
   }
   if params.length() > 0 {
     // Has parameters - use InlineType
-    InlineType(params, results)
+    InlineType(
+      ReadOnlyArray::from_array(params),
+      ReadOnlyArray::from_array(results),
+    )
   } else if results.length() == 0 {
     Empty
   } else if results.length() == 1 {
     Value(results[0])
   } else {
-    MultiValue(results)
+    MultiValue(ReadOnlyArray::from_array(results))
   }
 }
 
@@ -1157,8 +1187,8 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
 /// or create a new one if not found.
 fn Parser::find_or_create_func_type(
   self : Parser,
-  params : Array[@types.ValueType],
-  results : Array[@types.ValueType],
+  params : ArrayView[@types.ValueType],
+  results : ArrayView[@types.ValueType],
 ) -> Int32 {
   // Search existing types for a match
   for i, subtype in self.types {
@@ -1188,7 +1218,10 @@ fn Parser::find_or_create_func_type(
     }
   }
   // No match found, create a new type
-  let new_type = @types.FuncType::{ params, results, }
+  let new_type = @types.FuncType::{
+    params: ReadOnlyArray::from_array(params),
+    results: ReadOnlyArray::from_array(results),
+  }
   let idx = self.types.length()
   self.types.push(@types.SubType::from_func(new_type))
   // Implicit type is its own rec group

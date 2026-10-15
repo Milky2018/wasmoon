@@ -4,7 +4,7 @@
 /// Supports extended-const proposal: allows i32/i64 arithmetic (add, sub, mul)
 fn validate_const_expr(
   globals : ArrayView[@types.GlobalType],
-  expr : Array[@types.Instruction],
+  expr : ArrayView[@types.Instruction],
   expected_type : @types.ValueType,
   funcs~ : Array[Int32] = [],
   types~ : Array[@types.SubType] = [],
@@ -35,13 +35,18 @@ fn validate_const_expr(
       I64Const(_) => type_stack.push(I64)
       F32Const(_) => type_stack.push(F32)
       F64Const(_) => type_stack.push(F64)
-      V128Const(_) => type_stack.push(V128)
+      V128Const(bytes) => {
+        if bytes.length() != 16 {
+          raise TypeMismatch("v128 constant requires 16 bytes")
+        }
+        type_stack.push(V128)
+      }
       RefNull(t) => {
-        validate_value_type(t, types.length(), stack_switching~)
+        validate_value_type(t, types, stack_switching~)
         type_stack.push(t)
       }
       RefFunc(func_idx) => {
-        if func_idx >= funcs.length() {
+        if func_idx < 0 || func_idx >= funcs.length() {
           raise InvalidFunctionIndex(func_idx)
         }
         // ref.func produces (ref $t) where $t is the function's type index
@@ -49,7 +54,7 @@ fn validate_const_expr(
         type_stack.push(RefFuncTyped(type_idx))
       }
       GlobalGet(idx) => {
-        if idx >= globals.length() {
+        if idx < 0 || idx >= globals.length() {
           raise InvalidGlobalIndex(idx)
         }
         let global = globals[idx]
@@ -99,6 +104,11 @@ fn validate_const_expr(
         type_stack.push(RefArray(type_idx))
       }
       ArrayNewFixed(type_idx, len) => {
+        if len < 0 {
+          raise TypeMismatch(
+            "array.new_fixed element count exceeds supported stack size",
+          )
+        }
         let array_type = get_const_expr_array_type(types, type_idx)
         let elem_ty = const_expr_storage_type_to_value_type(
           array_type.element.storage_type,

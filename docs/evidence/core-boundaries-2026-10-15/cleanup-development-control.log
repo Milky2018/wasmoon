@@ -1,0 +1,4 @@
+[Milky2018/wasmoon_jit] test native_handles_test.mbt:1184 ("managed cleanup releases its callback capture after close or RC finalization") failed: native_handles_test.mbt:1189:5-1189:80@Milky2018/wasmoon_jit FAILED: `0 != 1`
+diff:
+-0 +1
+Total tests: 48, passed: 47, failed: 1.

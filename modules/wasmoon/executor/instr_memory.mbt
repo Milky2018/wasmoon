@@ -494,7 +494,7 @@ fn ExecContext::exec_memory_misc(
       let n64 = n.to_int64() & 0xFFFF_FFFFL
       let s64 = s.to_int64() & 0xFFFF_FFFFL
       // Determine data segment length (0 if dropped)
-      let data_len = if self.instance.dropped_datas[data_idx] {
+      let data_len = if self.instance.data_dropped(data_idx) {
         0
       } else {
         self.instance.data_segments[data_idx].init.length()
@@ -519,7 +519,7 @@ fn ExecContext::exec_memory_misc(
       }
     }
     // data.drop: mark data segment as dropped
-    DataDrop(data_idx) => self.instance.dropped_datas[data_idx] = true
+    DataDrop(data_idx) => self.instance.drop_data(data_idx)
     // memory.copy: copy within memory (possibly across memories)
     MemoryCopy(dst_memidx, src_memidx) => {
       // Get memories first to determine types

@@ -62,7 +62,7 @@ fn Translator::translate_cont_suspend(self : Translator, tag : Int32) -> Unit {
     value in @wasm_milkir.continuation_operation(
       self.builder,
       ContSuspend(tag),
-      signature.results.map(type_from_wasm),
+      signature.results[:].map(type_from_wasm),
       arguments,
     ) {
     self.push(value)
@@ -85,12 +85,12 @@ fn Translator::translate_cont_resume(
   self : Translator,
   index : Int32,
   exception_tag : Int32,
-  handlers : Array[@types.ResumeHandler],
+  handlers : ArrayView[@types.ResumeHandler],
 ) -> Unit {
   let reference = self.pop()
   let signature = self.continuation_signature(index)
   let input_types : Array[@types.ValueType] = if exception_tag == -2 {
-    signature.params
+    signature.params[:].to_owned()
   } else if exception_tag == -1 {
     [ExnRef]
   } else {
@@ -191,7 +191,7 @@ fn Translator::translate_cont_switch(
     value in @wasm_milkir.continuation_operation(
       self.builder,
       ContSwitch(index, tag),
-      self.continuation_signature(other_index).params.map(type_from_wasm),
+      self.continuation_signature(other_index).params[:].map(type_from_wasm),
       operands,
     ) {
     self.push(value)

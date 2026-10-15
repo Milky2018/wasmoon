@@ -348,8 +348,9 @@ fn split_core_import_name(name : String) -> (String, String) {
 fn core_imports_from_args(
   args : Array[CoreInstantiateArg],
   state : BuildState,
+  store : @runtime.Store,
 ) -> @runtime.Imports raise ComponentRuntimeError {
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   for arg in args {
     match resolve_sortidx(arg.sortidx, state) {
       CoreInstance(inst) => {

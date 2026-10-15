@@ -12,26 +12,37 @@ pub fn empty_module() -> @types.Module {
 
 ///|
 pub fn simple_module(
-  params : Array[@types.ValueType],
-  results : Array[@types.ValueType],
-  body : Array[@types.Instruction],
+  params : ArrayView[@types.ValueType],
+  results : ArrayView[@types.ValueType],
+  body : ArrayView[@types.Instruction],
   export_name : String,
 ) -> @types.Module {
-  @types.Module::simple(params, results, body, export_name)
+  @types.Module::simple(
+    ReadOnlyArray::from_array(params),
+    ReadOnlyArray::from_array(results),
+    ReadOnlyArray::from_array(body),
+    export_name,
+  )
 }
 
 ///|
 pub fn func_type(
-  params : Array[@types.ValueType],
-  results : Array[@types.ValueType],
+  params : ArrayView[@types.ValueType],
+  results : ArrayView[@types.ValueType],
 ) -> @types.FuncType {
-  { params, results, }
+  {
+    params: ReadOnlyArray::from_array(params),
+    results: ReadOnlyArray::from_array(results),
+  }
 }
 
 ///|
 pub fn func_subtype(
-  params : Array[@types.ValueType],
-  results : Array[@types.ValueType],
+  params : ArrayView[@types.ValueType],
+  results : ArrayView[@types.ValueType],
 ) -> @types.SubType {
-  @types.SubType::func(params, results)
+  @types.SubType::func(
+    ReadOnlyArray::from_array(params),
+    ReadOnlyArray::from_array(results),
+  )
 }

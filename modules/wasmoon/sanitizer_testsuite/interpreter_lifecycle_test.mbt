@@ -18,7 +18,7 @@ fn parked_host_call(
     func_type={ params: [], results: [I32], },
     type_idx=0,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("host", "leaf", host)
   let module_ = @wat.parse(
     (

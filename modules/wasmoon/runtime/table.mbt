@@ -1,6 +1,7 @@
 ///|
 /// WebAssembly table for function references
 struct Table {
+  mut binding : ResourceBinding?
   elem_type : @types.ValueType
   elements : Array[@types.Value]
   mut size : Int32
@@ -45,12 +46,21 @@ fn Table::allocate(
   if min > 0x7FFF_FFFFL {
     raise TableAllocationFailed
   }
+  guard (match elem_type {
+    I32 | I64 | F32 | F64 | V128 => false
+    _ => true
+  }) else {
+    raise InvalidTableType("element type must be a reference type")
+  }
+  if min != 0L && !value_fits_kind(init_value, elem_type) {
+    raise TypeMismatch
+  }
   let size = min.to_int()
   let elements : Array[@types.Value] = []
   for _ in 0..<size {
     elements.push(init_value)
   }
-  { elem_type, elements, size, max, is_table64, }
+  { elem_type, elements, size, max, is_table64, binding: None, }
 }
 
 ///|
@@ -79,6 +89,7 @@ fn Table::check_range(
   offset : Int64,
   count : Int64,
 ) -> Unit raise RuntimeError {
+  check_resource_open(self.binding)
   let size = self.size.to_int64()
   if offset < 0L || count < 0L || count > size || offset > size - count {
     raise OutOfBoundsTableAccess
@@ -110,6 +121,7 @@ pub fn Table::set_at(
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   self.check_range(idx, 1L)
+  guard value_fits_kind(value, self.elem_type) else { raise TypeMismatch }
   self.elements[idx.to_int()] = value
 }
 
@@ -133,6 +145,8 @@ pub fn Table::grow64(
   delta : Int64,
   init : @types.Value,
 ) -> Int64 raise RuntimeError {
+  check_resource_open(self.binding)
+  guard value_fits_kind(init, self.elem_type) else { raise TypeMismatch }
   let old_size = self.size.to_uint64()
   let new_size = old_size + delta.reinterpret_as_uint64()
   if new_size < old_size {
@@ -178,6 +192,7 @@ pub fn Table::fill_at(
   value : @types.Value,
   n : Int64,
 ) -> Unit raise RuntimeError {
+  guard value_fits_kind(value, self.elem_type) else { raise TypeMismatch }
   self.check_range(dest, n)
   let dest = dest.to_int()
   for i in 0..<n.to_int() {
@@ -209,6 +224,7 @@ pub fn Table::copy_from_at(
   src : Int64,
   n : Int64,
 ) -> Unit raise RuntimeError {
+  check_resource_copy(self.binding, src_table.binding)
   self.check_range(dest, n)
   src_table.check_range(src, n)
   let dest = dest.to_int()
@@ -255,4 +271,14 @@ pub fn Table::is_table64(self : Table) -> Bool {
 /// Full declared limits for import compatibility and native growth checks.
 pub fn Table::get_limits64(self : Table) -> (Int64, Int64?) {
   (self.size.to_int64(), self.max)
+}
+
+///|
+fn Table::close(self : Table) -> Unit {
+  if self.binding is Some(binding) {
+    binding.active.val = false
+  }
+  self.elements.clear()
+  self.elements.shrink_to_fit()
+  self.size = 0
 }

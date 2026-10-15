@@ -10,7 +10,11 @@ pub struct Caller {
 } derive(Debug)
 
 ///|
-pub fn Caller::Caller(store : Store, instance : ModuleInstance) -> Caller {
+pub fn Caller::Caller(
+  store : Store,
+  instance : ModuleInstance,
+) -> Caller raise RuntimeError {
+  store.check_instance(instance)
   { store, instance, }
 }
 
@@ -40,6 +44,7 @@ pub fn Caller::get_exported_memory(
   self : Caller,
   name : String,
 ) -> Memory? raise RuntimeError {
+  self.store.check_instance(self.instance)
   match self.find_export_desc(name) {
     Some(Memory(mem_idx)) => {
       if mem_idx < 0 || mem_idx >= self.instance.mem_addrs.length() {
@@ -55,6 +60,9 @@ pub fn Caller::get_exported_memory(
 ///|
 /// Look up an exported function address from the caller instance.
 pub fn Caller::get_exported_func_addr(self : Caller, name : String) -> Int32? {
+  self.store.check_instance(self.instance) catch {
+    _ => return None
+  }
   match self.find_export_desc(name) {
     Some(Func(func_idx)) => {
       if func_idx < 0 || func_idx >= self.instance.func_addrs.length() {

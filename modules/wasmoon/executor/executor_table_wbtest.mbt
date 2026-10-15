@@ -19,8 +19,28 @@ test "table import: call_indirect with imported table" {
   let binary_type : @types.FuncType = { params: [I32, I32], results: [I32], }
 
   // Allocate the functions in store with their type
-  let add_addr = store.alloc_func(add_func, func_type=binary_type)
-  let sub_addr = store.alloc_func(sub_func, func_type=binary_type)
+  let add_addr = store.alloc_func(
+    @validator.ValidatedModule::new(
+      @types.Module::simple(
+        binary_type.params,
+        binary_type.results,
+        add_func.body,
+        "add",
+      ),
+    ),
+    0,
+  )
+  let sub_addr = store.alloc_func(
+    @validator.ValidatedModule::new(
+      @types.Module::simple(
+        binary_type.params,
+        binary_type.results,
+        sub_func.body,
+        "sub",
+      ),
+    ),
+    0,
+  )
 
   // Set function references in table
   shared_table.set(0, FuncRef(add_addr)) catch {
@@ -74,7 +94,7 @@ test "table import: call_indirect with imported table" {
     tags: [],
     func_names: Map([]),
   }
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_table("env", "table", table_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
 
@@ -181,7 +201,7 @@ test "global import: imported global" {
       },
     ],
   }
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_global("env", "g", global_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
   let results = call_exported_func(store, instance, "get", [])

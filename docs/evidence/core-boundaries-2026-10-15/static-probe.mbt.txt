@@ -1,0 +1,12 @@
+///|
+fn invalid_external_mutation(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  validated : @validator.ValidatedModule,
+  code : @types.FunctionCode,
+) -> Unit {
+  store.funcs.clear()
+  instance.func_addrs = []
+  code.body[0] = Unreachable
+  validated.module_.codes.clear()
+}

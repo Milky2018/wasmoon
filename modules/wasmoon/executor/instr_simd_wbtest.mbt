@@ -417,7 +417,7 @@ test "exec_i8x16_shuffle" {
   let mod = @types.Module::simple(
     [],
     [V128],
-    [V128Const(a), V128Const(b), I8x16Shuffle(lanes)],
+    [V128Const(a), V128Const(b), I8x16Shuffle(ReadOnlyArray::from_array(lanes))],
     "shuffle",
   )
   let (store, instance) = instantiate_module(mod)

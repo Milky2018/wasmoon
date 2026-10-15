@@ -1,0 +1,2 @@
+[Milky2018/wasmoon] test sanitizer_testsuite/core_boundary_test.mbt:575 ("Core boundary: rollback cannot retarget a host namespace function handle") failed: sanitizer_testsuite/core_boundary_test.mbt:593:5-593:26@Milky2018/wasmoon FAILED: `false` is not true
+Total tests: 18, passed: 17, failed: 1.

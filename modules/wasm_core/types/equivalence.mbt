@@ -14,7 +14,7 @@ priv struct RecGroupIndex {
 ///|
 fn RecGroupIndex::new(
   type_count : Int32,
-  rec_group_ids : Array[Int32],
+  rec_group_ids : ArrayView[Int32],
 ) -> RecGroupIndex {
   let group_by_type = Array::make(type_count, -1)
   let position_by_type = Array::make(type_count, 0)
@@ -71,8 +71,8 @@ fn RecGroupIndex::info_at(
 /// Context for type equivalence checking.
 /// Now uses SubType to properly handle func, struct, and array types.
 struct TypeEquivalenceContext {
-  types1 : Array[SubType]
-  types2 : Array[SubType]
+  types1 : ArrayView[SubType]
+  types2 : ArrayView[SubType]
   rec_groups1 : RecGroupIndex
   rec_groups2 : RecGroupIndex
   cross_module : Bool
@@ -82,8 +82,8 @@ struct TypeEquivalenceContext {
 ///|
 /// Create a context for same-module type comparison.
 pub fn TypeEquivalenceContext::same_module(
-  types : Array[SubType],
-  type_rec_groups~ : Array[Int32] = [],
+  types : ArrayView[SubType],
+  type_rec_groups~ : ArrayView[Int32] = [],
 ) -> TypeEquivalenceContext {
   let rec_groups = RecGroupIndex::new(types.length(), type_rec_groups)
   {
@@ -99,10 +99,10 @@ pub fn TypeEquivalenceContext::same_module(
 ///|
 /// Create a context for cross-module type comparison.
 pub fn TypeEquivalenceContext::cross_module(
-  types1 : Array[SubType],
-  types2 : Array[SubType],
-  rec_groups1~ : Array[Int32] = [],
-  rec_groups2~ : Array[Int32] = [],
+  types1 : ArrayView[SubType],
+  types2 : ArrayView[SubType],
+  rec_groups1~ : ArrayView[Int32] = [],
+  rec_groups2~ : ArrayView[Int32] = [],
 ) -> TypeEquivalenceContext {
   {
     types1,
@@ -223,8 +223,8 @@ fn TypeEquivalenceContext::types_structurally_equal(
 /// - External references (outside rec group) must refer to equivalent types
 fn TypeEquivalenceContext::supertypes_equal_with_context(
   self : TypeEquivalenceContext,
-  s1 : Array[Int32],
-  s2 : Array[Int32],
+  s1 : ArrayView[Int32],
+  s2 : ArrayView[Int32],
   idx1 : Int32,
   idx2 : Int32,
 ) -> Bool {
@@ -455,7 +455,7 @@ fn TypeEquivalenceContext::type_refs_equal(
 /// Get rec group info (position, size) for a type at given index.
 /// Returns (position_in_group, group_size) tuple.
 pub fn get_rec_group_info(
-  rec_groups : Array[Int32],
+  rec_groups : ArrayView[Int32],
   type_idx : Int32,
 ) -> (Int32, Int32) {
   if type_idx < 0 || rec_groups.length() == 0 || type_idx >= rec_groups.length() {
@@ -481,8 +481,8 @@ pub fn get_rec_group_info(
 /// assigned the same canonical index.
 /// For isorecursive typing, entire rec groups must be pairwise equivalent.
 pub fn compute_canonical_type_indices(
-  types : Array[SubType],
-  type_rec_groups~ : Array[Int32] = [],
+  types : ArrayView[SubType],
+  type_rec_groups~ : ArrayView[Int32] = [],
 ) -> Array[Int32] {
   let canonical : Array[Int32] = Array::make(types.length(), -1)
   let ctx = TypeEquivalenceContext::same_module(types, type_rec_groups~)

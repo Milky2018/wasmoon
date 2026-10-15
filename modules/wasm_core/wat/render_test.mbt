@@ -94,7 +94,7 @@ test "reject malformed instruction immediates" {
   let malformed_shuffle = @types.Module::simple(
     [],
     [],
-    [I8x16Shuffle(FixedArray::make(15, 0))],
+    [I8x16Shuffle(ReadOnlyArray::from_array(FixedArray::make(15, 0)))],
     "malformed-shuffle",
   )
   let shuffle_error : @wat.WatPrintError? = try {

@@ -749,7 +749,8 @@ fn Translator::translate_instruction(
       self.translate_if(block_type, then_body, else_body)
     Br(depth) => self.translate_br(depth)
     BrIf(depth) => self.translate_br_if(depth)
-    BrTable(labels, default_) => self.translate_br_table(labels, default_)
+    BrTable(labels, default_) =>
+      self.translate_br_table(labels[:].to_owned(), default_)
     BrOnNull(depth) => self.translate_br_on_null(depth)
     BrOnNonNull(depth) => self.translate_br_on_non_null(depth)
 

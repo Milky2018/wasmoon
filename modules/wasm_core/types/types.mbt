@@ -109,7 +109,7 @@ pub(all) struct FieldType {
 ///|
 /// Struct type definition
 pub(all) struct StructType {
-  fields : Array[FieldType]
+  fields : ReadOnlyArray[FieldType]
 } derive(Eq, Debug)
 
 ///|
@@ -131,7 +131,7 @@ pub(all) enum CompositeType {
 /// Subtype definition with optional supertype
 pub(all) struct SubType {
   final_ : Bool // true if type cannot be subtyped further
-  supertypes : Array[Int32] // indices of supertypes (0 or 1 for MVP)
+  supertypes : ReadOnlyArray[Int32] // indices of supertypes (0 or 1 for MVP)
   composite : CompositeType
 } derive(Eq, Debug)
 
@@ -150,8 +150,8 @@ pub fn SubType::from_func(func_type : FuncType) -> SubType {
 ///|
 /// Create a subtype from params and results (convenience function)
 pub fn SubType::func(
-  params : Array[ValueType],
-  results : Array[ValueType],
+  params : ReadOnlyArray[ValueType],
+  results : ReadOnlyArray[ValueType],
 ) -> SubType {
   SubType::from_func({ params, results, })
 }
@@ -195,12 +195,12 @@ pub(all) enum Instruction {
   // Control instructions
   Unreachable
   Nop
-  Block(BlockType, Array[Instruction])
-  Loop(BlockType, Array[Instruction])
-  If(BlockType, Array[Instruction], Array[Instruction])
+  Block(BlockType, ReadOnlyArray[Instruction])
+  Loop(BlockType, ReadOnlyArray[Instruction])
+  If(BlockType, ReadOnlyArray[Instruction], ReadOnlyArray[Instruction])
   Br(Int32) // label index
   BrIf(Int32)
-  BrTable(Array[Int32], Int32) // labels, default
+  BrTable(ReadOnlyArray[Int32], Int32) // labels, default
   Return
   Call(Int32) // function index
   CallIndirect(Int32, Int32) // type index, table index
@@ -212,19 +212,19 @@ pub(all) enum Instruction {
   // Exception handling instructions
   Throw(Int32) // tag index - throw exception with tag
   ThrowRef // throw exception from exnref on stack
-  TryTable(BlockType, Array[CatchHandler], Array[Instruction]) // block type, handlers, body
+  TryTable(BlockType, ReadOnlyArray[CatchHandler], ReadOnlyArray[Instruction]) // block type, handlers, body
   ContNew(Int32)
   ContBind(Int32, Int32)
   Suspend(Int32)
-  Resume(Int32, Array[ResumeHandler])
-  ResumeThrow(Int32, Int32, Array[ResumeHandler])
-  ResumeThrowRef(Int32, Array[ResumeHandler])
+  Resume(Int32, ReadOnlyArray[ResumeHandler])
+  ResumeThrow(Int32, Int32, ReadOnlyArray[ResumeHandler])
+  ResumeThrowRef(Int32, ReadOnlyArray[ResumeHandler])
   Switch(Int32, Int32)
 
   // Parametric instructions
   Drop
   Select
-  SelectTyped(Array[ValueType]) // select with explicit result type
+  SelectTyped(ReadOnlyArray[ValueType]) // select with explicit result type
 
   // Variable instructions
   LocalGet(Int32)
@@ -524,7 +524,7 @@ pub(all) enum Instruction {
   V128Store64Lane(Int32, Int32, Int64, Int32)
 
   // SIMD shuffle/swizzle
-  I8x16Shuffle(FixedArray[Int32]) // 16 lane indices
+  I8x16Shuffle(ReadOnlyArray[Int32]) // 16 lane indices
   I8x16Swizzle
 
   // SIMD splat (scalar -> vector)
@@ -800,8 +800,8 @@ pub(all) enum Instruction {
 pub(all) enum BlockType {
   Empty
   Value(ValueType)
-  MultiValue(Array[ValueType]) // Multi-value results only (e.g., result i32 i64)
-  InlineType(Array[ValueType], Array[ValueType]) // (params, results) for blocks with params
+  MultiValue(ReadOnlyArray[ValueType]) // Multi-value results only (e.g., result i32 i64)
+  InlineType(ReadOnlyArray[ValueType], ReadOnlyArray[ValueType]) // (params, results) for blocks with params
   TypeIndex(Int32)
 } derive(Eq, Debug)
 
@@ -827,8 +827,8 @@ pub(all) enum ResumeHandler {
 ///|
 /// Function type
 pub(all) struct FuncType {
-  params : Array[ValueType]
-  results : Array[ValueType]
+  params : ReadOnlyArray[ValueType]
+  results : ReadOnlyArray[ValueType]
 } derive(Eq, Debug)
 
 ///|
@@ -1036,7 +1036,7 @@ pub(all) struct TableType {
 /// Table definition with optional init expression
 pub(all) struct Table {
   type_ : TableType
-  init : Array[Instruction]? // Optional init expression for all elements
+  init : ReadOnlyArray[Instruction]? // Optional init expression for all elements
 } derive(Eq, Debug)
 
 ///|
@@ -1091,22 +1091,22 @@ pub(all) struct Export {
 ///|
 /// Function code
 pub(all) struct FunctionCode {
-  locals : Array[ValueType]
-  body : Array[Instruction]
+  locals : ReadOnlyArray[ValueType]
+  body : ReadOnlyArray[Instruction]
 } derive(Eq, Debug)
 
 ///|
 /// Global definition
 pub(all) struct Global {
   type_ : GlobalType
-  init : Array[Instruction]
+  init : ReadOnlyArray[Instruction]
 } derive(Eq, Debug)
 
 ///|
 /// Element segment mode
 pub(all) enum ElemMode {
   /// Active segment: copied to table at instantiation
-  Active(Int32, Array[Instruction]) // table_idx, offset_expr
+  Active(Int32, ReadOnlyArray[Instruction]) // table_idx, offset_expr
   /// Passive segment: can be copied via table.init
   Passive
   /// Declarative segment: only for validation
@@ -1118,14 +1118,14 @@ pub(all) enum ElemMode {
 pub(all) struct Element {
   mode : ElemMode
   type_ : ValueType // element type (funcref or externref)
-  init : Array[Array[Instruction]] // init expressions (each evaluates to a ref)
+  init : ReadOnlyArray[ReadOnlyArray[Instruction]] // init expressions (each evaluates to a ref)
 } derive(Eq, Debug)
 
 ///|
 /// Data segment
 pub(all) struct Data {
   memory_idx : Int32
-  offset : Array[Instruction]
+  offset : ReadOnlyArray[Instruction]
   init : Bytes
 } derive(Eq, Debug)
 
@@ -1342,9 +1342,9 @@ pub fn Module::empty() -> Module {
 /// Create a simple module with one function.
 /// This is useful for tests that need a minimal valid module.
 pub fn Module::simple(
-  params : Array[ValueType],
-  results : Array[ValueType],
-  body : Array[Instruction],
+  params : ReadOnlyArray[ValueType],
+  results : ReadOnlyArray[ValueType],
+  body : ReadOnlyArray[Instruction],
   export_name : String,
 ) -> Module {
   let func_type : FuncType = { params, results, }

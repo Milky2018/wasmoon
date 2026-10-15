@@ -64,13 +64,35 @@ fn Parser::read_expr(
         guard frames.pop() is Some(frame) else { break }
         let (instruction, parent) = match frame {
           Block(bt, parent) =>
-            (@types.Instruction::Block(bt, instructions), parent)
-          Loop(bt, parent) => (Loop(bt, instructions), parent)
-          IfThen(bt, parent) => (If(bt, instructions, []), parent)
+            (
+              @types.Instruction::Block(
+                bt,
+                ReadOnlyArray::from_array(instructions),
+              ),
+              parent,
+            )
+          Loop(bt, parent) =>
+            (Loop(bt, ReadOnlyArray::from_array(instructions)), parent)
+          IfThen(bt, parent) =>
+            (If(bt, ReadOnlyArray::from_array(instructions), []), parent)
           IfElse(bt, then_body, parent) =>
-            (If(bt, then_body, instructions), parent)
+            (
+              If(
+                bt,
+                ReadOnlyArray::from_array(then_body),
+                ReadOnlyArray::from_array(instructions),
+              ),
+              parent,
+            )
           TryTable(bt, handlers, parent) =>
-            (TryTable(bt, handlers, instructions), parent)
+            (
+              TryTable(
+                bt,
+                ReadOnlyArray::from_array(handlers),
+                ReadOnlyArray::from_array(instructions),
+              ),
+              parent,
+            )
         }
         instructions = parent
         instructions.push(instruction)
@@ -136,7 +158,7 @@ fn Parser::read_instruction(
     0x0E => {
       let labels = self.read_vec(() => self.read_u32())
       let default = self.read_u32()
-      BrTable(labels, default)
+      BrTable(ReadOnlyArray::from_array(labels), default)
     }
     0x0F => Return
     0x10 => Call(self.read_u32())
@@ -461,10 +483,22 @@ fn Parser::read_instruction(
     0xE0 => ContNew(self.read_u32())
     0xE1 => ContBind(self.read_u32(), self.read_u32())
     0xE2 => Suspend(self.read_u32())
-    0xE3 => Resume(self.read_u32(), self.read_resume_handlers())
+    0xE3 =>
+      Resume(
+        self.read_u32(),
+        ReadOnlyArray::from_array(self.read_resume_handlers()),
+      )
     0xE4 =>
-      ResumeThrow(self.read_u32(), self.read_u32(), self.read_resume_handlers())
-    0xE5 => ResumeThrowRef(self.read_u32(), self.read_resume_handlers())
+      ResumeThrow(
+        self.read_u32(),
+        self.read_u32(),
+        ReadOnlyArray::from_array(self.read_resume_handlers()),
+      )
+    0xE5 =>
+      ResumeThrowRef(
+        self.read_u32(),
+        ReadOnlyArray::from_array(self.read_resume_handlers()),
+      )
     0xE6 => Switch(self.read_u32(), self.read_u32())
     // Saturating truncation instructions (0xFC prefix)
     0xFC => {
@@ -760,7 +794,7 @@ fn Parser::parse_simd_instruction(
       for i in 0..<16 {
         lanes[i] = self.read_byte()
       }
-      I8x16Shuffle(lanes)
+      I8x16Shuffle(ReadOnlyArray::from_array(lanes))
     }
     14 => I8x16Swizzle
     // Splat operations

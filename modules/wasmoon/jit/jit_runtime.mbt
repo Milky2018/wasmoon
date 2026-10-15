@@ -9,8 +9,8 @@ pub struct JITFunction {
   name : String
   priv func_ptr : Int64
   priv code_size : Int32
-  param_types : Array[@types.ValueType] // Parameter types for proper register allocation
-  result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
+  param_types : ReadOnlyArray[@types.ValueType] // Parameter types for proper register allocation
+  result_types : ReadOnlyArray[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
 }
 
 ///|
@@ -51,8 +51,8 @@ fn JITFunction::JITFunction(
   name : String,
   func_ptr : Int64,
   code_size : Int32,
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ReadOnlyArray[@types.ValueType],
+  result_types : ReadOnlyArray[@types.ValueType],
 ) -> JITFunction {
   { func_idx, name, func_ptr, code_size, param_types, result_types, }
 }
@@ -313,8 +313,8 @@ fn load_artifact_with_imports_using_registrar(
         name,
         function.entry_address(),
         function.code_size(),
-        param_types,
-        result_types,
+        ReadOnlyArray::from_array(param_types),
+        ReadOnlyArray::from_array(result_types),
       ),
     )
     jit_module.by_name.set(name, function_index)
@@ -1503,9 +1503,8 @@ pub fn JITModule::prepare_continuations(
 ///|
 pub fn JITModule::bind_segment_drop_flags(
   self : JITModule,
-  data : FixedArray[Bool],
-  elements : FixedArray[Bool],
+  instance : @runtime.ModuleInstance,
 ) -> Unit {
   guard self.context is Some(ctx) else { return }
-  ctx.ctx.bind_segment_drop_flags(data, elements)
+  instance.bind_native_segments(ctx.ctx)
 }

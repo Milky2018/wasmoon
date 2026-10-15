@@ -129,7 +129,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         for _ in 0..<count {
           let type_ = parser.read_global_type()
           let init = parser.read_expr()
-          mod.globals.push({ type_, init, })
+          mod.globals.push({ type_, init: ReadOnlyArray::from_array(init), })
         }
       }
       7 => {
@@ -158,7 +158,11 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         for _ in 0..<count {
           let flags = parser.read_u32()
           let (mode, elem_type, init) = parser.read_elem_segment(flags)
-          mod.elems.push({ mode, type_: elem_type, init, })
+          mod.elems.push({
+            mode,
+            type_: elem_type,
+            init: ReadOnlyArray::from_array(init),
+          })
         }
       }
       10 => {
@@ -184,7 +188,10 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             }
           }
           let body = parser.read_expr()
-          mod.codes.push({ locals, body, })
+          mod.codes.push({
+            locals: ReadOnlyArray::from_array(locals),
+            body: ReadOnlyArray::from_array(body),
+          })
         }
       }
       11 => {
@@ -212,7 +219,11 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
           }
           let size = parser.read_u32()
           let init = parser.read_bytes(size)
-          mod.datas.push({ memory_idx, offset, init, })
+          mod.datas.push({
+            memory_idx,
+            offset: ReadOnlyArray::from_array(offset),
+            init,
+          })
         }
       }
       0 => {

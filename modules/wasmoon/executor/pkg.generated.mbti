@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/executor"
 
 import {
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/validator",
   "Milky2018/wasmoon/runtime",
   "moonbitlang/core/debug",
 }
@@ -24,7 +25,7 @@ pub fn call_func_by_index_resumable_async_with_exception(@runtime.Store, @runtim
 
 pub fn call_func_by_index_with_exception(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> InvokeWithExceptionResult raise @runtime.RuntimeError
 
-pub fn eval_const_expr(Array[@types.Instruction], func_addrs? : Array[Int], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
+pub fn eval_const_expr(ArrayView[@types.Instruction], func_addrs? : Array[Int], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
 
 pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
 
@@ -39,6 +40,12 @@ pub async fn instantiate_module_with_imports_async(@runtime.Store, @types.Module
 pub fn instantiate_module_with_imports_unstarted(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
 pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+
+pub fn instantiate_validated_module(@validator.ValidatedModule) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+
+pub fn instantiate_validated_module_with_imports_unstarted(@runtime.Store, @validator.ValidatedModule, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub fn instantiate_validated_module_with_init(@validator.ValidatedModule) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 
 pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
@@ -98,6 +105,15 @@ pub fn ExecutionContinuation::continue_execution(Self) -> ResumableCallOutcome r
 pub fn ExecutionContinuation::continue_execution_with_exception(Self) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 pub fn ExecutionContinuation::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for ExecutionContinuation
+
+pub struct Function {
+  // private fields
+}
+pub fn Function::as_value(Self) -> @runtime.RootedValue raise @runtime.RuntimeError
+pub fn Function::call(Self, ArrayView[@runtime.RootedValue]) -> Array[@runtime.RootedValue] raise @runtime.RuntimeError
+pub async fn Function::call_async(Self, ArrayView[@runtime.RootedValue]) -> Array[@runtime.RootedValue] raise @runtime.RuntimeError
+pub fn Function::close(Self) -> Unit
+pub fn Function::from_export(@runtime.Store, @runtime.ModuleInstance, String) -> Self raise @runtime.RuntimeError
 
 pub struct ImportDiagnostic {
   import_index : Int

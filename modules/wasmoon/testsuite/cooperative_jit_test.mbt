@@ -19,7 +19,7 @@ test "cooperative JIT preserves guest work and parked GC references" {
   let instance = @executor.instantiate_module_with_imports(
     store,
     module_,
-    Imports(),
+    Imports(store),
   )
   let context = prepare_async_jit_context(
     module_,
@@ -53,7 +53,7 @@ test "cooperative JIT wait is notified by interpreter and cancellation dequeues"
   let store = @runtime.Store::with_c_heap()
   defer store.close()
   let memory = @runtime.Memory::Memory(1, Some(1), is_shared=true)
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_memory("shared", "memory", store.alloc_mem(memory))
   let instance = @executor.instantiate_module_with_imports(
     store, module_, imports,
@@ -92,7 +92,7 @@ test "synchronous JIT wait is woken by a native notifier" {
   let store = @runtime.Store::with_c_heap()
   defer store.close()
   let memory = @runtime.Memory::Memory(1, Some(1), is_shared=true)
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_memory("shared", "memory", store.alloc_mem(memory))
   let instance = @executor.instantiate_module_with_imports(
     store, module_, imports,
@@ -114,7 +114,7 @@ test "controlled JIT cancellation releases an indefinitely blocked atomic wait" 
   let store = @runtime.Store::with_c_heap()
   defer store.close()
   let memory = @runtime.Memory::Memory(1, Some(1), is_shared=true)
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_memory("shared", "memory", store.alloc_mem(memory))
   let instance = @executor.instantiate_module_with_imports(
     store, module_, imports,

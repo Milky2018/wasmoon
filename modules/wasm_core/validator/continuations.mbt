@@ -4,7 +4,7 @@ fn validate_continuation_types(
   enabled : Bool,
 ) -> Unit raise ValidationError {
   fn check_type(ty : @types.ValueType) -> Unit raise ValidationError {
-    validate_value_type(ty, module_.types.length(), stack_switching=enabled)
+    validate_value_type(ty, module_.types, stack_switching=enabled)
     match ty {
       RefContTyped(index) | RefNullContTyped(index) => {
         guard module_.types[index].composite is Cont(_) else {
@@ -99,10 +99,10 @@ fn ValidationContext::exception_tag_type(
 ///|
 fn ValidationContext::signature_subtype(
   self : ValidationContext,
-  params1 : Array[@types.ValueType],
-  results1 : Array[@types.ValueType],
-  params2 : Array[@types.ValueType],
-  results2 : Array[@types.ValueType],
+  params1 : ArrayView[@types.ValueType],
+  results1 : ArrayView[@types.ValueType],
+  params2 : ArrayView[@types.ValueType],
+  results2 : ArrayView[@types.ValueType],
 ) -> Bool {
   if params1.length() != params2.length() ||
     results1.length() != results2.length() {
@@ -125,7 +125,7 @@ fn ValidationContext::signature_subtype(
 fn ValidationContext::check_resume_handlers(
   self : ValidationContext,
   index : Int32,
-  handlers : Array[@types.ResumeHandler],
+  handlers : ArrayView[@types.ResumeHandler],
 ) -> @types.FuncType raise ValidationError {
   let resumed = self.continuation_function_type(index)
   for handler in handlers {
@@ -138,7 +138,9 @@ fn ValidationContext::check_resume_handlers(
         let values = if label == self.labels.length() {
           self.returns
         } else {
-          get_label_types(self, self.labels[self.labels.length() - 1 - label])
+          ReadOnlyArray::from_array(
+            get_label_types(self, self.labels[self.labels.length() - 1 - label]),
+          )
         }
         if values.length() != tag.params.length() + 1 {
           raise TypeMismatch(
@@ -186,7 +188,7 @@ fn ValidationContext::check_resume_handlers(
 ///|
 fn pop_continuation_arguments(
   stack : OperandStack,
-  types : Array[@types.ValueType],
+  types : ArrayView[@types.ValueType],
 ) -> Unit raise ValidationError {
   for i = types.length() - 1; i >= 0; i = i - 1 {
     stack.pop(types[i])
@@ -196,7 +198,7 @@ fn pop_continuation_arguments(
 ///|
 fn push_continuation_results(
   stack : OperandStack,
-  types : Array[@types.ValueType],
+  types : ArrayView[@types.ValueType],
 ) -> Unit {
   for ty in types {
     stack.push(ty)

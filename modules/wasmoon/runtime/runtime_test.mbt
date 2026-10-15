@@ -101,7 +101,9 @@ test "Frame local variable access" {
 
 ///|
 test "Imports resolution for module linking" {
-  let imports = @runtime.Imports::Imports()
+  let store = @runtime.Store::Store()
+  defer store.close()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("env", "print", 0)
   imports.add_func("env", "log", 1)
   imports.add_memory("env", "memory", 0)

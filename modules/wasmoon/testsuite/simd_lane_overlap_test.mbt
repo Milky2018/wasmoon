@@ -20,7 +20,7 @@ test "JIT floating lane replacement preserves aliased scalar inputs" {
         let instance = @executor.instantiate_module_with_imports(
           store,
           module_,
-          Imports(),
+          Imports(store),
         )
         let expected = @executor.call_func_by_index(store, instance, 0, args)
         let context = prepare_async_jit_context(

@@ -46,7 +46,7 @@ fn core_functype_for_task_return(
         None => return None
       }
   }
-  Some({ params, results: [], })
+  Some({ params: ReadOnlyArray::from_array(params), results: [], })
 }
 
 ///|

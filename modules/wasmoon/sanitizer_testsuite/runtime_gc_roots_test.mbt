@@ -37,8 +37,8 @@ test "GC reclaims discarded extern wrappers in an open Store" {
       store.wrap_as_extern(StructRef(index)) |> ignore
     }
     inspect(store.collect_garbage(), content="100")
-    inspect(store.wrapped_externs.length(), content="0")
-    assert_true(store.wrapped_externs.capacity() <= 16)
+    inspect(store.counts().wrapped_externs, content="0")
+    assert_true(store.counts().wrapped_extern_capacity <= 16)
   }
 }
 
@@ -63,8 +63,8 @@ test "GC roots follow live extern and exception edges through heap objects" {
     lease.release()
     lease.release()
     inspect(store.collect_garbage(), content="2")
-    inspect(store.exns.length(), content="0")
-    inspect(store.wrapped_externs.length(), content="0")
+    inspect(store.counts().exns, content="0")
+    inspect(store.counts().wrapped_externs, content="0")
   }
 }
 
@@ -83,7 +83,7 @@ test "GC reclaims discarded exception snapshots without closing the Store" {
       }
     }
     inspect(store.collect_garbage(), content="100")
-    inspect(store.exns.length(), content="0")
+    inspect(store.counts().exns, content="0")
     if native {
       inspect(
         store.native_execution_state().exceptions().snapshot(reference) is None,
@@ -192,7 +192,7 @@ test "GC walks deep and cyclic externalized heap edges without recursion" {
     inspect(store.collect_garbage(additional_roots=[cycle]), content="5000")
     inspect(store.is_gc_valid(first), content="true")
     inspect(store.collect_garbage(), content="1")
-    inspect(store.wrapped_externs.length(), content="0")
+    inspect(store.counts().wrapped_externs, content="0")
   }
 }
 
@@ -226,9 +226,9 @@ test "native exception translation and tracing do not recurse through deep paylo
   }
   let result = target.decode_native_exception(token)
   inspect(target.collect_garbage(additional_roots=[result]), content="0")
-  inspect(target.exns.length(), content="3001")
+  inspect(target.counts().exns, content="3001")
   inspect(target.collect_garbage(), content="0")
-  inspect(target.exns.length(), content="0")
+  inspect(target.counts().exns, content="0")
   inspect(store.collect_garbage(), content="1")
   inspect(
     store.native_execution_state().exceptions().snapshot(word) is None,
@@ -246,7 +246,7 @@ async test "completed and cancelled host tasks retire externalized exception res
       let wrapped = store.wrap_as_extern(StructRef(child))
       let tag = store.alloc_tag({ params: [ExternRef], results: [], })
       let exception = store.alloc_exn(tag, [wrapped])
-      let caller = @runtime.Caller(store, ModuleInstance())
+      let caller = @runtime.Caller(store, store.host_exports([]))
       @runtime.with_async_host_call_driver(async fn(driver) {
         let host : @runtime.AsyncHostFunction = async fn(_, _) {
           @async.sleep(0)
@@ -269,8 +269,8 @@ async test "completed and cancelled host tasks retire externalized exception res
         }
       })
       inspect(store.collect_garbage(), content="1")
-      inspect(store.exns.length(), content="0")
-      inspect(store.wrapped_externs.length(), content="0")
+      inspect(store.counts().exns, content="0")
+      inspect(store.counts().wrapped_externs, content="0")
     }
   }
 }
@@ -307,18 +307,18 @@ test "failed instantiation retires temporary globals functions wrappers and exce
       }
       debug_inspect(
         (
-          store.globals.length(),
-          store.funcs.length(),
-          store.instances.length(),
-          store.tags.length(),
+          store.counts().globals,
+          store.counts().funcs,
+          store.counts().instances,
+          store.counts().tags,
         ),
         content="(0, 0, 0, 0)",
       )
       inspect(store.collect_garbage(), content="0")
-      inspect(store.exns.length(), content="0")
-      inspect(store.wrapped_externs.length(), content="0")
-      inspect(store.heap.stats().live_objects, content="0")
-      if store.c_heap is Some(heap) {
+      inspect(store.counts().exns, content="0")
+      inspect(store.counts().wrapped_externs, content="0")
+      inspect(store.counts().heap_live, content="0")
+      if store.native_heap() is Some(heap) {
         inspect(heap.get_size(), content="0")
       }
     }
@@ -396,7 +396,7 @@ test "continuation cancellation can allocate a successor during GC cleanup" {
     inspect(nested_collection.val, content="-1")
     inspect(store.unwrap_extern(successor.val), content="I31(7)")
     inspect(store.collect_garbage(), content="0")
-    inspect(store.wrapped_externs.length(), content="0")
+    inspect(store.counts().wrapped_externs, content="0")
   }
 }
 
@@ -404,7 +404,7 @@ test "continuation cancellation can allocate a successor during GC cleanup" {
 test "failed native root tracing leaves live objects intact and allows another collection" {
   let store = lifecycle_store(true)
   defer store.close()
-  guard store.c_heap is Some(heap) else { fail("missing native heap") }
+  guard store.native_heap() is Some(heap) else { fail("missing native heap") }
   let child = store.alloc_struct(0, [I32(42)])
   // The low-level heap permits an unvalidated token. The Store visitor must
   // abort collection rather than sweep through an unknown exception edge.

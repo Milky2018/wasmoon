@@ -8,7 +8,11 @@
 fn Parser::read_elem_segment(
   self : Parser,
   flags : Int32,
-) -> (@types.ElemMode, @types.ValueType, Array[Array[@types.Instruction]]) raise ParserError {
+) -> (
+  @types.ElemMode,
+  @types.ValueType,
+  Array[ReadOnlyArray[@types.Instruction]],
+) raise ParserError {
   // Flags encoding:
   // bit 0: 0 = active, 1 = passive/declarative
   // bit 1: 0 = implicit table 0, 1 = explicit table index (only if active)
@@ -31,7 +35,7 @@ fn Parser::read_elem_segment(
       0
     }
     let offset = self.read_expr()
-    Active(table_idx, offset)
+    Active(table_idx, ReadOnlyArray::from_array(offset))
   }
 
   // Read element type
@@ -63,11 +67,11 @@ fn Parser::read_elem_segment(
 
   // Read init expressions or function indices
   let elem_count = self.read_u32()
-  let init : Array[Array[@types.Instruction]] = []
+  let init : Array[ReadOnlyArray[@types.Instruction]] = []
   for _ in 0..<elem_count {
     if uses_expressions {
       // Read expression
-      init.push(self.read_expr())
+      init.push(ReadOnlyArray::from_array(self.read_expr()))
     } else {
       // Read function index, convert to ref.func expression
       let func_idx = self.read_u32()

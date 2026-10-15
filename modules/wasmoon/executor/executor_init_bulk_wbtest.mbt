@@ -293,7 +293,7 @@ test "bulk memory: memory.init from data segment" {
   // Data: 0xDEADBEEF in little-endian
   let data_bytes = Bytes::from_array([b'\xEF', b'\xBE', b'\xAD', b'\xDE'])
   let mod = {
-    ..@types.Module::simple([], [I32], body, "test"),
+    ..@types.Module::simple([], [I32], ReadOnlyArray::from_array(body), "test"),
     memories: [
       {
         limits: { min: 1, max: None, },
@@ -328,7 +328,7 @@ test "bulk memory: memory.init with offset" {
   // Data: [0x11, 0x22, 0x33, 0x44]
   let data_bytes = Bytes::from_array([b'\x11', b'\x22', b'\x33', b'\x44'])
   let mod = {
-    ..@types.Module::simple([], [I32], body, "test"),
+    ..@types.Module::simple([], [I32], ReadOnlyArray::from_array(body), "test"),
     memories: [
       {
         limits: { min: 1, max: None, },
@@ -484,12 +484,12 @@ test "bulk memory: elem.drop" {
 
   // Before explicit drop: active elem segment is already implicitly dropped after initialization
   // (per WebAssembly spec, active elem segments are dropped after module instantiation)
-  inspect(instance.dropped_elems[0], content="true")
+  inspect(instance.element_dropped(0), content="true")
 
   // Drop the elem segment
   call_exported_func(store, instance, "drop", []) |> ignore
   // After drop: elem segment should be marked as dropped
-  inspect(instance.dropped_elems[0], content="true")
+  inspect(instance.element_dropped(0), content="true")
 }
 
 ///|
@@ -530,7 +530,7 @@ test "bulk memory: data.drop is idempotent" {
 
   // Calling drop multiple times should not cause error
   call_exported_func(store, instance, "drop", []) |> ignore
-  inspect(instance.dropped_datas[0], content="true")
+  inspect(instance.data_dropped(0), content="true")
 }
 
 ///|

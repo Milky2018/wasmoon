@@ -63,7 +63,7 @@ fn ExecContext::exec_call_indirect(
   // Type checking using unified subtyping API
   // For call_indirect, the actual function type must be a subtype of the expected type
   let owner_idx = self.store.get_func_owner_idx(store_addr)
-  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_index()
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   if same_module {
     // Same module: use subtyping context for proper rec group handling
@@ -143,7 +143,7 @@ fn ExecContext::exec_call_ref(
   // Verify type matches using subtyping
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   let owner_idx = self.store.get_func_owner_idx(store_addr)
-  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_index()
   if same_module {
     // Same module: use subtyping context
     let ctx = @types.SubtypingContext::same_module(
@@ -221,7 +221,8 @@ fn ExecContext::call_func_inst_with_context(
         self.call_wasm_func(code, args, num_results)
       }
     }
-    HostFunc(host_fn) => self.invoke_host_func(host_fn, self.instance, args)
+    HostFunc(host_fn) =>
+      self.invoke_host_func(store_addr, host_fn, self.instance, args)
     AsyncHostFunc(host_fn) =>
       self.invoke_async_host_func(store_addr, host_fn, self.instance, args)
   }
@@ -230,6 +231,7 @@ fn ExecContext::call_func_inst_with_context(
 ///|
 fn ExecContext::invoke_host_func(
   self : ExecContext,
+  store_addr : Int32,
   host_fn : (@runtime.Caller, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError,
   caller_instance : @runtime.ModuleInstance,
   args : Array[@types.Value],
@@ -249,13 +251,19 @@ fn ExecContext::invoke_host_func(
       self.suspend_host_call(
         error,
         fn(context) raise {
-          context.invoke_host_func(host_fn, caller_instance, args)
+          context.invoke_host_func(store_addr, host_fn, caller_instance, args)
         },
         roots=args,
       )
       return
     }
   }
+  check_call_values(
+    self.store,
+    caller_instance,
+    results,
+    self.store.get_func_type(store_addr).results,
+  )
   for result in results {
     self.stack.push(result)
   }
@@ -286,10 +294,17 @@ fn ExecContext::invoke_async_host_func(
     error => raise InvocationSignal::HostInvocation(error)
   }
   match poll {
-    AsyncHostReady(results) =>
+    AsyncHostReady(results) => {
+      check_call_values(
+        self.store,
+        caller_instance,
+        results,
+        self.store.get_func_type(store_addr).results,
+      )
       for result in results {
         self.stack.push(result)
       }
+    }
     AsyncHostPending => {
       self.suspension_roots = args.copy()
       self.set_base_resume_action(
@@ -401,7 +416,7 @@ pub fn ExecContext::exec_tail_call_indirect(
   let expected_type = self.instance.validated_func_type_at(type_idx)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   let owner_idx = self.store.get_func_owner_idx(store_addr)
-  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_index()
   if same_module {
     // Same module: use subtyping context
     let ctx = @types.SubtypingContext::same_module(
@@ -479,7 +494,7 @@ pub fn ExecContext::exec_tail_call_ref(
   let expected_type = self.instance.validated_func_type_at(type_idx)
   let actual_type_idx = self.store.get_func_type_idx(store_addr)
   let owner_idx = self.store.get_func_owner_idx(store_addr)
-  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_idx
+  let same_module = owner_idx >= 0 && owner_idx == self.instance.store_index()
   if same_module {
     // Same module: use subtyping context
     let ctx = @types.SubtypingContext::same_module(

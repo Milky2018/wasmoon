@@ -3,8 +3,8 @@ fn validation_function_contract(
   func_type : @types.FuncType,
 ) -> @wasm_milkir.WasmFunctionContract {
   {
-    params: func_type.params.map(type_from_wasm),
-    results: func_type.results.map(type_from_wasm),
+    params: func_type.params[:].map(type_from_wasm),
+    results: func_type.results[:].map(type_from_wasm),
   }
 }
 
@@ -42,7 +42,7 @@ fn validation_defined_type_contract(
     Func(func_type) => Function(validation_function_contract(func_type))
     Cont(index) => Continuation(index)
     Struct(struct_type) =>
-      Struct(struct_type.fields.map(validation_field_contract))
+      Struct(struct_type.fields[:].map(validation_field_contract))
     Array(array_type) => Array(validation_field_contract(array_type.element))
   }
 }

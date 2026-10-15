@@ -42,7 +42,7 @@ fn decode_gc_value(raw : Int64, store : @runtime.Store) -> @types.Value {
   } else {
     // Heap reference: encoded as (gc_ref << 1), where gc_ref is 1-based.
     let heap_idx = @wasmoon_jit.decode_heap_ref(raw)
-    match store.c_heap {
+    match store.native_heap() {
       Some(heap) =>
         if heap.is_array(heap_idx) {
           ArrayRef(heap_idx)
@@ -122,12 +122,13 @@ pub fn init_jit_globals_from_store(
   store : @runtime.Store,
   jit_module : @compiled_jit.JITModule,
 ) -> Int64 raise @runtime.RuntimeError {
-  if jit_module.has_callable_metadata() && store.c_heap is Some(heap) {
+  store.check_instance(instance)
+  if jit_module.has_callable_metadata() && store.native_heap() is Some(heap) {
     jit_module.setup_gc(
       heap,
-      instance.types,
-      instance.canonical_type_indices,
-      instance.func_type_indices,
+      instance.types[:].to_owned(),
+      instance.canonical_type_indices[:].to_owned(),
+      instance.func_type_indices[:].to_owned(),
     ) catch {
       error => raise LinkErrorDetail("native GC metadata: \{error}")
     }
@@ -139,7 +140,7 @@ pub fn init_jit_globals_from_store(
   }
   let pointers = FixedArray::make(count, 0L)
   for i, global_addr in instance.global_addrs {
-    let global = store.globals[global_addr]
+    let global = store.get_global(global_addr)
     let cell = match global.native_binding() {
       Some(binding) => binding.address
       None => {
@@ -153,7 +154,7 @@ pub fn init_jit_globals_from_store(
             value,
             store,
             jit_module,
-            instance.func_addrs,
+            instance.func_addrs[:].to_owned(),
           )
           @wasmoon_jit.native_value_slot_write(cell, 0, low)
           @wasmoon_jit.native_value_slot_write(cell, 1, high.unwrap_or(0L))
@@ -165,7 +166,12 @@ pub fn init_jit_globals_from_store(
         global.bind_native({
           address: cell,
           read: fn() raise @runtime.RuntimeError {
-            read_native_global(cell, value_type, instance.func_addrs, store)
+            read_native_global(
+              cell,
+              value_type,
+              instance.func_addrs[:].to_owned(),
+              store,
+            )
           },
           write,
           root: fn() {
@@ -184,7 +190,7 @@ pub fn init_jit_globals_from_store(
                 try! read_native_global(
                   cell,
                   value_type,
-                  instance.func_addrs,
+                  instance.func_addrs[:].to_owned(),
                   store,
                 )
             }
@@ -204,7 +210,8 @@ pub fn register_instance_funcrefs_for_jit(
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
+  store.check_instance(instance)
   register_owned_instance_funcrefs_for_jit(jit_module, instance, store)
   |> ignore
 }
@@ -216,7 +223,8 @@ pub fn register_owned_instance_funcrefs_for_jit(
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-) -> FuncrefRegistration {
+) -> FuncrefRegistration raise @runtime.RuntimeError {
+  store.check_instance(instance)
   let entries : Array[@runtime.StoreFuncrefEntry] = []
   for i, store_addr in instance.func_addrs {
     let func_ptr = jit_module.get_func_ptr(i)
@@ -229,7 +237,10 @@ pub fn register_owned_instance_funcrefs_for_jit(
     release_owner=jit_module.retain_callable_owner(),
   )
   jit_module.set_exception_arena(store.native_execution_state().exceptions())
-  for tag, signature in store.tags {
+  for tag in 0..<store.counts().tags {
+    guard (Some(store.get_tag_type(tag)) catch { _ => None }) is Some(signature) else {
+      continue
+    }
     store
     .native_execution_state()
     .exceptions()
@@ -238,7 +249,11 @@ pub fn register_owned_instance_funcrefs_for_jit(
   }
   let local_types = store.native_type_indices(instance)
   if store.native_callable_registry() is Some(registry) {
-    jit_module.bind_callable_registry(registry, local_types, instance.tag_addrs)
+    jit_module.bind_callable_registry(
+      registry,
+      local_types,
+      instance.tag_addrs[:].to_owned(),
+    )
   }
   { lease, }
 }
@@ -256,14 +271,14 @@ pub fn collect_registered_funcref_entries(
     if func_ptr == 0L {
       continue
     }
-    if store_addr < 0 || store_addr >= store.func_type_indices.length() {
+    if store_addr < 0 || store_addr >= store.counts().func_type_indices {
       continue
     }
     let canonical_type_idx = store.get_func_canonical_type_idx(store_addr)
     let type_idx = if canonical_type_idx >= 0 {
       canonical_type_idx
     } else {
-      store.func_type_indices[store_addr]
+      store.get_func_type_idx(store_addr)
     }
     entries.push((func_ptr, type_idx))
   }
@@ -290,7 +305,9 @@ pub fn has_unsupported_instructions_for_wast(mod_ : @types.Module) -> Bool {
 
 ///|
 /// Recursively check if instruction list contains unsupported instructions
-fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool {
+fn contains_unsupported_instruction(
+  instrs : ArrayView[@types.Instruction],
+) -> Bool {
   for instr in instrs {
     match instr {
       // All bulk memory/table + segment-based GC array ops are supported via libcalls.
@@ -600,6 +617,8 @@ pub fn sync_jit_tables_to_store(
   jit_ctx : JITModuleContext,
   store : @runtime.Store,
 ) -> Unit raise @runtime.RuntimeError {
+  guard jit_ctx.owner is Some(instance) else { raise InvalidHandle }
+  jit_ctx.bind_instance(store, instance)
   for table_idx, table_addr in jit_ctx.table_addrs {
     let table = store.get_table(table_addr) catch { _ => continue }
     let jit_table = match store.get_jit_table(table_addr) {
@@ -641,6 +660,7 @@ pub fn sync_tables_to_jit(
   jit_module : @compiled_jit.JITModule,
   use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
+  store.check_instance(instance)
   // Iterate over all tables in the instance
   for table_addr in instance.table_addrs {
     // Get the interpreter table
@@ -666,7 +686,7 @@ pub fn sync_tables_to_jit(
 /// Evaluate element segment offset constant expression
 /// Supports i32.const, i64.const (for table64), i32.add, i32.sub, i32.mul, global.get for computing offsets
 pub fn eval_elem_offset_expr(
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
 ) -> Int32 raise @runtime.RuntimeError {
   let stack : Array[Int32] = []
@@ -737,6 +757,7 @@ pub fn init_elem_segments(
   store : @runtime.Store,
   use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
+  store.check_instance(instance)
   // Get global instances for evaluating offset expressions
   let globals : Array[@runtime.GlobalInstance] = []
   for global_addr in instance.global_addrs {
@@ -851,6 +872,7 @@ pub fn init_bulk_segments(
   store : @runtime.Store,
   use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
+  store.check_instance(instance)
   jm.prepare_continuations(mod_.types, store.native_execution_state()) catch {
     error =>
       raise LinkErrorDetail("native continuation preparation failed: \{error}")
@@ -898,14 +920,14 @@ pub fn init_bulk_segments(
   let data_dropped : Array[Bool] = []
   for i in 0..<mod_.datas.length() {
     data_dropped.push(
-      i >= 0 && i < instance.dropped_datas.length() && instance.dropped_datas[i],
+      i >= 0 && i < instance.data_segments.length() && instance.data_dropped(i),
     )
   }
   let elem_dropped : Array[Bool] = []
   for i, elem in mod_.elems {
     let dropped = i >= 0 &&
-      i < instance.dropped_elems.length() &&
-      instance.dropped_elems[i]
+      i < instance.elem_segments.length() &&
+      instance.element_dropped(i)
     // Declarative segments behave as dropped for table.init/array.new_elem.
     let declarative = elem.mode is Declarative
     elem_dropped.push(dropped || declarative)
@@ -913,7 +935,8 @@ pub fn init_bulk_segments(
 
   // Reuse the values evaluated during instantiation, including object identity.
   let elem_pairs : Array[Array[Int64]] = []
-  for values in instance.elem_values {
+  for index in 0..<instance.elem_segments.length() {
+    let values = instance.element_values(index)
     let pairs : Array[Int64] = []
     for value in values {
       // Encode the value to the JIT segment format (value bits + type idx for funcref).
@@ -956,7 +979,7 @@ pub fn init_bulk_segments(
   jm.setup_segments(mod_.datas, elem_pairs, data_dropped~, elem_dropped~) catch {
     _ => raise OutOfMemory
   }
-  jm.bind_segment_drop_flags(instance.dropped_datas, instance.dropped_elems)
+  jm.bind_segment_drop_flags(instance)
 }
 
 ///|
@@ -984,8 +1007,8 @@ pub fn build_func_signatures(
         type_idx < mod_.types.length() {
         let func_type = mod_.validated_func_type_at(type_idx)
         signatures[func_import_idx] = (
-          func_type.params.copy(),
-          func_type.results.copy(),
+          func_type.params[:].to_owned(),
+          func_type.results[:].to_owned(),
         )
       }
       func_import_idx = func_import_idx + 1
@@ -996,7 +1019,10 @@ pub fn build_func_signatures(
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
       let func_type = mod_.validated_func_type_at(type_idx)
-      signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
+      signatures[func_idx] = (
+        func_type.params[:].to_owned(),
+        func_type.results[:].to_owned(),
+      )
     }
   }
   signatures
@@ -1077,7 +1103,7 @@ fn slot_count_for_type(ty : @types.ValueType) -> Int32 {
 }
 
 ///|
-fn sum_slot_count(types : Array[@types.ValueType]) -> Int32 {
+fn sum_slot_count(types : ArrayView[@types.ValueType]) -> Int32 {
   let mut n = 0
   for ty in types {
     n = n + slot_count_for_type(ty)
@@ -1507,7 +1533,8 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
   before_dispatch~ : () -> Unit raise @runtime.RuntimeError = fn() { () },
   after_dispatch~ : () -> Unit raise @runtime.RuntimeError = fn() { () },
   classify_suspension~ : (@runtime.RuntimeError) -> Bool = fn(_error) { false },
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
+  self.bind_instance(store, instance)
   let jit_module = self.jit_module
   fn call_func_by_addr(
     store : @runtime.Store,

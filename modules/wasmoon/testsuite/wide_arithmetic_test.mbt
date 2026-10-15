@@ -44,7 +44,7 @@ test "wide arithmetic: binary encoding preserves every opcode" {
   let decoded = @parser.parse_module(bytes)
   @validator.validate_module(decoded)
   debug_inspect(
-    decoded.codes[0].body,
+    decoded.codes[0].body[:].to_owned(),
     content="[Unreachable, I64Add128, I64Sub128, I64MulWideS, I64MulWideU]",
   )
 }

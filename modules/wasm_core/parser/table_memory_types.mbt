@@ -17,7 +17,10 @@ fn Parser::read_table(self : Parser) -> @types.Table raise ParserError {
     let (limits, is_table64) = self.read_table_limits()
     // Read the initialization expression
     let init = self.read_expr()
-    { type_: { elem_type, limits, is_table64, }, init: Some(init), }
+    {
+      type_: { elem_type, limits, is_table64, },
+      init: Some(ReadOnlyArray::from_array(init)),
+    }
   } else {
     // Standard encoding: reftype limits
     let elem_type = self.read_value_type()

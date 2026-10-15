@@ -76,7 +76,11 @@ fn Parser::parse_type_def(
     self.expect_rparen() // close sub
   }
   self.expect_rparen() // close type
-  { final_: is_final, supertypes, composite, }
+  {
+    final_: is_final,
+    supertypes: ReadOnlyArray::from_array(supertypes),
+    composite,
+  }
 }
 
 ///|
@@ -300,7 +304,7 @@ fn Parser::parse_struct_type(
   while self.current.token != RParen {
     self.parse_field_types(type_idx, fields)
   }
-  { fields, }
+  { fields: ReadOnlyArray::from_array(fields), }
 }
 
 ///|
@@ -563,7 +567,10 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
       }
     }
   }
-  { params, results, }
+  {
+    params: ReadOnlyArray::from_array(params),
+    results: ReadOnlyArray::from_array(results),
+  }
 }
 
 ///|
@@ -692,8 +699,8 @@ fn Parser::parse_func_def(
         // Create type if needed
         if type_idx < 0 {
           let ft : @types.FuncType = {
-            params: inline_params,
-            results: inline_results,
+            params: ReadOnlyArray::from_array(inline_params),
+            results: ReadOnlyArray::from_array(inline_results),
           }
           // Check if this type already exists
           let mut found = -1
@@ -819,8 +826,8 @@ fn Parser::parse_func_def(
   // If no type reference, create inline type
   if type_idx < 0 {
     let ft : @types.FuncType = {
-      params: inline_params,
-      results: inline_results,
+      params: ReadOnlyArray::from_array(inline_params),
+      results: ReadOnlyArray::from_array(inline_results),
     }
     // Check if this type already exists
     let mut found = -1
@@ -908,7 +915,14 @@ fn Parser::parse_func_def(
   // Parse body instructions
   let body = self.parse_instructions()
   self.expect_rparen() // close func
-  FuncDef(type_idx, { locals, body, }, export_names)
+  FuncDef(
+    type_idx,
+    {
+      locals: ReadOnlyArray::from_array(locals),
+      body: ReadOnlyArray::from_array(body),
+    },
+    export_names,
+  )
 }
 
 ///|

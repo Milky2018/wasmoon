@@ -12,12 +12,12 @@
 /// Context for subtyping checks.
 /// Can be used for same-module or cross-module comparisons.
 pub struct SubtypingContext {
-  types1 : Array[SubType]
-  types2 : Array[SubType]
-  rec_groups1 : Array[Int32]
-  rec_groups2 : Array[Int32]
-  canonical1 : Array[Int32]
-  canonical2 : Array[Int32]
+  types1 : ArrayView[SubType]
+  types2 : ArrayView[SubType]
+  rec_groups1 : ArrayView[Int32]
+  rec_groups2 : ArrayView[Int32]
+  canonical1 : ArrayView[Int32]
+  canonical2 : ArrayView[Int32]
   cross_module : Bool
   visited : Map[(Int32, Int32), Bool]
 }
@@ -25,9 +25,9 @@ pub struct SubtypingContext {
 ///|
 /// Create a context for same-module subtyping.
 pub fn SubtypingContext::same_module(
-  types : Array[SubType],
-  rec_groups~ : Array[Int32] = [],
-  canonical~ : Array[Int32] = [],
+  types : ArrayView[SubType],
+  rec_groups~ : ArrayView[Int32] = [],
+  canonical~ : ArrayView[Int32] = [],
 ) -> SubtypingContext {
   {
     types1: types,
@@ -44,12 +44,12 @@ pub fn SubtypingContext::same_module(
 ///|
 /// Create a context for cross-module subtyping (e.g., import validation).
 pub fn SubtypingContext::cross_module(
-  types1 : Array[SubType],
-  types2 : Array[SubType],
-  rec_groups1~ : Array[Int32] = [],
-  rec_groups2~ : Array[Int32] = [],
-  canonical1~ : Array[Int32] = [],
-  canonical2~ : Array[Int32] = [],
+  types1 : ArrayView[SubType],
+  types2 : ArrayView[SubType],
+  rec_groups1~ : ArrayView[Int32] = [],
+  rec_groups2~ : ArrayView[Int32] = [],
+  canonical1~ : ArrayView[Int32] = [],
+  canonical2~ : ArrayView[Int32] = [],
 ) -> SubtypingContext {
   {
     types1,

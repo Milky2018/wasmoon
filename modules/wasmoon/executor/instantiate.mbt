@@ -26,7 +26,7 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
 
 ///|
 fn find_export_by_name(
-  exports : Array[@types.Export],
+  exports : ArrayView[@types.Export],
   target : String,
 ) -> @types.Export? {
   for exp in exports {
@@ -42,6 +42,15 @@ fn find_export_by_name(
 pub fn instantiate_module(
   mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
+  instantiate_validated_module(validate_execution_module(mod))
+}
+
+///|
+/// Instantiate protected validation evidence without validating the module again.
+pub fn instantiate_validated_module(
+  validated : @validator.ValidatedModule,
+) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
+  let mod = validated.snapshot()
   let store = @runtime.Store::Store()
   errdefer store.close()
   validate_continuation_gc_storage(mod)
@@ -50,10 +59,8 @@ pub fn instantiate_module(
 
   // Allocate functions with their types
   let func_addrs : Array[Int32] = []
-  for i, code in mod.codes {
-    let type_idx = mod.funcs[i]
-    let func_type = mod.validated_func_type_at(type_idx)
-    let addr = store.alloc_func(code, func_type~, type_idx~)
+  for i, _code in mod.codes {
+    let addr = store.alloc_func(validated, i)
     func_addrs.push(addr)
   }
 
@@ -121,46 +128,19 @@ pub fn instantiate_module(
 
   // func_addrs: indices into store.funcs
   // func_type_indices: type index for each function (from mod.funcs)
-  // Initialize dropped arrays with false values
-  let dropped_elems : Array[Bool] = []
-  for elem in mod.elems {
-    dropped_elems.push(elem.mode is Declarative)
-  }
-  let dropped_datas : Array[Bool] = []
-  for _ in 0..<mod.datas.length() {
-    dropped_datas.push(false)
-  }
-  // Compute canonical type indices for structural equivalence
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    mod.types,
-    type_rec_groups=mod.type_rec_groups,
-  )
   let elem_values = evaluate_element_segments(
     mod, store, func_addrs, global_addrs,
   )
-  let instance : @runtime.ModuleInstance = {
-    types: mod.types,
-    type_rec_groups: mod.type_rec_groups,
-    canonical_type_indices,
-    store_idx: -1,
-    func_addrs,
-    func_type_indices: mod.funcs,
-    table_addrs,
-    mem_addrs,
-    global_addrs,
-    tag_addrs,
-    exports: mod.exports,
-    elem_values,
-    elem_segments: mod.elems,
-    data_segments: mod.datas,
-    dropped_elems: FixedArray::makei(dropped_elems.length(), i => {
-      dropped_elems[i]
-    }),
-    dropped_datas: FixedArray::makei(dropped_datas.length(), i => {
-      dropped_datas[i]
-    }),
-  }
-  store.register_instance(instance) |> ignore
+  let instance = store.new_instance(
+    validated,
+    func_addrs~,
+    table_addrs~,
+    mem_addrs~,
+    global_addrs~,
+    tag_addrs~,
+    elem_values~,
+  )
+
   (store, instance)
 }
 
@@ -169,7 +149,7 @@ pub fn instantiate_module(
 /// Supports extended constant expressions with arithmetic operations
 /// and GC instructions (array.new, array.new_default, array.new_fixed, struct.new, struct.new_default)
 pub fn eval_const_expr(
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
   func_addrs~ : Array[Int32] = [],
   globals~ : Array[@runtime.GlobalInstance] = [],
   store~ : @runtime.Store? = None,
@@ -499,7 +479,7 @@ pub fn eval_const_expr(
 /// Supports i32/i64.add, i32/i64.sub, i32/i64.mul in addition to basic constants
 /// Returns the offset value as Int (truncated for i64)
 fn eval_extended_const_expr(
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
   globals : Array[@runtime.GlobalInstance],
 ) -> Int64 raise @runtime.RuntimeError {
   match eval_const_expr(instrs, globals~) {
@@ -513,13 +493,11 @@ fn eval_extended_const_expr(
 /// Helper to get global instances from a store given global addresses
 fn get_global_instances(
   store : @runtime.Store,
-  global_addrs : Array[Int32],
-) -> Array[@runtime.GlobalInstance] {
+  global_addrs : ArrayView[Int32],
+) -> Array[@runtime.GlobalInstance] raise @runtime.RuntimeError {
   let globals : Array[@runtime.GlobalInstance] = []
   for addr in global_addrs {
-    globals.push(store.get_global(addr)) catch {
-      _ => ()
-    }
+    globals.push(store.get_global(addr))
   }
   globals
 }
@@ -529,7 +507,7 @@ fn evaluate_element_segments(
   mod : @types.Module,
   store : @runtime.Store,
   func_addrs : Array[Int32],
-  global_addrs : Array[Int32],
+  global_addrs : ArrayView[Int32],
 ) -> Array[Array[@types.Value]] raise @runtime.RuntimeError {
   let globals = get_global_instances(store, global_addrs)
   let segments : Array[Array[@types.Value]] = []
@@ -556,7 +534,15 @@ fn evaluate_element_segments(
 pub fn instantiate_module_with_init(
   mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
-  let (store, instance) = instantiate_module(mod)
+  instantiate_validated_module_with_init(validate_execution_module(mod))
+}
+
+///|
+pub fn instantiate_validated_module_with_init(
+  validated : @validator.ValidatedModule,
+) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
+  let mod = validated.snapshot()
+  let (store, instance) = instantiate_validated_module(validated)
   errdefer store.close()
 
   // Per WebAssembly spec: element segments are initialized BEFORE data segments
@@ -583,7 +569,7 @@ pub fn instantiate_module_with_init(
 
         // Set table entries - evaluate init expression to get value
         for i in 0..<elem.init.length() {
-          table.set(offset.to_int() + i, instance.elem_values[elem_idx][i])
+          table.set(offset.to_int() + i, instance.element_value(elem_idx, i))
         }
       }
       // Active elem segments are implicitly dropped after initialization
@@ -605,7 +591,7 @@ pub fn instantiate_module_with_init(
 
       // Copy data to memory
       mem.init_data_at(offset, data.init)
-      instance.dropped_datas[data_idx] = true
+      instance.drop_data(data_idx)
     }
   }
 
@@ -714,7 +700,9 @@ pub fn validate_imports_with_diagnostics(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> ImportDiagnosticsResult raise @runtime.RuntimeError {
-  store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
+  let validated = validate_execution_module(mod)
+  let mod = validated.snapshot()
+  imports.check_store(store)
   let result = ImportDiagnosticsResult::ImportDiagnosticsResult()
   let canonical_type_indices = @types.compute_canonical_type_indices(
     mod.types,
@@ -1227,6 +1215,22 @@ pub fn instantiate_module_with_imports_unstarted(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  instantiate_validated_module_with_imports_unstarted(
+    store,
+    validate_execution_module(mod),
+    imports,
+  )
+}
+
+///|
+/// Initialize a validated module's Store-owned state without running start.
+pub fn instantiate_validated_module_with_imports_unstarted(
+  store : @runtime.Store,
+  validated : @validator.ValidatedModule,
+  imports : @runtime.Imports,
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  let mod = validated.snapshot()
+  imports.check_store(store)
   validate_continuation_gc_storage(mod)
   // Set module types for GC support
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
@@ -1481,10 +1485,9 @@ pub fn instantiate_module_with_imports_unstarted(
   }
 
   // Allocate module functions with their types
-  for i, code in mod.codes {
+  for i, _code in mod.codes {
     let type_idx = mod.funcs[i]
-    let func_type = mod.validated_func_type_at(type_idx)
-    let addr = store.alloc_func(code, func_type~, type_idx~)
+    let addr = store.alloc_func(validated, i)
     func_addrs.push(addr)
     func_type_indices.push(type_idx)
   }
@@ -1506,11 +1509,7 @@ pub fn instantiate_module_with_imports_unstarted(
   // This is needed for table init expressions that reference imported globals
   let global_instances : Array[@runtime.GlobalInstance] = []
   for addr in global_addrs {
-    global_instances.push(
-      store.get_global(addr) catch {
-        _ => GlobalInstance({ value_type: I32, mutable: false, }, I32(0))
-      },
-    )
+    global_instances.push(store.get_global(addr))
   }
 
   // Allocate tables (after imported tables and globals)
@@ -1558,16 +1557,6 @@ pub fn instantiate_module_with_imports_unstarted(
     tag_addrs.push(addr)
   }
 
-  // Initialize dropped arrays with false values
-  let dropped_elems : Array[Bool] = []
-  for elem in mod.elems {
-    dropped_elems.push(elem.mode is Declarative)
-  }
-  let dropped_datas : Array[Bool] = []
-  for _ in 0..<mod.datas.length() {
-    dropped_datas.push(false)
-  }
-
   let elem_values = evaluate_element_segments(
     mod, store, func_addrs, global_addrs,
   )
@@ -1578,38 +1567,21 @@ pub fn instantiate_module_with_imports_unstarted(
 
   // Initialize active element segments (populate tables with function references)
   // canonical_type_indices was computed at the start of the function (for import type checking)
-  let instance : @runtime.ModuleInstance = {
-    types: mod.types,
-    type_rec_groups: mod.type_rec_groups,
-    canonical_type_indices,
-    store_idx: -1,
-    func_addrs,
-    func_type_indices,
-    table_addrs,
-    mem_addrs,
-    global_addrs,
-    tag_addrs,
-    exports: mod.exports,
-    elem_values,
-    elem_segments: mod.elems,
-    data_segments: mod.datas,
-    dropped_elems: FixedArray::makei(dropped_elems.length(), i => {
-      dropped_elems[i]
-    }),
-    dropped_datas: FixedArray::makei(dropped_datas.length(), i => {
-      dropped_datas[i]
-    }),
-  }
+  let instance = store.new_instance(
+    validated,
+    func_addrs~,
+    table_addrs~,
+    mem_addrs~,
+    global_addrs~,
+    tag_addrs~,
+    elem_values~,
+  )
 
   for index, elem in mod.elems {
     if elem.mode is Declarative {
       instance.drop_element(index)
     }
   }
-
-  // Register instance with store for cross-module call resolution
-  // This also sets the store_idx field
-  store.register_instance(instance) |> ignore
 
   for elem_idx, elem in mod.elems {
     // Only process active element segments
@@ -1649,7 +1621,7 @@ pub fn instantiate_module_with_imports_unstarted(
       let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
       // Copy data to memory
       mem.init_data_at(offset, data.init)
-      instance.dropped_datas[data_idx] = true
+      instance.drop_data(data_idx)
     }
   }
 
@@ -1666,8 +1638,11 @@ pub fn instantiate_module_with_imports(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
-  let instance = instantiate_module_with_imports_unstarted(store, mod, imports)
-  if mod.start is Some(start_func_idx) {
+  let validated = validate_execution_module(mod)
+  let instance = instantiate_validated_module_with_imports_unstarted(
+    store, validated, imports,
+  )
+  if validated.start() is Some(start_func_idx) {
     call_func_by_index(store, instance, start_func_idx, []) |> ignore
   }
   instance
@@ -1681,8 +1656,11 @@ pub async fn instantiate_module_with_imports_async(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
-  let instance = instantiate_module_with_imports_unstarted(store, mod, imports)
-  if mod.start is Some(start_func_idx) {
+  let validated = validate_execution_module(mod)
+  let instance = instantiate_validated_module_with_imports_unstarted(
+    store, validated, imports,
+  )
+  if validated.start() is Some(start_func_idx) {
     call_func_by_index_async(store, instance, start_func_idx, []) |> ignore
   }
   instance
@@ -1802,6 +1780,16 @@ pub fn call_exported_func_with_options(
   args : Array[@types.Value],
   options~ : CallExportOptions = CallExportOptions(),
 ) -> CallExportResult {
+  store.check_instance(instance) catch {
+    error =>
+      return Err(
+        call_export_failure(
+          HostInvocation,
+          error.to_string(),
+          runtime_error=Some(error),
+        ),
+      )
+  }
   if check_call_export_options(options) is Some(failure) {
     return Err(failure)
   }
@@ -1838,7 +1826,16 @@ pub fn call_exported_func_with_options(
             } else {
               None
             },
-          )
+          ) catch {
+            error =>
+              return Err(
+                call_export_failure(
+                  HostInvocation,
+                  error.to_string(),
+                  runtime_error=Some(error),
+                ),
+              )
+          }
           let results = ctx.call_func(func_idx, args) catch {
             BranchWith(_, _) | Return =>
               return Err(
@@ -2022,4 +2019,13 @@ pub async fn instantiate_with_linker_async(
   let instance = instantiate_module_with_imports_async(store, mod, imports)
   linker.register(name, instance)
   instance
+}
+
+///|
+fn validate_execution_module(
+  module_ : @types.Module,
+) -> @validator.ValidatedModule raise @runtime.RuntimeError {
+  @validator.ValidatedModule::new(module_, stack_switching=true) catch {
+    error => raise InvalidModule(error.to_string())
+  }
 }

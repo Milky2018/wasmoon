@@ -11,7 +11,7 @@ import {
 // Values
 pub fn translate_function(@types.Module, Int, @embedding.EmbeddingEnvironment, name? : String, memory_max_override? : Int?) -> @milkir.Function
 
-pub fn translate_function_body(TranslationContext, String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> @milkir.Function
+pub fn translate_function_body(TranslationContext, String, @types.FuncType, ArrayView[@types.ValueType], ArrayView[@types.Instruction]) -> @milkir.Function
 
 // Errors
 

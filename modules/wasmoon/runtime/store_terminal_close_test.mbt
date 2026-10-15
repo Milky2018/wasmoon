@@ -13,12 +13,13 @@ fn closed_store_result(
 test "Store close is terminal for resource creation" {
   let store = @runtime.Store::Store()
   let memory = @runtime.Memory::Memory(1, None)
+  let validated = @validator.ValidatedModule::new(
+    @types.Module::simple([], [], [], "f"),
+  )
   store.close()
   let results = [
     closed_store_result(() => store.enable_c_heap()),
-    closed_store_result(() => {
-      store.alloc_func({ locals: [], body: [], }) |> ignore
-    }),
+    closed_store_result(() => store.alloc_func(validated, 0) |> ignore),
     closed_store_result(() => store.alloc_host_func(fn(_args) { [] }) |> ignore),
     closed_store_result(() => {
       store.alloc_table(Table(FuncRef, 0, None)) |> ignore

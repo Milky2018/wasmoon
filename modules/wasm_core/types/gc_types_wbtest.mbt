@@ -11,7 +11,10 @@ test "SubType::simple creates final type without supertypes" {
   let subtype = SubType::simple(composite)
   inspect(subtype.final_, content="true")
   inspect(subtype.supertypes.length(), content="0")
-  inspect(subtype.composite, content="Func({params: [I32], results: [I64]})")
+  inspect(
+    subtype.composite,
+    content="Func({params: <ReadOnlyArray: [I32]>, results: <ReadOnlyArray: [I64]>})",
+  )
 }
 
 ///|
@@ -21,8 +24,8 @@ test "SubType::from_func wraps FuncType correctly" {
   inspect(subtype.final_, content="true")
   inspect(subtype.supertypes.length(), content="0")
   guard subtype.composite is Func(ft) else { return }
-  debug_inspect(ft.params, content="[F32, F64]")
-  debug_inspect(ft.results, content="[I32]")
+  debug_inspect(ft.params[:].to_owned(), content="[F32, F64]")
+  debug_inspect(ft.results[:].to_owned(), content="[I32]")
 }
 
 ///|
@@ -30,8 +33,8 @@ test "SubType::func convenience function" {
   let subtype = SubType::func([I32, I32], [I32])
   inspect(subtype.final_, content="true")
   guard subtype.composite is Func(ft) else { return }
-  debug_inspect(ft.params, content="[I32, I32]")
-  debug_inspect(ft.results, content="[I32]")
+  debug_inspect(ft.params[:].to_owned(), content="[I32, I32]")
+  debug_inspect(ft.results[:].to_owned(), content="[I32]")
 }
 
 ///|
@@ -81,7 +84,7 @@ test "StructType with packed i16 field" {
 
 ///|
 test "StructType with mixed field types" {
-  let fields : Array[FieldType] = [
+  let fields : ReadOnlyArray[FieldType] = [
     { storage_type: Val(I32), mutable: false, },
     { storage_type: Packed(I8), mutable: true, },
     { storage_type: Val(F64), mutable: false, },
@@ -143,7 +146,7 @@ test "CompositeType::Func variant" {
   let ft : FuncType = { params: [I32], results: [I32], }
   let composite = CompositeType::Func(ft)
   guard composite is Func(f) else { return }
-  debug_inspect(f.params, content="[I32]")
+  debug_inspect(f.params[:].to_owned(), content="[I32]")
 }
 
 ///|
@@ -180,8 +183,8 @@ test "func_types_to_subtypes with single type" {
   inspect(subtypes.length(), content="1")
   inspect(subtypes[0].final_, content="true")
   guard subtypes[0].composite is Func(ft) else { return }
-  debug_inspect(ft.params, content="[I32]")
-  debug_inspect(ft.results, content="[I64]")
+  debug_inspect(ft.params[:].to_owned(), content="[I32]")
+  debug_inspect(ft.results[:].to_owned(), content="[I64]")
 }
 
 ///|
@@ -385,10 +388,10 @@ test "Module::func_type_at returns correct FuncType" {
   mod_.types.push(SubType::func([], [F64]))
   let ft0 = mod_.func_type_at(0).unwrap()
   let ft1 = mod_.func_type_at(1).unwrap()
-  debug_inspect(ft0.params, content="[I32, I32]")
-  debug_inspect(ft0.results, content="[I32]")
-  debug_inspect(ft1.params, content="[]")
-  debug_inspect(ft1.results, content="[F64]")
+  debug_inspect(ft0.params[:].to_owned(), content="[I32, I32]")
+  debug_inspect(ft0.results[:].to_owned(), content="[I32]")
+  debug_inspect(ft1.params[:].to_owned(), content="[]")
+  debug_inspect(ft1.results[:].to_owned(), content="[F64]")
 }
 
 ///|
@@ -490,7 +493,7 @@ test "Module with mixed type definitions" {
   inspect(mod_.is_func_type(4), content="true")
   // Get specific types
   let add_type = mod_.func_type_at(1).unwrap()
-  debug_inspect(add_type.params, content="[I32, I32]")
+  debug_inspect(add_type.params[:].to_owned(), content="[I32, I32]")
   let point_type = mod_.struct_type_at(2).unwrap()
   inspect(point_type.fields.length(), content="1")
   let arr_type = mod_.array_type_at(3).unwrap()

@@ -500,7 +500,7 @@ fn ExecContext::exec_array_new_data(
   let bytes_per_elem = storage_type_byte_size(array_type.element.storage_type)
 
   // Check bounds
-  let source_len = if self.instance.dropped_datas[data_idx] {
+  let source_len = if self.instance.data_dropped(data_idx) {
     0
   } else {
     data_segment.init.length()
@@ -554,7 +554,7 @@ fn ExecContext::exec_array_new_elem(
 
   // Check if elem segment has been dropped or is declarative
   let elem_segment = self.instance.elem_segments[elem_idx]
-  let is_dropped = self.instance.dropped_elems[elem_idx]
+  let is_dropped = self.instance.element_dropped(elem_idx)
   let is_declarative = elem_segment.mode is Declarative
   let elem_len = if is_dropped || is_declarative {
     0
@@ -570,7 +570,7 @@ fn ExecContext::exec_array_new_elem(
   // Read elements from elem segment
   let elements : Array[@types.Value] = []
   for i in 0..<len {
-    let value = self.instance.elem_values[elem_idx][offset + i]
+    let value = self.instance.element_value(elem_idx, offset + i)
     elements.push(value)
   }
 
@@ -622,7 +622,7 @@ fn ExecContext::exec_array_init_data(
   let data_segment = self.instance.data_segments[data_idx]
   let array_type = self.instance.validated_array_type_at(type_idx)
   let bytes_per_elem = storage_type_byte_size(array_type.element.storage_type)
-  let source_len = if self.instance.dropped_datas[data_idx] {
+  let source_len = if self.instance.data_dropped(data_idx) {
     0
   } else {
     data_segment.init.length()
@@ -681,7 +681,7 @@ fn ExecContext::exec_array_init_elem(
     raise @runtime.RuntimeError::OutOfBoundsArrayAccess
   }
   let elem_segment = self.instance.elem_segments[elem_idx]
-  let elem_len = if self.instance.dropped_elems[elem_idx] ||
+  let elem_len = if self.instance.element_dropped(elem_idx) ||
     elem_segment.mode is Declarative {
     0
   } else {
@@ -694,7 +694,7 @@ fn ExecContext::exec_array_init_elem(
 
   // Copy elements from elem segment to array
   for i in 0..<len {
-    let value = self.instance.elem_values[elem_idx][src_offset + i]
+    let value = self.instance.element_value(elem_idx, src_offset + i)
     self.store.array_set(arr_idx, dst_offset + i, value)
   }
 }

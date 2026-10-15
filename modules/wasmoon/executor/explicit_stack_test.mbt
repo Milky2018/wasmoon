@@ -37,7 +37,7 @@ fn limited_count(
   let instance = @executor.instantiate_module_with_imports(
     store,
     deep_call_module(),
-    Imports(),
+    Imports(store),
   )
   (store, instance)
 }
@@ -112,7 +112,7 @@ test "explicit stack: tail calls replace the frame within a one-frame budget" {
   let instance = @executor.instantiate_module_with_imports(
     store,
     mod,
-    Imports(),
+    Imports(store),
   )
   assert_true(
     @executor.call_exported_func(store, instance, "tail", [I32(100000)])[0]
@@ -193,7 +193,7 @@ test "explicit stack: deep host suspension and single-use resume" {
     func_type={ params: [], results: [I32], },
     type_idx=1,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("host", "leaf", host)
   let instance = @executor.instantiate_module_with_imports(
     store,
@@ -247,7 +247,7 @@ test "explicit stack: host reentry is bounded and recovers" {
     func_type={ params: [], results: [I32], },
     type_idx=1,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("host", "leaf", host)
   let instance = @executor.instantiate_module_with_imports(
     store,
@@ -276,9 +276,14 @@ test "explicit stack: host reentry is bounded and recovers" {
 test "explicit stack: deep structured control and control budget" {
   let mut body : Array[@types.Instruction] = [I32Const(42)]
   for _ in 0..<2000 {
-    body = [Block(Value(I32), body)]
+    body = [Block(Value(I32), ReadOnlyArray::from_array(body))]
   }
-  let mod = @types.Module::simple([], [I32], body, "nested")
+  let mod = @types.Module::simple(
+    [],
+    [I32],
+    ReadOnlyArray::from_array(body),
+    "nested",
+  )
   let (store, instance) = @executor.instantiate_module(mod)
   defer store.close()
   assert_true(
@@ -291,7 +296,7 @@ test "explicit stack: deep structured control and control budget" {
   let instance = @executor.instantiate_module_with_imports(
     limited,
     mod,
-    Imports(),
+    Imports(limited),
   )
   let exhausted = try
     @executor.call_exported_func(limited, instance, "nested", [])
@@ -398,7 +403,7 @@ test "explicit stack: deep frame roots survive host collection" {
     func_type={ params: [], results: [], },
     type_idx=1,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("host", "collect", host)
   let instance = @executor.instantiate_module_with_imports(store, mod, imports)
   assert_true(
@@ -463,7 +468,9 @@ test "explicit stack: runaway ordinary recursion traps" {
 test "explicit stack: frame storage exhaustion preserves call-stack classification" {
   let mod : @types.Module = {
     ..@types.Module::simple([], [], [], "run"),
-    codes: [{ locals: Array::make(32, I64), body: [], }],
+    codes: [
+      { locals: ReadOnlyArray::from_array(Array::make(32, I64)), body: [], },
+    ],
   }
   let store = @runtime.Store::Store(
     interpreter_limits=@runtime.InterpreterLimits::new(max_values=16),
@@ -472,7 +479,7 @@ test "explicit stack: frame storage exhaustion preserves call-stack classificati
   let instance = @executor.instantiate_module_with_imports(
     store,
     mod,
-    Imports(),
+    Imports(store),
   )
   let exhausted = try
     @executor.call_exported_func(store, instance, "run", [])
@@ -502,7 +509,7 @@ test "explicit stack: nested guest continuation boundaries are bounded" {
   let instance = @executor.instantiate_module_with_imports(
     store,
     mod,
-    Imports(),
+    Imports(store),
   )
   let exhausted = try
     @executor.call_exported_func(store, instance, "run", [])

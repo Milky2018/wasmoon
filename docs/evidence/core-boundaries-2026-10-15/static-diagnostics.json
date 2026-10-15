@@ -1,0 +1,47 @@
+[
+  {
+    "$message_type": "diagnostic",
+    "level": "error",
+    "error_code": 4091,
+    "path": "modules/wasmoon/testsuite/core_boundary_static_probe_test.mbt",
+    "loc": "8:3-8:14",
+    "message": "The type @Milky2018/wasmoon/runtime.Store has no field funcs.",
+    "context": "7 |) -> Unit {\n8 |  store.funcs.clear()\n9 |  instance.func_addrs = []\n"
+  },
+  {
+    "$message_type": "diagnostic",
+    "level": "error",
+    "error_code": 4015,
+    "path": "modules/wasmoon/testsuite/core_boundary_static_probe_test.mbt",
+    "loc": "8:15-8:20",
+    "message": "Type Int has no method clear.",
+    "context": "7 |) -> Unit {\n8 |  store.funcs.clear()\n9 |  instance.func_addrs = []\n"
+  },
+  {
+    "$message_type": "diagnostic",
+    "level": "error",
+    "error_code": 4094,
+    "path": "modules/wasmoon/testsuite/core_boundary_static_probe_test.mbt",
+    "loc": "9:3-9:27",
+    "message": "Cannot modify a read-only field: func_addrs",
+    "context": " 8 |  store.funcs.clear()\n 9 |  instance.func_addrs = []\n10 |  code.body[0] = Unreachable\n"
+  },
+  {
+    "$message_type": "diagnostic",
+    "level": "error",
+    "error_code": 4015,
+    "path": "modules/wasmoon/testsuite/core_boundary_static_probe_test.mbt",
+    "loc": "10:12-10:15",
+    "message": "Type ReadOnlyArray[@Milky2018/wasm_core/types.Instruction] has no method op_set.",
+    "context": " 9 |  instance.func_addrs = []\n10 |  code.body[0] = Unreachable\n11 |  validated.module_.codes.clear()\n"
+  },
+  {
+    "$message_type": "diagnostic",
+    "level": "error",
+    "error_code": 4091,
+    "path": "modules/wasmoon/testsuite/core_boundary_static_probe_test.mbt",
+    "loc": "11:3-11:20",
+    "message": "The type @Milky2018/wasm_core/validator.ValidatedModule has no field module_.",
+    "context": "10 |  code.body[0] = Unreachable\n11 |  validated.module_.codes.clear()\n12 |}\n"
+  }
+]

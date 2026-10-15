@@ -103,7 +103,7 @@ fn hostcall_abi_stack_location(
 
 ///|
 fn hostcall_param_locations(
-  param_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
   int_arg_regs : Array[Int32],
   float_arg_reg_count : Int32,
 ) -> Array[HostcallAbiValueLocation] {
@@ -155,7 +155,7 @@ fn hostcall_abi_return_area_location(
 
 ///|
 fn hostcall_result_locations(
-  result_types : Array[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   int_result_regs : Array[Int32],
   float_result_reg_count : Int32,
 ) -> Array[HostcallAbiValueLocation] {
@@ -230,8 +230,8 @@ fn hostcall_return_area_size(
 
 ///|
 fn validate_hostcall_import_signature(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Unit {
   param_types |> ignore
   result_types |> ignore
@@ -671,8 +671,8 @@ fn a64_emit_store_result_to_values_vec(
 
 ///|
 fn build_aarch64_hostcall_import_trampoline(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   bridge : RuntimeValueBridge,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
   validate_hostcall_import_signature(param_types, result_types)
@@ -1039,8 +1039,8 @@ fn x64_hostcall_stack_adjust(values_vec_bytes : Int32) -> Int32 {
 
 ///|
 fn build_x64_hostcall_import_trampoline(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   bridge : RuntimeValueBridge,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
   validate_hostcall_import_signature(param_types, result_types)
@@ -1091,8 +1091,8 @@ fn build_x64_hostcall_import_trampoline(
 
 ///|
 pub fn build_hostcall_import_trampoline_for_target(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   host_func_addr : Int32,
   target : NativeTarget,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
@@ -1114,16 +1114,16 @@ pub fn build_hostcall_import_trampoline_for_target(
 
 ///|
 fn validate_entry_trampoline_signature(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Unit {
   validate_hostcall_import_signature(param_types, result_types)
 }
 
 ///|
 fn build_aarch64_entry_trampoline(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Array[Int32] raise HostcallImportTrampolineError {
   validate_entry_trampoline_signature(param_types, result_types)
   let code : Array[Int32] = []
@@ -1197,8 +1197,8 @@ fn build_aarch64_entry_trampoline(
 
 ///|
 fn build_x64_entry_trampoline(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Array[Int32] raise HostcallImportTrampolineError {
   validate_entry_trampoline_signature(param_types, result_types)
   let code : Array[Int32] = []
@@ -1288,8 +1288,8 @@ fn build_x64_entry_trampoline(
 
 ///|
 pub fn build_entry_trampoline_for_target(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   target : NativeTarget,
 ) -> Array[Int32] raise HostcallImportTrampolineError {
   match target {

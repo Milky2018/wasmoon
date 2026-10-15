@@ -20,7 +20,7 @@ core Wasm binary ───────→ wasm_core/parser ──┴→ wasm_cor
 WAST test script → wasm_core/wat → wasmoon/wast runner → the same validation and execution paths
 ```
 
-The `wasmoon run` command validates both the main module and preloaded core modules before instantiation. Library callers that assemble parsing, validation, and execution themselves remain responsible for preserving the same boundary.
+The `wasmoon run` command and public Core executor instantiation APIs validate module snapshots before instantiation. Reusable `ValidatedModule` evidence owns an accepted snapshot; Store and instance metadata is private or immutable. Reference-bearing embedding calls use Store-bound `Function` and `RootedValue` handles. Deliberate raw engine and native ABI seams retain explicit preconditions; see [Core embedding boundaries](core-embedding.md).
 
 ## Workspace and Ownership
 
