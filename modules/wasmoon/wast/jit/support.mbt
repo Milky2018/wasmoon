@@ -104,8 +104,8 @@ fn store_addr_to_module_func_idx(
   store_addr : Int32,
   instance : @runtime.ModuleInstance,
 ) -> Int32? {
-  for i, addr in instance.func_addrs {
-    if addr == store_addr {
+  for i in 0..<instance.func_addrs.length() {
+    if instance.func_addrs[i] == store_addr {
       return Some(i)
     }
   }

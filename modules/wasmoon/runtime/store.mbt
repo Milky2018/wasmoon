@@ -1165,8 +1165,9 @@ pub fn Store::get_func_canonical_type_idx(
     HostFunc => {
       // Host function types are declared in the importing module's type graph.
       for instance in self.instances {
-        for index, address in instance.func_addrs {
-          if address == func_addr && index < instance.func_type_indices.length() {
+        for index in 0..<instance.func_addrs.length() {
+          if instance.func_addrs[index] == func_addr &&
+            index < instance.func_type_indices.length() {
             let type_index = instance.func_type_indices[index]
             return self.native_types.register(instance)[type_index]
           }

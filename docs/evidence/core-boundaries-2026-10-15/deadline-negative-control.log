@@ -1,0 +1,2 @@
+[Milky2018/wasmoon] test wasi_http/timeout_wbtest.mbt:220 ("actual body data replaces the previous deadline before the next read") failed: TimerCancelled
+Total tests: 1, passed: 0, failed: 1.

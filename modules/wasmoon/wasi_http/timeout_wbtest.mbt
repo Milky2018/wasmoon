@@ -217,21 +217,47 @@ async test "chunk framing cannot refresh the between-byte deadline" {
 }
 
 ///|
-async test "actual body data refreshes the between-byte deadline" {
-  check_response_timeout(
-    1000000000L,
-    200000000L,
-    async fn(socket) {
-      socket.write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
-      for _ in 0..<6 {
-        socket.write(b"1\r\nx\r\n")
-        @async.sleep(50)
-      }
-      socket.write(b"0\r\n\r\n")
-    },
-    b"xxxxxx",
-    false,
-  )
+async test "actual body data replaces the previous deadline before the next read" {
+  @async.with_timeout(5000, async fn() {
+    let delivered = Ref(0)
+    let wake = @async.CondVar::Cond()
+    let (reader, writer) = @io.pipe()
+    defer reader.close()
+    let input = HttpInput::{
+      reader,
+      buffer: b"",
+      offset: 0,
+      timeout: Some(200),
+      body_deadline: Some(Timer(1000)),
+    }
+    @async.with_task_group(async fn(group) {
+      group.spawn_bg(async fn() {
+        defer writer.close()
+        for i in 0..<6 {
+          let previous = input.body_deadline.unwrap()
+          writer.write(b"1\r\nx\r\n")
+          while delivered.val <= i {
+            wake.wait()
+          }
+          let next = input.body_deadline.unwrap()
+          assert_false(physical_equal(previous, next))
+          assert_eq(next.duration, 200)
+        }
+        writer.write(b"0\r\n\r\n")
+      })
+      let received : Array[Byte] = []
+      input.body(Chunked, fn(bytes) {
+        received.append(bytes.to_array())
+        // A stale deadline must not affect the next read, even if cancelled.
+        input.body_deadline.unwrap().cancel()
+        delivered.val += 1
+        wake.broadcast()
+      })
+      |> ignore
+      assert_eq(Bytes::from_array(received), b"xxxxxx")
+      assert_eq(delivered.val, 6)
+    })
+  })
 }
 
 ///|
