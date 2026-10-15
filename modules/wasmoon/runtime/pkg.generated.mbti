@@ -66,6 +66,9 @@ pub(all) suberror RuntimeError {
   TypeMismatch
   StoreClosed
   MemoryClosed
+  InvalidMemoryType(String)
+  InvalidTableType(String)
+  HeapRepresentationInUse
   OutOfBoundsMemoryAccess
   OutOfBoundsTableAccess
   OutOfBoundsArrayAccess
@@ -292,7 +295,7 @@ pub fn InterpreterLimits::new(max_frames? : Int, max_values? : Int, max_controls
 pub fn InterpreterLimits::to_repr(Self) -> @debug.Repr
 
 type Linker
-pub fn Linker::Linker() -> Self
+pub fn Linker::Linker() -> Self raise RuntimeError
 pub fn Linker::add_async_host_func(Self, String, String, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType) -> Unit raise RuntimeError
 pub fn Linker::add_async_host_func_with_caller(Self, String, String, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType) -> Unit raise RuntimeError
 pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit raise RuntimeError
@@ -356,7 +359,7 @@ pub impl GcManager for MarkSweepHeap
 pub impl GcRuntime for MarkSweepHeap
 
 type Memory derive(@debug.Debug)
-pub fn Memory::Memory(Int, Int?, is_memory64? : Bool, is_shared? : Bool, page_size_log2? : Int) -> Self
+pub fn Memory::Memory(Int, Int?, is_memory64? : Bool, is_shared? : Bool, page_size_log2? : Int) -> Self raise RuntimeError
 pub fn Memory::atomic_compare_exchange(Self, Int64, Int, Int64, Int64) -> Int64 raise RuntimeError
 pub fn Memory::atomic_load(Self, Int64, Int) -> Int64 raise RuntimeError
 pub fn Memory::atomic_notify(Self, Int64, UInt) -> UInt raise RuntimeError
@@ -409,7 +412,7 @@ pub fn Memory::load_i64_8s_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8u(Self, Int) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_8u_at(Self, Int64) -> Int64 raise RuntimeError
 pub fn Memory::load_i64_at(Self, Int64) -> Int64 raise RuntimeError
-pub fn Memory::new_guarded_memory0(Int, Int?, is_shared? : Bool) -> Self
+pub fn Memory::new_guarded_memory0(Int, Int?, is_shared? : Bool) -> Self raise RuntimeError
 pub fn Memory::page_size_bytes(Self) -> Int64
 pub fn Memory::read_byte(Self, Int) -> Byte
 pub fn Memory::read_bytes(Self, Int, Int) -> Bytes
@@ -578,7 +581,7 @@ pub struct Store {
   native_execution : @execution.NativeExecutionState
   // private fields
 } derive(@debug.Debug)
-pub fn Store::Store(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self
+pub fn Store::Store(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self raise RuntimeError
 pub fn Store::alloc_array(Self, Int, Array[@types.Value], instance? : ModuleInstance) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func(Self, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func_with_caller(Self, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
@@ -624,13 +627,13 @@ pub fn Store::get_gc_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
 pub fn Store::get_jit_table(Self, Int) -> @wasmoon_jit.JITTable?
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
-pub fn Store::get_memory(Self, Int) -> Memory
+pub fn Store::get_memory(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_table(Self, Int) -> Table raise RuntimeError
 pub fn Store::get_tag_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_tag_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_tag_type_idx(Self, Int) -> Int
 pub fn Store::get_wasi_ctx_handle(Self) -> Int
-pub fn Store::get_wasi_memory(Self) -> Memory
+pub fn Store::get_wasi_memory(Self) -> Memory raise RuntimeError
 pub fn Store::has_c_heap(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::jit_funcref_entries(Self) -> Array[StoreFuncrefEntry]
@@ -657,7 +660,7 @@ pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeErro
 pub fn Store::take_guest_continuation(Self, Int64) -> GuestContinuationBody raise RuntimeError
 pub fn Store::to_repr(Self) -> @debug.Repr
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
-pub fn Store::with_c_heap(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self
+pub fn Store::with_c_heap(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self raise RuntimeError
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 
 pub struct StoreFuncrefEntry {

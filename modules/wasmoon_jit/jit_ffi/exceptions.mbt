@@ -3,7 +3,20 @@
 type NativeExceptionArena
 
 ///|
-pub extern "c" fn NativeExceptionArena::new() -> NativeExceptionArena = "wasmoon_exception_arena_new"
+extern "c" fn NativeExceptionArena::allocate() -> NativeExceptionArena = "wasmoon_exception_arena_new"
+
+///|
+#borrow(self)
+extern "c" fn NativeExceptionArena::is_available(
+  self : NativeExceptionArena,
+) -> Bool = "wasmoon_exception_arena_is_available"
+
+///|
+pub fn NativeExceptionArena::new() -> NativeExceptionArena raise NativeAllocationError {
+  let arena = NativeExceptionArena::allocate()
+  guard arena.is_available() else { raise OutOfMemory }
+  arena
+}
 
 ///|
 #borrow(self)

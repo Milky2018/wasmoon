@@ -124,7 +124,7 @@ fn JITContext::alloc_guarded_memory(
 fn JITContext::set_table_pointers(
   self : JITContext,
   jit_tables : Array[@wasmoon_jit.JITTable?],
-) -> Unit {
+) -> Unit raise @wasmoon_jit.NativeSetupError {
   self.ctx.set_table_pointers(jit_tables)
 }
 
@@ -141,7 +141,7 @@ fn JITContext::refresh_table_layout(
 fn JITContext::set_memory_pointers(
   self : JITContext,
   memories : Array[@wasmoon_jit.MemoryInfo],
-) -> Unit {
+) -> Unit raise @wasmoon_jit.NativeSetupError {
   self.ctx.set_memory_pointers(memories)
 }
 

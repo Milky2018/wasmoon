@@ -12,6 +12,7 @@
 
 #include <moonbit.h>
 #include "dwarf.h"
+#include "native_alloc.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -121,6 +122,7 @@ typedef struct {
 typedef struct {
     dwarf_func_t functions[MAX_DWARF_FUNCTIONS];
     int num_functions;
+    int capacity_exceeded;
     int closed;
     uint64_t low_pc;
     uint64_t high_pc;
@@ -137,40 +139,49 @@ typedef struct {
     uint8_t *data;
     size_t capacity;
     size_t size;
+    int failed;
 } buffer_t;
 
 static void buffer_init(buffer_t *buf, size_t initial_capacity) {
-    buf->data = (uint8_t *)malloc(initial_capacity);
+    buf->data = (uint8_t *)wasmoon_native_malloc(initial_capacity);
     buf->capacity = initial_capacity;
     buf->size = 0;
+    buf->failed = !buf->data;
 }
 
-static void buffer_ensure(buffer_t *buf, size_t additional) {
-    if (buf->size + additional > buf->capacity) {
-        buf->capacity = (buf->size + additional) * 2;
-        buf->data = (uint8_t *)realloc(buf->data, buf->capacity);
+static int buffer_ensure(buffer_t *buf, size_t additional) {
+    if (buf->failed) return 0;
+    if (additional > SIZE_MAX - buf->size) { buf->failed = 1; return 0; }
+    size_t required = buf->size + additional;
+    if (required > buf->capacity) {
+        size_t capacity = required <= SIZE_MAX / 2 ? required * 2 : required;
+        uint8_t *data = wasmoon_native_realloc(buf->data, capacity);
+        if (!data) { buf->failed = 1; return 0; }
+        buf->data = data;
+        buf->capacity = capacity;
     }
+    return 1;
 }
 
 static void buffer_write_u8(buffer_t *buf, uint8_t v) {
-    buffer_ensure(buf, 1);
+    if (!buffer_ensure(buf, 1)) return;
     buf->data[buf->size++] = v;
 }
 
 static void buffer_write_u16(buffer_t *buf, uint16_t v) {
-    buffer_ensure(buf, 2);
+    if (!buffer_ensure(buf, 2)) return;
     memcpy(buf->data + buf->size, &v, 2);
     buf->size += 2;
 }
 
 static void buffer_write_u32(buffer_t *buf, uint32_t v) {
-    buffer_ensure(buf, 4);
+    if (!buffer_ensure(buf, 4)) return;
     memcpy(buf->data + buf->size, &v, 4);
     buf->size += 4;
 }
 
 static void buffer_write_u64(buffer_t *buf, uint64_t v) {
-    buffer_ensure(buf, 8);
+    if (!buffer_ensure(buf, 8)) return;
     memcpy(buf->data + buf->size, &v, 8);
     buf->size += 8;
 }
@@ -186,13 +197,14 @@ static void buffer_write_uleb128(buffer_t *buf, uint64_t v) {
 
 static void buffer_write_string(buffer_t *buf, const char *s) {
     size_t len = strlen(s) + 1;
-    buffer_ensure(buf, len);
+    if (!buffer_ensure(buf, len)) return;
     memcpy(buf->data + buf->size, s, len);
     buf->size += len;
 }
 
 static void buffer_write_bytes(buffer_t *buf, const void *data, size_t len) {
-    buffer_ensure(buf, len);
+    if (!len) return;
+    if (!buffer_ensure(buf, len)) return;
     memcpy(buf->data + buf->size, data, len);
     buf->size += len;
 }
@@ -200,7 +212,7 @@ static void buffer_write_bytes(buffer_t *buf, const void *data, size_t len) {
 #ifdef __APPLE__
 static void buffer_align(buffer_t *buf, size_t alignment) {
     size_t padding = (alignment - (buf->size % alignment)) % alignment;
-    buffer_ensure(buf, padding);
+    if (!buffer_ensure(buf, padding)) return;
     memset(buf->data + buf->size, 0, padding);
     buf->size += padding;
 }
@@ -298,7 +310,7 @@ static void generate_debug_info(buffer_t *buf, dwarf_builder_t *builder,
 
     // Patch unit length (excludes the length field itself)
     uint32_t unit_length = (uint32_t)(buf->size - unit_start - 4);
-    memcpy(buf->data + unit_start, &unit_length, 4);
+    if (!buf->failed) memcpy(buf->data + unit_start, &unit_length, 4);
 }
 
 // ============================================================================
@@ -357,7 +369,8 @@ static void generate_macho_object(dwarf_builder_t *builder, buffer_t *output) {
     buffer_init(&strtab, 1024);
     buffer_write_u8(&strtab, 0);  // First byte is null
 
-    uint32_t *string_offsets = (uint32_t *)malloc(builder->num_functions * sizeof(uint32_t));
+    uint32_t *string_offsets = (uint32_t *)wasmoon_native_malloc(builder->num_functions * sizeof(uint32_t));
+    if (!string_offsets) { output->failed = 1; goto cleanup; }
     for (int i = 0; i < builder->num_functions; i++) {
         string_offsets[i] = (uint32_t)strtab.size;
         buffer_write_string(&strtab, builder->functions[i].name);
@@ -470,7 +483,7 @@ static void generate_macho_object(dwarf_builder_t *builder, buffer_t *output) {
 
     // Pad to section offset
     buffer_align(output, 8);
-    while (output->size < abbrev_offset) {
+    while (!output->failed && output->size < abbrev_offset) {
         buffer_write_u8(output, 0);
     }
 
@@ -479,7 +492,7 @@ static void generate_macho_object(dwarf_builder_t *builder, buffer_t *output) {
 
     // Pad to info offset
     buffer_align(output, 8);
-    while (output->size < info_offset) {
+    while (!output->failed && output->size < info_offset) {
         buffer_write_u8(output, 0);
     }
 
@@ -488,7 +501,7 @@ static void generate_macho_object(dwarf_builder_t *builder, buffer_t *output) {
 
     // Pad to symtab offset
     buffer_align(output, 8);
-    while (output->size < symtab_offset) {
+    while (!output->failed && output->size < symtab_offset) {
         buffer_write_u8(output, 0);
     }
 
@@ -508,7 +521,8 @@ static void generate_macho_object(dwarf_builder_t *builder, buffer_t *output) {
     // Write string table
     buffer_write_bytes(output, strtab.data, strtab.size);
 
-    // Cleanup
+cleanup:
+    output->failed |= strtab.failed | abbrev_buf.failed | info_buf.failed;
     free(string_offsets);
     buffer_free(&strtab);
     buffer_free(&abbrev_buf);
@@ -530,7 +544,7 @@ static void generate_coff_object(dwarf_builder_t *builder, buffer_t *output) {
     uint32_t info_name = (uint32_t)strings.size;
     buffer_write_string(&strings, ".debug_info");
     uint32_t strings_size = (uint32_t)strings.size;
-    memcpy(strings.data, &strings_size, sizeof(strings_size));
+    if (!strings.failed) memcpy(strings.data, &strings_size, sizeof(strings_size));
     IMAGE_FILE_HEADER header = {0};
     header.Machine = IMAGE_FILE_MACHINE_AMD64;
     header.NumberOfSections = 2;
@@ -550,6 +564,7 @@ static void generate_coff_object(dwarf_builder_t *builder, buffer_t *output) {
     buffer_write_bytes(output, abbrev.data, abbrev.size);
     buffer_write_bytes(output, info.data, info.size);
     buffer_write_bytes(output, strings.data, strings.size);
+    output->failed |= abbrev.failed | info.failed | strings.failed;
     buffer_free(&abbrev);
     buffer_free(&info);
     buffer_free(&strings);
@@ -579,7 +594,9 @@ static void generate_elf_object(dwarf_builder_t *builder, buffer_t *output) {
 
     // Build symbol string table.
     buffer_write_u8(&strtab, 0);
-    uint32_t *string_offsets = (uint32_t *)malloc((size_t)builder->num_functions * sizeof(uint32_t));
+    Elf64_Sym *symbols = NULL;
+    uint32_t *string_offsets = (uint32_t *)wasmoon_native_malloc((size_t)builder->num_functions * sizeof(uint32_t));
+    if (!string_offsets) { output->failed = 1; goto cleanup; }
     for (int i = 0; i < builder->num_functions; i++) {
         string_offsets[i] = (uint32_t)strtab.size;
         buffer_write_string(&strtab, builder->functions[i].name);
@@ -603,7 +620,8 @@ static void generate_elf_object(dwarf_builder_t *builder, buffer_t *output) {
     // Build symbol table: null + one symbol per function.
     int num_syms = 1 + builder->num_functions;
     size_t symtab_size = (size_t)num_syms * sizeof(Elf64_Sym);
-    Elf64_Sym *symbols = (Elf64_Sym *)calloc((size_t)num_syms, sizeof(Elf64_Sym));
+    symbols = (Elf64_Sym *)wasmoon_native_calloc((size_t)num_syms, sizeof(Elf64_Sym));
+    if (!symbols) { output->failed = 1; goto cleanup; }
     for (int i = 0; i < builder->num_functions; i++) {
         Elf64_Sym *sym = &symbols[i + 1];
         sym->st_name = string_offsets[i];
@@ -702,31 +720,33 @@ static void generate_elf_object(dwarf_builder_t *builder, buffer_t *output) {
     buffer_write_bytes(output, &ehdr, sizeof(ehdr));
     buffer_write_bytes(output, shdrs, sizeof(shdrs));
 
-    while (output->size < abbrev_offset) {
+    while (!output->failed && output->size < abbrev_offset) {
         buffer_write_u8(output, 0);
     }
     buffer_write_bytes(output, abbrev_buf.data, abbrev_buf.size);
 
-    while (output->size < info_offset) {
+    while (!output->failed && output->size < info_offset) {
         buffer_write_u8(output, 0);
     }
     buffer_write_bytes(output, info_buf.data, info_buf.size);
 
-    while (output->size < symtab_offset) {
+    while (!output->failed && output->size < symtab_offset) {
         buffer_write_u8(output, 0);
     }
     buffer_write_bytes(output, symbols, symtab_size);
 
-    while (output->size < strtab_offset) {
+    while (!output->failed && output->size < strtab_offset) {
         buffer_write_u8(output, 0);
     }
     buffer_write_bytes(output, strtab.data, strtab.size);
 
-    while (output->size < shstrtab_offset) {
+    while (!output->failed && output->size < shstrtab_offset) {
         buffer_write_u8(output, 0);
     }
     buffer_write_bytes(output, shstrtab.data, shstrtab.size);
 
+cleanup:
+    output->failed |= shstrtab.failed | strtab.failed | abbrev_buf.failed | info_buf.failed;
     free(symbols);
     free(string_offsets);
     buffer_free(&shstrtab);
@@ -765,7 +785,7 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_add_function(
     dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
     if (!builder || builder->closed) return;
     if (builder->num_functions >= MAX_DWARF_FUNCTIONS) {
-        fprintf(stderr, "DWARF: too many functions (max %d)\n", MAX_DWARF_FUNCTIONS);
+        builder->capacity_exceeded = 1;
         return;
     }
 
@@ -785,16 +805,16 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_add_function(
     }
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose) {
+MOONBIT_FFI_EXPORT int32_t wasmoon_dwarf_register(void *dwarf, int verbose) {
     dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
 
-    if (!builder || builder->closed || builder->code_entry || builder->num_functions == 0) {
-        return;
-    }
+    if (!builder || builder->closed || builder->capacity_exceeded || builder->num_functions == 0) return 0;
+    if (builder->code_entry) return 1;
 
     // Generate object file
     buffer_t object;
     buffer_init(&object, 8192);
+    if (object.failed) { buffer_free(&object); return 0; }
 
 #ifdef __APPLE__
     generate_macho_object(builder, &object);
@@ -804,13 +824,14 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose) {
     generate_elf_object(builder, &object);
 #endif
 
-    // Store object buffer
+    if (object.failed) { buffer_free(&object); return 0; }
+
+    // Create JIT code entry before publishing ownership to the builder.
+    struct jit_code_entry *entry = (struct jit_code_entry *)
+        wasmoon_native_calloc(1, sizeof(struct jit_code_entry));
+    if (!entry) { buffer_free(&object); return 0; }
     builder->object_buffer = (char *)object.data;
     builder->object_size = object.size;
-
-    // Create JIT code entry
-    struct jit_code_entry *entry = (struct jit_code_entry *)
-        calloc(1, sizeof(struct jit_code_entry));
     entry->symfile_addr = builder->object_buffer;
     entry->symfile_size = builder->object_size;
 
@@ -849,6 +870,7 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose) {
             }
         }
     }
+    return 1;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_dwarf_unregister(void *dwarf) {

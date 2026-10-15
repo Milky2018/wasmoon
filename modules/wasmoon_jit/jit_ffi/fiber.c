@@ -75,6 +75,7 @@ typedef struct native_fiber {
     native_fiber_entry_fn entry;
     void *closure;
     int owns_closure;
+    int startup_failed;
 #ifdef _WIN32
     DWORD owner_thread;
 #else
@@ -110,11 +111,9 @@ extern void wasmoon_native_fiber_swap(
 static void wasmoon_native_fiber_swap(
     native_fiber_context_t *from, const native_fiber_context_t *to
 ) {
-    int converted = !IsThreadAFiber();
-    if (converted && !ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH)) abort();
+    // The outer advance acquires thread-fiber support before changing state.
     from->handle = GetCurrentFiber();
     SwitchToFiber(to->handle);
-    if (converted && !ConvertFiberToThread()) abort();
 }
 #endif
 extern int64_t wasmoon_jit_context_ptr(void *managed);
@@ -189,7 +188,7 @@ static void release_fiber_resources(native_fiber_t *fiber) {
 
 void *native_fiber_own_resource(void *resource, void (*release)(void *)) {
     if (!current_native_fiber) return NULL;
-    native_fiber_resource_t *scope = malloc(sizeof(*scope));
+    native_fiber_resource_t *scope = wasmoon_native_malloc(sizeof(*scope));
     if (!scope) {
         g_trap_code = WASMOON_TRAP_OUT_OF_MEMORY;
         siglongjmp(g_trap_jmp_buf, 1);
@@ -242,16 +241,6 @@ static void unregister_fiber_parked_roots(native_fiber_t *fiber) {
 #ifdef _WIN32
 static VOID WINAPI fiber_bootstrap(void *unused) {
     (void)unused;
-    native_fiber_t *active = current_native_fiber;
-    ULONG guarantee = 32768;
-    if (!SetThreadStackGuarantee(&guarantee)) abort();
-    NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
-    MEMORY_BASIC_INFORMATION region;
-    if (!VirtualQuery(tib->StackLimit, &region, sizeof(region))) abort();
-    active->mapping = region.AllocationBase;
-    active->mapping_size = (uintptr_t)tib->StackBase - (uintptr_t)active->mapping;
-    active->guard_size = (uintptr_t)tib->StackLimit - (uintptr_t)active->mapping;
-    active->usable_size = (uintptr_t)tib->StackBase - (uintptr_t)tib->StackLimit;
 #else
 static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
 #endif
@@ -270,11 +259,24 @@ static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
     }
     fiber->caller_stack_bottom = caller_stack_bottom;
     fiber->caller_stack_size = caller_stack_size;
-    fiber->return_value = call_native_fiber_entry(
-        fiber->entry, fiber->closure
-    );
+#ifdef _WIN32
+    ULONG guarantee = 32768;
+    NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
+    MEMORY_BASIC_INFORMATION region;
+    if (!wasmoon_native_allocation_allowed() || !SetThreadStackGuarantee(&guarantee) ||
+        !VirtualQuery(tib->StackLimit, &region, sizeof(region))) {
+        fiber->startup_failed = 1;
+    } else {
+        fiber->mapping = region.AllocationBase;
+        fiber->mapping_size = (uintptr_t)tib->StackBase - (uintptr_t)fiber->mapping;
+        fiber->guard_size = (uintptr_t)tib->StackLimit - (uintptr_t)fiber->mapping;
+        fiber->usable_size = (uintptr_t)tib->StackBase - (uintptr_t)tib->StackLimit;
+    }
+#endif
+    if (!fiber->startup_failed)
+        fiber->return_value = call_native_fiber_entry(fiber->entry, fiber->closure);
     release_fiber_resources(fiber);
-    fiber->state = WASMOON_FIBER_STATE_RETURNED;
+    fiber->state = fiber->startup_failed ? WASMOON_FIBER_STATE_CANCELLED : WASMOON_FIBER_STATE_RETURNED;
     native_fiber_swap_stacks(
         &fiber->context,
         &fiber->caller,
@@ -295,7 +297,7 @@ static native_fiber_t *allocate_fiber(
 ) {
     if (!entry || requested_stack_size <= 0) return NULL;
 #ifdef _WIN32
-    native_fiber_t *fiber = calloc(1, sizeof(*fiber));
+    native_fiber_t *fiber = wasmoon_native_calloc(1, sizeof(*fiber));
     if (!fiber) return NULL;
     size_t size = (size_t)requested_stack_size;
     if (size < 65536) size = 65536;
@@ -339,7 +341,7 @@ static native_fiber_t *allocate_fiber(
         return NULL;
     }
 
-    native_fiber_t *fiber = (native_fiber_t *)calloc(1, sizeof(native_fiber_t));
+    native_fiber_t *fiber = (native_fiber_t *)wasmoon_native_calloc(1, sizeof(native_fiber_t));
     if (!fiber) {
         munmap(mapping, mapping_size);
         return NULL;
@@ -496,6 +498,12 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
         fiber->state != WASMOON_FIBER_STATE_SUSPENDED) {
         return WASMOON_FIBER_ADVANCE_INVALID_TRANSITION;
     }
+#ifdef _WIN32
+    int converted = !IsThreadAFiber();
+    if (converted && (!wasmoon_native_allocation_allowed() ||
+        !ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH)))
+        return WASMOON_FIBER_ADVANCE_RESOURCE_FAILURE;
+#endif
     native_fiber_t *previous = current_native_fiber;
     current_native_fiber = fiber;
     fiber->resume_value = resume_value;
@@ -510,6 +518,16 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
         NULL
     );
     current_native_fiber = previous;
+#ifdef _WIN32
+    // Reversal on the same current thread cannot allocate or change fibers.
+    if (converted && !ConvertFiberToThread()) abort();
+#endif
+    if (fiber->startup_failed) {
+        release_fiber_stack(fiber);
+        if (fiber->owns_closure && fiber->closure) moonbit_decref(fiber->closure);
+        fiber->closure = NULL;
+        return WASMOON_FIBER_ADVANCE_RESOURCE_FAILURE;
+    }
     if (fiber->state == WASMOON_FIBER_STATE_SUSPENDED) {
         return WASMOON_FIBER_ADVANCE_SUSPENDED;
     }

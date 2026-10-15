@@ -19,6 +19,7 @@ typedef struct {
 // The legacy standalone helper API allocates this lazily outside an invocation.
 typedef struct {
     void *exception_handler;  // Current exception handler (exception_handler_t*)
+    int hostcall_exception_pending; // Deliver only after the MoonBit callback returns.
     int64_t exception_ref;
     int32_t exception_tag;    // Tag of in-flight exception
     int64_t *exception_values; // Exception payload values

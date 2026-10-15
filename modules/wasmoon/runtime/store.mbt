@@ -155,7 +155,11 @@ fn c_heap_initial_capacity() -> Int32 {
 pub fn Store::Store(
   nan_canonicalization~ : Bool = false,
   interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
-) -> Store {
+) -> Store raise RuntimeError {
+  let native_execution = @wasmoon_jit.NativeExecutionState() catch {
+    _ => raise OutOfMemory
+  }
+
   {
     nan_canonicalization,
     interpreter_limits,
@@ -186,7 +190,7 @@ pub fn Store::Store(
     jit_table_owners: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
-    native_execution: NativeExecutionState(),
+    native_execution,
     funcref_registry: StoreFuncrefRegistry::new(),
     native_types: StoreTypeRegistry::new(),
     native_exception_to_store: Map([]),
@@ -207,8 +211,14 @@ pub fn Store::Store(
 pub fn Store::with_c_heap(
   nan_canonicalization~ : Bool = false,
   interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
-) -> Store {
+) -> Store raise RuntimeError {
+  let native_execution = @wasmoon_jit.NativeExecutionState() catch {
+    _ => raise OutOfMemory
+  }
   let initial_capacity = c_heap_initial_capacity()
+  let heap = @wasmoon_jit.CHeap(capacity=initial_capacity) catch {
+    _ => raise OutOfMemory
+  }
   let store : Store = {
     nan_canonicalization,
     interpreter_limits,
@@ -229,7 +239,7 @@ pub fn Store::with_c_heap(
     tag_owners: [],
     exns: Map([]),
     heap: MarkSweepHeap(), // Used only when c_heap is None.
-    c_heap: Some(CHeap(capacity=initial_capacity)),
+    c_heap: Some(heap),
     module_types: [],
     module_rec_groups: [],
     wrapped_externs: Map([]),
@@ -239,7 +249,7 @@ pub fn Store::with_c_heap(
     jit_table_owners: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
-    native_execution: NativeExecutionState(),
+    native_execution,
     funcref_registry: StoreFuncrefRegistry::new(),
     native_types: StoreTypeRegistry::new(),
     native_exception_to_store: Map([]),
@@ -441,7 +451,13 @@ pub fn GcRootLease::snapshot(self : GcRootLease) -> Array[@types.Value] {
 pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
   self.ensure_open()
   if self.c_heap is None {
-    self.c_heap = Some(CHeap(capacity=c_heap_initial_capacity()))
+    guard self.heap.stats().live_objects == 0 else {
+      raise HeapRepresentationInUse
+    }
+    let heap = @wasmoon_jit.CHeap(capacity=c_heap_initial_capacity()) catch {
+      _ => raise OutOfMemory
+    }
+    self.c_heap = Some(heap)
     self.native_execution.exceptions().enable_reclamation()
   }
 }
@@ -1152,21 +1168,18 @@ pub fn Store::get_mem(self : Store, idx : Int32) -> Memory raise RuntimeError {
 }
 
 ///|
-/// Get memory by index (returns None if not found)
-/// This is useful for WASI functions that need memory access
-pub fn Store::get_memory(self : Store, idx : Int32) -> Memory {
-  if idx < 0 || idx >= self.mems.length() {
-    // Return a dummy empty memory if not found
-    Memory(0, None)
-  } else {
-    self.mems[idx]
-  }
+/// Get memory by index, rejecting missing memories without fabricating a handle.
+pub fn Store::get_memory(
+  self : Store,
+  idx : Int32,
+) -> Memory raise RuntimeError {
+  self.get_mem(idx)
 }
 
 ///|
 /// Get WASI module's memory
 /// Uses the stored wasi_mem_addr if set, otherwise falls back to index 0
-pub fn Store::get_wasi_memory(self : Store) -> Memory {
+pub fn Store::get_wasi_memory(self : Store) -> Memory raise RuntimeError {
   match self.wasi_mem_addr {
     Some(addr) => self.get_memory(addr)
     None => self.get_memory(0)

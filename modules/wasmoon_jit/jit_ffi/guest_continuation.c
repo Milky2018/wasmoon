@@ -77,7 +77,7 @@ static void continuation_trap(int code) {
 }
 
 struct native_continuation_arena *continuation_arena_new(void) {
-    native_continuation_arena_t *arena = calloc(1, sizeof(*arena));
+    native_continuation_arena_t *arena = wasmoon_native_calloc(1, sizeof(*arena));
     if (arena) arena->references = 1;
     return arena;
 }
@@ -265,7 +265,7 @@ static int64_t publish_continuation(native_continuation_arena_t *arena,
     if (arena->count == arena->capacity) {
         size_t capacity = arena->capacity ? arena->capacity * 2 : 16;
         if (capacity > INT32_MAX) continuation_trap(9);
-        void *handles = realloc(arena->handles, capacity * sizeof(*arena->handles));
+        void *handles = wasmoon_native_realloc(arena->handles, capacity * sizeof(*arena->handles));
         if (!handles) continuation_trap(9);
         arena->handles = handles;
         arena->capacity = capacity;
@@ -319,14 +319,14 @@ static int64_t WASMOON_GUEST_ABI continuation_new(jit_context_t *ctx, int32_t in
     native_continuation_type_t *type = ctx_runtime(ctx)->continuation_types;
     while (type && type->index != index) type = type->next;
     if (!type || !ctx_runtime(ctx)->continuation_arena || ctx_runtime(ctx)->continuation_arena->sealed) continuation_trap(8);
-    native_continuation_body_t *body = calloc(1, sizeof(*body));
+    native_continuation_body_t *body = wasmoon_native_calloc(1, sizeof(*body));
     if (!body) continuation_trap(9);
     body->arena = ctx_runtime(ctx)->continuation_arena;
     body->context = ctx;
     body->type = type;
     body->function = function & ~(INT64_C(1) << 61);
     int slots = type->params + type->results;
-    body->values = calloc(slots ? slots : 1, sizeof(int64_t));
+    body->values = wasmoon_native_calloc(slots ? slots : 1, sizeof(int64_t));
     if (!body->values) { free(body); continuation_trap(9); }
     if (ctx_gc_heap(ctx)) {
         if (!gc_heap_register_parked_roots(ctx_gc_heap(ctx), type->params ? type->params : 1,
@@ -362,7 +362,7 @@ static int64_t WASMOON_GUEST_ABI continuation_bind(jit_context_t *ctx, int32_t i
         body->input_root_registration = registration;
         body->input_roots = roots;
         // A suspended continuation's parameters are its suspension results.
-        int64_t *input = malloc((size_t)(body->input_count + count) * sizeof(int64_t));
+        int64_t *input = wasmoon_native_malloc((size_t)(body->input_count + count) * sizeof(int64_t));
         if ((body->input_count + count) && !input) continuation_trap(9);
         if (body->input_count) memcpy(input, body->input, (size_t)body->input_count * sizeof(int64_t));
         if (count) memcpy(input + body->input_count, values, (size_t)count * sizeof(int64_t));
@@ -414,7 +414,7 @@ static void prepare_resume(native_continuation_body_t *body,
         body->started = 1;
     } else {
         int total = body->input_count + count;
-        int64_t *input = total ? malloc((size_t)total * sizeof(int64_t)) : NULL;
+        int64_t *input = total ? wasmoon_native_malloc((size_t)total * sizeof(int64_t)) : NULL;
         if (total && !input) continuation_trap(9);
         if (body->input_count) memcpy(input, body->input, (size_t)body->input_count * sizeof(int64_t));
         if (count) memcpy(input + body->input_count, values, (size_t)count * sizeof(int64_t));
@@ -486,7 +486,7 @@ static int32_t WASMOON_GUEST_ABI continuation_resume(jit_context_t *ctx, int64_t
                 native_fiber_disown_resource(ownership);
                 return matched;
             }
-            int64_t *input = malloc((size_t)(effect.count + 1) * sizeof(int64_t));
+            int64_t *input = wasmoon_native_malloc((size_t)(effect.count + 1) * sizeof(int64_t));
             if (!input) continuation_trap(9);
             if (effect.count) memcpy(input, effect.values, (size_t)effect.count * sizeof(int64_t));
             input[effect.count] = saved;
@@ -540,14 +540,14 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_continuation_define_type(void *context, int32
         ctx_runtime(ctx)->continuation_arena = continuation_arena_new();
         if (!ctx_runtime(ctx)->continuation_arena) return 0;
     }
-    native_continuation_type_t *type = calloc(1, sizeof(*type));
+    native_continuation_type_t *type = wasmoon_native_calloc(1, sizeof(*type));
     if (!type) return 0;
     type->index = index;
     type->params = params;
     type->results = results;
     type->trampoline = trampoline;
     if (params) {
-        type->roots = malloc((size_t)params * sizeof(int32_t));
+        type->roots = wasmoon_native_malloc((size_t)params * sizeof(int32_t));
         if (!type->roots) { free(type); return 0; }
         memcpy(type->roots, roots, (size_t)params * sizeof(int32_t));
     }
@@ -568,3 +568,7 @@ WASMOON_DEFINE_GUEST_TARGET(continuation_resume);
 WASMOON_DEFINE_GUEST_TARGET(continuation_suspend);
 WASMOON_DEFINE_GUEST_TARGET(continuation_switch);
 #endif
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_continuation_arena_is_available(void *owner) {
+    return owner && *(native_continuation_arena_t **)owner != NULL;
+}

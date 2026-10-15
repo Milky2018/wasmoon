@@ -83,6 +83,8 @@ pub fn memory_growth_start(@jit_ffi.MemoryDescriptor, Int) -> Int64
 
 pub fn mismatched_try_end_probe() -> Int64
 
+pub fn native_failure_recovery() -> Int
+
 pub fn nested_activation_exception_probe() -> Int64
 
 pub fn nested_activation_gc_root_probe() -> Int64

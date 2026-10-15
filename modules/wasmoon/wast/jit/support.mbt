@@ -736,15 +736,13 @@ pub fn init_elem_segments(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   use_subtype_indirect_check~ : Bool = false,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   // Get global instances for evaluating offset expressions
   let globals : Array[@runtime.GlobalInstance] = []
   for global_addr in instance.global_addrs {
     // All addresses in instance.global_addrs should exist in store
     // If not, it's an internal error
-    let global = store.get_global(global_addr) catch {
-      _ => abort("Internal error: global address not found in store")
-    }
+    let global = store.get_global(global_addr)
     globals.push(global)
   }
 
@@ -830,7 +828,10 @@ pub fn init_elem_segments(
   }
 
   // Initialize shared tables
-  jm.init_shared_tables(jit_tables, elem_init)
+  jm.init_shared_tables(jit_tables, elem_init) catch {
+    InvalidBinding(message) => raise LinkErrorDetail(message)
+    _ => raise OutOfMemory
+  }
 }
 
 ///|
@@ -952,7 +953,9 @@ pub fn init_bulk_segments(
     }
     elem_pairs.push(pairs)
   }
-  jm.setup_segments(mod_.datas, elem_pairs, data_dropped~, elem_dropped~)
+  jm.setup_segments(mod_.datas, elem_pairs, data_dropped~, elem_dropped~) catch {
+    _ => raise OutOfMemory
+  }
   jm.bind_segment_drop_flags(instance.dropped_datas, instance.dropped_elems)
 }
 
@@ -1485,19 +1488,6 @@ pub fn build_external_imports_for_jit(
 }
 
 ///|
-fn find_local_tag_idx(
-  caller_instance : @runtime.ModuleInstance,
-  tag_addr : Int32,
-) -> Int32? {
-  for i, addr in caller_instance.tag_addrs {
-    if addr == tag_addr {
-      return Some(i)
-    }
-  }
-  None
-}
-
-///|
 priv enum ImportedCallOutcome {
   ImportedReturned(Array[@types.Value])
   ImportedThrown(Int32, Array[@types.Value])
@@ -1681,23 +1671,18 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
           return host_error_outcome(error)
         }
         ImportedThrown(tag_addr, values) => {
-          let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(
-            -1,
-          )
-          // Imported wasm callees can throw; route the exception into the active
-          // JIT try_table chain instead of flattening it to a generic trap.
-          if values.length() == 0 {
-            jit_module.throw_exception_tag(local_tag_idx)
-          } else {
-            let encoded_values : Array[Int64] = []
-            for v in values {
-              match
-                encode_exception_value_for_jit(v, store, jit_module, instance) {
-                Some(raw) => encoded_values.push(raw)
-                None => return HostcallTrap(8)
-              }
+          // Return through MoonBit cleanup before native guest exception delivery.
+          let encoded_values : Array[Int64] = []
+          for v in values {
+            match
+              encode_exception_value_for_jit(v, store, jit_module, instance) {
+              Some(raw) => encoded_values.push(raw)
+              None => return HostcallTrap(8)
             }
-            jit_module.throw_exception_values(local_tag_idx, encoded_values)
+          }
+          jit_module.throw_store_exception_values(tag_addr, encoded_values) catch {
+            ExceptionPayloadAllocationFailed => return HostcallTrap(9)
+            _ => return HostcallTrap(8)
           }
           return HostcallTrap(8)
         }

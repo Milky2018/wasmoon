@@ -223,8 +223,13 @@ fn gc_set_context_heap_ptr(
 
 ///|
 /// Begin a GC frame scope for current JIT context.
-fn gc_begin_frame(context : JITContext, frame_id : Int64) -> Unit {
-  c_jit_gc_begin_frame_managed(context, frame_id)
+fn gc_begin_frame(
+  context : JITContext,
+  frame_id : Int64,
+) -> Unit raise NativeSetupError {
+  guard c_jit_gc_begin_frame_managed(context, frame_id) else {
+    raise RootFrameAllocationFailed
+  }
 }
 
 ///|
@@ -310,6 +315,7 @@ fn gc_use_func_safepoints(context : JITContext, func_idx : Int32) -> Unit {
 /// Error for invalid JIT GC setup context
 pub(all) suberror GCSetupError {
   MissingJITContext
+  InvalidMetadata
   InvalidFuncCount(num_funcs~ : Int32)
   FuncTypeIndicesLengthMismatch(
     func_type_indices_len~ : Int32,
@@ -358,7 +364,9 @@ fn gc_setup(
     gc_type_data(types),
     FixedArray::from_array(canonical_indices),
     FixedArray::from_array(func_type_indices),
-  )
+  ) catch {
+    _ => raise InvalidMetadata
+  }
 
   // Set function table pointer for tagged pointer funcref lookups.
   context.snapshot_gc_function_addresses(func_table_ptr, num_funcs)
@@ -430,7 +438,7 @@ pub fn NativeJITContext::set_gc_heap(
 pub fn NativeJITContext::gc_begin_frame(
   self : NativeJITContext,
   frame_id : Int64,
-) -> Unit {
+) -> Unit raise NativeSetupError {
   gc_begin_frame(self.handle, frame_id)
 }
 

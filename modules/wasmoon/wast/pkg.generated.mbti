@@ -43,11 +43,11 @@ pub fn has_unsupported_instructions_for_wast(@types.Module) -> Bool
 
 pub fn init_bulk_segments(@types.Module, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
-pub fn init_elem_segments(@types.Module, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
+pub fn init_elem_segments(@types.Module, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
 pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Int64 raise @runtime.RuntimeError
 
-pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo]?
+pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo] raise @runtime.RuntimeError
 
 pub fn invoke_action(WastContext, @parser.WastAction) -> Array[@types.Value] raise WastRunnerError
 
@@ -106,7 +106,7 @@ pub struct WastContext {
   wasi_ctx : @wasi.WasiContext
   // private fields
 }
-pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool) -> Self
+pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool) -> Self raise @runtime.RuntimeError
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
 pub fn WastContext::close(Self) -> Unit
 pub fn WastContext::get_store(Self) -> @runtime.Store

@@ -43,8 +43,11 @@ pub struct CHeap {
 
 ///|
 /// Create a new C heap with the given initial capacity
-pub fn CHeap::CHeap(capacity~ : Int32 = @types.ONE_MIB_BYTES) -> CHeap {
+pub fn CHeap::CHeap(
+  capacity~ : Int32 = @types.ONE_MIB_BYTES,
+) -> CHeap raise CHeapError {
   let ptr = c_gc_heap_new(capacity.to_int64())
+  guard !ptr.is_null() else { raise OutOfMemory }
   { ptr, }
 }
 

@@ -149,11 +149,8 @@ pub fn NativeJITContext::func_ptr(
 pub fn NativeJITContext::set_table_pointers(
   self : NativeJITContext,
   jit_tables : Array[JITTable?],
-) -> Unit {
-  self.jit_tables.clear()
-  for jit_table in jit_tables {
-    self.jit_tables.push(jit_table)
-  }
+) -> Unit raise NativeSetupError {
+  let replacement = jit_tables.copy()
   let table_ptrs = FixedArray::make(
     jit_tables.length(),
     NativeTableHandle::null(),
@@ -170,13 +167,22 @@ pub fn NativeJITContext::set_table_pointers(
       None => ()
     }
   }
-  c_jit_ctx_set_table_pointers_managed(
+  let status = c_jit_ctx_set_table_pointers_managed(
     self.handle,
     table_ptrs,
     table_sizes,
     table_max_sizes,
     jit_tables.length(),
   )
+  match status {
+    1 => ()
+    0 => raise TableBindingAllocationFailed
+    _ => raise InvalidBinding("table count exceeds layout or context is closed")
+  }
+  self.jit_tables.clear()
+  for table in replacement {
+    self.jit_tables.push(table)
+  }
 }
 
 ///|
@@ -203,12 +209,18 @@ pub fn NativeJITContext::refresh_table_layout(
 pub fn NativeJITContext::set_memory_pointers(
   self : NativeJITContext,
   memories : Array[MemoryInfo],
-) -> Unit {
+) -> Unit raise NativeSetupError {
   let ptrs = FixedArray::make(memories.length(), MemoryDescriptor::null())
   for i, mem in memories {
     ptrs[i] = mem.ptr
   }
-  c_jit_ctx_set_memory_pointers_managed(self.handle, ptrs, memories.length())
+  match
+    c_jit_ctx_set_memory_pointers_managed(self.handle, ptrs, memories.length()) {
+    1 => ()
+    0 => raise MemoryBindingAllocationFailed
+    _ =>
+      raise InvalidBinding("memory count exceeds layout or context is closed")
+  }
 }
 
 ///|

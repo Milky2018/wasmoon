@@ -903,7 +903,7 @@ fn instantiate_canon_lower(
       out
     }
     let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0) catch {
-      error => raise CoreModuleInstantiateError(error.to_string())
+      error => raise ComponentRuntimeError::from_core(error)
     }
     let instance : @runtime.ModuleInstance = {
       types: [@types.SubType::from_func(core_type)],

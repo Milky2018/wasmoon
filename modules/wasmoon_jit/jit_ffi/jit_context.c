@@ -27,11 +27,13 @@ static int gc_collect_debug_enabled(void) {
 }
 
 static int32_t gc_frame_chain_depth(const jit_context_t *ctx) {
+    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
+    if (!state) return 0;
     if (!ctx) {
         return 0;
     }
     int32_t depth = 0;
-    const wasmoon_gc_frame_t *cur = ctx_execution(ctx)->gc_frame_chain_head;
+    const wasmoon_gc_frame_t *cur = state->gc_frame_chain_head;
     while (cur) {
         depth++;
         cur = cur->prev;
@@ -40,11 +42,13 @@ static int32_t gc_frame_chain_depth(const jit_context_t *ctx) {
 }
 
 static int32_t gc_root_scope_count(const jit_context_t *ctx) {
+    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
+    if (!state) return 0;
     if (!ctx) {
         return 0;
     }
     int64_t total = 0;
-    const wasmoon_gc_root_scope_t *scope = ctx_execution(ctx)->gc_root_scope_head;
+    const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
     while (scope) {
         if (scope->root_count > 0) {
             total += scope->root_count;
@@ -61,11 +65,13 @@ static int32_t gc_copy_root_scopes(
     const jit_context_t *ctx,
     int64_t *dst
 ) {
+    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
+    if (!state) return 0;
     if (!ctx || !dst) {
         return 0;
     }
     int32_t at = 0;
-    const wasmoon_gc_root_scope_t *scope = ctx_execution(ctx)->gc_root_scope_head;
+    const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
     while (scope) {
         if (scope->root_count > 0 && scope->roots) {
             memcpy(
@@ -163,7 +169,7 @@ jit_context_t *alloc_context_with_layout(void **functions, uint8_t *layout) {
             if (i > 24 && fields[i] < fields[i - 1] + (int64_t)fields[i == 25 ? 28 : 29] * 8) goto invalid;
         }
     }
-    jit_runtime_state_t *runtime = calloc(1, sizeof(*runtime) + abi_size);
+    jit_runtime_state_t *runtime = wasmoon_native_calloc(1, sizeof(*runtime) + abi_size);
     if (!runtime) goto invalid;
     runtime->layout = layout;
     jit_context_t *ctx = (jit_context_t *)(runtime + 1);
@@ -220,9 +226,13 @@ uint32_t gc_safepoint_owner_size(int32_t count) {
                       (size_t)count * sizeof(wasmoon_gc_safepoint_table_t));
 }
 
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_safepoint_payload_fits(int32_t count) {
+    return gc_safepoint_owner_size(count) != 0;
+}
+
 static jit_safepoint_owner_t *new_safepoints(int32_t count, int shared) {
     uint32_t size = gc_safepoint_owner_size(count);
-    if (!size) abort();
+    if (!size) return NULL;
     jit_safepoint_owner_t *owner = moonbit_make_external_object(finalize_safepoints, size);
     memset(owner, 0, size);
     owner->count = count;
@@ -232,8 +242,9 @@ static jit_safepoint_owner_t *new_safepoints(int32_t count, int shared) {
 
 MOONBIT_FFI_EXPORT void *wasmoon_jit_prepare_safepoints(uint8_t **blobs, int32_t **offsets) {
     int32_t count = Moonbit_array_length(blobs);
-    assert(count == Moonbit_array_length(offsets));
+    if (count != Moonbit_array_length(offsets)) return NULL;
     jit_safepoint_owner_t *owner = new_safepoints(count, 1);
+    if (!owner) return NULL;
     for (int32_t i = 0; i < count; ++i) {
         wasmoon_gc_safepoint_table_t *table = &owner->entries[i];
         table->stackmap_blob_size = Moonbit_array_length(blobs[i]);
@@ -428,20 +439,23 @@ void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx) {
     ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
 }
 
-void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id) {
-    if (!ctx) return;
-    wasmoon_gc_frame_t *frame = (wasmoon_gc_frame_t *)malloc(sizeof(wasmoon_gc_frame_t));
-    if (!frame) return;
-    frame->prev = ctx_execution(ctx)->gc_frame_chain_head;
+int32_t ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id) {
+    jit_execution_state_t *state = ctx ? ctx_execution(ctx) : NULL;
+    if (!state) return 0;
+    wasmoon_gc_frame_t *frame = (wasmoon_gc_frame_t *)wasmoon_native_malloc(sizeof(wasmoon_gc_frame_t));
+    if (!frame) return 0;
+    frame->prev = state->gc_frame_chain_head;
     frame->frame_id = frame_id;
     frame->table = ctx_runtime(ctx)->gc_safepoint_table;
-    ctx_execution(ctx)->gc_frame_chain_head = frame;
+    state->gc_frame_chain_head = frame;
+    return 1;
 }
 
 void ctx_gc_end_frame_internal(jit_context_t *ctx) {
-    if (!ctx || !ctx_execution(ctx)->gc_frame_chain_head) return;
-    wasmoon_gc_frame_t *top = ctx_execution(ctx)->gc_frame_chain_head;
-    ctx_execution(ctx)->gc_frame_chain_head = top->prev;
+    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
+    if (!state || !state->gc_frame_chain_head) return;
+    wasmoon_gc_frame_t *top = state->gc_frame_chain_head;
+    state->gc_frame_chain_head = top->prev;
     free(top);
 }
 
@@ -454,32 +468,35 @@ int32_t ctx_gc_push_root_scope_internal(
     if (!ctx || root_count < 0 || (root_count > 0 && !roots)) {
         return 0;
     }
+    jit_execution_state_t *state = ctx_execution(ctx);
+    if (!state) return 0;
     wasmoon_gc_root_scope_t *scope =
-        (wasmoon_gc_root_scope_t *)malloc(sizeof(wasmoon_gc_root_scope_t));
+        (wasmoon_gc_root_scope_t *)wasmoon_native_malloc(sizeof(wasmoon_gc_root_scope_t));
     if (!scope) {
         return 0;
     }
-    scope->prev = ctx_execution(ctx)->gc_root_scope_head;
+    scope->prev = state->gc_root_scope_head;
     scope->roots = NULL;
     scope->root_count = root_count;
     if (root_count > 0) {
-        scope->roots = (int64_t *)malloc((size_t)root_count * sizeof(int64_t));
+        scope->roots = (int64_t *)wasmoon_native_malloc((size_t)root_count * sizeof(int64_t));
         if (!scope->roots) {
             free(scope);
             return 0;
         }
         memcpy(scope->roots, roots, (size_t)root_count * sizeof(int64_t));
     }
-    ctx_execution(ctx)->gc_root_scope_head = scope;
+    state->gc_root_scope_head = scope;
     return 1;
 }
 
 void ctx_gc_pop_root_scope_internal(jit_context_t *ctx) {
-    if (!ctx || !ctx_execution(ctx)->gc_root_scope_head) {
+    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
+    if (!state || !state->gc_root_scope_head) {
         return;
     }
-    wasmoon_gc_root_scope_t *scope = ctx_execution(ctx)->gc_root_scope_head;
-    ctx_execution(ctx)->gc_root_scope_head = scope->prev;
+    wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
+    state->gc_root_scope_head = scope->prev;
     free(scope->roots);
     free(scope);
 }
@@ -488,13 +505,14 @@ void ctx_gc_restore_root_scopes_internal(
     jit_context_t *ctx,
     wasmoon_gc_root_scope_t *marker
 ) {
-    if (!ctx) {
+    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
+    if (!state) {
         return;
     }
-    while (ctx_execution(ctx)->gc_root_scope_head && ctx_execution(ctx)->gc_root_scope_head != marker) {
+    while (state->gc_root_scope_head && state->gc_root_scope_head != marker) {
         ctx_gc_pop_root_scope_internal(ctx);
     }
-    if (marker && ctx_execution(ctx)->gc_root_scope_head != marker) {
+    if (marker && state->gc_root_scope_head != marker) {
         ctx_gc_clear_root_scopes_internal(ctx);
     }
 }
@@ -514,8 +532,8 @@ void ctx_gc_clear_root_scopes_internal(jit_context_t *ctx) {
 }
 
 jit_execution_state_t *ctx_execution_fallback(const jit_context_t *ctx) {
-    jit_execution_state_t *state = calloc(1, sizeof(*state));
-    if (!state) abort();
+    jit_execution_state_t *state = wasmoon_native_calloc(1, sizeof(*state));
+    if (!state) return NULL;
     ctx_runtime(ctx)->execution = state;
     return state;
 }
@@ -549,6 +567,7 @@ static int32_t gc_alloc_func_safepoint_tables(jit_context_t *ctx) {
     int32_t count = ctx_func_count(ctx);
     if (count <= 0) return 0;
     jit_safepoint_owner_t *owner = new_safepoints(count, 0);
+    if (!owner) return 0;
     if (old) {
         int32_t old_count = ctx_runtime(ctx)->gc_func_safepoint_table_count;
         for (int32_t i = 0; i < old_count; ++i) {
@@ -634,12 +653,14 @@ int32_t ctx_gc_set_root_scratch_internal(
     if (!ctx) {
         return 0;
     }
+    jit_execution_state_t *state = ctx_execution(ctx);
+    if (!state) return 0;
     if (root_count <= 0 || !roots) {
-        ctx_execution(ctx)->gc_root_scratch_len = 0;
+        state->gc_root_scratch_len = 0;
         return 1;
     }
-    if (root_count > ctx_execution(ctx)->gc_root_scratch_cap) {
-        int32_t new_cap = ctx_execution(ctx)->gc_root_scratch_cap > 0 ? ctx_execution(ctx)->gc_root_scratch_cap : 16;
+    if (root_count > state->gc_root_scratch_cap) {
+        int32_t new_cap = state->gc_root_scratch_cap > 0 ? state->gc_root_scratch_cap : 16;
         while (new_cap < root_count) {
             if (new_cap > INT32_MAX / 2) {
                 new_cap = root_count;
@@ -647,15 +668,15 @@ int32_t ctx_gc_set_root_scratch_internal(
             }
             new_cap *= 2;
         }
-        int64_t *new_buf = (int64_t *)realloc(ctx_execution(ctx)->gc_root_scratch, (size_t)new_cap * sizeof(int64_t));
+        int64_t *new_buf = (int64_t *)wasmoon_native_realloc(state->gc_root_scratch, (size_t)new_cap * sizeof(int64_t));
         if (!new_buf) {
             return 0;
         }
-        ctx_execution(ctx)->gc_root_scratch = new_buf;
-        ctx_execution(ctx)->gc_root_scratch_cap = new_cap;
+        state->gc_root_scratch = new_buf;
+        state->gc_root_scratch_cap = new_cap;
     }
-    memcpy(ctx_execution(ctx)->gc_root_scratch, roots, (size_t)root_count * sizeof(int64_t));
-    ctx_execution(ctx)->gc_root_scratch_len = root_count;
+    memcpy(state->gc_root_scratch, roots, (size_t)root_count * sizeof(int64_t));
+    state->gc_root_scratch_len = root_count;
     return 1;
 }
 
@@ -669,16 +690,17 @@ int32_t gc_collect_for_alloc_internal(
     if (!ctx || !ctx_gc_heap(ctx)) {
         return -1;
     }
-    if (ctx_execution(ctx)->gc_in_collect) {
+    jit_execution_state_t *state = ctx_execution(ctx);
+    if (!state || state->gc_in_collect) {
         return -1;
     }
 
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
     int32_t safe_root_count = root_count > 0 ? root_count : 0;
-    int32_t scratch_count = ctx_execution(ctx)->gc_root_scratch_len > 0 ? ctx_execution(ctx)->gc_root_scratch_len : 0;
+    int32_t scratch_count = state->gc_root_scratch_len > 0 ? state->gc_root_scratch_len : 0;
     int32_t caller_root_count = gc_root_scope_count(ctx);
-    int32_t exception_root_count = exception_copy_activation_roots(ctx, ctx_execution(ctx), NULL);
-    int32_t spilled_root_count = ctx_execution(ctx)->spilled_locals_count > 0 ? ctx_execution(ctx)->spilled_locals_count : 0;
+    int32_t exception_root_count = exception_copy_activation_roots(ctx, state, NULL);
+    int32_t spilled_root_count = state->spilled_locals_count > 0 ? state->spilled_locals_count : 0;
     int32_t table_root_count = gc_count_table_roots(ctx);
     int64_t stack_root_count64 =
         (int64_t)safe_root_count +
@@ -698,21 +720,21 @@ int32_t gc_collect_for_alloc_internal(
     int32_t total_roots = (int32_t)total_roots64;
     int32_t collected = 0;
     const wasmoon_gc_safepoint_table_t *active_table = ctx_runtime(ctx)->gc_safepoint_table;
-    if (ctx_execution(ctx)->gc_frame_chain_head && ctx_execution(ctx)->gc_frame_chain_head->table) {
-        active_table = ctx_execution(ctx)->gc_frame_chain_head->table;
+    if (state->gc_frame_chain_head && state->gc_frame_chain_head->table) {
+        active_table = state->gc_frame_chain_head->table;
     }
     size_t heap_size_before = heap->size;
     int32_t object_count_before = heap->object_count;
     int32_t free_count_before = heap->free_count;
 
-    ctx_execution(ctx)->gc_collect_requested = 1;
-    ctx_execution(ctx)->gc_in_collect = 1;
+    state->gc_collect_requested = 1;
+    state->gc_in_collect = 1;
 
     if (total_roots > 0) {
-        int64_t *merged = (int64_t *)malloc((size_t)total_roots * sizeof(int64_t));
+        int64_t *merged = (int64_t *)wasmoon_native_malloc((size_t)total_roots * sizeof(int64_t));
         if (!merged) {
-            ctx_execution(ctx)->gc_in_collect = 0;
-            ctx_execution(ctx)->gc_collect_requested = 0;
+            state->gc_in_collect = 0;
+            state->gc_collect_requested = 0;
             return -1;
         }
         int32_t at = 0;
@@ -720,16 +742,16 @@ int32_t gc_collect_for_alloc_internal(
             memcpy(&merged[at], roots, (size_t)safe_root_count * sizeof(int64_t));
             at += safe_root_count;
         }
-        if (scratch_count > 0 && ctx_execution(ctx)->gc_root_scratch) {
-            memcpy(&merged[at], ctx_execution(ctx)->gc_root_scratch, (size_t)scratch_count * sizeof(int64_t));
+        if (scratch_count > 0 && state->gc_root_scratch) {
+            memcpy(&merged[at], state->gc_root_scratch, (size_t)scratch_count * sizeof(int64_t));
             at += scratch_count;
         }
         if (caller_root_count > 0) {
             at += gc_copy_root_scopes(ctx, &merged[at]);
         }
-        at += exception_copy_activation_roots(ctx, ctx_execution(ctx), merged + at);
-        if (spilled_root_count > 0 && ctx_execution(ctx)->spilled_locals) {
-            memcpy(&merged[at], ctx_execution(ctx)->spilled_locals + spilled_root_count, (size_t)spilled_root_count * sizeof(int64_t));
+        at += exception_copy_activation_roots(ctx, state, merged + at);
+        if (spilled_root_count > 0 && state->spilled_locals) {
+            memcpy(&merged[at], state->spilled_locals + spilled_root_count, (size_t)spilled_root_count * sizeof(int64_t));
             at += spilled_root_count;
         }
         if (table_root_count > 0) {
@@ -772,8 +794,8 @@ int32_t gc_collect_for_alloc_internal(
         );
     }
 
-    ctx_execution(ctx)->gc_in_collect = 0;
-    ctx_execution(ctx)->gc_collect_requested = 0;
+    state->gc_in_collect = 0;
+    state->gc_collect_requested = 0;
     ctx_update_gc_heap_ptr_internal(ctx);
     return collected;
 }

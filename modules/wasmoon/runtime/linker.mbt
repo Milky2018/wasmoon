@@ -7,7 +7,7 @@ struct Linker {
 
 ///|
 /// Create a new linker with a fresh store
-pub fn Linker::Linker() -> Linker {
+pub fn Linker::Linker() -> Linker raise RuntimeError {
   { store: Store(), modules: [], }
 }
 

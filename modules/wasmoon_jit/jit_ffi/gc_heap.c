@@ -7,6 +7,7 @@
  */
 
 #include "gc_heap.h"
+#include "native_alloc.h"
 #include "ffi_callbacks.h"
 #include <moonbit.h>
 #include <stdlib.h>
@@ -164,7 +165,7 @@ static int ensure_heap_capacity(GcHeap* heap, size_t needed) {
         new_capacity *= 2;
     }
 
-    uint8_t* new_data = (uint8_t*)realloc(heap->data, new_capacity);
+    uint8_t* new_data = (uint8_t*)wasmoon_native_realloc(heap->data, new_capacity);
     if (!new_data) {
         return 0;  // Allocation failed
     }
@@ -182,8 +183,8 @@ int gc_heap_ensure_object_capacity(GcHeap* heap) {
     if (heap->object_capacity > INT32_MAX / 2) return 0;
     int32_t new_capacity = heap->object_capacity * 2;
     size_t bytes = (size_t)new_capacity * sizeof(int32_t);
-    int32_t *new_table = malloc(bytes);
-    int32_t *new_types = malloc(bytes);
+    int32_t *new_table = wasmoon_native_malloc(bytes);
+    int32_t *new_types = wasmoon_native_malloc(bytes);
     if (!new_table || !new_types) {
         free(new_table); free(new_types);
         return 0;
@@ -250,10 +251,10 @@ int32_t wasmoon_gc_heap_is_empty(GcHeap *heap) {
 GcHeap* gc_heap_new(size_t initial_capacity) {
     if (initial_capacity == 0) initial_capacity = DEFAULT_HEAP_CAPACITY;
     GcHeap *heap = wasmoon_gc_heap_empty();
-    heap->data = malloc(initial_capacity);
-    heap->object_table = malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
-    heap->runtime_types = malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
-    heap->free_list = malloc(DEFAULT_FREE_CAPACITY * sizeof(int32_t));
+    heap->data = wasmoon_native_malloc(initial_capacity);
+    heap->object_table = wasmoon_native_malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
+    heap->runtime_types = wasmoon_native_malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
+    heap->free_list = wasmoon_native_malloc(DEFAULT_FREE_CAPACITY * sizeof(int32_t));
     if (!heap->data || !heap->object_table || !heap->runtime_types || !heap->free_list) {
         finalize_gc_heap(heap);
         memset(heap, 0, sizeof(*heap));
@@ -281,12 +282,12 @@ int32_t gc_heap_register_parked_roots(
     *out_registration = NULL;
     *out_roots = NULL;
     GcParkedRoots* registration =
-        (GcParkedRoots*)calloc(1, sizeof(GcParkedRoots));
+        (GcParkedRoots*)wasmoon_native_calloc(1, sizeof(GcParkedRoots));
     if (!registration) {
         return 0;
     }
     registration->roots =
-        (int64_t*)malloc((size_t)root_count * sizeof(int64_t));
+        (int64_t*)wasmoon_native_malloc((size_t)root_count * sizeof(int64_t));
     if (!registration->roots) {
         free(registration);
         return 0;
@@ -535,7 +536,7 @@ int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
     // Widen the caller's runtime words in place of a second allocation path.
     // The high word of every non-v128 value is zero, which is what a fresh
     // slot already holds, so only the low words need writing.
-    GcSlot* slots = (GcSlot*)calloc((size_t)num_fields, sizeof(GcSlot));
+    GcSlot* slots = (GcSlot*)wasmoon_native_calloc((size_t)num_fields, sizeof(GcSlot));
     if (!slots) {
         return 0;
     }
@@ -865,7 +866,7 @@ int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
     if (!values || len <= 0) {
         return gc_heap_alloc_array_from_slots(heap, type_idx, NULL, len);
     }
-    GcSlot* slots = (GcSlot*)calloc((size_t)len, sizeof(GcSlot));
+    GcSlot* slots = (GcSlot*)wasmoon_native_calloc((size_t)len, sizeof(GcSlot));
     if (!slots) {
         return 0;
     }

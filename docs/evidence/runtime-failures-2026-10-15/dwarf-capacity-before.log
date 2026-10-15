@@ -1,0 +1,10 @@
+DWARF: too many functions (max 1024)
+[Milky2018/wasmoon_jit] test native_handles_test.mbt:1156 ("DWARF function capacity denial does not register a truncated object") failed
+expect test failed at /Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon_jit/native_handles_test.mbt:1166:3-1166:47
+Diff: (- expected, + actual)
+----
+-false
++true
+----
+
+Total tests: 1, passed: 0, failed: 1.

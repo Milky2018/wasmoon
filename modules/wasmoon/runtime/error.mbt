@@ -6,6 +6,9 @@ pub(all) suberror RuntimeError {
   TypeMismatch
   StoreClosed
   MemoryClosed
+  InvalidMemoryType(String)
+  InvalidTableType(String)
+  HeapRepresentationInUse
   OutOfBoundsMemoryAccess
   OutOfBoundsTableAccess
   OutOfBoundsArrayAccess // GC array access out of bounds
@@ -61,6 +64,9 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     TypeMismatch => Some(TypeMismatch)
     StoreClosed => Some(StoreClosed)
     MemoryClosed => Some(MemoryClosed)
+    InvalidMemoryType(_) as error => Some(error)
+    InvalidTableType(_) as error => Some(error)
+    HeapRepresentationInUse => Some(HeapRepresentationInUse)
     OutOfBoundsMemoryAccess => Some(OutOfBoundsMemoryAccess)
     OutOfBoundsTableAccess => Some(OutOfBoundsTableAccess)
     OutOfBoundsArrayAccess => Some(OutOfBoundsArrayAccess)
@@ -108,6 +114,10 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     TypeMismatch => "type mismatch"
     StoreClosed => "store is closed"
     MemoryClosed => "memory is closed"
+    InvalidMemoryType(detail) => "invalid memory type: \{detail}"
+    InvalidTableType(detail) => "invalid table type: \{detail}"
+    HeapRepresentationInUse =>
+      "cannot enable native GC with live interpreter objects"
     OutOfBoundsMemoryAccess => "out of bounds memory access"
     OutOfBoundsTableAccess => "undefined element: out of bounds table access"
     OutOfBoundsArrayAccess => "out of bounds array access"

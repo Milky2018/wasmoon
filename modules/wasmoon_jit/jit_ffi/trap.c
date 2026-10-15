@@ -193,14 +193,7 @@ void jit_mark_active_gc_roots(GcHeap *heap) {
              scope; scope = scope->prev) {
             gc_heap_mark_roots(heap, scope->roots, scope->root_count);
         }
-        int32_t exception_count = exception_copy_activation_roots(context, state, NULL);
-        if (exception_count) {
-            int64_t *roots = malloc((size_t)exception_count * sizeof(int64_t));
-            if (!roots) { g_trap_code = 9; siglongjmp(g_trap_jmp_buf, 1); }
-            exception_copy_activation_roots(context, state, roots);
-            gc_heap_mark_roots(heap, roots, exception_count);
-            free(roots);
-        }
+        exception_mark_activation_roots(heap, context, state);
         gc_heap_mark_roots(heap, state->spilled_locals ? state->spilled_locals + state->spilled_locals_count : NULL, state->spilled_locals_count);
         gc_heap_mark_roots(heap, state->gc_root_scratch, state->gc_root_scratch_len);
     }
@@ -247,7 +240,9 @@ static jit_trap_activation_t *matching_context_activation(jit_context_t *context
     return NULL;
 }
 
-void jit_trap_activation_push(jit_trap_activation_t *activation) {
+static void release_activation_controls(jit_trap_activation_t *activation);
+
+int jit_trap_activation_push(jit_trap_activation_t *activation) {
     activation->previous = current_activation;
     if (activation->context) {
         activation->owned_controls = ctx_runtime(activation->context)->control_defaults;
@@ -260,9 +255,6 @@ void jit_trap_activation_push(jit_trap_activation_t *activation) {
     if (activation->context) {
         jit_execution_state_t *previous = ctx_runtime(activation->context)->execution;
         int standalone = !matching_context_activation(activation->context);
-        if (standalone && previous) {
-            exception_reset_execution_state(previous);
-        }
         activation->previous_execution = previous;
         activation->previous_debug_func_idx = ctx_debug_current_func_idx(activation->context);
         ctx_runtime(activation->context)->execution = &activation->execution;
@@ -271,9 +263,18 @@ void jit_trap_activation_push(jit_trap_activation_t *activation) {
         // mutable scratch buffer with this invocation or a nested invocation.
         if (standalone && previous && previous->gc_root_scratch_len > 0 &&
             !ctx_gc_set_root_scratch_internal(activation->context,
-                previous->gc_root_scratch, previous->gc_root_scratch_len)) abort();
+                previous->gc_root_scratch, previous->gc_root_scratch_len)) {
+            ctx_runtime(activation->context)->execution = previous;
+            ctx_set_debug_current_func_idx(activation->context, activation->previous_debug_func_idx);
+            jit_execution_state_clear(&activation->execution);
+            release_activation_controls(activation);
+            activation->active = 0;
+            return 0;
+        }
+        if (standalone && previous) exception_reset_execution_state(previous);
     }
     current_activation = activation;
+    return 1;
 }
 
 void jit_trap_activation_publish(jit_trap_activation_t *activation) {
@@ -371,8 +372,8 @@ static _Thread_local size_t g_stack_size = 0;
 
 // ============ Stack Bounds Detection ============
 
-static void init_stack_bounds(void) {
-    if (g_stack_base != NULL) return;  // Already initialized
+static int init_stack_bounds(void) {
+    if (g_stack_base != NULL) return 1;  // Already initialized
 
 #if defined(__APPLE__)
     // macOS: use pthread_get_stackaddr_np and pthread_get_stacksize_np
@@ -382,15 +383,15 @@ static void init_stack_bounds(void) {
 #elif defined(__linux__)
     // Linux: use pthread_attr_getstack
     pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_getattr_np(pthread_self(), &attr);
-    void *stack_addr;
-    size_t stack_size;
-    pthread_attr_getstack(&attr, &stack_addr, &stack_size);
-    // On Linux, stack_addr is the low address
+    if (pthread_getattr_np(pthread_self(), &attr) != 0) return 0;
+    void *stack_addr = NULL;
+    size_t stack_size = 0;
+    int result = pthread_attr_getstack(&attr, &stack_addr, &stack_size);
+    pthread_attr_destroy(&attr);
+    if (result != 0 || !stack_addr || !stack_size) return 0;
+    // On Linux, stack_addr is the low address.
     g_stack_base = (char*)stack_addr + stack_size;
     g_stack_size = stack_size;
-    pthread_attr_destroy(&attr);
 #elif defined(_WIN32)
     ULONG_PTR low, high;
     GetCurrentThreadStackLimits(&low, &high);
@@ -402,6 +403,7 @@ static void init_stack_bounds(void) {
     g_stack_base = (void*)&dummy;
     g_stack_size = 8 * 1024 * 1024;  // Assume 8MB stack
 #endif
+    return g_stack_base != NULL && g_stack_size > 0;
 }
 
 // Check if address is near stack boundary (likely stack overflow)
@@ -430,12 +432,12 @@ static int is_stack_overflow(void *fault_addr) {
 
 // ============ Alternate Signal Stack ============
 
-static void install_alt_stack(void) {
-    if (g_sigstack_installed) return;
+static int install_alt_stack(void) {
+    if (g_sigstack_installed) return 1;
 
 #ifndef _WIN32
     // ASan owns the alternate signal stack even with uninstrumented stubs.
-    if (wasmoon_address_sanitizer_active()) return;
+    if (wasmoon_address_sanitizer_active()) return 1;
     stack_t ss;
     ss.ss_sp = g_sigstack;
     ss.ss_size = SIGSTACK_SIZE;
@@ -444,6 +446,7 @@ static void install_alt_stack(void) {
         g_sigstack_installed = 1;
     }
 #endif
+    return g_sigstack_installed;
 }
 
 #endif
@@ -931,38 +934,39 @@ static BOOL CALLBACK install_windows_traps(PINIT_ONCE once, PVOID parameter, PVO
 
 // ============ Handler Installation ============
 
-void install_trap_handler(void) {
+int install_trap_handler(void) {
 #ifdef _WIN32
     static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
-    if (!InitOnceExecuteOnce(&once, install_windows_traps, NULL, NULL)) abort();
+    return InitOnceExecuteOnce(&once, install_windows_traps, NULL, NULL) != 0;
 #else
-    // Signal handlers are process-wide; install them once.
-    // (Multiple installations are harmless, but keep this race-free.)
-    static atomic_int installed_handlers = 0;
-    int expected = 0;
-    if (atomic_compare_exchange_strong(&installed_handlers, &expected, 1)) {
-        // Install SIGTRAP handler (for BRK instructions)
-        // Use SA_SIGINFO to get ucontext for extracting BRK immediate
-        struct sigaction sa_trap;
-        sa_trap.sa_sigaction = trap_signal_handler;
-        sigemptyset(&sa_trap.sa_mask);
-        sa_trap.sa_flags = SA_SIGINFO;
-        sigaction(SIGTRAP, &sa_trap, NULL);
-
-        // Install SIGSEGV handler (for stack overflow)
-        // Use SA_SIGINFO to get fault address, SA_ONSTACK to use alternate stack
-        struct sigaction sa_segv;
-        sa_segv.sa_sigaction = segv_signal_handler;
-        sigemptyset(&sa_segv.sa_mask);
-        sa_segv.sa_flags = SA_SIGINFO | SA_ONSTACK;  // Run on alternate stack!
-        sigaction(SIGSEGV, &sa_segv, NULL);
-
-        // Also handle SIGBUS (on some platforms, stack overflow triggers SIGBUS)
-        sigaction(SIGBUS, &sa_segv, NULL);
+    // Publish installation only after every process-wide handler succeeds.
+    // Failed partial registration restores the previous handlers and can retry.
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    static int installed;
+    if (pthread_mutex_lock(&lock) != 0) return 0;
+    int ok = installed;
+    if (!installed) {
+        struct sigaction previous_trap, previous_segv, previous_bus;
+        struct sigaction trap_action = {0};
+        trap_action.sa_sigaction = trap_signal_handler;
+        sigemptyset(&trap_action.sa_mask);
+        trap_action.sa_flags = SA_SIGINFO;
+        struct sigaction fault_action = {0};
+        fault_action.sa_sigaction = segv_signal_handler;
+        sigemptyset(&fault_action.sa_mask);
+        fault_action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+        if (sigaction(SIGTRAP, &trap_action, &previous_trap) == 0) {
+            if (sigaction(SIGSEGV, &fault_action, &previous_segv) == 0) {
+                if (sigaction(SIGBUS, &fault_action, &previous_bus) == 0) {
+                    installed = ok = 1;
+                } else {
+                    sigaction(SIGSEGV, &previous_segv, NULL);
+                }
+            }
+            if (!ok) sigaction(SIGTRAP, &previous_trap, NULL);
+        }
     }
-
-    // These are per-thread: stacks differ per thread and sigaltstack is per-thread.
-    init_stack_bounds();
-    install_alt_stack();
+    pthread_mutex_unlock(&lock);
+    return ok && init_stack_bounds() && install_alt_stack();
 #endif
 }

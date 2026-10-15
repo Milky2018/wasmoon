@@ -50,7 +50,7 @@ struct NativeExecutionState {
 }
 
 ///|
-pub fn NativeExecutionState::NativeExecutionState() -> NativeExecutionState {
+pub fn NativeExecutionState::NativeExecutionState() -> NativeExecutionState raise @jit_ffi.NativeAllocationError {
   {
     continuation_arena: NativeContinuationArena::new(),
     exception_arena: NativeExceptionArena::new(),

@@ -41,7 +41,7 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_add_function(
  * @param dwarf    Builder handle
  * @param verbose  If non-zero, print debug info to stderr
  */
-MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose);
+MOONBIT_FFI_EXPORT int32_t wasmoon_dwarf_register(void *dwarf, int verbose);
 
 /**
  * Unregister DWARF debug info from the debugger.

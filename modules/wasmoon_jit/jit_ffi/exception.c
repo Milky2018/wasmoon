@@ -48,7 +48,7 @@ typedef struct native_exception_arena {
 } native_exception_arena_t;
 
 struct native_exception_arena *exception_arena_new(void) {
-    native_exception_arena_t *arena = calloc(1, sizeof(*arena));
+    native_exception_arena_t *arena = wasmoon_native_calloc(1, sizeof(*arena));
     if (arena) arena->references = 1;
     return arena;
 }
@@ -91,7 +91,7 @@ static int64_t exception_arena_insert(native_exception_arena_t *arena,
     if (arena->count == arena->capacity) {
         size_t capacity = arena->capacity ? arena->capacity * 2 : 16;
         if (capacity > INT32_MAX) return 0;
-        void *entries = realloc(arena->entries, capacity * sizeof(native_exception_t));
+        void *entries = wasmoon_native_realloc(arena->entries, capacity * sizeof(native_exception_t));
         if (!entries) return 0;
         arena->entries = entries;
         arena->capacity = capacity;
@@ -99,7 +99,7 @@ static int64_t exception_arena_insert(native_exception_arena_t *arena,
     native_exception_t entry = { .tag = tag, .count = count,
         .reference = GC_EXCEPTION_REF_TAG | ((int64_t)arena->next_reference << 1) | 1 };
     if (count) {
-        entry.values = malloc((size_t)count * sizeof(int64_t));
+        entry.values = wasmoon_native_malloc((size_t)count * sizeof(int64_t));
         if (!entry.values) return 0;
         memcpy(entry.values, values, (size_t)count * sizeof(int64_t));
     }
@@ -245,10 +245,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_define_tag(void *owner,
     if (!arena || arena->sealed || count < 0) return 0;
     for (native_exception_layout_t *entry = arena->layouts; entry; entry = entry->next)
         if (entry->tag == tag) return 1;
-    native_exception_layout_t *layout = calloc(1, sizeof(*layout));
+    native_exception_layout_t *layout = wasmoon_native_calloc(1, sizeof(*layout));
     if (!layout) return 0;
     if (count) {
-        layout->roots = malloc((size_t)count * sizeof(int32_t));
+        layout->roots = wasmoon_native_malloc((size_t)count * sizeof(int32_t));
         if (!layout->roots) { free(layout); return 0; }
         memcpy(layout->roots, roots, (size_t)count * sizeof(int32_t));
     }
@@ -321,16 +321,34 @@ int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_
     return count;
 }
 
+// Mark seeds without allocating: this path can run inside a MoonBit collector
+// callback, where a native longjmp would bypass managed cleanup.
+void exception_mark_activation_roots(GcHeap *heap, jit_context_t *ctx,
+    const jit_execution_state_t *state) {
+    if (state->exception_ref) {
+        gc_heap_mark_roots(heap, &state->exception_ref, 1);
+        return;
+    }
+    native_exception_layout_t *layout = ctx_runtime(ctx)->exception_arena
+        ? ctx_runtime(ctx)->exception_arena->layouts : NULL;
+    while (layout && layout->tag != state->exception_tag) layout = layout->next;
+    for (int32_t i = 0; i < state->exception_value_count; ++i) {
+        if (state->exception_values && (!layout || (i < layout->count && layout->roots[i]))) {
+            gc_heap_mark_roots(heap, &state->exception_values[i], 1);
+        }
+    }
+}
+
 // ============ Exception Handler Management ============
 
 sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
     ctx = exception_activation_context(ctx);
     jit_execution_state_t *state = ctx_execution(ctx);
     // Allocate new handler node
-    exception_handler_t *handler = (exception_handler_t *)malloc(sizeof(exception_handler_t));
+    exception_handler_t *handler = (exception_handler_t *)wasmoon_native_malloc(sizeof(exception_handler_t));
     if (!handler) {
-        // Out of memory - trap
-        g_trap_code = 99;
+        // Allocation failure is distinct from an unknown/internal trap.
+        g_trap_code = 9;
         siglongjmp(g_trap_jmp_buf, 1);
     }
 
@@ -397,6 +415,7 @@ void exception_reset_execution_state(jit_execution_state_t *state) {
     state->exception_ref = 0;
     state->exception_value_count = 0;
     state->exception_tag = 0;
+    state->hostcall_exception_pending = 0;
 
     if (state->spilled_locals) {
         free(state->spilled_locals);
@@ -424,16 +443,15 @@ static void exception_raise_current(jit_context_t *ctx) {
     siglongjmp(g_trap_jmp_buf, 1);
 }
 
-static void exception_set_payload(jit_context_t *ctx, int32_t tag,
+static int exception_set_payload_checked(jit_context_t *ctx, int32_t tag,
     const int64_t *values, int32_t count, int64_t reference) {
     jit_execution_state_t *state = ctx_execution(ctx);
+    if (!state || count < 0 || (count > 0 && !values) ||
+        (size_t)count > SIZE_MAX / sizeof(int64_t)) return 0;
     int64_t *copy = NULL;
     if (count > 0) {
-        copy = malloc((size_t)count * sizeof(int64_t));
-        if (!copy) {
-            g_trap_code = 9;
-            siglongjmp(g_trap_jmp_buf, 1);
-        }
+        copy = wasmoon_native_malloc((size_t)count * sizeof(int64_t));
+        if (!copy) return 0;
         memcpy(copy, values, (size_t)count * sizeof(int64_t));
     }
     free(state->exception_values);
@@ -441,6 +459,29 @@ static void exception_set_payload(jit_context_t *ctx, int32_t tag,
     state->exception_value_count = count;
     state->exception_tag = tag;
     state->exception_ref = reference;
+    return 1;
+}
+
+static void exception_set_payload(jit_context_t *ctx, int32_t tag,
+    const int64_t *values, int32_t count, int64_t reference) {
+    if (!exception_set_payload_checked(ctx, tag, values, count, reference)) {
+        g_trap_code = 9;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+}
+
+int exception_has_pending_hostcall(jit_context_t *ctx) {
+    ctx = exception_activation_context(ctx);
+    return ctx && ctx_runtime(ctx)->execution &&
+        ctx_runtime(ctx)->execution->hostcall_exception_pending;
+}
+
+void exception_raise_pending_hostcall(jit_context_t *ctx) {
+    if (exception_has_pending_hostcall(ctx)) {
+        ctx = exception_activation_context(ctx);
+        ctx_runtime(ctx)->execution->hostcall_exception_pending = 0;
+        exception_raise_current(ctx);
+    }
 }
 
 void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
@@ -499,23 +540,22 @@ void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count) {
     ctx = exception_activation_context(ctx);
     jit_execution_state_t *state = ctx_execution(ctx);
-    // Free any previous spilled locals
-    if (state->spilled_locals) {
-        free(state->spilled_locals);
-        state->spilled_locals = NULL;
-    }
-
-    state->spilled_locals_count = count;
-
+    int64_t *copy = NULL;
     if (count > 0 && locals) {
-        // Copy locals to heap
-        state->spilled_locals = (int64_t *)malloc((size_t)count * 2 * sizeof(int64_t));
-        if (state->spilled_locals) {
-            memcpy(state->spilled_locals, locals, (size_t)count * 2 * sizeof(int64_t));
+        if ((size_t)count > SIZE_MAX / (2 * sizeof(int64_t))) {
+            g_trap_code = 9;
+            siglongjmp(g_trap_jmp_buf, 1);
         }
-    } else {
-        state->spilled_locals = NULL;
+        copy = wasmoon_native_malloc((size_t)count * 2 * sizeof(int64_t));
+        if (!copy) {
+            g_trap_code = 9;
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        memcpy(copy, locals, (size_t)count * 2 * sizeof(int64_t));
     }
+    free(state->spilled_locals);
+    state->spilled_locals = copy;
+    state->spilled_locals_count = copy ? count : 0;
 }
 
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx) {
@@ -590,22 +630,47 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_values(
 
 extern int64_t wasmoon_jit_context_ptr(void *jit_context);
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_tag_managed(
+static int32_t exception_stage_hostcall(jit_context_t *ctx, int32_t tag,
+    const int64_t *values, int32_t count, int local_tag) {
+    if (!ctx || !jit_hostcall_is_active(ctx) || !g_trap_active || count < 0 ||
+        (count > 0 && !values)) return -1;
+    if (local_tag) {
+        if (tag < 0 || tag >= ctx_runtime(ctx)->callable_tag_count) return -1;
+        tag = ctx_runtime(ctx)->callable_tags[tag];
+    } else if (tag < 0) {
+        return -1;
+    }
+    ctx = exception_activation_context(ctx);
+    if (!ctx_runtime(ctx)->execution) return -1;
+    if (!exception_set_payload_checked(ctx, tag, values, count, 0)) return 0;
+    ctx_runtime(ctx)->execution->hostcall_exception_pending = 1;
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_throw_tag_managed(
     void *jit_context, int32_t tag_addr
 ) {
-    wasmoon_jit_exception_throw_tag(
-        wasmoon_jit_context_ptr(jit_context), tag_addr
+    return exception_stage_hostcall(
+        (jit_context_t *)wasmoon_jit_context_ptr(jit_context),
+        tag_addr, NULL, 0, 1
     );
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_values_managed(
-    void *jit_context,
-    int32_t tag_addr,
-    int64_t *values,
-    int32_t count
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_throw_values_managed(
+    void *jit_context, int32_t tag_addr, int64_t *values, int32_t count
 ) {
-    wasmoon_jit_exception_throw_values(
-        wasmoon_jit_context_ptr(jit_context), tag_addr, values, count
+    return exception_stage_hostcall(
+        (jit_context_t *)wasmoon_jit_context_ptr(jit_context),
+        tag_addr, values, count, 1
+    );
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_exception_throw_store_values_managed(
+    void *jit_context, int32_t tag_addr, int64_t *values, int32_t count
+) {
+    return exception_stage_hostcall(
+        (jit_context_t *)wasmoon_jit_context_ptr(jit_context),
+        tag_addr, values, count, 0
     );
 }
 
@@ -740,3 +805,7 @@ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_throw_tag);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_begin);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_end);
 #endif
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_is_available(void *owner) {
+    return owner && *(native_exception_arena_t **)owner != NULL;
+}

@@ -312,7 +312,9 @@ fn shared_thread_context(
     nan_canonicalization=parent.store.nan_canonicalization,
     jit_compiler=parent.jit_compiler,
     register_named_modules=parent.register_named_modules,
-  )
+  ) catch {
+    error => raise RuntimeError(error.to_string())
+  }
   errdefer child.close()
   for name, definition in parent.module_definitions {
     child.module_definitions.set(name, definition)

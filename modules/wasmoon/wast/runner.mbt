@@ -68,7 +68,7 @@ pub fn WastContext::WastContext(
   nan_canonicalization~ : Bool = false,
   jit_compiler~ : JITCompiler? = None,
   register_named_modules~ : Bool = false,
-) -> WastContext {
+) -> WastContext raise @runtime.RuntimeError {
   // Use c_heap when JIT is enabled for GC support
   let store = if use_jit {
     @runtime.Store::with_c_heap(nan_canonicalization~)
@@ -241,7 +241,13 @@ pub fn run_wast_commands(
     nan_canonicalization~,
     jit_compiler~,
     register_named_modules~,
-  )
+  ) catch {
+    error => {
+      result.failed = 1
+      result.failures.push("WAST context initialization failed: \{error}")
+      return result
+    }
+  }
   defer ctx.close()
   if script.commands.any(item => {
       match item.0 {

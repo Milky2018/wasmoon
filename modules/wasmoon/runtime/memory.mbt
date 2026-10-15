@@ -85,7 +85,7 @@ pub fn Memory::Memory(
   is_memory64~ : Bool = false,
   is_shared~ : Bool = false,
   page_size_log2~ : Int32 = 16,
-) -> Memory {
+) -> Memory raise RuntimeError {
   Memory::allocate(
     min.to_int64() & 0xFFFF_FFFFL,
     max.map(fn(value) { value.to_int64() & 0xFFFF_FFFFL }),
@@ -102,10 +102,17 @@ fn Memory::allocate(
   is_memory64~ : Bool,
   is_shared~ : Bool,
   page_size_log2~ : Int32,
-) -> Memory {
+) -> Memory raise RuntimeError {
   let l2 = page_size_log2
   if l2 < 0 || l2 > 30 {
-    abort("invalid memory page size")
+    raise InvalidMemoryType("invalid page size")
+  }
+  if max is Some(maximum) &&
+    maximum.reinterpret_as_uint64() < min.reinterpret_as_uint64() {
+    raise InvalidMemoryType("maximum is below minimum")
+  }
+  if is_shared && max is None {
+    raise InvalidMemoryType("shared memory requires a maximum")
   }
   let page_size_bytes = 1L << l2
   let valid_size = min >= 0L &&
@@ -115,9 +122,8 @@ fn Memory::allocate(
       min <=
       (if l2 == 0 { 0xFFFF_FFFEL } else { 0x1_0000_0000L / page_size_bytes })
     )
-  let mem_desc_ptr = if !valid_size {
-    @wasmoon_jit.MemoryDescriptor::null()
-  } else if !is_memory64 && l2 == 16 {
+  guard valid_size else { raise MemoryMinimumExceedsLimits(min) }
+  let mem_desc_ptr = if !is_memory64 && l2 == 16 {
     @wasmoon_jit.alloc_guarded_memory_desc(
       min.to_int(),
       max.map(fn(value) { value.to_int() }),
@@ -132,7 +138,7 @@ fn Memory::allocate(
       is_shared~,
     )
   }
-  {
+  let memory = {
     descriptor_state: Ref(Open(mem_desc_ptr)),
     max,
     is_memory64,
@@ -140,35 +146,20 @@ fn Memory::allocate(
     page_size_log2: l2,
     page_size_bytes,
   }
+  memory.require_desc_ptr() |> ignore
+  memory
 }
 
 ///|
 /// Allocate a validated module memory without narrowing its page limits.
 pub fn Memory::from_type(ty : @types.MemoryType) -> Memory raise RuntimeError {
-  let min = ty.limits.min
-  let page_size_bytes = 1L << ty.page_size_log2
-  if min < 0L ||
-    min > 0x7FFF_FFFF_FFFF_FFFFL / page_size_bytes ||
-    (
-      !ty.is_memory64 &&
-      min >
-      (if ty.page_size_log2 == 0 {
-        0xFFFF_FFFEL
-      } else {
-        0x1_0000_0000L / page_size_bytes
-      })
-    ) {
-    raise MemoryMinimumExceedsLimits(min)
-  }
-  let memory = Memory::allocate(
-    min,
+  Memory::allocate(
+    ty.limits.min,
     ty.limits.max,
     is_memory64=ty.is_memory64,
     is_shared=ty.is_shared,
     page_size_log2=ty.page_size_log2,
   )
-  memory.require_desc_ptr() |> ignore
-  memory
 }
 
 ///|
@@ -176,7 +167,7 @@ pub fn Memory::new_guarded_memory0(
   min : Int32,
   max : Int32?,
   is_shared~ : Bool = false,
-) -> Memory {
+) -> Memory raise RuntimeError {
   Memory(min, max, is_shared~)
 }
 

@@ -1,0 +1,2 @@
+[Milky2018/wasmoon] test sanitizer_testsuite/runtime_failures_test.mbt:522 ("component native preparation denial rolls back and preserves its resource category") failed: sanitizer_testsuite/runtime_failures_test.mbt:539:9-539:68@Milky2018/wasmoon FAILED: native resource failure lost its category: NativeCompilationFailed("artifact installation failed: ContextAllocationFailed(total_funcs=1)")
+Total tests: 1, passed: 0, failed: 1.

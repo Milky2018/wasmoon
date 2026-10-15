@@ -840,7 +840,7 @@ extern "c" fn c_dwarf_add_function(
 /// via the GDB JIT interface
 /// verbose: if true, print debug info to stderr
 #borrow(dwarf)
-extern "c" fn c_dwarf_register(dwarf : DWARFBuilder, verbose : Int32) -> Unit = "wasmoon_dwarf_register"
+extern "c" fn c_dwarf_register(dwarf : DWARFBuilder, verbose : Int32) -> Bool = "wasmoon_dwarf_register"
 
 ///|
 /// Unregister DWARF debug info from the debugger
@@ -962,7 +962,7 @@ extern "c" fn c_jit_ctx_set_memory_pointers_managed(
   jit_context : JITContext,
   memory_ptrs : FixedArray[MemoryDescriptor],
   memory_count : Int32,
-) -> Unit = "wasmoon_jit_ctx_set_memory_pointers_managed"
+) -> Int32 = "wasmoon_jit_ctx_set_memory_pointers_managed"
 
 ///|
 #borrow(jit_context, table_ptrs, table_sizes, table_max_sizes)
@@ -972,7 +972,7 @@ extern "c" fn c_jit_ctx_set_table_pointers_managed(
   table_sizes : FixedArray[Int32],
   table_max_sizes : FixedArray[Int64],
   table_count : Int32,
-) -> Unit = "wasmoon_jit_ctx_set_table_pointers_managed"
+) -> Int32 = "wasmoon_jit_ctx_set_table_pointers_managed"
 
 ///|
 #borrow(jit_context)
@@ -1001,7 +1001,7 @@ extern "c" fn c_jit_ctx_get_memory_size_managed(
 extern "c" fn c_jit_exception_throw_tag_managed(
   jit_context : JITContext,
   tag_addr : Int32,
-) -> Unit = "wasmoon_jit_exception_throw_tag_managed"
+) -> Int32 = "wasmoon_jit_exception_throw_tag_managed"
 
 ///|
 #borrow(jit_context, values)
@@ -1010,7 +1010,16 @@ extern "c" fn c_jit_exception_throw_values_managed(
   tag_addr : Int32,
   values : FixedArray[Int64],
   count : Int32,
-) -> Unit = "wasmoon_jit_exception_throw_values_managed"
+) -> Int32 = "wasmoon_jit_exception_throw_values_managed"
+
+///|
+#borrow(jit_context, values)
+extern "c" fn c_jit_exception_throw_store_values_managed(
+  jit_context : JITContext,
+  tag_addr : Int32,
+  values : FixedArray[Int64],
+  count : Int32,
+) -> Int32 = "wasmoon_jit_exception_throw_store_values_managed"
 
 ///|
 #borrow(jit_context)
@@ -1077,7 +1086,7 @@ extern "c" fn c_jit_ctx_set_gc_heap_managed(
 extern "c" fn c_jit_gc_begin_frame_managed(
   jit_context : JITContext,
   frame_id : Int64,
-) -> Unit = "wasmoon_jit_gc_begin_frame_managed"
+) -> Bool = "wasmoon_jit_gc_begin_frame_managed"
 
 ///|
 #borrow(jit_context)

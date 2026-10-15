@@ -13,6 +13,7 @@ options(
     "trap.c",
     "exec_mem.c",
     "jit_context.c",
+    "native_alloc.c",
     "memory_ops.c",
     "segment_ops.c",
     "gc_type_cache.c",

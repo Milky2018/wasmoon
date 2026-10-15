@@ -1,0 +1,60 @@
+=================================================================
+==36215==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x00016d5b6b20 at pc 0x000108986eac bp 0x00016d5b6390 sp 0x00016d5b6368
+WRITE of size 1096 at 0x00016d5b6b20 thread T0
+    #0 0x000108986ea8 in __asan_memset+0x1e0 (libclang_rt.asan_osx_dynamic.dylib:arm64e+0x3eea8)
+    #1 0x0001065e4260 in jit_trap_activation_init trap.c:81
+    #2 0x0001066b5a70 in wasmoon_test_activation_scratch_isolation context_test_support.c:111
+    #3 0x000102a89fec in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test60____test__6e61746976655f68616e646c65735f746573742e6d6274__26 native_handles_test.mbt:727
+    #4 0x00010286c194 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test70____test__6e61746976655f68616e646c65735f746573742e6d6274__26_2edyncall wasmoon_sanitizer.blackbox_test.c:239407
+    #5 0x0001028f8988 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test45moonbit__test__driver__internal__catch__error __generated_driver_for_blackbox_test.mbt:432
+    #6 0x0001028e02d4 in _M0IP29Milky201834wasmoon__sanitizer__blackbox__test41MoonBit__Test__Driver__Internal__No__ArgsP29Milky201834wasmoon__sanitizer__blackbox__test21MoonBit__Test__Driver9run__test __generated_driver_for_blackbox_test.mbt:611
+    #7 0x0001028dc568 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test44moonbit__test__driver__internal__do__execute __generated_driver_for_blackbox_test.mbt:869
+    #8 0x0001065c8ae0 in main __generated_driver_for_blackbox_test.mbt:711
+    #9 0x00018e93c4e0 in start+0x1b4c (dyld:arm64e+0x204e0)
+
+Address 0x00016d5b6b20 is located in stack of thread T0 at offset 1120 in frame
+    #0 0x0001066b589c in wasmoon_test_activation_scratch_isolation context_test_support.c:107
+
+  This frame has 4 object(s):
+    [32, 1120) 'outer' (line 110)
+    [1248, 2336) 'inner' (line 110) <== Memory access at offset 1120 partially underflows this variable
+    [2464, 2472) 'first' (line 113)
+    [2496, 2504) 'second' (line 113)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow trap.c:81 in jit_trap_activation_init
+Shadow bytes around the buggy address:
+  0x00016d5b6880: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00016d5b6900: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00016d5b6980: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00016d5b6a00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00016d5b6a80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x00016d5b6b00: 00 00 00 00[f2]f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x00016d5b6b80: f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00016d5b6c00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00016d5b6c80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00016d5b6d00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00016d5b6d80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==36215==ABORTING
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"native_handles_test.mbt","index":26}
+----- END MOON TEST RESULT -----

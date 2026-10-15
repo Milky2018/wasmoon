@@ -456,8 +456,8 @@ fn run_jit_with_opt_level(
     }
     @wast.register_instance_funcrefs_for_jit(jm, instance, store)
     jm.configure_native_fiber_stack_size(1048576L) |> ignore
-    guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
-      return Err("JIT memory initialization failed")
+    let _ = @wast.init_jit_memories_from_store(instance, store, jm) catch {
+      error => return Err("JIT memory initialization failed: \{error}")
     }
     let globals_ptr = @wast.init_jit_globals_from_store(instance, store, jm)
     let use_subtype_indirect_check = true

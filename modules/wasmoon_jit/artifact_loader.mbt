@@ -16,7 +16,7 @@ pub struct LoadedArtifact {
 ///|
 fn prepare_loaded_artifact(
   verified : @artifact_loader.LoadedArtifact,
-) -> LoadedArtifact {
+) -> LoadedArtifact raise ArtifactLoadError {
   let functions = verified.artifact().functions
   let safepoints = if functions.any(f => !f.safepoints.is_empty()) {
     let mut count = 0
@@ -24,6 +24,12 @@ fn prepare_loaded_artifact(
       if !function.safepoints.is_empty() {
         count = Int32::max(count, function.identity.function_index + 1)
       }
+    }
+    @jit_ffi.PreparedSafepoints::check_count(count) catch {
+      error =>
+        raise @artifact_loader.ArtifactLoadError::native_preparation_failed(
+          error.to_string(),
+        )
     }
     let blobs = FixedArray::make(count, b"")
     let offsets : FixedArray[FixedArray[Int32]] = FixedArray::make(count, [])
@@ -34,7 +40,14 @@ fn prepare_loaded_artifact(
         offsets[function.identity.function_index] = sites
       }
     }
-    Some(@jit_ffi.PreparedSafepoints::new(blobs, offsets))
+    Some(
+      @jit_ffi.PreparedSafepoints::new(blobs, offsets) catch {
+        error =>
+          raise @artifact_loader.ArtifactLoadError::native_preparation_failed(
+            error.to_string(),
+          )
+      },
+    )
   } else {
     None
   }
