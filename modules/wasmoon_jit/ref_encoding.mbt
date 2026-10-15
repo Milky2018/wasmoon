@@ -9,6 +9,20 @@
 /// - i31: raw = (value << 1) | 1
 
 ///|
+/// Native exception handles have their own tag, distinct from odd i31 words.
+pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000L
+
+///|
+pub fn encode_exception_ref(index : Int32) -> Int64 {
+  EXCEPTION_REF_TAG | (index.to_int64() << 1) | 1L
+}
+
+///|
+pub fn is_exception_ref(raw : Int64) -> Bool {
+  raw > 0L && (raw & EXCEPTION_REF_TAG) != 0L
+}
+
+///|
 pub fn is_null_ref(raw : Int64) -> Bool {
   raw == @wasm_milkir.NULL_REF
 }
@@ -72,7 +86,14 @@ pub fn encode_gc_heap_ref(heap_idx0 : Int32) -> Int64 {
 pub fn decode_gc_heap_ref(raw : Int64) -> Int32? {
   if raw == @wasm_milkir.NULL_REF {
     None
-  } else if (raw & (@wasm_milkir.FUNCREF_TAG | @wasm_milkir.EXTERNREF_TAG)) !=
+  } else if (
+      raw &
+      (
+        @wasm_milkir.FUNCREF_TAG |
+        @wasm_milkir.EXTERNREF_TAG |
+        EXCEPTION_REF_TAG
+      )
+    ) !=
     0L {
     None
   } else if (raw & 1L) == 1L {

@@ -155,8 +155,12 @@ pub fn instantiate_module(
     elem_values,
     elem_segments: mod.elems,
     data_segments: mod.datas,
-    dropped_elems,
-    dropped_datas,
+    dropped_elems: FixedArray::makei(dropped_elems.length(), i => {
+      dropped_elems[i]
+    }),
+    dropped_datas: FixedArray::makei(dropped_datas.length(), i => {
+      dropped_datas[i]
+    }),
   }
   try! (store.register_instance(instance) |> ignore)
   (store, instance)
@@ -585,7 +589,7 @@ pub fn instantiate_module_with_init(
         }
       }
       // Active elem segments are implicitly dropped after initialization
-      instance.dropped_elems[elem_idx] = true
+      instance.drop_element(elem_idx)
     }
   }
 
@@ -1591,8 +1595,18 @@ pub fn instantiate_module_with_imports_unstarted(
     elem_values,
     elem_segments: mod.elems,
     data_segments: mod.datas,
-    dropped_elems,
-    dropped_datas,
+    dropped_elems: FixedArray::makei(dropped_elems.length(), i => {
+      dropped_elems[i]
+    }),
+    dropped_datas: FixedArray::makei(dropped_datas.length(), i => {
+      dropped_datas[i]
+    }),
+  }
+
+  for index, elem in mod.elems {
+    if elem.mode is Declarative {
+      instance.drop_element(index)
+    }
   }
 
   // Register instance with store for cross-module call resolution
@@ -1621,7 +1635,7 @@ pub fn instantiate_module_with_imports_unstarted(
         }
       }
       // Active elem segments are implicitly dropped after initialization
-      dropped_elems[elem_idx] = true
+      instance.drop_element(elem_idx)
     }
   }
 
@@ -1637,7 +1651,7 @@ pub fn instantiate_module_with_imports_unstarted(
       let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
       // Copy data to memory
       mem.init_data_at(offset, data.init)
-      dropped_datas[data_idx] = true
+      instance.dropped_datas[data_idx] = true
     }
   }
 

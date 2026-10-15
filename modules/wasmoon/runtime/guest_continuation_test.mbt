@@ -3,16 +3,19 @@ test "guest continuation ownership: stale cancellation cannot release a new owne
   let store = @runtime.Store()
   let releases = Ref(0)
   let successor = Ref(-1L)
-  let handle = store.put_guest_continuation({
-    run: fn(_) raise {
-      successor.val = store.put_guest_continuation({
-        run: fn(_) { [] },
-        cancel: fn() { releases.val += 1 },
-      })
-      []
-    },
-    cancel: fn() { releases.val += 100 },
-  })
+  let handle = store.put_guest_continuation(
+    @runtime.GuestContinuationBody::new(
+      fn(_) raise {
+        successor.val = store.put_guest_continuation(
+          @runtime.GuestContinuationBody::new(fn(_) { [] }, fn() {
+            releases.val += 1
+          }),
+        )
+        []
+      },
+      fn() { releases.val += 100 },
+    ),
+  )
   let consumed = store.take_guest_continuation(handle)
   assert_true((consumed.run)(Values([])).is_empty())
   (consumed.cancel)()
@@ -33,10 +36,12 @@ test "guest continuation ownership: terminal failure releases the consumed body"
   let store = @runtime.Store()
   defer store.close()
   let releases = Ref(0)
-  let handle = store.put_guest_continuation({
-    run: fn(_) raise { raise @runtime.RuntimeError::Unreachable },
-    cancel: fn() { releases.val += 1 },
-  })
+  let handle = store.put_guest_continuation(
+    @runtime.GuestContinuationBody::new(
+      fn(_) raise { raise @runtime.RuntimeError::Unreachable },
+      fn() { releases.val += 1 },
+    ),
+  )
   let body = store.take_guest_continuation(handle)
   try (body.run)(Values([])) catch {
     error =>

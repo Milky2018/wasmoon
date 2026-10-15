@@ -1,0 +1,20 @@
+Interpreter Mode Summary:
+----------------------------------------
+  Files fully passed:  258/258
+  Files with failures: 0
+  Files with errors:   0
+  Total tests passed:  62563
+  Total tests failed:  0
+
+JIT Mode Summary:
+----------------------------------------
+  Files fully passed:  258/258
+  Files with failures: 0
+  Files with errors:   0
+  Total tests passed:  62563
+  Total tests failed:  0
+
+----------------------------------------
+Comparison:
+  Interpreter: 258/258 files passed
+  JIT:         258/258 files passed

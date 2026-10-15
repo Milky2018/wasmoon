@@ -25,6 +25,8 @@ typedef struct native_exception {
     int32_t count;
     int64_t *values;
     void *root_registration;
+    int64_t reference;
+    int marked;
 } native_exception_t;
 
 typedef struct native_exception_layout {
@@ -40,6 +42,8 @@ typedef struct native_exception_arena {
     size_t capacity;
     native_exception_t *entries;
     int sealed;
+    int traced;
+    int32_t next_reference;
     native_exception_layout_t *layouts;
 } native_exception_arena_t;
 
@@ -53,8 +57,11 @@ static void exception_arena_clear(native_exception_arena_t *arena) {
     if (!arena) return;
     for (size_t i = 0; i < arena->count; ++i) {
         native_exception_t *entry = &arena->entries[i];
-        if (entry->root_registration)
+        if (entry->root_registration) {
+            GcHeap *heap = gc_heap_registration_heap(entry->root_registration);
+            if (heap->exception_arena == arena) heap->exception_arena = NULL;
             gc_heap_unregister_parked_roots(entry->root_registration);
+        }
         free(entry->values);
     }
     while (arena->layouts) {
@@ -79,7 +86,8 @@ void exception_arena_release(native_exception_arena_t *arena) {
 static int64_t exception_arena_insert(native_exception_arena_t *arena,
     GcHeap *heap, int32_t tag, const int64_t *values, int32_t count) {
     heap = gc_heap_live(heap);
-    if (!arena || arena->sealed || count < 0 || (count && !values)) return 0;
+    if (!arena || arena->sealed || count < 0 || (count && !values) ||
+        arena->next_reference == INT32_MAX) return 0;
     if (arena->count == arena->capacity) {
         size_t capacity = arena->capacity ? arena->capacity * 2 : 16;
         if (capacity > INT32_MAX) return 0;
@@ -88,12 +96,14 @@ static int64_t exception_arena_insert(native_exception_arena_t *arena,
         arena->entries = entries;
         arena->capacity = capacity;
     }
-    native_exception_t entry = { .tag = tag, .count = count };
+    native_exception_t entry = { .tag = tag, .count = count,
+        .reference = GC_EXCEPTION_REF_TAG | ((int64_t)arena->next_reference << 1) | 1 };
     if (count) {
         entry.values = malloc((size_t)count * sizeof(int64_t));
         if (!entry.values) return 0;
         memcpy(entry.values, values, (size_t)count * sizeof(int64_t));
-        if (heap) {
+    }
+    if (heap && (count || arena->traced)) {
             native_exception_layout_t *layout = arena->layouts;
             while (layout && layout->tag != tag) layout = layout->next;
             if (layout && layout->count != count) {
@@ -101,25 +111,107 @@ static int64_t exception_arena_insert(native_exception_arena_t *arena,
                 return 0;
             }
             int64_t *roots = NULL;
-            if (!gc_heap_register_parked_roots(heap, count,
+            int32_t slots = count ? count : 1;
+            if (!gc_heap_register_parked_roots(heap, slots,
                     &entry.root_registration, &roots)) {
                 free(entry.values);
                 return 0;
             }
-            for (int32_t i = 0; i < count; ++i)
-                roots[i] = !layout || layout->roots[i] ? values[i] : 0;
-        }
+            for (int32_t i = 0; i < slots; ++i)
+                roots[i] = i < count && (!layout || layout->roots[i]) ? values[i] : 0;
+            if (arena->traced && !gc_heap_bind_exception_roots(entry.root_registration,
+                    arena, entry.reference)) {
+                gc_heap_unregister_parked_roots(entry.root_registration);
+                free(entry.values);
+                return 0;
+            }
     }
-    arena->entries[arena->count] = entry;
-    // Odd references cannot be mistaken for movable GC heap objects.
-    return ((int64_t)arena->count++ << 1) | 1;
+    arena->entries[arena->count++] = entry;
+    ++arena->next_reference;
+    return entry.reference;
 }
 
 static native_exception_t *exception_arena_lookup(native_exception_arena_t *arena,
     int64_t reference) {
-    if (!arena || reference <= 0 || !(reference & 1) ||
-        (uint64_t)(reference >> 1) >= arena->count) return NULL;
-    return &arena->entries[reference >> 1];
+    if (!arena || reference <= 0 || !(reference & GC_EXCEPTION_REF_TAG)) return NULL;
+    size_t low = 0, high = arena->count;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2;
+        if (arena->entries[middle].reference < reference) low = middle + 1;
+        else high = middle;
+    }
+    return low < arena->count && arena->entries[low].reference == reference
+        ? &arena->entries[low] : NULL;
+}
+
+static void exception_entry_free(native_exception_t *entry) {
+    if (entry->root_registration) gc_heap_unregister_parked_roots(entry->root_registration);
+    free(entry->values);
+}
+
+void exception_arena_mark(native_exception_arena_t *arena, int64_t reference) {
+    native_exception_t *entry = exception_arena_lookup(arena, reference);
+    if (entry) entry->marked = 1;
+}
+
+int32_t exception_arena_marked_count(native_exception_arena_t *arena) {
+    int32_t count = 0;
+    if (arena) for (size_t i = 0; i < arena->count; ++i)
+        if (arena->entries[i].marked) ++count;
+    return count;
+}
+
+void exception_arena_copy_marked(native_exception_arena_t *arena, int64_t *roots) {
+    if (arena) for (size_t i = 0; i < arena->count; ++i)
+        if (arena->entries[i].marked) *roots++ = arena->entries[i].reference;
+}
+
+void exception_arena_reset_marks(native_exception_arena_t *arena) {
+    if (arena) for (size_t i = 0; i < arena->count; ++i) arena->entries[i].marked = 0;
+}
+
+void exception_arena_sweep(native_exception_arena_t *arena, GcHeap *heap) {
+    if (!arena || !arena->traced) return;
+    size_t retained = 0;
+    for (size_t i = 0; i < arena->count; ++i) {
+        native_exception_t entry = arena->entries[i];
+        if (gc_heap_registration_heap(entry.root_registration) == heap && !entry.marked)
+            exception_entry_free(&entry);
+        else {
+            entry.marked = 0;
+            arena->entries[retained++] = entry;
+        }
+    }
+    arena->count = retained;
+    if (!retained) {
+        heap->exception_arena = NULL;
+        free(arena->entries);
+        arena->entries = NULL;
+        arena->capacity = 0;
+    }
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_exception_arena_enable_reclamation(void *owner) {
+    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
+    if (arena) arena->traced = 1;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_exception_arena_release_snapshot(void *owner, int64_t reference) {
+    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
+    native_exception_t *entry = exception_arena_lookup(arena, reference);
+    if (!entry) return;
+    size_t index = (size_t)(entry - arena->entries);
+    GcHeap *heap = gc_heap_registration_heap(entry->root_registration);
+    if (arena->count == 1 && heap && heap->exception_arena == arena)
+        heap->exception_arena = NULL;
+    exception_entry_free(entry);
+    memmove(entry, entry + 1, (arena->count - index - 1) * sizeof(*entry));
+    --arena->count;
+    if (!arena->count) {
+        free(arena->entries);
+        arena->entries = NULL;
+        arena->capacity = 0;
+    }
 }
 
 static void finalize_exception_arena(void *owner) {
@@ -207,6 +299,26 @@ static int64_t WASMOON_GUEST_ABI exception_get_ref_impl(jit_context_t *ctx) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_ref_ptr(void) {
     return WASMOON_GUEST_ADDRESS(exception_get_ref_impl);
+}
+
+// Snapshot only the current exception's typed reference words. The immutable
+// exception token, when present, is sufficient to trace its complete payload.
+int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_state_t *state, int64_t *roots) {
+    if (state->exception_ref) {
+        if (roots) roots[0] = state->exception_ref;
+        return 1;
+    }
+    native_exception_layout_t *layout = ctx_runtime(ctx)->exception_arena
+        ? ctx_runtime(ctx)->exception_arena->layouts : NULL;
+    while (layout && layout->tag != state->exception_tag) layout = layout->next;
+    int32_t count = 0;
+    for (int32_t i = 0; i < state->exception_value_count; ++i) {
+        if (state->exception_values && (!layout || (i < layout->count && layout->roots[i]))) {
+            if (roots) roots[count] = state->exception_values[i];
+            ++count;
+        }
+    }
+    return count;
 }
 
 // ============ Exception Handler Management ============
@@ -397,9 +509,9 @@ void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t co
 
     if (count > 0 && locals) {
         // Copy locals to heap
-        state->spilled_locals = (int64_t *)malloc(count * sizeof(int64_t));
+        state->spilled_locals = (int64_t *)malloc((size_t)count * 2 * sizeof(int64_t));
         if (state->spilled_locals) {
-            memcpy(state->spilled_locals, locals, count * sizeof(int64_t));
+            memcpy(state->spilled_locals, locals, (size_t)count * 2 * sizeof(int64_t));
         }
     } else {
         state->spilled_locals = NULL;

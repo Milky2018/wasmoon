@@ -415,27 +415,23 @@ pub fn MarkSweepHeap::is_alive(self : MarkSweepHeap, idx : Int32) -> Bool {
 ///|
 /// Mark an object as reachable (and recursively mark referenced objects)
 pub fn MarkSweepHeap::mark(self : MarkSweepHeap, idx : Int32) -> Unit {
-  // Bounds check
-  if idx < 0 || idx >= self.objects.length() {
-    return
-  }
-  // Already marked or freed
-  if self.marks[idx] || self.objects[idx] is None {
-    return
-  }
-  // Mark this object
-  self.marks[idx] = true
-  // Recursively mark referenced objects
-  match self.objects[idx] {
-    Some(Struct(s)) =>
-      for field in s.fields {
-        self.mark_value(field)
+  let pending = [idx]
+  while pending.pop() is Some(index) {
+    if !self.is_alive(index) || self.marks[index] {
+      continue
+    }
+    self.marks[index] = true
+    let values = match self.objects[index] {
+      Some(Struct(object)) => object.fields
+      Some(Array(object)) => object.elements
+      None => continue
+    }
+    for value in values {
+      match value {
+        StructRef(child) | ArrayRef(child) => pending.push(child)
+        _ => ()
       }
-    Some(Array(a)) =>
-      for elem in a.elements {
-        self.mark_value(elem)
-      }
-    None => ()
+    }
   }
 }
 

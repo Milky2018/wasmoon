@@ -1468,6 +1468,8 @@ fn run_with_jit(
               // Convert args to Int64 using shared helper
               let i64_args = convert_args_to_jit(args)
               @logger.debug("JIT: Calling function '\{func_name}'")
+              store.begin_gc_tracing()
+              defer store.end_gc_tracing()
               // Set up GC heap for JIT execution if c_heap is available
               match store.c_heap {
                 Some(heap) => {

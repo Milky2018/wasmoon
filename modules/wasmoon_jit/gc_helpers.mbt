@@ -53,6 +53,15 @@ pub fn is_null(value : Int64) -> Bool {
 pub fn value_type_may_hold_gc_ref(ty : @types.ValueType) -> Bool {
   match ty {
     AnyRef
+    | ExternRef
+    | RefExtern
+    | NullExternRef
+    | ContRef
+    | RefCont
+    | RefContTyped(_)
+    | RefNullContTyped(_)
+    | NullContRef
+    | RefNoCont
     | ExnRef
     | StructRef
     | ArrayRef
@@ -89,7 +98,9 @@ pub fn collect_gc_root_args(
       continue
     }
     let value = args[i]
-    if value > 0L && (value & 1L) == 0L {
+    if decode_gc_heap_ref(value) is Some(_) ||
+      is_exception_ref(value) ||
+      value < 0L {
       roots.push(value)
     }
   }

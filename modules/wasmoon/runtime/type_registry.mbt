@@ -1,7 +1,7 @@
 ///|
 /// Store-local identities retain recursive-group equivalence across modules.
 priv struct StoreTypeRegistry {
-  representatives : Array[(ModuleInstance, Int32)]
+  representatives : Array[(Array[@types.SubType], Array[Int32], Int32)]
   mappings : Map[Int32, (Array[@types.SubType], Array[Int32], Array[Int32])]
   parents : Array[Int32]
   views : Array[NativeCallableTypeView]
@@ -28,23 +28,38 @@ fn StoreTypeRegistry::register(
   self : StoreTypeRegistry,
   instance : ModuleInstance,
 ) -> Array[Int32] {
-  if instance.store_idx >= 0 &&
-    self.mappings.get(instance.store_idx) is Some((types, groups, mapping)) &&
-    types == instance.types &&
-    groups == instance.type_rec_groups {
+  self.register_graph(
+    instance.types,
+    instance.type_rec_groups,
+    instance.store_idx,
+  )
+}
+
+///|
+fn StoreTypeRegistry::register_graph(
+  self : StoreTypeRegistry,
+  types : Array[@types.SubType],
+  groups : Array[Int32],
+  store_index : Int32,
+) -> Array[Int32] {
+  if store_index >= 0 &&
+    self.mappings.get(store_index)
+    is Some((cached_types, cached_groups, mapping)) &&
+    cached_types == types &&
+    cached_groups == groups {
     return mapping
   }
   let mapping : Array[Int32] = []
   let first_new = self.representatives.length()
-  for type_index in 0..<instance.types.length() {
+  for type_index in 0..<types.length() {
     let mut identity = -1
     for candidate, representative in self.representatives {
-      let (owner, index) = representative
+      let (other_types, other_groups, index) = representative
       let equivalent = @types.TypeEquivalenceContext::cross_module(
-        instance.types,
-        owner.types,
-        rec_groups1=instance.type_rec_groups,
-        rec_groups2=owner.type_rec_groups,
+        types,
+        other_types,
+        rec_groups1=groups,
+        rec_groups2=other_groups,
       )
       if equivalent.types_equivalent(type_index, index) {
         identity = candidate
@@ -53,20 +68,17 @@ fn StoreTypeRegistry::register(
     }
     if identity < 0 {
       identity = self.representatives.length()
-      self.representatives.push((instance, type_index))
+      self.representatives.push((types, groups, type_index))
       self.parents.push(-1)
     }
     mapping.push(identity)
   }
-  if instance.store_idx >= 0 {
-    self.mappings.set(
-      instance.store_idx,
-      (instance.types, instance.type_rec_groups, mapping),
-    )
+  if store_index >= 0 {
+    self.mappings.set(store_index, (types, groups, mapping))
   }
   for identity in first_new..<self.representatives.length() {
-    let (_, index) = self.representatives[identity]
-    if instance.types[index].supertypes is [parent, ..] {
+    let (_, _, index) = self.representatives[identity]
+    if types[index].supertypes is [parent, ..] {
       self.parents[identity] = mapping[parent]
     }
   }
@@ -153,7 +165,16 @@ fn Store::record_gc_type(
 ) -> Unit {
   let identity = match instance {
     Some(instance) => self.native_types.register(instance)[type_index]
-    None => -1
+    None =>
+      if type_index >= 0 && type_index < self.module_types.length() {
+        self.native_types.register_graph(
+          self.module_types,
+          self.module_rec_groups,
+          -1,
+        )[type_index]
+      } else {
+        -1
+      }
   }
   match self.c_heap {
     Some(heap) => heap.set_runtime_type(index, identity)
@@ -215,8 +236,8 @@ fn Store::gc_type_definition(
     None => self.native_types.heap_types.get(reference).unwrap_or(-1)
   }
   if identity >= 0 && identity < self.native_types.representatives.length() {
-    let (instance, index) = self.native_types.representatives[identity]
-    return Some(instance.types[index])
+    let (types, _, index) = self.native_types.representatives[identity]
+    return Some(types[index])
   }
   if fallback >= 0 && fallback < self.module_types.length() {
     Some(self.module_types[fallback])

@@ -15,8 +15,8 @@ pub(all) struct ModuleInstance {
   elem_values : Array[Array[@types.Value]]
   elem_segments : Array[@types.Element]
   data_segments : Array[@types.Data]
-  dropped_elems : Array[Bool] // true if elem segment has been dropped
-  dropped_datas : Array[Bool] // true if data segment has been dropped
+  dropped_elems : FixedArray[Bool] // true if elem segment has been dropped
+  dropped_datas : FixedArray[Bool] // true if data segment has been dropped
 } derive(Debug)
 
 ///|
@@ -102,4 +102,15 @@ pub fn ModuleInstance::validated_array_type_at(
     Array(at) => at
     _ => abort("validated instance has no array type at index \{idx}")
   }
+}
+
+///|
+/// Retire evaluated element values as well as their guest-visible availability.
+pub fn ModuleInstance::drop_element(
+  self : ModuleInstance,
+  index : Int32,
+) -> Unit {
+  self.dropped_elems[index] = true
+  self.elem_values[index].clear()
+  self.elem_values[index].shrink_to_fit()
 }

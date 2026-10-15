@@ -677,7 +677,7 @@ int32_t gc_collect_for_alloc_internal(
     int32_t safe_root_count = root_count > 0 ? root_count : 0;
     int32_t scratch_count = ctx_execution(ctx)->gc_root_scratch_len > 0 ? ctx_execution(ctx)->gc_root_scratch_len : 0;
     int32_t caller_root_count = gc_root_scope_count(ctx);
-    int32_t exception_root_count = ctx_execution(ctx)->exception_value_count > 0 ? ctx_execution(ctx)->exception_value_count : 0;
+    int32_t exception_root_count = exception_copy_activation_roots(ctx, ctx_execution(ctx), NULL);
     int32_t spilled_root_count = ctx_execution(ctx)->spilled_locals_count > 0 ? ctx_execution(ctx)->spilled_locals_count : 0;
     int32_t table_root_count = gc_count_table_roots(ctx);
     int64_t stack_root_count64 =
@@ -727,12 +727,9 @@ int32_t gc_collect_for_alloc_internal(
         if (caller_root_count > 0) {
             at += gc_copy_root_scopes(ctx, &merged[at]);
         }
-        if (exception_root_count > 0 && ctx_execution(ctx)->exception_values) {
-            memcpy(&merged[at], ctx_execution(ctx)->exception_values, (size_t)exception_root_count * sizeof(int64_t));
-            at += exception_root_count;
-        }
+        at += exception_copy_activation_roots(ctx, ctx_execution(ctx), merged + at);
         if (spilled_root_count > 0 && ctx_execution(ctx)->spilled_locals) {
-            memcpy(&merged[at], ctx_execution(ctx)->spilled_locals, (size_t)spilled_root_count * sizeof(int64_t));
+            memcpy(&merged[at], ctx_execution(ctx)->spilled_locals + spilled_root_count, (size_t)spilled_root_count * sizeof(int64_t));
             at += spilled_root_count;
         }
         if (table_root_count > 0) {

@@ -18,6 +18,11 @@ pub(all) enum FuncOwner {
 pub struct Store {
   nan_canonicalization : Bool
   interpreter_limits : InterpreterLimits
+  priv mut next_exception : Int32
+  priv mut next_wrapped_extern : Int32
+  priv mut gc_tracing_depth : Int32
+  priv mut gc_in_collect : Bool
+  priv mut gc_trace : GcTrace?
   priv mut interpreter_reentry_depth : Int32
   funcs : Array[FuncInst]
   func_types : Array[@types.FuncType] // Type of each function
@@ -28,7 +33,7 @@ pub struct Store {
   tags : Array[@types.FuncType] // Tag types (params only, no results)
   tag_type_indices : Array[Int32] // Original type index for each tag
   tag_owners : Array[FuncOwner] // Owner module for each tag
-  exns : Array[ExnInstance] // Exception instances for exnref
+  mut exns : Map[Int32, ExnInstance] // Live exception snapshots, with non-reused handles
   heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
   // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
   mut c_heap : @wasmoon_jit.CHeap?
@@ -38,7 +43,7 @@ pub struct Store {
   mut module_rec_groups : Array[Int32]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
-  wrapped_externs : Array[@types.Value]
+  mut wrapped_externs : Map[Int32, @types.Value]
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
   func_owners : Array[FuncOwner]
@@ -63,8 +68,9 @@ pub struct Store {
   priv store_exception_to_native : Map[Int32, Int64]
   priv suspended_executions : Map[Int64, SuspendedExecutionCleanup]
   priv mut next_suspended_execution_id : Int64
-  priv guest_continuations : Array[GuestContinuationBody?]
-  priv pinned_gc_roots : Array[(Int64, Array[@types.Value], Ref[Bool])]
+  priv mut guest_continuations : Map[Int64, GuestContinuationBody]
+  priv mut next_guest_continuation : Int64
+  priv mut pinned_gc_roots : Map[Int64, PinnedGcRoots]
   priv mut next_pinned_gc_roots_id : Int64
   priv mut instantiation : RollbackRegistrar?
   priv closed : Ref[Bool]
@@ -105,7 +111,10 @@ fn[T] Store::push_allocation(
   value : T,
 ) -> Int32 {
   let index = values.length()
-  self.on_instantiation_rollback(fn() { values.truncate(index) })
+  self.on_instantiation_rollback(fn() {
+    values.truncate(index)
+    values.shrink_to_fit()
+  })
   values.push(value)
   index
 }
@@ -151,6 +160,11 @@ pub fn Store::Store(
     nan_canonicalization,
     interpreter_limits,
     interpreter_reentry_depth: 0,
+    next_exception: 0,
+    next_wrapped_extern: 0,
+    gc_tracing_depth: 0,
+    gc_in_collect: false,
+    gc_trace: None,
     funcs: [],
     func_types: [],
     func_type_indices: [],
@@ -160,12 +174,12 @@ pub fn Store::Store(
     tags: [],
     tag_type_indices: [],
     tag_owners: [],
-    exns: [],
+    exns: Map([]),
     heap: MarkSweepHeap(),
     c_heap: None,
     module_types: [],
     module_rec_groups: [],
-    wrapped_externs: [],
+    wrapped_externs: Map([]),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -179,8 +193,9 @@ pub fn Store::Store(
     store_exception_to_native: Map([]),
     suspended_executions: Map([]),
     next_suspended_execution_id: 0L,
-    guest_continuations: [],
-    pinned_gc_roots: [],
+    guest_continuations: Map([]),
+    next_guest_continuation: 0L,
+    pinned_gc_roots: Map([]),
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
     closed: Ref(false),
@@ -194,10 +209,15 @@ pub fn Store::with_c_heap(
   interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
 ) -> Store {
   let initial_capacity = c_heap_initial_capacity()
-  {
+  let store : Store = {
     nan_canonicalization,
     interpreter_limits,
     interpreter_reentry_depth: 0,
+    next_exception: 0,
+    next_wrapped_extern: 0,
+    gc_tracing_depth: 0,
+    gc_in_collect: false,
+    gc_trace: None,
     funcs: [],
     func_types: [],
     func_type_indices: [],
@@ -207,12 +227,12 @@ pub fn Store::with_c_heap(
     tags: [],
     tag_type_indices: [],
     tag_owners: [],
-    exns: [],
+    exns: Map([]),
     heap: MarkSweepHeap(), // Used only when c_heap is None.
     c_heap: Some(CHeap(capacity=initial_capacity)),
     module_types: [],
     module_rec_groups: [],
-    wrapped_externs: [],
+    wrapped_externs: Map([]),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -226,12 +246,15 @@ pub fn Store::with_c_heap(
     store_exception_to_native: Map([]),
     suspended_executions: Map([]),
     next_suspended_execution_id: 0L,
-    guest_continuations: [],
-    pinned_gc_roots: [],
+    guest_continuations: Map([]),
+    next_guest_continuation: 0L,
+    pinned_gc_roots: Map([]),
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
     closed: Ref(false),
   }
+  store.native_execution.exceptions().enable_reclamation()
+  store
 }
 
 ///|
@@ -250,21 +273,19 @@ pub fn Store::close(self : Store) -> Unit {
   for cleanup in suspended {
     (cleanup.run)()
   }
-  for entry in self.guest_continuations {
-    if entry is Some(body) {
-      (body.cancel)()
-    }
+  let guest_bodies = self.guest_continuations.values().to_array()
+  self.guest_continuations.clear()
+  for body in guest_bodies {
+    (body.cancel)()
   }
   // Clear logical contents and release retained backing slots to break cycles.
   // Array.clear alone can retain references beyond the new length.
   self.guest_continuations.clear()
-  self.guest_continuations.shrink_to_fit()
   self.native_execution.seal()
-  for roots in self.pinned_gc_roots {
-    roots.2.val = false
+  for roots in self.pinned_gc_roots.values() {
+    roots.active.val = false
   }
   self.pinned_gc_roots.clear()
-  self.pinned_gc_roots.shrink_to_fit()
   self.funcref_registry.clear()
   self.native_types.representatives.clear()
   self.native_types.representatives.shrink_to_fit()
@@ -310,7 +331,6 @@ pub fn Store::close(self : Store) -> Unit {
   self.native_exception_to_store.clear()
   self.store_exception_to_native.clear()
   self.exns.clear()
-  self.exns.shrink_to_fit()
   self.heap.clear()
   if self.c_heap is Some(heap) {
     heap.free()
@@ -321,7 +341,6 @@ pub fn Store::close(self : Store) -> Unit {
   self.module_types = []
   self.module_rec_groups = []
   self.wrapped_externs.clear()
-  self.wrapped_externs.shrink_to_fit()
   for owner in self.jit_table_owners {
     match owner {
       Some(owner) => owner.close()
@@ -358,7 +377,7 @@ pub fn Store::native_execution_state(
 /// Executors use this while an invocation is parked outside an active Wasm
 /// stack. Releasing a lease is idempotent.
 pub struct GcRootLease {
-  priv store : Store
+  priv mut store : Store?
   priv id : Int64
   priv active : Ref[Bool]
 }
@@ -371,21 +390,49 @@ pub fn Store::pin_gc_roots(
   let id = self.next_pinned_gc_roots_id
   let active = Ref(true)
   self.next_pinned_gc_roots_id = self.next_pinned_gc_roots_id + 1L
-  self.pinned_gc_roots.push((id, values.copy(), active))
-  { store: self, id, active, }
+  if self.closed.val {
+    return { store: None, id, active: Ref(false), }
+  }
+  self.pinned_gc_roots.set(id, {
+    values: values.copy(),
+    active,
+    guest_owned: false,
+  })
+  { store: Some(self), id, active, }
 }
 
 ///|
 pub fn GcRootLease::release(self : GcRootLease) -> Unit {
-  if !self.active.val {
-    return
-  }
   self.active.val = false
-  for index, roots in self.store.pinned_gc_roots {
-    if roots.0 == self.id {
-      self.store.pinned_gc_roots.remove(index) |> ignore
-      break
-    }
+  if self.store is Some(store) {
+    store.pinned_gc_roots.remove(self.id)
+  }
+  self.store = None
+}
+
+///|
+priv struct PinnedGcRoots {
+  values : Array[@types.Value]
+  active : Ref[Bool]
+  mut guest_owned : Bool
+} derive(Debug)
+
+///|
+fn GcRootLease::delegate_to_guest(self : GcRootLease) -> Unit {
+  if self.store is Some(store) &&
+    store.pinned_gc_roots.get(self.id) is Some(roots) {
+    roots.guest_owned = true
+  }
+}
+
+///|
+/// Copy the explicit roots owned by this lease for continuation transfer.
+pub fn GcRootLease::snapshot(self : GcRootLease) -> Array[@types.Value] {
+  if self.store is Some(store) &&
+    store.pinned_gc_roots.get(self.id) is Some(roots) {
+    roots.values.copy()
+  } else {
+    []
   }
 }
 
@@ -395,6 +442,7 @@ pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
   self.ensure_open()
   if self.c_heap is None {
     self.c_heap = Some(CHeap(capacity=c_heap_initial_capacity()))
+    self.native_execution.exceptions().enable_reclamation()
   }
 }
 
@@ -439,7 +487,13 @@ pub fn Store::wrap_as_extern(
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
   self.ensure_open()
-  let idx = self.push_allocation(self.wrapped_externs, value)
+  if self.next_wrapped_extern == 2147483647 {
+    raise AllocationTooLarge
+  }
+  let idx = self.next_wrapped_extern
+  self.next_wrapped_extern += 1
+  self.wrapped_externs.set(idx, value)
+  self.on_instantiation_rollback(fn() { self.wrapped_externs.remove(idx) })
   ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
 }
 
@@ -456,10 +510,10 @@ pub fn Store::unwrap_extern(
       if idx < 0 {
         // Wrapped internal value
         let wrapped_idx = -1 - idx
-        if wrapped_idx >= self.wrapped_externs.length() {
-          raise UndefinedElement
+        match self.wrapped_externs.get(wrapped_idx) {
+          Some(value) => value
+          None => raise UndefinedElement
         }
-        self.wrapped_externs[wrapped_idx]
       } else {
         // Host externref - return as-is (it's already an internal representation)
         value
@@ -589,8 +643,11 @@ pub fn Store::alloc_table(
       }
     }
     self.tables.truncate(idx)
+    self.tables.shrink_to_fit()
     self.jit_tables.truncate(idx)
+    self.jit_tables.shrink_to_fit()
     self.jit_table_owners.truncate(idx)
+    self.jit_table_owners.shrink_to_fit()
   })
   self.tables.push(table)
 
@@ -609,6 +666,7 @@ pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int32 raise RuntimeError 
       self.mems[idx].close()
     }
     self.mems.truncate(idx)
+    self.mems.shrink_to_fit()
   })
   self.mems.push(mem)
   idx
@@ -682,7 +740,14 @@ pub fn Store::alloc_exn(
   values : Array[@types.Value],
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
-  self.push_allocation(self.exns, { tag_addr, values, })
+  if self.next_exception == 2147483647 {
+    raise AllocationTooLarge
+  }
+  let index = self.next_exception
+  self.next_exception += 1
+  self.exns.set(index, { tag_addr, values: values.copy(), })
+  self.on_instantiation_rollback(fn() { self.exns.remove(index) })
+  index
 }
 
 ///|
@@ -691,10 +756,10 @@ pub fn Store::get_exn(
   self : Store,
   idx : Int32,
 ) -> ExnInstance raise RuntimeError {
-  if idx < 0 || idx >= self.exns.length() {
-    raise UndefinedElement
+  match self.exns.get(idx) {
+    Some(exception) => exception
+    None => raise UndefinedElement
   }
-  self.exns[idx]
 }
 
 ///|
@@ -753,7 +818,7 @@ pub fn Store::alloc_struct(
   self.ensure_open()
   let reference = match self.c_heap {
     Some(heap) => {
-      let encoded = fields.map(value => self.encode_heap_exception(value))
+      let encoded = fields.map(value => self.encode_heap_value(value))
       heap.alloc_struct(type_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
@@ -777,7 +842,7 @@ pub fn Store::alloc_array(
   self.ensure_open()
   let reference = match self.c_heap {
     Some(heap) => {
-      let encoded = elements.map(value => self.encode_heap_exception(value))
+      let encoded = elements.map(value => self.encode_heap_value(value))
       heap.alloc_array_from_values(type_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
@@ -803,7 +868,8 @@ pub fn Store::struct_get(
       let field_type = self.get_struct_field_type(
         type_idx, field_idx, struct_idx,
       )
-      self.decode_heap_exception(
+      self.decode_heap_value(
+        field_type,
         heap.struct_get(struct_idx, field_idx, field_type),
       )
     }
@@ -822,7 +888,7 @@ pub fn Store::struct_set(
   self.ensure_open()
   match self.c_heap {
     Some(heap) =>
-      heap.struct_set(struct_idx, field_idx, self.encode_heap_exception(value))
+      heap.struct_set(struct_idx, field_idx, self.encode_heap_value(value))
     None => self.heap.struct_set(struct_idx, field_idx, value)
   }
 }
@@ -855,7 +921,7 @@ pub fn Store::array_get(
         NullReference => raise NullReference
         OutOfMemory => raise OutOfMemory
       }
-      self.decode_heap_exception(value)
+      self.decode_heap_value(elem_type, value)
     }
     None => self.heap.array_get(array_idx, elem_idx)
   }
@@ -872,7 +938,7 @@ pub fn Store::array_set(
   self.ensure_open()
   match self.c_heap {
     Some(heap) => {
-      let encoded = self.encode_heap_exception(value)
+      let encoded = self.encode_heap_value(value)
       heap.array_set(array_idx, elem_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
@@ -895,7 +961,7 @@ pub fn Store::array_fill(
   self.ensure_open()
   match self.c_heap {
     Some(heap) => {
-      let encoded = self.encode_heap_exception(value)
+      let encoded = self.encode_heap_value(value)
       heap.array_fill(array_idx, offset, encoded, count) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
@@ -1192,7 +1258,9 @@ pub fn Store::register_instance(
       }
     }
     instance.store_idx = -1
+    self.native_types.mappings.remove(instance_idx)
     self.instances.truncate(instance_idx)
+    self.instances.shrink_to_fit()
   })
   instance_idx
 }
@@ -1235,100 +1303,51 @@ pub fn Store::get_func_owner_idx(self : Store, func_addr : Int32) -> Int32 {
 // ============================================================
 
 ///|
-/// Check if a value is a GC reference (struct, array, or i31)
-fn is_gc_ref(value : @types.Value) -> Bool {
-  match value {
-    StructRef(_) | ArrayRef(_) | I31(_) => true
-    _ => false
-  }
-}
-
-///|
-/// Collect all GC roots from the store (globals, tables, exns, wrapped_externs)
-/// Additional roots can be passed in (e.g., from the interpreter stack)
+/// Collect the transitive object roots of this Store and explicit host roots.
 pub fn Store::collect_roots(
   self : Store,
   additional_roots : Array[@types.Value],
 ) -> Array[@types.Value] {
-  let roots : Array[@types.Value] = []
-
-  // Collect from globals
-  for global in self.globals {
-    let value = global.root()
-    if is_gc_ref(value) {
-      roots.push(value)
-    }
-  }
-
-  // Collect from tables
-  for table in self.tables {
-    for i in 0..<table.size {
-      let value = table.elements[i]
-      if is_gc_ref(value) {
-        roots.push(value)
-      }
-    }
-  }
-
-  // Passive element values retain their identity until the segment is dropped.
-  for instance in self.instances {
-    for i, values in instance.elem_values {
-      if !instance.dropped_elems[i] {
-        for value in values {
-          roots.push(value)
-        }
-      }
-    }
-  }
-
-  // Collect from exception instances
-  for exn in self.exns {
-    for value in exn.values {
-      if is_gc_ref(value) {
-        roots.push(value)
-      }
-    }
-  }
-
-  // Collect from wrapped externrefs
-  for value in self.wrapped_externs {
-    if is_gc_ref(value) {
-      roots.push(value)
-    }
-  }
-
-  // Parked interpreter continuations have no active stack frame from which an
-  // allocator can provide roots, so their leases participate in every cycle.
-  for pinned in self.pinned_gc_roots {
-    if pinned.2.val {
-      for value in pinned.1 {
-        if is_gc_ref(value) {
-          roots.push(value)
-        }
-      }
-    }
-  }
-
-  // Add additional roots (e.g., from interpreter stack)
-  for value in additional_roots {
-    if is_gc_ref(value) {
-      roots.push(value)
-    }
-  }
-  roots
+  self.trace_gc_roots(additional_roots).objects
 }
 
 ///|
-/// Perform garbage collection using all Store roots and caller-provided roots.
-/// Returns the number of objects collected on either heap representation.
+/// Reclaim unreachable objects and temporary reference handles.
+/// Host Values held outside guest execution must be pinned or supplied here.
 pub fn Store::collect_garbage(
   self : Store,
   additional_roots~ : Array[@types.Value] = [],
 ) -> Int32 {
-  let roots = self.collect_roots(additional_roots)
+  if self.gc_in_collect {
+    return -1
+  }
+  self.gc_in_collect = true
+  defer {
+    self.gc_in_collect = false
+  }
   match self.c_heap {
-    Some(heap) => heap.collect(roots)
-    None => self.heap.collect(roots)
+    Some(heap) => {
+      self.begin_gc_tracing()
+      defer self.end_gc_tracing()
+      let trace = self.trace_gc_roots(additional_roots)
+      self.gc_trace = Some(trace)
+      let roots = self.native_trace_roots(trace) catch {
+        _ => {
+          self.gc_trace = None
+          return -1
+        }
+      }
+      heap.collect_raw(roots)
+    }
+    None => {
+      let trace = self.trace_gc_roots(additional_roots)
+      if trace.failed {
+        return -1
+      }
+      let collected = self.heap.collect(trace.objects)
+      self.release_unreachable_handles(trace)
+      collected
+    }
   }
 }
 
@@ -1386,4 +1405,12 @@ pub fn Store::alloc_shared_mem(
   let owned = memory.share()
   errdefer owned.close()
   self.alloc_mem(owned)
+}
+
+///|
+fn GcRootLease::retain_for_host(self : GcRootLease) -> Unit {
+  if self.store is Some(store) &&
+    store.pinned_gc_roots.get(self.id) is Some(roots) {
+    roots.guest_owned = false
+  }
 }

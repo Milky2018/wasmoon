@@ -24,3 +24,11 @@ pub fn JITContext::set_segments(
   })
   bind_segments(self, data, elements)
 }
+
+///|
+#borrow(self, data, elements)
+pub extern "c" fn JITContext::bind_segment_drop_flags(
+  self : JITContext,
+  data : FixedArray[Bool],
+  elements : FixedArray[Bool],
+) -> Unit = "wasmoon_jit_bind_segment_drop_flags"

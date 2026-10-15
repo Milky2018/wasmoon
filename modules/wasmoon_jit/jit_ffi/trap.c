@@ -134,9 +134,7 @@ static int32_t activation_root_count(
         }
         scope = scope->prev;
     }
-    if (activation->execution.exception_value_count > 0) {
-        total += activation->execution.exception_value_count;
-    }
+    total += exception_copy_activation_roots(activation->context, &activation->execution, NULL);
     if (activation->execution.spilled_locals_count > 0) {
         total += activation->execution.spilled_locals_count;
     }
@@ -165,20 +163,12 @@ static int32_t copy_activation_roots(
         }
         scope = scope->prev;
     }
-    if (activation->execution.exception_value_count > 0 &&
-        activation->execution.exception_values) {
-        memcpy(
-            &destination[at],
-            activation->execution.exception_values,
-            (size_t)activation->execution.exception_value_count * sizeof(int64_t)
-        );
-        at += activation->execution.exception_value_count;
-    }
+    at += exception_copy_activation_roots(activation->context, &activation->execution, destination + at);
     if (activation->execution.spilled_locals_count > 0 &&
         activation->execution.spilled_locals) {
         memcpy(
             &destination[at],
-            activation->execution.spilled_locals,
+            activation->execution.spilled_locals + activation->execution.spilled_locals_count,
             (size_t)activation->execution.spilled_locals_count * sizeof(int64_t)
         );
         at += activation->execution.spilled_locals_count;
@@ -203,8 +193,15 @@ void jit_mark_active_gc_roots(GcHeap *heap) {
              scope; scope = scope->prev) {
             gc_heap_mark_roots(heap, scope->roots, scope->root_count);
         }
-        gc_heap_mark_roots(heap, state->exception_values, state->exception_value_count);
-        gc_heap_mark_roots(heap, state->spilled_locals, state->spilled_locals_count);
+        int32_t exception_count = exception_copy_activation_roots(context, state, NULL);
+        if (exception_count) {
+            int64_t *roots = malloc((size_t)exception_count * sizeof(int64_t));
+            if (!roots) { g_trap_code = 9; siglongjmp(g_trap_jmp_buf, 1); }
+            exception_copy_activation_roots(context, state, roots);
+            gc_heap_mark_roots(heap, roots, exception_count);
+            free(roots);
+        }
+        gc_heap_mark_roots(heap, state->spilled_locals ? state->spilled_locals + state->spilled_locals_count : NULL, state->spilled_locals_count);
         gc_heap_mark_roots(heap, state->gc_root_scratch, state->gc_root_scratch_len);
     }
 }

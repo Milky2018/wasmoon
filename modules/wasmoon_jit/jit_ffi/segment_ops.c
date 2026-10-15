@@ -104,6 +104,8 @@ void ctx_clear_segments_internal(jit_context_t *ctx) {
     if (!ctx || !ctx_runtime(ctx)->segments) return;
     free_data_segments(ctx);
     free_elem_segments(ctx);
+    if (ctx_runtime(ctx)->segments->data_dropped) moonbit_decref(ctx_runtime(ctx)->segments->data_dropped);
+    if (ctx_runtime(ctx)->segments->elem_dropped) moonbit_decref(ctx_runtime(ctx)->segments->elem_dropped);
     free(ctx_runtime(ctx)->segments);
     ctx_runtime(ctx)->segments = NULL;
 }
@@ -113,6 +115,27 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments(int64_t ctx_ptr) {
 }
 
 extern int64_t wasmoon_jit_context_ptr(void *jit_context);
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_bind_segment_drop_flags(void *context, uint8_t *data, uint8_t *elements) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    if (!ctx || !ensure_segments(ctx)) return;
+    moonbit_incref(data);
+    moonbit_incref(elements);
+    if (ctx_runtime(ctx)->segments->data_dropped) moonbit_decref(ctx_runtime(ctx)->segments->data_dropped);
+    if (ctx_runtime(ctx)->segments->elem_dropped) moonbit_decref(ctx_runtime(ctx)->segments->elem_dropped);
+    ctx_runtime(ctx)->segments->data_dropped = data;
+    ctx_runtime(ctx)->segments->elem_dropped = elements;
+}
+
+static int data_is_dropped(jit_context_t *ctx, int32_t index) {
+    uint8_t *flags = ctx_segments_state(ctx)->data_dropped;
+    return flags && index >= 0 && index < Moonbit_array_length(flags) && flags[index];
+}
+
+static int elem_is_dropped(jit_context_t *ctx, int32_t index) {
+    uint8_t *flags = ctx_segments_state(ctx)->elem_dropped;
+    return flags && index >= 0 && index < Moonbit_array_length(flags) && flags[index];
+}
 
 // Consume private outer arrays built by MoonBit. Guest drop mutates these
 // arrays, so they must not alias another context's outer arrays.
@@ -217,7 +240,7 @@ static void WASMOON_GUEST_ABI memory_init_impl(
     uint64_t len_u32 = (uint64_t)(uint32_t)len;
     uint64_t src_u32 = (uint64_t)(uint32_t)src;
     uint8_t *seg_data = ctx_segments_state(ctx)->data_segments ? ctx_segments_state(ctx)->data_segments[data_idx] : NULL;
-    size_t seg_size = (size_t)Moonbit_array_length(seg_data);
+    size_t seg_size = data_is_dropped(ctx, data_idx) ? 0 : (size_t)Moonbit_array_length(seg_data);
     // Dropped segments are empty; both ranges must still be checked.
 
     // Bounds check source range in segment
@@ -288,6 +311,8 @@ static void WASMOON_GUEST_ABI data_drop_impl(
 
     // Bounds check (dropping out-of-bounds is a no-op in spec)
     if (data_idx >= 0 && data_idx < segment_count(ctx_segments_state(ctx)->data_segments)) {
+        if (ctx_runtime(ctx)->segments->data_dropped && data_idx < Moonbit_array_length(ctx_runtime(ctx)->segments->data_dropped))
+            ctx_runtime(ctx)->segments->data_dropped[data_idx] = 1;
         if (Moonbit_array_length(ctx_runtime(ctx)->segments->data_segments[data_idx]) == 0) return;
         moonbit_decref(ctx_runtime(ctx)->segments->data_segments[data_idx]);
         ctx_runtime(ctx)->segments->data_segments[data_idx] = moonbit_make_bytes(0, 0);
@@ -492,7 +517,7 @@ static void WASMOON_GUEST_ABI table_init_impl(
 
     // Get segment data
     int64_t *seg_data = ctx_segments_state(ctx)->elem_segments ? ctx_segments_state(ctx)->elem_segments[elem_idx] : NULL;
-    size_t seg_size = (size_t)Moonbit_array_length(seg_data) / 2;
+    size_t seg_size = elem_is_dropped(ctx, elem_idx) ? 0 : (size_t)Moonbit_array_length(seg_data) / 2;
     // Dropped segments remain subject to source and destination bounds checks.
 
     // Bounds check source range in segment
@@ -548,6 +573,8 @@ static void WASMOON_GUEST_ABI elem_drop_impl(
 
     // Bounds check (dropping out-of-bounds is a no-op in spec)
     if (elem_idx >= 0 && elem_idx < segment_count(ctx_segments_state(ctx)->elem_segments)) {
+        if (ctx_runtime(ctx)->segments->elem_dropped && elem_idx < Moonbit_array_length(ctx_runtime(ctx)->segments->elem_dropped))
+            ctx_runtime(ctx)->segments->elem_dropped[elem_idx] = 1;
         if (Moonbit_array_length(ctx_runtime(ctx)->segments->elem_segments[elem_idx]) == 0) return;
         moonbit_decref(ctx_runtime(ctx)->segments->elem_segments[elem_idx]);
         ctx_runtime(ctx)->segments->elem_segments[elem_idx] = moonbit_make_int64_array(0, 0);
@@ -675,7 +702,7 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     uint32_t off_u32 = (uint32_t)offset;
     // Get segment data
     uint8_t *seg_data = ctx_segments_state(ctx)->data_segments ? ctx_segments_state(ctx)->data_segments[data_idx] : NULL;
-    size_t seg_size = (size_t)Moonbit_array_length(seg_data);
+    size_t seg_size = data_is_dropped(ctx, data_idx) ? 0 : (size_t)Moonbit_array_length(seg_data);
 
     // Calculate byte size needed
     size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
@@ -747,7 +774,7 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     uint32_t off_u32 = (uint32_t)offset;
     // Get segment data
     int64_t *seg_data = ctx_segments_state(ctx)->elem_segments ? ctx_segments_state(ctx)->elem_segments[elem_idx] : NULL;
-    size_t seg_size = (size_t)Moonbit_array_length(seg_data) / 2;
+    size_t seg_size = elem_is_dropped(ctx, elem_idx) ? 0 : (size_t)Moonbit_array_length(seg_data) / 2;
 
     // Bounds check source range in segment
     if ((uint64_t)seg_size < (uint64_t)off_u32 || (uint64_t)seg_size - (uint64_t)off_u32 < (uint64_t)len_u32) {
@@ -822,7 +849,7 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
 
     // Get segment data
     uint8_t *seg_data = ctx_segments_state(ctx)->data_segments ? ctx_segments_state(ctx)->data_segments[data_idx] : NULL;
-    size_t seg_size = (size_t)Moonbit_array_length(seg_data);
+    size_t seg_size = data_is_dropped(ctx, data_idx) ? 0 : (size_t)Moonbit_array_length(seg_data);
     size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
     int elem_tag = get_array_elem_tag(ctx, type_idx);
     if (elem_size == 0) {
@@ -891,7 +918,7 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
 
     // Get segment data
     int64_t *seg_data = ctx_segments_state(ctx)->elem_segments ? ctx_segments_state(ctx)->elem_segments[elem_idx] : NULL;
-    size_t seg_size = (size_t)Moonbit_array_length(seg_data) / 2;
+    size_t seg_size = elem_is_dropped(ctx, elem_idx) ? 0 : (size_t)Moonbit_array_length(seg_data) / 2;
 
     // Bounds check source range in segment
     if ((uint64_t)seg_size < (uint64_t)elem_off_u32 || (uint64_t)seg_size - (uint64_t)elem_off_u32 < (uint64_t)len_u32) {

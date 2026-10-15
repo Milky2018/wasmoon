@@ -573,7 +573,7 @@ fn ExecContext::exec_memory_misc(
       mem.fill_at(effective_dst, val.to_byte(), n64)
     }
     // elem.drop: mark element segment as dropped
-    ElemDrop(elem_idx) => self.instance.dropped_elems[elem_idx] = true
+    ElemDrop(elem_idx) => self.instance.drop_element(elem_idx)
     Atomic(subop, memidx, align, offset) =>
       self.exec_atomic(subop, memidx, align, offset)
     _ => raise @runtime.RuntimeError::Unreachable

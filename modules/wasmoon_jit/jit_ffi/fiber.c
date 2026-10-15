@@ -646,6 +646,9 @@ int native_fiber_continue_c(void *fiber, int64_t value) {
     return wasmoon_native_fiber_continue(&fiber, value);
 }
 void native_fiber_destroy_c(void *fiber) { destroy_fiber(fiber); }
+void *native_fiber_gc_roots_c(void *fiber) {
+    return fiber ? ((native_fiber_t *)fiber)->parked_gc_roots : NULL;
+}
 int64_t native_fiber_result_c(void *fiber) { return ((native_fiber_t *)fiber)->return_value; }
 int64_t native_fiber_event_c(void *fiber) { return ((native_fiber_t *)fiber)->yielded_value; }
 

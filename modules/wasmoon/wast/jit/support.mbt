@@ -170,12 +170,6 @@ pub fn init_jit_globals_from_store(
           write,
           root: fn() {
             match value_type {
-              ContRef
-              | RefCont
-              | RefContTyped(_)
-              | RefNullContTyped(_)
-              | NullContRef
-              | RefNoCont => Null
               I32
               | I64
               | F32
@@ -185,12 +179,12 @@ pub fn init_jit_globals_from_store(
               | RefFunc
               | RefFuncTyped(_)
               | RefNullFuncTyped(_)
-              | NullFuncRef
-              | ExnRef
-              | NullExnRef => Null
+              | NullFuncRef => Null
               _ =>
-                decode_gc_value(
-                  @wasmoon_jit.native_value_slot_read(cell, 0),
+                try! read_native_global(
+                  cell,
+                  value_type,
+                  instance.func_addrs,
                   store,
                 )
             }
@@ -959,6 +953,7 @@ pub fn init_bulk_segments(
     elem_pairs.push(pairs)
   }
   jm.setup_segments(mod_.datas, elem_pairs, data_dropped~, elem_dropped~)
+  jm.bind_segment_drop_flags(instance.dropped_datas, instance.dropped_elems)
 }
 
 ///|

@@ -51,6 +51,7 @@ pub fn CHeap::CHeap(capacity~ : Int32 = @types.ONE_MIB_BYTES) -> CHeap {
 ///|
 /// Close this owner. Other managed handles, contexts and root leases stay live.
 pub fn CHeap::free(self : CHeap) -> Unit {
+  self.ptr.clear_root_visitor()
   self.ptr = GCHeapHandle::null()
 }
 
@@ -130,8 +131,8 @@ pub fn value_to_slot(value : @types.Value) -> GcSlot {
     StructRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L, }
     ArrayRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L, }
     FuncRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
-    ExternRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
-    ExnRef(idx) => { lo: (idx.to_int64() << 1) | 1L, hi: 0L, }
+    ExternRef(idx) => { lo: encode_externref(idx), hi: 0L, }
+    ExnRef(idx) => { lo: encode_exception_ref(idx), hi: 0L, }
     // Store-owned continuation handles use an odd word, outside GC object indices.
     ContRef(handle) => { lo: (handle << 1) | 1L, hi: 0L, }
     I31(n) => { lo: (n.to_int64() << 1) | 1L, hi: 0L, }
@@ -193,8 +194,12 @@ pub fn slot_to_value(slot : GcSlot, ty : @types.ValueType) -> @types.Value {
     ExternRef | RefExtern =>
       if raw == @wasm_milkir.NULL_REF {
         Null
+      } else if decode_externref(raw) is Some(index) {
+        ExternRef(index)
+      } else if (raw & 1L) != 0L {
+        I31((raw >> 1).to_int())
       } else {
-        ExternRef((raw - 1L).to_int())
+        StructRef(((raw >> 1) - 1L).to_int())
       }
     ContRef
     | RefCont
@@ -211,7 +216,7 @@ pub fn slot_to_value(slot : GcSlot, ty : @types.ValueType) -> @types.Value {
       if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
-        ExnRef((raw >> 1).to_int())
+        ExnRef(((raw & 0x0FFF_FFFF_FFFF_FFFFL) >> 1).to_int())
       }
     RefI31 | RefNullI31 =>
       if raw == @wasm_milkir.NULL_REF {
@@ -500,6 +505,32 @@ pub fn CHeap::collect(self : CHeap, roots : Array[@types.Value]) -> Int32 {
 }
 
 ///|
+/// Complete native root words, including tagged exception snapshots.
+pub fn CHeap::collect_raw(self : CHeap, roots : Array[Int64]) -> Int32 {
+  let buffer = FixedArray::makei(roots.length(), i => roots[i])
+  c_gc_heap_collect(self.ptr, buffer, buffer.length())
+}
+
+///|
+/// Supply a transitive typed root set before collection (phase 0), and release
+/// unreachable auxiliary handles after sweep (phase 1). Bind outside execution.
+pub fn CHeap::bind_root_visitor(
+  self : CHeap,
+  visitor : (Int32, FixedArray[Int64]) -> FixedArray[Int64],
+) -> Unit {
+  self.ptr.bind_root_visitor(visitor)
+}
+
+///|
+/// Low words for conservative tracing of allocations without a declared type.
+pub fn CHeap::reference_candidates(
+  self : CHeap,
+  index : Int32,
+) -> FixedArray[Int64] {
+  self.ptr.reference_candidates(index + 1)
+}
+
+///|
 /// Verify heap invariants (for debugging)
 pub fn CHeap::verify(self : CHeap, verbose~ : Bool = false) -> Bool {
   c_gc_heap_verify(self.ptr, if verbose { 1 } else { 0 }) != 0
@@ -617,4 +648,10 @@ pub fn CHeap::set_runtime_type(
   identity : Int32,
 ) -> Unit {
   set_runtime_type(self.ptr, index + 1, identity)
+}
+
+///|
+/// Release a scoped embedding visitor after execution or collection completes.
+pub fn CHeap::clear_root_visitor(self : CHeap) -> Unit {
+  self.ptr.clear_root_visitor()
 }

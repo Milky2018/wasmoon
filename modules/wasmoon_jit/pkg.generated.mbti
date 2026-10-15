@@ -23,6 +23,8 @@ import {
 }
 
 // Values
+pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
+
 pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-9"
 
 pub const WASMOON_JIT_ABI_VERSION : Int = 7
@@ -76,6 +78,8 @@ pub fn decode_gc_heap_ref(Int64) -> Int?
 pub fn decode_heap_ref(Int64) -> Int
 
 pub fn decode_i31(Int64) -> Int
+
+pub fn encode_exception_ref(Int) -> Int64
 
 pub fn encode_externref(Int) -> Int64
 
@@ -132,6 +136,8 @@ pub fn hostcall_value_slot_write(Int, Int64) -> Unit
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
 pub fn is_cancelled_trap_code(Int) -> Bool
+
+pub fn is_exception_ref(Int64) -> Bool
 
 pub fn is_funcref_ptr(Int64) -> Bool
 
@@ -317,7 +323,10 @@ pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise CHeapE
 pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value raise CHeapError
 pub fn CHeap::array_len(Self, Int) -> Int
 pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise CHeapError
+pub fn CHeap::bind_root_visitor(Self, (Int, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
+pub fn CHeap::clear_root_visitor(Self) -> Unit
 pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
+pub fn CHeap::collect_raw(Self, Array[Int64]) -> Int
 pub fn CHeap::free(Self) -> Unit
 pub fn CHeap::get_barrier_writes(Self) -> Int
 pub fn CHeap::get_base(Self) -> Int64
@@ -335,6 +344,7 @@ pub fn CHeap::is_array(Self, Int) -> Bool
 pub fn CHeap::is_struct(Self, Int) -> Bool
 pub fn CHeap::is_valid(Self, Int) -> Bool
 pub fn CHeap::make_allocation_rollback(Self, () -> Array[@types.Value]) -> () -> Unit
+pub fn CHeap::reference_candidates(Self, Int) -> FixedArray[Int64]
 pub fn CHeap::runtime_type(Self, Int) -> Int
 pub fn CHeap::set_runtime_type(Self, Int, Int) -> Unit
 pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
@@ -571,6 +581,7 @@ pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
 pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise @installer.JitInstallError
 pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int], Array[Int]) -> Unit
 pub fn NativeJITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
+pub fn NativeJITContext::bind_segment_drop_flags(Self, FixedArray[Bool], FixedArray[Bool]) -> Unit
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit

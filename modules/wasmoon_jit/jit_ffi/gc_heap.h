@@ -43,6 +43,12 @@ extern "C" {
 // GC flags
 #define GC_FLAG_MARKED 0x01
 
+// Exception snapshots are outside the object table and have a distinct word tag.
+#define GC_EXCEPTION_REF_TAG INT64_C(0x1000000000000000)
+
+struct native_exception_arena;
+typedef int64_t *(*GcRootVisitor)(void *, int32_t, int64_t *);
+
 /**
  * GC Object Header (16 bytes, aligned)
  *
@@ -118,6 +124,10 @@ typedef struct GcHeap {
     // continuations that share this Store heap.
     void *parked_jit_roots_head;
     int32_t* runtime_types;     // Store type identity, -1 for unbound objects
+    GcRootVisitor root_visitor;
+    void *root_visitor_data;    // Retained MoonBit closure; cleared before Store close
+    struct native_continuation_arena *continuation_arena; // Borrowed through root registrations
+    struct native_exception_arena *exception_arena; // Borrowed through root registrations
 } GcHeap;
 
 static inline GcHeap *gc_heap_live(GcHeap *heap) {
@@ -150,6 +160,25 @@ int32_t gc_heap_register_parked_roots(
  * Remove and free one parked-root registration.
  */
 void gc_heap_unregister_parked_roots(void* registration);
+
+int32_t gc_heap_bind_exception_roots(void *registration,
+    struct native_exception_arena *arena, int64_t reference);
+GcHeap *gc_heap_registration_heap(void *registration);
+int32_t gc_heap_bind_continuation_roots(void *registration,
+    struct native_continuation_arena *arena, int64_t reference);
+int32_t gc_heap_registered_root_count(void *registration);
+void gc_heap_copy_registered_roots(void *registration, int64_t *roots);
+void continuation_arena_mark(struct native_continuation_arena *arena, int64_t reference);
+int32_t continuation_arena_marked_count(struct native_continuation_arena *arena);
+void continuation_arena_copy_marked(struct native_continuation_arena *arena, int64_t *roots);
+void continuation_arena_reset_marks(struct native_continuation_arena *arena);
+void continuation_arena_sweep(struct native_continuation_arena *arena);
+
+void exception_arena_mark(struct native_exception_arena *arena, int64_t reference);
+int32_t exception_arena_marked_count(struct native_exception_arena *arena);
+void exception_arena_copy_marked(struct native_exception_arena *arena, int64_t *roots);
+void exception_arena_reset_marks(struct native_exception_arena *arena);
+void exception_arena_sweep(struct native_exception_arena *arena, GcHeap *heap);
 
 // ============ Struct Operations ============
 

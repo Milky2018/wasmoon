@@ -27,8 +27,11 @@ pub fn stage_exec_managed(Int) -> ExecCodeHandle
 type ExecCodeHandle
 
 pub type GCHeapHandle
+pub fn GCHeapHandle::bind_root_visitor(Self, (Int, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
+pub fn GCHeapHandle::clear_root_visitor(Self) -> Unit
 pub fn GCHeapHandle::is_null(Self) -> Bool
 pub fn GCHeapHandle::null() -> Self
+pub fn GCHeapHandle::reference_candidates(Self, Int) -> FixedArray[Int64]
 pub fn GCHeapHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for GCHeapHandle
 
@@ -39,6 +42,7 @@ pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], Fixe
 pub fn JITContext::bind_gc_safepoints(Self, Int, Bytes, FixedArray[Int]) -> Bool
 pub fn JITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITContext::bind_prepared_safepoints(Self, PreparedSafepoints) -> Bool
+pub fn JITContext::bind_segment_drop_flags(Self, FixedArray[Bool], FixedArray[Bool]) -> Unit
 pub fn JITContext::new(Int) -> Self
 pub fn JITContext::new_shaped(Int, @layout.ContextLayout?) -> Self
 pub fn JITContext::set_segments(Self, Array[Bytes], Array[Array[Int64]]) -> Bool
@@ -55,13 +59,17 @@ pub impl @debug.Debug for MemoryDescriptor
 
 type NativeContinuationArena
 pub fn NativeContinuationArena::clear(Self) -> Unit
+pub fn NativeContinuationArena::gc_roots(Self, Int64) -> FixedArray[Int64]
 pub fn NativeContinuationArena::new() -> Self
+pub fn NativeContinuationArena::reclaim_retired(Self) -> Unit
 
 type NativeExceptionArena
 pub fn NativeExceptionArena::clear(Self) -> Unit
 pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> Bool
+pub fn NativeExceptionArena::enable_reclamation(Self) -> Unit
 pub fn NativeExceptionArena::insert(Self, GCHeapHandle, Int, Array[Int64]) -> Int64
 pub fn NativeExceptionArena::new() -> Self
+pub fn NativeExceptionArena::release_snapshot(Self, Int64) -> Unit
 pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int, Array[Int64])?
 
 pub type NativeTableHandle
