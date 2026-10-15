@@ -197,7 +197,8 @@ print(json.dumps(results))
                         ("char", wintypes.WCHAR), ("control", wintypes.DWORD)]
 
         class Event(ctypes.Union):
-            _fields_ = [("key", KeyEvent), ("storage", ctypes.c_byte * 16)]
+            _fields_ = [("key", KeyEvent), ("focus", wintypes.BOOL),
+                        ("storage", ctypes.c_byte * 16)]
 
         class InputRecord(ctypes.Structure):
             _fields_ = [("kind", wintypes.WORD), ("event", Event)]
@@ -216,6 +217,8 @@ print(json.dumps(results))
                                             wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
         kernel.GetNumberOfConsoleInputEvents.argtypes = [wintypes.HANDLE,
                                                         ctypes.POINTER(wintypes.DWORD)]
+        kernel.PeekConsoleInputW.argtypes = [wintypes.HANDLE, ctypes.POINTER(InputRecord),
+                                           wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
         handle = kernel.CreateFileW("CONIN$", 0xC0000000, 3, None, 3, 0, None)
         self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
         fd = msvcrt.open_osfhandle(handle, os.O_BINARY)
@@ -256,12 +259,31 @@ print(json.dumps(results))
             self.assertEqual(actual, expected.raw[:transferred.value])
             self.assertTrue(actual.startswith(b"x"))
             return
-        before = wintypes.DWORD()
-        after = wintypes.DWORD()
-        self.assertTrue(kernel.GetNumberOfConsoleInputEvents(handle, ctypes.byref(before)))
-        self.assertEqual(self.readiness([fd], [1]), (1, [1]))
-        self.assertTrue(kernel.GetNumberOfConsoleInputEvents(handle, ctypes.byref(after)))
-        self.assertEqual(after.value, before.value)
+        def pending_keys():
+            count = wintypes.DWORD()
+            self.assertTrue(kernel.GetNumberOfConsoleInputEvents(handle, ctypes.byref(count)))
+            records = (InputRecord * count.value)()
+            read = wintypes.DWORD()
+            self.assertTrue(kernel.PeekConsoleInputW(handle, records, count, ctypes.byref(read)))
+            return [(bool(key.down), key.repeat, key.key, key.scan, key.char, key.control)
+                    for record in records[:read.value] if record.kind == 1
+                    for key in [record.event.key]]
+
+        before = pending_keys()
+        self.assertEqual(before, [(False, 1, 0, 0, "\r", 0),
+                                  (True, 1, 0, 0, "x", 0), (True, 1, 0, 0, "\r", 0)])
+        # Console notifications can arrive between observations. Preserve every
+        # keyboard record, including key-up events, rather than comparing totals.
+        focus = InputRecord()
+        focus.kind = 0x0010  # FOCUS_EVENT
+        focus.event.focus = True
+        written = wintypes.DWORD()
+        self.assertTrue(kernel.WriteConsoleInputW(handle, ctypes.byref(focus), 1,
+                                                  ctypes.byref(written)))
+        self.assertEqual(written.value, 1)
+        for _ in range(3):
+            self.assertEqual(self.readiness([fd], [1]), (1, [1]))
+            self.assertEqual(pending_keys(), before)
 
     def test_pipe_timeout_and_delayed_input(self):
         reader, writer = self.pipe()
