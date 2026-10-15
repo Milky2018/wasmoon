@@ -1,10 +1,14 @@
 # ISS-626 Core boundary verification, 2026-10-15
 
-This is local macOS ARM64 evidence for the uncommitted implementation based on
+The original local macOS ARM64 receipts below describe the uncommitted
+implementation based on
 `afd1daf99abd54c1d52088f8c518d8128dc4827e`, on
-`milky/protect-core-runtime-boundaries`. It is not exact-commit CI acceptance.
+`milky/protect-core-runtime-boundaries`. Those historical receipts are not
+exact-commit CI acceptance.
+The separate [CI receipt](ci.json) records the subsequently accepted implementation
+`c81490fa2993ea011ba1d9d1cd7bd4f298a14a15` and its exact source provenance.
 [local.json](local.json) records the toolchain, fresh CLI hashes, corpus pins,
-profiles, exclusions, results, and pending platform checks.
+profiles, exclusions, results, and platform checks pending at that time.
 [source-manifest.json](source-manifest.json) hashes changed/new module files
 relative to that base, including generated interfaces and the embedding example.
 
@@ -46,7 +50,7 @@ access Store function storage or validation backing storage, assign instance
 address maps, or modify an immutable instruction array. This is an actual
 compiler check, not source-text matching or a new style-audit script.
 
-## Final validation
+## Local validation snapshot
 
 | Gate | Result |
 | --- | --- |
@@ -88,9 +92,43 @@ host, `leak_detection=false` and `lsan_probe=not_applicable`. The finalizer-coun
 regression verifies the specific closure ownership path locally; it does not
 substitute for Linux LSan or instrument MoonBit runtime objects/JIT machine code.
 
-Linux AMD64, macOS ARM64 CI, Windows Clang/MSVC, and Linux ASan/UBSan/LSan remain
-pending for this change. ISS-626 stays in progress until that platform acceptance
-is recorded. No PR, package publication, or merge was performed by this task.
+## Cross-platform implementation acceptance
+
+[Run 38731910233](https://github.com/Milky2018/wasmoon/actions/runs/38731910233)
+passed every check for PR #536 implementation head
+`c81490fa2993ea011ba1d9d1cd7bd4f298a14a15`: Linux AMD64, macOS ARM64,
+Windows AMD64 Clang, Windows AMD64 MSVC, and Linux ASan/UBSan.
+[ci.json](ci.json) records the five jobs, artifact identities, clean source state,
+and merge-parent provenance. The tested source merge
+`3a647a7602af9f4d2b91a0ba80aba0a546644355` has base `afd1daf9` and this exact
+implementation head as parents.
+
+- Linux [normal sanitizer tests](ci-linux-sanitizer-tests.log): 143/143 passed,
+  enabled LSan, no ordinary-test leak report, and successful ASan/native-ASan
+  positive controls. The independent [LSan control](ci-linux-lsan-positive-control.log)
+  detects 17 leaked bytes in one allocation. Instrumentation exclusions remain
+  explicit in ci.json; this does not instrument JIT machine code or MoonBit
+  runtime objects.
+- Both Windows compilers: 42 strict C stubs, 2689/2689 native tests and 110/110
+  external WASI 0.3 HTTP-contract cases passed. Their 53 native probes passed
+  with three existing privilege-dependent skips, whose reasons are retained in
+  the [Clang](ci-windows-clang-probes.log) and [MSVC](ci-windows-msvc-probes.log)
+  logs. The console non-consumption checks inspect exact keyboard records while
+  explicitly injecting a focus notification.
+- Earlier Windows JIT HTTP requests exceeded the upstream five-second budget.
+  Sampling identified allocation-heavy immutable-array scans; two indexed loops
+  retain the same ownership/lookup semantics and restore local performance near
+  the fresh base ([measurement](http-jit-follow-up.json)). Both Windows jobs then
+  passed all external cases without increasing the upstream timeout.
+- The positive deadline test now checks timer replacement through chunk-by-chunk
+  handshakes and cancelled old timers, rather than assuming timely 50ms sleeps.
+  Its [mutation control](deadline-negative-control.log) fails if deadline
+  replacement is removed. Existing real TCP expiry tests remain; production
+  HTTP deadlines were unchanged.
+
+ISS-626 is closed on this implementation evidence. The documentation-only
+acceptance commit must pass all CI again before final delivery. The PR remains
+open for review; no package publication or merge was performed.
 
 [Core embedding boundaries](../../core-embedding.md) inventories the checked
 embedding API, read-only observations, deliberate raw execution seams, native
