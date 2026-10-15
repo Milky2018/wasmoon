@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "target" / "sanitizers"
@@ -79,6 +80,9 @@ def main():
     environment["MOON_WORK"] = str(PACKAGE / "moon.work")
     environment["MOONBIT_ALLOCATOR"] = "system"
     environment.pop("WASMOON_SANITIZER_PROBE", None)
+    if sys.platform == "linux":
+        environment["ASAN_OPTIONS"] = environment.get("ASAN_OPTIONS", "") + ":detect_leaks=1"
+        environment["LSAN_OPTIONS"] = environment.get("LSAN_OPTIONS", "") + ":exitcode=23"
     try:
         run(["moon", "test", ".", "--target", "native", "--no-parallelize", "--target-dir", str(OUT / "build")],
             log=OUT / "tests.log", env=environment)
@@ -144,13 +148,22 @@ def main():
                        log=OUT / "native-probe.log", env=environment, expected_failure=True)
     if "ERROR: AddressSanitizer:" not in native_probe:
         raise RuntimeError("Native stub positive control failed without an ASan diagnostic")
+    lsan_probe = "not_applicable"
+    if sys.platform == "linux":
+        environment["WASMOON_SANITIZER_PROBE"] = "lsan"
+        leak_probe = run([str(binary), "instrumentation_test.mbt:0-1"],
+                         log=OUT / "lsan-probe.log", env=environment, expected_failure=True)
+        if "ERROR: LeakSanitizer:" not in leak_probe:
+            raise RuntimeError("Leak positive control failed without an LSan diagnostic")
+        lsan_probe = "detected"
     (OUT / "summary.json").write_text(json.dumps({
         "version": version, "source_revision": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "source_dirty": bool(subprocess.check_output(
             ["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
         "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-        "tests": "passed", "event_loop": "passed", "asan_probe": "detected", "native_asan_probe": "detected",
+        "tests": "passed", "event_loop": "passed", "asan_probe": "detected", "native_asan_probe": "detected", "lsan_probe": lsan_probe,
+        "leak_detection": sys.platform == "linux",
         "binary": str(binary), "instrumentation": ["address", "undefined"], "allocator": "system",
         "exclusions": ["MoonBit runtime objects", "JIT machine code"],
     }, indent=2) + "\n")

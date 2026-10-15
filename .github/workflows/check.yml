@@ -545,6 +545,7 @@ jobs:
             target/sanitizers/tests.log
             target/sanitizers/probe.log
             target/sanitizers/native-probe.log
+            target/sanitizers/lsan-probe.log
             target/sanitizers/symbols.log
             target/sanitizers/summary.json
             target/sanitizers/isolated
