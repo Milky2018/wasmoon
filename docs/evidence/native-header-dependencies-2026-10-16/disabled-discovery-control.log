@@ -1,0 +1,28 @@
+   Compiling moonbuild v0.1.0 (/private/tmp/wasmoon-iss634-moon/crates/moonbuild)
+   Compiling moon v0.1.0 (/private/tmp/wasmoon-iss634-moon/crates/moon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.21s
+     Running tests/mod.rs (/Users/zhengyu/Documents/projects/moon/target/debug/deps/mod-c7cfdbe6dc7b555b)
+
+running 1 test
+
+thread 'test_cases::native_stub_stability::test_native_transitive_shared_header_changes_without_clean' (143530654) panicked at crates/moon/tests/test_cases/native_stub_stability/mod.rs:111:14:
+
+[31m--- Expected[0m
+[32m++++ actual:   stdout[0m
+[2m   1[0m [2m   1[0m [2m|[0m [2m16
+[0m[2m   2[0m      [31m-[0m [4m[31m16[0m[31m
+[0m     [2m   2[0m [32m+[0m [4m[32m8[0m[32m
+[0m
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test test_cases::native_stub_stability::test_native_transitive_shared_header_changes_without_clean ... FAILED
+
+failures:
+
+failures:
+    test_cases::native_stub_stability::test_native_transitive_shared_header_changes_without_clean
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 707 filtered out; finished in 0.80s
+
+error: test failed, to rerun pass `-p moon --test mod`

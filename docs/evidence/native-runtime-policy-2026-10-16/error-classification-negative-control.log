@@ -1,0 +1,4 @@
+[Milky2018/wasmoon] test sanitizer_testsuite/native_gc_allocation_test.mbt:62 ("allocation root visitor failure stays distinct from exhaustion and aborts before reuse") failed: sanitizer_testsuite/native_gc_allocation_test.mbt:92:24-92:74@Milky2018/wasmoon FAILED: `"out of memory" != "gc precise roots unavailable"`
+diff:
+-"out of memory" +"gc precise roots unavailable"
+Total tests: 112, passed: 111, failed: 1.

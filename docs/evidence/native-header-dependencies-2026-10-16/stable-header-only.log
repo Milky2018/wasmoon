@@ -1,0 +1,5 @@
+./_build/native/debug/test/consumer/consumer.blackbox_test.exe size_test.mbt:0-1
+[local/header_repro] test consumer/size_test.mbt:4 (#0) failed: consumer/size_test.mbt:4:41-4:62@local/header_repro FAILED: `8 != 16`
+diff:
+-8 +16
+Total tests: 1, passed: 0, failed: 1.

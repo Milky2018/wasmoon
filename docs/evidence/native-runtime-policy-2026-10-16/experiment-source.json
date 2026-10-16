@@ -1,0 +1,7 @@
+{
+  "scope": "isolated pre-scan-optimization control, not current production sources",
+  "sha256": {
+    "gc_allocator.c": "506c5ef9f5dc82dd0b36f535ddc4b27bffd4e1795c6731042bc5963fee3f4213",
+    "gc_heap.c": "4022cb1f2a94845b49be15d411c4b2f6eb86a194364f9b4bf398875e1fcd4f9f"
+  }
+}

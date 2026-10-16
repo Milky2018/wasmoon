@@ -1,0 +1,16 @@
+[
+  {
+    "label": "baseline",
+    "collections": 999,
+    "first": "[GC COLLECT] stack_roots=0 store_roots=0 table_roots=0 total=0 collected=1 heap=32/1048576->0/1048576 objs=1->1 free=0->0",
+    "last": "[GC COLLECT] stack_roots=0 store_roots=0 table_roots=0 total=0 collected=1 heap=32/1048576->0/1048576 objs=999->999 free=0->0",
+    "result": "499500"
+  },
+  {
+    "label": "candidate",
+    "collections": 999,
+    "first": "[GC COLLECT] stack_roots=0 store_roots=0 table_roots=0 total=0 collected=1 heap=32/1048576->0/1048576 objs=1->1 free=0->0",
+    "last": "[GC COLLECT] stack_roots=0 store_roots=0 table_roots=0 total=0 collected=1 heap=32/1048576->0/1048576 objs=999->999 free=0->0",
+    "result": "499500"
+  }
+]

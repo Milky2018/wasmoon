@@ -53,6 +53,7 @@ pub fn GCHeapHandle::bind_reservations(Self, Reservation, Reservation) -> Bool
 pub fn GCHeapHandle::bind_root_visitor(Self, (Int, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
 pub fn GCHeapHandle::clear_root_visitor(Self) -> Unit
 pub fn GCHeapHandle::is_null(Self) -> Bool
+pub fn GCHeapHandle::new(Int64) -> Self
 pub fn GCHeapHandle::null() -> Self
 pub fn GCHeapHandle::quota_denied(Self) -> Int
 pub fn GCHeapHandle::reference_candidates(Self, Int) -> FixedArray[Int64]

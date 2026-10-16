@@ -1,6 +1,6 @@
-#include "../jit_ffi/jit_internal.h"
+#include "../jit_internal.h"
 #if defined(_MSC_VER) && !defined(__clang__)
-#include "msvc_guest_bridges.h"
+#include "test_guest_bridges.h"
 #endif
 
 #include <stdint.h>

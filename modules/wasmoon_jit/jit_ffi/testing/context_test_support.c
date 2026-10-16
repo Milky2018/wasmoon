@@ -1,4 +1,4 @@
-#include "../jit_ffi/jit_internal.h"
+#include "../jit_internal.h"
 
 extern void wasmoon_jit_ctx_init_data_segments(int64_t ctx, int count);
 extern void wasmoon_jit_ctx_init_elem_segments(int64_t ctx, int count);

@@ -46,7 +46,7 @@ pub struct CHeap {
 pub fn CHeap::CHeap(
   capacity~ : Int32 = @types.ONE_MIB_BYTES,
 ) -> CHeap raise CHeapError {
-  let ptr = c_gc_heap_new(capacity.to_int64())
+  let ptr = GCHeapHandle::new(capacity.to_int64())
   guard !ptr.is_null() else { raise OutOfMemory }
   { ptr, }
 }

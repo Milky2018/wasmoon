@@ -1,0 +1,342 @@
+[
+  {
+    "file": "spec/gc/array.wast",
+    "baseline": {
+      "exit": 1,
+      "totals": [
+        "Passed:  40",
+        "Failed:  8",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 1,
+      "totals": [
+        "Passed:  40",
+        "Failed:  8",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/array_copy.wast",
+    "baseline": {
+      "exit": 1,
+      "totals": [
+        "Passed:  4",
+        "Failed:  31",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 1,
+      "totals": [
+        "Passed:  4",
+        "Failed:  31",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/array_fill.wast",
+    "baseline": {
+      "exit": 1,
+      "totals": [
+        "Passed:  3",
+        "Failed:  27",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 1,
+      "totals": [
+        "Passed:  3",
+        "Failed:  27",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/array_init_data.wast",
+    "baseline": {
+      "exit": 1,
+      "totals": [
+        "Passed:  14",
+        "Failed:  31",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 1,
+      "totals": [
+        "Passed:  14",
+        "Failed:  31",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/array_init_elem.wast",
+    "baseline": {
+      "exit": 1,
+      "totals": [
+        "Passed:  3",
+        "Failed:  20",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 1,
+      "totals": [
+        "Passed:  3",
+        "Failed:  20",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/array_new_data.wast",
+    "baseline": {
+      "exit": 1,
+      "totals": [
+        "Passed:  22",
+        "Failed:  1",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 1,
+      "totals": [
+        "Passed:  22",
+        "Failed:  1",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/array_new_elem.wast",
+    "baseline": {
+      "exit": 1,
+      "totals": [
+        "Passed:  17",
+        "Failed:  1",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 1,
+      "totals": [
+        "Passed:  17",
+        "Failed:  1",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/binary-gc.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  1",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  1",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/br_on_cast.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  31",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  31",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/br_on_cast_fail.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  31",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  31",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/extern.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  16",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  16",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/i31.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  57",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  57",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/ref_cast.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  40",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  40",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/ref_eq.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  87",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  87",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/ref_test.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  68",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  68",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/struct.wast",
+    "baseline": {
+      "exit": 1,
+      "totals": [
+        "Passed:  17",
+        "Failed:  8",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 1,
+      "totals": [
+        "Passed:  17",
+        "Failed:  8",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  },
+  {
+    "file": "spec/gc/type-subtyping.wast",
+    "baseline": {
+      "exit": 0,
+      "totals": [
+        "Passed:  61",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "candidate": {
+      "exit": 0,
+      "totals": [
+        "Passed:  61",
+        "Failed:  0",
+        "Skipped: 0"
+      ]
+    },
+    "same": true
+  }
+]

@@ -1,0 +1,10 @@
+Warning: [0029]
+   ╭─[ /Users/zhengyu/Documents/projects/wasmoon/_build/iss634-repro/consumer/moon.pkg:1:10 ]
+   │
+ 1 │ import { "local/header_repro/producer" }
+   │          ──────────────┬──────────────
+   │                        ╰──────────────── Warning (unused_package): Unused package 'local/header_repro/producer'
+───╯
+./_build/native/debug/test/consumer/consumer.blackbox_test.exe size_test.mbt:0-1
+[local/header_repro] test consumer/size_test.mbt:4 (#0) ok
+Total tests: 1, passed: 1, failed: 0.

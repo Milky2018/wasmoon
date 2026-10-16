@@ -1,4 +1,4 @@
-#include "../jit_ffi/jit_internal.h"
+#include "../jit_internal.h"
 #ifdef _WIN32
 #include <process.h>
 typedef HANDLE test_thread;

@@ -1,0 +1,107 @@
+   Compiling moonbuild-rupes-recta v0.1.0 (/private/tmp/wasmoon-iss634-moon/crates/moonbuild-rupes-recta)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.83s
+     Running unittests src/lib.rs (/Users/zhengyu/Documents/projects/moon/target/debug/deps/moonbuild_rupes_recta-160331cc819c4f19)
+
+running 99 tests
+test build_lower::backend::tests::c_direct_object_realizes_linker_executable ... ok
+test build_lower::compiler::prove::tests::legacy_driver_invokes_moonc_prove_subcommand ... ok
+test build_lower::compiler::prove::tests::standalone_driver_invokes_moonc_prove_directly ... ok
+test build_plan::builders::tests::dsym_generation_policy_is_backend_specific ... ok
+test build_lower::moonc_command::tests::rejects_arguments_changed_by_moonc_response_file_parsing ... ok
+test build_plan::builders::tests::prebuild_command_path_handles_absolute_paths ... ok
+test build_plan::builders::tests::prebuild_command_path_can_include_module_from_workspace_cwd ... ok
+test build_plan::builders::tests::prebuild_command_path_is_relative_to_command_cwd ... ok
+test build_plan::artifact::tests::multiple_artifacts_can_share_one_provider ... ok
+test build_plan::builders::tests::prebuild_command_path_normalizes_dot_segments ... ok
+test build_lower::compiler::msvc::tests::runtime_compile_command_uses_command_env_for_msvc_environment ... ok
+test build_plan::builders::tests::resolve_prebuild_rule_command_prefers_package_local_rule ... ok
+test build_plan::builders::tests::resolve_prebuild_rule_command_uses_module_rule ... ok
+test build_lower::compiler::msvc::tests::executable_link_command_uses_command_env_for_msvc_environment ... ok
+test build_plan::builders::tests::resolve_prebuild_command_replaces_all_placeholders_and_preserves_unknown_ones ... ok
+test build_plan::builders::tests::resolve_prebuild_command_uses_relative_input_and_output_placeholders ... ok
+test build_plan::builders::tests::resolve_prebuild_rule_command_uses_package_local_rule ... ok
+test build_lower::command::tests::structured_executable_is_derived_from_original_args_and_inputs_are_canonical ... ok
+test build_plan::builders::tests::resolve_prebuild_rule_command_rejects_unknown_rule ... ok
+test build_lower::tests::non_native_artifact_options_need_no_host_configuration ... ok
+test build_plan::artifact::tests::requirements_name_artifacts_without_providers ... ok
+test build_plan::runtime_archive_fingerprint_tests::fingerprint_preserves_non_utf8_member_identity ... ok
+test build_plan::runtime_archive_fingerprint_tests::c_stub_fingerprint_tracks_logical_members ... ok
+test build_plan::runtime_archive_fingerprint_tests::fingerprint_tracks_ordered_members ... ok
+test build_plan::package_prebuild::tests::package_prebuild_action_is_separate_from_backend_plan ... ok
+test build_plan::artifact::tests::one_artifact_cannot_have_two_providers - should panic ... ok
+test build_lower::tests::opaque_module_flags_make_compiler_actions_ineligible ... ok
+test build_lower::tests::lowered_generator_actions_track_host_and_payload_executables ... ok
+test build_lower::moonc_command::tests::preserves_logical_args_while_selecting_execution_transport ... ok
+test execution_plan::tests::default_roots_retain_unconsumed_outputs_of_a_shared_producer ... ok
+test execution_plan::tests::default_roots_include_unconsumed_auxiliary_outputs ... ok
+test compile::tests::native_payload_selection_uses_only_requested_executables ... ok
+test compile::tests::compile_uses_default_proof_prelude ... ok
+test execution_plan::tests::artifact_edges_and_physical_only_outputs_have_distinct_identity ... ok
+test execution_plan::tests::execution_action_rejects_duplicate_input_declarations - should panic ... ok
+test compile::tests::project_packages_are_not_marked_as_dependency_artifacts ... ok
+test execution_plan::tests::execution_inputs_without_a_producer_are_boundary_observations ... ok
+test build_lower::tests::macos_debug_link_and_dsymutil_are_separate_structured_actions ... ok
+test execution_plan::tests::merge_reuses_an_identical_physical_provider_and_remaps_consumers ... ok
+test execution_plan::tests::merge_rejects_different_actions_for_the_same_physical_output ... ok
+test execution_plan::tests::merge_remaps_plan_local_action_ids ... ok
+test fmt::tests::formatter_sources_are_file_observations ... ok
+test execution_plan::tests::semantic_artifact_requires_a_physical_output - should panic ... ok
+test discover::tests::discover_packages_keeps_installed_module_manifest ... ok
+test build_lower::tests::lowered_windows_msvc_native_graph_contains_complete_commands_and_tool_inputs ... ok
+test discover::tests::discovery_temporarily_allows_core_v128 ... ok
+test discover::tests::discovery_records_only_existing_virtual_contracts ... ok
+test mbtx::tests::extract_mbtx_import_source_supports_crlf ... ok
+test mbtx::tests::extract_mbtx_import_source_stops_before_doc_comment_sentinel ... ok
+test mbtx::tests::extract_mbtx_import_source_returns_none_without_import ... ok
+test discover::tests::package_discovery_keeps_explicit_dot_source_root_but_skips_dot_descendants ... ok
+test mbtx::tests::extract_mbtx_import_source_finds_import_after_leading_comment ... ok
+test mbtx::tests::extract_mbtx_import_source_only_returns_first_import_statement ... ok
+test mbtx::tests::extract_mbtx_import_source_stops_before_pub_sentinel ... ok
+test mbtx::tests::parse_mbtx_imports_reject_core_with_version ... ok
+test mbtx::tests::parse_mbtx_imports_allow_core_without_version ... ok
+test mbtx::tests::parse_mbtx_imports_supports_import_all_alias ... ok
+test mbtx::tests::parse_mbtx_imports_supports_block_syntax_and_alias ... ok
+test mbtx::tests::split_mbtx_import_path_normalizes_relative_package_with_module_prefix ... ok
+test mbtx::tests::parse_mbtx_imports_allow_corexx_with_version ... ok
+test mbtx::tests::split_mbtx_import_path_rejects_three_segment_module_with_version ... ok
+test mbtx::tests::split_mbtx_import_path_supports_core_without_version ... ok
+test model::tests::direct_native_mode_carries_only_target_choice ... ok
+test mbtx::tests::split_mbtx_import_path_supports_module_package ... ok
+test mbtx::tests::split_mbtx_import_path_supports_module_root ... ok
+test model::tests::native_target_selection_is_host_specific ... ok
+test model::tests::new_native_defaults_on_for_supported_hosts ... ok
+test mbtx::tests::parse_mbtx_rejects_conditional_imports ... ok
+test mbtx::tests::parse_mbtx_imports_supports_import_all_with_named_alias ... ok
+test pkg_name::test::major_version_root_alias_omits_suffix ... ok
+test mbtx::tests::parse_mbtx_imports_supports_top_level_package_path ... ok
+test pkg_name::test::test_package_fqn_shortname ... ok
+test pkg_name::test::test_pkg_path_parent ... ok
+test pkg_name::test::test_pkg_path_short_name ... ok
+test pkg_name::test::test_internal_examples_from_docs ... ok
+test pkg_name::test::test_pkg_path_segments ... ok
+test pkg_name::test::test_pkg_path_ctor ... ok
+test resolve::tests::split_import_path_rejects_package_version_suffix ... ok
+test resolve::tests::split_import_path_supports_module_root ... ok
+test resolve::tests::split_import_path_supports_module_package ... ok
+test target_layout::tests::artifact_resolver_handles_non_package_artifacts ... ok
+test target_layout::tests::artifact_resolver_resolves_build_core_package_interface ... ok
+test target_layout::tests::artifact_resolver_resolves_c_stub_library_artifacts ... ok
+test target_layout::tests::generated_test_driver_diagnostic_path_follows_the_target_layout ... ok
+test target_layout::tests::artifact_resolver_resolves_check_package_interface ... ok
+test target_layout::tests::native_executable_artifacts_keep_stable_suffix ... ok
+test target_layout::tests::artifact_resolver_resolves_impl_check_package_interface ... ok
+test target_layout::tests::injected_stdlib_impl_check_reads_the_installed_contract ... ok
+test target_layout::tests::mono_layout_flattens_main_module_packages ... ok
+test target_layout::tests::packages_metadata_paths_follow_the_compiler_contract ... ok
+test target_layout::tests::proof_artifact_stem_is_stable_and_distinct ... ok
+test target_layout::tests::artifact_resolver_resolves_proof_artifacts_with_matching_context ... ok
+test target_layout::tests::workspace_layout_qualifies_all_packages_by_module ... ok
+test target_layout::tests::prove_virtual_contract_and_proof_interfaces_have_distinct_paths ... ok
+test discover::tests::discovery_does_not_warn_consumers_about_dependency_package_names ... ok
+test target_layout::tests::workspace_proof_artifacts_are_qualified_by_module ... ok
+test discover::tests::c_stub_headers_follow_package_file_set_boundaries ... ok
+test discover::tests::discovery_warns_for_packages_named_like_major_version_modules ... ok
+test compile::tests::native_debug_info_is_scoped_to_each_compiler ... ok
+
+test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

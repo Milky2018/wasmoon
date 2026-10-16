@@ -316,7 +316,9 @@ static int64_t WASMOON_GUEST_ABI exception_get_ref_impl(jit_context_t *ctx) {
             ctx_gc_heap(ctx), state->exception_tag, state->exception_values,
             state->exception_value_count);
         if (!state->exception_ref) {
-            g_trap_code = ctx_runtime(ctx)->exception_arena->quota_denied ? ctx_runtime(ctx)->exception_arena->quota_denied : 9;
+            native_exception_arena_t *arena = ctx_runtime(ctx)->exception_arena;
+            g_trap_code = arena && arena->quota_denied
+                ? arena->quota_denied : WASMOON_TRAP_OUT_OF_MEMORY;
             siglongjmp(g_trap_jmp_buf, 1);
         }
     }
@@ -813,7 +815,12 @@ int64_t exception_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t
     if (!ctx_runtime(active)->exception_arena)
         ctx_runtime(active)->exception_arena = exception_arena_new();
     int64_t reference = exception_arena_insert(ctx_runtime(active)->exception_arena, ctx_gc_heap(active), tag, values, count);
-    if (!reference) { g_trap_code = ctx_runtime(active)->exception_arena->quota_denied ? ctx_runtime(active)->exception_arena->quota_denied : 9; siglongjmp(g_trap_jmp_buf, 1); }
+    if (!reference) {
+        native_exception_arena_t *arena = ctx_runtime(active)->exception_arena;
+        g_trap_code = arena && arena->quota_denied
+            ? arena->quota_denied : WASMOON_TRAP_OUT_OF_MEMORY;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
     return reference;
 }
 

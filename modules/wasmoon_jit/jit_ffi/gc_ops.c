@@ -69,9 +69,8 @@ static int64_t trap_out_of_memory_i64(void) {
     return 0;
 }
 
-static int64_t trap_gc_allocation_i64(GcHeap *heap) {
-    if (!heap || !heap->quota_denied) return trap_out_of_memory_i64();
-    g_trap_code = heap->quota_denied == 1 ? WASMOON_TRAP_GC_BYTE_QUOTA : WASMOON_TRAP_GC_OBJECT_QUOTA;
+static int64_t trap_gc_allocation_i64(int32_t result) {
+    g_trap_code = -result;
     if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
     return 0;
 }
@@ -343,27 +342,22 @@ int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, 
         }
     }
 
-    gc_alloc_result_t alloc_result = {0};
-    int32_t gc_ref = gc_alloc_struct_with_retry(
-        ctx,
-        heap,
-        type_idx,
-        actual_fields,
-        actual_num_fields,
-        actual_fields,
-        actual_num_fields,
-        &alloc_result
-    );
+    gc_allocation_request_t request = {
+        .ctx = ctx, .heap = heap, .layout = GC_ALLOC_STRUCT_WORDS,
+        .type_idx = type_idx, .values = actual_fields, .count = actual_num_fields,
+        .init = {0, 0}, .roots = actual_fields, .root_count = actual_num_fields
+    };
+    int32_t gc_ref = gc_allocate(&request);
 
     // Free temporary default fields buffer
     if (default_fields) {
         free(default_fields);
     }
 
-    if (gc_ref == 0) {
-        return trap_gc_allocation_i64(heap);
+    if (gc_ref < 0) {
+        return trap_gc_allocation_i64(gc_ref);
     }
-    gc_log_alloc_retry("struct.new", &alloc_result);
+    gc_log_alloc_retry("struct.new", &request.result);
 
     if (ctx) {
         ctx_set_gc_heap(ctx, heap);
@@ -425,21 +419,16 @@ int64_t WASMOON_GUEST_ABI gc_array_new_impl(int32_t type_idx, int32_t len, int64
     }
 
     int64_t roots_buf[1] = { fill };
-    gc_alloc_result_t alloc_result = {0};
-    int32_t gc_ref = gc_alloc_array_with_retry(
-        ctx,
-        heap,
-        type_idx,
-        len,
-        fill,
-        roots_buf,
-        1,
-        &alloc_result
-    );
-    if (gc_ref == 0) {
-        return trap_gc_allocation_i64(heap);
+    gc_allocation_request_t request = {
+        .ctx = ctx, .heap = heap, .layout = GC_ALLOC_ARRAY_WORD,
+        .type_idx = type_idx, .values = NULL, .count = len,
+        .init = {fill, 0}, .roots = roots_buf, .root_count = 1
+    };
+    int32_t gc_ref = gc_allocate(&request);
+    if (gc_ref < 0) {
+        return trap_gc_allocation_i64(gc_ref);
     }
-    gc_log_alloc_retry("array.new", &alloc_result);
+    gc_log_alloc_retry("array.new", &request.result);
 
     if (ctx) {
         ctx_set_gc_heap(ctx, heap);
@@ -698,17 +687,12 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_slow(
         return trap_gc_precise_roots_i64();
     }
 
-    gc_alloc_result_t alloc_result = {0};
-    int32_t gc_ref = gc_alloc_struct_with_retry(
-        actual_ctx,
-        heap,
-        type_idx,
-        actual_fields,
-        actual_num_fields,
-        alloc_roots,
-        alloc_root_count,
-        &alloc_result
-    );
+    gc_allocation_request_t request = {
+        .ctx = actual_ctx, .heap = heap, .layout = GC_ALLOC_STRUCT_WORDS,
+        .type_idx = type_idx, .values = actual_fields, .count = actual_num_fields,
+        .init = {0, 0}, .roots = alloc_roots, .root_count = alloc_root_count
+    };
+    int32_t gc_ref = gc_allocate(&request);
     if (alloc_roots_owned) {
         free(alloc_roots_owned);
     }
@@ -718,10 +702,10 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_slow(
         free(default_fields);
     }
 
-    if (gc_ref == 0) {
-        return trap_gc_allocation_i64(heap);
+    if (gc_ref < 0) {
+        return trap_gc_allocation_i64(gc_ref);
     }
-    gc_log_alloc_retry("alloc_struct_slow", &alloc_result);
+    gc_log_alloc_retry("alloc_struct_slow", &request.result);
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
     if (actual_ctx) {
@@ -792,27 +776,22 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_slow(
         return trap_gc_precise_roots_i64();
     }
 
-    gc_alloc_result_t alloc_result = {0};
-    int32_t gc_ref = gc_alloc_array_with_retry(
-        actual_ctx,
-        heap,
-        type_idx,
-        len,
-        init_value,
-        alloc_roots,
-        alloc_root_count,
-        &alloc_result
-    );
+    gc_allocation_request_t request = {
+        .ctx = actual_ctx, .heap = heap, .layout = GC_ALLOC_ARRAY_WORD,
+        .type_idx = type_idx, .values = NULL, .count = len,
+        .init = {init_value, 0}, .roots = alloc_roots, .root_count = alloc_root_count
+    };
+    int32_t gc_ref = gc_allocate(&request);
     if (alloc_roots_owned) {
         free(alloc_roots_owned);
     }
-    if (gc_ref == 0) {
+    if (gc_ref < 0) {
         if (gc_alloc_debug_enabled()) {
             fprintf(stderr, "[GC ALLOC] alloc_array_slow failed after retries\n");
         }
-        return trap_gc_allocation_i64(heap);
+        return trap_gc_allocation_i64(gc_ref);
     }
-    gc_log_alloc_retry("alloc_array_slow", &alloc_result);
+    gc_log_alloc_retry("alloc_array_slow", &request.result);
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
     if (actual_ctx) {
@@ -860,24 +839,19 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_values_slow(
         return trap_gc_precise_roots_i64();
     }
 
-    gc_alloc_result_t alloc_result = {0};
-    int32_t gc_ref = gc_alloc_array_from_values_with_retry(
-        actual_ctx,
-        heap,
-        type_idx,
-        values,
-        len,
-        alloc_roots,
-        alloc_root_count,
-        &alloc_result
-    );
+    gc_allocation_request_t request = {
+        .ctx = actual_ctx, .heap = heap, .layout = GC_ALLOC_ARRAY_WORDS,
+        .type_idx = type_idx, .values = values, .count = len,
+        .init = {0, 0}, .roots = alloc_roots, .root_count = alloc_root_count
+    };
+    int32_t gc_ref = gc_allocate(&request);
     if (alloc_roots_owned) {
         free(alloc_roots_owned);
     }
-    if (gc_ref == 0) {
-        return trap_gc_allocation_i64(heap);
+    if (gc_ref < 0) {
+        return trap_gc_allocation_i64(gc_ref);
     }
-    gc_log_alloc_retry("alloc_array_from_values_slow", &alloc_result);
+    gc_log_alloc_retry("alloc_array_from_values_slow", &request.result);
 
     if (actual_ctx) {
         ctx_set_gc_heap(actual_ctx, heap);
@@ -1018,14 +992,14 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_
     }
 
     const GcSlot *slots = (const GcSlot *)(uintptr_t)slots_ptr;
-    int32_t gc_ref = gc_heap_alloc_struct_wide(heap, type_idx, slots, num_fields);
-    if (gc_ref == 0) {
-        // Retry once behind a collection, mirroring the word-sized slow paths.
-        if (gc_collect_for_alloc_internal(ctx, NULL, 0) < 0) return trap_gc_precise_roots_i64();
-        gc_ref = gc_heap_alloc_struct_wide(heap, type_idx, slots, num_fields);
-    }
-    if (gc_ref == 0) {
-        return trap_gc_allocation_i64(heap);
+    gc_allocation_request_t request = {
+        .ctx = ctx, .heap = heap, .layout = GC_ALLOC_STRUCT_SLOTS,
+        .type_idx = type_idx, .values = slots, .count = num_fields,
+        .init = {0, 0}
+    };
+    int32_t gc_ref = gc_allocate(&request);
+    if (gc_ref < 0) {
+        return trap_gc_allocation_i64(gc_ref);
     }
 
     if (ctx) {
@@ -1033,7 +1007,6 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_wide_slow_impl(int64_t ctx_ptr, int32_
         ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
         ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
     }
-    gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
     return ((int64_t)gc_ref) << 1;
 }
 
@@ -1047,13 +1020,14 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t
     }
 
     GcSlot init = *(const GcSlot *)(uintptr_t)init_ptr;
-    int32_t gc_ref = gc_heap_alloc_array_wide(heap, type_idx, len, init);
-    if (gc_ref == 0) {
-        if (gc_collect_for_alloc_internal(ctx, NULL, 0) < 0) return trap_gc_precise_roots_i64();
-        gc_ref = gc_heap_alloc_array_wide(heap, type_idx, len, init);
-    }
-    if (gc_ref == 0) {
-        return trap_gc_allocation_i64(heap);
+    gc_allocation_request_t request = {
+        .ctx = ctx, .heap = heap, .layout = GC_ALLOC_ARRAY_SLOT,
+        .type_idx = type_idx, .values = NULL, .count = len,
+        .init = init
+    };
+    int32_t gc_ref = gc_allocate(&request);
+    if (gc_ref < 0) {
+        return trap_gc_allocation_i64(gc_ref);
     }
 
     if (ctx) {
@@ -1061,7 +1035,6 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_wide_slow_impl(int64_t ctx_ptr, int32_t
         ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
         ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
     }
-    gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
     return ((int64_t)gc_ref) << 1;
 }
 
@@ -1075,13 +1048,14 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, i
     }
 
     const GcSlot *slots = (const GcSlot *)(uintptr_t)slots_ptr;
-    int32_t gc_ref = gc_heap_alloc_array_from_slots(heap, type_idx, slots, len);
-    if (gc_ref == 0) {
-        if (gc_collect_for_alloc_internal(ctx, NULL, 0) < 0) return trap_gc_precise_roots_i64();
-        gc_ref = gc_heap_alloc_array_from_slots(heap, type_idx, slots, len);
-    }
-    if (gc_ref == 0) {
-        return trap_gc_allocation_i64(heap);
+    gc_allocation_request_t request = {
+        .ctx = ctx, .heap = heap, .layout = GC_ALLOC_ARRAY_SLOTS,
+        .type_idx = type_idx, .values = slots, .count = len,
+        .init = {0, 0}
+    };
+    int32_t gc_ref = gc_allocate(&request);
+    if (gc_ref < 0) {
+        return trap_gc_allocation_i64(gc_ref);
     }
 
     if (ctx) {
@@ -1089,7 +1063,6 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, i
         ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
         ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
     }
-    gc_record_runtime_type(ctx, heap, gc_ref, type_idx);
     return ((int64_t)gc_ref) << 1;
 }
 

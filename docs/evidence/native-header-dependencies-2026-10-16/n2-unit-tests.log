@@ -1,0 +1,238 @@
+   Compiling n2 v0.1.5 (/private/tmp/wasmoon-iss634-n2)
+warning: unnecessary parentheses around closure body
+   --> src/run.rs:103:43
+    |
+103 |     #[argh(option, short = 'f', default = "(\"build.ninja\".into())")]
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/densemap.rs:55:17
+   |
+55 |     pub fn iter(&self) -> std::slice::Iter<V> {
+   |                 ^^^^^     ^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                 |
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+55 |     pub fn iter(&self) -> std::slice::Iter<'_, V> {
+   |                                            +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/eval.rs:14:16
+   |
+14 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>>;
+   |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+14 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>>;
+   |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/eval.rs:96:19
+   |
+96 |     pub fn as_cow(&self) -> EvalString<Cow<str>> {
+   |                   ^^^^^                ^^^^^^^^ the same lifetime is hidden here
+   |                   |
+   |                   the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+96 |     pub fn as_cow(&self) -> EvalString<Cow<'_, str>> {
+   |                                            +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src/eval.rs:110:19
+    |
+110 |     pub fn as_cow(&self) -> EvalString<Cow<str>> {
+    |                   ^^^^^                ^^^^^^^^ the same lifetime is hidden here
+    |                   |
+    |                   the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+110 |     pub fn as_cow(&self) -> EvalString<Cow<'_, str>> {
+    |                                            +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src/eval.rs:136:16
+    |
+136 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+    |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+136 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+    |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src/eval.rs:144:16
+    |
+144 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+    |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+144 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+    |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src/eval.rs:150:16
+    |
+150 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+    |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+150 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+    |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src/eval.rs:156:16
+    |
+156 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+    |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+156 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+    |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/load.rs:35:16
+   |
+35 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+   |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+35 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+   |                                                           +++
+
+warning: direct cast of function item into an integer
+  --> src/signal.rs:24:42
+   |
+24 |         sa.sa_sigaction = sigint_handler as libc::sighandler_t;
+   |                                          ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(function_casts_as_integer)]` on by default
+help: first cast to a pointer `as *const ()`
+   |
+24 |         sa.sa_sigaction = sigint_handler as *const () as libc::sighandler_t;
+   |                                          ++++++++++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/smallmap.rs:41:17
+   |
+41 |     pub fn iter(&self) -> std::slice::Iter<(K, V)> {
+   |                 ^^^^^     ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                 |
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+41 |     pub fn iter(&self) -> std::slice::Iter<'_, (K, V)> {
+   |                                            +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/smallmap.rs:45:21
+   |
+45 |     pub fn iter_mut(&mut self) -> std::slice::IterMut<(K, V)> {
+   |                     ^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                     |
+   |                     the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+45 |     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, (K, V)> {
+   |                                                       +++
+
+warning: creating a shared reference to mutable static
+  --> src/trace.rs:94:14
+   |
+94 |     unsafe { TRACE.is_some() }
+   |              ^^^^^^^^^^^^^^^ shared reference to mutable static
+   |
+   = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+   = note: `#[warn(static_mut_refs)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
+
+warning: `n2` (lib test) generated 14 warnings (run `cargo fix --lib -p n2 --tests` to apply 12 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.00s
+     Running unittests src/lib.rs (target/debug/deps/n2-c21005f2d36abf39)
+
+running 53 tests
+test db::record::tests::truncated_record_payload_remains_an_error ... ok
+test canon::tests::slash ... ok
+test canon::tests::dot ... ok
+test db::compaction::tests::small_database_is_not_compacted ... ok
+test db::history::tests::overlapping_output_invalidates_the_whole_prior_record ... ok
+test db::record::tests::truncated_record_header_remains_an_incomplete_tail ... ok
+test db::history::tests::outputs_can_acquire_independent_latest_records ... ok
+test db::record::tests::malformed_file_header_keeps_existing_errors ... ok
+test canon::tests::noop ... ok
+test canon::tests::parent ... ok
+test db::record::tests::version_one_records_keep_the_existing_encoding ... ok
+test db::history::tests::record_without_outputs_is_not_live ... ok
+test depfile::tests::backslash_counts_and_unc_paths ... ok
+test depfile::tests::escaped_paths_and_windows_separators ... ok
+test depfile::tests::test_parse ... ok
+test depfile::tests::test_parse_missing_colon ... ok
+test depfile::tests::test_parse_multiline ... ok
+test depfile::tests::test_parse_multiple_targets ... ok
+test depfile::tests::test_parse_space_suffix ... ok
+test depfile::tests::test_parse_windows_dep_path ... ok
+test depfile::tests::test_parse_spaces_before_colon ... ok
+test depfile::tests::test_parse_without_final_newline ... ok
+test graph::tests::remove_dups_explicit ... ok
+test graph::tests::remove_dups_implicit ... ok
+test output::tests::non_windows_output_remains_lossy_utf8 ... ok
+test output::tests::utf8_is_preserved ... ok
+test parse::tests::parse_defaults ... ok
+test parse::tests::parse_dot_in_rule ... ok
+test parse::tests::parse_dot_in_eval ... ok
+test parse::tests::parse_trailing_newline ... ok
+
+[J
+[J
+[Jtest process_posix::tests::command_env_can_disable_inheritance ... ok
+test progress::tests::completed_output_retains_build_id ... ok
+test progress::tests::progress_bar_rendering ... ok
+test progress::tests::task_rendering ... ok
+test progress::tests::task_rendering_with_time ... ok
+test progress::tests::truncate_utf8 ... ok
+test process_posix::tests::command_env_rejects_invalid_entries ... ok
+test progress::tests::completed_output_and_preview_use_the_same_decoding ... ok
+test task::tests::find_last ... ok
+test task::tests::missing_depfile_allowed ... ok
+test work::tests::build_cycle ... ok
+test task::tests::show_includes ... ok
+test graph::stat_mtime_resolution ... ok
+test process_posix::tests::command_env ... ok
+test work::tests::programmatic_build_env_and_inheritance_affect_execution_and_hash ... ok
+test work::tests::programmatic_build_cwd_affects_execution_and_hash ... ok
+test work::tests::programmatic_build_cwd_resolves_relative_task_files ... ok
+test db::compaction::tests::database_that_cannot_shrink_enough_is_unchanged ... ok
+test db::compaction::tests::open_compacts_superseded_builds_but_keeps_paths ... ok
+test db::compaction::tests::overlapping_output_invalidates_the_whole_prior_record ... ok
+test db::compaction::tests::compaction_discards_an_incomplete_record_header ... ok
+test db::compaction::tests::writer_can_append_after_compaction ... ok
+test db::tests::opening_with_a_partial_graph_preserves_other_records ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+

@@ -435,9 +435,16 @@ static int gc_heap_prepare_roots(GcHeap *heap, const int64_t *roots, int32_t cou
             at += entry->root_count;
         }
     }
-    for (int32_t i = 0; i < heap->object_count; ++i) {
-        GcHeader *header = get_object_header(heap, i + 1);
-        if (header && (header->flags & GC_FLAG_MARKED)) input[at++] = (int64_t)(i + 1) << 1;
+    // No callbacks or buffer growth occur during this copy. Snapshot the scan
+    // span so writes to the fresh output do not force descriptor reloads.
+    const int32_t object_count = heap->object_count;
+    const int32_t *object_table = heap->object_table;
+    const uint8_t *data = heap->data;
+    for (int32_t i = 0; i < object_count; ++i) {
+        int32_t offset = object_table[i];
+        if (offset < 0 || !data) continue;
+        const GcHeader *header = (const GcHeader *)(data + offset);
+        if (header->flags & GC_FLAG_MARKED) input[at++] = (int64_t)(i + 1) << 1;
     }
     exception_arena_copy_marked(heap->exception_arena, input + at);
     at += exception_arena_marked_count(heap->exception_arena);
@@ -999,22 +1006,26 @@ int32_t gc_heap_sweep(GcHeap* heap) {
         return 0;
     }
 
+    // Sweeping has no callbacks or resizing; descriptor storage stays fixed.
+    const int32_t object_count = heap->object_count;
+    int32_t *object_table = heap->object_table;
+    uint8_t *data = heap->data;
     int32_t collected = 0;
 
-    for (int32_t i = 0; i < heap->object_count; i++) {
-        int32_t offset = heap->object_table[i];
+    for (int32_t i = 0; i < object_count; i++) {
+        int32_t offset = object_table[i];
         if (offset < 0) {
             continue;  // Already freed
         }
 
-        GcHeader* header = (GcHeader*)(heap->data + offset);
+        GcHeader* header = (GcHeader*)(data + offset);
         if (header->flags & GC_FLAG_MARKED) {
             // Object is reachable, clear mark for next cycle
             header->flags &= ~GC_FLAG_MARKED;
         } else {
             // Object is unreachable, mark as freed
             header->kind = GC_KIND_FREE;
-            heap->object_table[i] = -1;  // Mark as freed in table
+            object_table[i] = -1;  // Mark as freed in table
             collected++;
 
             // Add to free list (for potential compaction later)
@@ -1032,21 +1043,25 @@ void gc_heap_compact(GcHeap* heap) {
         return;
     }
 
+    // Compaction moves payload bytes, not these backing allocations.
+    const int32_t object_count = heap->object_count;
+    int32_t *object_table = heap->object_table;
+    uint8_t *data = heap->data;
     size_t new_offset = 0;
 
-    for (int32_t i = 0; i < heap->object_count; i++) {
-        int32_t old_offset = heap->object_table[i];
+    for (int32_t i = 0; i < object_count; i++) {
+        int32_t old_offset = object_table[i];
         if (old_offset < 0) {
             continue;  // Object was freed, skip
         }
 
-        GcHeader* header = (GcHeader*)(heap->data + old_offset);
+        GcHeader* header = (GcHeader*)(data + old_offset);
         uint32_t obj_size = header->size;
 
         // Move object to compact position if needed
         if ((size_t)old_offset != new_offset) {
-            memmove(heap->data + new_offset, heap->data + old_offset, obj_size);
-            heap->object_table[i] = (int32_t)new_offset;
+            memmove(data + new_offset, data + old_offset, obj_size);
+            object_table[i] = (int32_t)new_offset;
         }
 
         new_offset += ALIGN_UP(obj_size, 16);
@@ -1316,8 +1331,9 @@ void gc_heap_get_stats(GcHeap* heap, int32_t* out_total_allocations, int32_t* ou
 
 // These functions are exported for MoonBit FFI
 
-GcHeap *wasmoon_gc_heap_new(int64_t capacity) {
+MOONBIT_FFI_EXPORT GcHeap *wasmoon_gc_heap_new(int64_t capacity, GcAllocationPolicy policy) {
     GcHeap* heap = gc_heap_new((size_t)capacity);
+    heap->allocation_policy = policy;
     return heap;
 }
 

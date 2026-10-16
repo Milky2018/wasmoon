@@ -1,0 +1,14 @@
+libtool: warning: 'trampoline_call_x86_64.o' has no symbols
+libtool: warning: 'windows_context_x86_64.o' has no symbols
+libtool: warning: 'msvc_guest_bridges.o' has no symbols
+libtool: warning: 'stack_switch_x86_64.o' has no symbols
+Error: Native pipeline error: Milky2018/wasmoon/cmd/wasmoon/commands.ExpectedExploreCompileFailure.ExpectedExploreCompileFailure
+HTML report written to: /tmp/wasmoon-explore-status-1792130191118.html
+HTML report written to: /tmp/wasmoon-x64-result-spills-i32-1792130191119.html
+HTML report written to: /tmp/wasmoon-x64-result-spills-f64-1792130191123.html
+HTML report written to: /tmp/wasmoon-x64-result-spills-v128-1792130191126.html
+HTML report written to: /tmp/wasmoon-explore-parity-1792130191128.html
+HTML report written to: /tmp/wasmoon-explore-parity-1792130191128.html
+HTML report written to: /tmp/wasmoon-explore-parity-1792130191128.html
+HTML report written to: /tmp/wasmoon-explore-parity-1792130191128.html
+Total tests: 2721, passed: 2721, failed: 0.

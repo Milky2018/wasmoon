@@ -1,0 +1,23 @@
+{
+  "platform": "macOS ARM64",
+  "wasmoon_base": "5490d6bf1cc293c1a3adc42dd3583e607b1ec631",
+  "source_dirty": true,
+  "candidate_binary_sha256": "16a23537326cc2ebf5da46ce26581c13e80f634bda5452dda1fc8a1bfb5666bf",
+  "moonbuild_base": "748b63c25261be2ec38b2cc70884d5894a456360",
+  "n2_base": "73429f6a8e6b7b5f5382e4cf98c0c2746ba4c6bd",
+  "source_scope": "Isolated copied and declaratively instrumented Wasmoon workspace; installed stable unchanged",
+  "mutation": "Add one additional uintptr_t slot at the end of jit_trap_activation_t, with no C source edits",
+  "baseline_tests": 163,
+  "header_only_incremental_tests": 163,
+  "recompiled_objects": [
+    "context_test_support.o",
+    "trap.o"
+  ],
+  "asan_ubsan_errors": false,
+  "linux_lsan": "not_tested",
+  "windows_execution": "not_tested",
+  "patches_sha256": {
+    "moonbuild.patch": "b3293235223731ec0befc6da79d2deb387437c427e0ee3e39c9994593769fbbd",
+    "n2.patch": "4d8e585161c5f34b85e6ffe2c0fdf51c204c52c979145dd2f0cb5039fe8cad06"
+  }
+}

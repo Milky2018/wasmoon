@@ -1,0 +1,286 @@
+diff --git a/src/depfile.rs b/src/depfile.rs
+index b241cb6..37ce0d8 100644
+--- a/src/depfile.rs
++++ b/src/depfile.rs
+@@ -9,12 +9,12 @@ use crate::{
+ fn skip_spaces(scanner: &mut Scanner) -> ParseResult<()> {
+     loop {
+         match scanner.read() {
+-            ' ' => {}
+-            '\\' => match scanner.read() {
+-                '\r' => scanner.expect('\n')?,
+-                '\n' => {}
+-                _ => return scanner.parse_error("invalid backslash escape"),
+-            },
++            ' ' | '\t' => {}
++            '\\' if scanner.peek_newline() => {
++                if scanner.read() == '\r' {
++                    scanner.expect('\n')?;
++                }
++            }
+             _ => {
+                 scanner.back();
+                 break;
+@@ -28,33 +28,64 @@ fn skip_spaces(scanner: &mut Scanner) -> ParseResult<()> {
+ /// Note: treats colon as a valid character in a path because of Windows-style
+ /// paths, but this means that the inital `output: ...` path will include the
+ /// trailing colon.
+-fn read_path<'a>(scanner: &mut Scanner<'a>) -> ParseResult<Option<&'a str>> {
++fn read_path(scanner: &mut Scanner<'_>) -> ParseResult<Option<String>> {
+     skip_spaces(scanner)?;
+-    let start = scanner.ofs;
++    let mut path = Vec::new();
+     loop {
+         match scanner.read() {
+-            '\0' | ' ' | '\r' | '\n' => {
++            '\0' | ' ' | '\t' | '\r' | '\n' => {
+                 scanner.back();
+                 break;
+             }
+             '\\' => {
+-                if scanner.peek_newline() {
+-                    scanner.back();
++                let start = scanner.ofs - 1;
++                while scanner.peek() == '\\' {
++                    scanner.next();
++                }
++                let count = scanner.ofs - start;
++                if count == 1 && scanner.peek_newline() {
++                    scanner.ofs = start;
+                     break;
+                 }
++                // GCC/Clang quote spaces with 2N+1 backslashes; ordinary
++                // Windows separators remain literal. Match Ninja's convention.
++                let next = scanner.peek();
++                if matches!(next, ' ' | '\t') && count % 2 == 1 {
++                    path.extend(std::iter::repeat(b'\\').take(count / 2));
++                    path.push(scanner.read() as u8);
++                } else if next == '#' {
++                    path.extend(std::iter::repeat(b'\\').take(count - 1));
++                    path.push(scanner.read() as u8);
++                } else if next == ':' {
++                    scanner.next();
++                    let is_target_separator =
++                        matches!(scanner.peek(), '\0' | ' ' | '\t' | '\r' | '\n');
++                    path.extend(
++                        std::iter::repeat(b'\\').take(count - usize::from(!is_target_separator)),
++                    );
++                    path.push(b':');
++                } else {
++                    path.extend(std::iter::repeat(b'\\').take(count));
++                }
+             }
+-            _ => {}
++            '$' if scanner.peek() == '$' => {
++                scanner.next();
++                path.push(b'$');
++            }
++            ch => path.push(ch as u8),
+         }
+     }
+-    let end = scanner.ofs;
+-    if end == start {
++    if path.is_empty() {
+         return Ok(None);
+     }
+-    Ok(Some(scanner.slice(start, end)))
++    match String::from_utf8(path) {
++        Ok(path) => Ok(Some(path)),
++        Err(_) => scanner.parse_error("invalid UTF-8 in depfile path"),
++    }
+ }
+ 
+ /// Parse a `.d` file into `Deps`.
+-pub fn parse<'a>(scanner: &mut Scanner<'a>) -> ParseResult<SmallMap<&'a str, Vec<&'a str>>> {
++pub fn parse(scanner: &mut Scanner<'_>) -> ParseResult<SmallMap<String, Vec<String>>> {
+     let mut result = SmallMap::default();
+     loop {
+         while scanner.peek() == ' ' || scanner.peek_newline() {
+@@ -65,13 +96,12 @@ pub fn parse<'a>(scanner: &mut Scanner<'a>) -> ParseResult<SmallMap<&'a str, Vec
+             Some(o) => o,
+         };
+         scanner.skip_spaces();
+-        let target = match target.strip_suffix(':') {
+-            None => {
+-                scanner.expect(':')?;
+-                target
+-            }
+-            Some(target) => target,
+-        };
++        let mut target = target;
++        if target.ends_with(':') {
++            target.pop();
++        } else {
++            scanner.expect(':')?;
++        }
+         let mut deps = Vec::new();
+         while let Some(p) = read_path(scanner)? {
+             deps.push(p);
+@@ -88,13 +118,13 @@ mod tests {
+     use super::*;
+     use std::path::Path;
+ 
+-    fn try_parse(buf: &mut Vec<u8>) -> Result<SmallMap<&str, Vec<&str>>, String> {
++    fn try_parse(buf: &mut Vec<u8>) -> Result<SmallMap<String, Vec<String>>, String> {
+         buf.push(0);
+         let mut scanner = Scanner::new(buf);
+         parse(&mut scanner).map_err(|err| scanner.format_parse_error(Path::new("test"), err))
+     }
+ 
+-    fn must_parse(buf: &mut Vec<u8>) -> SmallMap<&str, Vec<&str>> {
++    fn must_parse(buf: &mut Vec<u8>) -> SmallMap<String, Vec<String>> {
+         match try_parse(buf) {
+             Err(err) => {
+                 println!("{}", err);
+@@ -104,6 +134,38 @@ mod tests {
+         }
+     }
+ 
++    fn expected<const N: usize>(values: [(&str, Vec<&str>); N]) -> SmallMap<String, Vec<String>> {
++        let mut result = SmallMap::default();
++        for (target, deps) in values {
++            result.insert(
++                target.to_owned(),
++                deps.into_iter().map(str::to_owned).collect(),
++            );
++        }
++        result
++    }
++
++    #[test]
++    fn escaped_paths_and_windows_separators() {
++        test_for_crlf(
++            "out\\ file.o: dir\\ name/header\\#1$$.h C:\\Windows\\file.h Unicode-月.h\n",
++            |text| {
++                let mut file = text.into_bytes();
++                assert_eq!(
++                    must_parse(&mut file),
++                    expected([(
++                        "out file.o",
++                        vec![
++                            "dir name/header#1$.h",
++                            "C:\\Windows\\file.h",
++                            "Unicode-月.h"
++                        ]
++                    )])
++                );
++            },
++        );
++    }
++
+     fn test_for_crlf(input: &str, test: fn(String)) {
+         let crlf = input.replace('\n', "\r\n");
+         for test_case in [String::from(input), crlf] {
+@@ -111,6 +173,26 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn backslash_counts_and_unc_paths() {
++        let mut file = br"out.o: two\\ next.h three\\\ spaces.h hash\#a.h dollar$$a.h colon\:a.h \\server\share\a.h".to_vec();
++        assert_eq!(
++            must_parse(&mut file),
++            expected([(
++                "out.o",
++                vec![
++                    r"two\\",
++                    "next.h",
++                    r"three\ spaces.h",
++                    "hash#a.h",
++                    "dollar$a.h",
++                    "colon:a.h",
++                    r"\\server\share\a.h"
++                ]
++            )])
++        );
++    }
++
+     #[test]
+     fn test_parse() {
+         test_for_crlf(
+@@ -120,7 +202,7 @@ mod tests {
+                 let deps = must_parse(&mut file);
+                 assert_eq!(
+                     deps,
+-                    SmallMap::from([(
++                    expected([(
+                         "build/browse.o",
+                         vec!["src/browse.cc", "src/browse.h", "build/browse_py.h",]
+                     )])
+@@ -134,10 +216,7 @@ mod tests {
+         test_for_crlf("build/browse.o: src/browse.cc   \n", |text| {
+             let mut file = text.into_bytes();
+             let deps = must_parse(&mut file);
+-            assert_eq!(
+-                deps,
+-                SmallMap::from([("build/browse.o", vec!["src/browse.cc",])])
+-            );
++            assert_eq!(deps, expected([("build/browse.o", vec!["src/browse.cc",])]));
+         });
+     }
+ 
+@@ -150,7 +229,7 @@ mod tests {
+                 let deps = must_parse(&mut file);
+                 assert_eq!(
+                     deps,
+-                    SmallMap::from([(
++                    expected([(
+                         "build/browse.o",
+                         vec!["src/browse.cc", "build/browse_py.h",]
+                     )])
+@@ -163,30 +242,21 @@ mod tests {
+     fn test_parse_without_final_newline() {
+         let mut file = b"build/browse.o: src/browse.cc".to_vec();
+         let deps = must_parse(&mut file);
+-        assert_eq!(
+-            deps,
+-            SmallMap::from([("build/browse.o", vec!["src/browse.cc",])])
+-        );
++        assert_eq!(deps, expected([("build/browse.o", vec!["src/browse.cc",])]));
+     }
+ 
+     #[test]
+     fn test_parse_spaces_before_colon() {
+         let mut file = b"build/browse.o   : src/browse.cc".to_vec();
+         let deps = must_parse(&mut file);
+-        assert_eq!(
+-            deps,
+-            SmallMap::from([("build/browse.o", vec!["src/browse.cc",])])
+-        );
++        assert_eq!(deps, expected([("build/browse.o", vec!["src/browse.cc",])]));
+     }
+ 
+     #[test]
+     fn test_parse_windows_dep_path() {
+         let mut file = b"odd/path.o: C:/odd\\path.c".to_vec();
+         let deps = must_parse(&mut file);
+-        assert_eq!(
+-            deps,
+-            SmallMap::from([("odd/path.o", vec!["C:/odd\\path.c",])])
+-        );
++        assert_eq!(deps, expected([("odd/path.o", vec!["C:/odd\\path.c",])]));
+     }
+ 
+     #[test]
+@@ -201,7 +271,7 @@ out/b.o :
+         let deps = must_parse(&mut file);
+         assert_eq!(
+             deps,
+-            SmallMap::from([
++            expected([
+                 ("out/a.o", vec!["src/a.c", "src/b.c",]),
+                 ("out/b.o", vec![])
+             ])
+diff --git a/src/task.rs b/src/task.rs
+index fa28308..4e7927c 100644
+--- a/src/task.rs
++++ b/src/task.rs
+@@ -56,7 +56,7 @@ fn read_depfile(path: &Path, cwd: Option<&Path>) -> anyhow::Result<Vec<String>>
+     let deps: Vec<String> = parsed_deps
+         .values()
+         .flat_map(|x| x.iter())
+-        .map(|&dep| resolve_discovered_dep(cwd, dep))
++        .map(|dep| resolve_discovered_dep(cwd, dep))
+         .collect();
+     tracing::info!(path = %path.display(), deps_count = deps.len(), "read depfile");
+     Ok(deps)

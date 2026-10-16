@@ -1,0 +1,31 @@
+--- a/gc_allocator.c
++++ b/gc_allocator.c
+@@ -64,3 +64,16 @@
+         heap->runtime_types[ref - 1] = ctx_runtime(ctx)->callable_local_types[local_type];
+     }
+ }
++
++// Experiment only: same-binary native control for the MoonBit retry policy.
++int32_t gc_native_policy_control(void *raw, int32_t wide) {
++    gc_allocation_request_t *request = raw;
++    int32_t collections = wide ? 1 : 3;
++    for (int32_t i = 0; i < collections; ++i) {
++        if (wasmoon_gc_allocation_collect(request) < 0) return -10;
++        int32_t reference = wasmoon_gc_allocation_attempt(request);
++        if (reference > 0) return reference;
++    }
++    int32_t denial = wasmoon_gc_allocation_denial(request);
++    return denial == 1 ? -25 : denial == 2 ? -26 : -9;
++}
+--- a/gc_heap.c
++++ b/gc_heap.c
+@@ -1316,7 +1316,9 @@
+ 
+ // These functions are exported for MoonBit FFI
+ 
++extern int32_t gc_native_policy_control(void *, int32_t);
+ MOONBIT_FFI_EXPORT GcHeap *wasmoon_gc_heap_new(int64_t capacity, GcAllocationPolicy policy) {
++    if (getenv("WASMOON_EXPERIMENT_NATIVE_POLICY")) policy = gc_native_policy_control;
+     GcHeap* heap = gc_heap_new((size_t)capacity);
+     heap->allocation_policy = policy;
+     return heap;

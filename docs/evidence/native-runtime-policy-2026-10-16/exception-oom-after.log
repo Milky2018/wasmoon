@@ -1,0 +1,7 @@
+libtool: warning: 'trampoline_call_x86_64.o' has no symbols
+libtool: warning: 'windows_context_x86_64.o' has no symbols
+libtool: warning: 'msvc_guest_bridges.o' has no symbols
+libtool: warning: 'stack_switch_x86_64.o' has no symbols
+libtool: warning: 'fiber_register_probe_x86_64.o' has no symbols
+libtool: warning: 'test_guest_bridges.o' has no symbols
+Total tests: 1, passed: 1, failed: 0.

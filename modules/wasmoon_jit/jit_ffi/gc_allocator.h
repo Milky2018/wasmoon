@@ -1,50 +1,42 @@
 // Copyright 2026
-// GC allocation retry helpers (V8-style slow path skeleton)
-
 #ifndef GC_ALLOCATOR_H
 #define GC_ALLOCATOR_H
 
-#include <stdint.h>
 #include "jit_ffi.h"
 #include "gc_heap.h"
 
+// Physical input layouts, not runtime opcodes. Every buffer is borrowed for the
+// synchronous allocation call; none may point into the movable heap payload.
+typedef enum {
+    GC_ALLOC_STRUCT_WORDS,
+    GC_ALLOC_ARRAY_WORD,
+    GC_ALLOC_ARRAY_WORDS,
+    GC_ALLOC_STRUCT_SLOTS,
+    GC_ALLOC_ARRAY_SLOT,
+    GC_ALLOC_ARRAY_SLOTS
+} gc_allocation_layout_t;
+
 typedef struct gc_alloc_result_t {
-    int32_t gc_ref;
     int32_t retry_count;
     int32_t collected_objects;
 } gc_alloc_result_t;
 
-int32_t gc_alloc_struct_with_retry(
-    jit_context_t *ctx,
-    GcHeap *heap,
-    int32_t type_idx,
-    const int64_t *fields,
-    int32_t num_fields,
-    const int64_t *roots,
-    int32_t root_count,
-    gc_alloc_result_t *result
-);
+typedef struct gc_allocation_request_t {
+    jit_context_t *ctx;
+    GcHeap *heap;
+    gc_allocation_layout_t layout;
+    int32_t type_idx;
+    const void *values;
+    int32_t count;
+    GcSlot init;
+    const int64_t *roots;
+    int32_t root_count;
+    gc_alloc_result_t result;
+} gc_allocation_request_t;
 
-int32_t gc_alloc_array_with_retry(
-    jit_context_t *ctx,
-    GcHeap *heap,
-    int32_t type_idx,
-    int32_t len,
-    int64_t init_value,
-    const int64_t *roots,
-    int32_t root_count,
-    gc_alloc_result_t *result
-);
+// Returns a positive object identity or a negative runtime trap code. The
+// caller must release its buffers before raising that trap. The callback never
+// suspends, raises a native trap, or retains this stack-allocated request.
+int32_t gc_allocate(gc_allocation_request_t *request);
 
-int32_t gc_alloc_array_from_values_with_retry(
-    jit_context_t *ctx,
-    GcHeap *heap,
-    int32_t type_idx,
-    const int64_t *values,
-    int32_t len,
-    const int64_t *roots,
-    int32_t root_count,
-    gc_alloc_result_t *result
-);
-
-#endif // GC_ALLOCATOR_H
+#endif
