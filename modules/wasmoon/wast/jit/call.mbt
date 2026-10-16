@@ -21,7 +21,7 @@ pub impl Show for JITCoreCallError with fn output(self, logger) {
 ///|
 fn encode_jit_entry_args(
   args : Array[@types.Value],
-  param_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
   store : @runtime.Store,
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
@@ -48,7 +48,7 @@ fn encode_jit_entry_args(
 ///|
 fn decode_jit_entry_results(
   results : Array[Int64],
-  result_types : Array[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   store : @runtime.Store,
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
@@ -95,13 +95,13 @@ fn prepare_jit_core_environment(
   ) catch {
     error => raise HostInvocation(error)
   }
-  match store.c_heap {
+  match store.native_heap() {
     Some(heap) => {
       context.jit_module.setup_gc(
         heap,
-        context.module_types,
-        context.canonical_type_indices,
-        context.func_type_indices,
+        context.module_types[:].to_owned(),
+        context.canonical_type_indices[:].to_owned(),
+        context.func_type_indices[:].to_owned(),
       ) catch {
         error => raise GcSetupFailed(error.to_string())
       }
@@ -280,6 +280,9 @@ fn JITModuleContext::start_core_func_resumable(
   args : Array[@types.Value],
   async_host_driver~ : @runtime.AsyncHostCallDriver? = None,
 ) -> JITCoreCallOutcome raise JITCoreCallError {
+  self.bind_instance(store, instance) catch {
+    error => raise HostInvocation(error)
+  }
   guard self.jit_module.get_func(func_idx) is Some(func) else {
     raise FunctionUnavailable(func_idx)
   }
@@ -320,7 +323,7 @@ fn JITModuleContext::start_core_func_resumable(
         context: self,
         store,
         instance,
-        result_types: func.result_types,
+        result_types: func.result_types[:].to_owned(),
         call,
         invocation,
         active: [true],
@@ -372,6 +375,9 @@ pub fn JITModuleContext::call_core_func(
   func_idx : Int32,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise JITCoreCallError {
+  self.bind_instance(store, instance) catch {
+    error => raise HostInvocation(error)
+  }
   guard self.jit_module.get_func(func_idx) is Some(func) else {
     raise FunctionUnavailable(func_idx)
   }

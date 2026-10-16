@@ -94,7 +94,7 @@ pub impl Show for CompareResult with fn output(self, logger) {
 /// Note: V128 results use 2 Int64 slots (low and high parts)
 pub fn jit_results_to_values(
   results : Array[Int64],
-  result_types : Array[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Array[@types.Value] {
   let values : Array[@types.Value] = []
   let mut slot_idx = 0
@@ -390,8 +390,8 @@ pub fn run_jit(
   func_name : String,
   func_idx : Int32,
   args : Array[@types.Value],
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Result[Array[@types.Value], String] {
   run_jit_with_opt_level(
     mod_, func_name, func_idx, args, param_types, result_types, 0,
@@ -404,8 +404,8 @@ fn run_jit_with_opt_level(
   func_name : String,
   func_idx : Int32,
   args : Array[@types.Value],
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   opt_level : Int32,
 ) -> Result[Array[@types.Value], String] {
   func_name |> ignore

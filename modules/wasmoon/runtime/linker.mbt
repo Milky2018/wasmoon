@@ -33,7 +33,10 @@ pub fn Linker::register_rollback(
 }
 
 ///|
-fn Linker::host_module(self : Linker, name : String) -> (ModuleInstance, Int32) {
+fn Linker::host_module(
+  self : Linker,
+  name : String,
+) -> (ModuleInstance, Int32) raise RuntimeError {
   let modules = self.modules.length()
   for entry in self.modules {
     let (module_name, instance) = entry
@@ -41,7 +44,7 @@ fn Linker::host_module(self : Linker, name : String) -> (ModuleInstance, Int32) 
       return (instance, modules)
     }
   }
-  let instance = ModuleInstance()
+  let instance = self.store.host_exports([])
   self.modules.push((name, instance))
   (instance, modules)
 }
@@ -76,7 +79,7 @@ pub fn Linker::register(
   name : String,
   instance : ModuleInstance,
 ) -> Unit raise RuntimeError {
-  self.store.ensure_open()
+  self.store.check_instance(instance)
   let modules = self.modules.length()
   self.store.on_instantiation_rollback(fn() { self.modules.truncate(modules) })
   self.modules.push((name, instance))
@@ -86,7 +89,7 @@ pub fn Linker::register(
 /// Build Imports from all registered modules
 /// This allows a new module to import from any previously registered module
 pub fn Linker::build_imports(self : Linker) -> Imports {
-  let imports = Imports::Imports()
+  let imports = Imports::Imports(self.store)
   for entry in self.modules {
     let (mod_name, instance) = entry
     for exp in instance.exports {
@@ -135,16 +138,19 @@ fn Linker::add_func_export(
   mod_name : String,
   name : String,
   func_addr : Int32,
-) -> Unit {
+) -> Unit raise RuntimeError {
   let (instance, modules) = self.host_module(mod_name)
-  let func_addrs = instance.func_addrs.length()
-  let exports = instance.exports.length()
+  let func_addrs = instance.func_addrs
+  let exports = instance.exports
   self.rollback_module_change(modules, fn() {
-    instance.func_addrs.truncate(func_addrs)
-    instance.exports.truncate(exports)
+    instance.func_addrs = func_addrs
+    instance.exports = exports
   })
-  instance.func_addrs.push(func_addr)
-  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1), })
+  instance.func_addrs = append_readonly(instance.func_addrs, func_addr)
+  instance.exports = append_readonly(instance.exports, {
+    name,
+    desc: Func(instance.func_addrs.length() - 1),
+  })
 }
 
 ///|
@@ -218,14 +224,17 @@ pub fn Linker::add_memory(
   self.store.ensure_open()
   let mem_addr = self.store.alloc_mem(mem)
   let (instance, modules) = self.host_module(mod_name)
-  let mem_addrs = instance.mem_addrs.length()
-  let exports = instance.exports.length()
+  let mem_addrs = instance.mem_addrs
+  let exports = instance.exports
   self.rollback_module_change(modules, fn() {
-    instance.mem_addrs.truncate(mem_addrs)
-    instance.exports.truncate(exports)
+    instance.mem_addrs = mem_addrs
+    instance.exports = exports
   })
-  instance.mem_addrs.push(mem_addr)
-  instance.exports.push({ name, desc: Memory(instance.mem_addrs.length() - 1), })
+  instance.mem_addrs = append_readonly(instance.mem_addrs, mem_addr)
+  instance.exports = append_readonly(instance.exports, {
+    name,
+    desc: Memory(instance.mem_addrs.length() - 1),
+  })
 }
 
 ///|
@@ -239,14 +248,14 @@ pub fn Linker::add_table(
   self.store.ensure_open()
   let table_addr = self.store.alloc_table(table)
   let (instance, modules) = self.host_module(mod_name)
-  let table_addrs = instance.table_addrs.length()
-  let exports = instance.exports.length()
+  let table_addrs = instance.table_addrs
+  let exports = instance.exports
   self.rollback_module_change(modules, fn() {
-    instance.table_addrs.truncate(table_addrs)
-    instance.exports.truncate(exports)
+    instance.table_addrs = table_addrs
+    instance.exports = exports
   })
-  instance.table_addrs.push(table_addr)
-  instance.exports.push({
+  instance.table_addrs = append_readonly(instance.table_addrs, table_addr)
+  instance.exports = append_readonly(instance.exports, {
     name,
     desc: Table(instance.table_addrs.length() - 1),
   })
@@ -263,15 +272,26 @@ pub fn Linker::add_global(
   self.store.ensure_open()
   let global_addr = self.store.alloc_global(global)
   let (instance, modules) = self.host_module(mod_name)
-  let global_addrs = instance.global_addrs.length()
-  let exports = instance.exports.length()
+  let global_addrs = instance.global_addrs
+  let exports = instance.exports
   self.rollback_module_change(modules, fn() {
-    instance.global_addrs.truncate(global_addrs)
-    instance.exports.truncate(exports)
+    instance.global_addrs = global_addrs
+    instance.exports = exports
   })
-  instance.global_addrs.push(global_addr)
-  instance.exports.push({
+  instance.global_addrs = append_readonly(instance.global_addrs, global_addr)
+  instance.exports = append_readonly(instance.exports, {
     name,
     desc: Global(instance.global_addrs.length() - 1),
+  })
+}
+
+///|
+fn[T] append_readonly(values : ReadOnlyArray[T], value : T) -> ReadOnlyArray[T] {
+  ReadOnlyArray::makei(values.length() + 1, i => {
+    if i < values.length() {
+      values[i]
+    } else {
+      value
+    }
   })
 }

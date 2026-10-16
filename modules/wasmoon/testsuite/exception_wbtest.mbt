@@ -422,7 +422,7 @@ fn create_throw_ref_module() -> @types.Module {
         // Save the exnref to local 0 temporarily
         // Actually we need another local for this
         // Let's simplify: just re-throw and catch the original value
-        TryTable(Empty, [Catch(0, 1)], [ThrowRef]),
+        TryTable(InlineType([ExnRef], []), [Catch(0, 1)], [ThrowRef]),
         Unreachable,
       ]),
     ],
@@ -720,9 +720,9 @@ test "exception: multi-value exception with various values" {
 ///|
 /// Create a module that tests no exception case
 fn create_no_exception_module() -> @types.Module {
-  // tag $e0 (no params)
+  // The handler targets the function label, which returns one i32.
   let tag0 : @types.TagType = { type_idx: 0, }
-  let tag_type : @types.FuncType = { params: [], results: [], }
+  let tag_type : @types.FuncType = { params: [I32], results: [], }
   // Function type: () -> i32
   let func_type : @types.FuncType = { params: [], results: [I32], }
   // Function: no_throw() {

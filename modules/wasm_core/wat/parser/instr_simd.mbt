@@ -106,7 +106,7 @@ fn Parser::parse_i8x16_instruction(
       for i in 0..<16 {
         lanes[i] = self.parse_u32()
       }
-      I8x16Shuffle(lanes)
+      I8x16Shuffle(ReadOnlyArray::from_array(lanes))
     }
     "i8x16.swizzle" => I8x16Swizzle
 

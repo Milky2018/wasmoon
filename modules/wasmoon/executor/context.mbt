@@ -131,7 +131,8 @@ fn ExecContext::ExecContext(
   classify_suspension~ : (@runtime.RuntimeError) -> Int64? = fn(_) { None },
   async_host_driver~ : @runtime.AsyncHostCallDriver? = None,
   cooperative~ : Bool = false,
-) -> ExecContext {
+) -> ExecContext raise @runtime.RuntimeError {
+  store.check_instance(instance)
   {
     stack: Stack(max_values=store.interpreter_limits.max_values),
     execution: [],
@@ -248,8 +249,9 @@ fn ExecContext::collect_gc_additional_roots(
       roots.push(local_value)
     }
   }
-  for i, values in self.instance.elem_values {
-    if !self.instance.dropped_elems[i] {
+  for i in 0..<self.instance.elem_segments.length() {
+    if !self.instance.element_dropped(i) {
+      let values = self.instance.element_values(i) catch { _ => [] }
       for value in values {
         roots.push(value)
       }

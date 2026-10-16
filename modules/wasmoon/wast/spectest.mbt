@@ -112,27 +112,24 @@ pub fn create_spectest_module(
     { name: "global_f32", desc: Global(2), },
     { name: "global_f64", desc: Global(3), },
   ]
-  {
-    types: [],
-    type_rec_groups: [],
-    canonical_type_indices: [],
-    store_idx: -1,
-    func_addrs: [
-      print_i32_addr, print_i64_addr, print_f32_addr, print_f64_addr, print_i32_f32_addr,
-      print_f64_f64_addr, print_addr, print_char_addr,
-    ],
-    func_type_indices: [],
-    table_addrs: [table_addr, table64_addr],
-    mem_addrs: [memory_addr],
-    global_addrs: [
-      global_i32_addr, global_i64_addr, global_f32_addr, global_f64_addr,
-    ],
-    tag_addrs: [],
-    exports,
-    elem_values: [],
-    elem_segments: [],
-    data_segments: [],
-    dropped_elems: [],
-    dropped_datas: [],
-  }
+  let funcs = [
+    print_i32_addr, print_i64_addr, print_f32_addr, print_f64_addr, print_i32_f32_addr,
+    print_f64_f64_addr, print_addr, print_char_addr,
+  ]
+  let tables = [table_addr, table64_addr]
+  let globals = [
+    global_i32_addr, global_i64_addr, global_f32_addr, global_f64_addr,
+  ]
+  store.host_exports(
+    exports.map(fn(export_) {
+      let value : @runtime.ExternVal = match export_.desc {
+        Func(index) => Func(funcs[index])
+        Table(index) => Table(tables[index])
+        Memory(_) => Memory(memory_addr)
+        Global(index) => Global(globals[index])
+        Tag(_) => abort("spectest has no tags")
+      }
+      (export_.name, value)
+    }),
+  )
 }

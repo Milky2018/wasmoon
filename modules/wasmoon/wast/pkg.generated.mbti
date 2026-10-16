@@ -29,7 +29,7 @@ pub fn count_func_imports(Array[@types.Import]) -> Int
 
 pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
-pub fn eval_elem_offset_expr(Array[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int raise @runtime.RuntimeError
+pub fn eval_elem_offset_expr(ArrayView[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int raise @runtime.RuntimeError
 
 pub fn exports_shared_resources(@types.Module) -> Bool
 
@@ -53,9 +53,9 @@ pub fn invoke_action(WastContext, @parser.WastAction) -> Array[@types.Value] rai
 
 pub fn parse(String) -> @parser.WastScript raise @parser.WatError
 
-pub fn register_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+pub fn register_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit raise @runtime.RuntimeError
 
-pub fn register_owned_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> @Milky2018/wasmoon/wast/jit.FuncrefRegistration
+pub fn register_owned_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> @Milky2018/wasmoon/wast/jit.FuncrefRegistration raise @runtime.RuntimeError
 
 pub fn run_wast_command(WastContext, @parser.WastCommand, Int, WastResult, String, Bool) -> Unit
 
@@ -69,9 +69,9 @@ pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @Milky2018/wasmo
 
 pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
-pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : Array[Int]) -> Bool
+pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : ArrayView[Int]) -> Bool
 
-pub fn wast_value_to_runtime(@parser.WastValue, func_addrs? : Array[Int]) -> @types.Value raise WastRunnerError
+pub fn wast_value_to_runtime(@parser.WastValue, func_addrs? : ArrayView[Int]) -> @types.Value raise WastRunnerError
 
 // Errors
 pub(all) suberror WastRunnerError {

@@ -638,7 +638,10 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   // Parse init expression
   let init = self.parse_instructions()
   self.expect_rparen()
-  GlobalDef({ type_: { value_type, mutable, }, init, }, export_names)
+  GlobalDef(
+    { type_: { value_type, mutable, }, init: ReadOnlyArray::from_array(init), },
+    export_names,
+  )
 }
 
 ///|
@@ -867,7 +870,12 @@ fn Parser::parse_table_def(
             let elem : @types.Element = {
               mode: Active(table_idx, [I32Const(0)]),
               type_: elem_type,
-              init,
+              init: ReadOnlyArray::from_array(
+                init
+                .iter()
+                .map(fn(xs) { ReadOnlyArray::from_array(xs) })
+                .collect(),
+              ),
             }
             let table : @types.Table = {
               type_: {
@@ -1000,7 +1008,12 @@ fn Parser::parse_table_def(
                       I64Const(0L), // Use i64 for table64
                     ]),
                     type_: elem_type,
-                    init,
+                    init: ReadOnlyArray::from_array(
+                      init
+                      .iter()
+                      .map(fn(xs) { ReadOnlyArray::from_array(xs) })
+                      .collect(),
+                    ),
                   }
                   let table : @types.Table = {
                     type_: {
@@ -1108,7 +1121,7 @@ fn Parser::parse_table_def(
       (
         Some({
           type_: { elem_type, limits: { min, max, }, is_table64, },
-          init: table_init,
+          init: table_init.map(fn(xs) { ReadOnlyArray::from_array(xs) }),
         }),
         export_names,
         None,
@@ -1520,7 +1533,11 @@ fn Parser::parse_data_def(
   }
   self.expect_rparen() // close data
   let final_memory_idx = if is_passive { -1 } else { memory_idx }
-  { memory_idx: final_memory_idx, offset, init: Bytes::from_array(init_bytes), }
+  {
+    memory_idx: final_memory_idx,
+    offset: ReadOnlyArray::from_array(offset),
+    init: Bytes::from_array(init_bytes),
+  }
 }
 
 ///|
@@ -1612,20 +1629,26 @@ fn Parser::parse_elem_def(
             self.expect_rparen()
             o
           }
-          self.parse_elem_items_and_finish(Active(table_idx, offset))
+          self.parse_elem_items_and_finish(
+            Active(table_idx, ReadOnlyArray::from_array(offset)),
+          )
         }
         Keyword("offset") => {
           // Active with explicit offset, implicit table 0
           self.advance()
           let offset = self.parse_instructions()
           self.expect_rparen()
-          self.parse_elem_items_and_finish(Active(0, offset))
+          self.parse_elem_items_and_finish(
+            Active(0, ReadOnlyArray::from_array(offset)),
+          )
         }
         _ => {
           // Active with direct offset expression like (i32.const 0), implicit table 0
           let offset = self.parse_instructions()
           self.expect_rparen()
-          self.parse_elem_items_and_finish(Active(0, offset))
+          self.parse_elem_items_and_finish(
+            Active(0, ReadOnlyArray::from_array(offset)),
+          )
         }
       }
     }
@@ -1696,7 +1719,13 @@ fn Parser::parse_elem_items_and_finish(
     }
   }
   self.expect_rparen() // close elem
-  { mode, type_: elem_type, init, }
+  {
+    mode,
+    type_: elem_type,
+    init: ReadOnlyArray::from_array(
+      init.iter().map(fn(xs) { ReadOnlyArray::from_array(xs) }).collect(),
+    ),
+  }
 }
 
 ///|

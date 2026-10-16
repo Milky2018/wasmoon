@@ -240,6 +240,11 @@ void continuation_arena_sweep(native_continuation_arena_t *arena) {
 
 }
 
+MOONBIT_FFI_EXPORT int32_t wasmoon_continuation_arena_is_live(void *owner, int64_t reference) {
+    native_continuation_arena_t *arena = *(native_continuation_arena_t **)owner;
+    return arena && !arena->sealed && find_continuation(arena, reference) != NULL;
+}
+
 MOONBIT_FFI_EXPORT int64_t *wasmoon_continuation_arena_gc_roots(void *owner, int64_t reference) {
     native_continuation_arena_t *arena = *(native_continuation_arena_t **)owner;
     native_continuation_body_t *body = find_continuation(arena, reference);

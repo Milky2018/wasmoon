@@ -4,7 +4,7 @@ test "a Linker transaction does not affect another Linker" {
   let transaction = @runtime.InstantiationTransaction::new()
   linker_a.register_rollback(transaction.registrar())
   let linker_b = @runtime.Linker::Linker()
-  linker_b.register("kept", ModuleInstance())
+  linker_b.register("kept", linker_b.get_store().host_exports([]))
   transaction.rollback()
   debug_inspect(linker_b.get_module("kept") is Some(_), content="true")
   linker_a.close()
@@ -24,7 +24,10 @@ test "Linkers sharing a Store join the active transaction" {
   guard nested.get_module("host") is Some(instance) else {
     return fail("expected pre-transaction host module")
   }
-  debug_inspect(instance.exports.map(item => item.name), content="[\"kept\"]")
+  debug_inspect(
+    instance.exports[:].map(item => item.name),
+    content="[\"kept\"]",
+  )
   owner.close()
   nested.close()
 }

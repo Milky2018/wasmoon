@@ -45,7 +45,7 @@ fn get_code(
 ///|
 fn first_native_capability_gap(
   mod_ : @types.Module,
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
 ) -> String? {
   for instr in body {
     match instr {

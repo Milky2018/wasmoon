@@ -43,10 +43,20 @@ test "canonical core signatures model indirect parameters and results" {
     ),
     content=(
       #|(
-      #|  Some({ params: [I32, I32], results: [I32] }),
-      #|  Some({ params: [I32, I32, I32], results: [] }),
-      #|  Some({ params: [I64], results: [] }),
-      #|  Some({ params: [I64], results: [] }),
+      #|  Some(
+      #|    {
+      #|      params: <ReadOnlyArray: [I32, I32]>,
+      #|      results: <ReadOnlyArray: [I32]>,
+      #|    },
+      #|  ),
+      #|  Some(
+      #|    {
+      #|      params: <ReadOnlyArray: [I32, I32, I32]>,
+      #|      results: <ReadOnlyArray: []>,
+      #|    },
+      #|  ),
+      #|  Some({ params: <ReadOnlyArray: [I64]>, results: <ReadOnlyArray: []> }),
+      #|  Some({ params: <ReadOnlyArray: [I64]>, results: <ReadOnlyArray: []> }),
       #|)
     ),
   )
@@ -62,11 +72,11 @@ test "large fixed lists have bounded canonical signature expansion" {
   }
   debug_inspect(
     canonical_lift_core_func_type(ft, types, I32),
-    content="Some({ params: [I32], results: [I32] })",
+    content="Some({ params: <ReadOnlyArray: [I32]>, results: <ReadOnlyArray: [I32]> })",
   )
   debug_inspect(
     canonical_lower_core_func_type(ft, types, I64),
-    content="Some({ params: [I64, I64], results: [] })",
+    content="Some({ params: <ReadOnlyArray: [I64, I64]>, results: <ReadOnlyArray: []> })",
   )
   debug_inspect(
     canonical_flat_types(TypeIdx(0), types, I32, max_flat=2),

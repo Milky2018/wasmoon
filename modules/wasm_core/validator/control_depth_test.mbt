@@ -4,13 +4,17 @@ test "validator: deeply nested control uses bounded host stack" {
   let mut body : Array[@types.Instruction] = [I32Const(42)]
   for depth in 0..<2048 {
     body = match depth % 4 {
-      0 => [Block(Value(I32), body)]
-      1 => [Loop(Value(I32), body)]
-      2 => [I32Const(1), If(Value(I32), body, [I32Const(0)])]
-      _ => [TryTable(Value(I32), [], body)]
+      0 => [Block(Value(I32), ReadOnlyArray::from_array(body))]
+      1 => [Loop(Value(I32), ReadOnlyArray::from_array(body))]
+      2 =>
+        [
+          I32Const(1),
+          If(Value(I32), ReadOnlyArray::from_array(body), [I32Const(0)]),
+        ]
+      _ => [TryTable(Value(I32), [], ReadOnlyArray::from_array(body))]
     }
   }
-  module_.codes[0] = { locals: [], body, }
+  module_.codes[0] = { locals: [], body: ReadOnlyArray::from_array(body), }
   @validator.validate_module(module_)
   @validator.validate_module_with_context(module_)
 }

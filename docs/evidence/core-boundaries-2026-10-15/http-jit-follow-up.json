@@ -1,0 +1,42 @@
+{
+  "scope": "Local macOS ARM64 HTTP JIT follow-up, not Windows timeout acceptance",
+  "upstream": "609c446139956ff30239f87cb18af1dc6128bed2",
+  "guest": "http-client-method",
+  "request_timeout_seconds": 5,
+  "method": "Same pinned upstream HTTP peer and guest; release binaries built with the same installed toolchain; eight sequential requests per binary without profiling or concurrent compilation. Fresh component instance per request.",
+  "base": {
+    "revision": "afd1daf99abd54c1d52088f8c518d8128dc4827e",
+    "seconds": [
+      0.5069,
+      0.4946,
+      0.4995,
+      0.4943,
+      0.4943,
+      0.4891,
+      0.5108,
+      0.4908
+    ],
+    "median_seconds": 0.49445
+  },
+  "candidate": {
+    "revision": "bb00e8a6ff5ea8cf7ef6b73c52b9c0e1505e13d9",
+    "source_dirty": true,
+    "changes": "Indexed traversal in two immutable function-address scans; same bounds, lookup and ownership checks.",
+    "seconds": [
+      0.5381,
+      0.5427,
+      0.5503,
+      0.5282,
+      0.5302,
+      0.5444,
+      0.5331,
+      0.536
+    ],
+    "median_seconds": 0.53705,
+    "source_sha256": {
+      "modules/wasmoon/runtime/store.mbt": "625d8998e02c27f883828ff0afd31330f8eb2bed2a66923a3ae39f64be31a8d0",
+      "modules/wasmoon/wast/jit/support.mbt": "5d7327fb7b92053d2f3294abf194e6e18cfa4570bbdccef1ad8a1fa08aad93f3"
+    }
+  },
+  "diagnosis": "Initial unprofiled observation at bb00e8a6: method 0.912s, path 0.976s. Sampling identified iterator allocation in repeated immutable function-address scans. These initial observations are not the controlled eight-request comparison above. Windows exact-head CI must confirm whether the correction resolves its five-second request failures."
+}

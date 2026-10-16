@@ -188,7 +188,7 @@ fn WastContext::try_compile_jit(
 ///|
 /// Build imports from registered modules
 pub fn WastContext::build_imports(self : WastContext) -> @runtime.Imports {
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(self.store)
   for entry in self.registered_modules.iter() {
     let (mod_name, instance) = entry
     // Add all exports from this module as imports
@@ -668,7 +668,7 @@ pub fn invoke_action(
 ///|
 pub fn wast_value_to_runtime(
   v : @wat.WastValue,
-  func_addrs~ : Array[Int32] = [],
+  func_addrs~ : ArrayView[Int32] = [],
 ) -> @types.Value raise WastRunnerError {
   match v {
     I32(n) => I32(n)
@@ -703,7 +703,7 @@ pub fn wast_value_to_runtime(
 pub fn values_match(
   actual : @types.Value,
   expected : @wat.WastValue,
-  func_addrs~ : Array[Int32] = [],
+  func_addrs~ : ArrayView[Int32] = [],
 ) -> Bool {
   match (actual, expected) {
     (I32(a), I32(e)) => a == e
@@ -891,7 +891,7 @@ fn build_partial_instance_for_trapped_module(
   before_globals : Int32,
   before_tags : Int32,
 ) -> @runtime.ModuleInstance? {
-  let after_funcs = ctx.store.funcs.length()
+  let after_funcs = ctx.store.counts().funcs
   if after_funcs <= before_funcs {
     return None
   }
@@ -947,7 +947,7 @@ fn build_partial_instance_for_trapped_module(
     }
   }
 
-  let after_tables = ctx.store.tables.length()
+  let after_tables = ctx.store.counts().tables
   for i in 0..<mod_.tables.length() {
     let addr = before_tables + i
     if addr >= 0 && addr < after_tables {
@@ -955,7 +955,7 @@ fn build_partial_instance_for_trapped_module(
     }
   }
 
-  let after_mems = ctx.store.mems.length()
+  let after_mems = ctx.store.counts().mems
   for i in 0..<mod_.memories.length() {
     let addr = before_mems + i
     if addr >= 0 && addr < after_mems {
@@ -963,7 +963,7 @@ fn build_partial_instance_for_trapped_module(
     }
   }
 
-  let after_globals = ctx.store.globals.length()
+  let after_globals = ctx.store.counts().globals
   for i in 0..<mod_.globals.length() {
     let addr = before_globals + i
     if addr >= 0 && addr < after_globals {
@@ -971,7 +971,7 @@ fn build_partial_instance_for_trapped_module(
     }
   }
 
-  let after_tags = ctx.store.tags.length()
+  let after_tags = ctx.store.counts().tags
   for i in 0..<mod_.tags.length() {
     let addr = before_tags + i
     if addr >= 0 && addr < after_tags {
@@ -979,31 +979,25 @@ fn build_partial_instance_for_trapped_module(
     }
   }
 
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-  let dropped_elems = FixedArray::make(mod_.elems.length(), false)
-  let dropped_datas = FixedArray::make(mod_.datas.length(), false)
-
-  Some({
-    types: mod_.types,
-    type_rec_groups: mod_.type_rec_groups,
-    canonical_type_indices,
-    store_idx: -1,
-    func_addrs,
-    func_type_indices,
-    table_addrs,
-    mem_addrs,
-    global_addrs,
-    tag_addrs,
-    exports: mod_.exports,
-    elem_values: [],
-    elem_segments: mod_.elems,
-    data_segments: mod_.datas,
-    dropped_elems,
-    dropped_datas,
-  })
+  try {
+    let validated = @validator.ValidatedModule::new(
+      mod_,
+      stack_switching=ctx.stack_switching,
+    )
+    Some(
+      ctx.store.new_instance(
+        validated,
+        func_addrs~,
+        table_addrs~,
+        mem_addrs~,
+        global_addrs~,
+        tag_addrs~,
+        elem_values=Array::makei(mod_.elems.length(), _ => []),
+      ),
+    )
+  } catch {
+    _ => None
+  }
 }
 
 ///|
@@ -1021,12 +1015,12 @@ fn try_instantiate_source_traps(
       ctx.validate_core_module(mod_) catch {
         _ => return false
       }
-      let before_instances = ctx.store.instances.length()
-      let before_funcs = ctx.store.funcs.length()
-      let before_tables = ctx.store.tables.length()
-      let before_mems = ctx.store.mems.length()
-      let before_globals = ctx.store.globals.length()
-      let before_tags = ctx.store.tags.length()
+      let before_instances = ctx.store.counts().instances
+      let before_funcs = ctx.store.counts().funcs
+      let before_tables = ctx.store.counts().tables
+      let before_mems = ctx.store.counts().mems
+      let before_globals = ctx.store.counts().globals
+      let before_tags = ctx.store.counts().tags
       let trapped = try {
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
@@ -1040,9 +1034,12 @@ fn try_instantiate_source_traps(
           }
       }
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
-        if ctx.store.instances.length() > before_instances {
-          let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
-            1]
+        if ctx.store.counts().instances > before_instances {
+          let trapped_instance = ctx.store.get_instance(
+            ctx.store.counts().instances - 1,
+          ) catch {
+            _ => return false
+          }
           match ctx.try_compile_jit(mod_, trapped_instance) {
             Ok(_) => ()
             Err(_) => return false
@@ -1068,12 +1065,12 @@ fn try_instantiate_source_traps(
       ctx.validate_core_module(mod_) catch {
         _ => return false
       }
-      let before_instances = ctx.store.instances.length()
-      let before_funcs = ctx.store.funcs.length()
-      let before_tables = ctx.store.tables.length()
-      let before_mems = ctx.store.mems.length()
-      let before_globals = ctx.store.globals.length()
-      let before_tags = ctx.store.tags.length()
+      let before_instances = ctx.store.counts().instances
+      let before_funcs = ctx.store.counts().funcs
+      let before_tables = ctx.store.counts().tables
+      let before_mems = ctx.store.counts().mems
+      let before_globals = ctx.store.counts().globals
+      let before_tags = ctx.store.counts().tags
       let trapped = try {
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
@@ -1087,9 +1084,12 @@ fn try_instantiate_source_traps(
           }
       }
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
-        if ctx.store.instances.length() > before_instances {
-          let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
-            1]
+        if ctx.store.counts().instances > before_instances {
+          let trapped_instance = ctx.store.get_instance(
+            ctx.store.counts().instances - 1,
+          ) catch {
+            _ => return false
+          }
           match ctx.try_compile_jit(mod_, trapped_instance) {
             Ok(_) => ()
             Err(_) => return false

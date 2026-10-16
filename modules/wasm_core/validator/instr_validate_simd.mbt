@@ -7,16 +7,21 @@ fn validate_instr_simd(
 ) -> Unit raise ValidationError {
   match instr {
     // SIMD instructions
-    V128Const(_) => stack.push(V128)
+    V128Const(bytes) => {
+      if bytes.length() != 16 {
+        raise TypeMismatch("v128 constant requires 16 bytes")
+      }
+      stack.push(V128)
+    }
 
     // SIMD load/store - natural alignments:
     // v128.load: 16 bytes = 4, load8x8/16x4/32x2: 8 bytes = 3
     // load8_splat: 0, load16_splat: 1, load32_splat/zero: 2, load64_splat/zero: 3
     V128Load(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 4 {
+      if align < 0 || align > 4 {
         raise InvalidAlignment(
           "v128.load alignment \{align} exceeds natural alignment 4",
         )
@@ -32,10 +37,10 @@ fn validate_instr_simd(
     | V128Load16x4U(memidx, align, offset)
     | V128Load32x2S(memidx, align, offset)
     | V128Load32x2U(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 3 {
+      if align < 0 || align > 3 {
         raise InvalidAlignment(
           "v128.load_extend alignment \{align} exceeds natural alignment 3",
         )
@@ -46,10 +51,10 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     V128Load8Splat(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 0 {
+      if align < 0 || align > 0 {
         raise InvalidAlignment(
           "v128.load8_splat alignment \{align} exceeds natural alignment 0",
         )
@@ -60,10 +65,10 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     V128Load16Splat(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 1 {
+      if align < 0 || align > 1 {
         raise InvalidAlignment(
           "v128.load16_splat alignment \{align} exceeds natural alignment 1",
         )
@@ -75,10 +80,10 @@ fn validate_instr_simd(
     }
     V128Load32Splat(memidx, align, offset)
     | V128Load32Zero(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "v128.load32 alignment \{align} exceeds natural alignment 2",
         )
@@ -90,10 +95,10 @@ fn validate_instr_simd(
     }
     V128Load64Splat(memidx, align, offset)
     | V128Load64Zero(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 3 {
+      if align < 0 || align > 3 {
         raise InvalidAlignment(
           "v128.load64 alignment \{align} exceeds natural alignment 3",
         )
@@ -104,10 +109,10 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     V128Store(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 4 {
+      if align < 0 || align > 4 {
         raise InvalidAlignment(
           "v128.store alignment \{align} exceeds natural alignment 4",
         )
@@ -118,15 +123,15 @@ fn validate_instr_simd(
       stack.pop(mem.addr_type())
     }
     V128Load8Lane(memidx, align, offset, lane) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 0 {
+      if align < 0 || align > 0 {
         raise InvalidAlignment(
           "v128.load8_lane alignment \{align} exceeds natural alignment 0",
         )
       }
-      if lane >= 16 {
+      if lane < 0 || lane >= 16 {
         raise InvalidLaneIndex(lane, 16)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
@@ -136,15 +141,15 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     V128Load16Lane(memidx, align, offset, lane) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 1 {
+      if align < 0 || align > 1 {
         raise InvalidAlignment(
           "v128.load16_lane alignment \{align} exceeds natural alignment 1",
         )
       }
-      if lane >= 8 {
+      if lane < 0 || lane >= 8 {
         raise InvalidLaneIndex(lane, 8)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
@@ -154,15 +159,15 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     V128Load32Lane(memidx, align, offset, lane) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "v128.load32_lane alignment \{align} exceeds natural alignment 2",
         )
       }
-      if lane >= 4 {
+      if lane < 0 || lane >= 4 {
         raise InvalidLaneIndex(lane, 4)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
@@ -172,15 +177,15 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     V128Load64Lane(memidx, align, offset, lane) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 3 {
+      if align < 0 || align > 3 {
         raise InvalidAlignment(
           "v128.load64_lane alignment \{align} exceeds natural alignment 3",
         )
       }
-      if lane >= 2 {
+      if lane < 0 || lane >= 2 {
         raise InvalidLaneIndex(lane, 2)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
@@ -190,15 +195,15 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     V128Store8Lane(memidx, align, offset, lane) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 0 {
+      if align < 0 || align > 0 {
         raise InvalidAlignment(
           "v128.store8_lane alignment \{align} exceeds natural alignment 0",
         )
       }
-      if lane >= 16 {
+      if lane < 0 || lane >= 16 {
         raise InvalidLaneIndex(lane, 16)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
@@ -207,15 +212,15 @@ fn validate_instr_simd(
       stack.pop(mem.addr_type())
     }
     V128Store16Lane(memidx, align, offset, lane) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 1 {
+      if align < 0 || align > 1 {
         raise InvalidAlignment(
           "v128.store16_lane alignment \{align} exceeds natural alignment 1",
         )
       }
-      if lane >= 8 {
+      if lane < 0 || lane >= 8 {
         raise InvalidLaneIndex(lane, 8)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
@@ -224,15 +229,15 @@ fn validate_instr_simd(
       stack.pop(mem.addr_type())
     }
     V128Store32Lane(memidx, align, offset, lane) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "v128.store32_lane alignment \{align} exceeds natural alignment 2",
         )
       }
-      if lane >= 4 {
+      if lane < 0 || lane >= 4 {
         raise InvalidLaneIndex(lane, 4)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
@@ -241,15 +246,15 @@ fn validate_instr_simd(
       stack.pop(mem.addr_type())
     }
     V128Store64Lane(memidx, align, offset, lane) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if align > 3 {
+      if align < 0 || align > 3 {
         raise InvalidAlignment(
           "v128.store64_lane alignment \{align} exceeds natural alignment 3",
         )
       }
-      if lane >= 2 {
+      if lane < 0 || lane >= 2 {
         raise InvalidLaneIndex(lane, 2)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
@@ -260,8 +265,11 @@ fn validate_instr_simd(
 
     // Shuffle/Swizzle - lane indices must be 0-31 (selecting from two concatenated v128s)
     I8x16Shuffle(lanes) => {
+      if lanes.length() != 16 {
+        raise TypeMismatch("shuffle requires 16 lanes")
+      }
       for i = 0; i < 16; i = i + 1 {
-        if lanes[i] >= 32 {
+        if lanes[i] < 0 || lanes[i] >= 32 {
           raise InvalidLaneIndex(lanes[i], 32)
         }
       }
@@ -295,42 +303,42 @@ fn validate_instr_simd(
 
     // Extract lane (vector -> scalar) with lane validation
     I8x16ExtractLaneS(lane) | I8x16ExtractLaneU(lane) => {
-      if lane >= 16 {
+      if lane < 0 || lane >= 16 {
         raise InvalidLaneIndex(lane, 16)
       }
       stack.pop(V128)
       stack.push(I32)
     }
     I16x8ExtractLaneS(lane) | I16x8ExtractLaneU(lane) => {
-      if lane >= 8 {
+      if lane < 0 || lane >= 8 {
         raise InvalidLaneIndex(lane, 8)
       }
       stack.pop(V128)
       stack.push(I32)
     }
     I32x4ExtractLane(lane) => {
-      if lane >= 4 {
+      if lane < 0 || lane >= 4 {
         raise InvalidLaneIndex(lane, 4)
       }
       stack.pop(V128)
       stack.push(I32)
     }
     I64x2ExtractLane(lane) => {
-      if lane >= 2 {
+      if lane < 0 || lane >= 2 {
         raise InvalidLaneIndex(lane, 2)
       }
       stack.pop(V128)
       stack.push(I64)
     }
     F32x4ExtractLane(lane) => {
-      if lane >= 4 {
+      if lane < 0 || lane >= 4 {
         raise InvalidLaneIndex(lane, 4)
       }
       stack.pop(V128)
       stack.push(F32)
     }
     F64x2ExtractLane(lane) => {
-      if lane >= 2 {
+      if lane < 0 || lane >= 2 {
         raise InvalidLaneIndex(lane, 2)
       }
       stack.pop(V128)
@@ -339,7 +347,7 @@ fn validate_instr_simd(
 
     // Replace lane (vector, scalar -> vector) with lane validation
     I8x16ReplaceLane(lane) => {
-      if lane >= 16 {
+      if lane < 0 || lane >= 16 {
         raise InvalidLaneIndex(lane, 16)
       }
       stack.pop(I32)
@@ -347,7 +355,7 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     I16x8ReplaceLane(lane) => {
-      if lane >= 8 {
+      if lane < 0 || lane >= 8 {
         raise InvalidLaneIndex(lane, 8)
       }
       stack.pop(I32)
@@ -355,7 +363,7 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     I32x4ReplaceLane(lane) => {
-      if lane >= 4 {
+      if lane < 0 || lane >= 4 {
         raise InvalidLaneIndex(lane, 4)
       }
       stack.pop(I32)
@@ -363,7 +371,7 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     I64x2ReplaceLane(lane) => {
-      if lane >= 2 {
+      if lane < 0 || lane >= 2 {
         raise InvalidLaneIndex(lane, 2)
       }
       stack.pop(I64)
@@ -371,7 +379,7 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     F32x4ReplaceLane(lane) => {
-      if lane >= 4 {
+      if lane < 0 || lane >= 4 {
         raise InvalidLaneIndex(lane, 4)
       }
       stack.pop(F32)
@@ -379,7 +387,7 @@ fn validate_instr_simd(
       stack.push(V128)
     }
     F64x2ReplaceLane(lane) => {
-      if lane >= 2 {
+      if lane < 0 || lane >= 2 {
         raise InvalidLaneIndex(lane, 2)
       }
       stack.pop(F64)

@@ -79,7 +79,10 @@ fn instantiate_canon_task_return(
     }
     None => []
   }
-  let core_type : @types.FuncType = { params: core_params, results: [], }
+  let core_type : @types.FuncType = {
+    params: ReadOnlyArray::from_array(core_params),
+    results: [],
+  }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let types = state.types

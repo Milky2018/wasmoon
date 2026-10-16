@@ -507,7 +507,7 @@ fn encode_memarg(
 /// Encode instructions
 fn encode_instructions(
   w : BinaryWriter,
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
 ) -> Unit {
   for instr in instrs {
     encode_instruction(w, instr)
@@ -1763,7 +1763,7 @@ pub fn encode(mod : @types.Module) -> Array[Int32] {
 ///|
 fn encode_resume_handlers(
   w : BinaryWriter,
-  handlers : Array[@types.ResumeHandler],
+  handlers : ArrayView[@types.ResumeHandler],
 ) -> Unit {
   w.write_u32(handlers.length())
   for handler in handlers {

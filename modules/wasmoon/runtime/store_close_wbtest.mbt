@@ -16,7 +16,7 @@ test "Store close releases owned state and is idempotent" {
       store.c_heap is Some(_),
       store.closed.val,
     ),
-    content="(1, 2, true, false)",
+    content="(1, 1, true, false)",
   )
   store.close()
   store.close()
@@ -35,7 +35,7 @@ test "Store close releases owned state and is idempotent" {
 ///|
 test "Linker close releases its modules and store" {
   let linker = Linker::Linker()
-  linker.register("empty", ModuleInstance())
+  linker.register("empty", linker.get_store().host_exports([]))
   linker.close()
   linker.close()
   debug_inspect(

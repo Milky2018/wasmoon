@@ -258,7 +258,10 @@ pub fn canonical_lower_core_func_type(
     params.push(pointer_type)
     []
   }
-  Some({ params, results, })
+  Some({
+    params: ReadOnlyArray::from_array(params),
+    results: ReadOnlyArray::from_array(results),
+  })
 }
 
 ///|
@@ -299,5 +302,8 @@ pub fn canonical_lift_core_func_type(
   } else {
     flat_results
   }
-  Some({ params, results, })
+  Some({
+    params: ReadOnlyArray::from_array(params),
+    results: ReadOnlyArray::from_array(results),
+  })
 }

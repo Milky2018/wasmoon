@@ -10,6 +10,7 @@ priv enum MemoryDescriptorState {
 
 ///|
 struct Memory {
+  mut binding : ResourceBinding?
   descriptor_state : Ref[MemoryDescriptorState]
   max : Int64? // max size in logical pages
   is_memory64 : Bool // true for memory64 (i64-indexed)
@@ -24,6 +25,9 @@ struct Memory {
 /// Existing handles stay live across Store close; closed Memory aliases return
 /// an empty handle and reject further access through the Memory API.
 pub fn Memory::desc_ptr(self : Memory) -> @wasmoon_jit.MemoryDescriptor {
+  if self.binding is Some(binding) && (binding.store.val || !binding.active.val) {
+    return @wasmoon_jit.MemoryDescriptor::null()
+  }
   match self.descriptor_state.val {
     Open(pointer) => pointer
     Closed => @wasmoon_jit.MemoryDescriptor::null()
@@ -34,6 +38,10 @@ pub fn Memory::desc_ptr(self : Memory) -> @wasmoon_jit.MemoryDescriptor {
 fn Memory::require_desc_ptr(
   self : Memory,
 ) -> @wasmoon_jit.MemoryDescriptor raise RuntimeError {
+  if self.descriptor_state.val is Closed {
+    raise MemoryClosed
+  }
+  check_resource_open(self.binding)
   match self.descriptor_state.val {
     Open(pointer) if !pointer.is_null() => pointer
     Open(_) => raise OutOfMemory
@@ -139,6 +147,7 @@ fn Memory::allocate(
     )
   }
   let memory = {
+    binding: None,
     descriptor_state: Ref(Open(mem_desc_ptr)),
     max,
     is_memory64,
@@ -572,6 +581,7 @@ fn Memory::share(self : Memory) -> Memory raise RuntimeError {
     raise LinkErrorDetail("only shared memory can be imported across Stores")
   }
   {
+    binding: None,
     descriptor_state: Ref(Open(pointer)),
     max: self.max,
     is_memory64: self.is_memory64,

@@ -116,7 +116,7 @@ extern "c" fn NativeExceptionArena::define_tag_raw(
 pub fn NativeExceptionArena::define_tag(
   self : NativeExceptionArena,
   tag : Int32,
-  params : Array[@types.ValueType],
+  params : ArrayView[@types.ValueType],
 ) -> Bool {
   let roots : Array[Int32] = []
   for ty in params {

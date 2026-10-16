@@ -32,7 +32,7 @@ test "native exception references preserve GC payloads across calls and collecti
     @wast.run_wast_command(context, command, line, result, ".", false)
   }
   assert_eq(result.failed, 0, msg=result.failures.join("\n"))
-  guard context.get_store().c_heap is Some(_) else {
+  guard context.get_store().native_heap() is Some(_) else {
     fail("missing native heap")
   }
   inspect(context.get_store().collect_garbage(), content="1")

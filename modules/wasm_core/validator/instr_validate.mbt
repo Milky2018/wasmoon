@@ -30,7 +30,7 @@ fn validate_leaf_instr(
 
     // Local operations
     LocalGet(idx) => {
-      if idx >= ctx.locals.length() {
+      if idx < 0 || idx >= ctx.locals.length() {
         raise InvalidLocalIndex(idx)
       }
       // Check if non-nullable ref local is initialized
@@ -40,7 +40,7 @@ fn validate_leaf_instr(
       stack.push(ctx.locals[idx])
     }
     LocalSet(idx) => {
-      if idx >= ctx.locals.length() {
+      if idx < 0 || idx >= ctx.locals.length() {
         raise InvalidLocalIndex(idx)
       }
       stack.pop(ctx.locals[idx])
@@ -50,7 +50,7 @@ fn validate_leaf_instr(
       }
     }
     LocalTee(idx) => {
-      if idx >= ctx.locals.length() {
+      if idx < 0 || idx >= ctx.locals.length() {
         raise InvalidLocalIndex(idx)
       }
       stack.pop(ctx.locals[idx])
@@ -63,13 +63,13 @@ fn validate_leaf_instr(
 
     // Global operations
     GlobalGet(idx) => {
-      if idx >= ctx.globals.length() {
+      if idx < 0 || idx >= ctx.globals.length() {
         raise InvalidGlobalIndex(idx)
       }
       stack.push(ctx.globals[idx].value_type)
     }
     GlobalSet(idx) => {
-      if idx >= ctx.globals.length() {
+      if idx < 0 || idx >= ctx.globals.length() {
         raise InvalidGlobalIndex(idx)
       }
       // Global must be mutable to set
@@ -308,11 +308,11 @@ fn validate_leaf_instr(
     // Memory operations - validate memory index exists
     // Natural alignment: 8-bit=0, 16-bit=1, 32-bit=2, 64-bit=3
     I32Load(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "i32.load alignment \{align} exceeds natural alignment 2",
         )
@@ -321,11 +321,11 @@ fn validate_leaf_instr(
       stack.push(I32)
     }
     I32Load8S(memidx, align, offset) | I32Load8U(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 0 {
+      if align < 0 || align > 0 {
         raise InvalidAlignment(
           "i32.load8 alignment \{align} exceeds natural alignment 0",
         )
@@ -334,11 +334,11 @@ fn validate_leaf_instr(
       stack.push(I32)
     }
     I32Load16S(memidx, align, offset) | I32Load16U(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 1 {
+      if align < 0 || align > 1 {
         raise InvalidAlignment(
           "i32.load16 alignment \{align} exceeds natural alignment 1",
         )
@@ -347,11 +347,11 @@ fn validate_leaf_instr(
       stack.push(I32)
     }
     I64Load(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 3 {
+      if align < 0 || align > 3 {
         raise InvalidAlignment(
           "i64.load alignment \{align} exceeds natural alignment 3",
         )
@@ -360,11 +360,11 @@ fn validate_leaf_instr(
       stack.push(I64)
     }
     I64Load8S(memidx, align, offset) | I64Load8U(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 0 {
+      if align < 0 || align > 0 {
         raise InvalidAlignment(
           "i64.load8 alignment \{align} exceeds natural alignment 0",
         )
@@ -373,11 +373,11 @@ fn validate_leaf_instr(
       stack.push(I64)
     }
     I64Load16S(memidx, align, offset) | I64Load16U(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 1 {
+      if align < 0 || align > 1 {
         raise InvalidAlignment(
           "i64.load16 alignment \{align} exceeds natural alignment 1",
         )
@@ -386,11 +386,11 @@ fn validate_leaf_instr(
       stack.push(I64)
     }
     I64Load32S(memidx, align, offset) | I64Load32U(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "i64.load32 alignment \{align} exceeds natural alignment 2",
         )
@@ -399,11 +399,11 @@ fn validate_leaf_instr(
       stack.push(I64)
     }
     F32Load(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "f32.load alignment \{align} exceeds natural alignment 2",
         )
@@ -412,11 +412,11 @@ fn validate_leaf_instr(
       stack.push(F32)
     }
     F64Load(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 3 {
+      if align < 0 || align > 3 {
         raise InvalidAlignment(
           "f64.load alignment \{align} exceeds natural alignment 3",
         )
@@ -425,11 +425,11 @@ fn validate_leaf_instr(
       stack.push(F64)
     }
     I32Store(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "i32.store alignment \{align} exceeds natural alignment 2",
         )
@@ -438,11 +438,11 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I32Store8(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 0 {
+      if align < 0 || align > 0 {
         raise InvalidAlignment(
           "i32.store8 alignment \{align} exceeds natural alignment 0",
         )
@@ -451,11 +451,11 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I32Store16(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 1 {
+      if align < 0 || align > 1 {
         raise InvalidAlignment(
           "i32.store16 alignment \{align} exceeds natural alignment 1",
         )
@@ -464,11 +464,11 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I64Store(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 3 {
+      if align < 0 || align > 3 {
         raise InvalidAlignment(
           "i64.store alignment \{align} exceeds natural alignment 3",
         )
@@ -477,11 +477,11 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I64Store8(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 0 {
+      if align < 0 || align > 0 {
         raise InvalidAlignment(
           "i64.store8 alignment \{align} exceeds natural alignment 0",
         )
@@ -490,11 +490,11 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I64Store16(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 1 {
+      if align < 0 || align > 1 {
         raise InvalidAlignment(
           "i64.store16 alignment \{align} exceeds natural alignment 1",
         )
@@ -503,11 +503,11 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I64Store32(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "i64.store32 alignment \{align} exceeds natural alignment 2",
         )
@@ -516,11 +516,11 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     F32Store(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 2 {
+      if align < 0 || align > 2 {
         raise InvalidAlignment(
           "f32.store alignment \{align} exceeds natural alignment 2",
         )
@@ -529,11 +529,11 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     F64Store(memidx, align, offset) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       validate_mem_offset(ctx.mems[memidx], offset)
-      if align > 3 {
+      if align < 0 || align > 3 {
         raise InvalidAlignment(
           "f64.store alignment \{align} exceeds natural alignment 3",
         )
@@ -542,7 +542,7 @@ fn validate_leaf_instr(
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     MemorySize(memidx) | MemoryGrow(memidx) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       let addr_type = ctx.mems[memidx].addr_type()
@@ -552,10 +552,10 @@ fn validate_leaf_instr(
       stack.push(addr_type)
     }
     MemoryInit(memidx, data_idx) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
-      if data_idx >= ctx.data_count {
+      if data_idx < 0 || data_idx >= ctx.data_count {
         raise InvalidDataIndex(data_idx)
       }
       let addr_type = ctx.mems[memidx].addr_type()
@@ -564,14 +564,14 @@ fn validate_leaf_instr(
       stack.pop(addr_type) // d (memory address)
     }
     DataDrop(data_idx) =>
-      if data_idx >= ctx.data_count {
+      if data_idx < 0 || data_idx >= ctx.data_count {
         raise InvalidDataIndex(data_idx)
       }
     MemoryCopy(dst, src) => {
-      if dst >= ctx.mems.length() {
+      if dst < 0 || dst >= ctx.mems.length() {
         raise InvalidMemoryIndex(dst)
       }
-      if src >= ctx.mems.length() {
+      if src < 0 || src >= ctx.mems.length() {
         raise InvalidMemoryIndex(src)
       }
       let dst_addr_type = ctx.mems[dst].addr_type()
@@ -587,7 +587,7 @@ fn validate_leaf_instr(
       stack.pop(dst_addr_type) // d
     }
     MemoryFill(memidx) => {
-      if memidx >= ctx.mems.length() {
+      if memidx < 0 || memidx >= ctx.mems.length() {
         raise InvalidMemoryIndex(memidx)
       }
       let addr_type = ctx.mems[memidx].addr_type()
@@ -598,7 +598,7 @@ fn validate_leaf_instr(
     Atomic(subop, memidx, align, offset) => {
       // Atomics use memarg except atomic.fence (subop=3).
       if subop != 3 {
-        if memidx >= ctx.mems.length() {
+        if memidx < 0 || memidx >= ctx.mems.length() {
           raise InvalidMemoryIndex(memidx)
         }
         validate_mem_offset(ctx.mems[memidx], offset)
@@ -824,7 +824,7 @@ fn validate_leaf_instr(
 
     // Table operations
     TableGet(idx) => {
-      if idx >= ctx.tables.length() {
+      if idx < 0 || idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
@@ -833,7 +833,7 @@ fn validate_leaf_instr(
       stack.push(table.elem_type)
     }
     TableSet(idx) => {
-      if idx >= ctx.tables.length() {
+      if idx < 0 || idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
@@ -842,7 +842,7 @@ fn validate_leaf_instr(
       stack.pop(idx_type) // index
     }
     TableSize(idx) => {
-      if idx >= ctx.tables.length() {
+      if idx < 0 || idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
@@ -853,7 +853,7 @@ fn validate_leaf_instr(
       }
     }
     TableGrow(idx) => {
-      if idx >= ctx.tables.length() {
+      if idx < 0 || idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
@@ -863,7 +863,7 @@ fn validate_leaf_instr(
       stack.push(idx_type) // old size or -1
     }
     TableFill(idx) => {
-      if idx >= ctx.tables.length() {
+      if idx < 0 || idx >= ctx.tables.length() {
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
@@ -873,10 +873,10 @@ fn validate_leaf_instr(
       stack.pop(idx_type) // i
     }
     TableCopy(dst_idx, src_idx) => {
-      if dst_idx >= ctx.tables.length() {
+      if dst_idx < 0 || dst_idx >= ctx.tables.length() {
         raise InvalidTableIndex(dst_idx)
       }
-      if src_idx >= ctx.tables.length() {
+      if src_idx < 0 || src_idx >= ctx.tables.length() {
         raise InvalidTableIndex(src_idx)
       }
       // Check that source element type is subtype of destination element type
@@ -901,10 +901,10 @@ fn validate_leaf_instr(
     }
     TableInit(table_idx, elem_idx) => {
       // Validate table and elem indices
-      if table_idx >= ctx.tables.length() {
+      if table_idx < 0 || table_idx >= ctx.tables.length() {
         raise InvalidTableIndex(table_idx)
       }
-      if elem_idx >= ctx.elems.length() {
+      if elem_idx < 0 || elem_idx >= ctx.elems.length() {
         raise InvalidElemIndex(elem_idx)
       }
       // Check elem segment type matches table element type
@@ -923,7 +923,7 @@ fn validate_leaf_instr(
       stack.pop(idx_type) // d (table's index type)
     }
     ElemDrop(elem_idx) =>
-      if elem_idx >= ctx.elems.length() {
+      if elem_idx < 0 || elem_idx >= ctx.elems.length() {
         raise InvalidElemIndex(elem_idx)
       }
 
@@ -931,7 +931,7 @@ fn validate_leaf_instr(
     RefNull(ref_type) => {
       validate_value_type(
         ref_type,
-        ctx.types.length(),
+        ctx.types,
         stack_switching=ctx.stack_switching,
       )
       stack.push(ref_type)
@@ -959,7 +959,7 @@ fn validate_leaf_instr(
       stack.push(I32)
     }
     RefFunc(func_idx) => {
-      if func_idx >= ctx.funcs.length() {
+      if func_idx < 0 || func_idx >= ctx.funcs.length() {
         raise InvalidFunctionIndex(func_idx)
       }
       // Check that function is declared (referenced in elem segment or global init)
@@ -977,14 +977,14 @@ fn validate_leaf_instr(
     }
     BrOnNull(label_idx) => {
       // br_on_null: pop branch args + ref; on fallthrough push args back + non-null ref
-      if label_idx > ctx.labels.length() {
+      if label_idx < 0 || label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
       let branch_types = if label_idx == ctx.labels.length() {
         ctx.returns
       } else {
         let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-        get_label_types(ctx, label)
+        ReadOnlyArray::from_array(get_label_types(ctx, label))
       }
       let nullable_ref = stack.pop_ref_any()
       for i = branch_types.length() - 1; i >= 0; i = i - 1 {
@@ -997,14 +997,14 @@ fn validate_leaf_instr(
     }
     BrOnNonNull(label_idx) => {
       // br_on_non_null: pop branch prefix + ref; on fallthrough push only prefix back
-      if label_idx > ctx.labels.length() {
+      if label_idx < 0 || label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
       let branch_types = if label_idx == ctx.labels.length() {
         ctx.returns
       } else {
         let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-        get_label_types(ctx, label)
+        ReadOnlyArray::from_array(get_label_types(ctx, label))
       }
       if branch_types.length() == 0 {
         raise TypeMismatch("br_on_non_null target must carry a reference value")
@@ -1062,9 +1062,8 @@ fn validate_leaf_instr(
         raise TypeMismatch("invalid result arity")
       }
       // Validate type indices
-      let num_types = ctx.types.length()
       for ty in types {
-        validate_value_type(ty, num_types, stack_switching=ctx.stack_switching)
+        validate_value_type(ty, ctx.types, stack_switching=ctx.stack_switching)
       }
       stack.pop(I32) // condition
       // Pop operands matching result types in reverse
@@ -1080,7 +1079,7 @@ fn validate_leaf_instr(
 
     // Function calls
     Call(func_idx) => {
-      if func_idx >= ctx.funcs.length() {
+      if func_idx < 0 || func_idx >= ctx.funcs.length() {
         raise InvalidFunctionIndex(func_idx)
       }
       let type_idx = ctx.funcs[func_idx]
@@ -1143,7 +1142,7 @@ fn validate_leaf_instr(
       }
     }
     ReturnCall(func_idx) => {
-      if func_idx >= ctx.funcs.length() {
+      if func_idx < 0 || func_idx >= ctx.funcs.length() {
         raise InvalidFunctionIndex(func_idx)
       }
       let type_idx = ctx.funcs[func_idx]
@@ -1244,7 +1243,7 @@ fn validate_leaf_instr(
 
     // Branch instructions with proper label validation
     Br(label_idx) => {
-      if label_idx > ctx.labels.length() {
+      if label_idx < 0 || label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
       // label_idx == labels.length() targets the implicit function label.
@@ -1254,7 +1253,7 @@ fn validate_leaf_instr(
       } else {
         // Get label from stack (index 0 is innermost)
         let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-        get_label_types(ctx, label)
+        ReadOnlyArray::from_array(get_label_types(ctx, label))
       }
       // Pop values that will be passed to target
       for i = branch_types.length() - 1; i >= 0; i = i - 1 {
@@ -1264,14 +1263,14 @@ fn validate_leaf_instr(
     }
     BrIf(label_idx) => {
       stack.pop(I32) // condition
-      if label_idx > ctx.labels.length() {
+      if label_idx < 0 || label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
       let branch_types = if label_idx == ctx.labels.length() {
         ctx.returns
       } else {
         let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-        get_label_types(ctx, label)
+        ReadOnlyArray::from_array(get_label_types(ctx, label))
       }
       // Pop and push values (conditional branch)
       for i = branch_types.length() - 1; i >= 0; i = i - 1 {
@@ -1284,25 +1283,25 @@ fn validate_leaf_instr(
     BrTable(labels, default_label) => {
       stack.pop(I32) // index
       // Validate default label
-      if default_label > ctx.labels.length() {
+      if default_label < 0 || default_label > ctx.labels.length() {
         raise InvalidLabelIndex(default_label)
       }
       let default_types = if default_label == ctx.labels.length() {
         ctx.returns
       } else {
         let default_info = ctx.labels[ctx.labels.length() - 1 - default_label]
-        get_label_types(ctx, default_info)
+        ReadOnlyArray::from_array(get_label_types(ctx, default_info))
       }
       // Validate all labels have same arity as default
       for label_idx in labels {
-        if label_idx > ctx.labels.length() {
+        if label_idx < 0 || label_idx > ctx.labels.length() {
           raise InvalidLabelIndex(label_idx)
         }
         let label_types = if label_idx == ctx.labels.length() {
           ctx.returns
         } else {
           let label_info = ctx.labels[ctx.labels.length() - 1 - label_idx]
-          get_label_types(ctx, label_info)
+          ReadOnlyArray::from_array(get_label_types(ctx, label_info))
         }
         if label_types.length() != default_types.length() {
           raise TypeMismatch(
@@ -1401,6 +1400,11 @@ fn validate_leaf_instr(
       stack.push(RefArray(type_idx))
     }
     ArrayNewFixed(type_idx, len) => {
+      if len < 0 {
+        raise TypeMismatch(
+          "array.new_fixed element count exceeds supported stack size",
+        )
+      }
       // Pop len elements, push array ref
       let array_type = ctx.get_array_type(type_idx)
       let elem_type = storage_type_to_value_type(
@@ -1417,7 +1421,7 @@ fn validate_leaf_instr(
       if !is_numeric_or_vector_storage_type(array_type.element.storage_type) {
         raise TypeMismatch("array type is not numeric or vector")
       }
-      if data_idx >= ctx.data_count {
+      if data_idx < 0 || data_idx >= ctx.data_count {
         raise TypeMismatch(
           "array.new_data: invalid data segment index \{data_idx}",
         )
@@ -1429,7 +1433,7 @@ fn validate_leaf_instr(
     ArrayNewElem(type_idx, elem_idx) => {
       // Pop size (i32), pop offset (i32), push array ref
       let array_type = ctx.get_array_type(type_idx)
-      if elem_idx >= ctx.elems.length() {
+      if elem_idx < 0 || elem_idx >= ctx.elems.length() {
         raise InvalidElemIndex(elem_idx)
       }
       let elem_type = ctx.elems[elem_idx]
@@ -1512,7 +1516,7 @@ fn validate_leaf_instr(
         raise TypeMismatch("array type is not numeric or vector")
       }
       // Check data segment exists
-      if data_idx >= ctx.data_count {
+      if data_idx < 0 || data_idx >= ctx.data_count {
         raise TypeMismatch(
           "array.init_data: invalid data segment index \{data_idx}",
         )
@@ -1530,7 +1534,7 @@ fn validate_leaf_instr(
         raise TypeMismatch("array.init_elem on immutable array")
       }
       // Check element segment exists and types match
-      if elem_idx >= ctx.elems.length() {
+      if elem_idx < 0 || elem_idx >= ctx.elems.length() {
         raise InvalidElemIndex(elem_idx)
       }
       let elem_type = ctx.elems[elem_idx]
@@ -1574,14 +1578,14 @@ fn validate_leaf_instr(
         )
       }
       // Check that target_type is compatible with branch label
-      if label_idx > ctx.labels.length() {
+      if label_idx < 0 || label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
       let branch_types = if label_idx == ctx.labels.length() {
         ctx.returns
       } else {
         let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-        get_label_types(ctx, label)
+        ReadOnlyArray::from_array(get_label_types(ctx, label))
       }
       let diff_type = compute_br_on_cast_fail_diff_type(
         source_type, target_type,
@@ -1620,14 +1624,14 @@ fn validate_leaf_instr(
       // Check that diff_type is compatible with branch label
       // Diff type: if source is nullable and target is non-nullable, diff is nullable
       // The diff type represents values that fail the cast
-      if label_idx > ctx.labels.length() {
+      if label_idx < 0 || label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
       let branch_types = if label_idx == ctx.labels.length() {
         ctx.returns
       } else {
         let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-        get_label_types(ctx, label)
+        ReadOnlyArray::from_array(get_label_types(ctx, label))
       }
       let diff_type = compute_br_on_cast_fail_diff_type(
         source_type, target_type,
@@ -1796,34 +1800,22 @@ fn to_nullable_ref_type(
 fn get_block_results(
   ctx : ValidationContext,
   bt : @types.BlockType,
-) -> Array[@types.ValueType] raise ValidationError {
+) -> ReadOnlyArray[@types.ValueType] raise ValidationError {
   match bt {
     Empty => []
     Value(t) => {
-      validate_value_type(
-        t,
-        ctx.types.length(),
-        stack_switching=ctx.stack_switching,
-      )
+      validate_value_type(t, ctx.types, stack_switching=ctx.stack_switching)
       [t]
     }
     MultiValue(types) => {
       for t in types {
-        validate_value_type(
-          t,
-          ctx.types.length(),
-          stack_switching=ctx.stack_switching,
-        )
+        validate_value_type(t, ctx.types, stack_switching=ctx.stack_switching)
       }
       types
     }
     InlineType(_, results) => {
       for t in results {
-        validate_value_type(
-          t,
-          ctx.types.length(),
-          stack_switching=ctx.stack_switching,
-        )
+        validate_value_type(t, ctx.types, stack_switching=ctx.stack_switching)
       }
       results
     }
@@ -1840,18 +1832,14 @@ fn get_block_results(
 fn get_block_params(
   ctx : ValidationContext,
   bt : @types.BlockType,
-) -> Array[@types.ValueType] raise ValidationError {
+) -> ReadOnlyArray[@types.ValueType] raise ValidationError {
   match bt {
     Empty => []
     Value(_) => [] // Single value blocks have no params
     MultiValue(_) => [] // MultiValue blocks have no params (result-only)
     InlineType(params, _) => {
       for t in params {
-        validate_value_type(
-          t,
-          ctx.types.length(),
-          stack_switching=ctx.stack_switching,
-        )
+        validate_value_type(t, ctx.types, stack_switching=ctx.stack_switching)
       }
       params
     }
@@ -1871,7 +1859,7 @@ fn get_block_params(
 fn get_label_types(
   ctx : ValidationContext,
   label : LabelInfo,
-) -> Array[@types.ValueType] raise ValidationError {
+) -> ReadOnlyArray[@types.ValueType] raise ValidationError {
   match label.kind {
     BlockLabel => get_block_results(ctx, label.block_type)
     LoopLabel => get_block_params(ctx, label.block_type)

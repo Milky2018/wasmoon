@@ -97,7 +97,10 @@ fn instantiate_canon_lower(
       Some(_) => lowered_params + [ptr_ty]
       None => lowered_params
     }
-    let core_type : @types.FuncType = { params, results: [I32], }
+    let core_type : @types.FuncType = {
+      params: ReadOnlyArray::from_array(params),
+      results: [I32],
+    }
     let async_state = state.async_state
     let caller_table = state.resource_table
     let host = fn(
@@ -905,23 +908,8 @@ fn instantiate_canon_lower(
     let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0) catch {
       error => raise ComponentRuntimeError::from_core(error)
     }
-    let instance : @runtime.ModuleInstance = {
-      types: [@types.SubType::from_func(core_type)],
-      type_rec_groups: [],
-      canonical_type_indices: [0],
-      store_idx: -1,
-      func_addrs: [func_addr],
-      func_type_indices: [0],
-      table_addrs: [],
-      mem_addrs: [],
-      global_addrs: [],
-      tag_addrs: [],
-      exports: [],
-      elem_values: [],
-      elem_segments: [],
-      data_segments: [],
-      dropped_elems: [],
-      dropped_datas: [],
+    let instance = store.host_call_instance(func_addr) catch {
+      error => raise ComponentRuntimeError::from_core(error)
     }
     state.core_funcs.push({
       instance,

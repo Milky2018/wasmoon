@@ -13,7 +13,10 @@ fn resolve_block_types(module_ : @types.Module) -> @types.Module {
     }
   }
   fn resolve(block : @types.BlockType) -> @types.BlockType {
-    let (params, results) = match block {
+    let (params, results) : (
+      ReadOnlyArray[@types.ValueType],
+      ReadOnlyArray[@types.ValueType],
+    ) = match block {
       MultiValue(results) => ([], results)
       InlineType(params, results) => (params, results)
       _ => return block
@@ -32,22 +35,41 @@ fn resolve_block_types(module_ : @types.Module) -> @types.Module {
     TypeIndex(index)
   }
   fn instructions(
-    body : Array[@types.Instruction],
+    body : ArrayView[@types.Instruction],
   ) -> Array[@types.Instruction] {
     body.map(fn(instruction) {
       match instruction {
-        Block(signature, body) => Block(resolve(signature), instructions(body))
-        Loop(signature, body) => Loop(resolve(signature), instructions(body))
+        Block(signature, body) =>
+          Block(
+            resolve(signature),
+            ReadOnlyArray::from_array(instructions(body)),
+          )
+        Loop(signature, body) =>
+          Loop(
+            resolve(signature),
+            ReadOnlyArray::from_array(instructions(body)),
+          )
         If(signature, yes, no) =>
-          If(resolve(signature), instructions(yes), instructions(no))
+          If(
+            resolve(signature),
+            ReadOnlyArray::from_array(instructions(yes)),
+            ReadOnlyArray::from_array(instructions(no)),
+          )
         TryTable(signature, handlers, body) =>
-          TryTable(resolve(signature), handlers, instructions(body))
+          TryTable(
+            resolve(signature),
+            handlers,
+            ReadOnlyArray::from_array(instructions(body)),
+          )
         _ => instruction
       }
     })
   }
   let codes : Array[@types.FunctionCode] = module_.codes.map(fn(code) {
-    { locals: code.locals, body: instructions(code.body), }
+    {
+      locals: code.locals,
+      body: ReadOnlyArray::from_array(instructions(code.body)),
+    }
   })
   { ..module_, types, type_rec_groups: groups, codes, }
 }

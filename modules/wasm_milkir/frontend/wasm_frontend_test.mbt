@@ -70,8 +70,13 @@ test "lower locals through native linear fast path" {
     I32Mul,
   ]
   let mod_ = {
-    ..@types.Module::simple([I32, I32], [I32], body, "double_sum"),
-    codes: [{ locals: [I32], body, }],
+    ..@types.Module::simple(
+      [I32, I32],
+      [I32],
+      ReadOnlyArray::from_array(body),
+      "double_sum",
+    ),
+    codes: [{ locals: [I32], body: ReadOnlyArray::from_array(body), }],
   }
   let env = frontend_test_env()
   let func = @frontend.lower_function(env, mod_, 0)
@@ -86,8 +91,13 @@ test "lower locals through native linear fast path" {
 test "lower nop and float locals through native linear fast path" {
   let body : Array[@types.Instruction] = [Nop, LocalGet(1), LocalGet(0), F64Add]
   let mod_ = {
-    ..@types.Module::simple([F64], [F64], body, "float_local_default"),
-    codes: [{ locals: [F64], body, }],
+    ..@types.Module::simple(
+      [F64],
+      [F64],
+      ReadOnlyArray::from_array(body),
+      "float_local_default",
+    ),
+    codes: [{ locals: [F64], body: ReadOnlyArray::from_array(body), }],
   }
   let env = frontend_test_env()
   let func = @frontend.lower_function(env, mod_, 0)
@@ -196,7 +206,12 @@ test "unreachable structured continuations remain verifier-safe" {
     [Return, Loop(Empty, [Loop(Empty, [])])],
   ]
   for i, body in bodies {
-    let mod_ = @types.Module::simple([], [], body, "unreachable_control_\{i}")
+    let mod_ = @types.Module::simple(
+      [],
+      [],
+      ReadOnlyArray::from_array(body),
+      "unreachable_control_\{i}",
+    )
     let func = @frontend.translate_function(native_test_env(), mod_, 0)
     @wasm_milkir.verify_function(func)
   }
@@ -526,7 +541,10 @@ test "lower linear integer bitops comparisons and select natively" {
     I32Eq,
     Select,
   ]
-  let mod_ = { ..mod_, codes: [{ locals: [I32], body, }], }
+  let mod_ = {
+    ..mod_,
+    codes: [{ locals: [I32], body: ReadOnlyArray::from_array(body), }],
+  }
   let env = frontend_test_env()
   let func = @frontend.lower_function(env, mod_, 0)
   let text = func.print()
@@ -1081,7 +1099,12 @@ test "lower v128 load store through native memory path" {
     V128Load(0, 4, 0),
   ]
   let mod_ = {
-    ..@types.Module::simple([V128], [V128], body, "v128_roundtrip"),
+    ..@types.Module::simple(
+      [V128],
+      [V128],
+      ReadOnlyArray::from_array(body),
+      "v128_roundtrip",
+    ),
     memories: [
       {
         limits: { min: 1, max: None, },

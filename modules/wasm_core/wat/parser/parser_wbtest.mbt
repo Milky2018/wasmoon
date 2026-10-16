@@ -507,7 +507,7 @@ test "regression: standalone recursive struct resolves its self reference" {
   let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
   inspect(
     mod.types[0],
-    content="{final_: true, supertypes: [], composite: Struct({fields: [{storage_type: Val(RefNullStruct(0)), mutable: false}]})}",
+    content="{final_: true, supertypes: <ReadOnlyArray: []>, composite: Struct({fields: <ReadOnlyArray: [{storage_type: Val(RefNullStruct(0)), mutable: false}]>})}",
   )
 }
 
@@ -551,7 +551,7 @@ test "regression: select with nested ref type in result annotation" {
   inspect(code.body.length(), content="4")
   // With result type annotation, should use SelectTyped not Select
   // (ref null func) is FuncRef, not RefNullFuncTyped - it's the abstract type
-  inspect(code.body[3], content="SelectTyped([FuncRef])")
+  inspect(code.body[3], content="SelectTyped(<ReadOnlyArray: [FuncRef]>)")
 }
 
 ///|

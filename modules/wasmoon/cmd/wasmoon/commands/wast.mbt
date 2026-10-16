@@ -113,7 +113,7 @@ fn remap_index(idx : Int32, alias_map : Map[Int32, Int32]) -> Int32 {
 }
 
 ///|
-fn build_alias_map(addrs : Array[Int32]) -> Map[Int32, Int32] {
+fn build_alias_map(addrs : ArrayView[Int32]) -> Map[Int32, Int32] {
   let first_idx_by_addr : Map[Int32, Int32] = Map([])
   let alias_map : Map[Int32, Int32] = Map([])
   for idx, addr in addrs {
@@ -127,10 +127,10 @@ fn build_alias_map(addrs : Array[Int32]) -> Map[Int32, Int32] {
 
 ///|
 fn rewrite_instr_indices(
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
   global_alias_map : Map[Int32, Int32],
   tag_alias_map : Map[Int32, Int32],
-) -> Array[@types.Instruction] {
+) -> ReadOnlyArray[@types.Instruction] {
   let rewritten : Array[@types.Instruction] = []
   for instr in instrs {
     match instr {
@@ -160,7 +160,7 @@ fn rewrite_instr_indices(
         rewritten.push(
           TryTable(
             block_type,
-            rewritten_handlers,
+            ReadOnlyArray::from_array(rewritten_handlers),
             rewrite_instr_indices(body, global_alias_map, tag_alias_map),
           ),
         )
@@ -190,7 +190,7 @@ fn rewrite_instr_indices(
       _ => rewritten.push(instr)
     }
   }
-  rewritten
+  ReadOnlyArray::from_array(rewritten)
 }
 
 ///|
@@ -231,7 +231,7 @@ fn rewrite_module_alias_indices_for_jit(
       Passive => Passive
       Declarative => Declarative
     }
-    let rewritten_init : Array[Array[@types.Instruction]] = []
+    let rewritten_init : Array[ReadOnlyArray[@types.Instruction]] = []
     for expr in elem.init {
       rewritten_init.push(
         rewrite_instr_indices(expr, global_alias_map, tag_alias_map),
@@ -240,7 +240,7 @@ fn rewrite_module_alias_indices_for_jit(
     rewritten_elems.push({
       mode: rewritten_mode,
       type_: elem.type_,
-      init: rewritten_init,
+      init: ReadOnlyArray::from_array(rewritten_init),
     })
   }
 
@@ -297,7 +297,7 @@ fn mark_wast_reachable_local_func(
 
 ///|
 fn collect_wast_reachable_from_instrs(
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
   num_imports : Int32,
   compile_mask : Array[Bool],
   pending_locals : Array[Int32],
@@ -509,7 +509,12 @@ fn try_compile_jit_with_suspension(
           wast_jit_compiled_modules.val = wast_jit_compiled_modules.val + 1
           wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
             compiled_local_funcs
-          @wast.register_instance_funcrefs_for_jit(jm, instance, store)
+          @wast.register_instance_funcrefs_for_jit(jm, instance, store) catch {
+            error => {
+              jm.close()
+              return Err("WAST JIT instance binding failed: \{error}")
+            }
+          }
           // Allocate independent WASM stack with guard page. Native JIT
           // execution and hostcall bridges use this stack, so keep it aligned
           // with `wasmoon run`.
@@ -611,7 +616,12 @@ fn try_compile_jit_with_suspension(
               )
             },
             classify_suspension~,
-          )
+          ) catch {
+            error => {
+              jit_ctx.close()
+              return Err("WAST JIT instance binding failed: \{error}")
+            }
+          }
           Ok(jit_ctx)
         }
       }

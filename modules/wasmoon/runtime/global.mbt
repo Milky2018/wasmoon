@@ -1,6 +1,7 @@
 ///|
 /// Runtime representation of a global variable
 struct GlobalInstance {
+  mut binding : ResourceBinding?
   type_ : @types.GlobalType
   mut value : @types.Value
   mut native : NativeGlobalBinding?
@@ -10,14 +11,16 @@ struct GlobalInstance {
 pub fn GlobalInstance::GlobalInstance(
   type_ : @types.GlobalType,
   value : @types.Value,
-) -> GlobalInstance {
-  { type_, value, native: None, }
+) -> GlobalInstance raise RuntimeError {
+  guard value_fits_kind(value, type_.value_type) else { raise TypeMismatch }
+  { type_, value, native: None, binding: None, }
 }
 
 ///|
 pub fn GlobalInstance::get(
   self : GlobalInstance,
 ) -> @types.Value raise RuntimeError {
+  check_resource_open(self.binding)
   match self.native {
     Some(binding) => (binding.read)()
     None => self.value
@@ -29,6 +32,10 @@ pub fn GlobalInstance::set(
   self : GlobalInstance,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
+  check_resource_open(self.binding)
+  guard value_fits_kind(value, self.type_.value_type) else {
+    raise TypeMismatch
+  }
   if !self.type_.mutable {
     raise TypeMismatch // attempting to mutate immutable global
   }
@@ -76,6 +83,10 @@ pub fn GlobalInstance::bind_native(
 
 ///|
 fn GlobalInstance::close(self : GlobalInstance) -> Unit {
+  if self.binding is Some(binding) {
+    binding.active.val = false
+  }
+  self.value = Null
   if self.native is Some(binding) {
     self.native = None
     (binding.release)()

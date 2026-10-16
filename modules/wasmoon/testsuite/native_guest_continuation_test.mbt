@@ -52,7 +52,7 @@ test "native guest continuation cancellation releases occupied child stacks" {
   let instance = @executor.instantiate_module_with_imports(
     store,
     module_,
-    Imports(),
+    Imports(store),
   )
   let context = prepare_async_jit_context(
     module_,

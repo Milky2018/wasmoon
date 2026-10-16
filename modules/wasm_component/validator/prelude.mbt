@@ -1742,7 +1742,10 @@ fn CoreTypeReader::read_core_functype(
   for _i in 0..<nresults {
     results.push(self.read_core_valtype())
   }
-  { params, results, }
+  {
+    params: ReadOnlyArray::from_array(params),
+    results: ReadOnlyArray::from_array(results),
+  }
 }
 
 ///|

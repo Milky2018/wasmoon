@@ -6,13 +6,12 @@ fn validate_function_with_offset(
   code : @types.FunctionCode,
   func_idx : Int32,
 ) -> Unit raise ValidationError {
-  let num_types = ctx.types.length()
 
   // Validate type indices in local types
   for local_type in code.locals {
     validate_value_type(
       local_type,
-      num_types,
+      ctx.types,
       stack_switching=ctx.stack_switching,
     )
   }
@@ -83,7 +82,7 @@ fn validate_function_with_offset(
 fn validate_expr_with_offset(
   ctx : ValidationContext,
   stack : OperandStack,
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
   func_idx : Int32,
 ) -> Unit raise ValidationError {
   for i, instr in instrs {
@@ -106,13 +105,12 @@ fn validate_function(
   func_type : @types.FuncType,
   code : @types.FunctionCode,
 ) -> Unit raise ValidationError {
-  let num_types = ctx.types.length()
 
   // Validate type indices in local types
   for local_type in code.locals {
     validate_value_type(
       local_type,
-      num_types,
+      ctx.types,
       stack_switching=ctx.stack_switching,
     )
   }
@@ -173,7 +171,7 @@ fn validate_function(
 fn validate_expr(
   ctx : ValidationContext,
   stack : OperandStack,
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
 ) -> Unit raise ValidationError {
   let tasks : Array[ValidationTask] = [Sequence(instrs[:], stack)]
   while tasks.pop() is Some(task) {
@@ -247,14 +245,19 @@ fn validate_expr(
 ///|
 priv enum ValidationTask {
   Sequence(ArrayView[@types.Instruction], OperandStack)
-  FinishBranch(OperandStack, Array[@types.ValueType], Array[Bool], String)
-  ExitControl(OperandStack, Array[@types.ValueType])
+  FinishBranch(
+    OperandStack,
+    ReadOnlyArray[@types.ValueType],
+    Array[Bool],
+    String
+  )
+  ExitControl(OperandStack, ReadOnlyArray[@types.ValueType])
 }
 
 ///|
 fn validate_catch_handlers(
   ctx : ValidationContext,
-  handlers : Array[@types.CatchHandler],
+  handlers : ArrayView[@types.CatchHandler],
 ) -> Unit raise ValidationError {
   for handler in handlers {
     match handler {
@@ -264,7 +267,7 @@ fn validate_catch_handlers(
           raise UnknownTag(tag_idx)
         }
         // Validate label index (labels are indexed from innermost)
-        if label_idx > ctx.labels.length() {
+        if label_idx < 0 || label_idx > ctx.labels.length() {
           raise InvalidLabelIndex(label_idx)
         }
         // Get expected types at label
@@ -272,7 +275,7 @@ fn validate_catch_handlers(
           ctx.returns
         } else {
           let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-          get_label_types(ctx, target_label)
+          ReadOnlyArray::from_array(get_label_types(ctx, target_label))
         }
         // Catch provides tag params
         let tag_type = ctx.exception_tag_type(tag_idx)
@@ -299,7 +302,7 @@ fn validate_catch_handlers(
           raise UnknownTag(tag_idx)
         }
         // Validate label index
-        if label_idx > ctx.labels.length() {
+        if label_idx < 0 || label_idx > ctx.labels.length() {
           raise InvalidLabelIndex(label_idx)
         }
         // Get expected types at label
@@ -307,7 +310,7 @@ fn validate_catch_handlers(
           ctx.returns
         } else {
           let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-          get_label_types(ctx, target_label)
+          ReadOnlyArray::from_array(get_label_types(ctx, target_label))
         }
         // CatchRef provides tag params + exnref
         let tag_type = ctx.exception_tag_type(tag_idx)
@@ -332,7 +335,7 @@ fn validate_catch_handlers(
       }
       CatchAll(label_idx) => {
         // Validate label index
-        if label_idx > ctx.labels.length() {
+        if label_idx < 0 || label_idx > ctx.labels.length() {
           raise InvalidLabelIndex(label_idx)
         }
         // CatchAll provides no values
@@ -340,7 +343,7 @@ fn validate_catch_handlers(
           ctx.returns
         } else {
           let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-          get_label_types(ctx, target_label)
+          ReadOnlyArray::from_array(get_label_types(ctx, target_label))
         }
         if expected_types.length() != 0 {
           raise TypeMismatch(
@@ -350,7 +353,7 @@ fn validate_catch_handlers(
       }
       CatchAllRef(label_idx) => {
         // Validate label index
-        if label_idx > ctx.labels.length() {
+        if label_idx < 0 || label_idx > ctx.labels.length() {
           raise InvalidLabelIndex(label_idx)
         }
         // CatchAllRef provides exnref only
@@ -358,7 +361,7 @@ fn validate_catch_handlers(
           ctx.returns
         } else {
           let target_label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-          get_label_types(ctx, target_label)
+          ReadOnlyArray::from_array(get_label_types(ctx, target_label))
         }
         if expected_types.length() != 1 {
           raise TypeMismatch(

@@ -20,7 +20,7 @@ pub fn compare_result_is_match(CompareResult) -> Bool
 
 pub fn current_target_arch() -> @wasmoon_jit.NativeTarget
 
-pub fn jit_results_to_values(Array[Int64], Array[@types.ValueType]) -> Array[@types.Value]
+pub fn jit_results_to_values(Array[Int64], ArrayView[@types.ValueType]) -> Array[@types.Value]
 
 pub fn parse_json_test_file(String) -> ParsedTestFile raise TestRunnerError
 
@@ -32,7 +32,7 @@ pub fn run_assert_trap(TestContext, String?, String, Array[TestValue], String) -
 
 pub fn run_interp_only(String, String, Array[@types.Value]) -> Result[Array[@types.Value], String]
 
-pub fn run_jit(@types.Module, String, Int, Array[@types.Value], Array[@types.ValueType], Array[@types.ValueType]) -> Result[Array[@types.Value], String]
+pub fn run_jit(@types.Module, String, Int, Array[@types.Value], ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Result[Array[@types.Value], String]
 
 pub fn run_json_tests(String, String, (String) -> Bytes raise) -> TestResult raise TestRunnerError
 

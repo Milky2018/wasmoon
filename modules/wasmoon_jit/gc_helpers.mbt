@@ -84,7 +84,7 @@ pub fn value_type_may_hold_gc_ref(ty : @types.ValueType) -> Bool {
 ///|
 pub fn collect_gc_root_args(
   args : Array[Int64],
-  param_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
 ) -> Array[Int64] {
   let roots : Array[Int64] = []
   let upto = if args.length() < param_types.length() {

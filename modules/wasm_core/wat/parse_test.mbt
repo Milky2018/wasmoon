@@ -339,7 +339,7 @@ test "parse inline table elem with named function" {
   inspect(mod_.elems.length(), content="1")
   // The element should contain the function index for $func (which is 0)
   inspect(mod_.elems[0].init.length(), content="1")
-  debug_inspect(mod_.elems[0].init[0], content="[RefFunc(0)]")
+  debug_inspect(mod_.elems[0].init[0][:].to_owned(), content="[RefFunc(0)]")
 }
 
 ///|
@@ -357,7 +357,7 @@ test "parse inline table elem with named function - multiple funcs" {
   inspect(mod_.elems.length(), content="1")
   // $func is the 4th function (index 3)
   inspect(mod_.elems[0].init.length(), content="1")
-  debug_inspect(mod_.elems[0].init[0], content="[RefFunc(3)]")
+  debug_inspect(mod_.elems[0].init[0][:].to_owned(), content="[RefFunc(3)]")
 }
 
 ///|
@@ -385,7 +385,7 @@ test "parse type index in call_indirect" {
   // Check the call_indirect instruction - $check is type 0
   let test_func = mod_.codes[mod_.codes.length() - 1]
   debug_inspect(
-    test_func.body,
+    test_func.body[:].to_owned(),
     content="[I32Const(1), I32Const(2), I32Const(0), CallIndirect(0, 0)]",
   )
 }
@@ -414,15 +414,15 @@ test "check type indices" {
   inspect(mod_.types.length(), content="3")
   inspect(
     mod_.types[0],
-    content="{final_: true, supertypes: [], composite: Func({params: [I32, I32], results: [I32]})}",
+    content="{final_: true, supertypes: <ReadOnlyArray: []>, composite: Func({params: <ReadOnlyArray: [I32, I32]>, results: <ReadOnlyArray: [I32]>})}",
   )
   inspect(
     mod_.types[1],
-    content="{final_: true, supertypes: [], composite: Func({params: [], results: []})}",
+    content="{final_: true, supertypes: <ReadOnlyArray: []>, composite: Func({params: <ReadOnlyArray: []>, results: <ReadOnlyArray: []>})}",
   )
   inspect(
     mod_.types[2],
-    content="{final_: true, supertypes: [], composite: Func({params: [], results: [I32]})}",
+    content="{final_: true, supertypes: <ReadOnlyArray: []>, composite: Func({params: <ReadOnlyArray: []>, results: <ReadOnlyArray: [I32]>})}",
   )
 }
 
@@ -442,11 +442,11 @@ test "parse inline table elem - func index with dummy" {
     #|)
   let mod_ = @wat.parse(wat)
   // $func is the 2nd function (index 1)
-  debug_inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
+  debug_inspect(mod_.elems[0].init[0][:].to_owned(), content="[RefFunc(1)]")
   // With explicit types first, $check is type 0
   let test_func = mod_.codes[mod_.codes.length() - 1]
   debug_inspect(
-    test_func.body,
+    test_func.body[:].to_owned(),
     content="[I32Const(1), I32Const(2), I32Const(0), CallIndirect(0, 0)]",
   )
 }
@@ -479,15 +479,15 @@ test "check funcs type indices" {
   inspect(mod_.types.length(), content="3")
   inspect(
     mod_.types[0],
-    content="{final_: true, supertypes: [], composite: Func({params: [I32, I32], results: [I32]})}",
+    content="{final_: true, supertypes: <ReadOnlyArray: []>, composite: Func({params: <ReadOnlyArray: [I32, I32]>, results: <ReadOnlyArray: [I32]>})}",
   )
   inspect(
     mod_.types[1],
-    content="{final_: true, supertypes: [], composite: Func({params: [], results: []})}",
+    content="{final_: true, supertypes: <ReadOnlyArray: []>, composite: Func({params: <ReadOnlyArray: []>, results: <ReadOnlyArray: []>})}",
   )
   inspect(
     mod_.types[2],
-    content="{final_: true, supertypes: [], composite: Func({params: [], results: [I32]})}",
+    content="{final_: true, supertypes: <ReadOnlyArray: []>, composite: Func({params: <ReadOnlyArray: []>, results: <ReadOnlyArray: [I32]>})}",
   )
 }
 
@@ -761,8 +761,8 @@ test "parse mixed func, struct, array types" {
   inspect(mod_.is_array_type(2), content="true")
   // Check func type
   let ft = mod_.func_type_at(0).unwrap()
-  debug_inspect(ft.params, content="[I32, I32]")
-  debug_inspect(ft.results, content="[I32]")
+  debug_inspect(ft.params[:].to_owned(), content="[I32, I32]")
+  debug_inspect(ft.results[:].to_owned(), content="[I32]")
   // Check struct type
   let st = mod_.struct_type_at(1).unwrap()
   inspect(st.fields.length(), content="2")

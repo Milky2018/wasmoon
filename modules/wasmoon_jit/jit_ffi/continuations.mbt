@@ -36,3 +36,10 @@ pub extern "c" fn NativeContinuationArena::gc_roots(
 pub extern "c" fn NativeContinuationArena::reclaim_retired(
   self : NativeContinuationArena,
 ) -> Unit = "wasmoon_continuation_arena_reclaim_retired"
+
+///|
+#borrow(self)
+pub extern "c" fn NativeContinuationArena::is_live(
+  self : NativeContinuationArena,
+  reference : Int64,
+) -> Bool = "wasmoon_continuation_arena_is_live"

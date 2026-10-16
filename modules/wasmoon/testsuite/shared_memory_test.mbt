@@ -43,7 +43,7 @@ test "atomics: text and binary use the same standard opcode and alignment" {
   let decoded = @parser.parse_module(encoded)
   @validator.validate_module(decoded)
   debug_inspect(
-    decoded.codes[0].body,
+    decoded.codes[0].body[:].to_owned(),
     content=(
       #|[
       #|  I32Const(0),

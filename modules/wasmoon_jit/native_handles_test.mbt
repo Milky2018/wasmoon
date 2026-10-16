@@ -1166,3 +1166,27 @@ test "DWARF function capacity denial does not register a truncated object" {
   inspect(builder.register(), content="false")
   inspect(active_dwarf_low_pc(), content="4096")
 }
+
+///|
+fn exercise_cleanup_capture(early : Bool, calls : Ref[Int32]) -> Unit {
+  let capture = @native_test_support.callback_capture()
+  let cleanup = @jit_ffi.CleanupOwner::new(fn() {
+    capture.touch()
+    calls.val += 1
+  })
+  if early {
+    cleanup.close()
+    cleanup.close()
+  }
+}
+
+///|
+test "managed cleanup releases its callback capture after close or RC finalization" {
+  @native_test_support.reset_callback_capture()
+  let calls = Ref(0)
+  for early in [false, true] {
+    exercise_cleanup_capture(early, calls)
+    assert_eq(@native_test_support.callback_capture_release_count(), calls.val)
+  }
+  inspect(calls.val, content="2")
+}

@@ -132,7 +132,11 @@ fn Translator::translate_instruction_simd(
     I8x16Shuffle(lanes) => {
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.v128_shuffle(a, b, lanes)
+      let result = self.builder.v128_shuffle(
+        a,
+        b,
+        FixedArray::makei(lanes.length(), i => lanes[i]),
+      )
       self.push(result)
     }
     I8x16Swizzle => {

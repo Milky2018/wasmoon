@@ -304,7 +304,7 @@ test "component runtime: core execution crosses the configured engine seam" {
   let closes = Ref(0)
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, module_, instance) {
-      registrations.push((module_.codes.length(), instance.store_idx))
+      registrations.push((module_.codes.length(), instance.store_index()))
     },
     fn(
       store,
@@ -313,7 +313,7 @@ test "component runtime: core execution crosses the configured engine seam" {
       args,
       request,
     ) raise @runtime_impl.ComponentRuntimeError {
-      calls.push((instance.store_idx, func_idx, args.copy(), request))
+      calls.push((instance.store_index(), func_idx, args.copy(), request))
       let results = @executor.call_func_by_index(
         store, instance, func_idx, args,
       ) catch {
@@ -955,22 +955,22 @@ fn core_store_allocation_baseline(
 ) -> CoreStoreAllocationBaseline {
   let (native_heap_size, _, native_heap_objects, _, _) = store.get_gc_stats()
   {
-    funcs: store.funcs.length(),
-    func_types: store.func_types.length(),
-    func_type_indices: store.func_type_indices.length(),
-    func_owners: store.func_owners.length(),
-    tables: store.tables.length(),
-    jit_tables: store.jit_tables.length(),
-    mems: store.mems.length(),
-    globals: store.globals.length(),
-    tags: store.tags.length(),
-    tag_type_indices: store.tag_type_indices.length(),
-    tag_owners: store.tag_owners.length(),
-    exns: store.exns.length(),
-    wrapped_externs: store.wrapped_externs.length(),
-    instances: store.instances.length(),
-    interpreter_heap_slots: store.heap.length(),
-    interpreter_heap_live: store.heap.stats().live_objects,
+    funcs: store.counts().funcs,
+    func_types: store.counts().func_types,
+    func_type_indices: store.counts().func_type_indices,
+    func_owners: store.counts().func_owners,
+    tables: store.counts().tables,
+    jit_tables: store.counts().jit_tables,
+    mems: store.counts().mems,
+    globals: store.counts().globals,
+    tags: store.counts().tags,
+    tag_type_indices: store.counts().tag_type_indices,
+    tag_owners: store.counts().tag_owners,
+    exns: store.counts().exns,
+    wrapped_externs: store.counts().wrapped_externs,
+    instances: store.counts().instances,
+    interpreter_heap_slots: store.counts().heap_slots,
+    interpreter_heap_live: store.counts().heap_live,
     native_heap_size,
     native_heap_objects,
   }
@@ -1008,7 +1008,7 @@ fn assert_start_trap_preserves_escaped_gc_ref(
     Null,
   )
   let global_addr = store.alloc_global(global)
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_global("host", "escaped", global_addr)
   let module_ = @wat.parse(
     (
@@ -1055,7 +1055,7 @@ fn assert_start_trap_preserves_table_escaped_gc_ref(
 ) -> Unit raise {
   let table = @runtime.Table::Table(AnyRef, 1, None)
   let table_addr = store.alloc_table(table)
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_table("host", "escaped", table_addr)
   let module_ = @wat.parse(
     (
@@ -1306,4 +1306,57 @@ test "component runtime: component import registration requires evidence" {
     content="true",
   )
   linker.close()
+}
+
+///|
+test "Core engine entry rejects foreign Store instances and native session reuse" {
+  let module_ = @wat.parse("(module (func (export \"f\")))")
+  let (a, ai) = @executor.instantiate_module(module_)
+  defer a.close()
+  let (b, bi) = @executor.instantiate_module(module_)
+  defer b.close()
+  let request = @runtime_impl.CoreExecutionRequest::CoreExecutionRequest(
+    RunToCompletion,
+    PreferNative,
+    RunToReturn,
+  )
+  for
+    engine in [
+      @runtime_impl.interpreter_core_execution_engine(),
+      @component_native.open_native_component_session(opt_level=0),
+    ] {
+    defer engine.close()
+    let foreign = try {
+      engine.invoke(b, ai, 0, [], request) |> ignore
+      false
+    } catch {
+      CoreModuleInstantiateError(message) =>
+        message == "instance belongs to another store"
+      _ => false
+    }
+    assert_true(foreign)
+  }
+  let native = @component_native.open_native_component_session(opt_level=0)
+  defer native.close()
+  native.register_instance(a, module_, ai)
+  native.register_instance(a, module_, ai)
+  native.invoke(a, ai, 0, [], request) |> ignore
+  let other = try {
+    native.register_instance(b, module_, bi)
+    false
+  } catch {
+    CoreModuleInstantiateError(message) =>
+      message == "instance belongs to another store"
+    _ => false
+  }
+  assert_true(other)
+  native.close()
+  let closed = try {
+    native.invoke(a, ai, 0, [], request) |> ignore
+    false
+  } catch {
+    CoreModuleInstantiateError(message) => message == "store is closed"
+    _ => false
+  }
+  assert_true(closed)
 }

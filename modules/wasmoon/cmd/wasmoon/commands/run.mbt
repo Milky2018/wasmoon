@@ -86,7 +86,7 @@ fn convert_args_to_jit(
 /// Convert JIT Int64 results to Value array using result types
 fn convert_jit_results(
   results : Array[Int64],
-  result_types : Array[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
 ) -> Array[@types.Value] {
   let values : Array[@types.Value] = []
   let mut slot_idx = 0
@@ -1495,17 +1495,22 @@ fn run_with_jit(
           let jit_ctx = @wast.JITModuleContext::JITModuleContext(
             jm,
             globals_ptr,
-            instance.global_addrs,
-            instance.table_addrs,
-            instance.func_addrs,
-            instance.func_type_indices,
-            instance.canonical_type_indices,
+            instance.global_addrs[:].to_owned(),
+            instance.table_addrs[:].to_owned(),
+            instance.func_addrs[:].to_owned(),
+            instance.func_type_indices[:].to_owned(),
+            instance.canonical_type_indices[:].to_owned(),
             mod_.types,
             mod_.type_rec_groups,
             use_subtype_indirect_check,
           )
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
-          jit_ctx.install_hostcall_dispatcher(store, instance)
+          jit_ctx.install_hostcall_dispatcher(store, instance) catch {
+            error => {
+              @logger.error("JIT instance binding failed: \{error}")
+              raise CommandFailure(1)
+            }
+          }
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {
@@ -1516,19 +1521,19 @@ fn run_with_jit(
               store.begin_gc_tracing()
               defer store.end_gc_tracing()
               // Set up GC heap for JIT execution if c_heap is available
-              match store.c_heap {
+              match store.native_heap() {
                 Some(heap) => {
                   // Compute canonical type indices for proper type equivalence checking
                   let canonical = @types.compute_canonical_type_indices(
-                    store.module_types,
+                    store.current_types(),
                   )
                   // Provide func_type_indices + func_table_ptr so libcalls can infer funcref types
                   // (e.g. table.fill) and ref.test can resolve tagged-pointer funcrefs.
                   jm.setup_gc(
                     heap,
-                    store.module_types,
+                    store.current_types(),
                     canonical,
-                    instance.func_type_indices,
+                    instance.func_type_indices[:].to_owned(),
                   ) catch {
                     err => {
                       @logger.error("JIT GC setup failed: \{err}")
@@ -2190,7 +2195,10 @@ fn build_jit_func_signatures(
   for i, imp in mod_.imports {
     if imp.desc is Func(type_idx) && type_idx < mod_.types.length() {
       let func_type = mod_.validated_func_type_at(type_idx)
-      signatures[i] = (func_type.params.copy(), func_type.results.copy())
+      signatures[i] = (
+        func_type.params[:].to_owned(),
+        func_type.results[:].to_owned(),
+      )
     }
   }
   // Fill in signatures for local functions
@@ -2198,7 +2206,10 @@ fn build_jit_func_signatures(
     let func_idx = num_imports + i
     if type_idx < mod_.types.length() {
       let func_type = mod_.validated_func_type_at(type_idx)
-      signatures[func_idx] = (func_type.params.copy(), func_type.results.copy())
+      signatures[func_idx] = (
+        func_type.params[:].to_owned(),
+        func_type.results[:].to_owned(),
+      )
     }
   }
   signatures
@@ -2213,7 +2224,7 @@ pub fn build_jit_function_names(mod_ : @types.Module) -> Array[String] {
 ///|
 /// Parse function arguments according to parameter types
 fn parse_func_args(
-  params : Array[@types.ValueType],
+  params : ArrayView[@types.ValueType],
   args : Array[String],
 ) -> Array[@types.Value] raise CliError {
   if args.length() != params.length() {

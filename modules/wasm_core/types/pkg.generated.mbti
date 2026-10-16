@@ -52,13 +52,13 @@ pub fn bytes_to_int64_le(Bytes, Int) -> Int64
 
 pub fn compact_show_repr(String) -> String
 
-pub fn compute_canonical_type_indices(Array[SubType], type_rec_groups? : Array[Int]) -> Array[Int]
+pub fn compute_canonical_type_indices(ArrayView[SubType], type_rec_groups? : ArrayView[Int]) -> Array[Int]
 
 pub fn func_types_equal(FuncType, FuncType) -> Bool
 
 pub fn func_types_to_subtypes(Array[FuncType]) -> Array[SubType]
 
-pub fn get_rec_group_info(Array[Int], Int) -> (Int, Int)
+pub fn get_rec_group_info(ArrayView[Int], Int) -> (Int, Int)
 
 pub fn int64_pair_to_v128_le(Int64, Int64) -> Bytes
 
@@ -81,8 +81,8 @@ pub fn ArrayType::to_repr(Self) -> @debug.Repr
 pub(all) enum BlockType {
   Empty
   Value(ValueType)
-  MultiValue(Array[ValueType])
-  InlineType(Array[ValueType], Array[ValueType])
+  MultiValue(ReadOnlyArray[ValueType])
+  InlineType(ReadOnlyArray[ValueType], ReadOnlyArray[ValueType])
   TypeIndex(Int)
 } derive(Eq, @debug.Debug)
 pub fn BlockType::equal(Self, Self) -> Bool
@@ -114,7 +114,7 @@ pub impl Show for CompositeType
 
 pub(all) struct Data {
   memory_idx : Int
-  offset : Array[Instruction]
+  offset : ReadOnlyArray[Instruction]
   init : Bytes
 } derive(Eq, @debug.Debug)
 pub fn Data::equal(Self, Self) -> Bool
@@ -122,7 +122,7 @@ pub fn Data::not_equal(Self, Self) -> Bool
 pub fn Data::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ElemMode {
-  Active(Int, Array[Instruction])
+  Active(Int, ReadOnlyArray[Instruction])
   Passive
   Declarative
 } derive(Eq, @debug.Debug)
@@ -133,7 +133,7 @@ pub fn ElemMode::to_repr(Self) -> @debug.Repr
 pub(all) struct Element {
   mode : ElemMode
   type_ : ValueType
-  init : Array[Array[Instruction]]
+  init : ReadOnlyArray[ReadOnlyArray[Instruction]]
 } derive(Eq, @debug.Debug)
 pub fn Element::equal(Self, Self) -> Bool
 pub fn Element::not_equal(Self, Self) -> Bool
@@ -167,8 +167,8 @@ pub fn FieldType::not_equal(Self, Self) -> Bool
 pub fn FieldType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FuncType {
-  params : Array[ValueType]
-  results : Array[ValueType]
+  params : ReadOnlyArray[ValueType]
+  results : ReadOnlyArray[ValueType]
 } derive(Eq, @debug.Debug)
 pub fn FuncType::equal(Self, Self) -> Bool
 pub fn FuncType::not_equal(Self, Self) -> Bool
@@ -180,8 +180,8 @@ pub fn FuncType::to_string(Self) -> String
 pub impl Show for FuncType
 
 pub(all) struct FunctionCode {
-  locals : Array[ValueType]
-  body : Array[Instruction]
+  locals : ReadOnlyArray[ValueType]
+  body : ReadOnlyArray[Instruction]
 } derive(Eq, @debug.Debug)
 pub fn FunctionCode::equal(Self, Self) -> Bool
 pub fn FunctionCode::not_equal(Self, Self) -> Bool
@@ -192,7 +192,7 @@ pub impl Show for FunctionCode
 
 pub(all) struct Global {
   type_ : GlobalType
-  init : Array[Instruction]
+  init : ReadOnlyArray[Instruction]
 } derive(Eq, @debug.Debug)
 pub fn Global::equal(Self, Self) -> Bool
 pub fn Global::not_equal(Self, Self) -> Bool
@@ -232,12 +232,12 @@ pub fn ImportDesc::to_repr(Self) -> @debug.Repr
 pub(all) enum Instruction {
   Unreachable
   Nop
-  Block(BlockType, Array[Instruction])
-  Loop(BlockType, Array[Instruction])
-  If(BlockType, Array[Instruction], Array[Instruction])
+  Block(BlockType, ReadOnlyArray[Instruction])
+  Loop(BlockType, ReadOnlyArray[Instruction])
+  If(BlockType, ReadOnlyArray[Instruction], ReadOnlyArray[Instruction])
   Br(Int)
   BrIf(Int)
-  BrTable(Array[Int], Int)
+  BrTable(ReadOnlyArray[Int], Int)
   Return
   Call(Int)
   CallIndirect(Int, Int)
@@ -247,17 +247,17 @@ pub(all) enum Instruction {
   ReturnCallRef(Int)
   Throw(Int)
   ThrowRef
-  TryTable(BlockType, Array[CatchHandler], Array[Instruction])
+  TryTable(BlockType, ReadOnlyArray[CatchHandler], ReadOnlyArray[Instruction])
   ContNew(Int)
   ContBind(Int, Int)
   Suspend(Int)
-  Resume(Int, Array[ResumeHandler])
-  ResumeThrow(Int, Int, Array[ResumeHandler])
-  ResumeThrowRef(Int, Array[ResumeHandler])
+  Resume(Int, ReadOnlyArray[ResumeHandler])
+  ResumeThrow(Int, Int, ReadOnlyArray[ResumeHandler])
+  ResumeThrowRef(Int, ReadOnlyArray[ResumeHandler])
   Switch(Int, Int)
   Drop
   Select
-  SelectTyped(Array[ValueType])
+  SelectTyped(ReadOnlyArray[ValueType])
   LocalGet(Int)
   LocalSet(Int)
   LocalTee(Int)
@@ -506,7 +506,7 @@ pub(all) enum Instruction {
   V128Store16Lane(Int, Int, Int64, Int)
   V128Store32Lane(Int, Int, Int64, Int)
   V128Store64Lane(Int, Int, Int64, Int)
-  I8x16Shuffle(FixedArray[Int])
+  I8x16Shuffle(ReadOnlyArray[Int])
   I8x16Swizzle
   I8x16Splat
   I16x8Splat
@@ -793,7 +793,8 @@ pub fn Module::is_array_type(Self, Int) -> Bool
 pub fn Module::is_func_type(Self, Int) -> Bool
 pub fn Module::is_struct_type(Self, Int) -> Bool
 pub fn Module::output(Self, &Logger) -> Unit
-pub fn Module::simple(Array[ValueType], Array[ValueType], Array[Instruction], String) -> Self
+pub fn Module::simple(ReadOnlyArray[ValueType], ReadOnlyArray[ValueType], ReadOnlyArray[Instruction], String) -> Self
+pub fn Module::snapshot(Self) -> Self
 pub fn Module::struct_type_at(Self, Int) -> StructType?
 pub fn Module::to_repr(Self) -> @debug.Repr
 pub fn Module::to_string(Self) -> String
@@ -830,7 +831,7 @@ pub fn StorageType::to_string(Self) -> String
 pub impl Show for StorageType
 
 pub(all) struct StructType {
-  fields : Array[FieldType]
+  fields : ReadOnlyArray[FieldType]
 } derive(Eq, @debug.Debug)
 pub fn StructType::equal(Self, Self) -> Bool
 pub fn StructType::not_equal(Self, Self) -> Bool
@@ -838,12 +839,12 @@ pub fn StructType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SubType {
   final_ : Bool
-  supertypes : Array[Int]
+  supertypes : ReadOnlyArray[Int]
   composite : CompositeType
 } derive(Eq, @debug.Debug)
 pub fn SubType::equal(Self, Self) -> Bool
 pub fn SubType::from_func(FuncType) -> Self
-pub fn SubType::func(Array[ValueType], Array[ValueType]) -> Self
+pub fn SubType::func(ReadOnlyArray[ValueType], ReadOnlyArray[ValueType]) -> Self
 pub fn SubType::not_equal(Self, Self) -> Bool
 pub fn SubType::output(Self, &Logger) -> Unit
 pub fn SubType::simple(CompositeType) -> Self
@@ -852,24 +853,24 @@ pub fn SubType::to_string(Self) -> String
 pub impl Show for SubType
 
 pub struct SubtypingContext {
-  types1 : Array[SubType]
-  types2 : Array[SubType]
-  rec_groups1 : Array[Int]
-  rec_groups2 : Array[Int]
-  canonical1 : Array[Int]
-  canonical2 : Array[Int]
+  types1 : ArrayView[SubType]
+  types2 : ArrayView[SubType]
+  rec_groups1 : ArrayView[Int]
+  rec_groups2 : ArrayView[Int]
+  canonical1 : ArrayView[Int]
+  canonical2 : ArrayView[Int]
   cross_module : Bool
   visited : Map[(Int, Int), Bool]
 }
-pub fn SubtypingContext::cross_module(Array[SubType], Array[SubType], rec_groups1? : Array[Int], rec_groups2? : Array[Int], canonical1? : Array[Int], canonical2? : Array[Int]) -> Self
+pub fn SubtypingContext::cross_module(ArrayView[SubType], ArrayView[SubType], rec_groups1? : ArrayView[Int], rec_groups2? : ArrayView[Int], canonical1? : ArrayView[Int], canonical2? : ArrayView[Int]) -> Self
 pub fn SubtypingContext::is_subtype(Self, Int, Int) -> Bool
-pub fn SubtypingContext::same_module(Array[SubType], rec_groups? : Array[Int], canonical? : Array[Int]) -> Self
+pub fn SubtypingContext::same_module(ArrayView[SubType], rec_groups? : ArrayView[Int], canonical? : ArrayView[Int]) -> Self
 pub fn SubtypingContext::validate_declared_subtype(Self, Int, Int) -> Bool
 pub fn SubtypingContext::value_type_subtype(Self, ValueType, ValueType, _idx1? : Int, _idx2? : Int) -> Bool
 
 pub(all) struct Table {
   type_ : TableType
-  init : Array[Instruction]?
+  init : ReadOnlyArray[Instruction]?
 } derive(Eq, @debug.Debug)
 pub fn Table::equal(Self, Self) -> Bool
 pub fn Table::not_equal(Self, Self) -> Bool
@@ -895,8 +896,8 @@ pub fn TagType::not_equal(Self, Self) -> Bool
 pub fn TagType::to_repr(Self) -> @debug.Repr
 
 type TypeEquivalenceContext
-pub fn TypeEquivalenceContext::cross_module(Array[SubType], Array[SubType], rec_groups1? : Array[Int], rec_groups2? : Array[Int]) -> Self
-pub fn TypeEquivalenceContext::same_module(Array[SubType], type_rec_groups? : Array[Int]) -> Self
+pub fn TypeEquivalenceContext::cross_module(ArrayView[SubType], ArrayView[SubType], rec_groups1? : ArrayView[Int], rec_groups2? : ArrayView[Int]) -> Self
+pub fn TypeEquivalenceContext::same_module(ArrayView[SubType], type_rec_groups? : ArrayView[Int]) -> Self
 pub fn TypeEquivalenceContext::types_equivalent(Self, Int, Int) -> Bool
 
 pub(all) enum Value {

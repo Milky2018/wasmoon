@@ -45,12 +45,13 @@ pub(all) enum ExternVal {
 ///|
 /// Import object: maps (module_name, name) to external values
 struct Imports {
+  owner : Store
   entries : Array[(String, String, ExternVal)]
 }
 
 ///|
-pub fn Imports::Imports() -> Imports {
-  { entries: [], }
+pub fn Imports::Imports(store : Store) -> Imports {
+  { entries: [], owner: store, }
 }
 
 ///|
@@ -116,4 +117,13 @@ pub fn Imports::resolve(
     }
   }
   None
+}
+
+///|
+pub fn Imports::check_store(
+  self : Imports,
+  store : Store,
+) -> Unit raise RuntimeError {
+  store.ensure_open()
+  guard physical_equal(self.owner, store) else { raise ForeignStore }
 }

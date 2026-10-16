@@ -8,6 +8,7 @@ import {
 options(
   "native-stub": [
     "jit.c",
+    "cleanup.c",
     "atomic.c",
     "atomic_wait.c",
     "trap.c",

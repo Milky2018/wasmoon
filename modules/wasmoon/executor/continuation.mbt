@@ -207,10 +207,9 @@ pub fn call_func_by_index_resumable(
   cooperative~ : Bool = false,
 ) -> ResumableCallOutcome raise @runtime.RuntimeError {
   let context = ExecContext(store, instance, classify_suspension~, cooperative~)
+  let func_type = check_call_arguments(store, instance, func_idx, args)
   let store_addr = instance.func_addrs[func_idx]
   let func_inst = store.get_func_inst(store_addr)
-  let type_idx = instance.func_type_indices[func_idx]
-  let func_type = instance.validated_func_type_at(type_idx)
   let return_arity = func_type.results.length()
   context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
     ExecutionSuspended => return suspended_outcome(context, return_arity)
@@ -233,10 +232,9 @@ fn start_async_host_call_unchecked(
   driver : @runtime.AsyncHostCallDriver,
 ) -> ResumableCallOutcome raise {
   let context = ExecContext(store, instance, async_host_driver=Some(driver))
+  let func_type = check_call_arguments(store, instance, func_idx, args)
   let store_addr = instance.func_addrs[func_idx]
   let func_inst = store.get_func_inst(store_addr)
-  let type_idx = instance.func_type_indices[func_idx]
-  let func_type = instance.validated_func_type_at(type_idx)
   let return_arity = func_type.results.length()
   context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
     ExecutionSuspended => return suspended_outcome(context, return_arity)

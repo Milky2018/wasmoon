@@ -55,7 +55,7 @@ test "resource destructor dispatch restores task context on return and trap" {
     debug_inspect(
       error,
       content=if traps {
-        "Some(\"CanonCallError(\\\"destructor failed (core store_idx=-1 func_idx=0)\\\")\")"
+        "Some(\"CanonCallError(\\\"destructor failed (core store_idx=0 func_idx=0)\\\")\")"
       } else {
         "None"
       },

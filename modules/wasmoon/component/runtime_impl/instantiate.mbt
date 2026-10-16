@@ -113,7 +113,7 @@ fn run_component_sections(
               }
               let mod_ = state.core_modules[module_idx]
               validate_core_import_args(mod_, args, state)
-              let imports = core_imports_from_args(args, state)
+              let imports = core_imports_from_args(args, state, store)
               let may_suspend = core_args_may_suspend(args, state)
               let native_eligible = core_args_native_eligible(args, state)
               let module_name = "\{name}::coreinst\{state.core_instances.length()}"

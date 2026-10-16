@@ -41,9 +41,14 @@ fn locals_by_merges(
       then_body.push(LocalSet(i))
     }
     body.push(LocalGet(0))
-    body.push(If(Empty, then_body, []))
+    body.push(If(Empty, ReadOnlyArray::from_array(then_body), []))
   }
-  @types.Module::simple(params, [], body, "run")
+  @types.Module::simple(
+    ReadOnlyArray::from_array(params),
+    [],
+    ReadOnlyArray::from_array(body),
+    "run",
+  )
 }
 
 ///|
@@ -125,7 +130,11 @@ test "a nested write reaches every enclosing merge" {
   let mod_ = @types.Module::simple(
     [I32, I32, I32, I32],
     [],
-    [Block(Empty, [Block(Empty, [Loop(Empty, inner)])])],
+    [
+      Block(Empty, [
+        Block(Empty, [Loop(Empty, ReadOnlyArray::from_array(inner))]),
+      ]),
+    ],
     "nested",
   )
   let func = @frontend.translate_function(native_test_env(), mod_, 0)

@@ -324,7 +324,8 @@ fn shared_thread_context(
     guard parent.named_modules.get(name) is Some(original) else {
       raise ModuleNotFound(name)
     }
-    let instance = @runtime.ModuleInstance::ModuleInstance()
+    let memories : Array[Int32] = []
+    let exports : Array[(String, @runtime.ExternVal)] = []
     let memory_indices : Map[Int32, Int32] = Map([])
     for export_ in original.exports {
       // Store-local functions, globals and tables cannot cross the boundary.
@@ -339,17 +340,20 @@ fn shared_thread_context(
         let local_index = match memory_indices.get(index) {
           Some(index) => index
           None => {
-            let index_in_child = instance.mem_addrs.length()
+            let index_in_child = memories.length()
             let address = child.store.alloc_shared_mem(memory) catch {
               error => raise classify_runtime_failure(error)
             }
-            instance.mem_addrs.push(address)
+            memories.push(address)
             memory_indices.set(index, index_in_child)
             index_in_child
           }
         }
-        instance.exports.push({ name: export_.name, desc: Memory(local_index), })
+        exports.push((export_.name, Memory(memories[local_index])))
       }
+    }
+    let instance = child.store.host_exports(exports) catch {
+      error => raise classify_runtime_failure(error)
     }
     child.named_modules.set(name, instance)
     child.registered_modules.set(name, instance)

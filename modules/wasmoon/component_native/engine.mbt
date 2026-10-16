@@ -113,8 +113,29 @@ fn native_component_session_with_contexts(
   } noraise {
     value => Some(value)
   }
+  let owner : Ref[@runtime.StoreIdentity?] = Ref(None)
+  let closed = Ref(false)
+  fn check_store(store : @runtime.Store) -> Unit raise @runtime.RuntimeError {
+    if closed.val || store.is_closed() {
+      raise StoreClosed
+    }
+    if owner.val is Some(identity) {
+      guard identity.matches(store) else { raise ForeignStore }
+    } else {
+      owner.val = Some(store.identity())
+    }
+  }
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(store, module_, instance) raise @runtime_impl.ComponentRuntimeError {
+      check_store(store) catch {
+        error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+      }
+      if contexts.get(instance.store_index()) is Some(existing) {
+        existing.core.bind_instance(store, instance) catch {
+          error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+        }
+        return
+      }
       guard target is Some(target) else {
         raise NativeEngineUnavailable(
           "the host architecture has no Wasmoon native component target",
@@ -141,7 +162,7 @@ fn native_component_session_with_contexts(
           }
         },
       )
-      let instance_idx = instance.store_idx
+      let instance_idx = instance.store_index()
       let context = { core, funcrefs, pending_suspension, suspension_enabled, }
       contexts[instance_idx] = context
       if rollback_registrar.val is Some(registrar) {
@@ -160,6 +181,9 @@ fn native_component_session_with_contexts(
       arguments,
       request,
     ) raise @runtime_impl.ComponentRuntimeError {
+      check_store(store) catch {
+        error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+      }
       if component_core_route(request) is Interpreter {
         let outcome = interpreter.invoke(
           store, instance, function_index, arguments, request,
@@ -167,9 +191,9 @@ fn native_component_session_with_contexts(
         on_execution(ExplicitInterpreter)
         return outcome
       }
-      guard contexts.get(instance.store_idx) is Some(context) else {
+      guard contexts.get(instance.store_index()) is Some(context) else {
         raise NativeCompilationFailed(
-          "native context is missing for core instance \{instance.store_idx}",
+          "native context is missing for core instance \{instance.store_index()}",
         )
       }
       context.pending_suspension[0] = None
@@ -199,6 +223,7 @@ fn native_component_session_with_contexts(
       }
     },
     prepare_store=fn(store) raise @runtime.RuntimeError {
+      check_store(store)
       store.enable_c_heap()
     },
     register_rollback=fn(registrar) {
@@ -206,6 +231,11 @@ fn native_component_session_with_contexts(
       registrar.on_finish(fn() { rollback_registrar.val = None })
     },
     close=fn() {
+      if closed.val {
+        return
+      }
+      closed.val = true
+      owner.val = None
       for _, context in contexts {
         context.close()
       }

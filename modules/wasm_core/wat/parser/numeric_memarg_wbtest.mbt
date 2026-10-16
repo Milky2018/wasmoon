@@ -15,7 +15,7 @@ test "numeric memory indices and SIMD lanes have distinct immediate positions" {
     }
   })
   debug_inspect(
-    accesses,
+    accesses[:].to_owned(),
     content=(
       #|[
       #|  I32Load(1, 0, 0),

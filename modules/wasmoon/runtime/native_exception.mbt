@@ -101,7 +101,7 @@ pub fn Store::decode_native_exception(
       raise TypeMismatch
     }
     for value in values {
-      self.get_exn(index).values.push(value)
+      self.exns[index].values.push(value)
     }
   }
   ExnRef(self.native_exception_to_store.get(reference).unwrap())

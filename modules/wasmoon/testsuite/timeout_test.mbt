@@ -139,7 +139,7 @@ test "interpreter timeout includes a final blocking host call" {
     func_type={ params: [], results: [I32], },
     type_idx=0,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("host", "slow", addr)
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports)
   let result = @executor.call_exported_func_with_options(

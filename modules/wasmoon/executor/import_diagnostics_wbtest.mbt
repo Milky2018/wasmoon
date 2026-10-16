@@ -15,7 +15,7 @@ fn module_with_imported_func(expected_type : @types.FuncType) -> @types.Module {
 test "validate_imports_with_diagnostics: missing import" {
   let store = @runtime.Store::Store()
   let mod = module_with_imported_func({ params: [], results: [I32], })
-  let result = validate_imports_with_diagnostics(store, mod, Imports())
+  let result = validate_imports_with_diagnostics(store, mod, Imports(store))
   assert_false(result.ok)
   inspect(result.diagnostics.length(), content="1")
   match result.diagnostics[0].kind {
@@ -31,7 +31,7 @@ test "validate_imports_with_diagnostics: import kind mismatch" {
   let store = @runtime.Store::Store()
   let mod = module_with_imported_func({ params: [], results: [I32], })
   let mem_addr = store.alloc_mem(Memory(1, None))
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_memory("env", "f", mem_addr)
   let result = validate_imports_with_diagnostics(store, mod, imports)
   assert_false(result.ok)
@@ -56,7 +56,7 @@ test "validate_imports_with_diagnostics: function signature mismatch" {
     func_type={ params: [], results: [I64], },
     type_idx=0,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("env", "f", host_addr)
   let result = validate_imports_with_diagnostics(store, mod, imports)
   assert_false(result.ok)
@@ -71,7 +71,11 @@ test "validate_imports_with_diagnostics: function signature mismatch" {
 test "instantiate_module_with_import_diagnostics: returns import error" {
   let store = @runtime.Store::Store()
   let mod = module_with_imported_func({ params: [], results: [I32], })
-  let result = instantiate_module_with_import_diagnostics(store, mod, Imports())
+  let result = instantiate_module_with_import_diagnostics(
+    store,
+    mod,
+    Imports(store),
+  )
   match result {
     ImportError(diagnostics) => assert_false(diagnostics.ok)
     _ => fail("Expected ImportError")
@@ -87,7 +91,7 @@ test "instantiate_module_with_import_diagnostics: returns ok on valid imports" {
     func_type={ params: [], results: [I32], },
     type_idx=0,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("env", "f", host_addr)
   let result = instantiate_module_with_import_diagnostics(store, mod, imports)
   match result {
@@ -110,7 +114,11 @@ test "instantiate_module_with_import_diagnostics: returns runtime failure" {
     codes: [{ locals: [], body: [Unreachable], }],
     start: Some(0),
   }
-  let result = instantiate_module_with_import_diagnostics(store, mod, Imports())
+  let result = instantiate_module_with_import_diagnostics(
+    store,
+    mod,
+    Imports(store),
+  )
   match result {
     RuntimeFailure(err) => inspect(err.to_string(), content="unreachable")
     _ => fail("Expected RuntimeFailure")

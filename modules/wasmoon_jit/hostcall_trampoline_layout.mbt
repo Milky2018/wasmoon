@@ -36,8 +36,8 @@ fn is_hostcall_int_class(ty : @types.ValueType) -> Bool {
 
 ///|
 pub fn plan_hostcall_import_trampoline_layout(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
+  param_types : ArrayView[@types.ValueType],
+  result_types : ArrayView[@types.ValueType],
   max_int_regs : Int32,
   max_float_regs : Int32,
 ) -> HostcallImportTrampolineLayout {

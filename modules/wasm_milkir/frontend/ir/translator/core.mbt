@@ -241,7 +241,7 @@ fn Translator::mark_block_frame_reachable(
 fn Translator::Translator(
   name : String,
   func_type : @types.FuncType,
-  locals : Array[@types.ValueType],
+  locals : ArrayView[@types.ValueType],
   func_types : Array[@types.FuncType],
   func_type_indices : Array[Int32],
   num_imports : Int32,
@@ -362,8 +362,8 @@ pub fn translate_function_body(
   ctx : TranslationContext,
   name : String,
   func_type : @types.FuncType,
-  locals : Array[@types.ValueType],
-  body : Array[@types.Instruction],
+  locals : ArrayView[@types.ValueType],
+  body : ArrayView[@types.Instruction],
 ) -> Function {
   let translator = Translator::Translator(
     name,
@@ -457,7 +457,7 @@ fn Translator::spill_words_to_v128(
 /// them in step.
 fn Translator::read_exception_payload(
   self : Translator,
-  tag_types : Array[@types.ValueType],
+  tag_types : ArrayView[@types.ValueType],
 ) -> Array[Value] {
   let args : Array[Value] = []
   let mut word = 0
@@ -697,11 +697,11 @@ fn get_block_result_types(
   match block_type {
     Empty => []
     Value(vt) => [type_from_wasm(vt)]
-    MultiValue(vts) => vts.map(type_from_wasm)
-    InlineType(_, results) => results.map(type_from_wasm)
+    MultiValue(vts) => vts[:].map(type_from_wasm)
+    InlineType(_, results) => results.map(type_from_wasm)[:].to_owned()
     TypeIndex(idx) =>
       if idx < func_types.length() {
-        func_types[idx].results.map(type_from_wasm)
+        func_types[idx].results[:].map(type_from_wasm)
       } else {
         []
       }
@@ -718,10 +718,10 @@ fn get_block_param_types(
     Empty => []
     Value(_) => [] // Simple block types have no params
     MultiValue(_) => [] // MultiValue blocks have no params (result-only)
-    InlineType(params, _) => params.map(type_from_wasm)
+    InlineType(params, _) => params.map(type_from_wasm)[:].to_owned()
     TypeIndex(idx) =>
       if idx < func_types.length() {
-        func_types[idx].params.map(type_from_wasm)
+        func_types[idx].params[:].map(type_from_wasm)
       } else {
         []
       }
@@ -732,7 +732,7 @@ fn get_block_param_types(
 /// Translate a sequence of WASM instructions
 fn Translator::translate(
   self : Translator,
-  instrs : Array[@types.Instruction],
+  instrs : ArrayView[@types.Instruction],
 ) -> Function {
   self.func_env.emit_cancellation_safepoint(self.builder, self.vmctx)
   // Initialize locals with default values in the default entry block.
@@ -1004,7 +1004,7 @@ fn Translator::get_tag_param_types(
     let tag = self.tags[tag_idx]
     if tag.type_idx >= 0 && tag.type_idx < self.func_types.length() {
       let func_type = self.func_types[tag.type_idx]
-      return func_type.params
+      return func_type.params[:].to_owned()
     }
   }
   [] // Default to empty array if tag not found
@@ -1268,7 +1268,7 @@ fn Translator::translate_simd_store_lane(
 fn Translator::translate_block(
   self : Translator,
   block_type : @types.BlockType,
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
 ) -> Unit {
   // Save the unreachable state from outer context
   let outer_is_unreachable = self.is_unreachable
@@ -1378,7 +1378,7 @@ fn Translator::translate_block(
 fn Translator::translate_loop(
   self : Translator,
   block_type : @types.BlockType,
-  body : Array[@types.Instruction],
+  body : ArrayView[@types.Instruction],
 ) -> Unit {
   // Save the unreachable state from outer context
   let outer_is_unreachable = self.is_unreachable

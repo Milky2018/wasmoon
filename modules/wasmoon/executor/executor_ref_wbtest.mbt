@@ -2,7 +2,12 @@
 test "reference types: ref.null funcref" {
   // Function: push null funcref and check if it's null
   let body : Array[@types.Instruction] = [RefNull(FuncRef), RefIsNull]
-  let mod = @types.Module::simple([], [I32], body, "test")
+  let mod = @types.Module::simple(
+    [],
+    [I32],
+    ReadOnlyArray::from_array(body),
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -15,7 +20,12 @@ test "reference types: ref.null funcref" {
 test "reference types: ref.null externref" {
   // Function: push null externref and check if it's null
   let body : Array[@types.Instruction] = [RefNull(ExternRef), RefIsNull]
-  let mod = @types.Module::simple([], [I32], body, "test")
+  let mod = @types.Module::simple(
+    [],
+    [I32],
+    ReadOnlyArray::from_array(body),
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -44,7 +54,7 @@ test "reference types: ref.func" {
     globals: [],
     exports: [{ name: "test", desc: Func(1), }],
     start: None,
-    elems: [],
+    elems: [{ mode: Declarative, type_: FuncRef, init: [[RefFunc(0)]], }],
     codes: [func0, func1],
     datas: [],
     tags: [],
@@ -142,7 +152,7 @@ test "reference types: ref.func used with table.set" {
     globals: [],
     exports: [{ name: "test", desc: Func(1), }],
     start: None,
-    elems: [],
+    elems: [{ mode: Declarative, type_: FuncRef, init: [[RefFunc(0)]], }],
     codes: [target_func, test_func],
     datas: [],
     tags: [],
@@ -161,7 +171,12 @@ test "multi-value: function returning two values" {
   // Function returns (i32, i32) pair
   let results_types = [@types.ValueType::I32, I32]
   let body : Array[@types.Instruction] = [I32Const(10), I32Const(20)]
-  let mod = @types.Module::simple([], results_types, body, "test")
+  let mod = @types.Module::simple(
+    [],
+    ReadOnlyArray::from_array(results_types),
+    ReadOnlyArray::from_array(body),
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   inspect(results.length(), content="2")
@@ -184,7 +199,12 @@ test "multi-value: function returning three values" {
     I64Const(2L),
     F32Const(3.0),
   ]
-  let mod = @types.Module::simple([], results_types, body, "test")
+  let mod = @types.Module::simple(
+    [],
+    ReadOnlyArray::from_array(results_types),
+    ReadOnlyArray::from_array(body),
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   inspect(results.length(), content="3")
@@ -351,7 +371,12 @@ test "multi-value: if returning two values" {
 test "multi-value: block with single Value type" {
   // Block with Value(I32) returns single value (existing behavior)
   let body : Array[@types.Instruction] = [Block(Value(I32), [I32Const(42)])]
-  let mod = @types.Module::simple([], [I32], body, "test")
+  let mod = @types.Module::simple(
+    [],
+    [I32],
+    ReadOnlyArray::from_array(body),
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -364,7 +389,12 @@ test "multi-value: block with single Value type" {
 test "multi-value: empty block" {
   // Block with Empty type returns nothing
   let body : Array[@types.Instruction] = [Block(Empty, [Nop]), I32Const(99)]
-  let mod = @types.Module::simple([], [I32], body, "test")
+  let mod = @types.Module::simple(
+    [],
+    [I32],
+    ReadOnlyArray::from_array(body),
+    "test",
+  )
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -656,7 +686,7 @@ test "call_indirect with imports path" {
 
   // Use instantiate_module_with_imports (same path as run.mbt)
   let store = @runtime.Store::Store()
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   let instance = instantiate_module_with_imports(store, mod, imports) catch {
     _ => fail("instantiate failed")
   }
@@ -716,7 +746,7 @@ test "call_indirect with multiple funcs and explicit type" {
     func_names: Map([]),
   }
   let store = @runtime.Store::Store()
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   let instance = instantiate_module_with_imports(store, mod, imports) catch {
     _ => fail("instantiate failed")
   }
@@ -780,7 +810,7 @@ test "call_indirect type index bug reproduction" {
     func_names: Map([]),
   }
   let store = @runtime.Store::Store()
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   let instance = instantiate_module_with_imports(store, mod, imports) catch {
     _ => fail("instantiate failed")
   }

@@ -41,6 +41,10 @@ pub fn NativeAllocationError::to_string(Self) -> String
 pub impl Show for NativeAllocationError
 
 // Types and methods
+pub type CleanupOwner
+pub fn CleanupOwner::close(Self) -> Unit
+pub fn CleanupOwner::new(() -> Unit) -> Self
+
 type ExecCodeHandle
 
 pub type GCHeapHandle
@@ -77,12 +81,13 @@ pub impl @debug.Debug for MemoryDescriptor
 type NativeContinuationArena
 pub fn NativeContinuationArena::clear(Self) -> Unit
 pub fn NativeContinuationArena::gc_roots(Self, Int64) -> FixedArray[Int64]
+pub fn NativeContinuationArena::is_live(Self, Int64) -> Bool
 pub fn NativeContinuationArena::new() -> Self raise NativeAllocationError
 pub fn NativeContinuationArena::reclaim_retired(Self) -> Unit
 
 type NativeExceptionArena
 pub fn NativeExceptionArena::clear(Self) -> Unit
-pub fn NativeExceptionArena::define_tag(Self, Int, Array[@types.ValueType]) -> Bool
+pub fn NativeExceptionArena::define_tag(Self, Int, ArrayView[@types.ValueType]) -> Bool
 pub fn NativeExceptionArena::enable_reclamation(Self) -> Unit
 pub fn NativeExceptionArena::insert(Self, GCHeapHandle, Int, Array[Int64]) -> Int64
 pub fn NativeExceptionArena::new() -> Self raise NativeAllocationError

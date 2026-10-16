@@ -177,8 +177,8 @@ pub fn wasm_function_signature(
   function_type : @types.FuncType,
 ) -> @native.Signature {
   @native.Signature::new(
-    function_type.params.map(wasm_value_type),
-    function_type.results.map(wasm_value_type),
+    function_type.params[:].map(wasm_value_type),
+    function_type.results[:].map(wasm_value_type),
   )
 }
 

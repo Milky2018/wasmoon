@@ -293,7 +293,7 @@ test "native table allocation denial does not publish a Store address" {
     _ => false
   }
   inspect(denied, content="true")
-  inspect(store.tables.length(), content="0")
+  inspect(store.counts().tables, content="0")
   inspect(store.alloc_table(table), content="0")
 }
 
@@ -324,7 +324,7 @@ test "failed capacity instantiation rolls back explicit transactions and permits
       transaction.rollback()
       inspect(denied, content="true")
       debug_inspect(
-        (store.funcs.length(), store.mems.length(), store.instances.length()),
+        (store.counts().funcs, store.counts().mems, store.counts().instances),
         content="(0, 0, 0)",
       )
     }
@@ -349,7 +349,7 @@ test "native heap activation rejects live interpreter objects without losing the
     _ => false
   }
   inspect(denied, content="true")
-  inspect(store.c_heap is None, content="true")
+  inspect(store.native_heap() is None, content="true")
   debug_inspect(store.struct_get(object, 0), content="I32(37)")
   inspect(store.collect_garbage(), content="1")
   store.enable_c_heap()

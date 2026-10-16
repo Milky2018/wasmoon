@@ -1,0 +1,9 @@
+Warning: [0027]
+     ╭─[ /Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/sanitizer_testsuite/core_boundary_test.mbt:552:14 ]
+     │
+ 552 │       write: fn(_) { raise @runtime.TypeMismatch },
+     │              ─┬
+     │               ╰── Warning (deprecated_syntax): This `fn` may raise error but is not annotated with `raise`, this kind of effect inference is deprecated, use arrow function `(..) => ...` instead or add explicit `raise` annotation.
+─────╯
+[Milky2018/wasmoon] test sanitizer_testsuite/core_boundary_test.mbt:540 ("Core boundary: host initialization cannot replace the validated start function") failed: unreachable
+Total tests: 17, passed: 16, failed: 1.

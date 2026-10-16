@@ -5,10 +5,13 @@
 ///|
 /// Helper to create FuncType from param and result types
 fn make_func_type(
-  params : Array[@types.ValueType],
-  results : Array[@types.ValueType],
+  params : ArrayView[@types.ValueType],
+  results : ArrayView[@types.ValueType],
 ) -> @types.FuncType {
-  { params, results, }
+  {
+    params: ReadOnlyArray::from_array(params),
+    results: ReadOnlyArray::from_array(results),
+  }
 }
 
 ///|

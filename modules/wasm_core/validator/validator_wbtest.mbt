@@ -1374,7 +1374,7 @@ test "regression: invalid type index should fail" {
   // When a function references a type that doesn't exist, validation should fail
   let mod : @types.Module = {
     types: [@types.SubType::func([], [])], // only type 0 exists
-    type_rec_groups: [0, 1, 2],
+    type_rec_groups: [0],
     imports: [],
     funcs: [2], // references type 2, which doesn't exist
     tables: [],
@@ -1397,7 +1397,7 @@ test "regression: uninitialized non-nullable local should fail" {
   // Non-nullable reference locals must be initialized before use
   let mod : @types.Module = {
     types: [@types.SubType::func([], [])],
-    type_rec_groups: [0, 1],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1427,7 +1427,7 @@ test "regression: initialized non-nullable local should pass" {
   // Use FuncRef (nullable) as local type since RefFunc(idx) instruction pushes FuncRef
   let mod : @types.Module = {
     types: [@types.SubType::func([], [])],
-    type_rec_groups: [0, 1],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1463,7 +1463,7 @@ test "regression: nullable ref local reading without initialization should pass"
   // so reading without explicit initialization is valid
   let mod : @types.Module = {
     types: [@types.SubType::func([], [])],
-    type_rec_groups: [0, 1],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1490,7 +1490,7 @@ test "regression: param with non-nullable ref type should be initialized" {
   // Function parameters are always initialized by the caller
   let mod : @types.Module = {
     types: [@types.SubType::func([RefFunc], [])],
-    type_rec_groups: [0, 1],
+    type_rec_groups: [0],
     imports: [],
     funcs: [0],
     tables: [],
@@ -1547,7 +1547,11 @@ fn field(
 ///|
 /// Helper: create a SubType wrapping a struct
 fn struct_subtype(fields : Array[@types.FieldType]) -> @types.SubType {
-  { final_: true, supertypes: [], composite: Struct({ fields, }), }
+  {
+    final_: true,
+    supertypes: [],
+    composite: Struct({ fields: ReadOnlyArray::from_array(fields), }),
+  }
 }
 
 ///|
@@ -1690,11 +1694,14 @@ test "validator: mixed func, struct, array types should pass" {
 
 ///|
 fn module_with_memory(
-  body : Array[@types.Instruction],
-  results : Array[@types.ValueType],
+  body : ArrayView[@types.Instruction],
+  results : ArrayView[@types.ValueType],
   is_memory64~ : Bool = false,
 ) -> @types.Module {
-  let func_type : @types.FuncType = { params: [], results, }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: ReadOnlyArray::from_array(results),
+  }
   let mem_type : @types.MemoryType = {
     limits: { min: 1L, max: None, },
     is_memory64,
@@ -1712,7 +1719,7 @@ fn module_with_memory(
     exports: [],
     start: None,
     elems: [],
-    codes: [{ locals: [], body, }],
+    codes: [{ locals: [], body: ReadOnlyArray::from_array(body), }],
     datas: [],
     tags: [],
     func_names: Map([]),
@@ -1721,11 +1728,14 @@ fn module_with_memory(
 
 ///|
 fn module_with_table(
-  body : Array[@types.Instruction],
-  results : Array[@types.ValueType],
+  body : ArrayView[@types.Instruction],
+  results : ArrayView[@types.ValueType],
   is_table64~ : Bool = false,
 ) -> @types.Module {
-  let func_type : @types.FuncType = { params: [], results, }
+  let func_type : @types.FuncType = {
+    params: [],
+    results: ReadOnlyArray::from_array(results),
+  }
   let table_type : @types.TableType = {
     limits: { min: 1L, max: None, },
     elem_type: FuncRef,
@@ -1742,7 +1752,7 @@ fn module_with_table(
     exports: [],
     start: None,
     elems: [],
-    codes: [{ locals: [], body, }],
+    codes: [{ locals: [], body: ReadOnlyArray::from_array(body), }],
     datas: [],
     tags: [],
     func_names: Map([]),
@@ -1883,7 +1893,7 @@ test "validator: table64 table.grow takes and returns i64" {
 /// rule. Both spellings below reached it (ISS-395).
 test "validator: type index naming the wrong kind is rejected, not fatal" {
   let func_type : @types.FuncType = { params: [], results: [], }
-  fn module_with(body : Array[@types.Instruction]) -> @types.Module {
+  fn module_with(body : ArrayView[@types.Instruction]) -> @types.Module {
     {
       types: [@types.SubType::from_func(func_type)],
       type_rec_groups: [0],
@@ -1895,7 +1905,7 @@ test "validator: type index naming the wrong kind is rejected, not fatal" {
       exports: [],
       start: None,
       elems: [],
-      codes: [{ locals: [], body, }],
+      codes: [{ locals: [], body: ReadOnlyArray::from_array(body), }],
       datas: [],
       tags: [],
       func_names: Map([]),

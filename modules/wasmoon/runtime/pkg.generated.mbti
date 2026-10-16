@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/runtime"
 
 import {
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/validator",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/wasmoon_jit/native/callable",
@@ -64,6 +65,9 @@ pub(all) suberror RuntimeError {
   StackUnderflow
   StackOverflow
   TypeMismatch
+  InvalidModule(String)
+  ForeignStore
+  InvalidHandle
   StoreClosed
   MemoryClosed
   InvalidMemoryType(String)
@@ -153,7 +157,7 @@ pub struct Caller {
   store : Store
   instance : ModuleInstance
 } derive(@debug.Debug)
-pub fn Caller::Caller(Store, ModuleInstance) -> Self
+pub fn Caller::Caller(Store, ModuleInstance) -> Self raise RuntimeError
 pub fn Caller::get_exported_func_addr(Self, String) -> Int?
 pub fn Caller::get_exported_memory(Self, String) -> Memory? raise RuntimeError
 pub fn Caller::instance(Self) -> ModuleInstance
@@ -202,6 +206,11 @@ pub fn FuncOwner::equal(Self, Self) -> Bool
 pub fn FuncOwner::not_equal(Self, Self) -> Bool
 pub fn FuncOwner::to_repr(Self) -> @debug.Repr
 
+pub struct FunctionIdentity {
+  // private fields
+}
+pub fn FunctionIdentity::is_live(Self) -> Bool
+
 pub(all) enum GCObject {
   Struct(StructInstance)
   Array(ArrayInstance)
@@ -238,7 +247,7 @@ pub struct GcStats {
 pub fn GcStats::to_repr(Self) -> @debug.Repr
 
 type GlobalInstance derive(@debug.Debug)
-pub fn GlobalInstance::GlobalInstance(@types.GlobalType, @types.Value) -> Self
+pub fn GlobalInstance::GlobalInstance(@types.GlobalType, @types.Value) -> Self raise RuntimeError
 pub fn GlobalInstance::bind_native(Self, NativeGlobalBinding) -> Unit
 pub fn GlobalInstance::get(Self) -> @types.Value raise RuntimeError
 pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
@@ -270,12 +279,13 @@ pub(all) enum GuestContinuationInput {
 pub fn GuestContinuationInput::to_repr(Self) -> @debug.Repr
 
 type Imports
-pub fn Imports::Imports() -> Self
+pub fn Imports::Imports(Store) -> Self
 pub fn Imports::add_func(Self, String, String, Int) -> Unit
 pub fn Imports::add_global(Self, String, String, Int) -> Unit
 pub fn Imports::add_memory(Self, String, String, Int) -> Unit
 pub fn Imports::add_table(Self, String, String, Int) -> Unit
 pub fn Imports::add_tag(Self, String, String, Int) -> Unit
+pub fn Imports::check_store(Self, Store) -> Unit raise RuntimeError
 pub fn Imports::resolve(Self, String, String) -> ExternVal?
 
 type InstantiationTransaction
@@ -444,27 +454,31 @@ pub fn Memory::write_byte(Self, Int, Byte) -> Unit
 pub fn Memory::write_i32(Self, Int, Int) -> Unit
 pub fn Memory::write_i64(Self, Int, Int64) -> Unit
 
-pub(all) struct ModuleInstance {
-  types : Array[@types.SubType]
-  type_rec_groups : Array[Int]
-  canonical_type_indices : Array[Int]
-  mut store_idx : Int
-  func_addrs : Array[Int]
-  func_type_indices : Array[Int]
-  table_addrs : Array[Int]
-  mem_addrs : Array[Int]
-  global_addrs : Array[Int]
-  tag_addrs : Array[Int]
-  exports : Array[@types.Export]
-  elem_values : Array[Array[@types.Value]]
-  elem_segments : Array[@types.Element]
-  data_segments : Array[@types.Data]
-  dropped_elems : FixedArray[Bool]
-  dropped_datas : FixedArray[Bool]
+pub struct ModuleInstance {
+  types : ReadOnlyArray[@types.SubType]
+  type_rec_groups : ReadOnlyArray[Int]
+  canonical_type_indices : ReadOnlyArray[Int]
+  mut func_addrs : ReadOnlyArray[Int]
+  func_type_indices : ReadOnlyArray[Int]
+  mut table_addrs : ReadOnlyArray[Int]
+  mut mem_addrs : ReadOnlyArray[Int]
+  mut global_addrs : ReadOnlyArray[Int]
+  tag_addrs : ReadOnlyArray[Int]
+  mut exports : ReadOnlyArray[@types.Export]
+  elem_segments : ReadOnlyArray[@types.Element]
+  data_segments : ReadOnlyArray[@types.Data]
+  // private fields
 } derive(@debug.Debug)
 pub fn ModuleInstance::ModuleInstance() -> Self
-pub fn ModuleInstance::drop_element(Self, Int) -> Unit
+pub fn ModuleInstance::bind_native_segments(Self, @wasmoon_jit.NativeJITContext) -> Unit
+pub fn ModuleInstance::data_dropped(Self, Int) -> Bool
+pub fn ModuleInstance::drop_data(Self, Int) -> Unit raise RuntimeError
+pub fn ModuleInstance::drop_element(Self, Int) -> Unit raise RuntimeError
+pub fn ModuleInstance::element_dropped(Self, Int) -> Bool
+pub fn ModuleInstance::element_value(Self, Int, Int) -> @types.Value raise RuntimeError
+pub fn ModuleInstance::element_values(Self, Int) -> ReadOnlyArray[@types.Value] raise RuntimeError
 pub fn ModuleInstance::output(Self, &Logger) -> Unit
+pub fn ModuleInstance::store_index(Self) -> Int
 pub fn ModuleInstance::to_repr(Self) -> @debug.Repr
 pub fn ModuleInstance::to_string(Self) -> String
 pub fn ModuleInstance::validated_array_type_at(Self, Int) -> @types.ArrayType
@@ -485,6 +499,18 @@ pub impl @debug.Debug for NativeGlobalBinding
 type RollbackRegistrar
 pub fn RollbackRegistrar::on_finish(Self, () -> Unit) -> Unit
 pub fn RollbackRegistrar::on_rollback(Self, () -> Unit) -> Unit
+
+pub struct RootedValue {
+  // private fields
+}
+pub fn RootedValue::close(Self) -> Unit
+pub fn RootedValue::f32(Float) -> Self
+pub fn RootedValue::f64(Double) -> Self
+pub fn RootedValue::i32(Int) -> Self
+pub fn RootedValue::i64(Int64) -> Self
+pub fn RootedValue::null() -> Self
+pub fn RootedValue::scalar(Self) -> @types.Value raise RuntimeError
+pub fn RootedValue::v128(Bytes) -> Self raise RuntimeError
 
 pub struct RuntimeCapabilities {
   version : String
@@ -558,26 +584,6 @@ pub fn Stack::to_repr(Self) -> @debug.Repr
 pub struct Store {
   nan_canonicalization : Bool
   interpreter_limits : InterpreterLimits
-  funcs : Array[FuncInst]
-  func_types : Array[@types.FuncType]
-  func_type_indices : Array[Int]
-  tables : Array[Table]
-  mems : Array[Memory]
-  globals : Array[GlobalInstance]
-  tags : Array[@types.FuncType]
-  tag_type_indices : Array[Int]
-  tag_owners : Array[FuncOwner]
-  mut exns : Map[Int, ExnInstance]
-  heap : MarkSweepHeap
-  mut c_heap : @wasmoon_jit.CHeap?
-  mut module_types : Array[@types.SubType]
-  mut module_rec_groups : Array[Int]
-  mut wrapped_externs : Map[Int, @types.Value]
-  func_owners : Array[FuncOwner]
-  instances : Array[ModuleInstance]
-  jit_tables : Array[@wasmoon_jit.JITTable?]
-  mut wasi_mem_addr : Int?
-  mut wasi_ctx_handle : Int
   native_execution : @execution.NativeExecutionState
   // private fields
 } derive(@debug.Debug)
@@ -586,7 +592,7 @@ pub fn Store::alloc_array(Self, Int, Array[@types.Value], instance? : ModuleInst
 pub fn Store::alloc_async_host_func(Self, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func_with_caller(Self, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
-pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
+pub fn Store::alloc_func(Self, @validator.ValidatedModule, Int) -> Int raise RuntimeError
 pub fn Store::alloc_global(Self, GlobalInstance) -> Int raise RuntimeError
 pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_host_func_with_caller(Self, (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
@@ -602,14 +608,21 @@ pub fn Store::array_len(Self, Int) -> Int raise RuntimeError
 pub fn Store::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub fn Store::begin_gc_tracing(Self) -> Unit
 pub fn Store::bind_native_callable_view(Self, (Array[Int], Array[(Int64, Int)]) -> Unit) -> Unit
+pub fn Store::borrow_rooted_value(Self, RootedValue) -> @types.Value raise RuntimeError
+pub fn Store::borrow_typed_rooted_value(Self, RootedValue, ModuleInstance, @types.ValueType) -> @types.Value raise RuntimeError
+pub fn Store::check_instance(Self, ModuleInstance) -> Unit raise RuntimeError
 pub fn Store::close(Self) -> Unit
 pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int
 pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
+pub fn Store::counts(Self) -> StoreCounts
+pub fn Store::current_types(Self) -> Array[@types.SubType]
 pub fn Store::decode_native_exception(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Store::enable_c_heap(Self) -> Unit raise RuntimeError
 pub fn Store::encode_native_exception(Self, Int) -> Int64 raise RuntimeError
 pub fn Store::end_gc_tracing(Self) -> Unit
 pub fn Store::enter_interpreter_boundary(Self) -> Unit raise RuntimeError
+pub fn Store::func_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
+pub fn Store::function_identity(Self, Int) -> FunctionIdentity raise RuntimeError
 pub fn Store::gc_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
 pub fn Store::get_c_heap_ptr(Self) -> @jit_ffi.GCHeapHandle
 pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
@@ -625,6 +638,7 @@ pub fn Store::get_func_type_opt(Self, Int) -> @types.FuncType?
 pub fn Store::get_gc_stats(Self) -> (Int64, Int64, Int, Int, Int)
 pub fn Store::get_gc_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
+pub fn Store::get_instance(Self, Int) -> ModuleInstance raise RuntimeError
 pub fn Store::get_jit_table(Self, Int) -> @wasmoon_jit.JITTable?
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory raise RuntimeError
@@ -635,6 +649,11 @@ pub fn Store::get_tag_type_idx(Self, Int) -> Int
 pub fn Store::get_wasi_ctx_handle(Self) -> Int
 pub fn Store::get_wasi_memory(Self) -> Memory raise RuntimeError
 pub fn Store::has_c_heap(Self) -> Bool
+pub fn Store::has_guest_continuation(Self, Int64) -> Bool
+pub fn Store::host_call_instance(Self, Int) -> ModuleInstance raise RuntimeError
+pub fn Store::host_exports(Self, ArrayView[(String, ExternVal)]) -> ModuleInstance raise RuntimeError
+pub fn Store::identity(Self) -> StoreIdentity
+pub fn Store::is_closed(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::jit_funcref_entries(Self) -> Array[StoreFuncrefEntry]
 pub fn Store::leave_interpreter_boundary(Self) -> Unit
@@ -643,14 +662,18 @@ pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::native_callable_registry(Self) -> @callable.NativeCallableRegistry?
 pub fn Store::native_execution_state(Self) -> @execution.NativeExecutionState
+pub fn Store::native_heap(Self) -> @wasmoon_jit.CHeap?
 pub fn Store::native_type_indices(Self, ModuleInstance) -> Array[Int]
 pub fn Store::native_type_parents(Self) -> Array[Int]
+pub fn Store::new_instance(Self, @validator.ValidatedModule, func_addrs~ : ArrayView[Int], table_addrs~ : ArrayView[Int], mem_addrs~ : ArrayView[Int], global_addrs~ : ArrayView[Int], tag_addrs~ : ArrayView[Int], elem_values~ : Array[Array[@types.Value]]) -> ModuleInstance raise RuntimeError
 pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease
 pub fn Store::put_guest_continuation(Self, GuestContinuationBody) -> Int64 raise RuntimeError
 pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
 pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry], release_owner? : () -> Unit) -> StoreFuncrefRegistration
 pub fn Store::register_suspended_execution(Self, () -> Unit) -> Int64 raise RuntimeError
 pub fn Store::release_suspended_execution(Self, Int64) -> Unit
+pub fn Store::root_raw_value(Self, @types.Value) -> RootedValue raise RuntimeError
+pub fn Store::root_result_value(Self, ModuleInstance, @types.Value, @types.ValueType) -> RootedValue raise RuntimeError
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit raise RuntimeError
 pub fn Store::set_wasi_ctx_handle(Self, Int) -> Unit raise RuntimeError
 pub fn Store::set_wasi_mem_addr(Self, Int) -> Unit raise RuntimeError
@@ -663,6 +686,27 @@ pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeErr
 pub fn Store::with_c_heap(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self raise RuntimeError
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 
+pub struct StoreCounts {
+  funcs : Int
+  func_types : Int
+  func_type_indices : Int
+  tables : Int
+  mems : Int
+  globals : Int
+  tags : Int
+  tag_type_indices : Int
+  tag_owners : Int
+  exns : Int
+  wrapped_externs : Int
+  func_owners : Int
+  instances : Int
+  jit_tables : Int
+  heap_slots : Int
+  heap_live : Int
+  wrapped_extern_capacity : Int
+} derive(@debug.Debug)
+pub fn StoreCounts::to_repr(Self) -> @debug.Repr
+
 pub struct StoreFuncrefEntry {
   store_addr : Int
   func_ptr : Int64
@@ -674,6 +718,11 @@ pub fn StoreFuncrefEntry::to_repr(Self) -> @debug.Repr
 
 type StoreFuncrefRegistration
 pub fn StoreFuncrefRegistration::release(Self) -> Unit
+
+pub struct StoreIdentity {
+  // private fields
+}
+pub fn StoreIdentity::matches(Self, Store) -> Bool
 
 pub(all) struct StructInstance {
   type_idx : Int

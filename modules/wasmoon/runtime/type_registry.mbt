@@ -1,8 +1,11 @@
 ///|
 /// Store-local identities retain recursive-group equivalence across modules.
 priv struct StoreTypeRegistry {
-  representatives : Array[(Array[@types.SubType], Array[Int32], Int32)]
-  mappings : Map[Int32, (Array[@types.SubType], Array[Int32], Array[Int32])]
+  representatives : Array[(ArrayView[@types.SubType], ArrayView[Int32], Int32)]
+  mappings : Map[
+    Int32,
+    (ArrayView[@types.SubType], ArrayView[Int32], Array[Int32]),
+  ]
   parents : Array[Int32]
   views : Array[NativeCallableTypeView]
   mut native_registry : @wasmoon_jit.NativeCallableRegistry?
@@ -38,8 +41,8 @@ fn StoreTypeRegistry::register(
 ///|
 fn StoreTypeRegistry::register_graph(
   self : StoreTypeRegistry,
-  types : Array[@types.SubType],
-  groups : Array[Int32],
+  types : ArrayView[@types.SubType],
+  groups : ArrayView[Int32],
   store_index : Int32,
 ) -> Array[Int32] {
   if store_index >= 0 &&
@@ -93,6 +96,9 @@ pub fn Store::native_type_indices(
   self : Store,
   instance : ModuleInstance,
 ) -> Array[Int32] {
+  self.check_instance(instance) catch {
+    _ => return []
+  }
   self.native_types.register(instance).copy()
 }
 
@@ -189,6 +195,12 @@ pub fn Store::gc_type_is_subtype(
   instance : ModuleInstance,
   expected : Int32,
 ) -> Bool {
+  self.check_instance(instance) catch {
+    _ => return false
+  }
+  guard expected >= 0 && expected < instance.types.length() else {
+    return false
+  }
   let actual = match self.c_heap {
     Some(heap) => heap.runtime_type(reference)
     None => self.native_types.heap_types.get(reference).unwrap_or(-1)
@@ -263,8 +275,30 @@ fn StoreTypeRegistry::publish(self : StoreTypeRegistry) -> Unit {
   if self.views.is_empty() {
     return
   }
-  let parents = self.parents.copy()
   for view in self.views {
-    (view.refresh)(parents, entries)
+    (view.refresh)(self.parents.copy(), entries.copy())
   }
+}
+
+///|
+pub fn Store::func_type_is_subtype(
+  self : Store,
+  address : Int32,
+  instance : ModuleInstance,
+  expected : Int32,
+) -> Bool {
+  self.check_instance(instance) catch {
+    _ => return false
+  }
+  guard expected >= 0 && expected < instance.types.length() else {
+    return false
+  }
+  let actual = self.get_func_canonical_type_idx(address)
+  if actual < 0 {
+    return false
+  }
+  self.native_types.is_subtype(
+    actual,
+    self.native_types.register(instance)[expected],
+  )
 }

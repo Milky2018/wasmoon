@@ -42,7 +42,7 @@ test "WAST scripts release stores and every compiled module on success and failu
       inspect(context.jit_module.get_func_count(), content="0")
     }
     for store in stores {
-      inspect(store.mems.length(), content="0")
+      inspect(store.counts().mems, content="0")
     }
     inspect(
       @native_test_support.shared_indirect_table_live_count() == baseline,
@@ -56,10 +56,10 @@ test "WAST close is idempotent and rejects subsequent commands" {
   for use_jit in [false, true] {
     let context = @wast.WastContext(use_jit)
     let store = context.get_store()
-    inspect(store.mems.length() > 0, content="true")
+    inspect(store.counts().mems > 0, content="true")
     context.close()
     context.close()
-    inspect(store.mems.length(), content="0")
+    inspect(store.counts().mems, content="0")
     let result = @wast.WastResult()
     let script = @wast.parse("(module definition $m)")
     let (command, line) = script.commands[0]

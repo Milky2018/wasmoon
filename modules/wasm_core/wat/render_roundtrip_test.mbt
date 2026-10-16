@@ -103,7 +103,12 @@ test "canonical renderer preserves floating-point bits" {
   for bits in f64_bits {
     body.push(F64Const(bits.reinterpret_as_double()))
   }
-  let expected = @types.Module::simple([], [], body, "float-bits")
+  let expected = @types.Module::simple(
+    [],
+    [],
+    ReadOnlyArray::from_array(body),
+    "float-bits",
+  )
   let rendered = @wat.render(expected)
   let actual = @wat.parse(rendered)
   for i, bits in f32_bits {

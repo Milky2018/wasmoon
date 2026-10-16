@@ -17,7 +17,7 @@ test "cooperative interpreter preserves completed work across instruction quanta
   let instance = @executor.instantiate_module_with_imports(
     store,
     module_,
-    Imports(),
+    Imports(store),
   )
   let mut outcome = @executor.call_func_by_index_resumable(
     store,
@@ -59,12 +59,12 @@ test "independent interpreter Stores resume notified waits and cancel parked wai
   defer first.close()
   defer second.close()
   let memory = @runtime.Memory::Memory(1, Some(1), is_shared=true)
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(first)
   imports.add_memory("shared", "memory", first.alloc_mem(memory))
   let first_instance = @executor.instantiate_module_with_imports(
     first, module_, imports,
   )
-  let other_imports = @runtime.Imports::Imports()
+  let other_imports = @runtime.Imports::Imports(second)
   other_imports.add_memory("shared", "memory", second.alloc_shared_mem(memory))
   let second_instance = @executor.instantiate_module_with_imports(
     second, module_, other_imports,
@@ -108,7 +108,7 @@ test "synchronous interpreter wait is woken by a native notifier" {
   let store = @runtime.Store::Store()
   defer store.close()
   let memory = @runtime.Memory::Memory(1, Some(1), is_shared=true)
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_memory("shared", "memory", store.alloc_mem(memory))
   let instance = @executor.instantiate_module_with_imports(
     store, module_, imports,
@@ -128,7 +128,7 @@ test "a consumed interpreter continuation cannot cancel its resumed waiter" {
   let store = @runtime.Store::Store()
   defer store.close()
   let memory = @runtime.Memory::Memory(1, Some(1), is_shared=true)
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_memory("shared", "memory", store.alloc_mem(memory))
   let instance = @executor.instantiate_module_with_imports(
     store, module_, imports,

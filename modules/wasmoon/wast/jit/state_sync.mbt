@@ -14,6 +14,7 @@ pub fn init_jit_memories_from_store(
   store : @runtime.Store,
   jm : @compiled_jit.JITModule,
 ) -> Array[@wasmoon_jit.MemoryInfo] raise @runtime.RuntimeError {
+  store.check_instance(instance)
   if instance.mem_addrs.is_empty() {
     return []
   }

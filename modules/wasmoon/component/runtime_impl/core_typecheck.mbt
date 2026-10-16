@@ -159,7 +159,10 @@ fn parse_core_functype(
   for _i in 0..<nresults {
     results.push(parse_core_valtype(reader))
   }
-  { params, results, }
+  {
+    params: ReadOnlyArray::from_array(params),
+    results: ReadOnlyArray::from_array(results),
+  }
 }
 
 ///|

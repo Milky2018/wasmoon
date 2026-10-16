@@ -19,7 +19,7 @@ pub fn validate_continuation_gc_storage(
     }
   }
   fn visit(
-    body : Array[@types.Instruction],
+    body : ArrayView[@types.Instruction],
   ) -> Unit raise @runtime.RuntimeError {
     let pending = [body]
     while pending.pop() is Some(instructions) {

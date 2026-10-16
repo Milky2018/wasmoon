@@ -55,11 +55,11 @@ fn build_gc_root_context(
   JITModuleContext(
     jit_module,
     globals_ptr,
-    instance.global_addrs.copy(),
-    instance.table_addrs.copy(),
-    instance.func_addrs.copy(),
-    instance.func_type_indices.copy(),
-    instance.canonical_type_indices.copy(),
+    instance.global_addrs[:].to_owned(),
+    instance.table_addrs[:].to_owned(),
+    instance.func_addrs[:].to_owned(),
+    instance.func_type_indices[:].to_owned(),
+    instance.canonical_type_indices[:].to_owned(),
     mod_.types.copy(),
     mod_.type_rec_groups.copy(),
     true,
@@ -98,7 +98,7 @@ test "guest continuation roots retire after bound and suspended handles are drop
     let instance = @executor.instantiate_module_with_imports(
       store,
       module_,
-      Imports(),
+      Imports(store),
     )
     let context = if mode == 2 {
       Some(build_gc_root_context(module_, instance, store))
@@ -156,14 +156,14 @@ test "JIT segment drops retire Store roots and are visible to the interpreter" {
   let instance = @executor.instantiate_module_with_imports(
     store,
     module_,
-    Imports(),
+    Imports(store),
   )
   let context = build_gc_root_context(module_, instance, store)
   defer context.close()
   inspect(store.collect_garbage(), content="0")
   context.call_core_func(store, instance, 0, []) |> ignore
   inspect(store.collect_garbage(), content="1")
-  inspect(instance.elem_values[0].length(), content="0")
+  inspect(instance.element_values(0).length(), content="0")
   for name in ["read", "load"] {
     try @executor.call_exported_func(store, instance, name, []) catch {
       _ => ()

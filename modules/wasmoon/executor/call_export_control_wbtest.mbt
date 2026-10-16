@@ -46,7 +46,7 @@ test "call_exported_func_with_options: classify host invocation error" {
     func_type={ params: [], results: [I32], },
     type_idx=0,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("env", "fail", host_addr)
   let instance = instantiate_module_with_imports(
     store,
@@ -79,7 +79,7 @@ test "call_exported_func_with_options: preserve legacy host error behavior" {
     func_type={ params: [], results: [I32], },
     type_idx=0,
   )
-  let imports = @runtime.Imports::Imports()
+  let imports = @runtime.Imports::Imports(store)
   imports.add_func("env", "fail", host_addr)
   let instance = instantiate_module_with_imports(
     store,
