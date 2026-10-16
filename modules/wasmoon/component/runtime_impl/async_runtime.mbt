@@ -130,6 +130,8 @@ fn drive_core_to_completion(
       Returned(results) => return results
       Suspended(reason, continuation) => {
         match reason {
+          CooperativeYield =>
+            progress_one_subtask_nonblocking(async_state, store) |> ignore
           Yield => {
             let runnable = task_can_resume_without_external_progress(
               async_state,
@@ -313,6 +315,10 @@ fn step_task_once_impl(
       Suspended(reason, continuation) => {
         task.continuation[0] = Some(continuation)
         match reason {
+          CooperativeYield => {
+            set_waiting(None)
+            CorePending(Progressed)
+          }
           Yield => {
             set_waiting(None)
             CorePending(

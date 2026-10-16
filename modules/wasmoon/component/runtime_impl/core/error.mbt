@@ -5,6 +5,8 @@ pub(all) suberror ComponentRuntimeError {
   CoreModuleParseError(String)
   CoreModuleInstantiateError(String)
   ResourceExhausted(String)
+  ResourceLimitExceeded(@runtime.ResourceKind)
+  ExecutionBudgetExceeded
   InvalidUtf8
   UnknownImport(String)
   ImportTypeMismatch(String)
@@ -36,6 +38,7 @@ pub(all) suberror ComponentRuntimeError {
   NativeCompilationFailed(String)
   /// A resumable component invocation was cancelled.
   Cancelled
+  ExecutionTimedOut
   /// Structured termination requested by an embedding-provided command host.
   HostExit(Int32)
   InvalidStartResultCount(Int32)
@@ -70,13 +73,16 @@ pub fn ComponentRuntimeError::from_core(
   error : @runtime.RuntimeError,
 ) -> ComponentRuntimeError {
   match error {
+    ResourceLimitExceeded(kind) => ResourceLimitExceeded(kind)
+    ExecutionBudgetExceeded => ExecutionBudgetExceeded
     OutOfMemory
     | AllocationTooLarge
     | MemoryMinimumExceedsLimits(_)
     | TableAllocationOverflow
     | TableAllocationFailed => ResourceExhausted(error.to_string())
     HostExit(code) => HostExit(code)
-    AsyncHostCallCancelled => Cancelled
+    AsyncHostCallCancelled | ExecutionCancelled => Cancelled
+    ExecutionTimedOut => ExecutionTimedOut
     _ => CoreModuleInstantiateError(error.to_string())
   }
 }

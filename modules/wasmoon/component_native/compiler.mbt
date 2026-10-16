@@ -223,11 +223,20 @@ fn encoded_component_module(module_ : @types.Module) -> Bytes {
 
 ///|
 fn compile_component_artifact(
+  store : @runtime.Store,
   module_ : @types.Module,
   target : @wasmoon_jit.NativeTarget,
   actual_memory_max : Int32?,
   opt_level : Int32,
 ) -> @artifact.Artifact raise @runtime_impl.ComponentRuntimeError {
+  fn checkpoint() -> Unit raise @runtime_impl.ComponentRuntimeError {
+    if store.execution_scope() is Some(scope) {
+      scope.check() catch {
+        error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+      }
+    }
+  }
+  checkpoint()
   @validator.validate_module(module_) catch {
     error =>
       raise NativeCompilationFailed("core module validation failed: \{error}")
@@ -240,6 +249,7 @@ fn compile_component_artifact(
     module_,
     @wasmoon.wasm_frontend_embedding_environment(
       context_shape=@wasmoon_jit.context_shape(module_),
+      cancellation_safepoints=true,
     ),
     memory_max_override=actual_memory_max,
   )
@@ -267,6 +277,7 @@ fn compile_component_artifact(
     context_shape=@wasmoon_jit.context_shape(module_),
   )
   for local_index, code in module_.codes {
+    checkpoint()
     let function_index = imported_function_index + local_index
     let function_type = module_.validated_func_type_at(
       module_.funcs[local_index],
@@ -296,6 +307,7 @@ fn compile_component_artifact(
           "core function \{function_index} compilation failed: \{error}",
         )
     }
+    checkpoint()
     functions.push(compiled)
   }
   let policy : @artifact.CompilationPolicy = {
@@ -303,7 +315,7 @@ fn compile_component_artifact(
     code_model: Small,
     call_binding: DirectBody,
     nan_canonicalization: false,
-    cancellation_safepoints: false,
+    cancellation_safepoints: true,
     debug_info: false,
   }
   let manifest = @wasmoon_jit.build_host_artifact_manifest(
@@ -345,7 +357,7 @@ fn load_component_jit_context(
     None
   }
   let artifact = compile_component_artifact(
-    lowered_module, target, actual_memory_max, opt_level,
+    store, lowered_module, target, actual_memory_max, opt_level,
   )
   let compatibility = @wasmoon_jit.artifact_compatibility(
     artifact.manifest,
@@ -363,17 +375,20 @@ fn load_component_jit_context(
     loaded,
     @core_jit.build_func_signatures(lowered_module),
     @core_jit.build_external_imports_for_jit(lowered_module, instance, store),
+    resource_budget=store.resource_budget,
     function_names=Array::makei(
       @core_jit.count_func_imports(lowered_module.imports) +
       lowered_module.funcs.length(),
       fn(index) { component_function_name(lowered_module, index) },
     ),
   ) catch {
+    CodeQuotaExceeded => raise ResourceLimitExceeded(CodeBytes)
     ContextAllocationFailed(..)
     | ImportTrampolineAllocationFailed(..) as error =>
       raise ResourceExhausted(error.to_string())
     ArtifactInstallationFailed(cause~) as error =>
       match cause {
+        CodeQuotaExceeded => raise ResourceLimitExceeded(CodeBytes)
         AllocationFailed(_) | TrampolineAllocationFailed(_) =>
           raise ResourceExhausted(error.to_string())
         _ =>

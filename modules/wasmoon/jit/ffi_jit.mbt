@@ -11,6 +11,7 @@ pub suberror JITTrap {
   JITNativeFiberFailure(String)
   JITExit(Int32)
   JITCancelled
+  JITResourceLimit(@runtime.ResourceKind)
 } derive(Debug)
 
 ///|
@@ -38,6 +39,7 @@ priv struct JITContext {
   // Trampoline cache: maps signature hash to generated trampoline
   // Signature hash = hash of (param_types, result_types)
   trampoline_cache : Map[Int64, @wasmoon_jit.InstalledTrampoline]
+  resource_budget : @runtime.ResourceBudget?
 }
 
 ///|
@@ -45,11 +47,12 @@ priv struct JITContext {
 fn JITContext::try_alloc(
   total_funcs : Int32,
   loaded : @wasmoon_jit.LoadedArtifact,
+  resource_budget~ : @runtime.ResourceBudget? = None,
 ) -> JITContext? {
   @wasmoon_jit.NativeJITContext::try_alloc(
     total_funcs,
     layout=loaded.context_layout(),
-  ).map(fn(ctx) { { ctx, trampoline_cache: Map([]), } })
+  ).map(fn(ctx) { { ctx, trampoline_cache: Map([]), resource_budget, } })
 }
 
 ///|
@@ -227,8 +230,14 @@ fn JITContext::entry_trampoline(
       ) catch {
         err => raise JITTrap("entry trampoline generation failed: \{err}")
       }
-      let installer = @wasmoon_jit.JitCodeInstaller::new(fn(_) { None })
+      let installer = @wasmoon_jit.JitCodeInstaller::new(
+        fn(_) { None },
+        code_quota=self.resource_budget.map(budget => {
+          budget.native_quota(CodeBytes)
+        }),
+      )
       let trampoline = installer.install_trampoline(code_ints) catch {
+        CodeQuotaExceeded => raise JITResourceLimit(CodeBytes)
         err =>
           raise JITTrap("entry trampoline installation failed: \{Repr(err)}")
       }
@@ -280,6 +289,15 @@ fn JITContext::call_multi_return(
     }
     if @wasmoon_jit.is_cancelled_trap_code(trap_code) {
       raise JITCancelled
+    }
+    if trap_code == 25 {
+      raise JITResourceLimit(GcBytes)
+    }
+    if trap_code == 26 {
+      raise JITResourceLimit(GcObjects)
+    }
+    if trap_code == 27 {
+      raise JITResourceLimit(PendingWork)
     }
     raise JITTrap(@wasmoon_jit.jit_trap_message(trap_code))
   }
@@ -363,6 +381,15 @@ fn JITContextContinuation::advance(
       }
       if @wasmoon_jit.is_cancelled_trap_code(trap_code) {
         raise JITCancelled
+      }
+      if trap_code == 25 {
+        raise JITResourceLimit(GcBytes)
+      }
+      if trap_code == 26 {
+        raise JITResourceLimit(GcObjects)
+      }
+      if trap_code == 27 {
+        raise JITResourceLimit(PendingWork)
       }
       raise JITTrap(@wasmoon_jit.jit_trap_message(trap_code))
     }

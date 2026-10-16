@@ -21,8 +21,9 @@ pub fn HostRuntimeState::HostRuntimeState() -> HostRuntimeState {
 ///|
 fn HostRuntimeState::with_core_execution_engine(
   core_engine : CoreExecutionEngine,
+  resource_budget~ : @runtime.ResourceBudget? = None,
 ) -> HostRuntimeState {
-  let stream_table = StreamTable()
+  let stream_table = StreamTable(resource_budget~)
   let async_state = AsyncState(stream_table, core_engine~)
   let resource_table = ResourceTable(resources=async_state.concurrent_resources)
   async_state.resource_tables.set(resource_table.id, resource_table)
@@ -51,6 +52,7 @@ pub fn ComponentLinker::host_runtime_state(
     None => {
       let runtime = HostRuntimeState::with_core_execution_engine(
         self.core_engine(),
+        resource_budget=self.get_store().resource_budget,
       )
       self.host_runtime.val = Some(runtime)
       runtime

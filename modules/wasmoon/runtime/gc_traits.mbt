@@ -27,11 +27,11 @@ pub(open) trait GcHeap {
 
   /// Allocate a struct with given type index and field values
   /// Returns the object reference index
-  fn alloc_struct(Self, Int32, Array[@types.Value]) -> Int32
+  fn alloc_struct(Self, Int32, Array[@types.Value]) -> Int32 raise RuntimeError
 
   /// Allocate an array with given type index and elements
   /// Returns the object reference index
-  fn alloc_array(Self, Int32, Array[@types.Value]) -> Int32
+  fn alloc_array(Self, Int32, Array[@types.Value]) -> Int32 raise RuntimeError
 
   // === Object Access ===
 
@@ -158,8 +158,8 @@ pub(open) trait GcRuntime {
 /// Combined GC manager interface
 pub(open) trait GcManager {
   // === Heap Operations (delegated) ===
-  fn alloc_struct(Self, Int32, Array[@types.Value]) -> Int32
-  fn alloc_array(Self, Int32, Array[@types.Value]) -> Int32
+  fn alloc_struct(Self, Int32, Array[@types.Value]) -> Int32 raise RuntimeError
+  fn alloc_array(Self, Int32, Array[@types.Value]) -> Int32 raise RuntimeError
   fn struct_get(Self, Int32, Int32) -> @types.Value raise RuntimeError
   fn struct_set(Self, Int32, Int32, @types.Value) -> Unit raise RuntimeError
   fn array_len(Self, Int32) -> Int32 raise RuntimeError

@@ -46,12 +46,15 @@ pub fn CleanupOwner::close(Self) -> Unit
 pub fn CleanupOwner::new(() -> Unit) -> Self
 
 type ExecCodeHandle
+pub fn ExecCodeHandle::bind_reservation(Self, Reservation) -> Bool
 
 pub type GCHeapHandle
+pub fn GCHeapHandle::bind_reservations(Self, Reservation, Reservation) -> Bool
 pub fn GCHeapHandle::bind_root_visitor(Self, (Int, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
 pub fn GCHeapHandle::clear_root_visitor(Self) -> Unit
 pub fn GCHeapHandle::is_null(Self) -> Bool
 pub fn GCHeapHandle::null() -> Self
+pub fn GCHeapHandle::quota_denied(Self) -> Int
 pub fn GCHeapHandle::reference_candidates(Self, Int) -> FixedArray[Int64]
 pub fn GCHeapHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for GCHeapHandle
@@ -70,8 +73,10 @@ pub fn JITContext::set_segments(Self, Array[Bytes], Array[Array[Int64]]) -> Bool
 pub fn JITContext::snapshot_gc_function_addresses(Self, Int64, Int) -> Unit
 
 pub type MemoryDescriptor
+pub fn MemoryDescriptor::bind_reservation(Self, Reservation) -> Bool
 pub fn MemoryDescriptor::equal(Self, Self) -> Bool
 pub fn MemoryDescriptor::is_null(Self) -> Bool
+pub fn MemoryDescriptor::matches_quota(Self, Quota) -> Int
 pub fn MemoryDescriptor::not_equal(Self, Self) -> Bool
 pub fn MemoryDescriptor::null() -> Self
 pub fn MemoryDescriptor::to_repr(Self) -> @debug.Repr
@@ -79,6 +84,7 @@ pub impl Eq for MemoryDescriptor
 pub impl @debug.Debug for MemoryDescriptor
 
 type NativeContinuationArena
+pub fn NativeContinuationArena::bind_quota(Self, Quota) -> Bool
 pub fn NativeContinuationArena::clear(Self) -> Unit
 pub fn NativeContinuationArena::gc_roots(Self, Int64) -> FixedArray[Int64]
 pub fn NativeContinuationArena::is_live(Self, Int64) -> Bool
@@ -86,15 +92,19 @@ pub fn NativeContinuationArena::new() -> Self raise NativeAllocationError
 pub fn NativeContinuationArena::reclaim_retired(Self) -> Unit
 
 type NativeExceptionArena
+pub fn NativeExceptionArena::bind_quotas(Self, Quota, Quota) -> Bool
 pub fn NativeExceptionArena::clear(Self) -> Unit
 pub fn NativeExceptionArena::define_tag(Self, Int, ArrayView[@types.ValueType]) -> Bool
 pub fn NativeExceptionArena::enable_reclamation(Self) -> Unit
 pub fn NativeExceptionArena::insert(Self, GCHeapHandle, Int, Array[Int64]) -> Int64
 pub fn NativeExceptionArena::new() -> Self raise NativeAllocationError
+pub fn NativeExceptionArena::quota_denied(Self) -> Int
 pub fn NativeExceptionArena::release_snapshot(Self, Int64) -> Unit
 pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int, Array[Int64])?
 
 pub type NativeTableHandle
+pub fn NativeTableHandle::bind_reservation(Self, Reservation) -> Bool
+pub fn NativeTableHandle::grow(Self, Int64) -> Int64
 pub fn NativeTableHandle::is_null(Self) -> Bool
 pub fn NativeTableHandle::null() -> Self
 pub fn NativeTableHandle::size(Self) -> Int
@@ -104,6 +114,21 @@ pub impl @debug.Debug for NativeTableHandle
 pub type PreparedSafepoints
 pub fn PreparedSafepoints::check_count(Int) -> Unit raise GCMetadataError
 pub fn PreparedSafepoints::new(FixedArray[Bytes], FixedArray[FixedArray[Int]]) -> Self raise GCMetadataError
+
+pub type Quota
+pub fn Quota::new(Int64) -> Self
+pub fn Quota::to_repr(Self) -> @debug.Repr
+pub fn Quota::used(Self) -> Int64
+pub impl @debug.Debug for Quota
+
+pub type Reservation
+pub fn Reservation::close(Self) -> Unit
+pub fn Reservation::matches(Self, Quota) -> Bool
+pub fn Reservation::new(Quota, Int64) -> Self
+pub fn Reservation::resize(Self, Int64) -> Bool
+pub fn Reservation::to_repr(Self) -> @debug.Repr
+pub fn Reservation::valid(Self) -> Bool
+pub impl @debug.Debug for Reservation
 
 // Type aliases
 pub using @layout {type ContextLayout}

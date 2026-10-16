@@ -204,7 +204,11 @@ fn Store::encode_exception_snapshot(
     .exceptions()
     .insert(heap, exception.tag_addr, words)
   if reference == 0L {
-    raise OutOfMemory
+    match self.native_execution.exceptions().quota_denied() {
+      25 => raise ResourceLimitExceeded(GcBytes)
+      26 => raise ResourceLimitExceeded(GcObjects)
+      _ => raise OutOfMemory
+    }
   }
   self.native_exception_to_store.set(reference, index)
   self.store_exception_to_native.set(index, reference)

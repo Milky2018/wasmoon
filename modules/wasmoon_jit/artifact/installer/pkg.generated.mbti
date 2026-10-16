@@ -5,6 +5,7 @@ import {
   "Milky2018/vcode/code_object",
   "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit/artifact/loader",
+  "Milky2018/wasmoon_jit/jit_ffi",
   "moonbitlang/core/debug",
 }
 
@@ -19,6 +20,7 @@ pub(all) suberror JitInstallError {
   RegistrationFailed(function_index~ : Int, message~ : String)
   PublicationFailed(message~ : String)
   TrampolineAllocationFailed(code_size~ : Int)
+  CodeQuotaExceeded
 } derive(Eq, @debug.Debug)
 pub fn JitInstallError::equal(Self, Self) -> Bool
 pub fn JitInstallError::not_equal(Self, Self) -> Bool
@@ -67,7 +69,7 @@ pub struct JitCodeInstaller {
 pub fn JitCodeInstaller::current(Self) -> InstalledCode?
 pub fn JitCodeInstaller::install(Self, @loader.LoadedArtifact) -> InstalledCode raise JitInstallError
 pub fn JitCodeInstaller::install_trampoline(Self, Array[Int]) -> InstalledTrampoline raise JitInstallError
-pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?) -> Self
+pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?, code_quota? : @jit_ffi.Quota?) -> Self
 
 // Type aliases
 

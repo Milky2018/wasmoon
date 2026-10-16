@@ -18,6 +18,9 @@ pub(all) enum FuncOwner {
 pub struct Store {
   nan_canonicalization : Bool
   interpreter_limits : InterpreterLimits
+  resource_budget : ResourceBudget?
+  priv mut execution_scope : ExecutionScope?
+  priv instance_leases : Array[ResourceLease]
   priv mut next_exception : Int32
   priv mut next_wrapped_extern : Int32
   priv mut gc_tracing_depth : Int32
@@ -43,6 +46,7 @@ pub struct Store {
   priv mut module_rec_groups : Array[Int32]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
+  priv auxiliary_leases : Map[(Int32, Int64), (ResourceLease, ResourceLease)]
   priv mut wrapped_externs : Map[Int32, @types.Value]
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
@@ -155,14 +159,28 @@ fn c_heap_initial_capacity() -> Int32 {
 pub fn Store::Store(
   nan_canonicalization~ : Bool = false,
   interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
+  resource_budget~ : ResourceBudget? = None,
 ) -> Store raise RuntimeError {
   let native_execution = @wasmoon_jit.NativeExecutionState() catch {
     _ => raise OutOfMemory
+  }
+  if resource_budget is Some(budget) {
+    guard native_execution
+      .continuations()
+      .bind_quota(budget.native_quota(PendingWork)) &&
+      native_execution
+      .exceptions()
+      .bind_quotas(budget.native_quota(GcBytes), budget.native_quota(GcObjects)) else {
+      raise InvalidHandle
+    }
   }
 
   {
     nan_canonicalization,
     interpreter_limits,
+    resource_budget,
+    execution_scope: None,
+    instance_leases: [],
     interpreter_reentry_depth: 0,
     next_exception: 0,
     next_wrapped_extern: 0,
@@ -179,11 +197,12 @@ pub fn Store::Store(
     tag_type_indices: [],
     tag_owners: [],
     exns: Map([]),
-    heap: MarkSweepHeap(),
+    heap: MarkSweepHeap(resource_budget~),
     c_heap: None,
     module_types: [],
     module_rec_groups: [],
     wrapped_externs: Map([]),
+    auxiliary_leases: Map([]),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -211,9 +230,20 @@ pub fn Store::Store(
 pub fn Store::with_c_heap(
   nan_canonicalization~ : Bool = false,
   interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
+  resource_budget~ : ResourceBudget? = None,
 ) -> Store raise RuntimeError {
   let native_execution = @wasmoon_jit.NativeExecutionState() catch {
     _ => raise OutOfMemory
+  }
+  if resource_budget is Some(budget) {
+    guard native_execution
+      .continuations()
+      .bind_quota(budget.native_quota(PendingWork)) &&
+      native_execution
+      .exceptions()
+      .bind_quotas(budget.native_quota(GcBytes), budget.native_quota(GcObjects)) else {
+      raise InvalidHandle
+    }
   }
   let initial_capacity = c_heap_initial_capacity()
   let heap = @wasmoon_jit.CHeap(capacity=initial_capacity) catch {
@@ -222,6 +252,9 @@ pub fn Store::with_c_heap(
   let store : Store = {
     nan_canonicalization,
     interpreter_limits,
+    resource_budget,
+    execution_scope: None,
+    instance_leases: [],
     interpreter_reentry_depth: 0,
     next_exception: 0,
     next_wrapped_extern: 0,
@@ -238,11 +271,12 @@ pub fn Store::with_c_heap(
     tag_type_indices: [],
     tag_owners: [],
     exns: Map([]),
-    heap: MarkSweepHeap(), // Used only when c_heap is None.
+    heap: MarkSweepHeap(resource_budget~), // Used only when c_heap is None.
     c_heap: Some(heap),
     module_types: [],
     module_rec_groups: [],
     wrapped_externs: Map([]),
+    auxiliary_leases: Map([]),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -263,6 +297,7 @@ pub fn Store::with_c_heap(
     instantiation: None,
     closed: Ref(false),
   }
+  store.bind_gc_budget(heap)
   store.native_execution.exceptions().enable_reclamation()
   store
 }
@@ -281,6 +316,9 @@ pub fn Store::close(self : Store) -> Unit {
   let suspended = self.suspended_executions.values().to_array()
   self.suspended_executions.clear()
   for cleanup in suspended {
+    if cleanup.lease is Some(lease) {
+      lease.release()
+    }
     (cleanup.run)()
   }
   let guest_bodies = self.guest_continuations.values().to_array()
@@ -294,6 +332,9 @@ pub fn Store::close(self : Store) -> Unit {
   self.native_execution.seal()
   for roots in self.pinned_gc_roots.values() {
     roots.active.val = false
+    if roots.lease is Some(lease) {
+      lease.release()
+    }
   }
   self.pinned_gc_roots.clear()
   self.funcref_registry.clear()
@@ -321,6 +362,8 @@ pub fn Store::close(self : Store) -> Unit {
   self.func_type_indices.shrink_to_fit()
   self.func_owners.clear()
   self.func_owners.shrink_to_fit()
+  self.instance_leases.clear()
+  self.instance_leases.shrink_to_fit()
   self.instances.clear()
   self.instances.shrink_to_fit()
   for table in self.tables {
@@ -347,6 +390,7 @@ pub fn Store::close(self : Store) -> Unit {
   self.native_exception_to_store.clear()
   self.store_exception_to_native.clear()
   self.exns.clear()
+  self.auxiliary_leases.clear()
   self.heap.clear()
   if self.c_heap is Some(heap) {
     heap.free()
@@ -402,14 +446,16 @@ pub struct GcRootLease {
 pub fn Store::pin_gc_roots(
   self : Store,
   values : Array[@types.Value],
-) -> GcRootLease {
+) -> GcRootLease raise RuntimeError {
   let id = self.next_pinned_gc_roots_id
   let active = Ref(true)
   self.next_pinned_gc_roots_id = self.next_pinned_gc_roots_id + 1L
   if self.closed.val {
     return { store: None, id, active: Ref(false), }
   }
+  let lease = self.resource_budget.map(budget => budget.reserve(PendingWork, 1L))
   self.pinned_gc_roots.set(id, {
+    lease,
     values: values.copy(),
     active,
     guest_owned: false,
@@ -421,6 +467,11 @@ pub fn Store::pin_gc_roots(
 pub fn GcRootLease::release(self : GcRootLease) -> Unit {
   self.active.val = false
   if self.store is Some(store) {
+    if store.pinned_gc_roots.get(self.id) is Some(roots) {
+      if roots.lease is Some(lease) {
+        lease.release()
+      }
+    }
     store.pinned_gc_roots.remove(self.id)
   }
   self.store = None
@@ -428,6 +479,7 @@ pub fn GcRootLease::release(self : GcRootLease) -> Unit {
 
 ///|
 priv struct PinnedGcRoots {
+  lease : ResourceLease?
   values : Array[@types.Value]
   active : Ref[Bool]
   mut guest_owned : Bool
@@ -463,6 +515,7 @@ pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
     let heap = @wasmoon_jit.CHeap(capacity=c_heap_initial_capacity()) catch {
       _ => raise OutOfMemory
     }
+    self.bind_gc_budget(heap)
     self.c_heap = Some(heap)
     self.native_execution.exceptions().enable_reclamation()
   }
@@ -512,10 +565,14 @@ pub fn Store::wrap_as_extern(
   if self.next_wrapped_extern == 2147483647 {
     raise AllocationTooLarge
   }
+  self.reserve_auxiliary_handle(0, self.next_wrapped_extern.to_int64(), 16L)
   let idx = self.next_wrapped_extern
   self.next_wrapped_extern += 1
   self.wrapped_externs.set(idx, value)
-  self.on_instantiation_rollback(fn() { self.wrapped_externs.remove(idx) })
+  self.on_instantiation_rollback(fn() {
+    self.wrapped_externs.remove(idx)
+    self.auxiliary_leases.remove((0, idx.to_int64()))
+  })
   ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
 }
 
@@ -656,13 +713,28 @@ pub fn Store::alloc_table(
       return index
     }
   }
+  let previous_reservation = table.reservation
+  errdefer {
+    table.reservation = previous_reservation
+  }
+  if self.resource_budget is Some(budget) {
+    table.bind_budget(budget)
+  }
   let owner = if use_jit {
     match
       @wasmoon_jit.JITTableOwner::try_alloc(
         table.size(),
         table.get_limits64().1,
       ) {
-      Some(owner) => Some(owner)
+      Some(owner) => {
+        if table.reservation is Some(reservation) {
+          guard owner.table().raw_ptr().bind_reservation(reservation) else {
+            owner.close()
+            raise InvalidHandle
+          }
+        }
+        Some(owner)
+      }
       None => raise TableAllocationFailed
     }
   } else {
@@ -670,6 +742,11 @@ pub fn Store::alloc_table(
   }
   let idx = self.tables.length()
   table.binding = Some(binding)
+  table.native_table = if table.reservation is Some(_) {
+    owner.map(owner => owner.table().raw_ptr())
+  } else {
+    None
+  }
   self.on_instantiation_rollback(fn() {
     binding.active.val = false
     if idx < self.jit_table_owners.length() {
@@ -703,6 +780,9 @@ pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int32 raise RuntimeError 
     }
   }
   mem.require_desc_ptr() |> ignore
+  if self.resource_budget is Some(budget) {
+    mem.bind_budget(budget)
+  }
   let idx = self.mems.length()
   mem.binding = Some(binding)
   self.on_instantiation_rollback(fn() {
@@ -800,10 +880,18 @@ pub fn Store::alloc_exn(
   if self.next_exception == 2147483647 {
     raise AllocationTooLarge
   }
+  self.reserve_auxiliary_handle(
+    1,
+    self.next_exception.to_int64(),
+    16L + values.length().to_int64() * 16L,
+  )
   let index = self.next_exception
   self.next_exception += 1
   self.exns.set(index, { tag_addr, values: values.copy(), })
-  self.on_instantiation_rollback(fn() { self.exns.remove(index) })
+  self.on_instantiation_rollback(fn() {
+    self.exns.remove(index)
+    self.auxiliary_leases.remove((1, index.to_int64()))
+  })
   index
 }
 
@@ -883,7 +971,7 @@ pub fn Store::alloc_struct(
       heap.alloc_struct(type_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
-        OutOfMemory => raise OutOfMemory
+        OutOfMemory => raise self.gc_allocation_error()
       }
     }
     None => self.heap.alloc_struct(type_idx, fields)
@@ -910,7 +998,7 @@ pub fn Store::alloc_array(
       heap.alloc_array_from_values(type_idx, encoded) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
-        OutOfMemory => raise OutOfMemory
+        OutOfMemory => raise self.gc_allocation_error()
       }
     }
     None => self.heap.alloc_array(type_idx, elements)
@@ -1297,6 +1385,7 @@ pub fn Store::get_global(
 pub fn Store::register_instance(
   self : Store,
   instance : ModuleInstance,
+  admission? : InstanceAdmission,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
   let instance_idx = self.instances.length()
@@ -1306,6 +1395,20 @@ pub fn Store::register_instance(
     self.check_instance(instance)
     return instance.store_idx
   }
+  let lease_index = self.instance_leases.length()
+  let admission = admission.unwrap_or_else(() => self.reserve_instance())
+  guard physical_equal(admission.owner, self.closed) else { raise ForeignStore }
+  guard !admission.consumed.val else { raise InvalidHandle }
+  admission.consumed.val = true
+  if admission.lease is Some(lease) {
+    self.instance_leases.push(lease)
+  }
+  admission.lease = None
+  if admission.compilation is Some(lease) {
+    self.instance_leases.push(lease)
+  }
+  admission.compilation = None
+  admission.validated = None
   instance.owner = Some(self.closed)
   instance.store_idx = instance_idx
   self.instances.push(instance)
@@ -1339,6 +1442,8 @@ pub fn Store::register_instance(
         self.tag_owners[tag_addr] = Unowned
       }
     }
+    self.instance_leases.truncate(lease_index)
+    self.instance_leases.shrink_to_fit()
     instance.store_idx = -1
     self.native_types.mappings.remove(instance_idx)
     self.instances.truncate(instance_idx)

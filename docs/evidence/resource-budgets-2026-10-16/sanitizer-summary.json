@@ -1,0 +1,22 @@
+{
+  "version": "0.16.0",
+  "source_revision": "25dac7da3e3b99f98b074d0f3c5d054ffe5ca65d",
+  "source_dirty": true,
+  "binary_sha256": "0b5dd19ddbc8089ecb97b96c746a2dbc4daf3d214da26d9d07f9791bbb329c09",
+  "tests": "passed",
+  "event_loop": "passed",
+  "asan_probe": "detected",
+  "native_asan_probe": "detected",
+  "lsan_probe": "not_applicable",
+  "leak_detection": false,
+  "binary": "/Users/zhengyu/Documents/projects/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+  "instrumentation": [
+    "address",
+    "undefined"
+  ],
+  "allocator": "system",
+  "exclusions": [
+    "MoonBit runtime objects",
+    "JIT machine code"
+  ]
+}

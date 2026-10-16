@@ -69,3 +69,24 @@ pub extend MemoryDescriptor with Eq::{equal, not_equal}
 
 ///|
 pub extend MemoryDescriptor with Debug::{to_repr}
+
+///|
+#borrow(self, reservation)
+pub extern "c" fn MemoryDescriptor::bind_reservation(
+  self : MemoryDescriptor,
+  reservation : Reservation,
+) -> Bool = "wasmoon_memory_bind_reservation"
+
+///|
+#borrow(self, quota)
+pub extern "c" fn MemoryDescriptor::matches_quota(
+  self : MemoryDescriptor,
+  quota : Quota,
+) -> Int32 = "wasmoon_memory_matches_quota"
+
+///|
+#borrow(self, reservation)
+pub extern "c" fn ExecCodeHandle::bind_reservation(
+  self : ExecCodeHandle,
+  reservation : Reservation,
+) -> Bool = "wasmoon_exec_bind_reservation"

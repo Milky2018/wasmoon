@@ -285,8 +285,10 @@ pub(all) struct StreamTable {
 } derive(Debug)
 
 ///|
-pub fn StreamTable::StreamTable() -> StreamTable {
-  let concurrent_resources = ConcurrentResources::new()
+pub fn StreamTable::StreamTable(
+  resource_budget~ : @runtime.ResourceBudget? = None,
+) -> StreamTable {
+  let concurrent_resources = ConcurrentResources::new(budget=resource_budget)
   {
     concurrent_resources,
     next_stream_id: [0],

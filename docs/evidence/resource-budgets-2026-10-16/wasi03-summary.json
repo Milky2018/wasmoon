@@ -1,0 +1,784 @@
+{
+  "upstream": "609c446139956ff30239f87cb18af1dc6128bed2",
+  "binary_sha256": "248d7214155665109dffd90e5d4c5410dfa6147af5ca66daffce797d77651ea3",
+  "profile": "http-contract",
+  "guest_overrides": {
+    "http-fields.wasm": "c7f95716eea547632ee49ca68f39f6c062425f037616c1ba95ff1ee27e87abd0",
+    "http-request.wasm": "d587372f2ef2320bbbddef51f6f5edbd1a97f92294968a7ce73273811e35b8ef"
+  },
+  "counts": {
+    "pass": 110
+  },
+  "results": [
+    {
+      "name": "cli-env",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-env",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-exit",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-exit",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-stdio-roundtrip",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-stdio-roundtrip",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-stdio",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-stdio",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-stdout-flush",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-stdout-flush",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-terminal",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "cli-terminal",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-advise",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-advise",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-dotdot",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-dotdot",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-flags-and-type",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-flags-and-type",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-hard-links",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-hard-links",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-io",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-io",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-is-same-object",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-is-same-object",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-metadata-hash",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-metadata-hash",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-mkdir-rmdir",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-mkdir-rmdir",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-open-errors",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-open-errors",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-read-directory",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-read-directory",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-rename",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-rename",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-set-size",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-set-size",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-stat",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-stat",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-unlink-errors",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "filesystem-unlink-errors",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-chunked",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-chunked",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-headers",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-headers",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-method",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-method",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-path-none",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-path-none",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-path",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-path",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-send-errors",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-send-errors",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-sent",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-sent",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-status",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-status",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-trailer-error",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-trailer-error",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-trailers",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client-trailers",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-client",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-fields",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "http-contract"
+    },
+    {
+      "name": "http-fields",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "http-contract"
+    },
+    {
+      "name": "http-request-options",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-request-options",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-request",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "http-contract"
+    },
+    {
+      "name": "http-request",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "http-contract"
+    },
+    {
+      "name": "http-response",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-response",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-service-echo",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-service-echo",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-service-uri",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-service-uri",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-service",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "http-service",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "monotonic-clock",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "monotonic-clock",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "multi-clock-wait",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "multi-clock-wait",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "random",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "random",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "run-with-err",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "run-with-err",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-echo",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-echo",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-bind",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-bind",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-connect",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-connect",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-listen",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-listen",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-properties",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-properties",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-receive",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-receive",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-send",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-tcp-send",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-bind",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-bind",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-connect",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-connect",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-properties",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-properties",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-receive",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-receive",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-send",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "sockets-udp-send",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "wall-clock",
+      "engine": "jit",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    },
+    {
+      "name": "wall-clock",
+      "engine": "interp",
+      "status": "pass",
+      "failures": [],
+      "guest_source": "upstream"
+    }
+  ]
+}

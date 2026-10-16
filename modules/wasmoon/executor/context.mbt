@@ -112,6 +112,7 @@ struct ExecContext {
   gc_stress_every : Int32
   mut gc_stress_alloc_count : Int32
   cancel : CancellationPoller?
+  execution_scope : @runtime.ExecutionScope?
   suspension_classifier : SuspensionClassifier?
   async_host_driver : @runtime.AsyncHostCallDriver?
   mut resume_action : ResumeAction?
@@ -145,6 +146,7 @@ fn ExecContext::ExecContext(
     gc_stress: gc_stress_enabled(),
     gc_stress_every: gc_stress_every(),
     gc_stress_alloc_count: 0,
+    execution_scope: store.execution_scope(),
     cancel: cancel.map(fn(callback) { { callback, } }),
     suspension_classifier: Some({ classify: classify_suspension, }),
     async_host_driver,
@@ -161,6 +163,9 @@ fn ExecContext::ExecContext(
 ///|
 /// Poll the invocation-local cancellation callback at a Wasm safepoint.
 fn ExecContext::check_cancellation(self : ExecContext) -> Unit raise {
+  if self.execution_scope is Some(scope) {
+    scope.check()
+  }
   if self.cancel is Some(poller) && (poller.callback)() {
     raise InvocationSignal::Cancelled
   }

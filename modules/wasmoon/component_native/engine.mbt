@@ -43,6 +43,8 @@ fn component_jit_error(
   match error {
     Exit(code) => HostExit(code)
     Cancelled => Cancelled
+    HostInvocation(error) =>
+      @runtime_impl.ComponentRuntimeError::from_core(error)
     Trap(message) =>
       if message == "uncaught exception" {
         UncaughtWasmException
@@ -76,7 +78,8 @@ fn component_native_outcome(
           }
           reason
         }
-        CooperativeYield | AtomicWait => Yield
+        CooperativeYield => CooperativeYield
+        AtomicWait => Yield
       }
       context.pending_suspension[0] = None
       Suspended(
@@ -198,6 +201,10 @@ fn native_component_session_with_contexts(
       }
       context.pending_suspension[0] = None
       context.suspension_enabled[0] = request.suspension is Resumable
+      context.core.jit_module.set_cooperative_scheduling(
+        request.suspension is Resumable,
+      )
+      |> ignore
       defer {
         context.suspension_enabled[0] = false
       }

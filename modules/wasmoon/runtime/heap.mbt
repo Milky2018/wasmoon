@@ -46,6 +46,10 @@ pub impl Show for GCObject with fn output(self, logger) {
 ///|
 /// GC Heap - manages all GC objects with mark-sweep garbage collection
 pub struct MarkSweepHeap {
+  priv resource_budget : ResourceBudget?
+  priv mut byte_reservation : @jit_ffi.Reservation?
+  priv mut object_reservation : @jit_ffi.Reservation?
+  priv mut budget_live_bytes : Int64
   objects : Array[GCObject?] // None means slot is free (tombstone)
   marks : Array[Bool] // Mark bits for GC
   free_list : Array[Int32] // List of free slot indices for reuse
@@ -69,8 +73,14 @@ pub struct GCStats {
 
 ///|
 /// Create a new empty GC heap
-pub fn MarkSweepHeap::MarkSweepHeap() -> MarkSweepHeap {
+pub fn MarkSweepHeap::MarkSweepHeap(
+  resource_budget~ : ResourceBudget? = None,
+) -> MarkSweepHeap {
   {
+    resource_budget,
+    byte_reservation: None,
+    object_reservation: None,
+    budget_live_bytes: 0L,
     objects: [],
     marks: [],
     free_list: [],
@@ -84,8 +94,15 @@ pub fn MarkSweepHeap::MarkSweepHeap() -> MarkSweepHeap {
 
 ///|
 /// Create a new GC heap with custom threshold
-pub fn MarkSweepHeap::with_threshold(threshold : Int32) -> MarkSweepHeap {
+pub fn MarkSweepHeap::with_threshold(
+  threshold : Int32,
+  resource_budget~ : ResourceBudget? = None,
+) -> MarkSweepHeap {
   {
+    resource_budget,
+    byte_reservation: None,
+    object_reservation: None,
+    budget_live_bytes: 0L,
     objects: [],
     marks: [],
     free_list: [],
@@ -125,6 +142,7 @@ fn MarkSweepHeap::make_allocation_rollback(
     for i in 0..<self.objects.length() {
       let existed = i < occupied.length() && occupied[i]
       if !existed && self.objects[i] is Some(object) && !self.marks[i] {
+        self.release_budget_object(object)
         self.bytes_collected += gc_object_size_bytes(object)
         self.objects[i] = None
       }
@@ -134,6 +152,9 @@ fn MarkSweepHeap::make_allocation_rollback(
     while retained_length > occupied.length() &&
           self.objects[retained_length - 1] is None {
       retained_length -= 1
+    }
+    if self.object_reservation is Some(reservation) {
+      reservation.resize(retained_length.to_int64()) |> ignore
     }
     self.objects.truncate(retained_length)
     self.marks.truncate(retained_length)
@@ -161,6 +182,9 @@ fn MarkSweepHeap::make_allocation_rollback(
 
 ///|
 fn MarkSweepHeap::clear(self : MarkSweepHeap) -> Unit {
+  self.byte_reservation = None
+  self.object_reservation = None
+  self.budget_live_bytes = 0L
   self.objects.clear()
   self.objects.shrink_to_fit()
   self.marks.clear()
@@ -176,7 +200,8 @@ pub fn MarkSweepHeap::alloc_struct(
   self : MarkSweepHeap,
   type_idx : Int32,
   fields : Array[@types.Value],
-) -> Int32 {
+) -> Int32 raise RuntimeError {
+  self.admit_gc_object(16L + fields.length().to_int64() * 16L)
   let obj = GCObject::Struct({ type_idx, fields: fields.copy(), })
   self.alloc_object(obj)
 }
@@ -187,7 +212,8 @@ pub fn MarkSweepHeap::alloc_array(
   self : MarkSweepHeap,
   type_idx : Int32,
   elements : Array[@types.Value],
-) -> Int32 {
+) -> Int32 raise RuntimeError {
+  self.admit_gc_object(32L + elements.length().to_int64() * 16L)
   let obj = GCObject::Array({ type_idx, elements: elements.copy(), })
   self.alloc_object(obj)
 }
@@ -208,6 +234,7 @@ fn gc_object_size_bytes(obj : GCObject) -> Int64 {
 /// Internal: allocate an object, reusing free slots if available
 fn MarkSweepHeap::alloc_object(self : MarkSweepHeap, obj : GCObject) -> Int32 {
   self.total_live += 1
+  self.budget_live_bytes += gc_budget_size(obj)
   self.bytes_allocated += gc_object_size_bytes(obj)
   // Try to reuse a free slot
   if self.free_list.length() > 0 {
@@ -466,6 +493,7 @@ pub fn MarkSweepHeap::sweep(self : MarkSweepHeap) -> Int32 {
   for i in 0..<self.objects.length() {
     if self.objects[i] is Some(object) && !self.marks[i] {
       // Object is not reachable, collect it
+      self.release_budget_object(object)
       self.bytes_collected += gc_object_size_bytes(object)
       self.objects[i] = None
       self.free_list.push(i)
@@ -525,12 +553,12 @@ pub fn MarkSweepHeap::is_valid(self : MarkSweepHeap, idx : Int32) -> Bool {
 // ============================================================
 
 ///|
-pub impl GcHeap for MarkSweepHeap with fn alloc_struct(self, type_idx, fields) -> Int32 {
+pub impl GcHeap for MarkSweepHeap with fn alloc_struct(self, type_idx, fields) -> Int32 raise RuntimeError {
   MarkSweepHeap::alloc_struct(self, type_idx, fields)
 }
 
 ///|
-pub impl GcHeap for MarkSweepHeap with fn alloc_array(self, type_idx, elements) -> Int32 {
+pub impl GcHeap for MarkSweepHeap with fn alloc_array(self, type_idx, elements) -> Int32 raise RuntimeError {
   MarkSweepHeap::alloc_array(self, type_idx, elements)
 }
 
@@ -689,7 +717,7 @@ pub impl GcManager for MarkSweepHeap with fn alloc_struct(
   self,
   type_idx,
   fields,
-) -> Int32 {
+) -> Int32 raise RuntimeError {
   MarkSweepHeap::alloc_struct(self, type_idx, fields)
 }
 
@@ -698,7 +726,7 @@ pub impl GcManager for MarkSweepHeap with fn alloc_array(
   self,
   type_idx,
   elements,
-) -> Int32 {
+) -> Int32 raise RuntimeError {
   MarkSweepHeap::alloc_array(self, type_idx, elements)
 }
 
@@ -811,4 +839,56 @@ pub impl GcManager for MarkSweepHeap with fn write_barrier(
   _new_value,
 ) -> Unit {
   // No-op for stop-the-world mark-sweep GC
+}
+
+///|
+fn gc_budget_size(object : GCObject) -> Int64 {
+  match object {
+    Struct(instance) => 16L + instance.fields.length().to_int64() * 16L
+    Array(instance) => 32L + instance.elements.length().to_int64() * 16L
+  }
+}
+
+///|
+fn MarkSweepHeap::admit_gc_object(
+  self : MarkSweepHeap,
+  bytes : Int64,
+) -> Unit raise RuntimeError {
+  if self.resource_budget is Some(budget) {
+    let next_bytes = self.budget_live_bytes + bytes
+    let byte_reservation = match self.byte_reservation {
+      Some(reservation) => {
+        guard reservation.resize(next_bytes) else {
+          raise ResourceLimitExceeded(GcBytes)
+        }
+        reservation
+      }
+      None => budget.reservation(GcBytes, next_bytes)
+    }
+    errdefer byte_reservation.resize(self.budget_live_bytes) |> ignore
+    let next_objects = self.objects.length().to_int64() +
+      (if self.free_list.is_empty() { 1L } else { 0L })
+    let object_reservation = match self.object_reservation {
+      Some(reservation) => {
+        guard reservation.resize(next_objects) else {
+          raise ResourceLimitExceeded(GcObjects)
+        }
+        reservation
+      }
+      None => budget.reservation(GcObjects, next_objects)
+    }
+    self.byte_reservation = Some(byte_reservation)
+    self.object_reservation = Some(object_reservation)
+  }
+}
+
+///|
+fn MarkSweepHeap::release_budget_object(
+  self : MarkSweepHeap,
+  object : GCObject,
+) -> Unit {
+  self.budget_live_bytes -= gc_budget_size(object)
+  if self.byte_reservation is Some(reservation) {
+    reservation.resize(self.budget_live_bytes) |> ignore
+  }
 }

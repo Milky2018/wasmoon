@@ -22,6 +22,13 @@ pub(all) suberror RuntimeError {
   IntegerOverflow
   InvalidConversion
   OutOfMemory
+  InvalidResourceLimit
+  InvalidExecutionLimit
+  ExecutionLimitsUnavailable
+  ExecutionCancelled
+  ExecutionTimedOut
+  ExecutionBudgetExceeded
+  ResourceLimitExceeded(ResourceKind)
   TableAllocationOverflow
   TableAllocationFailed
   MemoryMinimumExceedsLimits(Int64)
@@ -85,6 +92,13 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     MemoryMinimumExceedsLimits(_) as error => Some(error)
     TableAllocationOverflow => Some(TableAllocationOverflow)
     TableAllocationFailed => Some(TableAllocationFailed)
+    InvalidExecutionLimit => Some(InvalidExecutionLimit)
+    ExecutionLimitsUnavailable => Some(ExecutionLimitsUnavailable)
+    ExecutionCancelled => Some(ExecutionCancelled)
+    ExecutionTimedOut => Some(ExecutionTimedOut)
+    ExecutionBudgetExceeded => Some(ExecutionBudgetExceeded)
+    InvalidResourceLimit => Some(InvalidResourceLimit)
+    ResourceLimitExceeded(_) as error => Some(error)
     OutOfMemory => Some(OutOfMemory)
     AllocationTooLarge => Some(AllocationTooLarge)
     AtomicWaitNonSharedMemory => Some(AtomicWaitNonSharedMemory)
@@ -140,6 +154,13 @@ pub impl Show for RuntimeError with fn output(self, logger) {
       "memory minimum size of \{pages.reinterpret_as_uint64()} pages exceeds memory limits"
     TableAllocationOverflow => "overflow calculating table allocation size"
     TableAllocationFailed => "failed to allocate"
+    InvalidExecutionLimit => "invalid execution limit"
+    ExecutionLimitsUnavailable => "execution limits require compiled safepoints"
+    ExecutionCancelled => "execution cancelled"
+    ExecutionTimedOut => "execution deadline exceeded"
+    ExecutionBudgetExceeded => "execution safepoint budget exhausted"
+    InvalidResourceLimit => "invalid resource limit"
+    ResourceLimitExceeded(kind) => "host resource limit exceeded: \{Repr(kind)}"
     OutOfMemory => "out of memory"
     AllocationTooLarge => "allocation size too large"
     AtomicWaitNonSharedMemory => "atomic wait on non-shared memory"

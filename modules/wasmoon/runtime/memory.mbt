@@ -93,6 +93,7 @@ pub fn Memory::Memory(
   is_memory64~ : Bool = false,
   is_shared~ : Bool = false,
   page_size_log2~ : Int32 = 16,
+  resource_budget~ : ResourceBudget? = None,
 ) -> Memory raise RuntimeError {
   Memory::allocate(
     min.to_int64() & 0xFFFF_FFFFL,
@@ -100,6 +101,7 @@ pub fn Memory::Memory(
     is_memory64~,
     is_shared~,
     page_size_log2~,
+    resource_budget~,
   )
 }
 
@@ -110,6 +112,7 @@ fn Memory::allocate(
   is_memory64~ : Bool,
   is_shared~ : Bool,
   page_size_log2~ : Int32,
+  resource_budget~ : ResourceBudget? = None,
 ) -> Memory raise RuntimeError {
   let l2 = page_size_log2
   if l2 < 0 || l2 > 30 {
@@ -131,6 +134,9 @@ fn Memory::allocate(
       (if l2 == 0 { 0xFFFF_FFFEL } else { 0x1_0000_0000L / page_size_bytes })
     )
   guard valid_size else { raise MemoryMinimumExceedsLimits(min) }
+  let reservation = resource_budget.map(budget => {
+    budget.reservation(MemoryBytes, min * page_size_bytes)
+  })
   let mem_desc_ptr = if !is_memory64 && l2 == 16 {
     @wasmoon_jit.alloc_guarded_memory_desc(
       min.to_int(),
@@ -155,19 +161,26 @@ fn Memory::allocate(
     page_size_log2: l2,
     page_size_bytes,
   }
-  memory.require_desc_ptr() |> ignore
+  let descriptor = memory.require_desc_ptr()
+  if reservation is Some(reservation) {
+    guard descriptor.bind_reservation(reservation) else { raise InvalidHandle }
+  }
   memory
 }
 
 ///|
 /// Allocate a validated module memory without narrowing its page limits.
-pub fn Memory::from_type(ty : @types.MemoryType) -> Memory raise RuntimeError {
+pub fn Memory::from_type(
+  ty : @types.MemoryType,
+  resource_budget~ : ResourceBudget? = None,
+) -> Memory raise RuntimeError {
   Memory::allocate(
     ty.limits.min,
     ty.limits.max,
     is_memory64=ty.is_memory64,
     is_shared=ty.is_shared,
     page_size_log2=ty.page_size_log2,
+    resource_budget~,
   )
 }
 

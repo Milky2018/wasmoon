@@ -1,6 +1,8 @@
 ///|
 /// WebAssembly table for function references
 struct Table {
+  mut reservation : @jit_ffi.Reservation?
+  mut native_table : @jit_ffi.NativeTableHandle?
   mut binding : ResourceBinding?
   elem_type : @types.ValueType
   elements : Array[@types.Value]
@@ -16,6 +18,7 @@ pub fn Table::Table(
   max : Int32?,
   init_value~ : @types.Value = Null,
   is_table64~ : Bool = false,
+  resource_budget~ : ResourceBudget? = None,
 ) -> Table raise RuntimeError {
   Table::allocate(
     elem_type,
@@ -23,6 +26,7 @@ pub fn Table::Table(
     max.map(fn(value) { value.to_int64() & 0xFFFF_FFFFL }),
     init_value,
     is_table64,
+    resource_budget,
   )
 }
 
@@ -33,6 +37,7 @@ fn Table::allocate(
   max : Int64?,
   init_value : @types.Value,
   is_table64 : Bool,
+  resource_budget : ResourceBudget?,
 ) -> Table raise RuntimeError {
   if max is Some(maximum) &&
     maximum.reinterpret_as_uint64() < min.reinterpret_as_uint64() {
@@ -55,12 +60,24 @@ fn Table::allocate(
   if min != 0L && !value_fits_kind(init_value, elem_type) {
     raise TypeMismatch
   }
+  let reservation = resource_budget.map(budget => {
+    budget.reservation(TableElements, min)
+  })
   let size = min.to_int()
   let elements : Array[@types.Value] = []
   for _ in 0..<size {
     elements.push(init_value)
   }
-  { elem_type, elements, size, max, is_table64, binding: None, }
+  {
+    elem_type,
+    elements,
+    size,
+    max,
+    is_table64,
+    binding: None,
+    reservation,
+    native_table: None,
+  }
 }
 
 ///|
@@ -68,6 +85,7 @@ fn Table::allocate(
 pub fn Table::from_type(
   ty : @types.TableType,
   init_value~ : @types.Value = Null,
+  resource_budget~ : ResourceBudget? = None,
 ) -> Table raise RuntimeError {
   Table::allocate(
     ty.elem_type,
@@ -75,6 +93,7 @@ pub fn Table::from_type(
     ty.limits.max,
     init_value,
     ty.is_table64,
+    resource_budget,
   )
 }
 
@@ -161,6 +180,20 @@ pub fn Table::grow64(
   // Actual tables use MoonBit arrays and signed 32-bit native size metadata.
   if new_size > 0x7FFF_FFFFUL {
     return -1L
+  }
+  match self.native_table {
+    Some(table) => {
+      let native_size = table.size().to_int64()
+      if new_size.reinterpret_as_int64() > native_size &&
+        table.grow(new_size.reinterpret_as_int64() - native_size) < 0L {
+        return -1L
+      }
+    }
+    None =>
+      if self.reservation is Some(reservation) &&
+        !reservation.resize(new_size.reinterpret_as_int64()) {
+        return -1L
+      }
   }
   for _ in self.size..<new_size.to_int() {
     self.elements.push(init)
@@ -281,4 +314,6 @@ fn Table::close(self : Table) -> Unit {
   self.elements.clear()
   self.elements.shrink_to_fit()
   self.size = 0
+  self.native_table = None
+  self.reservation = None
 }

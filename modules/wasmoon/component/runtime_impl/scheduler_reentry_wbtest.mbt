@@ -71,3 +71,37 @@ test "scheduler does not recursively poll an active subtask through its guest ha
   inspect(polled.val, content="2")
   inspect(reentered.val, content="false")
 }
+
+///|
+test "compute suspension remains runnable while a canonical yield still requires progress" {
+  let state = AsyncState(StreamTable())
+  let store = @runtime.Store()
+  defer store.close()
+  let resumed = Ref(0)
+  let cancelled = Ref(0)
+  for reason in [CoreSuspension::CooperativeYield, Yield] {
+    let continuation = CoreContinuation(
+      fn() {
+        resumed.val += 1
+        Returned([I32(42)])
+      },
+      fn() { cancelled.val += 1 },
+    )
+    try
+      drive_core_to_completion(state, store, Suspended(reason, continuation))
+    catch {
+      CanonCallError(message) => {
+        assert_eq(reason, Yield)
+        assert_true(message.contains("deadlock"))
+      }
+      error => fail(error.to_string())
+    } noraise {
+      values => {
+        assert_eq(reason, CooperativeYield)
+        assert_eq(values, [I32(42)])
+      }
+    }
+  }
+  assert_eq(resumed.val, 1)
+  assert_eq(cancelled.val, 1)
+}

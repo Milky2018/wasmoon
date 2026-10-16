@@ -584,6 +584,7 @@ static void finalize_shared_table(void *object) {
         free(table->entries);
         atomic_fetch_sub_explicit(&g_shared_indirect_table_live_count, 1, memory_order_relaxed);
     }
+    if (table->reservation) moonbit_decref(table->reservation);
 }
 
 MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_native_table_empty(void) {
@@ -1083,6 +1084,7 @@ static void finalize_memory_descriptor(void *object) {
         }
     }
 
+    if (mem->reservation) moonbit_decref(mem->reservation);
     atomic_fetch_sub_explicit(&g_memory_descriptor_live_count, 1, memory_order_relaxed);
 }
 
@@ -1311,6 +1313,7 @@ typedef struct {
     int64_t ptr;
     int32_t size;
     int32_t finalized;
+    wasmoon_reservation_t *reservation;
 } managed_exec_code_t;
 
 static void finalize_exec_code(void *self) {
@@ -1319,6 +1322,7 @@ static void finalize_exec_code(void *self) {
         free_exec_internal(code->ptr);
         code->ptr = 0;
     }
+    if (code->reservation) { moonbit_decref(code->reservation); code->reservation = NULL; }
 }
 
 static void *make_managed_exec_code(int64_t ptr, int size, int finalized) {
@@ -1333,6 +1337,7 @@ static void *make_managed_exec_code(int64_t ptr, int size, int finalized) {
     payload->ptr = ptr;
     payload->size = size;
     payload->finalized = finalized;
+    payload->reservation = NULL;
     return payload;
 }
 
@@ -1391,6 +1396,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_release_exec_managed(void *exec_code) {
     payload->ptr = 0;
     payload->size = 0;
     payload->finalized = 0;
+    if (payload->reservation) { moonbit_decref(payload->reservation); payload->reservation = NULL; }
     return 0;
 }
 
@@ -2107,4 +2113,33 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_native_pointer_equal(void *a, void *b) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_native_table_entry_word(wasmoon_table_t *table, int32_t index, int32_t word) {
     return (int64_t)(intptr_t)table->entries[(size_t)index * 2 + (size_t)word];
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_memory_bind_reservation(wasmoon_memory_t *memory, wasmoon_reservation_t *reservation) {
+    if (!memory_descriptor_live(memory)) return 0;
+    if (memory->reservation) return memory->reservation->quota == reservation->quota;
+    if (!wasmoon_reservation_valid(reservation) || reservation->amount != (int64_t)atomic_load(&memory->current_length)) return 0;
+    moonbit_incref(reservation);
+    memory->reservation = reservation;
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_memory_matches_quota(wasmoon_memory_t *memory, wasmoon_quota_t *quota) {
+    if (!memory_descriptor_live(memory)) return 0;
+    return memory->reservation ? (wasmoon_reservation_matches(memory->reservation, quota) ? 1 : -1) : 0;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_table_bind_reservation(wasmoon_table_t *table, wasmoon_reservation_t *reservation) {
+    if (!table || !table->entries || table->reservation || !wasmoon_reservation_valid(reservation)) return 0;
+    moonbit_incref(reservation);
+    table->reservation = reservation;
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_exec_bind_reservation(void *object, wasmoon_reservation_t *reservation) {
+    managed_exec_code_t *code = object;
+    if (!code || !code->ptr || code->reservation || !wasmoon_reservation_valid(reservation) || reservation->amount != code->size) return 0;
+    moonbit_incref(reservation);
+    code->reservation = reservation;
+    return 1;
 }

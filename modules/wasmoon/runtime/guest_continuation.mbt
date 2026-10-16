@@ -60,6 +60,16 @@ pub fn Store::put_guest_continuation(
   body : GuestContinuationBody,
 ) -> Int64 raise RuntimeError {
   self.ensure_open()
+  errdefer (body.cancel)()
+  errdefer (for lease in body.leases {
+    lease.release()
+  })
+  guard self.next_guest_continuation < 0x7FFF_FFFF_FFFF_FFFFL else {
+    raise AllocationTooLarge
+  }
+  let pending = self.resource_budget.map(budget => {
+    budget.reserve(PendingWork, 1L)
+  })
   let handle = self.next_guest_continuation
   self.next_guest_continuation += 1L
   let leases = body.leases.copy()
@@ -99,17 +109,19 @@ pub fn Store::put_guest_continuation(
       for value in values {
         roots.push(value)
       }
-      let lease = self.pin_gc_roots(roots)
-      defer lease.release()
+      defer (if pending is Some(lease) { lease.release() })
+      errdefer (body.cancel)()
       defer (for lease in leases {
         lease.release()
       })
-      errdefer (body.cancel)()
+      let lease = self.pin_gc_roots(roots)
+      defer lease.release()
       (body.run)(input)
     },
     cancel: fn() {
       if active.val {
         active.val = false
+        defer (if pending is Some(lease) { lease.release() })
         defer (for lease in leases {
           lease.release()
         })

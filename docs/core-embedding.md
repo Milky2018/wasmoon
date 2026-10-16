@@ -132,3 +132,13 @@ for shared memory. Create one native Component session per Store.
 The [executable embedding example](../modules/wasmoon/executor/README.mbt.md)
 and [boundary evidence](evidence/core-boundaries-2026-10-15/README.md) record the
 supported path and current verification scope.
+
+## Resource policy
+
+Pass an explicit `ResourceBudget` to related Stores to share finite logical
+memory, table, GC, instance, code and pending-work quotas. Use
+`Store.decode_module` for bounded binary expansion and
+`Store.with_execution_limits` for scoped cooperative execution controls.
+`component.ComponentRuntime` exposes the same budget and execution-scope policy.
+The [resource inventory](resource-budgets.md) defines units, admission/release,
+Core compilation integration and the limits that still need OS isolation.

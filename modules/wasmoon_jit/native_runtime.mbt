@@ -132,6 +132,9 @@ pub fn jit_trap_message(code : Int32) -> String {
     22 => "failed to allocate"
     23 => "continuation already consumed"
     24 => "unhandled suspension"
+    25 => "host GC byte quota exceeded"
+    27 => "pending work quota exceeded"
+    26 => "host GC identity quota exceeded"
     _ => "unknown trap"
   }
 }

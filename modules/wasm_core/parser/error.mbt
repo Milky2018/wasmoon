@@ -8,6 +8,10 @@
 ///|
 suberror ParserError {
   UnexpectedEndOfInput
+  InvalidParseLimits
+  InputLimitExceeded
+  WorkLimitExceeded
+  NestingLimitExceeded
   UnexpectedEnd // For custom sections that are truncated
   LengthOutOfBounds // Section size exceeds available data
   InvalidMagicNumber
@@ -31,6 +35,14 @@ suberror ParserError {
   MalformedDataSegmentFlags(Int32) // data segment flags must be 0, 1, or 2
   DataCountRequired // memory.init/data.drop require data count section
   ParseError(String) // Generic error with message
+}
+
+///|
+pub fn ParserError::is_resource_exhaustion(self : ParserError) -> Bool {
+  match self {
+    InputLimitExceeded | WorkLimitExceeded | NestingLimitExceeded => true
+    _ => false
+  }
 }
 
 // ============================================================
@@ -72,6 +84,10 @@ fn int_to_hex(n : Int32) -> String {
 pub impl Show for ParserError with fn output(self, logger) {
   let msg = match self {
     UnexpectedEndOfInput => "unexpected end of input"
+    InvalidParseLimits => "invalid parser resource limits"
+    InputLimitExceeded => "parser input byte limit exceeded"
+    WorkLimitExceeded => "parser work limit exceeded"
+    NestingLimitExceeded => "parser expression nesting limit exceeded"
     UnexpectedEnd => "unexpected end"
     LengthOutOfBounds => "length out of bounds"
     InvalidMagicNumber =>

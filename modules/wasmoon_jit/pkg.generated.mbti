@@ -20,6 +20,7 @@ import {
   "Milky2018/x64_target",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -455,10 +456,13 @@ pub struct InvocationControl {
   cancel : (() -> Bool)?
   mut cancelled : Bool
   mut timed_out : Bool
+  exhausted : @ref.Ref[Bool]
+  // private fields
 }
 pub fn InvocationControl::expired(Self) -> Bool
-pub fn InvocationControl::new(Int?, (() -> Bool)?) -> Self?
+pub fn InvocationControl::new(Int?, (() -> Bool)?, safepoints? : Int64?) -> Self?
 pub fn InvocationControl::poll(Self) -> Bool
+pub fn InvocationControl::preflight(Self) -> Bool
 
 pub struct JITDebugDB {
   entries : Map[Int, JITFunctionDebug]

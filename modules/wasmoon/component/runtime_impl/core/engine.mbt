@@ -52,6 +52,7 @@ pub fn CoreExecutionRequest::CoreExecutionRequest(
 ///|
 /// Why a core execution continuation stopped.
 pub(all) enum CoreSuspension {
+  CooperativeYield
   Yield
   Wait(Int64)
 } derive(Debug, Eq)
@@ -285,6 +286,13 @@ fn resume_interpreter_continuation(
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
   let outcome = continuation.continue_execution() catch {
     error => {
+      match error {
+        ResourceLimitExceeded(_)
+        | ExecutionBudgetExceeded
+        | ExecutionTimedOut
+        | ExecutionCancelled => raise ComponentRuntimeError::from_core(error)
+        _ => ()
+      }
       if error is UncaughtException {
         raise UncaughtWasmException
       }
@@ -322,7 +330,8 @@ fn interpreter_outcome(
             raise CanonCallError("unhandled suspension")
           }
           HostCall(token) => core_suspension_from_token(token)
-          CooperativeYield | AtomicWait => Yield
+          CooperativeYield => CooperativeYield
+          AtomicWait => Yield
         },
         CoreContinuation(
           fn() raise ComponentRuntimeError {
@@ -367,6 +376,7 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
               None => None
             }
           },
+          cooperative=true,
         ) catch {
           error => raise component_core_error(error)
         }

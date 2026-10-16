@@ -189,6 +189,9 @@ pub(all) suberror ComponentRuntimeError {
   ValidationFailed(String)
   InstantiationFailed(String)
   ResourceExhausted(String)
+  ResourceLimitExceeded(@runtime.ResourceKind)
+  ExecutionBudgetExceeded
+  ExecutionTimedOut
   InvalidExportPath(String)
   UnknownExport(String)
   ExportNotFunction(String)
@@ -270,13 +273,18 @@ pub fn ComponentRuntime::ComponentRuntime(
   engine~ : ComponentEngine = native_component_engine(),
   wit_names~ : Bool = true,
   component_implements~ : Bool = true,
+  resource_budget~ : @runtime.ResourceBudget? = None,
 ) -> ComponentRuntime raise ComponentRuntimeError {
   {
     state: {
       linker: @runtime_impl.ComponentLinker::with_core_execution_engine(
         engine.open_session(),
+        resource_budget~,
       ) catch {
         ResourceExhausted(message) => raise ResourceExhausted(message)
+        ResourceLimitExceeded(kind) => raise ResourceLimitExceeded(kind)
+        ExecutionBudgetExceeded => raise ExecutionBudgetExceeded
+        ExecutionTimedOut => raise ExecutionTimedOut
         HostExit(code) => raise HostExit(code)
         Cancelled => raise Cancelled
         error => raise InstantiationFailed(error.to_string())
@@ -401,10 +409,18 @@ pub fn ComponentRuntime::instantiate(
   bytes : Bytes,
 ) -> ComponentInstance raise ComponentRuntimeError {
   self.state.ensure_open()
-  let component = @model.parse_component(bytes) catch {
-    error => raise ParseFailed(error.to_string())
+  let validated = self.state.linker.validate_input(
+    bytes,
+    wit_names=self.state.wit_names,
+    component_implements=self.state.component_implements,
+  ) catch {
+    @runtime_impl.ComponentRuntimeError::ResourceLimitExceeded(kind) =>
+      raise ResourceLimitExceeded(kind)
+    @runtime_impl.ComponentRuntimeError::ComponentParseError(message) =>
+      raise ParseFailed(message)
+    error => raise ValidationFailed(error.to_string())
   }
-  self.instantiate_component(name, component)
+  self.instantiate_validated(name, validated)
 }
 
 ///|
@@ -413,22 +429,24 @@ pub fn ComponentRuntime::instantiate_component(
   name : String,
   component : Component,
 ) -> ComponentInstance raise ComponentRuntimeError {
-  self.state.ensure_open()
-  let validated = @component_model.validate_component_for_instantiation_with_config(
-    component,
-    ComponentValidationConfig(
-      self.state.wit_names,
-      component_implements=self.state.component_implements,
-    ),
-  ) catch {
-    error => raise ValidationFailed(error.to_string())
-  }
+  self.instantiate(name, component.snapshot_bytes())
+}
+
+///|
+fn ComponentRuntime::instantiate_validated(
+  self : ComponentRuntime,
+  name : String,
+  validated : @component_model.ValidatedComponent,
+) -> ComponentInstance raise ComponentRuntimeError {
   self.state.begin_execution()
   let inner = self.state.linker.instantiate(name, validated) catch {
     error => {
       self.state.end_execution()
       match error {
         ResourceExhausted(message) => raise ResourceExhausted(message)
+        ResourceLimitExceeded(kind) => raise ResourceLimitExceeded(kind)
+        ExecutionBudgetExceeded => raise ExecutionBudgetExceeded
+        ExecutionTimedOut => raise ExecutionTimedOut
         HostExit(code) => raise HostExit(code)
         Cancelled => raise Cancelled
         NativeEngineUnavailable(message) =>
@@ -1245,6 +1263,9 @@ fn raise_public_invocation_error(
   match error {
     NativeEngineUnavailable(message) => raise NativeEngineUnavailable(message)
     NativeCompilationFailed(message) => raise NativeCompilationFailed(message)
+    ResourceLimitExceeded(kind) => raise ResourceLimitExceeded(kind)
+    ExecutionBudgetExceeded => raise ExecutionBudgetExceeded
+    ExecutionTimedOut => raise ExecutionTimedOut
     Cancelled => raise Cancelled
     HostExit(status) => raise HostExit(status)
     error => raise InvocationFailed(error.to_string())
@@ -1859,4 +1880,30 @@ pub fn component_values_to_json(values : Array[ComponentValue]) -> Json {
     items.push(component_value_to_json(value))
   }
   Json::array(items)
+}
+
+///|
+/// Share cooperative compute limits across calls created in this scope, including
+/// their later asynchronous scheduling rounds. Blocking host code is not preempted.
+pub fn[T] ComponentRuntime::with_execution_limits(
+  self : ComponentRuntime,
+  run : () -> T raise,
+  timeout_ms~ : Int32? = None,
+  safepoints~ : Int64? = None,
+  cancel~ : (() -> Bool)? = None,
+) -> T raise {
+  self.state.ensure_open()
+  self.state.linker
+  .get_store()
+  .with_execution_limits(run, timeout_ms~, safepoints~, cancel~) catch {
+    @runtime.RuntimeError::ResourceLimitExceeded(kind) =>
+      raise ResourceLimitExceeded(kind)
+    @runtime.RuntimeError::ExecutionBudgetExceeded =>
+      raise ExecutionBudgetExceeded
+    @runtime.RuntimeError::ExecutionTimedOut => raise ExecutionTimedOut
+    @runtime.RuntimeError::ExecutionCancelled => raise Cancelled
+    @runtime.RuntimeError::InvalidExecutionLimit =>
+      raise InvalidContract("invalid execution limits")
+    error => raise error
+  }
 }

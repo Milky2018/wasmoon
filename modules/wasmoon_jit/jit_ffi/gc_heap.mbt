@@ -50,3 +50,15 @@ pub extern "c" fn GCHeapHandle::reference_candidates(
   self : GCHeapHandle,
   reference : Int32,
 ) -> FixedArray[Int64] = "wasmoon_gc_heap_reference_candidates"
+
+///|
+#borrow(self, bytes, objects)
+pub extern "c" fn GCHeapHandle::bind_reservations(
+  self : GCHeapHandle,
+  bytes : Reservation,
+  objects : Reservation,
+) -> Bool = "wasmoon_gc_heap_bind_reservations"
+
+///|
+#borrow(self)
+pub extern "c" fn GCHeapHandle::quota_denied(self : GCHeapHandle) -> Int32 = "wasmoon_gc_heap_quota_denied"

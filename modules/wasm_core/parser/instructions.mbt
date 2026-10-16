@@ -35,7 +35,12 @@ fn Parser::read_expr(
   let frames : Array[ExpressionFrame] = []
   let mut instructions : Array[@types.Instruction] = []
   while true {
-    match self.read_byte() {
+    let opcode = self.read_byte()
+    if (opcode == 0x02 || opcode == 0x03 || opcode == 0x04 || opcode == 0x1f) &&
+      frames.length() >= self.max_depth {
+      raise NestingLimitExceeded
+    }
+    match opcode {
       0x02 => {
         frames.push(Block(self.read_block_type(), instructions))
         instructions = []

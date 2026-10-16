@@ -2,6 +2,7 @@
 /// Physical concurrent-resource slots shared by otherwise typed owner tables.
 /// Capacity limits growth; slots freed before or after shrinking remain usable.
 pub struct ConcurrentResources {
+  priv budget : @runtime.ResourceBudget?
   priv closed : Ref[Bool]
   priv maximum : Ref[Int64]
   priv allocated : Ref[Int64]
@@ -10,8 +11,11 @@ pub struct ConcurrentResources {
 } derive(Debug)
 
 ///|
-fn ConcurrentResources::new() -> ConcurrentResources {
+fn ConcurrentResources::new(
+  budget~ : @runtime.ResourceBudget? = None,
+) -> ConcurrentResources {
   {
+    budget,
     closed: Ref(false),
     maximum: Ref(1000000L),
     allocated: Ref(0L),
@@ -33,6 +37,7 @@ struct ConcurrentResourceLease {
   pool : ConcurrentResources
   slot : Int64
   active : Ref[Bool]
+  budget_lease : @runtime.ResourceLease?
 } derive(Debug)
 
 ///|
@@ -41,6 +46,9 @@ fn ConcurrentResources::allocate(
 ) -> ConcurrentResourceLease raise ComponentRuntimeError {
   if self.closed.val {
     raise Cancelled
+  }
+  let budget_lease = self.budget.map(budget => budget.reserve(PendingWork, 1L)) catch {
+    error => raise ComponentRuntimeError::from_core(error)
   }
   let slot = match self.free.pop() {
     Some(slot) => slot
@@ -54,7 +62,7 @@ fn ConcurrentResources::allocate(
     }
   }
   self.live.val += 1L
-  { pool: self, slot, active: Ref(true), }
+  { pool: self, slot, active: Ref(true), budget_lease, }
 }
 
 ///|
@@ -63,6 +71,9 @@ fn ConcurrentResourceLease::release(self : ConcurrentResourceLease) -> Unit {
     return
   }
   self.active.val = false
+  if self.budget_lease is Some(lease) {
+    lease.release()
+  }
   self.pool.live.val -= 1L
   self.pool.free.push(self.slot)
 }
@@ -117,6 +128,7 @@ fn[K : Hash + Eq, V] ConcurrentMap::set_core(
   value : V,
 ) -> Unit raise @runtime.RuntimeError {
   self.set(key, value) catch {
+    ResourceLimitExceeded(kind) => raise ResourceLimitExceeded(kind)
     error => trap_canon(canon_err_message(error))
   }
 }

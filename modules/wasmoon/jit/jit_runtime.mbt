@@ -35,6 +35,7 @@ pub suberror JITModuleLoadError {
     message~ : String
   )
   ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
+  CodeQuotaExceeded
   FunctionMetadataRegistrationFailed(func_idx~ : Int32, message~ : String)
 } derive(Debug)
 
@@ -151,10 +152,14 @@ fn stage_artifact_imports(
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   external_imports : Map[String, Map[String, Int64]],
   owned_trampolines : Array[@wasmoon_jit.InstalledTrampoline],
+  resource_budget : @runtime.ResourceBudget?,
 ) -> Map[String, Int64] raise JITModuleLoadError {
   let import_targets : Map[String, Int64] = Map([])
   let target = artifact_target_architecture(artifact)
-  let trampoline_installer = @wasmoon_jit.JitCodeInstaller::new(fn(_) { None })
+  let trampoline_installer = @wasmoon_jit.JitCodeInstaller::new(
+    fn(_) { None },
+    code_quota=resource_budget.map(budget => budget.native_quota(CodeBytes)),
+  )
   for import_ in artifact.imports {
     let function_index = import_.function_index
     let resolved = @wasmoon_jit.resolve_import_function_ptr(
@@ -189,6 +194,7 @@ fn stage_artifact_imports(
           )
       }
       let code = trampoline_installer.install_trampoline(trampoline.code) catch {
+        CodeQuotaExceeded => raise CodeQuotaExceeded
         _ =>
           raise ImportTrampolineAllocationFailed(
             import_idx=function_index,
@@ -216,6 +222,7 @@ pub fn JITModule::load_artifact(
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   function_names~ : Array[String] = [],
   debug_db~ : @wasmoon_jit.JITDebugDB? = None,
+  resource_budget~ : @runtime.ResourceBudget? = None,
 ) -> JITModule raise JITModuleLoadError {
   JITModule::load_artifact_with_imports(
     loaded,
@@ -223,6 +230,7 @@ pub fn JITModule::load_artifact(
     Map([]),
     function_names~,
     debug_db~,
+    resource_budget~,
   )
 }
 
@@ -234,6 +242,7 @@ pub fn JITModule::load_artifact_with_imports(
   external_imports : Map[String, Map[String, Int64]],
   function_names~ : Array[String] = [],
   debug_db~ : @wasmoon_jit.JITDebugDB? = None,
+  resource_budget~ : @runtime.ResourceBudget? = None,
 ) -> JITModule raise JITModuleLoadError {
   load_artifact_with_imports_using_registrar(
     loaded,
@@ -242,6 +251,7 @@ pub fn JITModule::load_artifact_with_imports(
     function_names,
     debug_db,
     fn(context) { loaded.bind_safepoints(context.ctx) },
+    resource_budget~,
   )
 }
 
@@ -253,13 +263,15 @@ fn load_artifact_with_imports_using_registrar(
   function_names : Array[String],
   debug_db : @wasmoon_jit.JITDebugDB?,
   register_safepoints : (JITContext) -> Bool,
+  resource_budget~ : @runtime.ResourceBudget? = None,
 ) -> JITModule raise JITModuleLoadError {
   let artifact = loaded.artifact()
   let total_funcs = artifact_context_function_count(
     artifact,
     func_signatures.length(),
   )
-  guard JITContext::try_alloc(total_funcs, loaded) is Some(ctx) else {
+  guard JITContext::try_alloc(total_funcs, loaded, resource_budget~)
+    is Some(ctx) else {
     raise ContextAllocationFailed(total_funcs~)
   }
   errdefer ctx.close()
@@ -276,18 +288,22 @@ fn load_artifact_with_imports_using_registrar(
     func_signatures,
     external_imports,
     jit_module.owned_trampolines,
+    resource_budget,
   )
   let runtime_symbols = @wasmoon_jit.RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
-  let installer = @wasmoon_jit.JitCodeInstaller::new(fn(target) {
-    match target {
-      External(symbol) =>
-        match import_targets.get(symbol.name) {
-          Some(pointer) => Some(pointer)
-          None => runtime_symbols.resolve(symbol.name)
-        }
-      Code(_) | Data(_) => None
-    }
-  })
+  let installer = @wasmoon_jit.JitCodeInstaller::new(
+    fn(target) {
+      match target {
+        External(symbol) =>
+          match import_targets.get(symbol.name) {
+            Some(pointer) => Some(pointer)
+            None => runtime_symbols.resolve(symbol.name)
+          }
+        Code(_) | Data(_) => None
+      }
+    },
+    code_quota=resource_budget.map(budget => budget.native_quota(CodeBytes)),
+  )
   let installed = installer.install(loaded.verified()) catch {
     error => raise ArtifactInstallationFailed(cause=error)
   }
@@ -579,6 +595,7 @@ pub fn JITModule::call_with_context(
         Some(JITNativeFiberFailure(message)) =>
           raise JITNativeFiberFailure(message)
         Some(JITExit(code)) => raise JITExit(code)
+        Some(JITResourceLimit(kind)) => raise JITResourceLimit(kind)
         Some(JITCancelled) => raise JITCancelled
         None => ()
       }
@@ -648,6 +665,7 @@ fn JITCallContinuation::finish_error(
     }
     JITNativeFiberFailure(message) => raise JITNativeFiberFailure(message)
     JITExit(code) => raise JITExit(code)
+    JITResourceLimit(kind) => raise JITResourceLimit(kind)
     JITCancelled => raise JITCancelled
   }
 }
@@ -1507,4 +1525,23 @@ pub fn JITModule::bind_segment_drop_flags(
 ) -> Unit {
   guard self.context is Some(ctx) else { return }
   instance.bind_native_segments(ctx.ctx)
+}
+
+///|
+/// Install the captured Store policy for the next activation. Native activations
+/// retain their own callback snapshot across parking and nested invocations.
+pub fn JITModule::set_execution_scope(
+  self : JITModule,
+  scope : @runtime.ExecutionScope?,
+) -> Bool {
+  if scope is Some(_) && !self.cancellation_safepoints {
+    return false
+  }
+  if self.context is Some(context) {
+    match scope {
+      Some(scope) => context.set_cancellation_callback(() => scope.poll())
+      None => context.clear_cancellation_callback()
+    }
+  }
+  true
 }

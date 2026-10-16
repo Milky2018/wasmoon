@@ -9,6 +9,7 @@ fn[T] Parser::read_vec(
   reader : () -> T raise ParserError,
 ) -> Array[T] raise ParserError {
   let count = self.read_u32()
+  self.charge(count.reinterpret_as_uint().to_int64())
   let acc : Array[T] = []
   for _ in 0..<count {
     acc.push(reader())

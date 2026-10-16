@@ -256,3 +256,57 @@ test "live and decoded artifacts use the same installer transaction" {
     ),
   )
 }
+
+///|
+test "executable quota admits before staging and preserves published code on denial" {
+  let artifact = loader_artifact()
+  let loaded = verify_artifact(artifact, loader_compatibility(artifact))
+  fn installer(quota : @jit_ffi.Quota) -> JitCodeInstaller {
+    JitCodeInstaller::new(
+      fn(target) {
+        match target {
+          External(symbol) if symbol.name == "wasm.runtime.host_log" =>
+            Some(0x0000000100000000L)
+          _ => None
+        }
+      },
+      code_quota=Some(quota),
+    )
+  }
+  let probe = @jit_ffi.Quota::new(100000L)
+  let measured = installer(probe).install(loaded)
+  let units = probe.used()
+  assert_true(units > 0L)
+  measured.release()
+  assert_eq(probe.used(), 0L)
+  let insufficient = @jit_ffi.Quota::new(units - 1L)
+  let mappings = executable_mapping_count()
+  try installer(insufficient).install(loaded) catch {
+    CodeQuotaExceeded => ()
+    error => fail("\{Repr(error)}")
+  } noraise {
+    _ => fail("code was staged beyond its quota")
+  }
+  assert_eq(insufficient.used(), 0L)
+  assert_eq(executable_mapping_count(), mappings)
+  let exact = @jit_ffi.Quota::new(units)
+  let owner = installer(exact)
+  let published = owner.install(loaded)
+  let entry = published.functions()[0].entry_address()
+  try owner.install(loaded) catch {
+    CodeQuotaExceeded => ()
+    error => fail("\{Repr(error)}")
+  } noraise {
+    _ => fail("replacement exceeded peak code allowance")
+  }
+  assert_eq(exact.used(), units)
+  assert_eq(owner.current().unwrap().functions()[0].entry_address(), entry)
+  published.release()
+  assert_eq(exact.used(), 0L)
+  install_error_for_tests(owner, loaded, Publication) |> ignore
+  assert_eq(exact.used(), 0L)
+  let replacement = owner.install(loaded)
+  assert_eq(exact.used(), units)
+  replacement.release()
+  assert_eq(exact.used(), 0L)
+}

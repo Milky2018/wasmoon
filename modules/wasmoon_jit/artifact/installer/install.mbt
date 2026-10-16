@@ -8,6 +8,7 @@ pub(all) suberror JitInstallError {
   RegistrationFailed(function_index~ : Int32, message~ : String)
   PublicationFailed(message~ : String)
   TrampolineAllocationFailed(code_size~ : Int32)
+  CodeQuotaExceeded
 } derive(Eq, Debug)
 
 ///|
@@ -185,13 +186,15 @@ pub fn InstalledTrampoline::release(self : InstalledTrampoline) -> Unit {
 pub struct JitCodeInstaller {
   priv resolver : (@code_object.RelocationTarget) -> Int64?
   priv current : Ref[InstalledCode?]
+  priv code_quota : @jit_ffi.Quota?
 }
 
 ///|
 pub fn JitCodeInstaller::new(
   resolver : (@code_object.RelocationTarget) -> Int64?,
+  code_quota~ : @jit_ffi.Quota? = None,
 ) -> JitCodeInstaller {
-  { resolver, current: { val: None, }, }
+  { resolver, current: { val: None, }, code_quota, }
 }
 
 ///|
@@ -208,7 +211,8 @@ pub fn JitCodeInstaller::install_trampoline(
   code : Array[Int32],
 ) -> InstalledTrampoline raise JitInstallError {
   self.resolver |> ignore
-  match ExecCode::try_alloc(code) {
+  let reservation = self.reserve_code(code.length())
+  match ExecCode::try_alloc(code, reservation~) {
     Some(executable_code) => { executable_code, }
     None => raise TrampolineAllocationFailed(code_size=code.length())
   }
@@ -430,7 +434,8 @@ fn install_artifact_with_failure(
   errdefer release_staged_code(staged)
   for index, plan in plans {
     let source = artifact.functions[index]
-    let code = match ExecCode::try_stage(plan.code().length()) {
+    let reservation = installer.reserve_code(plan.code().length())
+    let code = match ExecCode::try_stage(plan.code().length(), reservation~) {
       Some(code) => code
       None =>
         raise AllocationFailed(function_index=source.identity.function_index)
@@ -494,4 +499,19 @@ pub fn JitCodeInstaller::install(
   loaded : LoadedArtifact,
 ) -> InstalledCode raise JitInstallError {
   install_artifact_with_failure(self, loaded)
+}
+
+///|
+fn JitCodeInstaller::reserve_code(
+  self : JitCodeInstaller,
+  size : Int32,
+) -> @jit_ffi.Reservation? raise JitInstallError {
+  match self.code_quota {
+    Some(quota) => {
+      let reservation = @jit_ffi.Reservation::new(quota, size.to_int64())
+      guard reservation.valid() else { raise CodeQuotaExceeded }
+      Some(reservation)
+    }
+    None => None
+  }
 }

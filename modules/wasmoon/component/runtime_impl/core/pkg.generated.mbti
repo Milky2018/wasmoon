@@ -56,6 +56,8 @@ pub(all) suberror ComponentRuntimeError {
   CoreModuleParseError(String)
   CoreModuleInstantiateError(String)
   ResourceExhausted(String)
+  ResourceLimitExceeded(@runtime.ResourceKind)
+  ExecutionBudgetExceeded
   InvalidUtf8
   UnknownImport(String)
   ImportTypeMismatch(String)
@@ -84,6 +86,7 @@ pub(all) suberror ComponentRuntimeError {
   NativeEngineUnavailable(String)
   NativeCompilationFailed(String)
   Cancelled
+  ExecutionTimedOut
   HostExit(Int)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
@@ -188,6 +191,7 @@ pub(all) struct CoreFuncRef {
 pub fn CoreFuncRef::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CoreSuspension {
+  CooperativeYield
   Yield
   Wait(Int64)
 } derive(Eq, @debug.Debug)

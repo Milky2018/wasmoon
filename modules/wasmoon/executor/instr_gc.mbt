@@ -197,12 +197,10 @@ fn ExecContext::exec_array_new(
 
   // Create array with fill value
   check_gc_array_length(len)
-  let elements : Array[@types.Value] = Array::make(len, fill_val)
-
-  // Allocate array in the store
-  let ref_idx = self.store.alloc_array(
+  let ref_idx = self.store.alloc_array_repeated(
     type_idx,
-    elements,
+    len,
+    fill_val,
     instance=self.instance,
   )
   self.stack.push(ArrayRef(ref_idx))
@@ -227,12 +225,10 @@ fn ExecContext::exec_array_new_default(
 
   // Create array with default values
   check_gc_array_length(len)
-  let elements : Array[@types.Value] = Array::make(len, default_val)
-
-  // Allocate array in the store
-  let ref_idx = self.store.alloc_array(
+  let ref_idx = self.store.alloc_array_repeated(
     type_idx,
-    elements,
+    len,
+    default_val,
     instance=self.instance,
   )
   self.stack.push(ArrayRef(ref_idx))
@@ -248,12 +244,21 @@ fn ExecContext::exec_array_new_fixed(
 ) -> Unit raise {
   // Pop elements from stack (in reverse order)
   check_gc_array_length(len)
+  let staging = self.store.reserve_gc_array_work(len)
+  defer (if staging is Some((bytes, objects)) {
+    bytes.release()
+    objects.release()
+  })
   let elements : Array[@types.Value] = Array::make(len, I32(0))
   for i = len - 1; i >= 0; i = i - 1 {
     elements[i] = self.stack.pop()
   }
 
   // Allocate array in the store
+  if staging is Some((bytes, objects)) {
+    bytes.release()
+    objects.release()
+  }
   let ref_idx = self.store.alloc_array(
     type_idx,
     elements,
@@ -513,6 +518,11 @@ fn ExecContext::exec_array_new_data(
   }
 
   // Read elements from data segment
+  let staging = self.store.reserve_gc_array_work(len)
+  defer (if staging is Some((bytes, objects)) {
+    bytes.release()
+    objects.release()
+  })
   let elements : Array[@types.Value] = []
   for i in 0..<len {
     let byte_offset = offset + i * bytes_per_elem
@@ -525,6 +535,10 @@ fn ExecContext::exec_array_new_data(
   }
 
   // Allocate array in the store
+  if staging is Some((bytes, objects)) {
+    bytes.release()
+    objects.release()
+  }
   let ref_idx = self.store.alloc_array(
     type_idx,
     elements,
@@ -568,6 +582,11 @@ fn ExecContext::exec_array_new_elem(
   }
 
   // Read elements from elem segment
+  let staging = self.store.reserve_gc_array_work(len)
+  defer (if staging is Some((bytes, objects)) {
+    bytes.release()
+    objects.release()
+  })
   let elements : Array[@types.Value] = []
   for i in 0..<len {
     let value = self.instance.element_value(elem_idx, offset + i)
@@ -575,6 +594,10 @@ fn ExecContext::exec_array_new_elem(
   }
 
   // Allocate array in the store
+  if staging is Some((bytes, objects)) {
+    bytes.release()
+    objects.release()
+  }
   let ref_idx = self.store.alloc_array(
     type_idx,
     elements,
