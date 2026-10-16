@@ -1,0 +1,99 @@
+{
+  "base_revision": "25dac7da3e3b99f98b074d0f3c5d054ffe5ca65d",
+  "source_dirty": true,
+  "platform": "macOS ARM64",
+  "source_manifest": "source-manifest.json",
+  "cli_sha256": "248d7214155665109dffd90e5d4c5410dfa6147af5ca66daffce797d77651ea3",
+  "checks": {
+    "moon_info": "passed",
+    "moon_fmt": "passed",
+    "moon_check_native_warnings_denied": "passed",
+    "native_tests": {
+      "passed": 2721,
+      "failed": 0
+    },
+    "strict_c_stubs": 43,
+    "module_boundaries": "passed",
+    "asan_ubsan_tests": {
+      "passed": 163,
+      "failed": 0
+    },
+    "asan_positive_control": "detected",
+    "native_asan_positive_control": "detected",
+    "linux_leak_detection": "not_run_on_macOS"
+  },
+  "core_wast": {
+    "interp": {
+      "files_passed": 258,
+      "files_failed": 0,
+      "assertions_passed": 62563,
+      "assertions_failed": 0
+    },
+    "jit": {
+      "files_passed": 258,
+      "files_failed": 0,
+      "assertions_passed": 62563,
+      "assertions_failed": 0
+    }
+  },
+  "component_wast": {
+    "interp": {
+      "stable-0.2": {
+        "files": 23,
+        "passed": 845,
+        "failed": 0,
+        "skipped": 0
+      },
+      "async-0.3": {
+        "files": 24,
+        "passed": 153,
+        "failed": 0,
+        "skipped": 0
+      },
+      "future-gated": {
+        "files": 12,
+        "passed": 387,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "jit": {
+      "stable-0.2": {
+        "files": 23,
+        "passed": 845,
+        "failed": 0,
+        "skipped": 0
+      },
+      "async-0.3": {
+        "files": 24,
+        "passed": 153,
+        "failed": 0,
+        "skipped": 0
+      },
+      "future-gated": {
+        "files": 12,
+        "passed": 387,
+        "failed": 0,
+        "skipped": 0
+      }
+    }
+  },
+  "wasi03": {
+    "upstream": "609c446139956ff30239f87cb18af1dc6128bed2",
+    "profile": "http-contract",
+    "counts": {
+      "pass": 110
+    }
+  },
+  "pending_acceptance": [
+    "Linux AMD64",
+    "Linux ASan/UBSan/LSan with positive controls",
+    "Windows AMD64 Clang",
+    "Windows AMD64 MSVC"
+  ],
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "pull_request_created": false
+  }
+}

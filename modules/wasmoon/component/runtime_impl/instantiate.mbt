@@ -24,6 +24,9 @@ fn instantiate_component(
   outer_stack : Array[ComponentInstance],
   staged : Array[(String, ComponentInstance)],
 ) -> ComponentInstance raise ComponentRuntimeError {
+  linker.get_store().reserve_retained_resource(Instances, 1L) catch {
+    error => raise ComponentRuntimeError::from_core(error)
+  }
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
   } else {
@@ -96,8 +99,12 @@ fn run_component_sections(
         if @component.sniff_binary_kind(section.payload) != Some(CoreModule) {
           raise CoreModuleParseError("unknown binary version")
         }
-        let core_module = @parser.parse_module(section.payload) catch {
-          e => raise CoreModuleParseError(e.to_string())
+        let core_module = store.decode_module(section.payload) catch {
+          e =>
+            match @runtime.RuntimeError::from_error(e) {
+              Some(error) => raise ComponentRuntimeError::from_core(error)
+              None => raise CoreModuleParseError(e.to_string())
+            }
         }
         state.core_modules.push(core_module)
       }

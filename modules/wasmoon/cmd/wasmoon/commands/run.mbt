@@ -1422,6 +1422,7 @@ fn run_with_jit(
           external_imports,
           function_names=build_jit_function_names(mod_),
           debug_db~,
+          resource_budget=store.resource_budget,
         )
       catch {
         e => Err(e)
@@ -1582,6 +1583,11 @@ fn run_with_jit(
                     None => @logger.error("JIT Trap: \{msg}")
                   }
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
+                  raise CommandFailure(1)
+                }
+                JITResourceLimit(kind) => {
+                  jm.teardown_gc()
+                  @logger.error("Host resource limit exceeded: \{Repr(kind)}")
                   raise CommandFailure(1)
                 }
                 JITNativeFiberFailure(message) => {

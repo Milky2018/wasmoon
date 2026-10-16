@@ -14,7 +14,10 @@ struct ExecCode(ExecCodeHandle)
 
 ///|
 /// Allocate and copy code to executable memory (GC-managed).
-fn ExecCode::try_alloc(code : Array[Int32]) -> ExecCode? {
+fn ExecCode::try_alloc(
+  code : Array[Int32],
+  reservation~ : @jit_ffi.Reservation? = None,
+) -> ExecCode? {
   let size = code.length()
   if size == 0 {
     return None
@@ -25,6 +28,9 @@ fn ExecCode::try_alloc(code : Array[Int32]) -> ExecCode? {
   }
   let ec = alloc_exec_managed(bytes, size)
   if exec_code_pointer(ec) != 0L {
+    if reservation is Some(reservation) && !ec.bind_reservation(reservation) {
+      return None
+    }
     Some(ExecCode(ec))
   } else {
     None
@@ -32,7 +38,10 @@ fn ExecCode::try_alloc(code : Array[Int32]) -> ExecCode? {
 }
 
 ///|
-fn ExecCode::try_stage(size : Int32) -> ExecCode? {
+fn ExecCode::try_stage(
+  size : Int32,
+  reservation~ : @jit_ffi.Reservation? = None,
+) -> ExecCode? {
   if size <= 0 {
     return None
   }
@@ -40,6 +49,9 @@ fn ExecCode::try_stage(size : Int32) -> ExecCode? {
   if exec_code_pointer(code) == 0L {
     None
   } else {
+    if reservation is Some(reservation) && !code.bind_reservation(reservation) {
+      return None
+    }
     Some(ExecCode(code))
   }
 }

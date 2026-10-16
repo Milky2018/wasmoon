@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/debug",
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/parser",
   "Milky2018/wasm_core/validator",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/jit_ffi",

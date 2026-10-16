@@ -30,6 +30,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "quota.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -128,7 +129,15 @@ typedef struct GcHeap {
     void *root_visitor_data;    // Retained MoonBit closure; cleared before Store close
     struct native_continuation_arena *continuation_arena; // Borrowed through root registrations
     struct native_exception_arena *exception_arena; // Borrowed through root registrations
+    wasmoon_reservation_t *byte_reservation;
+    wasmoon_reservation_t *object_reservation;
+    int quota_denied; // 1: payload bytes, 2: retained identity slots
 } GcHeap;
+
+// Budgeted heaps enter the common allocator before any guest payload write.
+static inline uint8_t *gc_heap_allocation_limit(GcHeap *heap) {
+    return heap->data + (heap->byte_reservation ? heap->size : heap->capacity);
+}
 
 static inline GcHeap *gc_heap_live(GcHeap *heap) {
     return heap && heap->data ? heap : NULL;

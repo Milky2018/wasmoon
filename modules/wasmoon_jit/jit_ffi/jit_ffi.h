@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdatomic.h>
+#include "quota.h"
 
 // Guest machine code uses the private SysV helper ABI on x64. C callers use
 // their host ABI; Clang emits the crossing when calling these declarations.
@@ -53,6 +54,7 @@ typedef struct {
     int is_shared;
     _Atomic int growth_lock;
     int valid;              // Empty managed handles represent allocation failure.
+    wasmoon_reservation_t *reservation;
 } wasmoon_memory_t;
 
 static inline wasmoon_memory_t *memory_descriptor_live(wasmoon_memory_t *memory) {
@@ -65,6 +67,7 @@ typedef struct {
     void **entries;
     size_t size;
     struct wasmoon_table_binding *bindings;
+    wasmoon_reservation_t *reservation;
 } wasmoon_table_t;
 
 typedef struct wasmoon_table_binding {

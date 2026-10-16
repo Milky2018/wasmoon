@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/component"
 
 import {
   "Milky2018/wasm_component/model",
+  "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/wasi_component",
   "moonbitlang/core/debug",
 }
@@ -50,6 +51,9 @@ pub(all) suberror ComponentRuntimeError {
   ValidationFailed(String)
   InstantiationFailed(String)
   ResourceExhausted(String)
+  ResourceLimitExceeded(@runtime.ResourceKind)
+  ExecutionBudgetExceeded
+  ExecutionTimedOut
   InvalidExportPath(String)
   UnknownExport(String)
   ExportNotFunction(String)
@@ -167,11 +171,12 @@ pub fn ComponentResourceType::not_equal(Self, Self) -> Bool
 pub fn ComponentResourceType::to_repr(Self) -> @debug.Repr
 
 type ComponentRuntime
-pub fn ComponentRuntime::ComponentRuntime(engine? : ComponentEngine, wit_names? : Bool, component_implements? : Bool) -> Self raise ComponentRuntimeError
+pub fn ComponentRuntime::ComponentRuntime(engine? : ComponentEngine, wit_names? : Bool, component_implements? : Bool, resource_budget? : @runtime.ResourceBudget?) -> Self raise ComponentRuntimeError
 pub fn ComponentRuntime::close(Self) -> Unit
 pub fn ComponentRuntime::install(Self, ComponentHostInstaller) -> Unit raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate_component(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn[T] ComponentRuntime::with_execution_limits(Self, () -> T raise, timeout_ms? : Int?, safepoints? : Int64?, cancel? : (() -> Bool)?) -> T raise
 
 pub(all) enum ComponentValue {
   Bool(Bool)

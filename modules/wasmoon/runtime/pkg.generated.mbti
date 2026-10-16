@@ -83,6 +83,13 @@ pub(all) suberror RuntimeError {
   IntegerOverflow
   InvalidConversion
   OutOfMemory
+  InvalidResourceLimit
+  InvalidExecutionLimit
+  ExecutionLimitsUnavailable
+  ExecutionCancelled
+  ExecutionTimedOut
+  ExecutionBudgetExceeded
+  ResourceLimitExceeded(ResourceKind)
   TableAllocationOverflow
   TableAllocationFailed
   MemoryMinimumExceedsLimits(Int64)
@@ -163,6 +170,15 @@ pub fn Caller::get_exported_memory(Self, String) -> Memory? raise RuntimeError
 pub fn Caller::instance(Self) -> ModuleInstance
 pub fn Caller::store(Self) -> Store
 pub fn Caller::to_repr(Self) -> @debug.Repr
+
+pub struct ExecutionScope {
+  // private fields
+}
+pub fn ExecutionScope::check(Self) -> Unit raise RuntimeError
+pub fn ExecutionScope::failure(Self) -> RuntimeError?
+pub fn ExecutionScope::poll(Self) -> Bool
+pub fn ExecutionScope::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for ExecutionScope
 
 pub struct ExnInstance {
   tag_addr : Int
@@ -288,6 +304,11 @@ pub fn Imports::add_tag(Self, String, String, Int) -> Unit
 pub fn Imports::check_store(Self, Store) -> Unit raise RuntimeError
 pub fn Imports::resolve(Self, String, String) -> ExternVal?
 
+pub struct InstanceAdmission {
+  // private fields
+}
+pub fn InstanceAdmission::cancel(Self) -> Unit
+
 type InstantiationTransaction
 pub fn InstantiationTransaction::commit(Self) -> Unit
 pub fn InstantiationTransaction::new() -> Self
@@ -330,10 +351,11 @@ pub struct MarkSweepHeap {
   mut collections : Int
   mut bytes_allocated : Int64
   mut bytes_collected : Int64
+  // private fields
 } derive(@debug.Debug)
-pub fn MarkSweepHeap::MarkSweepHeap() -> Self
-pub fn MarkSweepHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
-pub fn MarkSweepHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
+pub fn MarkSweepHeap::MarkSweepHeap(resource_budget? : ResourceBudget?) -> Self
+pub fn MarkSweepHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
+pub fn MarkSweepHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
 pub fn MarkSweepHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
 pub fn MarkSweepHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
 pub fn MarkSweepHeap::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
@@ -360,7 +382,7 @@ pub fn MarkSweepHeap::struct_get(Self, Int, Int) -> @types.Value raise RuntimeEr
 pub fn MarkSweepHeap::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 pub fn MarkSweepHeap::sweep(Self) -> Int
 pub fn MarkSweepHeap::to_repr(Self) -> @debug.Repr
-pub fn MarkSweepHeap::with_threshold(Int) -> Self
+pub fn MarkSweepHeap::with_threshold(Int, resource_budget? : ResourceBudget?) -> Self
 pub fn MarkSweepHeap::write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
 pub fn MarkSweepHeap::write_barrier_post(Self, Int, @types.Value) -> Unit
 pub fn MarkSweepHeap::write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
@@ -369,7 +391,7 @@ pub impl GcManager for MarkSweepHeap
 pub impl GcRuntime for MarkSweepHeap
 
 type Memory derive(@debug.Debug)
-pub fn Memory::Memory(Int, Int?, is_memory64? : Bool, is_shared? : Bool, page_size_log2? : Int) -> Self raise RuntimeError
+pub fn Memory::Memory(Int, Int?, is_memory64? : Bool, is_shared? : Bool, page_size_log2? : Int, resource_budget? : ResourceBudget?) -> Self raise RuntimeError
 pub fn Memory::atomic_compare_exchange(Self, Int64, Int, Int64, Int64) -> Int64 raise RuntimeError
 pub fn Memory::atomic_load(Self, Int64, Int) -> Int64 raise RuntimeError
 pub fn Memory::atomic_notify(Self, Int64, UInt) -> UInt raise RuntimeError
@@ -383,7 +405,7 @@ pub fn Memory::copy_from(Self, Int64, Self, Int64, Int64) -> Unit raise RuntimeE
 pub fn Memory::desc_ptr(Self) -> @jit_ffi.MemoryDescriptor
 pub fn Memory::fill(Self, Int, Byte, Int) -> Unit raise RuntimeError
 pub fn Memory::fill_at(Self, Int64, Byte, Int64) -> Unit raise RuntimeError
-pub fn Memory::from_type(@types.MemoryType) -> Self raise RuntimeError
+pub fn Memory::from_type(@types.MemoryType, resource_budget? : ResourceBudget?) -> Self raise RuntimeError
 pub fn Memory::get_limits(Self) -> (Int, Int?)
 pub fn Memory::get_limits64(Self) -> (Int64, Int64?)
 pub fn Memory::grow(Self, Int) -> Int
@@ -496,6 +518,38 @@ pub(all) struct NativeGlobalBinding {
 pub fn NativeGlobalBinding::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeGlobalBinding
 
+pub struct ResourceBudget {
+  compilation_depth : Int
+  // private fields
+} derive(@debug.Debug)
+pub fn ResourceBudget::native_quota(Self, ResourceKind) -> @jit_ffi.Quota
+pub fn ResourceBudget::new(compilation_depth? : Int, memory_bytes? : Int64, table_elements? : Int64, gc_bytes? : Int64, gc_objects? : Int64, instances? : Int64, code_bytes? : Int64, pending_work? : Int64, input_bytes? : Int64, compilation_units? : Int64) -> Self raise RuntimeError
+pub fn ResourceBudget::reserve(Self, ResourceKind, Int64) -> ResourceLease raise RuntimeError
+pub fn ResourceBudget::to_repr(Self) -> @debug.Repr
+pub fn ResourceBudget::used(Self, ResourceKind) -> Int64
+
+pub(all) enum ResourceKind {
+  MemoryBytes
+  TableElements
+  GcBytes
+  GcObjects
+  Instances
+  CodeBytes
+  PendingWork
+  InputBytes
+  CompilationUnits
+} derive(Eq, @debug.Debug)
+pub fn ResourceKind::equal(Self, Self) -> Bool
+pub fn ResourceKind::not_equal(Self, Self) -> Bool
+pub fn ResourceKind::to_repr(Self) -> @debug.Repr
+
+pub struct ResourceLease {
+  // private fields
+} derive(@debug.Debug)
+pub fn ResourceLease::release(Self) -> Unit
+pub fn ResourceLease::resize(Self, Int64) -> Bool
+pub fn ResourceLease::to_repr(Self) -> @debug.Repr
+
 type RollbackRegistrar
 pub fn RollbackRegistrar::on_finish(Self, () -> Unit) -> Unit
 pub fn RollbackRegistrar::on_rollback(Self, () -> Unit) -> Unit
@@ -584,11 +638,14 @@ pub fn Stack::to_repr(Self) -> @debug.Repr
 pub struct Store {
   nan_canonicalization : Bool
   interpreter_limits : InterpreterLimits
+  resource_budget : ResourceBudget?
   native_execution : @execution.NativeExecutionState
   // private fields
 } derive(@debug.Debug)
-pub fn Store::Store(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self raise RuntimeError
+pub fn Store::Store(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits, resource_budget? : ResourceBudget?) -> Self raise RuntimeError
+pub fn Store::admit_module_work(Self, @types.Module) -> ResourceLease? raise RuntimeError
 pub fn Store::alloc_array(Self, Int, Array[@types.Value], instance? : ModuleInstance) -> Int raise RuntimeError
+pub fn Store::alloc_array_repeated(Self, Int, Int, @types.Value, instance? : ModuleInstance) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func(Self, async (Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_async_host_func_with_caller(Self, async (Caller, Array[@types.Value]) -> Array[@types.Value], func_type? : @types.FuncType, type_idx? : Int) -> Int raise RuntimeError
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
@@ -611,16 +668,19 @@ pub fn Store::bind_native_callable_view(Self, (Array[Int], Array[(Int64, Int)]) 
 pub fn Store::borrow_rooted_value(Self, RootedValue) -> @types.Value raise RuntimeError
 pub fn Store::borrow_typed_rooted_value(Self, RootedValue, ModuleInstance, @types.ValueType) -> @types.Value raise RuntimeError
 pub fn Store::check_instance(Self, ModuleInstance) -> Unit raise RuntimeError
+pub fn Store::check_instance_admission(Self, InstanceAdmission, validated? : @validator.ValidatedModule) -> Unit raise RuntimeError
 pub fn Store::close(Self) -> Unit
 pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int
 pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
 pub fn Store::counts(Self) -> StoreCounts
 pub fn Store::current_types(Self) -> Array[@types.SubType]
+pub fn Store::decode_module(Self, Bytes) -> @types.Module raise
 pub fn Store::decode_native_exception(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Store::enable_c_heap(Self) -> Unit raise RuntimeError
 pub fn Store::encode_native_exception(Self, Int) -> Int64 raise RuntimeError
 pub fn Store::end_gc_tracing(Self) -> Unit
 pub fn Store::enter_interpreter_boundary(Self) -> Unit raise RuntimeError
+pub fn Store::execution_scope(Self) -> ExecutionScope?
 pub fn Store::func_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
 pub fn Store::function_identity(Self, Int) -> FunctionIdentity raise RuntimeError
 pub fn Store::gc_type_is_subtype(Self, Int, ModuleInstance, Int) -> Bool
@@ -653,6 +713,7 @@ pub fn Store::has_guest_continuation(Self, Int64) -> Bool
 pub fn Store::host_call_instance(Self, Int) -> ModuleInstance raise RuntimeError
 pub fn Store::host_exports(Self, ArrayView[(String, ExternVal)]) -> ModuleInstance raise RuntimeError
 pub fn Store::identity(Self) -> StoreIdentity
+pub fn[T, E : Error] Store::in_execution_scope(Self, ExecutionScope?, () -> T raise E) -> T raise E
 pub fn Store::is_closed(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::jit_funcref_entries(Self) -> Array[StoreFuncrefEntry]
@@ -665,13 +726,17 @@ pub fn Store::native_execution_state(Self) -> @execution.NativeExecutionState
 pub fn Store::native_heap(Self) -> @wasmoon_jit.CHeap?
 pub fn Store::native_type_indices(Self, ModuleInstance) -> Array[Int]
 pub fn Store::native_type_parents(Self) -> Array[Int]
-pub fn Store::new_instance(Self, @validator.ValidatedModule, func_addrs~ : ArrayView[Int], table_addrs~ : ArrayView[Int], mem_addrs~ : ArrayView[Int], global_addrs~ : ArrayView[Int], tag_addrs~ : ArrayView[Int], elem_values~ : Array[Array[@types.Value]]) -> ModuleInstance raise RuntimeError
-pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease
+pub fn Store::new_instance(Self, @validator.ValidatedModule, func_addrs~ : ArrayView[Int], table_addrs~ : ArrayView[Int], mem_addrs~ : ArrayView[Int], global_addrs~ : ArrayView[Int], tag_addrs~ : ArrayView[Int], elem_values~ : Array[Array[@types.Value]], admission? : InstanceAdmission) -> ModuleInstance raise RuntimeError
+pub fn Store::pin_gc_roots(Self, Array[@types.Value]) -> GcRootLease raise RuntimeError
+pub fn Store::publish_core_instance(Self) -> Unit
 pub fn Store::put_guest_continuation(Self, GuestContinuationBody) -> Int64 raise RuntimeError
-pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
+pub fn Store::register_instance(Self, ModuleInstance, admission? : InstanceAdmission) -> Int raise RuntimeError
 pub fn Store::register_jit_funcrefs(Self, Array[StoreFuncrefEntry], release_owner? : () -> Unit) -> StoreFuncrefRegistration
 pub fn Store::register_suspended_execution(Self, () -> Unit) -> Int64 raise RuntimeError
 pub fn Store::release_suspended_execution(Self, Int64) -> Unit
+pub fn Store::reserve_gc_array_work(Self, Int) -> (ResourceLease, ResourceLease)? raise RuntimeError
+pub fn Store::reserve_instance(Self, module_? : @types.Module) -> InstanceAdmission raise RuntimeError
+pub fn Store::reserve_retained_resource(Self, ResourceKind, Int64) -> Unit raise RuntimeError
 pub fn Store::root_raw_value(Self, @types.Value) -> RootedValue raise RuntimeError
 pub fn Store::root_result_value(Self, ModuleInstance, @types.Value, @types.ValueType) -> RootedValue raise RuntimeError
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit raise RuntimeError
@@ -683,7 +748,10 @@ pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeErro
 pub fn Store::take_guest_continuation(Self, Int64) -> GuestContinuationBody raise RuntimeError
 pub fn Store::to_repr(Self) -> @debug.Repr
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
-pub fn Store::with_c_heap(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits) -> Self raise RuntimeError
+pub async fn[T, E : Error] Store::with_async_instantiation(Self, async () -> T raise E) -> T raise E
+pub fn Store::with_c_heap(nan_canonicalization? : Bool, interpreter_limits? : InterpreterLimits, resource_budget? : ResourceBudget?) -> Self raise RuntimeError
+pub fn[T] Store::with_execution_limits(Self, () -> T raise, timeout_ms? : Int?, safepoints? : Int64?, cancel? : (() -> Bool)?) -> T raise
+pub fn[T, E : Error] Store::with_instantiation(Self, () -> T raise E) -> T raise E
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 
 pub struct StoreCounts {
@@ -734,12 +802,12 @@ pub fn StructInstance::to_string(Self) -> String
 pub impl Show for StructInstance
 
 type Table derive(@debug.Debug)
-pub fn Table::Table(@types.ValueType, Int, Int?, init_value? : @types.Value, is_table64? : Bool) -> Self raise RuntimeError
+pub fn Table::Table(@types.ValueType, Int, Int?, init_value? : @types.Value, is_table64? : Bool, resource_budget? : ResourceBudget?) -> Self raise RuntimeError
 pub fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
 pub fn Table::copy_from_at(Self, Int64, Self, Int64, Int64) -> Unit raise RuntimeError
 pub fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
 pub fn Table::fill_at(Self, Int64, @types.Value, Int64) -> Unit raise RuntimeError
-pub fn Table::from_type(@types.TableType, init_value? : @types.Value) -> Self raise RuntimeError
+pub fn Table::from_type(@types.TableType, init_value? : @types.Value, resource_budget? : ResourceBudget?) -> Self raise RuntimeError
 pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError
 pub fn Table::get_at(Self, Int64) -> @types.Value raise RuntimeError
 pub fn Table::get_elem_type(Self) -> @types.ValueType
@@ -758,8 +826,8 @@ pub type AsyncHostFunction = async (Caller, Array[@types.Value]) -> Result[Array
 
 // Traits
 pub(open) trait GcHeap {
-  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int
-  fn alloc_array(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
+  fn alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
   fn struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
   fn struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
   fn array_len(Self, Int) -> Int raise RuntimeError
@@ -772,8 +840,8 @@ pub(open) trait GcHeap {
 }
 
 pub(open) trait GcManager {
-  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int
-  fn alloc_array(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
+  fn alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
   fn struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
   fn struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
   fn array_len(Self, Int) -> Int raise RuntimeError

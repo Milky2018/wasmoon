@@ -3,6 +3,7 @@ fn build_gc_root_context(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
+  enable_cancellation~ : Bool = false,
 ) -> @wast.JITModuleContext raise {
   guard @commands.compile_module_to_jit(
       mod_,
@@ -11,7 +12,7 @@ fn build_gc_root_context(
       0,
       false,
       nan_canonicalization=store.nan_canonicalization,
-      enable_cancellation=false,
+      enable_cancellation~,
       stack_switching=true,
     )
     is Some((artifact, debug_db)) else {
@@ -24,6 +25,7 @@ fn build_gc_root_context(
     @wast.build_external_imports_for_jit(mod_, instance, store),
     function_names=@commands.build_jit_function_names(mod_),
     debug_db~,
+    resource_budget=store.resource_budget,
   )
   assert_true(jit_module.set_cooperative_scheduling(false))
   @wast.register_instance_funcrefs_for_jit(jit_module, instance, store)

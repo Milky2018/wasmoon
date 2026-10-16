@@ -24,6 +24,7 @@ struct ComponentInvocation {
   task_id : Int64
   task : CallbackTask
   store : @runtime.Store
+  execution_scope : @runtime.ExecutionScope?
   caller_table : ResourceTable
   async_state : AsyncState
   can_block : Bool
@@ -205,7 +206,14 @@ fn ComponentInvocation::drive_once(
       backpressure_value_for_instance(self.async_state, table.id) > 0 {
       Blocked
     } else {
-      step_task_once(self.task, self.store, self.caller_table, self.async_state)
+      self.store.in_execution_scope(self.execution_scope, () => {
+        step_task_once(
+          self.task,
+          self.store,
+          self.caller_table,
+          self.async_state,
+        )
+      })
     }
   } catch {
     error => Err(error)
@@ -458,6 +466,7 @@ fn start_component_invocation(
       continuation: [None],
     },
     store,
+    execution_scope: store.execution_scope(),
     caller_table,
     async_state,
     can_block,

@@ -53,6 +53,7 @@ pub fn instantiate_validated_module(
   let mod = validated.snapshot()
   let store = @runtime.Store::Store()
   errdefer store.close()
+  let admission = store.reserve_instance(module_=mod)
   validate_continuation_gc_storage(mod)
   // Set module types for GC support
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
@@ -67,7 +68,10 @@ pub fn instantiate_validated_module(
   // Allocate memories
   let mem_addrs : Array[Int32] = []
   for mem_type in mod.memories {
-    let mem = @runtime.Memory::from_type(mem_type)
+    let mem = @runtime.Memory::from_type(
+      mem_type,
+      resource_budget=store.resource_budget,
+    )
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
@@ -91,7 +95,11 @@ pub fn instantiate_validated_module(
     } else {
       Null
     }
-    let table = @runtime.Table::from_type(table_def.type_, init_value~)
+    let table = @runtime.Table::from_type(
+      table_def.type_,
+      init_value~,
+      resource_budget=store.resource_budget,
+    )
     let addr = store.alloc_table(table)
     table_addrs.push(addr)
   }
@@ -133,6 +141,7 @@ pub fn instantiate_validated_module(
   )
   let instance = store.new_instance(
     validated,
+    admission~,
     func_addrs~,
     table_addrs~,
     mem_addrs~,
@@ -223,8 +232,9 @@ pub fn eval_const_expr(
               array_type.element.storage_type,
             )
             check_gc_array_length(len)
-            let elements : Array[@types.Value] = Array::make(len, default_val)
-            let ref_idx = store.unwrap().alloc_array(type_idx, elements)
+            let ref_idx = store
+              .unwrap()
+              .alloc_array_repeated(type_idx, len, default_val)
             stack.push(ArrayRef(ref_idx))
           } else {
             raise InvalidConstantExpression(
@@ -245,8 +255,9 @@ pub fn eval_const_expr(
           let init_val = stack.pop().unwrap()
           if len_val is I32(len) {
             check_gc_array_length(len)
-            let elements : Array[@types.Value] = Array::make(len, init_val)
-            let ref_idx = store.unwrap().alloc_array(type_idx, elements)
+            let ref_idx = store
+              .unwrap()
+              .alloc_array_repeated(type_idx, len, init_val)
             stack.push(ArrayRef(ref_idx))
           } else {
             raise InvalidConstantExpression("array.new length must be i32")
@@ -276,9 +287,18 @@ pub fn eval_const_expr(
           } else if stack.length() >= len {
             // Pop elements in reverse order (last element pushed first).
             check_gc_array_length(len)
+            let staging = store.unwrap().reserve_gc_array_work(len)
+            defer (if staging is Some((bytes, objects)) {
+              bytes.release()
+              objects.release()
+            })
             let elements : Array[@types.Value] = Array::make(len, Null)
             for i = len - 1; i >= 0; i = i - 1 {
               elements[i] = stack.pop().unwrap()
+            }
+            if staging is Some((bytes, objects)) {
+              bytes.release()
+              objects.release()
             }
             let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
@@ -700,9 +720,11 @@ pub fn validate_imports_with_diagnostics(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> ImportDiagnosticsResult raise @runtime.RuntimeError {
+  imports.check_store(store)
+  let work = store.admit_module_work(mod)
+  defer (if work is Some(lease) { lease.release() })
   let validated = validate_execution_module(mod)
   let mod = validated.snapshot()
-  imports.check_store(store)
   let result = ImportDiagnosticsResult::ImportDiagnosticsResult()
   let canonical_type_indices = @types.compute_canonical_type_indices(
     mod.types,
@@ -1215,10 +1237,14 @@ pub fn instantiate_module_with_imports_unstarted(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  imports.check_store(store)
+  let admission = store.reserve_instance(module_=mod)
+  errdefer admission.cancel()
   instantiate_validated_module_with_imports_unstarted(
     store,
     validate_execution_module(mod),
     imports,
+    admission~,
   )
 }
 
@@ -1228,9 +1254,32 @@ pub fn instantiate_validated_module_with_imports_unstarted(
   store : @runtime.Store,
   validated : @validator.ValidatedModule,
   imports : @runtime.Imports,
+  admission? : @runtime.InstanceAdmission,
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  store.with_instantiation(() => {
+    instantiate_validated_module_with_imports_impl(
+      store,
+      validated,
+      imports,
+      admission?,
+    )
+  })
+}
+
+///|
+fn instantiate_validated_module_with_imports_impl(
+  store : @runtime.Store,
+  validated : @validator.ValidatedModule,
+  imports : @runtime.Imports,
+  admission? : @runtime.InstanceAdmission,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
   let mod = validated.snapshot()
   imports.check_store(store)
+  let admission = admission.unwrap_or_else(() => {
+    store.reserve_instance(module_=mod)
+  })
+  store.check_instance_admission(admission, validated~)
+  errdefer admission.cancel()
   validate_continuation_gc_storage(mod)
   // Set module types for GC support
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
@@ -1494,7 +1543,10 @@ pub fn instantiate_validated_module_with_imports_unstarted(
 
   // Allocate memories (after imported memories)
   for mem_type in mod.memories {
-    let mem = @runtime.Memory::from_type(mem_type)
+    let mem = @runtime.Memory::from_type(
+      mem_type,
+      resource_budget=store.resource_budget,
+    )
     let addr = store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
@@ -1527,7 +1579,11 @@ pub fn instantiate_validated_module_with_imports_unstarted(
         )
       None => Null
     }
-    let table = @runtime.Table::from_type(table_def.type_, init_value~)
+    let table = @runtime.Table::from_type(
+      table_def.type_,
+      init_value~,
+      resource_budget=store.resource_budget,
+    )
     let addr = store.alloc_table(table)
     table_addrs.push(addr)
   }
@@ -1569,6 +1625,7 @@ pub fn instantiate_validated_module_with_imports_unstarted(
   // canonical_type_indices was computed at the start of the function (for import type checking)
   let instance = store.new_instance(
     validated,
+    admission~,
     func_addrs~,
     table_addrs~,
     mem_addrs~,
@@ -1582,6 +1639,10 @@ pub fn instantiate_validated_module_with_imports_unstarted(
       instance.drop_element(index)
     }
   }
+
+  // From this point initialization may publish function references into imported
+  // tables. Core traps preserve those writes and their owning instance.
+  store.publish_core_instance()
 
   for elem_idx, elem in mod.elems {
     // Only process active element segments
@@ -1638,14 +1699,22 @@ pub fn instantiate_module_with_imports(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
-  let validated = validate_execution_module(mod)
-  let instance = instantiate_validated_module_with_imports_unstarted(
-    store, validated, imports,
-  )
-  if validated.start() is Some(start_func_idx) {
-    call_func_by_index(store, instance, start_func_idx, []) |> ignore
-  }
-  instance
+  store.with_instantiation(fn() raise @runtime.RuntimeError {
+    imports.check_store(store)
+    let admission = store.reserve_instance(module_=mod)
+    errdefer admission.cancel()
+    let validated = validate_execution_module(mod)
+    let instance = instantiate_validated_module_with_imports_unstarted(
+      store,
+      validated,
+      imports,
+      admission~,
+    )
+    if validated.start() is Some(start_func_idx) {
+      call_func_by_index(store, instance, start_func_idx, []) |> ignore
+    }
+    instance
+  })
 }
 
 ///|
@@ -1656,14 +1725,22 @@ pub async fn instantiate_module_with_imports_async(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
-  let validated = validate_execution_module(mod)
-  let instance = instantiate_validated_module_with_imports_unstarted(
-    store, validated, imports,
-  )
-  if validated.start() is Some(start_func_idx) {
-    call_func_by_index_async(store, instance, start_func_idx, []) |> ignore
-  }
-  instance
+  store.with_async_instantiation(async fn() raise @runtime.RuntimeError {
+    imports.check_store(store)
+    let admission = store.reserve_instance(module_=mod)
+    errdefer admission.cancel()
+    let validated = validate_execution_module(mod)
+    let instance = instantiate_validated_module_with_imports_unstarted(
+      store,
+      validated,
+      imports,
+      admission~,
+    )
+    if validated.start() is Some(start_func_idx) {
+      call_func_by_index_async(store, instance, start_func_idx, []) |> ignore
+    }
+    instance
+  })
 }
 
 ///|

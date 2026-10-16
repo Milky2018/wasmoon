@@ -239,7 +239,7 @@ fn run_explicit_thread_once(
       t.continuation[0] = Some(continuation)
       t.phase[0] = Suspended
       t.waiting_ws[0] = match reason {
-        Yield => None
+        Yield | CooperativeYield => None
         Wait(waitable_set) => Some(waitable_set)
       }
     }

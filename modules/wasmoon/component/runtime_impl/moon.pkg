@@ -4,7 +4,6 @@ import {
   "moonbitlang/async",
   "Milky2018/wasm_component" @component,
   "Milky2018/wasmoon/executor",
-  "Milky2018/wasm_core/parser",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasm_component/validator" @component_validator,
   "Milky2018/wasm_core/types",

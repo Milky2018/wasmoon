@@ -43,7 +43,7 @@ pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.
 
 pub fn instantiate_validated_module(@validator.ValidatedModule) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 
-pub fn instantiate_validated_module_with_imports_unstarted(@runtime.Store, @validator.ValidatedModule, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+pub fn instantiate_validated_module_with_imports_unstarted(@runtime.Store, @validator.ValidatedModule, @runtime.Imports, admission? : @runtime.InstanceAdmission) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
 pub fn instantiate_validated_module_with_init(@validator.ValidatedModule) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 

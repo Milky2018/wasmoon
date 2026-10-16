@@ -163,7 +163,7 @@ pub(all) enum ComponentInvocationProgress {
 }
 
 type ComponentLinker
-pub fn ComponentLinker::ComponentLinker() -> Self raise @core.ComponentRuntimeError
+pub fn ComponentLinker::ComponentLinker(resource_budget? : @runtime.ResourceBudget?) -> Self raise @core.ComponentRuntimeError
 pub fn ComponentLinker::add_component(Self, String, @validator.ValidatedComponent) -> Unit raise @core.ComponentRuntimeError
 pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit raise @core.ComponentRuntimeError
 pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit raise @core.ComponentRuntimeError
@@ -179,7 +179,8 @@ pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) ->
 pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState raise @core.ComponentRuntimeError
 pub fn ComponentLinker::instantiate(Self, String, @validator.ValidatedComponent) -> ComponentInstance raise @core.ComponentRuntimeError
 pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
-pub fn ComponentLinker::with_core_execution_engine(@core.CoreExecutionEngine) -> Self raise @core.ComponentRuntimeError
+pub fn ComponentLinker::validate_input(Self, Bytes, wit_names? : Bool, component_implements? : Bool) -> @validator.ValidatedComponent raise
+pub fn ComponentLinker::with_core_execution_engine(@core.CoreExecutionEngine, resource_budget? : @runtime.ResourceBudget?) -> Self raise @core.ComponentRuntimeError
 
 pub(all) enum ComponentValue {
   Bool(Bool)
@@ -378,7 +379,7 @@ pub(all) struct StreamTable {
   streams : ConcurrentMap[Int, StreamState]
   host_values : Map[Int, HostValueStream]
 } derive(@debug.Debug)
-pub fn StreamTable::StreamTable() -> Self
+pub fn StreamTable::StreamTable(resource_budget? : @runtime.ResourceBudget?) -> Self
 pub fn StreamTable::to_repr(Self) -> @debug.Repr
 
 type Subtask derive(@debug.Debug)

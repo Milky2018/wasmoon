@@ -180,3 +180,34 @@ test "explicit thread metadata is charged by its owning thread entry" {
   inspect(state.concurrent_resources.live.val, content="0")
   retire_task(state, record)
 }
+
+///|
+test "embedding pending budget covers replacement task rollback and reuse" {
+  let budget = @runtime.ResourceBudget::new(pending_work=1L)
+  let table = StreamTable(resource_budget=Some(budget))
+  let state = AsyncState(table)
+  try alloc_task_id(state) catch {
+    ResourceLimitExceeded(PendingWork) => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("partial two-slot task exceeded aggregate quota")
+  }
+  assert_eq(budget.used(PendingWork), 0L)
+  let pool = state.concurrent_resources
+  let map : ConcurrentMap[Int32, Int32] = ConcurrentMap::new(pool)
+  map.set(1, 1)
+  map.set(1, 2)
+  assert_eq(map.get(1), Some(2))
+  assert_eq(budget.used(PendingWork), 1L)
+  try map.set(2, 3) catch {
+    ResourceLimitExceeded(PendingWork) => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("second entry ignored budget")
+  }
+  map.remove(1)
+  map.set(2, 3)
+  map.clear()
+  map.clear()
+  assert_eq(budget.used(PendingWork), 0L)
+}

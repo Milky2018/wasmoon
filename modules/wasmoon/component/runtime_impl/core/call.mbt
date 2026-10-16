@@ -110,8 +110,13 @@ pub fn call_core_func_outcome(
     ),
   ) catch {
     e => {
-      if e is UncaughtWasmException {
-        raise e
+      match e {
+        UncaughtWasmException
+        | ResourceLimitExceeded(_)
+        | ExecutionBudgetExceeded
+        | ExecutionTimedOut
+        | Cancelled => raise e
+        _ => ()
       }
       match canon_suspend[0] {
         Some(_) => {
@@ -248,6 +253,10 @@ pub fn call_core_func_guarded_outcome(
 fn component_core_error(error : @runtime.RuntimeError) -> ComponentRuntimeError {
   match error {
     UncaughtException => UncaughtWasmException
+    ResourceLimitExceeded(_)
+    | ExecutionBudgetExceeded
+    | ExecutionTimedOut
+    | ExecutionCancelled => ComponentRuntimeError::from_core(error)
     _ => CanonCallError(error.to_string())
   }
 }

@@ -424,7 +424,7 @@ void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap) {
     if (heap) {
         // Set up pointers for inline allocation
         ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
-        ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
+        ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
     } else {
         ctx_set_gc_heap_ptr(ctx, NULL);
         ctx_set_gc_heap_limit(ctx, NULL);
@@ -436,7 +436,7 @@ void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx) {
 
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
     ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
-    ctx_set_gc_heap_limit(ctx, heap->data + heap->capacity);
+    ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
 }
 
 int32_t ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id) {

@@ -249,6 +249,7 @@ fn Parser::read_rec_group(
     1
   }
   let base_idx = self.types.length()
+  self.charge(n.reinterpret_as_uint().to_int64())
 
   // Both explicit and implicit groups allow references to their own types.
   // Pre-scan composite kinds and reserve placeholders before resolving typed
@@ -258,6 +259,9 @@ fn Parser::read_rec_group(
     pos: self.pos,
     has_data_count: self.has_data_count,
     types: [],
+    max_depth: self.max_depth,
+    remaining_work: self.remaining_work,
+    admit_work: self.admit_work,
   }
   let composite_tags : Array[Int32] = []
   for _ in 0..<n {

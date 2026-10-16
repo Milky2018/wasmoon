@@ -235,6 +235,8 @@ static void finalize_gc_heap(void *object) {
     free(heap->runtime_types);
     free(heap->object_table);
     free(heap->data);
+    if (heap->byte_reservation) moonbit_decref(heap->byte_reservation);
+    if (heap->object_reservation) moonbit_decref(heap->object_reservation);
     if (heap->capacity) atomic_fetch_sub_explicit(&gc_heap_live_count, 1, memory_order_relaxed);
 }
 
@@ -474,6 +476,26 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_heap_reference_candidates(GcHeap *heap, i
     return result;
 }
 
+static int gc_heap_admit(GcHeap *heap, size_t needed) {
+    heap->quota_denied = 0;
+    if (needed > INT32_MAX || heap->size > (size_t)INT32_MAX - needed || heap->object_count == INT32_MAX) return 0;
+    if (heap->byte_reservation && !wasmoon_reservation_resize(heap->byte_reservation, (int64_t)(heap->size + needed))) {
+        heap->quota_denied = 1;
+        return 0;
+    }
+    if (heap->object_reservation && !wasmoon_reservation_resize(heap->object_reservation, (int64_t)heap->object_count + 1)) {
+        if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)heap->size);
+        heap->quota_denied = 2;
+        return 0;
+    }
+    return 1;
+}
+
+static void gc_heap_undo_admission(GcHeap *heap) {
+    if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)heap->size);
+    if (heap->object_reservation) wasmoon_reservation_resize(heap->object_reservation, heap->object_count);
+}
+
 // ============ Struct Operations ============
 
 static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
@@ -481,6 +503,7 @@ static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
     if (!heap) {
         return 0;
     }
+    heap->quota_denied = 0;
     if (gc_should_fail_allocation()) {
         return 0;
     }
@@ -489,11 +512,9 @@ static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
     size_t data_size = (size_t)num_fields * GC_VALUE_SLOT_SIZE;
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
-    // Ensure capacity
-    if (!ensure_heap_capacity(heap, total_size)) {
-        return 0;
-    }
-    if (!gc_heap_ensure_object_capacity(heap)) {
+    if (!gc_heap_admit(heap, total_size)) return 0;
+    if (!ensure_heap_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
+        gc_heap_undo_admission(heap);
         return 0;
     }
 
@@ -593,6 +614,7 @@ int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
     if (!heap || len < 0) {
         return 0;
     }
+    heap->quota_denied = 0;
     if (gc_should_fail_allocation()) {
         return 0;
     }
@@ -602,11 +624,9 @@ int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
     size_t data_size = GC_ARRAY_DATA_OFFSET + (size_t)len * GC_VALUE_SLOT_SIZE;
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
-    // Ensure capacity
-    if (!ensure_heap_capacity(heap, total_size)) {
-        return 0;
-    }
-    if (!gc_heap_ensure_object_capacity(heap)) {
+    if (!gc_heap_admit(heap, total_size)) return 0;
+    if (!ensure_heap_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
+        gc_heap_undo_admission(heap);
         return 0;
     }
 
@@ -809,6 +829,7 @@ int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
     if (!heap || len < 0) {
         return 0;
     }
+    heap->quota_denied = 0;
     if (gc_should_fail_allocation()) {
         return 0;
     }
@@ -817,11 +838,9 @@ int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
     size_t data_size = GC_ARRAY_DATA_OFFSET + (size_t)len * GC_VALUE_SLOT_SIZE;
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
-    // Ensure capacity
-    if (!ensure_heap_capacity(heap, total_size)) {
-        return 0;
-    }
-    if (!gc_heap_ensure_object_capacity(heap)) {
+    if (!gc_heap_admit(heap, total_size)) return 0;
+    if (!ensure_heap_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
+        gc_heap_undo_admission(heap);
         return 0;
     }
 
@@ -1035,6 +1054,7 @@ void gc_heap_compact(GcHeap* heap) {
 
     // Shrink heap size
     heap->size = new_offset;
+    if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)new_offset);
 
     // Clear free list (no more free slots after compaction)
     heap->free_count = 0;
@@ -1272,6 +1292,7 @@ int32_t gc_heap_rollback_allocations(
     } else {
         gc_heap_compact(heap);
     }
+    gc_heap_undo_admission(heap);
     gc_heap_finish_roots(heap);
     gc_heap_maybe_verify(heap, "rollback_allocations");
     return 1;
@@ -1533,4 +1554,18 @@ void wasmoon_gc_heap_set_runtime_type(GcHeap *pointer, int32_t ref, int32_t iden
     GcHeap *heap = pointer;
     if (!heap || ref <= 0 || ref > heap->object_count || heap->object_table[ref - 1] < 0) return;
     heap->runtime_types[ref - 1] = identity;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_gc_heap_bind_reservations(GcHeap *heap, wasmoon_reservation_t *bytes, wasmoon_reservation_t *objects) {
+    if (!gc_heap_live(heap) || heap->byte_reservation || heap->size || heap->object_count ||
+        !wasmoon_reservation_valid(bytes) || !wasmoon_reservation_valid(objects)) return 0;
+    moonbit_incref(bytes);
+    moonbit_incref(objects);
+    heap->byte_reservation = bytes;
+    heap->object_reservation = objects;
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_gc_heap_quota_denied(GcHeap *heap) {
+    return heap ? heap->quota_denied : 0;
 }

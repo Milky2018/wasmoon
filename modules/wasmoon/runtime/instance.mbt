@@ -210,8 +210,11 @@ pub fn Store::new_instance(
   global_addrs~ : ArrayView[Int32],
   tag_addrs~ : ArrayView[Int32],
   elem_values~ : Array[Array[@types.Value]],
+  admission? : InstanceAdmission,
 ) -> ModuleInstance raise RuntimeError {
   self.ensure_open()
+  let admission = admission.unwrap_or_else(() => self.reserve_instance())
+  self.check_instance_admission(admission, validated~)
   let module_ = validated.snapshot()
   let expected_functions : Array[Int32] = []
   let mut functions = module_.codes.length()
@@ -403,7 +406,7 @@ pub fn Store::new_instance(
     dropped_elems: FixedArray::make(module_.elems.length(), false),
     dropped_datas: FixedArray::make(module_.datas.length(), false),
   }
-  self.register_instance(instance) |> ignore
+  self.register_instance(instance, admission~) |> ignore
   for index, element in module_.elems {
     if element.mode is Declarative {
       instance.drop_element(index)

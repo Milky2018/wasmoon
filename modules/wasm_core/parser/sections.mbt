@@ -4,8 +4,33 @@
 
 ///|
 /// Parse WebAssembly module from bytes
-pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
-  let parser = Parser::Parser(data)
+pub fn parse_module(
+  data : Bytes,
+  limits? : ParseLimits,
+  admit_work~ : ((Int64) -> Bool)? = None,
+) -> @types.Module raise ParserError {
+  let limits = limits.unwrap_or({
+    max_input_bytes: 0x7FFF_FFFF_FFFF_FFFFL,
+    max_work: 0x7FFF_FFFF_FFFF_FFFFL,
+    max_depth: 0x7FFF_FFFF,
+  })
+  guard limits.max_input_bytes >= 0L &&
+    limits.max_work >= 0L &&
+    limits.max_depth >= 0 else {
+    raise InvalidParseLimits
+  }
+  guard data.length().to_int64() <= limits.max_input_bytes else {
+    raise InputLimitExceeded
+  }
+  let parser : Parser = {
+    data,
+    pos: 0,
+    has_data_count: false,
+    types: [],
+    remaining_work: Ref(limits.max_work),
+    max_depth: limits.max_depth,
+    admit_work,
+  }
 
   // Check magic number
   let magic = parser.read_bytes(4)
@@ -183,6 +208,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             if total_locals > 1000000L {
               raise TooManyLocals
             }
+            parser.charge(n_unsigned)
             for _ in 0..<n {
               locals.push(vt)
             }

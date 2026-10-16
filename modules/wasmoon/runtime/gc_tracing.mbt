@@ -214,11 +214,13 @@ fn Store::release_unreachable_handles(self : Store, trace : GcTrace) -> Unit {
   for index in self.wrapped_externs.keys().to_array() {
     if !trace.wrappers.contains(index) {
       self.wrapped_externs.remove(index)
+      self.auxiliary_leases.remove((0, index.to_int64()))
     }
   }
   for index in self.exns.keys().to_array() {
     if !trace.exceptions.contains(index) {
       self.exns.remove(index)
+      self.auxiliary_leases.remove((1, index.to_int64()))
       if self.store_exception_to_native.get(index) is Some(reference) {
         self.native_execution.exceptions().release_snapshot(reference)
         self.store_exception_to_native.remove(index)

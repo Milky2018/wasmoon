@@ -20,3 +20,17 @@ pub impl Debug for NativeTableHandle with fn to_repr(_self) {
 
 ///|
 pub extend NativeTableHandle with Debug::{to_repr}
+
+///|
+#borrow(self, reservation)
+pub extern "c" fn NativeTableHandle::bind_reservation(
+  self : NativeTableHandle,
+  reservation : Reservation,
+) -> Bool = "wasmoon_table_bind_reservation"
+
+///|
+#borrow(self)
+pub extern "c" fn NativeTableHandle::grow(
+  self : NativeTableHandle,
+  delta : Int64,
+) -> Int64 = "wasmoon_table_grow_owned"

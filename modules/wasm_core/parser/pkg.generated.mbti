@@ -7,18 +7,27 @@ import {
 }
 
 // Values
-pub fn parse_module(Bytes) -> @types.Module raise ParserError
+pub fn parse_module(Bytes, limits? : ParseLimits, admit_work? : ((Int64) -> Bool)?) -> @types.Module raise ParserError
 
 // Errors
 type ParserError
+pub fn ParserError::is_resource_exhaustion(Self) -> Bool
 pub fn ParserError::output(Self, &Logger) -> Unit
 pub fn ParserError::to_string(Self) -> String
 pub impl Show for ParserError
 
 // Types and methods
-type Parser derive(@debug.Debug)
+pub(all) struct ParseLimits {
+  max_input_bytes : Int64
+  max_work : Int64
+  max_depth : Int
+} derive(@debug.Debug)
+pub fn ParseLimits::to_repr(Self) -> @debug.Repr
+
+type Parser
 pub fn Parser::Parser(Bytes) -> Self
 pub fn Parser::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for Parser
 
 // Type aliases
 

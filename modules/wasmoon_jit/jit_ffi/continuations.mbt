@@ -43,3 +43,10 @@ pub extern "c" fn NativeContinuationArena::is_live(
   self : NativeContinuationArena,
   reference : Int64,
 ) -> Bool = "wasmoon_continuation_arena_is_live"
+
+///|
+#borrow(self, quota)
+pub extern "c" fn NativeContinuationArena::bind_quota(
+  self : NativeContinuationArena,
+  quota : Quota,
+) -> Bool = "wasmoon_continuation_arena_bind_quota"

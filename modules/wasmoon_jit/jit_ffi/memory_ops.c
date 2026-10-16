@@ -176,15 +176,20 @@ static int64_t memory_grow_desc_locked(wasmoon_memory_t *mem, int64_t delta, int
     if ((uint64_t)new_pages > (uint64_t)INT64_MAX / page_size) return -1;
     size_t new_size = (size_t)new_pages * page_size;
 
+    if (mem->reservation && !wasmoon_reservation_resize(mem->reservation, (int64_t)new_size)) return -1;
     if (mem->is_guarded) {
         if (grow_guarded_memory(mem, current_size, new_size) != 0) {
+            if (mem->reservation) wasmoon_reservation_resize(mem->reservation, (int64_t)current_size);
             return -1;
         }
         return current_pages;
     }
 
     uint8_t *new_base = (uint8_t *)wasmoon_native_realloc(mem->base, new_size);
-    if (!new_base) return -1;
+    if (!new_base) {
+        if (mem->reservation) wasmoon_reservation_resize(mem->reservation, (int64_t)current_size);
+        return -1;
+    }
 
     memset(new_base + current_size, 0, new_size - current_size);
 
@@ -415,18 +420,9 @@ void WASMOON_GUEST_ABI memory_copy_indexed_internal(jit_context_t *ctx, int32_t 
 
 // ============ Table Operations ============
 
-int64_t table_grow_ctx_internal(
-    jit_context_t *ctx,
-    int32_t table_idx,
-    int64_t delta,
-    int64_t init_value
-) {
-    if (!ctx || table_idx < 0) return -1;
-    if (table_idx >= ctx_table_count(ctx)) return -1;
-    if (!ctx_tables(ctx) || !ctx_table_sizes(ctx) || !ctx_runtime(ctx)->table_bindings) return -1;
-    if (!ctx_runtime(ctx)->table_bindings[table_idx].owner->entries) return -1;
-
-    size_t old_size = ctx_table_sizes(ctx)[table_idx];
+static int64_t table_grow_owner(wasmoon_table_t *owner, int64_t delta, int64_t init_value, size_t maximum) {
+    if (!owner || !owner->entries || delta < 0) return -1;
+    size_t old_size = owner->size;
     if (delta == 0) return (int64_t)old_size;
     size_t new_size = old_size + (size_t)delta;
 
@@ -434,10 +430,7 @@ int64_t table_grow_ctx_internal(
     if (new_size < old_size) return -1;
 
     // Check against max size limit
-    if (ctx_table_max_sizes(ctx)) {
-        size_t max_size = ctx_table_max_sizes(ctx)[table_idx];
-        if (new_size > max_size) return -1;
-    }
+    if (new_size > maximum) return -1;
 
     // Check reference-array allocation overflow before the implementation's
     // element-count limit, after checking the module's declared maximum.
@@ -449,11 +442,16 @@ int64_t table_grow_ctx_internal(
     if (new_size > INT32_MAX) return -1;
 
     // Get the old table pointer
-    void **old_table = ctx_tables(ctx)[table_idx];
+    void **old_table = owner->entries;
 
     // Allocate new table (2 slots per entry: func_ptr and type_idx)
+    int64_t charged = owner->reservation ? owner->reservation->amount : 0;
+    if (owner->reservation && !wasmoon_reservation_resize(owner->reservation, (int64_t)new_size)) return -1;
     void **new_table = (void **)wasmoon_native_calloc(new_size * 2, sizeof(void *));
-    if (!new_table) return -1;
+    if (!new_table) {
+        if (owner->reservation) wasmoon_reservation_resize(owner->reservation, charged);
+        return -1;
+    }
 
     // Copy existing elements
     if (old_table && old_size > 0) {
@@ -467,7 +465,7 @@ int64_t table_grow_ctx_internal(
     }
 
     // Publish reallocations to every context retaining this stable owner.
-    table_publish_layout(ctx_runtime(ctx)->table_bindings[table_idx].owner, new_table, new_size);
+    table_publish_layout(owner, new_table, new_size);
 
     // Free old table
     if (old_table) {
@@ -475,6 +473,25 @@ int64_t table_grow_ctx_internal(
     }
 
     return (int64_t)old_size;
+}
+
+int64_t table_grow_ctx_internal(
+    jit_context_t *ctx,
+    int32_t table_idx,
+    int64_t delta,
+    int64_t init_value
+) {
+    if (!ctx || table_idx < 0) return -1;
+    if (table_idx >= ctx_table_count(ctx)) return -1;
+    if (!ctx_tables(ctx) || !ctx_table_sizes(ctx) || !ctx_runtime(ctx)->table_bindings) return -1;
+    if (!ctx_runtime(ctx)->table_bindings[table_idx].owner->entries) return -1;
+
+    size_t maximum = ctx_table_max_sizes(ctx) ? ctx_table_max_sizes(ctx)[table_idx] : SIZE_MAX;
+    return table_grow_owner(ctx_runtime(ctx)->table_bindings[table_idx].owner, delta, init_value, maximum);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_table_grow_owned(wasmoon_table_t *owner, int64_t delta) {
+    return table_grow_owner(owner, delta, 0, SIZE_MAX);
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

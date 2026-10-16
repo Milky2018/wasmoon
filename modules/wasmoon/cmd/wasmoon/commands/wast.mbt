@@ -494,6 +494,7 @@ fn try_compile_jit_with_suspension(
           func_signatures,
           external_imports,
           function_names=build_jit_function_names(lowered_mod),
+          resource_budget=store.resource_budget,
         )
       catch {
         e => Err(e)

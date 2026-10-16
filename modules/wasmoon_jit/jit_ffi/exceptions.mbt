@@ -135,3 +135,17 @@ pub fn NativeExceptionArena::define_tag(
   }
   self.define_tag_raw(tag, buffer, buffer.length()) != 0
 }
+
+///|
+#borrow(self, bytes, objects)
+pub extern "c" fn NativeExceptionArena::bind_quotas(
+  self : NativeExceptionArena,
+  bytes : Quota,
+  objects : Quota,
+) -> Bool = "wasmoon_exception_arena_bind_quotas"
+
+///|
+#borrow(self)
+pub extern "c" fn NativeExceptionArena::quota_denied(
+  self : NativeExceptionArena,
+) -> Int32 = "wasmoon_exception_arena_quota_denied"

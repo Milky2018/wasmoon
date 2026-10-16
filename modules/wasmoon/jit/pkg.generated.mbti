@@ -21,6 +21,7 @@ pub suberror JITModuleLoadError {
   ImportTrampolineAllocationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, code_size~ : Int)
   ImportTrampolineCompilationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, message~ : String)
   ArtifactInstallationFailed(cause~ : @installer.JitInstallError)
+  CodeQuotaExceeded
   FunctionMetadataRegistrationFailed(func_idx~ : Int, message~ : String)
 } derive(@debug.Debug)
 pub fn JITModuleLoadError::output(Self, &Logger) -> Unit
@@ -33,6 +34,7 @@ pub suberror JITTrap {
   JITNativeFiberFailure(String)
   JITExit(Int)
   JITCancelled
+  JITResourceLimit(@runtime.ResourceKind)
 } derive(@debug.Debug)
 pub fn JITTrap::output(Self, &Logger) -> Unit
 pub fn JITTrap::to_repr(Self) -> @debug.Repr
@@ -111,8 +113,8 @@ pub fn JITModule::has_callable_metadata(Self) -> Bool
 pub fn JITModule::has_configured_native_fiber_stack_size(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit raise @wasmoon_jit.NativeSetupError
-pub fn JITModule::load_artifact(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
-pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::load_artifact(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?, resource_budget? : @runtime.ResourceBudget?) -> Self raise JITModuleLoadError
+pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?, resource_budget? : @runtime.ResourceBudget?) -> Self raise JITModuleLoadError
 pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @execution.NativeExecutionState) -> Unit raise JITTrap
 pub fn JITModule::refresh_table_layout(Self, Int) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder raise @wasmoon_jit.NativeSetupError
@@ -120,6 +122,7 @@ pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
 pub fn JITModule::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
 pub fn JITModule::set_cooperative_scheduling(Self, Bool) -> Bool
 pub fn JITModule::set_exception_arena(Self, @jit_ffi.NativeExceptionArena) -> Unit
+pub fn JITModule::set_execution_scope(Self, @runtime.ExecutionScope?) -> Bool
 pub fn JITModule::set_gc_heap(Self, @jit_ffi.GCHeapHandle) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit

@@ -86,7 +86,12 @@ fn prepare_jit_core_environment(
   context : JITModuleContext,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
+  scope : @runtime.ExecutionScope?,
 ) -> Bool raise JITCoreCallError {
+  guard context.jit_module.set_execution_scope(scope) else {
+    raise HostInvocation(ExecutionLimitsUnavailable)
+  }
+  errdefer context.jit_module.set_execution_scope(None) |> ignore
   sync_tables_to_jit(
     instance,
     store,
@@ -120,6 +125,7 @@ fn finish_jit_core_environment(
   gc_active : Bool,
 ) -> Unit raise JITCoreCallError {
   defer (if gc_active { store.end_gc_tracing() })
+  defer context.jit_module.set_execution_scope(None) |> ignore
   if gc_active {
     context.jit_module.teardown_gc()
   }
@@ -134,6 +140,7 @@ fn JITModuleContext::map_jit_call_error(
   self : JITModuleContext,
   error : @compiled_jit.JITTrap,
   invocation_id : Int64,
+  scope : @runtime.ExecutionScope?,
 ) -> JITCoreCallError {
   match error {
     JITTrap(message) =>
@@ -145,7 +152,13 @@ fn JITModuleContext::map_jit_call_error(
         None => Trap(message)
       }
     JITNativeFiberFailure(message) => NativeFiberFailure(message)
-    JITCancelled => Cancelled
+    JITCancelled =>
+      if scope is Some(scope) && scope.failure() is Some(error) {
+        HostInvocation(error)
+      } else {
+        Cancelled
+      }
+    JITResourceLimit(kind) => HostInvocation(ResourceLimitExceeded(kind))
     JITExit(code) => Exit(code)
   }
 }
@@ -183,6 +196,7 @@ struct JITCoreContinuation {
   call : @compiled_jit.JITCallContinuation
   invocation : @wasmoon_jit.NativeInvocationHandle
   active : Array[Bool]
+  scope : @runtime.ExecutionScope?
 }
 
 ///|
@@ -240,14 +254,23 @@ pub fn JITCoreContinuation::continue_execution(
       self.invocation.release_if_live()
       self.active[0] = false
     }
-    prepare_jit_core_environment(self.context, self.store, self.instance)
+    prepare_jit_core_environment(
+      self.context,
+      self.store,
+      self.instance,
+      self.scope,
+    )
   }
   let outcome = self.call.continue_execution() catch {
     error => {
       finish_jit_core_environment(self.context, self.store, gc_active)
       self.invocation.release_if_live()
       self.active[0] = false
-      let mapped = self.context.map_jit_call_error(error, self.invocation.id())
+      let mapped = self.context.map_jit_call_error(
+        error,
+        self.invocation.id(),
+        self.scope,
+      )
       self.context.clear_async_host_state(self.invocation.id())
       raise mapped
     }
@@ -293,7 +316,15 @@ fn JITModuleContext::start_core_func_resumable(
     self.jit_module,
     instance,
   )
-  let invocation = store.native_execution_state().begin() catch {
+  let scope = store.execution_scope()
+  let pending_work = store.resource_budget.map(budget => {
+    budget.reserve(PendingWork, 1L)
+  }) catch {
+    error => raise HostInvocation(error)
+  }
+  let invocation = store
+    .native_execution_state()
+    .begin(release=fn() { if pending_work is Some(lease) { lease.release() } }) catch {
       error => raise ExecutionStateFailure(error)
     }
   let invocation_id = invocation.id()
@@ -305,13 +336,13 @@ fn JITModuleContext::start_core_func_resumable(
       self.clear_async_host_state(invocation_id)
       invocation.release_if_live()
     }
-    prepare_jit_core_environment(self, store, instance)
+    prepare_jit_core_environment(self, store, instance, scope)
   }
   let outcome = self.jit_module.start_continuation_call(func, encoded_args) catch {
     error => {
       finish_jit_core_environment(self, store, gc_active)
       invocation.release_if_live()
-      let mapped = self.map_jit_call_error(error, invocation_id)
+      let mapped = self.map_jit_call_error(error, invocation_id, scope)
       self.clear_async_host_state(invocation_id)
       raise mapped
     }
@@ -327,6 +358,7 @@ fn JITModuleContext::start_core_func_resumable(
         call,
         invocation,
         active: [true],
+        scope,
       }
       continuation.finish(outcome)
     }
@@ -388,16 +420,24 @@ pub fn JITModuleContext::call_core_func(
     self.jit_module,
     instance,
   )
-  let gc_active = prepare_jit_core_environment(self, store, instance)
+  let scope = store.execution_scope()
+  let gc_active = prepare_jit_core_environment(self, store, instance, scope)
   defer finish_jit_core_environment(self, store, gc_active)
-  let invocation = store.native_execution_state().begin() catch {
+  let pending_work = store.resource_budget.map(budget => {
+    budget.reserve(PendingWork, 1L)
+  }) catch {
+    error => raise HostInvocation(error)
+  }
+  let invocation = store
+    .native_execution_state()
+    .begin(release=fn() { if pending_work is Some(lease) { lease.release() } }) catch {
       error => raise ExecutionStateFailure(error)
     }
   let invocation_id = invocation.id()
   defer self.clear_async_host_state(invocation_id)
   defer invocation.release_if_live()
   let raw_results = self.jit_module.call_with_context(func, encoded_args) catch {
-    error => raise self.map_jit_call_error(error, invocation_id)
+    error => raise self.map_jit_call_error(error, invocation_id, scope)
   }
   invocation.complete() catch {
     error => raise ExecutionStateFailure(error)

@@ -274,9 +274,12 @@ struct ComponentLinker {
 }
 
 ///|
-pub fn ComponentLinker::ComponentLinker() -> ComponentLinker raise ComponentRuntimeError {
+pub fn ComponentLinker::ComponentLinker(
+  resource_budget~ : @runtime.ResourceBudget? = None,
+) -> ComponentLinker raise ComponentRuntimeError {
   ComponentLinker::with_core_execution_engine(
     interpreter_core_execution_engine(),
+    resource_budget~,
   )
 }
 
@@ -284,11 +287,12 @@ pub fn ComponentLinker::ComponentLinker() -> ComponentLinker raise ComponentRunt
 /// Create a component linker with an embedding-provided core execution engine.
 pub fn ComponentLinker::with_core_execution_engine(
   core_engine : CoreExecutionEngine,
+  resource_budget~ : @runtime.ResourceBudget? = None,
 ) -> ComponentLinker raise ComponentRuntimeError {
   let core_execution_lifecycle = CoreExecutionLifecycle::new()
   let managed_core_engine = core_engine.with_lifecycle(core_execution_lifecycle)
   errdefer managed_core_engine.close()
-  let core_linker = @runtime.Linker::Linker() catch {
+  let core_linker = @runtime.Linker::with_store(Store(resource_budget~)) catch {
     error => raise ComponentRuntimeError::from_core(error)
   }
   errdefer core_linker.close()
@@ -586,7 +590,18 @@ pub fn ComponentLinker::instantiate(
       self.core_linker.register_rollback(registrar)
       self.core_engine().register_rollback(registrar)
       registrar.on_rollback(fn() { rollback_staged_registrations(staged) })
-      let isolated = @component.parse_component(component.component_bytes()) catch {
+      let bytes = component.component_bytes()
+      self
+      .get_store()
+      .reserve_retained_resource(InputBytes, bytes.length().to_int64()) catch {
+        error => raise ComponentRuntimeError::from_core(error)
+      }
+      self
+      .get_store()
+      .reserve_retained_resource(CompilationUnits, bytes.length().to_int64()) catch {
+        error => raise ComponentRuntimeError::from_core(error)
+      }
+      let isolated = @component.parse_component(bytes) catch {
         e => raise ComponentParseError(e.to_string())
       }
       instantiate_component(self, name, isolated, Map([]), [], [], staged)
