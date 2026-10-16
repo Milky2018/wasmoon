@@ -1,0 +1,180 @@
+{
+  "pull_request": "https://github.com/Milky2018/wasmoon/pull/540",
+  "accepted_implementation_head": "076b56a08c58fed1fe20329399cb619df90067f0",
+  "base": "main",
+  "run_id": 38848863428,
+  "run_url": "https://github.com/Milky2018/wasmoon/actions/runs/38848863428",
+  "conclusion": "success",
+  "source_merge_commit": "c7105d993871a78bdfd8a423a241d938c8f5c802",
+  "source_merge_parents": [
+    "25dac7da3e3b99f98b074d0f3c5d054ffe5ca65d",
+    "076b56a08c58fed1fe20329399cb619df90067f0"
+  ],
+  "jobs": [
+    {
+      "completedAt": "2026-10-16T04:26:51Z",
+      "conclusion": "success",
+      "databaseId": 116805399800,
+      "name": "macOS ARM64",
+      "startedAt": "2026-10-16T04:06:21Z",
+      "status": "completed",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38848863428/job/116805399800"
+    },
+    {
+      "completedAt": "2026-10-16T04:08:50Z",
+      "conclusion": "success",
+      "databaseId": 116805400006,
+      "name": "Linux ASan and UBSan",
+      "startedAt": "2026-10-16T04:06:17Z",
+      "status": "completed",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38848863428/job/116805400006"
+    },
+    {
+      "completedAt": "2026-10-16T04:25:49Z",
+      "conclusion": "success",
+      "databaseId": 116805400172,
+      "name": "Linux AMD64",
+      "startedAt": "2026-10-16T04:06:18Z",
+      "status": "completed",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38848863428/job/116805400172"
+    },
+    {
+      "completedAt": "2026-10-16T04:22:42Z",
+      "conclusion": "success",
+      "databaseId": 116805400179,
+      "name": "Windows AMD64 (clang)",
+      "startedAt": "2026-10-16T04:06:17Z",
+      "status": "completed",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38848863428/job/116805400179"
+    },
+    {
+      "completedAt": "2026-10-16T04:25:27Z",
+      "conclusion": "success",
+      "databaseId": 116805400656,
+      "name": "Windows AMD64 (msvc)",
+      "startedAt": "2026-10-16T04:06:17Z",
+      "status": "completed",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/38848863428/job/116805400656"
+    }
+  ],
+  "artifacts": {
+    "wasi03-windows-msvc": {
+      "id": 12024817302,
+      "size_in_bytes": 79914,
+      "expired": false,
+      "archive_download_url": "https://api.github.com/repos/Milky2018/wasmoon/actions/artifacts/12024817302/zip"
+    },
+    "windows-msvc-native-probes": {
+      "id": 12024586461,
+      "size_in_bytes": 2271,
+      "expired": false,
+      "archive_download_url": "https://api.github.com/repos/Milky2018/wasmoon/actions/artifacts/12024586461/zip"
+    },
+    "wasi03-windows-clang": {
+      "id": 12024428482,
+      "size_in_bytes": 79521,
+      "expired": false,
+      "archive_download_url": "https://api.github.com/repos/Milky2018/wasmoon/actions/artifacts/12024428482/zip"
+    },
+    "sanitizer-evidence": {
+      "id": 12023818820,
+      "size_in_bytes": 424976,
+      "expired": false,
+      "archive_download_url": "https://api.github.com/repos/Milky2018/wasmoon/actions/artifacts/12023818820/zip"
+    },
+    "windows-clang-native-probes": {
+      "id": 12023748669,
+      "size_in_bytes": 1827,
+      "expired": false,
+      "archive_download_url": "https://api.github.com/repos/Milky2018/wasmoon/actions/artifacts/12023748669/zip"
+    }
+  },
+  "linux_sanitizer": {
+    "version": "0.16.0",
+    "source_revision": "c7105d993871a78bdfd8a423a241d938c8f5c802",
+    "source_dirty": false,
+    "binary_sha256": "256e201a900e8b1c746164f2f6e8ad05a1bb7502eaca82a3d77be8f80fd10fb1",
+    "tests": "passed",
+    "event_loop": "passed",
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "lsan_probe": "detected",
+    "leak_detection": true,
+    "binary": "/home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+    "instrumentation": [
+      "address",
+      "undefined"
+    ],
+    "allocator": "system",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ]
+  },
+  "linux_sanitizer_tests": {
+    "total": 163,
+    "passed": 163,
+    "failed": 0,
+    "normal_run_has_leak_report": false,
+    "positive_control_leaked_bytes": 17
+  },
+  "windows": {
+    "clang": {
+      "strict_c_stubs": 43,
+      "native_test_summary_records": 57,
+      "native_tests": {
+        "total": 2721,
+        "passed": 2721,
+        "failed": 0
+      },
+      "native_probes": {
+        "run": 53,
+        "skipped": 3,
+        "status": "passed",
+        "skip_scope": "Existing privilege-dependent probes; reasons retained in log."
+      },
+      "wasi03": {
+        "upstream": "609c446139956ff30239f87cb18af1dc6128bed2",
+        "binary_sha256": "5d5bdd8abb4f65518b26407677c405e177a3cff4a93333c1a3609fdc16bea52d",
+        "profile": "http-contract",
+        "guest_overrides": {
+          "http-fields.wasm": "c7f95716eea547632ee49ca68f39f6c062425f037616c1ba95ff1ee27e87abd0",
+          "http-request.wasm": "d587372f2ef2320bbbddef51f6f5edbd1a97f92294968a7ce73273811e35b8ef"
+        },
+        "counts": {
+          "pass": 110
+        }
+      },
+      "job_log_sha256": "30574a3995d2be8a2a3152b2aec57f2ba8016938d8dad07b6167e88df502f213"
+    },
+    "msvc": {
+      "strict_c_stubs": 43,
+      "native_test_summary_records": 57,
+      "native_tests": {
+        "total": 2721,
+        "passed": 2721,
+        "failed": 0
+      },
+      "native_probes": {
+        "run": 53,
+        "skipped": 3,
+        "status": "passed",
+        "skip_scope": "Existing privilege-dependent probes; reasons retained in log."
+      },
+      "wasi03": {
+        "upstream": "609c446139956ff30239f87cb18af1dc6128bed2",
+        "binary_sha256": "6fb18963e87f7cd912310c3c66e0f0cedb74eb0bb1a7a65e1b68aa891bac1fe3",
+        "profile": "http-contract",
+        "guest_overrides": {
+          "http-fields.wasm": "c7f95716eea547632ee49ca68f39f6c062425f037616c1ba95ff1ee27e87abd0",
+          "http-request.wasm": "d587372f2ef2320bbbddef51f6f5edbd1a97f92294968a7ce73273811e35b8ef"
+        },
+        "counts": {
+          "pass": 110
+        }
+      },
+      "job_log_sha256": "1cc657946865c78190d0d7a1eaff6d16784224e52d255f88a4712b228b554784"
+    }
+  },
+  "delivery_boundary": "Implementation acceptance. The subsequent documentation-only head must pass all checks again; no merge or publication is authorized."
+}

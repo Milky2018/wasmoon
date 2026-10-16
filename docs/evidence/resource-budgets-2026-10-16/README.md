@@ -89,7 +89,7 @@ MoonBit runtime objects and JIT-generated machine code. On this platform
 `leak_detection=false` and `lsan_probe=not_applicable` are expected; they are not
 proof of zero Linux leaks.
 
-## Remaining acceptance
+## Historical local acceptance boundary
 
 ISS-627 stays `in_progress` until Linux native/LSan and Windows Clang/MSVC CI
 validate a submitted revision. Existing CI already runs the new public blackbox
@@ -97,3 +97,31 @@ fixtures, strict C stubs and isolated sanitizer closure. Linux must prove enable
 leak detection and its independent LSan positive control; both Windows compilers
 must pass the native and external suites. No remote acceptance has been claimed
 for this working tree.
+
+## Cross-platform CI acceptance
+
+Implementation `076b56a08c58fed1fe20329399cb619df90067f0` passed all five jobs in
+[run 38848863428](https://github.com/Milky2018/wasmoon/actions/runs/38848863428).
+[The CI record](ci.json) includes job and artifact identities, binary digests and
+source merge provenance, independently of the historical local snapshot above.
+The clean artifact source merge `c7105d993871a78bdfd8a423a241d938c8f5c802` has
+main `25dac7da3e3b99f98b074d0f3c5d054ffe5ca65d` and that implementation head as
+its parents.
+
+- Linux ASan/UBSan/LSan: [163/163 ordinary tests](ci-linux-sanitizer-tests.log),
+  leak detection enabled, all three positive controls detected, no ordinary
+  leak report; the [separate LSan positive control](ci-linux-lsan-positive-control.log)
+  detected the intentional 17-byte leak. Instrumentation exclusions remain
+  unchanged. The log retains an upstream async C compiler warning about the
+  ignored return value of `write`; this is separate from Wasmoon's strict C gate.
+- Windows Clang and MSVC: each passed 43 strict C stubs, 2721/2721 native tests,
+  and 110/110 external WASI 0.3 HTTP-contract cases. The native probe suites
+  each ran 53 tests with three existing privilege-dependent skips; exact reasons
+  are retained in the [Clang](ci-windows-clang-probes.log) and
+  [MSVC](ci-windows-msvc-probes.log) logs.
+- Linux AMD64 and macOS ARM64 completed every job step successfully, including
+  external suites and independent-module installation.
+
+Captured CI logs normalize line endings and trim trailing whitespace. ISS-627
+is closed with this evidence. The subsequent documentation-only head must pass
+all checks again before final PR acceptance; no merge or publication is implied.
