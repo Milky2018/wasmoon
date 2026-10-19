@@ -93,15 +93,16 @@ pub fn validate_module(
     validate_memory_limits(mem)
   }
 
+  // Table initializers can only see imported globals.
+  let num_imported_globals = count_global_imports(mod.imports)
   // Validate table types and limits
   for table in mod.tables {
-    validate_table_type(table, ctx, ctx.funcs)
+    validate_table_type(table, ctx, ctx.globals[:num_imported_globals])
   }
 
   // Validate global initialization expressions
   // For each global, its init expression can only reference previously defined globals
   // (imported globals are already in ctx.globals from imports)
-  let num_imported_globals = count_global_imports(mod.imports)
   for i, global in mod.globals {
     // Validate init expression (pass funcs to allow ref.func in global init)
     validate_const_expr(
@@ -341,9 +342,11 @@ pub fn validate_module_with_context(
     }
   }
 
+  // Table initializers can only see imported globals.
+  let num_imported_globals = count_global_imports(mod.imports)
   // Validate table types and limits
   for table in mod.tables {
-    validate_table_type(table, ctx, ctx.funcs) catch {
+    validate_table_type(table, ctx, ctx.globals[:num_imported_globals]) catch {
       e => raise WithContext(ValidationErrorContext::from_error(e))
     }
   }

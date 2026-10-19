@@ -108,7 +108,7 @@ fn is_non_nullable_ref_type(ty : @types.ValueType) -> Bool {
 fn validate_table_type(
   table : @types.Table,
   ctx : ValidationContext,
-  func_addrs : Array[Int32],
+  imported_globals : ArrayView[@types.GlobalType],
 ) -> Unit raise ValidationError {
   // Validate table limits
   validate_table_limits(table.type_.limits, is_table64=table.type_.is_table64)
@@ -116,10 +116,10 @@ fn validate_table_type(
   if table.init is Some(init_expr) {
     // Validate the init expression produces the correct type
     validate_const_expr(
-      ctx.globals,
+      imported_globals,
       init_expr,
       table.type_.elem_type,
-      funcs=func_addrs,
+      funcs=ctx.funcs,
       types=ctx.types,
       subtyping_ctx=Some(ctx.subtyping_ctx),
       stack_switching=ctx.stack_switching,

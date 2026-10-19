@@ -1022,8 +1022,7 @@ fn Parser::parse_table_def(
       // Check for optional default init expression (ref.func $f) or (ref.null func) or (global.get $g)
       let table_init : Array[@types.Instruction]? = if self.current.token ==
         LParen {
-        // Parse the init expression - validate global.get references
-        // Table init expressions can only reference imported globals, not module-defined globals
+        // Decode the initializer; constant-expression scope belongs to validation.
         self.advance()
         match self.current.token {
           Keyword("ref.func") => {
@@ -1040,16 +1039,7 @@ fn Parser::parse_table_def(
           }
           Keyword("global.get") => {
             self.advance()
-            // Parse and validate the global index
             let global_idx = self.parse_global_idx()
-            // Check if this global is imported (only imported globals can be used in table init)
-            let num_imported_globals = count_global_imports(mod_.imports)
-            if global_idx >= num_imported_globals {
-              raise UndefinedIdentifier(
-                "unknown global (table init can only reference imported globals)",
-                self.loc(),
-              )
-            }
             self.expect_rparen()
             Some([GlobalGet(global_idx)])
           }
