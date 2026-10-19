@@ -523,11 +523,6 @@ extern "c" fn c_jit_gc_clear_heap_managed(jit_context : JITContext) -> Unit = "w
 
 // ============ C GC Heap ============
 
-///|
-/// Create a new GC heap with the given initial capacity
-/// Returns a C-owned heap handle
-extern "c" fn c_gc_heap_new(capacity : Int64) -> GCHeapHandle = "wasmoon_gc_heap_new"
-
 // ============ Struct Operations ============
 
 ///|

@@ -1,0 +1,11 @@
+libtool: warning: 'trampoline_call_x86_64.o' has no symbols
+libtool: warning: 'windows_context_x86_64.o' has no symbols
+libtool: warning: 'msvc_guest_bridges.o' has no symbols
+libtool: warning: 'stack_switch_x86_64.o' has no symbols
+libtool: warning: 'fiber_register_probe_x86_64.o' has no symbols
+libtool: warning: 'test_guest_bridges.o' has no symbols
+Error: failed to run test for target Native
+
+Caused by:
+    Failed to run the test: /Users/zhengyu/Documents/projects/wasmoon/_build/native/debug/test/Milky2018/wasmoon_jit/wasmoon_jit.blackbox_test.exe
+    The test executable exited with signal: 11 (SIGSEGV)

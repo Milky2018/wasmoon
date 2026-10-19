@@ -11,6 +11,11 @@ MOONBIT_FFI_EXPORT wasmoon_quota_t *wasmoon_quota_new(int64_t limit) {
     return quota;
 }
 
+// The native primitives already accept NULL for an unbound quota.
+MOONBIT_FFI_EXPORT wasmoon_quota_t *wasmoon_quota_unlimited(void) {
+    return NULL;
+}
+
 // A native allocation can reserve units without invoking MoonBit or allocating.
 MOONBIT_FFI_EXPORT int32_t wasmoon_quota_acquire(wasmoon_quota_t *quota, int64_t amount) {
     if (!quota) return 1;

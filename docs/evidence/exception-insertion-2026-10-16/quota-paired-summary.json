@@ -1,0 +1,29 @@
+{
+  "method": "Median of per-round paired CPU ratios; 10000 resamples with replacement of21pairs,seed1; descriptive uncertainty under unpinned machine load, not independent hardware-counter attribution. Positive means slower.",
+  "results": [
+    {
+      "workload": "snapshots",
+      "paired_median_percent": 1.1810551058287322,
+      "bootstrap95_percent": [
+        -2.9532832979937695,
+        2.756852607935789
+      ]
+    },
+    {
+      "workload": "snapshots-word",
+      "paired_median_percent": -0.4649119582734951,
+      "bootstrap95_percent": [
+        -2.861528435206151,
+        0.7690000524854801
+      ]
+    },
+    {
+      "workload": "rethrow",
+      "paired_median_percent": -0.7305144962821641,
+      "bootstrap95_percent": [
+        -2.078770932228702,
+        0.3791344035633193
+      ]
+    }
+  ]
+}

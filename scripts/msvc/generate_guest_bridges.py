@@ -6,7 +6,7 @@ import re
 ROOT = Path(__file__).resolve().parents[2] / 'modules/wasmoon_jit/jit_ffi'
 
 
-def generate(root=ROOT):
+def generate(root=ROOT, stem='msvc_guest_bridges'):
     functions = {}
     used = set()
     for path in root.glob('*.c'):
@@ -42,15 +42,15 @@ def generate(root=ROOT):
                 '    ret', f'{name}_msvc_guest ENDP']
     header += ['#endif', '']
     asm += ['END', '']
-    return {'msvc_guest_bridges.h': '\n'.join(header), 'msvc_guest_bridges.asm': '\n'.join(asm)}
+    return {stem + '.h': '\n'.join(header), stem + '.asm': '\n'.join(asm)}
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    for root in [ROOT, ROOT.parent / 'native_test_support']:
-        for name, content in generate(root).items():
+    for root, stem in [(ROOT, 'msvc_guest_bridges'), (ROOT / 'testing', 'test_guest_bridges')]:
+        for name, content in generate(root, stem).items():
             path = root / name
             if args.check:
                 if path.read_text() != content:

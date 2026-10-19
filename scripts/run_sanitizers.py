@@ -25,6 +25,13 @@ def run(command, *, log, env=None, expected_failure=False):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+    # Recreating sources is not a fresh build: copy2 preserves unchanged C
+    # timestamps, and current MoonBuild misses cross-package header inputs.
+    # Keep this isolated diagnostic workspace fresh until ISS-634's toolchain
+    # fix ships; ordinary incremental builds still need dependency discovery.
+    build = OUT / "build"
+    if build.exists():
+        shutil.rmtree(build)
     if PACKAGE.exists():
         shutil.rmtree(PACKAGE)
     shutil.copytree(ROOT / "tools" / "sanitizer", PACKAGE)
@@ -161,6 +168,7 @@ def main():
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "source_dirty": bool(subprocess.check_output(
             ["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
+        "build_reuse": "fresh",
         "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         "tests": "passed", "event_loop": "passed", "asan_probe": "detected", "native_asan_probe": "detected", "lsan_probe": lsan_probe,
         "leak_detection": sys.platform == "linux",

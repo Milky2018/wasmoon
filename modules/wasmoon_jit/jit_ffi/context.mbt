@@ -42,6 +42,7 @@ pub fn JITContext::new(func_count : Int32) -> JITContext {
     return allocate_legacy_context(func_count)
   }
   allocate_context(FixedArray::make(func_count, null_function_address()))
+  |> install_exception_factory
 }
 
 ///|
@@ -102,6 +103,7 @@ pub fn JITContext::new_shaped(
     FixedArray::make(func_count, null_function_address()),
     layout.words(),
   )
+  |> install_exception_factory
 }
 
 ///|

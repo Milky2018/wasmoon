@@ -1,0 +1,19 @@
+Using cached moonbitlang/async@0.22.4
+Using cached moonbitlang/x@0.5.5
+Using cached marianoguerra/uri@0.1.2
+libtool: warning: 'windows_input.o' has no symbols
+libtool: warning: 'windows_fs.o' has no symbols
+libtool: warning: 'reactor_windows.o' has no symbols
+libtool: warning: 'trampoline_call_x86_64.o' has no symbols
+libtool: warning: 'windows_context_x86_64.o' has no symbols
+libtool: warning: 'msvc_guest_bridges.o' has no symbols
+libtool: warning: 'stack_switch_x86_64.o' has no symbols
+libtool: warning: 'fiber_register_probe_x86_64.o' has no symbols
+libtool: warning: 'test_guest_bridges.o' has no symbols
+libtool: warning: 'watch_windows.o' has no symbols
+libtool: warning: 'stub.o' has no symbols
+libtool: warning: 'epoll.o' has no symbols
+libtool: warning: 'iocp.o' has no symbols
+libtool: warning: 'io_windows.o' has no symbols
+libtool: warning: 'schannel.o' has no symbols
+Total tests: 173, passed: 173, failed: 0.

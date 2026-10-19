@@ -1,0 +1,915 @@
+{
+  "test_dir": "/Users/zhengyu/Documents/projects/wasmoon/spec/gc",
+  "repeat": 1,
+  "files": {
+    "array.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 47,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 47,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 47,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 47,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "fail",
+        "passed": 40,
+        "failed": 8,
+        "error": null,
+        "trap_signature": "out of memory",
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0,
+        "stdout_tail": "Running WAST script: /Users/zhengyu/Documents/projects/wasmoon/spec/gc/array.wast\nJIT: enabled\n==================================================\n\nResults:\n  Passed:  40\n  Failed:  8\n  Skipped: 0\n\nFailures:\n  - line 60: module instantiation failed: wasm trap: out of memory\n  - line 97: assert_return (new): invoke failed: runtime error: unknown exported function: new\n  - line 98: assert_return (new): invoke failed: runtime error: unknown exported function: new\n  - line 99: assert_return (get): invoke failed: runtime error: unknown exported function: get\n  - line 100: assert_return (set_get): invoke failed: runtime error: unknown exported function: set_get\n  - line 101: assert_return (len): invoke failed: runtime error: unknown exported function: len\n  - line 103: assert_trap failed: expected trap 'out of bounds array access', got runtime error: unknown exported function: get\n  - line 104: assert_trap failed: expected trap 'out of bounds array access', got runtime error: unknown exported function: set_get\n=================================================="
+      }
+    },
+    "array_copy.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 34,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 34,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 34,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 34,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "fail",
+        "passed": 4,
+        "failed": 31,
+        "error": null,
+        "trap_signature": "out of memory",
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0,
+        "stdout_tail": "  - line 116: assert_trap failed: expected trap 'out of bounds array access', got no current module\n  - line 119: assert_return (array_copy): invoke failed: no current module\n  - line 120: assert_return (array_get_nth): invoke failed: no current module\n  - line 121: assert_return (array_get_nth): invoke failed: no current module\n  - line 122: assert_return (array_get_nth): invoke failed: no current module\n  - line 125: assert_return (array_copy_overlap_test-1): invoke failed: no current module\n  - line 126: assert_return (array_get_nth): invoke failed: no current module\n  - line 127: assert_return (array_get_nth): invoke failed: no current module\n  - line 128: assert_return (array_get_nth): invoke failed: no current module\n  - line 129: assert_return (array_get_nth): invoke failed: no current module\n  - line 130: assert_return (array_get_nth): invoke failed: no current module\n  - line 131: assert_return (array_get_nth): invoke failed: no current module\n  - line 133: assert_return (array_copy_overlap_test-2): invoke failed: no current module\n  - line 134: assert_return (array_get_nth): invoke failed: no current module\n  - line 135: assert_return (array_get_nth): invoke failed: no current module\n  - line 136: assert_return (array_get_nth): invoke failed: no current module\n  - line 137: assert_return (array_get_nth): invoke failed: no current module\n  - line 138: assert_return (array_get_nth): invoke failed: no current module\n  - line 139: assert_return (array_get_nth): invoke failed: no current module\n=================================================="
+      }
+    },
+    "array_fill.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 29,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 29,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 29,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 29,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "fail",
+        "passed": 3,
+        "failed": 27,
+        "error": null,
+        "trap_signature": "out of memory",
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0,
+        "stdout_tail": "  - line 74: assert_trap failed: expected trap 'out of bounds array access', got no current module\n  - line 77: assert_return (array_fill): invoke failed: no current module\n  - line 78: assert_return (array_get_nth): invoke failed: no current module\n  - line 79: assert_return (array_get_nth): invoke failed: no current module\n  - line 80: assert_return (array_get_nth): invoke failed: no current module\n  - line 81: assert_return (array_get_nth): invoke failed: no current module\n  - line 84: assert_return (array_fill): invoke failed: no current module\n  - line 85: assert_return (array_get_nth): invoke failed: no current module\n  - line 86: assert_return (array_get_nth): invoke failed: no current module\n  - line 87: assert_return (array_get_nth): invoke failed: no current module\n  - line 88: assert_return (array_get_nth): invoke failed: no current module\n  - line 91: assert_return (array_fill): invoke failed: no current module\n  - line 92: assert_return (array_get_nth): invoke failed: no current module\n  - line 93: assert_return (array_get_nth): invoke failed: no current module\n  - line 94: assert_return (array_get_nth): invoke failed: no current module\n  - line 97: assert_return (array_fill): invoke failed: no current module\n  - line 98: assert_return (array_get_nth): invoke failed: no current module\n  - line 99: assert_return (array_get_nth): invoke failed: no current module\n  - line 100: assert_return (array_get_nth): invoke failed: no current module\n=================================================="
+      }
+    },
+    "array_init_data.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 44,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 44,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 44,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 44,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "fail",
+        "passed": 14,
+        "failed": 31,
+        "error": null,
+        "trap_signature": "out of memory",
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0,
+        "stdout_tail": "  - line 87: assert_return (array_get_nth): invoke failed: no current module\n  - line 88: assert_trap failed: expected trap 'out of bounds array access', got no current module\n  - line 89: assert_return (array_get_nth_i16): invoke failed: no current module\n  - line 90: assert_return (array_get_nth_i16): invoke failed: no current module\n  - line 91: assert_return (array_get_nth_i16): invoke failed: no current module\n  - line 92: assert_trap failed: expected trap 'out of bounds array access', got no current module\n  - line 95: assert_return (array_init_data): invoke failed: no current module\n  - line 96: assert_return (array_get_nth): invoke failed: no current module\n  - line 97: assert_return (array_get_nth): invoke failed: no current module\n  - line 98: assert_return (array_get_nth): invoke failed: no current module\n  - line 99: assert_return (array_get_nth): invoke failed: no current module\n  - line 101: assert_return (array_init_data_i16): invoke failed: no current module\n  - line 102: assert_return (array_get_nth_i16): invoke failed: no current module\n  - line 103: assert_return (array_get_nth_i16): invoke failed: no current module\n  - line 104: assert_return (array_get_nth_i16): invoke failed: no current module\n  - line 105: assert_return (array_get_nth_i16): invoke failed: no current module\n  - line 108: assert_return (drop_segs): invoke failed: no current module\n  - line 109: assert_return (array_init_data): invoke failed: no current module\n  - line 110: assert_trap failed: expected trap 'out of bounds memory access', got no current module\n=================================================="
+      }
+    },
+    "array_init_elem.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 22,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 22,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 22,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 22,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "fail",
+        "passed": 3,
+        "failed": 20,
+        "error": null,
+        "trap_signature": "out of memory",
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0,
+        "stdout_tail": "  - line 78: assert_trap failed: expected trap 'null array reference', got no current module\n  - line 81: assert_trap failed: expected trap 'out of bounds array access', got no current module\n  - line 82: assert_trap failed: expected trap 'out of bounds table access', got no current module\n  - line 85: assert_trap failed: expected trap 'out of bounds array access', got no current module\n  - line 86: assert_trap failed: expected trap 'out of bounds array access', got no current module\n  - line 89: assert_return (array_init_elem): invoke failed: no current module\n  - line 90: assert_return (array_init_elem): invoke failed: no current module\n  - line 93: assert_trap failed: expected trap 'uninitialized element', got no current module\n  - line 94: assert_trap failed: expected trap 'uninitialized element', got no current module\n  - line 95: assert_trap failed: expected trap 'uninitialized element', got no current module\n  - line 96: assert_trap failed: expected trap 'out of bounds array access', got no current module\n  - line 99: assert_return (array_init_elem): invoke failed: no current module\n  - line 100: assert_trap failed: expected trap 'uninitialized element', got no current module\n  - line 101: assert_return (array_call_nth): invoke failed: no current module\n  - line 102: assert_return (array_call_nth): invoke failed: no current module\n  - line 103: assert_trap failed: expected trap 'uninitialized element', got no current module\n  - line 106: assert_return (drop_segs): invoke failed: no current module\n  - line 107: assert_return (array_init_elem): invoke failed: no current module\n  - line 108: assert_trap failed: expected trap 'out of bounds table access', got no current module\n=================================================="
+      }
+    },
+    "array_new_data.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 23,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 23,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 23,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 23,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "fail",
+        "passed": 22,
+        "failed": 1,
+        "error": null,
+        "trap_signature": "out of memory",
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0,
+        "stdout_tail": "Running WAST script: /Users/zhengyu/Documents/projects/wasmoon/spec/gc/array_new_data.wast\nJIT: enabled\n==================================================\n\nResults:\n  Passed:  22\n  Failed:  1\n  Skipped: 0\n\nFailures:\n  - line 12: assert_return (array-new-data): invoke failed: wasm trap: out of memory\n=================================================="
+      }
+    },
+    "array_new_elem.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 18,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 18,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 18,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 18,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "fail",
+        "passed": 17,
+        "failed": 1,
+        "error": null,
+        "trap_signature": "out of memory",
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0,
+        "stdout_tail": "Running WAST script: /Users/zhengyu/Documents/projects/wasmoon/spec/gc/array_new_elem.wast\nJIT: enabled\n==================================================\n\nResults:\n  Passed:  17\n  Failed:  1\n  Skipped: 0\n\nFailures:\n  - line 18: assert_return (array-new-elem): invoke failed: wasm trap: out of memory\n=================================================="
+      }
+    },
+    "binary-gc.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "br_on_cast.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "br_on_cast_fail.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "extern.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "i31.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "ref_cast.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "ref_eq.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "ref_test.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "struct.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 24,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 24,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 24,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 24,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "fail",
+        "passed": 17,
+        "failed": 8,
+        "error": null,
+        "trap_signature": "out of memory",
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0,
+        "stdout_tail": "Running WAST script: /Users/zhengyu/Documents/projects/wasmoon/spec/gc/struct.wast\nJIT: enabled\n==================================================\n\nResults:\n  Passed:  17\n  Failed:  8\n  Skipped: 0\n\nFailures:\n  - line 70: module instantiation failed: wasm trap: out of memory\n  - line 122: assert_return (new): invoke failed: runtime error: unknown exported function: new\n  - line 124: assert_return (get_0_0): invoke failed: runtime error: unknown exported function: get_0_0\n  - line 125: assert_return (get_vec_0): invoke failed: runtime error: unknown exported function: get_vec_0\n  - line 126: assert_return (get_0_y): invoke failed: runtime error: unknown exported function: get_0_y\n  - line 127: assert_return (get_vec_y): invoke failed: runtime error: unknown exported function: get_vec_y\n  - line 129: assert_return (set_get_y): invoke failed: runtime error: unknown exported function: set_get_y\n  - line 130: assert_return (set_get_1): invoke failed: runtime error: unknown exported function: set_get_1\n=================================================="
+      }
+    },
+    "type-subtyping.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_fault_inject": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    }
+  },
+  "reductions": [],
+  "summary": {
+    "total_files": 17,
+    "interp_pass": 17,
+    "jit_pass": 17,
+    "stress_pass": 17,
+    "small_heap_pass": 17,
+    "barrier_pass": 0,
+    "regressions": [],
+    "issues": [],
+    "trap_mismatches": [],
+    "flaky": [],
+    "fault_inject_non_pass": 8,
+    "reductions_attempted": 0,
+    "reductions_succeeded": 0,
+    "reductions_failed": 0
+  }
+}

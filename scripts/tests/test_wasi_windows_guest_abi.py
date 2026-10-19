@@ -15,13 +15,14 @@ class WindowsGuestAbiTests(unittest.TestCase):
     def test_all_guest_helpers_preserve_argument_positions(self):
         signatures = {}
         targets = set()
-        directories = [FFI, FFI.parent / 'native_test_support']
+        directories = [FFI, FFI / 'testing']
+        bridges = [FFI / 'msvc_guest_bridges.asm', directories[1] / 'test_guest_bridges.asm']
         for path in [p for directory in directories for p in directory.glob('*.c')]:
             targets.update(re.findall(r'WASMOON_GUEST_ADDRESS\((\w+)\)', path.read_text()))
             for match in re.finditer(r'\bWASMOON_GUEST_ABI\s+(\w+)\s*\(([^)]*)\)\s*\{', path.read_text()):
                 signatures[match[1]] = len(match[2].split(','))
-        names = [name for directory in directories for name in re.findall(
-            r'PUBLIC (\w+)_msvc_guest', (directory / 'msvc_guest_bridges.asm').read_text())]
+        names = [name for bridge in bridges for name in re.findall(
+            r'PUBLIC (\w+)_msvc_guest', bridge.read_text())]
         self.assertTrue(targets)
         self.assertEqual(set(names), targets)
         self.assertEqual(len(names), len(targets))
@@ -59,8 +60,8 @@ class WindowsGuestAbiTests(unittest.TestCase):
             (path / 'probe.asm').write_text('\n'.join(asm))
             ml64 = os.environ.get('WASMOON_MSVC_ML64', 'ml64.exe')
             cl = os.environ.get('WASMOON_MSVC_CL', 'cl.exe')
-            for source, output in [(FFI / 'msvc_guest_bridges.asm', 'bridges.obj'),
-                                   (directories[1] / 'msvc_guest_bridges.asm', 'test_bridges.obj'),
+            for source, output in [(bridges[0], 'bridges.obj'),
+                                   (bridges[1], 'test_bridges.obj'),
                                    (path / 'probe.asm', 'probe.obj')]:
                 subprocess.run([ml64, '/nologo', '/c', '/Fo' + output, str(source)], cwd=path, check=True, timeout=60)
             subprocess.run([cl, '/nologo', '/std:c11', '/O2', '/MT', 'host.c', 'bridges.obj', 'test_bridges.obj', 'probe.obj', '/Feprobe.exe'],

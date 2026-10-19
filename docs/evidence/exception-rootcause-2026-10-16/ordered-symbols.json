@@ -1,0 +1,252 @@
+{
+  "__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup": {
+    "original": "0x100000778",
+    "candidate": "0x100000778",
+    "same": true
+  },
+  "_ctx_execution_fallback": {
+    "original": "0x100000850",
+    "candidate": "0x100000850",
+    "same": true
+  },
+  "_ctx_gc_restore_root_scopes_internal": {
+    "original": "0x100000880",
+    "candidate": "0x100000880",
+    "same": true
+  },
+  "_exception_activation_context": {
+    "original": "0x100000940",
+    "candidate": "0x100000940",
+    "same": true
+  },
+  "_exception_arena_copy_marked": {
+    "original": "0x100000978",
+    "candidate": "0x100000978",
+    "same": true
+  },
+  "_exception_arena_mark": {
+    "original": "0x100000990",
+    "candidate": "0x100000990",
+    "same": true
+  },
+  "_exception_arena_marked_count": {
+    "original": "0x1000009a8",
+    "candidate": "0x1000009a8",
+    "same": true
+  },
+  "_exception_arena_release": {
+    "original": "0x1000009c0",
+    "candidate": "0x1000009c0",
+    "same": true
+  },
+  "_exception_arena_reset_marks": {
+    "original": "0x1000009cc",
+    "candidate": "0x1000009cc",
+    "same": true
+  },
+  "_exception_arena_sweep": {
+    "original": "0x1000009e4",
+    "candidate": "0x1000009e4",
+    "same": true
+  },
+  "_exception_capture_current": {
+    "original": "0x1000009fc",
+    "candidate": "0x1000009fc",
+    "same": true
+  },
+  "_exception_capture_payload": {
+    "original": "0x100000a00",
+    "candidate": "0x100000a00",
+    "same": true
+  },
+  "_exception_copy_activation_roots": {
+    "original": "0x100000b38",
+    "candidate": "0x100000b38",
+    "same": true
+  },
+  "_exception_delegate_impl": {
+    "original": "0x100000c04",
+    "candidate": "0x100000c04",
+    "same": true
+  },
+  "_exception_get_ref_impl": {
+    "original": "0x100000cd4",
+    "candidate": "0x100000cd4",
+    "same": true
+  },
+  "_exception_get_spilled_local_impl": {
+    "original": "0x100000e18",
+    "candidate": "0x100000e18",
+    "same": true
+  },
+  "_exception_get_tag_impl": {
+    "original": "0x100000e98",
+    "candidate": "0x100000e98",
+    "same": true
+  },
+  "_exception_get_value_count_impl": {
+    "original": "0x100000f24",
+    "candidate": "0x100000f24",
+    "same": true
+  },
+  "_exception_get_value_impl": {
+    "original": "0x100000f70",
+    "candidate": "0x100000f70",
+    "same": true
+  },
+  "_exception_has_pending_hostcall": {
+    "original": "0x100000ff0",
+    "candidate": "0x100000ff0",
+    "same": true
+  },
+  "_exception_mark_activation_roots": {
+    "original": "0x100001040",
+    "candidate": "0x100001040",
+    "same": true
+  },
+  "_exception_raise_current": {
+    "original": "0x100001124",
+    "candidate": "0x100001124",
+    "same": true
+  },
+  "_exception_raise_pending_hostcall": {
+    "original": "0x100001184",
+    "candidate": "0x100001184",
+    "same": true
+  },
+  "_exception_reset_execution_state": {
+    "original": "0x1000011dc",
+    "candidate": "0x1000011dc",
+    "same": true
+  },
+  "_exception_set_payload": {
+    "original": "0x100001254",
+    "candidate": "0x100001254",
+    "same": true
+  },
+  "_exception_spill_locals_impl": {
+    "original": "0x100001314",
+    "candidate": "0x100001314",
+    "same": true
+  },
+  "_exception_stage_hostcall": {
+    "original": "0x1000013ec",
+    "candidate": "0x1000013ec",
+    "same": true
+  },
+  "_exception_throw_impl": {
+    "original": "0x10000150c",
+    "candidate": "0x10000150c",
+    "same": true
+  },
+  "_exception_throw_ref_impl": {
+    "original": "0x100001568",
+    "candidate": "0x100001568",
+    "same": true
+  },
+  "_exception_try_begin_impl": {
+    "original": "0x100001638",
+    "candidate": "0x100001638",
+    "same": true
+  },
+  "_exception_try_end_impl": {
+    "original": "0x1000016c0",
+    "candidate": "0x1000016c0",
+    "same": true
+  },
+  "_get_current_jit_context": {
+    "original": "0x100001784",
+    "candidate": "0x100001784",
+    "same": true
+  },
+  "_jit_current_trap_activation": {
+    "original": "0x1000017b0",
+    "candidate": "0x1000017b0",
+    "same": true
+  },
+  "_wasmoon_jit_exception_delegate": {
+    "original": "0x1000017ec",
+    "candidate": "0x1000017ec",
+    "same": true
+  },
+  "_wasmoon_jit_exception_get_spilled_local": {
+    "original": "0x1000017f8",
+    "candidate": "0x1000017f8",
+    "same": true
+  },
+  "_wasmoon_jit_exception_get_tag": {
+    "original": "0x100001878",
+    "candidate": "0x100001878",
+    "same": true
+  },
+  "_wasmoon_jit_exception_get_value": {
+    "original": "0x100001904",
+    "candidate": "0x100001904",
+    "same": true
+  },
+  "_wasmoon_jit_exception_get_value_count": {
+    "original": "0x100001984",
+    "candidate": "0x100001984",
+    "same": true
+  },
+  "_wasmoon_jit_exception_spill_locals": {
+    "original": "0x1000019d0",
+    "candidate": "0x1000019d0",
+    "same": true
+  },
+  "_wasmoon_jit_exception_throw": {
+    "original": "0x1000019d4",
+    "candidate": "0x1000019d4",
+    "same": true
+  },
+  "_wasmoon_jit_exception_throw_ref": {
+    "original": "0x1000019e0",
+    "candidate": "0x1000019e0",
+    "same": true
+  },
+  "_wasmoon_jit_exception_throw_store_values_managed": {
+    "original": "0x1000019ec",
+    "candidate": "0x1000019ec",
+    "same": true
+  },
+  "_wasmoon_jit_exception_throw_tag": {
+    "original": "0x100001a2c",
+    "candidate": "0x100001a2c",
+    "same": true
+  },
+  "_wasmoon_jit_exception_throw_tag_managed": {
+    "original": "0x100001a40",
+    "candidate": "0x100001a40",
+    "same": true
+  },
+  "_wasmoon_jit_exception_throw_values": {
+    "original": "0x100001ae8",
+    "candidate": "0x100001ae8",
+    "same": true
+  },
+  "_wasmoon_jit_exception_throw_values_managed": {
+    "original": "0x100001af4",
+    "candidate": "0x100001af4",
+    "same": true
+  },
+  "_wasmoon_jit_exception_try_begin": {
+    "original": "0x100001b34",
+    "candidate": "0x100001b34",
+    "same": true
+  },
+  "_wasmoon_jit_exception_try_end": {
+    "original": "0x100001b38",
+    "candidate": "0x100001b38",
+    "same": true
+  },
+  "_wasmoon_native_malloc": {
+    "original": "0x100001b3c",
+    "candidate": "0x100001b3c",
+    "same": true
+  },
+  "_wasmoon_native_realloc": {
+    "original": "0x100001b84",
+    "candidate": "0x100001b84",
+    "same": true
+  }
+}

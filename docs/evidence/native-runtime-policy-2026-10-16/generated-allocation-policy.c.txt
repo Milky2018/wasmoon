@@ -1,0 +1,56 @@
+int32_t _M0FP39Milky201812wasmoon__jit8jit__ffi8allocate(
+  void* _M0L7requestS98548,
+  int32_t _M0L4wideS98546
+) {
+  int32_t _M0L11collectionsS98545;
+  int32_t _M0L7attemptS98547;
+  int32_t _M0L7_2abindS98551;
+  #line 89 "/Users/zhengyu/Documents/projects/wasmoon/_build/sanitizers/sources/wasmoon_jit/jit_ffi/gc_heap.mbt"
+  if (_M0L4wideS98546 != 0) {
+    _M0L11collectionsS98545 = 1;
+  } else {
+    _M0L11collectionsS98545 = 3;
+  }
+  _M0L7attemptS98547 = 0;
+  while (1) {
+    if (_M0L7attemptS98547 < _M0L11collectionsS98545) {
+      int32_t _M0L6_2atmpS238742;
+      int32_t _M0L9referenceS98549;
+      int32_t _M0L6_2atmpS238743;
+      #line 95 "/Users/zhengyu/Documents/projects/wasmoon/_build/sanitizers/sources/wasmoon_jit/jit_ffi/gc_heap.mbt"
+      _M0L6_2atmpS238742
+      = _M0MP39Milky201812wasmoon__jit8jit__ffi17AllocationRequest7collect(_M0L7requestS98548);
+      if (_M0L6_2atmpS238742 < 0) {
+        return -10;
+      }
+      #line 98 "/Users/zhengyu/Documents/projects/wasmoon/_build/sanitizers/sources/wasmoon_jit/jit_ffi/gc_heap.mbt"
+      _M0L9referenceS98549
+      = _M0MP39Milky201812wasmoon__jit8jit__ffi17AllocationRequest7attempt(_M0L7requestS98548);
+      if (_M0L9referenceS98549 > 0) {
+        return _M0L9referenceS98549;
+      }
+      _M0L6_2atmpS238743 = _M0L7attemptS98547 + 1;
+      _M0L7attemptS98547 = _M0L6_2atmpS238743;
+      continue;
+    }
+    break;
+  }
+  #line 103 "/Users/zhengyu/Documents/projects/wasmoon/_build/sanitizers/sources/wasmoon_jit/jit_ffi/gc_heap.mbt"
+  _M0L7_2abindS98551
+  = _M0MP39Milky201812wasmoon__jit8jit__ffi17AllocationRequest6denial(_M0L7requestS98548);
+  switch (_M0L7_2abindS98551) {
+    case 1: {
+      return -25;
+      break;
+    }
+
+    case 2: {
+      return -26;
+      break;
+    }
+    default: {
+      return -9;
+      break;
+    }
+  }
+}

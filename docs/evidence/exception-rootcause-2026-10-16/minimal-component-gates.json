@@ -1,0 +1,17 @@
+[
+  {
+    "suite": "stable-0.2",
+    "exit_code": 0,
+    "log": "minimal-component-stable-0.2-jit.log"
+  },
+  {
+    "suite": "async-0.3",
+    "exit_code": 0,
+    "log": "minimal-component-async-0.3-jit.log"
+  },
+  {
+    "suite": "future-gated",
+    "exit_code": 0,
+    "log": "minimal-component-future-gated-jit.log"
+  }
+]

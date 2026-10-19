@@ -1,0 +1,719 @@
+{
+  "diagnostic_only": true,
+  "method": "Same executable; capacities optionally reserved in State constructor, before invocation. Serial shuffled21 paired rounds after2 warmups. Thread CPU clocks and iteration counts checked by the original guests. Lookup repetition preserves every identity/liveness check. Lookup cost includes the whole validated callback, not only FFI overhead.",
+  "binary_sha256": "f1d38d36323fcd31b28832e97df829f438b34257ef6dc13f5c6f2cead99146b1",
+  "results": [
+    {
+      "workload": "snapshots",
+      "count": 300000,
+      "samples": {
+        "normal": [
+          {
+            "cpu_ns": 32757625,
+            "guest_ns": 32752000
+          },
+          {
+            "cpu_ns": 32229250,
+            "guest_ns": 32222000
+          },
+          {
+            "cpu_ns": 32868709,
+            "guest_ns": 32863000
+          },
+          {
+            "cpu_ns": 32681333,
+            "guest_ns": 32675000
+          },
+          {
+            "cpu_ns": 33792833,
+            "guest_ns": 33787000
+          },
+          {
+            "cpu_ns": 35379750,
+            "guest_ns": 35373000
+          },
+          {
+            "cpu_ns": 31938917,
+            "guest_ns": 31933000
+          },
+          {
+            "cpu_ns": 33934083,
+            "guest_ns": 33926000
+          },
+          {
+            "cpu_ns": 33430750,
+            "guest_ns": 33424000
+          },
+          {
+            "cpu_ns": 36356833,
+            "guest_ns": 36466000
+          },
+          {
+            "cpu_ns": 32620042,
+            "guest_ns": 32614000
+          },
+          {
+            "cpu_ns": 34485167,
+            "guest_ns": 34478000
+          },
+          {
+            "cpu_ns": 31943250,
+            "guest_ns": 31937000
+          },
+          {
+            "cpu_ns": 33235625,
+            "guest_ns": 33229000
+          },
+          {
+            "cpu_ns": 33637708,
+            "guest_ns": 33631000
+          },
+          {
+            "cpu_ns": 35096417,
+            "guest_ns": 37473000
+          },
+          {
+            "cpu_ns": 34667417,
+            "guest_ns": 34660000
+          },
+          {
+            "cpu_ns": 33210209,
+            "guest_ns": 33204000
+          },
+          {
+            "cpu_ns": 31019875,
+            "guest_ns": 31013000
+          },
+          {
+            "cpu_ns": 32622791,
+            "guest_ns": 32615000
+          },
+          {
+            "cpu_ns": 32138834,
+            "guest_ns": 32132000
+          }
+        ],
+        "metadata_reserved": [
+          {
+            "cpu_ns": 32289625,
+            "guest_ns": 32281000
+          },
+          {
+            "cpu_ns": 36878792,
+            "guest_ns": 36872000
+          },
+          {
+            "cpu_ns": 34035292,
+            "guest_ns": 34036000
+          },
+          {
+            "cpu_ns": 32863792,
+            "guest_ns": 32858000
+          },
+          {
+            "cpu_ns": 32242792,
+            "guest_ns": 32235000
+          },
+          {
+            "cpu_ns": 36365833,
+            "guest_ns": 36358000
+          },
+          {
+            "cpu_ns": 34681542,
+            "guest_ns": 34672000
+          },
+          {
+            "cpu_ns": 32854125,
+            "guest_ns": 32848000
+          },
+          {
+            "cpu_ns": 35467458,
+            "guest_ns": 35572000
+          },
+          {
+            "cpu_ns": 32059166,
+            "guest_ns": 32051000
+          },
+          {
+            "cpu_ns": 31643959,
+            "guest_ns": 31635000
+          },
+          {
+            "cpu_ns": 32931584,
+            "guest_ns": 32925000
+          },
+          {
+            "cpu_ns": 36042875,
+            "guest_ns": 36037000
+          },
+          {
+            "cpu_ns": 32111083,
+            "guest_ns": 32104000
+          },
+          {
+            "cpu_ns": 31862875,
+            "guest_ns": 31856000
+          },
+          {
+            "cpu_ns": 33284625,
+            "guest_ns": 33277000
+          },
+          {
+            "cpu_ns": 36038417,
+            "guest_ns": 36037000
+          },
+          {
+            "cpu_ns": 35872583,
+            "guest_ns": 35866000
+          },
+          {
+            "cpu_ns": 32146041,
+            "guest_ns": 32138000
+          },
+          {
+            "cpu_ns": 31648500,
+            "guest_ns": 31641000
+          },
+          {
+            "cpu_ns": 32941625,
+            "guest_ns": 32959000
+          }
+        ],
+        "native_reserved": [
+          {
+            "cpu_ns": 34470375,
+            "guest_ns": 34465000
+          },
+          {
+            "cpu_ns": 33527167,
+            "guest_ns": 34353000
+          },
+          {
+            "cpu_ns": 32582875,
+            "guest_ns": 32576000
+          },
+          {
+            "cpu_ns": 36550750,
+            "guest_ns": 36544000
+          },
+          {
+            "cpu_ns": 33526958,
+            "guest_ns": 33554000
+          },
+          {
+            "cpu_ns": 34774083,
+            "guest_ns": 34767000
+          },
+          {
+            "cpu_ns": 33430542,
+            "guest_ns": 33419000
+          },
+          {
+            "cpu_ns": 35391125,
+            "guest_ns": 35383000
+          },
+          {
+            "cpu_ns": 33959292,
+            "guest_ns": 33952000
+          },
+          {
+            "cpu_ns": 36104375,
+            "guest_ns": 36098000
+          },
+          {
+            "cpu_ns": 35694834,
+            "guest_ns": 35684000
+          },
+          {
+            "cpu_ns": 34507500,
+            "guest_ns": 34501000
+          },
+          {
+            "cpu_ns": 34525417,
+            "guest_ns": 34519000
+          },
+          {
+            "cpu_ns": 32497666,
+            "guest_ns": 32490000
+          },
+          {
+            "cpu_ns": 33184417,
+            "guest_ns": 33178000
+          },
+          {
+            "cpu_ns": 35628833,
+            "guest_ns": 35621000
+          },
+          {
+            "cpu_ns": 33185584,
+            "guest_ns": 33179000
+          },
+          {
+            "cpu_ns": 35249875,
+            "guest_ns": 35243000
+          },
+          {
+            "cpu_ns": 34977708,
+            "guest_ns": 34970000
+          },
+          {
+            "cpu_ns": 32268208,
+            "guest_ns": 32268000
+          },
+          {
+            "cpu_ns": 35938709,
+            "guest_ns": 35931000
+          }
+        ],
+        "both_reserved": [
+          {
+            "cpu_ns": 32366666,
+            "guest_ns": 32360000
+          },
+          {
+            "cpu_ns": 34548541,
+            "guest_ns": 34539000
+          },
+          {
+            "cpu_ns": 35053458,
+            "guest_ns": 35047000
+          },
+          {
+            "cpu_ns": 32668042,
+            "guest_ns": 32663000
+          },
+          {
+            "cpu_ns": 32827833,
+            "guest_ns": 32821000
+          },
+          {
+            "cpu_ns": 33654708,
+            "guest_ns": 33649000
+          },
+          {
+            "cpu_ns": 33072584,
+            "guest_ns": 33064000
+          },
+          {
+            "cpu_ns": 33703417,
+            "guest_ns": 33695000
+          },
+          {
+            "cpu_ns": 33715875,
+            "guest_ns": 33709000
+          },
+          {
+            "cpu_ns": 33924083,
+            "guest_ns": 33919000
+          },
+          {
+            "cpu_ns": 33119625,
+            "guest_ns": 33113000
+          },
+          {
+            "cpu_ns": 32226167,
+            "guest_ns": 32218000
+          },
+          {
+            "cpu_ns": 31877542,
+            "guest_ns": 31872000
+          },
+          {
+            "cpu_ns": 32478042,
+            "guest_ns": 32471000
+          },
+          {
+            "cpu_ns": 34271542,
+            "guest_ns": 34264000
+          },
+          {
+            "cpu_ns": 33346500,
+            "guest_ns": 33338000
+          },
+          {
+            "cpu_ns": 32500458,
+            "guest_ns": 32491000
+          },
+          {
+            "cpu_ns": 32292208,
+            "guest_ns": 32286000
+          },
+          {
+            "cpu_ns": 35225208,
+            "guest_ns": 35220000
+          },
+          {
+            "cpu_ns": 31752709,
+            "guest_ns": 31747000
+          },
+          {
+            "cpu_ns": 35131375,
+            "guest_ns": 35125000
+          }
+        ]
+      },
+      "median": {
+        "normal": 33210209,
+        "metadata_reserved": 32931584,
+        "native_reserved": 34507500,
+        "both_reserved": 33119625
+      }
+    },
+    {
+      "workload": "rethrow",
+      "count": 2000000,
+      "samples": {
+        "normal": [
+          {
+            "cpu_ns": 185977375,
+            "guest_ns": 185971000
+          },
+          {
+            "cpu_ns": 178934500,
+            "guest_ns": 178936000
+          },
+          {
+            "cpu_ns": 186627292,
+            "guest_ns": 186623000
+          },
+          {
+            "cpu_ns": 181531958,
+            "guest_ns": 181569000
+          },
+          {
+            "cpu_ns": 178008709,
+            "guest_ns": 178002000
+          },
+          {
+            "cpu_ns": 182399458,
+            "guest_ns": 182405000
+          },
+          {
+            "cpu_ns": 205419792,
+            "guest_ns": 205414000
+          },
+          {
+            "cpu_ns": 189610666,
+            "guest_ns": 189605000
+          },
+          {
+            "cpu_ns": 187864291,
+            "guest_ns": 187918000
+          },
+          {
+            "cpu_ns": 180736083,
+            "guest_ns": 180811000
+          },
+          {
+            "cpu_ns": 182589875,
+            "guest_ns": 182596000
+          },
+          {
+            "cpu_ns": 185921375,
+            "guest_ns": 185914000
+          },
+          {
+            "cpu_ns": 188416208,
+            "guest_ns": 188408000
+          },
+          {
+            "cpu_ns": 179248125,
+            "guest_ns": 179245000
+          },
+          {
+            "cpu_ns": 190919625,
+            "guest_ns": 191331000
+          },
+          {
+            "cpu_ns": 193757042,
+            "guest_ns": 193797000
+          },
+          {
+            "cpu_ns": 195444875,
+            "guest_ns": 195514000
+          },
+          {
+            "cpu_ns": 191204083,
+            "guest_ns": 191197000
+          },
+          {
+            "cpu_ns": 180896125,
+            "guest_ns": 180929000
+          },
+          {
+            "cpu_ns": 182089000,
+            "guest_ns": 182084000
+          },
+          {
+            "cpu_ns": 177507083,
+            "guest_ns": 177628000
+          }
+        ],
+        "lookup_twice": [
+          {
+            "cpu_ns": 183879416,
+            "guest_ns": 183987000
+          },
+          {
+            "cpu_ns": 184337250,
+            "guest_ns": 184440000
+          },
+          {
+            "cpu_ns": 184598708,
+            "guest_ns": 184592000
+          },
+          {
+            "cpu_ns": 236092750,
+            "guest_ns": 236094000
+          },
+          {
+            "cpu_ns": 194270959,
+            "guest_ns": 194267000
+          },
+          {
+            "cpu_ns": 187262708,
+            "guest_ns": 187314000
+          },
+          {
+            "cpu_ns": 206047167,
+            "guest_ns": 206042000
+          },
+          {
+            "cpu_ns": 190096292,
+            "guest_ns": 190138000
+          },
+          {
+            "cpu_ns": 195416625,
+            "guest_ns": 195410000
+          },
+          {
+            "cpu_ns": 184979583,
+            "guest_ns": 185054000
+          },
+          {
+            "cpu_ns": 180077417,
+            "guest_ns": 180282000
+          },
+          {
+            "cpu_ns": 184964333,
+            "guest_ns": 184958000
+          },
+          {
+            "cpu_ns": 196653292,
+            "guest_ns": 196648000
+          },
+          {
+            "cpu_ns": 196547000,
+            "guest_ns": 196678000
+          },
+          {
+            "cpu_ns": 200646083,
+            "guest_ns": 200801000
+          },
+          {
+            "cpu_ns": 197956292,
+            "guest_ns": 197982000
+          },
+          {
+            "cpu_ns": 209016917,
+            "guest_ns": 210456000
+          },
+          {
+            "cpu_ns": 208854292,
+            "guest_ns": 209174000
+          },
+          {
+            "cpu_ns": 196311334,
+            "guest_ns": 197235000
+          },
+          {
+            "cpu_ns": 195568792,
+            "guest_ns": 195662000
+          },
+          {
+            "cpu_ns": 179989125,
+            "guest_ns": 179983000
+          }
+        ],
+        "lookup_four_times": [
+          {
+            "cpu_ns": 203904292,
+            "guest_ns": 203961000
+          },
+          {
+            "cpu_ns": 202833625,
+            "guest_ns": 202870000
+          },
+          {
+            "cpu_ns": 190786625,
+            "guest_ns": 190780000
+          },
+          {
+            "cpu_ns": 199227459,
+            "guest_ns": 199227000
+          },
+          {
+            "cpu_ns": 201495000,
+            "guest_ns": 201508000
+          },
+          {
+            "cpu_ns": 213492166,
+            "guest_ns": 213614000
+          },
+          {
+            "cpu_ns": 202405916,
+            "guest_ns": 202409000
+          },
+          {
+            "cpu_ns": 204679083,
+            "guest_ns": 204677000
+          },
+          {
+            "cpu_ns": 201663334,
+            "guest_ns": 201667000
+          },
+          {
+            "cpu_ns": 196999584,
+            "guest_ns": 197114000
+          },
+          {
+            "cpu_ns": 201725958,
+            "guest_ns": 201728000
+          },
+          {
+            "cpu_ns": 195038250,
+            "guest_ns": 195045000
+          },
+          {
+            "cpu_ns": 193963083,
+            "guest_ns": 193956000
+          },
+          {
+            "cpu_ns": 202000458,
+            "guest_ns": 202004000
+          },
+          {
+            "cpu_ns": 199820041,
+            "guest_ns": 199838000
+          },
+          {
+            "cpu_ns": 212993375,
+            "guest_ns": 213145000
+          },
+          {
+            "cpu_ns": 222658459,
+            "guest_ns": 222841000
+          },
+          {
+            "cpu_ns": 211357292,
+            "guest_ns": 211395000
+          },
+          {
+            "cpu_ns": 209983875,
+            "guest_ns": 209995000
+          },
+          {
+            "cpu_ns": 198739500,
+            "guest_ns": 198736000
+          },
+          {
+            "cpu_ns": 199477417,
+            "guest_ns": 199472000
+          }
+        ],
+        "both_reserved": [
+          {
+            "cpu_ns": 188109042,
+            "guest_ns": 188113000
+          },
+          {
+            "cpu_ns": 183536291,
+            "guest_ns": 183647000
+          },
+          {
+            "cpu_ns": 185664167,
+            "guest_ns": 186945000
+          },
+          {
+            "cpu_ns": 189648542,
+            "guest_ns": 189653000
+          },
+          {
+            "cpu_ns": 183328000,
+            "guest_ns": 185036000
+          },
+          {
+            "cpu_ns": 180900375,
+            "guest_ns": 180892000
+          },
+          {
+            "cpu_ns": 197964583,
+            "guest_ns": 197958000
+          },
+          {
+            "cpu_ns": 182604958,
+            "guest_ns": 182778000
+          },
+          {
+            "cpu_ns": 180535709,
+            "guest_ns": 180530000
+          },
+          {
+            "cpu_ns": 220101417,
+            "guest_ns": 220131000
+          },
+          {
+            "cpu_ns": 193640792,
+            "guest_ns": 193637000
+          },
+          {
+            "cpu_ns": 189818375,
+            "guest_ns": 189819000
+          },
+          {
+            "cpu_ns": 184554708,
+            "guest_ns": 184549000
+          },
+          {
+            "cpu_ns": 184754708,
+            "guest_ns": 184786000
+          },
+          {
+            "cpu_ns": 193197708,
+            "guest_ns": 194356000
+          },
+          {
+            "cpu_ns": 184331500,
+            "guest_ns": 184327000
+          },
+          {
+            "cpu_ns": 189299667,
+            "guest_ns": 189395000
+          },
+          {
+            "cpu_ns": 196709500,
+            "guest_ns": 196797000
+          },
+          {
+            "cpu_ns": 190979666,
+            "guest_ns": 191013000
+          },
+          {
+            "cpu_ns": 184069375,
+            "guest_ns": 184127000
+          },
+          {
+            "cpu_ns": 185476875,
+            "guest_ns": 185701000
+          }
+        ]
+      },
+      "median": {
+        "normal": 185921375,
+        "lookup_twice": 195416625,
+        "lookup_four_times": 201725958,
+        "both_reserved": 185664167
+      }
+    }
+  ]
+}

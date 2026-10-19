@@ -1,0 +1,10 @@
+{
+  "modules/wasmoon_jit/jit_ffi/exceptions.mbt": {
+    "production_sha256": "d06f08d961b8ba3b27867281e9e83cf540f2373683276bd92f9f69126d4a9820",
+    "diagnostic_sha256": "92f77df43733664d932e304edc0b5839ba67d05ddfef60e32be74ab5406b9421"
+  },
+  "modules/wasmoon_jit/jit_ffi/exception.c": {
+    "production_sha256": "cf92edf2247f6801bb9ca64c1d526df0d11ac04ea2547490f410d7a5d2444a5a",
+    "diagnostic_sha256": "ecd3c5e3440b6d4633d187d56143993b23571935e8966f7e0d26a2106265d0f5"
+  }
+}

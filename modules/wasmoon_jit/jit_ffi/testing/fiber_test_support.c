@@ -1,0 +1,472 @@
+#include "../jit_internal.h"
+#if defined(_MSC_VER) && !defined(__clang__)
+#include "test_guest_bridges.h"
+#endif
+
+#include <stdint.h>
+#include <stdatomic.h>
+#ifndef _WIN32
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
+typedef int64_t (*native_fiber_entry_fn)(void *closure);
+typedef int32_t (*cancellation_callback_fn)(void *closure);
+
+typedef struct {
+    int64_t marker;
+} callback_capture_t;
+
+static _Atomic int callback_capture_releases;
+
+#if defined(__x86_64__) && !defined(_WIN32)
+__attribute__((naked, noinline))
+static int64_t x64_sysv_stack_alignment_probe(void) {
+    __asm__ volatile(
+        "movq %rsp, %rax\n\t"
+        "andq $15, %rax\n\t"
+        "retq\n\t"
+    );
+}
+#endif
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_x64_stack_alignment_probe_ptr(void) {
+#if defined(__x86_64__) && !defined(_WIN32)
+    return (int64_t)(uintptr_t)x64_sysv_stack_alignment_probe;
+#else
+    return 0;
+#endif
+}
+
+static void finalize_callback_capture(void *self) {
+    (void)self;
+    atomic_fetch_add_explicit(
+        &callback_capture_releases,
+        1,
+        memory_order_relaxed
+    );
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_test_callback_capture_new(void) {
+    callback_capture_t *capture = moonbit_make_external_object(
+        finalize_callback_capture,
+        sizeof(callback_capture_t)
+    );
+    if (!capture) return NULL;
+    capture->marker = 0;
+    return capture;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_test_callback_capture_touch(void *capture) {
+    (void)capture;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_test_callback_capture_reset(void) {
+    atomic_store_explicit(
+        &callback_capture_releases,
+        0,
+        memory_order_relaxed
+    );
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_callback_capture_release_count(void) {
+    return atomic_load_explicit(
+        &callback_capture_releases,
+        memory_order_relaxed
+    );
+}
+
+extern void wasmoon_jit_set_cancellation_callback(
+    int64_t ctx_ptr,
+    cancellation_callback_fn callback,
+    void *closure
+);
+
+extern void *wasmoon_native_fiber_alloc(
+    native_fiber_entry_fn entry,
+    void *closure,
+    int64_t stack_size
+);
+extern int wasmoon_native_fiber_continue(void *managed, int64_t resume_value);
+extern int64_t wasmoon_native_fiber_return_value(void *managed);
+extern int64_t wasmoon_test_native_fiber_register_probe(void *closure);
+extern WASMOON_GUEST_ABI int32_t wasmoon_jit_hostcall(
+    jit_context_t *ctx,
+    int32_t func_idx,
+    int64_t values_ptr,
+    int32_t num_args,
+    int32_t num_results
+);
+
+static int WASMOON_GUEST_ABI hostcall_probe_trampoline(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    values[0] = 10;
+    int64_t slots[1] = {10};
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        42,
+        (int64_t)slots,
+        0,
+        0
+    );
+    if (result != 0) return result;
+    values[0] = slots[0] + 1;
+    int mode = (int)(intptr_t)func_ptr;
+    if (mode == 999) {
+        ctx_set_debug_current_func_idx(ctx, mode);
+        uintptr_t guard_base = 0;
+        if (!wasmoon_native_fiber_stack_bounds(
+                NULL, NULL, &guard_base, NULL
+            )) {
+            return 8;
+        }
+        volatile unsigned char *guard =
+            (volatile unsigned char *)guard_base;
+        *guard = 1;
+        return 0;
+    }
+    if (mode > 1) {
+        g_trap_func_idx = mode;
+        g_trap_pc = (uintptr_t)hostcall_probe_trampoline;
+        g_trap_code = 6;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_hostcall_probe_trampoline(void) {
+    return WASMOON_GUEST_ADDRESS(hostcall_probe_trampoline);
+}
+
+static int WASMOON_GUEST_ABI fiber_stack_hostcall_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    uintptr_t fiber_base = 0;
+    if (!wasmoon_native_fiber_stack_bounds(
+            &fiber_base, NULL, NULL, NULL
+        )) {
+        values[0] = 3;
+        return 3;
+    }
+    // AddressSanitizer may place fixed-size C locals on its fake stack. Use
+    // the registered fiber mapping directly so this probe still exercises
+    // the runtime's real native-fiber slot boundary under instrumentation.
+    int64_t *slots = (int64_t *)fiber_base;
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        44,
+        (int64_t)slots,
+        0,
+        0
+    );
+    values[0] = result;
+    return result;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_test_fiber_stack_hostcall_probe_trampoline(void) {
+    return WASMOON_GUEST_ADDRESS(fiber_stack_hostcall_probe);
+}
+
+static int WASMOON_GUEST_ABI active_fiber_stack_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)ctx;
+    (void)func_ptr;
+    uintptr_t stack_base = 0;
+    uintptr_t stack_top = 0;
+    if (!wasmoon_native_fiber_stack_bounds(
+            &stack_base, &stack_top, NULL, NULL
+        )) {
+        values[0] = 0;
+        values[1] = 0;
+        return 0;
+    }
+    values[0] = 1;
+    values[1] = (int64_t)(stack_top - stack_base);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_test_active_fiber_stack_probe_trampoline(void) {
+    return WASMOON_GUEST_ADDRESS(active_fiber_stack_probe);
+}
+
+static int WASMOON_GUEST_ABI nested_hostcall_tls_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    int64_t slots[1] = {0};
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        46,
+        (int64_t)slots,
+        0,
+        1
+    );
+    values[0] = slots[0];
+    return result;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_test_nested_hostcall_tls_probe_trampoline(void) {
+    return WASMOON_GUEST_ADDRESS(nested_hostcall_tls_probe);
+}
+
+static int WASMOON_GUEST_ABI nested_activation_exception_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    sigjmp_buf *landing = exception_try_begin_impl(ctx, 17);
+    int jumped = sigsetjmp(*landing, 1);
+    if (jumped == 0) {
+        int64_t slots[1] = {0};
+        int result = wasmoon_jit_hostcall(
+            ctx,
+            46,
+            (int64_t)slots,
+            0,
+            1
+        );
+        if (result != 0) {
+            exception_try_end_impl(ctx, 17);
+            return result;
+        }
+        if (ctx_execution(ctx)->exception_handler) {
+            result = wasmoon_jit_hostcall(
+                ctx,
+                47,
+                (int64_t)slots,
+                0,
+                1
+            );
+            if (result != 0) {
+                exception_try_end_impl(ctx, 17);
+                return result;
+            }
+        }
+        exception_throw_impl(ctx, 1, NULL, 0);
+        return 8;
+    }
+    exception_try_end_impl(ctx, 17);
+    values[0] = jumped;
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_test_nested_activation_exception_probe(void) {
+    return WASMOON_GUEST_ADDRESS(nested_activation_exception_probe);
+}
+
+static int WASMOON_GUEST_ABI mismatched_try_end_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)values;
+    (void)func_ptr;
+    exception_try_begin_impl(ctx, 17);
+    exception_try_end_impl(ctx, 18);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_mismatched_try_end_probe(void) {
+    return WASMOON_GUEST_ADDRESS(mismatched_try_end_probe);
+}
+
+static int WASMOON_GUEST_ABI nested_activation_gc_root_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    if (!ctx || !ctx_gc_heap(ctx) || !values) return 8;
+    if (!ctx_gc_push_root_scope_internal(ctx, values, 1)) return 9;
+    int64_t slots[1] = {0};
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        46,
+        (int64_t)slots,
+        0,
+        1
+    );
+    if (result != 0) {
+        ctx_gc_pop_root_scope_internal(ctx);
+        return result;
+    }
+    int64_t encoded = values[0];
+    int32_t gc_ref = encoded > 0 && (encoded & 1L) == 0
+        ? (int32_t)(encoded >> 1)
+        : 0;
+    if (gc_collect_for_alloc_internal(ctx, NULL, 0) < 0) {
+        ctx_gc_pop_root_scope_internal(ctx);
+        return 9;
+    }
+    values[1] = gc_heap_is_valid((GcHeap *)ctx_gc_heap(ctx), gc_ref);
+    ctx_gc_pop_root_scope_internal(ctx);
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_test_nested_activation_gc_root_probe(void) {
+    return WASMOON_GUEST_ADDRESS(nested_activation_gc_root_probe);
+}
+
+static int WASMOON_GUEST_ABI parked_gc_root_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    if (!ctx || !ctx_gc_heap(ctx) || !values) return 8;
+    if (!ctx_gc_push_root_scope_internal(ctx, values, 1)) return 9;
+    int64_t hostcall_slots[1] = {0};
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        43,
+        (int64_t)hostcall_slots,
+        0,
+        0
+    );
+    int64_t encoded = values[0];
+    int32_t gc_ref = encoded > 0 && (encoded & 1L) == 0
+        ? (int32_t)(encoded >> 1)
+        : 0;
+    values[1] = gc_heap_is_valid((GcHeap *)ctx_gc_heap(ctx), gc_ref);
+    ctx_gc_pop_root_scope_internal(ctx);
+    return result;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_parked_gc_root_probe(void) {
+    return WASMOON_GUEST_ADDRESS(parked_gc_root_probe);
+}
+
+static int WASMOON_GUEST_ABI nested_trap_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)ctx;
+    (void)values;
+    g_trap_func_idx = (int)(intptr_t)func_ptr;
+    g_trap_pc = (uintptr_t)nested_trap_probe;
+    g_trap_code = 6;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_nested_trap_probe(void) {
+    return WASMOON_GUEST_ADDRESS(nested_trap_probe);
+}
+
+#ifdef _WIN32
+// Clang only preserves SEH for a fault reached through a call from __try.
+// A volatile store in the catching frame does not retain the handler.
+__declspec(noinline) static void write_guard(volatile unsigned char *guard) {
+    *guard = 1;
+}
+#endif
+
+static int64_t guard_access_probe(void *closure) {
+    (void)closure;
+    uintptr_t guard_base = 0;
+    if (!wasmoon_native_fiber_stack_bounds(
+            NULL, NULL, &guard_base, NULL
+        )) {
+        return 0;
+    }
+    volatile unsigned char *guard = (volatile unsigned char *)guard_base;
+#ifdef _WIN32
+    __try { write_guard(guard); }
+    __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
+              ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return 1;
+    }
+#else
+    *guard = 1;
+#endif
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_test_fiber_guard_rejects_access(int64_t stack_size) {
+    void *fiber = wasmoon_native_fiber_alloc(
+        guard_access_probe,
+        NULL,
+        stack_size
+    );
+    if (!fiber) return 0;
+#ifdef _WIN32
+    int result = wasmoon_native_fiber_continue(fiber, 0);
+    int passed = result == WASMOON_FIBER_ADVANCE_RETURNED &&
+        wasmoon_native_fiber_return_value(fiber) == 1;
+    moonbit_decref(fiber);
+    return passed;
+#else
+    pid_t child = fork();
+    if (child < 0) {
+        moonbit_decref(fiber);
+        return 0;
+    }
+    if (child == 0) {
+        wasmoon_native_fiber_continue(fiber, 0);
+        _exit(0);
+    }
+    int status = 0;
+    int waited = waitpid(child, &status, 0);
+    moonbit_decref(fiber);
+    return waited == child && WIFSIGNALED(status);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_test_fiber_preserves_registers(void) {
+    void *fiber = wasmoon_native_fiber_alloc(
+        wasmoon_test_native_fiber_register_probe,
+        NULL,
+        64 * 1024
+    );
+    if (!fiber) return 0;
+    int first = wasmoon_native_fiber_continue(fiber, 0);
+    int second = first == WASMOON_FIBER_ADVANCE_SUSPENDED
+        ? wasmoon_native_fiber_continue(fiber, 0)
+        : WASMOON_FIBER_ADVANCE_INVALID_HANDLE;
+    int passed = second == WASMOON_FIBER_ADVANCE_RETURNED &&
+        wasmoon_native_fiber_return_value(fiber) == 1;
+    moonbit_decref(fiber);
+    return passed;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_fresh_context_scheduling_budget(void) {
+    for (int i = 0; i < 64; ++i) {
+        jit_context_t *ctx = alloc_context_internal(1);
+        if (!ctx) return -1;
+        int32_t budget = ctx_runtime(ctx)->control_defaults.scheduling_budget;
+        // Exercise allocator reuse after a previously enabled context.
+        ctx_runtime(ctx)->control_defaults.scheduling_budget = 1;
+        free_context_internal(ctx);
+        if (budget != 0) return budget;
+    }
+    return 0;
+}
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(hostcall_probe_trampoline);
+WASMOON_DEFINE_GUEST_TARGET(fiber_stack_hostcall_probe);
+WASMOON_DEFINE_GUEST_TARGET(active_fiber_stack_probe);
+WASMOON_DEFINE_GUEST_TARGET(nested_hostcall_tls_probe);
+WASMOON_DEFINE_GUEST_TARGET(nested_activation_exception_probe);
+WASMOON_DEFINE_GUEST_TARGET(mismatched_try_end_probe);
+WASMOON_DEFINE_GUEST_TARGET(nested_activation_gc_root_probe);
+WASMOON_DEFINE_GUEST_TARGET(parked_gc_root_probe);
+WASMOON_DEFINE_GUEST_TARGET(nested_trap_probe);
+#endif

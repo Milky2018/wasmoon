@@ -1,0 +1,1386 @@
+{
+  "method": "Unmodified release executables; child-only DYLD interpose of putchar for counters. Store-bound WAST strict JIT,known tag layouts,tracing enabled. Two spectest.print_char calls are timing boundaries; diagnostic putchar override ignores the C argument and requires exactly2 calls. 21 shuffled paired serial rounds after2warmups; guest checks final iteration count via assert_return. CPU/counters cover loop and fixed native boundary envelope, exclude compile/startup/teardown. No active builds/tests.",
+  "sha256": {
+    "before": "061b484c03f1ee7a9a79a7fe0d41f2a0776bd109f8a18e6082fdd7ed226bc1d0",
+    "fixed": "144b149c5170635747e1d522658505846ffb01b0e70c2b0691b607e7708dbda5",
+    "matched_c": "079b454b24c5df6dfff7402782c7b01e5e053ce422448683c7c67987cc0aefd1"
+  },
+  "results": [
+    {
+      "workload": "snapshots",
+      "n": 300000,
+      "samples": {
+        "before": [
+          {
+            "cpu_ns": 41256875,
+            "instructions": 790096517,
+            "cycles": 166159490
+          },
+          {
+            "cpu_ns": 41808375,
+            "instructions": 790221531,
+            "cycles": 168272488
+          },
+          {
+            "cpu_ns": 41582917,
+            "instructions": 768612382,
+            "cycles": 167952400
+          },
+          {
+            "cpu_ns": 42166667,
+            "instructions": 790216102,
+            "cycles": 170231245
+          },
+          {
+            "cpu_ns": 40799833,
+            "instructions": 790244282,
+            "cycles": 164931903
+          },
+          {
+            "cpu_ns": 44957917,
+            "instructions": 790368889,
+            "cycles": 168717013
+          },
+          {
+            "cpu_ns": 42731166,
+            "instructions": 790236908,
+            "cycles": 171921099
+          },
+          {
+            "cpu_ns": 41120417,
+            "instructions": 790986774,
+            "cycles": 165985598
+          },
+          {
+            "cpu_ns": 41821083,
+            "instructions": 790756682,
+            "cycles": 167008486
+          },
+          {
+            "cpu_ns": 42067542,
+            "instructions": 791186881,
+            "cycles": 167879838
+          },
+          {
+            "cpu_ns": 42740250,
+            "instructions": 790190048,
+            "cycles": 172317779
+          },
+          {
+            "cpu_ns": 43153542,
+            "instructions": 790262250,
+            "cycles": 166214203
+          },
+          {
+            "cpu_ns": 42229833,
+            "instructions": 790310344,
+            "cycles": 169371350
+          },
+          {
+            "cpu_ns": 43481750,
+            "instructions": 768630866,
+            "cycles": 171379261
+          },
+          {
+            "cpu_ns": 41647625,
+            "instructions": 768542856,
+            "cycles": 167668829
+          },
+          {
+            "cpu_ns": 42575708,
+            "instructions": 790104816,
+            "cycles": 171754661
+          },
+          {
+            "cpu_ns": 41539375,
+            "instructions": 790252894,
+            "cycles": 167503818
+          },
+          {
+            "cpu_ns": 41338417,
+            "instructions": 790198636,
+            "cycles": 166211752
+          },
+          {
+            "cpu_ns": 42593417,
+            "instructions": 790197264,
+            "cycles": 171733630
+          },
+          {
+            "cpu_ns": 44630875,
+            "instructions": 768646224,
+            "cycles": 174225931
+          },
+          {
+            "cpu_ns": 42722417,
+            "instructions": 790389863,
+            "cycles": 168017948
+          }
+        ],
+        "fixed": [
+          {
+            "cpu_ns": 37582750,
+            "instructions": 790077472,
+            "cycles": 149560998
+          },
+          {
+            "cpu_ns": 37550583,
+            "instructions": 789888860,
+            "cycles": 149974955
+          },
+          {
+            "cpu_ns": 37005625,
+            "instructions": 789905363,
+            "cycles": 149264769
+          },
+          {
+            "cpu_ns": 37816833,
+            "instructions": 789983040,
+            "cycles": 152209137
+          },
+          {
+            "cpu_ns": 40611000,
+            "instructions": 768443352,
+            "cycles": 155677697
+          },
+          {
+            "cpu_ns": 39280375,
+            "instructions": 789969177,
+            "cycles": 151799274
+          },
+          {
+            "cpu_ns": 37539208,
+            "instructions": 768478579,
+            "cycles": 151271569
+          },
+          {
+            "cpu_ns": 37150167,
+            "instructions": 768298184,
+            "cycles": 149999182
+          },
+          {
+            "cpu_ns": 38783375,
+            "instructions": 789855295,
+            "cycles": 152015428
+          },
+          {
+            "cpu_ns": 37967042,
+            "instructions": 790935678,
+            "cycles": 153252949
+          },
+          {
+            "cpu_ns": 36951208,
+            "instructions": 789927443,
+            "cycles": 148969586
+          },
+          {
+            "cpu_ns": 37509083,
+            "instructions": 789858822,
+            "cycles": 151388676
+          },
+          {
+            "cpu_ns": 37296083,
+            "instructions": 789818062,
+            "cycles": 150591725
+          },
+          {
+            "cpu_ns": 36721917,
+            "instructions": 768221143,
+            "cycles": 148513497
+          },
+          {
+            "cpu_ns": 38736667,
+            "instructions": 768233696,
+            "cycles": 155032469
+          },
+          {
+            "cpu_ns": 37611083,
+            "instructions": 768299949,
+            "cycles": 151805798
+          },
+          {
+            "cpu_ns": 36831250,
+            "instructions": 789904659,
+            "cycles": 148757790
+          },
+          {
+            "cpu_ns": 38206209,
+            "instructions": 789984002,
+            "cycles": 149242419
+          },
+          {
+            "cpu_ns": 37751542,
+            "instructions": 768397156,
+            "cycles": 152516100
+          },
+          {
+            "cpu_ns": 38082792,
+            "instructions": 789800279,
+            "cycles": 151441989
+          },
+          {
+            "cpu_ns": 38318541,
+            "instructions": 789898574,
+            "cycles": 150956075
+          }
+        ],
+        "matched_c": [
+          {
+            "cpu_ns": 37696875,
+            "instructions": 772482369,
+            "cycles": 151403980
+          },
+          {
+            "cpu_ns": 36766042,
+            "instructions": 772468667,
+            "cycles": 147905304
+          },
+          {
+            "cpu_ns": 36824834,
+            "instructions": 772458788,
+            "cycles": 148367740
+          },
+          {
+            "cpu_ns": 40577333,
+            "instructions": 772672042,
+            "cycles": 156563754
+          },
+          {
+            "cpu_ns": 38285375,
+            "instructions": 772504255,
+            "cycles": 154001144
+          },
+          {
+            "cpu_ns": 37982041,
+            "instructions": 772501866,
+            "cycles": 152315301
+          },
+          {
+            "cpu_ns": 37743792,
+            "instructions": 772474668,
+            "cycles": 151951810
+          },
+          {
+            "cpu_ns": 38084792,
+            "instructions": 750932287,
+            "cycles": 153169839
+          },
+          {
+            "cpu_ns": 38217334,
+            "instructions": 772536811,
+            "cycles": 154141921
+          },
+          {
+            "cpu_ns": 37472833,
+            "instructions": 773171571,
+            "cycles": 151262591
+          },
+          {
+            "cpu_ns": 37926916,
+            "instructions": 772728883,
+            "cycles": 152011795
+          },
+          {
+            "cpu_ns": 37563208,
+            "instructions": 772697794,
+            "cycles": 151363756
+          },
+          {
+            "cpu_ns": 37070250,
+            "instructions": 750831093,
+            "cycles": 149794801
+          },
+          {
+            "cpu_ns": 37082833,
+            "instructions": 772576376,
+            "cycles": 149586352
+          },
+          {
+            "cpu_ns": 36193417,
+            "instructions": 772453658,
+            "cycles": 145898310
+          },
+          {
+            "cpu_ns": 38741459,
+            "instructions": 772437509,
+            "cycles": 156627984
+          },
+          {
+            "cpu_ns": 38318333,
+            "instructions": 772626848,
+            "cycles": 148688221
+          },
+          {
+            "cpu_ns": 38101792,
+            "instructions": 772611436,
+            "cycles": 153412672
+          },
+          {
+            "cpu_ns": 38562125,
+            "instructions": 772490165,
+            "cycles": 154731359
+          },
+          {
+            "cpu_ns": 38032791,
+            "instructions": 772507173,
+            "cycles": 149235611
+          },
+          {
+            "cpu_ns": 38896167,
+            "instructions": 772445953,
+            "cycles": 152404315
+          }
+        ]
+      },
+      "median": {
+        "before": {
+          "cpu_ns": 42166667,
+          "instructions": 790221531,
+          "cycles": 168017948
+        },
+        "fixed": {
+          "cpu_ns": 37611083,
+          "instructions": 789858822,
+          "cycles": 151271569
+        },
+        "matched_c": {
+          "cpu_ns": 37982041,
+          "instructions": 772501866,
+          "cycles": 151951810
+        }
+      }
+    },
+    {
+      "workload": "snapshots-word",
+      "n": 300000,
+      "samples": {
+        "before": [
+          {
+            "cpu_ns": 51670500,
+            "instructions": 1004068268,
+            "cycles": 208577774
+          },
+          {
+            "cpu_ns": 53417542,
+            "instructions": 1025694183,
+            "cycles": 215530661
+          },
+          {
+            "cpu_ns": 54314000,
+            "instructions": 1025736643,
+            "cycles": 213619899
+          },
+          {
+            "cpu_ns": 53426750,
+            "instructions": 1025800532,
+            "cycles": 215282786
+          },
+          {
+            "cpu_ns": 53206959,
+            "instructions": 1025778426,
+            "cycles": 214390275
+          },
+          {
+            "cpu_ns": 55050458,
+            "instructions": 1004179584,
+            "cycles": 214062275
+          },
+          {
+            "cpu_ns": 53394208,
+            "instructions": 1025821453,
+            "cycles": 215286157
+          },
+          {
+            "cpu_ns": 51979542,
+            "instructions": 1025711620,
+            "cycles": 208551798
+          },
+          {
+            "cpu_ns": 51944084,
+            "instructions": 1025777680,
+            "cycles": 209864311
+          },
+          {
+            "cpu_ns": 51083334,
+            "instructions": 1004091685,
+            "cycles": 205530275
+          },
+          {
+            "cpu_ns": 51925709,
+            "instructions": 1027766837,
+            "cycles": 209286954
+          },
+          {
+            "cpu_ns": 55548125,
+            "instructions": 1028207414,
+            "cycles": 219790887
+          },
+          {
+            "cpu_ns": 52135416,
+            "instructions": 1025743013,
+            "cycles": 210602008
+          },
+          {
+            "cpu_ns": 52456875,
+            "instructions": 1026091360,
+            "cycles": 207026318
+          },
+          {
+            "cpu_ns": 52888708,
+            "instructions": 1004088585,
+            "cycles": 212886021
+          },
+          {
+            "cpu_ns": 52664375,
+            "instructions": 1004047616,
+            "cycles": 212754888
+          },
+          {
+            "cpu_ns": 54720375,
+            "instructions": 1025649936,
+            "cycles": 220113210
+          },
+          {
+            "cpu_ns": 52999875,
+            "instructions": 1004020871,
+            "cycles": 209769375
+          },
+          {
+            "cpu_ns": 53476083,
+            "instructions": 1025744907,
+            "cycles": 215873242
+          },
+          {
+            "cpu_ns": 52184791,
+            "instructions": 1025868275,
+            "cycles": 210563262
+          },
+          {
+            "cpu_ns": 53571500,
+            "instructions": 1026807531,
+            "cycles": 216145595
+          }
+        ],
+        "fixed": [
+          {
+            "cpu_ns": 49557750,
+            "instructions": 1025996696,
+            "cycles": 196353970
+          },
+          {
+            "cpu_ns": 50567542,
+            "instructions": 1004383230,
+            "cycles": 204043042
+          },
+          {
+            "cpu_ns": 48521375,
+            "instructions": 1004331660,
+            "cycles": 196127088
+          },
+          {
+            "cpu_ns": 48849250,
+            "instructions": 1026312986,
+            "cycles": 196961906
+          },
+          {
+            "cpu_ns": 48389083,
+            "instructions": 1025932227,
+            "cycles": 194945008
+          },
+          {
+            "cpu_ns": 48684000,
+            "instructions": 1004440100,
+            "cycles": 196537672
+          },
+          {
+            "cpu_ns": 50331000,
+            "instructions": 1026185131,
+            "cycles": 202751827
+          },
+          {
+            "cpu_ns": 50516333,
+            "instructions": 1025928177,
+            "cycles": 196494531
+          },
+          {
+            "cpu_ns": 48389917,
+            "instructions": 1025876423,
+            "cycles": 195559180
+          },
+          {
+            "cpu_ns": 49048292,
+            "instructions": 1026192961,
+            "cycles": 197414240
+          },
+          {
+            "cpu_ns": 52495084,
+            "instructions": 1027792706,
+            "cycles": 198368843
+          },
+          {
+            "cpu_ns": 49363042,
+            "instructions": 1028284292,
+            "cycles": 194837130
+          },
+          {
+            "cpu_ns": 48562125,
+            "instructions": 1028692688,
+            "cycles": 194595352
+          },
+          {
+            "cpu_ns": 49452333,
+            "instructions": 1026086973,
+            "cycles": 197785821
+          },
+          {
+            "cpu_ns": 48023834,
+            "instructions": 1004273462,
+            "cycles": 194237376
+          },
+          {
+            "cpu_ns": 47857084,
+            "instructions": 1025916456,
+            "cycles": 193315292
+          },
+          {
+            "cpu_ns": 49585250,
+            "instructions": 1004606745,
+            "cycles": 195518656
+          },
+          {
+            "cpu_ns": 50036708,
+            "instructions": 1026132279,
+            "cycles": 197758453
+          },
+          {
+            "cpu_ns": 47931500,
+            "instructions": 1004547136,
+            "cycles": 192571540
+          },
+          {
+            "cpu_ns": 47884500,
+            "instructions": 1004369495,
+            "cycles": 192939434
+          },
+          {
+            "cpu_ns": 48449292,
+            "instructions": 1005341717,
+            "cycles": 194622487
+          }
+        ],
+        "matched_c": [
+          {
+            "cpu_ns": 49698500,
+            "instructions": 1007017493,
+            "cycles": 196673666
+          },
+          {
+            "cpu_ns": 48025000,
+            "instructions": 1007390187,
+            "cycles": 192277405
+          },
+          {
+            "cpu_ns": 48275250,
+            "instructions": 1006940482,
+            "cycles": 191886934
+          },
+          {
+            "cpu_ns": 48094750,
+            "instructions": 1007031547,
+            "cycles": 193861165
+          },
+          {
+            "cpu_ns": 48061292,
+            "instructions": 985972969,
+            "cycles": 192396292
+          },
+          {
+            "cpu_ns": 48791167,
+            "instructions": 1007089387,
+            "cycles": 195348577
+          },
+          {
+            "cpu_ns": 47944041,
+            "instructions": 1007075602,
+            "cycles": 192952759
+          },
+          {
+            "cpu_ns": 47336583,
+            "instructions": 1007021570,
+            "cycles": 190733415
+          },
+          {
+            "cpu_ns": 47997042,
+            "instructions": 1007180426,
+            "cycles": 193476079
+          },
+          {
+            "cpu_ns": 48727625,
+            "instructions": 986353488,
+            "cycles": 196859537
+          },
+          {
+            "cpu_ns": 49878083,
+            "instructions": 1008149744,
+            "cycles": 199583918
+          },
+          {
+            "cpu_ns": 48472834,
+            "instructions": 986842766,
+            "cycles": 195393797
+          },
+          {
+            "cpu_ns": 48791125,
+            "instructions": 985974086,
+            "cycles": 195709274
+          },
+          {
+            "cpu_ns": 48877458,
+            "instructions": 1007095438,
+            "cycles": 194592600
+          },
+          {
+            "cpu_ns": 47961958,
+            "instructions": 1006976618,
+            "cycles": 193129279
+          },
+          {
+            "cpu_ns": 49060667,
+            "instructions": 1007311443,
+            "cycles": 191979257
+          },
+          {
+            "cpu_ns": 48281000,
+            "instructions": 1007095726,
+            "cycles": 193381534
+          },
+          {
+            "cpu_ns": 49284291,
+            "instructions": 985576297,
+            "cycles": 194476063
+          },
+          {
+            "cpu_ns": 47622708,
+            "instructions": 964095627,
+            "cycles": 192137231
+          },
+          {
+            "cpu_ns": 47897167,
+            "instructions": 1007231442,
+            "cycles": 193307120
+          },
+          {
+            "cpu_ns": 48894667,
+            "instructions": 1007520417,
+            "cycles": 196437892
+          }
+        ]
+      },
+      "median": {
+        "before": {
+          "cpu_ns": 52999875,
+          "instructions": 1025743013,
+          "cycles": 212886021
+        },
+        "fixed": {
+          "cpu_ns": 48849250,
+          "instructions": 1025928177,
+          "cycles": 196127088
+        },
+        "matched_c": {
+          "cpu_ns": 48281000,
+          "instructions": 1007031547,
+          "cycles": 193476079
+        }
+      }
+    },
+    {
+      "workload": "rethrow",
+      "n": 2000000,
+      "samples": {
+        "before": [
+          {
+            "cpu_ns": 291141000,
+            "instructions": 6124275178,
+            "cycles": 1164579791
+          },
+          {
+            "cpu_ns": 270174333,
+            "instructions": 6124458576,
+            "cycles": 1057855234
+          },
+          {
+            "cpu_ns": 272782416,
+            "instructions": 6124582111,
+            "cycles": 1075112094
+          },
+          {
+            "cpu_ns": 285068417,
+            "instructions": 6124313864,
+            "cycles": 1125367796
+          },
+          {
+            "cpu_ns": 273971167,
+            "instructions": 6124364510,
+            "cycles": 1076994470
+          },
+          {
+            "cpu_ns": 283052625,
+            "instructions": 6124490061,
+            "cycles": 1121056572
+          },
+          {
+            "cpu_ns": 296875375,
+            "instructions": 6124277649,
+            "cycles": 1182970486
+          },
+          {
+            "cpu_ns": 287663500,
+            "instructions": 6124432473,
+            "cycles": 1122078529
+          },
+          {
+            "cpu_ns": 272762084,
+            "instructions": 6124301597,
+            "cycles": 1071527655
+          },
+          {
+            "cpu_ns": 283792875,
+            "instructions": 6124391026,
+            "cycles": 1128210072
+          },
+          {
+            "cpu_ns": 293375250,
+            "instructions": 6124384655,
+            "cycles": 1152644459
+          },
+          {
+            "cpu_ns": 284025875,
+            "instructions": 6124523532,
+            "cycles": 1117807097
+          },
+          {
+            "cpu_ns": 280328833,
+            "instructions": 6124334719,
+            "cycles": 1105867382
+          },
+          {
+            "cpu_ns": 273173417,
+            "instructions": 5980596597,
+            "cycles": 1086730902
+          },
+          {
+            "cpu_ns": 290745625,
+            "instructions": 6124728705,
+            "cycles": 1157071133
+          },
+          {
+            "cpu_ns": 270457125,
+            "instructions": 6124988240,
+            "cycles": 1068469328
+          },
+          {
+            "cpu_ns": 285573750,
+            "instructions": 6124477250,
+            "cycles": 1115404350
+          },
+          {
+            "cpu_ns": 282873917,
+            "instructions": 6124386218,
+            "cycles": 1122033375
+          },
+          {
+            "cpu_ns": 271859000,
+            "instructions": 5980336181,
+            "cycles": 1077294812
+          },
+          {
+            "cpu_ns": 287194500,
+            "instructions": 6124406597,
+            "cycles": 1139023946
+          },
+          {
+            "cpu_ns": 283769542,
+            "instructions": 6124291443,
+            "cycles": 1132708567
+          }
+        ],
+        "fixed": [
+          {
+            "cpu_ns": 282819541,
+            "instructions": 6124372657,
+            "cycles": 1114543595
+          },
+          {
+            "cpu_ns": 271156667,
+            "instructions": 5980287072,
+            "cycles": 1062346540
+          },
+          {
+            "cpu_ns": 278869000,
+            "instructions": 6124342525,
+            "cycles": 1105147832
+          },
+          {
+            "cpu_ns": 279176541,
+            "instructions": 6124442906,
+            "cycles": 1103222168
+          },
+          {
+            "cpu_ns": 278603125,
+            "instructions": 6124286762,
+            "cycles": 1087057841
+          },
+          {
+            "cpu_ns": 262672334,
+            "instructions": 5980334950,
+            "cycles": 1034600734
+          },
+          {
+            "cpu_ns": 293855541,
+            "instructions": 6124519953,
+            "cycles": 1146664249
+          },
+          {
+            "cpu_ns": 287996583,
+            "instructions": 6124471687,
+            "cycles": 1117311800
+          },
+          {
+            "cpu_ns": 291854667,
+            "instructions": 6124480256,
+            "cycles": 1161721588
+          },
+          {
+            "cpu_ns": 267927291,
+            "instructions": 6124613461,
+            "cycles": 1045506870
+          },
+          {
+            "cpu_ns": 269615625,
+            "instructions": 5980243524,
+            "cycles": 1066241106
+          },
+          {
+            "cpu_ns": 287638541,
+            "instructions": 6124464260,
+            "cycles": 1150387213
+          },
+          {
+            "cpu_ns": 280781584,
+            "instructions": 6124404339,
+            "cycles": 1114597054
+          },
+          {
+            "cpu_ns": 288065792,
+            "instructions": 6124480007,
+            "cycles": 1126618641
+          },
+          {
+            "cpu_ns": 290531500,
+            "instructions": 6124822909,
+            "cycles": 1141630550
+          },
+          {
+            "cpu_ns": 287959083,
+            "instructions": 6124438527,
+            "cycles": 1139406345
+          },
+          {
+            "cpu_ns": 279017000,
+            "instructions": 6124557688,
+            "cycles": 1102901262
+          },
+          {
+            "cpu_ns": 289322292,
+            "instructions": 6124366920,
+            "cycles": 1162487836
+          },
+          {
+            "cpu_ns": 275626833,
+            "instructions": 5980415803,
+            "cycles": 1102889323
+          },
+          {
+            "cpu_ns": 278529666,
+            "instructions": 6124278769,
+            "cycles": 1098145956
+          },
+          {
+            "cpu_ns": 291583875,
+            "instructions": 6124435369,
+            "cycles": 1170042191
+          }
+        ],
+        "matched_c": [
+          {
+            "cpu_ns": 264834917,
+            "instructions": 6078293111,
+            "cycles": 1041663542
+          },
+          {
+            "cpu_ns": 276160625,
+            "instructions": 5934595441,
+            "cycles": 1083670198
+          },
+          {
+            "cpu_ns": 269363916,
+            "instructions": 6078294167,
+            "cycles": 1066711469
+          },
+          {
+            "cpu_ns": 293800750,
+            "instructions": 6078346208,
+            "cycles": 1156822725
+          },
+          {
+            "cpu_ns": 273789875,
+            "instructions": 5934514958,
+            "cycles": 1078787243
+          },
+          {
+            "cpu_ns": 284635333,
+            "instructions": 6078341861,
+            "cycles": 1115818826
+          },
+          {
+            "cpu_ns": 287942709,
+            "instructions": 6078323845,
+            "cycles": 1132219835
+          },
+          {
+            "cpu_ns": 265721250,
+            "instructions": 6078337830,
+            "cycles": 1037261614
+          },
+          {
+            "cpu_ns": 268073750,
+            "instructions": 5934449072,
+            "cycles": 1057290789
+          },
+          {
+            "cpu_ns": 274861375,
+            "instructions": 5934390881,
+            "cycles": 1097921536
+          },
+          {
+            "cpu_ns": 288715000,
+            "instructions": 6078437988,
+            "cycles": 1135615177
+          },
+          {
+            "cpu_ns": 278135083,
+            "instructions": 6078347355,
+            "cycles": 1084667012
+          },
+          {
+            "cpu_ns": 277253625,
+            "instructions": 6078273417,
+            "cycles": 1092553275
+          },
+          {
+            "cpu_ns": 279316834,
+            "instructions": 6078551520,
+            "cycles": 1104594192
+          },
+          {
+            "cpu_ns": 280479042,
+            "instructions": 6078272028,
+            "cycles": 1121779936
+          },
+          {
+            "cpu_ns": 283042333,
+            "instructions": 6078638536,
+            "cycles": 1122785740
+          },
+          {
+            "cpu_ns": 289423625,
+            "instructions": 6078414407,
+            "cycles": 1131414207
+          },
+          {
+            "cpu_ns": 292359625,
+            "instructions": 6078360982,
+            "cycles": 1142999206
+          },
+          {
+            "cpu_ns": 289559041,
+            "instructions": 6078274229,
+            "cycles": 1138978490
+          },
+          {
+            "cpu_ns": 289606917,
+            "instructions": 6078664499,
+            "cycles": 1109634694
+          },
+          {
+            "cpu_ns": 278443209,
+            "instructions": 5934308158,
+            "cycles": 1111566429
+          }
+        ]
+      },
+      "median": {
+        "before": {
+          "cpu_ns": 283769542,
+          "instructions": 6124386218,
+          "cycles": 1121056572
+        },
+        "fixed": {
+          "cpu_ns": 280781584,
+          "instructions": 6124435369,
+          "cycles": 1114543595
+        },
+        "matched_c": {
+          "cpu_ns": 279316834,
+          "instructions": 6078323845,
+          "cycles": 1109634694
+        }
+      }
+    },
+    {
+      "workload": "rethrow-many",
+      "n": 2000000,
+      "samples": {
+        "before": [
+          {
+            "cpu_ns": 275937917,
+            "instructions": 6124272722,
+            "cycles": 1056220421
+          },
+          {
+            "cpu_ns": 279895250,
+            "instructions": 5980277217,
+            "cycles": 1099811759
+          },
+          {
+            "cpu_ns": 281662042,
+            "instructions": 6124514418,
+            "cycles": 1094504569
+          },
+          {
+            "cpu_ns": 280277500,
+            "instructions": 5980670599,
+            "cycles": 1106257013
+          },
+          {
+            "cpu_ns": 272020416,
+            "instructions": 5980215270,
+            "cycles": 1059565875
+          },
+          {
+            "cpu_ns": 284369666,
+            "instructions": 5980525199,
+            "cycles": 1121513007
+          },
+          {
+            "cpu_ns": 303323625,
+            "instructions": 5980205225,
+            "cycles": 1196805327
+          },
+          {
+            "cpu_ns": 297286875,
+            "instructions": 6124548770,
+            "cycles": 1164755884
+          },
+          {
+            "cpu_ns": 277778583,
+            "instructions": 6124205175,
+            "cycles": 1089562102
+          },
+          {
+            "cpu_ns": 285698292,
+            "instructions": 6124293328,
+            "cycles": 1118587366
+          },
+          {
+            "cpu_ns": 298959125,
+            "instructions": 5980524239,
+            "cycles": 1171665318
+          },
+          {
+            "cpu_ns": 291630584,
+            "instructions": 5980540669,
+            "cycles": 1079093666
+          },
+          {
+            "cpu_ns": 272981333,
+            "instructions": 5980401441,
+            "cycles": 1046416753
+          },
+          {
+            "cpu_ns": 284454333,
+            "instructions": 6124364133,
+            "cycles": 1101836500
+          },
+          {
+            "cpu_ns": 279895709,
+            "instructions": 6124322677,
+            "cycles": 1096782126
+          },
+          {
+            "cpu_ns": 281720000,
+            "instructions": 5980314214,
+            "cycles": 1103462168
+          },
+          {
+            "cpu_ns": 284321583,
+            "instructions": 5980240474,
+            "cycles": 1140479890
+          },
+          {
+            "cpu_ns": 278063042,
+            "instructions": 6124183852,
+            "cycles": 1075523706
+          },
+          {
+            "cpu_ns": 280590792,
+            "instructions": 6124270872,
+            "cycles": 1079207930
+          },
+          {
+            "cpu_ns": 277680458,
+            "instructions": 5980672426,
+            "cycles": 1087317960
+          },
+          {
+            "cpu_ns": 284175709,
+            "instructions": 6124439054,
+            "cycles": 1110654382
+          }
+        ],
+        "fixed": [
+          {
+            "cpu_ns": 286694708,
+            "instructions": 5980248980,
+            "cycles": 1114753421
+          },
+          {
+            "cpu_ns": 278411833,
+            "instructions": 5980320302,
+            "cycles": 1101103398
+          },
+          {
+            "cpu_ns": 297418667,
+            "instructions": 6124376133,
+            "cycles": 1182661055
+          },
+          {
+            "cpu_ns": 298963209,
+            "instructions": 6124248032,
+            "cycles": 1173190660
+          },
+          {
+            "cpu_ns": 291754125,
+            "instructions": 5980653687,
+            "cycles": 1154399640
+          },
+          {
+            "cpu_ns": 291093792,
+            "instructions": 6124344057,
+            "cycles": 1150616253
+          },
+          {
+            "cpu_ns": 277627291,
+            "instructions": 6124197972,
+            "cycles": 1089171172
+          },
+          {
+            "cpu_ns": 279311167,
+            "instructions": 6124279725,
+            "cycles": 1085701096
+          },
+          {
+            "cpu_ns": 271705250,
+            "instructions": 5980191899,
+            "cycles": 1063807099
+          },
+          {
+            "cpu_ns": 287492167,
+            "instructions": 6124375590,
+            "cycles": 1129132020
+          },
+          {
+            "cpu_ns": 296492708,
+            "instructions": 5980233419,
+            "cycles": 1135151351
+          },
+          {
+            "cpu_ns": 303252166,
+            "instructions": 5836404591,
+            "cycles": 1096234175
+          },
+          {
+            "cpu_ns": 289761958,
+            "instructions": 6124254134,
+            "cycles": 1139176927
+          },
+          {
+            "cpu_ns": 273661500,
+            "instructions": 5980271378,
+            "cycles": 1068136868
+          },
+          {
+            "cpu_ns": 285113334,
+            "instructions": 5836945685,
+            "cycles": 1125267705
+          },
+          {
+            "cpu_ns": 278810416,
+            "instructions": 5980279979,
+            "cycles": 1088931335
+          },
+          {
+            "cpu_ns": 283436750,
+            "instructions": 6124405191,
+            "cycles": 1108598128
+          },
+          {
+            "cpu_ns": 268726792,
+            "instructions": 5980216960,
+            "cycles": 1051036520
+          },
+          {
+            "cpu_ns": 295275917,
+            "instructions": 6124341658,
+            "cycles": 1146514146
+          },
+          {
+            "cpu_ns": 290001958,
+            "instructions": 6124218595,
+            "cycles": 1129961362
+          },
+          {
+            "cpu_ns": 287905042,
+            "instructions": 5980246936,
+            "cycles": 1137860352
+          }
+        ],
+        "matched_c": [
+          {
+            "cpu_ns": 310771416,
+            "instructions": 6133221341,
+            "cycles": 1216204819
+          },
+          {
+            "cpu_ns": 309586083,
+            "instructions": 5988292640,
+            "cycles": 1219934829
+          },
+          {
+            "cpu_ns": 324676375,
+            "instructions": 6132266249,
+            "cycles": 1282666179
+          },
+          {
+            "cpu_ns": 299643291,
+            "instructions": 5988290740,
+            "cycles": 1193325928
+          },
+          {
+            "cpu_ns": 306274166,
+            "instructions": 6132383644,
+            "cycles": 1223727076
+          },
+          {
+            "cpu_ns": 307365292,
+            "instructions": 6132389457,
+            "cycles": 1214498208
+          },
+          {
+            "cpu_ns": 306576542,
+            "instructions": 6132405873,
+            "cycles": 1196826386
+          },
+          {
+            "cpu_ns": 316815083,
+            "instructions": 6132495737,
+            "cycles": 1226325540
+          },
+          {
+            "cpu_ns": 314136208,
+            "instructions": 6132434518,
+            "cycles": 1242504605
+          },
+          {
+            "cpu_ns": 311388500,
+            "instructions": 6132644232,
+            "cycles": 1218001835
+          },
+          {
+            "cpu_ns": 328942542,
+            "instructions": 6132327348,
+            "cycles": 1298643154
+          },
+          {
+            "cpu_ns": 333067375,
+            "instructions": 6133893337,
+            "cycles": 1222279641
+          },
+          {
+            "cpu_ns": 311386833,
+            "instructions": 5988896887,
+            "cycles": 1224176635
+          },
+          {
+            "cpu_ns": 315014583,
+            "instructions": 6276436582,
+            "cycles": 1229581094
+          },
+          {
+            "cpu_ns": 318159333,
+            "instructions": 6132251962,
+            "cycles": 1245526556
+          },
+          {
+            "cpu_ns": 305619333,
+            "instructions": 6132579081,
+            "cycles": 1206629791
+          },
+          {
+            "cpu_ns": 323389000,
+            "instructions": 6132210370,
+            "cycles": 1248341968
+          },
+          {
+            "cpu_ns": 313045958,
+            "instructions": 6133233789,
+            "cycles": 1234499651
+          },
+          {
+            "cpu_ns": 319616708,
+            "instructions": 6132295957,
+            "cycles": 1240340800
+          },
+          {
+            "cpu_ns": 322486584,
+            "instructions": 6132276522,
+            "cycles": 1274559975
+          },
+          {
+            "cpu_ns": 307080667,
+            "instructions": 6132375322,
+            "cycles": 1211959937
+          }
+        ]
+      },
+      "median": {
+        "before": {
+          "cpu_ns": 281662042,
+          "instructions": 5980672426,
+          "cycles": 1099811759
+        },
+        "fixed": {
+          "cpu_ns": 287492167,
+          "instructions": 5980653687,
+          "cycles": 1125267705
+        },
+        "matched_c": {
+          "cpu_ns": 313045958,
+          "instructions": 6132383644,
+          "cycles": 1224176635
+        }
+      }
+    }
+  ]
+}

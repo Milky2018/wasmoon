@@ -1,0 +1,43 @@
+[
+  {
+    "command": [
+      "moon",
+      "info"
+    ],
+    "exit_code": 0,
+    "log": "final-info.log"
+  },
+  {
+    "command": [
+      "moon",
+      "fmt"
+    ],
+    "exit_code": 0,
+    "log": "final-fmt.log"
+  },
+  {
+    "command": [
+      "moon",
+      "check",
+      "--target",
+      "native",
+      "--warn-list",
+      "+73",
+      "--deny-warn"
+    ],
+    "exit_code": 0,
+    "log": "final-check.log"
+  },
+  {
+    "command": [
+      "moon",
+      "test",
+      "--target",
+      "native",
+      "--target-dir",
+      "target/exception-perf/array-tests"
+    ],
+    "exit_code": 0,
+    "log": "final-native-tests.log"
+  }
+]

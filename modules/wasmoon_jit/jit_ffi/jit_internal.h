@@ -451,9 +451,7 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, i
 
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value);
 
-void gc_record_runtime_type(jit_context_t *ctx, GcHeap *heap, int32_t ref, int32_t local_type);
 
-struct native_exception_arena *exception_arena_new(void);
 void exception_arena_release(struct native_exception_arena *arena);
 
 void *native_fiber_alloc_c(int64_t (*entry)(void *), void *closure, int64_t stack_size);

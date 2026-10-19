@@ -1,0 +1,50 @@
+[
+  {
+    "path": "final-cli-counters",
+    "workload": "snapshots",
+    "iterations": 300000,
+    "extra_instructions_per_iteration": 66.32257666666666
+  },
+  {
+    "path": "final-cli-counters",
+    "workload": "snapshots-word",
+    "iterations": 300000,
+    "extra_instructions_per_iteration": 64.05825333333334
+  },
+  {
+    "path": "final-cli-counters",
+    "workload": "rethrow",
+    "iterations": 2000000,
+    "extra_instructions_per_iteration": 22.9920225
+  },
+  {
+    "path": "final-cli-counters",
+    "workload": "rethrow-many",
+    "iterations": 2000000,
+    "extra_instructions_per_iteration": -76.029664
+  },
+  {
+    "path": "final-store-counters",
+    "workload": "snapshots",
+    "iterations": 300000,
+    "extra_instructions_per_iteration": 57.85652
+  },
+  {
+    "path": "final-store-counters",
+    "workload": "snapshots-word",
+    "iterations": 300000,
+    "extra_instructions_per_iteration": 62.98876666666666
+  },
+  {
+    "path": "final-store-counters",
+    "workload": "rethrow",
+    "iterations": 2000000,
+    "extra_instructions_per_iteration": 23.055762
+  },
+  {
+    "path": "final-store-counters",
+    "workload": "rethrow-many",
+    "iterations": 2000000,
+    "extra_instructions_per_iteration": -75.8649785
+  }
+]

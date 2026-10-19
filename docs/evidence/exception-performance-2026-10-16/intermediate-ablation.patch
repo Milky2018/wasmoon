@@ -1,0 +1,69 @@
+--- a/modules/wasmoon_jit/jit_ffi/exceptions.mbt
++++ b/modules/wasmoon_jit/jit_ffi/exceptions.mbt
+@@ -23,7 +23,11 @@
+ }
+
+ ///|
++extern "c" fn exception_perf_flags() -> Int32 = "wasmoon_exception_perf_flags"
++
++///|
+ priv struct ExceptionState {
++  perf_flags : Int32
+   // Numeric metadata is unboxed; owning FFI handles cannot be value fields.
+   // Metadata and physical slots have identical lengths. Only this registry
+   // appends, retires or compacts them; native storage has no identity policy.
+@@ -53,6 +57,7 @@
+ ///|
+ fn ExceptionState::new() -> ExceptionState {
+   {
++    perf_flags: exception_perf_flags(),
+     entries: [],
+     storage: ExceptionStorage::new(),
+     dead_entries: 0,
+@@ -170,7 +175,7 @@
+   guard !self.closed && count >= 0 && self.next_reference < 0x7fffffff else {
+     return -9
+   }
+-  if self.last_tag != tag {
++  if (self.perf_flags & 1) != 0 || self.last_tag != tag {
+     self.cache_layout(tag)
+   }
+   let mask = match self.last_mask {
+@@ -241,7 +246,7 @@
+ ///|
+ fn ExceptionState::lookup(self : ExceptionState, reference : Int64) -> Int64 {
+   let hint = self.lookup_hint
+-  if hint >= 0 && hint < self.entries.length() {
++  if (self.perf_flags & 2) == 0 && hint >= 0 && hint < self.entries.length() {
+     let entry = self.entries[hint]
+     // A hint may be stale after compaction. Validate the complete identity and
+     // live bit before returning a slot; retirement never reuses an identity.
+@@ -266,7 +271,7 @@
+
+ ///|
+ fn ExceptionState::layout(self : ExceptionState, tag : Int32) -> Int64 {
+-  if self.last_tag != tag {
++  if (self.perf_flags & 1) != 0 || self.last_tag != tag {
+     self.cache_layout(tag)
+   }
+   match self.last_mask {
+@@ -537,7 +542,7 @@
+   guard self.state.storage.bind_quotas(bytes, objects) else { return false }
+   self.state.bytes = bytes
+   self.state.objects = objects
+-  self.state.quotas_bound = true
++  self.state.quotas_bound = (self.state.perf_flags & 4) == 0
+   true
+ }
+
+--- a/modules/wasmoon_jit/jit_ffi/exception.c
++++ b/modules/wasmoon_jit/jit_ffi/exception.c
+@@ -833,3 +833,8 @@
+ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_begin);
+ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_end);
+ #endif
++
++MOONBIT_FFI_EXPORT int32_t wasmoon_exception_perf_flags(void) {
++    const char *flags = getenv("WASMOON_EXCEPTION_PERF_FLAGS");
++    return flags ? atoi(flags) : 0;
++}

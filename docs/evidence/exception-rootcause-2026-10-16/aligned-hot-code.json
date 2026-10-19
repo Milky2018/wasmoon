@@ -1,0 +1,12 @@
+{
+  "_exception_throw_ref_impl": true,
+  "_exception_try_begin_impl": true,
+  "_exception_try_end_impl": true,
+  "_exception_spill_locals_impl": true,
+  "_get_current_jit_context": true,
+  "_jit_current_trap_activation": true,
+  "_wasmoon_jit_exception_throw_ref": true,
+  "_wasmoon_jit_exception_try_begin": true,
+  "_wasmoon_jit_exception_try_end": true,
+  "__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup": false
+}

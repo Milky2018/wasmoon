@@ -1,0 +1,152 @@
+int64_t _M0MP39Milky201812wasmoon__jit8jit__ffi15ExceptionBridge3newC87958l258(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L5stateS37882,
+  void* _M0L7requestS37883
+) {
+  #line 258 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  #line 258 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  return _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert(_M0L5stateS37882, _M0L7requestS37883);
+}
+
+int64_t _M0MP39Milky201812wasmoon__jit8jit__ffi15ExceptionBridge3newC87957l259(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L5stateS37884,
+  int64_t _M0L9referenceS37885
+) {
+  #line 259 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  #line 259 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  return _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup(_M0L5stateS37884, _M0L9referenceS37885);
+}
+
+int64_t _M0MP39Milky201812wasmoon__jit8jit__ffi15ExceptionBridge3newC87956l260(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L5stateS37886,
+  int32_t _M0L3tagS37887
+) {
+  #line 260 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  #line 260 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  return _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6layout(_M0L5stateS37886, _M0L3tagS37887);
+}
+
+void _M0MP39Milky201812wasmoon__jit8jit__ffi15ExceptionBridge3newC87955l261(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L5stateS37888,
+  int64_t _M0L9referenceS37889
+) {
+  #line 261 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  #line 261 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState4mark(_M0L5stateS37888, _M0L9referenceS37889);
+}
+
+int32_t _M0MP39Milky201812wasmoon__jit8jit__ffi15ExceptionBridge3newC87954l262(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L5stateS37890
+) {
+  #line 262 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  #line 262 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  return _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13marked__count(_M0L5stateS37890);
+}
+
+void _M0MP39Milky201812wasmoon__jit8jit__ffi15ExceptionBridge3newC87953l263(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L5stateS37891,
+  void* _M0L6outputS37892
+) {
+  #line 263 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  #line 263 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState12copy__marked(_M0L5stateS37891, _M0L6outputS37892);
+}
+
+void _M0MP39Milky201812wasmoon__jit8jit__ffi15ExceptionBridge3newC87952l264(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L5stateS37893
+) {
+  #line 264 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  #line 264 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState12reset__marks(_M0L5stateS37893);
+}
+
+void _M0MP39Milky201812wasmoon__jit8jit__ffi15ExceptionBridge3newC87951l265(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L5stateS37894,
+  int64_t _M0L4heapS37895
+) {
+  #line 265 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  #line 265 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState5sweep(_M0L5stateS37894, _M0L4heapS37895);
+}
+
+int64_t _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L4selfS37839,
+  int64_t _M0L9referenceS37840
+) {
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntry* _M0L5entryS37837;
+  struct _M0TPB3MapGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE* _M0L7entriesS87911;
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntry* _M0L7_2abindS37838;
+  void* _M0L7payloadS87910;
+  int32_t _M0L6_2acntS110906;
+  int64_t _result_119234;
+  #line 169 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _M0L7entriesS87911 = _M0L4selfS37839->$0;
+  #line 170 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _M0L7_2abindS37838
+  = _M0MPB3Map3getGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE(_M0L7entriesS87911, _M0L9referenceS37840);
+  if (_M0L7_2abindS37838 == 0) {
+    if (_M0L7_2abindS37838) {
+      moonbit_decref_cycle_free(_M0L7_2abindS37838);
+    }
+    return 0ll;
+  } else {
+    struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntry* _M0L7_2aSomeS37841 =
+      _M0L7_2abindS37838;
+    struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntry* _M0L8_2aentryS37842 =
+      _M0L7_2aSomeS37841;
+    _M0L5entryS37837 = _M0L8_2aentryS37842;
+    goto join_37836;
+  }
+  join_37836:;
+  _M0L7payloadS87910 = _M0L5entryS37837->$0;
+  _M0L6_2acntS110906
+  = Moonbit_rc_count(Moonbit_object_header(_M0L5entryS37837));
+  if (_M0L6_2acntS110906 > 1) {
+    int32_t _M0L11_2anew__cntS110907 = _M0L6_2acntS110906 - 1;
+    Moonbit_set_rc_count(Moonbit_object_header(_M0L5entryS37837), _M0L11_2anew__cntS110907);
+    if (_M0L7payloadS87910) {
+      moonbit_incref(_M0L7payloadS87910);
+    }
+  } else if (_M0L6_2acntS110906 == 1) {
+    #line 170 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+    moonbit_free(_M0L5entryS37837);
+  }
+  #line 171 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _result_119234
+  = _M0MP39Milky201812wasmoon__jit8jit__ffi16ExceptionPayload7address(_M0L7payloadS87910);
+  if (_M0L7payloadS87910) {
+    moonbit_decref(_M0L7payloadS87910);
+  }
+  return _result_119234;
+}
+
+int32_t _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState4mark(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionState* _M0L4selfS37853,
+  int64_t _M0L9referenceS37854
+) {
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntry* _M0L5entryS37851;
+  struct _M0TPB3MapGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE* _M0L7entriesS87913;
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntry* _M0L7_2abindS37852;
+  #line 185 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _M0L7entriesS87913 = _M0L4selfS37853->$0;
+  #line 186 "./modules/wasmoon_jit/jit_ffi/exceptions.mbt"
+  _M0L7_2abindS37852
+  = _M0MPB3Map3getGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE(_M0L7entriesS87913, _M0L9referenceS37854);
+  if (_M0L7_2abindS37852 == 0) {
+    if (_M0L7_2abindS37852) {
+      moonbit_decref_cycle_free(_M0L7_2abindS37852);
+    }
+  } else {
+    struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntry* _M0L7_2aSomeS37855 =
+      _M0L7_2abindS37852;
+    struct _M0TP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntry* _M0L8_2aentryS37856 =
+      _M0L7_2aSomeS37855;
+    _M0L5entryS37851 = _M0L8_2aentryS37856;
+    goto join_37850;
+  }
+  goto joinlet_119230;
+  join_37850:;
+  _M0L5entryS37851->$1 = 1;
+  moonbit_decref_cycle_free(_M0L5entryS37851);
+  joinlet_119230:;
+  return 0;
+}

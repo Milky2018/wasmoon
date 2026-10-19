@@ -1,0 +1,41 @@
+{
+  "revision": "d9279052ed577537da1991ba5000bea26cd55760",
+  "source_dirty": true,
+  "delivery": false,
+  "platform": "macOS ARM64",
+  "files": {
+    "modules/wasmoon/sanitizer_testsuite/runtime_failures_test.mbt": "8e6a2dbdbe3ff78069dfc92fffbe9515abbde0f65b1a4e46a0a11bfd9b96de01",
+    "modules/wasmoon_jit/context_layout_wbtest.mbt": "20334046702cce5c779637a573e32a16c5ade097f141cbb01c96e0582e741a02",
+    "modules/wasmoon_jit/jit_ffi/context.mbt": "0c821cd6a11d870de7546967df6d7908ca100430e73f3af325405fdf835b1aa6",
+    "modules/wasmoon_jit/jit_ffi/exception.c": "8c688624dc8c447ad16238a1a925b8845068020d275fc8d5edec74cf3316ee72",
+    "modules/wasmoon_jit/jit_ffi/exceptions.mbt": "603e2155c8a86018041f1e0ed9840f0b56277295cb597e9788cc298e34bdd1d4",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.c": "a7feeaef37c0fa2d4a470ff3f6ab5560f3938408ab398dea32c68a8aba37707f",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.h": "e50ea012c5855dfad4393592ca966eb143fe54712280f2156f27548ef4bae73e",
+    "modules/wasmoon_jit/jit_ffi/jit_context.h": "85098da28c81339f1b974ed51b6446a7078d7352e43c348aaa2f1aab08fbe4b5",
+    "modules/wasmoon_jit/jit_ffi/jit_internal.h": "4dc7708995cdbb5c062c2cd3fb96ad039b2d4aa1d42f08de9754d663a7bfa3f6",
+    "modules/wasmoon_jit/jit_ffi/pkg.generated.mbti": "9d022c2718489a13faf329b9ff61e7877c5f0527119d8301e440e17bbd750ddf",
+    "modules/wasmoon_jit/jit_ffi/quota.mbt": "3b703e0a24269312c0bf1a1d9b74e13fc5f96959258d9f8a6958788b44343237",
+    "modules/wasmoon_jit/jit_ffi/testing/failure_test_support.c": "bdc1eee4711f3d9ff51d33a96d071c5b0d08028f2d43d100858fe98ece51b736",
+    "modules/wasmoon_jit/native_exception.mbt": "82fbf6f5ce3394aaba79e7e5c512b08f238acc91dcd6df4b1308052fdd710dd2",
+    "modules/wasmoon_jit/native_handles_test.mbt": "66a93af93ff7233564a193e60a984be03dd2f4048cbd9a53d4aab39dffcbf906",
+    "modules/wasmoon_jit/native_test_support/trap.mbt": "d72624ef212b64eba491dee1fe4d9bff0a979f88123ae553ce93341081d2c396"
+  },
+  "cli_sha256": "284a3e769885fec0098ff1e87d51790f9fb786afb55dd9ec9b4a041bd5a6c7ec",
+  "sanitizer_source_matches": {
+    "modules/wasmoon/sanitizer_testsuite/runtime_failures_test.mbt": true,
+    "modules/wasmoon_jit/context_layout_wbtest.mbt": true,
+    "modules/wasmoon_jit/jit_ffi/context.mbt": true,
+    "modules/wasmoon_jit/jit_ffi/exception.c": true,
+    "modules/wasmoon_jit/jit_ffi/exceptions.mbt": true,
+    "modules/wasmoon_jit/jit_ffi/gc_heap.c": true,
+    "modules/wasmoon_jit/jit_ffi/gc_heap.h": true,
+    "modules/wasmoon_jit/jit_ffi/jit_context.h": true,
+    "modules/wasmoon_jit/jit_ffi/jit_internal.h": true,
+    "modules/wasmoon_jit/jit_ffi/pkg.generated.mbti": true,
+    "modules/wasmoon_jit/jit_ffi/quota.mbt": true,
+    "modules/wasmoon_jit/jit_ffi/testing/failure_test_support.c": true,
+    "modules/wasmoon_jit/native_exception.mbt": true,
+    "modules/wasmoon_jit/native_handles_test.mbt": true,
+    "modules/wasmoon_jit/native_test_support/trap.mbt": true
+  }
+}

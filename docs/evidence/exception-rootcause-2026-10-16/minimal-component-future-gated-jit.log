@@ -1,0 +1,25 @@
+Using suite 'future-gated' from https://github.com/WebAssembly/component-model.git@d346e5a335b772909ac4c8072f56d7ed7ea49927
+Found 12 .wast test files in '/Users/zhengyu/Documents/projects/wasmoon/component-spec/upstream'
+Core execution mode: JIT
+Timeout settings: validate=20s(base 20s), script=30s(base 30s), tools=30s(base 30s), qemu_relax=False
+async/big-interleaving-test.wast                   [PASS] (pass=55 skip=0)
+async/cancel-subtask.wast                          [PASS] (pass=2 skip=0)
+async/cancellable.wast                             [PASS] (pass=2 skip=0)
+async/sync-barges-in.wast                          [PASS] (pass=3 skip=0)
+Applying documented correction: async/sync-streams.wast (/Users/zhengyu/Documents/projects/wasmoon/component-spec/corrections/async/sync-streams.wast)
+async/sync-streams.wast                            [PASS] (pass=2 skip=0)
+Applying documented correction: async/trap-if-block-and-sync.wast (/Users/zhengyu/Documents/projects/wasmoon/component-spec/corrections/async/trap-if-block-and-sync.wast)
+async/trap-if-block-and-sync.wast                  [PASS] (pass=47 skip=0)
+async/trap-if-sync-and-waitable-set.wast           [PASS] (pass=27 skip=0)
+binary/binary.wast                                 [PASS] (pass=122 skip=0)
+validation/attributes.wast                         [PASS] (pass=29 skip=0)
+validation/indicies.wast                           [PASS] (pass=17 skip=0)
+values/post-return.wast                            [PASS] (pass=67 skip=0)
+values/variants.wast                               [PASS] (pass=14 skip=0)
+
+Summary:
+  Files passed:  12/12
+  Files failed:  0
+  Commands passed:  387
+  Commands failed:  0
+  Commands skipped: 0

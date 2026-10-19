@@ -1,0 +1,14 @@
+--- a/modules/wasmoon_jit/jit_ffi/exception.c
++++ b/modules/wasmoon_jit/jit_ffi/exception.c
+@@ -173,7 +173,10 @@
+     if (request->heap && (count || traced)) {
+         int64_t *roots = NULL;
+         int32_t slots = count ? count : 1;
+-        if (!gc_heap_register_parked_roots(request->heap, slots, &entry.root_registration, &roots)) goto failed;
++        // Keep the out-parameter separate so the pending record can stay scalar.
++        void *registration = NULL;
++        if (!gc_heap_register_parked_roots(request->heap, slots, &registration, &roots)) goto failed;
++        entry.root_registration = registration;
+         int32_t mask_count = Moonbit_array_length(mask);
+         for (int32_t i = 0; i < slots; ++i)
+             roots[i] = i < count && (!mask_count || mask[i]) ? entry.values[i] : 0;

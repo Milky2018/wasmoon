@@ -32,5 +32,13 @@ options(
     "stack_switch_aarch64.S",
     "stack_switch_x86_64.S",
     "dwarf.c",
+    "testing/atomic_test_support.c",
+    "testing/context_test_support.c",
+    "testing/failure_test_support.c",
+    "testing/fiber_register_probe_aarch64.S",
+    "testing/fiber_register_probe_x86_64.S",
+    "testing/fiber_test_support.c",
+    "testing/test_guest_bridges.S",
+    "testing/trap_test_support.c",
   ],
 )

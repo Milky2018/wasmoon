@@ -1,0 +1,34 @@
+Using suite 'stable-0.2' from https://github.com/WebAssembly/component-model.git@d346e5a335b772909ac4c8072f56d7ed7ea49927
+Found 23 .wast test files in '/Users/zhengyu/Documents/projects/wasmoon/component-spec/upstream'
+Core execution mode: interpreter
+Timeout settings: validate=20s(base 20s), script=30s(base 30s), tools=30s(base 30s), qemu_relax=False
+linking/link-time-virtualization.wast              [PASS] (pass=8 skip=0)
+linking/shared-everything-dynamic-linking.wast     [PASS] (pass=14 skip=0)
+linking/tags.wast                                  [PASS] (pass=12 skip=0)
+linking/unit.wast                                  [PASS] (pass=238 skip=0)
+resources/borrows.wast                             [PASS] (pass=5 skip=0)
+resources/handle-table.wast                        [PASS] (pass=29 skip=0)
+resources/multiple-resources.wast                  [PASS] (pass=2 skip=0)
+validation/abi.wast                                [PASS] (pass=23 skip=0)
+validation/annotated-names.wast                    [PASS] (pass=36 skip=0)
+validation/core-modules.wast                       [PASS] (pass=11 skip=0)
+validation/defined-types.wast                      [PASS] (pass=47 skip=0)
+validation/extern-names.wast                       [PASS] (pass=12 skip=0)
+validation/external-visibility.wast                [PASS] (pass=62 skip=0)
+validation/instantiation.wast                      [PASS] (pass=82 skip=0)
+validation/kebab.wast                              [PASS] (pass=31 skip=0)
+validation/outer-alias.wast                        [PASS] (pass=31 skip=0)
+validation/resources.wast                          [PASS] (pass=72 skip=0)
+values/alignment.wast                              [PASS] (pass=25 skip=0)
+values/concat.wast                                 [PASS] (pass=36 skip=0)
+values/numerics.wast                               [PASS] (pass=26 skip=0)
+values/realloc.wast                                [PASS] (pass=16 skip=0)
+values/strings.wast                                [PASS] (pass=17 skip=0)
+values/transcode.wast                              [PASS] (pass=10 skip=0)
+
+Summary:
+  Files passed:  23/23
+  Files failed:  0
+  Commands passed:  845
+  Commands failed:  0
+  Commands skipped: 0

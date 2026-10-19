@@ -53,6 +53,7 @@ pub fn GCHeapHandle::bind_reservations(Self, Reservation, Reservation) -> Bool
 pub fn GCHeapHandle::bind_root_visitor(Self, (Int, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
 pub fn GCHeapHandle::clear_root_visitor(Self) -> Unit
 pub fn GCHeapHandle::is_null(Self) -> Bool
+pub fn GCHeapHandle::new(Int64) -> Self
 pub fn GCHeapHandle::null() -> Self
 pub fn GCHeapHandle::quota_denied(Self) -> Int
 pub fn GCHeapHandle::reference_candidates(Self, Int) -> FixedArray[Int64]
@@ -61,6 +62,7 @@ pub impl @debug.Debug for GCHeapHandle
 
 pub type JITContext
 pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::bind_exception_arena(Self, NativeExceptionArena) -> Unit
 pub fn JITContext::bind_gc_function_addresses(Self, FixedArray[Int64]) -> Unit
 pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit raise GCMetadataError
 pub fn JITContext::bind_gc_safepoints(Self, Int, Bytes, FixedArray[Int]) -> Bool
@@ -91,7 +93,9 @@ pub fn NativeContinuationArena::is_live(Self, Int64) -> Bool
 pub fn NativeContinuationArena::new() -> Self raise NativeAllocationError
 pub fn NativeContinuationArena::reclaim_retired(Self) -> Unit
 
-type NativeExceptionArena
+pub struct NativeExceptionArena {
+  // private fields
+}
 pub fn NativeExceptionArena::bind_quotas(Self, Quota, Quota) -> Bool
 pub fn NativeExceptionArena::clear(Self) -> Unit
 pub fn NativeExceptionArena::define_tag(Self, Int, ArrayView[@types.ValueType]) -> Bool

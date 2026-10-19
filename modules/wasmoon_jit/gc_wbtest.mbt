@@ -344,7 +344,7 @@ test "gc: barrier write counter tracks reference stores" {
 ///|
 test "gc: fault injection fails configured allocation attempt" {
   gc_debug_set_fail_alloc(2)
-  let heap_ptr = c_gc_heap_new(1024L)
+  let heap_ptr = GCHeapHandle::new(1024L)
   // One field, as the [lo, hi] word pair a slot is made of.
   let fields : FixedArray[Int64] = [1L, 0L]
 

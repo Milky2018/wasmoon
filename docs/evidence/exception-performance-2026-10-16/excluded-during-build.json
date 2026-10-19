@@ -1,0 +1,451 @@
+{
+  "method": "Five paired serial runs after one warmup, rotating binary order; guest elapsed ns from WASIp1 monotonic clock around the loop, plus whole CLI wall seconds; compilation/startup/teardown excluded only from guest time. No concurrent builds.",
+  "binaries": {
+    "baseline": {
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/_build/native-policy/wasmoon-candidate",
+      "sha256": "881277fd0b1ad9cf0c360535789c7367c95309b3c3aa92013ba71c13526ef917"
+    },
+    "before": {
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/_build/exception-perf/wasmoon-before",
+      "sha256": "284a3e769885fec0098ff1e87d51790f9fb786afb55dd9ec9b4a041bd5a6c7ec"
+    },
+    "pool": {
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/_build/exception-perf/wasmoon-pool",
+      "sha256": "fe8ee698af604d45b2c207e35d20f20f89bbfdc8f85bc0209239d5dd8d85a4f9"
+    }
+  },
+  "results": [
+    {
+      "workload": "snapshots",
+      "count": 20000,
+      "samples": {
+        "baseline": [
+          {
+            "guest_ns": 1913000,
+            "wall_s": 0.006609958014450967
+          },
+          {
+            "guest_ns": 1977000,
+            "wall_s": 0.006390750058926642
+          },
+          {
+            "guest_ns": 2152000,
+            "wall_s": 0.007109457976184785
+          },
+          {
+            "guest_ns": 1898000,
+            "wall_s": 0.0073659580666571856
+          },
+          {
+            "guest_ns": 2321000,
+            "wall_s": 0.007981166942045093
+          }
+        ],
+        "before": [
+          {
+            "guest_ns": 3308000,
+            "wall_s": 0.00816241605207324
+          },
+          {
+            "guest_ns": 3248000,
+            "wall_s": 0.007879249984398484
+          },
+          {
+            "guest_ns": 3426000,
+            "wall_s": 0.00825704203452915
+          },
+          {
+            "guest_ns": 3221000,
+            "wall_s": 0.008562875096686184
+          },
+          {
+            "guest_ns": 4007000,
+            "wall_s": 0.009868582943454385
+          }
+        ],
+        "pool": [
+          {
+            "guest_ns": 2349000,
+            "wall_s": 0.007037417031824589
+          },
+          {
+            "guest_ns": 2350000,
+            "wall_s": 0.007155583007261157
+          },
+          {
+            "guest_ns": 2179000,
+            "wall_s": 0.0071972080040723085
+          },
+          {
+            "guest_ns": 2255000,
+            "wall_s": 0.008367166970856488
+          },
+          {
+            "guest_ns": 2271000,
+            "wall_s": 0.007713875034824014
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "guest_ns": 1977000,
+          "wall_s": 0.007109457976184785
+        },
+        "before": {
+          "guest_ns": 3308000,
+          "wall_s": 0.00825704203452915
+        },
+        "pool": {
+          "guest_ns": 2271000,
+          "wall_s": 0.0071972080040723085
+        }
+      }
+    },
+    {
+      "workload": "snapshots",
+      "count": 100000,
+      "samples": {
+        "baseline": [
+          {
+            "guest_ns": 11672000,
+            "wall_s": 0.017097083036787808
+          },
+          {
+            "guest_ns": 10295000,
+            "wall_s": 0.015572750009596348
+          },
+          {
+            "guest_ns": 10123000,
+            "wall_s": 0.01678495795931667
+          },
+          {
+            "guest_ns": 11429000,
+            "wall_s": 0.017744416021741927
+          },
+          {
+            "guest_ns": 10520000,
+            "wall_s": 0.01663033291697502
+          }
+        ],
+        "before": [
+          {
+            "guest_ns": 18797000,
+            "wall_s": 0.024799334001727402
+          },
+          {
+            "guest_ns": 20359000,
+            "wall_s": 0.0262236250564456
+          },
+          {
+            "guest_ns": 17455000,
+            "wall_s": 0.023364000022411346
+          },
+          {
+            "guest_ns": 18082000,
+            "wall_s": 0.024302624980919063
+          },
+          {
+            "guest_ns": 18720000,
+            "wall_s": 0.024670916027389467
+          }
+        ],
+        "pool": [
+          {
+            "guest_ns": 12861000,
+            "wall_s": 0.018688332987949252
+          },
+          {
+            "guest_ns": 12104000,
+            "wall_s": 0.017985541955567896
+          },
+          {
+            "guest_ns": 11796000,
+            "wall_s": 0.01800216594710946
+          },
+          {
+            "guest_ns": 11923000,
+            "wall_s": 0.018206416978500783
+          },
+          {
+            "guest_ns": 11513000,
+            "wall_s": 0.017653458984568715
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "guest_ns": 10520000,
+          "wall_s": 0.01678495795931667
+        },
+        "before": {
+          "guest_ns": 18720000,
+          "wall_s": 0.024670916027389467
+        },
+        "pool": {
+          "guest_ns": 11923000,
+          "wall_s": 0.01800216594710946
+        }
+      }
+    },
+    {
+      "workload": "snapshots",
+      "count": 300000,
+      "samples": {
+        "baseline": [
+          {
+            "guest_ns": 33861000,
+            "wall_s": 0.040394125040620565
+          },
+          {
+            "guest_ns": 31482000,
+            "wall_s": 0.03762058401480317
+          },
+          {
+            "guest_ns": 31140000,
+            "wall_s": 0.037627332960255444
+          },
+          {
+            "guest_ns": 31221000,
+            "wall_s": 0.03826779208611697
+          },
+          {
+            "guest_ns": 32674000,
+            "wall_s": 0.03863054106477648
+          }
+        ],
+        "before": [
+          {
+            "guest_ns": 64733000,
+            "wall_s": 0.07174712501000613
+          },
+          {
+            "guest_ns": 64742000,
+            "wall_s": 0.07129116600845009
+          },
+          {
+            "guest_ns": 64868000,
+            "wall_s": 0.07242079207208008
+          },
+          {
+            "guest_ns": 63275000,
+            "wall_s": 0.06939020799472928
+          },
+          {
+            "guest_ns": 61904000,
+            "wall_s": 0.06809441698715091
+          }
+        ],
+        "pool": [
+          {
+            "guest_ns": 36335000,
+            "wall_s": 0.04282983299344778
+          },
+          {
+            "guest_ns": 35372000,
+            "wall_s": 0.042275791987776756
+          },
+          {
+            "guest_ns": 35984000,
+            "wall_s": 0.04259258403908461
+          },
+          {
+            "guest_ns": 34137000,
+            "wall_s": 0.03981095808558166
+          },
+          {
+            "guest_ns": 34693000,
+            "wall_s": 0.04050324996933341
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "guest_ns": 31482000,
+          "wall_s": 0.03826779208611697
+        },
+        "before": {
+          "guest_ns": 64733000,
+          "wall_s": 0.07129116600845009
+        },
+        "pool": {
+          "guest_ns": 35372000,
+          "wall_s": 0.042275791987776756
+        }
+      }
+    },
+    {
+      "workload": "rethrow",
+      "count": 200000,
+      "samples": {
+        "baseline": [
+          {
+            "guest_ns": 18624000,
+            "wall_s": 0.023979917052201927
+          },
+          {
+            "guest_ns": 18477000,
+            "wall_s": 0.023530791979283094
+          },
+          {
+            "guest_ns": 19624000,
+            "wall_s": 0.027408416965045035
+          },
+          {
+            "guest_ns": 20889000,
+            "wall_s": 0.027200874988920987
+          },
+          {
+            "guest_ns": 19831000,
+            "wall_s": 0.025592459016479552
+          }
+        ],
+        "before": [
+          {
+            "guest_ns": 19134000,
+            "wall_s": 0.024722832953557372
+          },
+          {
+            "guest_ns": 19989000,
+            "wall_s": 0.025157666066661477
+          },
+          {
+            "guest_ns": 19931000,
+            "wall_s": 0.02626504097133875
+          },
+          {
+            "guest_ns": 20265000,
+            "wall_s": 0.025815750006586313
+          },
+          {
+            "guest_ns": 22783000,
+            "wall_s": 0.02938212500885129
+          }
+        ],
+        "pool": [
+          {
+            "guest_ns": 19106000,
+            "wall_s": 0.0244820419466123
+          },
+          {
+            "guest_ns": 20350000,
+            "wall_s": 0.025864708935841918
+          },
+          {
+            "guest_ns": 21066000,
+            "wall_s": 0.026530291070230305
+          },
+          {
+            "guest_ns": 19141000,
+            "wall_s": 0.02522629196755588
+          },
+          {
+            "guest_ns": 19931000,
+            "wall_s": 0.026114042033441365
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "guest_ns": 19624000,
+          "wall_s": 0.025592459016479552
+        },
+        "before": {
+          "guest_ns": 19989000,
+          "wall_s": 0.025815750006586313
+        },
+        "pool": {
+          "guest_ns": 19931000,
+          "wall_s": 0.025864708935841918
+        }
+      }
+    },
+    {
+      "workload": "rethrow",
+      "count": 2000000,
+      "samples": {
+        "baseline": [
+          {
+            "guest_ns": 195682000,
+            "wall_s": 0.20147020800504833
+          },
+          {
+            "guest_ns": 194319000,
+            "wall_s": 0.2010398340644315
+          },
+          {
+            "guest_ns": 187226000,
+            "wall_s": 0.19315299997106194
+          },
+          {
+            "guest_ns": 198594000,
+            "wall_s": 0.2044101250357926
+          },
+          {
+            "guest_ns": 192601000,
+            "wall_s": 0.19772845797706395
+          }
+        ],
+        "before": [
+          {
+            "guest_ns": 191469000,
+            "wall_s": 0.19723558402620256
+          },
+          {
+            "guest_ns": 205764000,
+            "wall_s": 0.21250395802780986
+          },
+          {
+            "guest_ns": 199376000,
+            "wall_s": 0.2055965829640627
+          },
+          {
+            "guest_ns": 195806000,
+            "wall_s": 0.20291454100515693
+          },
+          {
+            "guest_ns": 192830000,
+            "wall_s": 0.1981825000839308
+          }
+        ],
+        "pool": [
+          {
+            "guest_ns": 212832000,
+            "wall_s": 0.21932045801077038
+          },
+          {
+            "guest_ns": 201343000,
+            "wall_s": 0.20766225003171712
+          },
+          {
+            "guest_ns": 202343000,
+            "wall_s": 0.20809420803561807
+          },
+          {
+            "guest_ns": 225868000,
+            "wall_s": 0.23203937499783933
+          },
+          {
+            "guest_ns": 203282000,
+            "wall_s": 0.20944662496913224
+          }
+        ]
+      },
+      "median": {
+        "baseline": {
+          "guest_ns": 194319000,
+          "wall_s": 0.2010398340644315
+        },
+        "before": {
+          "guest_ns": 195806000,
+          "wall_s": 0.20291454100515693
+        },
+        "pool": {
+          "guest_ns": 203282000,
+          "wall_s": 0.20944662496913224
+        }
+      }
+    }
+  ],
+  "valid": false,
+  "discard_reason": "The build had not completed; pool label contains the preceding SoA binary and sampling overlapped a build. Excluded from conclusions."
+}

@@ -1,0 +1,184 @@
+   Compiling n2 v0.1.5 (/tmp/wasmoon-iss634-n2)
+warning: unnecessary parentheses around closure body
+   --> /tmp/wasmoon-iss634-n2/src/run.rs:103:43
+    |
+103 |     #[argh(option, short = 'f', default = "(\"build.ninja\".into())")]
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> /tmp/wasmoon-iss634-n2/src/densemap.rs:55:17
+   |
+55 |     pub fn iter(&self) -> std::slice::Iter<V> {
+   |                 ^^^^^     ^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                 |
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+55 |     pub fn iter(&self) -> std::slice::Iter<'_, V> {
+   |                                            +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> /tmp/wasmoon-iss634-n2/src/eval.rs:14:16
+   |
+14 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>>;
+   |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+14 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>>;
+   |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> /tmp/wasmoon-iss634-n2/src/eval.rs:96:19
+   |
+96 |     pub fn as_cow(&self) -> EvalString<Cow<str>> {
+   |                   ^^^^^                ^^^^^^^^ the same lifetime is hidden here
+   |                   |
+   |                   the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+96 |     pub fn as_cow(&self) -> EvalString<Cow<'_, str>> {
+   |                                            +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /tmp/wasmoon-iss634-n2/src/eval.rs:110:19
+    |
+110 |     pub fn as_cow(&self) -> EvalString<Cow<str>> {
+    |                   ^^^^^                ^^^^^^^^ the same lifetime is hidden here
+    |                   |
+    |                   the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+110 |     pub fn as_cow(&self) -> EvalString<Cow<'_, str>> {
+    |                                            +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /tmp/wasmoon-iss634-n2/src/eval.rs:136:16
+    |
+136 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+    |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+136 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+    |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /tmp/wasmoon-iss634-n2/src/eval.rs:144:16
+    |
+144 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+    |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+144 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+    |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /tmp/wasmoon-iss634-n2/src/eval.rs:150:16
+    |
+150 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+    |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+150 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+    |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> /tmp/wasmoon-iss634-n2/src/eval.rs:156:16
+    |
+156 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+    |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+156 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+    |                                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> /tmp/wasmoon-iss634-n2/src/load.rs:35:16
+   |
+35 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<str>>> {
+   |                ^^^^^ the lifetime is elided here      ^^^^^^^^ the same lifetime is hidden here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+35 |     fn get_var(&self, var: &str) -> Option<EvalString<Cow<'_, str>>> {
+   |                                                           +++
+
+warning: direct cast of function item into an integer
+  --> /tmp/wasmoon-iss634-n2/src/signal.rs:24:42
+   |
+24 |         sa.sa_sigaction = sigint_handler as libc::sighandler_t;
+   |                                          ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(function_casts_as_integer)]` on by default
+help: first cast to a pointer `as *const ()`
+   |
+24 |         sa.sa_sigaction = sigint_handler as *const () as libc::sighandler_t;
+   |                                          ++++++++++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> /tmp/wasmoon-iss634-n2/src/smallmap.rs:41:17
+   |
+41 |     pub fn iter(&self) -> std::slice::Iter<(K, V)> {
+   |                 ^^^^^     ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                 |
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+41 |     pub fn iter(&self) -> std::slice::Iter<'_, (K, V)> {
+   |                                            +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> /tmp/wasmoon-iss634-n2/src/smallmap.rs:45:21
+   |
+45 |     pub fn iter_mut(&mut self) -> std::slice::IterMut<(K, V)> {
+   |                     ^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                     |
+   |                     the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+45 |     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, (K, V)> {
+   |                                                       +++
+
+warning: creating a shared reference to mutable static
+  --> /tmp/wasmoon-iss634-n2/src/trace.rs:94:14
+   |
+94 |     unsafe { TRACE.is_some() }
+   |              ^^^^^^^^^^^^^^^ shared reference to mutable static
+   |
+   = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+   = note: `#[warn(static_mut_refs)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
+
+   Compiling moonbuild v0.1.0 (/private/tmp/wasmoon-iss634-moon/crates/moonbuild)
+warning: `n2` (lib) generated 14 warnings (run `cargo fix --lib -p n2` to apply 12 suggestions)
+   Compiling moon v0.1.0 (/private/tmp/wasmoon-iss634-moon/crates/moon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.93s
+     Running tests/mod.rs (/Users/zhengyu/Documents/projects/moon/target/debug/deps/mod-850ec615b4242d16)
+
+running 1 test
+test test_cases::native_stub_stability::test_native_transitive_shared_header_changes_without_clean ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 707 filtered out; finished in 2.96s

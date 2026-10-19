@@ -1,0 +1,12 @@
+{
+  "release_binary_sha256": "881277fd0b1ad9cf0c360535789c7367c95309b3c3aa92013ba71c13526ef917",
+  "nm_command": [
+    "nm",
+    "wasmoon"
+  ],
+  "allocator_symbols_present": true,
+  "wasmoon_test_symbols": 0,
+  "exported_gc_record_runtime_type": false,
+  "private_test_objects": "separate archive members; built but not linked into release on macOS",
+  "windows_archive_and_masm_acceptance": "pending"
+}

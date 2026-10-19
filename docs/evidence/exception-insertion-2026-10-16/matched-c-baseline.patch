@@ -1,0 +1,61 @@
+--- a/modules/wasmoon_jit/jit_ffi/gc_heap.c
++++ b/modules/wasmoon_jit/jit_ffi/gc_heap.c
+@@ -326,6 +326,9 @@
+     if (registration->next) {
+         registration->next->previous = registration->previous;
+     }
++    if (registration->owner_reference & GC_EXCEPTION_REF_TAG) {
++        if (--heap->exception_root_count == 0) heap->exception_arena = NULL;
++    }
+     free(registration->roots);
+     free(registration);
+     moonbit_decref(heap);
+@@ -341,6 +344,7 @@
+         registration->heap->exception_arena != arena)) return 0;
+     registration->owner_reference = reference;
+     registration->heap->exception_arena = arena;
++    ++registration->heap->exception_root_count;
+     return 1;
+ }
+
+--- a/modules/wasmoon_jit/jit_ffi/gc_heap.h
++++ b/modules/wasmoon_jit/jit_ffi/gc_heap.h
+@@ -134,6 +134,7 @@
+     wasmoon_reservation_t *object_reservation;
+     int quota_denied; // 1: payload bytes, 2: retained identity slots
+     GcAllocationPolicy allocation_policy; // Closed MoonBit function; no retained closure
++    int32_t exception_root_count; // Leases borrowing exception_arena
+ } GcHeap;
+
+ // Budgeted heaps enter the common allocator before any guest payload write.
+--- a/modules/wasmoon_jit/jit_ffi/jit_context.h
++++ b/modules/wasmoon_jit/jit_ffi/jit_context.h
+@@ -62,6 +62,7 @@
+     struct native_continuation_arena *continuation_arena;
+     struct native_continuation_type *continuation_types;
+     struct native_exception_arena *exception_arena;
++    struct native_exception_arena *(*exception_arena_factory)(void);
+
+     // Hostcall callback (MoonBit closure) for JIT -> host function bridging.
+     // This is invoked by `wasmoon_jit_hostcall` during JIT execution.
+--- a/modules/wasmoon_jit/jit_ffi/exception.c
++++ b/modules/wasmoon_jit/jit_ffi/exception.c
+@@ -65,8 +65,6 @@
+     for (size_t i = 0; i < arena->count; ++i) {
+         native_exception_t *entry = &arena->entries[i];
+         if (entry->root_registration) {
+-            GcHeap *heap = gc_heap_registration_heap(entry->root_registration);
+-            if (heap->exception_arena == arena) heap->exception_arena = NULL;
+             gc_heap_unregister_parked_roots(entry->root_registration);
+         }
+         free(entry->values);
+@@ -227,9 +225,6 @@
+     native_exception_t *entry = exception_arena_lookup(arena, reference);
+     if (!entry) return;
+     size_t index = (size_t)(entry - arena->entries);
+-    GcHeap *heap = gc_heap_registration_heap(entry->root_registration);
+-    if (arena->count == 1 && heap && heap->exception_arena == arena)
+-        heap->exception_arena = NULL;
+     exception_entry_free(entry);
+     memmove(entry, entry + 1, (arena->count - index - 1) * sizeof(*entry));
+     --arena->count;

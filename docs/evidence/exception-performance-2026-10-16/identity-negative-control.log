@@ -1,0 +1,4 @@
+[Milky2018/wasmoon_jit] test jit_ffi/exceptions_wbtest.mbt:45 ("exception slot estimates reject retired identities after compaction and clear") failed: jit_ffi/exceptions_wbtest.mbt:53:3-53:57@Milky2018/wasmoon_jit FAILED: `26 != 0`
+diff:
+-26 +0
+Total tests: 3, passed: 2, failed: 1.

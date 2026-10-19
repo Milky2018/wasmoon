@@ -1,0 +1,60 @@
+
+wasmoon:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+000000010040cf9c <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup>:
+10040cf9c: a9bf7bfd    	stp	x29, x30, [sp, #-0x10]!
+10040cfa0: 910003fd    	mov	x29, sp
+10040cfa4: f9400008    	ldr	x8, [x0]
+10040cfa8: b9400909    	ldr	w9, [x8, #0x8]
+10040cfac: 7100053f    	cmp	w9, #0x1
+10040cfb0: 540005ab    	b.lt	0x10040d064 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xc8>
+10040cfb4: f940010b    	ldr	x11, [x8]
+10040cfb8: f940016a    	ldr	x10, [x11]
+10040cfbc: cb0a002c    	sub	x12, x1, x10
+10040cfc0: 9341fd8a    	asr	x10, x12, #1
+10040cfc4: b7f8020a    	tbnz	x10, #0x3f, 0x10040d004 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x68>
+10040cfc8: eb09015f    	cmp	x10, x9
+10040cfcc: 540001ca    	b.ge	0x10040d004 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x68>
+10040cfd0: d341fd8c    	lsr	x12, x12, #1
+10040cfd4: 6b0c013f    	cmp	w9, w12
+10040cfd8: 540004c9    	b.ls	0x10040d070 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xd4>
+10040cfdc: d37c794c    	ubfiz	x12, x10, #4, #31
+10040cfe0: 8b0c016b    	add	x11, x11, x12
+10040cfe4: f940016c    	ldr	x12, [x11]
+10040cfe8: eb01019f    	cmp	x12, x1
+10040cfec: 540000c1    	b.ne	0x10040d004 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x68>
+10040cff0: b940096b    	ldr	w11, [x11, #0x8]
+10040cff4: 3400008b    	cbz	w11, 0x10040d004 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x68>
+10040cff8: 91000540    	add	x0, x10, #0x1
+10040cffc: a8c17bfd    	ldp	x29, x30, [sp], #0x10
+10040d000: d65f03c0    	ret
+10040d004: 5280000a    	mov	w10, #0x0               ; =0
+10040d008: aa0903eb    	mov	x11, x9
+10040d00c: 14000004    	b	0x10040d01c <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x80>
+10040d010: 1100058a    	add	w10, w12, #0x1
+10040d014: 6b0b015f    	cmp	w10, w11
+10040d018: 5400026a    	b.ge	0x10040d064 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xc8>
+10040d01c: 4b0a016c    	sub	w12, w11, w10
+10040d020: 0b4c7d8c    	add	w12, w12, w12, lsr #31
+10040d024: 0b8c054c    	add	w12, w10, w12, asr #1
+10040d028: 6b09019f    	cmp	w12, w9
+10040d02c: 54000222    	b.hs	0x10040d070 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xd4>
+10040d030: f940010d    	ldr	x13, [x8]
+10040d034: d37c7d8e    	ubfiz	x14, x12, #4, #32
+10040d038: f86e69ae    	ldr	x14, [x13, x14]
+10040d03c: eb0101df    	cmp	x14, x1
+10040d040: 54fffe8b    	b.lt	0x10040d010 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x74>
+10040d044: aa0c03eb    	mov	x11, x12
+10040d048: 54fffe6c    	b.gt	0x10040d014 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x78>
+10040d04c: 8b0c11a8    	add	x8, x13, x12, lsl #4
+10040d050: b9400908    	ldr	w8, [x8, #0x8]
+10040d054: 7100011f    	cmp	w8, #0x0
+10040d058: 9a8c07e0    	csinc	x0, xzr, x12, eq
+10040d05c: a8c17bfd    	ldp	x29, x30, [sp], #0x10
+10040d060: d65f03c0    	ret
+10040d064: d2800000    	mov	x0, #0x0                ; =0
+10040d068: a8c17bfd    	ldp	x29, x30, [sp], #0x10
+10040d06c: d65f03c0    	ret
+10040d070: 940f839f    	bl	0x1007edeec <_moonbit_panic>

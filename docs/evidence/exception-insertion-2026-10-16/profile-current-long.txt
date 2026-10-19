@@ -1,0 +1,284 @@
+Analysis of sampling before (pid 26081) every 1 millisecond
+Process:         before [26081]
+Path:            /Users/USER/Documents/*/before
+Load Address:    0x1042f0000
+Identifier:      before
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  Python [26080]
+Target Type:     live task
+
+Date/Time:       2026-10-16 18:00:51.161 +0800
+Launch Time:     2026-10-16 18:00:51.134 +0800
+OS Version:      macOS 26.7 (25G229)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+
+Physical footprint:         770.6M
+Physical footprint (peak):  770.6M
+Idle exit:                  untracked
+----
+
+Call graph:
+    852 Thread_147880158   DispatchQueue_1: com.apple.main-thread  (serial)
+    + 846 native_fiber_stack_size_c  (in before) + 56  [0x104ac46d8]
+    + ! 846 fiber_bootstrap  (in before) + 152  [0x104ac4770]
+    + !   846 native_jit_continuation_entry  (in before) + 44  [0x104ac3f8c]
+    + !     846 wasmoon_jit_call_trampoline_caught  (in before) + 140  [0x104ab16bc]
+    + !       258 ???  (in <unknown binary>)  [0x104fcc0dc]
+    + !       : 131 exception_try_end_impl  (in before) + 116  [0x104ac2cd8]
+    + !       : | 81 _xzm_free  (in libsystem_malloc.dylib) + 1048  [0x18eb24530]
+    + !       : | + 81 mach_absolute_time  (in libsystem_kernel.dylib) + 108,112,...  [0x18ecc410c,0x18ecc4110,...]
+    + !       : | 32 _xzm_free  (in libsystem_malloc.dylib) + 28,164,...  [0x18eb24134,0x18eb241bc,...]
+    + !       : | 8 _xzm_free  (in libsystem_malloc.dylib) + 352  [0x18eb24278]
+    + !       : | + 6 _platform_memset  (in libsystem_platform.dylib) + 140,160  [0x18ed1111c,0x18ed11130]
+    + !       : | + 1 DYLD-STUB$$_platform_bzero  (in libsystem_malloc.dylib) + 12  [0x18eb3b87c]
+    + !       : | + 1 __bzero  (in libsystem_platform.dylib) + 24  [0x18ed11048]
+    + !       : | 7 _free  (in libsystem_malloc.dylib) + 44,0,...  [0x18eb33cfc,0x18eb33cd0,...]
+    + !       : | 3 DYLD-STUB$$free  (in before) + 4  [0x104ade4f4]
+    + !       : 88 exception_try_end_impl  (in before) + 152  [0x104ac2cfc]
+    + !       : | 70 _xzm_free  (in libsystem_malloc.dylib) + 1048  [0x18eb24530]
+    + !       : | + 69 mach_absolute_time  (in libsystem_kernel.dylib) + 108,112  [0x18ecc410c,0x18ecc4110]
+    + !       : | + 1 DYLD-STUB$$mach_absolute_time  (in libsystem_malloc.dylib) + 8  [0x18eb3bb98]
+    + !       : | 11 _xzm_free  (in libsystem_malloc.dylib) + 8,748,...  [0x18eb24120,0x18eb24404,...]
+    + !       : | 5 _xzm_free  (in libsystem_malloc.dylib) + 352  [0x18eb24278]
+    + !       : | + 4 _platform_memset  (in libsystem_platform.dylib) + 180  [0x18ed11144]
+    + !       : | + 1 __bzero  (in libsystem_platform.dylib) + 0  [0x18ed11030]
+    + !       : | 1 DYLD-STUB$$free  (in before) + 4  [0x104ade4f4]
+    + !       : | 1 _free  (in libsystem_malloc.dylib) + 44  [0x18eb33cfc]
+    + !       : 19 exception_try_end_impl  (in before) + 24  [0x104ac2c7c]
+    + !       : | 14 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       : | + 12 jit_current_trap_activation  (in before) + 0,52,...  [0x104ab411c,0x104ab4150,...]
+    + !       : | + 1 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       : | + ! 1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       : | + 1 jit_current_trap_activation  (in before) + 44  [0x104ab4148]
+    + !       : | +   1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       : | 5 get_current_jit_context  (in before) + 12,0  [0x104ab1610,0x104ab1604]
+    + !       : 13 exception_try_end_impl  (in before) + 0,68,...  [0x104ac2c64,0x104ac2ca8,...]
+    + !       : 7 _xzm_free  (in libsystem_malloc.dylib) + 1552  [0x18eb24728]
+    + !       190 ???  (in <unknown binary>)  [0x104fcc0d0]
+    + !       : 92 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in before) + 932,940  [0x1046fda54,0x1046fda5c]
+    + !       : 64 exception_get_ref_impl  (in before) + 264  [0x104ac29b8]
+    + !       : | 22 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in before) + 548  [0x1046fd8d4]
+    + !       : | + 22 wasmoon_exception_storage_append  (in before) + 372,32,...  [0x104ac24d0,0x104ac237c,...]
+    + !       : | 20 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in before) + 656,96,...  [0x1046fd940,0x1046fd710,...]
+    + !       : | 14 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in before) + 636  [0x1046fd92c]
+    + !       : | + 14 _M0MPC15array5Array7reallocGRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in before) + 116  [0x104a23be0]
+    + !       : | +   12 _M0MPB18UninitializedArray23make__and__blit_2einnerGRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in before) + 164  [0x104a4513c]
+    + !       : | +   ! 12 moonbit_unsafe_val_array_blit  (in before) + 84  [0x104ad1680]
+    + !       : | +   !   12 _platform_memmove  (in libsystem_platform.dylib) + 88  [0x18ed113b8]
+    + !       : | +   2 _M0MPB18UninitializedArray23make__and__blit_2einnerGRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in before) + 204  [0x104a45164]
+    + !       : | +     2 moonbit_drop_object  (in before) + 312  [0x104ad06b4]
+    + !       : | +       2 mi_segment_free  (in before) + 648  [0x1042fde4c]
+    + !       : | +         2 _mi_arena_free  (in before) + 520  [0x1042f3354]
+    + !       : | +           2 _mi_os_free_ex  (in before) + 436  [0x1042f4978]
+    + !       : | +             2 __munmap  (in libsystem_kernel.dylib) + 8  [0x18ecc7728]
+    + !       : | 8 wasmoon_exception_storage_append  (in before) + 464,468  [0x104ac252c,0x104ac2530]
+    + !       : 18 exception_get_ref_impl  (in before) + 252,72,...  [0x104ac29ac,0x104ac28f8,...]
+    + !       : 16 exception_get_ref_impl  (in before) + 24  [0x104ac28c8]
+    + !       :   14 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       :   + 10 jit_current_trap_activation  (in before) + 16,52,...  [0x104ab412c,0x104ab4150,...]
+    + !       :   + 3 jit_current_trap_activation  (in before) + 44  [0x104ab4148]
+    + !       :   + ! 3 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       :   + 1 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       :   +   1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       :   2 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       136 ???  (in <unknown binary>)  [0x104fcc098]
+    + !       : 78 exception_spill_locals_impl  (in before) + 128  [0x104ac31e4]
+    + !       : | 36 _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib) + 88,264,...  [0x18eb28f94,0x18eb29044,...]
+    + !       : | 14 <deduplicated_symbol>  (in libsystem_malloc.dylib) + 112,212,...  [0x18eb231cc,0x18eb23230,...]
+    + !       : | 12 _malloc_zone_malloc  (in libsystem_malloc.dylib) + 12,44,...  [0x18eb330c8,0x18eb330e8,...]
+    + !       : | 11 _xzm_xzone_malloc  (in libsystem_malloc.dylib) + 8,192,...  [0x18eb23958,0x18eb23a10,...]
+    + !       : | 2 DYLD-STUB$$malloc  (in before) + 4  [0x104ade6bc]
+    + !       : | 2 wasmoon_native_malloc  (in before) + 20  [0x104ab7fa8]
+    + !       : | 1 wasmoon_native_malloc  (in before) + 28  [0x104ab7fb0]
+    + !       : |   1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       : 18 exception_spill_locals_impl  (in before) + 156  [0x104ac3200]
+    + !       : | 15 _free  (in libsystem_malloc.dylib) + 124,0  [0x18eb33d4c,0x18eb33cd0]
+    + !       : | 3 DYLD-STUB$$free  (in before) + 4  [0x104ade4f4]
+    + !       : 15 exception_spill_locals_impl  (in before) + 36  [0x104ac3188]
+    + !       : | 15 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       : |   11 jit_current_trap_activation  (in before) + 16,0,...  [0x104ab412c,0x104ab411c,...]
+    + !       : |   2 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       : |   + 2 _tlv_get_addr  (in libdyld.dylib) + 12,20  [0x18e904394,0x18e90439c]
+    + !       : |   2 jit_current_trap_activation  (in before) + 44  [0x104ab4148]
+    + !       : |     2 _tlv_get_addr  (in libdyld.dylib) + 20  [0x18e90439c]
+    + !       : 13 exception_spill_locals_impl  (in before) + 104,12,...  [0x104ac31cc,0x104ac3170,...]
+    + !       : 12 exception_spill_locals_impl  (in before) + 148  [0x104ac31f8]
+    + !       :   9 _platform_memmove  (in libsystem_platform.dylib) + 428,460,...  [0x18ed1150c,0x18ed1152c,...]
+    + !       :   3 DYLD-STUB$$memcpy  (in before) + 4  [0x104ade6ec]
+    + !       73 ???  (in <unknown binary>)  [0x104fcc0a4]
+    + !       : 73 wasmoon_jit_exception_throw_tag  (in before) + 20  [0x104ac343c]
+    + !       :   25 exception_throw_impl  (in before) + 92  [0x104ac2f04]
+    + !       :   | 9 exception_raise_current  (in before) + 96  [0x104ac2ea8]
+    + !       :   | + 4 siglongjmp  (in libsystem_platform.dylib) + 0  [0x18ed0f844]
+    + !       :   | + 3 DYLD-STUB$$siglongjmp  (in before) + 4  [0x104adeaac]
+    + !       :   | + 2 _longjmp  (in libsystem_platform.dylib) + 28  [0x18ed0f7a0]
+    + !       :   | 7 exception_raise_current  (in before) + 84  [0x104ac2e9c]
+    + !       :   | + 7 ctx_gc_restore_root_scopes_internal  (in before) + 36,0  [0x104ab6c6c,0x104ab6c48]
+    + !       :   | 7 exception_raise_current  (in before) + 16,32  [0x104ac2e58,0x104ac2e68]
+    + !       :   | 1 ???  (in <unknown binary>)  [0x104fcc064]
+    + !       :   | + 1 _longjmp  (in libsystem_platform.dylib) + 68  [0x18ed0f7c8]
+    + !       :   | 1 ctx_gc_restore_root_scopes_internal  (in before) + 184  [0x104ab6d00]
+    + !       :   22 exception_throw_impl  (in before) + 60  [0x104ac2ee4]
+    + !       :   | 22 exception_activation_context  (in before) + 20  [0x104ac2c40]
+    + !       :   |   17 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       :   |   + 12 jit_current_trap_activation  (in before) + 0,16,...  [0x104ab411c,0x104ab412c,...]
+    + !       :   |   + 4 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       :   |   + ! 4 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       :   |   + 1 jit_current_trap_activation  (in before) + 44  [0x104ab4148]
+    + !       :   |   +   1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       :   |   5 get_current_jit_context  (in before) + 24,12  [0x104ab161c,0x104ab1610]
+    + !       :   16 exception_throw_impl  (in before) + 84  [0x104ac2efc]
+    + !       :   | 10 exception_set_payload  (in before) + 60,40,...  [0x104ac2f40,0x104ac2f2c,...]
+    + !       :   | 6 exception_set_payload  (in before) + 128  [0x104ac2f84]
+    + !       :   |   4 DYLD-STUB$$free  (in before) + 4  [0x104ade4f4]
+    + !       :   |   2 _free  (in libsystem_malloc.dylib) + 124  [0x18eb33d4c]
+    + !       :   5 exception_set_payload  (in before) + 160  [0x104ac2fa4]
+    + !       :   3 exception_activation_context  (in before) + 48  [0x104ac2c5c]
+    + !       :   2 exception_throw_impl  (in before) + 8  [0x104ac2eb0]
+    + !       52 ???  (in <unknown binary>)  [0x104fcc05c]
+    + !       : 43 exception_try_begin_impl  (in before) + 72  [0x104ac2bec]
+    + !       : | 30 _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib) + 272,88,...  [0x18eb2904c,0x18eb28f94,...]
+    + !       : | 5 _malloc_zone_malloc  (in libsystem_malloc.dylib) + 64,0  [0x18eb330fc,0x18eb330bc]
+    + !       : | 5 _xzm_xzone_malloc  (in libsystem_malloc.dylib) + 324  [0x18eb23a94]
+    + !       : | 3 <deduplicated_symbol>  (in libsystem_malloc.dylib) + 56,212  [0x18eb23194,0x18eb23230]
+    + !       : 5 exception_try_begin_impl  (in before) + 24  [0x104ac2bbc]
+    + !       : | 3 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       : | + 2 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       : | + 1 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       : | +   1 _tlv_get_addr  (in libdyld.dylib) + 20  [0x18e90439c]
+    + !       : | 2 get_current_jit_context  (in before) + 24  [0x104ab161c]
+    + !       : 4 wasmoon_jit_exception_try_begin  (in before) + 0  [0x104ac3414]
+    + !       38 ???  (in <unknown binary>)  [0x104fcc064]
+    + !       20 ???  (in <unknown binary>)  [0x104fcc0b4]
+    + !       : 15 wasmoon_jit_exception_get_spilled_local  (in before) + 24  [0x104ac3888]
+    + !       : | 14 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       : | + 6 jit_current_trap_activation  (in before) + 0,16,...  [0x104ab411c,0x104ab412c,...]
+    + !       : | + 5 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       : | + ! 5 _tlv_get_addr  (in libdyld.dylib) + 12,20  [0x18e904394,0x18e90439c]
+    + !       : | + 3 jit_current_trap_activation  (in before) + 44  [0x104ab4148]
+    + !       : | +   3 _tlv_get_addr  (in libdyld.dylib) + 20  [0x18e90439c]
+    + !       : | 1 get_current_jit_context  (in before) + 0  [0x104ab1604]
+    + !       : 5 wasmoon_jit_exception_get_spilled_local  (in before) + 28,96,...  [0x104ac388c,0x104ac38d0,...]
+    + !       18 wasmoon_jit_exception_get_spilled_local  (in before) + 120  [0x104ac38e8]
+    + !       17 wasmoon_jit_exception_get_tag  (in before) + 132  [0x104ac372c]
+    + !       16 ???  (in <unknown binary>)  [0x104fcc0c0]
+    + !       : 13 wasmoon_jit_exception_get_spilled_local  (in before) + 24  [0x104ac3888]
+    + !       : | 12 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       : | + 10 jit_current_trap_activation  (in before) + 16,36,...  [0x104ab412c,0x104ab4140,...]
+    + !       : | + 1 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       : | + ! 1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       : | + 1 jit_current_trap_activation  (in before) + 44  [0x104ab4148]
+    + !       : | +   1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       : | 1 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       : 3 wasmoon_jit_exception_get_spilled_local  (in before) + 24,48,...  [0x104ac3888,0x104ac38a0,...]
+    + !       16 ???  (in <unknown binary>)  [0x104fcc0c8]
+    + !       : 13 wasmoon_jit_exception_get_tag  (in before) + 20  [0x104ac36bc]
+    + !       : | 8 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       : | + 6 jit_current_trap_activation  (in before) + 0,16,...  [0x104ab411c,0x104ab412c,...]
+    + !       : | + 1 jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+    + !       : | + ! 1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       : | + 1 jit_current_trap_activation  (in before) + 44  [0x104ab4148]
+    + !       : | +   1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    + !       : | 5 get_current_jit_context  (in before) + 12  [0x104ab1610]
+    + !       : 3 wasmoon_jit_exception_get_tag  (in before) + 44  [0x104ac36d4]
+    + !       6 ???  (in <unknown binary>)  [0x104fcc064]
+    + !       : 6 _setjmp  (in libsystem_platform.dylib) + 84,60  [0x18ed0f778,0x18ed0f760]
+    + !       4 exception_spill_locals_impl  (in before) + 184  [0x104ac321c]
+    + !       1 ???  (in <unknown binary>)  [0x104fcc0a8]
+    + !       1 exception_try_begin_impl  (in before) + 104  [0x104ac2c0c]
+    + 6 ???  (in <unknown binary>)  [0x104fcc064]
+    +   6 _longjmp  (in libsystem_platform.dylib) + 84  [0x18ed0f7d8]
+    852 Thread_147880190
+      852 thread_start  (in libsystem_pthread.dylib) + 8  [0x18ed02c1c]
+        852 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x18ed07c58]
+          852 sigwait_thread_worker  (in before) + 160  [0x104aae454]
+            852 sigwait  (in libsystem_pthread.dylib) + 40  [0x18ed08418]
+              852 __sigwait  (in libsystem_kernel.dylib) + 8  [0x18eccf808]
+
+Total number in stack (recursive counted multiple, when >=5):
+        16       _tlv_get_addr  (in libdyld.dylib) + 0  [0x18e904388]
+        8       get_current_jit_context  (in before) + 12  [0x104ab1610]
+        8       jit_current_trap_activation  (in before) + 0  [0x104ab411c]
+        8       jit_current_trap_activation  (in before) + 24  [0x104ab4134]
+        7       get_current_jit_context  (in before) + 0  [0x104ab1604]
+        7       jit_current_trap_activation  (in before) + 44  [0x104ab4148]
+
+Sort by top of stack, same collapsed (when >= 5):
+        __sigwait  (in libsystem_kernel.dylib)        852
+        mach_absolute_time  (in libsystem_kernel.dylib)        150
+        _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in before)        112
+        jit_current_trap_activation  (in before)        69
+        _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib)        66
+        _xzm_free  (in libsystem_malloc.dylib)        50
+        ???  (in <unknown binary>)  [0x104fcc064]        38
+        wasmoon_exception_storage_append  (in before)        30
+        _tlv_get_addr  (in libdyld.dylib)        29
+        wasmoon_jit_exception_get_spilled_local  (in before)        26
+        _free  (in libsystem_malloc.dylib)        25
+        _platform_memmove  (in libsystem_platform.dylib)        21
+        get_current_jit_context  (in before)        21
+        wasmoon_jit_exception_get_tag  (in before)        20
+        exception_get_ref_impl  (in before)        18
+        <deduplicated_symbol>  (in libsystem_malloc.dylib)        17
+        _malloc_zone_malloc  (in libsystem_malloc.dylib)        17
+        exception_spill_locals_impl  (in before)        17
+        _xzm_xzone_malloc  (in libsystem_malloc.dylib)        16
+        exception_set_payload  (in before)        15
+        exception_try_end_impl  (in before)        13
+        DYLD-STUB$$free  (in before)        11
+        _platform_memset  (in libsystem_platform.dylib)        10
+        _longjmp  (in libsystem_platform.dylib)        9
+        ctx_gc_restore_root_scopes_internal  (in before)        8
+        exception_raise_current  (in before)        7
+        _setjmp  (in libsystem_platform.dylib)        6
+
+Binary Images:
+       0x1042f0000 -        0x104b6f07f +before (0) <E459AD51-F055-3C43-A2F0-6AE6BE77DD82> /Users/*/Documents/*/before
+       0x18e894000 -        0x18e8e6b4b  libobjc.A.dylib (951.7) <1D62B376-2303-376A-B993-9432A2004EB6> /usr/lib/libobjc.A.dylib
+       0x18e8e7000 -        0x18e91bd58  libdyld.dylib (1387) <70073E6E-4CDD-314F-BBDF-EC7FF6CE2DFC> /usr/lib/system/libdyld.dylib
+       0x18e91c000 -        0x18e9cf4ff  dyld (1.0.0 - 1387) <0263B88E-0B22-3B33-BBC0-483BE879B513> /usr/lib/dyld
+       0x18e9d0000 -        0x18e9d3228  libsystem_blocks.dylib (96) <B33F1440-9364-38E4-AF85-8A21BFF24324> /usr/lib/system/libsystem_blocks.dylib
+       0x18e9d4000 -        0x18ea2855f  libxpc.dylib (3102.160.5) <E26A36A6-4B8F-321C-AE17-54353F9EEE84> /usr/lib/system/libxpc.dylib
+       0x18ea29000 -        0x18ea499ff  libsystem_trace.dylib (1861.160.4) <314A8A89-4715-32B9-ABC2-B3087149C8B7> /usr/lib/system/libsystem_trace.dylib
+       0x18ea4a000 -        0x18eaf85f7  libcorecrypto.dylib (1922.160.10) <057A41E9-2A2E-39CD-B198-387734EED870> /usr/lib/system/libcorecrypto.dylib
+       0x18eaf9000 -        0x18eb49257  libsystem_malloc.dylib (812.160.5) <B7ED74D2-5A24-3F39-9296-EE5688FF4B63> /usr/lib/system/libsystem_malloc.dylib
+       0x18eb4a000 -        0x18eb9123f  libdispatch.dylib (1542.160.2) <80E75F3F-333F-38A8-A3DD-6279FCDB771B> /usr/lib/system/libdispatch.dylib
+       0x18eb92000 -        0x18eb94ffb  libsystem_featureflags.dylib (103) <5725BCFE-07F3-3629-9B44-551A435E2DE2> /usr/lib/system/libsystem_featureflags.dylib
+       0x18eb95000 -        0x18ec161e7  libsystem_c.dylib (1752.160.4) <3498CA79-EF40-3587-AD44-75187CEE7D95> /usr/lib/system/libsystem_c.dylib
+       0x18ec17000 -        0x18eca7ae7  libc++.1.dylib (2100.43) <32327062-C3A2-389E-ABFE-68A9942422E3> /usr/lib/libc++.1.dylib
+       0x18eca8000 -        0x18ecc275f  libc++abi.dylib (2100.43) <CCDE1614-20B7-354C-B201-99C5C4CC589D> /usr/lib/libc++abi.dylib
+       0x18ecc3000 -        0x18ed002f7  libsystem_kernel.dylib (12377.161.15.700.19) <EE805B14-29F2-360D-9A2C-3221A1211833> /usr/lib/system/libsystem_kernel.dylib
+       0x18ed01000 -        0x18ed0db3b  libsystem_pthread.dylib (539.100.4) <A58BEABD-7AC0-35F8-BCFF-E4FFBD79E938> /usr/lib/system/libsystem_pthread.dylib
+       0x18ed0e000 -        0x18ed16963  libsystem_platform.dylib (375.120.2) <3AF14164-15FE-3623-9EE3-46DE29FD5B5A> /usr/lib/system/libsystem_platform.dylib
+       0x18ed17000 -        0x18ed466eb  libsystem_info.dylib (600) <0037F576-2C50-36F0-9F36-6CB7A049D5B1> /usr/lib/system/libsystem_info.dylib
+       0x192ce7000 -        0x192cf0e5f  libsystem_darwin.dylib (1752.160.4) <B808D04B-2798-36C9-96F6-35534BDFCF11> /usr/lib/system/libsystem_darwin.dylib
+       0x193152000 -        0x1931641b6  libsystem_notify.dylib (348.160.3) <922BDCF4-CD33-3EEB-BC56-9DCAE54F8F65> /usr/lib/system/libsystem_notify.dylib
+       0x195423000 -        0x19543df7b  libsystem_networkextension.dylib (2226.161.1.700.2) <83F224A4-40C4-3106-A97B-788D1D961DCB> /usr/lib/system/libsystem_networkextension.dylib
+       0x1954c0000 -        0x1954d7fdf  libsystem_asl.dylib (406) <FF6BE113-1093-3D23-8A55-E0A5B327CA8E> /usr/lib/system/libsystem_asl.dylib
+       0x197079000 -        0x197081387  libsystem_symptoms.dylib (2169.160.3.701.1) <7F0D4E31-268A-3EBB-8A2C-30CCC771A5A5> /usr/lib/system/libsystem_symptoms.dylib
+       0x19b31e000 -        0x19b356373  libsystem_containermanager.dylib (725.160.3.701.2) <118BC21E-B17D-32A2-9B65-16256131974F> /usr/lib/system/libsystem_containermanager.dylib
+       0x19c730000 -        0x19c7345d7  libsystem_configuration.dylib (1405.160.3.701.3) <7725D903-1D37-33E7-82AF-2260661C81A8> /usr/lib/system/libsystem_configuration.dylib
+       0x19c735000 -        0x19c73b99f  libsystem_sandbox.dylib (2680.160.6.700.3) <7B54AAA3-EB32-3853-8F0E-EB956EC957A1> /usr/lib/system/libsystem_sandbox.dylib
+       0x19dd90000 -        0x19dd931fb  libquarantine.dylib (196.160.2.700.3) <45146171-F0C1-3104-AE01-6AAD841A70B5> /usr/lib/system/libquarantine.dylib
+       0x19e52f000 -        0x19e535d03  libsystem_coreservices.dylib (191.5.1) <BF51842C-BC69-3725-9EB2-7A52804963F8> /usr/lib/system/libsystem_coreservices.dylib
+       0x19eabe000 -        0x19eafba77  libsystem_m.dylib (3312.100.1) <A2858495-5B01-3D11-955D-FF6F25E88A6E> /usr/lib/system/libsystem_m.dylib
+       0x19eafd000 -        0x19eb00527  libmacho.dylib (1387) <95DEC6C1-4480-3303-8A52-9AFC3D8C9219> /usr/lib/system/libmacho.dylib
+       0x19eb1a000 -        0x19eb273a7  libcommonCrypto.dylib (600035) <EBA6E4D0-4DD2-33BB-BF95-48A58591AAAD> /usr/lib/system/libcommonCrypto.dylib
+       0x19eb28000 -        0x19eb31ca3  libunwind.dylib (2100.2) <201827AE-90B0-38B1-9729-50455B607293> /usr/lib/system/libunwind.dylib
+       0x19eb3a000 -        0x19eb44c1f  libcopyfile.dylib (240.160.2.702.1) <BA7266A8-BF4B-32BF-A323-F4B2EBCDC0B0> /usr/lib/system/libcopyfile.dylib
+       0x19eb45000 -        0x19eb48987  libcompiler_rt.dylib (103.3) <9EE26D98-97BF-3BE0-B6BE-425284AB2D24> /usr/lib/system/libcompiler_rt.dylib
+       0x19eb49000 -        0x19eb4d78b  libsystem_collections.dylib (1752.160.4) <34CEFA68-1E15-32F2-A5B1-97C0170A77C5> /usr/lib/system/libsystem_collections.dylib
+       0x19eb4e000 -        0x19eb514cf  libsystem_secinit.dylib (168.100.7) <B6B286B6-6E08-3578-8AFC-E4C55697C760> /usr/lib/system/libsystem_secinit.dylib
+       0x19eb52000 -        0x19eb54bf7  libremovefile.dylib (85.100.6) <33530415-3DB6-3556-A59A-24C22681D632> /usr/lib/system/libremovefile.dylib
+       0x19eb55000 -        0x19eb55f27  libkeymgr.dylib (31) <AD45B9EE-CE2B-3E1F-B96B-15F7F9FA3712> /usr/lib/system/libkeymgr.dylib
+       0x19eb56000 -        0x19eb5ee3f  libsystem_dnssd.dylib (2881.160.4.700.1) <71833E65-58B3-3C06-A4F3-D69D476CCC3C> /usr/lib/system/libsystem_dnssd.dylib
+       0x19eb5f000 -        0x19eb6409b  libcache.dylib (95) <A13AF0DC-5928-38BE-97FF-E04C29EF96AF> /usr/lib/system/libcache.dylib
+       0x19eb65000 -        0x19eb66ce3  libSystem.B.dylib (1356) <E9E4C9A6-16BB-392C-96AA-07797764E2A1> /usr/lib/libSystem.B.dylib
+       0x29283d000 -        0x292844349  libRosetta.dylib (367.9) <3DBB2990-262D-3776-8FAC-B88C0373DCF0> /usr/lib/libRosetta.dylib
+       0x294450000 -        0x294453a4b  libsystem_darwindirectory.dylib (122) <6246210A-5279-391D-8F58-E62A87CAB309> /usr/lib/system/libsystem_darwindirectory.dylib
+       0x294454000 -        0x29445e39b  libsystem_eligibility.dylib (319.160.17) <85C0486B-60BE-3E10-ABBF-DD74341B7376> /usr/lib/system/libsystem_eligibility.dylib
+       0x29445f000 -        0x29446688b  libsystem_sanitizers.dylib (26.1) <A8C4F7FC-3443-35F7-B306-068D06237ED0> /usr/lib/system/libsystem_sanitizers.dylib
+       0x294467000 -        0x294467bbf  libsystem_trial.dylib (474.2.18.2.1) <83FF8DEB-1153-35BA-99C3-2AEF9B7559CD> /usr/lib/system/libsystem_trial.dylib
