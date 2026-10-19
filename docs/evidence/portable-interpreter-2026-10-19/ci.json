@@ -1,0 +1,200 @@
+{
+  "pr": "https://github.com/Milky2018/wasmoon/pull/545",
+  "implementation_head": "a25d9db5e81ffa06f4a71cf7752a9ab25f222e9c",
+  "base": "8f99719a69d32e79325edf06785039f4d3fbf071",
+  "run_id": 39238063977,
+  "run_url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977",
+  "status": "all six implementation checks passed; documentation head must pass separately",
+  "source_revision": "8d80e1c969827e175e4526159f994e3c6b3a60d0",
+  "source_dirty": false,
+  "source_parents": [
+    "8f99719a69d32e79325edf06785039f4d3fbf071",
+    "a25d9db5e81ffa06f4a71cf7752a9ab25f222e9c"
+  ],
+  "jobs": [
+    {
+      "name": "Wasm interpreter",
+      "databaseId": 118011892197,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892197"
+    },
+    {
+      "name": "Linux AMD64",
+      "databaseId": 118011892413,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892413"
+    },
+    {
+      "name": "Linux ASan and UBSan",
+      "databaseId": 118011892438,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892438"
+    },
+    {
+      "name": "macOS ARM64",
+      "databaseId": 118011892478,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892478"
+    },
+    {
+      "name": "Windows AMD64 (clang)",
+      "databaseId": 118011892522,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892522"
+    },
+    {
+      "name": "Windows AMD64 (msvc)",
+      "databaseId": 118011892614,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892614"
+    }
+  ],
+  "sanitizer": {
+    "version": "0.17.0",
+    "source_revision": "8d80e1c969827e175e4526159f994e3c6b3a60d0",
+    "source_dirty": false,
+    "build_reuse": "fresh",
+    "binary_sha256": "14677c97cd644f5a8ec62f6d5204cb2c484ce1030142ed5edad3bd4a30d388d3",
+    "tests": "passed",
+    "event_loop": "passed",
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "lsan_probe": "detected",
+    "leak_detection": true,
+    "binary": "/home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+    "instrumentation": [
+      "address",
+      "undefined"
+    ],
+    "allocator": "system",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ]
+  },
+  "sanitizer_tests": 193,
+  "ordinary_leak_or_ub_reports": 0,
+  "lsan_positive_control_leaked_bytes": 17,
+  "portable": {
+    "focused_wasm_tests": 226,
+    "embedding": {
+      "result": 43,
+      "host_observed": 21,
+      "memory": 21,
+      "budget_released": true
+    },
+    "targets": {
+      "native": {
+        "artifact_sha256": "ae45f3b92fb983a756789bb4140e3bdaf35215be0a1a1887ddfdbf09667dd107",
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "wasm": {
+        "artifact_sha256": "a6755a38cabe1432fb12b5f274082f38b1c56f95b6f915011ef36d596dc2762a",
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      }
+    }
+  },
+  "windows": {
+    "clang": {
+      "native_tests": 2783,
+      "packages": 60,
+      "strict_c_stubs": 43,
+      "wasi03_http_contract": {
+        "pass": 110
+      },
+      "wasi03_binary_sha256": "386d7ced78dbfee7e549c0b8c8292255c5916ab5164ffb62c96ea1a415898fc4",
+      "misc": {
+        "upstream_commit": "46c23a87dac1465986a8ad53ba6a7ae49372857b",
+        "snapshot_sha256": "2ec0cfe1b1b538eef6d3bb3e0de76803b20cc0fe1d1da32f4a80fc0d5472546c",
+        "validation_profile": "wasmtime-engine-build",
+        "counts": {
+          "pass": 692,
+          "script_only": 72,
+          "fail": 0,
+          "timeout": 0,
+          "unsupported": 0,
+          "deferred": 0,
+          "harness_error": 0
+        }
+      },
+      "native_probes": 53,
+      "existing_privilege_skips": 3,
+      "actual_masm_argument_probe": "passed",
+      "packaged_wasm_embedding": "passed",
+      "job_log_sha256": "8416a0f9223eb289a0f4f49115160f00768ccf354e8ccf76a22916e6511a1bbf"
+    },
+    "msvc": {
+      "native_tests": 2783,
+      "packages": 60,
+      "strict_c_stubs": 43,
+      "wasi03_http_contract": {
+        "pass": 110
+      },
+      "wasi03_binary_sha256": "e9b37b96f8cb2f54f4a48e97da7dd5e82feef5659f80b49297d013125c00ace0",
+      "misc": {
+        "upstream_commit": "46c23a87dac1465986a8ad53ba6a7ae49372857b",
+        "snapshot_sha256": "2ec0cfe1b1b538eef6d3bb3e0de76803b20cc0fe1d1da32f4a80fc0d5472546c",
+        "validation_profile": "wasmtime-engine-build",
+        "counts": {
+          "pass": 692,
+          "script_only": 72,
+          "fail": 0,
+          "timeout": 0,
+          "unsupported": 0,
+          "deferred": 0,
+          "harness_error": 0
+        }
+      },
+      "native_probes": 53,
+      "existing_privilege_skips": 3,
+      "actual_masm_argument_probe": "passed",
+      "packaged_wasm_embedding": "passed",
+      "job_log_sha256": "cafb64ae6adb7dec2574fa495d28d67031a66f291b9be28e61381b5a94ab8818"
+    }
+  },
+  "receipts": [
+    {
+      "file": "ci-windows-clang-probes.log",
+      "sha256": "546721940109ac85f9468b323ab6c5c49496b2dfc717f6eb78e9fe8e23a04509",
+      "presentation_trailing_whitespace_trimmed": true
+    },
+    {
+      "file": "ci-windows-msvc-probes.log",
+      "sha256": "27b6d6ef7b99f9eb081c4279cfb9f2c8eececfd50c71c07e2d9a1b84753c1e4f",
+      "presentation_trailing_whitespace_trimmed": true
+    },
+    {
+      "file": "ci-linux-sanitizer-tests.log",
+      "sha256": "5d4411bee8e798417851ba5d14c67d78f6c309e68c7040b7d56908b5b475dd8d",
+      "presentation_trailing_whitespace_trimmed": true
+    },
+    {
+      "file": "ci-linux-lsan-positive-control.log",
+      "sha256": "168b5fc613a3fc9c4723c7ba7e211fead7b256b38dab0c28b68513939ee84613",
+      "presentation_trailing_whitespace_trimmed": true
+    },
+    {
+      "file": "ci-linux-asan-positive-control.log",
+      "sha256": "e5fa76cf0b534eaeeab70eef42e49c17bfe2451f94cb1e849d41925596094798",
+      "presentation_trailing_whitespace_trimmed": true
+    },
+    {
+      "file": "ci-linux-native-asan-positive-control.log",
+      "sha256": "4f8cbedbac62255953aad943f521915e4ba2a26356d1f2c63e8994cd248f5ca3",
+      "presentation_trailing_whitespace_trimmed": true
+    },
+    {
+      "file": "ci-wasm-job.log",
+      "sha256": "cbd5b24ab82eb3d7b701ee9ce2905a9227d4c0ad739dd86fb38c260082f646d9",
+      "presentation_trailing_whitespace_trimmed": true
+    }
+  ]
+}

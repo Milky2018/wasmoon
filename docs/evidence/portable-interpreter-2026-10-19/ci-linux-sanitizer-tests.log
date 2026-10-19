@@ -1,0 +1,9 @@
+Downloading marianoguerra/uri@0.1.2
+Downloading moonbitlang/async@0.22.4
+Downloading moonbitlang/x@0.5.5
+Warning: Package `Milky2018/wasmoon_sanitizer` does not declare `supported_targets`, but depends on `Milky2018/wasmoon/cmd/wasmoon/commands` which declares it. Consider declaring `supported_targets` explicitly
+/home/runner/work/wasmoon/wasmoon/target/sanitizers/package/.mooncakes/moonbitlang/async/src/internal/event_loop/thread_pool.c: In function ‘cancellation_signal_handler’:
+/home/runner/work/wasmoon/wasmoon/target/sanitizers/package/.mooncakes/moonbitlang/async/src/internal/event_loop/thread_pool.c:470:5: warning: ignoring return value of ‘write’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+  470 |     write(pool.notify_send, &data, sizeof(data));
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Total tests: 193, passed: 193, failed: 0.
