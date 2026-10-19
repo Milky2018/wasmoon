@@ -61,9 +61,10 @@ test "type-heavy module with allocating globals instantiates" {
 
 ///|
 test "identical modules share GC type identities across instances" {
+  let count = 40
   let store = @runtime.Store::Store()
   defer store.close()
-  let module_ = many_types_module(40)
+  let module_ = many_types_module(count)
   let imports = @runtime.Imports::Imports(store)
   let first = @executor.instantiate_module_with_imports(store, module_, imports)
   let second = @executor.instantiate_module_with_imports(
@@ -75,7 +76,8 @@ test "identical modules share GC type identities across instances" {
   }
   // The struct allocated through the first instance's constant-expression
   // graph must satisfy the struct type of the second instance: identities
-  // are content-based, not per registration.
-  let struct_type_idx = 40 // struct type index inside many_types_module(40)
+  // are content-based, not per registration. many_types_module appends the
+  // struct type right after the `count` function types.
+  let struct_type_idx = count
   assert_true(store.gc_type_is_subtype(reference, second, struct_type_idx))
 }

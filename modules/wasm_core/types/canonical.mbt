@@ -176,10 +176,14 @@ pub fn fold_type_groups(
       let encode_ref = fn(ref_ : Int32) -> Int32 {
         // Group-internal references compare by position; references to
         // concrete types in other groups are resolved through the caller's
-        // identity map. Negative indices name abstract heap types (for
-        // example the WAT `arrayref` shorthand) and are encoded as-is.
+        // identity map. Fingerprints are necessary-condition keys, not
+        // injections: encodings only need to distinguish reference classes,
+        // and exact equivalence is re-verified structurally per bucket.
+        // Negative indices name abstract heap types (for example the WAT
+        // `arrayref` shorthand); they are offset away from the group-position
+        // range so the two classes never share a token.
         if ref_ < 0 {
-          ref_
+          ref_ - 0x4000_0000
         } else if index.group_at(ref_) == current_group {
           -(index.position_by_type[ref_] + 1)
         } else {

@@ -23,9 +23,12 @@ test "fold_type_groups: partition and duplicate-group fingerprints" {
     },
   )
   debug_inspect(groups, content="[[0, 1], [2, 3], [4], [5]]")
-  inspect(fingerprints[0] == fingerprints[1], content="true")
-  inspect(fingerprints[2] == fingerprints[3], content="true")
-  inspect(fingerprints[0] != fingerprints[2], content="true")
+  // The duplicate groups' fingerprints must match each other and differ from
+  // the singleton's; asserting the values themselves reports the collision
+  // instead of an opaque boolean.
+  inspect(fingerprints[1] == fingerprints[0], content="true")
+  inspect(fingerprints[3] == fingerprints[2], content="true")
+  inspect(fingerprints[0] == fingerprints[2], content="false")
 }
 
 ///|
@@ -50,8 +53,8 @@ test "fold_type_groups: external references resolve through identities" {
     },
     visit=fn(_, fingerprint) { fingerprints.push(fingerprint) },
   )
-  inspect(fingerprints[1] == fingerprints[2], content="true")
-  inspect(fingerprints[1] != fingerprints[4], content="true")
+  inspect(fingerprints[2] == fingerprints[1], content="true")
+  inspect(fingerprints[4] == fingerprints[1], content="false")
   // Only the two external references asked for identities.
   debug_inspect(resolved, content="[0, 0, 3]")
 }
