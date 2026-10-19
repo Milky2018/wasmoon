@@ -26,3 +26,37 @@ test "numeric memory indices and SIMD lanes have distinct immediate positions" {
     ),
   )
 }
+
+///|
+test "text alignment decodes unsigned powers of two through bit 63" {
+  let module_ = parse(
+    (
+      #|(module (memory 1 1 shared) (func
+      #|  i32.const 0 i32.load align=0x8000_0000_0000_0000 drop
+      #|  i32.const 0 i32.atomic.load align=0x8000_0000_0000_0000 drop
+      #|  i32.const 0 v128.const i32x4 0 0 0 0
+      #|  v128.load8_lane align=0x8000_0000_0000_0000 0 drop))
+    ),
+  )
+  for instruction in module_.codes[0].body {
+    match instruction {
+      I32Load(_, align, _)
+      | Atomic(_, _, align, _)
+      | V128Load8Lane(_, align, _, _) => assert_eq(align, 63)
+      _ => ()
+    }
+  }
+  for alignment in ["0", "3", "0x1_0000_0000_0000_0000"] {
+    try
+      parse(
+        "(module (memory 1) (func i32.const 0 i32.load align=" +
+        alignment +
+        " drop))",
+      )
+    catch {
+      _ => ()
+    } noraise {
+      _ => fail("invalid alignment syntax was accepted")
+    }
+  }
+}

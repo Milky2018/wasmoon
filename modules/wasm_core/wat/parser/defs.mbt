@@ -392,7 +392,7 @@ fn Parser::parse_optional_page_size_log2(self : Parser) -> Int32 raise WatError 
     )
   }
   self.expect_rparen()
-  log2(page_size)
+  log2(page_size.to_uint64())
 }
 
 ///|

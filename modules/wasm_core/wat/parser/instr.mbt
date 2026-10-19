@@ -1057,8 +1057,8 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int32, Int32, Int64) raise WatError 
           for i in 6..<s.length() {
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
-          let a = parse_u32(align_str.to_string())
-          if a == 0 || (a & (a - 1)) != 0 {
+          let a = parse_u64(align_str.to_string()).reinterpret_as_uint64()
+          if a == 0UL || (a & (a - 1UL)) != 0UL {
             raise UnexpectedToken(
               "alignment must be a nonzero power of two",
               parser.loc(),
@@ -1115,8 +1115,8 @@ fn parse_mem_arg(
           for i in 6..<s.length() {
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
-          let a = parse_u32(align_str.to_string())
-          if a == 0 || (a & (a - 1)) != 0 {
+          let a = parse_u64(align_str.to_string()).reinterpret_as_uint64()
+          if a == 0UL || (a & (a - 1UL)) != 0UL {
             raise UnexpectedToken(
               "alignment must be a nonzero power of two",
               parser.loc(),
@@ -1135,11 +1135,11 @@ fn parse_mem_arg(
 }
 
 ///|
-fn log2(n : Int32) -> Int32 {
-  let mut v = n.reinterpret_as_uint()
+fn log2(n : UInt64) -> Int32 {
+  let mut v = n
   let mut r = 0
-  while v > 1U {
-    v = v / 2U
+  while v > 1UL {
+    v = v / 2UL
     r += 1
   }
   r

@@ -15,28 +15,17 @@ fn Parser::read_u64(self : Parser) -> Int64 raise ParserError {
 }
 
 ///|
-/// Read memory argument (memidx, align, offset) with validation
-/// Multi-memory: if bit 6 of flags is set, memory index follows
-/// Alignment values >= 32 are reserved and should be rejected as malformed
-/// The flags byte must not have continuation bit set (must fit in single byte)
-/// offset is read as u64 to support memory64 64-bit offsets
+/// Decode memory arguments; natural alignment is checked by the validator.
+/// Bit 6 selects an explicit memory index, and the low six bits encode alignment.
 fn Parser::read_memarg(
   self : Parser,
 ) -> (Int32, Int32, Int64) raise ParserError {
-  // Read first byte directly - must not have continuation bit (0x80) set
-  let flags_byte = self.read_byte()
-  if (flags_byte & 0x80) != 0 {
-    // Continuation bit is set - malformed memop flags
+  let flags = self.read_leb128_u32()
+  if flags.reinterpret_as_uint() >= 0x80U {
     raise MalformedMemopFlags
   }
-  let flags = flags_byte
-  // Multi-memory proposal: if bit 6 is set, memory index follows
   let memidx = if (flags & 0x40) != 0 { self.read_leb128_u32() } else { 0 }
-  let align = flags & 0x3F // Lower 6 bits are alignment
-  // WebAssembly spec: alignment values >= 32 are reserved
-  if align >= 32 {
-    raise MalformedMemopFlags
-  }
+  let align = flags & 0x3F
   // Read offset as u64 to support memory64 64-bit offsets
   let offset = self.read_leb128_u64()
   (memidx, align, offset)
