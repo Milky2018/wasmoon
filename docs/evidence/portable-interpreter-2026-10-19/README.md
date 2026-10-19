@@ -121,3 +121,9 @@ actual package archives extracted into unrelated directories, without publishing
 Text-validity rules follow the official Core specification's
 [lexical conventions](https://webassembly.github.io/spec/core/text/lexical.html)
 and [text values](https://webassembly.github.io/spec/core/text/values.html).
+
+## PR review follow-up
+
+[Review fixes and clean local regression evidence](review-fixes.md) document
+separate follow-up commits and the 19 hidden phase errors exposed by strict
+assertion handling. The original dirty receipts above remain historical.
