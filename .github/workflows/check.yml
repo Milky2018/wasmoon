@@ -369,7 +369,10 @@ jobs:
           python-version: '3.12'
       - name: diagnose HTTP timing on the Windows runtime
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_only == true }}
-        run: python scripts/diagnose_http_timing.py --output target/http-timing-${{ matrix.compiler }}
+        run: |
+          New-Item -ItemType Directory -Force target/http-timing-${{ matrix.compiler }} | Out-Null
+          python scripts/diagnose_http_timing.py --output target/http-timing-${{ matrix.compiler }} 2>&1 | Tee-Object -FilePath target/http-timing-${{ matrix.compiler }}/driver.log
+          exit $LASTEXITCODE
 
       - name: upload temporary HTTP timing diagnosis
         if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.windows_only == true }}

@@ -103,6 +103,9 @@ def main() -> int:
     if os.name != "nt":
         raise SystemExit("This diagnostic requires the real Windows native runtime")
     args.output.mkdir(parents=True, exist_ok=True)
+    with (args.output / "bootstrap.log").open("w", encoding="utf-8") as log:
+        subprocess.run(["moon", "check", "--target", "native", "modules/wasmoon/wasi_http"],
+                       cwd=ROOT, stdout=log, stderr=log, check=True, timeout=600)
     paths = [ROOT / ".mooncakes/moonbitlang/async/src/tls/schannel.c",
              ROOT / "modules/wasmoon/wasi_http/wire.mbt",
              ROOT / "modules/wasmoon/wasi_http/timeout_wbtest.mbt"]
@@ -121,9 +124,9 @@ def main() -> int:
     summary = args.output / "summary.json"
     def save(): summary.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     try:
-        paths[0].write_text(instrument_tls(originals[paths[0]].decode()), encoding="utf-8")
-        paths[1].write_text(instrument_wire(originals[paths[1]].decode()), encoding="utf-8")
-        paths[2].write_text(instrument_tests(originals[paths[2]].decode()), encoding="utf-8")
+        paths[0].write_text(instrument_tls(originals[paths[0]].decode().replace("\r\n", "\n")), encoding="utf-8")
+        paths[1].write_text(instrument_wire(originals[paths[1]].decode().replace("\r\n", "\n")), encoding="utf-8")
+        paths[2].write_text(instrument_tests(originals[paths[2]].decode().replace("\r\n", "\n")), encoding="utf-8")
         build_dir = args.output / "build"
         build = ["moon", "test", "--target", "native", "--package", "Milky2018/wasmoon/wasi_http",
                  "--build-only", "--strip", "--jobs", "2", "--target-dir", str(build_dir)]
