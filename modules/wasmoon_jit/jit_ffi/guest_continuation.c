@@ -206,7 +206,7 @@ static int32_t bind_body_roots(native_continuation_arena_t *arena, native_contin
     for (size_t i = 0; i < sizeof(registrations) / sizeof(registrations[0]); ++i) {
         if (registrations[i]) {
             if (!gc_heap_bind_continuation_roots(registrations[i], arena,
-                    gc_heap_registration_heap(registrations[i])->root_visitor ? reference : 0))
+                    gc_heap_registration_heap(registrations[i])->precise_roots ? reference : 0))
                 return 0;
         }
     }
@@ -230,7 +230,7 @@ WASMOON_NO_FUNCTION_SANITIZE void continuation_arena_reset_marks(native_continua
     if (arena) arena->callbacks->reset_marks(arena->state);
 }
 WASMOON_NO_FUNCTION_SANITIZE void continuation_arena_sweep(native_continuation_arena_t *arena, GcHeap *heap) {
-    if (arena && heap->root_visitor) arena->callbacks->sweep(arena->state, (int64_t)(uintptr_t)heap);
+    if (arena) arena->callbacks->sweep(arena->state, (int64_t)(uintptr_t)heap);
 }
 
 MOONBIT_FFI_EXPORT int64_t *wasmoon_continuation_body_gc_roots(int64_t address) {

@@ -132,10 +132,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_scratch_isolation(void) {
     return passed;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(void) {
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(GcHeap *heap) {
     jit_context_t *ctx = alloc_context_internal(1);
     if (!ctx) return 0;
-    GcHeap *heap = gc_heap_new(1024);
     ctx_set_gc_heap_internal(ctx, heap);
     int32_t ref = gc_heap_alloc_struct(heap, 0, NULL, 0);
     int64_t root = (int64_t)ref << 1;
@@ -176,7 +175,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(void) {
     jit_trap_activation_pop(&caller);
     passed &= ctx_execution(ctx)->gc_root_scratch[0] == other;
     free_context_internal(ctx);
-    moonbit_decref(heap);
     return passed;
 }
 

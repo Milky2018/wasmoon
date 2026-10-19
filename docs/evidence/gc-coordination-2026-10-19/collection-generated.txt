@@ -1,0 +1,38 @@
+int32_t _M0MP39Milky201812wasmoon__jit8jit__ffi15CollectionState7collect(
+  struct _M0TP39Milky201812wasmoon__jit8jit__ffi15CollectionState* _M0L4selfS86144,
+  void* _M0L7requestS86146,
+  int32_t _M0L8rollbackS86147
+) {
+  int32_t _M0L10collectingS253429;
+  #line 103 "/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon_jit/jit_ffi/gc_collection.mbt"
+  _M0L10collectingS253429 = _M0L4selfS86144->$1;
+  if (!_M0L10collectingS253429) {
+    struct _M0TWiAlEAl* _M0L7visitorS253432;
+    int32_t _M0L6resultS86145;
+    struct _M0TWiAlEAl* _M0L7_2abindS86148;
+    int32_t _M0L6_2atmpS253431;
+    int32_t _M0L6_2atmpS253430;
+    _M0L4selfS86144->$1 = 1;
+    _M0L7visitorS253432 = _M0L4selfS86144->$0;
+    if (_M0L7visitorS253432) {
+      moonbit_incref_cycle_free(_M0L7visitorS253432);
+    }
+    #line 103 "/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon_jit/jit_ffi/gc_collection.mbt"
+    _M0L6resultS86145
+    = _M0FP39Milky201812wasmoon__jit8jit__ffi19trace__and__reclaim(_M0L7requestS86146, _M0L7visitorS253432, _M0L8rollbackS86147);
+    if (_M0L7visitorS253432) {
+      moonbit_decref_cycle_free(_M0L7visitorS253432);
+    }
+    _M0L4selfS86144->$1 = 0;
+    _M0L7_2abindS86148 = _M0L4selfS86144->$0;
+    _M0L6_2atmpS253431 = _M0L7_2abindS86148 == 0;
+    _M0L6_2atmpS253430 = !_M0L6_2atmpS253431;
+    #line 103 "/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon_jit/jit_ffi/gc_collection.mbt"
+    _M0MP39Milky201812wasmoon__jit8jit__ffi17CollectionRequest19set__precise__roots(_M0L7requestS86146, _M0L6_2atmpS253430);
+    return _M0L6resultS86145;
+  } else if (_M0L8rollbackS86147) {
+    return 0;
+  } else {
+    return -1;
+  }
+}

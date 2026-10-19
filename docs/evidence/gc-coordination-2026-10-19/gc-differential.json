@@ -1,0 +1,737 @@
+{
+  "test_dir": "/Users/zhengyu/Documents/projects/wasmoon/spec/gc",
+  "repeat": 1,
+  "files": {
+    "array.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 47,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 47,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 47,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 47,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "array_copy.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 34,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 34,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 34,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 34,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "array_fill.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 29,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 29,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 29,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 29,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "array_init_data.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 44,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 44,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 44,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 44,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "array_init_elem.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 22,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 22,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 22,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 22,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "array_new_data.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 23,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 23,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 23,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 23,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "array_new_elem.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 18,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 18,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 18,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 18,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "binary-gc.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 1,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "br_on_cast.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "br_on_cast_fail.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 31,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "extern.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 16,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "i31.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 57,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "ref_cast.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 40,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "ref_eq.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 87,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "ref_test.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 68,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "struct.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 24,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 24,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 24,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 24,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    },
+    "type-subtyping.wast": {
+      "interp": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_verify": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      },
+      "jit_stress_small_heap": {
+        "status": "pass",
+        "passed": 61,
+        "failed": 0,
+        "error": null,
+        "trap_signature": null,
+        "root_count": 0,
+        "gc_collect_events": 0,
+        "gc_retry_count": 0
+      }
+    }
+  },
+  "reductions": [],
+  "summary": {
+    "total_files": 17,
+    "interp_pass": 17,
+    "jit_pass": 17,
+    "stress_pass": 17,
+    "small_heap_pass": 17,
+    "barrier_pass": 0,
+    "regressions": [],
+    "issues": [],
+    "trap_mismatches": [],
+    "flaky": [],
+    "fault_inject_non_pass": 0,
+    "reductions_attempted": 0,
+    "reductions_succeeded": 0,
+    "reductions_failed": 0
+  }
+}

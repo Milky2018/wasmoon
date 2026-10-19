@@ -1,0 +1,32 @@
+[
+  {
+    "suite": "stable-0.2",
+    "mode": "jit",
+    "exit_code": 0
+  },
+  {
+    "suite": "stable-0.2",
+    "mode": "interp",
+    "exit_code": 0
+  },
+  {
+    "suite": "async-0.3",
+    "mode": "jit",
+    "exit_code": 0
+  },
+  {
+    "suite": "async-0.3",
+    "mode": "interp",
+    "exit_code": 0
+  },
+  {
+    "suite": "future-gated",
+    "mode": "jit",
+    "exit_code": 0
+  },
+  {
+    "suite": "future-gated",
+    "mode": "interp",
+    "exit_code": 0
+  }
+]

@@ -1,11 +1,10 @@
 # Native runtime policy ownership
 
-ISS-635 tracks this migration. GC allocation retry policy, exception registry
-ownership and private native test layouts have moved to their intended owners.
-PR #541 supplies platform acceptance for the exception work (ISS-637). The
-continuation lifecycle implementation (ISS-638) now lives in MoonBit and has
-local regression evidence; its new native ownership paths still require Linux
-and Windows CI. GC collection coordination remains to review. This document
+ISS-635 tracks this migration. GC allocation retry and collection coordination,
+exception registries and continuation lifecycle now have MoonBit owners. Native
+test layouts live with their implementation. PR #541 supplies platform acceptance
+for the exception work (ISS-637). The newer continuation and collection changes
+have local regression evidence and still require Linux/Windows CI. This document
 describes the current boundary, not completion of the whole epic.
 
 ## State and owners
@@ -15,6 +14,7 @@ describes the current boundary, not completion of the whole epic.
 | Wasm objects, object identities, contiguous payload, mark/sweep/compaction | Managed `GCHeapHandle` and native heap implementation | Generated code directly addresses this layout; moving payloads requires refreshing native heap pointers. Logical Store reachability is expanded by MoonBit. |
 | Allocation retries and classification of collection failure, quota denial and exhaustion | MoonBit `jit_ffi/gc_heap.mbt::allocate` | Three call-scoped primitives attempt a physical allocation, collect pinned roots, and read the last physical admission result. C has no retry loop. |
 | Explicit, live activation, spilled, table and parked roots | Native activation/root registrations plus MoonBit Store visitor | Native stack maps and parked stacks contain machine addresses. The Store visitor traces MoonBit wrappers, exceptions and continuations; its closure exists only during an execution/collection scope. |
+| Collection/rollback protocol, visitor ownership and reentry | MoonBit `CollectionState` | Native code copies root spans and mutates physical object storage. A cached precision flag occupies existing padding and is written from MoonBit outside an active collection; no duplicate visitor or phase machine remains in C. |
 | Stable exception identity, tag layouts, payload registry, admission and reclamation | MoonBit `ExceptionState` with packed numeric metadata and an RC-retained native callback view | One RC storage owner holds fallible payload buffers and physical root/quota leases. C has no identity registry or reclamation decisions. Handler jump buffers remain a control-transfer primitive. |
 | Continuation identities, admission, marks, retirement and sealing | MoonBit `ContinuationState`; an RC bridge retains it | RC physical storage owns bodies, buffers and root/quota leases. Active native cancellation scopes pin bodies directly. Saved machine stacks, platform contexts and stack transfers remain native primitives. |
 | Immutable callable metadata | MoonBit registry with RC-retained native array view | Existing example of one logical owner and direct native reads without a second mutable registry. |
@@ -46,7 +46,9 @@ buffers reside in the bridge/caller storage, not inside the movable Wasm heap.
 The context retains its heap; collection additionally retains the heap while
 invoking a visitor that can retire owners. Canonical runtime type binding is
 performed on every successful physical attempt, for word and slot layouts.
-Reentry protection and root merging remain in `gc_collect_for_alloc_internal`.
+Activation root assembly remains in `gc_collect_for_alloc_internal`; its
+guard protects native scratch preparation before the heap-wide coordinator
+is entered.
 The non-callback physical root-copy, sweep and compaction loops capture a
 stable native scan span: their writes cannot resize descriptor storage or
 change its object count. This removes descriptor reloads forced by potential
@@ -59,6 +61,55 @@ This fixes an existing difference: word allocation helpers used to collapse a
 failed collection into allocation exhaustion, while wide helpers reported
 missing precise roots. Regression tests now require the precise-root error
 and successful subsequent reuse for all six allocation formats.
+
+## Collection and rollback protocol
+
+A native heap retains one MoonBit `CollectionState`; that state holds the
+optional Store visitor and a per-heap collection guard, without a direct heap
+field. A visitor may indirectly retain the heap through its Store. The visitor
+remains bound only during the existing tracing scope,
+so Store ownership still relies on balanced `begin_gc_tracing`/`end_gc_tracing`
+rather than a permanent RC cycle. Binding and clearing are MoonBit operations.
+The public `GCHeapHandle` and `CHeap` interfaces are unchanged.
+
+Normal collection and allocation rollback enter the same closed, synchronous
+coordinator with a borrowed native stack request. Both entry paths retain the
+heap until the coordinator returns, including when a visitor closes its owning
+`CHeap`. A recursive collection on the same heap returns failure without
+entering another phase; a different heap has its own guard and may collect.
+
+The coordinator captures one visitor for the complete prepare/finish/abort
+protocol. It requests native root seeds, expands typed Store reachability,
+decides whether to abort, selects physical sweep/compaction or rollback, then
+sweeps exception and continuation owners before visitor completion. Abort
+clears native/auxiliary marks and invokes phase 2 on that same captured visitor.
+Replacing or clearing a binding in any callback affects the next collection.
+The precision flag used by native marking is held stable until this protocol
+ends; otherwise an integer resembling a reference could suddenly become a
+conservative edge halfway through a precise collection.
+
+The protocol helper is non-raising and returns every outcome to one outer
+cleanup point. This avoids a generated per-collection `defer` environment;
+release code inspection verifies that the outer coordinator allocates none.
+Native root arrays and the visitor's result retain ordinary MoonBit ownership.
+The borrowed request is neither RC-managed nor retained past the callback.
+No trap or stack switch occurs while a MoonBit coordinator frame is active.
+
+Native code retains root-span copying, stack-map access, physical mark/sweep,
+compaction, rollback mutation and accounting primitives. The cached precision
+view uses an existing 4-byte gap before the allocation-policy pointer: the
+macOS ARM64 native heap descriptor stays 160B, with allocation field offsets
+unchanged. There is one additional managed coordinator per heap, not per object
+or allocation; JIT context layout is unchanged. Private test helpers receive a
+heap made by the managed constructor, so tests do not have a second collector
+without its state. The raw physical constructor is now private to its C file.
+
+`gc_heap.mbt` and `gc_collection.mbt` remain in the handle's owning package
+because construction and collection methods share private state and the closed
+native callback contract; no public registry/layout getters are introduced.
+See [collection evidence](evidence/gc-coordination-2026-10-19/README.md) for
+before/after failures, negative controls, source hashes, local gates and measured
+fast/slow paths. New platform acceptance remains pending under ISS-636.
 
 ## Exception registry and native control transfer
 
@@ -183,18 +234,16 @@ See [local evidence](evidence/native-runtime-policy-2026-10-16/README.md).
 Local macOS ASan/UBSan is not Linux leak detection or Windows compiler
 acceptance. ISS-637 is closed with the accepted PR #541 CI receipts and measured
 performance investigation. ISS-638 remains in progress for platform acceptance
-of the new continuation paths. ISS-636 still needs collection-coordination
-review and final acceptance reconciliation; ISS-639 needs final archive/platform
-acceptance reconciliation. Their historical pending notes must be checked
+of the new continuation paths. ISS-636 has completed local collection
+coordination and review, with new platform acceptance pending; ISS-639 needs
+final archive/platform acceptance reconciliation. Their historical pending notes must be checked
 against PR #541 rather than interpreted as new missing implementations.
 
-The next migration review is `gc_heap_prepare_roots`, `gc_heap_finish_roots` and
-`gc_heap_abort_roots`: native root gathering, managed Store reachability,
-exception/continuation sweep and visitor failure recovery still form one
-collection protocol. Move any remaining policy together with its state and
-rollback contract; retain machine stack-map traversal and physical payload
-mark/sweep/compaction where generated code needs that layout. Fiber/context
-assembly, ABI entry points and raw OS/buffer operations are retained native
-mechanisms, not an outstanding instruction to translate every C line.
+The old C prepare/finish/abort protocol and visitor storage have been removed.
+The remaining work for this slice is cross-platform acceptance and reconciliation
+of the earlier test-layout receipts. Native stack-map traversal, physical payload
+scans, fiber/context assembly, ABI entry points and raw OS/buffer operations
+remain machine/storage mechanisms. Their presence alone is not an outstanding
+instruction to translate every C line.
 ISS-634's upstream build-dependency fixes and ISS-640's builtin argument-routing
 bug are separate work. The installed stable toolchain is unchanged.

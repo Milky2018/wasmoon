@@ -1,0 +1,1222 @@
+{
+  "seed": 636,
+  "warmup_rounds": 2,
+  "measured_rounds": 21,
+  "method": "Serial subprocesses, shuffled cases and paired version order. Two putchar call boundaries exclude loading/compilation and teardown. Thread CPU time; process retired instructions/cycles. No core affinity or frequency control.",
+  "forced_collection_environment": {
+    "wide-30000": {
+      "WASMOON_GC_FAIL_ALLOC_EVERY": "2"
+    }
+  },
+  "binaries": {
+    "before": {
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/before",
+      "sha256": "f8333d5e7473973c09f6b261ad4b823fc0b4b3ceafb9c41b54f64a09cca7548d"
+    },
+    "after": {
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/after",
+      "sha256": "aca7d0293f7d528ce18b1db19056f83346a6621469ce97cab7758b8a6c19f302"
+    }
+  },
+  "counter_library_sha256": "87b90d957253ba519eb2549f3cd6f519159c539a0260d9fe1e722a8da3396214",
+  "fixtures": {
+    "word-2000000": "f3b9d9687520e3dfbb3267b472c7c73ceb3b64fcb8ad02e45224c16f6b943a74",
+    "wide-1000000": "d57c46f44f57d32dc5f6def57f15902a1f3c20512a10eaf3b622f5ca5e9edb82",
+    "wide-30000": "06088a52cb935fe8296d3d602b9bae11d945a1e5bcd56ea9385fc709bacb8b4b"
+  },
+  "samples": [
+    {
+      "round": -2,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 23684375,
+      "instructions": 467417320,
+      "cycles": 89281243
+    },
+    {
+      "round": -2,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24499875,
+      "instructions": 467480674,
+      "cycles": 90934562
+    },
+    {
+      "round": -2,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 502474250,
+      "instructions": 6211000248,
+      "cycles": 1891912413
+    },
+    {
+      "round": -2,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 493577459,
+      "instructions": 6212064810,
+      "cycles": 1909303940
+    },
+    {
+      "round": -2,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 93377125,
+      "instructions": 2173961745,
+      "cycles": 338964808
+    },
+    {
+      "round": -2,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 90294125,
+      "instructions": 2171204959,
+      "cycles": 336669534
+    },
+    {
+      "round": -1,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 89030958,
+      "instructions": 2171086756,
+      "cycles": 334289996
+    },
+    {
+      "round": -1,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 90453209,
+      "instructions": 2171177932,
+      "cycles": 337469624
+    },
+    {
+      "round": -1,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 477048333,
+      "instructions": 6210569106,
+      "cycles": 1894484132
+    },
+    {
+      "round": -1,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 474274042,
+      "instructions": 6211782530,
+      "cycles": 1891401062
+    },
+    {
+      "round": -1,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24339709,
+      "instructions": 465537093,
+      "cycles": 95279250
+    },
+    {
+      "round": -1,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 23019375,
+      "instructions": 465711242,
+      "cycles": 87581138
+    },
+    {
+      "round": 0,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 483203333,
+      "instructions": 6212444713,
+      "cycles": 1909085506
+    },
+    {
+      "round": 0,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 473055500,
+      "instructions": 6210461898,
+      "cycles": 1889991259
+    },
+    {
+      "round": 0,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 90121833,
+      "instructions": 2173864522,
+      "cycles": 340077349
+    },
+    {
+      "round": 0,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 91112416,
+      "instructions": 2174226261,
+      "cycles": 340900958
+    },
+    {
+      "round": 0,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 23255625,
+      "instructions": 466040769,
+      "cycles": 87575856
+    },
+    {
+      "round": 0,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 23861125,
+      "instructions": 466069082,
+      "cycles": 89974558
+    },
+    {
+      "round": 1,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 23417834,
+      "instructions": 466333452,
+      "cycles": 88135799
+    },
+    {
+      "round": 1,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24014209,
+      "instructions": 465428836,
+      "cycles": 91069881
+    },
+    {
+      "round": 1,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 478437000,
+      "instructions": 6211792193,
+      "cycles": 1901343859
+    },
+    {
+      "round": 1,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 489756291,
+      "instructions": 6210751548,
+      "cycles": 1899943019
+    },
+    {
+      "round": 1,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 90623625,
+      "instructions": 2171161285,
+      "cycles": 338369085
+    },
+    {
+      "round": 1,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 92803375,
+      "instructions": 2171149639,
+      "cycles": 345506743
+    },
+    {
+      "round": 2,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 25386625,
+      "instructions": 465448719,
+      "cycles": 95541612
+    },
+    {
+      "round": 2,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 23570416,
+      "instructions": 465419611,
+      "cycles": 89427676
+    },
+    {
+      "round": 2,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 92356709,
+      "instructions": 2171339221,
+      "cycles": 343225041
+    },
+    {
+      "round": 2,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 94175250,
+      "instructions": 2171187335,
+      "cycles": 342647794
+    },
+    {
+      "round": 2,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 520219750,
+      "instructions": 6211769107,
+      "cycles": 1901056371
+    },
+    {
+      "round": 2,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 488693416,
+      "instructions": 6212267150,
+      "cycles": 1894282296
+    },
+    {
+      "round": 3,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 493631250,
+      "instructions": 6210682625,
+      "cycles": 1893153326
+    },
+    {
+      "round": 3,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 480037916,
+      "instructions": 6211797947,
+      "cycles": 1894862622
+    },
+    {
+      "round": 3,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 91487375,
+      "instructions": 2171185586,
+      "cycles": 336762541
+    },
+    {
+      "round": 3,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 92791875,
+      "instructions": 2173181693,
+      "cycles": 341257363
+    },
+    {
+      "round": 3,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24375208,
+      "instructions": 467380146,
+      "cycles": 89916206
+    },
+    {
+      "round": 3,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24725375,
+      "instructions": 467258809,
+      "cycles": 91457627
+    },
+    {
+      "round": 4,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24337000,
+      "instructions": 467179409,
+      "cycles": 90196982
+    },
+    {
+      "round": 4,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 23196375,
+      "instructions": 467307466,
+      "cycles": 86714515
+    },
+    {
+      "round": 4,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 483650250,
+      "instructions": 6211972325,
+      "cycles": 1896040082
+    },
+    {
+      "round": 4,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 487094833,
+      "instructions": 6210739427,
+      "cycles": 1896812606
+    },
+    {
+      "round": 4,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 91806791,
+      "instructions": 2171271656,
+      "cycles": 339809238
+    },
+    {
+      "round": 4,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 90769083,
+      "instructions": 2171610783,
+      "cycles": 337974239
+    },
+    {
+      "round": 5,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24578792,
+      "instructions": 465537495,
+      "cycles": 93076804
+    },
+    {
+      "round": 5,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24869625,
+      "instructions": 465457131,
+      "cycles": 93647872
+    },
+    {
+      "round": 5,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 498639166,
+      "instructions": 6212540116,
+      "cycles": 1901268243
+    },
+    {
+      "round": 5,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 497568958,
+      "instructions": 6210895799,
+      "cycles": 1891966491
+    },
+    {
+      "round": 5,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 93315042,
+      "instructions": 2171343407,
+      "cycles": 346512376
+    },
+    {
+      "round": 5,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 92035084,
+      "instructions": 2171387413,
+      "cycles": 338668032
+    },
+    {
+      "round": 6,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 485997208,
+      "instructions": 6210578021,
+      "cycles": 1891606511
+    },
+    {
+      "round": 6,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 500465084,
+      "instructions": 6212149095,
+      "cycles": 1900081511
+    },
+    {
+      "round": 6,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 26788875,
+      "instructions": 465529365,
+      "cycles": 96745034
+    },
+    {
+      "round": 6,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 23676833,
+      "instructions": 465406486,
+      "cycles": 89201745
+    },
+    {
+      "round": 6,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 94609583,
+      "instructions": 2171127527,
+      "cycles": 348937211
+    },
+    {
+      "round": 6,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 94951208,
+      "instructions": 2171587774,
+      "cycles": 345474400
+    },
+    {
+      "round": 7,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 94483292,
+      "instructions": 2171070802,
+      "cycles": 340583449
+    },
+    {
+      "round": 7,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 93739291,
+      "instructions": 2171873185,
+      "cycles": 345031851
+    },
+    {
+      "round": 7,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 23414167,
+      "instructions": 465478356,
+      "cycles": 87961590
+    },
+    {
+      "round": 7,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 25130375,
+      "instructions": 465610001,
+      "cycles": 92981732
+    },
+    {
+      "round": 7,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 488878792,
+      "instructions": 6211852945,
+      "cycles": 1894147734
+    },
+    {
+      "round": 7,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 513591333,
+      "instructions": 6210777272,
+      "cycles": 1893834758
+    },
+    {
+      "round": 8,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 512741958,
+      "instructions": 6210022078,
+      "cycles": 1886512627
+    },
+    {
+      "round": 8,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 517206166,
+      "instructions": 6211663005,
+      "cycles": 1896950994
+    },
+    {
+      "round": 8,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 23952500,
+      "instructions": 467127677,
+      "cycles": 87181842
+    },
+    {
+      "round": 8,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 25639500,
+      "instructions": 467334396,
+      "cycles": 93731742
+    },
+    {
+      "round": 8,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 93081750,
+      "instructions": 2173777739,
+      "cycles": 343078298
+    },
+    {
+      "round": 8,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 94388375,
+      "instructions": 2172649146,
+      "cycles": 346153286
+    },
+    {
+      "round": 9,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 94106792,
+      "instructions": 2174403619,
+      "cycles": 340598435
+    },
+    {
+      "round": 9,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 95795750,
+      "instructions": 2174883162,
+      "cycles": 348679478
+    },
+    {
+      "round": 9,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 513549292,
+      "instructions": 6212449898,
+      "cycles": 1895613313
+    },
+    {
+      "round": 9,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 509974167,
+      "instructions": 6210698398,
+      "cycles": 1893450934
+    },
+    {
+      "round": 9,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24635417,
+      "instructions": 467495023,
+      "cycles": 90207961
+    },
+    {
+      "round": 9,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24238375,
+      "instructions": 467341244,
+      "cycles": 89499627
+    },
+    {
+      "round": 10,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 92179083,
+      "instructions": 2173191223,
+      "cycles": 336526932
+    },
+    {
+      "round": 10,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 93212875,
+      "instructions": 2172308313,
+      "cycles": 339311495
+    },
+    {
+      "round": 10,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 25378041,
+      "instructions": 467602303,
+      "cycles": 90685532
+    },
+    {
+      "round": 10,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 26829542,
+      "instructions": 467519459,
+      "cycles": 97217703
+    },
+    {
+      "round": 10,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 513037792,
+      "instructions": 6210731781,
+      "cycles": 1909307377
+    },
+    {
+      "round": 10,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 498488042,
+      "instructions": 6211668424,
+      "cycles": 1891132935
+    },
+    {
+      "round": 11,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 94953750,
+      "instructions": 2175954838,
+      "cycles": 344785629
+    },
+    {
+      "round": 11,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 95024958,
+      "instructions": 2175245058,
+      "cycles": 342888188
+    },
+    {
+      "round": 11,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24303208,
+      "instructions": 467491115,
+      "cycles": 88555559
+    },
+    {
+      "round": 11,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 25106583,
+      "instructions": 465408871,
+      "cycles": 90864978
+    },
+    {
+      "round": 11,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 511438083,
+      "instructions": 6211179444,
+      "cycles": 1904917201
+    },
+    {
+      "round": 11,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 523149291,
+      "instructions": 6212492465,
+      "cycles": 1898266999
+    },
+    {
+      "round": 12,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24233334,
+      "instructions": 467124487,
+      "cycles": 90492907
+    },
+    {
+      "round": 12,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 26067792,
+      "instructions": 467183091,
+      "cycles": 95065036
+    },
+    {
+      "round": 12,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 94160166,
+      "instructions": 2173856775,
+      "cycles": 345443298
+    },
+    {
+      "round": 12,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 96808584,
+      "instructions": 2174750397,
+      "cycles": 345116116
+    },
+    {
+      "round": 12,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 511634375,
+      "instructions": 6211421512,
+      "cycles": 1902854929
+    },
+    {
+      "round": 12,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 511731917,
+      "instructions": 6212533898,
+      "cycles": 1910317670
+    },
+    {
+      "round": 13,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 100176625,
+      "instructions": 2175832344,
+      "cycles": 353806135
+    },
+    {
+      "round": 13,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 96572125,
+      "instructions": 2171797981,
+      "cycles": 347566970
+    },
+    {
+      "round": 13,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24425000,
+      "instructions": 465545916,
+      "cycles": 86770019
+    },
+    {
+      "round": 13,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24209875,
+      "instructions": 465410777,
+      "cycles": 90287269
+    },
+    {
+      "round": 13,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 513993208,
+      "instructions": 6211864545,
+      "cycles": 1890178997
+    },
+    {
+      "round": 13,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 484162916,
+      "instructions": 6210973842,
+      "cycles": 1900586926
+    },
+    {
+      "round": 14,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 26032208,
+      "instructions": 467381524,
+      "cycles": 97630320
+    },
+    {
+      "round": 14,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 26252458,
+      "instructions": 467271140,
+      "cycles": 98215321
+    },
+    {
+      "round": 14,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 90737833,
+      "instructions": 2175026469,
+      "cycles": 337758425
+    },
+    {
+      "round": 14,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 90986125,
+      "instructions": 2175170811,
+      "cycles": 338358562
+    },
+    {
+      "round": 14,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 499220292,
+      "instructions": 6210479429,
+      "cycles": 1906807540
+    },
+    {
+      "round": 14,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 488940417,
+      "instructions": 6211829209,
+      "cycles": 1891062066
+    },
+    {
+      "round": 15,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24590333,
+      "instructions": 467391706,
+      "cycles": 91073880
+    },
+    {
+      "round": 15,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24474959,
+      "instructions": 467210525,
+      "cycles": 93923077
+    },
+    {
+      "round": 15,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 523484416,
+      "instructions": 6211615050,
+      "cycles": 1897138746
+    },
+    {
+      "round": 15,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 521648750,
+      "instructions": 6213734113,
+      "cycles": 1899720049
+    },
+    {
+      "round": 15,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 92464042,
+      "instructions": 2176152548,
+      "cycles": 342644473
+    },
+    {
+      "round": 15,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 91491250,
+      "instructions": 2175109408,
+      "cycles": 336735069
+    },
+    {
+      "round": 16,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24213625,
+      "instructions": 467384561,
+      "cycles": 88916746
+    },
+    {
+      "round": 16,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 26772166,
+      "instructions": 467310731,
+      "cycles": 98190172
+    },
+    {
+      "round": 16,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 92289083,
+      "instructions": 2175072804,
+      "cycles": 338767102
+    },
+    {
+      "round": 16,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 92145750,
+      "instructions": 2173220874,
+      "cycles": 340196509
+    },
+    {
+      "round": 16,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 512853250,
+      "instructions": 6211067093,
+      "cycles": 1894241633
+    },
+    {
+      "round": 16,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 520523708,
+      "instructions": 6210390534,
+      "cycles": 1921846483
+    },
+    {
+      "round": 17,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 94425125,
+      "instructions": 2173391225,
+      "cycles": 343309585
+    },
+    {
+      "round": 17,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 93991208,
+      "instructions": 2175387987,
+      "cycles": 342388618
+    },
+    {
+      "round": 17,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 518297834,
+      "instructions": 6211895518,
+      "cycles": 1896539059
+    },
+    {
+      "round": 17,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 516576041,
+      "instructions": 6210931147,
+      "cycles": 1890506731
+    },
+    {
+      "round": 17,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 24898041,
+      "instructions": 467393620,
+      "cycles": 89858708
+    },
+    {
+      "round": 17,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 25063000,
+      "instructions": 468623770,
+      "cycles": 89553870
+    },
+    {
+      "round": 18,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 522269000,
+      "instructions": 6215519955,
+      "cycles": 1907267555
+    },
+    {
+      "round": 18,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 510064166,
+      "instructions": 6213119829,
+      "cycles": 1913855645
+    },
+    {
+      "round": 18,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 95957125,
+      "instructions": 2174892262,
+      "cycles": 349533262
+    },
+    {
+      "round": 18,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 95881375,
+      "instructions": 2174441241,
+      "cycles": 347175993
+    },
+    {
+      "round": 18,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 27927500,
+      "instructions": 467631113,
+      "cycles": 98119814
+    },
+    {
+      "round": 18,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24521833,
+      "instructions": 468305533,
+      "cycles": 90809914
+    },
+    {
+      "round": 19,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 517171709,
+      "instructions": 6212790845,
+      "cycles": 1901373762
+    },
+    {
+      "round": 19,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 523384667,
+      "instructions": 6212072725,
+      "cycles": 1897431293
+    },
+    {
+      "round": 19,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 25456417,
+      "instructions": 467266790,
+      "cycles": 92003177
+    },
+    {
+      "round": 19,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 24527041,
+      "instructions": 467922365,
+      "cycles": 88418569
+    },
+    {
+      "round": 19,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 96209625,
+      "instructions": 2176149390,
+      "cycles": 347716147
+    },
+    {
+      "round": 19,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 93659250,
+      "instructions": 2175319339,
+      "cycles": 338005371
+    },
+    {
+      "round": 20,
+      "case": "wide-1000000",
+      "version": "after",
+      "cpu_ns": 26139750,
+      "instructions": 467112330,
+      "cycles": 93498681
+    },
+    {
+      "round": 20,
+      "case": "wide-1000000",
+      "version": "before",
+      "cpu_ns": 26830583,
+      "instructions": 467140358,
+      "cycles": 96042384
+    },
+    {
+      "round": 20,
+      "case": "wide-30000",
+      "version": "before",
+      "cpu_ns": 530718875,
+      "instructions": 6210673049,
+      "cycles": 1929595522
+    },
+    {
+      "round": 20,
+      "case": "wide-30000",
+      "version": "after",
+      "cpu_ns": 519081958,
+      "instructions": 6211704738,
+      "cycles": 1889417237
+    },
+    {
+      "round": 20,
+      "case": "word-2000000",
+      "version": "after",
+      "cpu_ns": 94322042,
+      "instructions": 2172339990,
+      "cycles": 342321273
+    },
+    {
+      "round": 20,
+      "case": "word-2000000",
+      "version": "before",
+      "cpu_ns": 93697167,
+      "instructions": 2175081906,
+      "cycles": 340717839
+    }
+  ],
+  "summary": {
+    "word-2000000": {
+      "cpu_ns": {
+        "before_median": 93697167,
+        "after_median": 93659250,
+        "paired_ratio_median": 1.000790038732757,
+        "paired_ratio_bootstrap_95pct": [
+          0.9891279032706146,
+          1.0066690917133065
+        ]
+      },
+      "instructions": {
+        "before_median": 2173777739,
+        "after_median": 2173391225,
+        "paired_ratio_median": 0.9998336240314595,
+        "paired_ratio_bootstrap_95pct": [
+          0.999618568925546,
+          1.0000663633303122
+        ]
+      },
+      "cycles": {
+        "before_median": 342888188,
+        "after_median": 340598435,
+        "paired_ratio_median": 1.0017768231836113,
+        "paired_ratio_bootstrap_95pct": [
+          0.9957982902170228,
+          1.005533701849187
+        ]
+      }
+    },
+    "wide-1000000": {
+      "cpu_ns": {
+        "before_median": 24527041,
+        "after_median": 24898041,
+        "paired_ratio_median": 1.02546670200156,
+        "paired_ratio_bootstrap_95pct": [
+          0.9916103094041708,
+          1.0491725539012022
+        ]
+      },
+      "instructions": {
+        "before_median": 467258809,
+        "after_median": 467183091,
+        "paired_ratio_median": 0.9998228323524745,
+        "paired_ratio_bootstrap_95pct": [
+          0.9996710574606481,
+          0.9999400009022555
+        ]
+      },
+      "cycles": {
+        "before_median": 90207961,
+        "after_median": 92003177,
+        "paired_ratio_median": 1.0312844582881502,
+        "paired_ratio_bootstrap_95pct": [
+          1.0034039623301594,
+          1.0405413482771928
+        ]
+      }
+    },
+    "wide-30000": {
+      "cpu_ns": {
+        "before_median": 511438083,
+        "after_median": 511731917,
+        "paired_ratio_median": 1.0001906478625484,
+        "paired_ratio_bootstrap_95pct": [
+          0.9794081387220533,
+          1.00870653928423
+        ]
+      },
+      "instructions": {
+        "before_median": 6210751548,
+        "after_median": 6211972325,
+        "paired_ratio_median": 1.0001795812259848,
+        "paired_ratio_bootstrap_95pct": [
+          1.000166115490521,
+          1.0002529674363139
+        ]
+      },
+      "cycles": {
+        "before_median": 1899943019,
+        "after_median": 1896539059,
+        "paired_ratio_median": 1.0001652604582727,
+        "paired_ratio_bootstrap_95pct": [
+          0.9965089285788857,
+          1.001360629529834
+        ]
+      }
+    }
+  }
+}
