@@ -410,16 +410,11 @@ fn encode_table_limits(
     flags = flags | 0x04
   }
   w.write_byte(flags)
-  if is_table64 {
-    w.write_u64(limits.min)
-    if limits.max is Some(max) {
-      w.write_u64(max)
-    }
-  } else {
-    w.write_u32(limits.min.to_int())
-    if limits.max is Some(max) {
-      w.write_u32(max.to_int())
-    }
+  // Valid u32 and u64 limits use the same LEB encoding. Preserve the full
+  // AST value so decoding rejects an oversized table32 limit instead of wrapping.
+  w.write_u64(limits.min)
+  if limits.max is Some(max) {
+    w.write_u64(max)
   }
 }
 
@@ -449,16 +444,10 @@ fn encode_memory_limits(w : BinaryWriter, mt : @types.MemoryType) -> Unit {
     flags = flags | 0x08
   }
   w.write_byte(flags)
-  if mt.is_memory64 {
-    w.write_u64(mt.limits.min)
-    if mt.limits.max is Some(max) {
-      w.write_u64(max)
-    }
-  } else {
-    w.write_u32(mt.limits.min.to_int())
-    if mt.limits.max is Some(max) {
-      w.write_u32(max.to_int())
-    }
+  // Do not narrow unvalidated memory32 limits into a different valid module.
+  w.write_u64(mt.limits.min)
+  if mt.limits.max is Some(max) {
+    w.write_u64(max)
   }
   if has_custom_page_size {
     w.write_u32(mt.page_size_log2)
