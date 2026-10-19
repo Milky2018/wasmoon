@@ -35,7 +35,7 @@ pub async fn run_http_component_command(String, Array[String], Array[String], Ar
 
 pub fn run_settings() -> Int32
 
-pub fn run_testsuite(String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool) -> Int32
+pub fn run_testsuite(String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, wasmtime_validation? : Bool) -> Int32
 
 pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, @component.ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int32
 

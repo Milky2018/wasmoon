@@ -21,6 +21,7 @@ fn run_wast(
   bulk_memory : Bool,
   stack_switching : Bool,
   nan_canonicalization : Bool,
+  wasmtime_validation : Bool,
 ) -> Int32 {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
@@ -64,6 +65,7 @@ fn run_wast(
     bulk_memory~,
     stack_switching~,
     nan_canonicalization~,
+    wasmtime_validation~,
     jit_compiler~,
     register_named_modules=match
       @env.get_env_var("WASMOON_WAST_REGISTER_NAMED_MODULES") {
@@ -648,8 +650,10 @@ pub fn run_testsuite(
   bulk_memory~ : Bool = true,
   stack_switching~ : Bool = false,
   nan_canonicalization~ : Bool = false,
+  wasmtime_validation~ : Bool = false,
 ) -> Int32 {
   run_wast(
     wast_path, use_jit, show_success, bulk_memory, stack_switching, nan_canonicalization,
+    wasmtime_validation,
   )
 }

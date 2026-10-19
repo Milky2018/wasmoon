@@ -62,7 +62,7 @@ pub fn register_owned_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule
 
 pub fn run_wast_command(WastContext, @parser.WastCommand, Int32, WastResult, String, Bool) -> Unit
 
-pub fn run_wast_commands(@parser.WastScript, String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool) -> WastResult
+pub fn run_wast_commands(@parser.WastScript, String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool, wasmtime_validation? : Bool) -> WastResult
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Unit
 
@@ -99,7 +99,7 @@ pub struct WastContext {
   wasi_ctx : @wasi.WasiContext
   // private fields
 }
-pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool) -> Self raise @runtime.RuntimeError
+pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool, wasmtime_validation? : Bool) -> Self raise @runtime.RuntimeError
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
 pub fn WastContext::close(Self) -> Unit
 pub fn WastContext::get_store(Self) -> @runtime.Store

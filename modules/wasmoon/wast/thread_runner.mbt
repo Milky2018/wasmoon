@@ -312,6 +312,7 @@ fn shared_thread_context(
     nan_canonicalization=parent.store.nan_canonicalization,
     jit_compiler=parent.jit_compiler,
     register_named_modules=parent.register_named_modules,
+    wasmtime_validation=parent.wasmtime_validation,
   ) catch {
     error => raise RuntimeError(error.to_string())
   }

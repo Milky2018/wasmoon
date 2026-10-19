@@ -169,6 +169,10 @@ fn build_command() -> @argparse.Command {
           FlagArg("canonicalize-nans", about="Canonicalize arithmetic NaNs"),
           FlagArg("stack-switching", about="Enable typed continuations"),
           FlagArg(
+            "wasmtime-validation",
+            about="Include Wasmtime engine build restrictions in assert_invalid",
+          ),
+          FlagArg(
             "no-bulk-memory",
             about="Disable bulk-memory instructions and passive segments",
           ),
@@ -401,6 +405,7 @@ async fn main {
         sub.flags.get("show-success") is Some(true),
         bulk_memory=!(sub.flags.get("no-bulk-memory") is Some(true)),
         stack_switching=sub.flags.get("stack-switching") is Some(true),
+        wasmtime_validation=sub.flags.get("wasmtime-validation") is Some(true),
         nan_canonicalization=sub.flags.get("canonicalize-nans") is Some(true),
       )
     Some(("disasm", sub)) => @commands.run_disasm(sub.values["file"][0])

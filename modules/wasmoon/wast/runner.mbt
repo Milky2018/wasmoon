@@ -54,6 +54,7 @@ pub struct WastContext {
   bulk_memory : Bool
   stack_switching : Bool
   register_named_modules : Bool
+  priv wasmtime_validation : Bool
   // JIT compiler callback (provided by main package)
   jit_compiler : JITCompiler?
   // WASI context (for WASI function support in tests)
@@ -68,6 +69,7 @@ pub fn WastContext::WastContext(
   nan_canonicalization~ : Bool = false,
   jit_compiler~ : JITCompiler? = None,
   register_named_modules~ : Bool = false,
+  wasmtime_validation~ : Bool = false,
 ) -> WastContext raise @runtime.RuntimeError {
   // Use c_heap when JIT is enabled for GC support
   let store = if use_jit {
@@ -121,6 +123,7 @@ pub fn WastContext::WastContext(
     bulk_memory,
     stack_switching,
     register_named_modules,
+    wasmtime_validation,
     jit_compiler,
     wasi_ctx,
   }
@@ -232,6 +235,7 @@ pub fn run_wast_commands(
   nan_canonicalization~ : Bool = false,
   jit_compiler~ : JITCompiler? = None,
   register_named_modules~ : Bool = false,
+  wasmtime_validation~ : Bool = false,
 ) -> WastResult {
   let result = WastResult::WastResult()
   let ctx = WastContext::WastContext(
@@ -241,6 +245,7 @@ pub fn run_wast_commands(
     nan_canonicalization~,
     jit_compiler~,
     register_named_modules~,
+    wasmtime_validation~,
   ) catch {
     error => {
       result.failed = 1
@@ -360,11 +365,7 @@ pub fn run_wast_command(
       }
     }
     AssertInvalid(source, msg) => {
-      let invalid = @assertions.module_is_invalid(
-        source,
-        bulk_memory=ctx.bulk_memory,
-        stack_switching=ctx.stack_switching,
-      ) catch {
+      let invalid = ctx.source_is_invalid(source, msg) catch {
         error => {
           result.failed += 1
           result.failures.push("line \{line}: assert_invalid: \{error}")
@@ -578,6 +579,35 @@ pub fn invoke_action(
       }
       [value]
     }
+  }
+}
+
+///|
+fn WastContext::source_is_invalid(
+  self : WastContext,
+  source : @wat.WastModuleSource,
+  expected : String,
+) -> Bool raise WastRunnerError {
+  let valid_module = @assertions.validate_module_source(
+    source,
+    bulk_memory=self.bulk_memory,
+    stack_switching=self.stack_switching,
+  )
+  guard valid_module is Some(module_) else { return true }
+  if !self.wasmtime_validation {
+    return false
+  }
+  // Wasmtime's assert_invalid also includes engine build restrictions. Keep
+  // this explicit profile separate from Core validity and arbitrary failures.
+  try @executor.validate_continuation_gc_storage(module_) catch {
+    error =>
+      if error is UnsupportedGcContinuationStorage {
+        wast_trap_message_matches(error.to_string(), expected)
+      } else {
+        raise RuntimeError("engine capability check failed: \{error}")
+      }
+  } noraise {
+    _ => false
   }
 }
 

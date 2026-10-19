@@ -109,6 +109,23 @@ class MiscRunnerTests(unittest.TestCase):
                 self.assertEqual(misc.parse_core_result({'status': 'pass', 'returncode': 0,
                                                          'stdout': str(stdout)})['status'], 'fail')
 
+    def test_core_engine_profile_is_explicit_for_both_engines(self):
+        case = dict(name="profile.wast", lane="core", path="profile.wast",
+                    commands=["assert_invalid"], host_contract=None, config={"stack_switching": True})
+        with tempfile.TemporaryDirectory() as tmp:
+            stdout = Path(tmp) / "result.txt"
+            stdout.write_text("Results:\nPassed: 1\nFailed: 0\nSkipped: 0\n")
+            for mode in ["interp", "jit"]:
+                with patch.object(misc, "execute", return_value={"status": "pass", "returncode": 0,
+                                                                 "stdout": str(stdout)}) as execute:
+                    result = misc.run_case(case, mode, Path("wasmoon"), Path(tmp), 1,
+                                           Path("wasmoon-tools"), Path("wasm-tools"))
+                    self.assertEqual(result["status"], "pass")
+                    command = execute.call_args.args[0]
+                    self.assertIn("--wasmtime-validation", command)
+                    self.assertIn("--stack-switching", command)
+                    self.assertEqual("--no-jit" in command, mode == "interp")
+
     def test_timeout_and_harness_error_survive_result_parsing(self):
         for status in ('timeout', 'harness_error'):
             result = {'status': status}

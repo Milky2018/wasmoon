@@ -149,7 +149,7 @@ pub fn run_wast_command(
       }
     }
     AssertInvalid(source, msg) => {
-      let invalid = @assertions.module_is_invalid(
+      let valid_module = @assertions.validate_module_source(
         source,
         bulk_memory=true,
         stack_switching=ctx.stack_switching,
@@ -164,7 +164,7 @@ pub fn run_wast_command(
           return
         }
       }
-      if !invalid {
+      if valid_module is Some(_) {
         result.failed = result.failed + 1
         result.failures.push(
           "line \{line}: assert_invalid: module should have been invalid (expected: \{msg})",

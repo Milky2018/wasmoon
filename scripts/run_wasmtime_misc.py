@@ -134,7 +134,7 @@ def run_case(case: dict, mode: str, binary: Path, output: Path, timeout: float,
     directory = output / mode / case["name"]
     directory.mkdir(parents=True)
     if case["lane"] == "core":
-        command = [str(binary), "test", case["path"]]
+        command = [str(binary), "test", case["path"], "--wasmtime-validation"]
         if case["config"].get("nan_canonicalization") is True:
             command.append("--canonicalize-nans")
         if case["config"].get("bulk_memory") is False:
@@ -233,7 +233,7 @@ def main() -> int:
         os.environ["WASMOON_WAST_JIT_TRACE"] = "1"
         os.environ["WASMOON_WAST_REGISTER_NAMED_MODULES"] = "1"
         results = []
-        report = {"register_named_modules": True, "upstream_commit": snapshot["commit"], "snapshot_sha256": digest(CORPUS / "SNAPSHOT.json"),
+        report = {"register_named_modules": True, "validation_profile": "wasmtime-engine-build", "upstream_commit": snapshot["commit"], "snapshot_sha256": digest(CORPUS / "SNAPSHOT.json"),
                   "host_contracts_sha256": digest(CORPUS / "HOST_CONTRACTS.json"),
                   "host": platform.platform(), "engine": str(binary), "engine_sha256": digest(binary),
                   "engine_version": subprocess.check_output([str(binary), "--version"], text=True).strip(),

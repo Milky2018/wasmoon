@@ -1,11 +1,11 @@
 ///|
-/// An invalid assertion requires a decoded module rejected by Core validation.
-/// Host instantiation restrictions cannot establish WebAssembly invalidity.
-pub fn module_is_invalid(
+/// Return the decoded module if Core-valid, or None for validation rejection.
+/// Syntax failures and unsupported validation mechanisms raise instead.
+pub fn validate_module_source(
   source : @wat.WastModuleSource,
   bulk_memory~ : Bool,
   stack_switching~ : Bool,
-) -> Bool raise WastRunnerError {
+) -> @types.Module? raise WastRunnerError {
   let module_ = try {
     match source {
       Binary(bytes) => @parser.parse_module(bytes)
@@ -20,8 +20,8 @@ pub fn module_is_invalid(
     @validator.validate_module(module_, bulk_memory~, stack_switching~)
   catch {
     UnsupportedInstruction(detail) => raise UnsupportedCapability(detail)
-    _ => true
+    _ => None
   } noraise {
-    _ => false
+    _ => Some(module_)
   }
 }
