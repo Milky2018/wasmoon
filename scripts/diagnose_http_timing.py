@@ -50,13 +50,42 @@ static double wasmoon_http_diag_ms(void) {
   return (double)now.QuadPart * 1000.0 / (double)frequency.QuadPart;
 }
 MOONBIT_FFI_EXPORT void wasmoon_http_timing_trace(int32_t event) {
-  fprintf(stderr, "[HTTP-TIMING] event=%ld qpc_ms=%.3f tid=%lu\\n",
-    (long)event, wasmoon_http_diag_ms(), (unsigned long)GetCurrentThreadId());
+  FILETIME now; ULARGE_INTEGER ticks;
+  GetSystemTimeAsFileTime(&now);
+  ticks.LowPart = now.dwLowDateTime; ticks.HighPart = now.dwHighDateTime;
+  fprintf(stderr, "[HTTP-TIMING] event=%ld qpc_ms=%.3f wall_ms=%llu tid=%lu\\n",
+    (long)event, wasmoon_http_diag_ms(), (unsigned long long)(ticks.QuadPart / 10000),
+    (unsigned long)GetCurrentThreadId());
 }
 '''
     end = source.rfind("#endif")
     assert end > 0
     return source[:end] + helpers + "\n".join(wrappers) + source[end:]
+
+
+
+def instrument_iocp(source: str) -> str:
+    needle = "int moonbitlang_async_event_bus_wait(HANDLE iocp, int timeout)"
+    assert source.count(needle) == 1
+    source = source.replace(needle, "int wasmoon_http_diag_bus_wait(HANDLE iocp, int timeout)")
+    wrapper = r"""
+#include <stdio.h>
+MOONBIT_FFI_EXPORT int moonbitlang_async_event_bus_wait(HANDLE iocp, int timeout) {
+  LARGE_INTEGER before, after, frequency;
+  QueryPerformanceFrequency(&frequency);
+  QueryPerformanceCounter(&before);
+  int result = wasmoon_http_diag_bus_wait(iocp, timeout);
+  QueryPerformanceCounter(&after);
+  double elapsed = (double)(after.QuadPart - before.QuadPart) * 1000.0 / (double)frequency.QuadPart;
+  if (timeout >= 0 && elapsed > timeout + 10.0)
+    fprintf(stderr, "[HTTP-TIMING] IOCP wait requested=%d elapsed=%.3f qpc_ms=%.3f events=%d\n",
+      timeout, elapsed, (double)after.QuadPart * 1000.0 / (double)frequency.QuadPart, result);
+  return result;
+}
+"""
+    end = source.rfind("#endif")
+    assert end > 0
+    return source[:end] + wrapper + source[end:]
 
 
 def instrument_wire(source: str) -> str:
@@ -98,7 +127,7 @@ def instrument_tests(source: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--repeats", type=int, default=12)
+    parser.add_argument("--repeats", type=int, default=300)
     args = parser.parse_args()
     if os.name != "nt":
         raise SystemExit("This diagnostic requires the real Windows native runtime")
@@ -108,7 +137,8 @@ def main() -> int:
                        cwd=ROOT, stdout=log, stderr=log, check=True, timeout=600)
     paths = [ROOT / ".mooncakes/moonbitlang/async/src/tls/schannel.c",
              ROOT / "modules/wasmoon/wasi_http/wire.mbt",
-             ROOT / "modules/wasmoon/wasi_http/timeout_wbtest.mbt"]
+             ROOT / "modules/wasmoon/wasi_http/timeout_wbtest.mbt",
+             ROOT / ".mooncakes/moonbitlang/async/src/internal/event_loop/iocp.c"]
     originals = {p: p.read_bytes() for p in paths}
     report = {"diagnostic_only": True, "source_revision": subprocess.check_output(
         ["git", "rev-parse", "HEAD"], text=True).strip(), "original_sha256": {
@@ -127,11 +157,22 @@ def main() -> int:
         paths[0].write_text(instrument_tls(originals[paths[0]].decode().replace("\r\n", "\n")), encoding="utf-8")
         paths[1].write_text(instrument_wire(originals[paths[1]].decode().replace("\r\n", "\n")), encoding="utf-8")
         paths[2].write_text(instrument_tests(originals[paths[2]].decode().replace("\r\n", "\n")), encoding="utf-8")
+        paths[3].write_text(instrument_iocp(originals[paths[3]].decode().replace("\r\n", "\n")), encoding="utf-8")
         build_dir = args.output / "build"
         build = ["moon", "test", "--target", "native", "--package", "Milky2018/wasmoon/wasi_http",
                  "--build-only", "--strip", "--jobs", "2", "--target-dir", str(build_dir)]
         with (args.output / "build.log").open("w", encoding="utf-8") as log:
             subprocess.run(build, cwd=ROOT, stdout=log, stderr=log, check=True, timeout=1200)
+        # Match the original CI's complete build/test workload before narrowing
+        # the observation to HTTP cohorts. A passing isolated package is weaker evidence.
+        started = time.monotonic()
+        with (args.output / "whole-workspace.log").open("w", encoding="utf-8") as log:
+            workspace = subprocess.run(["moon", "test", "--target", "native", "--strip",
+                                        "--jobs", "2", "--no-parallelize", "--target-dir", str(build_dir)],
+                                       cwd=ROOT, stdout=log, stderr=log, timeout=1800)
+        report["whole_workspace"] = {"code": workspace.returncode, "seconds": time.monotonic()-started,
+                                      "log": "whole-workspace.log"}
+        save()
         binary = (build_dir / "native/debug/test/Milky2018/wasmoon/wasi_http/wasi_http.whitebox_test.exe").resolve()
         metadata = json.loads(binary.with_name("__whitebox_test_info.json").read_text())
         whole_package = [f"{name}:0-{max(v['index'] for v in tests)+1}"
