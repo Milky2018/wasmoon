@@ -14,6 +14,26 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def instrument_tls(source: str) -> str:
+    server_start = source.index("MOONBIT_FFI_EXPORT\nint32_t moonbitlang_async_schannel_init_server(")
+    server_end = source.index("enum TlsState", server_start)
+    server = source[server_start:server_end]
+    for label, begin, end in [
+        ("pfx_import", "  HCERTSTORE cert_store = PFXImportCertStore(", "  if (!cert_store) {"),
+        ("find_certificate", "  PCCERT_CONTEXT cert = CertFindCertificateInStore(", "  if (!cert) {"),
+        ("acquire_server_credentials", "  int32_t ret = AcquireCredentialsHandle(", "  CertFreeCertificateContext(cert);\n  CertCloseStore(cert_store, 0);"),
+    ]:
+        assert server.count(begin) == 1 and server.count(end) == 1, label
+        server = server.replace(begin,
+            f"  double {label}_start = wasmoon_http_diag_ms();\n"
+            f"  double {label}_cpu = wasmoon_http_diag_cpu_ms();\n" + begin)
+        server = server.replace(end,
+            f'  wasmoon_http_diag_api_end("{label}", {label}_start, {label}_cpu);\n' + end)
+    declarations = """
+static double wasmoon_http_diag_ms(void);
+static double wasmoon_http_diag_cpu_ms(void);
+static void wasmoon_http_diag_api_end(const char *, double, double);
+"""
+    source = source[:server_start] + declarations + server + source[server_end:]
     wrappers = []
     for name, signature, arguments in [
         ("init_server", "struct Context *ctx, unsigned char *pfx_content", "ctx, pfx_content"),
@@ -48,6 +68,19 @@ static double wasmoon_http_diag_ms(void) {
   QueryPerformanceCounter(&now);
   QueryPerformanceFrequency(&frequency);
   return (double)now.QuadPart * 1000.0 / (double)frequency.QuadPart;
+}
+static double wasmoon_http_diag_cpu_ms(void) {
+  FILETIME created, exited, kernel, user; ULARGE_INTEGER k, u;
+  GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user);
+  k.LowPart = kernel.dwLowDateTime; k.HighPart = kernel.dwHighDateTime;
+  u.LowPart = user.dwLowDateTime; u.HighPart = user.dwHighDateTime;
+  return (double)(k.QuadPart + u.QuadPart) / 10000.0;
+}
+static void wasmoon_http_diag_api_end(const char *name, double start, double cpu) {
+  DWORD error = GetLastError();
+  fprintf(stderr, "[HTTP-TIMING] api=%s qpc_ms=%.3f elapsed=%.3f cpu_ms=%.3f\\n",
+    name, wasmoon_http_diag_ms(), wasmoon_http_diag_ms() - start, wasmoon_http_diag_cpu_ms() - cpu);
+  SetLastError(error);
 }
 MOONBIT_FFI_EXPORT void wasmoon_http_timing_trace(int32_t event) {
   FILETIME now; ULARGE_INTEGER ticks;
@@ -89,6 +122,8 @@ MOONBIT_FFI_EXPORT int moonbitlang_async_event_bus_wait(HANDLE iocp, int timeout
 
 
 def instrument_wire(source: str) -> str:
+    source = source.replace("          timer.wait()\n",
+                            "          timer.wait()\n          http_timing_trace(20000 + timer.duration)\n")
     source = source.replace(
         "  if self.offset == self.buffer.length() {\n",
         "  if self.offset == self.buffer.length() {\n"
@@ -149,7 +184,8 @@ def main() -> int:
                       "803": "consumer sleep150 begin", "804": "consumer sleep150 end",
                       "805": "consumer ready broadcast", "806": "producer ready observed",
                       "807": "pipe i write returned", "4000": "consume begin", "4001": "consume end",
-                      "3000+ms": "next body Timer created", "9000+ms": "buffer empty / read with active Timer"},
+                      "3000+ms": "next body Timer created", "9000+ms": "buffer empty / read with active Timer",
+                      "20000+ms": "body timeout fired"},
         "runs": []}
     summary = args.output / "summary.json"
     def save(): summary.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
