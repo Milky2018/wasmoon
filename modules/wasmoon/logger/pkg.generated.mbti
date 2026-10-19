@@ -21,13 +21,8 @@ pub fn warn(String) -> Unit
 // Errors
 
 // Types and methods
-pub(all) enum LogLevel {
-  Debug
-  Info
-  Warn
-  Error
-}
 
 // Type aliases
+pub using @Milky2018/wasmoon_runtime/logger {type LogLevel}
 
 // Traits

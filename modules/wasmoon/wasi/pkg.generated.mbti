@@ -2,73 +2,73 @@
 package "Milky2018/wasmoon/wasi"
 
 import {
-  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon_runtime/runtime",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashmap",
 }
 
 // Values
-pub const AT_REMOVEDIR : Int = 0x200
+pub const AT_REMOVEDIR : Int32 = 0x200
 
-pub const AT_SYMLINK_NOFOLLOW : Int = 0x100
+pub const AT_SYMLINK_NOFOLLOW : Int32 = 0x100
 
-pub fn args_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn args_get(WasiContext, @runtime.Memory, Int32, Int32) -> Int32
 
-pub fn args_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn args_sizes_get(WasiContext, @runtime.Memory, Int32, Int32) -> Int32
 
-pub fn clock_res_get(@runtime.Memory, Int, Int) -> Int
+pub fn clock_res_get(@runtime.Memory, Int32, Int32) -> Int32
 
-pub fn clock_time_get(@runtime.Memory, Int, Int64, Int) -> Int
+pub fn clock_time_get(@runtime.Memory, Int32, Int64, Int32) -> Int32
 
-pub fn environ_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn environ_get(WasiContext, @runtime.Memory, Int32, Int32) -> Int32
 
-pub fn environ_sizes_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn environ_sizes_get(WasiContext, @runtime.Memory, Int32, Int32) -> Int32
 
-pub fn fd_advise_impl(WasiContext, Int, Int64, Int64, Int) -> Int
+pub fn fd_advise_impl(WasiContext, Int32, Int64, Int64, Int32) -> Int32
 
-pub fn fd_allocate_impl(WasiContext, Int, Int64, Int64) -> Int
+pub fn fd_allocate_impl(WasiContext, Int32, Int64, Int64) -> Int32
 
-pub fn fd_close(WasiContext, Int) -> Int
+pub fn fd_close(WasiContext, Int32) -> Int32
 
-pub fn fd_datasync_impl(WasiContext, Int) -> Int
+pub fn fd_datasync_impl(WasiContext, Int32) -> Int32
 
-pub fn fd_fdstat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn fd_fdstat_get(WasiContext, @runtime.Memory, Int32, Int32) -> Int32
 
-pub fn fd_fdstat_set_flags_impl(WasiContext, Int, Int) -> Int
+pub fn fd_fdstat_set_flags_impl(WasiContext, Int32, Int32) -> Int32
 
-pub fn fd_fdstat_set_rights_impl(WasiContext, Int, Int64, Int64) -> Int
+pub fn fd_fdstat_set_rights_impl(WasiContext, Int32, Int64, Int64) -> Int32
 
-pub fn fd_filestat_get_impl(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn fd_filestat_get_impl(WasiContext, @runtime.Memory, Int32, Int32) -> Int32
 
-pub fn fd_filestat_set_size_impl(WasiContext, Int, Int64) -> Int
+pub fn fd_filestat_set_size_impl(WasiContext, Int32, Int64) -> Int32
 
-pub fn fd_filestat_set_times_impl(WasiContext, Int, Int64, Int64, Int) -> Int
+pub fn fd_filestat_set_times_impl(WasiContext, Int32, Int64, Int64, Int32) -> Int32
 
-pub fn fd_pread(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
+pub fn fd_pread(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int64, Int32) -> Int32
 
-pub fn fd_prestat_dir_name(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+pub fn fd_prestat_dir_name(WasiContext, @runtime.Memory, Int32, Int32, Int32) -> Int32
 
-pub fn fd_prestat_get(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn fd_prestat_get(WasiContext, @runtime.Memory, Int32, Int32) -> Int32
 
-pub fn fd_pwrite(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
+pub fn fd_pwrite(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int64, Int32) -> Int32
 
-pub fn fd_read(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+pub fn fd_read(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32) -> Int32
 
-pub fn fd_readdir(WasiContext, @runtime.Memory, Int, Int, Int, Int64, Int) -> Int
+pub fn fd_readdir(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int64, Int32) -> Int32
 
-pub fn fd_renumber_impl(WasiContext, Int, Int) -> Int
+pub fn fd_renumber_impl(WasiContext, Int32, Int32) -> Int32
 
-pub fn fd_seek(WasiContext, @runtime.Memory, Int, Int64, Int, Int) -> Int
+pub fn fd_seek(WasiContext, @runtime.Memory, Int32, Int64, Int32, Int32) -> Int32
 
-pub fn fd_sync_impl(WasiContext, Int) -> Int
+pub fn fd_sync_impl(WasiContext, Int32) -> Int32
 
-pub fn fd_tell(WasiContext, @runtime.Memory, Int, Int) -> Int
+pub fn fd_tell(WasiContext, @runtime.Memory, Int32, Int32) -> Int32
 
-pub fn fd_write(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+pub fn fd_write(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32) -> Int32
 
 pub fn is_valid_rights(Int64) -> Bool
 
-pub fn native_accept(Int) -> Int
+pub fn native_accept(Int32) -> Int32
 
 pub fn native_clock_getres_monotonic() -> Int64?
 
@@ -78,173 +78,173 @@ pub fn native_clock_gettime_monotonic() -> Int64
 
 pub fn native_clock_gettime_realtime() -> Int64
 
-pub fn native_close(Int) -> Bool
+pub fn native_close(Int32) -> Bool
 
-pub fn native_dup(Int) -> Int?
+pub fn native_dup(Int32) -> Int32?
 
-pub fn native_dup2(Int, Int) -> Bool
+pub fn native_dup2(Int32, Int32) -> Bool
 
-pub fn native_errno_to_wasi(Int) -> Int
+pub fn native_errno_to_wasi(Int32) -> Int32
 
-pub fn native_fcntl_getfl(Int) -> Int?
+pub fn native_fcntl_getfl(Int32) -> Int32?
 
-pub fn native_fcntl_setfl(Int, Int) -> Bool
+pub fn native_fcntl_setfl(Int32, Int32) -> Bool
 
-pub fn native_fdatasync(Int) -> Bool
+pub fn native_fdatasync(Int32) -> Bool
 
-pub fn native_fstat(Int) -> FileStat?
+pub fn native_fstat(Int32) -> FileStat?
 
-pub fn native_fstat_beneath(Int, String, Int) -> FileStat?
+pub fn native_fstat_beneath(Int32, String, Int32) -> FileStat?
 
-pub fn native_fstatat(Int, String, Int) -> FileStat?
+pub fn native_fstatat(Int32, String, Int32) -> FileStat?
 
-pub fn native_fsync(Int) -> Bool
+pub fn native_fsync(Int32) -> Bool
 
-pub fn native_ftruncate(Int, Int64) -> Bool
+pub fn native_ftruncate(Int32, Int64) -> Bool
 
-pub fn native_futimens(Int, Int64, Int64, Int) -> Bool
+pub fn native_futimens(Int32, Int64, Int64, Int32) -> Bool
 
-pub fn native_get_errno() -> Int
+pub fn native_get_errno() -> Int32
 
 pub fn native_get_error_message() -> String
 
-pub fn native_getrandom(FixedArray[Byte], Int) -> Bool
+pub fn native_getrandom(FixedArray[Byte], Int32) -> Bool
 
-pub fn native_isatty(Int) -> Bool
+pub fn native_isatty(Int32) -> Bool
 
-pub fn native_last_errno_to_wasi() -> Int
+pub fn native_last_errno_to_wasi() -> Int32
 
-pub fn native_linkat(Int, String, Int, String, Int) -> Bool
+pub fn native_linkat(Int32, String, Int32, String, Int32) -> Bool
 
-pub fn native_mkdir(String, Int) -> Bool
+pub fn native_mkdir(String, Int32) -> Bool
 
-pub fn native_mkdirat(Int, String, Int) -> Bool
+pub fn native_mkdirat(Int32, String, Int32) -> Bool
 
 pub fn native_nanosleep(Int64) -> Bool
 
-pub fn native_o_append() -> Int
+pub fn native_o_append() -> Int32
 
-pub fn native_o_nonblock() -> Int
+pub fn native_o_nonblock() -> Int32
 
-pub fn native_o_rdonly() -> Int
+pub fn native_o_rdonly() -> Int32
 
-pub fn native_o_rdwr() -> Int
+pub fn native_o_rdwr() -> Int32
 
-pub fn native_o_wronly() -> Int
+pub fn native_o_wronly() -> Int32
 
-pub fn native_open(String, Array[OpenFlags], Int) -> Int?
+pub fn native_open(String, Array[OpenFlags], Int32) -> Int32?
 
-pub fn native_open_parent_beneath(Int, String) -> Int?
+pub fn native_open_parent_beneath(Int32, String) -> Int32?
 
-pub fn native_open_read(String) -> Int?
+pub fn native_open_read(String) -> Int32?
 
-pub fn native_open_write(String) -> Int?
+pub fn native_open_write(String) -> Int32?
 
-pub fn native_openat_beneath(Int, String, String, Array[OpenFlags], Int, Bool) -> Int?
+pub fn native_openat_beneath(Int32, String, String, Array[OpenFlags], Int32, Bool) -> Int32?
 
 pub fn native_path_within_base(String, String) -> Bool
 
-pub fn native_poll(Array[Int], Array[Int], Int) -> PollResult?
+pub fn native_poll(Array[Int32], Array[Int32], Int32) -> PollResult?
 
-pub fn native_pread(Int, FixedArray[Byte], Int, Int64) -> Int?
+pub fn native_pread(Int32, FixedArray[Byte], Int32, Int64) -> Int32?
 
-pub fn native_pwrite(Int, FixedArray[Byte], Int, Int64) -> Int?
+pub fn native_pwrite(Int32, FixedArray[Byte], Int32, Int64) -> Int32?
 
-pub fn native_raise(Int) -> Bool
+pub fn native_raise(Int32) -> Bool
 
-pub fn native_read(Int, FixedArray[Byte], Int) -> Int?
+pub fn native_read(Int32, FixedArray[Byte], Int32) -> Int32?
 
-pub fn native_read_to_memory(Int, @runtime.Memory, Int, Int) -> Int?
+pub fn native_read_to_memory(Int32, @runtime.Memory, Int32, Int32) -> Int32?
 
-pub fn native_readdir(String) -> Array[(String, Int)]?
+pub fn native_readdir(String) -> Array[(String, Int32)]?
 
-pub fn native_readdir_fd(Int) -> Array[(String, Int)]?
+pub fn native_readdir_fd(Int32) -> Array[(String, Int32)]?
 
-pub fn native_readlinkat(Int, String, Int) -> String?
+pub fn native_readlinkat(Int32, String, Int32) -> String?
 
-pub fn native_recv(Int, FixedArray[Byte], Int) -> Int64
+pub fn native_recv(Int32, FixedArray[Byte], Int32) -> Int64
 
-pub fn native_renameat(Int, String, Int, String) -> Bool
+pub fn native_renameat(Int32, String, Int32, String) -> Bool
 
-pub fn native_resolver_drop(@Milky2018/wasmoon_jit/host_io/wasi.NativeResolverHandle) -> Unit
+pub fn native_resolver_drop(@Milky2018/wasmoon_runtime/native/host_io/wasi.NativeResolverHandle) -> Unit
 
-pub fn native_resolver_next(@Milky2018/wasmoon_jit/host_io/wasi.NativeResolverHandle) -> NativeResolverNext
+pub fn native_resolver_next(@Milky2018/wasmoon_runtime/native/host_io/wasi.NativeResolverHandle) -> NativeResolverNext
 
 pub fn native_resolver_start(String) -> NativeResolver?
 
-pub fn native_seek(Int, Int64, Whence) -> Int64?
+pub fn native_seek(Int32, Int64, Whence) -> Int64?
 
-pub fn native_send(Int, FixedArray[Byte], Int, Int) -> Int64
+pub fn native_send(Int32, FixedArray[Byte], Int32, Int32) -> Int64
 
-pub fn native_shutdown(Int, Int) -> Bool
+pub fn native_shutdown(Int32, Int32) -> Bool
 
-pub fn native_socket_address(Int, Bool) -> NativeSocketAddress?
+pub fn native_socket_address(Int32, Bool) -> NativeSocketAddress?
 
-pub fn native_socket_bind(Int, NativeSocketAddress) -> Bool
+pub fn native_socket_bind(Int32, NativeSocketAddress) -> Bool
 
-pub fn native_socket_connect(Int, NativeSocketAddress) -> Int
+pub fn native_socket_connect(Int32, NativeSocketAddress) -> Int32
 
-pub fn native_socket_create(Int, Int) -> Int?
+pub fn native_socket_create(Int32, Int32) -> Int32?
 
-pub fn native_socket_disconnect(Int) -> Bool
+pub fn native_socket_disconnect(Int32) -> Bool
 
-pub fn native_socket_error(Int) -> Int?
+pub fn native_socket_error(Int32) -> Int32?
 
-pub fn native_socket_listen(Int, Int) -> Bool
+pub fn native_socket_listen(Int32, Int32) -> Bool
 
-pub fn native_socket_option_get(Int, Int, Int) -> Int?
+pub fn native_socket_option_get(Int32, Int32, Int32) -> Int32?
 
-pub fn native_socket_option_set(Int, Int, Int, Int) -> Bool
+pub fn native_socket_option_set(Int32, Int32, Int32, Int32) -> Bool
 
-pub fn native_socket_recv_from(Int, Int) -> NativeSocketDatagram?
+pub fn native_socket_recv_from(Int32, Int32) -> NativeSocketDatagram?
 
-pub fn native_socket_send_to(Int, FixedArray[Byte], NativeSocketAddress?) -> Int64
+pub fn native_socket_send_to(Int32, FixedArray[Byte], NativeSocketAddress?) -> Int64
 
-pub fn native_symlinkat(String, Int, String) -> Bool
+pub fn native_symlinkat(String, Int32, String) -> Bool
 
-pub fn native_tell(Int) -> Int64?
+pub fn native_tell(Int32) -> Int64?
 
-pub fn native_unlinkat(Int, String, Int) -> Bool
+pub fn native_unlinkat(Int32, String, Int32) -> Bool
 
-pub fn native_utimens_beneath(Int, String, Bool, Int64, Int64, Int) -> Bool
+pub fn native_utimens_beneath(Int32, String, Bool, Int64, Int64, Int32) -> Bool
 
-pub fn native_utimensat(Int, String, Int64, Int64, Int, Int) -> Bool
+pub fn native_utimensat(Int32, String, Int64, Int64, Int32, Int32) -> Bool
 
-pub fn native_write(Int, FixedArray[Byte], Int) -> Int?
+pub fn native_write(Int32, FixedArray[Byte], Int32) -> Int32?
 
-pub fn path_create_directory(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+pub fn path_create_directory(WasiContext, @runtime.Memory, Int32, Int32, Int32) -> Int32
 
-pub fn path_filestat_get_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int) -> Int
+pub fn path_filestat_get_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int32) -> Int32
 
-pub fn path_filestat_set_times_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int64, Int64, Int) -> Int
+pub fn path_filestat_set_times_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int64, Int64, Int32) -> Int32
 
-pub fn path_link_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int, Int) -> Int
+pub fn path_link_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int32, Int32, Int32) -> Int32
 
-pub fn path_open(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int64, Int64, Int, Int) -> Int
+pub fn path_open(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int32, Int64, Int64, Int32, Int32) -> Int32
 
-pub fn path_readlink_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int) -> Int
+pub fn path_readlink_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int32, Int32) -> Int32
 
-pub fn path_remove_directory_impl(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+pub fn path_remove_directory_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32) -> Int32
 
-pub fn path_rename_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int) -> Int
+pub fn path_rename_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int32, Int32) -> Int32
 
-pub fn path_symlink_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int) -> Int
+pub fn path_symlink_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int32) -> Int32
 
-pub fn path_unlink_file_impl(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+pub fn path_unlink_file_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32) -> Int32
 
-pub fn poll_oneoff_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int) -> Int
+pub fn poll_oneoff_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32) -> Int32
 
 pub fn print_string(String) -> Unit
 
-pub fn proc_exit(WasiContext, Int) -> Unit raise WasiExit
+pub fn proc_exit(WasiContext, Int32) -> Unit raise WasiExit
 
-pub fn proc_raise_impl(Int, handler? : ((Int) -> Int)?) -> Int
+pub fn proc_raise_impl(Int32, handler? : ((Int32) -> Int32)?) -> Int32
 
-pub fn putchar(Int) -> Unit
+pub fn putchar(Int32) -> Unit
 
-pub fn raise_host_signal(Int) -> Int
+pub fn raise_host_signal(Int32) -> Int32
 
-pub fn random_get(@runtime.Memory, Int, Int) -> Int
+pub fn random_get(@runtime.Memory, Int32, Int32) -> Int32
 
 pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit raise @runtime.RuntimeError
 
@@ -310,15 +310,15 @@ pub let right_sock_shutdown : Int64
 
 pub let rights_all_valid : Int64
 
-pub fn sched_yield() -> Int
+pub fn sched_yield() -> Int32
 
-pub fn sock_accept_impl(WasiContext, @runtime.Memory, Int, Int, Int) -> Int
+pub fn sock_accept_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32) -> Int32
 
-pub fn sock_recv_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int, Int) -> Int
+pub fn sock_recv_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int32, Int32) -> Int32
 
-pub fn sock_send_impl(WasiContext, @runtime.Memory, Int, Int, Int, Int, Int) -> Int
+pub fn sock_send_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32, Int32) -> Int32
 
-pub fn sock_shutdown_impl(WasiContext, Int, Int) -> Int
+pub fn sock_shutdown_impl(WasiContext, Int32, Int32) -> Int32
 
 pub let stderr : Fd
 
@@ -328,13 +328,13 @@ pub let stdout : Fd
 
 // Errors
 pub(all) suberror WasiExit {
-  WasiExit(Int)
+  WasiExit(Int32)
 }
 
 // Types and methods
 pub(all) struct CIoVec {
-  buf : Int
-  buf_len : Int
+  buf : Int32
+  buf_len : Int32
 }
 
 pub(all) enum ClockId {
@@ -343,7 +343,7 @@ pub(all) enum ClockId {
   ProcessCPUTimeId
   ThreadCPUTimeId
 }
-pub fn ClockId::from_i32(Int) -> Self?
+pub fn ClockId::from_i32(Int32) -> Self?
 
 pub(all) enum Errno {
   Success
@@ -424,13 +424,13 @@ pub(all) enum Errno {
   XDev
   NotCapable
 }
-pub fn Errno::to_i32(Self) -> Int
+pub fn Errno::to_i32(Self) -> Int32
 
-pub(all) struct Fd(Int) derive(Eq, @debug.Debug)
+pub(all) struct Fd(Int32) derive(Eq, @debug.Debug)
 pub fn Fd::equal(Self, Self) -> Bool
-pub fn Fd::from_int(Int) -> Self
+pub fn Fd::from_int(Int32) -> Self
 pub fn Fd::not_equal(Self, Self) -> Bool
-pub fn Fd::to_int(Self) -> Int
+pub fn Fd::to_int(Self) -> Int32
 pub fn Fd::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FileSize(Int64) derive(Eq, @debug.Debug)
@@ -442,7 +442,7 @@ pub fn FileSize::to_repr(Self) -> @debug.Repr
 pub(all) struct FileStat {
   dev : UInt64
   ino : UInt64
-  filetype : Int
+  filetype : Int32
   nlink : UInt64
   size : UInt64
   atim : UInt64
@@ -459,13 +459,13 @@ pub(all) enum FileType {
 }
 
 pub(all) struct IoVec {
-  buf : Int
-  buf_len : Int
+  buf : Int32
+  buf_len : Int32
 }
 
 pub(all) struct NativeResolver {
-  handle : @Milky2018/wasmoon_jit/host_io/wasi.NativeResolverHandle
-  poll_fd : Int
+  handle : @Milky2018/wasmoon_runtime/native/host_io/wasi.NativeResolverHandle
+  poll_fd : Int32
 }
 
 pub(all) enum NativeResolverNext {
@@ -478,10 +478,10 @@ pub(all) enum NativeResolverNext {
 }
 
 pub(all) struct NativeSocketAddress {
-  family : Int
+  family : Int32
   address : FixedArray[Byte]
-  port : Int
-  scope_id : Int
+  port : Int32
+  scope_id : Int32
 }
 
 pub(all) struct NativeSocketDatagram {
@@ -490,12 +490,12 @@ pub(all) struct NativeSocketDatagram {
 }
 
 pub(all) struct OpenFile {
-  native_fd : Int
+  native_fd : Int32
   file_type : FileType
   host_path : String
   mut socket_input : Bytes
   mut position : Int64
-  mut flags : Int
+  mut flags : Int32
   mut rights_base : Int64
   mut rights_inheriting : Int64
 }
@@ -513,8 +513,8 @@ pub(all) enum OpenFlags {
 }
 
 pub(all) struct PollResult {
-  ready_count : Int
-  revents : Array[Int]
+  ready_count : Int32
+  revents : Array[Int32]
 }
 
 pub(all) enum ResolvePathError {
@@ -523,10 +523,10 @@ pub(all) enum ResolvePathError {
   NotCapable
 }
 
-pub(all) struct Size(Int) derive(Eq, @debug.Debug)
+pub(all) struct Size(Int32) derive(Eq, @debug.Debug)
 pub fn Size::equal(Self, Self) -> Bool
 pub fn Size::not_equal(Self, Self) -> Bool
-pub fn Size::to_int(Self) -> Int
+pub fn Size::to_int(Self) -> Int32
 pub fn Size::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Timestamp(Int64) derive(Eq, @debug.Debug)
@@ -538,11 +538,11 @@ pub fn Timestamp::to_repr(Self) -> @debug.Repr
 pub(all) struct WasiContext {
   args : Array[String]
   env : Array[String]
-  signal_handler : ((Int) -> Int)?
-  mut exit_code : Int?
+  signal_handler : ((Int32) -> Int32)?
+  mut exit_code : Int32?
   preopens : Array[(Fd, String, String)]
-  mut next_fd : Int
-  open_files : @hashmap.HashMap[Int, OpenFile]
+  mut next_fd : Int32
+  open_files : @hashmap.HashMap[Int32, OpenFile]
   stdio_rights : FixedArray[(Int64, Int64)]
   stdout_callback : (Bytes) -> Unit
   stderr_callback : (Bytes) -> Unit
@@ -553,24 +553,24 @@ pub(all) struct WasiContext {
   mut stdin_open : Bool
   mut stdout_open : Bool
   mut stderr_open : Bool
-  mut stdin_fd : Int
-  mut stdout_fd : Int
-  mut stderr_fd : Int
+  mut stdin_fd : Int32
+  mut stdout_fd : Int32
+  mut stderr_fd : Int32
 }
 pub fn WasiContext::WasiContext() -> Self
-pub fn WasiContext::alloc_fd(Self, OpenFile) -> Int
-pub fn WasiContext::close_fd(Self, Int) -> Bool
-pub fn WasiContext::get_exit_code(Self) -> Int?
-pub fn WasiContext::get_file(Self, Int) -> OpenFile?
-pub fn WasiContext::get_preopen_host_path(Self, Int) -> String?
+pub fn WasiContext::alloc_fd(Self, OpenFile) -> Int32
+pub fn WasiContext::close_fd(Self, Int32) -> Bool
+pub fn WasiContext::get_exit_code(Self) -> Int32?
+pub fn WasiContext::get_file(Self, Int32) -> OpenFile?
+pub fn WasiContext::get_preopen_host_path(Self, Int32) -> String?
 pub fn WasiContext::has_exited(Self) -> Bool
-pub fn WasiContext::is_valid_fd(Self, Int) -> Bool
-pub fn WasiContext::resolve_path(Self, Int, String) -> Result[String, ResolvePathError]
-pub fn WasiContext::resolve_path_nofollow_leaf(Self, Int, String) -> Result[String, ResolvePathError]
-pub fn WasiContext::take_socket(Self, Int, rights_base? : Int64, rights_inheriting? : Int64) -> Result[Int, Int]
+pub fn WasiContext::is_valid_fd(Self, Int32) -> Bool
+pub fn WasiContext::resolve_path(Self, Int32, String) -> Result[String, ResolvePathError]
+pub fn WasiContext::resolve_path_nofollow_leaf(Self, Int32, String) -> Result[String, ResolvePathError]
+pub fn WasiContext::take_socket(Self, Int32, rights_base? : Int64, rights_inheriting? : Int64) -> Result[Int32, Int32]
 
 pub(all) struct WasiContextBuilder {
-  mut signal_handler : ((Int) -> Int)?
+  mut signal_handler : ((Int32) -> Int32)?
   mut args : Array[String]
   env : Array[String]
   preopens : Array[(String, String)]
@@ -592,7 +592,7 @@ pub fn WasiContextBuilder::inherit_stdio(Self) -> Self
 pub fn WasiContextBuilder::inherit_stdout(Self) -> Self
 pub fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
 pub fn WasiContextBuilder::preopen_dir_readonly(Self, String, String) -> Self
-pub fn WasiContextBuilder::signal_handler(Self, (Int) -> Int) -> Self
+pub fn WasiContextBuilder::signal_handler(Self, (Int32) -> Int32) -> Self
 pub fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
 pub fn WasiContextBuilder::stdin(Self, () -> Bytes) -> Self
 pub fn WasiContextBuilder::stdout(Self, (Bytes) -> Unit) -> Self
@@ -604,6 +604,6 @@ pub(all) enum Whence {
 }
 
 // Type aliases
-pub using @Milky2018/wasmoon_jit/host_io/wasi {type NativeResolverHandle}
+pub using @Milky2018/wasmoon_runtime/native/host_io/wasi {type NativeResolverHandle}
 
 // Traits

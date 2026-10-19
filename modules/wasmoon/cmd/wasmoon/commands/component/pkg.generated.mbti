@@ -6,19 +6,19 @@ import {
 }
 
 // Values
-pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat, component_implements? : Bool) -> Int
+pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat, component_implements? : Bool) -> Int32
 
-pub fn run_component_invoke_command(String, String, Array[String], Bool, ComponentErrorFormat, component_implements? : Bool) -> Int
+pub fn run_component_invoke_command(String, String, Array[String], Bool, ComponentErrorFormat, component_implements? : Bool) -> Int32
 
-pub fn run_component_script(String, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+pub fn run_component_script(String, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int32
 
-pub fn run_component_script_cli(String, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+pub fn run_component_script_cli(String, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int32
 
-pub async fn run_http_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, Bool, Bool) -> Int
+pub async fn run_http_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, Bool, Bool) -> Int32
 
-pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int32
 
-pub async fn serve_http(String, Array[String], String, String, Bool, envs? : Array[String]) -> Int
+pub async fn serve_http(String, Array[String], String, String, Bool, envs? : Array[String]) -> Int32
 
 // Errors
 

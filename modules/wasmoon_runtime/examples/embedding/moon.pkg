@@ -1,0 +1,7 @@
+import {
+  "Milky2018/wasmoon_runtime/runtime",
+  "Milky2018/wasmoon_runtime/executor",
+  "Milky2018/wasm_core/validator",
+}
+
+pkgtype(kind: "executable")

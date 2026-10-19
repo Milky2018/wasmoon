@@ -1,4 +1,5 @@
-options(
-  "native-stub": [ "windows_io.c", "windows_input.c", "windows_fs.c" ],
-  targets: { "platform.mbt": [ "native" ] },
-)
+import {
+  "Milky2018/wasmoon_runtime/native/host_io" @implementation,
+}
+
+supported_targets = "+native"

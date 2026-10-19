@@ -1,0 +1,10 @@
+import {
+  "Milky2018/wasmoon_runtime/native/host_io",
+}
+
+options(
+  targets: { "reactor.mbt": [ "native" ] },
+  warn_list: "+73",
+)
+
+supported_targets = "+native"

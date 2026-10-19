@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn open_native_component_session(opt_level? : Int, on_execution? : (NativeComponentExecutionEvent) -> Unit) -> @core.CoreExecutionEngine
+pub fn open_native_component_session(opt_level? : Int32, on_execution? : (NativeComponentExecutionEvent) -> Unit) -> @core.CoreExecutionEngine
 
 // Errors
 

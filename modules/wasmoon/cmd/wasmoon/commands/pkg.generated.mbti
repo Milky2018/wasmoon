@@ -7,41 +7,41 @@ import {
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit/artifact/loader",
-  "Milky2018/wasmoon_jit/perf",
+  "Milky2018/wasmoon_runtime/clock",
 }
 
 // Values
 pub fn build_jit_function_names(@types.Module) -> Array[String]
 
-pub fn compile_module(Bytes, opt_level? : Int, enable_dwarf? : Bool, on_progress? : (CompileProgress) -> Unit?, enable_cancellation? : Bool, nan_canonicalization? : Bool) -> @artifact.Artifact?
+pub fn compile_module(Bytes, opt_level? : Int32, enable_dwarf? : Bool, on_progress? : (CompileProgress) -> Unit?, enable_cancellation? : Bool, nan_canonicalization? : Bool) -> @artifact.Artifact?
 
-pub fn compile_module_to_jit(@types.Module, Bool, Bool, actual_memory_max? : Int?, Int, Bool, on_progress? : (CompileProgress) -> Unit?, compile_start? : @perf.Instant?, local_compile_mask? : Array[Bool]?, force_subtype_indirect_check? : Bool?, use_reusable_pipeline? : Bool, enable_cancellation? : Bool, nan_canonicalization? : Bool, stack_switching? : Bool) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)?
+pub fn compile_module_to_jit(@types.Module, Bool, Bool, actual_memory_max? : Int32?, Int32, Bool, on_progress? : (CompileProgress) -> Unit?, compile_start? : @clock.Instant?, local_compile_mask? : Array[Bool]?, force_subtype_indirect_check? : Bool?, use_reusable_pipeline? : Bool, enable_cancellation? : Bool, nan_canonicalization? : Bool, stack_switching? : Bool) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)?
 
-pub fn run_component_command(String, Bool, Bool, Bool, @component.ComponentErrorFormat, component_implements? : Bool) -> Int
+pub fn run_component_command(String, Bool, Bool, Bool, @component.ComponentErrorFormat, component_implements? : Bool) -> Int32
 
-pub fn run_component_invoke_command(String, String, Array[String], Bool, @component.ComponentErrorFormat, component_implements? : Bool) -> Int
+pub fn run_component_invoke_command(String, String, Array[String], Bool, @component.ComponentErrorFormat, component_implements? : Bool) -> Int32
 
-pub fn run_component_script(String, @component.ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+pub fn run_component_script(String, @component.ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int32
 
-pub fn run_component_script_cli(String, @component.ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+pub fn run_component_script_cli(String, @component.ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int32
 
-pub fn run_config(String) -> Int
+pub fn run_config(String) -> Int32
 
-pub fn run_disasm(String) -> Int
+pub fn run_disasm(String) -> Int32
 
-pub fn run_explore(String, Int?, Int, Array[String], Bool, Bool, target_name? : String) -> Int
+pub fn run_explore(String, Int32?, Int32, Array[String], Bool, Bool, target_name? : String) -> Int32
 
-pub async fn run_http_component_command(String, Array[String], Array[String], Array[String], String, Bool, @component.ComponentErrorFormat, Bool, Bool) -> Int
+pub async fn run_http_component_command(String, Array[String], Array[String], Array[String], String, Bool, @component.ComponentErrorFormat, Bool, Bool) -> Int32
 
-pub fn run_settings() -> Int
+pub fn run_settings() -> Int32
 
-pub fn run_testsuite(String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool) -> Int
+pub fn run_testsuite(String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool) -> Int32
 
-pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, @component.ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int
+pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, @component.ComponentErrorFormat, use_jit? : Bool, component_implements? : Bool) -> Int32
 
-pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool, readonly_dirs? : Array[String]) -> Int
+pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int32, Bool, readonly_dirs? : Array[String]) -> Int32
 
-pub async fn serve_http(String, Array[String], String, String, Bool, envs? : Array[String]) -> Int
+pub async fn serve_http(String, Array[String], String, String, Bool, envs? : Array[String]) -> Int32
 
 pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedArtifact raise @loader.ArtifactLoadError
 
@@ -50,14 +50,14 @@ pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedAr
 // Types and methods
 pub struct CompileProgress {
   stage : CompileStage
-  func_idx : Int?
+  func_idx : Int32?
   func_name : String?
-  total_funcs : Int
-  compiled_funcs : Int
+  total_funcs : Int32
+  compiled_funcs : Int32
   elapsed_us : Int64
   message : String?
 }
-pub fn CompileProgress::CompileProgress(CompileStage, Int, Int, Int64, func_idx? : Int?, func_name? : String?, message? : String?) -> Self
+pub fn CompileProgress::CompileProgress(CompileStage, Int32, Int32, Int64, func_idx? : Int32?, func_name? : String?, message? : String?) -> Self
 
 pub(all) enum CompileStage {
   Parse

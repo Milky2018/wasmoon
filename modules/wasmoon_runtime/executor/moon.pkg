@@ -1,0 +1,27 @@
+import {
+  "Milky2018/wasmoon_runtime/control",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/validator",
+  "Milky2018/wasmoon_runtime/runtime",
+  "Milky2018/wasmoon_runtime/logger",
+  "moonbitlang/core/env",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/math",
+}
+
+import {
+  "moonbitlang/async",
+} for "test"
+
+import {
+  "moonbitlang/core/double",
+  "moonbitlang/core/float",
+} for "wbtest"
+
+options(
+  targets: {
+    "instr_atomic.mbt": [ "native" ],
+    "instr_atomic_wasm.mbt": [ "wasm" ],
+  },
+)

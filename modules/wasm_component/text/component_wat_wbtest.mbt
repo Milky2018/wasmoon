@@ -427,3 +427,25 @@ test "component value type references round trip signed LEB boundaries" {
     content="[(63, true), (64, true), (127, true), (128, true)]",
   )
 }
+
+///|
+test "embedded core modules preserve byte string spellings" {
+  let source =
+    #|(component (core module
+    #| (memory 1) (data "\c3\a9\ff") (data "é")
+    #| (func (export "\c3\a9"))))
+  let parsed = @component.parse_component(parse_component_wat(source))
+  let core = @core_parser.parse_module(parsed.core_modules[0])
+  inspect(core.datas[0].init, content="b\"\\xc3\\xa9\\xff\"")
+  inspect(core.datas[1].init, content="b\"\\xc3\\xa9\"")
+  inspect(core.exports[0].name, content="é")
+  let malformed =
+    #|(component (core module (memory 1) (data "\q")))
+  let rejected = try {
+    let _ = parse_component_wat(malformed)
+    false
+  } catch {
+    _ => true
+  }
+  inspect(rejected, content="true")
+}

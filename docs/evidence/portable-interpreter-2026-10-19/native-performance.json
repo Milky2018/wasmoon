@@ -1,0 +1,97 @@
+{
+  "base_revision": "8f99719a69d32e79325edf06785039f4d3fbf071",
+  "candidate_dirty": true,
+  "host": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "toolchain": "moon 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moon\nmoonc v0.10.16+b1a0e846e (2026-10-16) ~/.moon/bin/moonc\nmoonrun 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "method": "1000000 guest iterations plus final Store collection, parse/validation/instantiation outside timer; one warmup pair, seven serial alternating pairs; native interpreter only",
+  "binaries": {
+    "baseline": "ac830930d9f4f5911eacd6c1009d9aa0398e7a8767eea486d3032941be073a03",
+    "candidate": "d529af2ec581855026c8a66c4b095d11bb1cd65e884b3a71b5e4816b581b99fc"
+  },
+  "measurements": [
+    {
+      "workload": "memory",
+      "seconds": {
+        "baseline": [
+          0.2566640000004554,
+          0.25598899999749847,
+          0.25606600000173785,
+          0.25834000000031665,
+          0.2584050000004936,
+          0.2595819999987725,
+          0.25474399999075104
+        ],
+        "candidate": [
+          0.25575799999933224,
+          0.2773200000083307,
+          0.255871000001207,
+          0.2599620000110008,
+          0.25830600000335835,
+          0.2568560000072466,
+          0.25654000000213273
+        ]
+      },
+      "median_seconds": {
+        "baseline": 0.2566640000004554,
+        "candidate": 0.2568560000072466
+      },
+      "candidate_over_baseline": 1.0007480597465592
+    },
+    {
+      "workload": "gc",
+      "seconds": {
+        "baseline": [
+          0.43085199999040924,
+          0.41648699999495875,
+          0.5892789999925299,
+          0.5466040000028443,
+          0.5166150000004563,
+          0.5210650000080932,
+          0.5124119999964023
+        ],
+        "candidate": [
+          0.4080709999980172,
+          0.4940280000009807,
+          0.585562000007485,
+          0.4885589999903459,
+          0.4633999999932712,
+          0.5113869999913732,
+          0.5262870000005933
+        ]
+      },
+      "median_seconds": {
+        "baseline": 0.5166150000004563,
+        "candidate": 0.4940280000009807
+      },
+      "candidate_over_baseline": 0.9562788536928744
+    },
+    {
+      "workload": "exceptions",
+      "seconds": {
+        "baseline": [
+          0.5289420000044629,
+          0.5426670000015292,
+          0.5568199999979697,
+          0.4989660000137519,
+          0.46997200000623707,
+          0.4756360000028508,
+          0.4676959999924293
+        ],
+        "candidate": [
+          0.574930000002496,
+          0.5597060000000056,
+          0.6528629999957047,
+          0.4719679999980144,
+          0.48655000000144355,
+          0.47740500001236796,
+          0.46970499999588355
+        ]
+      },
+      "median_seconds": {
+        "baseline": 0.4989660000137519,
+        "candidate": 0.48655000000144355
+      },
+      "candidate_over_baseline": 0.9751165409828202
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 ///|
 test "WAST invalid and unlinkable assertions reject failures from the wrong phase" {
   let sources = [
-    "(assert_invalid (module quote \"(module)\") \"\")", "(assert_unlinkable (module (func (result i32))) \"type mismatch\")",
-    "(assert_unlinkable (module binary \"\\00asm\\01\\00\\00\\00\\01\\05\\01\\60\\00\\01\\7f\\03\\02\\01\\00\\0a\\04\\01\\02\\00\\0b\") \"type mismatch\")",
+    "(assert_malformed (module quote \"(module)\") \"expected malformed\")", "(assert_invalid (module quote \"(module)\") \"\")",
+    "(assert_unlinkable (module (func (result i32))) \"type mismatch\")", "(assert_unlinkable (module binary \"\\00asm\\01\\00\\00\\00\\01\\05\\01\\60\\00\\01\\7f\\03\\02\\01\\00\\0a\\04\\01\\02\\00\\0b\") \"type mismatch\")",
   ]
   for source in sources {
     let result = @wast.run_wast_commands(@wast.parse(source), ".", false, false)
@@ -45,4 +45,20 @@ test "WAST unlinkable assertions retain pinned start-trap behavior" {
     #|(assert_unlinkable (module (func $start unreachable) (start $start)) "unreachable")
   let result = @wast.run_wast_commands(@wast.parse(source), ".", false, false)
   debug_inspect((result.passed, result.failed), content="(3, 0)")
+}
+
+///|
+test "quoted start traps are parsed and checked against the expected category" {
+  let source =
+    #|(assert_trap (module quote "(module (func $s unreachable) (start $s))") "unreachable")
+    #|(assert_trap (module quote "(module (func $s unreachable) (start $s))") "integer divide by zero")
+  for use_jit in [false, true] {
+    let result = @wast.run_wast_commands(
+      @wast.parse(source),
+      ".",
+      use_jit,
+      false,
+    )
+    debug_inspect((result.passed, result.failed), content="(1, 1)")
+  }
 }

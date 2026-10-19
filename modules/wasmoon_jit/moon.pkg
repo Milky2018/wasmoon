@@ -1,4 +1,7 @@
 import {
+  "Milky2018/wasmoon_runtime/control",
+  "Milky2018/wasmoon_runtime/runtime",
+  "Milky2018/wasmoon_runtime/native/bridge" @runtime_bridge,
   "Milky2018/wasmoon_jit/context/layout" @context_layout,
   "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/wasmoon_jit/native/execution",

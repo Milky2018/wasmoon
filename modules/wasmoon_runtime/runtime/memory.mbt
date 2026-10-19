@@ -1,0 +1,598 @@
+///|
+/// WebAssembly linear memory.
+///
+/// Native builds use an authoritative C descriptor shared with JIT. Wasm builds
+/// use managed storage selected at compile time; both reuse checked guest access.
+#cfg(target="native")
+priv enum MemoryDescriptorState {
+  Open(@native_bridge.MemoryDescriptor)
+  Closed
+} derive(Debug)
+
+///|
+struct Memory {
+  mut binding : ResourceBinding?
+  descriptor_state : Ref[MemoryDescriptorState]
+  max : Int64? // max size in logical pages
+  is_memory64 : Bool // true for memory64 (i64-indexed)
+  is_shared : Bool
+  page_size_log2 : Int32
+  page_size_bytes : Int64
+} derive(Debug)
+
+///|
+/// Retain the native memory descriptor.
+///
+/// Existing handles stay live across Store close; closed Memory aliases return
+/// an empty handle and reject further access through the Memory API.
+#cfg(target="native")
+pub fn Memory::desc_ptr(self : Memory) -> @native_bridge.MemoryDescriptor {
+  if self.binding is Some(binding) && (binding.store.val || !binding.active.val) {
+    return @native_bridge.MemoryDescriptor::null()
+  }
+  match self.descriptor_state.val {
+    Open(pointer) => pointer
+    Closed => @native_bridge.MemoryDescriptor::null()
+  }
+}
+
+///|
+#cfg(target="native")
+fn Memory::require_desc_ptr(
+  self : Memory,
+) -> @native_bridge.MemoryDescriptor raise RuntimeError {
+  if self.descriptor_state.val is Closed {
+    raise MemoryClosed
+  }
+  check_resource_open(self.binding)
+  match self.descriptor_state.val {
+    Open(pointer) if !pointer.is_null() => pointer
+    Open(_) => raise OutOfMemory
+    Closed => raise MemoryClosed
+  }
+}
+
+///|
+#cfg(target="native")
+pub fn Memory::close(self : Memory) -> Unit {
+  match self.descriptor_state.val {
+    Open(_) => self.descriptor_state.val = Closed
+    Closed => ()
+  }
+}
+
+///|
+#cfg(target="native")
+pub fn Memory::byte_len(self : Memory) -> Int64 {
+  let pointer = self.desc_ptr()
+  if pointer.is_null() {
+    0L
+  } else {
+    @native_bridge.memory_descriptor_length(pointer)
+  }
+}
+
+///|
+pub fn Memory::page_size_bytes(self : Memory) -> Int64 {
+  self.page_size_bytes
+}
+
+///|
+/// Convert a WASM address to a byte offset.
+///
+/// For memory32, addresses are u32, so negative Int values represent large
+/// addresses (high bit set) and must be treated as unsigned.
+fn Memory::addr_to_offset(self : Memory, addr : Int32) -> Int64 {
+  if self.is_memory64 {
+    addr.to_int64()
+  } else {
+    // Interpret as u32 and widen to i64.
+    addr.to_int64() & 0xFFFF_FFFFL
+  }
+}
+
+///|
+pub fn Memory::Memory(
+  min : Int32,
+  max : Int32?,
+  is_memory64~ : Bool = false,
+  is_shared~ : Bool = false,
+  page_size_log2~ : Int32 = 16,
+  resource_budget~ : ResourceBudget? = None,
+) -> Memory raise RuntimeError {
+  Memory::allocate(
+    min.to_int64() & 0xFFFF_FFFFL,
+    max.map(fn(value) { value.to_int64() & 0xFFFF_FFFFL }),
+    is_memory64~,
+    is_shared~,
+    page_size_log2~,
+    resource_budget~,
+  )
+}
+
+///|
+fn Memory::allocate(
+  min : Int64,
+  max : Int64?,
+  is_memory64~ : Bool,
+  is_shared~ : Bool,
+  page_size_log2~ : Int32,
+  resource_budget~ : ResourceBudget? = None,
+) -> Memory raise RuntimeError {
+  let l2 = page_size_log2
+  if l2 < 0 || l2 > 30 {
+    raise InvalidMemoryType("invalid page size")
+  }
+  if max is Some(maximum) &&
+    maximum.reinterpret_as_uint64() < min.reinterpret_as_uint64() {
+    raise InvalidMemoryType("maximum is below minimum")
+  }
+  if is_shared && max is None {
+    raise InvalidMemoryType("shared memory requires a maximum")
+  }
+  let page_size_bytes = 1L << l2
+  let valid_size = min >= 0L &&
+    min <= 0x7FFF_FFFF_FFFF_FFFFL / page_size_bytes &&
+    (
+      is_memory64 ||
+      min <=
+      (if l2 == 0 { 0xFFFF_FFFEL } else { 0x1_0000_0000L / page_size_bytes })
+    )
+  guard valid_size else { raise MemoryMinimumExceedsLimits(min) }
+  let reservation = resource_budget.map(budget => {
+    budget.reservation(MemoryBytes, min * page_size_bytes)
+  })
+  errdefer (if reservation is Some(reservation) { reservation.close() })
+  let descriptor_state = allocate_memory_storage(
+    min, max, is_memory64, is_shared, l2,
+  )
+  let memory = {
+    binding: None,
+    descriptor_state: Ref(descriptor_state),
+    max,
+    is_memory64,
+    is_shared,
+    page_size_log2: l2,
+    page_size_bytes,
+  }
+  memory.ensure_memory_open()
+  if reservation is Some(reservation) {
+    memory.bind_memory_reservation(reservation)
+  }
+  memory
+}
+
+///|
+/// Allocate a validated module memory without narrowing its page limits.
+pub fn Memory::from_type(
+  ty : @types.MemoryType,
+  resource_budget~ : ResourceBudget? = None,
+) -> Memory raise RuntimeError {
+  Memory::allocate(
+    ty.limits.min,
+    ty.limits.max,
+    is_memory64=ty.is_memory64,
+    is_shared=ty.is_shared,
+    page_size_log2=ty.page_size_log2,
+    resource_budget~,
+  )
+}
+
+///|
+pub fn Memory::new_guarded_memory0(
+  min : Int32,
+  max : Int32?,
+  is_shared~ : Bool = false,
+) -> Memory raise RuntimeError {
+  Memory(min, max, is_shared~)
+}
+
+// Compatibility entry points for callers that hold 32-bit addresses.
+// All typed accesses use the checked 64-bit byte-offset implementation.
+
+///|
+pub fn Memory::load_byte(
+  self : Memory,
+  addr : Int32,
+) -> Byte raise RuntimeError {
+  self.load_byte_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::store_byte(
+  self : Memory,
+  addr : Int32,
+  value : Byte,
+) -> Unit raise RuntimeError {
+  self.store_byte_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::load_i32(
+  self : Memory,
+  addr : Int32,
+) -> Int32 raise RuntimeError {
+  self.load_i32_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::store_i32(
+  self : Memory,
+  addr : Int32,
+  value : Int32,
+) -> Unit raise RuntimeError {
+  self.store_i32_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::load_i64(
+  self : Memory,
+  addr : Int32,
+) -> Int64 raise RuntimeError {
+  self.load_i64_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::store_i64(
+  self : Memory,
+  addr : Int32,
+  value : Int64,
+) -> Unit raise RuntimeError {
+  self.store_i64_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::load_f32(
+  self : Memory,
+  addr : Int32,
+) -> Float raise RuntimeError {
+  self.load_f32_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::store_f32(
+  self : Memory,
+  addr : Int32,
+  value : Float,
+) -> Unit raise RuntimeError {
+  self.store_f32_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::load_f64(
+  self : Memory,
+  addr : Int32,
+) -> Double raise RuntimeError {
+  self.load_f64_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::store_f64(
+  self : Memory,
+  addr : Int32,
+  value : Double,
+) -> Unit raise RuntimeError {
+  self.store_f64_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::load_i32_8s(
+  self : Memory,
+  addr : Int32,
+) -> Int32 raise RuntimeError {
+  self.load_i32_8s_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i32_8u(
+  self : Memory,
+  addr : Int32,
+) -> Int32 raise RuntimeError {
+  self.load_i32_8u_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i32_16s(
+  self : Memory,
+  addr : Int32,
+) -> Int32 raise RuntimeError {
+  self.load_i32_16s_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i32_16u(
+  self : Memory,
+  addr : Int32,
+) -> Int32 raise RuntimeError {
+  self.load_i32_16u_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i64_8s(
+  self : Memory,
+  addr : Int32,
+) -> Int64 raise RuntimeError {
+  self.load_i64_8s_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i64_8u(
+  self : Memory,
+  addr : Int32,
+) -> Int64 raise RuntimeError {
+  self.load_i64_8u_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i64_16s(
+  self : Memory,
+  addr : Int32,
+) -> Int64 raise RuntimeError {
+  self.load_i64_16s_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i64_16u(
+  self : Memory,
+  addr : Int32,
+) -> Int64 raise RuntimeError {
+  self.load_i64_16u_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i64_32s(
+  self : Memory,
+  addr : Int32,
+) -> Int64 raise RuntimeError {
+  self.load_i64_32s_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::load_i64_32u(
+  self : Memory,
+  addr : Int32,
+) -> Int64 raise RuntimeError {
+  self.load_i64_32u_at(self.addr_to_offset(addr))
+}
+
+///|
+pub fn Memory::store_i32_8(
+  self : Memory,
+  addr : Int32,
+  value : Int32,
+) -> Unit raise RuntimeError {
+  self.store_i32_8_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::store_i32_16(
+  self : Memory,
+  addr : Int32,
+  value : Int32,
+) -> Unit raise RuntimeError {
+  self.store_i32_16_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::store_i64_8(
+  self : Memory,
+  addr : Int32,
+  value : Int64,
+) -> Unit raise RuntimeError {
+  self.store_i64_8_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::store_i64_16(
+  self : Memory,
+  addr : Int32,
+  value : Int64,
+) -> Unit raise RuntimeError {
+  self.store_i64_16_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::store_i64_32(
+  self : Memory,
+  addr : Int32,
+  value : Int64,
+) -> Unit raise RuntimeError {
+  self.store_i64_32_at(self.addr_to_offset(addr), value)
+}
+
+///|
+pub fn Memory::size_pages(self : Memory) -> Int32 {
+  let bytes = self.byte_len()
+  if self.page_size_bytes <= 0L {
+    0
+  } else {
+    (bytes / self.page_size_bytes).to_int()
+  }
+}
+
+///|
+pub fn Memory::is_memory64(self : Memory) -> Bool {
+  self.is_memory64
+}
+
+///|
+pub fn Memory::grow(self : Memory, delta : Int32) -> Int32 {
+  self.grow64(delta.to_int64() & 0xFFFF_FFFFL).to_int()
+}
+
+///|
+/// Grow by an unsigned memory64 page count; negative bit patterns cannot fit.
+#cfg(target="native")
+pub fn Memory::grow64(self : Memory, delta : Int64) -> Int64 {
+  let pointer = self.desc_ptr()
+  if pointer.is_null() || delta < 0L {
+    return -1L
+  }
+  @native_bridge.memory_descriptor_grow64(pointer, delta)
+}
+
+///|
+/// Initialize memory with data segment
+pub fn Memory::init_data(
+  self : Memory,
+  dest : Int32,
+  data : Bytes,
+) -> Unit raise RuntimeError {
+  self.init_data_at(self.addr_to_offset(dest), data)
+}
+
+///|
+/// Copy memory within the same memory instance
+/// Handles overlapping regions correctly
+pub fn Memory::copy(
+  self : Memory,
+  dest : Int32,
+  src : Int32,
+  len : Int32,
+) -> Unit raise RuntimeError {
+  self.copy_at(
+    self.addr_to_offset(dest),
+    self.addr_to_offset(src),
+    len.to_int64(),
+  )
+}
+
+///|
+/// Fill memory region with a byte value
+pub fn Memory::fill(
+  self : Memory,
+  dest : Int32,
+  value : Byte,
+  len : Int32,
+) -> Unit raise RuntimeError {
+  self.fill_at(self.addr_to_offset(dest), value, len.to_int64())
+}
+
+///|
+/// Read i32 from memory (non-raising version for WASI)
+pub fn Memory::read_i32(self : Memory, addr : Int32) -> Int32 {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset + 4L > self.byte_len() {
+    return 0
+  }
+  self.load_i32_at(offset) catch {
+    _ => 0
+  }
+}
+
+///|
+/// Write i32 to memory (non-raising version for WASI)
+pub fn Memory::write_i32(self : Memory, addr : Int32, value : Int32) -> Unit {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset + 4L > self.byte_len() {
+    return
+  }
+  try self.store_i32_at(offset, value) |> ignore catch {
+    _ => ()
+  }
+}
+
+///|
+/// Read i64 from memory (non-raising version for WASI)
+pub fn Memory::read_i64(self : Memory, addr : Int32) -> Int64 {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset + 8L > self.byte_len() {
+    return 0L
+  }
+  self.load_i64_at(offset) catch {
+    _ => 0L
+  }
+}
+
+///|
+/// Write i64 to memory (non-raising version for WASI)
+pub fn Memory::write_i64(self : Memory, addr : Int32, value : Int64) -> Unit {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset + 8L > self.byte_len() {
+    return
+  }
+  try self.store_i64_at(offset, value) |> ignore catch {
+    _ => ()
+  }
+}
+
+///|
+/// Read a byte from memory (non-raising version for WASI)
+pub fn Memory::read_byte(self : Memory, addr : Int32) -> Byte {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset >= self.byte_len() {
+    return b'\x00'
+  }
+  self.load_byte_unchecked_at(offset)
+}
+
+///|
+/// Write a byte to memory (non-raising version for WASI)
+pub fn Memory::write_byte(self : Memory, addr : Int32, value : Byte) -> Unit {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if offset >= self.byte_len() {
+    return
+  }
+  self.store_byte_unchecked_at(offset, value)
+}
+
+///|
+/// Read bytes from memory (non-raising version for WASI)
+pub fn Memory::read_bytes(self : Memory, addr : Int32, len : Int32) -> Bytes {
+  let offset = addr.reinterpret_as_uint().to_int64()
+  if len < 0 || offset + len.to_int64() > self.byte_len() {
+    return b""
+  }
+  if len == 0 {
+    return b""
+  }
+  let fixed = self.read_fixed_at(offset, len)
+  let arr : Array[Byte] = Array::make(len, b'\x00')
+  for i in 0..<len {
+    arr[i] = fixed[i]
+  }
+  Bytes::from_array(arr)
+}
+
+///|
+/// Legacy 32-bit page counts. Maxima wider than 32 bits are omitted.
+/// Use get_limits64 for module type compatibility.
+pub fn Memory::get_limits(self : Memory) -> (Int32, Int32?) {
+  (
+    self.size_pages(),
+    match self.max {
+      Some(value) if value >= 0L && value <= 0xFFFF_FFFFL =>
+        Some(value.to_int())
+      _ => None
+    },
+  )
+}
+
+///|
+pub fn Memory::is_shared(self : Memory) -> Bool {
+  self.is_shared
+}
+
+///|
+#cfg(target="native")
+fn Memory::share(self : Memory) -> Memory raise RuntimeError {
+  let pointer = self.require_desc_ptr()
+  if !self.is_shared {
+    raise LinkErrorDetail("only shared memory can be imported across Stores")
+  }
+  {
+    binding: None,
+    descriptor_state: Ref(Open(pointer)),
+    max: self.max,
+    is_memory64: self.is_memory64,
+    is_shared: true,
+    page_size_log2: self.page_size_log2,
+    page_size_bytes: self.page_size_bytes,
+  }
+}
+
+///|
+/// Return the full logical page limits for module import compatibility.
+pub fn Memory::get_limits64(self : Memory) -> (Int64, Int64?) {
+  (self.byte_len() / self.page_size_bytes, self.max)
+}

@@ -1,0 +1,19 @@
+import {
+  "Milky2018/wasmoon_runtime/native/ffi" @jit_ffi,
+  "Milky2018/wasmoon_runtime/native/execution",
+  "Milky2018/wasmoon_runtime/native/callable",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_milkir",
+}
+
+options(
+  targets: {
+    "ffi.mbt": [ "native" ],
+    "traits.mbt": [ "native" ],
+    "handles.mbt": [ "native" ],
+    "native_atomic_wait.mbt": [ "native" ],
+    "native_atomic.mbt": [ "native" ],
+    "c_heap.mbt": [ "native" ],
+    "memory.mbt": [ "native" ],
+  },
+)

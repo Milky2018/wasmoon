@@ -23,7 +23,7 @@ class WindowsMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "moonbit.h").write_text('#define MOONBIT_FFI_EXPORT\n')
-            source = ROOT / "modules/wasmoon_jit/host_io"
+            source = ROOT / "modules/wasmoon_runtime/native/ffi/host_io"
             program = root / "memory.exe"
             subprocess.run([
                 str(compiler), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/MD", "/Zi", "/fsanitize=address",

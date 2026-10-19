@@ -4,3 +4,7 @@ import {
   "Milky2018/wasm_component/validator" @component_model,
   "Milky2018/wasm_core/wat",
 }
+
+import {
+  "Milky2018/wasm_core/parser" @core_parser,
+} for "wbtest"

@@ -99,9 +99,9 @@ async test "JIT async host function parks and resumes its native fiber" {
       }
       events.push("host ready")
       match args[0] {
-        I32(value) if value < 0 => raise @runtime.DivisionByZero
+        I32(value) if value < 0 => raise @runtime.RuntimeError::DivisionByZero
         I32(value) => [I32(value * 2)]
-        _ => raise @runtime.TypeMismatch
+        _ => raise @runtime.RuntimeError::TypeMismatch
       }
     },
     func_type~,
@@ -217,13 +217,13 @@ async test "JIT propagates async suspension through an imported wasm function" {
         }
         I32(value) if value < 0 => {
           @async.sleep(1)
-          raise @runtime.DivisionByZero
+          raise @runtime.RuntimeError::DivisionByZero
         }
         I32(value) => {
           @async.sleep(1)
           [I32(value * 2)]
         }
-        _ => raise @runtime.TypeMismatch
+        _ => raise @runtime.RuntimeError::TypeMismatch
       }
     },
     func_type~,

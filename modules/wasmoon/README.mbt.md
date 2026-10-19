@@ -9,7 +9,7 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 ## Features
 
 - **JIT Compiler**: AArch64 and amd64 native code generation with SSA-based IR
-- **Interpreter**: Full WebAssembly 1.0 execution engine, available via `--no-jit`
+- **Interpreter**: Core execution via `--no-jit`; the unreleased `wasmoon_runtime` module also supports the MoonBit `wasm` target under `moonrun`
 - **Async host functions**: Suspend interpreter continuations or JIT native fibers without blocking the host thread
 - **WAT/WASM Parser**: Parse both text and binary formats
 - **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
@@ -18,6 +18,10 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 - **WASI HTTP 0.3**: Streaming HTTP/HTTPS client, service and middleware worlds; `wasmoon serve` with interpreter or JIT
 - **WASI HTTP 0.3**: Streaming HTTP/HTTPS client, service and middleware worlds; `wasmoon serve` with interpreter or JIT
 - **WASI Components**: Preview 2 and WASI 0.3 hosts with native Component Async JIT on macOS AArch64 and Linux AMD64
+
+See the [portable interpreter guide](docs/portable-interpreter.md) for wasm embedding and host requirements.
+
+See the [portable interpreter guide](../../docs/portable-interpreter.md) for wasm embedding and host requirements.
 
 ## Requirements
 

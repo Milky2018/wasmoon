@@ -6,7 +6,7 @@ priv enum Token {
   Keyword(String) // module, func, param, etc.
   Id(String) // $name identifiers
   Number(String) // numeric literals
-  String_(String) // string literals
+  String_(String) // byte strings, one code unit per byte
   Eof
 } derive(Debug, Eq)
 
@@ -113,7 +113,20 @@ fn Lexer::next_char(self : Lexer) -> Char? {
   if self.is_eof() {
     None
   } else {
-    let c = self.input.code_unit_at(self.pos).unsafe_to_char()
+    let first = self.input.code_unit_at(self.pos)
+    let c = if first >= 0xd800 &&
+      first <= 0xdbff &&
+      self.pos + 1 < self.input.length() {
+      let low = self.input.code_unit_at(self.pos + 1)
+      if low >= 0xdc00 && low <= 0xdfff {
+        self.pos += 1
+        (0x10000 + ((first.to_int() - 0xd800) << 10) + low.to_int() - 0xdc00).unsafe_to_char()
+      } else {
+        first.unsafe_to_char()
+      }
+    } else {
+      first.unsafe_to_char()
+    }
     self.pos += 1
     if c == '\n' {
       self.line += 1
@@ -141,7 +154,7 @@ fn Lexer::advance_pos(self : Lexer) -> Unit {
 }
 
 ///|
-fn Lexer::skip_whitespace(self : Lexer) -> Unit {
+fn Lexer::skip_whitespace(self : Lexer) -> Unit raise WatError {
   while !self.is_eof() {
     let c = self.peek_char()
     if c is Some(' ') || c is Some('\t') || c is Some('\n') || c is Some('\r') {
@@ -166,28 +179,7 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
       // Check for block comment (; ... ;)
       if self.pos + 1 < self.input.length() &&
         self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
-        self.advance_pos()
-        self.advance_pos()
-        let mut depth = 1
-        while !self.is_eof() && depth > 0 {
-          if self.pos + 1 < self.input.length() {
-            let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
-            let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
-            if c1 == ';' && c2 == ')' {
-              depth -= 1
-              self.advance_pos()
-              self.advance_pos()
-            } else if c1 == '(' && c2 == ';' {
-              depth += 1
-              self.advance_pos()
-              self.advance_pos()
-            } else {
-              self.advance_pos()
-            }
-          } else {
-            self.advance_pos()
-          }
-        }
+        self.skip_block_comment()
       } else if self.pos + 1 < self.input.length() &&
         self.input.code_unit_at(self.pos + 1).unsafe_to_char() == '@' {
         // Skip annotation (@id ...)
@@ -202,124 +194,89 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
 }
 
 ///|
-/// Skip an annotation (@id ...) including nested parentheses
-fn Lexer::skip_annotation(self : Lexer) -> Unit {
-  // Skip '(@'
+fn Lexer::skip_block_comment(self : Lexer) -> Unit raise WatError {
   self.advance_pos()
   self.advance_pos()
-  // Skip annotation id (can be identifier or string)
-  while !self.is_eof() {
-    match self.peek_char() {
-      Some(' ') | Some('\t') | Some('\n') | Some('\r') => break
-      Some('(') | Some(')') => break
-      Some('"') => {
-        // Skip string in annotation id
-        self.advance_pos()
-        while !self.is_eof() {
-          match self.peek_char() {
-            Some('"') => {
-              self.advance_pos()
-              break
-            }
-            Some('\\') => {
-              self.advance_pos()
-              self.advance_pos() // skip escaped char
-            }
-            _ => self.advance_pos()
-          }
-        }
-        break
-      }
-      _ => self.advance_pos()
-    }
-  }
-  // Skip whitespace after id
-  while !self.is_eof() {
-    match self.peek_char() {
-      Some(' ') | Some('\t') | Some('\n') | Some('\r') => self.advance_pos()
-      _ => break
-    }
-  }
-  // Skip content with balanced parentheses until closing ')'
   let mut depth = 1
   while !self.is_eof() && depth > 0 {
+    if self.pos + 1 < self.input.length() {
+      let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
+      let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
+      if c1 == ';' && c2 == ')' {
+        depth -= 1
+        self.advance_pos()
+        self.advance_pos()
+      } else if c1 == '(' && c2 == ';' {
+        depth += 1
+        self.advance_pos()
+        self.advance_pos()
+      } else {
+        self.advance_pos()
+      }
+    } else {
+      self.advance_pos()
+    }
+  }
+  if depth != 0 {
+    raise UnexpectedEof(self.current_loc())
+  }
+}
+
+///|
+// Annotation payloads permit arbitrary printable ASCII atoms, but strings,
+// comments and balanced delimiters retain their lexical contracts.
+fn Lexer::skip_annotation(self : Lexer) -> Unit raise WatError {
+  self.advance_pos()
+  self.advance_pos()
+  let name = if self.peek_char() == Some('"') {
+    self.read_id_string()
+  } else {
+    self.read_id_or_keyword()
+  }
+  if name.is_empty() {
+    raise ParseError("Empty annotation identifier", self.current_loc())
+  }
+  let mut depth = 1
+  while !self.is_eof() {
     match self.peek_char() {
+      Some('"') => self.read_string() |> ignore
       Some('(') =>
-        // Check for nested annotation or block comment
-        if self.pos + 1 < self.input.length() {
-          let next = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
-          if next == ';' {
-            // Block comment inside annotation - skip it
-            self.advance_pos()
-            self.advance_pos()
-            let mut comment_depth = 1
-            while !self.is_eof() && comment_depth > 0 {
-              if self.pos + 1 < self.input.length() {
-                let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
-                let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
-                if c1 == ';' && c2 == ')' {
-                  comment_depth -= 1
-                  self.advance_pos()
-                  self.advance_pos()
-                } else if c1 == '(' && c2 == ';' {
-                  comment_depth += 1
-                  self.advance_pos()
-                  self.advance_pos()
-                } else {
-                  self.advance_pos()
-                }
-              } else {
-                self.advance_pos()
-              }
-            }
-          } else {
-            depth += 1
-            self.advance_pos()
-          }
+        if self.pos + 1 < self.input.length() &&
+          self.input.code_unit_at(self.pos + 1) == 59 {
+          self.skip_block_comment()
         } else {
           depth += 1
           self.advance_pos()
         }
       Some(')') => {
+        self.advance_pos()
         depth -= 1
-        self.advance_pos()
-      }
-      Some('"') => {
-        // Skip string inside annotation
-        self.advance_pos()
-        while !self.is_eof() {
-          match self.peek_char() {
-            Some('"') => {
-              self.advance_pos()
-              break
-            }
-            Some('\\') => {
-              self.advance_pos()
-              self.advance_pos() // skip escaped char
-            }
-            _ => self.advance_pos()
-          }
+        if depth == 0 {
+          return
         }
       }
       Some(';') =>
-        // Check for line comment inside annotation
         if self.pos + 1 < self.input.length() &&
-          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
-          while !self.is_eof() {
-            match self.peek_char() {
-              Some('\n') | Some('\r') => {
-                self.advance_pos()
-                break
-              }
-              _ => self.advance_pos()
-            }
+          self.input.code_unit_at(self.pos + 1) == 59 {
+          while !self.is_eof() &&
+                self.peek_char() != Some('\n') &&
+                self.peek_char() != Some('\r') {
+            self.advance_pos()
           }
         } else {
           self.advance_pos()
         }
-      _ => self.advance_pos()
+      Some(c) => {
+        let cp = c.to_int()
+        if (cp < 32 && c != '\t' && c != '\n' && c != '\r') || cp >= 127 {
+          raise ParseError("Illegal annotation character", self.current_loc())
+        }
+        self.advance_pos()
+      }
+      None => break
     }
   }
+  raise UnexpectedEof(self.current_loc())
 }
 
 ///|
@@ -372,8 +329,8 @@ fn Lexer::read_id_or_keyword(self : Lexer) -> String {
 
 ///|
 fn Lexer::read_string(self : Lexer) -> String raise WatError {
-  // Write directly to StringBuilder - hex escapes produce raw byte values
-  // that are stored as character code units (not UTF-8 interpreted)
+  // Store bytes as code units; data and binary strings need not be UTF-8.
+  // Text consumers decode explicitly, without Unicode normalization.
   let buf = StringBuilder::StringBuilder()
   let start_loc = self.current_loc()
   // Skip opening quote
@@ -405,7 +362,7 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
                       break
                     }
                     Some(c) =>
-                      if is_hex_digit(c) {
+                      if is_hex_digit(c) || c == '_' {
                         hex_buf.write_char(c)
                         self.advance_pos()
                       } else {
@@ -422,7 +379,7 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
                   raise ParseError("Empty Unicode escape", start_loc)
                 }
                 match parse_hex_codepoint(hex) {
-                  Some(cp) => buf.write_char(cp.unsafe_to_char())
+                  Some(cp) => write_string_codepoint(buf, cp)
                   None =>
                     raise ParseError(
                       "Invalid Unicode escape: \\u{\{hex}}",
@@ -451,8 +408,7 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
                 None => raise UnexpectedEof(self.current_loc())
               }
             } else {
-              // Unknown escape - just output the character
-              buf.write_char(c)
+              raise ParseError("Unknown string escape", start_loc)
             }
           None => raise UnexpectedEof(self.current_loc())
         }
@@ -460,7 +416,14 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
       Some(_) =>
         // Regular character
         match self.next_char() {
-          Some(c) => buf.write_char(c)
+          Some(c) => {
+            if c.to_int() < 0x20 ||
+              c.to_int() == 0x7f ||
+              (c.to_int() >= 0xd800 && c.to_int() <= 0xdfff) {
+              raise ParseError("Control character in string", start_loc)
+            }
+            write_string_codepoint(buf, c.to_int())
+          }
           None => raise UnexpectedEof(self.current_loc())
         }
       None => raise UnexpectedEof(self.current_loc())
@@ -472,101 +435,7 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
 ///|
 /// Read a string used as identifier name - hex escapes are decoded as UTF-8
 fn Lexer::read_id_string(self : Lexer) -> String raise WatError {
-  // Accumulate bytes, then decode as UTF-8
-  // This ensures $"\ef\98\9a" matches $"" (emoji)
-  let bytes : Array[Int32] = []
-  let start_loc = self.current_loc()
-  // Skip opening quote
-  self.advance_pos()
-  while !self.is_eof() {
-    match self.peek_char() {
-      Some('"') => {
-        self.advance_pos()
-        return decode_utf8_bytes(bytes)
-      }
-      Some('\\') => {
-        self.advance_pos()
-        match self.next_char() {
-          Some('n') => bytes.push(0x0A)
-          Some('t') => bytes.push(0x09)
-          Some('r') => bytes.push(0x0D)
-          Some('"') => bytes.push(0x22)
-          Some('\\') => bytes.push(0x5C)
-          Some('\'') => bytes.push(0x27)
-          Some('u') =>
-            // Unicode escape \u{xxxx} - encode as UTF-8 bytes
-            match self.next_char() {
-              Some('{') => {
-                let hex_buf = StringBuilder::StringBuilder()
-                while !self.is_eof() {
-                  match self.peek_char() {
-                    Some('}') => {
-                      self.advance_pos()
-                      break
-                    }
-                    Some(c) =>
-                      if is_hex_digit(c) {
-                        hex_buf.write_char(c)
-                        self.advance_pos()
-                      } else {
-                        raise ParseError(
-                          "Invalid Unicode escape: expected hex digit or '}'",
-                          self.current_loc(),
-                        )
-                      }
-                    None => raise UnexpectedEof(self.current_loc())
-                  }
-                }
-                let hex = hex_buf.to_string()
-                if hex.is_empty() {
-                  raise ParseError("Empty Unicode escape", start_loc)
-                }
-                match parse_hex_codepoint(hex) {
-                  Some(cp) => encode_utf8_codepoint(bytes, cp)
-                  None =>
-                    raise ParseError(
-                      "Invalid Unicode escape: \\u{\{hex}}",
-                      start_loc,
-                    )
-                }
-              }
-              _ =>
-                raise ParseError(
-                  "Invalid Unicode escape: expected '{'",
-                  self.current_loc(),
-                )
-            }
-          Some(c) =>
-            // Hex escape \xx - produces a raw byte
-            if is_hex_digit(c) {
-              match self.next_char() {
-                Some(c2) => {
-                  let hex = String::make(1, c) + String::make(1, c2)
-                  match parse_hex_byte(hex) {
-                    Some(b) => bytes.push(b)
-                    None =>
-                      raise ParseError("Invalid hex escape: \{hex}", start_loc)
-                  }
-                }
-                None => raise UnexpectedEof(self.current_loc())
-              }
-            } else {
-              // Unknown escape - encode as UTF-8
-              encode_utf8_codepoint(bytes, c.to_int())
-            }
-          None => raise UnexpectedEof(self.current_loc())
-        }
-      }
-      Some(_) =>
-        // Regular character - encode as UTF-8
-        match self.next_char() {
-          Some(c) => encode_utf8_codepoint(bytes, c.to_int())
-          None => raise UnexpectedEof(self.current_loc())
-        }
-      None => raise UnexpectedEof(self.current_loc())
-    }
-  }
-  raise UnexpectedEof(self.current_loc())
+  decode_text(self.read_string())
 }
 
 ///|
@@ -590,59 +459,24 @@ fn encode_utf8_codepoint(bytes : Array[Int32], cp : Int32) -> Unit {
 }
 
 ///|
-/// Decode UTF-8 bytes to a string
-fn decode_utf8_bytes(bytes : Array[Int32]) -> String {
-  let buf = StringBuilder::StringBuilder()
-  let mut i = 0
-  while i < bytes.length() {
-    let b = bytes[i]
-    if b < 0x80 {
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xC0 {
-      // Invalid leading byte, treat as raw
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xE0 {
-      // 2-byte sequence
-      if i + 1 < bytes.length() {
-        let b2 = bytes[i + 1]
-        let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
-        buf.write_char(cp.unsafe_to_char())
-        i = i + 2
-      } else {
-        buf.write_char(b.unsafe_to_char())
-        i = i + 1
-      }
-    } else if b < 0xF0 {
-      // 3-byte sequence
-      if i + 2 < bytes.length() {
-        let b2 = bytes[i + 1]
-        let b3 = bytes[i + 2]
-        let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
-        buf.write_char(cp.unsafe_to_char())
-        i = i + 3
-      } else {
-        buf.write_char(b.unsafe_to_char())
-        i = i + 1
-      }
-      // 4-byte sequence
-    } else if i + 3 < bytes.length() {
-      let b2 = bytes[i + 1]
-      let b3 = bytes[i + 2]
-      let b4 = bytes[i + 3]
-      let cp = ((b & 0x07) << 18) |
-        ((b2 & 0x3F) << 12) |
-        ((b3 & 0x3F) << 6) |
-        (b4 & 0x3F)
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 4
-    } else {
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    }
+// String tokens contain bytes, including arbitrary data/binary payloads. Only
+// text consumers (names and quoted source) decode them as UTF-8.
+fn decode_text(bytes : String) -> String raise WatError {
+  @utf8.decode(
+    Bytes::from_array(bytes.iter().map(c => c.to_int().to_byte()).collect()),
+    ignore_bom=false,
+  ) catch {
+    _ => raise ParseError("Invalid UTF-8 text", default_loc())
   }
-  buf.to_string()
+}
+
+///|
+fn write_string_codepoint(buf : StringBuilder, cp : Int32) -> Unit {
+  let bytes : Array[Int32] = []
+  encode_utf8_codepoint(bytes, cp)
+  for b in bytes {
+    buf.write_char(b.unsafe_to_char())
+  }
 }
 
 ///|
@@ -652,16 +486,30 @@ fn is_hex_digit(c : Char) -> Bool {
 
 ///|
 fn parse_hex_codepoint(s : String) -> Int32? {
+  let valid = try literal_digits(s, 0, 16) == s.length() catch {
+    _ => false
+  }
+  if !valid {
+    return None
+  }
   let mut value = 0
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue
+    }
     match hex_digit_value(c) {
-      Some(digit) => value = value * 16 + digit
+      Some(digit) => {
+        if value > (0x10ffff - digit) / 16 {
+          return None
+        }
+        value = value * 16 + digit
+      }
       None => return None
     }
   }
   // Check valid Unicode codepoint range
-  if value > 0x10FFFF {
+  if value > 0x10FFFF || (value >= 0xd800 && value <= 0xdfff) {
     return None
   }
   Some(value)
@@ -730,93 +578,7 @@ fn Lexer::check_nan_or_inf(self : Lexer) -> Bool {
 
 ///|
 fn Lexer::read_number(self : Lexer) -> String {
-  let buf = StringBuilder::StringBuilder()
-  // Handle optional sign
-  if self.peek_char() is (Some('-') | Some('+')) {
-    buf.write_char(self.next_char().unwrap())
-  }
-  // Handle "inf" after sign (e.g., -inf, +inf)
-  if self.pos + 2 < self.input.length() {
-    let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
-    let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
-    let c3 = self.input.code_unit_at(self.pos + 2).unsafe_to_char()
-    if c1 == 'i' && c2 == 'n' && c3 == 'f' {
-      buf.write_string("inf")
-      self.pos += 3
-      self.column += 3
-      return buf.to_string()
-    }
-    // Handle "nan" after sign (e.g., -nan, +nan, -nan:0x200000)
-    if c1 == 'n' && c2 == 'a' && c3 == 'n' {
-      buf.write_string("nan")
-      self.pos += 3
-      self.column += 3
-      // Check for nan:payload format
-      if !self.is_eof() && self.peek_char() is Some(':') {
-        buf.write_char(':')
-        self.advance_pos()
-        // Read payload (hex number with optional underscores)
-        while !self.is_eof() {
-          match self.peek_char() {
-            Some(c) =>
-              if (c >= '0' && c <= '9') ||
-                (c >= 'a' && c <= 'f') ||
-                (c >= 'A' && c <= 'F') ||
-                c == 'x' ||
-                c == 'X' ||
-                c == '_' {
-                // Skip underscores but consume them
-                if c != '_' {
-                  buf.write_char(c)
-                }
-                self.advance_pos()
-              } else {
-                break
-              }
-            None => break
-          }
-        }
-      }
-      return buf.to_string()
-    }
-  }
-  // Handle 0x prefix for hex
-  if self.pos + 1 < self.input.length() {
-    let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
-    let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
-    if c1 == '0' && (c2 == 'x' || c2 == 'X') {
-      buf.write_char(c1)
-      buf.write_char(c2)
-      self.advance_pos()
-      self.advance_pos()
-    }
-  }
-  // Read digits
-  while !self.is_eof() {
-    match self.peek_char() {
-      Some(c) =>
-        if (c >= '0' && c <= '9') ||
-          (c >= 'a' && c <= 'f') ||
-          (c >= 'A' && c <= 'F') ||
-          c == '_' ||
-          c == '.' ||
-          c == 'p' ||
-          c == 'P' ||
-          c == 'e' ||
-          c == 'E' ||
-          c == '+' ||
-          c == '-' {
-          if c != '_' {
-            buf.write_char(c)
-          }
-          self.advance_pos()
-        } else {
-          break
-        }
-      None => break
-    }
-  }
-  buf.to_string()
+  self.read_id_or_keyword()
 }
 
 ///|
@@ -855,9 +617,15 @@ fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
       // Check for string identifier like $"foo"
       if self.peek_char() == Some('"') {
         let name = self.read_id_string()
+        if name.is_empty() {
+          raise ParseError("Empty identifier", self.current_loc())
+        }
         Id(name)
       } else {
         let name = self.read_id_or_keyword()
+        if name.is_empty() {
+          raise ParseError("Empty identifier", self.current_loc())
+        }
         Id(name)
       }
     }
@@ -887,6 +655,15 @@ fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
         raise UnexpectedToken(String::make(1, c), self.current_loc())
       }
     None => Eof
+  }
+  match token {
+    LParen | RParen | Eof => ()
+    _ =>
+      match self.peek_char() {
+        Some(c) if c == '"' || is_idchar(c) =>
+          raise ParseError("Missing token separator", self.current_loc())
+        _ => ()
+      }
   }
   // Extract raw text
   let end_pos = self.pos

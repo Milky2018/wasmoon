@@ -289,7 +289,7 @@ fn Parser::parse_plain_instruction(
       self.pop_label()
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
-      self.skip_optional_id()
+      self.parse_matching_label(label)
       Block(bt, ReadOnlyArray::from_array(body))
     }
     "loop" => {
@@ -307,7 +307,7 @@ fn Parser::parse_plain_instruction(
       self.pop_label()
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
-      self.skip_optional_id()
+      self.parse_matching_label(label)
       Loop(bt, ReadOnlyArray::from_array(body))
     }
     "if" => {
@@ -327,7 +327,7 @@ fn Parser::parse_plain_instruction(
         Keyword("else") {
         self.advance()
         // Skip optional label after 'else' (e.g., "else $label")
-        self.skip_optional_id()
+        self.parse_matching_label(label)
         self.parse_instructions()
       } else {
         []
@@ -335,7 +335,7 @@ fn Parser::parse_plain_instruction(
       self.pop_label()
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
-      self.skip_optional_id()
+      self.parse_matching_label(label)
       If(
         bt,
         ReadOnlyArray::from_array(then_body),
@@ -449,6 +449,7 @@ fn Parser::parse_plain_instruction(
       // (call_indirect ...)  - empty type
       let mut table_idx = 0
       let mut type_idx : Int32? = None
+      let mut annotation_phase = 0
       let inline_params : Array[@types.ValueType] = []
       let inline_results : Array[@types.ValueType] = []
 
@@ -476,6 +477,10 @@ fn Parser::parse_plain_instruction(
         self.advance()
         match self.current.token {
           Keyword("type") => {
+            if annotation_phase > 0 {
+              raise ParseError("Misplaced type annotation", self.loc())
+            }
+            annotation_phase = 1
             self.advance()
             let idx = self.parse_type_idx()
             // Validate type index is in range (0xffffffff becomes -1 after parsing)
@@ -486,11 +491,15 @@ fn Parser::parse_plain_instruction(
             self.expect_rparen()
           }
           Keyword("param") => {
+            if annotation_phase > 2 {
+              raise ParseError("Misplaced param annotation", self.loc())
+            }
+            annotation_phase = 2
             // Parse inline param types
             self.advance()
             // Skip optional name
             if self.current.token is Id(_) {
-              self.advance()
+              raise ParseError("Named instruction parameter", self.loc())
             }
             while self.current.token != RParen {
               inline_params.push(self.parse_value_type())
@@ -498,6 +507,7 @@ fn Parser::parse_plain_instruction(
             self.expect_rparen()
           }
           Keyword("result") => {
+            annotation_phase = 3
             // Parse inline result types
             self.advance()
             while self.current.token != RParen {
@@ -518,7 +528,15 @@ fn Parser::parse_plain_instruction(
         }
       }
       let final_type_idx = match type_idx {
-        Some(idx) => idx
+        Some(idx) => {
+          self.check_inline_type(
+            idx,
+            inline_params,
+            inline_results,
+            annotation_phase >= 2,
+          )
+          idx
+        }
         None =>
           // No explicit (type $t), find or create type from inline annotations
           self.find_or_create_func_type(inline_params, inline_results)
@@ -535,6 +553,7 @@ fn Parser::parse_plain_instruction(
       // return_call_indirect follows the same parsing as call_indirect
       let mut table_idx = 0
       let mut type_idx : Int32? = None
+      let mut annotation_phase = 0
       let inline_params : Array[@types.ValueType] = []
       let inline_results : Array[@types.ValueType] = []
 
@@ -562,6 +581,10 @@ fn Parser::parse_plain_instruction(
         self.advance()
         match self.current.token {
           Keyword("type") => {
+            if annotation_phase > 0 {
+              raise ParseError("Misplaced type annotation", self.loc())
+            }
+            annotation_phase = 1
             self.advance()
             let idx = self.parse_type_idx()
             // Validate type index is in range (0xffffffff becomes -1 after parsing)
@@ -572,6 +595,10 @@ fn Parser::parse_plain_instruction(
             self.expect_rparen()
           }
           Keyword("param") => {
+            if annotation_phase > 2 {
+              raise ParseError("Misplaced param annotation", self.loc())
+            }
+            annotation_phase = 2
             self.advance() // skip "param"
             // Parse parameter types until we hit ')'
             while self.current.token != RParen {
@@ -580,6 +607,7 @@ fn Parser::parse_plain_instruction(
             self.expect_rparen()
           }
           Keyword("result") => {
+            annotation_phase = 3
             self.advance() // skip "result"
             // Parse result types until we hit ')'
             while self.current.token != RParen {
@@ -600,7 +628,15 @@ fn Parser::parse_plain_instruction(
         }
       }
       let final_type_idx = match type_idx {
-        Some(idx) => idx
+        Some(idx) => {
+          self.check_inline_type(
+            idx,
+            inline_params,
+            inline_results,
+            annotation_phase >= 2,
+          )
+          idx
+        }
         None =>
           // No explicit (type $t), find or create type from inline annotations
           self.find_or_create_func_type(inline_params, inline_results)
@@ -1114,6 +1150,7 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
   let params : Array[@types.ValueType] = []
   let results : Array[@types.ValueType] = []
   let mut type_idx : Int32? = None
+  let mut annotation_phase = 0
 
   // Parse optional (type $idx) and/or (param ...) (result ...)
   while self.current.token == LParen {
@@ -1125,6 +1162,10 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
     self.advance()
     match self.current.token {
       Keyword("type") => {
+        if annotation_phase > 0 {
+          raise ParseError("Misplaced type annotation", self.loc())
+        }
+        annotation_phase = 1
         // (type $idx) - explicit type reference
         self.advance()
         type_idx = Some(self.parse_type_idx())
@@ -1132,10 +1173,14 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
         // Continue to parse any inline param/result annotations (they are optional redundant info)
       }
       Keyword("param") => {
+        if annotation_phase > 2 {
+          raise ParseError("Misplaced param annotation", self.loc())
+        }
+        annotation_phase = 2
         self.advance()
         // Skip optional name
         if self.current.token is Id(_) {
-          self.advance()
+          raise ParseError("Named instruction parameter", self.loc())
         }
         while self.current.token != RParen {
           params.push(self.parse_value_type())
@@ -1143,6 +1188,7 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
         self.expect_rparen()
       }
       Keyword("result") => {
+        annotation_phase = 3
         self.advance()
         while self.current.token != RParen {
           results.push(self.parse_value_type())
@@ -1165,6 +1211,7 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
   // Determine the block type variant
   // If we have explicit type index, use it (param/result are just annotations)
   if type_idx is Some(idx) {
+    self.check_inline_type(idx, params, results, annotation_phase >= 2)
     return TypeIndex(idx)
   }
   if params.length() > 0 {

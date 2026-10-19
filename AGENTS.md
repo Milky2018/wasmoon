@@ -10,6 +10,9 @@ Wasmoon is a WebAssembly runtime written in MoonBit. Its compiler pipeline is:
 tooling lives in `wasm_component`; Wasmoon owns the corresponding runtime
 adapters.
 
+- `modules/wasmoon_runtime/runtime` and `executor` own portable Core execution;
+  target variants share these packages because they require the same private state.
+- `modules/wasmoon/runtime` and `executor` preserve native compatibility imports.
 - `modules/wasmoon/cmd/wasmoon` builds the CLI.
 - `modules/wasmoon/wasi` implements WASI Preview 1.
 - `modules/wasmoon/testsuite` contains MoonBit tests; `spec` contains WAST suites.

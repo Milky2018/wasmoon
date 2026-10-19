@@ -3,6 +3,7 @@ name = "Milky2018/wasmoon"
 version = "0.17.0"
 
 import {
+  "Milky2018/wasmoon_runtime@0.17.0",
   "moonbitlang/x@0.5.5",
   "Milky2018/wasm_core@0.17.0",
   "Milky2018/wasm_component@0.17.0",

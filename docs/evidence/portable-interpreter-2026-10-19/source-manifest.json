@@ -1,0 +1,3086 @@
+{
+  "base_revision": "8f99719a69d32e79325edf06785039f4d3fbf071",
+  "source_dirty": true,
+  "files": [
+    {
+      "path": ".github/workflows/check.yml",
+      "sha256": "bd35cb682cdd9abf04336d5f2dad2d0af25dc3c7114386eee067ff9f4e22d2cc",
+      "deleted": false
+    },
+    {
+      "path": "modules/aarch64_target/pkg.generated.mbti",
+      "sha256": "bd983fe46275b5fc788b01f89a19e755cc562b2bdee3bbe43311324484f22fb4",
+      "deleted": false
+    },
+    {
+      "path": "modules/milkir/native/adapter/pkg.generated.mbti",
+      "sha256": "6332e2d1f1485592ccb1dbeb7ea1d6f2a7417e755574903960106536a921ccb1",
+      "deleted": false
+    },
+    {
+      "path": "modules/milkir/native/pkg.generated.mbti",
+      "sha256": "9cb709f224c59522a6e93711e3b7e9be895b809257fc2d37f3be69802f288acf",
+      "deleted": false
+    },
+    {
+      "path": "modules/milkir/optimize/internal/acyclic/pkg.generated.mbti",
+      "sha256": "b4b1bb09140f55301096aac1bcb73b5e6ceb4dc107f73d14bee1838f271af5fe",
+      "deleted": false
+    },
+    {
+      "path": "modules/milkir/optimize/internal/analysis/pkg.generated.mbti",
+      "sha256": "6b6bc05828c65b5a8df145664fa1a6f615a1cfcf577b317ca9c1d11fbd6228e9",
+      "deleted": false
+    },
+    {
+      "path": "modules/milkir/optimize/pkg.generated.mbti",
+      "sha256": "bcce2eebf2d7446871aa1b093a5fbf1df9bd13bc48b870f478ff6862b621782d",
+      "deleted": false
+    },
+    {
+      "path": "modules/milkir/pkg.generated.mbti",
+      "sha256": "9c3019513be36bc5f462c9ce394f6ce2868a069e2de2430872f899689c3f247c",
+      "deleted": false
+    },
+    {
+      "path": "modules/regalloc/pkg.generated.mbti",
+      "sha256": "eac07edeb8e10dcba48fc96952d13417456336d3ce6f86ecc1770f0dca12210d",
+      "deleted": false
+    },
+    {
+      "path": "modules/regalloc/unionfind/pkg.generated.mbti",
+      "sha256": "8b81150e7f0fe8da6df6bef094af0b4c8ef18affa1a1bf3fc529176b251d0ad1",
+      "deleted": false
+    },
+    {
+      "path": "modules/vcode/allocation_types/pkg.generated.mbti",
+      "sha256": "730c84e150a39ad0a8edb77354b730f8e00ab75e013084c2f17557ce960bfe83",
+      "deleted": false
+    },
+    {
+      "path": "modules/vcode/code_object/pkg.generated.mbti",
+      "sha256": "71628f97807b3c49838be2e3a877bd1f957fbbd36550b0aafab0ae69b1e1723d",
+      "deleted": false
+    },
+    {
+      "path": "modules/vcode/native_lowering/pkg.generated.mbti",
+      "sha256": "164bec2ecb249d4f1e1816115af724effa828a8886bba10ee6e532a7fc6943b2",
+      "deleted": false
+    },
+    {
+      "path": "modules/vcode/native_types/pkg.generated.mbti",
+      "sha256": "54ee80cdbb7e595399c770201bb80fbe647b24bb677f74bd6cba756abe6b2e6f",
+      "deleted": false
+    },
+    {
+      "path": "modules/vcode/pkg.generated.mbti",
+      "sha256": "99715457d6d38f43db1c728a51915cb7ac712ba0f58322ee7b202b8e464ba2e1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_component/canonical/pkg.generated.mbti",
+      "sha256": "7984853bbfd772fc4a57087f29bfd2e48cf0360128863fb37b7d351c8cc63523",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_component/model/pkg.generated.mbti",
+      "sha256": "188951b2da97ca59ab89788150da7cfcf58b796b8ffe4906203f40beb0b95895",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_component/pkg.generated.mbti",
+      "sha256": "9ae78cddad7acd001d99a062529c5d9d6b06991f42635b5f4efde5694d3b30d8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_component/text/component_wat.mbt",
+      "sha256": "58089a47331a11eb31da40cbd0c26e31f6a2a7c3489e896655c8a6fbee9091d3",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_component/text/component_wat_wbtest.mbt",
+      "sha256": "efd19699198cf89c009c0bc0fe09e94818dc44320acec0920ddfe0ba1c18973a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_component/text/moon.pkg",
+      "sha256": "c5a37b7a8466ffe6223bc7cce96f2415a971e5a19f175abce81149b18b7b1cb8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_component/validator/pkg.generated.mbti",
+      "sha256": "bdcd1da170838663c709d9a4918f5393413364e6b1471fae8c4762785abddfae",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_component/wit/pkg.generated.mbti",
+      "sha256": "dea9776c5bc87bc9e321ecf2d5a763dd96756e61bb420c98f71a3d712a9c66cb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/encoder/pkg.generated.mbti",
+      "sha256": "97ee7e7be7db0c82df849a269b0b254a616aec399d54845377281704d71a6519",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/parser/pkg.generated.mbti",
+      "sha256": "28086accb150d49de0ff548655e8b570785c84ae2c7e4dcbd60cebe206a2a244",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/types/pkg.generated.mbti",
+      "sha256": "1961ce0deb0ca3a0d7047502aea17729f880021b8800274717b680b0fd657a42",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/validator/pkg.generated.mbti",
+      "sha256": "1dc5d13e0ee8e2d91e4e31374a48154a5807bf8a81174928af31497e39e01658",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/defs.mbt",
+      "sha256": "bf45ac113d83f4d7e8dac7ceaab9002b3726f28d309bd19b2e323bd77f587ea5",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/instr.mbt",
+      "sha256": "fd367caf3c61c75672a222fb0839c76174d269a4d4e6b93fbaad24aea98db3c9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/instr_simd.mbt",
+      "sha256": "39e3d37cbff3bc6abfe957784dba1b771c8481da951c282ffb7c6b90e3e39cf6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/lexer.mbt",
+      "sha256": "743189a817b88a735a0865ecd773d97fd85727613bb644ab8d5eebbd12e8dccb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/lexer_wbtest.mbt",
+      "sha256": "2b86e962854ec638ea18da4327858ecbe138d61fc0346e4145620dca86b785c8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/literal_validity_wbtest.mbt",
+      "sha256": "7e3b5906da62321a2dbed3cf96390a0b26d58e4a0c668cc04105b28df420e445",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/module.mbt",
+      "sha256": "bdc689cd28a93684183a2f3dd23acda95bbe6df1e8b4cab03fac142cbc7f8ac5",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/moon.pkg",
+      "sha256": "b7dc95a92ebfe4e1daabc5816c23d62ab6ff3cbf5b9de47c79319fb1e2871e2a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/numbers.mbt",
+      "sha256": "a039732e0cb3951506b3a5119126d560e1d55e3535bd14155b25b8c49e09a63b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/parser_wbtest.mbt",
+      "sha256": "a22b0840ae54d1e5e35fc62656f75eb601037751e3aca8de068e650a6e527ea7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/pkg.generated.mbti",
+      "sha256": "7d8ecd9ed7c348fe36a2b3f0bff715acf8f193d2cd8b33d068344ee9efae27bb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/types_and_instr.mbt",
+      "sha256": "485bb176ca4d4af8f19f2c16bfed6ad361171a2594d987f8a953bed3afa449e2",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/parser/wast.mbt",
+      "sha256": "7e99090efca7c65160f49465e949841eac0a4086953388caebe5041e64c1a7ce",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_core/wat/pkg.generated.mbti",
+      "sha256": "a3c7bcc3c23170bd2a7fc54c58d1118d86b7182146d050dd15453adf959f2a6b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_milkir/frontend/embedding/pkg.generated.mbti",
+      "sha256": "434a8c1fe29f5db04f5ce23de8f990b5412b0ec3c5f8e31087f55c7245a45635",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_milkir/frontend/ir/pkg.generated.mbti",
+      "sha256": "3bf32cb29c3830b9d52c373f39e24f6f2b87a9a10bdaa283077cf1d39fb4b680",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_milkir/frontend/ir/translator/pkg.generated.mbti",
+      "sha256": "4c1828a04fe381c64e36f8dd52d54d976278121c9a1189f3700374924f4d8085",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_milkir/frontend/pkg.generated.mbti",
+      "sha256": "34458d6d661d6f525b686beb2ed9b95f33b06784d2b8ef1d770d41cbb9cc918e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_milkir/native/pkg.generated.mbti",
+      "sha256": "bfe5daef798806ba071e77f63818b1ec125c1a4d814e17ebb5f5095c4a15a716",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasm_milkir/pkg.generated.mbti",
+      "sha256": "b2dfff5d0fb6820da79009bb6644187bbb9c642b3ba4052b382077ded83a25bf",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/async_native/moon.pkg",
+      "sha256": "faeaaf4c0340275eae8a169c16f2705953ee394eaea471c98e5b1c5144934b9b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/async_native/pkg.generated.mbti",
+      "sha256": "0aed3fe4937fa6c3f8d043d932c8fdf34b362e415f84f23fe829bb64d0614554",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/cmd/wasmoon-tools/moon.pkg",
+      "sha256": "7bcb41a1cc94b6f55d9239c26db086c146b2588ffcae7558dd76803a29f495f4",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/cmd/wasmoon/commands/component/moon.pkg",
+      "sha256": "2a30f922065261d5dacf3ee62a60c10d7c2d4db733915833fff5c44513a6522b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/cmd/wasmoon/commands/component/pkg.generated.mbti",
+      "sha256": "a447c3283da87e5d2db0752e239ceaeb1c2f46d2956673389b43be38fb2573df",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/cmd/wasmoon/commands/moon.pkg",
+      "sha256": "92fce3eff955058e0ad36023679882dfb25673dd14edfab10b6d7f444fc89b10",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/cmd/wasmoon/commands/pkg.generated.mbti",
+      "sha256": "2d4ea4aa8fd50af3bc32c3dd4786006f7d25138d3ab11cb5d52d64ad0009ada9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/cmd/wasmoon/moon.pkg",
+      "sha256": "d70a3e8f89ed2032f00d5c1cafeb531046cdbcd987f70dfa05965a2bfd22a8e1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/component/moon.pkg",
+      "sha256": "4383da8368cc10b1486dcb40ee2cac27013cbf56945445a36bf9aabcc6c3fa8a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/component/pkg.generated.mbti",
+      "sha256": "5674bfe13072513b0d3251a22d5a18e7b26b96c9b515ac4aaa9dc917abf9c2eb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/component/runtime_impl/core/pkg.generated.mbti",
+      "sha256": "77cbe79f012b4b626fed73b861fc59e9341c8abc9c5331481b1745ff22cc44d8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/component/runtime_impl/pkg.generated.mbti",
+      "sha256": "4ddfd876469b010ab9d2322e7517ed655ea132b3e858f5d72ba804636de5ef26",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/component_conformance/component_script.mbt",
+      "sha256": "15aaa4e732f7e0760086098e683e9570ac6ed05e1fedc5e7ed708eac0711273d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/component_conformance/pkg.generated.mbti",
+      "sha256": "e88160197fa3155e176b4687e3c61e23c3df860ac16e90478f5fc868fb78cc20",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/component_native/pkg.generated.mbti",
+      "sha256": "bfa6f5db85e34a7b540e80fa474b4a2c831ca0d89235816f317873731fb016c2",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/executor/async_host_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/call_export_control_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/compat.mbt",
+      "sha256": "42bdc01347af9a30cdd5edf06d94046cb6d78c6422cb077960fac0cc0bb73056",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/executor/context.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/continuation.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/continuation_capabilities.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/error.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/exec_instr.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/execution_limits_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/execution_stack.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/executor.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/executor_basic_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/executor_conversion_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/executor_init_bulk_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/executor_ref_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/executor_table_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/executor_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/explicit_stack_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/function.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/guest_continuation.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/import_diagnostics_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instantiate.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_atomic.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_call.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_control.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_conversion.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_gc.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_memory.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_numeric.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_simd.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/instr_simd_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/moon.pkg",
+      "sha256": "f959f43945a381f5de17aa972590d8df2bb3c1b05f72315b88d2ed689022bd1c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/executor/nan_canonicalization.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/pkg.generated.mbti",
+      "sha256": "6a7bb15b90194d89ad94ad78900c71986fe5aa7e15330a30d8e765e019f0b021",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/executor/simd_helpers.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/executor/trait_extensions.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/jit/pkg.generated.mbti",
+      "sha256": "e73834033b04de7b2402cea07067c67337d1f61b122a9b87b66955298b4772df",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/logger/compat.mbt",
+      "sha256": "37dfe94c090c84b7ee17344372343509d425ed32cae4e9226a39ed24a4879bf8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/logger/logger.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/logger/moon.pkg",
+      "sha256": "4ebd6065749d4a7edc365ccc6debe2f2125a9d6a0ab272828d0145cde6167c58",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/logger/pkg.generated.mbti",
+      "sha256": "471147485336d96949fd5e250d494fcd139cd79f2661f09487f52ca8e3f87924",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/logger/stderr_fallback.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/logger/stderr_native.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/logger/stderr_stub.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/moon.mod",
+      "sha256": "0fb1f558d913a0c7b3a011d9ef67838bb53faae4095cfa30cd1e79d17a783ba3",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/pkg.generated.mbti",
+      "sha256": "b5b673b54ecba5f82594f4e54a0e6b3f80863f53ae6c03596485a31d5a914533",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/preflight/pkg.generated.mbti",
+      "sha256": "89b7bc9bcd8a922b5d73cff07b677c703e90bfa4a2aecd438341e9f08e06729c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/runtime/async_host.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/async_host_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/atomic_wait_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/caller.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/capability.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/capability_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/compat.mbt",
+      "sha256": "4110d14862de201daae962cf179319d8eded1f59379f9e1df3cb2a69bb845c60",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/runtime/error.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/execution_limits.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/frame.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/funcref_registry.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/function_identity.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/gc_tracing.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/gc_traits.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/global.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/guest_continuation.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/guest_continuation_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/heap.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/heap_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/imports.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/instance.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/instantiation_transaction.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/instantiation_transaction_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/interpreter_limits.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/linker.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/linker_transaction_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/memory.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/memory_access.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/memory_allocation_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/memory_atomic.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/memory_lifetime_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/module_budget.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/moon.pkg",
+      "sha256": "bf84ded8cfdc496c7bac047458ab5f9ba695588ab462d86ba22a4381a28f8eb6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/runtime/native_exception.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/pkg.generated.mbti",
+      "sha256": "4405d8aa89cf2561a81bc45d917907530dc235412d0cff70e02d009cda65009d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/runtime/resource_binding.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/resource_budget.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/rooted_value.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/runtime_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/stack.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/store.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/store_close_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/store_inspection.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/store_terminal_close_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/suspended_execution.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/table.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/table_bounds_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/trait_extensions.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/runtime/type_registry.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/sanitizer_testsuite/interpreter_lifecycle_test.mbt",
+      "sha256": "2558d81b578db615d421b6d3efc4a764fc94017676597bbc578b7e5377c6a738",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/sanitizer_testsuite/moon.pkg",
+      "sha256": "d733297633b9633ebeb5a817304b076a4554428e5946597944a0ff05fd8b44ee",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/testsuite/async_host_jit_test.mbt",
+      "sha256": "c0b6a8404dfa4288a1a0ebcc02bc1172ff469d34928a24cbb70c1203ee868e6a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/testsuite/call_indirect_iterative_test.mbt",
+      "sha256": "5f3b2f51e52ce3b130bfd42cc6f6aa8152ef6764e7421b50c811f93a7b74199f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/testsuite/call_indirect_stack_args_test.mbt",
+      "sha256": "ee8ef2f546801cc1a66e2b7cc124cd29ae21fb33a805aaff8d989fe460d42715",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/testsuite/compiler_memory/moon.pkg",
+      "sha256": "4969d910d4e1ea06988de67c54c7cb28f3cd7e0ef0a51a719251a3c5aa11f7df",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/testsuite/moon.pkg",
+      "sha256": "6a912d5b71d6994d5cb9cb63d4e956368d664a22e6f832fc5dc088ede15f28e7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/testsuite/native_event_loop/moon.pkg",
+      "sha256": "74af862e78a6f60342e687abf318890da813780c0f124f4833f50e9a40a4b6c8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/testsuite/pkg.generated.mbti",
+      "sha256": "1dd01dd17c8b3ba6e8f38a001323d01c8ab73183e2c5e26aa7b5cf7494bbdf60",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/testsuite/wast_assertion_phase_test.mbt",
+      "sha256": "e0a246df6eab2d15ad7e0880ec1b55b1c209f8923451866536df1619ffa1847e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wasi/moon.pkg",
+      "sha256": "ef782412e6d7c5afa3a00992f8c43f96eb67d7c9072389acbb02c16fc109191b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wasi/pkg.generated.mbti",
+      "sha256": "d03457f9fe0d4ac473f763ae816d70f5eabf6ea3f62011e1ca1ffe886eb6cea9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wasi_component/moon.pkg",
+      "sha256": "18e6e10b8c953586c2e8db2ec0b951a428c8ecacbc4e57716518cd98e4bd7a69",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wasi_component/pkg.generated.mbti",
+      "sha256": "d7ced405c9fc1dc83617587db04c9273cc2375bf298c4144e8d8f09d2c8797e8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wasi_http/moon.pkg",
+      "sha256": "e1063e0ca3053d6278ee4c8f9d96ffa6d7e556536541ae0b3f80c7c78c868120",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wasi_http/pkg.generated.mbti",
+      "sha256": "2309e869c62f6148fe89b0113aad0d8420ff9fa0f6cf1d0ecbd54cf256a68be5",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wast/float_assertions_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/wast/jit/call.mbt",
+      "sha256": "4300f4920fe88fd0b4e1e8cd803b9b00b3adb88bbecdc9f8152b321d919e6b38",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wast/jit/pkg.generated.mbti",
+      "sha256": "69664446695db4485f9aa20d381e2148684435701cd2c9ea1d8bf3eb77949c4e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wast/jit/support.mbt",
+      "sha256": "e2fdb09f29bd63064aab0a97a81f30fb18fef314d1aafda0e2bae4058d5c855a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wast/moon.pkg",
+      "sha256": "00a9c5bce765e642ea1f5d758dd59ef5a78984d787fd3c47e33df052d63e6001",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wast/pkg.generated.mbti",
+      "sha256": "3584f35ecb58545572d201533b3b24af7372f10dfbbb12ac19a98971968c7b2b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wast/runner.mbt",
+      "sha256": "496e22dd92479dae808293074c161c042ff0d85f274119e01556fbb449101ce4",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wast/spectest.mbt",
+      "sha256": "612930337fb606af59f350f342b2eeafafa171bcb67b731321a3c230b9153743",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon/wast/trait_extensions.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon/wit_binding/moon.pkg",
+      "sha256": "059e8e9b0833b639af723732a63962c41b31d1d195742d7385047655b169ba00",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/artifact/codec_test.mbt",
+      "sha256": "dfe1d681dbf51a9e4fe20fa5d79c07e9d08efc8bfa12975fe1cbb18f902c1609",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/artifact/installer/pkg.generated.mbti",
+      "sha256": "99aab2af7b10a6deaa1aaf98a55ac2e42379a1448d6e13b916328f0bc59ddebc",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/artifact/loader/pkg.generated.mbti",
+      "sha256": "7689021ed6e4e6ee4815e89e92641491fb07aea72b4df578c8448c1e4c53bfeb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/artifact/pkg.generated.mbti",
+      "sha256": "8947335ae3473881498c2246d5a042d725d0d45d0c283825fbcda203ae832c28",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/c_heap.mbt",
+      "sha256": "76649182feb6ab916726c20397b537de02e8ec511960365303d61482bdf3cc51",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/context/layout/compat.mbt",
+      "sha256": "ea0dde5b5a3c182fd1feaa6127b3e46c107b3e39190cff3ba066388d50245201",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/context/layout/layout.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/context/layout/layout_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/context/layout/moon.pkg",
+      "sha256": "e9449de8f19e989742406684c1b82e90d4017c442d1588d232a8892b90c6e417",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/context/layout/pkg.generated.mbti",
+      "sha256": "060479d5446e9d01ac6351a68ab43d54ed018e8887179b6d516673571c29bcf8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/gc_helpers.mbt",
+      "sha256": "6cb0a9ebf36de1913dae59023b896b66384176e2c2e74c099884fe9243e0a96b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/gc_wbtest.mbt",
+      "sha256": "648789dff2815f7dc5783037ccb28c6d20f96514ca74956d5b3ac4380ed04e70",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/compat.mbt",
+      "sha256": "2deef482dd82c473ef82b4adbb69b988ca16f37b6978a2a0aab9b5b1a4ace82d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/moon.pkg",
+      "sha256": "e5a9d886ab8ea060e816020486cb48991d38672581a4db964d79fd97f0f39812",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/path_inline.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/pkg.generated.mbti",
+      "sha256": "ce5dc1ce5f75f81d418ebd779524acfc89c44470d03be1674fc24ccee05fa808",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/platform.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/compat.mbt",
+      "sha256": "87b60c8cdc0f581510d8aea3fab4757d490696dd50c567f66a528ddb0b9f8e43",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/external_loop.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/moon.pkg",
+      "sha256": "b6133384cc9393af6e27a87e981c7f29585b1115a913d05e93dc55a6a6b3bc50",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/pkg.generated.mbti",
+      "sha256": "567c227d2d3b6d9e1e92282d6326ab46c958e9d832122bbe9b30e4bae9a51bc7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/reactor.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/reactor.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/reactor_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/reactor_windows.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/reactor/trait_extensions.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/bounds_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/compat.mbt",
+      "sha256": "f2f50b91a2b6b64181dae5f15024e5ca1def4f355944c64c6263c28d45985517",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/directory_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/ffi_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/ffi_native.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/file_semantics.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/file_semantics_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/moon.pkg",
+      "sha256": "b290c2399e1c0d70fdf20f7ec50302515871ca357ca47ca9069064036ed9ba03",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/native_filetype.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/pkg.generated.mbti",
+      "sha256": "64a59f07404eabc96da1694ff18372a4544c75e402d1f5f2c7e12bda9c267a35",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/platform.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/poll_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/process.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/process_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/resolver_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/resolver_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/socket_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/socket_semantics.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/wasi/socket_semantics_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/windows_fs.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/windows_fs.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/windows_input.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/windows_input.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/windows_io.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/host_io/windows_io.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/invocation_control.mbt",
+      "sha256": "7b0c6f9a9ea89d8b09f0740d1e9d92ca6b3193147d8c1db8ff5f2d0658660ab7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/atomic.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/atomic_wait.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/cleanup.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/cleanup.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/compat.mbt",
+      "sha256": "6b220a19f7f03ef4861792fc500ac276bb07e5dc6dd90c678178f56cc1d316d1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/context.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/context_fields.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/continuations.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/dwarf.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/dwarf.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/exception.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/exceptions.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/exceptions_wbtest.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/exec_mem.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/ffi_callbacks.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/fiber.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/fiber_protocol.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_allocator.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_allocator.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_collection.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_heap.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_heap.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_heap.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_metadata.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_ops.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/gc_type_cache.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/guest_continuation.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/host_exit.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/jit.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/jit_context.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/jit_context.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/jit_ffi.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/jit_internal.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/memory.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/memory_ops.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/moon.pkg",
+      "sha256": "223c5d1c61e6c0a1df372e902a46212db2ede0de2547d72f2484f8ea4f6e70f7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/msvc_guest_bridges.S",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/msvc_guest_bridges.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/native_alloc.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/native_alloc.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/pkg.generated.mbti",
+      "sha256": "4b685cfec486c288196ba32b033b578d492a69c4d3f2cd1c9131d0c54c36e951",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/platform.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/quota.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/quota.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/quota.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/segment_ops.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/segments.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/stack_switch_aarch64.S",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/stack_switch_x86_64.S",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/table.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/atomic_test_support.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/context_test_support.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/failure_test_support.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/fiber_register_probe_aarch64.S",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/fiber_register_probe_x86_64.S",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/fiber_test_support.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/test_guest_bridges.S",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/test_guest_bridges.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/testing/trap_test_support.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/trampoline_call_x86_64.S",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/trap.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/trap_codes.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/windows_context.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/jit_ffi/windows_context_x86_64.S",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/moon.mod",
+      "sha256": "e83e5beb2c61edc222e937aa852f240ac95d69cead11886f344b6a586c1a4e9e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/moon.pkg",
+      "sha256": "528937760e02aa903aed8a6533af817a8c35fbbca71bda4e6fa38cd98640ed13",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native/callable/compat.mbt",
+      "sha256": "36155d1e4998fdb604ceb0f78a64d199183d8dcbee2955b597164cf24bd4d5ac",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native/callable/moon.pkg",
+      "sha256": "92cca310cd9c980bf9fe7217294a8caf5e95f1713bb312c7aabc6eef4bc6fdd8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native/callable/pkg.generated.mbti",
+      "sha256": "8445b39f57d9f9ac86f5940da8ff158b1aa9e80191d423e2c6241d043f7970fa",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native/callable/registry.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/native/callable/registry.h",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/native/callable/registry.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/native/callable/view.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/native/execution/arenas.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/native/execution/compat.mbt",
+      "sha256": "3568007fc3b002cfb9d5bf607a82ef1dd11e417164a75da578d7d35327a175ba",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native/execution/moon.pkg",
+      "sha256": "1b24a0f55af9b36055dca43713559b13b21d75efae4ccbdd4a62bc65047957ee",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native/execution/pkg.generated.mbti",
+      "sha256": "950f99ecdf73810c47eb1aa3eeb989a0a5a0544ca9440b830e96f7b86d4788b8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native/execution/state.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/native/execution/state_test.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/native/execution/trait_extensions.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/native_atomic.mbt",
+      "sha256": "cf8ef19d2e550a80449b6de2e5c5aafe9600099a0108c8fca824d3cddc82a299",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native_atomic_wait.mbt",
+      "sha256": "753942c7e38c89cc663f5a66faf71cb6f735a18c7a661d064f43478fcdeb1618",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native_context_memory.mbt",
+      "sha256": "30cea2c361aa97e6536a3cae6c5d281d7d08e461efb7c08f4810d532b52b2a2c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native_ffi.mbt",
+      "sha256": "d960b2c1d49d9cef17b7d20e34f3193531c2b280d108068f7b69f9b56d24b077",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native_slot_bounds_wbtest.mbt",
+      "sha256": "81b0f6340a7a8a3c1defdb9c8eb1bb6278f4a882d9a3980e6e88a4825a428182",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/native_test_support/pkg.generated.mbti",
+      "sha256": "feec04105e8f1911ed5806ae1dc3bf0f06980ce48ab04560978868037e4e9964",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/perf/clock.mbt",
+      "sha256": "4274f3425b80cb20b3e7589a476d35361f28db9fea53bee775e5651ae9d74c9c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/perf/clock_js.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/perf/clock_native.c",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/perf/clock_native.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/perf/clock_wasm.mbt",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "modules/wasmoon_jit/perf/moon.pkg",
+      "sha256": "0ecabfe5a0d62df7db6a0808c950103b42a27a0ac70f3bfe05ff594a57fe0083",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/perf/pkg.generated.mbti",
+      "sha256": "84ce6f4ba27ca4de010e5c324ed2346bb391ed61dfccc2e4ee029de94aa3a788",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/pkg.generated.mbti",
+      "sha256": "54db76b1345709f6b7fc3336ae11300ee1d9765ca2438f802943a35354db1138",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/ref_encoding.mbt",
+      "sha256": "8e8c96650bbe3837603e5c11ddfb07f71be9eba67d8f5651810c9929aca5e7f6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/segment_binding.mbt",
+      "sha256": "0c6fe2f950725d89c89c488c76e3e99d3156930fafaf05d79e8bb35e46405aaa",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_jit/trait_extensions.mbt",
+      "sha256": "8439cb39d327bada6bfa576885765e1b9cf377497d2da64031a9b508eafbea4a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/clock/clock_js.mbt",
+      "sha256": "b9d8b79af91f47083dcdb9e0cc504d230987c771f5a228905b54b9eee3a538a4",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/clock/clock_native.c",
+      "sha256": "5decd076f0afd5a4c651761ba2fff6cd9ee899b05c78ba8c4983f4d4960a0f3b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/clock/clock_native.mbt",
+      "sha256": "3a84f40ad58484b025cbd0ce8a0653008ab21c1a36ff35e49096d49244c4a8dc",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/clock/clock_wasm.mbt",
+      "sha256": "429279e4dd7c70a3a0189fdb87c809774fadf9064c97d915274a62af602c5c7e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/clock/moon.pkg",
+      "sha256": "7e09cd263aa824196b6841849098aa3ce9a09a81f7df024565d045d63ab37398",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/clock/pkg.generated.mbti",
+      "sha256": "75b4fb5bcb3570dd0ff911da01ee8fbcea6b19f6b4399d061d5584f7e462591f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/cmd/core-wast/main.mbt",
+      "sha256": "a437fade8acfb82c6308f52e1694f96f74301fb23239e186b4993b7eea7fd431",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/cmd/core-wast/moon.pkg",
+      "sha256": "f959accb5caf97b69891000c21e50385e00bc595b03a8c62fe17cb2fbe4951e0",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/cmd/core-wast/pkg.generated.mbti",
+      "sha256": "2d3c1fb2d9f4e18fc6a86512d56d71e62d22b5b1207f6ec134849a9c8c8b79aa",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/control/invocation_control.mbt",
+      "sha256": "7d1200e2ec702eed261c1bc3654825efeac3deaea4f499a5ba65d1d64853663c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/control/moon.pkg",
+      "sha256": "50bdf6bb64d3945a07723adbab119d6e993b396954a1ff1d1d481b817f4914f9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/control/pkg.generated.mbti",
+      "sha256": "2fd229dfc398909fb7ba24dc5e8febbb9034bb6bd6bff3d80d0e2c832ffc1f01",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/examples/embedding/main.mbt",
+      "sha256": "bf0374a382992fe3bfc104ca0cd2534ab8ea16fc4abb0cf9ea848c6574720f84",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/examples/embedding/moon.pkg",
+      "sha256": "6d5de5de084cfb9f016f78b2296bdf30a6bcb68c7a1a8d3b6dd8d0baf672de7b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/examples/embedding/pkg.generated.mbti",
+      "sha256": "970364ed8de440acf64bb4fb40af7213a9f2ed207989719ee66c9cf3b06a34f1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/async_host_test.mbt",
+      "sha256": "6368541b9e1363caf9521fa59c8ce9177d10237d4ae3abd9c882f625bd36909b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/call_export_control_wbtest.mbt",
+      "sha256": "614572174db9c25e95fd9d4499f4af188ada559006fc3d89964488ef0299f24b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/context.mbt",
+      "sha256": "9076711ea0e1bae04f91eaa8545063fdf10a7a6f547f1f5f490f1a16c2fee552",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/continuation.mbt",
+      "sha256": "03d32fde5a04c9ee0e5dfc80e261fa4f66a8cea9849efb32cbac09408f36faaf",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/continuation_capabilities.mbt",
+      "sha256": "0f3c0b0741d9785ded9fc3f96afbf18f37e4ccdae7aeaca2e20eeb7aa43ed28f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/error.mbt",
+      "sha256": "7202f399e0b4d986169bd0bc4f18f97e38c38a91fe9566f1da77450469d0cdce",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/exec_instr.mbt",
+      "sha256": "f3cd128f9bd04b0f45621e8a404f9c75e51dd440a8459676d3dee3766bdd98b9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/execution_limits_test.mbt",
+      "sha256": "54a76d1586f70e2f50d58cbbe23b364334bac7c8276d2b1fd3921579d8fc6cba",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/execution_stack.mbt",
+      "sha256": "24cbaf7857850d2d1e34b441b5a2846aef271d41a20b410f58ee54b23289a070",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/executor.mbt",
+      "sha256": "fc830957f8a7f23c8a9a10ae175903efd39a3cb7e45a4739dd4232152d86e0fc",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/executor_basic_wbtest.mbt",
+      "sha256": "8954830540ef1d21aa52f02ce67d942d86e0087e91e884ec18656f3ab6c96712",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/executor_conversion_wbtest.mbt",
+      "sha256": "f97e4e6ce55bbe801441c6d161673a65ed44fc445f29cd346dc93ad1cb9bc4f7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/executor_init_bulk_wbtest.mbt",
+      "sha256": "e9a994526ba06d485f05a2c2928740c2a3fd64ff432e10af4d6b18d9c9f5717c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/executor_ref_wbtest.mbt",
+      "sha256": "a1e06f4bfcc4e424ed542bd0700cbe8bbe7960b7893aac3893a12fe508b334ed",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/executor_table_wbtest.mbt",
+      "sha256": "3b208e85e0be0da8702ce08cf7a8d87f83b2841adb78823f842e9207cfb71c8f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/executor_wbtest.mbt",
+      "sha256": "cf6be672f8434af51a8c462e0b621dadd43804ce19f14eedcfb6adb30bc1b048",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/explicit_stack_test.mbt",
+      "sha256": "44ed568816bb8b5053ff21aa7a6ac116b977acedb89e7d2910d76cfa0c647ee6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/function.mbt",
+      "sha256": "dfe6eb0ac2a38a9c9f77964a19516f70bef55f4ad63e07525de96f453d7893b6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/guest_continuation.mbt",
+      "sha256": "abf7680de3908a03281a61fe0eb0d14dc6abd325cc439bd33b3c4735af5f16ef",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/import_diagnostics_wbtest.mbt",
+      "sha256": "6e9a30db599519aea56eed38de4ec34025b28e31f8ee7958d90ccbb0dccd1be0",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instantiate.mbt",
+      "sha256": "fdf3bf897ea5c6c30e1587b40800c0630e3976d7ad64cdbe12097a40ac2a28bb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_atomic.mbt",
+      "sha256": "d9c132de5100ce47ee5faedd8bb087b7db8cbfa5b53befc785829081a115ecb1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_atomic_wasm.mbt",
+      "sha256": "ba73d14556eebb41d3a985df8a1064e38528c9e2e64578cdfe35809853949bb4",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_call.mbt",
+      "sha256": "9819cc24162da051a7bffdaf652ee20320b33a1ed4ac72e7a3c5378686eb3931",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_control.mbt",
+      "sha256": "c37d25c17d10c3b56f16ec24905e42584950292b2dd39af2cebd91ba6d595012",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_conversion.mbt",
+      "sha256": "05366898b8cc5e073cbaa6bbd621f7d7374ae2e17a6cef3eed6724fa9d231719",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_gc.mbt",
+      "sha256": "6dafdce003fc52bf58ac6e1789d71893548cecff850455c3b67f7d823c5ef3a2",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_memory.mbt",
+      "sha256": "6ee9348bd744d6efa23e1108ef181745cef314b08451293eb3071191a11694c3",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_numeric.mbt",
+      "sha256": "44931ed6a6eebe2850e4e0f6787e668a74bed14aefeb1193042b0c63f1d40b4a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_simd.mbt",
+      "sha256": "6f2dd7f64385c0d9427806badd2929e76c1ab0e937b4412aebdc122aa9571914",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/instr_simd_wbtest.mbt",
+      "sha256": "6d077bcefb12444416904d8ebbca04d724ef3cec4166f16bb4579d245bfd6723",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/moon.pkg",
+      "sha256": "00d557f74467d2f36c4590e21f799e5b44a5850fd7a815e31c5580a37cf45cda",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/nan_canonicalization.mbt",
+      "sha256": "072d96cb8496a6161672247667eba9405c0c00c581a28c70e956bf8d2a86efcd",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/pkg.generated.mbti",
+      "sha256": "4fde3e199ecf6f9078f0e4dc61e6c4ca5a82bcc1189109aebb2b03e1c8149319",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/simd_helpers.mbt",
+      "sha256": "8b5d180c4431ce765cfe5c9693daedf8079234f555f57d7ad1bdc548c1981e3d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/executor/trait_extensions.mbt",
+      "sha256": "a0ad69526368ceb9e90d64f219fec7e538a5cd8a338f8c4765ce341f5b6d7864",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/logger/logger.mbt",
+      "sha256": "f630d7dfaf1a7ce4ae6235d699e3efb531b3000e9140a56431a82e13e1210c55",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/logger/moon.pkg",
+      "sha256": "33629446a150386b28a2ca687bc5ff7a33cf7ae95ce5f0594fdd7172468f1cbb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/logger/pkg.generated.mbti",
+      "sha256": "31ac3ede8fa6e81cbc280c87289625d1245c780a64e388a8a5df7c82f3ae495b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/logger/stderr_fallback.mbt",
+      "sha256": "c24ef047ba7afb774f8acdb90ff45053e405d503c8485a7e9a0a5ecd3225ea81",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/logger/stderr_native.mbt",
+      "sha256": "775940467453c977ec25f7c11a466db9b7cb187be147a2c75e434124b314c545",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/logger/stderr_stub.c",
+      "sha256": "dc0677f74b58e16091d4ef3f3ef73157f00f20e810d44d9e75d78e0ab4e84555",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/moon.mod",
+      "sha256": "eac2c5114bc7b5fa538f5d45cc5184e347e2315ebfa5e271c1cd8f78c066f44e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/c_heap.mbt",
+      "sha256": "28eb2abdaef2f680d46093fafe566b41d87f6ffa8975e248d9cc33c8bd38c532",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/errors.mbt",
+      "sha256": "fe36a9cd7e6a20a157b2b192f3dcc2b418246fd837f48dda62b064f0d2873659",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/ffi.mbt",
+      "sha256": "491d4645be68ef7c2f22ea50b99229a5b7a487d4fa2e8744d10a20951aba7125",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/handles.mbt",
+      "sha256": "2ff05055ee32be6bd8119a56f181abfe9e03f3c2ffbc35904c27982a3f7f865e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/memory.mbt",
+      "sha256": "749c601a563a4b2cbca0f52b1008eec8b37cf6bfaff48fee2ec0002be3452257",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/moon.pkg",
+      "sha256": "8a4d92a5cf157f2897ef599713ae559ad5190c9f028036ae65536383d18fe5bf",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/native_atomic.mbt",
+      "sha256": "224d73dc6f7f345626c02075328ff55634bfede8ef8993504753902642f3cf2d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/native_atomic_wait.mbt",
+      "sha256": "9e57dabff411d7c53bed2b120feb63144b4578cafccccd80d78929512d324bda",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/pkg.generated.mbti",
+      "sha256": "9fa1d963ede895451a58dfbd118d804cf59d5c7c77fc0096df5e103f6effd6d6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/ref_encoding.mbt",
+      "sha256": "68eeb03d3c21d00b0dc5879e617d5a50ec97f13b4378b1e724ac11b244ece242",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/traits.mbt",
+      "sha256": "bcfdfaea3fc10fdd34ec0713c018bc549600a104d88ea9b54e01fb4bf0c56a60",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/value_codec.mbt",
+      "sha256": "ed3c728da5b30eac18209cdb71de0180a7112edc3477ceec52c8c70154af3269",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/bridge/value_traits.mbt",
+      "sha256": "2d70b17b0b8c7a3e37016dc9440872b19cef4330c94327f9a2cc0ef7a7a25011",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/callable/moon.pkg",
+      "sha256": "9665951129897c4d7e46946bdf16aae2e24430054845aa9081c8f5e92b8d3b3f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/callable/pkg.generated.mbti",
+      "sha256": "9e80c9a900df7e0e92b60b04d599cf3425a1e6f720fd466891794bfaa29ff61f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/callable/registry.c",
+      "sha256": "b00a4c073abadbff9a41506e161fce6dc2c6f4513c7839c488aaab389900f039",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/callable/registry.h",
+      "sha256": "b0fb5f322d2b42802ddb921d880a1ae05ac626eb061cd4cbeefbec5d6a131252",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/callable/registry.mbt",
+      "sha256": "c24a3d300fdf9d1484d28aa71dd7c0ff4c1969d76e63a2c0d62ecfcb75e8459f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/callable/view.mbt",
+      "sha256": "52f0b01fd9b6aef9d5cc54bf9da72ed19139ed31606ef9a7a9791fc63cabd98f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/callable/view_wasm.mbt",
+      "sha256": "ac68c6d129395ffa7df967d8fd90396a39cc3fa219f4d3faf7b04e69b209e176",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/arenas.mbt",
+      "sha256": "eb1032ccf3950351446fdd83004c340d876ffe041caf4dbaf95f4f64b4ecae43",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/errors.mbt",
+      "sha256": "e75b5a9784e8264044a77472b7bd0051ea20013e6c1383f4b0bc29dd168cc84d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/moon.pkg",
+      "sha256": "a4c02ac1d2d0d50ae415d4e1f93c3c8d1cd1f1a60293aeb03e939436fd054365",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/pkg.generated.mbti",
+      "sha256": "93f02b7e60bb33d11cf120d13c3fead49f568ceb4ffdcd199cdda316eb380537",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/state.mbt",
+      "sha256": "5f15b2ab652478aaf30c393c4d79f4641bfd429da5bff86c51a3caae0e357ca8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/state_test.mbt",
+      "sha256": "6e91c8e135b11cc26acb9879483553fd88e18ffc18cf477f4041a220c332dbfe",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/supported_native.mbt",
+      "sha256": "1a617777497e5a00b44ef5dc2f3ee898439eaa9efbee1a4631165354daf518c6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/supported_wasm.mbt",
+      "sha256": "846019de760c57c264bcdc10f9dc50c4306cb7d2643da3e4bdfdc3439f4e9ed1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/execution/trait_extensions.mbt",
+      "sha256": "0eaa26ac7321c273192aed74360312217d84bd061b7ca6e3d746e49c59963acc",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/allocation_error.mbt",
+      "sha256": "1ae11e70bdaa3c961e2e6e80cba62bf3429553b955332fcc171187bb144393f2",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/atomic.c",
+      "sha256": "d64241115abfe15ce6d7575dfb170b2f40912960ad3d1272e8daa0fb060df62c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/atomic_wait.c",
+      "sha256": "43ecb8e719048a4726f451c7a48402f8c1f331aaec28e35a540ba22b5714465b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/cleanup.c",
+      "sha256": "33ebc7c1e79a1b80e016a9a27179033b911a05749cb30702888bf6c0fa682030",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/cleanup.mbt",
+      "sha256": "955fe3e25684244fa8db503c7d61b527542564b99f09e4c7ed12f86914ec2d94",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/context.mbt",
+      "sha256": "6332854ff7ad3850e427a9523bd5f69625e436ab79fe42542d096d418a508a1d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/context_fields.h",
+      "sha256": "ed899979e5bc830534cc14fdb6867622591707f7cde213f1d5b04e3dc7abec6b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/continuations.mbt",
+      "sha256": "4914b258aa5a631d721a0c24ec8d100d171d9c1b086a9825fcece13b567d99f6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/dwarf.c",
+      "sha256": "4fd71c69e8d638f53f5d3da8e278c4944f473d4d2c330f101057e5f1ecf66826",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/dwarf.h",
+      "sha256": "7c1292f26223248792f71afaa13244597d6cd00b738183b3f262a09a832ebfd7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/exception.c",
+      "sha256": "1396518cf051b38c1205e2e16f1946db8078d62168b74468c1cdd8556c5bd9c9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/exceptions.mbt",
+      "sha256": "d06f08d961b8ba3b27867281e9e83cf540f2373683276bd92f9f69126d4a9820",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/exceptions_wbtest.mbt",
+      "sha256": "a47b4bd5629749859fecafdb4c434cb5efc43452bab117224e49e8480b183622",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/exec_mem.c",
+      "sha256": "0351f801423824645438fc14ae6a4230442618d12a9202ff094d1a280e1e984d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/ffi_callbacks.h",
+      "sha256": "276c02f264e445f0a81b762133e66a7174558ab20c47818c418c820b9f755fa2",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/fiber.c",
+      "sha256": "24a5465fae869ab5601b2e808a1330b90e54dcb9b8d8e7bb7c555f08b12a6fd9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/fiber_protocol.h",
+      "sha256": "6b680f3b893c761e52ca62980b4ccec1e96821e26eeef3f454856a5dcf0ba307",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_allocator.c",
+      "sha256": "1ad99a1bc123415a4c7545a3815ec8e500de4a8abc41dcd5739067c542cb0e22",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_allocator.h",
+      "sha256": "a50b90d632cb5a7c389d53a99ed273cbdb07622a57e3fcd88b7a494d91d581d1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_collection.mbt",
+      "sha256": "ca42198eb55d2fccf746e175b6eb289855f1bbef0ad701824c285ed3b449aa03",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_heap.c",
+      "sha256": "3c4a0199d0831ba0838da2d67e8b292d76d1a3c5495304297ef6c3ca7f2d91cc",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_heap.h",
+      "sha256": "a8358b153a82931ce54af33327303583f0a95765f5076d369c363c93e0f18e3e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_heap.mbt",
+      "sha256": "ca65a5c49050fdda8348fb00a6dd86d63513d88615d349e646f1cb655ae7299a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_metadata.mbt",
+      "sha256": "d628e33b05b1d35a08545d7ae4774f32c6b98b736fb6a18d49a362a1d3962523",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_ops.c",
+      "sha256": "6da0fa874c30f4e785f9917c8e8d1647f39776c6e75ba028a270b41ba692a841",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/gc_type_cache.c",
+      "sha256": "8dc01f0b1326760f16dfaf24dd5ca5f500f3164c551c3df8d1729087ac567488",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/guest_continuation.c",
+      "sha256": "50d6bafc77e750584e3d22a10ae0d94f15e70c65b7ff72b22f625dfc4c3ba25f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_exit.c",
+      "sha256": "eca11dafd07b3c4b914592f585ab34ed04794b8feb4b154ee74ccde02e5989de",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/path_inline.h",
+      "sha256": "437da4e5771d84cfc9d4153369092f73298268c777546cd8ec892859ba99d79e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/reactor/external_loop.c",
+      "sha256": "299c8d04cb0de26856ea75e76f873e4a3135455e9b22a5feb4cf7ef377833f4c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/reactor/reactor.c",
+      "sha256": "02433852fad3e97dabf0b9ce37b6535e9060d206a54ebd90c50ea455f5cb9099",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/reactor/reactor_windows.c",
+      "sha256": "461da52c1583b4ae90ca222b9d6d82586c6bae8bec9f2b864dfbdfcc8d5726a4",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/directory_native.c",
+      "sha256": "dfdf8eb3ec78a1e7e11b453c28edbb020d4cc1796b57bd87de717ced1a274872",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/ffi_native.c",
+      "sha256": "a426ed4042ebaff6fd7577456f5c6ab057e08b13a613ceabb26765e4003a4448",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/file_semantics_native.c",
+      "sha256": "2885b8cbf8a81ba07114f588ab1d1473ed536906da5453721475e26d6ef955ce",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/native_filetype.h",
+      "sha256": "6e6df13f6fd256815d03ff42fb6944a66f39fb715e8fbe8fbe2aa44422cbf12b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/poll_native.c",
+      "sha256": "7f36807bfa008713cd71c68b23903873a058992ca62bcd0792d39895b3aed747",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/process_native.c",
+      "sha256": "eb30f460eda48a99ff9af772db12042164536df1cd003b8f35be6858b1434061",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/resolver_native.c",
+      "sha256": "d04a31eb11cdaa2788c3304d42c24d307adf71eb8384ce1effea1adce5c571dd",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/socket_native.c",
+      "sha256": "a23affdf0e1288a12e24b038cd042d7dac4ed960b8a524b3c252a8eb60412e02",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/wasi/socket_semantics_native.c",
+      "sha256": "282b063e7dfaa0aeccae2a02d5003d1349a7841ebb1cecf60061a9ec9cd90488",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/windows_fs.c",
+      "sha256": "ae26346b48fc127e674b1727aeff020f2afc4c7b4ce8fe3f415a4275507eb416",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/windows_fs.h",
+      "sha256": "2df3789d626d743210ebcb2f179db0a714cc2ab25e6b449feea5a5c4e197bf87",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/windows_input.c",
+      "sha256": "6d3fd596c4c5c27463e49fbd795da72aa5aa1674394fe0ada212e9cd42f04726",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/windows_input.h",
+      "sha256": "94cc315bd6cc8c711ef2bfe603de2018d50e01bdb140158b522b62532c319996",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/windows_io.c",
+      "sha256": "006648b1c16a4fb8c6f83a24cbab2c1f2aa1d8ff3c8f14d9ee2e7f36ad760c75",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/host_io/windows_io.h",
+      "sha256": "53630e0deb61ceb8cc94d394445292e4abfadf8af689787df7c60de156d40418",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/jit.c",
+      "sha256": "2ac4e33e64cdfbeed8b607c29fd44738373695abbda454e09f9fd154cc68291e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/jit_context.c",
+      "sha256": "d91cec5492c1f1e883b146d75b823a0263454c96d44be1c426b51370f986e5da",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/jit_context.h",
+      "sha256": "e7e3773e1f6a8a86467588654aa8c11f915b11897aa310b4c6453b18adec1298",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/jit_ffi.h",
+      "sha256": "07f500771a1897e7a22ad6dca62736c5763b2ff6bd2e0dd0b03481858ab4938f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/jit_internal.h",
+      "sha256": "d7e35ef4144b1774ace94bb0fa3eb5fb599a0307c64e1f039395a9291cc4ed4d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/memory.mbt",
+      "sha256": "797b041e4045bfcae7ecd648e1be2a0ecb77711b72226ce066ae35fe326a540e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/memory_ops.c",
+      "sha256": "e88007aca73ab02fd4f0eccc03e41f29ae16a5ddecee63c3229b0caba83d46db",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/moon.pkg",
+      "sha256": "50e0c210f89c1574635a07c46761132d8cb3b67c103707ccf3d24b8b7a3b044e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/msvc_guest_bridges.S",
+      "sha256": "3333793691a03c6dc5ad640ba27fc851b487562502b309e76f27a67c60017325",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/msvc_guest_bridges.h",
+      "sha256": "8cdbbc5215eb925a9aea31027db8c9c128de54b840127f9445807e95df5bb8c5",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/native_alloc.c",
+      "sha256": "3704bb8f8a43e11eb5f7998a938b04cdb792888bcb890b44e863af38f26d0c64",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/native_alloc.h",
+      "sha256": "02aee3d8f37ce46c3bd42057ffe0aa2ab787cabb9d25c443b25b28f0f09583ab",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/ownership_wasm.mbt",
+      "sha256": "16833fd4639ac8d0ee3cff20092a7aa014225573976b6c6bab52b05ec76a8ed6",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/pkg.generated.mbti",
+      "sha256": "a30afc12fe2416d4095d5600b6e628d64501f5e71afd36f58144b13dd0bf3f6a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/platform.mbt",
+      "sha256": "c097d312d8915722e12121d11e75b27c71a4e6229a7dd21753ab11ababdb2cdb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/portable_metadata.mbt",
+      "sha256": "806819c41d8318a579204172fe3f477a14250dda5cb84c4389f67c28c61bcd7e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/quota.c",
+      "sha256": "c72f03f64d36c5aa6e584e7244120c00d0e8a7257c832656b260af4fe665cb1e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/quota.h",
+      "sha256": "b7add9803fcc37e5b98f1de4c7d9311e76288b964371b11b5ae7cd17f53e7255",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/quota.mbt",
+      "sha256": "e62f0e3e9a092eaee9d8e294e63b6234074537ee76ab1027e10e3e9b476e3a85",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/segment_ops.c",
+      "sha256": "12ca1efbfe990bbd5c2465cf47ce50aa9ab012910e06decf883a7eed7b53c2d9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/segments.mbt",
+      "sha256": "d1a8620b981108028886a3b3e91b58e21708981031bdf40e9cc563e1472ca84f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/stack_switch_aarch64.S",
+      "sha256": "d8a6bc63fa66b2c34af61841e4be05d95298e6b03a9cfc8652432d279e16d812",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/stack_switch_x86_64.S",
+      "sha256": "39af93b5d4fac2724cd82f02eeeb74963027d0ef0226f63d27952f23d7a2062e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/table.mbt",
+      "sha256": "43783052b6f5542a1258f19228ea2ce5e02357d47219799168b00a34104553b8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/atomic_test_support.c",
+      "sha256": "0e82ff298f14f5fc8d98215af7b8eadd06b25b7ce8519388ca01483ae30efc9d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/context_test_support.c",
+      "sha256": "a22115ca4b3dc9333fdb816a42c8faba8c8938dee103e7a05863227c29dc3faa",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/failure_test_support.c",
+      "sha256": "bdc1eee4711f3d9ff51d33a96d071c5b0d08028f2d43d100858fe98ece51b736",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/fiber_register_probe_aarch64.S",
+      "sha256": "1658e2cef2266c4731358471971a1ac4d0e1366b1d8355d8a45ea9eee779a795",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/fiber_register_probe_x86_64.S",
+      "sha256": "8877d7d4d7d6789b46ac69e2ecb1cfb0f4b9204118901419e292f35a3fdb3a7d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/fiber_test_support.c",
+      "sha256": "f1376c5a04f7fc557cb15dd00d47dd1ce1cc5088715d9243177dae26350d222e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/test_guest_bridges.S",
+      "sha256": "3333793691a03c6dc5ad640ba27fc851b487562502b309e76f27a67c60017325",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/test_guest_bridges.h",
+      "sha256": "aee6e04dc4d7428261281db5ce6c82def91ddfd0065191475c0262e3543cfa7f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/testing/trap_test_support.c",
+      "sha256": "97d9ab3f20fb8238aac781815d4370b57d0bfdf1566bc61220e0af1922cca786",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/trampoline_call_x86_64.S",
+      "sha256": "b6c020aa595647c9721d98b192f16856e6cacf8b1b3de5958b76f22f6fa9617a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/trap.c",
+      "sha256": "7f8e89d79097c145fa39230c502081caaa4236281442c435965cd9af4206f347",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/trap_codes.h",
+      "sha256": "845e342cb4a33629b6a3538483f1b9fdbdf72e6b391a48b230088a6b9874d4a2",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/windows_context.h",
+      "sha256": "3d688ef7fb6d41285990d4870231fc37fe35d3ea8cd711e149a8e1465d4082af",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/ffi/windows_context_x86_64.S",
+      "sha256": "bb42b052a9e21534d12441b64f721b7b120f18de6d398413f72ac2b1c7a689f9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/moon.pkg",
+      "sha256": "32c320267d4e3613fc7ce3d0ca2a002c0c0550258fa7e93e6bb7180d34b046de",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/pkg.generated.mbti",
+      "sha256": "37ace173e3fc07464584ded5f4bf7e4f92c16f4cfd7fc679ea78b334ed0eeb2c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/platform.mbt",
+      "sha256": "a5e92020e3c6399149a1fdd52fc21bff4d0a753a7f00dd7d63e579334002a805",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/reactor/moon.pkg",
+      "sha256": "5e93185669920a80037d567818f28382479afe13821b4bdb929efbe1941cd31c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/reactor/pkg.generated.mbti",
+      "sha256": "6bf92ba01f11966f77fb3a7c286a0e7beb490a9d45317b72046545bb739b0a24",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/reactor/reactor.mbt",
+      "sha256": "00f144cd664ee458459009a65289afb280c288d72f586a901e97fc72a350823e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/reactor/reactor_wbtest.mbt",
+      "sha256": "5c3d78563d52f87b65010575a7abfdcb2390e7a4aee3eb0f4c18ae5a1aa2a317",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/reactor/trait_extensions.mbt",
+      "sha256": "abb19199fbb395b308baceec5295a87d9b99cb380932c69ed0a9c18e24e27602",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/bounds_test.mbt",
+      "sha256": "7c38db50ceb620014b0fcc27866e90e79cfd970c2bd3d7236f5122bfcfe0c04e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/ffi_native.mbt",
+      "sha256": "b6ed34e39e93b9765776053983a476329f4d2a6437740e730616aa6cd3593363",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/file_semantics.mbt",
+      "sha256": "dec283d8a835363066c5d3f058d9f87b2bc1fafb7424f110c847a6d69fa4cbd8",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/moon.pkg",
+      "sha256": "259f2c542ec1d691a22dfbc83ebcafca0f2491d17382ee62312e29067f832372",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/pkg.generated.mbti",
+      "sha256": "a4aba557a5faa5ba8ac320738550e630d9f190eabfe93e9726c483a31abdb850",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/platform.mbt",
+      "sha256": "922d36221ccad47d73515508b43cdac22a5f210ad15f9048a17fedb95366970f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/process.mbt",
+      "sha256": "26f3d164cda3f9b686d831770a622725f8d71fcd392115d3ef91107ccb68b7c7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/resolver_test.mbt",
+      "sha256": "1943901aaa26ed64a622c8f2df99575a901333fd3fbb28fb71309bf0ae199de0",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/host_io/wasi/socket_semantics.mbt",
+      "sha256": "e8baf09243a38969eea807a98e811ebf1c44cc08808d28a453e8916b837671e9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/layout/layout.mbt",
+      "sha256": "d71c0c4cf2db2b40919b25041bcafb2162c63ef81caf6391b5bc2817669a793f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/layout/layout_test.mbt",
+      "sha256": "6004d4e423d796a3989198c6a8d7f5fa5e0968962eaf9f2c90c9be52c891d625",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/layout/moon.pkg",
+      "sha256": "655dcb5578915d0fb6eb81df39dbe9aff626b791f86a6c13765b1e394bae77f1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/native/layout/pkg.generated.mbti",
+      "sha256": "b5e49487e1bcca3727eae489534a39a87b9848f19156ad4b9fb0b39e62d79dca",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/async_host.mbt",
+      "sha256": "b199b932c9f643e0756d49d6db8f339f13f6c8f9cf54876f41e064a5cdbbce55",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/async_host_test.mbt",
+      "sha256": "f903bd361c4f500053bbff16dd6a0e2713eed00ac79d669325cdae71499c5de5",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/atomic_wait_test.mbt",
+      "sha256": "ba9dcc53ddeb4e53717a5d03714d6ad62cae29d97247479e7e95d5e58d185c88",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/caller.mbt",
+      "sha256": "c69b300b630fff5b2951854685994a909c1568e34c3f66661faa8579c2c840a1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/capability.mbt",
+      "sha256": "dc786e28976cf3e5b347c8195593395dd3333251999d6a1d3fd75f2c5aba3eac",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/capability_wbtest.mbt",
+      "sha256": "1b12b9334ec040c774d9f28220f40db17dda8bd153e3ae84baec091875595bdd",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/error.mbt",
+      "sha256": "c18be2fa04b131f815376ccc6bee2e9d7ea71e7bebfbc9e8360c53e6908f3521",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/execution_limits.mbt",
+      "sha256": "b6db04ab48f09878eacaf09cf2c036474a35fe414e1b28aca8d9d54d701b605b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/frame.mbt",
+      "sha256": "0c9be9b226b375a7c059f9e0a8144657ee32f7fcfe1e796cb20417ffa81e1f76",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/funcref_registry.mbt",
+      "sha256": "3aaea5617038e1baa38dd131e758cb3bf09252d1cc887a89b31ed3a56a430bb1",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/function_identity.mbt",
+      "sha256": "d0ad0d52214c1c7b12d399a4e898f0e2b28ca1b62052b4ccbe44001872279e37",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/gc_tracing.mbt",
+      "sha256": "cb65eaa9fd130237fbfd1fce02906703a55153e8b853750badd2ae6748a69446",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/gc_tracing_native.mbt",
+      "sha256": "d59f290ec8778551e5e6010506ec502c9221a9be1112083d067870df1237ac20",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/gc_tracing_wasm.mbt",
+      "sha256": "0709af0a673d90e70b747b66caf0a9382a0c2a5bf6f398156663f17ffa6de424",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/gc_traits.mbt",
+      "sha256": "ad74303e3aa45da93a72bb7457fef51f6b3b39c1bc7af5aa877388fa51965215",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/global.mbt",
+      "sha256": "911c87873a7eda1aa76206784e4d75c60f1067ea40c7d9aa956289f23d5e9b0e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/guest_continuation.mbt",
+      "sha256": "98d797560229dd77a592b77ccfa4cfbd4764f5293691e79ca8fb06af6b8867d7",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/guest_continuation_test.mbt",
+      "sha256": "3483d66ec6ab5c7cfa1e9062e39f26843253eb33eb194edecd8e01de9407d877",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/heap.mbt",
+      "sha256": "f0bacd9a2346208fb693adacd6f9f961ab979bd685fc1b597a1e43fa36d587bd",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/heap_wbtest.mbt",
+      "sha256": "4eef37e8c67326282f21fb94666a46a0c56bdd22e87f43d7e77a8921d4ff5019",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/imports.mbt",
+      "sha256": "e311f3616c44649a65bebf0496c7d6962c9e0a1b1b023ba6cae729bc8f18040e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/instance.mbt",
+      "sha256": "f553cd5fa6a4799953153601e9ff235d33ce6989377eea0ec9923acf30f35dfa",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/instantiation_transaction.mbt",
+      "sha256": "766f5daaa0d7b3b7242ab1f0cc3a38fa14f4d589c4b42b6c7da06559c7fe9e6b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/instantiation_transaction_test.mbt",
+      "sha256": "c9b8854f4639581c94863e6bad2cc2a78fe3c1497ee2dcc05b02a37136751d62",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/interpreter_limits.mbt",
+      "sha256": "f5671e10be39c436067372408cd79c74958327dc381ec140f64178569f2b9484",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/linker.mbt",
+      "sha256": "dc91cce887e27442c45c15057f19b26c6defd37526b2dd38f7cd7eb8f626de5f",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/linker_transaction_test.mbt",
+      "sha256": "25287462b5f310432d1d98e5db4ffa21251e12fc05864b0d9eb64e1559714a2d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/memory.mbt",
+      "sha256": "e1c56bb68b558c0a76f4613e73762fa7442fa95251ad21e3eb3d393154626173",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/memory_access.mbt",
+      "sha256": "bb4d1cc98b7e93c62fafd414d250b9cf02aee3b7b52ab535061ae08183abe87d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/memory_allocation_test.mbt",
+      "sha256": "34d66cc9dc56fe0da278c240179bb6ea44a685b0c3a2bb801eb2a7479b2f4449",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/memory_atomic.mbt",
+      "sha256": "4579b68236012ba1ed85ef705908f12d2d744c394dbfc41d7e3d6b927ab40daf",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/memory_lifetime_test.mbt",
+      "sha256": "7490b343e794b458ae48b2bde4bcf8362e88116ad061c241dea201092efa2b56",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/memory_native.mbt",
+      "sha256": "454caffd215ff39bab77d38b2423ee7065665159d52bc8b289fe6e3f4c4f1676",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/memory_wasm.mbt",
+      "sha256": "bad2500c99ce99255879d4b403131742caacd3c7dfd42c2678de27f02a87d924",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/module_budget.mbt",
+      "sha256": "2f1f44d39446e71e4fc0c9b238b12c5c27053eb336473448523f1ee1e10827c3",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/moon.pkg",
+      "sha256": "e6df741620685d811d4c8ff8388ce798afa362e9494a195c74be1485ccc46fa3",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/native_exception.mbt",
+      "sha256": "b3926de682d85bbb95844be27ecd5d70d57a146861e0ce696476a9ad65efc604",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/pkg.generated.mbti",
+      "sha256": "a03d2bf3ddc262ba8d31ae82a843cc086e8a5547f4d4cb234cb5c27011701ba9",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/portable_storage_test.mbt",
+      "sha256": "344cd598842458f323d53b345672b8464f9e79aae19975cca2e04adb16398dfe",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/resource_binding.mbt",
+      "sha256": "77dc54c614af3ceafd34a411c9f7ad554a430df4a7e5345a9bfb0e60093a9bce",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/resource_budget.mbt",
+      "sha256": "9bff97c816d14124ed40568df06d7b9d803e377febcaba1833f960c9cbb5ab67",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/resource_budget_wasm.mbt",
+      "sha256": "f194b167cbc8cd301c21e71f331dfa8b5616015dd423b4def4c693fc8a4d50fb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/rooted_value.mbt",
+      "sha256": "be5d5800a4fef97ce66534129684e3965b9c1e66543b99dd642936588d16aae0",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/rooted_value_wasm.mbt",
+      "sha256": "f7a3e5cfa8ab5fac6e69fb25713e2ba7d6f882785cfd6160e62e73208c8aca45",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/runtime_test.mbt",
+      "sha256": "08227f68bcf9155753e802319a6d875293ed632baef99f5cbb82d56f5a74179e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/stack.mbt",
+      "sha256": "4806044a1138ac8076de3c450fbee1aff04e830ac8607c149532ed02586cdc38",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/store.mbt",
+      "sha256": "b2d379bc6b1f32bd2dfae7cc3480e17ab3d6f787e26d9320604c48390e2a5e00",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/store_close_wbtest.mbt",
+      "sha256": "574324977e43ebdd58c9d10a343a299adec19687b3a10ec25a40c3f163b2ad44",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/store_inspection.mbt",
+      "sha256": "f5be394e553d9a031dd83d0363f1ddd81c4b9084415c41a51c4a8c342a1e62e0",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/store_inspection_wasm.mbt",
+      "sha256": "f39df01d864227f15cb7559a46526bb33be2d05d6327dbce9dea3f84a4ec48cb",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/store_terminal_close_test.mbt",
+      "sha256": "7341ebdc1c428e42ce46b0748257443711c8d3eba0747665865fedcc60bf4e8e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/store_wasm.mbt",
+      "sha256": "7366529b6152b4cfa721193980b440396e87cfc80c2d61f8ae157b9c593366de",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/suspended_execution.mbt",
+      "sha256": "b7084069b3b657db4ebe9a05fda2450dcbb9c37a66e218b555c989d1657ed23b",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/table.mbt",
+      "sha256": "c3334e0d707290541a43eda1b3e019389c00667edf3fe3bf1383dc2a0fcb60b0",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/table_bounds_test.mbt",
+      "sha256": "ada735ebdae32e0f1f8145c3b9e12c2ba6ee989ff0189baffb4d277c7625211e",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/table_wasm.mbt",
+      "sha256": "87db1f5271bd45a8ca4bd3666cce97998c02719d46782db42495d9f246c2c1bc",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/trait_extensions.mbt",
+      "sha256": "4fc7ca3d83d5b6b520d5649cfc7b5f2835d3f99816663747195c04459347c8cc",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/type_registry.mbt",
+      "sha256": "231cf1fba03137885703a28bb56e302639790704128697e39d501d0a962e7d5d",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/runtime/type_registry_wasm.mbt",
+      "sha256": "6a743477b1803f5b1dc676d58a450eed34b2a35baf08493c8282b5815783e803",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/assertions/assertions.mbt",
+      "sha256": "649a15fcc5a5a467d1cac6cb77cb507a0a89b9f9ac573c910e4f1891d867045a",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/assertions/float_assertions_wbtest.mbt",
+      "sha256": "66d4a71d99779df1264b0c1302f7a9165e9208f13bd6d980081433c947efbddf",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/assertions/moon.pkg",
+      "sha256": "3543292971fcc69d82f4082bba014009e8dc84dc5ad6f578cc6265ed7e32cb4c",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/assertions/pkg.generated.mbti",
+      "sha256": "e57650d3b6cd2b350a345defb10c4b6843fa34b7d2e2f67fcb55d6cb6c15e9c2",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/context.mbt",
+      "sha256": "459658f47f01b2057391fc62dd062533ef9d5d0df8e5bedb2559ddffcc5f9f51",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/moon.pkg",
+      "sha256": "acaa2e9f0b92d8f3e2c1021360be3d9ced0fa190b754e771e052743101639643",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/pkg.generated.mbti",
+      "sha256": "9e6baafd4b54ef1a9ae8d91c4d088242d4965883b7ad51c20bce5f4ef92d8e45",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/runner.mbt",
+      "sha256": "3c9b5b022f8af1a4f180fad80c776a1d822c2fd29641b1b401cb79b1c0f6af79",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/runner_test.mbt",
+      "sha256": "30e88be16b46c3021f0684c00e32816f63af8ffb4a38ab73dcf8923d9084e5e5",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/spectest/moon.pkg",
+      "sha256": "1389bacb66b65b794d89886936fa00041d86d7af48b83d70f8b65b8b3a6e0fbd",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/spectest/pkg.generated.mbti",
+      "sha256": "1345cf5a65ad1ca9a67f0e57b2d26d85e92ea96089f29dc21ef445a308c30007",
+      "deleted": false
+    },
+    {
+      "path": "modules/wasmoon_runtime/wast/spectest/spectest.mbt",
+      "sha256": "c2c7ccecf4b80c994cfe12328755fda3d8ae749d4cbc344891140def18d039cb",
+      "deleted": false
+    },
+    {
+      "path": "modules/x64_target/internal/emit/pkg.generated.mbti",
+      "sha256": "8385c349bc049de476c4fffd63fffa2d85ac8fa4bd24c2f60f8857deed2e8c4b",
+      "deleted": false
+    },
+    {
+      "path": "modules/x64_target/pkg.generated.mbti",
+      "sha256": "276cdf15b035e6b1a5189e93b07deb30566ffb36851513fe3489686c0a001e6a",
+      "deleted": false
+    },
+    {
+      "path": "moon.work",
+      "sha256": "7079e53e30ef7cf4179c95690d442bafb53c17f8719e532a0878d2284a4f0e62",
+      "deleted": false
+    },
+    {
+      "path": "scripts/audit_module_boundaries.py",
+      "sha256": "ddad0197fc43568b783a78f97cfc23874044486442423ed38799f04b2f7f4009",
+      "deleted": false
+    },
+    {
+      "path": "scripts/check_native_c.py",
+      "sha256": "9c781bdc6093e0246e57c7ab807f4d6be258915520d8e1cc6ba1b30da852f2c8",
+      "deleted": false
+    },
+    {
+      "path": "scripts/msvc/generate_guest_bridges.py",
+      "sha256": "c10851440f93105ccaf87d647373ea7941859cb34bbf423f7481b8bf02a65079",
+      "deleted": false
+    },
+    {
+      "path": "scripts/run_portable_core_wast.py",
+      "sha256": "d53658145ffc1e8fd802c7c12a957b6d7d5985e9b5de9392fb96cf033958675c",
+      "deleted": false
+    },
+    {
+      "path": "scripts/run_sanitizers.py",
+      "sha256": "e55ee6f5c10eca62e97b90ee10f5aae9c2fa00c8af3c2deae55d7e3ea74156e4",
+      "deleted": false
+    },
+    {
+      "path": "scripts/test_packaged_install.py",
+      "sha256": "ce40faa355fbfda025b6dd9c2d0cdbbd6f45a082caf0d1b2e5b0c4fd21c79c7c",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_resolver_lifecycle.py",
+      "sha256": "bb1964ca06cb24661bd1fd6e39ee75d086fadd97086fdb5204d4acffa596667c",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_file_semantics.py",
+      "sha256": "6e578ca805818acc8e0af6a81752a1b450ed9e703d0f94cb0d673fc7dcb67c18",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_native_poll.py",
+      "sha256": "a8b36a5e02e4e2615d4471aa7d6256c98e6196b10afb0657ba7d1a7c7c4cf5ac",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_native_readdir.py",
+      "sha256": "6e9ac5ffd6dfb6ad3791acdcf8a48e8d66baee5fb720ad2f32c1369996400c0e",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_path_portability.py",
+      "sha256": "a7d585468390fdffe0882fe2d6c8958d2a43910168d1bb1fa9bcc74949540264",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_process.py",
+      "sha256": "63731cca54b5e19aa8e2da55b56c9fa9ee6296555b0f5aea342089d63bee3610",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_windows_files.py",
+      "sha256": "6a57eb635e56c4763a4a086320168ddb6868f39b70c81faad469c3c4656816b1",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_windows_guest_abi.py",
+      "sha256": "9557cd318b739ed7f2e6289a94e43d1e5ef3779235d4a976dff70479e8461584",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_windows_memory.py",
+      "sha256": "7623834e6e8910bbe16ea6ed4cd0155450989737aa7585bc400e864994826720",
+      "deleted": false
+    },
+    {
+      "path": "scripts/tests/test_wasi_windows_poll.py",
+      "sha256": "00761f49d60c10380c372a0a655c5814703c931dee984a7c891bc7d09ae6e509",
+      "deleted": false
+    }
+  ]
+}

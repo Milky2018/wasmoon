@@ -30,3 +30,5 @@ dev_build(
 import {
   "moonbitlang/x/fs",
 } for "wbtest"
+
+supported_targets = "+native"

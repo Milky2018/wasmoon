@@ -20,7 +20,7 @@ pub impl Show for ComponentTextError with fn output(self, logger) {
 ///|
 priv enum SExpr {
   Atom(String)
-  Str(String)
+  Str(String, String) // decoded component text and original WAT spelling
   List(Array[SExpr])
 }
 
@@ -257,7 +257,9 @@ fn parse_sexpr(reader : TextReader) -> SExpr raise ComponentTextError {
     raise ParseError("unexpected ')'")
   }
   if first == Some('"') {
-    return Str(reader.read_string())
+    let start = reader.pos
+    let text = reader.read_string()
+    return Str(text, reader.input[start:reader.pos].to_owned())
   }
   Atom(reader.read_atom())
 }
@@ -659,7 +661,7 @@ fn parse_name_text(
   expr : SExpr,
   context : String,
 ) -> String raise ComponentTextError {
-  if expr is Str(text) {
+  if expr is Str(text, _) {
     return text
   }
   if expr is Atom(text) {
@@ -667,7 +669,7 @@ fn parse_name_text(
   }
   if expr is List(items) {
     if items.length() == 2 && items[0] is Atom("interface") {
-      if items[1] is Str(text) {
+      if items[1] is Str(text, _) {
         return text
       }
       if items[1] is Atom(text) {
@@ -909,33 +911,12 @@ fn int_array_to_bytes(values : Array[Int32]) -> Bytes {
 }
 
 ///|
-fn escape_wat_string(text : String) -> String {
-  let out = StringBuilder::StringBuilder()
-  out.write_char('"')
-  for ch in text {
-    if ch == '"' {
-      out.write_string("\\\"")
-    } else if ch == '\\' {
-      out.write_string("\\\\")
-    } else if ch == '\n' {
-      out.write_string("\\n")
-    } else if ch == '\r' {
-      out.write_string("\\r")
-    } else if ch == '\t' {
-      out.write_string("\\t")
-    } else {
-      out.write_char(ch)
-    }
-  }
-  out.write_char('"')
-  out.to_string()
-}
-
-///|
 fn sexpr_to_wat(expr : SExpr) -> String {
   match expr {
     Atom(text) => text
-    Str(text) => escape_wat_string(text)
+    // Core strings are byte strings. Re-emitting decoded text would change
+    // byte escapes (and allow invalid escapes to disappear before validation).
+    Str(_, spelling) => spelling
     List(items) => {
       let out = StringBuilder::StringBuilder()
       out.write_char('(')
@@ -1109,7 +1090,7 @@ fn parse_func_sig(
           continue
         }
         if items.length() == 3 {
-          let label = if items[1] is Str(name) {
+          let label = if items[1] is Str(name, _) {
             name
           } else if items[1] is Atom(name) {
             name
@@ -1620,7 +1601,7 @@ fn parse_inline_func_sig(
           continue
         }
         if items.length() == 3 {
-          let label = if items[1] is Str(name) {
+          let label = if items[1] is Str(name, _) {
             name
           } else if items[1] is Atom(name) {
             name
@@ -7451,7 +7432,7 @@ pub fn parse_component_wat(input : String) -> Bytes raise ComponentTextError {
         index += 1
         let out : Array[Byte] = []
         for i in index..<items.length() {
-          if items[i] is Str(text) {
+          if items[i] is Str(text, _) {
             let bytes = decode_wat_binary_string(text)
             for b in bytes {
               out.push(b)

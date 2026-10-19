@@ -1,48 +1,52 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon_jit/perf"
 
+import {
+  "Milky2018/wasmoon_runtime/clock",
+}
+
 // Values
-pub fn begin_function(Int, String, Int, Int) -> Unit
+pub fn begin_function(Int32, String, Int32, Int32) -> Unit
 
 pub fn clear_milkir_metrics_sink() -> Unit
 
 pub fn detail_enabled() -> Bool
 
-pub fn elapsed_us(Instant) -> Int64
+pub fn elapsed_us(@clock.Instant) -> Int64
 
 pub fn enabled() -> Bool
 
 pub fn export_json() -> String
 
-pub fn finish_function(Int, Int) -> Unit
+pub fn finish_function(Int32, Int32) -> Unit
 
 pub fn install_milkir_metrics_sink() -> Unit
 
-pub fn instant_elapsed_as_secs_f64(Instant) -> Double
+pub fn instant_elapsed_as_secs_f64(@clock.Instant) -> Double
 
-pub fn instant_now() -> Instant
+pub fn instant_now() -> @clock.Instant
 
 pub fn record_compile_subphase_us(String, Int64, parent? : String) -> Unit
 
 pub fn record_function_compile_us(Int64) -> Unit
 
-pub fn record_ir_pass(String, Int, Int, Bool, Int64, rewrite_attempts? : Int?, rewrite_apps? : Int?, rewrite_created_insts? : Int?, work_done? : Int?, value_lookup_probes? : Int?, budget_exhausted? : Bool?) -> Unit
+pub fn record_ir_pass(String, Int32, Int32, Bool, Int64, rewrite_attempts? : Int32?, rewrite_apps? : Int32?, rewrite_created_insts? : Int32?, work_done? : Int32?, value_lookup_probes? : Int32?, budget_exhausted? : Bool?) -> Unit
 
 pub fn record_module_subphase_us(String, Int64) -> Unit
 
-pub fn record_regalloc_loop(Int, Int, Int, Int, Int, Int, Int, Int) -> Unit
+pub fn record_regalloc_loop(Int32, Int32, Int32, Int32, Int32, Int32, Int32, Int32) -> Unit
 
 pub fn record_regalloc_phase_us(String, Int64) -> Unit
 
-pub fn record_regalloc_stats(Int, Int, Int, Int, Int) -> Unit
+pub fn record_regalloc_stats(Int32, Int32, Int32, Int32, Int32) -> Unit
 
 pub fn record_stage_us(FunctionCompileStage, Int64) -> Unit
 
-pub fn reset_module(Int) -> Unit
+pub fn reset_module(Int32) -> Unit
 
 pub fn set_module_compile_us(Int64) -> Unit
 
-pub fn tick_now() -> Instant
+pub fn tick_now() -> @clock.Instant
 
 // Errors
 
@@ -64,11 +68,11 @@ pub(all) enum FunctionCompileStage {
 }
 
 pub struct FunctionMetrics {
-  func_idx : Int
+  func_idx : Int32
   func_name : String
-  opt_level : Int
-  ir_insts_before : Int
-  mut ir_insts_after : Int
+  opt_level : Int32
+  ir_insts_before : Int32
+  mut ir_insts_after : Int32
   mut function_compile_us : Int64
   mut optimize_us : Int64
   mut lower_us : Int64
@@ -77,12 +81,12 @@ pub struct FunctionMetrics {
   mut frame_plan_us : Int64
   mut emit_us : Int64
   compile_subphases : Array[CompileSubphaseMetric]
-  mut code_size : Int
-  mut spill_slots : Int
-  mut spills : Int
-  mut reloads : Int
-  mut reg_moves : Int
-  mut spill_to_spill : Int
+  mut code_size : Int32
+  mut spill_slots : Int32
+  mut spills : Int32
+  mut reloads : Int32
+  mut reg_moves : Int32
+  mut spill_to_spill : Int32
   mut regalloc_loop : RegallocLoopMetric?
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
@@ -92,24 +96,21 @@ pub fn FunctionMetrics::to_json(Self) -> Json
 pub struct IRPassMetric {
   name : String
   duration_us : Int64
-  before_insts : Int
-  after_insts : Int
+  before_insts : Int32
+  after_insts : Int32
   changed : Bool
-  rewrite_attempts : Int?
-  rewrite_apps : Int?
-  rewrite_created_insts : Int?
-  work_done : Int?
-  value_lookup_probes : Int?
+  rewrite_attempts : Int32?
+  rewrite_apps : Int32?
+  rewrite_created_insts : Int32?
+  work_done : Int32?
+  value_lookup_probes : Int32?
   budget_exhausted : Bool?
 } derive(ToJson)
 pub fn IRPassMetric::to_json(Self) -> Json
 
-#alias(PerfTick)
-type Instant
-
 pub struct ModuleMetricsReport {
-  schema_version : Int
-  expected_functions : Int
+  schema_version : Int32
+  expected_functions : Int32
   mut module_compile_us : Int64
   compile_subphases : Array[CompileSubphaseMetric]
   functions : Array[FunctionMetrics]
@@ -117,14 +118,14 @@ pub struct ModuleMetricsReport {
 pub fn ModuleMetricsReport::to_json(Self) -> Json
 
 pub struct RegallocLoopMetric {
-  queue_pops : Int
-  register_probes : Int
-  occupied_segments_scanned : Int
-  conflicts : Int
-  evictions : Int
-  bundle_splits : Int
-  second_chance_attempts : Int
-  max_queue_length : Int
+  queue_pops : Int32
+  register_probes : Int32
+  occupied_segments_scanned : Int32
+  conflicts : Int32
+  evictions : Int32
+  bundle_splits : Int32
+  second_chance_attempts : Int32
+  max_queue_length : Int32
 } derive(ToJson)
 pub fn RegallocLoopMetric::to_json(Self) -> Json
 
@@ -135,5 +136,8 @@ pub struct RegallocPhaseMetric {
 pub fn RegallocPhaseMetric::to_json(Self) -> Json
 
 // Type aliases
+pub using @clock {type Instant}
+
+pub using @clock {type Instant as PerfTick}
 
 // Traits

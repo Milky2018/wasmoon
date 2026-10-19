@@ -1,221 +1,149 @@
 ///|
+// Validate separators before conversion; never normalize an invalid token.
+fn literal_digits(
+  s : String,
+  start : Int32,
+  radix : Int32,
+) -> Int32 raise WatError {
+  let mut i = start
+  let mut digit = false
+  while i < s.length() {
+    let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      if !digit || i + 1 >= s.length() {
+        raise InvalidNumber(s, default_loc())
+      }
+      digit = false
+    } else {
+      match hex_digit_value(c) {
+        Some(v) if v < radix => digit = true
+        _ => break
+      }
+    }
+    i += 1
+  }
+  if !digit {
+    raise InvalidNumber(s, default_loc())
+  }
+  i
+}
+
+///|
+fn integer_literal(
+  s : String,
+  width : Int32,
+  signed : Bool,
+) -> Int64 raise WatError {
+  let mut start = 0
+  let negative = s.has_prefix("-")
+  if signed && (negative || s.has_prefix("+")) {
+    start = 1
+  }
+  let radix = if s[start:].has_prefix("0x") {
+    start += 2
+    16
+  } else {
+    10
+  }
+  if literal_digits(s, start, radix) != s.length() {
+    raise InvalidNumber(s, default_loc())
+  }
+  let limit = if negative && signed {
+    1UL << (width - 1)
+  } else if width == 64 {
+    0xffffffffffffffffUL
+  } else {
+    (1UL << width) - 1UL
+  }
+  let mut value = 0UL
+  for i in start..<s.length() {
+    let c = s.code_unit_at(i).unsafe_to_char()
+    if c == '_' {
+      continue
+    }
+    let digit = hex_digit_value(c).unwrap().to_uint64()
+    if value > (limit - digit) / radix.to_uint64() {
+      raise InvalidNumber(s, default_loc())
+    }
+    value = value * radix.to_uint64() + digit
+  }
+  if negative {
+    -value.reinterpret_as_int64()
+  } else {
+    value.reinterpret_as_int64()
+  }
+}
+
+///|
 fn parse_int(s : String) -> Int32 raise WatError {
-  let trimmed = s
-  if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
-    if trimmed.length() > 2 {
-      let hex_part = StringBuilder::StringBuilder()
-      for i in 2..<trimmed.length() {
-        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
-      }
-      parse_hex_int(hex_part.to_string())
-    } else {
-      raise InvalidNumber(s, default_loc())
-    }
-  } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
-    if trimmed.length() > 3 {
-      let hex_part = StringBuilder::StringBuilder()
-      for i in 3..<trimmed.length() {
-        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
-      }
-      -parse_hex_int(hex_part.to_string())
-    } else {
-      raise InvalidNumber(s, default_loc())
-    }
-  } else {
-    // Try signed first, then unsigned (for values like 4294967295 which is -1 in i32)
-    let result = @string.parse_int(trimmed) catch {
-      _ => {
-        // Try parsing as unsigned and reinterpret
-        let u64 = @string.parse_uint64(trimmed) catch {
-          _ => raise InvalidNumber(s, default_loc())
-        }
-        // Check if it fits in u32 range
-        if u64 > 0xFFFFFFFFUL {
-          raise InvalidNumber(s, default_loc())
-        }
-        u64.reinterpret_as_int64().to_int()
-      }
-    }
-    result
-  }
+  integer_literal(s, 32, true).to_int()
 }
 
 ///|
-fn parse_hex_int(s : String) -> Int32 raise WatError {
-  let mut result = 0
-  for i in 0..<s.length() {
-    let c = s.code_unit_at(i).unsafe_to_char()
-    if c == '_' {
-      continue // Skip underscores (WAT number separator)
-    }
-    match hex_digit_value(c) {
-      Some(v) => result = result * 16 + v
-      None => raise InvalidNumber(s, default_loc())
-    }
-  }
-  result
-}
-
-///|
-/// Parse an unsigned 32-bit integer (for offset/align values)
-/// Returns Int but interprets large values as unsigned
-/// Raises error if value exceeds u32 max (4294967295)
 fn parse_u32(s : String) -> Int32 raise WatError {
-  let trimmed = s
-  if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
-    if trimmed.length() > 2 {
-      let hex_part = StringBuilder::StringBuilder()
-      for i in 2..<trimmed.length() {
-        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
-      }
-      parse_hex_u32(hex_part.to_string())
-    } else {
-      raise InvalidNumber(s, default_loc())
-    }
-  } else {
-    // Parse decimal as unsigned 64-bit first to check range
-    let u64 = @string.parse_uint64(trimmed) catch {
-      _ => raise InvalidNumber(s, default_loc())
-    }
-    // Check if value exceeds u32 max
-    if u64 > 0xFFFFFFFFUL {
-      raise InvalidNumber(s, default_loc())
-    }
-    u64.reinterpret_as_int64().to_int()
-  }
+  integer_literal(s, 32, false).to_int()
 }
 
 ///|
-fn parse_hex_u32(s : String) -> Int32 raise WatError {
-  let mut result : UInt64 = 0UL
-  let mut overflow = false
-  for i in 0..<s.length() {
-    let c = s.code_unit_at(i).unsafe_to_char()
-    if c == '_' {
-      continue // Skip underscores (WAT number separator)
-    }
-    match hex_digit_value(c) {
-      Some(v) => {
-        let new_result = result * 16UL + v.to_int64().reinterpret_as_uint64()
-        // Detect overflow
-        if new_result < result {
-          overflow = true
-        }
-        result = new_result
-      }
-      None => raise InvalidNumber(s, default_loc())
-    }
-  }
-  // Check if value exceeds u32 max
-  if result > 0xFFFFFFFFUL || overflow {
-    raise InvalidNumber(s, default_loc())
-  }
-  result.reinterpret_as_int64().to_int()
-}
-
-///|
-/// Parse an unsigned 64-bit integer (for memory64 limits)
-/// Returns Int64 to support memory64 proposal limits
 fn parse_u64(s : String) -> Int64 raise WatError {
-  let trimmed = s
-  if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
-    if trimmed.length() > 2 {
-      let hex_part = StringBuilder::StringBuilder()
-      for i in 2..<trimmed.length() {
-        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
-      }
-      parse_hex_u64(hex_part.to_string())
-    } else {
-      raise InvalidNumber(s, default_loc())
-    }
-  } else {
-    // Parse decimal as unsigned 64-bit
-    let u64 = @string.parse_uint64(trimmed) catch {
-      _ => raise InvalidNumber(s, default_loc())
-    }
-    u64.reinterpret_as_int64()
-  }
-}
-
-///|
-fn parse_hex_u64(s : String) -> Int64 raise WatError {
-  let mut result : UInt64 = 0UL
-  let mut overflow = false
-  for i in 0..<s.length() {
-    let c = s.code_unit_at(i).unsafe_to_char()
-    if c == '_' {
-      continue // Skip underscores (WAT number separator)
-    }
-    match hex_digit_value(c) {
-      Some(v) => {
-        let new_result = result * 16UL + v.to_int64().reinterpret_as_uint64()
-        // Detect overflow
-        if new_result < result {
-          overflow = true
-        }
-        result = new_result
-      }
-      None => raise InvalidNumber(s, default_loc())
-    }
-  }
-  if overflow {
-    raise InvalidNumber(s, default_loc())
-  }
-  result.reinterpret_as_int64()
+  integer_literal(s, 64, false)
 }
 
 ///|
 fn parse_int64(s : String) -> Int64 raise WatError {
-  let trimmed = s
-  if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
-    if trimmed.length() > 2 {
-      let hex_part = StringBuilder::StringBuilder()
-      for i in 2..<trimmed.length() {
-        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
-      }
-      parse_hex_int64(hex_part.to_string())
-    } else {
-      raise InvalidNumber(s, default_loc())
-    }
-  } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
-    if trimmed.length() > 3 {
-      let hex_part = StringBuilder::StringBuilder()
-      for i in 3..<trimmed.length() {
-        hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
-      }
-      -parse_hex_int64(hex_part.to_string())
-    } else {
-      raise InvalidNumber(s, default_loc())
-    }
-  } else {
-    // Try signed first, then unsigned (for values like 18446744073709551615 which is -1 in i64)
-    let result = @string.parse_int64(trimmed) catch {
-      _ => {
-        // Try parsing as unsigned and reinterpret
-        let u64 = @string.parse_uint64(trimmed) catch {
-          _ => raise InvalidNumber(s, default_loc())
-        }
-        u64.reinterpret_as_int64()
-      }
-    }
-    result
-  }
+  integer_literal(s, 64, true)
 }
 
 ///|
-fn parse_hex_int64(s : String) -> Int64 raise WatError {
-  let mut result = 0L
-  for i in 0..<s.length() {
-    let c = s.code_unit_at(i).unsafe_to_char()
-    if c == '_' {
-      continue // Skip underscores (WAT number separator)
-    }
-    match hex_digit_value(c) {
-      Some(v) => result = result * 16L + v.to_int64()
-      None => raise InvalidNumber(s, default_loc())
+fn float_literal(s : String) -> String raise WatError {
+  let mut i = if s.has_prefix("-") || s.has_prefix("+") { 1 } else { 0 }
+  let hexadecimal = s[i:].has_prefix("0x")
+  let radix = if hexadecimal {
+    i += 2
+    16
+  } else {
+    10
+  }
+  i = literal_digits(s, i, radix)
+  if i < s.length() && s.code_unit_at(i) == 46 {
+    i += 1
+    if i < s.length() {
+      match hex_digit_value(s.code_unit_at(i).unsafe_to_char()) {
+        Some(v) if v < radix => i = literal_digits(s, i, radix)
+        _ => ()
+      }
     }
   }
-  result
+  if i < s.length() {
+    let c = s.code_unit_at(i)
+    if (hexadecimal && (c == 112 || c == 80)) ||
+      (!hexadecimal && (c == 101 || c == 69)) {
+      i += 1
+      if i < s.length() && (s.code_unit_at(i) == 43 || s.code_unit_at(i) == 45) {
+        i += 1
+      }
+      i = literal_digits(s, i, 10)
+    }
+  }
+  if i != s.length() {
+    raise InvalidNumber(s, default_loc())
+  }
+  let clean = StringBuilder::StringBuilder()
+  for c in s.iter() {
+    if c != '_' {
+      clean.write_char(c)
+    }
+  }
+  clean.to_string()
+}
+
+///|
+fn nan_payload(s : String, width : Int32) -> Int64 raise WatError {
+  let bits = integer_literal("0x" + s, width, false)
+  if bits == 0L {
+    raise InvalidNumber(s, default_loc())
+  }
+  bits
 }
 
 ///|
@@ -239,7 +167,7 @@ fn parse_float32(s : String) -> Float raise WatError {
     // Parse payload from nan:0x...
     let payload_start = if s.has_prefix("+") { 7 } else { 6 }
     let payload_str = s[payload_start:].to_owned()
-    let payload = parse_hex_int(payload_str)
+    let payload = nan_payload(payload_str, 23).to_int()
     // Positive NaN: 0x7f800000 | payload
     let bits = 0x7f800000 | (payload & 0x7fffff)
     return Float::reinterpret_from_int(bits)
@@ -247,7 +175,7 @@ fn parse_float32(s : String) -> Float raise WatError {
   if s.has_prefix("-nan:0x") {
     // Parse payload from -nan:0x...
     let payload_str = s[7:].to_owned()
-    let payload = parse_hex_int(payload_str)
+    let payload = nan_payload(payload_str, 23).to_int()
     // Negative NaN: 0xff800000 | payload = -8388608 | payload
     let bits = -8388608 | (payload & 0x7fffff)
     return Float::reinterpret_from_int(bits)
@@ -259,10 +187,18 @@ fn parse_float32(s : String) -> Float raise WatError {
     s.has_prefix("0X") ||
     s.has_prefix("-0X") ||
     s.has_prefix("+0X") {
-    return parse_hex_float32_precise(s)
+    let result = parse_hex_float32_precise(float_literal(s))
+    if (result.reinterpret_as_int() & 0x7fffffff) == 0x7f800000 {
+      raise InvalidNumber(s, default_loc())
+    }
+    return result
   }
   // Use precise decimal to float conversion to avoid double rounding
-  parse_decimal_float32_precise(s)
+  let result = parse_decimal_float32_precise(float_literal(s))
+  if (result.reinterpret_as_int() & 0x7fffffff) == 0x7f800000 {
+    raise InvalidNumber(s, default_loc())
+  }
+  result
 }
 
 ///|
@@ -1164,7 +1100,7 @@ fn parse_float64(s : String) -> Double raise WatError {
     // Parse payload from nan:0x...
     let payload_start = if s.has_prefix("+") { 7 } else { 6 }
     let payload_str = s[payload_start:].to_owned()
-    let payload = parse_hex_int64(payload_str)
+    let payload = nan_payload(payload_str, 52)
     // Positive NaN: 0x7ff0000000000000 | payload
     let bits = 0x7ff0000000000000L | (payload & 0xfffffffffffffL)
     return bits.reinterpret_as_double()
@@ -1172,7 +1108,7 @@ fn parse_float64(s : String) -> Double raise WatError {
   if s.has_prefix("-nan:0x") {
     // Parse payload from -nan:0x...
     let payload_str = s[7:].to_owned()
-    let payload = parse_hex_int64(payload_str)
+    let payload = nan_payload(payload_str, 52)
     // Negative NaN: 0xfff0000000000000 | payload
     let bits = 0xfff0000000000000L | (payload & 0xfffffffffffffL)
     return bits.reinterpret_as_double()
@@ -1184,11 +1120,21 @@ fn parse_float64(s : String) -> Double raise WatError {
     s.has_prefix("0X") ||
     s.has_prefix("-0X") ||
     s.has_prefix("+0X") {
-    return parse_hex_float64(s)
+    let result = parse_hex_float64(float_literal(s))
+    if (result.reinterpret_as_int64() & 0x7fffffffffffffffL) ==
+      0x7ff0000000000000L {
+      raise InvalidNumber(s, default_loc())
+    }
+    return result
   }
-  @string.parse_double(s) catch {
+  let result = @string.parse_double(float_literal(s)) catch {
     _ => raise InvalidNumber(s, default_loc())
   }
+  if (result.reinterpret_as_int64() & 0x7fffffffffffffffL) ==
+    0x7ff0000000000000L {
+    raise InvalidNumber(s, default_loc())
+  }
+  result
 }
 
 ///|

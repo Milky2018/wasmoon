@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse
 import re
 
-ROOT = Path(__file__).resolve().parents[2] / 'modules/wasmoon_jit/jit_ffi'
+ROOT = Path(__file__).resolve().parents[2] / 'modules/wasmoon_runtime/native/ffi'
 
 
 def generate(root=ROOT, stem='msvc_guest_bridges'):

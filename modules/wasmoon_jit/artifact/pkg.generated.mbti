@@ -4,12 +4,12 @@ package "Milky2018/wasmoon_jit/artifact"
 import {
   "Milky2018/vcode/code_object",
   "Milky2018/vcode/native_types",
-  "Milky2018/wasmoon_jit/context/layout",
+  "Milky2018/wasmoon_runtime/native/layout",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub const FORMAT_VERSION : Int = 11
+pub const FORMAT_VERSION : Int32 = 11
 
 pub fn decode(Bytes, limits? : DecodeLimits) -> Artifact raise ArtifactDecodeError
 
@@ -17,15 +17,15 @@ pub fn encode(Artifact) -> Bytes raise ArtifactEncodeError
 
 // Errors
 pub suberror ArtifactDecodeError {
-  ArtifactTooLarge(size~ : Int, limit~ : Int)
+  ArtifactTooLarge(size~ : Int32, limit~ : Int32)
   BadMagic
-  UnsupportedVersion(version~ : Int)
-  Truncated(field~ : String, offset~ : Int, needed~ : Int, remaining~ : Int)
-  InvalidTag(field~ : String, tag~ : Int)
+  UnsupportedVersion(version~ : Int32)
+  Truncated(field~ : String, offset~ : Int32, needed~ : Int32, remaining~ : Int32)
+  InvalidTag(field~ : String, tag~ : Int32)
   InvalidValue(field~ : String, message~ : String)
   InvalidUtf8(field~ : String)
-  LimitExceeded(field~ : String, count~ : Int, limit~ : Int)
-  TrailingBytes(count~ : Int)
+  LimitExceeded(field~ : String, count~ : Int32, limit~ : Int32)
+  TrailingBytes(count~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn ArtifactDecodeError::equal(Self, Self) -> Bool
 pub fn ArtifactDecodeError::not_equal(Self, Self) -> Bool
@@ -65,10 +65,10 @@ pub fn CodeModel::not_equal(Self, Self) -> Bool
 pub fn CodeModel::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CompatibilityManifest {
-  format_version : Int
+  format_version : Int32
   target : TargetSpec
   required_cpu_features : Array[CpuFeature]
-  jit_abi_version : Int
+  jit_abi_version : Int32
   codegen_revision : String
   module_identity : ModuleIdentity
   policy : CompilationPolicy
@@ -98,20 +98,20 @@ pub fn CpuFeature::not_equal(Self, Self) -> Bool
 pub fn CpuFeature::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DecodeLimits {
-  max_artifact_bytes : Int
-  max_imports : Int
-  max_functions : Int
-  max_cpu_features : Int
-  max_string_bytes : Int
-  max_signature_values : Int
-  max_code_bytes_per_function : Int
-  max_total_code_bytes : Int
-  max_relocations_per_function : Int
-  max_sources_per_function : Int
-  max_traps_per_function : Int
-  max_safepoints_per_function : Int
-  max_unwind_directives_per_function : Int
-  max_roots_per_safepoint : Int
+  max_artifact_bytes : Int32
+  max_imports : Int32
+  max_functions : Int32
+  max_cpu_features : Int32
+  max_string_bytes : Int32
+  max_signature_values : Int32
+  max_code_bytes_per_function : Int32
+  max_total_code_bytes : Int32
+  max_relocations_per_function : Int32
+  max_sources_per_function : Int32
+  max_traps_per_function : Int32
+  max_safepoints_per_function : Int32
+  max_unwind_directives_per_function : Int32
+  max_roots_per_safepoint : Int32
 } derive(Eq, @debug.Debug)
 pub fn DecodeLimits::default() -> Self
 pub fn DecodeLimits::equal(Self, Self) -> Bool
@@ -128,8 +128,8 @@ pub impl @debug.Debug for Digest
 
 pub(all) struct FunctionCode {
   identity : FunctionIdentity
-  entry_offset : Int
-  frame_size : Int
+  entry_offset : Int32
+  frame_size : Int32
   code : Array[Byte]
   relocations : Array[@code_object.Relocation]
   sources : Array[@code_object.SourceSite]
@@ -142,7 +142,7 @@ pub fn FunctionCode::not_equal(Self, Self) -> Bool
 pub fn FunctionCode::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FunctionIdentity {
-  function_index : Int
+  function_index : Int32
   symbol : @native_types.CodeSymbol
   signature : @native_types.Signature
 } derive(Eq, @debug.Debug)
@@ -151,7 +151,7 @@ pub fn FunctionIdentity::not_equal(Self, Self) -> Bool
 pub fn FunctionIdentity::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ImportIdentity {
-  function_index : Int
+  function_index : Int32
   module_name : String
   function_name : String
   symbol : @native_types.ExternalSymbol

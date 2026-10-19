@@ -38,10 +38,11 @@ def main():
     fixtures = ROOT / "modules" / "wasmoon" / "sanitizer_testsuite"
     for source in fixtures.glob("*_test.mbt"):
         shutil.copy2(source, PACKAGE / source.name)
-    bounds = ROOT / "modules/wasmoon_jit/host_io/wasi/bounds_test.mbt"
+    shutil.copy2(ROOT / "modules/wasmoon_runtime/runtime/portable_storage_test.mbt", PACKAGE)
+    bounds = ROOT / "modules/wasmoon_runtime/native/host_io/wasi/bounds_test.mbt"
     (PACKAGE / "native_bounds_test.mbt").write_text(
         bounds.read_text().replace("@wasi.", "@native_host."))
-    resolver = ROOT / "modules/wasmoon_jit/host_io/wasi/resolver_test.mbt"
+    resolver = ROOT / "modules/wasmoon_runtime/native/host_io/wasi/resolver_test.mbt"
     (PACKAGE / "resolver_test.mbt").write_text(
         resolver.read_text().replace("@wasi.", "@native_host."))
     shutil.copy2(ROOT / "modules/wasmoon_jit/native_handles_test.mbt", PACKAGE)
@@ -141,7 +142,7 @@ def main():
     include = Path(os.environ.get("MOON_HOME", Path.home() / ".moon")) / "include"
     run(["clang", "-pthread", "-fsanitize=address,undefined", "-fno-sanitize-recover=all",
          "-fno-omit-frame-pointer", "-I", str(include),
-         "-I", str(sources / "wasmoon_jit/host_io/wasi"),
+         "-I", str(sources / "wasmoon_runtime/native/ffi/host_io/wasi"),
          str(ROOT / "scripts/tests/native/resolver_lifecycle.c"),
          "-o", str(allocation_probe)], log=OUT / "allocation-build.log")
     run([str(allocation_probe)], log=OUT / "allocation.log")

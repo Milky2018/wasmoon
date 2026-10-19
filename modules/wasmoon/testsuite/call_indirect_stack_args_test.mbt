@@ -72,7 +72,7 @@ test "call_indirect: 10 integer args (4 stack args)" {
     #|  ;; Pack each argument into one byte of two i64 results:
     #|  ;; r0: byte0=p0 ... byte7=p7
     #|  ;; r1: byte0=p8, byte1=p9
-    #|  (func $pack (export "pack") (type $t) (result i64 i64)
+    #|  (func $pack (export "pack") (type $t)
     #|    (local.get 0) i64.extend_i32_u
     #|    (local.get 1) i64.extend_i32_u (i64.const 8)  i64.shl i64.or
     #|    (local.get 2) i64.extend_i32_u (i64.const 16) i64.shl i64.or

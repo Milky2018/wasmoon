@@ -329,6 +329,7 @@ fn Parser::parse_field_types(
       // Register field name if present (for the first field only)
       if field_name is Some(name) &&
         self.field_names.get(type_idx) is Some(names) {
+        check_new_name(names, name, self.loc())
         names.set(name, fields.length())
       }
       // Parse one or more storage types (abbreviated form)
@@ -534,6 +535,7 @@ fn Parser::parse_rec_group(
 fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
   let params : Array[@types.ValueType] = []
   let results : Array[@types.ValueType] = []
+  let mut annotation_phase = 0
 
   // Parse params
   while self.current.token == LParen {
@@ -541,6 +543,10 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
     self.advance()
     match self.current.token {
       Keyword("param") => {
+        if annotation_phase > 2 {
+          raise ParseError("Misplaced param annotation", self.loc())
+        }
+        annotation_phase = 2
         self.advance()
         // Optional name
         if self.current.token is Id(_) {
@@ -553,6 +559,7 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
         self.expect_rparen()
       }
       Keyword("result") => {
+        annotation_phase = 3
         self.advance()
         while self.current.token != RParen {
           results.push(self.parse_value_type())
@@ -606,7 +613,7 @@ fn Parser::parse_func_def(
         self.advance()
         match self.current.token {
           String_(s) => {
-            export_names.push(s)
+            export_names.push(decode_text(s))
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -619,14 +626,14 @@ fn Parser::parse_func_def(
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -641,7 +648,7 @@ fn Parser::parse_func_def(
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -660,19 +667,29 @@ fn Parser::parse_func_def(
         let mut type_idx = -1
         let inline_params : Array[@types.ValueType] = []
         let inline_results : Array[@types.ValueType] = []
+        let mut annotation_phase = 0
         while self.current.token == LParen {
           let saved2 = self.lexer.pos
           self.advance()
           match self.current.token {
             Keyword("type") => {
+              if annotation_phase > 0 {
+                raise ParseError("Misplaced type annotation", self.loc())
+              }
+              annotation_phase = 1
               self.advance()
               type_idx = self.parse_type_idx()
               self.expect_rparen()
             }
             Keyword("param") => {
+              if annotation_phase > 2 {
+                raise ParseError("Misplaced param annotation", self.loc())
+              }
+              annotation_phase = 2
               self.advance()
               // Optional name
               if self.current.token is Id(name) {
+                check_new_name(self.local_names, name, self.loc())
                 self.local_names.set(name, inline_params.length())
                 self.advance()
               }
@@ -682,6 +699,7 @@ fn Parser::parse_func_def(
               self.expect_rparen()
             }
             Keyword("result") => {
+              annotation_phase = 3
               self.advance()
               while self.current.token != RParen {
                 inline_results.push(self.parse_value_type())
@@ -696,6 +714,14 @@ fn Parser::parse_func_def(
           }
         }
 
+        if type_idx >= 0 {
+          self.check_inline_type(
+            type_idx,
+            inline_params,
+            inline_results,
+            annotation_phase >= 2,
+          )
+        }
         // Create type if needed
         if type_idx < 0 {
           let ft : @types.FuncType = {
@@ -782,6 +808,7 @@ fn Parser::parse_func_def(
   let mut type_idx = -1
   let inline_params : Array[@types.ValueType] = []
   let inline_results : Array[@types.ValueType] = []
+  let mut annotation_phase = 0
 
   // Parse (type $idx) or inline params/results
   while self.current.token == LParen {
@@ -789,15 +816,24 @@ fn Parser::parse_func_def(
     self.advance()
     match self.current.token {
       Keyword("type") => {
+        if annotation_phase > 0 {
+          raise ParseError("Misplaced type annotation", self.loc())
+        }
+        annotation_phase = 1
         self.advance()
         type_idx = self.parse_type_idx()
         self.expect_rparen()
       }
       Keyword("param") => {
+        if annotation_phase > 2 {
+          raise ParseError("Misplaced param annotation", self.loc())
+        }
+        annotation_phase = 2
         self.advance()
         // Optional name
         match self.current.token {
           Id(name) => {
+            check_new_name(self.local_names, name, self.loc())
             self.local_names.set(name, inline_params.length())
             self.advance()
           }
@@ -809,6 +845,7 @@ fn Parser::parse_func_def(
         self.expect_rparen()
       }
       Keyword("result") => {
+        annotation_phase = 3
         self.advance()
         while self.current.token != RParen {
           inline_results.push(self.parse_value_type())
@@ -823,6 +860,14 @@ fn Parser::parse_func_def(
     }
   }
 
+  if type_idx >= 0 {
+    self.check_inline_type(
+      type_idx,
+      inline_params,
+      inline_results,
+      annotation_phase >= 2,
+    )
+  }
   // If no type reference, create inline type
   if type_idx < 0 {
     let ft : @types.FuncType = {
@@ -896,6 +941,7 @@ fn Parser::parse_func_def(
         // Optional name
         if self.current.token is Id(name) {
           let local_idx = param_count + locals.length()
+          check_new_name(self.local_names, name, self.loc())
           self.local_names.set(name, local_idx)
           self.advance()
         }

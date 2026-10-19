@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/wast/spectest"
+
+import {
+  "Milky2018/wasmoon_runtime/runtime",
+}
+
+// Values
+pub fn create_spectest_module(@runtime.Store, print_char~ : (Int32) -> Unit) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

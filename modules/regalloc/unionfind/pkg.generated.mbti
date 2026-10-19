@@ -7,15 +7,15 @@ package "Milky2018/regalloc/unionfind"
 
 // Types and methods
 type UnionFind
-pub fn UnionFind::UnionFind(Int) -> Self
-pub fn UnionFind::find(Self, Int) -> Int
-pub fn UnionFind::get_all_sets(Self) -> Array[Array[Int]]
-pub fn UnionFind::get_set(Self, Int) -> Array[Int]
-pub fn UnionFind::length(Self) -> Int
-pub fn UnionFind::num_sets(Self) -> Int
-pub fn UnionFind::same_set(Self, Int, Int) -> Bool
-pub fn UnionFind::union(Self, Int, Int) -> Bool
-pub fn UnionFind::union_into(Self, Int, Int) -> Bool
+pub fn UnionFind::UnionFind(Int32) -> Self
+pub fn UnionFind::find(Self, Int32) -> Int32
+pub fn UnionFind::get_all_sets(Self) -> Array[Array[Int32]]
+pub fn UnionFind::get_set(Self, Int32) -> Array[Int32]
+pub fn UnionFind::length(Self) -> Int32
+pub fn UnionFind::num_sets(Self) -> Int32
+pub fn UnionFind::same_set(Self, Int32, Int32) -> Bool
+pub fn UnionFind::union(Self, Int32, Int32) -> Bool
+pub fn UnionFind::union_into(Self, Int32, Int32) -> Bool
 
 // Type aliases
 

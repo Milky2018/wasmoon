@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/control"
+
+import {
+  "Milky2018/wasmoon_runtime/clock",
+  "moonbitlang/core/ref",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct InvocationControl {
+  deadline : (@clock.Instant, Double)?
+  cancel : (() -> Bool)?
+  mut cancelled : Bool
+  mut timed_out : Bool
+  exhausted : @ref.Ref[Bool]
+  // private fields
+}
+pub fn InvocationControl::expired(Self) -> Bool
+pub fn InvocationControl::new(Int32?, (() -> Bool)?, safepoints? : Int64?) -> Self?
+pub fn InvocationControl::poll(Self) -> Bool
+pub fn InvocationControl::preflight(Self) -> Bool
+
+// Type aliases
+
+// Traits

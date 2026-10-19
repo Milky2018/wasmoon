@@ -1,0 +1,200 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/native/bridge"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_runtime/native/callable",
+  "Milky2018/wasmoon_runtime/native/execution",
+  "Milky2018/wasmoon_runtime/native/ffi",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
+
+pub fn alloc_guarded_memory_desc(Int32, Int32?, is_shared? : Bool) -> @ffi.MemoryDescriptor
+
+pub fn alloc_memory(Int64) -> Int64
+
+pub fn alloc_memory_desc(Int64, Int64?, is_memory64? : Bool, page_size_log2? : Int32, is_shared? : Bool) -> @ffi.MemoryDescriptor
+
+pub fn atomic_fence() -> Unit
+
+pub fn atomic_notify(@ffi.MemoryDescriptor, Int64, Int32) -> Int32
+
+pub fn atomic_wait_begin(@ffi.MemoryDescriptor, Int64, Int32, Int64, Int64) -> NativeAtomicWait?
+
+pub fn borrow_table(@ffi.NativeTableHandle, Int64?) -> JITTable
+
+pub fn cooperative_idle() -> Unit
+
+pub fn decode_externref(Int64) -> Int32?
+
+pub fn decode_funcref_idx(Int64) -> Int32?
+
+pub fn decode_gc_heap_ref(Int64) -> Int32?
+
+pub fn decode_heap_ref(Int64) -> Int32
+
+pub fn encode_exception_ref(Int32) -> Int64
+
+pub fn encode_externref(Int32) -> Int64
+
+pub fn encode_funcref_idx(Int32) -> Int64
+
+pub fn encode_gc_heap_ref(Int32) -> Int64
+
+pub fn encode_null_ref() -> Int64
+
+pub fn free_memory(Int64) -> Unit
+
+pub fn gc_debug_set_fail_alloc(Int32, fail_every? : Int32) -> Unit
+
+pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
+
+pub fn is_exception_ref(Int64) -> Bool
+
+pub fn is_funcref_ptr(Int64) -> Bool
+
+pub fn is_null_ref(Int64) -> Bool
+
+pub fn memory_atomic_compare_exchange(@ffi.MemoryDescriptor, Int64, Int32, Int64, Int64) -> Int64
+
+pub fn memory_atomic_load(@ffi.MemoryDescriptor, Int64, Int32) -> Int64
+
+pub fn memory_atomic_rmw(@ffi.MemoryDescriptor, Int64, Int32, Int32, Int64) -> Int64
+
+pub fn memory_atomic_store(@ffi.MemoryDescriptor, Int64, Int32, Int64) -> Unit
+
+pub fn memory_descriptor_copy(@ffi.MemoryDescriptor, Int64, @ffi.MemoryDescriptor, Int64, Int64) -> Int32
+
+pub fn memory_descriptor_fill(@ffi.MemoryDescriptor, Int64, Int32, Int32) -> Int32
+
+pub fn memory_descriptor_fill64(@ffi.MemoryDescriptor, Int64, Int32, Int64) -> Int32
+
+pub fn memory_descriptor_grow(@ffi.MemoryDescriptor, Int32, Int32) -> Int32
+
+pub fn memory_descriptor_grow64(@ffi.MemoryDescriptor, Int64) -> Int64
+
+pub fn memory_descriptor_length(@ffi.MemoryDescriptor) -> Int64
+
+pub fn memory_descriptor_move(@ffi.MemoryDescriptor, Int64, Int64, Int32) -> Int32
+
+pub fn memory_descriptor_read(@ffi.MemoryDescriptor, Int64, FixedArray[Byte], Int32) -> Int32
+
+pub fn memory_descriptor_write(@ffi.MemoryDescriptor, Int64, FixedArray[Byte], Int32) -> Int32
+
+pub fn memory_descriptor_write_bytes(@ffi.MemoryDescriptor, Int64, Bytes, Int32) -> Int32
+
+pub fn slot_to_value(GcSlot, @types.ValueType) -> @types.Value
+
+pub fn supported() -> Bool
+
+pub fn tag_funcref_ptr(Int64) -> Int64
+
+pub fn untag_funcref_ptr(Int64) -> Int64
+
+pub fn value_to_i64(@types.Value) -> Int64
+
+pub fn value_to_slot(@types.Value) -> GcSlot
+
+// Errors
+pub(all) suberror CHeapError {
+  OutOfBoundsArrayAccess
+  NullReference
+  OutOfMemory
+}
+
+// Types and methods
+pub struct CHeap {
+  // private fields
+} derive(@debug.Debug)
+pub fn CHeap::CHeap(capacity? : Int32) -> Self raise CHeapError
+pub fn CHeap::alloc_array(Self, Int32, Int32, @types.Value) -> Int32 raise CHeapError
+pub fn CHeap::alloc_array_from_values(Self, Int32, Array[@types.Value]) -> Int32 raise CHeapError
+pub fn CHeap::alloc_struct(Self, Int32, Array[@types.Value]) -> Int32 raise CHeapError
+pub fn CHeap::array_copy(Self, Int32, Int32, Int32, Int32, Int32) -> Unit raise CHeapError
+pub fn CHeap::array_fill(Self, Int32, Int32, @types.Value, Int32) -> Unit raise CHeapError
+pub fn CHeap::array_get(Self, Int32, Int32, @types.ValueType) -> @types.Value raise CHeapError
+pub fn CHeap::array_len(Self, Int32) -> Int32
+pub fn CHeap::array_set(Self, Int32, Int32, @types.Value) -> Unit raise CHeapError
+pub fn CHeap::bind_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
+pub fn CHeap::clear_root_visitor(Self) -> Unit
+pub fn CHeap::collect(Self, Array[@types.Value]) -> Int32
+pub fn CHeap::collect_raw(Self, Array[Int64]) -> Int32
+pub fn CHeap::free(Self) -> Unit
+pub fn CHeap::get_barrier_writes(Self) -> Int32
+pub fn CHeap::get_base(Self) -> Int64
+pub fn CHeap::get_capacity(Self) -> Int64
+pub fn CHeap::get_kind(Self, Int32) -> Int32
+pub fn CHeap::get_object_count(Self) -> Int32
+pub fn CHeap::get_offset(Self, Int32) -> Int32
+pub fn CHeap::get_ptr(Self) -> @ffi.GCHeapHandle
+pub fn CHeap::get_size(Self) -> Int64
+pub fn CHeap::get_total_allocations(Self) -> Int32
+pub fn CHeap::get_total_collections(Self) -> Int32
+pub fn CHeap::get_type_idx(Self, Int32) -> Int32
+pub fn CHeap::get_usage_ratio(Self) -> Double
+pub fn CHeap::is_array(Self, Int32) -> Bool
+pub fn CHeap::is_struct(Self, Int32) -> Bool
+pub fn CHeap::is_valid(Self, Int32) -> Bool
+pub fn CHeap::make_allocation_rollback(Self, () -> Array[@types.Value]) -> () -> Unit
+pub fn CHeap::reference_candidates(Self, Int32) -> FixedArray[Int64]
+pub fn CHeap::runtime_type(Self, Int32) -> Int32
+pub fn CHeap::set_runtime_type(Self, Int32, Int32) -> Unit
+pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
+pub fn CHeap::struct_get(Self, Int32, Int32, @types.ValueType) -> @types.Value
+pub fn CHeap::struct_set(Self, Int32, Int32, @types.Value) -> Unit
+pub fn CHeap::to_repr(Self) -> @debug.Repr
+pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
+
+pub struct GcSlot {
+  lo : Int64
+  hi : Int64
+} derive(Eq, @debug.Debug)
+pub fn GcSlot::equal(Self, Self) -> Bool
+pub fn GcSlot::not_equal(Self, Self) -> Bool
+pub fn GcSlot::to_repr(Self) -> @debug.Repr
+
+type JITTable derive(@debug.Debug)
+pub fn JITTable::get_entry_type(Self, Int32) -> Int32
+pub fn JITTable::get_entry_value(Self, Int32) -> Int64
+pub fn JITTable::get_max(Self) -> Int64?
+pub fn JITTable::get_size(Self) -> Int32
+pub fn JITTable::raw_ptr(Self) -> @ffi.NativeTableHandle
+pub fn JITTable::refresh_layout(Self, @ffi.NativeTableHandle, Int32) -> Unit
+pub fn JITTable::set(Self, Int32, Int64, Int32) -> Unit
+pub fn JITTable::to_repr(Self) -> @debug.Repr
+
+type JITTableOwner derive(@debug.Debug)
+pub fn JITTableOwner::close(Self) -> Unit
+pub fn JITTableOwner::table(Self) -> JITTable
+pub fn JITTableOwner::to_repr(Self) -> @debug.Repr
+pub fn JITTableOwner::try_alloc(Int32, Int64?) -> Self?
+
+pub struct MemoryInfo {
+  ptr : @ffi.MemoryDescriptor
+  size : Int64
+  max_pages : Int32?
+}
+pub fn MemoryInfo::MemoryInfo(@ffi.MemoryDescriptor, Int64, Int32?) -> Self
+
+pub type NativeAtomicWait
+pub fn NativeAtomicWait::cancel(Self) -> Unit
+pub fn NativeAtomicWait::pause(Self) -> Unit
+pub fn NativeAtomicWait::poll(Self) -> Int32
+
+// Type aliases
+pub using @ffi {type GCHeapHandle}
+
+pub using @ffi {type MemoryDescriptor}
+
+pub using @ffi {type NativeAllocationError}
+
+pub using @callable {type NativeCallableRegistry}
+
+pub using @execution {type NativeExecutionState}
+
+pub using @ffi {type NativeTableHandle}
+
+// Traits

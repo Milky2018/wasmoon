@@ -3,3 +3,5 @@ import {
   "moonbitlang/async/external_loop_integration",
   "Milky2018/wasmoon_jit/host_io/reactor",
 }
+
+supported_targets = "+native"

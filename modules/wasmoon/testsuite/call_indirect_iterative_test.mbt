@@ -10,7 +10,7 @@ test "call_indirect: iterative call with varying parameters" {
     #|  (type $t (func (param i32 i32 i32 i32 i64 i32 i64 i32 i32 i32) (result i32)))
     #|
     #|  ;; Simple function that returns sum of all params (mod 256 for simplicity)
-    #|  (func $sum (export "sum") (type $t) (result i32)
+    #|  (func $sum (export "sum") (type $t)
     #|    (local.get 0)
     #|    (local.get 1) i32.add
     #|    (local.get 2) i32.add
@@ -86,7 +86,7 @@ test "call_indirect: type 11 (9 params, 3 stack args)" {
     #|  ;; Same type as aead_aegis128l type 11: 9 int params
     #|  (type $t (func (param i32 i32 i32 i64 i32 i32 i64 i32 i32) (result i32)))
     #|
-    #|  (func $sum (export "sum") (type $t) (result i32)
+    #|  (func $sum (export "sum") (type $t)
     #|    (local.get 0)
     #|    (local.get 1) i32.add
     #|    (local.get 2) i32.add

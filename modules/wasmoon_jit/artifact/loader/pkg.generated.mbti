@@ -5,7 +5,7 @@ import {
   "Milky2018/vcode/code_object",
   "Milky2018/vcode/native_types",
   "Milky2018/wasmoon_jit/artifact",
-  "Milky2018/wasmoon_jit/context/layout",
+  "Milky2018/wasmoon_runtime/native/layout",
   "moonbitlang/core/debug",
 }
 
@@ -17,15 +17,15 @@ pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtif
 // Errors
 pub suberror ArtifactIncompatible {
   TargetMismatch(expected~ : @artifact.TargetSpec, actual~ : @artifact.TargetSpec)
-  InvalidFunctionIndex(index~ : Int)
+  InvalidFunctionIndex(index~ : Int32)
   ContextLayoutMismatch
   MissingCpuFeature(name~ : String)
   DuplicateCpuFeature(name~ : String)
-  JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
+  JitAbiVersionMismatch(expected~ : Int32, actual~ : Int32)
   CodegenRevisionMismatch(expected~ : String, actual~ : String)
   ModuleIdentityMismatch(expected~ : @artifact.ModuleIdentity, actual~ : @artifact.ModuleIdentity)
   CompilationPolicyMismatch(expected~ : @artifact.CompilationPolicy, actual~ : @artifact.CompilationPolicy)
-  DuplicateFunctionIndex(index~ : Int)
+  DuplicateFunctionIndex(index~ : Int32)
   DuplicateSymbol(name~ : String)
   UnknownSymbol(kind~ : String, name~ : String)
 } derive(Eq, @debug.Debug)
@@ -48,7 +48,7 @@ pub fn ArtifactLoadError::to_repr(Self) -> @debug.Repr
 pub(all) struct ArtifactCompatibility {
   target : @artifact.TargetSpec
   available_cpu_features : Array[@artifact.CpuFeature]
-  jit_abi_version : Int
+  jit_abi_version : Int32
   codegen_revision : String
   module_identity : @artifact.ModuleIdentity
   context_shape : @layout.ContextShape

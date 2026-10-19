@@ -556,3 +556,19 @@ test "gc: repeated setup clears an omitted canonical mapping" {
     content="0",
   )
 }
+
+///|
+/// Allocate a new struct
+/// Returns gc_ref (1-based index), or 0 on failure
+///
+/// `fields` is a flat run of [lo, hi] word pairs, two entries per field. The
+/// narrow `wasmoon_gc_heap_alloc_struct` next to it in C is for JIT-emitted
+/// code, which only ever produces runtime words; MoonBit always goes wide so
+/// that a v128 field never has to be squeezed into one word.
+#borrow(fields, heap)
+extern "c" fn c_gc_heap_alloc_struct_wide(
+  heap : GCHeapHandle,
+  type_idx : Int32,
+  fields : FixedArray[Int64],
+  num_fields : Int32,
+) -> Int32 = "wasmoon_gc_heap_alloc_struct_wide"

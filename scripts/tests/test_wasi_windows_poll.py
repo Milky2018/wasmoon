@@ -28,9 +28,9 @@ class WindowsPollTests(unittest.TestCase):
         library = directory / "poll.dll"
         subprocess.run([
             os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/DWASMOON_POLL_TESTING", "/I" + str(directory),
-            str(ROOT / "modules/wasmoon_jit/host_io/wasi/poll_native.c"),
-            str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
-            str(ROOT / "modules/wasmoon_jit/host_io/windows_input.c"),
+            str(ROOT / "modules/wasmoon_runtime/native/ffi/host_io/wasi/poll_native.c"),
+            str(ROOT / "modules/wasmoon_runtime/native/ffi/host_io/windows_io.c"),
+            str(ROOT / "modules/wasmoon_runtime/native/ffi/host_io/windows_input.c"),
             "/link", "/EXPORT:wasmoon_windows_socket_adopt",
             "/EXPORT:wasmoon_windows_close",
             "/EXPORT:wasmoon_windows_notification_pipe",

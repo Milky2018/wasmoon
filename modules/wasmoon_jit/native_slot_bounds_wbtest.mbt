@@ -18,7 +18,7 @@ test "native table slots retain byte offsets above signed i32" {
   guard pointer.size() == 0x08000001 else {
     fail("could not allocate native table fixture")
   }
-  let table : JITTable = { table_ptr: pointer, max: None, }
+  let table = @runtime_bridge.borrow_table(pointer, None)
   table.set(0, 11L, 22)
   table.set(0x08000000, 33L, 44)
   inspect(table.get_entry_value(0), content="11")

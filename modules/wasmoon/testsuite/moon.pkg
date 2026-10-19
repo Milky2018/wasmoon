@@ -41,3 +41,5 @@ import {
   "Milky2018/wasmoon_jit/host_io",
   "moonbitlang/core/debug",
 } for "wbtest"
+
+supported_targets = "+native"

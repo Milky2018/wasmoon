@@ -41,42 +41,42 @@ fn Parser::parse_v128_instruction(
       parse_mem_arg(self, fn(m, a, o) { V128Load64Zero(m, a, o) })
     "v128.load8_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
-      let lane = self.parse_u32()
+      let lane = self.parse_lane_index()
       V128Load8Lane(memidx, align, offset, lane)
     }
     "v128.load16_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
-      let lane = self.parse_u32()
+      let lane = self.parse_lane_index()
       V128Load16Lane(memidx, align, offset, lane)
     }
     "v128.load32_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
-      let lane = self.parse_u32()
+      let lane = self.parse_lane_index()
       V128Load32Lane(memidx, align, offset, lane)
     }
     "v128.load64_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
-      let lane = self.parse_u32()
+      let lane = self.parse_lane_index()
       V128Load64Lane(memidx, align, offset, lane)
     }
     "v128.store8_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
-      let lane = self.parse_u32()
+      let lane = self.parse_lane_index()
       V128Store8Lane(memidx, align, offset, lane)
     }
     "v128.store16_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
-      let lane = self.parse_u32()
+      let lane = self.parse_lane_index()
       V128Store16Lane(memidx, align, offset, lane)
     }
     "v128.store32_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
-      let lane = self.parse_u32()
+      let lane = self.parse_lane_index()
       V128Store32Lane(memidx, align, offset, lane)
     }
     "v128.store64_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
-      let lane = self.parse_u32()
+      let lane = self.parse_lane_index()
       V128Store64Lane(memidx, align, offset, lane)
     }
 
@@ -104,7 +104,7 @@ fn Parser::parse_i8x16_instruction(
       // Parse 16 lane indices
       let lanes : FixedArray[Int32] = FixedArray::make(16, 0)
       for i in 0..<16 {
-        lanes[i] = self.parse_u32()
+        lanes[i] = self.parse_lane_index()
       }
       I8x16Shuffle(ReadOnlyArray::from_array(lanes))
     }
@@ -114,11 +114,11 @@ fn Parser::parse_i8x16_instruction(
     "i8x16.splat" => I8x16Splat
 
     // SIMD extract lane
-    "i8x16.extract_lane_s" => I8x16ExtractLaneS(self.parse_u32())
-    "i8x16.extract_lane_u" => I8x16ExtractLaneU(self.parse_u32())
+    "i8x16.extract_lane_s" => I8x16ExtractLaneS(self.parse_lane_index())
+    "i8x16.extract_lane_u" => I8x16ExtractLaneU(self.parse_lane_index())
 
     // SIMD replace lane
-    "i8x16.replace_lane" => I8x16ReplaceLane(self.parse_u32())
+    "i8x16.replace_lane" => I8x16ReplaceLane(self.parse_lane_index())
 
     // SIMD comparisons - i8x16
     "i8x16.eq" => I8x16Eq
@@ -169,9 +169,9 @@ fn Parser::parse_i16x8_instruction(
 ) -> @types.Instruction raise WatError {
   match kw {
     "i16x8.splat" => I16x8Splat
-    "i16x8.extract_lane_s" => I16x8ExtractLaneS(self.parse_u32())
-    "i16x8.extract_lane_u" => I16x8ExtractLaneU(self.parse_u32())
-    "i16x8.replace_lane" => I16x8ReplaceLane(self.parse_u32())
+    "i16x8.extract_lane_s" => I16x8ExtractLaneS(self.parse_lane_index())
+    "i16x8.extract_lane_u" => I16x8ExtractLaneU(self.parse_lane_index())
+    "i16x8.replace_lane" => I16x8ReplaceLane(self.parse_lane_index())
 
     // SIMD comparisons - i16x8
     "i16x8.eq" => I16x8Eq
@@ -232,8 +232,8 @@ fn Parser::parse_i32x4_instruction(
 ) -> @types.Instruction raise WatError {
   match kw {
     "i32x4.splat" => I32x4Splat
-    "i32x4.extract_lane" => I32x4ExtractLane(self.parse_u32())
-    "i32x4.replace_lane" => I32x4ReplaceLane(self.parse_u32())
+    "i32x4.extract_lane" => I32x4ExtractLane(self.parse_lane_index())
+    "i32x4.replace_lane" => I32x4ReplaceLane(self.parse_lane_index())
 
     // SIMD comparisons - i32x4
     "i32x4.eq" => I32x4Eq
@@ -294,8 +294,8 @@ fn Parser::parse_i64x2_instruction(
 ) -> @types.Instruction raise WatError {
   match kw {
     "i64x2.splat" => I64x2Splat
-    "i64x2.extract_lane" => I64x2ExtractLane(self.parse_u32())
-    "i64x2.replace_lane" => I64x2ReplaceLane(self.parse_u32())
+    "i64x2.extract_lane" => I64x2ExtractLane(self.parse_lane_index())
+    "i64x2.replace_lane" => I64x2ReplaceLane(self.parse_lane_index())
 
     // SIMD comparisons - i64x2
     "i64x2.eq" => I64x2Eq
@@ -336,8 +336,8 @@ fn Parser::parse_f32x4_instruction(
 ) -> @types.Instruction raise WatError {
   match kw {
     "f32x4.splat" => F32x4Splat
-    "f32x4.extract_lane" => F32x4ExtractLane(self.parse_u32())
-    "f32x4.replace_lane" => F32x4ReplaceLane(self.parse_u32())
+    "f32x4.extract_lane" => F32x4ExtractLane(self.parse_lane_index())
+    "f32x4.replace_lane" => F32x4ReplaceLane(self.parse_lane_index())
 
     // SIMD comparisons - f32x4
     "f32x4.eq" => F32x4Eq
@@ -381,8 +381,8 @@ fn Parser::parse_f64x2_instruction(
 ) -> @types.Instruction raise WatError {
   match kw {
     "f64x2.splat" => F64x2Splat
-    "f64x2.extract_lane" => F64x2ExtractLane(self.parse_u32())
-    "f64x2.replace_lane" => F64x2ReplaceLane(self.parse_u32())
+    "f64x2.extract_lane" => F64x2ExtractLane(self.parse_lane_index())
+    "f64x2.replace_lane" => F64x2ReplaceLane(self.parse_lane_index())
 
     // SIMD comparisons - f64x2
     "f64x2.eq" => F64x2Eq

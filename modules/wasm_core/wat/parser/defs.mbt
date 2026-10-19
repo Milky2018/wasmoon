@@ -23,14 +23,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -45,7 +45,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -116,7 +116,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               match self.current.token {
                 String_(s) => {
                   self.advance()
-                  s
+                  decode_text(s)
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
               }
@@ -137,7 +137,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -150,14 +150,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               let mod_name = match self.current.token {
                 String_(s) => {
                   self.advance()
-                  s
+                  decode_text(s)
                 }
                 _ => raise UnexpectedToken("expected module name", self.loc())
               }
               let import_name = match self.current.token {
                 String_(s) => {
                   self.advance()
-                  s
+                  decode_text(s)
                 }
                 _ => raise UnexpectedToken("expected import name", self.loc())
               }
@@ -420,14 +420,14 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -442,7 +442,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -517,7 +517,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         self.advance()
         match self.current.token {
           String_(s) => {
-            export_names.push(s)
+            export_names.push(decode_text(s))
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -530,14 +530,14 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -552,7 +552,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -675,7 +675,7 @@ fn Parser::parse_table_def(
         self.advance()
         match self.current.token {
           String_(s) => {
-            export_names.push(s)
+            export_names.push(decode_text(s))
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -709,14 +709,14 @@ fn Parser::parse_table_def(
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -727,7 +727,7 @@ fn Parser::parse_table_def(
           self.expect_keyword("export")
           match self.current.token {
             String_(name) => {
-              export_names.push(name)
+              export_names.push(decode_text(name))
               self.advance()
             }
             _ => raise UnexpectedToken("expected export name", self.loc())
@@ -768,6 +768,7 @@ fn Parser::parse_table_def(
           name: import_name,
           desc: Table({ elem_type, limits: { min, max, }, is_table64, }),
         }
+        self.check_import_order(mod_)
         mod_.imports.push(imp)
         return (None, export_names, None, table_name)
       }
@@ -1140,7 +1141,7 @@ fn Parser::parse_export_def(
   let name = match self.current.token {
     String_(s) => {
       self.advance()
-      s
+      decode_text(s)
     }
     _ => raise UnexpectedToken("expected export name", self.loc())
   }
@@ -1210,14 +1211,14 @@ fn Parser::parse_import_def(
   let mod_name = match self.current.token {
     String_(s) => {
       self.advance()
-      s
+      decode_text(s)
     }
     _ => raise UnexpectedToken("expected module name", self.loc())
   }
   let name = match self.current.token {
     String_(s) => {
       self.advance()
-      s
+      decode_text(s)
     }
     _ => raise UnexpectedToken("expected import name", self.loc())
   }
@@ -1825,7 +1826,7 @@ fn Parser::parse_tag_def(
         self.advance()
         match self.current.token {
           String_(s) => {
-            export_names.push(s)
+            export_names.push(decode_text(s))
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -1838,14 +1839,14 @@ fn Parser::parse_tag_def(
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
