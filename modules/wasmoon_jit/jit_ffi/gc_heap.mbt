@@ -18,33 +18,6 @@ pub extern "c" fn GCHeapHandle::null() -> GCHeapHandle = "wasmoon_gc_heap_empty"
 pub extern "c" fn GCHeapHandle::is_null(self : GCHeapHandle) -> Bool = "wasmoon_gc_heap_is_empty"
 
 ///|
-#borrow(self, visitor)
-extern "c" fn GCHeapHandle::bind_root_visitor_raw(
-  self : GCHeapHandle,
-  trampoline : FuncRef[
-    ((Int32, FixedArray[Int64]) -> FixedArray[Int64], Int32, FixedArray[Int64]) -> FixedArray[
-      Int64,
-    ],
-  ],
-  visitor : (Int32, FixedArray[Int64]) -> FixedArray[Int64],
-) -> Unit = "wasmoon_gc_heap_bind_root_visitor"
-
-///|
-pub fn GCHeapHandle::bind_root_visitor(
-  self : GCHeapHandle,
-  visitor : (Int32, FixedArray[Int64]) -> FixedArray[Int64],
-) -> Unit {
-  self.bind_root_visitor_raw(
-    fn(callback, phase, roots) { callback(phase, roots) },
-    visitor,
-  )
-}
-
-///|
-#borrow(self)
-pub extern "c" fn GCHeapHandle::clear_root_visitor(self : GCHeapHandle) -> Unit = "wasmoon_gc_heap_clear_root_visitor"
-
-///|
 #borrow(self)
 pub extern "c" fn GCHeapHandle::reference_candidates(
   self : GCHeapHandle,
@@ -78,9 +51,12 @@ extern "c" fn AllocationRequest::collect(self : AllocationRequest) -> Int32 = "w
 extern "c" fn AllocationRequest::denial(self : AllocationRequest) -> Int32 = "wasmoon_gc_allocation_denial"
 
 ///|
+#borrow(state)
 extern "c" fn allocate_heap(
   capacity : Int64,
   policy : FuncRef[(AllocationRequest, Int32) -> Int32],
+  state : CollectionState,
+  collection : FuncRef[(CollectionState, CollectionRequest, Bool) -> Int32],
 ) -> GCHeapHandle = "wasmoon_gc_heap_new"
 
 ///|
@@ -110,5 +86,10 @@ fn allocate(request : AllocationRequest, wide : Int32) -> Int32 {
 ///|
 /// Create a managed heap with the closed native allocation policy installed.
 pub fn GCHeapHandle::new(capacity : Int64) -> GCHeapHandle {
-  allocate_heap(capacity, fn(request, wide) { allocate(request, wide) })
+  allocate_heap(
+    capacity,
+    fn(request, wide) { allocate(request, wide) },
+    { visitor: None, collecting: false, },
+    fn(state, request, rollback) { state.collect(request, rollback) },
+  )
 }

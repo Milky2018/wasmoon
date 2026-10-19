@@ -1,0 +1,18 @@
+libtool: warning: 'windows_input.o' has no symbols
+libtool: warning: 'windows_fs.o' has no symbols
+libtool: warning: 'trampoline_call_x86_64.o' has no symbols
+libtool: warning: 'windows_context_x86_64.o' has no symbols
+libtool: warning: 'msvc_guest_bridges.o' has no symbols
+libtool: warning: 'stack_switch_x86_64.o' has no symbols
+libtool: warning: 'fiber_register_probe_x86_64.o' has no symbols
+libtool: warning: 'test_guest_bridges.o' has no symbols
+[Milky2018/wasmoon_jit] test gc_collection_test.mbt:2 ("collection finishes the captured visitor after it clears its binding") failed: gc_collection_test.mbt:21:5-21:30@Milky2018/wasmoon_jit FAILED: `[0] != [0, 1]`
+diff:
+[0, +1]
+[Milky2018/wasmoon_jit] test gc_collection_test.mbt:28 ("collection aborts the captured visitor before using its replacement") failed: gc_collection_test.mbt:53:5-53:32@Milky2018/wasmoon_jit FAILED: `[0] != [0, 2]`
+diff:
+[0, +2]
+[Milky2018/wasmoon_jit] test gc_collection_test.mbt:64 ("collection rejects same-heap reentry without touching the outer roots") failed: gc_collection_test.mbt:80:3-80:28@Milky2018/wasmoon_jit FAILED: `1 != -1`
+diff:
+-1 +-1
+Total tests: 3, passed: 0, failed: 3.

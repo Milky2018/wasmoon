@@ -49,7 +49,7 @@ extern "C" {
 
 struct native_exception_arena;
 typedef int32_t (*GcAllocationPolicy)(void *, int32_t);
-typedef int64_t *(*GcRootVisitor)(void *, int32_t, int64_t *);
+typedef int32_t (*GcCollectionPolicy)(void *, void *, int32_t);
 
 /**
  * GC Object Header (16 bytes, aligned)
@@ -126,15 +126,17 @@ typedef struct GcHeap {
     // continuations that share this Store heap.
     void *parked_jit_roots_head;
     int32_t* runtime_types;     // Store type identity, -1 for unbound objects
-    GcRootVisitor root_visitor;
-    void *root_visitor_data;    // Retained MoonBit closure; cleared before Store close
+    GcCollectionPolicy collection_policy;
+    void *collection_state;    // RC-retained MoonBit coordinator, no heap back-reference
     struct native_continuation_arena *continuation_arena; // Borrowed through root registrations
     struct native_exception_arena *exception_arena; // Borrowed through root registrations
     wasmoon_reservation_t *byte_reservation;
     wasmoon_reservation_t *object_reservation;
     int quota_denied; // 1: payload bytes, 2: retained identity slots
+    int32_t precise_roots; // Native marking view; MoonBit updates it outside a collection
     GcAllocationPolicy allocation_policy; // Closed MoonBit function; no retained closure
     int32_t exception_root_count; // Leases borrowing exception_arena
+    int32_t continuation_root_count; // Leases borrowing continuation_arena
 } GcHeap;
 
 // Budgeted heaps enter the common allocator before any guest payload write.
@@ -147,14 +149,6 @@ static inline GcHeap *gc_heap_live(GcHeap *heap) {
 }
 
 // ============ Heap Lifecycle ============
-
-/**
- * Create a new GC heap with the given initial capacity
- * @param initial_capacity Initial heap size in bytes
- * @return Managed heap, with empty data on allocation failure
- */
-GcHeap* gc_heap_new(size_t initial_capacity);
-
 
 /**
  * Register an updateable root array and retain its heap with MoonBit RC.
@@ -184,7 +178,7 @@ void continuation_arena_mark(struct native_continuation_arena *arena, int64_t re
 int32_t continuation_arena_marked_count(struct native_continuation_arena *arena);
 void continuation_arena_copy_marked(struct native_continuation_arena *arena, int64_t *roots);
 void continuation_arena_reset_marks(struct native_continuation_arena *arena);
-void continuation_arena_sweep(struct native_continuation_arena *arena);
+void continuation_arena_sweep(struct native_continuation_arena *arena, GcHeap *heap);
 
 void exception_arena_mark(struct native_exception_arena *arena, int64_t reference);
 int32_t exception_arena_marked_count(struct native_exception_arena *arena);

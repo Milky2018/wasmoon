@@ -1,0 +1,4 @@
+[Milky2018/wasmoon] test sanitizer_testsuite/gc_collection_test.mbt:136 ("clearing a visitor does not change the current precise marking mode") failed: sanitizer_testsuite/gc_collection_test.mbt:151:3-151:51@Milky2018/wasmoon FAILED: `0 != 1`
+diff:
+-0 +1
+Total tests: 1, passed: 0, failed: 1.

@@ -1,0 +1,4 @@
+[Milky2018/wasmoon] test sanitizer_testsuite/gc_collection_test.mbt:64 ("collection rejects same-heap reentry without touching the outer roots") failed: sanitizer_testsuite/gc_collection_test.mbt:80:3-80:28@Milky2018/wasmoon FAILED: `1 != -1`
+diff:
+-1 +-1
+Total tests: 1, passed: 0, failed: 1.

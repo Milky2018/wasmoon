@@ -1,0 +1,4 @@
+[Milky2018/wasmoon] test testsuite/native_guest_continuation_test.mbt:2 ("continuation root leases cannot release an exception arena") failed: testsuite/native_guest_continuation_test.mbt:31:3-31:62@Milky2018/wasmoon FAILED: `1152921504606846977 != 0`
+diff:
+-1152921504606846977 +0
+Total tests: 1, passed: 0, failed: 1.

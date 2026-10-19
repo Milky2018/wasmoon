@@ -1,0 +1,31 @@
+Running GC differential on 17 files from /Users/zhengyu/Documents/projects/wasmoon/spec/gc
+array.wast                                         interp=pass     jit=pass     stress=pass     small=pass
+array_copy.wast                                    interp=pass     jit=pass     stress=pass     small=pass
+array_fill.wast                                    interp=pass     jit=pass     stress=pass     small=pass
+array_init_data.wast                               interp=pass     jit=pass     stress=pass     small=pass
+array_init_elem.wast                               interp=pass     jit=pass     stress=pass     small=pass
+array_new_data.wast                                interp=pass     jit=pass     stress=pass     small=pass
+array_new_elem.wast                                interp=pass     jit=pass     stress=pass     small=pass
+binary-gc.wast                                     interp=pass     jit=pass     stress=pass     small=pass
+br_on_cast.wast                                    interp=pass     jit=pass     stress=pass     small=pass
+br_on_cast_fail.wast                               interp=pass     jit=pass     stress=pass     small=pass
+extern.wast                                        interp=pass     jit=pass     stress=pass     small=pass
+i31.wast                                           interp=pass     jit=pass     stress=pass     small=pass
+ref_cast.wast                                      interp=pass     jit=pass     stress=pass     small=pass
+ref_eq.wast                                        interp=pass     jit=pass     stress=pass     small=pass
+ref_test.wast                                      interp=pass     jit=pass     stress=pass     small=pass
+struct.wast                                        interp=pass     jit=pass     stress=pass     small=pass
+type-subtyping.wast                                interp=pass     jit=pass     stress=pass     small=pass
+
+Summary:
+  repeat per lane: 1
+  interp pass:  17/17
+  jit pass:     17/17
+  stress pass:  17/17
+  small pass:   17/17
+  flaky lanes:  0
+  issues:       0
+  regressions:  0
+  trap mismatch:0
+  reductions:   0/0 succeeded
+  report json:  /Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/gc-differential.json

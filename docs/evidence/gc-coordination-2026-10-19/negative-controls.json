@@ -1,0 +1,17 @@
+[
+  {
+    "mutation": "lost-visitor",
+    "expected": "test failure",
+    "exit_code": 2
+  },
+  {
+    "mutation": "reentry",
+    "expected": "test failure",
+    "exit_code": 2
+  },
+  {
+    "mutation": "mark-mode",
+    "expected": "test failure",
+    "exit_code": 2
+  }
+]

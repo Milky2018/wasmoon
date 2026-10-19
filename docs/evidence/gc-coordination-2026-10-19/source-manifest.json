@@ -1,0 +1,76 @@
+{
+  "source_revision": "6637ad6c5e65170d05b729aec0385c038ba7919c",
+  "source_dirty": true,
+  "delivery": false,
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "toolchain": "moon 0.1.20261012 (748b63c 2026-10-12) ~/.moon/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) ~/.moon/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "wasm_tools": "wasm-tools 1.254.0",
+  "changed_code_sha256": {
+    "modules/wasmoon_jit/jit_ffi/gc_heap.c": "3c4a0199d0831ba0838da2d67e8b292d76d1a3c5495304297ef6c3ca7f2d91cc",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.h": "a8358b153a82931ce54af33327303583f0a95765f5076d369c363c93e0f18e3e",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.mbt": "ca65a5c49050fdda8348fb00a6dd86d63513d88615d349e646f1cb655ae7299a",
+    "modules/wasmoon_jit/jit_ffi/guest_continuation.c": "22485b4799e36ca621b67e358300eb7ae222446ef9a38c070b84be4ba69b0e85",
+    "modules/wasmoon_jit/jit_ffi/testing/context_test_support.c": "a22115ca4b3dc9333fdb816a42c8faba8c8938dee103e7a05863227c29dc3faa",
+    "modules/wasmoon_jit/native_test_support/context_test_support.mbt": "c25934a9b260297cf4d685d207fcc659fba3ad9f346a64d5b1d0750450bd2f06",
+    "modules/wasmoon_jit/jit_ffi/gc_collection.mbt": "ca42198eb55d2fccf746e175b6eb289855f1bbef0ad701824c285ed3b449aa03",
+    "modules/wasmoon/sanitizer_testsuite/gc_collection_test.mbt": "bc6516d7d3aa21bd0090b030e9a78fb4c86651427ca7b61e706f579734d2e1af"
+  },
+  "before_binary_sha256": "f8333d5e7473973c09f6b261ad4b823fc0b4b3ceafb9c41b54f64a09cca7548d",
+  "before_receipt": "../continuation-lifecycle-2026-10-19/source-manifest.json",
+  "candidate_binary_sha256": "aca7d0293f7d528ce18b1db19056f83346a6621469ce97cab7758b8a6c19f302",
+  "installed_cli_sha256": "aca7d0293f7d528ce18b1db19056f83346a6621469ce97cab7758b8a6c19f302",
+  "build_reuse": "install.sh and sanitizer use fresh target directories",
+  "sanitizer_source_copies": {
+    "modules/wasmoon_jit/jit_ffi/gc_heap.c": {
+      "source_sha256": "3c4a0199d0831ba0838da2d67e8b292d76d1a3c5495304297ef6c3ca7f2d91cc",
+      "copied_sha256": "3c4a0199d0831ba0838da2d67e8b292d76d1a3c5495304297ef6c3ca7f2d91cc"
+    },
+    "modules/wasmoon_jit/jit_ffi/gc_heap.h": {
+      "source_sha256": "a8358b153a82931ce54af33327303583f0a95765f5076d369c363c93e0f18e3e",
+      "copied_sha256": "a8358b153a82931ce54af33327303583f0a95765f5076d369c363c93e0f18e3e"
+    },
+    "modules/wasmoon_jit/jit_ffi/gc_heap.mbt": {
+      "source_sha256": "ca65a5c49050fdda8348fb00a6dd86d63513d88615d349e646f1cb655ae7299a",
+      "copied_sha256": "ca65a5c49050fdda8348fb00a6dd86d63513d88615d349e646f1cb655ae7299a"
+    },
+    "modules/wasmoon_jit/jit_ffi/guest_continuation.c": {
+      "source_sha256": "22485b4799e36ca621b67e358300eb7ae222446ef9a38c070b84be4ba69b0e85",
+      "copied_sha256": "22485b4799e36ca621b67e358300eb7ae222446ef9a38c070b84be4ba69b0e85"
+    },
+    "modules/wasmoon_jit/jit_ffi/testing/context_test_support.c": {
+      "source_sha256": "a22115ca4b3dc9333fdb816a42c8faba8c8938dee103e7a05863227c29dc3faa",
+      "copied_sha256": "a22115ca4b3dc9333fdb816a42c8faba8c8938dee103e7a05863227c29dc3faa"
+    },
+    "modules/wasmoon_jit/native_test_support/context_test_support.mbt": {
+      "source_sha256": "c25934a9b260297cf4d685d207fcc659fba3ad9f346a64d5b1d0750450bd2f06",
+      "copied_sha256": "c25934a9b260297cf4d685d207fcc659fba3ad9f346a64d5b1d0750450bd2f06"
+    },
+    "modules/wasmoon_jit/jit_ffi/gc_collection.mbt": {
+      "source_sha256": "ca42198eb55d2fccf746e175b6eb289855f1bbef0ad701824c285ed3b449aa03",
+      "copied_sha256": "ca42198eb55d2fccf746e175b6eb289855f1bbef0ad701824c285ed3b449aa03"
+    },
+    "modules/wasmoon/sanitizer_testsuite/gc_collection_test.mbt": {
+      "source_sha256": "bc6516d7d3aa21bd0090b030e9a78fb4c86651427ca7b61e706f579734d2e1af",
+      "copied_sha256": "bc6516d7d3aa21bd0090b030e9a78fb4c86651427ca7b61e706f579734d2e1af"
+    }
+  },
+  "native_heap_layout": {
+    "before_size": 160,
+    "after_size": 160,
+    "data_offset_before_after": [
+      0,
+      0
+    ],
+    "object_table_offset_before_after": [
+      24,
+      24
+    ],
+    "allocation_policy_offset_before_after": [
+      144,
+      144
+    ],
+    "note": "precise_roots occupies existing padding before allocation_policy; one additional managed CollectionState per heap"
+  },
+  "generated_c_sha256": "791dffe9c746b48ba30f0703264e7db68f6323fc90c3e7d4a7d9cf9dc26d6a49",
+  "verified_baseline_changed_source_hashes": 11
+}

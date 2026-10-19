@@ -1,0 +1,3758 @@
+{
+  "register_named_modules": true,
+  "upstream_commit": "46c23a87dac1465986a8ad53ba6a7ae49372857b",
+  "snapshot_sha256": "a7b94478d997c9c3b99c44a9b7aed02db0fc0b3c918b1b117d851e5c3d23e8ff",
+  "host_contracts_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+  "host": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "engine": "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+  "engine_sha256": "aca7d0293f7d528ce18b1db19056f83346a6621469ce97cab7758b8a6c19f302",
+  "engine_version": "0.16.0",
+  "tools": {},
+  "filter": [
+    "stack-switching*"
+  ],
+  "lane": "all",
+  "timeout": 30,
+  "include_high_memory": false,
+  "results": [
+    {
+      "commands": [
+        "assert_invalid"
+      ],
+      "name": "stack-switching-and-gc.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching-and-gc.wast",
+      "sha256": "28b786a31670664a942656f0fc16bacba317a40f303e683f386ab4c1c7c46671",
+      "lane": "core",
+      "config": {
+        "stack_switching": true,
+        "gc": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching-and-gc.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching-and-gc.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching-and-gc.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "assert_invalid"
+      ],
+      "name": "stack-switching-and-gc.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching-and-gc.wast",
+      "sha256": "28b786a31670664a942656f0fc16bacba317a40f303e683f386ab4c1c7c46671",
+      "lane": "core",
+      "config": {
+        "stack_switching": true,
+        "gc": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching-and-gc.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching-and-gc.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching-and-gc.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_args.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_args.wast",
+      "sha256": "c2b03fbd5d6ce8feba4b03b2010606d0dbefda446715c736fa256709d0b3c8b2",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_args.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_args.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_args.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_args.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_args.wast",
+      "sha256": "c2b03fbd5d6ce8feba4b03b2010606d0dbefda446715c736fa256709d0b3c8b2",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_args.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_args.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_args.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 7
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_bind1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind1.wast",
+      "sha256": "37b06cc6c9130dc57879c1693e5de71f87f009faf70474763b2c2e0b5552f692",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind1.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_bind1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_bind1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_bind1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind1.wast",
+      "sha256": "37b06cc6c9130dc57879c1693e5de71f87f009faf70474763b2c2e0b5552f692",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind1.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_bind1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_bind1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_bind2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind2.wast",
+      "sha256": "94c94c401b6e2f788bfeaa1363e1b7301b5cdb98472113588e42eb7a5241825f",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind2.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_bind2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_bind2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_bind2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind2.wast",
+      "sha256": "94c94c401b6e2f788bfeaa1363e1b7301b5cdb98472113588e42eb7a5241825f",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind2.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_bind2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_bind2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_bind3.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind3.wast",
+      "sha256": "f420ad472a78c5ff43615b2cdd4dcec4bb15dccd9b77e492ba1579179eaa85f0",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind3.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_bind3.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_bind3.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_bind3.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind3.wast",
+      "sha256": "f420ad472a78c5ff43615b2cdd4dcec4bb15dccd9b77e492ba1579179eaa85f0",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind3.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_bind3.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_bind3.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_bind4.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind4.wast",
+      "sha256": "ece8346caf136fd59deb435a43640b4a42414f006f3233d4f3e1f5479416a9e5",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind4.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_bind4.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_bind4.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_bind4.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind4.wast",
+      "sha256": "ece8346caf136fd59deb435a43640b4a42414f006f3233d4f3e1f5479416a9e5",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.011,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_bind4.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_bind4.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_bind4.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding1.wast",
+      "sha256": "f779576c680a3fbe5935b0aa91f74e4c2704cf3fada534d1f13226eef566f3f6",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding1.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding1.wast",
+      "sha256": "f779576c680a3fbe5935b0aa91f74e4c2704cf3fada534d1f13226eef566f3f6",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding1.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 5
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding2.wast",
+      "sha256": "3974aac524f7f3ba5bc014edd690bcfdaabb6da82b4ab9218ebb548145da4bcb",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding2.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding2.wast",
+      "sha256": "3974aac524f7f3ba5bc014edd690bcfdaabb6da82b4ab9218ebb548145da4bcb",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding2.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding3.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding3.wast",
+      "sha256": "54c672ae028d11e3fd0b38de90bbeb836799a573f12d33ed5864b21229c29bdc",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding3.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding3.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding3.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding3.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding3.wast",
+      "sha256": "54c672ae028d11e3fd0b38de90bbeb836799a573f12d33ed5864b21229c29bdc",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding3.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding3.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding3.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding4.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding4.wast",
+      "sha256": "380b3c2ab82dabb5600393bae4aac30a18c0a3c72cb0c214a5a54b0f63d26a9d",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding4.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding4.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding4.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding4.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding4.wast",
+      "sha256": "380b3c2ab82dabb5600393bae4aac30a18c0a3c72cb0c214a5a54b0f63d26a9d",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding4.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding4.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding4.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding5.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding5.wast",
+      "sha256": "6c794293d3795ace0535a03470224db62425319e5d48b8cf47be327cb47c5528",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding5.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding5.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding5.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding5.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding5.wast",
+      "sha256": "6c794293d3795ace0535a03470224db62425319e5d48b8cf47be327cb47c5528",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding5.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding5.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding5.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 5
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding6.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding6.wast",
+      "sha256": "d5412a6ef523a7ecea838bc76b95feef393a2c66b52646a06f771abc21e101d4",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding6.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding6.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding6.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding6.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding6.wast",
+      "sha256": "d5412a6ef523a7ecea838bc76b95feef393a2c66b52646a06f771abc21e101d4",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding6.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding6.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding6.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding7.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding7.wast",
+      "sha256": "585e203e7eebeee33adc509d90ed6f57a61396ca090231ac7ebbcc164aaf580a",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding7.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding7.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding7.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding7.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding7.wast",
+      "sha256": "585e203e7eebeee33adc509d90ed6f57a61396ca090231ac7ebbcc164aaf580a",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding7.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding7.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding7.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding8.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding8.wast",
+      "sha256": "ce41d0f8ed0509268b9b8ed9435245a01dd2d6cedab797daa72620750ed0c5db",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding8.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding8.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_forwarding8.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_forwarding8.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding8.wast",
+      "sha256": "ce41d0f8ed0509268b9b8ed9435245a01dd2d6cedab797daa72620750ed0c5db",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_forwarding8.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding8.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_forwarding8.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nary.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nary.wast",
+      "sha256": "c7a8301eaf9ce039a2c492b55605616bea3aede4f7347934b96822a777f36e7f",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nary.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nary.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nary.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nary.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nary.wast",
+      "sha256": "c7a8301eaf9ce039a2c492b55605616bea3aede4f7347934b96822a777f36e7f",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nary.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nary.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nary.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested1.wast",
+      "sha256": "ae36a8621f8aa35973bd955c174a3a297d3b856faf63faf55cb0897504f3c658",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested1.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested1.wast",
+      "sha256": "ae36a8621f8aa35973bd955c174a3a297d3b856faf63faf55cb0897504f3c658",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested1.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested2.wast",
+      "sha256": "7638b5824f07a9d31d35f9b3412bcdd2c01e3a00e2a47b7bd5b3390c0e0374bb",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested2.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested2.wast",
+      "sha256": "7638b5824f07a9d31d35f9b3412bcdd2c01e3a00e2a47b7bd5b3390c0e0374bb",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested2.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested3.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested3.wast",
+      "sha256": "ae2426015075761b21639dda1bbe07dbe777a40f27d7cd22ad06d317291883eb",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested3.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested3.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested3.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested3.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested3.wast",
+      "sha256": "ae2426015075761b21639dda1bbe07dbe777a40f27d7cd22ad06d317291883eb",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested3.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested3.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested3.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested4.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested4.wast",
+      "sha256": "76185a99c8246810f47422765be73f69c1f02deb62cf3151a721cd5a846dcf14",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested4.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested4.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested4.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested4.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested4.wast",
+      "sha256": "76185a99c8246810f47422765be73f69c1f02deb62cf3151a721cd5a846dcf14",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested4.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested4.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested4.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested5.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested5.wast",
+      "sha256": "be06619165b24a4333b64a9a3822c3e207904085c438ff056a3059cf1af6ac8e",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested5.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested5.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested5.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested5.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested5.wast",
+      "sha256": "be06619165b24a4333b64a9a3822c3e207904085c438ff056a3059cf1af6ac8e",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested5.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested5.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested5.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 5
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested6.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested6.wast",
+      "sha256": "c02bc77da4cc1a59b9886fd630ebb24d6e1ece74ad96ca4745e297e5b33ef88b",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested6.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested6.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_nested6.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_nested6.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested6.wast",
+      "sha256": "c02bc77da4cc1a59b9886fd630ebb24d6e1ece74ad96ca4745e297e5b33ef88b",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_nested6.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested6.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_nested6.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_new.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_new.wast",
+      "sha256": "353866376debe7859c216b5882e252b04b9bba29eda391bf1052d55d356a5aaa",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_new.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_new.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_new.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_new.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_new.wast",
+      "sha256": "353866376debe7859c216b5882e252b04b9bba29eda391bf1052d55d356a5aaa",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_new.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_new.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_new.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_resume.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume.wast",
+      "sha256": "13577823db8dd3e5b9d15c2f14443ec8f4f471f91adb4d175d53996c7ceae55e",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_resume.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_resume.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_resume.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume.wast",
+      "sha256": "13577823db8dd3e5b9d15c2f14443ec8f4f471f91adb4d175d53996c7ceae55e",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_resume.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_resume.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_resume1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume1.wast",
+      "sha256": "62cf162ffd9835ddae3c601a03cfbfa66fdc4dcf5932191873a861fd681e4ac7",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume1.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_resume1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_resume1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_resume1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume1.wast",
+      "sha256": "62cf162ffd9835ddae3c601a03cfbfa66fdc4dcf5932191873a861fd681e4ac7",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume1.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_resume1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_resume1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_resume2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume2.wast",
+      "sha256": "5b69c85b0b5cd6b7a5fca23e0ab815cefde01508b0dbf8d10917de72b4609b85",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume2.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_resume2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_resume2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_resume2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume2.wast",
+      "sha256": "5b69c85b0b5cd6b7a5fca23e0ab815cefde01508b0dbf8d10917de72b4609b85",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume2.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_resume2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_resume2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_resume_return.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume_return.wast",
+      "sha256": "2bf85f167c577d3e91bd14c1454dce619d3ed78f984aec84536b1d72ac54bbcd",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume_return.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_resume_return.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_resume_return.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_resume_return.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume_return.wast",
+      "sha256": "2bf85f167c577d3e91bd14c1454dce619d3ed78f984aec84536b1d72ac54bbcd",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_resume_return.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_resume_return.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_resume_return.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_return.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_return.wast",
+      "sha256": "ee9ca0c2a081607730db07e64e78ed255fe96524eb7f872ab9ef9afea7e1ceda",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_return.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_return.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_return.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_return.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_return.wast",
+      "sha256": "ee9ca0c2a081607730db07e64e78ed255fe96524eb7f872ab9ef9afea7e1ceda",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_return.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_return.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_return.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_suspend.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_suspend.wast",
+      "sha256": "aef44c060faf4dbaf72fcb2d56ac87dc8227ee8d0401ddb268c33a706ede367a",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_suspend.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_suspend.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_suspend.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_suspend.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_suspend.wast",
+      "sha256": "aef44c060faf4dbaf72fcb2d56ac87dc8227ee8d0401ddb268c33a706ede367a",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_suspend.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_suspend.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_suspend.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "invoke",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "invoke",
+        "assert_return",
+        "invoke",
+        "assert_return",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_table.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_table.wast",
+      "sha256": "c6d2c088bcd70274f5687b11468619135126b0920621e72eca2445bce8224bb8",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_table.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_table.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_table.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "invoke",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "invoke",
+        "assert_return",
+        "invoke",
+        "assert_return",
+        "assert_return"
+      ],
+      "name": "stack-switching/cont_table.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_table.wast",
+      "sha256": "c6d2c088bcd70274f5687b11468619135126b0920621e72eca2445bce8224bb8",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_table.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_table.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_table.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 12
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_trap"
+      ],
+      "name": "stack-switching/cont_twice.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_twice.wast",
+      "sha256": "4c2f7e8057d9f3a58f064958997427827985a5d819bda01663693cd40c421015",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_twice.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_twice.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/cont_twice.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_trap"
+      ],
+      "name": "stack-switching/cont_twice.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_twice.wast",
+      "sha256": "4c2f7e8057d9f3a58f064958997427827985a5d819bda01663693cd40c421015",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/cont_twice.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_twice.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/cont_twice.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/dup.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/dup.wast",
+      "sha256": "3b1e8e9877fb2edbe2672ba1c678936a2cc2584225f76795fe853c3aea20690e",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/dup.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/dup.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/dup.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/dup.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/dup.wast",
+      "sha256": "3b1e8e9877fb2edbe2672ba1c678936a2cc2584225f76795fe853c3aea20690e",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/dup.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/dup.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/dup.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "register",
+        "module",
+        "register",
+        "assert_return",
+        "assert_suspension"
+      ],
+      "name": "stack-switching/linking_tags1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/linking_tags1.wast",
+      "sha256": "d827f4eda3167a89a95b335b3f2474de015eeefc58332362412f1564375e287a",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/linking_tags1.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/linking_tags1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/linking_tags1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "register",
+        "module",
+        "register",
+        "assert_return",
+        "assert_suspension"
+      ],
+      "name": "stack-switching/linking_tags1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/linking_tags1.wast",
+      "sha256": "d827f4eda3167a89a95b335b3f2474de015eeefc58332362412f1564375e287a",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/linking_tags1.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/linking_tags1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/linking_tags1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 2,
+        "modules": 2,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "register",
+        "assert_return",
+        "module",
+        "register",
+        "assert_return",
+        "assert_return",
+        "module",
+        "register",
+        "assert_return",
+        "assert_return",
+        "module",
+        "register",
+        "assert_return",
+        "assert_suspension"
+      ],
+      "name": "stack-switching/linking_tags2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/linking_tags2.wast",
+      "sha256": "38ca5d8952800502eab7aa0962590ef9482c276cfd20893ddeef3faca2518e0a",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/linking_tags2.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/linking_tags2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/linking_tags2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "register",
+        "assert_return",
+        "module",
+        "register",
+        "assert_return",
+        "assert_return",
+        "module",
+        "register",
+        "assert_return",
+        "assert_return",
+        "module",
+        "register",
+        "assert_return",
+        "assert_suspension"
+      ],
+      "name": "stack-switching/linking_tags2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/linking_tags2.wast",
+      "sha256": "38ca5d8952800502eab7aa0962590ef9482c276cfd20893ddeef3faca2518e0a",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "exceptions": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/linking_tags2.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/linking_tags2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/linking_tags2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 4,
+        "modules": 4,
+        "functions": 17
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_trap"
+      ],
+      "name": "stack-switching/resume_throw.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/resume_throw.wast",
+      "sha256": "c0687f0250f4f233dd9005091b252ceb0da00ed32c2688f015537aa4f52dfa98",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/resume_throw.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/resume_throw.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/resume_throw.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_trap"
+      ],
+      "name": "stack-switching/resume_throw.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/resume_throw.wast",
+      "sha256": "c0687f0250f4f233dd9005091b252ceb0da00ed32c2688f015537aa4f52dfa98",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/resume_throw.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/resume_throw.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/resume_throw.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 9
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return"
+      ],
+      "name": "stack-switching/resume_throw_ref.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/resume_throw_ref.wast",
+      "sha256": "9497d4dc7f6c7a2e145e27c2fbfe378e6fc603d7ebfdc3843d2995634cb2b0ff",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/resume_throw_ref.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/resume_throw_ref.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/resume_throw_ref.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return",
+        "assert_return",
+        "assert_return",
+        "assert_return"
+      ],
+      "name": "stack-switching/resume_throw_ref.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/resume_throw_ref.wast",
+      "sha256": "9497d4dc7f6c7a2e145e27c2fbfe378e6fc603d7ebfdc3843d2995634cb2b0ff",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.011,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/resume_throw_ref.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/resume_throw_ref.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/resume_throw_ref.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 9
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch-type-index-conflation.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch-type-index-conflation.wast",
+      "sha256": "2bf6374532ced8cff37e7022ddff1f851f81c19625189427deb1c9c5d8d295c6",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch-type-index-conflation.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch-type-index-conflation.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch-type-index-conflation.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch-type-index-conflation.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch-type-index-conflation.wast",
+      "sha256": "2bf6374532ced8cff37e7022ddff1f851f81c19625189427deb1c9c5d8d295c6",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch-type-index-conflation.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch-type-index-conflation.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch-type-index-conflation.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch1.wast",
+      "sha256": "f1261342acf6dae878520362acc0f33da4d2952af12c85539d348d44cf2a4d61",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch1.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch1.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch1.wast",
+      "sha256": "f1261342acf6dae878520362acc0f33da4d2952af12c85539d348d44cf2a4d61",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch1.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch1.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch1.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch2.wast",
+      "sha256": "93f3b6ab61dad3242a7b7fb89a444cc7e9cf215452cc065c38abfd1e69d5a9bc",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "gc": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch2.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch2.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch2.wast",
+      "sha256": "93f3b6ab61dad3242a7b7fb89a444cc7e9cf215452cc065c38abfd1e69d5a9bc",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "gc": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.011,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch2.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch2.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch2.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 5
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch3.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch3.wast",
+      "sha256": "516fef2aa6ed4b59454270644583995113eaa76c235682d159e5f82f62f31bf1",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "gc": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch3.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch3.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch3.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch3.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch3.wast",
+      "sha256": "516fef2aa6ed4b59454270644583995113eaa76c235682d159e5f82f62f31bf1",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "gc": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.01,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch3.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch3.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch3.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 5
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch4.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch4.wast",
+      "sha256": "69cfa183e3b655ea86e01b0bc9b2dc131235770894cb847432e82d8c71e5e539",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "gc": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch4.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch4.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch4.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch4.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch4.wast",
+      "sha256": "69cfa183e3b655ea86e01b0bc9b2dc131235770894cb847432e82d8c71e5e539",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "gc": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch4.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch4.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch4.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch5.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch5.wast",
+      "sha256": "d09278547767252612ba61e0a89b1484e6e92a51dab5c2de92d0d36da0a7dcae",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch5.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch5.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch5.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch5.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch5.wast",
+      "sha256": "d09278547767252612ba61e0a89b1484e6e92a51dab5c2de92d0d36da0a7dcae",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.011,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch5.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch5.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch5.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch6.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch6.wast",
+      "sha256": "759fe91b31cddcd3817b974f22b14e0d7c5d552cdf5341cf2341ac6b2e3f3020",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch6.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch6.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch6.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch6.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch6.wast",
+      "sha256": "759fe91b31cddcd3817b974f22b14e0d7c5d552cdf5341cf2341ac6b2e3f3020",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch6.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch6.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch6.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch7.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch7.wast",
+      "sha256": "22d33b38c36753df1bdc85d8f23ffd5181001878f6c2f3c32ffd42410e785eb9",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch7.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch7.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch7.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_return"
+      ],
+      "name": "stack-switching/switch7.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch7.wast",
+      "sha256": "22d33b38c36753df1bdc85d8f23ffd5181001878f6c2f3c32ffd42410e785eb9",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch7.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch7.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch7.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 4
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_trap"
+      ],
+      "name": "stack-switching/switch8.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch8.wast",
+      "sha256": "43419d1f211335460a0664d296f76b2cf7c956ca8a385dc7df01c593914eaf29",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.006,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch8.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch8.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/switch8.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_trap"
+      ],
+      "name": "stack-switching/switch8.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch8.wast",
+      "sha256": "43419d1f211335460a0664d296f76b2cf7c956ca8a385dc7df01c593914eaf29",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/switch8.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch8.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/switch8.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_trap"
+      ],
+      "name": "stack-switching/trap.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/trap.wast",
+      "sha256": "c0a371cf3f0b80be3a93f0f30d68b7521586273519f8abf7e70cb033202a741b",
+      "lane": "core",
+      "config": {
+        "stack_switching": true,
+        "reference_types": true,
+        "bulk_memory": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/trap.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/trap.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/trap.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_trap"
+      ],
+      "name": "stack-switching/trap.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/trap.wast",
+      "sha256": "c0a371cf3f0b80be3a93f0f30d68b7521586273519f8abf7e70cb033202a741b",
+      "lane": "core",
+      "config": {
+        "stack_switching": true,
+        "reference_types": true,
+        "bulk_memory": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/trap.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/trap.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/trap.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 2
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_suspension"
+      ],
+      "name": "stack-switching/unhandled.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/unhandled.wast",
+      "sha256": "e0336509d9646677f75813f3bfc2ec6daf13c356833cc71d155d03c6d609f8bc",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "interp",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/unhandled.wast",
+        "--stack-switching",
+        "--no-jit"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/unhandled.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/interp/stack-switching/unhandled.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 0,
+        "modules": 0,
+        "functions": 0
+      }
+    },
+    {
+      "commands": [
+        "module",
+        "assert_suspension"
+      ],
+      "name": "stack-switching/unhandled.wast",
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/unhandled.wast",
+      "sha256": "e0336509d9646677f75813f3bfc2ec6daf13c356833cc71d155d03c6d609f8bc",
+      "lane": "core",
+      "config": {
+        "bulk_memory": true,
+        "function_references": true,
+        "stack_switching": true
+      },
+      "host_contract": null,
+      "mode": "jit",
+      "status": "pass",
+      "returncode": 0,
+      "detail": "",
+      "seconds": 0.005,
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/wasmoon",
+        "test",
+        "/Users/zhengyu/Documents/projects/wasmoon/wasm-tests/wasmtime/upstream/tests/misc_testsuite/stack-switching/unhandled.wast",
+        "--stack-switching"
+      ],
+      "stdout": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/unhandled.wast/stdout.txt",
+      "stderr": "/Users/zhengyu/Documents/projects/wasmoon/_build/gc-coordination/wasmtime-stack-final/jit/stack-switching/unhandled.wast/stderr.txt",
+      "terminal": false,
+      "pending_stdin": false,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "jit_compilation": {
+        "attempts": 1,
+        "modules": 1,
+        "functions": 3
+      }
+    }
+  ],
+  "counts": {
+    "pass": 92,
+    "script_only": 0,
+    "fail": 0,
+    "timeout": 0,
+    "unsupported": 0,
+    "deferred": 0,
+    "harness_error": 0
+  }
+}

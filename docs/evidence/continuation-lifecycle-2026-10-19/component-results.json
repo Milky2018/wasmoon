@@ -1,0 +1,38 @@
+[
+  {
+    "suite": "stable-0.2",
+    "interp": false,
+    "exit_code": 0,
+    "log": "target/continuation-migration/component-stable-0.2-jit.log"
+  },
+  {
+    "suite": "stable-0.2",
+    "interp": true,
+    "exit_code": 0,
+    "log": "target/continuation-migration/component-stable-0.2-interp.log"
+  },
+  {
+    "suite": "async-0.3",
+    "interp": false,
+    "exit_code": 0,
+    "log": "target/continuation-migration/component-async-0.3-jit.log"
+  },
+  {
+    "suite": "async-0.3",
+    "interp": true,
+    "exit_code": 0,
+    "log": "target/continuation-migration/component-async-0.3-interp.log"
+  },
+  {
+    "suite": "future-gated",
+    "interp": false,
+    "exit_code": 0,
+    "log": "target/continuation-migration/component-future-gated-jit.log"
+  },
+  {
+    "suite": "future-gated",
+    "interp": true,
+    "exit_code": 0,
+    "log": "target/continuation-migration/component-future-gated-interp.log"
+  }
+]

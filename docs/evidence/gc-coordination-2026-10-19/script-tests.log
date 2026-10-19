@@ -1,0 +1,47 @@
+..[run] 1/1 /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmp4vds1bm2/a.wasm
+[run] /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmp4vds1bm2/a.wasm status=measurement_error value_ratio=1.0 wall_ratio=1.0
+[done] summary=/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmp4vds1bm2/out/summary.json failures=1 perf_gaps=0
+.[run] 1/2 /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmpo48kyjrp/workloads/a.wasm
+[run] /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmpo48kyjrp/workloads/a.wasm status=perf_gap value_ratio=2.0 wall_ratio=2.0
+[run] 2/2 /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmpo48kyjrp/workloads/b.wasm
+[run] /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmpo48kyjrp/workloads/b.wasm status=perf_gap value_ratio=2.0 wall_ratio=2.0
+[done] summary=/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmpo48kyjrp/out/summary.json failures=0 perf_gaps=2
+........................file.txt:1: trailing whitespace.
++trailing
+....................................................s...........sssssssssssssssssssssssssssssssssssssssssssssssssssss..{
+  "work_dir": "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmpievs_6ci/run-20261019-114204",
+  "stats": {
+    "count": 0,
+    "seed_size": 256,
+    "seed": null,
+    "timeout": 3.0,
+    "oracle": "interpreter",
+    "ensure_termination": true,
+    "failures": 0,
+    "generated_errors": 0,
+    "passes": 0
+  }
+}
+{
+  "work_dir": "/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmpcccbzi8u/run-20261019-114204",
+  "stats": {
+    "count": 1,
+    "seed_size": 256,
+    "seed": null,
+    "timeout": 3.0,
+    "oracle": "interpreter",
+    "ensure_termination": true,
+    "failures": 0,
+    "generated_errors": 1,
+    "passes": 0
+  }
+}
+Results: /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/tmpeooayit_
+interp pass         component.wast
+{"pass": 1, "script_only": 0, "fail": 0, "timeout": 0, "unsupported": 0, "deferred": 0, "harness_error": 0}
+Misc harness error: component adapter requires wasm-tools 1.254.0, found wasm-tools 1.253.0 (old)
+..........................
+----------------------------------------------------------------------
+Ran 172 tests in 4.969s
+
+OK (skipped=54)

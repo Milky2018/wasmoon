@@ -1,4 +1,42 @@
 ///|
+test "continuation root leases cannot release an exception arena" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #|  (type $f (func)) (type $c (cont $f))
+      #|  (global $saved (mut (ref null $c)) (ref.null $c))
+      #|  (func $body) (elem declare func $body)
+      #|  (func (export "make") (global.set $saved (cont.new $c (ref.func $body)))))
+    ),
+  )
+  @validator.validate_module(module_, stack_switching=true)
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    module_,
+    Imports(store),
+  )
+  let context = prepare_async_jit_context(module_, instance, store)
+  defer context.close()
+  let first = store.native_execution_state().exceptions()
+  first.enable_reclamation()
+  assert_true(first.define_tag(7, []))
+  let reference = first.insert(store.get_c_heap_ptr(), 7, [])
+  assert_true(reference != 0L)
+  context.call_core_func(store, instance, 1, []) |> ignore
+  store.native_execution_state().continuations().clear()
+  let second = @wasmoon_jit.NativeExceptionArena::new()
+  defer second.clear()
+  second.enable_reclamation()
+  assert_true(second.define_tag(7, []))
+  assert_eq(second.insert(store.get_c_heap_ptr(), 7, []), 0L)
+  assert_eq(first.snapshot(reference), Some((7, [])))
+  first.release_snapshot(reference)
+  assert_true(second.insert(store.get_c_heap_ptr(), 7, []) != 0L)
+}
+
+///|
 test "native guest continuation binds retain GC arguments after suspension" {
   let source =
     #|(module

@@ -1,0 +1,4003 @@
+{
+  "seed": 638,
+  "warmup_rounds": 2,
+  "measured_rounds": 21,
+  "method": "Serial subprocesses, shuffled cases and paired version order. Two putchar call boundaries exclude loading/compilation and teardown. Thread CPU time; process retired instructions/cycles. No core affinity or frequency control.",
+  "binaries": {
+    "before": {
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/_build/continuation-migration/before",
+      "sha256": "144b149c5170635747e1d522658505846ffb01b0e70c2b0691b607e7708dbda5"
+    },
+    "after": {
+      "path": "/Users/zhengyu/Documents/projects/wasmoon/_build/continuation-migration/after",
+      "sha256": "f8333d5e7473973c09f6b261ad4b823fc0b4b3ceafb9c41b54f64a09cca7548d"
+    }
+  },
+  "counter_library_sha256": "87b90d957253ba519eb2549f3cd6f519159c539a0260d9fe1e722a8da3396214",
+  "fixtures": {
+    "bind-10": "2cdd239b1baf8a3112facc76d9daf5fc91add681d8f15ee648b446b5f605dcfe",
+    "bind-100": "75c7e9133f5fe0dcc2cbefb8f877cbbab9478516a1787a6820d88e9bc3413c9d",
+    "bind-1000": "a6331214221e4d61f37448586a37651c896ffbcb64c9a2d3c3e7fd9235529114",
+    "bind-10000": "154b1a4a40363b425c7fda56fcfab17e0cd8087c8fc1b3ff568453df0a2a57c4",
+    "bind-30000": "d3b6dcc91e43cebf54485ea9980cb6aeb54be77930f4bda83e4f7d22ee408645",
+    "suspend-10": "22142e0a4497441e2c702f55e5f502ada2709f8139b793973d9934e055a50446",
+    "suspend-100": "953154c30ec37238145dbde8e616cc979b6d27ad882e09d0ea42a670c725bdef",
+    "suspend-1000": "9e29000a35a112adea7a382dcd6d7186027538dc9fda2fa9d3ede90545e4ef48",
+    "suspend-10000": "b3b877419bb7a4abfed80fe1580be648a06b5b0cbc7df1e3fc9b311fb7f50f2f",
+    "suspend-30000": "90e6a09c2d1b3bc0e13b1563f05f56f26e2d63dc779c923006907fbd94979097"
+  },
+  "samples": [
+    {
+      "round": -2,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3249875,
+      "instructions": 81380771,
+      "cycles": 12497585
+    },
+    {
+      "round": -2,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 119122833,
+      "instructions": 2782555779,
+      "cycles": 479201752
+    },
+    {
+      "round": -2,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 275000,
+      "instructions": 5776047,
+      "cycles": 1093892
+    },
+    {
+      "round": -2,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 117625,
+      "instructions": 2603826,
+      "cycles": 455529
+    },
+    {
+      "round": -2,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 45458,
+      "instructions": 498119,
+      "cycles": 137677
+    },
+    {
+      "round": -2,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 41250,
+      "instructions": 532964,
+      "cycles": 147484
+    },
+    {
+      "round": -2,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26375,
+      "instructions": 355813,
+      "cycles": 88931
+    },
+    {
+      "round": -2,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21709,
+      "instructions": 321423,
+      "cycles": 71796
+    },
+    {
+      "round": -2,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6375,
+      "instructions": 46137,
+      "cycles": 23651
+    },
+    {
+      "round": -2,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5750,
+      "instructions": 46504,
+      "cycles": 21080
+    },
+    {
+      "round": -2,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121974333,
+      "instructions": 2822296429,
+      "cycles": 489612275
+    },
+    {
+      "round": -2,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5929750,
+      "instructions": 122394829,
+      "cycles": 23933547
+    },
+    {
+      "round": -2,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15024166,
+      "instructions": 339511605,
+      "cycles": 60593344
+    },
+    {
+      "round": -2,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1957375,
+      "instructions": 39388072,
+      "cycles": 7792343
+    },
+    {
+      "round": -2,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 11375,
+      "instructions": 76197,
+      "cycles": 38917
+    },
+    {
+      "round": -2,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 12875,
+      "instructions": 86949,
+      "cycles": 43720
+    },
+    {
+      "round": -2,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 376500,
+      "instructions": 7162308,
+      "cycles": 1435134
+    },
+    {
+      "round": -2,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 205667,
+      "instructions": 4166459,
+      "cycles": 813319
+    },
+    {
+      "round": -2,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1043500,
+      "instructions": 27160236,
+      "cycles": 4211647
+    },
+    {
+      "round": -2,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14033958,
+      "instructions": 327430800,
+      "cycles": 56804070
+    },
+    {
+      "round": -1,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 117292,
+      "instructions": 2776559,
+      "cycles": 448484
+    },
+    {
+      "round": -1,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 271291,
+      "instructions": 5783006,
+      "cycles": 1079097
+    },
+    {
+      "round": -1,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6208,
+      "instructions": 46152,
+      "cycles": 22720
+    },
+    {
+      "round": -1,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 6083,
+      "instructions": 46538,
+      "cycles": 22513
+    },
+    {
+      "round": -1,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10750,
+      "instructions": 77924,
+      "cycles": 36893
+    },
+    {
+      "round": -1,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 12958,
+      "instructions": 83539,
+      "cycles": 44469
+    },
+    {
+      "round": -1,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 33875,
+      "instructions": 461016,
+      "cycles": 118621
+    },
+    {
+      "round": -1,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 39375,
+      "instructions": 510053,
+      "cycles": 140468
+    },
+    {
+      "round": -1,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21917,
+      "instructions": 321326,
+      "cycles": 72537
+    },
+    {
+      "round": -1,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26667,
+      "instructions": 355678,
+      "cycles": 90067
+    },
+    {
+      "round": -1,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3207458,
+      "instructions": 77046730,
+      "cycles": 12688670
+    },
+    {
+      "round": -1,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118267791,
+      "instructions": 2782560088,
+      "cycles": 479065464
+    },
+    {
+      "round": -1,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121602125,
+      "instructions": 2822418738,
+      "cycles": 489576742
+    },
+    {
+      "round": -1,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5743917,
+      "instructions": 118027981,
+      "cycles": 22978174
+    },
+    {
+      "round": -1,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1128916,
+      "instructions": 27160419,
+      "cycles": 4422319
+    },
+    {
+      "round": -1,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14492916,
+      "instructions": 325969048,
+      "cycles": 56679169
+    },
+    {
+      "round": -1,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1974625,
+      "instructions": 39387936,
+      "cycles": 7750338
+    },
+    {
+      "round": -1,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15437792,
+      "instructions": 340237436,
+      "cycles": 60687491
+    },
+    {
+      "round": -1,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 386750,
+      "instructions": 7178179,
+      "cycles": 1462267
+    },
+    {
+      "round": -1,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 219916,
+      "instructions": 4166772,
+      "cycles": 823637
+    },
+    {
+      "round": 0,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3463875,
+      "instructions": 81395249,
+      "cycles": 13246946
+    },
+    {
+      "round": 0,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 123205250,
+      "instructions": 2782775699,
+      "cycles": 477760278
+    },
+    {
+      "round": 0,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15025375,
+      "instructions": 340965606,
+      "cycles": 60528406
+    },
+    {
+      "round": 0,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1908000,
+      "instructions": 40125220,
+      "cycles": 7717421
+    },
+    {
+      "round": 0,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 38958,
+      "instructions": 501473,
+      "cycles": 138913
+    },
+    {
+      "round": 0,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 34625,
+      "instructions": 468668,
+      "cycles": 121906
+    },
+    {
+      "round": 0,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26875,
+      "instructions": 355860,
+      "cycles": 90954
+    },
+    {
+      "round": 0,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21583,
+      "instructions": 321118,
+      "cycles": 71027
+    },
+    {
+      "round": 0,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 268042,
+      "instructions": 5610311,
+      "cycles": 1065932
+    },
+    {
+      "round": 0,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 118167,
+      "instructions": 2761716,
+      "cycles": 458116
+    },
+    {
+      "round": 0,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5541,
+      "instructions": 46535,
+      "cycles": 20460
+    },
+    {
+      "round": 0,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6083,
+      "instructions": 46222,
+      "cycles": 22355
+    },
+    {
+      "round": 0,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 12958,
+      "instructions": 87221,
+      "cycles": 43736
+    },
+    {
+      "round": 0,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 15708,
+      "instructions": 83263,
+      "cycles": 48573
+    },
+    {
+      "round": 0,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 379042,
+      "instructions": 7167268,
+      "cycles": 1444234
+    },
+    {
+      "round": 0,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 204834,
+      "instructions": 3999858,
+      "cycles": 809040
+    },
+    {
+      "round": 0,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1038417,
+      "instructions": 25707087,
+      "cycles": 4190597
+    },
+    {
+      "round": 0,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14199708,
+      "instructions": 327439772,
+      "cycles": 56893030
+    },
+    {
+      "round": 0,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5975084,
+      "instructions": 122391012,
+      "cycles": 23942286
+    },
+    {
+      "round": 0,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122427834,
+      "instructions": 2822416949,
+      "cycles": 489593550
+    },
+    {
+      "round": 1,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1981875,
+      "instructions": 40856713,
+      "cycles": 7961950
+    },
+    {
+      "round": 1,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15075625,
+      "instructions": 340961646,
+      "cycles": 60796891
+    },
+    {
+      "round": 1,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1075125,
+      "instructions": 27160244,
+      "cycles": 4283822
+    },
+    {
+      "round": 1,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14186666,
+      "instructions": 327421524,
+      "cycles": 57206468
+    },
+    {
+      "round": 1,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 357875,
+      "instructions": 7158861,
+      "cycles": 1430097
+    },
+    {
+      "round": 1,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 210875,
+      "instructions": 4000014,
+      "cycles": 833956
+    },
+    {
+      "round": 1,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 12958,
+      "instructions": 86457,
+      "cycles": 44109
+    },
+    {
+      "round": 1,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 10875,
+      "instructions": 75100,
+      "cycles": 37121
+    },
+    {
+      "round": 1,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 116959,
+      "instructions": 2775658,
+      "cycles": 453197
+    },
+    {
+      "round": 1,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 276125,
+      "instructions": 5776008,
+      "cycles": 1098663
+    },
+    {
+      "round": 1,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 38208,
+      "instructions": 502554,
+      "cycles": 135813
+    },
+    {
+      "round": 1,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 33084,
+      "instructions": 461076,
+      "cycles": 115401
+    },
+    {
+      "round": 1,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3276125,
+      "instructions": 81380214,
+      "cycles": 13266840
+    },
+    {
+      "round": 1,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118344208,
+      "instructions": 2782553398,
+      "cycles": 479066428
+    },
+    {
+      "round": 1,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122408542,
+      "instructions": 2820240378,
+      "cycles": 489734507
+    },
+    {
+      "round": 1,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5816166,
+      "instructions": 122380869,
+      "cycles": 23447356
+    },
+    {
+      "round": 1,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 20292,
+      "instructions": 293369,
+      "cycles": 67455
+    },
+    {
+      "round": 1,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 25958,
+      "instructions": 355581,
+      "cycles": 87541
+    },
+    {
+      "round": 1,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5917,
+      "instructions": 42760,
+      "cycles": 21968
+    },
+    {
+      "round": 1,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5792,
+      "instructions": 46535,
+      "cycles": 21356
+    },
+    {
+      "round": 2,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5833,
+      "instructions": 46836,
+      "cycles": 21497
+    },
+    {
+      "round": 2,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5958,
+      "instructions": 42760,
+      "cycles": 22160
+    },
+    {
+      "round": 2,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 206583,
+      "instructions": 4174006,
+      "cycles": 816657
+    },
+    {
+      "round": 2,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 359083,
+      "instructions": 7079799,
+      "cycles": 1435318
+    },
+    {
+      "round": 2,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5886083,
+      "instructions": 120202364,
+      "cycles": 23395329
+    },
+    {
+      "round": 2,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122707125,
+      "instructions": 2820232486,
+      "cycles": 491669948
+    },
+    {
+      "round": 2,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118206459,
+      "instructions": 2782558937,
+      "cycles": 478440431
+    },
+    {
+      "round": 2,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3241834,
+      "instructions": 81380214,
+      "cycles": 13127420
+    },
+    {
+      "round": 2,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 268041,
+      "instructions": 5624128,
+      "cycles": 1066264
+    },
+    {
+      "round": 2,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 122167,
+      "instructions": 2775603,
+      "cycles": 474374
+    },
+    {
+      "round": 2,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 10708,
+      "instructions": 78551,
+      "cycles": 36378
+    },
+    {
+      "round": 2,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10708,
+      "instructions": 77998,
+      "cycles": 36439
+    },
+    {
+      "round": 2,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26209,
+      "instructions": 355891,
+      "cycles": 88575
+    },
+    {
+      "round": 2,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21000,
+      "instructions": 321440,
+      "cycles": 69145
+    },
+    {
+      "round": 2,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15031458,
+      "instructions": 340958772,
+      "cycles": 60629290
+    },
+    {
+      "round": 2,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1927416,
+      "instructions": 40850423,
+      "cycles": 7773389
+    },
+    {
+      "round": 2,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 40542,
+      "instructions": 532806,
+      "cycles": 144985
+    },
+    {
+      "round": 2,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 38125,
+      "instructions": 513735,
+      "cycles": 135544
+    },
+    {
+      "round": 2,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1029750,
+      "instructions": 27160440,
+      "cycles": 4155411
+    },
+    {
+      "round": 2,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14034500,
+      "instructions": 327429778,
+      "cycles": 56903046
+    },
+    {
+      "round": 3,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 212250,
+      "instructions": 4072413,
+      "cycles": 825053
+    },
+    {
+      "round": 3,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 370458,
+      "instructions": 7079409,
+      "cycles": 1449075
+    },
+    {
+      "round": 3,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 33750,
+      "instructions": 461082,
+      "cycles": 117985
+    },
+    {
+      "round": 3,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 38292,
+      "instructions": 524535,
+      "cycles": 136357
+    },
+    {
+      "round": 3,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14108250,
+      "instructions": 327430875,
+      "cycles": 56938110
+    },
+    {
+      "round": 3,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1049708,
+      "instructions": 25706971,
+      "cycles": 4236560
+    },
+    {
+      "round": 3,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5917,
+      "instructions": 46510,
+      "cycles": 21972
+    },
+    {
+      "round": 3,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5375,
+      "instructions": 42775,
+      "cycles": 19862
+    },
+    {
+      "round": 3,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118066166,
+      "instructions": 2782547961,
+      "cycles": 478186627
+    },
+    {
+      "round": 3,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3197917,
+      "instructions": 81394465,
+      "cycles": 12925598
+    },
+    {
+      "round": 3,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1904709,
+      "instructions": 40842056,
+      "cycles": 7704158
+    },
+    {
+      "round": 3,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14959708,
+      "instructions": 340217799,
+      "cycles": 60632139
+    },
+    {
+      "round": 3,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 12125,
+      "instructions": 86919,
+      "cycles": 41255
+    },
+    {
+      "round": 3,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10666,
+      "instructions": 77942,
+      "cycles": 36387
+    },
+    {
+      "round": 3,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5983166,
+      "instructions": 118033351,
+      "cycles": 24246543
+    },
+    {
+      "round": 3,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121687542,
+      "instructions": 2818085133,
+      "cycles": 488689101
+    },
+    {
+      "round": 3,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26416,
+      "instructions": 355708,
+      "cycles": 89420
+    },
+    {
+      "round": 3,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 22125,
+      "instructions": 321379,
+      "cycles": 73099
+    },
+    {
+      "round": 3,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 115708,
+      "instructions": 2775464,
+      "cycles": 447857
+    },
+    {
+      "round": 3,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 268750,
+      "instructions": 5776031,
+      "cycles": 1068937
+    },
+    {
+      "round": 4,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1054500,
+      "instructions": 25706728,
+      "cycles": 4168653
+    },
+    {
+      "round": 4,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14223375,
+      "instructions": 325984460,
+      "cycles": 56826614
+    },
+    {
+      "round": 4,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1940083,
+      "instructions": 39399607,
+      "cycles": 7711230
+    },
+    {
+      "round": 4,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15038584,
+      "instructions": 339525330,
+      "cycles": 60618616
+    },
+    {
+      "round": 4,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 359709,
+      "instructions": 7071049,
+      "cycles": 1437910
+    },
+    {
+      "round": 4,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 262666,
+      "instructions": 4084187,
+      "cycles": 822935
+    },
+    {
+      "round": 4,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 270834,
+      "instructions": 5625253,
+      "cycles": 1077171
+    },
+    {
+      "round": 4,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 114750,
+      "instructions": 2603883,
+      "cycles": 444286
+    },
+    {
+      "round": 4,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 24583,
+      "instructions": 328373,
+      "cycles": 81580
+    },
+    {
+      "round": 4,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 20875,
+      "instructions": 321389,
+      "cycles": 68940
+    },
+    {
+      "round": 4,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3167583,
+      "instructions": 81380134,
+      "cycles": 12395191
+    },
+    {
+      "round": 4,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 120078417,
+      "instructions": 2782565444,
+      "cycles": 478894986
+    },
+    {
+      "round": 4,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 34292,
+      "instructions": 468721,
+      "cycles": 120351
+    },
+    {
+      "round": 4,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 40916,
+      "instructions": 533044,
+      "cycles": 146506
+    },
+    {
+      "round": 4,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122492375,
+      "instructions": 2822414542,
+      "cycles": 489038239
+    },
+    {
+      "round": 4,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5712916,
+      "instructions": 120193899,
+      "cycles": 23150705
+    },
+    {
+      "round": 4,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 6125,
+      "instructions": 46683,
+      "cycles": 22405
+    },
+    {
+      "round": 4,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6292,
+      "instructions": 46130,
+      "cycles": 23239
+    },
+    {
+      "round": 4,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 11458,
+      "instructions": 76710,
+      "cycles": 39285
+    },
+    {
+      "round": 4,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 11541,
+      "instructions": 77939,
+      "cycles": 39836
+    },
+    {
+      "round": 5,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 121125,
+      "instructions": 2775493,
+      "cycles": 464237
+    },
+    {
+      "round": 5,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 284041,
+      "instructions": 5777088,
+      "cycles": 1065036
+    },
+    {
+      "round": 5,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 11292,
+      "instructions": 76878,
+      "cycles": 37041
+    },
+    {
+      "round": 5,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 11583,
+      "instructions": 74519,
+      "cycles": 39917
+    },
+    {
+      "round": 5,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1063667,
+      "instructions": 27174440,
+      "cycles": 4223372
+    },
+    {
+      "round": 5,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14147500,
+      "instructions": 327431619,
+      "cycles": 56915599
+    },
+    {
+      "round": 5,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6042,
+      "instructions": 46137,
+      "cycles": 22136
+    },
+    {
+      "round": 5,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5625,
+      "instructions": 43101,
+      "cycles": 20857
+    },
+    {
+      "round": 5,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14996083,
+      "instructions": 339521271,
+      "cycles": 60706406
+    },
+    {
+      "round": 5,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 2009042,
+      "instructions": 40108420,
+      "cycles": 7799664
+    },
+    {
+      "round": 5,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 357917,
+      "instructions": 7158875,
+      "cycles": 1430512
+    },
+    {
+      "round": 5,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 208000,
+      "instructions": 4080753,
+      "cycles": 822500
+    },
+    {
+      "round": 5,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 40208,
+      "instructions": 511313,
+      "cycles": 143793
+    },
+    {
+      "round": 5,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 34625,
+      "instructions": 489836,
+      "cycles": 121632
+    },
+    {
+      "round": 5,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 19917,
+      "instructions": 293566,
+      "cycles": 65812
+    },
+    {
+      "round": 5,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26167,
+      "instructions": 355730,
+      "cycles": 87982
+    },
+    {
+      "round": 5,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121474791,
+      "instructions": 2822413673,
+      "cycles": 488391156
+    },
+    {
+      "round": 5,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5803958,
+      "instructions": 122367628,
+      "cycles": 23519604
+    },
+    {
+      "round": 5,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 119749583,
+      "instructions": 2782563534,
+      "cycles": 479037043
+    },
+    {
+      "round": 5,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3132333,
+      "instructions": 81380294,
+      "cycles": 12570041
+    },
+    {
+      "round": 6,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 13292,
+      "instructions": 84606,
+      "cycles": 45287
+    },
+    {
+      "round": 6,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 11084,
+      "instructions": 76738,
+      "cycles": 37918
+    },
+    {
+      "round": 6,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 114959,
+      "instructions": 2761331,
+      "cycles": 444986
+    },
+    {
+      "round": 6,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 271500,
+      "instructions": 5775824,
+      "cycles": 1080466
+    },
+    {
+      "round": 6,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1048708,
+      "instructions": 27160395,
+      "cycles": 4232726
+    },
+    {
+      "round": 6,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14352584,
+      "instructions": 327430820,
+      "cycles": 56983435
+    },
+    {
+      "round": 6,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 39833,
+      "instructions": 511130,
+      "cycles": 142291
+    },
+    {
+      "round": 6,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 33458,
+      "instructions": 468703,
+      "cycles": 116870
+    },
+    {
+      "round": 6,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 2015917,
+      "instructions": 40856695,
+      "cycles": 8153468
+    },
+    {
+      "round": 6,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15004917,
+      "instructions": 340221766,
+      "cycles": 60601003
+    },
+    {
+      "round": 6,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 207167,
+      "instructions": 4158011,
+      "cycles": 819047
+    },
+    {
+      "round": 6,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 370917,
+      "instructions": 7079691,
+      "cycles": 1448549
+    },
+    {
+      "round": 6,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 6000,
+      "instructions": 48967,
+      "cycles": 21698
+    },
+    {
+      "round": 6,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5875,
+      "instructions": 46187,
+      "cycles": 21757
+    },
+    {
+      "round": 6,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122813958,
+      "instructions": 2822407300,
+      "cycles": 489319983
+    },
+    {
+      "round": 6,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5722458,
+      "instructions": 118033401,
+      "cycles": 23189404
+    },
+    {
+      "round": 6,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 25375,
+      "instructions": 327706,
+      "cycles": 84774
+    },
+    {
+      "round": 6,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 22917,
+      "instructions": 335488,
+      "cycles": 75524
+    },
+    {
+      "round": 6,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118727292,
+      "instructions": 2782584669,
+      "cycles": 479092039
+    },
+    {
+      "round": 6,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3110583,
+      "instructions": 81383939,
+      "cycles": 12477731
+    },
+    {
+      "round": 7,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 35541,
+      "instructions": 477164,
+      "cycles": 125109
+    },
+    {
+      "round": 7,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 38375,
+      "instructions": 524525,
+      "cycles": 136683
+    },
+    {
+      "round": 7,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26416,
+      "instructions": 355827,
+      "cycles": 88823
+    },
+    {
+      "round": 7,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 20459,
+      "instructions": 293510,
+      "cycles": 68124
+    },
+    {
+      "round": 7,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5875,
+      "instructions": 46165,
+      "cycles": 21360
+    },
+    {
+      "round": 7,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5709,
+      "instructions": 46535,
+      "cycles": 20793
+    },
+    {
+      "round": 7,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 375959,
+      "instructions": 7021660,
+      "cycles": 1503798
+    },
+    {
+      "round": 7,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 209542,
+      "instructions": 4081002,
+      "cycles": 828878
+    },
+    {
+      "round": 7,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15147916,
+      "instructions": 339539993,
+      "cycles": 60824804
+    },
+    {
+      "round": 7,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 2015667,
+      "instructions": 40851619,
+      "cycles": 7898688
+    },
+    {
+      "round": 7,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121775750,
+      "instructions": 2822409437,
+      "cycles": 488823176
+    },
+    {
+      "round": 7,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 6047917,
+      "instructions": 118033433,
+      "cycles": 23092633
+    },
+    {
+      "round": 7,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14066166,
+      "instructions": 327434126,
+      "cycles": 57030902
+    },
+    {
+      "round": 7,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1040209,
+      "instructions": 25706866,
+      "cycles": 4197326
+    },
+    {
+      "round": 7,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 12167,
+      "instructions": 84633,
+      "cycles": 44119
+    },
+    {
+      "round": 7,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 11167,
+      "instructions": 78476,
+      "cycles": 38434
+    },
+    {
+      "round": 7,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3126250,
+      "instructions": 77046918,
+      "cycles": 12368118
+    },
+    {
+      "round": 7,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 117438791,
+      "instructions": 2782582745,
+      "cycles": 475304957
+    },
+    {
+      "round": 7,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 117875,
+      "instructions": 2776648,
+      "cycles": 457001
+    },
+    {
+      "round": 7,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 273459,
+      "instructions": 5776017,
+      "cycles": 1087801
+    },
+    {
+      "round": 8,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 273750,
+      "instructions": 5776420,
+      "cycles": 1068750
+    },
+    {
+      "round": 8,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 115584,
+      "instructions": 2603883,
+      "cycles": 447401
+    },
+    {
+      "round": 8,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 207041,
+      "instructions": 3999936,
+      "cycles": 810339
+    },
+    {
+      "round": 8,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 354542,
+      "instructions": 7013398,
+      "cycles": 1416775
+    },
+    {
+      "round": 8,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1055625,
+      "instructions": 27175547,
+      "cycles": 4221315
+    },
+    {
+      "round": 8,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14163167,
+      "instructions": 327429740,
+      "cycles": 56950338
+    },
+    {
+      "round": 8,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1917583,
+      "instructions": 39387978,
+      "cycles": 7756460
+    },
+    {
+      "round": 8,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14980792,
+      "instructions": 340954490,
+      "cycles": 60741099
+    },
+    {
+      "round": 8,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118798125,
+      "instructions": 2782556390,
+      "cycles": 478379786
+    },
+    {
+      "round": 8,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3183709,
+      "instructions": 77046771,
+      "cycles": 12891853
+    },
+    {
+      "round": 8,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 6416,
+      "instructions": 43193,
+      "cycles": 24009
+    },
+    {
+      "round": 8,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5542,
+      "instructions": 46137,
+      "cycles": 20246
+    },
+    {
+      "round": 8,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10792,
+      "instructions": 74557,
+      "cycles": 36784
+    },
+    {
+      "round": 8,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 11209,
+      "instructions": 78859,
+      "cycles": 38300
+    },
+    {
+      "round": 8,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 27167,
+      "instructions": 356073,
+      "cycles": 92268
+    },
+    {
+      "round": 8,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21208,
+      "instructions": 321239,
+      "cycles": 70087
+    },
+    {
+      "round": 8,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 38292,
+      "instructions": 512789,
+      "cycles": 136189
+    },
+    {
+      "round": 8,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 38500,
+      "instructions": 501633,
+      "cycles": 137059
+    },
+    {
+      "round": 8,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5924333,
+      "instructions": 122381760,
+      "cycles": 22928670
+    },
+    {
+      "round": 8,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121506666,
+      "instructions": 2818102884,
+      "cycles": 489032832
+    },
+    {
+      "round": 9,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 40500,
+      "instructions": 532731,
+      "cycles": 145056
+    },
+    {
+      "round": 9,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 36125,
+      "instructions": 498092,
+      "cycles": 127526
+    },
+    {
+      "round": 9,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14999917,
+      "instructions": 340218641,
+      "cycles": 60620992
+    },
+    {
+      "round": 9,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1932584,
+      "instructions": 39396415,
+      "cycles": 7751099
+    },
+    {
+      "round": 9,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3207458,
+      "instructions": 81380111,
+      "cycles": 12987995
+    },
+    {
+      "round": 9,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118143542,
+      "instructions": 2778248396,
+      "cycles": 477264363
+    },
+    {
+      "round": 9,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 363250,
+      "instructions": 7077710,
+      "cycles": 1452491
+    },
+    {
+      "round": 9,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 217292,
+      "instructions": 4181915,
+      "cycles": 859941
+    },
+    {
+      "round": 9,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14108708,
+      "instructions": 327430249,
+      "cycles": 57029558
+    },
+    {
+      "round": 9,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1096500,
+      "instructions": 27160425,
+      "cycles": 4220783
+    },
+    {
+      "round": 9,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 24625,
+      "instructions": 328440,
+      "cycles": 81784
+    },
+    {
+      "round": 9,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 19750,
+      "instructions": 293497,
+      "cycles": 65308
+    },
+    {
+      "round": 9,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5959,
+      "instructions": 46510,
+      "cycles": 22177
+    },
+    {
+      "round": 9,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5666,
+      "instructions": 46162,
+      "cycles": 20958
+    },
+    {
+      "round": 9,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 114208,
+      "instructions": 2761066,
+      "cycles": 442189
+    },
+    {
+      "round": 9,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 270708,
+      "instructions": 5776155,
+      "cycles": 1076910
+    },
+    {
+      "round": 9,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 11417,
+      "instructions": 76706,
+      "cycles": 39011
+    },
+    {
+      "round": 9,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 12750,
+      "instructions": 86373,
+      "cycles": 43487
+    },
+    {
+      "round": 9,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 6009833,
+      "instructions": 122390937,
+      "cycles": 23366165
+    },
+    {
+      "round": 9,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121727875,
+      "instructions": 2822405467,
+      "cycles": 489152346
+    },
+    {
+      "round": 10,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10958,
+      "instructions": 76182,
+      "cycles": 37532
+    },
+    {
+      "round": 10,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 12500,
+      "instructions": 89360,
+      "cycles": 42074
+    },
+    {
+      "round": 10,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 6125,
+      "instructions": 46535,
+      "cycles": 22616
+    },
+    {
+      "round": 10,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5875,
+      "instructions": 46135,
+      "cycles": 21719
+    },
+    {
+      "round": 10,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122679458,
+      "instructions": 2818147151,
+      "cycles": 489098363
+    },
+    {
+      "round": 10,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5918292,
+      "instructions": 122391689,
+      "cycles": 23747808
+    },
+    {
+      "round": 10,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 280250,
+      "instructions": 5767859,
+      "cycles": 1115488
+    },
+    {
+      "round": 10,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 117375,
+      "instructions": 2761340,
+      "cycles": 454825
+    },
+    {
+      "round": 10,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 37125,
+      "instructions": 505122,
+      "cycles": 131718
+    },
+    {
+      "round": 10,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 40958,
+      "instructions": 533181,
+      "cycles": 146562
+    },
+    {
+      "round": 10,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3437250,
+      "instructions": 77046908,
+      "cycles": 13920327
+    },
+    {
+      "round": 10,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 120104917,
+      "instructions": 2782544361,
+      "cycles": 479122052
+    },
+    {
+      "round": 10,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 215584,
+      "instructions": 4181246,
+      "cycles": 853117
+    },
+    {
+      "round": 10,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 361583,
+      "instructions": 7021517,
+      "cycles": 1445175
+    },
+    {
+      "round": 10,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 22209,
+      "instructions": 336612,
+      "cycles": 72903
+    },
+    {
+      "round": 10,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 24917,
+      "instructions": 328462,
+      "cycles": 83263
+    },
+    {
+      "round": 10,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14278125,
+      "instructions": 327430840,
+      "cycles": 56998254
+    },
+    {
+      "round": 10,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1048833,
+      "instructions": 25706758,
+      "cycles": 4232947
+    },
+    {
+      "round": 10,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15067792,
+      "instructions": 340953304,
+      "cycles": 60843962
+    },
+    {
+      "round": 10,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 2118667,
+      "instructions": 40845460,
+      "cycles": 8487904
+    },
+    {
+      "round": 11,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 122833,
+      "instructions": 2761212,
+      "cycles": 470897
+    },
+    {
+      "round": 11,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 271334,
+      "instructions": 5776171,
+      "cycles": 1079510
+    },
+    {
+      "round": 11,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 35542,
+      "instructions": 490723,
+      "cycles": 125483
+    },
+    {
+      "round": 11,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 40084,
+      "instructions": 533001,
+      "cycles": 143306
+    },
+    {
+      "round": 11,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1069667,
+      "instructions": 27160580,
+      "cycles": 4258901
+    },
+    {
+      "round": 11,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14271000,
+      "instructions": 327436127,
+      "cycles": 57132738
+    },
+    {
+      "round": 11,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 11250,
+      "instructions": 78149,
+      "cycles": 38492
+    },
+    {
+      "round": 11,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 10792,
+      "instructions": 80843,
+      "cycles": 36859
+    },
+    {
+      "round": 11,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 123428417,
+      "instructions": 2820238805,
+      "cycles": 490001804
+    },
+    {
+      "round": 11,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5849709,
+      "instructions": 120202324,
+      "cycles": 23076811
+    },
+    {
+      "round": 11,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5583,
+      "instructions": 46190,
+      "cycles": 20524
+    },
+    {
+      "round": 11,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 6375,
+      "instructions": 46595,
+      "cycles": 23703
+    },
+    {
+      "round": 11,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 359417,
+      "instructions": 7158736,
+      "cycles": 1436614
+    },
+    {
+      "round": 11,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 207125,
+      "instructions": 4167526,
+      "cycles": 819050
+    },
+    {
+      "round": 11,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1939750,
+      "instructions": 40108299,
+      "cycles": 7780355
+    },
+    {
+      "round": 11,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14932041,
+      "instructions": 339522474,
+      "cycles": 60543264
+    },
+    {
+      "round": 11,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 25334,
+      "instructions": 328313,
+      "cycles": 84677
+    },
+    {
+      "round": 11,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21917,
+      "instructions": 321144,
+      "cycles": 72520
+    },
+    {
+      "round": 11,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118412417,
+      "instructions": 2778251171,
+      "cycles": 479093079
+    },
+    {
+      "round": 11,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3321791,
+      "instructions": 81395636,
+      "cycles": 12943588
+    },
+    {
+      "round": 12,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1095959,
+      "instructions": 27160254,
+      "cycles": 4388696
+    },
+    {
+      "round": 12,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14132833,
+      "instructions": 325967607,
+      "cycles": 56857662
+    },
+    {
+      "round": 12,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 13750,
+      "instructions": 89262,
+      "cycles": 46258
+    },
+    {
+      "round": 12,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10459,
+      "instructions": 74783,
+      "cycles": 35547
+    },
+    {
+      "round": 12,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 362542,
+      "instructions": 7020903,
+      "cycles": 1449194
+    },
+    {
+      "round": 12,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 211417,
+      "instructions": 4173499,
+      "cycles": 836548
+    },
+    {
+      "round": 12,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 271167,
+      "instructions": 5610327,
+      "cycles": 1078426
+    },
+    {
+      "round": 12,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 117625,
+      "instructions": 2775482,
+      "cycles": 455826
+    },
+    {
+      "round": 12,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26125,
+      "instructions": 355949,
+      "cycles": 88010
+    },
+    {
+      "round": 12,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21459,
+      "instructions": 321620,
+      "cycles": 70684
+    },
+    {
+      "round": 12,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14991542,
+      "instructions": 339527121,
+      "cycles": 60784102
+    },
+    {
+      "round": 12,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1942625,
+      "instructions": 40850617,
+      "cycles": 7857660
+    },
+    {
+      "round": 12,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5959,
+      "instructions": 46145,
+      "cycles": 22061
+    },
+    {
+      "round": 12,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 9708,
+      "instructions": 46499,
+      "cycles": 33676
+    },
+    {
+      "round": 12,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5819208,
+      "instructions": 120202275,
+      "cycles": 23438490
+    },
+    {
+      "round": 12,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122375292,
+      "instructions": 2822403502,
+      "cycles": 489482462
+    },
+    {
+      "round": 12,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3127875,
+      "instructions": 81380256,
+      "cycles": 12661317
+    },
+    {
+      "round": 12,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118457334,
+      "instructions": 2778248091,
+      "cycles": 478296982
+    },
+    {
+      "round": 12,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 41125,
+      "instructions": 532990,
+      "cycles": 147137
+    },
+    {
+      "round": 12,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 36000,
+      "instructions": 477183,
+      "cycles": 127105
+    },
+    {
+      "round": 13,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21708,
+      "instructions": 321234,
+      "cycles": 71714
+    },
+    {
+      "round": 13,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26291,
+      "instructions": 355684,
+      "cycles": 88532
+    },
+    {
+      "round": 13,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 13125,
+      "instructions": 89314,
+      "cycles": 44016
+    },
+    {
+      "round": 13,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 11708,
+      "instructions": 74582,
+      "cycles": 40018
+    },
+    {
+      "round": 13,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15135166,
+      "instructions": 340218513,
+      "cycles": 60697375
+    },
+    {
+      "round": 13,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1939625,
+      "instructions": 40856672,
+      "cycles": 7845876
+    },
+    {
+      "round": 13,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 112792,
+      "instructions": 2603925,
+      "cycles": 435993
+    },
+    {
+      "round": 13,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 270167,
+      "instructions": 5782615,
+      "cycles": 1074333
+    },
+    {
+      "round": 13,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1076125,
+      "instructions": 27160618,
+      "cycles": 4343497
+    },
+    {
+      "round": 13,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14057292,
+      "instructions": 327450842,
+      "cycles": 56995463
+    },
+    {
+      "round": 13,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118850541,
+      "instructions": 2778239509,
+      "cycles": 479818930
+    },
+    {
+      "round": 13,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3433625,
+      "instructions": 81380562,
+      "cycles": 13417298
+    },
+    {
+      "round": 13,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121012208,
+      "instructions": 2822424295,
+      "cycles": 490119349
+    },
+    {
+      "round": 13,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5853958,
+      "instructions": 120202409,
+      "cycles": 23514331
+    },
+    {
+      "round": 13,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 38292,
+      "instructions": 501391,
+      "cycles": 136173
+    },
+    {
+      "round": 13,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 34625,
+      "instructions": 468685,
+      "cycles": 121968
+    },
+    {
+      "round": 13,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 6375,
+      "instructions": 46703,
+      "cycles": 23807
+    },
+    {
+      "round": 13,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6000,
+      "instructions": 42729,
+      "cycles": 22106
+    },
+    {
+      "round": 13,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 359250,
+      "instructions": 7013264,
+      "cycles": 1436063
+    },
+    {
+      "round": 13,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 210041,
+      "instructions": 4080813,
+      "cycles": 830832
+    },
+    {
+      "round": 14,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 379417,
+      "instructions": 7071122,
+      "cycles": 1443706
+    },
+    {
+      "round": 14,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 208541,
+      "instructions": 4072576,
+      "cycles": 825421
+    },
+    {
+      "round": 14,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1985042,
+      "instructions": 39387850,
+      "cycles": 7831557
+    },
+    {
+      "round": 14,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15232125,
+      "instructions": 339497921,
+      "cycles": 60744358
+    },
+    {
+      "round": 14,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 120924667,
+      "instructions": 2818094452,
+      "cycles": 489250513
+    },
+    {
+      "round": 14,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5816875,
+      "instructions": 122367643,
+      "cycles": 23525309
+    },
+    {
+      "round": 14,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 271500,
+      "instructions": 5775915,
+      "cycles": 1079918
+    },
+    {
+      "round": 14,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 116459,
+      "instructions": 2761353,
+      "cycles": 450991
+    },
+    {
+      "round": 14,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14048042,
+      "instructions": 325987016,
+      "cycles": 56788594
+    },
+    {
+      "round": 14,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1048458,
+      "instructions": 27160392,
+      "cycles": 4231472
+    },
+    {
+      "round": 14,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 11167,
+      "instructions": 75060,
+      "cycles": 38337
+    },
+    {
+      "round": 14,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 11625,
+      "instructions": 74810,
+      "cycles": 39312
+    },
+    {
+      "round": 14,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21250,
+      "instructions": 321473,
+      "cycles": 70266
+    },
+    {
+      "round": 14,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 28166,
+      "instructions": 328357,
+      "cycles": 81975
+    },
+    {
+      "round": 14,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5500,
+      "instructions": 46162,
+      "cycles": 19946
+    },
+    {
+      "round": 14,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 9375,
+      "instructions": 49017,
+      "cycles": 35554
+    },
+    {
+      "round": 14,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118701625,
+      "instructions": 2782548338,
+      "cycles": 478674340
+    },
+    {
+      "round": 14,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3335583,
+      "instructions": 81380486,
+      "cycles": 12961548
+    },
+    {
+      "round": 14,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 38959,
+      "instructions": 511606,
+      "cycles": 138719
+    },
+    {
+      "round": 14,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 39417,
+      "instructions": 524456,
+      "cycles": 140535
+    },
+    {
+      "round": 15,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 373292,
+      "instructions": 7158802,
+      "cycles": 1462765
+    },
+    {
+      "round": 15,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 206208,
+      "instructions": 4167501,
+      "cycles": 815581
+    },
+    {
+      "round": 15,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3385583,
+      "instructions": 81380179,
+      "cycles": 12917167
+    },
+    {
+      "round": 15,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 120477291,
+      "instructions": 2778227936,
+      "cycles": 477723692
+    },
+    {
+      "round": 15,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1092167,
+      "instructions": 27160341,
+      "cycles": 4408331
+    },
+    {
+      "round": 15,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14114250,
+      "instructions": 327458416,
+      "cycles": 57109122
+    },
+    {
+      "round": 15,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14945208,
+      "instructions": 340963026,
+      "cycles": 60501405
+    },
+    {
+      "round": 15,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1913709,
+      "instructions": 39387848,
+      "cycles": 7740751
+    },
+    {
+      "round": 15,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5750792,
+      "instructions": 118027733,
+      "cycles": 23304341
+    },
+    {
+      "round": 15,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122883125,
+      "instructions": 2822411687,
+      "cycles": 488071684
+    },
+    {
+      "round": 15,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 40208,
+      "instructions": 533090,
+      "cycles": 143830
+    },
+    {
+      "round": 15,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 36042,
+      "instructions": 498043,
+      "cycles": 127251
+    },
+    {
+      "round": 15,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 22292,
+      "instructions": 336193,
+      "cycles": 73548
+    },
+    {
+      "round": 15,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 25625,
+      "instructions": 356257,
+      "cycles": 86268
+    },
+    {
+      "round": 15,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5750,
+      "instructions": 46132,
+      "cycles": 21151
+    },
+    {
+      "round": 15,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5458,
+      "instructions": 48967,
+      "cycles": 19865
+    },
+    {
+      "round": 15,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 12000,
+      "instructions": 80843,
+      "cycles": 41469
+    },
+    {
+      "round": 15,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 14041,
+      "instructions": 86442,
+      "cycles": 46533
+    },
+    {
+      "round": 15,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 278625,
+      "instructions": 5776082,
+      "cycles": 1108323
+    },
+    {
+      "round": 15,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 116625,
+      "instructions": 2761667,
+      "cycles": 451780
+    },
+    {
+      "round": 16,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 33000,
+      "instructions": 469501,
+      "cycles": 119324
+    },
+    {
+      "round": 16,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 39292,
+      "instructions": 524559,
+      "cycles": 140511
+    },
+    {
+      "round": 16,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5708,
+      "instructions": 46137,
+      "cycles": 21130
+    },
+    {
+      "round": 16,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5375,
+      "instructions": 43133,
+      "cycles": 20079
+    },
+    {
+      "round": 16,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 208666,
+      "instructions": 4158011,
+      "cycles": 825217
+    },
+    {
+      "round": 16,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 361208,
+      "instructions": 7079739,
+      "cycles": 1444359
+    },
+    {
+      "round": 16,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26000,
+      "instructions": 356001,
+      "cycles": 87523
+    },
+    {
+      "round": 16,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 25541,
+      "instructions": 335554,
+      "cycles": 74548
+    },
+    {
+      "round": 16,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1075791,
+      "instructions": 27160334,
+      "cycles": 4342643
+    },
+    {
+      "round": 16,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14036625,
+      "instructions": 327434309,
+      "cycles": 56911480
+    },
+    {
+      "round": 16,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 120880541,
+      "instructions": 2822409889,
+      "cycles": 488961741
+    },
+    {
+      "round": 16,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5697292,
+      "instructions": 118041847,
+      "cycles": 23087249
+    },
+    {
+      "round": 16,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3254958,
+      "instructions": 81380236,
+      "cycles": 12858874
+    },
+    {
+      "round": 16,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118754042,
+      "instructions": 2782552181,
+      "cycles": 479180461
+    },
+    {
+      "round": 16,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1964708,
+      "instructions": 40842192,
+      "cycles": 7834938
+    },
+    {
+      "round": 16,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14990167,
+      "instructions": 340954538,
+      "cycles": 60588435
+    },
+    {
+      "round": 16,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 117208,
+      "instructions": 2761371,
+      "cycles": 454200
+    },
+    {
+      "round": 16,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 266167,
+      "instructions": 5610279,
+      "cycles": 1058438
+    },
+    {
+      "round": 16,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10209,
+      "instructions": 77893,
+      "cycles": 34819
+    },
+    {
+      "round": 16,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 12584,
+      "instructions": 86867,
+      "cycles": 42201
+    },
+    {
+      "round": 17,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 368375,
+      "instructions": 7158667,
+      "cycles": 1443355
+    },
+    {
+      "round": 17,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 206333,
+      "instructions": 4173491,
+      "cycles": 816018
+    },
+    {
+      "round": 17,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3118292,
+      "instructions": 77046960,
+      "cycles": 12370529
+    },
+    {
+      "round": 17,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 119501583,
+      "instructions": 2782564662,
+      "cycles": 480515478
+    },
+    {
+      "round": 17,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 275708,
+      "instructions": 5776080,
+      "cycles": 1097120
+    },
+    {
+      "round": 17,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 119250,
+      "instructions": 2761665,
+      "cycles": 462373
+    },
+    {
+      "round": 17,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 5541,
+      "instructions": 46105,
+      "cycles": 20303
+    },
+    {
+      "round": 17,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5625,
+      "instructions": 46510,
+      "cycles": 20674
+    },
+    {
+      "round": 17,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10083,
+      "instructions": 77922,
+      "cycles": 34109
+    },
+    {
+      "round": 17,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 13208,
+      "instructions": 89255,
+      "cycles": 44653
+    },
+    {
+      "round": 17,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5904208,
+      "instructions": 122391740,
+      "cycles": 23692480
+    },
+    {
+      "round": 17,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 122339042,
+      "instructions": 2820242919,
+      "cycles": 490267524
+    },
+    {
+      "round": 17,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14975583,
+      "instructions": 340226258,
+      "cycles": 60698650
+    },
+    {
+      "round": 17,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1914833,
+      "instructions": 40108231,
+      "cycles": 7745020
+    },
+    {
+      "round": 17,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14177125,
+      "instructions": 327453295,
+      "cycles": 57042311
+    },
+    {
+      "round": 17,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1043834,
+      "instructions": 27160572,
+      "cycles": 4212885
+    },
+    {
+      "round": 17,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 21500,
+      "instructions": 335482,
+      "cycles": 70920
+    },
+    {
+      "round": 17,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26625,
+      "instructions": 355980,
+      "cycles": 90218
+    },
+    {
+      "round": 17,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 33000,
+      "instructions": 461231,
+      "cycles": 115323
+    },
+    {
+      "round": 17,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 41791,
+      "instructions": 510465,
+      "cycles": 150065
+    },
+    {
+      "round": 18,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 115500,
+      "instructions": 2761396,
+      "cycles": 457483
+    },
+    {
+      "round": 18,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 273042,
+      "instructions": 5624247,
+      "cycles": 1053950
+    },
+    {
+      "round": 18,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 369791,
+      "instructions": 7167356,
+      "cycles": 1445513
+    },
+    {
+      "round": 18,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 212667,
+      "instructions": 4166595,
+      "cycles": 842016
+    },
+    {
+      "round": 18,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3391875,
+      "instructions": 81380281,
+      "cycles": 12832721
+    },
+    {
+      "round": 18,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118675584,
+      "instructions": 2782564286,
+      "cycles": 479103774
+    },
+    {
+      "round": 18,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 24667,
+      "instructions": 327719,
+      "cycles": 82295
+    },
+    {
+      "round": 18,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 22291,
+      "instructions": 336222,
+      "cycles": 73746
+    },
+    {
+      "round": 18,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6250,
+      "instructions": 42735,
+      "cycles": 23180
+    },
+    {
+      "round": 18,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5875,
+      "instructions": 46510,
+      "cycles": 21684
+    },
+    {
+      "round": 18,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121267875,
+      "instructions": 2822413993,
+      "cycles": 488150965
+    },
+    {
+      "round": 18,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5771458,
+      "instructions": 120202351,
+      "cycles": 23289067
+    },
+    {
+      "round": 18,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14055583,
+      "instructions": 327430568,
+      "cycles": 56988301
+    },
+    {
+      "round": 18,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1064208,
+      "instructions": 25706862,
+      "cycles": 4269232
+    },
+    {
+      "round": 18,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10958,
+      "instructions": 78054,
+      "cycles": 37443
+    },
+    {
+      "round": 18,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 11291,
+      "instructions": 78748,
+      "cycles": 38778
+    },
+    {
+      "round": 18,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1906250,
+      "instructions": 39387770,
+      "cycles": 7711023
+    },
+    {
+      "round": 18,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15034000,
+      "instructions": 340964055,
+      "cycles": 60657479
+    },
+    {
+      "round": 18,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 36291,
+      "instructions": 499107,
+      "cycles": 128502
+    },
+    {
+      "round": 18,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 40375,
+      "instructions": 532833,
+      "cycles": 144687
+    },
+    {
+      "round": 19,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 28916,
+      "instructions": 356052,
+      "cycles": 88366
+    },
+    {
+      "round": 19,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 19625,
+      "instructions": 293378,
+      "cycles": 64808
+    },
+    {
+      "round": 19,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1068375,
+      "instructions": 27160312,
+      "cycles": 4252952
+    },
+    {
+      "round": 19,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14152833,
+      "instructions": 327429640,
+      "cycles": 56957807
+    },
+    {
+      "round": 19,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 266666,
+      "instructions": 5775885,
+      "cycles": 1061257
+    },
+    {
+      "round": 19,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 116708,
+      "instructions": 2761279,
+      "cycles": 452335
+    },
+    {
+      "round": 19,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121415459,
+      "instructions": 2820215135,
+      "cycles": 489752348
+    },
+    {
+      "round": 19,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5870041,
+      "instructions": 122367575,
+      "cycles": 23787860
+    },
+    {
+      "round": 19,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1947083,
+      "instructions": 40843065,
+      "cycles": 7875818
+    },
+    {
+      "round": 19,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 15016500,
+      "instructions": 339520165,
+      "cycles": 60591395
+    },
+    {
+      "round": 19,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5625,
+      "instructions": 46510,
+      "cycles": 20767
+    },
+    {
+      "round": 19,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6000,
+      "instructions": 46137,
+      "cycles": 22081
+    },
+    {
+      "round": 19,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 210834,
+      "instructions": 4159195,
+      "cycles": 833935
+    },
+    {
+      "round": 19,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 360375,
+      "instructions": 7013308,
+      "cycles": 1438083
+    },
+    {
+      "round": 19,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 36166,
+      "instructions": 504302,
+      "cycles": 127789
+    },
+    {
+      "round": 19,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 39750,
+      "instructions": 524375,
+      "cycles": 141839
+    },
+    {
+      "round": 19,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10958,
+      "instructions": 74507,
+      "cycles": 37520
+    },
+    {
+      "round": 19,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 13625,
+      "instructions": 86956,
+      "cycles": 46498
+    },
+    {
+      "round": 19,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3278917,
+      "instructions": 81394631,
+      "cycles": 12932618
+    },
+    {
+      "round": 19,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 120875709,
+      "instructions": 2782556249,
+      "cycles": 479241179
+    },
+    {
+      "round": 20,
+      "case": "suspend-10",
+      "version": "after",
+      "cpu_ns": 10542,
+      "instructions": 86926,
+      "cycles": 42001
+    },
+    {
+      "round": 20,
+      "case": "suspend-10",
+      "version": "before",
+      "cpu_ns": 10958,
+      "instructions": 74554,
+      "cycles": 37632
+    },
+    {
+      "round": 20,
+      "case": "suspend-1000",
+      "version": "after",
+      "cpu_ns": 206583,
+      "instructions": 4072341,
+      "cycles": 817018
+    },
+    {
+      "round": 20,
+      "case": "suspend-1000",
+      "version": "before",
+      "cpu_ns": 360583,
+      "instructions": 6998626,
+      "cycles": 1441398
+    },
+    {
+      "round": 20,
+      "case": "suspend-30000",
+      "version": "before",
+      "cpu_ns": 121984750,
+      "instructions": 2820252265,
+      "cycles": 489719016
+    },
+    {
+      "round": 20,
+      "case": "suspend-30000",
+      "version": "after",
+      "cpu_ns": 5918959,
+      "instructions": 122391603,
+      "cycles": 23883037
+    },
+    {
+      "round": 20,
+      "case": "suspend-100",
+      "version": "before",
+      "cpu_ns": 38333,
+      "instructions": 524730,
+      "cycles": 136355
+    },
+    {
+      "round": 20,
+      "case": "suspend-100",
+      "version": "after",
+      "cpu_ns": 36041,
+      "instructions": 461115,
+      "cycles": 127065
+    },
+    {
+      "round": 20,
+      "case": "bind-100",
+      "version": "before",
+      "cpu_ns": 26834,
+      "instructions": 355620,
+      "cycles": 90929
+    },
+    {
+      "round": 20,
+      "case": "bind-100",
+      "version": "after",
+      "cpu_ns": 20958,
+      "instructions": 293381,
+      "cycles": 69664
+    },
+    {
+      "round": 20,
+      "case": "bind-10000",
+      "version": "before",
+      "cpu_ns": 14148833,
+      "instructions": 327422284,
+      "cycles": 57137256
+    },
+    {
+      "round": 20,
+      "case": "bind-10000",
+      "version": "after",
+      "cpu_ns": 1046083,
+      "instructions": 27160169,
+      "cycles": 4221930
+    },
+    {
+      "round": 20,
+      "case": "bind-10",
+      "version": "before",
+      "cpu_ns": 6167,
+      "instructions": 46137,
+      "cycles": 22640
+    },
+    {
+      "round": 20,
+      "case": "bind-10",
+      "version": "after",
+      "cpu_ns": 5625,
+      "instructions": 43139,
+      "cycles": 20688
+    },
+    {
+      "round": 20,
+      "case": "suspend-10000",
+      "version": "after",
+      "cpu_ns": 1913125,
+      "instructions": 39387971,
+      "cycles": 7738707
+    },
+    {
+      "round": 20,
+      "case": "suspend-10000",
+      "version": "before",
+      "cpu_ns": 14975917,
+      "instructions": 340953361,
+      "cycles": 60626330
+    },
+    {
+      "round": 20,
+      "case": "bind-30000",
+      "version": "after",
+      "cpu_ns": 3381709,
+      "instructions": 81380199,
+      "cycles": 13225634
+    },
+    {
+      "round": 20,
+      "case": "bind-30000",
+      "version": "before",
+      "cpu_ns": 118872333,
+      "instructions": 2782556353,
+      "cycles": 478965953
+    },
+    {
+      "round": 20,
+      "case": "bind-1000",
+      "version": "after",
+      "cpu_ns": 115166,
+      "instructions": 2776173,
+      "cycles": 446213
+    },
+    {
+      "round": 20,
+      "case": "bind-1000",
+      "version": "before",
+      "cpu_ns": 270166,
+      "instructions": 5775994,
+      "cycles": 1074949
+    }
+  ],
+  "summary": {
+    "bind-10": {
+      "cpu_ns": {
+        "before_median": 5875,
+        "after_median": 5875,
+        "paired_ratio_median": 0.9790198053037932,
+        "paired_ratio_bootstrap_95pct": [
+          0.9492173913043478,
+          1.0517119661136605
+        ]
+      },
+      "instructions": {
+        "before_median": 46137,
+        "after_median": 46535,
+        "paired_ratio_median": 1.008768131630223,
+        "paired_ratio_bootstrap_95pct": [
+          1.0076714703651533,
+          1.0614540882684471
+        ]
+      },
+      "cycles": {
+        "before_median": 21757,
+        "after_median": 21684,
+        "paired_ratio_median": 0.9734550561797752,
+        "paired_ratio_bootstrap_95pct": [
+          0.9502602934216754,
+          1.058163946941502
+        ]
+      }
+    },
+    "bind-100": {
+      "cpu_ns": {
+        "before_median": 26167,
+        "after_median": 21459,
+        "paired_ratio_median": 0.8075117370892019,
+        "paired_ratio_bootstrap_95pct": [
+          0.7817243239078512,
+          0.8491640564617825
+        ]
+      },
+      "instructions": {
+        "before_median": 355708,
+        "after_median": 321379,
+        "paired_ratio_median": 0.9034910657055787,
+        "paired_ratio_bootstrap_95pct": [
+          0.902171745681363,
+          0.9436811066168524
+        ]
+      },
+      "cycles": {
+        "before_median": 87982,
+        "after_median": 70684,
+        "paired_ratio_median": 0.8031360072719009,
+        "paired_ratio_bootstrap_95pct": [
+          0.7806378775049393,
+          0.8517532534305269
+        ]
+      }
+    },
+    "bind-1000": {
+      "cpu_ns": {
+        "before_median": 271334,
+        "after_median": 116708,
+        "paired_ratio_median": 0.426434916086058,
+        "paired_ratio_bootstrap_95pct": [
+          0.4234217311233886,
+          0.4325228139916143
+        ]
+      },
+      "instructions": {
+        "before_median": 5775994,
+        "after_median": 2761396,
+        "paired_ratio_median": 0.47874609972261806,
+        "paired_ratio_bootstrap_95pct": [
+          0.47808061579853584,
+          0.4806398690857366
+        ]
+      },
+      "cycles": {
+        "before_median": 1076910,
+        "after_median": 453197,
+        "paired_ratio_median": 0.41897417714982266,
+        "paired_ratio_bootstrap_95pct": [
+          0.4124986460816465,
+          0.42622569273983585
+        ]
+      }
+    },
+    "bind-10000": {
+      "cpu_ns": {
+        "before_median": 14147500,
+        "after_median": 1055625,
+        "paired_ratio_median": 0.07463374611209163,
+        "paired_ratio_bootstrap_95pct": [
+          0.07395113920879363,
+          0.07571425532473466
+        ]
+      },
+      "instructions": {
+        "before_median": 327430820,
+        "after_median": 27160334,
+        "paired_ratio_median": 0.0829492464647922,
+        "paired_ratio_bootstrap_95pct": [
+          0.08294287052313842,
+          0.08295042731269237
+        ]
+      },
+      "cycles": {
+        "before_median": 56983435,
+        "after_median": 4232726,
+        "paired_ratio_median": 0.07427993766960521,
+        "paired_ratio_bootstrap_95pct": [
+          0.07401044560085841,
+          0.07466846467596619
+        ]
+      }
+    },
+    "bind-30000": {
+      "cpu_ns": {
+        "before_median": 118754042,
+        "after_median": 3254958,
+        "paired_ratio_median": 0.027409239678763946,
+        "paired_ratio_bootstrap_95pct": [
+          0.02679932027546731,
+          0.028100567283725054
+        ]
+      },
+      "instructions": {
+        "before_median": 2782556249,
+        "after_median": 81380236,
+        "paired_ratio_median": 0.02924661630990632,
+        "paired_ratio_bootstrap_95pct": [
+          0.029246517826320366,
+          0.029251746853006744
+        ]
+      },
+      "cycles": {
+        "before_median": 478965953,
+        "after_median": 12925598,
+        "paired_ratio_median": 0.027016854484762865,
+        "paired_ratio_bootstrap_95pct": [
+          0.02678484640782646,
+          0.027213418823814423
+        ]
+      }
+    },
+    "suspend-10": {
+      "cpu_ns": {
+        "before_median": 11250,
+        "after_median": 11417,
+        "paired_ratio_median": 0.9928082488519192,
+        "paired_ratio_bootstrap_95pct": [
+          0.9592888888888889,
+          1.1210283566791936
+        ]
+      },
+      "instructions": {
+        "before_median": 77939,
+        "after_median": 80843,
+        "paired_ratio_median": 1.0344726100142037,
+        "paired_ratio_bootstrap_95pct": [
+          1.0033417992247027,
+          1.1152093256133413
+        ]
+      },
+      "cycles": {
+        "before_median": 38492,
+        "after_median": 39285,
+        "paired_ratio_median": 0.9983259694283597,
+        "paired_ratio_bootstrap_95pct": [
+          0.9279504972818599,
+          1.1160980017006803
+        ]
+      }
+    },
+    "suspend-100": {
+      "cpu_ns": {
+        "before_median": 39833,
+        "after_median": 35542,
+        "paired_ratio_median": 0.8919753086419753,
+        "paired_ratio_bootstrap_95pct": [
+          0.8753799392097265,
+          0.9064163289223106
+        ]
+      },
+      "instructions": {
+        "before_median": 524535,
+        "after_median": 477183,
+        "paired_ratio_median": 0.9342568797013637,
+        "paired_ratio_bootstrap_95pct": [
+          0.9097068776512083,
+          0.9367043707878453
+        ]
+      },
+      "cycles": {
+        "before_median": 142291,
+        "after_median": 125483,
+        "paired_ratio_median": 0.879150121332451,
+        "paired_ratio_bootstrap_95pct": [
+          0.8638547748017154,
+          0.8987186310230483
+        ]
+      }
+    },
+    "suspend-1000": {
+      "cpu_ns": {
+        "before_median": 361583,
+        "after_median": 208666,
+        "paired_ratio_median": 0.5762804764382319,
+        "paired_ratio_bootstrap_95pct": [
+          0.5729138644916705,
+          0.5839674848113905
+        ]
+      },
+      "instructions": {
+        "before_median": 7079409,
+        "after_median": 4158011,
+        "paired_ratio_median": 0.5818772141846128,
+        "paired_ratio_bootstrap_95pct": [
+          0.5775928012944048,
+          0.5873113401496863
+        ]
+      },
+      "cycles": {
+        "before_median": 1443706,
+        "after_median": 825053,
+        "paired_ratio_median": 0.5717375975440984,
+        "paired_ratio_bootstrap_95pct": [
+          0.5689728687301351,
+          0.577250526844577
+        ]
+      }
+    },
+    "suspend-10000": {
+      "cpu_ns": {
+        "before_median": 15004917,
+        "after_median": 1939750,
+        "paired_ratio_median": 0.12900702619342352,
+        "paired_ratio_bootstrap_95pct": [
+          0.12804833495793433,
+          0.1303194399993435
+        ]
+      },
+      "instructions": {
+        "before_median": 340221766,
+        "after_median": 40125220,
+        "paired_ratio_median": 0.11813227454606225,
+        "paired_ratio_bootstrap_95pct": [
+          0.11604320361016952,
+          0.11982788527481475
+        ]
+      },
+      "cycles": {
+        "before_median": 60632139,
+        "after_median": 7780355,
+        "paired_ratio_median": 0.1284817289298925,
+        "paired_ratio_bootstrap_95pct": [
+          0.12769706389408594,
+          0.12927163092744218
+        ]
+      }
+    },
+    "suspend-30000": {
+      "cpu_ns": {
+        "before_median": 121984750,
+        "after_median": 5853958,
+        "paired_ratio_median": 0.04810329558319148,
+        "paired_ratio_bootstrap_95pct": [
+          0.04755214802674383,
+          0.04837493751043696
+        ]
+      },
+      "instructions": {
+        "before_median": 2822403502,
+        "after_median": 120202409,
+        "paired_ratio_median": 0.04262143798310959,
+        "paired_ratio_bootstrap_95pct": [
+          0.042588355412381394,
+          0.043389446954372156
+        ]
+      },
+      "cycles": {
+        "before_median": 489250513,
+        "after_median": 23438490,
+        "paired_ratio_median": 0.04787768814501772,
+        "paired_ratio_bootstrap_95pct": [
+          0.04758340243321115,
+          0.048157309384201874
+        ]
+      }
+    }
+  }
+}

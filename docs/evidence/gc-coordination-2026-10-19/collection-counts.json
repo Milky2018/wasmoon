@@ -1,0 +1,92 @@
+[
+  {
+    "case": "word-2000000",
+    "binary": "before",
+    "exit_code": 0,
+    "binary_sha256": "f8333d5e7473973c09f6b261ad4b823fc0b4b3ceafb9c41b54f64a09cca7548d",
+    "collections": 0,
+    "totals": {
+      "stack_roots": 0,
+      "store_roots": 0,
+      "table_roots": 0,
+      "total": 0,
+      "collected": 0
+    },
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "case": "word-2000000",
+    "binary": "after",
+    "exit_code": 0,
+    "binary_sha256": "aca7d0293f7d528ce18b1db19056f83346a6621469ce97cab7758b8a6c19f302",
+    "collections": 0,
+    "totals": {
+      "stack_roots": 0,
+      "store_roots": 0,
+      "table_roots": 0,
+      "total": 0,
+      "collected": 0
+    },
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "case": "wide-1000000",
+    "binary": "before",
+    "exit_code": 0,
+    "binary_sha256": "f8333d5e7473973c09f6b261ad4b823fc0b4b3ceafb9c41b54f64a09cca7548d",
+    "collections": 0,
+    "totals": {
+      "stack_roots": 0,
+      "store_roots": 0,
+      "table_roots": 0,
+      "total": 0,
+      "collected": 0
+    },
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "case": "wide-1000000",
+    "binary": "after",
+    "exit_code": 0,
+    "binary_sha256": "aca7d0293f7d528ce18b1db19056f83346a6621469ce97cab7758b8a6c19f302",
+    "collections": 0,
+    "totals": {
+      "stack_roots": 0,
+      "store_roots": 0,
+      "table_roots": 0,
+      "total": 0,
+      "collected": 0
+    },
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "case": "wide-30000",
+    "binary": "before",
+    "exit_code": 0,
+    "binary_sha256": "f8333d5e7473973c09f6b261ad4b823fc0b4b3ceafb9c41b54f64a09cca7548d",
+    "collections": 29999,
+    "totals": {
+      "stack_roots": 0,
+      "store_roots": 0,
+      "table_roots": 0,
+      "total": 0,
+      "collected": 29999
+    },
+    "stderr_sha256": "418e2cb83e00224adeb974be472ffd123113d2af6662bfbad765eb8577224756"
+  },
+  {
+    "case": "wide-30000",
+    "binary": "after",
+    "exit_code": 0,
+    "binary_sha256": "aca7d0293f7d528ce18b1db19056f83346a6621469ce97cab7758b8a6c19f302",
+    "collections": 29999,
+    "totals": {
+      "stack_roots": 0,
+      "store_roots": 0,
+      "table_roots": 0,
+      "total": 0,
+      "collected": 29999
+    },
+    "stderr_sha256": "418e2cb83e00224adeb974be472ffd123113d2af6662bfbad765eb8577224756"
+  }
+]

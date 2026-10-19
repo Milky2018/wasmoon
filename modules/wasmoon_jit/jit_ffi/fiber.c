@@ -190,6 +190,9 @@ void *native_fiber_own_resource(void *resource, void (*release)(void *)) {
     if (!current_native_fiber) return NULL;
     native_fiber_resource_t *scope = wasmoon_native_malloc(sizeof(*scope));
     if (!scope) {
+        // The caller transferred a retained lease; failed registration must
+        // release it before the trap abandons the caller's native frame.
+        release(resource);
         g_trap_code = WASMOON_TRAP_OUT_OF_MEMORY;
         siglongjmp(g_trap_jmp_buf, 1);
     }

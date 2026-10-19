@@ -53,7 +53,20 @@ pub extern "c" fn context_callable_tag(context : @jit_ffi.JITContext) -> Int32 =
 pub extern "c" fn activation_scratch_isolation() -> Int32 = "wasmoon_test_activation_scratch_isolation"
 
 ///|
-pub extern "c" fn activation_resume_roots() -> Int32 = "wasmoon_test_activation_resume_roots"
+#borrow(heap)
+extern "c" fn activation_resume_roots_raw(
+  heap : @jit_ffi.GCHeapHandle,
+) -> Int32 = "wasmoon_test_activation_resume_roots"
+
+///|
+pub fn activation_resume_roots() -> Int32 {
+  let heap = @jit_ffi.GCHeapHandle::new(1024L)
+  if heap.is_null() {
+    0
+  } else {
+    activation_resume_roots_raw(heap)
+  }
+}
 
 ///|
 #borrow(context)
