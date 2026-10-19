@@ -1,7 +1,7 @@
 --- a/modules/wasmoon_jit/jit_ffi/exceptions.mbt
 +++ b/modules/wasmoon_jit/jit_ffi/exceptions.mbt
 @@ -24,6 +24,7 @@
- 
+
  ///|
  priv struct ExceptionState {
 +  control : Int32
@@ -18,7 +18,7 @@
      dead_entries: 0,
 @@ -158,7 +160,430 @@
  ) -> Unit = "wasmoon_exception_root_write"
- 
+
  ///|
 -fn ExceptionState::insert(
 +fn ExceptionState::insert_split(
@@ -450,7 +450,7 @@
    tag : Int32,
 @@ -217,352 +642,13 @@
  }
- 
+
  ///|
 -// Identities are appended monotonically. Dead entries remain searchable until
 -// compaction, but never yield a payload. Storage tracks live/peak occupancy,

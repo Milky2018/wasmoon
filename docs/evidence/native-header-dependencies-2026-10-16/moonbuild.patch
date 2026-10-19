@@ -105,18 +105,18 @@ index 426dea9d3..8f3ae7710 100644
 --- a/crates/moonbuild-rupes-recta/src/build_lower/command.rs
 +++ b/crates/moonbuild-rupes-recta/src/build_lower/command.rs
 @@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
- 
+
  use moonutil::compiler_flags::Toolchain;
- 
+
 -use crate::execution_plan::{InputObservation, LoweredCommand};
 +use crate::execution_plan::{DependencyDiscovery, InputObservation, LoweredCommand};
- 
+
  /// Command data produced by action-specific lowering before common execution
  /// metadata and declared outputs are attached.
 @@ -68,6 +68,33 @@ impl BuildCommand {
          )
      }
- 
+
 +    /// Let the compiler report the actual include closure, including headers
 +    /// outside the package and those selected by conditional compilation.
 +    pub(super) fn with_c_dependencies(mut self, toolchain: &Toolchain, output: &Path) -> Self {
@@ -158,7 +158,7 @@ index 9da490541..cb3688a9c 100644
 +        .with_c_dependencies(runtime_toolchain, &artifact_path)
          .with_env(command_env)
      }
- 
+
 diff --git a/crates/moonbuild-rupes-recta/src/build_lower/lower_build.rs b/crates/moonbuild-rupes-recta/src/build_lower/lower_build.rs
 index c998462c6..6abc614a9 100644
 --- a/crates/moonbuild-rupes-recta/src/build_lower/lower_build.rs
@@ -170,7 +170,7 @@ index c998462c6..6abc614a9 100644
 +        .with_c_dependencies(&info.effective_native_toolchain, &output_file)
          .with_msvc_env(&info.effective_native_toolchain)
      }
- 
+
 @@ -1165,6 +1166,7 @@ impl<'a> LoweringContext<'a> {
              extra_inputs: vec![],
              commandline: cc_cmd.into(),
@@ -178,7 +178,7 @@ index c998462c6..6abc614a9 100644
 +        .with_c_dependencies(&info.effective_native_toolchain, Path::new(&dest))
          .with_msvc_env(&info.effective_native_toolchain)
      }
- 
+
 diff --git a/crates/moonbuild-rupes-recta/src/build_lower/mod.rs b/crates/moonbuild-rupes-recta/src/build_lower/mod.rs
 index 547f05fbe..56504fa19 100644
 --- a/crates/moonbuild-rupes-recta/src/build_lower/mod.rs
@@ -186,7 +186,7 @@ index 547f05fbe..56504fa19 100644
 @@ -811,6 +811,40 @@ mod tests {
              1
          );
- 
+
 +        let stub_action = lowered
 +            .action_ids()
 +            .map(|id| lowered.action(id))
@@ -231,7 +231,7 @@ index 8cd3d3ee8..49a8d391a 100644
 @@ -70,6 +70,13 @@ pub enum LoweredCommandExecution {
      },
  }
- 
+
 +/// Compiler-produced dependencies consumed by the incremental executor.
 +#[derive(Debug, Clone, Eq, PartialEq)]
 +pub enum DependencyDiscovery {
@@ -248,7 +248,7 @@ index 8cd3d3ee8..49a8d391a 100644
      pub(crate) env: Vec<(String, String)>,
 +    dependency_discovery: Option<DependencyDiscovery>,
  }
- 
+
  impl From<Vec<String>> for LoweredCommand {
 @@ -90,6 +98,7 @@ impl From<Vec<String>> for LoweredCommand {
              execution: LoweredCommandExecution::Inline(command),
@@ -261,7 +261,7 @@ index 8cd3d3ee8..49a8d391a 100644
 @@ -111,6 +120,15 @@ impl LoweredCommand {
          self.args.first().map(Path::new)
      }
- 
+
 +    pub fn dependency_discovery(&self) -> Option<&DependencyDiscovery> {
 +        self.dependency_discovery.as_ref()
 +    }
@@ -275,7 +275,7 @@ index 8cd3d3ee8..49a8d391a 100644
          &self.args
      }
 @@ -244,7 +262,9 @@ impl ExecutionAction {
- 
+
      /// Whether lowering has a complete enough execution model to permit reuse.
      pub fn is_cache_eligible(&self) -> bool {
 -        self.cache_eligible
@@ -283,7 +283,7 @@ index 8cd3d3ee8..49a8d391a 100644
 +        // cache must include that closure before these actions become reusable.
 +        self.cache_eligible && self.command.dependency_discovery().is_none()
      }
- 
+
      pub fn can_dirty_on_output(&self) -> bool {
 diff --git a/crates/moonbuild/src/execution/n2.rs b/crates/moonbuild/src/execution/n2.rs
 index d447c1c1d..fdeb13829 100644
@@ -291,13 +291,13 @@ index d447c1c1d..fdeb13829 100644
 +++ b/crates/moonbuild/src/execution/n2.rs
 @@ -25,7 +25,9 @@
  use std::{collections::HashMap, path::Path, rc::Rc, sync::mpsc};
- 
+
  use anyhow::Context;
 -use moonbuild_rupes_recta::execution_plan::{InputObservation, LoweredCommandExecution};
 +use moonbuild_rupes_recta::execution_plan::{
 +    DependencyDiscovery, InputObservation, LoweredCommandExecution,
 +};
- 
+
  use super::resolve_parallelism;
  use super::{BuildConfig, BuildInput, CapturedActionOutput, CapturedBuildExecution, ResultCatcher};
 @@ -98,6 +100,13 @@ pub(super) fn execute<'a>(
@@ -338,7 +338,7 @@ index a1e5425cd..beb907e33 100644
 @@ -364,6 +364,12 @@ contracts used by `-check-mi` or `-impl-virtual` therefore remain separate file
  observations for n2. Native lowering enumerates the chosen toolchain include
  tree and attaches its headers as ordinary inputs.
- 
+
 +Compiler commands can declare dependency discovery (a Makefile depfile or MSVC
 +include output). The n2 adapter consumes this metadata and persists its inputs
 +for later incremental runs. Until the global action identity includes that
@@ -354,7 +354,7 @@ index 4de0d53a8..d10b8d50f 100644
 +++ b/docs/dev/reference/build.md
 @@ -246,11 +246,13 @@ MoonBit code might reference the functions defined in them in e.g. `extern "C" f
  Compiling C stubs of a package involves 3 steps:
- 
+
  1. `BuildCStub` -- The C files are compiled independently using a C compiler.
 -   Each action conservatively tracks every package-local `.h`, `.hh`, `.hpp`,
 -   and `.hxx` file because MoonBuild does not interpret transitive `#include`

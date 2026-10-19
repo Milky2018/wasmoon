@@ -43,7 +43,7 @@ int32_t _M0FP39Milky201812wasmoon__jit8jit__ffi8allocate(
       return -25;
       break;
     }
-    
+
     case 2: {
       return -26;
       break;

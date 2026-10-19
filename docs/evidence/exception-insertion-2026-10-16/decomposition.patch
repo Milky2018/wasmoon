@@ -68,7 +68,7 @@
 @@ -147,10 +147,12 @@
      storage->count = count;
  }
- 
+
 +static int exception_probe_control;
  MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_append(
      exception_insert_request_t *request, int64_t reference, const int32_t *mask,

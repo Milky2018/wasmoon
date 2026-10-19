@@ -6,12 +6,12 @@
      exception_callbacks_t *callbacks;
 +    int diagnostic_control;
  } native_exception_arena_t;
- 
+
  // Physical payload storage and root leases, released on close or last RC owner.
 @@ -147,7 +148,7 @@
      storage->count = count;
  }
- 
+
 -MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_append(
 +static __attribute__((noinline)) int32_t original_append(
      exception_insert_request_t *request, int64_t reference, const int32_t *mask,
@@ -71,7 +71,7 @@
 +        return minimal_append(request, reference, mask, traced, byte_charge, object_charge);
 +    return original_append(request, reference, mask, traced, byte_charge, object_charge);
 +}
- 
+
  MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_tag(exception_storage_t *storage, int32_t index) {
      native_exception_t *entry = exception_storage_at(storage, index);
 @@ -225,6 +276,8 @@

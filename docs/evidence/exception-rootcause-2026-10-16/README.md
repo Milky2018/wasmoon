@@ -7,6 +7,14 @@ It adds no fast path, ownership mode, ABI entry point, compiler annotation or
 linker requirement. Linux LSan and Windows Clang/MSVC are **not** accepted by
 these local receipts. No commit or remote delivery is claimed.
 
+Submission formatting note (2026-10-19): archived text logs and the generated C
+excerpt have trailing presentation whitespace removed. Blank patch context
+lines use the empty-line form accepted by `git apply`; every affected patch
+retains identical parsed change counts, and the final repair patch passes a
+reverse application check against production. Original text is recoverable at
+`fcd9dbae`. Numerical JSON, production/test source hashes and measured binaries
+are unchanged. This formatting repair changes no CI whitespace rules.
+
 ## Established compiler problem
 
 The native constructor passes `&entry.root_registration`, a member of its pending

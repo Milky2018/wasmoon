@@ -104,4 +104,3 @@ test discover::tests::discovery_warns_for_packages_named_like_major_version_modu
 test compile::tests::native_debug_info_is_scoped_to_each_compiler ... ok
 
 test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
-

@@ -20,9 +20,9 @@
 --- a/gc_heap.c
 +++ b/gc_heap.c
 @@ -1316,7 +1316,9 @@
- 
+
  // These functions are exported for MoonBit FFI
- 
+
 +extern int32_t gc_native_policy_control(void *, int32_t);
  MOONBIT_FFI_EXPORT GcHeap *wasmoon_gc_heap_new(int64_t capacity, GcAllocationPolicy policy) {
 +    if (getenv("WASMOON_EXPERIMENT_NATIVE_POLICY")) policy = gc_native_policy_control;

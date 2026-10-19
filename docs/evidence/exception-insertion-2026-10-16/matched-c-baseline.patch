@@ -17,7 +17,7 @@
 +    ++registration->heap->exception_root_count;
      return 1;
  }
- 
+
 --- a/modules/wasmoon_jit/jit_ffi/gc_heap.h
 +++ b/modules/wasmoon_jit/jit_ffi/gc_heap.h
 @@ -134,6 +134,7 @@
@@ -26,7 +26,7 @@
      GcAllocationPolicy allocation_policy; // Closed MoonBit function; no retained closure
 +    int32_t exception_root_count; // Leases borrowing exception_arena
  } GcHeap;
- 
+
  // Budgeted heaps enter the common allocator before any guest payload write.
 --- a/modules/wasmoon_jit/jit_ffi/jit_context.h
 +++ b/modules/wasmoon_jit/jit_ffi/jit_context.h
@@ -35,7 +35,7 @@
      struct native_continuation_type *continuation_types;
      struct native_exception_arena *exception_arena;
 +    struct native_exception_arena *(*exception_arena_factory)(void);
- 
+
      // Hostcall callback (MoonBit closure) for JIT -> host function bridging.
      // This is invoked by `wasmoon_jit_hostcall` during JIT execution.
 --- a/modules/wasmoon_jit/jit_ffi/exception.c

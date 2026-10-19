@@ -16,15 +16,14 @@ Process 89672 launched: '/Users/zhengyu/Documents/projects/wasmoon/target/except
 Process 89672 exited with status = 0 (0x00000000)
 (lldb) breakpoint list
 Current breakpoints:
-1: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert', locations = 1, resolved = 1, hit count = 10 Options: enabled auto-continue 
-  1.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert, address = 0x00000001032996b0, resolved, hit count = 10 
+1: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert', locations = 1, resolved = 1, hit count = 10 Options: enabled auto-continue
+  1.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert, address = 0x00000001032996b0, resolved, hit count = 10
 
-2: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13cache__layout', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
-  2.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13cache__layout, address = 0x000000010329a158, resolved, hit count = 0 
+2: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13cache__layout', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue
+  2.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13cache__layout, address = 0x000000010329a158, resolved, hit count = 0
 
-3: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
-  3.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup, address = 0x0000000103298f9c, resolved, hit count = 0 
+3: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue
+  3.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup, address = 0x0000000103298f9c, resolved, hit count = 0
 
-4: name = 'wasmoon_exception_storage_append', locations = 1, resolved = 1, hit count = 10 Options: enabled auto-continue 
-  4.1: where = before`wasmoon_exception_storage_append, address = 0x000000010365e35c, resolved, hit count = 10 
-
+4: name = 'wasmoon_exception_storage_append', locations = 1, resolved = 1, hit count = 10 Options: enabled auto-continue
+  4.1: where = before`wasmoon_exception_storage_append, address = 0x000000010365e35c, resolved, hit count = 10

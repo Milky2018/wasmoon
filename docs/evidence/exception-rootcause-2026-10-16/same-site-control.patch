@@ -6,7 +6,7 @@
      exception_callbacks_t *callbacks;
 +    int diagnostic_control;
  } native_exception_arena_t;
- 
+
  // Physical payload storage and root leases, released on close or last RC owner.
 @@ -179,8 +180,10 @@
              roots[i] = i < count && (!mask_count || mask[i]) ? entry.values[i] : 0;

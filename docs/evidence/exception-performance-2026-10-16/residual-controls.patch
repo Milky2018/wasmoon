@@ -1,7 +1,7 @@
 --- a/modules/wasmoon_jit/jit_ffi/exceptions.mbt
 +++ b/modules/wasmoon_jit/jit_ffi/exceptions.mbt
 @@ -51,7 +51,7 @@
- 
+
  ///|
  fn ExceptionState::new() -> ExceptionState {
 -  {
@@ -18,7 +18,7 @@
 +  if (reserve & 2) != 0 { state.storage.reserve_for_control(524288) }
 +  state
  }
- 
+
  ///|
 @@ -78,6 +82,13 @@
    byte_charge : Int64,
@@ -31,7 +31,7 @@
 +///|
 +#borrow(self)
 +extern "c" fn ExceptionStorage::reserve_for_control(self : ExceptionStorage, count : Int32) -> Unit = "wasmoon_exception_storage_reserve_control"
- 
+
  ///|
  extern "c" fn ExceptionStorage::new() -> ExceptionStorage = "wasmoon_exception_storage_new"
 --- a/modules/wasmoon_jit/jit_ffi/exception.c
@@ -42,7 +42,7 @@
      exception_callbacks_t *callbacks;
 +    int32_t lookup_repetitions;
  } native_exception_arena_t;
- 
+
  // Physical payload storage and root leases, released on close or last RC owner.
 @@ -231,6 +232,8 @@
          moonbit_incref(state);

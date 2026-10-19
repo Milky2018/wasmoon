@@ -1,7 +1,7 @@
 --- a/modules/wasmoon_jit/jit_ffi/exceptions.mbt
 +++ b/modules/wasmoon_jit/jit_ffi/exceptions.mbt
 @@ -24,6 +24,9 @@
- 
+
  ///|
  priv struct ExceptionState {
 +  control : Int32
@@ -22,7 +22,7 @@
      dead_entries: 0,
 @@ -69,6 +75,26 @@
  }
- 
+
  ///|
 +#external
 +priv type ExceptionMaskView
@@ -108,7 +108,7 @@
 +    None => { self.mask_view = ExceptionMaskView::null(); self.mask_count = -1 }
 +  }
  }
- 
+
  ///|
 @@ -510,6 +536,8 @@
    self.state.layouts[tag] = mask
@@ -118,7 +118,7 @@
 +  self.state.mask_count = mask.length()
    true
  }
- 
+
 --- a/modules/wasmoon_jit/jit_ffi/exception.c
 +++ b/modules/wasmoon_jit/jit_ffi/exception.c
 @@ -27,6 +27,8 @@
@@ -128,7 +128,7 @@
 +    struct exception_storage *storage;
 +    int32_t control;
  } exception_insert_request_t;
- 
+
  typedef struct exception_callbacks {
 @@ -46,6 +48,7 @@
      void *state;
@@ -136,7 +136,7 @@
      exception_callbacks_t *callbacks;
 +    int32_t control;
  } native_exception_arena_t;
- 
+
  // Physical payload storage and root leases, released on close or last RC owner.
 @@ -151,7 +154,7 @@
      exception_insert_request_t *request, int64_t reference, const int32_t *mask,
@@ -195,7 +195,7 @@
 +    exception_payload_close(storage, entry);
      return 0;
  }
- 
+
 @@ -231,6 +237,8 @@
          moonbit_incref(state);
          arena->state = state;
@@ -213,7 +213,7 @@
 +    exception_insert_request_t request = {arena, gc_heap_live(heap), tag, count, values, arena->storage, arena->control};
      return arena->callbacks->insert(arena->state, &request, tag, count);
  }
- 
+
 @@ -833,3 +841,10 @@
  WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_begin);
  WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_end);

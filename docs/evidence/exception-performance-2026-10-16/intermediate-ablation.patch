@@ -2,7 +2,7 @@
 +++ b/modules/wasmoon_jit/jit_ffi/exceptions.mbt
 @@ -23,7 +23,11 @@
  }
- 
+
  ///|
 +extern "c" fn exception_perf_flags() -> Int32 = "wasmoon_exception_perf_flags"
 +
@@ -39,7 +39,7 @@
      // A hint may be stale after compaction. Validate the complete identity and
      // live bit before returning a slot; retirement never reuses an identity.
 @@ -266,7 +271,7 @@
- 
+
  ///|
  fn ExceptionState::layout(self : ExceptionState, tag : Int32) -> Int64 {
 -  if self.last_tag != tag {
@@ -55,7 +55,7 @@
 +  self.state.quotas_bound = (self.state.perf_flags & 4) == 0
    true
  }
- 
+
 --- a/modules/wasmoon_jit/jit_ffi/exception.c
 +++ b/modules/wasmoon_jit/jit_ffi/exception.c
 @@ -833,3 +833,8 @@

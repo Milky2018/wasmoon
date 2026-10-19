@@ -89,7 +89,7 @@ index b241cb6..37ce0d8 100644
 +        Err(_) => scanner.parse_error("invalid UTF-8 in depfile path"),
 +    }
  }
- 
+
  /// Parse a `.d` file into `Deps`.
 -pub fn parse<'a>(scanner: &mut Scanner<'a>) -> ParseResult<SmallMap<&'a str, Vec<&'a str>>> {
 +pub fn parse(scanner: &mut Scanner<'_>) -> ParseResult<SmallMap<String, Vec<String>>> {
@@ -119,14 +119,14 @@ index b241cb6..37ce0d8 100644
 @@ -88,13 +118,13 @@ mod tests {
      use super::*;
      use std::path::Path;
- 
+
 -    fn try_parse(buf: &mut Vec<u8>) -> Result<SmallMap<&str, Vec<&str>>, String> {
 +    fn try_parse(buf: &mut Vec<u8>) -> Result<SmallMap<String, Vec<String>>, String> {
          buf.push(0);
          let mut scanner = Scanner::new(buf);
          parse(&mut scanner).map_err(|err| scanner.format_parse_error(Path::new("test"), err))
      }
- 
+
 -    fn must_parse(buf: &mut Vec<u8>) -> SmallMap<&str, Vec<&str>> {
 +    fn must_parse(buf: &mut Vec<u8>) -> SmallMap<String, Vec<String>> {
          match try_parse(buf) {
@@ -135,7 +135,7 @@ index b241cb6..37ce0d8 100644
 @@ -104,6 +134,38 @@ mod tests {
          }
      }
- 
+
 +    fn expected<const N: usize>(values: [(&str, Vec<&str>); N]) -> SmallMap<String, Vec<String>> {
 +        let mut result = SmallMap::default();
 +        for (target, deps) in values {
@@ -174,7 +174,7 @@ index b241cb6..37ce0d8 100644
 @@ -111,6 +173,26 @@ mod tests {
          }
      }
- 
+
 +    #[test]
 +    fn backslash_counts_and_unc_paths() {
 +        let mut file = br"out.o: two\\ next.h three\\\ spaces.h hash\#a.h dollar$$a.h colon\:a.h \\server\share\a.h".to_vec();
@@ -218,7 +218,7 @@ index b241cb6..37ce0d8 100644
 +            assert_eq!(deps, expected([("build/browse.o", vec!["src/browse.cc",])]));
          });
      }
- 
+
 @@ -150,7 +229,7 @@ mod tests {
                  let deps = must_parse(&mut file);
                  assert_eq!(
@@ -238,7 +238,7 @@ index b241cb6..37ce0d8 100644
 -        );
 +        assert_eq!(deps, expected([("build/browse.o", vec!["src/browse.cc",])]));
      }
- 
+
      #[test]
      fn test_parse_spaces_before_colon() {
          let mut file = b"build/browse.o   : src/browse.cc".to_vec();
@@ -249,7 +249,7 @@ index b241cb6..37ce0d8 100644
 -        );
 +        assert_eq!(deps, expected([("build/browse.o", vec!["src/browse.cc",])]));
      }
- 
+
      #[test]
      fn test_parse_windows_dep_path() {
          let mut file = b"odd/path.o: C:/odd\\path.c".to_vec();
@@ -260,7 +260,7 @@ index b241cb6..37ce0d8 100644
 -        );
 +        assert_eq!(deps, expected([("odd/path.o", vec!["C:/odd\\path.c",])]));
      }
- 
+
      #[test]
 @@ -201,7 +271,7 @@ out/b.o :
          let deps = must_parse(&mut file);
