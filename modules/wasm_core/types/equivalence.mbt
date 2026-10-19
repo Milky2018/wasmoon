@@ -5,10 +5,10 @@
 // support for recursive types, rec groups, and all composite types.
 
 ///|
-priv struct RecGroupIndex {
-  group_by_type : Array[Int32]
-  position_by_type : Array[Int32]
-  groups : Array[Array[Int32]]
+pub struct RecGroupIndex {
+  priv group_by_type : Array[Int32]
+  priv position_by_type : Array[Int32]
+  priv groups : Array[Array[Int32]]
 }
 
 ///|
@@ -70,13 +70,13 @@ fn RecGroupIndex::info_at(
 ///|
 /// Context for type equivalence checking.
 /// Now uses SubType to properly handle func, struct, and array types.
-struct TypeEquivalenceContext {
-  types1 : ArrayView[SubType]
-  types2 : ArrayView[SubType]
-  rec_groups1 : RecGroupIndex
-  rec_groups2 : RecGroupIndex
-  cross_module : Bool
-  visited : Map[(Int32, Int32), Bool]
+pub struct TypeEquivalenceContext {
+  priv types1 : ArrayView[SubType]
+  priv types2 : ArrayView[SubType]
+  priv rec_groups1 : RecGroupIndex
+  priv rec_groups2 : RecGroupIndex
+  priv cross_module : Bool
+  priv visited : Map[(Int32, Int32), Bool]
 }
 
 ///|
@@ -480,35 +480,59 @@ pub fn get_rec_group_info(
 /// Structurally equivalent types (in equivalent rec groups) will be
 /// assigned the same canonical index.
 /// For isorecursive typing, entire rec groups must be pairwise equivalent.
+///
+/// Groups are bucketed by structural fingerprint so only groups that could
+/// possibly be equivalent are compared; exact equivalence is still decided
+/// structurally, so the result matches a full pairwise comparison.
 pub fn compute_canonical_type_indices(
   types : ArrayView[SubType],
   type_rec_groups~ : ArrayView[Int32] = [],
 ) -> Array[Int32] {
   let canonical : Array[Int32] = Array::make(types.length(), -1)
   let ctx = TypeEquivalenceContext::same_module(types, type_rec_groups~)
-  for group_index, members in ctx.rec_groups1.groups {
-    let mut canonical_first = members[0]
-    for previous_group in 0..<group_index {
-      let previous_members = ctx.rec_groups1.groups[previous_group]
-      if members.length() != previous_members.length() {
-        continue
+  // Fingerprint buckets of previously visited groups, in visit order.
+  let buckets : Map[Int64, Array[Array[Int32]]] = Map([])
+  fold_type_groups(
+    types,
+    type_rec_groups~,
+    external_identity=fn(type_index) { canonical[type_index] },
+    visit=fn(members, fingerprint) {
+      let mut canonical_first = -1
+      match buckets.get(fingerprint) {
+        Some(bucket) =>
+          for previous_members in bucket {
+            if members.length() != previous_members.length() {
+              continue
+            }
+            let mut equivalent = true
+            for position, type_idx in members {
+              if !ctx.types_structurally_equal(
+                  type_idx,
+                  previous_members[position],
+                ) {
+                equivalent = false
+                break
+              }
+            }
+            if equivalent {
+              canonical_first = previous_members[0]
+              break
+            }
+          }
+        None => ()
       }
-      let mut equivalent = true
-      for position, type_idx in members {
-        if !ctx.types_structurally_equal(type_idx, previous_members[position]) {
-          equivalent = false
-          break
+      if canonical_first < 0 {
+        canonical_first = members[0]
+        match buckets.get(fingerprint) {
+          Some(bucket) => bucket.push(members.to_owned())
+          None => buckets[fingerprint] = [members.to_owned()]
         }
       }
-      if equivalent {
-        canonical_first = previous_members[0]
-        break
+      for position, type_idx in members {
+        canonical[type_idx] = canonical_first + position
       }
-    }
-    for position, type_idx in members {
-      canonical[type_idx] = canonical_first + position
-    }
-  }
+    },
+  )
   canonical
 }
 

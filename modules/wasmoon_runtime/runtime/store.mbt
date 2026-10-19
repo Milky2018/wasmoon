@@ -348,6 +348,8 @@ pub fn Store::close(self : Store) -> Unit {
   self.funcref_registry.clear()
   self.native_types.representatives.clear()
   self.native_types.representatives.shrink_to_fit()
+  self.native_types.group_buckets.clear()
+  self.native_types.module_types_entry = None
   self.native_types.mappings.clear()
   self.native_types.parents.clear()
   self.native_types.parents.shrink_to_fit()
@@ -544,9 +546,11 @@ pub fn Store::set_module_types(
   self.on_instantiation_rollback(fn() {
     self.module_types = old_types
     self.module_rec_groups = old_rec_groups
+    self.native_types.invalidate_module_types()
   })
   self.module_types = types.copy()
   self.module_rec_groups = rec_groups.copy()
+  self.native_types.invalidate_module_types()
 }
 
 ///|

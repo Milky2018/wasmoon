@@ -1,5 +1,18 @@
 ///|
 /// Store-local identities retain recursive-group equivalence across modules.
+
+///|
+/// A rec group already registered under a fingerprint bucket. Records enough
+/// of the contributing graph to rebuild an equivalence context on demand.
+priv struct RegisteredTypeGroup {
+  source : Int32 // registration sequence number of the contributing graph
+  types : ArrayView[@types.SubType]
+  rec_groups : ArrayView[Int32]
+  members : Array[Int32] // group member indices, in group order
+  identity_base : Int32 // store identity of members[0]
+} derive(Debug)
+
+///|
 priv struct StoreTypeRegistry {
   representatives : Array[(ArrayView[@types.SubType], ArrayView[Int32], Int32)]
   mappings : Map[
@@ -11,6 +24,14 @@ priv struct StoreTypeRegistry {
   mut native_registry : @native_bridge.NativeCallableRegistry?
   entries : Map[Int64, Int32]
   heap_types : Map[Int32, Int32]
+  // Fingerprint buckets over registered rec groups; identities in
+  // representatives are only ever found through these buckets.
+  group_buckets : Map[Int64, Array[RegisteredTypeGroup]]
+  // Cache for the unowned module-types graph, keyed by a version that
+  // Store::set_module_types bumps whenever module_types changes.
+  mut module_types_version : Int64
+  mut module_types_entry : (Int64, Array[Int32])?
+  mut next_source : Int32
 } derive(Debug)
 
 ///|
@@ -23,7 +44,18 @@ fn StoreTypeRegistry::new() -> StoreTypeRegistry {
     native_registry: None,
     entries: Map([]),
     heap_types: Map([]),
+    group_buckets: Map([]),
+    module_types_version: 0L,
+    module_types_entry: None,
+    next_source: 0,
   }
+}
+
+///|
+/// Drop the cached mapping for the unowned module-types graph. Must be called
+/// whenever Store.module_types or Store.module_rec_groups is replaced.
+fn StoreTypeRegistry::invalidate_module_types(self : StoreTypeRegistry) -> Unit {
+  self.module_types_version += 1L
 }
 
 ///|
@@ -39,44 +71,96 @@ fn StoreTypeRegistry::register(
 }
 
 ///|
+/// Map every type of a graph to a store-wide identity. Structurally
+/// equivalent rec groups share identities position-by-position; groups are
+/// located through structural fingerprints instead of scanning all
+/// representatives, so registering a graph costs one pass over the type
+/// section instead of one structural comparison per known type.
 fn StoreTypeRegistry::register_graph(
   self : StoreTypeRegistry,
   types : ArrayView[@types.SubType],
   groups : ArrayView[Int32],
   store_index : Int32,
 ) -> Array[Int32] {
-  if store_index >= 0 &&
-    self.mappings.get(store_index)
+  if store_index < 0 {
+    // The unowned module-types graph changes under set_module_types, so its
+    // cache entry is validated by version, not by content comparison.
+    if self.module_types_entry is Some((version, mapping)) &&
+      version == self.module_types_version {
+      return mapping
+    }
+  } else if self.mappings.get(store_index)
     is Some((cached_types, cached_groups, mapping)) &&
     cached_types == types &&
     cached_groups == groups {
     return mapping
   }
-  let mapping : Array[Int32] = []
+  let mapping : Array[Int32] = Array::make(types.length(), -1)
   let first_new = self.representatives.length()
-  for type_index in 0..<types.length() {
-    let mut identity = -1
-    for candidate, representative in self.representatives {
-      let (other_types, other_groups, index) = representative
-      let equivalent = @types.TypeEquivalenceContext::cross_module(
-        types,
-        other_types,
-        rec_groups1=groups,
-        rec_groups2=other_groups,
-      )
-      if equivalent.types_equivalent(type_index, index) {
-        identity = candidate
-        break
+  let source = self.next_source
+  self.next_source += 1
+  // Verification contexts are per contributing graph so a graph re-registered
+  // against many of its own earlier groups builds each context only once.
+  let contexts : Map[Int32, @types.TypeEquivalenceContext] = Map([])
+  @types.fold_type_groups(
+    types,
+    type_rec_groups=groups,
+    external_identity=fn(type_index) { mapping[type_index] },
+    visit=fn(members, fingerprint) {
+      let mut identity_base = -1
+      match self.group_buckets.get(fingerprint) {
+        Some(bucket) =>
+          for candidate in bucket {
+            if candidate.members.length() != members.length() {
+              continue
+            }
+            let context = match contexts.get(candidate.source) {
+              Some(context) => context
+              None => {
+                let context = @types.TypeEquivalenceContext::cross_module(
+                  types,
+                  candidate.types,
+                  rec_groups1=groups,
+                  rec_groups2=candidate.rec_groups,
+                )
+                contexts.set(candidate.source, context)
+                context
+              }
+            }
+            // Comparing first members verifies the whole group pairwise.
+            if context.types_equivalent(members[0], candidate.members[0]) {
+              identity_base = candidate.identity_base
+              break
+            }
+          }
+        None => ()
       }
-    }
-    if identity < 0 {
-      identity = self.representatives.length()
-      self.representatives.push((types, groups, type_index))
-      self.parents.push(-1)
-    }
-    mapping.push(identity)
-  }
-  if store_index >= 0 {
+      if identity_base < 0 {
+        identity_base = self.representatives.length()
+        for type_index in members {
+          self.representatives.push((types, groups, type_index))
+          self.parents.push(-1)
+        }
+        let registered : RegisteredTypeGroup = {
+          source,
+          types,
+          rec_groups: groups,
+          members: members.to_owned(),
+          identity_base,
+        }
+        match self.group_buckets.get(fingerprint) {
+          Some(bucket) => bucket.push(registered)
+          None => self.group_buckets.set(fingerprint, [registered])
+        }
+      }
+      for position, type_index in members {
+        mapping[type_index] = identity_base + position
+      }
+    },
+  )
+  if store_index < 0 {
+    self.module_types_entry = Some((self.module_types_version, mapping))
+  } else {
     self.mappings.set(store_index, (types, groups, mapping))
   }
   for identity in first_new..<self.representatives.length() {

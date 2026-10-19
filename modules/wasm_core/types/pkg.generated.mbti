@@ -6,33 +6,33 @@ import {
 }
 
 // Values
-pub const ASCII_DEL : Int32 = 0x7F
+pub const ASCII_DEL : Int = 0x7F
 
-pub const F32_CANONICAL_NAN_BITS : Int32 = 0x7FC00000
+pub const F32_CANONICAL_NAN_BITS : Int = 0x7FC00000
 
-pub const F32_EXP_BIAS : Int32 = 0x7F
+pub const F32_EXP_BIAS : Int = 0x7F
 
-pub const F32_EXP_INF_NAN : Int32 = 0xFF
+pub const F32_EXP_INF_NAN : Int = 0xFF
 
-pub const I32_MAX : Int32 = 0x7FFFFFFF
+pub const I32_MAX : Int = 0x7FFFFFFF
 
 pub const I32_MAX_F32 : Float = 2147483647.0
 
 pub const I32_MAX_F64 : Double = 2147483647.0
 
-pub const I32_MIN : Int32 = -0x80000000
+pub const I32_MIN : Int = -0x80000000
 
 pub const I32_MIN_F32 : Float = -2147483648.0
 
 pub const I32_MIN_F64 : Double = -2147483648.0
 
-pub const I8_MAX : Int32 = 0x7F
+pub const I8_MAX : Int = 0x7F
 
-pub const ONE_MIB_BYTES : Int32 = 1048576
+pub const ONE_MIB_BYTES : Int = 1048576
 
 pub const SIXTEEN_MIB_BYTES : Int64 = 0x1000000
 
-pub const U32_MAX : UInt32 = 0xFFFFFFFF
+pub const U32_MAX : UInt = 0xFFFFFFFF
 
 pub const U32_MAX_F32 : Float = 4294967295.0
 
@@ -44,29 +44,31 @@ pub const U32_MODULUS_F64 : Double = 4294967296.0
 
 pub const U32_MODULUS_I64 : Int64 = 0x100000000
 
-pub const U8_MAX : Int32 = 0xFF
+pub const U8_MAX : Int = 0xFF
 
 pub const WASM_PAGE_SIZE_BYTES : Int64 = 0x10000
 
-pub fn bytes_to_int64_le(Bytes, Int32) -> Int64
+pub fn bytes_to_int64_le(Bytes, Int) -> Int64
 
 pub fn compact_show_repr(String) -> String
 
-pub fn compute_canonical_type_indices(ArrayView[SubType], type_rec_groups? : ArrayView[Int32]) -> Array[Int32]
+pub fn compute_canonical_type_indices(ArrayView[SubType], type_rec_groups? : ArrayView[Int]) -> Array[Int]
+
+pub fn fold_type_groups(ArrayView[SubType], type_rec_groups? : ArrayView[Int], external_identity~ : (Int) -> Int, visit~ : (ArrayView[Int], Int64) -> Unit) -> Unit
 
 pub fn func_types_equal(FuncType, FuncType) -> Bool
 
 pub fn func_types_to_subtypes(Array[FuncType]) -> Array[SubType]
 
-pub fn get_rec_group_info(ArrayView[Int32], Int32) -> (Int32, Int32)
+pub fn get_rec_group_info(ArrayView[Int], Int) -> (Int, Int)
 
 pub fn int64_pair_to_v128_le(Int64, Int64) -> Bytes
 
-pub fn int_to_hex(Int32) -> String
+pub fn int_to_hex(Int) -> String
 
-pub fn to_hex_byte(Int32) -> String
+pub fn to_hex_byte(Int) -> String
 
-pub fn to_hex_u16(Int32) -> String
+pub fn to_hex_u16(Int) -> String
 
 // Errors
 
@@ -83,17 +85,17 @@ pub(all) enum BlockType {
   Value(ValueType)
   MultiValue(ReadOnlyArray[ValueType])
   InlineType(ReadOnlyArray[ValueType], ReadOnlyArray[ValueType])
-  TypeIndex(Int32)
+  TypeIndex(Int)
 } derive(Eq, @debug.Debug)
 pub fn BlockType::equal(Self, Self) -> Bool
 pub fn BlockType::not_equal(Self, Self) -> Bool
 pub fn BlockType::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CatchHandler {
-  Catch(Int32, Int32)
-  CatchRef(Int32, Int32)
-  CatchAll(Int32)
-  CatchAllRef(Int32)
+  Catch(Int, Int)
+  CatchRef(Int, Int)
+  CatchAll(Int)
+  CatchAllRef(Int)
 } derive(Eq, @debug.Debug)
 pub fn CatchHandler::equal(Self, Self) -> Bool
 pub fn CatchHandler::not_equal(Self, Self) -> Bool
@@ -103,7 +105,7 @@ pub(all) enum CompositeType {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
-  Cont(Int32)
+  Cont(Int)
 } derive(Eq, @debug.Debug)
 pub fn CompositeType::equal(Self, Self) -> Bool
 pub fn CompositeType::not_equal(Self, Self) -> Bool
@@ -113,7 +115,7 @@ pub fn CompositeType::to_string(Self) -> String
 pub impl Show for CompositeType
 
 pub(all) struct Data {
-  memory_idx : Int32
+  memory_idx : Int
   offset : ReadOnlyArray[Instruction]
   init : Bytes
 } derive(Eq, @debug.Debug)
@@ -122,7 +124,7 @@ pub fn Data::not_equal(Self, Self) -> Bool
 pub fn Data::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ElemMode {
-  Active(Int32, ReadOnlyArray[Instruction])
+  Active(Int, ReadOnlyArray[Instruction])
   Passive
   Declarative
 } derive(Eq, @debug.Debug)
@@ -148,11 +150,11 @@ pub fn Export::not_equal(Self, Self) -> Bool
 pub fn Export::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ExportDesc {
-  Func(Int32)
-  Table(Int32)
-  Memory(Int32)
-  Global(Int32)
-  Tag(Int32)
+  Func(Int)
+  Table(Int)
+  Memory(Int)
+  Global(Int)
+  Tag(Int)
 } derive(Eq, @debug.Debug)
 pub fn ExportDesc::equal(Self, Self) -> Bool
 pub fn ExportDesc::not_equal(Self, Self) -> Bool
@@ -173,8 +175,8 @@ pub(all) struct FuncType {
 pub fn FuncType::equal(Self, Self) -> Bool
 pub fn FuncType::not_equal(Self, Self) -> Bool
 pub fn FuncType::output(Self, &Logger) -> Unit
-pub fn FuncType::structural_hash(Self) -> Int32
-pub fn FuncType::structurally_equal(Self, Self, Int32, Int32) -> Bool
+pub fn FuncType::structural_hash(Self) -> Int
+pub fn FuncType::structurally_equal(Self, Self, Int, Int) -> Bool
 pub fn FuncType::to_repr(Self) -> @debug.Repr
 pub fn FuncType::to_string(Self) -> String
 pub impl Show for FuncType
@@ -219,11 +221,11 @@ pub fn Import::not_equal(Self, Self) -> Bool
 pub fn Import::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ImportDesc {
-  Func(Int32)
+  Func(Int)
   Table(TableType)
   Memory(MemoryType)
   Global(GlobalType)
-  Tag(Int32)
+  Tag(Int)
 } derive(Eq, @debug.Debug)
 pub fn ImportDesc::equal(Self, Self) -> Bool
 pub fn ImportDesc::not_equal(Self, Self) -> Bool
@@ -235,80 +237,80 @@ pub(all) enum Instruction {
   Block(BlockType, ReadOnlyArray[Instruction])
   Loop(BlockType, ReadOnlyArray[Instruction])
   If(BlockType, ReadOnlyArray[Instruction], ReadOnlyArray[Instruction])
-  Br(Int32)
-  BrIf(Int32)
-  BrTable(ReadOnlyArray[Int32], Int32)
+  Br(Int)
+  BrIf(Int)
+  BrTable(ReadOnlyArray[Int], Int)
   Return
-  Call(Int32)
-  CallIndirect(Int32, Int32)
-  CallRef(Int32)
-  ReturnCall(Int32)
-  ReturnCallIndirect(Int32, Int32)
-  ReturnCallRef(Int32)
-  Throw(Int32)
+  Call(Int)
+  CallIndirect(Int, Int)
+  CallRef(Int)
+  ReturnCall(Int)
+  ReturnCallIndirect(Int, Int)
+  ReturnCallRef(Int)
+  Throw(Int)
   ThrowRef
   TryTable(BlockType, ReadOnlyArray[CatchHandler], ReadOnlyArray[Instruction])
-  ContNew(Int32)
-  ContBind(Int32, Int32)
-  Suspend(Int32)
-  Resume(Int32, ReadOnlyArray[ResumeHandler])
-  ResumeThrow(Int32, Int32, ReadOnlyArray[ResumeHandler])
-  ResumeThrowRef(Int32, ReadOnlyArray[ResumeHandler])
-  Switch(Int32, Int32)
+  ContNew(Int)
+  ContBind(Int, Int)
+  Suspend(Int)
+  Resume(Int, ReadOnlyArray[ResumeHandler])
+  ResumeThrow(Int, Int, ReadOnlyArray[ResumeHandler])
+  ResumeThrowRef(Int, ReadOnlyArray[ResumeHandler])
+  Switch(Int, Int)
   Drop
   Select
   SelectTyped(ReadOnlyArray[ValueType])
-  LocalGet(Int32)
-  LocalSet(Int32)
-  LocalTee(Int32)
-  GlobalGet(Int32)
-  GlobalSet(Int32)
-  TableGet(Int32)
-  TableSet(Int32)
-  TableSize(Int32)
-  TableGrow(Int32)
-  TableFill(Int32)
-  TableCopy(Int32, Int32)
-  TableInit(Int32, Int32)
-  I32Load(Int32, Int32, Int64)
-  I64Load(Int32, Int32, Int64)
-  F32Load(Int32, Int32, Int64)
-  F64Load(Int32, Int32, Int64)
-  I32Load8S(Int32, Int32, Int64)
-  I32Load8U(Int32, Int32, Int64)
-  I32Load16S(Int32, Int32, Int64)
-  I32Load16U(Int32, Int32, Int64)
-  I64Load8S(Int32, Int32, Int64)
-  I64Load8U(Int32, Int32, Int64)
-  I64Load16S(Int32, Int32, Int64)
-  I64Load16U(Int32, Int32, Int64)
-  I64Load32S(Int32, Int32, Int64)
-  I64Load32U(Int32, Int32, Int64)
-  I32Store(Int32, Int32, Int64)
-  I64Store(Int32, Int32, Int64)
-  F32Store(Int32, Int32, Int64)
-  F64Store(Int32, Int32, Int64)
-  I32Store8(Int32, Int32, Int64)
-  I32Store16(Int32, Int32, Int64)
-  I64Store8(Int32, Int32, Int64)
-  I64Store16(Int32, Int32, Int64)
-  I64Store32(Int32, Int32, Int64)
-  MemorySize(Int32)
-  MemoryGrow(Int32)
-  MemoryInit(Int32, Int32)
-  DataDrop(Int32)
-  MemoryCopy(Int32, Int32)
-  MemoryFill(Int32)
-  ElemDrop(Int32)
-  Atomic(Int32, Int32, Int32, Int64)
+  LocalGet(Int)
+  LocalSet(Int)
+  LocalTee(Int)
+  GlobalGet(Int)
+  GlobalSet(Int)
+  TableGet(Int)
+  TableSet(Int)
+  TableSize(Int)
+  TableGrow(Int)
+  TableFill(Int)
+  TableCopy(Int, Int)
+  TableInit(Int, Int)
+  I32Load(Int, Int, Int64)
+  I64Load(Int, Int, Int64)
+  F32Load(Int, Int, Int64)
+  F64Load(Int, Int, Int64)
+  I32Load8S(Int, Int, Int64)
+  I32Load8U(Int, Int, Int64)
+  I32Load16S(Int, Int, Int64)
+  I32Load16U(Int, Int, Int64)
+  I64Load8S(Int, Int, Int64)
+  I64Load8U(Int, Int, Int64)
+  I64Load16S(Int, Int, Int64)
+  I64Load16U(Int, Int, Int64)
+  I64Load32S(Int, Int, Int64)
+  I64Load32U(Int, Int, Int64)
+  I32Store(Int, Int, Int64)
+  I64Store(Int, Int, Int64)
+  F32Store(Int, Int, Int64)
+  F64Store(Int, Int, Int64)
+  I32Store8(Int, Int, Int64)
+  I32Store16(Int, Int, Int64)
+  I64Store8(Int, Int, Int64)
+  I64Store16(Int, Int, Int64)
+  I64Store32(Int, Int, Int64)
+  MemorySize(Int)
+  MemoryGrow(Int)
+  MemoryInit(Int, Int)
+  DataDrop(Int)
+  MemoryCopy(Int, Int)
+  MemoryFill(Int)
+  ElemDrop(Int)
+  Atomic(Int, Int, Int, Int64)
   RefNull(ValueType)
   RefIsNull
-  RefFunc(Int32)
+  RefFunc(Int)
   RefAsNonNull
   RefEqInstr
-  BrOnNull(Int32)
-  BrOnNonNull(Int32)
-  I32Const(Int32)
+  BrOnNull(Int)
+  BrOnNonNull(Int)
+  I32Const(Int)
   I64Const(Int64)
   F32Const(Float)
   F64Const(Double)
@@ -452,61 +454,61 @@ pub(all) enum Instruction {
   I64TruncSatF32U
   I64TruncSatF64S
   I64TruncSatF64U
-  StructNew(Int32)
-  StructNewDefault(Int32)
-  StructGet(Int32, Int32)
-  StructGetS(Int32, Int32)
-  StructGetU(Int32, Int32)
-  StructSet(Int32, Int32)
-  ArrayNew(Int32)
-  ArrayNewDefault(Int32)
-  ArrayNewFixed(Int32, Int32)
-  ArrayNewData(Int32, Int32)
-  ArrayNewElem(Int32, Int32)
-  ArrayGet(Int32)
-  ArrayGetS(Int32)
-  ArrayGetU(Int32)
-  ArraySet(Int32)
+  StructNew(Int)
+  StructNewDefault(Int)
+  StructGet(Int, Int)
+  StructGetS(Int, Int)
+  StructGetU(Int, Int)
+  StructSet(Int, Int)
+  ArrayNew(Int)
+  ArrayNewDefault(Int)
+  ArrayNewFixed(Int, Int)
+  ArrayNewData(Int, Int)
+  ArrayNewElem(Int, Int)
+  ArrayGet(Int)
+  ArrayGetS(Int)
+  ArrayGetU(Int)
+  ArraySet(Int)
   ArrayLen
-  ArrayFill(Int32)
-  ArrayCopy(Int32, Int32)
-  ArrayInitData(Int32, Int32)
-  ArrayInitElem(Int32, Int32)
+  ArrayFill(Int)
+  ArrayCopy(Int, Int)
+  ArrayInitData(Int, Int)
+  ArrayInitElem(Int, Int)
   RefTest(ValueType)
   RefTestNull(ValueType)
   RefCast(ValueType)
   RefCastNull(ValueType)
-  BrOnCast(Int32, ValueType, ValueType)
-  BrOnCastFail(Int32, ValueType, ValueType)
+  BrOnCast(Int, ValueType, ValueType)
+  BrOnCastFail(Int, ValueType, ValueType)
   RefI31
   I31GetS
   I31GetU
   AnyConvertExtern
   ExternConvertAny
   V128Const(Bytes)
-  V128Load(Int32, Int32, Int64)
-  V128Load8x8S(Int32, Int32, Int64)
-  V128Load8x8U(Int32, Int32, Int64)
-  V128Load16x4S(Int32, Int32, Int64)
-  V128Load16x4U(Int32, Int32, Int64)
-  V128Load32x2S(Int32, Int32, Int64)
-  V128Load32x2U(Int32, Int32, Int64)
-  V128Load8Splat(Int32, Int32, Int64)
-  V128Load16Splat(Int32, Int32, Int64)
-  V128Load32Splat(Int32, Int32, Int64)
-  V128Load64Splat(Int32, Int32, Int64)
-  V128Load32Zero(Int32, Int32, Int64)
-  V128Load64Zero(Int32, Int32, Int64)
-  V128Store(Int32, Int32, Int64)
-  V128Load8Lane(Int32, Int32, Int64, Int32)
-  V128Load16Lane(Int32, Int32, Int64, Int32)
-  V128Load32Lane(Int32, Int32, Int64, Int32)
-  V128Load64Lane(Int32, Int32, Int64, Int32)
-  V128Store8Lane(Int32, Int32, Int64, Int32)
-  V128Store16Lane(Int32, Int32, Int64, Int32)
-  V128Store32Lane(Int32, Int32, Int64, Int32)
-  V128Store64Lane(Int32, Int32, Int64, Int32)
-  I8x16Shuffle(ReadOnlyArray[Int32])
+  V128Load(Int, Int, Int64)
+  V128Load8x8S(Int, Int, Int64)
+  V128Load8x8U(Int, Int, Int64)
+  V128Load16x4S(Int, Int, Int64)
+  V128Load16x4U(Int, Int, Int64)
+  V128Load32x2S(Int, Int, Int64)
+  V128Load32x2U(Int, Int, Int64)
+  V128Load8Splat(Int, Int, Int64)
+  V128Load16Splat(Int, Int, Int64)
+  V128Load32Splat(Int, Int, Int64)
+  V128Load64Splat(Int, Int, Int64)
+  V128Load32Zero(Int, Int, Int64)
+  V128Load64Zero(Int, Int, Int64)
+  V128Store(Int, Int, Int64)
+  V128Load8Lane(Int, Int, Int64, Int)
+  V128Load16Lane(Int, Int, Int64, Int)
+  V128Load32Lane(Int, Int, Int64, Int)
+  V128Load64Lane(Int, Int, Int64, Int)
+  V128Store8Lane(Int, Int, Int64, Int)
+  V128Store16Lane(Int, Int, Int64, Int)
+  V128Store32Lane(Int, Int, Int64, Int)
+  V128Store64Lane(Int, Int, Int64, Int)
+  I8x16Shuffle(ReadOnlyArray[Int])
   I8x16Swizzle
   I8x16Splat
   I16x8Splat
@@ -514,20 +516,20 @@ pub(all) enum Instruction {
   I64x2Splat
   F32x4Splat
   F64x2Splat
-  I8x16ExtractLaneS(Int32)
-  I8x16ExtractLaneU(Int32)
-  I16x8ExtractLaneS(Int32)
-  I16x8ExtractLaneU(Int32)
-  I32x4ExtractLane(Int32)
-  I64x2ExtractLane(Int32)
-  F32x4ExtractLane(Int32)
-  F64x2ExtractLane(Int32)
-  I8x16ReplaceLane(Int32)
-  I16x8ReplaceLane(Int32)
-  I32x4ReplaceLane(Int32)
-  I64x2ReplaceLane(Int32)
-  F32x4ReplaceLane(Int32)
-  F64x2ReplaceLane(Int32)
+  I8x16ExtractLaneS(Int)
+  I8x16ExtractLaneU(Int)
+  I16x8ExtractLaneS(Int)
+  I16x8ExtractLaneU(Int)
+  I32x4ExtractLane(Int)
+  I64x2ExtractLane(Int)
+  F32x4ExtractLane(Int)
+  F64x2ExtractLane(Int)
+  I8x16ReplaceLane(Int)
+  I16x8ReplaceLane(Int)
+  I32x4ReplaceLane(Int)
+  I64x2ReplaceLane(Int)
+  F32x4ReplaceLane(Int)
+  F64x2ReplaceLane(Int)
   I8x16Eq
   I8x16Ne
   I8x16LtS
@@ -759,7 +761,7 @@ pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool
   is_shared : Bool
-  page_size_log2 : Int32
+  page_size_log2 : Int
 } derive(Eq, @debug.Debug)
 pub fn MemoryType::addr_type(Self) -> ValueType
 pub fn MemoryType::equal(Self, Self) -> Bool
@@ -771,36 +773,36 @@ pub impl Show for MemoryType
 
 pub(all) struct Module {
   types : Array[SubType]
-  type_rec_groups : Array[Int32]
+  type_rec_groups : Array[Int]
   imports : Array[Import]
-  funcs : Array[Int32]
+  funcs : Array[Int]
   tables : Array[Table]
   memories : Array[MemoryType]
   globals : Array[Global]
   exports : Array[Export]
-  mut start : Int32?
+  mut start : Int?
   elems : Array[Element]
   codes : Array[FunctionCode]
   datas : Array[Data]
   tags : Array[TagType]
-  func_names : Map[Int32, String]
+  func_names : Map[Int, String]
 } derive(@debug.Debug)
 pub fn Module::Module() -> Self
-pub fn Module::array_type_at(Self, Int32) -> ArrayType?
+pub fn Module::array_type_at(Self, Int) -> ArrayType?
 pub fn Module::empty() -> Self
-pub fn Module::func_type_at(Self, Int32) -> FuncType?
-pub fn Module::is_array_type(Self, Int32) -> Bool
-pub fn Module::is_func_type(Self, Int32) -> Bool
-pub fn Module::is_struct_type(Self, Int32) -> Bool
+pub fn Module::func_type_at(Self, Int) -> FuncType?
+pub fn Module::is_array_type(Self, Int) -> Bool
+pub fn Module::is_func_type(Self, Int) -> Bool
+pub fn Module::is_struct_type(Self, Int) -> Bool
 pub fn Module::output(Self, &Logger) -> Unit
 pub fn Module::simple(ReadOnlyArray[ValueType], ReadOnlyArray[ValueType], ReadOnlyArray[Instruction], String) -> Self
 pub fn Module::snapshot(Self) -> Self
-pub fn Module::struct_type_at(Self, Int32) -> StructType?
+pub fn Module::struct_type_at(Self, Int) -> StructType?
 pub fn Module::to_repr(Self) -> @debug.Repr
 pub fn Module::to_string(Self) -> String
-pub fn Module::validated_array_type_at(Self, Int32) -> ArrayType
-pub fn Module::validated_func_type_at(Self, Int32) -> FuncType
-pub fn Module::validated_struct_type_at(Self, Int32) -> StructType
+pub fn Module::validated_array_type_at(Self, Int) -> ArrayType
+pub fn Module::validated_func_type_at(Self, Int) -> FuncType
+pub fn Module::validated_struct_type_at(Self, Int) -> StructType
 pub impl Show for Module
 
 pub(all) enum PackedType {
@@ -811,9 +813,13 @@ pub fn PackedType::equal(Self, Self) -> Bool
 pub fn PackedType::not_equal(Self, Self) -> Bool
 pub fn PackedType::to_repr(Self) -> @debug.Repr
 
+pub struct RecGroupIndex {
+  // private fields
+}
+
 pub(all) enum ResumeHandler {
-  OnLabel(Int32, Int32)
-  OnSwitch(Int32)
+  OnLabel(Int, Int)
+  OnSwitch(Int)
 } derive(Eq, @debug.Debug)
 pub fn ResumeHandler::equal(Self, Self) -> Bool
 pub fn ResumeHandler::not_equal(Self, Self) -> Bool
@@ -839,7 +845,7 @@ pub fn StructType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SubType {
   final_ : Bool
-  supertypes : ReadOnlyArray[Int32]
+  supertypes : ReadOnlyArray[Int]
   composite : CompositeType
 } derive(Eq, @debug.Debug)
 pub fn SubType::equal(Self, Self) -> Bool
@@ -855,18 +861,18 @@ pub impl Show for SubType
 pub struct SubtypingContext {
   types1 : ArrayView[SubType]
   types2 : ArrayView[SubType]
-  rec_groups1 : ArrayView[Int32]
-  rec_groups2 : ArrayView[Int32]
-  canonical1 : ArrayView[Int32]
-  canonical2 : ArrayView[Int32]
+  rec_groups1 : ArrayView[Int]
+  rec_groups2 : ArrayView[Int]
+  canonical1 : ArrayView[Int]
+  canonical2 : ArrayView[Int]
   cross_module : Bool
-  visited : Map[(Int32, Int32), Bool]
+  visited : Map[(Int, Int), Bool]
 }
-pub fn SubtypingContext::cross_module(ArrayView[SubType], ArrayView[SubType], rec_groups1? : ArrayView[Int32], rec_groups2? : ArrayView[Int32], canonical1? : ArrayView[Int32], canonical2? : ArrayView[Int32]) -> Self
-pub fn SubtypingContext::is_subtype(Self, Int32, Int32) -> Bool
-pub fn SubtypingContext::same_module(ArrayView[SubType], rec_groups? : ArrayView[Int32], canonical? : ArrayView[Int32]) -> Self
-pub fn SubtypingContext::validate_declared_subtype(Self, Int32, Int32) -> Bool
-pub fn SubtypingContext::value_type_subtype(Self, ValueType, ValueType, _idx1? : Int32, _idx2? : Int32) -> Bool
+pub fn SubtypingContext::cross_module(ArrayView[SubType], ArrayView[SubType], rec_groups1? : ArrayView[Int], rec_groups2? : ArrayView[Int], canonical1? : ArrayView[Int], canonical2? : ArrayView[Int]) -> Self
+pub fn SubtypingContext::is_subtype(Self, Int, Int) -> Bool
+pub fn SubtypingContext::same_module(ArrayView[SubType], rec_groups? : ArrayView[Int], canonical? : ArrayView[Int]) -> Self
+pub fn SubtypingContext::validate_declared_subtype(Self, Int, Int) -> Bool
+pub fn SubtypingContext::value_type_subtype(Self, ValueType, ValueType, _idx1? : Int, _idx2? : Int) -> Bool
 
 pub(all) struct Table {
   type_ : TableType
@@ -889,30 +895,32 @@ pub fn TableType::to_string(Self) -> String
 pub impl Show for TableType
 
 pub(all) struct TagType {
-  type_idx : Int32
+  type_idx : Int
 } derive(Eq, @debug.Debug)
 pub fn TagType::equal(Self, Self) -> Bool
 pub fn TagType::not_equal(Self, Self) -> Bool
 pub fn TagType::to_repr(Self) -> @debug.Repr
 
-type TypeEquivalenceContext
-pub fn TypeEquivalenceContext::cross_module(ArrayView[SubType], ArrayView[SubType], rec_groups1? : ArrayView[Int32], rec_groups2? : ArrayView[Int32]) -> Self
-pub fn TypeEquivalenceContext::same_module(ArrayView[SubType], type_rec_groups? : ArrayView[Int32]) -> Self
-pub fn TypeEquivalenceContext::types_equivalent(Self, Int32, Int32) -> Bool
+pub struct TypeEquivalenceContext {
+  // private fields
+}
+pub fn TypeEquivalenceContext::cross_module(ArrayView[SubType], ArrayView[SubType], rec_groups1? : ArrayView[Int], rec_groups2? : ArrayView[Int]) -> Self
+pub fn TypeEquivalenceContext::same_module(ArrayView[SubType], type_rec_groups? : ArrayView[Int]) -> Self
+pub fn TypeEquivalenceContext::types_equivalent(Self, Int, Int) -> Bool
 
 pub(all) enum Value {
-  I32(Int32)
+  I32(Int)
   I64(Int64)
   F32(Float)
   F64(Double)
   V128(Bytes)
-  FuncRef(Int32)
-  ExternRef(Int32)
-  ExnRef(Int32)
+  FuncRef(Int)
+  ExternRef(Int)
+  ExnRef(Int)
   ContRef(Int64)
-  StructRef(Int32)
-  ArrayRef(Int32)
-  I31(Int32)
+  StructRef(Int)
+  ArrayRef(Int)
+  I31(Int)
   Null
 } derive(Eq, @debug.Debug)
 pub fn Value::equal(Self, Self) -> Bool
@@ -932,22 +940,22 @@ pub(all) enum ValueType {
   ExternRef
   RefFunc
   RefExtern
-  RefFuncTyped(Int32)
-  RefNullFuncTyped(Int32)
+  RefFuncTyped(Int)
+  RefNullFuncTyped(Int)
   ContRef
   RefCont
-  RefContTyped(Int32)
-  RefNullContTyped(Int32)
+  RefContTyped(Int)
+  RefNullContTyped(Int)
   NullContRef
   RefNoCont
   AnyRef
   ExnRef
   StructRef
   ArrayRef
-  RefStruct(Int32)
-  RefNullStruct(Int32)
-  RefArray(Int32)
-  RefNullArray(Int32)
+  RefStruct(Int)
+  RefNullStruct(Int)
+  RefArray(Int)
+  RefNullArray(Int)
   RefAny
   RefEq
   RefNullEq
@@ -962,7 +970,7 @@ pub(all) enum ValueType {
   NullExternRef
 } derive(Eq, @debug.Debug)
 pub fn ValueType::equal(Self, Self) -> Bool
-pub fn ValueType::from_abstract_heap_type(Int32, Bool) -> Self?
+pub fn ValueType::from_abstract_heap_type(Int, Bool) -> Self?
 pub fn ValueType::is_continuation_ref(Self) -> Bool
 pub fn ValueType::is_nullable(Self) -> Bool
 pub fn ValueType::not_equal(Self, Self) -> Bool
@@ -977,7 +985,7 @@ pub impl Show for ValueType
 pub trait FromInt64 {
   fn from_int64_bits(Int64) -> Self
 }
-pub impl FromInt64 for Int32
+pub impl FromInt64 for Int
 pub impl FromInt64 for Int64
 pub impl FromInt64 for Float
 pub impl FromInt64 for Double
@@ -985,7 +993,7 @@ pub impl FromInt64 for Double
 pub trait ToInt64 {
   fn to_int64_bits(Self) -> Int64
 }
-pub impl ToInt64 for Int32
+pub impl ToInt64 for Int
 pub impl ToInt64 for Int64
 pub impl ToInt64 for Float
 pub impl ToInt64 for Double
