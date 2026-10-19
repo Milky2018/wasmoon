@@ -47,6 +47,7 @@ pub impl Show for GCObject with fn output(self, logger) {
 /// GC Heap - manages all GC objects with mark-sweep garbage collection
 pub struct MarkSweepHeap {
   priv resource_budget : ResourceBudget?
+  priv mut closed : Bool
   priv mut byte_reservation : @jit_ffi.Reservation?
   priv mut object_reservation : @jit_ffi.Reservation?
   priv mut budget_live_bytes : Int64
@@ -78,6 +79,7 @@ pub fn MarkSweepHeap::MarkSweepHeap(
 ) -> MarkSweepHeap {
   {
     resource_budget,
+    closed: false,
     byte_reservation: None,
     object_reservation: None,
     budget_live_bytes: 0L,
@@ -100,6 +102,7 @@ pub fn MarkSweepHeap::with_threshold(
 ) -> MarkSweepHeap {
   {
     resource_budget,
+    closed: false,
     byte_reservation: None,
     object_reservation: None,
     budget_live_bytes: 0L,
@@ -181,7 +184,9 @@ fn MarkSweepHeap::make_allocation_rollback(
 }
 
 ///|
-fn MarkSweepHeap::clear(self : MarkSweepHeap) -> Unit {
+/// Release all objects and quota capacity. Closing is terminal and idempotent.
+pub fn MarkSweepHeap::close(self : MarkSweepHeap) -> Unit {
+  self.closed = true
   if self.byte_reservation is Some(reservation) {
     reservation.close()
   }
@@ -860,6 +865,7 @@ fn MarkSweepHeap::admit_gc_object(
   self : MarkSweepHeap,
   bytes : Int64,
 ) -> Unit raise RuntimeError {
+  guard !self.closed else { raise InvalidHandle }
   if self.resource_budget is Some(budget) {
     let next_bytes = self.budget_live_bytes + bytes
     let byte_reservation = match self.byte_reservation {

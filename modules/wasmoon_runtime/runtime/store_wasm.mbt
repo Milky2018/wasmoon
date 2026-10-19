@@ -206,7 +206,7 @@ pub fn Store::close(self : Store) -> Unit {
     pair.1.release()
   }
   self.auxiliary_leases.clear()
-  self.heap.clear()
+  self.heap.close()
 
   // These arrays are borrowed from the parsed module and may be reused by
   // other stores. Closing a store must only drop its own references.

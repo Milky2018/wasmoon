@@ -99,6 +99,10 @@ quotas and guest GC roots require the existing explicit cleanup operations:
   `InstanceAdmission.cancel` or `ExecutionContinuation.cancel` when finished
   with manually managed admission/root/work tokens. Interpreter-owned tokens
   are cleaned up by the existing call, rollback and cancellation paths.
+- Close a standalone `MarkSweepHeap` with `defer`. Collection releases live
+  object bytes but retains reusable slot capacity; `close` also releases that
+  capacity and permanently rejects further allocation through every alias.
+  Store-owned heaps are closed by their Store.
 - Standalone budgeted `Memory` and `Table` values have `close` methods. Once
   adopted, their Store closes them. Do not manually close a resource while
   guest execution is using it.

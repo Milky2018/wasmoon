@@ -399,7 +399,7 @@ pub fn Store::close(self : Store) -> Unit {
   self.store_exception_to_native.clear()
   self.exns.clear()
   self.auxiliary_leases.clear()
-  self.heap.clear()
+  self.heap.close()
   if self.c_heap is Some(heap) {
     heap.free()
     self.c_heap = None

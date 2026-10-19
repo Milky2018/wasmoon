@@ -362,6 +362,7 @@ pub fn MarkSweepHeap::array_fill(Self, Int32, Int32, @types.Value, Int32) -> Uni
 pub fn MarkSweepHeap::array_get(Self, Int32, Int32) -> @types.Value raise RuntimeError
 pub fn MarkSweepHeap::array_len(Self, Int32) -> Int32 raise RuntimeError
 pub fn MarkSweepHeap::array_set(Self, Int32, Int32, @types.Value) -> Unit raise RuntimeError
+pub fn MarkSweepHeap::close(Self) -> Unit
 pub fn MarkSweepHeap::collect(Self, Array[@types.Value]) -> Int32
 pub fn MarkSweepHeap::collection_count(Self) -> Int32
 pub fn MarkSweepHeap::force_collect(Self, Array[@types.Value]) -> Unit
