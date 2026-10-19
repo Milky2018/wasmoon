@@ -1,0 +1,18 @@
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":8}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"tls_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":8,"message":"TimeoutError"}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":0,"message":"wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: []> != <Bytes: [0x68, 0x69]>`\ndiff:\n<Bytes: -[] +[0x68, 0x69]>"}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"tls_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----

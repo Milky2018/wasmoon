@@ -145,6 +145,11 @@ jobs:
         timeout-minutes: 2
         run: moon run modules/wasmoon/testsuite/native_event_loop --target native
 
+      - name: verify blocking TLS fixture isolation
+        env:
+          WASMOON_TEST_BLOCKING_TLS_SETUP: "1"
+        run: moon test modules/wasmoon/wasi_http --target native --no-parallelize --warn-list +73 --deny-warn
+
       - name: build Wasmoon
         id: build
         run: |
@@ -530,6 +535,12 @@ jobs:
         env:
           VCODE_REGALLOC_VALIDATION: "1"
         run: python scripts/run_native_packages.py --output target/windows-native-tests
+      - name: verify blocking TLS fixture isolation
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        env:
+          WASMOON_TEST_BLOCKING_TLS_SETUP: "1"
+        run: moon test modules/wasmoon/wasi_http --target native --no-parallelize --warn-list +73 --deny-warn
+
       - name: upload Windows test evidence
         uses: actions/upload-artifact@v4
         if: always()

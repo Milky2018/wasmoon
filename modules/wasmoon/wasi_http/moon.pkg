@@ -29,6 +29,7 @@ dev_build(
 
 import {
   "moonbitlang/x/fs",
-} for "wbtest"
+  "moonbitlang/core/env",
+} for "test"
 
 supported_targets = "+native"
