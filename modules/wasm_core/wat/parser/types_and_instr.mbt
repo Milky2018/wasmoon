@@ -976,7 +976,7 @@ fn Parser::parse_type_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
-      parse_int(s)
+      parse_u32(s)
     }
     Id(name) =>
       match self.type_names.get(name) {
