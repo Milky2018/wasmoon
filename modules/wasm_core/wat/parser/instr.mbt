@@ -483,10 +483,6 @@ fn Parser::parse_plain_instruction(
             annotation_phase = 1
             self.advance()
             let idx = self.parse_type_idx()
-            // Validate type index is in range (0xffffffff becomes -1 after parsing)
-            if idx < 0 || idx >= self.types.length() {
-              raise ParseError("unknown type", self.loc())
-            }
             type_idx = Some(idx)
             self.expect_rparen()
           }
@@ -587,10 +583,6 @@ fn Parser::parse_plain_instruction(
             annotation_phase = 1
             self.advance()
             let idx = self.parse_type_idx()
-            // Validate type index is in range (0xffffffff becomes -1 after parsing)
-            if idx < 0 || idx >= self.types.length() {
-              raise ParseError("unknown type", self.loc())
-            }
             type_idx = Some(idx)
             self.expect_rparen()
           }
