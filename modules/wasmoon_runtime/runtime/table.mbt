@@ -5,6 +5,7 @@ struct Table {
   mut reservation : @jit_ffi.Reservation?
   mut native_table : @jit_ffi.NativeTableHandle?
   mut binding : ResourceBinding?
+  mut closed : Bool
   elem_type : @types.ValueType
   elements : Array[@types.Value]
   mut size : Int32
@@ -77,6 +78,7 @@ fn Table::allocate(
     max,
     is_table64,
     binding: None,
+    closed: false,
     reservation,
     native_table: None,
   }
@@ -105,12 +107,18 @@ pub fn Table::get(self : Table, idx : Int32) -> @types.Value raise RuntimeError 
 }
 
 ///|
+fn Table::ensure_open(self : Table) -> Unit raise RuntimeError {
+  check_resource_open(self.binding)
+  guard !self.closed else { raise InvalidHandle }
+}
+
+///|
 fn Table::check_range(
   self : Table,
   offset : Int64,
   count : Int64,
 ) -> Unit raise RuntimeError {
-  check_resource_open(self.binding)
+  self.ensure_open()
   let size = self.size.to_int64()
   if offset < 0L || count < 0L || count > size || offset > size - count {
     raise OutOfBoundsTableAccess
@@ -167,7 +175,7 @@ pub fn Table::grow64(
   delta : Int64,
   init : @types.Value,
 ) -> Int64 raise RuntimeError {
-  check_resource_open(self.binding)
+  self.ensure_open()
   guard value_fits_kind(init, self.elem_type) else { raise TypeMismatch }
   let old_size = self.size.to_uint64()
   let new_size = old_size + delta.reinterpret_as_uint64()
@@ -312,6 +320,7 @@ pub fn Table::get_limits64(self : Table) -> (Int64, Int64?) {
 ///|
 #cfg(target="native")
 pub fn Table::close(self : Table) -> Unit {
+  self.closed = true
   if self.binding is Some(binding) {
     binding.active.val = false
   }

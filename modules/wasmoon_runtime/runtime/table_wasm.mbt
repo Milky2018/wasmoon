@@ -3,6 +3,7 @@
 struct Table {
   mut reservation : @jit_ffi.Reservation?
   mut binding : ResourceBinding?
+  mut closed : Bool
   elem_type : @types.ValueType
   elements : Array[@types.Value]
   mut size : Int32
@@ -48,7 +49,16 @@ fn Table::allocate(
   for _ in 0..<size {
     elements.push(init_value)
   }
-  { elem_type, elements, size, max, is_table64, binding: None, reservation, }
+  {
+    elem_type,
+    elements,
+    size,
+    max,
+    is_table64,
+    binding: None,
+    closed: false,
+    reservation,
+  }
 }
 
 ///|
@@ -58,7 +68,7 @@ pub fn Table::grow64(
   delta : Int64,
   init : @types.Value,
 ) -> Int64 raise RuntimeError {
-  check_resource_open(self.binding)
+  self.ensure_open()
   guard value_fits_kind(init, self.elem_type) else { raise TypeMismatch }
   let old_size = self.size.to_uint64()
   let new_size = old_size + delta.reinterpret_as_uint64()
@@ -89,6 +99,7 @@ pub fn Table::grow64(
 
 ///|
 pub fn Table::close(self : Table) -> Unit {
+  self.closed = true
   if self.binding is Some(binding) {
     binding.active.val = false
   }

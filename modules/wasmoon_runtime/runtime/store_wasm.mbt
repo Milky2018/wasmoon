@@ -226,6 +226,7 @@ pub fn Store::alloc_table(
   use_jit~ : Bool = true,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
+  table.ensure_open()
   let binding = resource_binding(table.binding, self.closed)
   for index, existing in self.tables {
     if physical_equal(existing, table) {
