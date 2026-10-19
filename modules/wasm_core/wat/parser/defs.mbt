@@ -351,15 +351,15 @@ fn Parser::parse_optional_page_size_log2(self : Parser) -> Int32 raise WatError 
     return 16
   }
   self.advance()
-  let page_size = self.parse_u32()
-  if page_size == 0 || page_size > 65536 || (page_size & (page_size - 1)) != 0 {
+  let page_size = self.parse_u64().reinterpret_as_uint64()
+  if page_size == 0UL || (page_size & (page_size - 1UL)) != 0UL {
     raise UnexpectedToken(
-      "memory page size must be a power of two between 1 and 65536",
+      "memory page size must be a nonzero u64 power of two",
       self.loc(),
     )
   }
   self.expect_rparen()
-  log2(page_size.to_uint64())
+  log2(page_size)
 }
 
 ///|
