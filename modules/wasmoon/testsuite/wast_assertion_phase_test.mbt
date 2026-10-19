@@ -62,3 +62,23 @@ test "quoted start traps are parsed and checked against the expected category" {
     debug_inspect((result.passed, result.failed), content="(1, 1)")
   }
 }
+
+///|
+test "assert_invalid requires successful decoding and a validation rejection" {
+  let source =
+    #|(assert_invalid (module quote "(module (func i32.const 0e))") "malformed number")
+    #|(assert_invalid (module binary "\00asm") "truncated header")
+    #|(assert_invalid (module (func i32.const 0e)) "malformed inline number")
+    #|(assert_invalid (module (memory 1 1 shared)) "valid despite host restrictions")
+    #|(assert_invalid (module (func (result i32))) "type mismatch")
+  for use_jit in [false, true] {
+    let result = @wast.run_wast_commands(
+      @wast.parse(source),
+      ".",
+      use_jit,
+      false,
+    )
+    assert_eq(result.passed, 1)
+    assert_eq(result.failed, 4)
+  }
+}

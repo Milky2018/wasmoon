@@ -10,6 +10,8 @@ import {
 // Values
 pub fn classify_runtime_failure(@runtime.RuntimeError) -> WastRunnerError
 
+pub fn module_is_invalid(@parser.WastModuleSource, bulk_memory~ : Bool, stack_switching~ : Bool) -> Bool raise WastRunnerError
+
 pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : ArrayView[Int32]) -> Bool
 
 pub fn wast_trap_message_matches(String, String) -> Bool

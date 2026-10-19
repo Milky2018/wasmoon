@@ -149,8 +149,22 @@ pub fn run_wast_command(
       }
     }
     AssertInvalid(source, msg) => {
-      let valid = validate_module_source(ctx, source)
-      if valid {
+      let invalid = @assertions.module_is_invalid(
+        source,
+        bulk_memory=true,
+        stack_switching=ctx.stack_switching,
+      ) catch {
+        UnsupportedCapability(detail) => {
+          result.unsupported.push("line \{line}: \{detail}")
+          return
+        }
+        error => {
+          result.failed += 1
+          result.failures.push("line \{line}: assert_invalid: \{error}")
+          return
+        }
+      }
+      if !invalid {
         result.failed = result.failed + 1
         result.failures.push(
           "line \{line}: assert_invalid: module should have been invalid (expected: \{msg})",
@@ -163,8 +177,6 @@ pub fn run_wast_command(
       }
     }
     AssertMalformed(source, msg) => {
-      // For quoted sources, we can't easily test malformation
-      // For binary/inline sources, try parsing
       let parsed = parse_module_source(source)
       if parsed {
         result.failed = result.failed + 1
@@ -284,27 +296,6 @@ fn[T] succeeds(body : () -> T raise) -> Bool {
     _ => false
   } noraise {
     _ => true
-  }
-}
-
-///|
-fn validate_module_source(
-  ctx : CoreWastContext,
-  source : @wat.WastModuleSource,
-) -> Bool {
-  match source {
-    Binary(bytes) =>
-      succeeds(() => {
-        let mod_ = @parser.parse_module(bytes)
-        ctx.validate_core_module(mod_)
-      })
-    Quote(parts) =>
-      succeeds(() => {
-        let mod_ = @wat.parse(parts.join(""), implicit_module=true)
-        ctx.validate_core_module(mod_)
-      })
-    Inline(mod_) => succeeds(() => ctx.validate_core_module(mod_))
-    FailedToParse(_) => false // Module failed to parse, so it's invalid
   }
 }
 
