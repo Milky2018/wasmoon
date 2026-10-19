@@ -73,10 +73,8 @@ jobs:
         include:
           - name: Linux AMD64
             os: ubuntu-latest
-            native_test_args: --no-parallelize
           - name: macOS ARM64
             os: macos-latest
-            native_test_args: ""
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,7 +137,7 @@ jobs:
       - name: run native tests
         run: |
           VCODE_REGALLOC_VALIDATION=1 \
-            moon test --target native ${{ matrix.native_test_args }}
+            moon test --target native --no-parallelize
 
       - name: test native and async event loop integration
         timeout-minutes: 2

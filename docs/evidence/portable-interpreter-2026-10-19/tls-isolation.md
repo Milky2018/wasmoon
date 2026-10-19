@@ -32,9 +32,16 @@ Restoring the isolated layout passes all 32 tests in both parallel and
 serialized executable modes with the same control enabled. This checks the
 observable interference rather than relying only on a filename assertion.
 
+All native CI workspace gates now serialize executable execution with
+`--no-parallelize`. Linux and the Windows inventory runner already did so;
+the follow-up removes the macOS exception. Async tasks inside one executable
+remain concurrent, which is why the TLS fixture still requires isolation.
+
 [Local receipt](tls-isolation-local.json) records the actual source hashes,
 dirty precommit provenance, the counterfactual mutation and the unchanged
 source used for the passing controls. These macOS controls are not Windows CI
 acceptance. Ordinary native tests pass 2786/2786; info/fmt, strict native
 checking and the package-boundary audit pass. Supported-platform CI remains
 required before closing ISS-643.
+The local receipt predates the CI serialization follow-up and retains the
+workflow hash for the isolation change before that separate scheduling change.
