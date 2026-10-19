@@ -73,21 +73,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
           _ => false
         }
 
-        // Parse limits (use u64 for memory64)
-        let min = if is_memory64 {
-          self.parse_u64()
-        } else {
-          self.parse_u32().to_int64() & 0xFFFF_FFFFL
-        }
+        // Parse unsigned 64-bit limits; the validator checks address-type bounds
+        let min = self.parse_u64()
         let max = match self.current.token {
-          Number(_) =>
-            Some(
-              if is_memory64 {
-                self.parse_u64()
-              } else {
-                self.parse_u32().to_int64() & 0xFFFF_FFFFL
-              },
-            )
+          Number(_) => Some(self.parse_u64())
           _ => None
         }
         let is_shared = self.current.token == Keyword("shared")
@@ -174,21 +163,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                 }
                 _ => false
               }
-              // Parse limits (use u64 for memory64)
-              let min = if is_memory64 {
-                self.parse_u64()
-              } else {
-                self.parse_u32().to_int64() & 0xFFFF_FFFFL
-              }
+              // Parse unsigned 64-bit limits; the validator checks address-type bounds
+              let min = self.parse_u64()
               let max = match self.current.token {
-                Number(_) =>
-                  Some(
-                    if is_memory64 {
-                      self.parse_u64()
-                    } else {
-                      self.parse_u32().to_int64() & 0xFFFF_FFFFL
-                    },
-                  )
+                Number(_) => Some(self.parse_u64())
                 _ => None
               }
               let is_shared = self.current.token == Keyword("shared")
@@ -334,21 +312,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
     }
   }
 
-  // Parse limits (use u64 for memory64)
-  let min = if is_memory64 {
-    self.parse_u64()
-  } else {
-    self.parse_u32().to_int64() & 0xFFFF_FFFFL
-  }
+  // Parse unsigned 64-bit limits; the validator checks address-type bounds
+  let min = self.parse_u64()
   let max = match self.current.token {
-    Number(_) =>
-      Some(
-        if is_memory64 {
-          self.parse_u64()
-        } else {
-          self.parse_u32().to_int64() & 0xFFFF_FFFFL
-        },
-      )
+    Number(_) => Some(self.parse_u64())
     _ => None
   }
   let is_shared = self.current.token == Keyword("shared")
@@ -742,20 +709,9 @@ fn Parser::parse_table_def(
         }
 
         // Parse limits - use u64 for table64, u32 for table32
-        let min = if is_table64 {
-          self.parse_u64()
-        } else {
-          self.parse_u32().to_int64() & 0xFFFF_FFFFL
-        }
+        let min = self.parse_u64()
         let max = match self.current.token {
-          Number(_) =>
-            Some(
-              if is_table64 {
-                self.parse_u64()
-              } else {
-                self.parse_u32().to_int64() & 0xFFFF_FFFFL
-              },
-            )
+          Number(_) => Some(self.parse_u64())
           _ => None
         }
         // Parse element type
@@ -1057,20 +1013,9 @@ fn Parser::parse_table_def(
         }
       }
       // Parse limits - use u64 for table64, u32 for table32
-      let min = if is_table64 {
-        self.parse_u64()
-      } else {
-        self.parse_u32().to_int64() & 0xFFFF_FFFFL
-      }
+      let min = self.parse_u64()
       let max = match self.current.token {
-        Number(_) =>
-          Some(
-            if is_table64 {
-              self.parse_u64()
-            } else {
-              self.parse_u32().to_int64() & 0xFFFF_FFFFL
-            },
-          )
+        Number(_) => Some(self.parse_u64())
         _ => None
       }
       let elem_type = self.parse_value_type()
@@ -1286,21 +1231,10 @@ fn Parser::parse_import_def(
         }
         _ => false
       }
-      // Parse limits (use u64 for memory64)
-      let min = if is_memory64 {
-        self.parse_u64()
-      } else {
-        self.parse_u32().to_int64() & 0xFFFF_FFFFL
-      }
+      // Parse unsigned 64-bit limits; the validator checks address-type bounds
+      let min = self.parse_u64()
       let max = match self.current.token {
-        Number(_) =>
-          Some(
-            if is_memory64 {
-              self.parse_u64()
-            } else {
-              self.parse_u32().to_int64() & 0xFFFF_FFFFL
-            },
-          )
+        Number(_) => Some(self.parse_u64())
         _ => None
       }
       let is_shared = self.current.token == Keyword("shared")
@@ -1323,21 +1257,10 @@ fn Parser::parse_import_def(
       if is_table64 {
         self.advance()
       }
-      // Use u64 for table64 limits, u32 for table32
-      let min = if is_table64 {
-        self.parse_u64()
-      } else {
-        self.parse_u32().to_int64() & 0xFFFF_FFFFL
-      }
+      // Decode limits independently of the table address type
+      let min = self.parse_u64()
       let max = match self.current.token {
-        Number(_) =>
-          Some(
-            if is_table64 {
-              self.parse_u64()
-            } else {
-              self.parse_u32().to_int64() & 0xFFFF_FFFFL
-            },
-          )
+        Number(_) => Some(self.parse_u64())
         _ => None
       }
       let elem_type = self.parse_value_type()

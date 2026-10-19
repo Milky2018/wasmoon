@@ -55,10 +55,13 @@ fn validate_table_limits(
   // For table32, min and max must fit in 32 bits (< 2^32)
   let max_table32_size = 0x100000000L // 2^32
   if !is_table64 {
-    if limits.min >= max_table32_size {
+    if limits.min.reinterpret_as_uint64() >=
+      max_table32_size.reinterpret_as_uint64() {
       raise InvalidLimits("table size")
     }
-    if limits.max is Some(max_val) && max_val >= max_table32_size {
+    if limits.max is Some(max_val) &&
+      max_val.reinterpret_as_uint64() >=
+      max_table32_size.reinterpret_as_uint64() {
       raise InvalidLimits("table size")
     }
   }
