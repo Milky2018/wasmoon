@@ -10,13 +10,13 @@ test "import trampolines: known wasi functions" {
 }
 
 ///|
-test "import trampolines: known spectest functions" {
+test "import trampolines: spectest requires linked host functions" {
   let names = [
     "print", "print_i32", "print_i64", "print_f32", "print_f64", "print_i32_f32",
     "print_f64_f64", "print_char",
   ]
   for name in names {
-    assert_true(get_import_trampoline("spectest", name) is Some(_))
+    assert_true(get_import_trampoline("spectest", name) is None)
   }
 }
 
@@ -37,7 +37,7 @@ test "import trampolines: poll_oneoff requires the shared host implementation" {
 }
 
 ///|
-test "import trampolines: external imports override builtin fallback" {
+test "import trampolines: external imports resolve without a native fallback" {
   let external : Map[String, Map[String, Int64]] = Map([])
   external.set("spectest", { "print": 1234L })
   debug_inspect(

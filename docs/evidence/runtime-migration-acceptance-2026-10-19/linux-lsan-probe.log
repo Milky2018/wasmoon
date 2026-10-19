@@ -1,0 +1,19 @@
+
+=================================================================
+==4245==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 17 byte(s) in 1 object(s) allocated from:
+    #0 0x55feba378713 in malloc (/home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe+0x1d04713) (BuildId: fa06dec471ff0a8833d4f6cb61a7809cef527362)
+    #1 0x55febd9e67c9 in wasmoon_sanitizer_leak_probe /home/runner/work/wasmoon/wasmoon/target/sanitizers/package/native_probe.c:13:37
+    #2 0x55feba5ac4d2 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test11leak__probe /home/runner/work/wasmoon/wasmoon/target/sanitizers/package/instrumentation_test.mbt:35:3
+    #3 0x55feba5ab6c6 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test61____test__696e737472756d656e746174696f6e5f746573742e6d6274__0 /home/runner/work/wasmoon/wasmoon/target/sanitizers/package/instrumentation_test.mbt:7:5
+    #4 0x55feba3c68f8 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test71____test__696e737472756d656e746174696f6e5f746573742e6d6274__0_2edyncall /home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.c:257406:10
+    #5 0x55feba45affe in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test45moonbit__test__driver__internal__catch__error /home/runner/work/wasmoon/wasmoon/target/sanitizers/package/__generated_driver_for_blackbox_test.mbt:432:17
+    #6 0x55feba445184 in _M0IP29Milky201834wasmoon__sanitizer__blackbox__test41MoonBit__Test__Driver__Internal__No__ArgsP29Milky201834wasmoon__sanitizer__blackbox__test21MoonBit__Test__Driver9run__test /home/runner/work/wasmoon/wasmoon/target/sanitizers/package/__generated_driver_for_blackbox_test.mbt:681:3
+    #7 0x55feba441b99 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test44moonbit__test__driver__internal__do__execute /home/runner/work/wasmoon/wasmoon/target/sanitizers/package/__generated_driver_for_blackbox_test.mbt:943:5
+    #8 0x55febd9126fb in main /home/runner/work/wasmoon/wasmoon/target/sanitizers/package/__generated_driver_for_blackbox_test.mbt:785:7
+    #9 0x7f9f72a2a1c9  (/lib/x86_64-linux-gnu/libc.so.6+0x2a1c9) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+    #10 0x7f9f72a2a28a in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2a28a) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+    #11 0x55feba2dd8c4 in _start (/home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe+0x1c698c4) (BuildId: fa06dec471ff0a8833d4f6cb61a7809cef527362)
+
+SUMMARY: AddressSanitizer: 17 byte(s) leaked in 1 allocation(s).

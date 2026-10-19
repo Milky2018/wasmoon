@@ -1,0 +1,5 @@
+fn main raise {
+  let types : Array[@types.ValueType] = Array::make(10, I64)
+  let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target([], types, 17, X64)
+  println("[" + trampoline.code.map(i => i.to_string()).join(",") + "]")
+}

@@ -1,0 +1,56 @@
+{
+  "pr": 542,
+  "run": 39200929903,
+  "accepted_head": "c6c92283ced27859674b1a9065c870b14a30e33a",
+  "merge_commit": "aac8ce10be6096dc0b843e54613265017bbad762",
+  "base": "c23e918d64ab4c571c10bfe5f480b471500f6212",
+  "all_five_jobs": "success",
+  "windows": {
+    "clang": {
+      "strict_c_stubs": 43,
+      "native_tests": 2744,
+      "native_failures": 0,
+      "http_contract": {
+        "pass": 110
+      },
+      "masm_guest_bridge_behavior": "passed"
+    },
+    "msvc": {
+      "strict_c_stubs": 43,
+      "native_tests": 2744,
+      "native_failures": 0,
+      "http_contract": {
+        "pass": 110
+      },
+      "masm_guest_bridge_behavior": "passed"
+    }
+  },
+  "linux_sanitizer": {
+    "version": "0.16.0",
+    "source_revision": "ac81d6040bb486baac4fe0aa2f1d65fe9c9d43f8",
+    "source_dirty": false,
+    "build_reuse": "fresh",
+    "binary_sha256": "f7b42bfed481ff9b7bdd7ab767227783ae9ac5e2f53ad8e2c661051298298b7d",
+    "tests": "passed",
+    "event_loop": "passed",
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "lsan_probe": "detected",
+    "leak_detection": true,
+    "binary": "/home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+    "instrumentation": [
+      "address",
+      "undefined"
+    ],
+    "allocator": "system",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ]
+  },
+  "artifact_merge_parents": [
+    "c23e918d64ab4c571c10bfe5f480b471500f6212",
+    "c6c92283ced27859674b1a9065c870b14a30e33a"
+  ],
+  "archive_symbol_check": "fresh macOS ARM64 only; Windows compilation/MASM behavior validated by CI, not a Windows release symbol audit"
+}

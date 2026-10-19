@@ -183,12 +183,12 @@ test "JITModule resolves imported Code symbols transactionally" {
     ],
   }
   let imports : Map[String, Map[String, Int64]] = Map([])
-  imports.set(
-    "env",
-    Map([
-      ("host", @wasmoon_jit.get_import_trampoline("spectest", "print").unwrap()),
-    ]),
+  let installer = @wasmoon_jit.JitCodeInstaller::new(fn(_) { None })
+  let host = installer.install_trampoline(
+    runtime_artifact_code(Some(0)).map(byte => byte.to_int()),
   )
+  defer host.release()
+  imports.set("env", Map([("host", host.entry_address())]))
   let jit_module = @jit.JITModule::load_artifact_with_imports(
     load_runtime_artifact(artifact),
     [([], []), ([], [])],

@@ -556,14 +556,14 @@ fn code_contains_x64_rsp_int_store(code : Array[Int32]) -> Bool {
 }
 
 ///|
-fn code_contains_x64_r12_int_store(code : Array[Int32]) -> Bool {
+fn code_contains_x64_r11_store_to_r12(code : Array[Int32]) -> Bool {
   if code.length() < 4 {
     return false
   }
   for i in 0..<(code.length() - 3) {
     if code[i] == 0x4d &&
       code[i + 1] == 0x89 &&
-      code[i + 2] == 0x94 &&
+      code[i + 2] == 0x9c &&
       code[i + 3] == 0x24 {
       return true
     }
@@ -740,7 +740,7 @@ test "hostcall trampolines support overflow result areas" {
     err => fail(Repr(err).to_string())
   }
   inspect(code_contains_x64_rsp_int_load(x64_host.code), content="true")
-  inspect(code_contains_x64_r12_int_store(x64_host.code), content="true")
+  inspect(code_contains_x64_r11_store_to_r12(x64_host.code), content="true")
   let a64_host = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
     params,
     results,

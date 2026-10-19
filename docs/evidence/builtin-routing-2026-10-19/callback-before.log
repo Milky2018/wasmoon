@@ -1,0 +1,2 @@
+[Milky2018/wasmoon] test sanitizer_testsuite/builtin_routing_test.mbt:2 ("spectest imports invoke the linked host function with typed arguments") failed: sanitizer_testsuite/builtin_routing_test.mbt:60:7-60:71@Milky2018/wasmoon FAILED: print, native=true
+Total tests: 1, passed: 0, failed: 1.

@@ -1467,7 +1467,7 @@ fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int32 {
 ///|
 /// Build `external_imports` for `JITModule::load_artifact_with_imports`.
 ///
-/// For function imports without built-in trampolines, we pass a special
+/// For linked host functions, we pass a special
 /// negative encoding `-(addr+1)` (store function address) to instruct the JIT
 /// loader to generate a hostcall trampoline that dispatches host/wasm imports.
 pub fn build_external_imports_for_jit(
@@ -1486,10 +1486,6 @@ pub fn build_external_imports_for_jit(
       }
       func_imp_idx = func_imp_idx + 1
       if func_addr < 0 {
-        continue
-      }
-      // Prefer built-in trampolines when available.
-      if @wasmoon_jit.get_import_trampoline(imp.mod_name, imp.name) is Some(_) {
         continue
       }
       if store.get_func_inst_opt(func_addr) is None {
