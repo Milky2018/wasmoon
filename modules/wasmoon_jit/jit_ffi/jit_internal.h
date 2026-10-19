@@ -460,10 +460,10 @@ void native_fiber_destroy_c(void *fiber);
 void *native_fiber_gc_roots_c(void *fiber);
 int64_t native_fiber_result_c(void *fiber);
 int64_t native_fiber_event_c(void *fiber);
-struct native_continuation_arena *continuation_arena_new(void);
 void continuation_arena_release(struct native_continuation_arena *arena);
 void continuation_types_free(jit_context_t *ctx);
 int64_t exception_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t *values, int32_t count);
+int64_t exception_try_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t *values, int32_t count);
 int64_t exception_capture_current(jit_context_t *ctx);
 int wasmoon_jit_call_trampoline_caught(int64_t trampoline_ptr, int64_t ctx_ptr,
     int64_t func_ptr, int64_t *values, int values_len, int64_t *exception);

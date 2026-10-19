@@ -1,0 +1,65 @@
+{
+  "source_revision": "c23e918d64ab4c571c10bfe5f480b471500f6212",
+  "source_dirty": true,
+  "delivery": false,
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "toolchain": "moon 0.1.20261012 (748b63c 2026-10-12) ~/.moon/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) ~/.moon/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "c_compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "wasm_tools": "wasm-tools 1.254.0",
+  "changed_code_sha256": {
+    "modules/wasmoon/sanitizer_testsuite/runtime_failures_test.mbt": "d30d8d777d14e779c1b538d38e92fa9fe9f582db7197430efdab978bf1b1b2a7",
+    "modules/wasmoon/testsuite/native_guest_continuation_test.mbt": "82fdafc98d1e4eb90e1099b4765173aaece959f3c3dd905cecc8bff00f241284",
+    "modules/wasmoon_jit/jit_ffi/continuations.mbt": "4914b258aa5a631d721a0c24ec8d100d171d9c1b086a9825fcece13b567d99f6",
+    "modules/wasmoon_jit/jit_ffi/exception.c": "1396518cf051b38c1205e2e16f1946db8078d62168b74468c1cdd8556c5bd9c9",
+    "modules/wasmoon_jit/jit_ffi/fiber.c": "24a5465fae869ab5601b2e808a1330b90e54dcb9b8d8e7bb7c555f08b12a6fd9",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.c": "de1259f45cab0b9b3a7ed7fd4caf22cfa6d6d4aee4d1c6583908d164d9a506de",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.h": "38d4fbfe5b0aa2d0de2be15cc8b077b5bc165457ea43da597893957fccba5b3e",
+    "modules/wasmoon_jit/jit_ffi/guest_continuation.c": "62c94ec82285ad9f1a283c3920c40f02a5a351dcd73370ce189cfc1da6c1acaf",
+    "modules/wasmoon_jit/jit_ffi/jit_internal.h": "83434671342defdafa7dcddb3ef042d4990cdadc6e94879622390eadc7ffc556",
+    "modules/wasmoon_jit/jit_ffi/pkg.generated.mbti": "ead0ceb1fb8bcb5130ca58e1a24c16e177ea89fa07934a80607f8ff4f1d90ce2",
+    "modules/wasmoon_jit/native_guest_continuation.mbt": "5f538097cac6d0cd3de9e8a746f892efbe65ee92b3e01b1cdd891113c2b24169"
+  },
+  "baseline_binary_sha256": "144b149c5170635747e1d522658505846ffb01b0e70c2b0691b607e7708dbda5",
+  "baseline_receipt": "../exception-rootcause-2026-10-16/source-manifest.json",
+  "baseline_source_hashes_verified_against_main": 18,
+  "candidate_binary_sha256": "f8333d5e7473973c09f6b261ad4b823fc0b4b3ceafb9c41b54f64a09cca7548d",
+  "external_suite_binary_sha256": "34a121a2ce8e8d487c85d01a135e966041f1982e1fc98b48af75dd5ca7d5c9ec",
+  "external_suite_binary_note": "Initial fresh release build before the final EOF whitespace normalization; production logic identical. Final release benchmark binary was rebuilt afterwards. No source changes during external suites.",
+  "candidate_build": "./install.sh; removes target/moon-install-build before build",
+  "generated_c_sha256": "b85a5d1e0a47acd4dfd6a7a6cd7fe532176b36565ceebfaef4ad5637a255487b",
+  "counter_source_sha256": "609ef19323d0de3b0c700cd5c9a0a051a5a22d36176be9d501a7189d950f78d6",
+  "sanitizer_source_copies": {
+    "continuations.mbt": {
+      "source_sha256": "4914b258aa5a631d721a0c24ec8d100d171d9c1b086a9825fcece13b567d99f6",
+      "copied_sha256": "4914b258aa5a631d721a0c24ec8d100d171d9c1b086a9825fcece13b567d99f6"
+    },
+    "guest_continuation.c": {
+      "source_sha256": "62c94ec82285ad9f1a283c3920c40f02a5a351dcd73370ce189cfc1da6c1acaf",
+      "copied_sha256": "62c94ec82285ad9f1a283c3920c40f02a5a351dcd73370ce189cfc1da6c1acaf"
+    },
+    "gc_heap.c": {
+      "source_sha256": "de1259f45cab0b9b3a7ed7fd4caf22cfa6d6d4aee4d1c6583908d164d9a506de",
+      "copied_sha256": "de1259f45cab0b9b3a7ed7fd4caf22cfa6d6d4aee4d1c6583908d164d9a506de"
+    },
+    "gc_heap.h": {
+      "source_sha256": "38d4fbfe5b0aa2d0de2be15cc8b077b5bc165457ea43da597893957fccba5b3e",
+      "copied_sha256": "38d4fbfe5b0aa2d0de2be15cc8b077b5bc165457ea43da597893957fccba5b3e"
+    },
+    "exception.c": {
+      "source_sha256": "1396518cf051b38c1205e2e16f1946db8078d62168b74468c1cdd8556c5bd9c9",
+      "copied_sha256": "1396518cf051b38c1205e2e16f1946db8078d62168b74468c1cdd8556c5bd9c9"
+    },
+    "fiber.c": {
+      "source_sha256": "24a5465fae869ab5601b2e808a1330b90e54dcb9b8d8e7bb7c555f08b12a6fd9",
+      "copied_sha256": "24a5465fae869ab5601b2e808a1330b90e54dcb9b8d8e7bb7c555f08b12a6fd9"
+    },
+    "jit_internal.h": {
+      "source_sha256": "83434671342defdafa7dcddb3ef042d4990cdadc6e94879622390eadc7ffc556",
+      "copied_sha256": "83434671342defdafa7dcddb3ef042d4990cdadc6e94879622390eadc7ffc556"
+    },
+    "runtime_failures_test.mbt": {
+      "source_sha256": "d30d8d777d14e779c1b538d38e92fa9fe9f582db7197430efdab978bf1b1b2a7",
+      "copied_sha256": "d30d8d777d14e779c1b538d38e92fa9fe9f582db7197430efdab978bf1b1b2a7"
+    }
+  }
+}

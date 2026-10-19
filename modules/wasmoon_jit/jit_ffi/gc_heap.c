@@ -108,12 +108,15 @@ static void gc_set_fail_alloc_config(int fail_at, int fail_every) {
 
 static int gc_barrier_assert_env_cached = -1;
 
+typedef enum { GC_ROOT_UNBOUND, GC_ROOT_EXCEPTION, GC_ROOT_CONTINUATION } GcRootOwnerKind;
+
 typedef struct GcParkedRoots {
     GcHeap* heap;
     struct GcParkedRoots* previous;
     struct GcParkedRoots* next;
     int64_t* roots;
     int32_t root_count;
+    GcRootOwnerKind owner_kind;
     int64_t owner_reference;
 } GcParkedRoots;
 
@@ -326,8 +329,10 @@ void gc_heap_unregister_parked_roots(void* opaque_registration) {
     if (registration->next) {
         registration->next->previous = registration->previous;
     }
-    if (registration->owner_reference & GC_EXCEPTION_REF_TAG) {
+    if (registration->owner_kind == GC_ROOT_EXCEPTION) {
         if (--heap->exception_root_count == 0) heap->exception_arena = NULL;
+    } else if (registration->owner_kind == GC_ROOT_CONTINUATION) {
+        if (--heap->continuation_root_count == 0) heap->continuation_arena = NULL;
     }
     free(registration->roots);
     free(registration);
@@ -340,20 +345,23 @@ GcHeap *gc_heap_registration_heap(void *registration) {
 
 int32_t gc_heap_bind_exception_roots(void *opaque, struct native_exception_arena *arena, int64_t reference) {
     GcParkedRoots *registration = opaque;
-    if (!registration || (registration->heap->exception_arena &&
+    if (!registration || registration->owner_kind == GC_ROOT_CONTINUATION || (registration->heap->exception_arena &&
         registration->heap->exception_arena != arena)) return 0;
     registration->owner_reference = reference;
     registration->heap->exception_arena = arena;
-    ++registration->heap->exception_root_count;
+    if (!registration->owner_kind) ++registration->heap->exception_root_count;
+    registration->owner_kind = GC_ROOT_EXCEPTION;
     return 1;
 }
 
 int32_t gc_heap_bind_continuation_roots(void *opaque, struct native_continuation_arena *arena, int64_t reference) {
     GcParkedRoots *registration = opaque;
-    if (!registration || (registration->heap->continuation_arena &&
+    if (!registration || registration->owner_kind == GC_ROOT_EXCEPTION || (registration->heap->continuation_arena &&
         registration->heap->continuation_arena != arena)) return 0;
     registration->owner_reference = reference;
     registration->heap->continuation_arena = arena;
+    if (!registration->owner_kind) ++registration->heap->continuation_root_count;
+    registration->owner_kind = GC_ROOT_CONTINUATION;
     return 1;
 }
 
@@ -465,7 +473,7 @@ static int gc_heap_prepare_roots(GcHeap *heap, const int64_t *roots, int32_t cou
 static void gc_heap_finish_roots(GcHeap *heap) {
     if (heap->root_visitor) {
         exception_arena_sweep(heap->exception_arena, heap);
-        continuation_arena_sweep(heap->continuation_arena);
+        continuation_arena_sweep(heap->continuation_arena, heap);
         int64_t *result = call_gc_root_visitor(heap->root_visitor, heap->root_visitor_data, 1,
             moonbit_make_int64_array(0, 0));
         moonbit_decref(result);

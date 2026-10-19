@@ -1,4 +1,114 @@
 ///|
+test "failed binding of a suspended continuation releases roots and pending budget" {
+  let module_ = @wat.parse(
+    (
+      #|(module (import "host" "arm" (func $arm))
+      #|  (type $f (func (result i32))) (type $c (cont $f))
+      #|  (type $input (func (param i32) (result i32))) (type $k (cont $input))
+      #|  (tag $yield (result i32))
+      #|  (global $saved (mut (ref null $k)) (ref.null $k))
+      #|  (func $body (result i32) suspend $yield) (elem declare func $body)
+      #|  (func (export "make")
+      #|    (block $s (result (ref $k))
+      #|      (resume $c (on $yield $s) (cont.new $c (ref.func $body))) unreachable)
+      #|    global.set $saved)
+      #|  (func (export "bind") call $arm
+      #|    (drop (cont.bind $k $c (i32.const 42) (global.get $saved))))
+      #|  (func (export "drop") (global.set $saved (ref.null $k)))
+      #|  (func (export "healthy") (result i32) i32.const 42))
+    ),
+  )
+  @validator.validate_module(module_, stack_switching=true)
+  let budget = @runtime.ResourceBudget::new(pending_work=2L)
+  let store = @runtime.Store::with_c_heap(resource_budget=Some(budget))
+  let linker = @runtime.Linker::with_store(store)
+  defer linker.close()
+  linker.add_host_func("host", "arm", fn(_) { [] })
+  let instance = @executor.instantiate_with_linker(linker, "guest", module_)
+  let context = build_gc_root_context(module_, instance, store)
+  defer context.close()
+  let failure = Ref(1)
+  context.jit_module.set_hostcall_callback(fn() {
+    runtime_fail_native_allocation(failure.val)
+    HostcallCompleted
+  })
+  defer runtime_fail_native_allocation(0)
+  let mut denied = 0
+  for attempt in 1..<=6 {
+    context.call_core_func(store, instance, 2, []) |> ignore
+    assert_eq(budget.used(PendingWork), 1L)
+    failure.val = attempt
+    try context.call_core_func(store, instance, 3, []) catch {
+      Trap(message) => {
+        assert_true(message.contains("out of memory"))
+        denied += 1
+      }
+      error => fail(error.to_string())
+    } noraise {
+      _ => ()
+    }
+    runtime_fail_native_allocation(0)
+    context.call_core_func(store, instance, 4, []) |> ignore
+    store.collect_garbage() |> ignore
+    assert_eq(budget.used(PendingWork), 0L)
+    assert_eq(context.call_core_func(store, instance, 5, []), [I32(42)])
+  }
+  assert_true(denied > 0)
+}
+
+///|
+test "continuation scope allocation failure returns its consumed body budget" {
+  let module_ = @wat.parse(
+    (
+      #|(module (import "host" "arm" (func $arm))
+      #|  (type $f (func)) (type $c (cont $f))
+      #|  (global $saved (mut (ref null $c)) (ref.null $c))
+      #|  (func $body) (elem declare func $body)
+      #|  (func (export "make") (global.set $saved (cont.new $c (ref.func $body))))
+      #|  (func (export "run") call $arm (resume $c (global.get $saved)))
+      #|  (func (export "healthy") (result i32) i32.const 42)
+      #|  (func (export "drop") (global.set $saved (ref.null $c))))
+    ),
+  )
+  @validator.validate_module(module_, stack_switching=true)
+  let budget = @runtime.ResourceBudget::new(pending_work=2L)
+  let store = @runtime.Store::with_c_heap(resource_budget=Some(budget))
+  let linker = @runtime.Linker::with_store(store)
+  defer linker.close()
+  linker.add_host_func("host", "arm", fn(_) { [] })
+  let instance = @executor.instantiate_with_linker(linker, "guest", module_)
+  let context = build_gc_root_context(module_, instance, store)
+  defer context.close()
+  let failure = Ref(1)
+  context.jit_module.set_hostcall_callback(fn() {
+    runtime_fail_native_allocation(failure.val)
+    HostcallCompleted
+  })
+  defer runtime_fail_native_allocation(0)
+  let mut denied = 0
+  for attempt in 1..<=8 {
+    context.call_core_func(store, instance, 2, []) |> ignore
+    assert_eq(budget.used(PendingWork), 1L)
+    failure.val = attempt
+    try context.call_core_func(store, instance, 3, []) catch {
+      Trap(message) => {
+        assert_true(message.contains("out of memory"))
+        denied += 1
+      }
+      error => fail(error.to_string())
+    } noraise {
+      _ => ()
+    }
+    runtime_fail_native_allocation(0)
+    context.call_core_func(store, instance, 5, []) |> ignore
+    store.collect_garbage() |> ignore
+    assert_eq(budget.used(PendingWork), 0L)
+    assert_eq(context.call_core_func(store, instance, 4, []), [I32(42)])
+  }
+  assert_true(denied > 0)
+}
+
+///|
 test "valid capacity denial is catchable and leaves the process usable" {
   let oversized = @wat.parse("(module (memory i64 281474976710656))")
   @validator.validate_module(oversized)

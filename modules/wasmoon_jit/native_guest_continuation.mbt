@@ -1,28 +1,10 @@
 ///|
-#borrow(context, arena)
-extern "c" fn bind_continuation_arena(
-  context : JITContext,
-  arena : NativeContinuationArena,
-) -> Unit = "wasmoon_continuation_arena_bind"
-
-///|
 pub fn NativeJITContext::set_continuation_arena(
   self : NativeJITContext,
   arena : NativeContinuationArena,
 ) -> Unit {
-  bind_continuation_arena(self.handle, arena)
+  self.handle.bind_continuation_arena(arena)
 }
-
-///|
-#borrow(context, roots)
-extern "c" fn define_continuation_type(
-  context : JITContext,
-  index : Int32,
-  trampoline : Int64,
-  params : Int32,
-  results : Int32,
-  roots : FixedArray[Int32],
-) -> Int32 = "wasmoon_continuation_define_type"
 
 ///|
 pub fn NativeJITContext::define_continuation_type(
@@ -47,15 +29,13 @@ pub fn NativeJITContext::define_continuation_type(
   for i, root in roots {
     buffer[i] = root
   }
-  define_continuation_type(
-    self.handle,
+  self.handle.define_continuation_type(
     index,
     trampoline,
     roots.length(),
     count_entry_trampoline_slots(results),
     buffer,
-  ) !=
-  0
+  )
 }
 
 ///|

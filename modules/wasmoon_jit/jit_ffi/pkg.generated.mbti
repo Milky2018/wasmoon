@@ -62,6 +62,7 @@ pub impl @debug.Debug for GCHeapHandle
 
 pub type JITContext
 pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int], FixedArray[Int]) -> Unit
+pub fn JITContext::bind_continuation_arena(Self, NativeContinuationArena) -> Unit
 pub fn JITContext::bind_exception_arena(Self, NativeExceptionArena) -> Unit
 pub fn JITContext::bind_gc_function_addresses(Self, FixedArray[Int64]) -> Unit
 pub fn JITContext::bind_gc_metadata(Self, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit raise GCMetadataError
@@ -69,6 +70,7 @@ pub fn JITContext::bind_gc_safepoints(Self, Int, Bytes, FixedArray[Int]) -> Bool
 pub fn JITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITContext::bind_prepared_safepoints(Self, PreparedSafepoints) -> Bool
 pub fn JITContext::bind_segment_drop_flags(Self, FixedArray[Bool], FixedArray[Bool]) -> Unit
+pub fn JITContext::define_continuation_type(Self, Int, Int64, Int, Int, FixedArray[Int]) -> Bool
 pub fn JITContext::new(Int) -> Self
 pub fn JITContext::new_shaped(Int, @layout.ContextLayout?) -> Self
 pub fn JITContext::set_segments(Self, Array[Bytes], Array[Array[Int64]]) -> Bool
@@ -85,7 +87,9 @@ pub fn MemoryDescriptor::to_repr(Self) -> @debug.Repr
 pub impl Eq for MemoryDescriptor
 pub impl @debug.Debug for MemoryDescriptor
 
-type NativeContinuationArena
+pub struct NativeContinuationArena {
+  // private fields
+}
 pub fn NativeContinuationArena::bind_quota(Self, Quota) -> Bool
 pub fn NativeContinuationArena::clear(Self) -> Unit
 pub fn NativeContinuationArena::gc_roots(Self, Int64) -> FixedArray[Int64]

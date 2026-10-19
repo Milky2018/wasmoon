@@ -1,0 +1,17 @@
+[
+  {
+    "mutation": "bind-cleanup",
+    "expected": "failure",
+    "exit_code": 2
+  },
+  {
+    "mutation": "scope-cleanup",
+    "expected": "failure",
+    "exit_code": 2
+  },
+  {
+    "mutation": "restored",
+    "expected": "success",
+    "exit_code": 0
+  }
+]

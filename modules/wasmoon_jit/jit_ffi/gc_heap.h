@@ -135,6 +135,7 @@ typedef struct GcHeap {
     int quota_denied; // 1: payload bytes, 2: retained identity slots
     GcAllocationPolicy allocation_policy; // Closed MoonBit function; no retained closure
     int32_t exception_root_count; // Leases borrowing exception_arena
+    int32_t continuation_root_count; // Leases borrowing continuation_arena
 } GcHeap;
 
 // Budgeted heaps enter the common allocator before any guest payload write.
@@ -184,7 +185,7 @@ void continuation_arena_mark(struct native_continuation_arena *arena, int64_t re
 int32_t continuation_arena_marked_count(struct native_continuation_arena *arena);
 void continuation_arena_copy_marked(struct native_continuation_arena *arena, int64_t *roots);
 void continuation_arena_reset_marks(struct native_continuation_arena *arena);
-void continuation_arena_sweep(struct native_continuation_arena *arena);
+void continuation_arena_sweep(struct native_continuation_arena *arena, GcHeap *heap);
 
 void exception_arena_mark(struct native_exception_arena *arena, int64_t reference);
 int32_t exception_arena_marked_count(struct native_exception_arena *arena);

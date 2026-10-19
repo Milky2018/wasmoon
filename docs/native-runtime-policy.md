@@ -1,10 +1,12 @@
 # Native runtime policy ownership
 
-ISS-635 tracks this migration. The GC allocation slice and private native test
-layout move are implemented locally. Exception registry ownership has also
-moved to MoonBit; its platform acceptance and further performance work remain
-open. Continuation registry migration is still unfinished. This document describes that intermediate state,
-not a completed removal of runtime policy from C.
+ISS-635 tracks this migration. GC allocation retry policy, exception registry
+ownership and private native test layouts have moved to their intended owners.
+PR #541 supplies platform acceptance for the exception work (ISS-637). The
+continuation lifecycle implementation (ISS-638) now lives in MoonBit and has
+local regression evidence; its new native ownership paths still require Linux
+and Windows CI. GC collection coordination remains to review. This document
+describes the current boundary, not completion of the whole epic.
 
 ## State and owners
 
@@ -14,7 +16,7 @@ not a completed removal of runtime policy from C.
 | Allocation retries and classification of collection failure, quota denial and exhaustion | MoonBit `jit_ffi/gc_heap.mbt::allocate` | Three call-scoped primitives attempt a physical allocation, collect pinned roots, and read the last physical admission result. C has no retry loop. |
 | Explicit, live activation, spilled, table and parked roots | Native activation/root registrations plus MoonBit Store visitor | Native stack maps and parked stacks contain machine addresses. The Store visitor traces MoonBit wrappers, exceptions and continuations; its closure exists only during an execution/collection scope. |
 | Stable exception identity, tag layouts, payload registry, admission and reclamation | MoonBit `ExceptionState` with packed numeric metadata and an RC-retained native callback view | One RC storage owner holds fallible payload buffers and physical root/quota leases. C has no identity registry or reclamation decisions. Handler jump buffers remain a control-transfer primitive. |
-| Continuation handle registry, state transitions and cancellation | C continuation arena plus MoonBit execution adapters | Still to migrate in ISS-638. Saved machine stacks, platform contexts and stack switching remain native primitives. |
+| Continuation identities, admission, marks, retirement and sealing | MoonBit `ContinuationState`; an RC bridge retains it | RC physical storage owns bodies, buffers and root/quota leases. Active native cancellation scopes pin bodies directly. Saved machine stacks, platform contexts and stack transfers remain native primitives. |
 | Immutable callable metadata | MoonBit registry with RC-retained native array view | Existing example of one logical owner and direct native reads without a second mutable registry. |
 | Tests that allocate private activation layouts | `jit_ffi/testing`, compiled by `jit_ffi` | Test callers retain the `native_test_support` MoonBit facade. No other package allocates a copy of the private activation layout. |
 
@@ -112,6 +114,52 @@ negative controls and generated ownership excerpts. The later
 replaces the initial Map/per-snapshot-owner implementation and separates loop
 time from CLI startup; it records both the improvement and residual costs. This is not completion of ISS-635 or ISS-638.
 
+## Continuation lifecycle and cancellation
+
+`ContinuationState` owns one-shot identities, lookup, consumption, GC marks,
+heap-specific sweep decisions, quota admission and sealing. Packed numeric
+handle rows borrow body addresses only while its RC physical storage owns them.
+IDs decrease monotonically and never revive; compaction preserves identity
+validation. A found index is consumed directly rather than looked up again by a
+linear scan. Ordinary publication retains amortized capacity; explicit reclaim
+and clear release excess storage.
+
+The native RC bridge retains state; state owns storage; storage owns RC physical
+bodies. State and bodies never retain the bridge or context. Bodies borrow
+context-owned immutable type/trampoline/root descriptors and therefore remain
+inside the existing execution-context lifetime. These descriptors describe a
+machine call and are not a second mutable identity registry. No continuation
+factory field was added to the context: the MoonBit type-definition method
+creates an arena lazily before invoking the physical descriptor setter.
+
+| Transition | Logical decision | Physical ownership and root visibility |
+| --- | --- | --- |
+| Create | Admit one pending-work unit, construct, publish a fresh identity | Storage owns a body and its accepted quota lease; parameter roots are registered. Failed construction rolls admission back before returning a trap status. |
+| Bind | Consume the old identity, publish a new identity for the same body | Native code copies bound inputs and registers their roots. Failure closes the consumed body before raising a trap. |
+| Resume | Consume the identity before executing | A native cancellation scope pins the body. Registrations use active ownership (reference zero); spilled guest roots stay on the physical stack. Scope-allocation failure releases the transferred lease before trapping. |
+| Suspend | Publish a new identity after the native fiber returns | Storage retains the parked stack and roots. The resumer disowns its temporary scope pin only after publication succeeds. |
+| Switch or forward | Consume the target and publish the source when a matching handler is found | An additional native scope pins the target across forwarding/yield. A matching resumer transfers that pin; cancellation releases nested scopes. Temporary inputs are freed before preparation errors trap. |
+| Return, throw or cancel | Consumed identities remain invalid | Native control closes buffers, roots and stack idempotently. Final body release returns its accepted quota once. Exception capture returns a status so the resumer can clean up before throwing. |
+| GC or explicit reclaim | Retire unmarked handles for the collecting heap; invalidate metadata before releasing owners | Physical table compaction transfers/drops RC ownership. Active native scope pins remain valid until disowned or cancelled. |
+| Clear or last owner | Seal before clearing metadata; no further publication | Close all physical stacks before dropping table owners, since one stack's cancellation scopes can pin another body in that table. Then free the table. |
+
+All callbacks are closed, synchronous `FuncRef`s. Creation requests and output
+buffers use borrowed `#external` views and cannot escape. Native entry points
+check the returned status and only then trap, yield or switch stacks. Generated
+callback adapters contain no ownership operations on these borrowed request
+views. No parked stack contains a suspended MoonBit frame.
+
+Root registration now stores an explicit owner kind. Negative continuation
+identities contain the exception tag bit, so classifying a lease from that bit
+could prematurely detach a still-live exception arena. Exception and
+continuation leases now have separate idempotent counters; unregistering the
+last lease clears only the matching borrowed adapter. The regression reproduces
+the earlier defect independently of the registry migration.
+
+See [continuation evidence](evidence/continuation-lifecycle-2026-10-19/README.md)
+for the mixed-root regression, allocation-failure matrices and negative
+controls, external suites, ownership review and isolated performance samples.
+
 ## Native test ownership and shared headers
 
 The C helpers and platform assembly that inspect private JIT layouts live
@@ -133,7 +181,20 @@ header. The installed stable toolchain remains unchanged.
 
 See [local evidence](evidence/native-runtime-policy-2026-10-16/README.md).
 Local macOS ASan/UBSan is not Linux leak detection or Windows compiler
-acceptance. ISS-636 and ISS-639 remain in progress until the outstanding
-acceptance criteria are met. ISS-637's registry migration is implemented locally
-but remains in progress for platform acceptance and measured exception-heavy
-overhead. ISS-638 remains open.
+acceptance. ISS-637 is closed with the accepted PR #541 CI receipts and measured
+performance investigation. ISS-638 remains in progress for platform acceptance
+of the new continuation paths. ISS-636 still needs collection-coordination
+review and final acceptance reconciliation; ISS-639 needs final archive/platform
+acceptance reconciliation. Their historical pending notes must be checked
+against PR #541 rather than interpreted as new missing implementations.
+
+The next migration review is `gc_heap_prepare_roots`, `gc_heap_finish_roots` and
+`gc_heap_abort_roots`: native root gathering, managed Store reachability,
+exception/continuation sweep and visitor failure recovery still form one
+collection protocol. Move any remaining policy together with its state and
+rollback contract; retain machine stack-map traversal and physical payload
+mark/sweep/compaction where generated code needs that layout. Fiber/context
+assembly, ABI entry points and raw OS/buffer operations are retained native
+mechanisms, not an outstanding instruction to translate every C line.
+ISS-634's upstream build-dependency fixes and ISS-640's builtin argument-routing
+bug are separate work. The installed stable toolchain is unchanged.
