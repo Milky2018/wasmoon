@@ -11,6 +11,8 @@ pub fn format_wat_error(@parser.WatError, String) -> String
 
 pub fn parse(String, implicit_module? : Bool) -> @types.Module raise @parser.WatError
 
+pub fn parse_string_literal(String) -> Bytes raise @parser.WatError
+
 pub fn parse_wast(String) -> @parser.WastScript raise @parser.WatError
 
 pub fn render(@types.Module) -> String raise WatPrintError

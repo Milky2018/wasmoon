@@ -3,6 +3,7 @@ import {
   "Milky2018/wasm_component" @component,
   "Milky2018/wasm_component/validator" @component_model,
   "Milky2018/wasm_core/wat",
+  "moonbitlang/core/encoding/utf8",
 }
 
 import {

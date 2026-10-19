@@ -52,3 +52,21 @@ The reference decoder reads unsigned LEB memarg flags and leaves natural
 alignment to validation; the reference text grammar uses u64 limits and
 alignment values. See the official [binary decoder](https://github.com/WebAssembly/spec/blob/main/interpreter/binary/decode.ml)
 and [text grammar](https://github.com/WebAssembly/spec/blob/main/interpreter/text/parser.mly).
+
+## Component string follow-up
+
+A user-supplied Core export/alias pair using `\c3\a9` exposed a remaining
+Component text decoding defect: the embedded Core export was `é`, but the outer
+alias was `Ã©`. Component literals now reuse the Core WAT lexer through the
+public byte-oriented `parse_string_literal` operation. Names decode those bytes
+as strict UTF-8 with BOM preservation, while data/binary payloads remain bytes.
+The independent Component escape interpreter and its Latin-1 binary conversion
+are removed.
+
+[Follow-up local receipts](component-string-local.json) retain their dirty
+precommit source revision and changed-input hashes. Native 2,781/2,781 and wasm
+1,309/1,309 pass; Component text tests pass 18/18 on each target. All three
+Component suites pass on both native engines (59 files/1,385 commands each,
+zero failures or skips). The actual CLI output for the user repro validates
+with both Wasmoon and wasm-tools 1.254.0. New platform CI must accept this
+follow-up; earlier source receipts remain historical.
