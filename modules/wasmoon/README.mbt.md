@@ -307,14 +307,14 @@ versions, coverage, remaining contract differences, and the new performance base
 
 ## Library Usage
 
-### API changes for the next minor release
+### API changes in 0.17.0
 
-Main removes the migration-era `RuntimeAssembly`, `RuntimeComponent`,
+Version 0.17.0 removes the migration-era `RuntimeAssembly`, `RuntimeComponent`,
 `CompilerInfrastructureAssembly`, and `WasmCompilerPipelineError` types, plus
 `runtime_assembly`, `compiler_infrastructure_assembly`, and
 `plan_wasm_function_with_compiler_infra`. These were exported in earlier 0.x
-releases; the removal is a source-breaking change for the next minor release,
-not a 0.16.x patch. External callers must migrate before upgrading.
+releases; the removal is a source-breaking change in 0.17.0. External callers
+must migrate before upgrading from 0.16.x.
 
 Use the [architecture documentation](../../docs/architecture.md) and package
 imports for ownership information. For compilation, create a translation
