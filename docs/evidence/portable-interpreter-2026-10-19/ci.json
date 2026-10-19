@@ -1,60 +1,60 @@
 {
   "pr": "https://github.com/Milky2018/wasmoon/pull/545",
-  "implementation_head": "a25d9db5e81ffa06f4a71cf7752a9ab25f222e9c",
+  "implementation_head": "cc6444158a18350f352264d123a2626f94052e84",
   "base": "8f99719a69d32e79325edf06785039f4d3fbf071",
-  "run_id": 39238063977,
-  "run_url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977",
+  "run_id": 39246263241,
+  "run_url": "https://github.com/Milky2018/wasmoon/actions/runs/39246263241",
   "status": "all six implementation checks passed; documentation head must pass separately",
-  "source_revision": "8d80e1c969827e175e4526159f994e3c6b3a60d0",
+  "source_revision": "dae81454402cc70e80438762f1ec6f5dabf13232",
   "source_dirty": false,
   "source_parents": [
     "8f99719a69d32e79325edf06785039f4d3fbf071",
-    "a25d9db5e81ffa06f4a71cf7752a9ab25f222e9c"
+    "cc6444158a18350f352264d123a2626f94052e84"
   ],
   "jobs": [
     {
       "name": "Wasm interpreter",
-      "databaseId": 118011892197,
+      "databaseId": 118038815877,
       "conclusion": "success",
-      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892197"
-    },
-    {
-      "name": "Linux AMD64",
-      "databaseId": 118011892413,
-      "conclusion": "success",
-      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892413"
-    },
-    {
-      "name": "Linux ASan and UBSan",
-      "databaseId": 118011892438,
-      "conclusion": "success",
-      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892438"
-    },
-    {
-      "name": "macOS ARM64",
-      "databaseId": 118011892478,
-      "conclusion": "success",
-      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892478"
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39246263241/job/118038815877"
     },
     {
       "name": "Windows AMD64 (clang)",
-      "databaseId": 118011892522,
+      "databaseId": 118038816222,
       "conclusion": "success",
-      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892522"
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39246263241/job/118038816222"
+    },
+    {
+      "name": "Linux ASan and UBSan",
+      "databaseId": 118038816248,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39246263241/job/118038816248"
     },
     {
       "name": "Windows AMD64 (msvc)",
-      "databaseId": 118011892614,
+      "databaseId": 118038816275,
       "conclusion": "success",
-      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39238063977/job/118011892614"
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39246263241/job/118038816275"
+    },
+    {
+      "name": "macOS ARM64",
+      "databaseId": 118038816286,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39246263241/job/118038816286"
+    },
+    {
+      "name": "Linux AMD64",
+      "databaseId": 118038816315,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39246263241/job/118038816315"
     }
   ],
   "sanitizer": {
     "version": "0.17.0",
-    "source_revision": "8d80e1c969827e175e4526159f994e3c6b3a60d0",
+    "source_revision": "dae81454402cc70e80438762f1ec6f5dabf13232",
     "source_dirty": false,
     "build_reuse": "fresh",
-    "binary_sha256": "14677c97cd644f5a8ec62f6d5204cb2c484ce1030142ed5edad3bd4a30d388d3",
+    "binary_sha256": "63e3ef9176b0c2d3cc84fe07b808c7558a9d3d3acf4ba3b1365e1285e88e8930",
     "tests": "passed",
     "event_loop": "passed",
     "asan_probe": "detected",
@@ -85,7 +85,7 @@
     },
     "targets": {
       "native": {
-        "artifact_sha256": "ae45f3b92fb983a756789bb4140e3bdaf35215be0a1a1887ddfdbf09667dd107",
+        "artifact_sha256": "cde041fa4895ab88bb530c354626bfe3efd137cc3da85d0065cc057ca81f4cff",
         "files": 258,
         "accepted_files": 258,
         "passed": 62563,
@@ -93,7 +93,7 @@
         "unsupported": 0
       },
       "wasm": {
-        "artifact_sha256": "a6755a38cabe1432fb12b5f274082f38b1c56f95b6f915011ef36d596dc2762a",
+        "artifact_sha256": "6c4d859e30f5252df77ce216ecfdf97baa98383bdad7d4f09bdd2b594a1326a3",
         "files": 258,
         "accepted_files": 258,
         "passed": 62563,
@@ -104,13 +104,13 @@
   },
   "windows": {
     "clang": {
-      "native_tests": 2783,
+      "native_tests": 2786,
       "packages": 60,
       "strict_c_stubs": 43,
       "wasi03_http_contract": {
         "pass": 110
       },
-      "wasi03_binary_sha256": "386d7ced78dbfee7e549c0b8c8292255c5916ab5164ffb62c96ea1a415898fc4",
+      "wasi03_binary_sha256": "f1b23f33ff66e3b3e7872f09309493261672097728104f64555a0eb51c90bcf6",
       "misc": {
         "upstream_commit": "46c23a87dac1465986a8ad53ba6a7ae49372857b",
         "snapshot_sha256": "2ec0cfe1b1b538eef6d3bb3e0de76803b20cc0fe1d1da32f4a80fc0d5472546c",
@@ -129,16 +129,16 @@
       "existing_privilege_skips": 3,
       "actual_masm_argument_probe": "passed",
       "packaged_wasm_embedding": "passed",
-      "job_log_sha256": "8416a0f9223eb289a0f4f49115160f00768ccf354e8ccf76a22916e6511a1bbf"
+      "job_log_sha256": "8e3a83bc648071fca56060cf7ab50e9070d4b5d8b8733bd36662d1ea79161804"
     },
     "msvc": {
-      "native_tests": 2783,
+      "native_tests": 2786,
       "packages": 60,
       "strict_c_stubs": 43,
       "wasi03_http_contract": {
         "pass": 110
       },
-      "wasi03_binary_sha256": "e9b37b96f8cb2f54f4a48e97da7dd5e82feef5659f80b49297d013125c00ace0",
+      "wasi03_binary_sha256": "c345f3962f30e006ff6db0b210bf7e38b08452f1b32fc230aa6a3eaefdc914c3",
       "misc": {
         "upstream_commit": "46c23a87dac1465986a8ad53ba6a7ae49372857b",
         "snapshot_sha256": "2ec0cfe1b1b538eef6d3bb3e0de76803b20cc0fe1d1da32f4a80fc0d5472546c",
@@ -157,18 +157,18 @@
       "existing_privilege_skips": 3,
       "actual_masm_argument_probe": "passed",
       "packaged_wasm_embedding": "passed",
-      "job_log_sha256": "cafb64ae6adb7dec2574fa495d28d67031a66f291b9be28e61381b5a94ab8818"
+      "job_log_sha256": "fe0cc53bda1b75191bf43a86f93e287da5b1920fa17a6b985599ae82a8e09a76"
     }
   },
   "receipts": [
     {
       "file": "ci-windows-clang-probes.log",
-      "sha256": "546721940109ac85f9468b323ab6c5c49496b2dfc717f6eb78e9fe8e23a04509",
+      "sha256": "e9cc6c61a8268b8a193a663c702161e421d93964f4b37ac2637cf351b7bd464f",
       "presentation_trailing_whitespace_trimmed": true
     },
     {
       "file": "ci-windows-msvc-probes.log",
-      "sha256": "27b6d6ef7b99f9eb081c4279cfb9f2c8eececfd50c71c07e2d9a1b84753c1e4f",
+      "sha256": "76a40983c77feccb048e9f5a24d31b4a70b2a918f3512d2ea6431cca67a21db1",
       "presentation_trailing_whitespace_trimmed": true
     },
     {
@@ -178,23 +178,28 @@
     },
     {
       "file": "ci-linux-lsan-positive-control.log",
-      "sha256": "168b5fc613a3fc9c4723c7ba7e211fead7b256b38dab0c28b68513939ee84613",
+      "sha256": "d6fd73c9e8afdf6df65c3b0988e7be10bd1c5b6b640421df6b798150375c1c81",
       "presentation_trailing_whitespace_trimmed": true
     },
     {
       "file": "ci-linux-asan-positive-control.log",
-      "sha256": "e5fa76cf0b534eaeeab70eef42e49c17bfe2451f94cb1e849d41925596094798",
+      "sha256": "087f0fe0a004f4251a3d673dfc0468c2ed975d654bb6dc7b174126a1e683bf2d",
       "presentation_trailing_whitespace_trimmed": true
     },
     {
       "file": "ci-linux-native-asan-positive-control.log",
-      "sha256": "4f8cbedbac62255953aad943f521915e4ba2a26356d1f2c63e8994cd248f5ca3",
+      "sha256": "b44f698c630abb2d9058bedda5d6ee3f4b469f23cf3778b07c015eca4f713de9",
       "presentation_trailing_whitespace_trimmed": true
     },
     {
       "file": "ci-wasm-job.log",
-      "sha256": "cbd5b24ab82eb3d7b701ee9ce2905a9227d4c0ad739dd86fb38c260082f646d9",
+      "sha256": "031f86115728984ec9f0410aedb7267515e48651265cdab6410acad6aa77bd88",
       "presentation_trailing_whitespace_trimmed": true
     }
+  ],
+  "previous_acceptance": "ci-a25d9db5-historical.json",
+  "review_fixes": [
+    "2428dfb0",
+    "cc644415"
   ]
 }

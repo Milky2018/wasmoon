@@ -128,9 +128,9 @@ and [text values](https://webassembly.github.io/spec/core/text/values.html).
 separate follow-up commits and the 19 hidden phase errors exposed by strict
 assertion handling. The original dirty receipts above remain historical.
 
-## Clean platform CI acceptance
+## Historical initial platform CI acceptance
 
-[CI receipts](ci.json) accept implementation `a25d9db5` in
+[Historical CI receipt](ci-a25d9db5-historical.json) accepts implementation `a25d9db5` in
 [run 39238063977](https://github.com/Milky2018/wasmoon/actions/runs/39238063977).
 All six jobs passed. The source merge `8d80e1c9` has main `8f99719a` and
 implementation `a25d9db5` as its parents; both sanitizer and portable artifacts
@@ -157,3 +157,40 @@ The acceptance documentation head is checked separately after this receipt is
 committed. No further evidence-only commit is needed for that check. This PR is
 not merged while user review is open. ASan instrumentation exclusions in
 `ci.json` remain explicit; passing tests are bounded regression evidence.
+
+## Review follow-up platform acceptance
+
+Current [CI receipts](ci.json) accept implementation `cc644415` in
+[run 39246263241](https://github.com/Milky2018/wasmoon/actions/runs/39246263241).
+All six jobs passed. Sanitizer and portable artifacts use clean source merge
+`dae81454402cc70e80438762f1ec6f5dabf13232`, whose parents are main `8f99719a`
+and implementation `cc644415`. Earlier receipt files remain retrievable from
+commit `353b1123`; their metadata is preserved in the historical JSON above.
+
+- `2428dfb0` removes truncating memory/table limit encoding. Public Component
+  regressions preserve rejection of oversized minimum/maximum values, including
+  defined and both imported forms, while valid 32/64-bit neighbors still pass.
+- `cc644415` enforces unsigned u32 syntax in the shared type-index parser.
+  Signed/negative/overflowing indices fail parsing; bit-31 and u32-maximum
+  indices still parse before receiving typed semantic validation errors.
+- Windows Clang and MSVC each executed all 2,786 inventoried native tests in
+  60 packages, 43 strict C stubs, 110 external HTTP-contract cases, the complete
+  692 assertion / 72 script-only misc runs, actual MASM ABI probes and packaged
+  wasm embedding. Each 53-test native probe suite retains three existing
+  privilege-dependent skips.
+- Linux ASan/UBSan/LSan passed 193/193, leak detection enabled, all three
+  detection controls, no ordinary leak/UB report and separate expected 17-byte
+  LSan leak. Native and actual wasm each passed 258 files / 62,563 Core
+  assertions; focused wasm passed 226 with embedding result/callback/memory
+  43/21/21 and restored budget. Linux/macOS complete jobs also passed.
+
+Clean local `cc644415` additionally passed native 2,786, wasm 1,313, Component
+59 files / 1,385 commands on each native engine without skips and complete misc
+764 runs without failures. The fresh CLI rejects all four embedded-limit review
+examples and both negative indirect-call type indices. The original escaped
+UTF-8 alias remains accepted by Wasmoon and wasm-tools 1.254.0. These local
+results remain separate from CI provenance.
+
+This updated acceptance documentation must pass all six jobs separately.
+No further evidence-only commit is needed for that final check. User review
+remains open; the PR has not been merged.

@@ -2,15 +2,15 @@
   "build": {
     "returncode": 0,
     "timed_out": false,
-    "seconds": 156.516,
+    "seconds": 162.188,
     "log": "target\\windows-native-tests\\build.log"
   },
-  "inventory_count": 2783,
+  "inventory_count": 2786,
   "packages": [
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.438,
+      "seconds": 0.297,
       "log": "target\\windows-native-tests\\Milky2018_aarch64_target.log",
       "package": "Milky2018/aarch64_target",
       "expected_tests": 85,
@@ -28,7 +28,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.125,
+      "seconds": 0.141,
       "log": "target\\windows-native-tests\\Milky2018_milkir_native.log",
       "package": "Milky2018/milkir/native",
       "expected_tests": 19,
@@ -37,7 +37,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 6.922,
+      "seconds": 7.406,
       "log": "target\\windows-native-tests\\Milky2018_milkir_optimize.log",
       "package": "Milky2018/milkir/optimize",
       "expected_tests": 133,
@@ -55,7 +55,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.203,
+      "seconds": 0.234,
       "log": "target\\windows-native-tests\\Milky2018_regalloc.log",
       "package": "Milky2018/regalloc",
       "expected_tests": 71,
@@ -64,7 +64,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.125,
+      "seconds": 0.141,
       "log": "target\\windows-native-tests\\Milky2018_regalloc_unionfind.log",
       "package": "Milky2018/regalloc/unionfind",
       "expected_tests": 1,
@@ -91,7 +91,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.141,
+      "seconds": 0.156,
       "log": "target\\windows-native-tests\\Milky2018_vcode_code_object.log",
       "package": "Milky2018/vcode/code_object",
       "expected_tests": 8,
@@ -118,7 +118,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.14,
+      "seconds": 0.141,
       "log": "target\\windows-native-tests\\Milky2018_wasm_component_canonical.log",
       "package": "Milky2018/wasm_component/canonical",
       "expected_tests": 4,
@@ -127,7 +127,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.125,
+      "seconds": 0.156,
       "log": "target\\windows-native-tests\\Milky2018_wasm_component_model.log",
       "package": "Milky2018/wasm_component/model",
       "expected_tests": 4,
@@ -139,13 +139,13 @@
       "seconds": 0.172,
       "log": "target\\windows-native-tests\\Milky2018_wasm_component_text.log",
       "package": "Milky2018/wasm_component/text",
-      "expected_tests": 18,
-      "executed_tests": 18
+      "expected_tests": 20,
+      "executed_tests": 20
     },
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.141,
+      "seconds": 0.14,
       "log": "target\\windows-native-tests\\Milky2018_wasm_component_validator.log",
       "package": "Milky2018/wasm_component/validator",
       "expected_tests": 7,
@@ -163,7 +163,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.125,
+      "seconds": 0.141,
       "log": "target\\windows-native-tests\\Milky2018_wasm_core.log",
       "package": "Milky2018/wasm_core",
       "expected_tests": 3,
@@ -172,7 +172,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.125,
+      "seconds": 0.14,
       "log": "target\\windows-native-tests\\Milky2018_wasm_core_encoder.log",
       "package": "Milky2018/wasm_core/encoder",
       "expected_tests": 6,
@@ -181,7 +181,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.156,
+      "seconds": 0.172,
       "log": "target\\windows-native-tests\\Milky2018_wasm_core_parser.log",
       "package": "Milky2018/wasm_core/parser",
       "expected_tests": 41,
@@ -190,7 +190,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.344,
+      "seconds": 0.391,
       "log": "target\\windows-native-tests\\Milky2018_wasm_core_types.log",
       "package": "Milky2018/wasm_core/types",
       "expected_tests": 62,
@@ -199,11 +199,11 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.172,
+      "seconds": 0.219,
       "log": "target\\windows-native-tests\\Milky2018_wasm_core_validator.log",
       "package": "Milky2018/wasm_core/validator",
-      "expected_tests": 88,
-      "executed_tests": 88
+      "expected_tests": 89,
+      "executed_tests": 89
     },
     {
       "returncode": 0,
@@ -235,7 +235,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.141,
+      "seconds": 0.172,
       "log": "target\\windows-native-tests\\Milky2018_wasm_milkir_frontend.log",
       "package": "Milky2018/wasm_milkir/frontend",
       "expected_tests": 62,
@@ -244,7 +244,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.14,
+      "seconds": 0.156,
       "log": "target\\windows-native-tests\\Milky2018_wasm_milkir_frontend_ir_translator.log",
       "package": "Milky2018/wasm_milkir/frontend/ir/translator",
       "expected_tests": 1,
@@ -253,7 +253,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.157,
+      "seconds": 0.172,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon.log",
       "package": "Milky2018/wasmoon",
       "expected_tests": 4,
@@ -262,7 +262,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.281,
+      "seconds": 0.297,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_cmd_wasmoon_commands.log",
       "package": "Milky2018/wasmoon/cmd/wasmoon/commands",
       "expected_tests": 17,
@@ -271,7 +271,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.609,
+      "seconds": 0.656,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_cmd_wasmoon_commands_component.log",
       "package": "Milky2018/wasmoon/cmd/wasmoon/commands/component",
       "expected_tests": 18,
@@ -289,7 +289,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.297,
+      "seconds": 0.328,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_component_runtime_impl.log",
       "package": "Milky2018/wasmoon/component/runtime_impl",
       "expected_tests": 95,
@@ -298,7 +298,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.156,
+      "seconds": 0.172,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_component_runtime_impl_core.log",
       "package": "Milky2018/wasmoon/component/runtime_impl/core",
       "expected_tests": 2,
@@ -307,7 +307,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.187,
+      "seconds": 0.219,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_component_conformance.log",
       "package": "Milky2018/wasmoon/component_conformance",
       "expected_tests": 9,
@@ -316,7 +316,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.579,
+      "seconds": 0.625,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_component_native.log",
       "package": "Milky2018/wasmoon/component_native",
       "expected_tests": 25,
@@ -325,7 +325,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.203,
+      "seconds": 0.218,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_jit.log",
       "package": "Milky2018/wasmoon/jit",
       "expected_tests": 7,
@@ -343,7 +343,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.828,
+      "seconds": 0.891,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_sanitizer_testsuite.log",
       "package": "Milky2018/wasmoon/sanitizer_testsuite",
       "expected_tests": 125,
@@ -352,7 +352,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 10.718,
+      "seconds": 11.734,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_testsuite.log",
       "package": "Milky2018/wasmoon/testsuite",
       "expected_tests": 682,
@@ -361,7 +361,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.469,
+      "seconds": 0.719,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_wasi.log",
       "package": "Milky2018/wasmoon/wasi",
       "expected_tests": 130,
@@ -370,7 +370,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.344,
+      "seconds": 1.484,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_wasi_component.log",
       "package": "Milky2018/wasmoon/wasi_component",
       "expected_tests": 47,
@@ -379,7 +379,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.391,
+      "seconds": 0.5,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_wasi_http.log",
       "package": "Milky2018/wasmoon/wasi_http",
       "expected_tests": 32,
@@ -388,7 +388,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.203,
+      "seconds": 0.219,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_wast.log",
       "package": "Milky2018/wasmoon/wast",
       "expected_tests": 21,
@@ -397,7 +397,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.156,
+      "seconds": 0.172,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_wast_jit.log",
       "package": "Milky2018/wasmoon/wast/jit",
       "expected_tests": 2,
@@ -406,7 +406,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.25,
+      "seconds": 0.265,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_jit.log",
       "package": "Milky2018/wasmoon_jit",
       "expected_tests": 198,
@@ -424,7 +424,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.156,
+      "seconds": 0.141,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_jit_artifact_installer.log",
       "package": "Milky2018/wasmoon_jit/artifact/installer",
       "expected_tests": 5,
@@ -442,7 +442,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.125,
+      "seconds": 0.141,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_jit_perf.log",
       "package": "Milky2018/wasmoon_jit/perf",
       "expected_tests": 2,
@@ -451,7 +451,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 1.25,
+      "seconds": 1.297,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_runtime_executor.log",
       "package": "Milky2018/wasmoon_runtime/executor",
       "expected_tests": 157,
@@ -460,7 +460,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.141,
+      "seconds": 0.14,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_runtime_native_execution.log",
       "package": "Milky2018/wasmoon_runtime/native/execution",
       "expected_tests": 4,
@@ -469,7 +469,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.141,
+      "seconds": 0.157,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_runtime_native_ffi.log",
       "package": "Milky2018/wasmoon_runtime/native/ffi",
       "expected_tests": 3,
@@ -478,7 +478,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.156,
+      "seconds": 0.14,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_runtime_native_host_io_reactor.log",
       "package": "Milky2018/wasmoon_runtime/native/host_io/reactor",
       "expected_tests": 8,
@@ -487,7 +487,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.14,
+      "seconds": 0.156,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_runtime_native_host_io_wasi.log",
       "package": "Milky2018/wasmoon_runtime/native/host_io/wasi",
       "expected_tests": 5,
@@ -514,7 +514,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.156,
+      "seconds": 0.171,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_runtime_wast.log",
       "package": "Milky2018/wasmoon_runtime/wast",
       "expected_tests": 6,
@@ -523,7 +523,7 @@
     {
       "returncode": 0,
       "timed_out": false,
-      "seconds": 0.156,
+      "seconds": 0.172,
       "log": "target\\windows-native-tests\\Milky2018_wasmoon_runtime_wast_assertions.log",
       "package": "Milky2018/wasmoon_runtime/wast/assertions",
       "expected_tests": 2,

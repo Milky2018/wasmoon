@@ -33,7 +33,7 @@ test_unprivileged_symlink_during_parent_renames (test_wasi_windows_files.Windows
 test_workspace_and_temp_volume_symlinks_with_disabled_privilege (test_wasi_windows_files.WindowsFileTests.test_workspace_and_temp_volume_symlinks_with_disabled_privilege) ... ok
  Assembling: D:\a\wasmoon\wasmoon\modules\wasmoon_runtime\native\ffi\msvc_guest_bridges.asm
  Assembling: D:\a\wasmoon\wasmoon\modules\wasmoon_runtime\native\ffi\testing\test_guest_bridges.asm
- Assembling: C:\Users\RUNNER~1\AppData\Local\Temp\tmpflrw_7f8\probe.asm
+ Assembling: C:\Users\RUNNER~1\AppData\Local\Temp\tmpstxqb23f\probe.asm
 host.c
 test_all_guest_helpers_preserve_argument_positions (test_wasi_windows_guest_abi.WindowsGuestAbiTests.test_all_guest_helpers_preserve_argument_positions) ... ok
 test_native_ownership_and_buffers_under_asan (test_wasi_windows_memory.WindowsMemoryTests.test_native_ownership_and_buffers_under_asan) ... ok
@@ -59,6 +59,6 @@ test_socket_data_hangup_and_duplicate_subscriptions (test_wasi_windows_poll.Wind
 test_socket_nonblocking_flag_controls_actual_reads (test_wasi_windows_poll.WindowsPollTests.test_socket_nonblocking_flag_controls_actual_reads) ... ok
 
 ----------------------------------------------------------------------
-Ran 53 tests in 10.026s
+Ran 53 tests in 20.120s
 
 OK (skipped=3)
