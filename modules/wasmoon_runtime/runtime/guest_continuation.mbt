@@ -70,6 +70,7 @@ pub fn Store::put_guest_continuation(
   let pending = self.resource_budget.map(budget => {
     budget.reserve(PendingWork, 1L)
   })
+  errdefer (if pending is Some(lease) { lease.release() })
   let handle = self.next_guest_continuation
   self.next_guest_continuation += 1L
   let leases = body.leases.copy()
