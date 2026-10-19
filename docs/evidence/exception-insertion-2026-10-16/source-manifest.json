@@ -1,0 +1,20 @@
+{
+  "source_revision": "d9279052ed577537da1991ba5000bea26cd55760",
+  "source_dirty": true,
+  "platform": "macOS ARM64",
+  "delivery": false,
+  "retained_production_optimization": false,
+  "restoration": {
+    "exceptions.mbt": true,
+    "exception.c": true
+  },
+  "sources": {
+    "modules/wasmoon_jit/jit_ffi/exceptions.mbt": "d06f08d961b8ba3b27867281e9e83cf540f2373683276bd92f9f69126d4a9820",
+    "modules/wasmoon_jit/jit_ffi/exception.c": "cf92edf2247f6801bb9ca64c1d526df0d11ac04ea2547490f410d7a5d2444a5a",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.c": "a7feeaef37c0fa2d4a470ff3f6ab5560f3938408ab398dea32c68a8aba37707f",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.h": "e50ea012c5855dfad4393592ca966eb143fe54712280f2156f27548ef4bae73e",
+    "modules/wasmoon_jit/jit_ffi/jit_context.h": "85098da28c81339f1b974ed51b6446a7078d7352e43c348aaa2f1aab08fbe4b5"
+  },
+  "cli_sha256": "061b484c03f1ee7a9a79a7fe0d41f2a0776bd109f8a18e6082fdd7ed226bc1d0",
+  "starting_cli_sha256": "061b484c03f1ee7a9a79a7fe0d41f2a0776bd109f8a18e6082fdd7ed226bc1d0"
+}

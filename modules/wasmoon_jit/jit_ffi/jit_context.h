@@ -62,6 +62,7 @@ typedef struct jit_runtime_state {
     struct native_continuation_arena *continuation_arena;
     struct native_continuation_type *continuation_types;
     struct native_exception_arena *exception_arena;
+    struct native_exception_arena *(*exception_arena_factory)(void);
 
     // Hostcall callback (MoonBit closure) for JIT -> host function bridging.
     // This is invoked by `wasmoon_jit_hostcall` during JIT execution.

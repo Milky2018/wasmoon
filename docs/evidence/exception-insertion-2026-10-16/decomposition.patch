@@ -1,0 +1,163 @@
+--- a/modules/wasmoon_jit/jit_ffi/exceptions.mbt
++++ b/modules/wasmoon_jit/jit_ffi/exceptions.mbt
+@@ -566,3 +566,62 @@
+   })
+   context
+ }
++
++///|
++fn ExceptionState::probe_without_metadata(
++  self : ExceptionState,
++  request : ExceptionInsertRequest,
++  tag : Int32,
++  count : Int32,
++) -> Int64 {
++  self.quota_denied = 0
++  guard !self.closed && count >= 0 && self.next_reference < 0x7fffffff else {
++    return -9
++  }
++  if self.last_tag != tag {
++    self.cache_layout(tag)
++  }
++  let mask = match self.last_mask {
++    Some(mask) => {
++      guard mask.length() == count else { return -9 }
++      mask
++    }
++    None => [] // Empty mask preserves conservative roots for unknown tags.
++  }
++  let amount = 16L + count.to_int64() * 16L
++  guard !self.quotas_bound || self.bytes.acquire(amount) else {
++    self.quota_denied = 25
++    return -25
++  }
++  guard !self.quotas_bound || self.objects.acquire(1L) else {
++    self.bytes.release(amount)
++    self.quota_denied = 26
++    return -26
++  }
++  let reference = 0x1000000000000001L | (self.next_reference.to_int64() << 1)
++  let copied = request.append_payload(
++    reference,
++    mask,
++    self.traced,
++    if self.quotas_bound {
++      amount
++    } else {
++      0L
++    },
++    if self.quotas_bound {
++      1L
++    } else {
++      0L
++    },
++  )
++  guard copied else {
++    if self.quotas_bound {
++      self.bytes.release(amount)
++      self.objects.release(1L)
++    }
++    return -9
++  }
++  self.next_reference += 1
++  reference
++}
++
+--- a/modules/wasmoon_jit/jit_ffi/exception.c
++++ b/modules/wasmoon_jit/jit_ffi/exception.c
+@@ -147,10 +147,12 @@
+     storage->count = count;
+ }
+ 
++static int exception_probe_control;
+ MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_append(
+     exception_insert_request_t *request, int64_t reference, const int32_t *mask,
+     int32_t traced, int64_t byte_charge, int64_t object_charge
+ ) {
++    if (exception_probe_control & 16) return 1;
+     exception_storage_t *storage = request->arena->storage;
+     int32_t count = request->count;
+     if (count < 0 || (size_t)count > SIZE_MAX / sizeof(int64_t)) return 0;
+@@ -833,3 +835,48 @@
+ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_begin);
+ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_end);
+ #endif
++
++#include <time.h>
++static int64_t exception_probe_c_callback(void *state, exception_insert_request_t *request, int32_t tag, int32_t count) {
++    (void)state; (void)request;
++    return (int64_t)tag + count;
++}
++MOONBIT_FFI_EXPORT int32_t wasmoon_insert_probe_mode(void) {
++    const char *mode = getenv("WASMOON_INSERT_PROBE_MODE");
++    return mode ? atoi(mode) : 0;
++}
++MOONBIT_FFI_EXPORT int64_t wasmoon_insert_probe(native_exception_arena_t *arena, GcHeap *heap, int32_t mode, int64_t (*managed)(void *, exception_insert_request_t *, int32_t, int32_t)) {
++    const int32_t count = 300000;
++    const int32_t words = (mode & 2) ? 1 : 0;
++    if (!(mode & 1)) heap = NULL;
++    int64_t value = 42, reference = 0;
++    exception_probe_control = mode;
++    if (mode & 160) arena->callbacks->insert = managed;
++    if (mode & 64) arena->callbacks->insert = exception_probe_c_callback;
++    exception_insert_request_t request = {arena, gc_heap_live(heap), words ? 8 : 7, words, &value};
++    int32_t *diagnostic_mask = moonbit_make_int32_array(words, 0);
++    struct timespec start, end;
++    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start)) abort();
++    if (mode & 8) {
++        for (int32_t i = 0; i < count; ++i) {
++            reference = INT64_C(0x1000000000000001) | ((int64_t)i << 1);
++            if (!wasmoon_exception_storage_append(&request, reference, diagnostic_mask, 1, 0, 0)) abort();
++        }
++    } else {
++        for (int32_t i = 0; i < count; ++i) {
++            reference = exception_arena_insert(arena, heap, words ? 8 : 7, &value, words);
++            if (reference <= 0) abort();
++        }
++    }
++    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end)) abort();
++    int64_t elapsed = (end.tv_sec - start.tv_sec) * INT64_C(1000000000) + end.tv_nsec - start.tv_nsec;
++    if (mode & 8) {
++        exception_storage_t *storage = arena->storage;
++        if (storage->count != count || storage->entries[count - 1].tag != (words ? 8 : 7)
++            || storage->entries[count - 1].count != words
++            || (words && storage->entries[count - 1].values[0] != value)) abort();
++    }
++    moonbit_decref(diagnostic_mask);
++    fprintf(stderr, "[DEBUG-insert-probe] %d %lld\n", mode, (long long)elapsed);
++    return reference;
++}
+--- /dev/null
++++ b/modules/wasmoon_jit/jit_ffi/insert_profile_wbtest.mbt
+@@ -0,0 +1,31 @@
++///|
++extern "c" fn probe_mode() -> Int32 = "wasmoon_insert_probe_mode"
++
++///|
++#borrow(arena, heap)
++extern "c" fn probe_insert(arena : ExceptionBridge, heap : GCHeapHandle, mode : Int32, managed : FuncRef[(ExceptionState, ExceptionInsertRequest, Int32, Int32) -> Int64]) -> Int64 = "wasmoon_insert_probe"
++
++///|
++test "isolated insertion profile" {
++  let arena = NativeExceptionArena::new()
++  defer arena.clear()
++  arena.enable_reclamation()
++  assert_true(arena.define_tag(7, []))
++  assert_true(arena.define_tag(8, [I64]))
++  let heap = GCHeapHandle::new(1048576L)
++  let mode = probe_mode()
++  let callback : FuncRef[(ExceptionState, ExceptionInsertRequest, Int32, Int32) -> Int64] = if (mode & 128) != 0 {
++    fn(state, request, tag, count) { state.probe_without_metadata(request, tag, count) }
++  } else {
++    fn(_state, _request, tag, count) { tag.to_int64() + count.to_int64() }
++  }
++  let reference = probe_insert(arena.bridge, heap, mode, callback)
++  assert_true(reference > 0L)
++  if (mode & 248) != 0 {
++    assert_true(reference > 0L)
++  } else if (mode & 2) != 0 {
++    assert_eq(arena.snapshot(reference), Some((8, [42L])))
++  } else {
++    assert_eq(arena.snapshot(reference), Some((7, [])))
++  }
++}

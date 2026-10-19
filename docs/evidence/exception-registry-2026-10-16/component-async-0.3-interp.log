@@ -1,0 +1,36 @@
+Using suite 'async-0.3' from https://github.com/WebAssembly/component-model.git@d346e5a335b772909ac4c8072f56d7ed7ea49927
+Found 24 .wast test files in '/Users/zhengyu/Documents/projects/wasmoon/component-spec/upstream'
+Core execution mode: interpreter
+Timeout settings: validate=20s(base 20s), script=30s(base 30s), tools=30s(base 30s), qemu_relax=False
+async/async-calls-sync.wast                        [PASS] (pass=3 skip=0)
+async/builtin-trap-poisons-instance.wast           [PASS] (pass=8 skip=0)
+async/cancel-stream.wast                           [PASS] (pass=2 skip=0)
+async/closed-stream.wast                           [PASS] (pass=3 skip=0)
+async/cross-abi-calls.wast                         [PASS] (pass=49 skip=0)
+async/cross-task-future.wast                       [PASS] (pass=2 skip=0)
+async/deadlock.wast                                [PASS] (pass=2 skip=0)
+async/dont-block-start.wast                        [PASS] (pass=2 skip=0)
+async/drop-cross-task-borrow.wast                  [PASS] (pass=7 skip=0)
+async/drop-stream.wast                             [PASS] (pass=5 skip=0)
+async/drop-subtask.wast                            [PASS] (pass=3 skip=0)
+async/drop-waitable-set.wast                       [PASS] (pass=2 skip=0)
+async/empty-wait.wast                              [PASS] (pass=2 skip=0)
+async/futures-must-write.wast                      [PASS] (pass=3 skip=0)
+async/partial-stream-copies.wast                   [PASS] (pass=2 skip=0)
+async/passing-resources.wast                       [PASS] (pass=3 skip=0)
+async/same-component-stream-future.wast            [PASS] (pass=9 skip=0)
+async/trap-if-done.wast                            [PASS] (pass=27 skip=0)
+async/trap-if-transfer-in-waitable-set.wast        [PASS] (pass=5 skip=0)
+Applying documented correction: async/trap-on-reenter.wast (/Users/zhengyu/Documents/projects/wasmoon/component-spec/corrections/async/trap-on-reenter.wast)
+async/trap-on-reenter.wast                         [PASS] (pass=6 skip=0)
+async/validate-no-async-abi-for-sync-type.wast     [PASS] (pass=3 skip=0)
+async/validate-no-stream-char.wast                 [PASS] (pass=1 skip=0)
+async/wait-during-callback.wast                    [PASS] (pass=2 skip=0)
+async/zero-length.wast                             [PASS] (pass=2 skip=0)
+
+Summary:
+  Files passed:  24/24
+  Files failed:  0
+  Commands passed:  153
+  Commands failed:  0
+  Commands skipped: 0

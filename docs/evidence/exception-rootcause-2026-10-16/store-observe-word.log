@@ -1,0 +1,11 @@
+Running WAST script: target/exception-rootcause/store-snapshots-word-100.wast
+JIT: enabled
+==================================================
+[DEBUG-rootcause-state] count=1 heap=1 traced=1 byte_charge=0 object_charge=0 mask_length=1 mask_rc=97
+[DEBUG-rootcause-store] 47291 495787 175717
+
+Results:
+  Passed:  1
+  Failed:  0
+  Skipped: 0
+==================================================

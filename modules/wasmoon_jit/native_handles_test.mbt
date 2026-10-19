@@ -1190,3 +1190,175 @@ test "managed cleanup releases its callback capture after close or RC finalizati
   }
   inspect(calls.val, content="2")
 }
+
+///|
+fn context_retaining_exception_registry() -> @jit_ffi.JITContext raise {
+  let heap = @wasmoon_jit.CHeap()
+  let arena = @jit_ffi.NativeExceptionArena::new()
+  arena.enable_reclamation()
+  assert_true(arena.define_tag(7, []))
+  assert_true(arena.insert(heap.get_ptr(), 7, []) > 0L)
+  let context = @jit_ffi.JITContext::new(0)
+  context.bind_exception_arena(arena)
+  heap.free()
+  context
+}
+
+///|
+fn exercise_context_exception_registry(baseline : Int64) -> Unit raise {
+  let context = context_retaining_exception_registry()
+  // The public arena and heap wrappers have expired; only the context retains
+  // the registry, whose zero-word snapshot still owns a heap root lease.
+  assert_eq(heap_live_count(), baseline + 1L)
+  context.bind_globals([]) |> ignore
+}
+
+///|
+test "context retains MoonBit exception state without a cycle through its heap" {
+  let baseline = heap_live_count()
+  exercise_context_exception_registry(baseline)
+  assert_eq(heap_live_count(), baseline)
+}
+
+///|
+test "exception payload and root allocation failures roll back quota and identity" {
+  let heap = @wasmoon_jit.CHeap()
+  defer heap.free()
+  let arena = @jit_ffi.NativeExceptionArena::new()
+  defer arena.clear()
+  arena.enable_reclamation()
+  assert_true(arena.define_tag(7, [I64]))
+  let bytes = @jit_ffi.Quota::new(32L)
+  let objects = @jit_ffi.Quota::new(1L)
+  assert_true(arena.bind_quotas(bytes, objects))
+  let mut previous = 0L
+  // Backing storage, payload, root registration and root buffer are fallible.
+  for attempt in [1, 2, 3, 4] {
+    fail_native_allocation_for_tests(attempt)
+    let failed = arena.insert(heap.get_ptr(), 7, [42L])
+    fail_native_allocation_for_tests(0)
+    assert_eq(failed, 0L)
+    assert_eq(bytes.used(), 0L)
+    assert_eq(objects.used(), 0L)
+    let reference = arena.insert(heap.get_ptr(), 7, [42L])
+    assert_true(reference > previous)
+    previous = reference
+    assert_eq(arena.snapshot(reference), Some((7, [42L])))
+    assert_eq(bytes.used(), 32L)
+    assert_eq(objects.used(), 1L)
+    arena.release_snapshot(reference)
+    arena.release_snapshot(reference)
+    assert_true(arena.snapshot(reference) is None)
+    assert_eq(bytes.used(), 0L)
+    assert_eq(objects.used(), 0L)
+  }
+  // A mismatched typed payload is rejected before acquiring any quota.
+  assert_eq(arena.insert(heap.get_ptr(), 7, []), 0L)
+  assert_eq(bytes.used(), 0L)
+  arena.clear()
+  assert_eq(arena.insert(heap.get_ptr(), 7, [42L]), 0L)
+  assert_false(arena.define_tag(8, []))
+}
+
+///|
+test "only the last exception root lease releases a heap's borrowed arena" {
+  let heap = @wasmoon_jit.CHeap()
+  defer heap.free()
+  let first = @jit_ffi.NativeExceptionArena::new()
+  let next = @jit_ffi.NativeExceptionArena::new()
+  defer first.clear()
+  defer next.clear()
+  first.enable_reclamation()
+  next.enable_reclamation()
+  let a = first.insert(heap.get_ptr(), 7, [])
+  let b = first.insert(heap.get_ptr(), 7, [])
+  assert_true(a > 0L && b > a)
+  first.release_snapshot(a)
+  assert_eq(next.insert(heap.get_ptr(), 7, []), 0L)
+  assert_eq(first.snapshot(b), Some((7, [])))
+  first.release_snapshot(b)
+  let c = next.insert(heap.get_ptr(), 7, [])
+  assert_true(c > 0L)
+  next.release_snapshot(c)
+  // Also exercise collection after the last traced registration disappears.
+  let dead = heap.alloc_struct(0, [I32(42)])
+  assert_eq(heap.collect([]), 1)
+  assert_false(heap.is_valid(dead))
+}
+
+///|
+test "exception registry preserves identity across unordered release and per-heap sweep" {
+  let first = @wasmoon_jit.CHeap()
+  let second = @wasmoon_jit.CHeap()
+  defer first.free()
+  defer second.free()
+  let arena = @jit_ffi.NativeExceptionArena::new()
+  defer arena.clear()
+  arena.enable_reclamation()
+  assert_true(arena.define_tag(7, [I64]))
+  first.get_ptr().bind_root_visitor(fn(_, roots) { roots })
+  second.get_ptr().bind_root_visitor(fn(_, roots) { roots })
+  defer first.get_ptr().clear_root_visitor()
+  defer second.get_ptr().clear_root_visitor()
+  let references : Array[Int64] = []
+  for i in 0..<128 {
+    let heap = if i % 2 == 0 { first } else { second }
+    references.push(arena.insert(heap.get_ptr(), 7, [i.to_int64()]))
+  }
+  // Release in a different order from creation before collecting one heap.
+  for i = 126; i >= 0; i = i - 3 {
+    arena.release_snapshot(references[i])
+  }
+  first.collect_raw([references[2]]) |> ignore
+  for i, reference in references {
+    if i == 2 || (i % 2 == 1 && i % 3 != 0) {
+      assert_eq(arena.snapshot(reference), Some((7, [i.to_int64()])))
+    } else {
+      assert_true(arena.snapshot(reference) is None)
+    }
+  }
+  second.collect_raw([]) |> ignore
+  assert_eq(arena.snapshot(references[2]), Some((7, [2L])))
+  first.collect_raw([]) |> ignore
+  for reference in references {
+    assert_true(arena.snapshot(reference) is None)
+  }
+  let fresh = arena.insert(first.get_ptr(), 7, [42L])
+  assert_true(fresh > references[127])
+  for
+    invalid in [
+      0L,
+      -1L,
+      fresh + 1L,
+      fresh ^ 0x100000000L,
+      fresh ^ 0x2000000000000000L,
+    ] {
+    assert_true(arena.snapshot(invalid) is None)
+    arena.release_snapshot(invalid)
+  }
+  assert_eq(arena.snapshot(fresh), Some((7, [42L])))
+}
+
+///|
+test "exception layout cache observes tag definitions and alternating payload shapes" {
+  let arena = @jit_ffi.NativeExceptionArena::new()
+  defer arena.clear()
+  let heap = @jit_ffi.GCHeapHandle::null()
+  // An unknown tag initially permits a conservative payload description.
+  let unknown = arena.insert(heap, 7, [7L])
+  assert_true(unknown > 0L)
+  assert_true(arena.define_tag(7, [I64]))
+  assert_eq(arena.insert(heap, 7, []), 0L)
+  assert_true(arena.define_tag(8, []))
+  for _ in 0..<4 {
+    assert_eq(arena.insert(heap, 8, [8L]), 0L)
+    let empty = arena.insert(heap, 8, [])
+    let word = arena.insert(heap, 7, [42L])
+    assert_true(empty > 0L && word > empty)
+    assert_eq(arena.snapshot(empty), Some((8, [])))
+    assert_eq(arena.snapshot(word), Some((7, [42L])))
+    arena.release_snapshot(empty)
+    arena.release_snapshot(word)
+  }
+  assert_eq(arena.snapshot(unknown), Some((7, [7L])))
+}

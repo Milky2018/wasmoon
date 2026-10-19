@@ -1,0 +1,227 @@
+--- a/modules/wasmoon_jit/jit_ffi/exceptions.mbt
++++ b/modules/wasmoon_jit/jit_ffi/exceptions.mbt
+@@ -24,6 +24,9 @@
+ 
+ ///|
+ priv struct ExceptionState {
++  control : Int32
++  mut mask_view : ExceptionMaskView
++  mut mask_count : Int32
+   // Numeric metadata is unboxed; owning FFI handles cannot be value fields.
+   // Metadata and physical slots have identical lengths. Only this registry
+   // appends, retires or compacts them; native storage has no identity policy.
+@@ -52,6 +55,9 @@
+ ///|
+ fn ExceptionState::new() -> ExceptionState {
+   {
++    control: exception_insert_control(),
++    mask_view: ExceptionMaskView::null(),
++    mask_count: -1,
+     entries: [],
+     storage: ExceptionStorage::new(),
+     dead_entries: 0,
+@@ -69,6 +75,26 @@
+ }
+ 
+ ///|
++#external
++priv type ExceptionMaskView
++
++///|
++extern "c" fn exception_insert_control() -> Int32 = "wasmoon_exception_insert_control"
++
++///|
++extern "c" fn ExceptionMaskView::null() -> ExceptionMaskView = "wasmoon_exception_mask_null"
++
++///|
++#borrow(mask)
++extern "c" fn ExceptionMaskView::borrow(mask : FixedArray[Int32]) -> ExceptionMaskView = "wasmoon_exception_mask_borrow"
++
++///|
++extern "c" fn ExceptionInsertRequest::append_view(
++  self : ExceptionInsertRequest, reference : Int64, mask : ExceptionMaskView,
++  traced : Bool, byte_charge : Int64, object_charge : Int64,
++) -> Bool = "wasmoon_exception_storage_append"
++
++///|
+ #borrow(mask)
+ extern "c" fn ExceptionInsertRequest::append_payload(
+   self : ExceptionInsertRequest,
+@@ -171,12 +197,14 @@
+   if self.last_tag != tag {
+     self.cache_layout(tag)
+   }
+-  let mask = match self.last_mask {
+-    Some(mask) => {
+-      guard mask.length() == count else { return -9 }
+-      mask
+-    }
+-    None => [] // Empty mask preserves conservative roots for unknown tags.
++  let use_view = (self.control & 1) != 0
++  let mask = if use_view { None } else { self.last_mask }
++  if use_view {
++    guard self.mask_count < 0 || self.mask_count == count else { return -9 }
++  } else {
++    if mask is Some(words) {
++      guard words.length() == count else { return -9 }
++    }
+   }
+   let amount = 16L + count.to_int64() * 16L
+   guard !self.quotas_bound || self.bytes.acquire(amount) else {
+@@ -189,21 +217,15 @@
+     return -26
+   }
+   let reference = 0x1000000000000001L | (self.next_reference.to_int64() << 1)
+-  let copied = request.append_payload(
+-    reference,
+-    mask,
+-    self.traced,
+-    if self.quotas_bound {
+-      amount
+-    } else {
+-      0L
+-    },
+-    if self.quotas_bound {
+-      1L
+-    } else {
+-      0L
+-    },
+-  )
++  let copied = if use_view {
++    request.append_view(reference, self.mask_view, self.traced,
++      if self.quotas_bound { amount } else { 0L },
++      if self.quotas_bound { 1L } else { 0L })
++  } else {
++    request.append_payload(reference, mask.or([]), self.traced,
++      if self.quotas_bound { amount } else { 0L },
++      if self.quotas_bound { 1L } else { 0L })
++  }
+   guard copied else {
+     if self.quotas_bound {
+       self.bytes.release(amount)
+@@ -253,6 +275,10 @@
+ fn ExceptionState::cache_layout(self : ExceptionState, tag : Int32) -> Unit {
+   self.last_mask = self.layouts.get(tag)
+   self.last_tag = tag
++  match self.last_mask {
++    Some(mask) => { self.mask_view = ExceptionMaskView::borrow(mask); self.mask_count = mask.length() }
++    None => { self.mask_view = ExceptionMaskView::null(); self.mask_count = -1 }
++  }
+ }
+ 
+ ///|
+@@ -510,6 +536,8 @@
+   self.state.layouts[tag] = mask
+   self.state.last_tag = tag
+   self.state.last_mask = Some(mask)
++  self.state.mask_view = ExceptionMaskView::borrow(mask)
++  self.state.mask_count = mask.length()
+   true
+ }
+ 
+--- a/modules/wasmoon_jit/jit_ffi/exception.c
++++ b/modules/wasmoon_jit/jit_ffi/exception.c
+@@ -27,6 +27,8 @@
+     int32_t tag;
+     int32_t count;
+     const int64_t *values;
++    struct exception_storage *storage;
++    int32_t control;
+ } exception_insert_request_t;
+ 
+ typedef struct exception_callbacks {
+@@ -46,6 +48,7 @@
+     void *state;
+     struct exception_storage *storage; // Borrowed from the retained state
+     exception_callbacks_t *callbacks;
++    int32_t control;
+ } native_exception_arena_t;
+ 
+ // Physical payload storage and root leases, released on close or last RC owner.
+@@ -151,7 +154,7 @@
+     exception_insert_request_t *request, int64_t reference, const int32_t *mask,
+     int32_t traced, int64_t byte_charge, int64_t object_charge
+ ) {
+-    exception_storage_t *storage = request->arena->storage;
++    exception_storage_t *storage = (request->control & 4) ? request->storage : request->arena->storage;
+     int32_t count = request->count;
+     if (count < 0 || (size_t)count > SIZE_MAX / sizeof(int64_t)) return 0;
+     if (storage->count == storage->capacity) {
+@@ -162,29 +165,32 @@
+         storage->entries = entries;
+         storage->capacity = (int32_t)capacity;
+     }
+-    native_exception_t entry = {0};
++    native_exception_t temporary;
++    native_exception_t *entry = (request->control & 2) ? &storage->entries[storage->count] : &temporary;
++    memset(entry, 0, sizeof(*entry));
+     if (count) {
+-        entry.values = wasmoon_native_malloc((size_t)count * sizeof(int64_t));
+-        if (!entry.values) return 0;
+-        memcpy(entry.values, request->values, (size_t)count * sizeof(int64_t));
+-    }
+-    entry.tag = request->tag;
+-    entry.count = count;
++        entry->values = wasmoon_native_malloc((size_t)count * sizeof(int64_t));
++        if (!entry->values) return 0;
++        memcpy(entry->values, request->values, (size_t)count * sizeof(int64_t));
++    }
++    entry->tag = request->tag;
++    entry->count = count;
+     if (request->heap && (count || traced)) {
+         int64_t *roots = NULL;
+         int32_t slots = count ? count : 1;
+-        if (!gc_heap_register_parked_roots(request->heap, slots, &entry.root_registration, &roots)) goto failed;
+-        int32_t mask_count = Moonbit_array_length(mask);
++        if (!gc_heap_register_parked_roots(request->heap, slots, &entry->root_registration, &roots)) goto failed;
++        int32_t mask_count = mask ? Moonbit_array_length(mask) : 0;
+         for (int32_t i = 0; i < slots; ++i)
+-            roots[i] = i < count && (!mask_count || mask[i]) ? entry.values[i] : 0;
+-        if (traced && !gc_heap_bind_exception_roots(entry.root_registration, request->arena, reference)) goto failed;
+-    }
+-    entry.byte_charge = byte_charge;
+-    entry.object_charge = object_charge;
+-    storage->entries[storage->count++] = entry;
++            roots[i] = i < count && (!mask_count || mask[i]) ? entry->values[i] : 0;
++        if (traced && !gc_heap_bind_exception_roots(entry->root_registration, request->arena, reference)) goto failed;
++    }
++    entry->byte_charge = byte_charge;
++    entry->object_charge = object_charge;
++    if (!(request->control & 2)) storage->entries[storage->count] = *entry;
++    ++storage->count;
+     return 1;
+ failed:
+-    exception_payload_close(storage, &entry);
++    exception_payload_close(storage, entry);
+     return 0;
+ }
+ 
+@@ -231,6 +237,8 @@
+         moonbit_incref(state);
+         arena->state = state;
+         arena->storage = storage;
++        const char *control = getenv("WASMOON_EXCEPTION_INSERT_CONTROL");
++        arena->control = control ? atoi(control) : 0;
+     }
+     return arena;
+ }
+@@ -248,7 +256,7 @@
+ static WASMOON_NO_FUNCTION_SANITIZE int64_t exception_arena_insert(native_exception_arena_t *arena,
+     GcHeap *heap, int32_t tag, const int64_t *values, int32_t count) {
+     if (!arena || count < 0 || (count && !values)) return -9;
+-    exception_insert_request_t request = {arena, gc_heap_live(heap), tag, count, values};
++    exception_insert_request_t request = {arena, gc_heap_live(heap), tag, count, values, arena->storage, arena->control};
+     return arena->callbacks->insert(arena->state, &request, tag, count);
+ }
+ 
+@@ -833,3 +841,10 @@
+ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_begin);
+ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_end);
+ #endif
++
++MOONBIT_FFI_EXPORT int32_t wasmoon_exception_insert_control(void) {
++    const char *control = getenv("WASMOON_EXCEPTION_INSERT_CONTROL");
++    return control ? atoi(control) : 0;
++}
++MOONBIT_FFI_EXPORT void *wasmoon_exception_mask_null(void) { return NULL; }
++MOONBIT_FFI_EXPORT void *wasmoon_exception_mask_borrow(const int32_t *mask) { return (void *)mask; }

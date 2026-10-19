@@ -1,0 +1,13 @@
+{
+  "platform": "macOS ARM64",
+  "source_dirty": true,
+  "retained_runtime_change": false,
+  "checks": {
+    "moon info": "passed; info.log",
+    "moon fmt": "passed; fmt.log, exception source digests unchanged",
+    "moon check --target native --warn-list +73 --deny-warn": "passed; check.log",
+    "moon test --target native --target-dir target/exception-perf/array-tests": "2734 passed,0 failed; native-tests.log"
+  },
+  "sanitizer_and_platform_acceptance": "No new runtime code retained. Prior reports remain historical local receipts; no new Linux LSan or Windows acceptance claimed.",
+  "source_manifest_verified_after_formatting": true
+}

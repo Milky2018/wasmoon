@@ -134,6 +134,7 @@ typedef struct GcHeap {
     wasmoon_reservation_t *object_reservation;
     int quota_denied; // 1: payload bytes, 2: retained identity slots
     GcAllocationPolicy allocation_policy; // Closed MoonBit function; no retained closure
+    int32_t exception_root_count; // Leases borrowing exception_arena
 } GcHeap;
 
 // Budgeted heaps enter the common allocator before any guest payload write.

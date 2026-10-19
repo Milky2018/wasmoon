@@ -1,0 +1,14 @@
+[
+  {
+    "control": "omit registration assignment",
+    "expected": "failure",
+    "exit_code": 2,
+    "log": "lease-negative.log"
+  },
+  {
+    "control": "restored final source",
+    "expected": "success",
+    "exit_code": 0,
+    "log": "lease-restored.log"
+  }
+]

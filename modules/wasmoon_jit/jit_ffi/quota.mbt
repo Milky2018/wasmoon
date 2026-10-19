@@ -63,3 +63,15 @@ pub extend Quota with Debug::{to_repr}
 
 ///|
 pub extend Reservation with Debug::{to_repr}
+
+///|
+#borrow(self)
+extern "c" fn Quota::acquire(self : Quota, amount : Int64) -> Bool = "wasmoon_quota_acquire"
+
+///|
+#borrow(self)
+extern "c" fn Quota::release(self : Quota, amount : Int64) -> Unit = "wasmoon_quota_release"
+
+///|
+// No accounting object exists until an embedding supplies a budget.
+extern "c" fn Quota::unlimited() -> Quota = "wasmoon_quota_unlimited"

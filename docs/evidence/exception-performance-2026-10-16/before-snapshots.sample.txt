@@ -1,0 +1,155 @@
+Analysis of sampling wasmoon-before (pid 93729) every 1 millisecond
+Process:         wasmoon-before [93729]
+Path:            /Users/USER/Documents/*/wasmoon-before
+Load Address:    0x10017c000
+Identifier:      wasmoon-before
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  Python [93484]
+Target Type:     live task
+
+Date/Time:       2026-10-16 16:04:02.776 +0800
+Launch Time:     2026-10-16 16:04:02.750 +0800
+OS Version:      macOS 26.7 (25G229)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+----
+
+Call graph:
+    107 Thread_146043800   DispatchQueue_1: com.apple.main-thread  (serial)
+    + 107 native_fiber_stack_size_c  (in wasmoon-before) + 56  [0x100950bc0]
+    +   107 fiber_bootstrap  (in wasmoon-before) + 152  [0x100950c58]
+    +     107 native_jit_continuation_entry  (in wasmoon-before) + 44  [0x100950474]
+    +       107 wasmoon_jit_call_trampoline_caught  (in wasmoon-before) + 140  [0x10093e058]
+    +         63 ???  (in <unknown binary>)  [0x100e580ac]
+    +         ! 62 exception_get_ref_impl  (in wasmoon-before) + 260  [0x10094eef0]
+    +         ! : 58 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in wasmoon-before) + 1048  [0x1005898f0]
+    +         ! : | 41 _M0MPB3Map15set__with__hashGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 200  [0x1008792bc]
+    +         ! : | + 15 _M0MPB3Map4growGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 312,256,...  [0x100893198,0x100893160,...]
+    +         ! : | + 14 _M0MPB3Map4growGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 272  [0x100893170]
+    +         ! : | + ! 14 _M0MPB3Map20add__entry__to__tailGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 108,208,...  [0x100893260,0x1008932c4,...]
+    +         ! : | + 6 _M0MPB3Map4growGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 120  [0x1008930d8]
+    +         ! : | + ! 6 moonbit_drop_object  (in wasmoon-before) + 340,368,...  [0x10095cbb8,0x10095cbd4,...]
+    +         ! : | + 2 _M0MPB3Map20add__entry__to__tailGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 344,348  [0x10089334c,0x100893350]
+    +         ! : | + 2 _M0MPB3Map4growGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 48  [0x100893090]
+    +         ! : | + ! 2 moonbit_make_ref_array  (in wasmoon-before) + 180  [0x10095e0e8]
+    +         ! : | + 2 _M0MPB3Map4growGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 392  [0x1008931e8]
+    +         ! : | +   2 _M0MPB3Map10push__awayGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 136,188  [0x1008933e4,0x100893418]
+    +         ! : | 14 _M0MPB3Map15set__with__hashGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 84,176,...  [0x100879248,0x1008792a4,...]
+    +         ! : | 3 _M0MPB3Map15set__with__hashGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 272  [0x100879304]
+    +         ! : |   3 _M0MPB3Map10push__awayGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before) + 188,152  [0x100893418,0x1008933f4]
+    +         ! : 2 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in wasmoon-before) + 664  [0x100589770]
+    +         ! : | 1 wasmoon_exception_payload_new  (in wasmoon-before) + 80  [0x10094e974]
+    +         ! : | + 1 moonbit_make_external_object  (in wasmoon-before) + 36  [0x10095e9d0]
+    +         ! : | +   1 _mi_malloc_generic  (in wasmoon-before) + 244  [0x100967c5c]
+    +         ! : | +     1 mi_find_page  (in wasmoon-before) + 492  [0x100188e14]
+    +         ! : | +       1 mi_page_fresh_alloc  (in wasmoon-before) + 384  [0x10018e2cc]
+    +         ! : | +         1 mi_page_free_list_extend  (in wasmoon-before) + 52  [0x10018e338]
+    +         ! : | 1 wasmoon_exception_payload_new  (in wasmoon-before) + 296  [0x10094ea4c]
+    +         ! : |   1 moonbit_incref  (in wasmoon-before) + 0  [0x10095ccf0]
+    +         ! : 1 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in wasmoon-before) + 312  [0x100589610]
+    +         ! : | 1 moonbit_make_int32_array  (in wasmoon-before) + 8  [0x10095df50]
+    +         ! : 1 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in wasmoon-before) + 68  [0x10058951c]
+    +         ! 1 _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert  (in wasmoon-before) + 1464  [0x100589a90]
+    +         32 ???  (in <unknown binary>)  [0x100e580b8]
+    +         ! 27 exception_try_end_impl  (in wasmoon-before) + 116  [0x10094f208]
+    +         ! : 24 _xzm_free  (in libsystem_malloc.dylib) + 1048  [0x18eb24530]
+    +         ! : | 24 mach_absolute_time  (in libsystem_kernel.dylib) + 108,16,...  [0x18ecc410c,0x18ecc40b0,...]
+    +         ! : 3 _xzm_free  (in libsystem_malloc.dylib) + 352,736,...  [0x18eb24278,0x18eb243f8,...]
+    +         ! 4 exception_try_end_impl  (in wasmoon-before) + 152  [0x10094f22c]
+    +         ! : 3 _xzm_free  (in libsystem_malloc.dylib) + 1048  [0x18eb24530]
+    +         ! : | 3 mach_absolute_time  (in libsystem_kernel.dylib) + 108  [0x18ecc410c]
+    +         ! : 1 DYLD-STUB$$free  (in wasmoon-before) + 4  [0x10096a9dc]
+    +         ! 1 exception_try_end_impl  (in wasmoon-before) + 24  [0x10094f1ac]
+    +         !   1 get_current_jit_context  (in wasmoon-before) + 12  [0x10093dfac]
+    +         !     1 jit_current_trap_activation  (in wasmoon-before) + 52  [0x100940aec]
+    +         4 ???  (in <unknown binary>)  [0x100e58074]
+    +         ! 4 exception_spill_locals_impl  (in wasmoon-before) + 128  [0x10094f6d8]
+    +         !   2 _xzm_xzone_malloc  (in libsystem_malloc.dylib) + 180,324  [0x18eb23a04,0x18eb23a94]
+    +         !   1 _malloc_zone_malloc  (in libsystem_malloc.dylib) + 12  [0x18eb330c8]
+    +         !   1 _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib) + 264  [0x18eb29044]
+    +         2 ???  (in <unknown binary>)  [0x100e58038]
+    +         ! 1 exception_try_begin_impl  (in wasmoon-before) + 24  [0x10094f0ec]
+    +         ! : 1 get_current_jit_context  (in wasmoon-before) + 24  [0x10093dfb8]
+    +         ! 1 exception_try_begin_impl  (in wasmoon-before) + 72  [0x10094f11c]
+    +         !   1 _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib) + 88  [0x18eb28f94]
+    +         2 ???  (in <unknown binary>)  [0x100e58080]
+    +         ! 2 wasmoon_jit_exception_throw_tag  (in wasmoon-before) + 20  [0x10094f930]
+    +         !   2 exception_throw_impl  (in wasmoon-before) + 92  [0x10094f434]
+    +         !     1 ctx_gc_restore_root_scopes_internal  (in wasmoon-before) + 184  [0x10094369c]
+    +         !     1 exception_raise_current  (in wasmoon-before) + 84  [0x10094f3cc]
+    +         !       1 ctx_gc_restore_root_scopes_internal  (in wasmoon-before) + 36  [0x100943608]
+    +         1 ???  (in <unknown binary>)  [0x100e5809c]
+    +         ! 1 wasmoon_jit_exception_get_spilled_local  (in wasmoon-before) + 24  [0x10094fd7c]
+    +         !   1 get_current_jit_context  (in wasmoon-before) + 12  [0x10093dfac]
+    +         !     1 jit_current_trap_activation  (in wasmoon-before) + 44  [0x100940ae4]
+    +         !       1 _tlv_get_addr  (in libdyld.dylib) + 12  [0x18e904394]
+    +         1 ???  (in <unknown binary>)  [0x100e58040]
+    +         1 exception_get_ref_impl  (in wasmoon-before) + 276  [0x10094ef00]
+    +         1 wasmoon_jit_exception_get_spilled_local  (in wasmoon-before) + 120  [0x10094fddc]
+    107 Thread_146043832
+      107 thread_start  (in libsystem_pthread.dylib) + 8  [0x18ed02c1c]
+        107 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x18ed07c58]
+          107 sigwait_thread_worker  (in wasmoon-before) + 160  [0x10093adf0]
+            107 sigwait  (in libsystem_pthread.dylib) + 40  [0x18ed08418]
+              107 __sigwait  (in libsystem_kernel.dylib) + 8  [0x18eccf808]
+
+Total number in stack (recursive counted multiple, when >=5):
+
+Sort by top of stack, same collapsed (when >= 5):
+        __sigwait  (in libsystem_kernel.dylib)        107
+        mach_absolute_time  (in libsystem_kernel.dylib)        27
+        _M0MPB3Map20add__entry__to__tailGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before)        16
+        _M0MPB3Map4growGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before)        15
+        _M0MPB3Map15set__with__hashGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before)        14
+        moonbit_drop_object  (in wasmoon-before)        6
+        _M0MPB3Map10push__awayGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE  (in wasmoon-before)        5
+
+Binary Images:
+       0x10017c000 -        0x1009fb587 +wasmoon-before (0) <6C3C16B2-3E3E-3394-8543-1478C57B9619> /Users/*/Documents/*/wasmoon-before
+       0x18e894000 -        0x18e8e6b4b  libobjc.A.dylib (951.7) <1D62B376-2303-376A-B993-9432A2004EB6> /usr/lib/libobjc.A.dylib
+       0x18e8e7000 -        0x18e91bd58  libdyld.dylib (1387) <70073E6E-4CDD-314F-BBDF-EC7FF6CE2DFC> /usr/lib/system/libdyld.dylib
+       0x18e91c000 -        0x18e9cf4ff  dyld (1.0.0 - 1387) <0263B88E-0B22-3B33-BBC0-483BE879B513> /usr/lib/dyld
+       0x18e9d0000 -        0x18e9d3228  libsystem_blocks.dylib (96) <B33F1440-9364-38E4-AF85-8A21BFF24324> /usr/lib/system/libsystem_blocks.dylib
+       0x18e9d4000 -        0x18ea2855f  libxpc.dylib (3102.160.5) <E26A36A6-4B8F-321C-AE17-54353F9EEE84> /usr/lib/system/libxpc.dylib
+       0x18ea29000 -        0x18ea499ff  libsystem_trace.dylib (1861.160.4) <314A8A89-4715-32B9-ABC2-B3087149C8B7> /usr/lib/system/libsystem_trace.dylib
+       0x18ea4a000 -        0x18eaf85f7  libcorecrypto.dylib (1922.160.10) <057A41E9-2A2E-39CD-B198-387734EED870> /usr/lib/system/libcorecrypto.dylib
+       0x18eaf9000 -        0x18eb49257  libsystem_malloc.dylib (812.160.5) <B7ED74D2-5A24-3F39-9296-EE5688FF4B63> /usr/lib/system/libsystem_malloc.dylib
+       0x18eb4a000 -        0x18eb9123f  libdispatch.dylib (1542.160.2) <80E75F3F-333F-38A8-A3DD-6279FCDB771B> /usr/lib/system/libdispatch.dylib
+       0x18eb92000 -        0x18eb94ffb  libsystem_featureflags.dylib (103) <5725BCFE-07F3-3629-9B44-551A435E2DE2> /usr/lib/system/libsystem_featureflags.dylib
+       0x18eb95000 -        0x18ec161e7  libsystem_c.dylib (1752.160.4) <3498CA79-EF40-3587-AD44-75187CEE7D95> /usr/lib/system/libsystem_c.dylib
+       0x18ec17000 -        0x18eca7ae7  libc++.1.dylib (2100.43) <32327062-C3A2-389E-ABFE-68A9942422E3> /usr/lib/libc++.1.dylib
+       0x18eca8000 -        0x18ecc275f  libc++abi.dylib (2100.43) <CCDE1614-20B7-354C-B201-99C5C4CC589D> /usr/lib/libc++abi.dylib
+       0x18ecc3000 -        0x18ed002f7  libsystem_kernel.dylib (12377.161.15.700.19) <EE805B14-29F2-360D-9A2C-3221A1211833> /usr/lib/system/libsystem_kernel.dylib
+       0x18ed01000 -        0x18ed0db3b  libsystem_pthread.dylib (539.100.4) <A58BEABD-7AC0-35F8-BCFF-E4FFBD79E938> /usr/lib/system/libsystem_pthread.dylib
+       0x18ed0e000 -        0x18ed16963  libsystem_platform.dylib (375.120.2) <3AF14164-15FE-3623-9EE3-46DE29FD5B5A> /usr/lib/system/libsystem_platform.dylib
+       0x18ed17000 -        0x18ed466eb  libsystem_info.dylib (600) <0037F576-2C50-36F0-9F36-6CB7A049D5B1> /usr/lib/system/libsystem_info.dylib
+       0x192ce7000 -        0x192cf0e5f  libsystem_darwin.dylib (1752.160.4) <B808D04B-2798-36C9-96F6-35534BDFCF11> /usr/lib/system/libsystem_darwin.dylib
+       0x193152000 -        0x1931641b6  libsystem_notify.dylib (348.160.3) <922BDCF4-CD33-3EEB-BC56-9DCAE54F8F65> /usr/lib/system/libsystem_notify.dylib
+       0x195423000 -        0x19543df7b  libsystem_networkextension.dylib (2226.161.1.700.2) <83F224A4-40C4-3106-A97B-788D1D961DCB> /usr/lib/system/libsystem_networkextension.dylib
+       0x1954c0000 -        0x1954d7fdf  libsystem_asl.dylib (406) <FF6BE113-1093-3D23-8A55-E0A5B327CA8E> /usr/lib/system/libsystem_asl.dylib
+       0x197079000 -        0x197081387  libsystem_symptoms.dylib (2169.160.3.701.1) <7F0D4E31-268A-3EBB-8A2C-30CCC771A5A5> /usr/lib/system/libsystem_symptoms.dylib
+       0x19b31e000 -        0x19b356373  libsystem_containermanager.dylib (725.160.3.701.2) <118BC21E-B17D-32A2-9B65-16256131974F> /usr/lib/system/libsystem_containermanager.dylib
+       0x19c730000 -        0x19c7345d7  libsystem_configuration.dylib (1405.160.3.701.3) <7725D903-1D37-33E7-82AF-2260661C81A8> /usr/lib/system/libsystem_configuration.dylib
+       0x19c735000 -        0x19c73b99f  libsystem_sandbox.dylib (2680.160.6.700.3) <7B54AAA3-EB32-3853-8F0E-EB956EC957A1> /usr/lib/system/libsystem_sandbox.dylib
+       0x19dd90000 -        0x19dd931fb  libquarantine.dylib (196.160.2.700.3) <45146171-F0C1-3104-AE01-6AAD841A70B5> /usr/lib/system/libquarantine.dylib
+       0x19e52f000 -        0x19e535d03  libsystem_coreservices.dylib (191.5.1) <BF51842C-BC69-3725-9EB2-7A52804963F8> /usr/lib/system/libsystem_coreservices.dylib
+       0x19eabe000 -        0x19eafba77  libsystem_m.dylib (3312.100.1) <A2858495-5B01-3D11-955D-FF6F25E88A6E> /usr/lib/system/libsystem_m.dylib
+       0x19eafd000 -        0x19eb00527  libmacho.dylib (1387) <95DEC6C1-4480-3303-8A52-9AFC3D8C9219> /usr/lib/system/libmacho.dylib
+       0x19eb1a000 -        0x19eb273a7  libcommonCrypto.dylib (600035) <EBA6E4D0-4DD2-33BB-BF95-48A58591AAAD> /usr/lib/system/libcommonCrypto.dylib
+       0x19eb28000 -        0x19eb31ca3  libunwind.dylib (2100.2) <201827AE-90B0-38B1-9729-50455B607293> /usr/lib/system/libunwind.dylib
+       0x19eb3a000 -        0x19eb44c1f  libcopyfile.dylib (240.160.2.702.1) <BA7266A8-BF4B-32BF-A323-F4B2EBCDC0B0> /usr/lib/system/libcopyfile.dylib
+       0x19eb45000 -        0x19eb48987  libcompiler_rt.dylib (103.3) <9EE26D98-97BF-3BE0-B6BE-425284AB2D24> /usr/lib/system/libcompiler_rt.dylib
+       0x19eb49000 -        0x19eb4d78b  libsystem_collections.dylib (1752.160.4) <34CEFA68-1E15-32F2-A5B1-97C0170A77C5> /usr/lib/system/libsystem_collections.dylib
+       0x19eb4e000 -        0x19eb514cf  libsystem_secinit.dylib (168.100.7) <B6B286B6-6E08-3578-8AFC-E4C55697C760> /usr/lib/system/libsystem_secinit.dylib
+       0x19eb52000 -        0x19eb54bf7  libremovefile.dylib (85.100.6) <33530415-3DB6-3556-A59A-24C22681D632> /usr/lib/system/libremovefile.dylib
+       0x19eb55000 -        0x19eb55f27  libkeymgr.dylib (31) <AD45B9EE-CE2B-3E1F-B96B-15F7F9FA3712> /usr/lib/system/libkeymgr.dylib
+       0x19eb56000 -        0x19eb5ee3f  libsystem_dnssd.dylib (2881.160.4.700.1) <71833E65-58B3-3C06-A4F3-D69D476CCC3C> /usr/lib/system/libsystem_dnssd.dylib
+       0x19eb5f000 -        0x19eb6409b  libcache.dylib (95) <A13AF0DC-5928-38BE-97FF-E04C29EF96AF> /usr/lib/system/libcache.dylib
+       0x19eb65000 -        0x19eb66ce3  libSystem.B.dylib (1356) <E9E4C9A6-16BB-392C-96AA-07797764E2A1> /usr/lib/libSystem.B.dylib
+       0x29283d000 -        0x292844349  libRosetta.dylib (367.9) <3DBB2990-262D-3776-8FAC-B88C0373DCF0> /usr/lib/libRosetta.dylib
+       0x294450000 -        0x294453a4b  libsystem_darwindirectory.dylib (122) <6246210A-5279-391D-8F58-E62A87CAB309> /usr/lib/system/libsystem_darwindirectory.dylib
+       0x294454000 -        0x29445e39b  libsystem_eligibility.dylib (319.160.17) <85C0486B-60BE-3E10-ABBF-DD74341B7376> /usr/lib/system/libsystem_eligibility.dylib
+       0x29445f000 -        0x29446688b  libsystem_sanitizers.dylib (26.1) <A8C4F7FC-3443-35F7-B306-068D06237ED0> /usr/lib/system/libsystem_sanitizers.dylib
+       0x294467000 -        0x294467bbf  libsystem_trial.dylib (474.2.18.2.1) <83FF8DEB-1153-35BA-99C3-2AEF9B7559CD> /usr/lib/system/libsystem_trial.dylib

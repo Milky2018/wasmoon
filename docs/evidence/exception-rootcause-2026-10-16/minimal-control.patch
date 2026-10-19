@@ -1,0 +1,85 @@
+--- a/modules/wasmoon_jit/jit_ffi/exception.c
++++ b/modules/wasmoon_jit/jit_ffi/exception.c
+@@ -46,6 +46,7 @@
+     void *state;
+     struct exception_storage *storage; // Borrowed from the retained state
+     exception_callbacks_t *callbacks;
++    int diagnostic_control;
+ } native_exception_arena_t;
+ 
+ // Physical payload storage and root leases, released on close or last RC owner.
+@@ -147,7 +148,7 @@
+     storage->count = count;
+ }
+ 
+-MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_append(
++static __attribute__((noinline)) int32_t original_append(
+     exception_insert_request_t *request, int64_t reference, const int32_t *mask,
+     int32_t traced, int64_t byte_charge, int64_t object_charge
+ ) {
+@@ -187,6 +188,56 @@
+     exception_payload_close(storage, &entry);
+     return 0;
+ }
++static __attribute__((noinline)) int32_t minimal_append(
++    exception_insert_request_t *request, int64_t reference, const int32_t *mask,
++    int32_t traced, int64_t byte_charge, int64_t object_charge
++) {
++    exception_storage_t *storage = request->arena->storage;
++    int32_t count = request->count;
++    if (count < 0 || (size_t)count > SIZE_MAX / sizeof(int64_t)) return 0;
++    if (storage->count == storage->capacity) {
++        size_t capacity = storage->capacity ? (size_t)storage->capacity * 2 : 16;
++        if (capacity > INT32_MAX || capacity > SIZE_MAX / sizeof(native_exception_t)) return 0;
++        void *entries = wasmoon_native_realloc(storage->entries, capacity * sizeof(native_exception_t));
++        if (!entries) return 0;
++        storage->entries = entries;
++        storage->capacity = (int32_t)capacity;
++    }
++    native_exception_t entry = {0};
++    if (count) {
++        entry.values = wasmoon_native_malloc((size_t)count * sizeof(int64_t));
++        if (!entry.values) return 0;
++        memcpy(entry.values, request->values, (size_t)count * sizeof(int64_t));
++    }
++    entry.tag = request->tag;
++    entry.count = count;
++    if (request->heap && (count || traced)) {
++        int64_t *roots = NULL;
++        int32_t slots = count ? count : 1;
++        void *registration = NULL;
++        if (!gc_heap_register_parked_roots(request->heap, slots, &registration, &roots)) goto failed;
++        entry.root_registration = registration;
++        int32_t mask_count = Moonbit_array_length(mask);
++        for (int32_t i = 0; i < slots; ++i)
++            roots[i] = i < count && (!mask_count || mask[i]) ? entry.values[i] : 0;
++        if (traced && !gc_heap_bind_exception_roots(entry.root_registration, request->arena, reference)) goto failed;
++    }
++    entry.byte_charge = byte_charge;
++    entry.object_charge = object_charge;
++    storage->entries[storage->count++] = entry;
++    return 1;
++failed:
++    exception_payload_close(storage, &entry);
++    return 0;
++}
++MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_append(
++    exception_insert_request_t *request, int64_t reference, const int32_t *mask,
++    int32_t traced, int64_t byte_charge, int64_t object_charge
++) {
++    if (request->arena->diagnostic_control)
++        return minimal_append(request, reference, mask, traced, byte_charge, object_charge);
++    return original_append(request, reference, mask, traced, byte_charge, object_charge);
++}
+ 
+ MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_tag(exception_storage_t *storage, int32_t index) {
+     native_exception_t *entry = exception_storage_at(storage, index);
+@@ -225,6 +276,8 @@
+ ) {
+     native_exception_arena_t *arena = moonbit_make_external_object(finalize_exception_arena, sizeof(*arena));
+     memset(arena, 0, sizeof(*arena));
++    const char *mode = getenv("WASMOON_EMPTY_CONTROL");
++    arena->diagnostic_control = mode ? atoi(mode) : 0;
+     arena->callbacks = wasmoon_native_malloc(sizeof(*arena->callbacks));
+     if (arena->callbacks) {
+         *arena->callbacks = (exception_callbacks_t){insert, lookup, layout, mark, marked_count, copy_marked, reset_marks, sweep};

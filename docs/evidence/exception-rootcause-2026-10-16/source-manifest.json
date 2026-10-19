@@ -1,0 +1,72 @@
+{
+  "source_revision": "d9279052ed577537da1991ba5000bea26cd55760",
+  "source_dirty": true,
+  "delivery": false,
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "toolchain": "moon 0.1.20261012 (748b63c 2026-10-12) ~/.moon/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) ~/.moon/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "c_compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "changed_code_sha256": {
+    "modules/wasmoon/sanitizer_testsuite/runtime_failures_test.mbt": "a9f8860adf779df983f8670653f1a5c4ed91b9fe47bb8ffaecc6fedaecf8ceb4",
+    "modules/wasmoon_jit/context_layout_wbtest.mbt": "20334046702cce5c779637a573e32a16c5ade097f141cbb01c96e0582e741a02",
+    "modules/wasmoon_jit/jit_ffi/context.mbt": "0c821cd6a11d870de7546967df6d7908ca100430e73f3af325405fdf835b1aa6",
+    "modules/wasmoon_jit/jit_ffi/exception.c": "4e2a094318456f12034ba247adf1558a4667aa4d09f591ca5cabc4b738dcf92c",
+    "modules/wasmoon_jit/jit_ffi/exceptions.mbt": "d06f08d961b8ba3b27867281e9e83cf540f2373683276bd92f9f69126d4a9820",
+    "modules/wasmoon_jit/jit_ffi/exceptions_wbtest.mbt": "a47b4bd5629749859fecafdb4c434cb5efc43452bab117224e49e8480b183622",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.c": "a7feeaef37c0fa2d4a470ff3f6ab5560f3938408ab398dea32c68a8aba37707f",
+    "modules/wasmoon_jit/jit_ffi/gc_heap.h": "e50ea012c5855dfad4393592ca966eb143fe54712280f2156f27548ef4bae73e",
+    "modules/wasmoon_jit/jit_ffi/jit_context.h": "85098da28c81339f1b974ed51b6446a7078d7352e43c348aaa2f1aab08fbe4b5",
+    "modules/wasmoon_jit/jit_ffi/jit_internal.h": "4dc7708995cdbb5c062c2cd3fb96ad039b2d4aa1d42f08de9754d663a7bfa3f6",
+    "modules/wasmoon_jit/jit_ffi/pkg.generated.mbti": "9d022c2718489a13faf329b9ff61e7877c5f0527119d8301e440e17bbd750ddf",
+    "modules/wasmoon_jit/jit_ffi/quota.c": "c72f03f64d36c5aa6e584e7244120c00d0e8a7257c832656b260af4fe665cb1e",
+    "modules/wasmoon_jit/jit_ffi/quota.mbt": "e62f0e3e9a092eaee9d8e294e63b6234074537ee76ab1027e10e3e9b476e3a85",
+    "modules/wasmoon_jit/jit_ffi/testing/failure_test_support.c": "bdc1eee4711f3d9ff51d33a96d071c5b0d08028f2d43d100858fe98ece51b736",
+    "modules/wasmoon_jit/native_exception.mbt": "82fbf6f5ce3394aaba79e7e5c512b08f238acc91dcd6df4b1308052fdd710dd2",
+    "modules/wasmoon_jit/native_exception_test.mbt": "6e064cd053520a2086b428dd60c7882803ac5947b50cfd1b36a0e43db59438e5",
+    "modules/wasmoon_jit/native_handles_test.mbt": "9c70292190df0a3e5d36bc8e09e3218aa7e436f6cc620b731dbf044734a88a0e",
+    "modules/wasmoon_jit/native_test_support/trap.mbt": "d72624ef212b64eba491dee1fe4d9bff0a979f88123ae553ce93341081d2c396"
+  },
+  "pre_investigation_exception_c_sha256": "cf92edf2247f6801bb9ca64c1d526df0d11ac04ea2547490f410d7a5d2444a5a",
+  "sanitizer_source_copies": {
+    "exception.c": {
+      "production_sha256": "4e2a094318456f12034ba247adf1558a4667aa4d09f591ca5cabc4b738dcf92c",
+      "copied_sha256": "4e2a094318456f12034ba247adf1558a4667aa4d09f591ca5cabc4b738dcf92c",
+      "match": true
+    },
+    "exceptions.mbt": {
+      "production_sha256": "d06f08d961b8ba3b27867281e9e83cf540f2373683276bd92f9f69126d4a9820",
+      "copied_sha256": "d06f08d961b8ba3b27867281e9e83cf540f2373683276bd92f9f69126d4a9820",
+      "match": true
+    },
+    "gc_heap.c": {
+      "production_sha256": "a7feeaef37c0fa2d4a470ff3f6ab5560f3938408ab398dea32c68a8aba37707f",
+      "copied_sha256": "a7feeaef37c0fa2d4a470ff3f6ab5560f3938408ab398dea32c68a8aba37707f",
+      "match": true
+    },
+    "gc_heap.h": {
+      "production_sha256": "e50ea012c5855dfad4393592ca966eb143fe54712280f2156f27548ef4bae73e",
+      "copied_sha256": "e50ea012c5855dfad4393592ca966eb143fe54712280f2156f27548ef4bae73e",
+      "match": true
+    },
+    "quota.c": {
+      "production_sha256": "c72f03f64d36c5aa6e584e7244120c00d0e8a7257c832656b260af4fe665cb1e",
+      "copied_sha256": "c72f03f64d36c5aa6e584e7244120c00d0e8a7257c832656b260af4fe665cb1e",
+      "match": true
+    },
+    "quota.mbt": {
+      "production_sha256": "e62f0e3e9a092eaee9d8e294e63b6234074537ee76ab1027e10e3e9b476e3a85",
+      "copied_sha256": "e62f0e3e9a092eaee9d8e294e63b6234074537ee76ab1027e10e3e9b476e3a85",
+      "match": true
+    }
+  },
+  "installed_cli_sha256": "144b149c5170635747e1d522658505846ffb01b0e70c2b0691b607e7708dbda5",
+  "measured_final_cli_sha256": "144b149c5170635747e1d522658505846ffb01b0e70c2b0691b607e7708dbda5",
+  "counter_dylib_sha256": {
+    "libclockboundaries.dylib": "79f5b66ef29aabda2a5d288a9117507707b477792da1cccdded23fe8a1b2b681",
+    "libstoreboundaries.dylib": "87b90d957253ba519eb2549f3cd6f519159c539a0260d9fe1e722a8da3396214"
+  },
+  "notes": [
+    "Historical dirty local evidence; not Linux LSan or Windows acceptance.",
+    "Production exception.mbt policy is byte-identical to the pre-investigation snapshot.",
+    "Before/final binaries in final-cli.json are ordinary completed release builds; diagnostic relinks are separate."
+  ]
+}

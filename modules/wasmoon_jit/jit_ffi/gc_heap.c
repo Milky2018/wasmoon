@@ -326,6 +326,9 @@ void gc_heap_unregister_parked_roots(void* opaque_registration) {
     if (registration->next) {
         registration->next->previous = registration->previous;
     }
+    if (registration->owner_reference & GC_EXCEPTION_REF_TAG) {
+        if (--heap->exception_root_count == 0) heap->exception_arena = NULL;
+    }
     free(registration->roots);
     free(registration);
     moonbit_decref(heap);
@@ -341,6 +344,7 @@ int32_t gc_heap_bind_exception_roots(void *opaque, struct native_exception_arena
         registration->heap->exception_arena != arena)) return 0;
     registration->owner_reference = reference;
     registration->heap->exception_arena = arena;
+    ++registration->heap->exception_root_count;
     return 1;
 }
 

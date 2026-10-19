@@ -1,0 +1,30 @@
+(lldb) target create "target/exception-insert/before"
+Current executable set to '/Users/zhengyu/Documents/projects/wasmoon/target/exception-insert/before' (arm64).
+(lldb) settings set -- target.run-args  "run" "docs/evidence/exception-performance-2026-10-16/rethrow.wat" "--invoke" "run" "--arg" "10"
+(lldb) settings set target.disable-aslr false
+(lldb) breakpoint set -n _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert --auto-continue true
+Breakpoint 1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert, address = 0x000000010040d6b0
+(lldb) breakpoint set -n _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13cache__layout --auto-continue true
+Breakpoint 2: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13cache__layout, address = 0x000000010040e158
+(lldb) breakpoint set -n _M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup --auto-continue true
+Breakpoint 3: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup, address = 0x000000010040cf9c
+(lldb) breakpoint set -n wasmoon_exception_storage_append --auto-continue true
+Breakpoint 4: where = before`wasmoon_exception_storage_append, address = 0x00000001007d235c
+(lldb) run
+35022000 422833
+Process 5337 launched: '/Users/zhengyu/Documents/projects/wasmoon/target/exception-insert/before' (arm64)
+Process 5337 exited with status = 0 (0x00000000)
+(lldb) breakpoint list
+Current breakpoints:
+1: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert', locations = 1, resolved = 1, hit count = 1 Options: enabled auto-continue 
+  1.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6insert, address = 0x00000001046196b0, resolved, hit count = 1 
+
+2: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13cache__layout', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+  2.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState13cache__layout, address = 0x000000010461a158, resolved, hit count = 0 
+
+3: name = '_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup', locations = 1, resolved = 1, hit count = 10 Options: enabled auto-continue 
+  3.1: where = before`_M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup, address = 0x0000000104618f9c, resolved, hit count = 10 
+
+4: name = 'wasmoon_exception_storage_append', locations = 1, resolved = 1, hit count = 1 Options: enabled auto-continue 
+  4.1: where = before`wasmoon_exception_storage_append, address = 0x00000001049de35c, resolved, hit count = 1 
+

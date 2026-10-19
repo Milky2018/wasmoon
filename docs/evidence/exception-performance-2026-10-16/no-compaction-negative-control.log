@@ -1,0 +1,5 @@
+[Milky2018/wasmoon_jit] test jit_ffi/exceptions_wbtest.mbt:4 ("exception registry storage stays bounded during long-lived retirement churn") failed: jit_ffi/exceptions_wbtest.mbt:17:3-17:49@Milky2018/wasmoon_jit FAILED: `false` is not true
+[Milky2018/wasmoon_jit] test jit_ffi/exceptions_wbtest.mbt:45 ("exception slot estimates reject retired identities after compaction and clear") failed: jit_ffi/exceptions_wbtest.mbt:59:3-59:51@Milky2018/wasmoon_jit FAILED: `6 != 2`
+diff:
+-6 +2
+Total tests: 3, passed: 1, failed: 2.

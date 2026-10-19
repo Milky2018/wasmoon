@@ -1,0 +1,80 @@
+--- a/modules/wasmoon_jit/jit_ffi/exceptions.mbt
++++ b/modules/wasmoon_jit/jit_ffi/exceptions.mbt
+@@ -51,7 +51,7 @@
+ 
+ ///|
+ fn ExceptionState::new() -> ExceptionState {
+-  {
++  let state = {
+     entries: [],
+     storage: ExceptionStorage::new(),
+     dead_entries: 0,
+@@ -66,6 +66,10 @@
+     objects: Quota::unlimited(),
+     quota_denied: 0,
+   }
++  let reserve = exception_performance_reserve()
++  if (reserve & 1) != 0 { state.entries.reserve_capacity(524288) }
++  if (reserve & 2) != 0 { state.storage.reserve_for_control(524288) }
++  state
+ }
+ 
+ ///|
+@@ -78,6 +82,13 @@
+   byte_charge : Int64,
+   object_charge : Int64,
+ ) -> Bool = "wasmoon_exception_storage_append"
++
++///|
++extern "c" fn exception_performance_reserve() -> Int32 = "wasmoon_exception_performance_reserve"
++
++///|
++#borrow(self)
++extern "c" fn ExceptionStorage::reserve_for_control(self : ExceptionStorage, count : Int32) -> Unit = "wasmoon_exception_storage_reserve_control"
+ 
+ ///|
+ extern "c" fn ExceptionStorage::new() -> ExceptionStorage = "wasmoon_exception_storage_new"
+--- a/modules/wasmoon_jit/jit_ffi/exception.c
++++ b/modules/wasmoon_jit/jit_ffi/exception.c
+@@ -46,6 +46,7 @@
+     void *state;
+     struct exception_storage *storage; // Borrowed from the retained state
+     exception_callbacks_t *callbacks;
++    int32_t lookup_repetitions;
+ } native_exception_arena_t;
+ 
+ // Physical payload storage and root leases, released on close or last RC owner.
+@@ -231,6 +232,8 @@
+         moonbit_incref(state);
+         arena->state = state;
+         arena->storage = storage;
++        const char *repeat = getenv("WASMOON_EXCEPTION_LOOKUP_REPETITIONS");
++        arena->lookup_repetitions = repeat ? atoi(repeat) : 1;
+     }
+     return arena;
+ }
+@@ -256,6 +259,8 @@
+     if (!arena) return NULL;
+     // The callback returns slot + 1 after full identity/liveness validation.
+     int64_t slot = arena->callbacks->lookup(arena->state, reference);
++    for (int32_t repeat = 1; repeat < arena->lookup_repetitions; ++repeat)
++        slot = arena->callbacks->lookup(arena->state, reference);
+     native_exception_t *entry = slot > 0 && slot <= INT32_MAX
+         ? exception_storage_at(arena->storage, (int32_t)slot - 1) : NULL;
+     return entry && entry->count >= 0 ? entry : NULL;
+@@ -833,3 +838,15 @@
+ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_begin);
+ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_end);
+ #endif
++
++MOONBIT_FFI_EXPORT int32_t wasmoon_exception_performance_reserve(void) {
++    const char *reserve = getenv("WASMOON_EXCEPTION_RESERVE");
++    return reserve ? atoi(reserve) : 0;
++}
++MOONBIT_FFI_EXPORT void wasmoon_exception_storage_reserve_control(exception_storage_t *storage, int32_t count) {
++    if (count <= storage->capacity) return;
++    void *entries = realloc(storage->entries, (size_t)count * sizeof(*storage->entries));
++    if (!entries) abort();
++    storage->entries = entries;
++    storage->capacity = count;
++}

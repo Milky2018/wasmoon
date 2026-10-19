@@ -19,308 +19,314 @@ static jit_context_t *exception_activation_context(jit_context_t *ctx) {
     return ctx && ctx_runtime(ctx)->callable_local_types && active ? active : ctx;
 }
 
-// Stable exception objects belong to the Store, independently of handler frames.
-typedef struct native_exception {
+// Logical identities, layouts and reachability belong to the MoonBit state.
+// This adapter retains that state, without the state retaining the adapter.
+typedef struct exception_insert_request {
+    struct native_exception_arena *arena;
+    GcHeap *heap;
     int32_t tag;
     int32_t count;
-    int64_t *values;
-    void *root_registration;
-    int64_t reference;
-    int marked;
-    wasmoon_quota_t *bytes_quota;
-    wasmoon_quota_t *objects_quota;
-} native_exception_t;
+    const int64_t *values;
+} exception_insert_request_t;
 
-typedef struct native_exception_layout {
-    int32_t *roots;
-    int32_t count;
-    int32_t tag;
-    struct native_exception_layout *next;
-} native_exception_layout_t;
+typedef struct exception_callbacks {
+    int64_t (*insert)(void *, exception_insert_request_t *, int32_t, int32_t);
+    int64_t (*lookup)(void *, int64_t);
+    int64_t (*layout)(void *, int32_t);
+    void (*mark)(void *, int64_t);
+    int32_t (*marked_count)(void *);
+    void (*copy_marked)(void *, int64_t *);
+    void (*reset_marks)(void *);
+    void (*sweep)(void *, int64_t);
+} exception_callbacks_t;
+
+struct exception_storage;
 
 typedef struct native_exception_arena {
-    size_t references;
-    wasmoon_quota_t *bytes_quota;
-    wasmoon_quota_t *objects_quota;
-    int quota_denied;
-    size_t count;
-    size_t capacity;
-    native_exception_t *entries;
-    int sealed;
-    int traced;
-    int32_t next_reference;
-    native_exception_layout_t *layouts;
+    void *state;
+    struct exception_storage *storage; // Borrowed from the retained state
+    exception_callbacks_t *callbacks;
 } native_exception_arena_t;
 
-struct native_exception_arena *exception_arena_new(void) {
-    native_exception_arena_t *arena = wasmoon_native_calloc(1, sizeof(*arena));
-    if (arena) arena->references = 1;
-    return arena;
+// Physical payload storage and root leases, released on close or last RC owner.
+typedef struct native_exception {
+    int64_t *values;
+    void *root_registration;
+    int64_t byte_charge;
+    int64_t object_charge;
+    int32_t tag;
+    int32_t count;
+} native_exception_t;
+
+// One RC owner for physical buffers. This contains no identities, marks,
+// admission policy or lookup algorithm; MoonBit supplies validated slot indices.
+typedef struct exception_storage {
+    native_exception_t *entries;
+    int32_t count;
+    int32_t capacity;
+    wasmoon_quota_t *bytes;
+    wasmoon_quota_t *objects;
+} exception_storage_t;
+
+static void exception_payload_close(exception_storage_t *storage, native_exception_t *entry) {
+    if (entry->count < 0) return;
+    if (entry->root_registration) gc_heap_unregister_parked_roots(entry->root_registration);
+    free(entry->values);
+    wasmoon_quota_release(storage->bytes, entry->byte_charge);
+    wasmoon_quota_release(storage->objects, entry->object_charge);
+    memset(entry, 0, sizeof(*entry));
+    entry->count = -1;
 }
 
-static void exception_entry_free(native_exception_t *entry);
-
-static void exception_arena_clear(native_exception_arena_t *arena) {
-    if (!arena) return;
-    for (size_t i = 0; i < arena->count; ++i) {
-        native_exception_t *entry = &arena->entries[i];
-        if (entry->root_registration) {
-            GcHeap *heap = gc_heap_registration_heap(entry->root_registration);
-            if (heap->exception_arena == arena) heap->exception_arena = NULL;
-            gc_heap_unregister_parked_roots(entry->root_registration);
-        }
-        free(entry->values);
-        wasmoon_quota_release(entry->bytes_quota, 16 + (int64_t)entry->count * 16);
-        wasmoon_quota_release(entry->objects_quota, 1);
-    }
-    while (arena->layouts) {
-        native_exception_layout_t *next = arena->layouts->next;
-        free(arena->layouts->roots);
-        free(arena->layouts);
-        arena->layouts = next;
-    }
-    free(arena->entries);
-    arena->entries = NULL;
-    arena->count = arena->capacity = 0;
-    arena->sealed = 1;
+MOONBIT_FFI_EXPORT void wasmoon_exception_storage_clear(exception_storage_t *storage) {
+    for (int32_t i = 0; i < storage->count; ++i) exception_payload_close(storage, &storage->entries[i]);
+    free(storage->entries);
+    if (storage->bytes) moonbit_decref(storage->bytes);
+    if (storage->objects) moonbit_decref(storage->objects);
+    memset(storage, 0, sizeof(*storage));
 }
 
-void exception_arena_release(native_exception_arena_t *arena) {
-    if (arena && --arena->references == 0) {
-        exception_arena_clear(arena);
-        if (arena->bytes_quota) moonbit_decref(arena->bytes_quota);
-        if (arena->objects_quota) moonbit_decref(arena->objects_quota);
-        free(arena);
+static void finalize_exception_storage(void *storage) {
+    wasmoon_exception_storage_clear(storage);
+}
+
+MOONBIT_FFI_EXPORT exception_storage_t *wasmoon_exception_storage_new(void) {
+    exception_storage_t *storage = moonbit_make_external_object(finalize_exception_storage, sizeof(*storage));
+    memset(storage, 0, sizeof(*storage));
+    return storage;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_bind_quotas(exception_storage_t *storage,
+    wasmoon_quota_t *bytes, wasmoon_quota_t *objects) {
+    if (storage->count || storage->bytes || storage->objects) return 0;
+    moonbit_incref(bytes);
+    moonbit_incref(objects);
+    storage->bytes = bytes;
+    storage->objects = objects;
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_capacity(exception_storage_t *storage) {
+    return storage->capacity;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_exception_storage_shrink(exception_storage_t *storage) {
+    if (storage->count == 0) {
+        free(storage->entries);
+        storage->entries = NULL;
+        storage->capacity = 0;
+    } else if (storage->count < storage->capacity) {
+        // Best-effort reduction, not resource acquisition or guest admission.
+        void *entries = realloc(storage->entries, (size_t)storage->count * sizeof(*storage->entries));
+        if (entries) { storage->entries = entries; storage->capacity = storage->count; }
     }
 }
 
-static int64_t exception_arena_insert(native_exception_arena_t *arena,
-    GcHeap *heap, int32_t tag, const int64_t *values, int32_t count) {
-    heap = gc_heap_live(heap);
-    if (!arena || arena->sealed || count < 0 || (count && !values) ||
-        arena->next_reference == INT32_MAX) return 0;
-    arena->quota_denied = 0;
-    int64_t bytes = 16 + (int64_t)count * 16;
-    if (!wasmoon_quota_acquire(arena->bytes_quota, bytes)) { arena->quota_denied = 25; return 0; }
-    if (!wasmoon_quota_acquire(arena->objects_quota, 1)) {
-        wasmoon_quota_release(arena->bytes_quota, bytes);
-        arena->quota_denied = 26;
-        return 0;
+static native_exception_t *exception_storage_at(exception_storage_t *storage, int32_t index) {
+    return index >= 0 && index < storage->count ? &storage->entries[index] : NULL;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_exception_storage_close_at(exception_storage_t *storage, int32_t index) {
+    native_exception_t *entry = exception_storage_at(storage, index);
+    if (entry) exception_payload_close(storage, entry);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_exception_storage_move(exception_storage_t *storage, int32_t from, int32_t to) {
+    native_exception_t *source = exception_storage_at(storage, from);
+    native_exception_t *target = exception_storage_at(storage, to);
+    if (!source || !target || from == to) return;
+    exception_payload_close(storage, target);
+    *target = *source;
+    memset(source, 0, sizeof(*source));
+    source->count = -1;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_exception_storage_truncate(exception_storage_t *storage, int32_t count) {
+    if (count < 0 || count > storage->count) return;
+    for (int32_t i = count; i < storage->count; ++i) exception_payload_close(storage, &storage->entries[i]);
+    storage->count = count;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_append(
+    exception_insert_request_t *request, int64_t reference, const int32_t *mask,
+    int32_t traced, int64_t byte_charge, int64_t object_charge
+) {
+    exception_storage_t *storage = request->arena->storage;
+    int32_t count = request->count;
+    if (count < 0 || (size_t)count > SIZE_MAX / sizeof(int64_t)) return 0;
+    if (storage->count == storage->capacity) {
+        size_t capacity = storage->capacity ? (size_t)storage->capacity * 2 : 16;
+        if (capacity > INT32_MAX || capacity > SIZE_MAX / sizeof(native_exception_t)) return 0;
+        void *entries = wasmoon_native_realloc(storage->entries, capacity * sizeof(native_exception_t));
+        if (!entries) return 0;
+        storage->entries = entries;
+        storage->capacity = (int32_t)capacity;
     }
-    if (arena->count == arena->capacity) {
-        size_t capacity = arena->capacity ? arena->capacity * 2 : 16;
-        if (capacity > INT32_MAX) goto allocation_failed;
-        void *entries = wasmoon_native_realloc(arena->entries, capacity * sizeof(native_exception_t));
-        if (!entries) goto allocation_failed;
-        arena->entries = entries;
-        arena->capacity = capacity;
-    }
-    native_exception_t entry = { .tag = tag, .count = count,
-        .reference = GC_EXCEPTION_REF_TAG | ((int64_t)arena->next_reference << 1) | 1,
-        .bytes_quota = arena->bytes_quota, .objects_quota = arena->objects_quota };
+    native_exception_t entry = {0};
     if (count) {
         entry.values = wasmoon_native_malloc((size_t)count * sizeof(int64_t));
-        if (!entry.values) goto allocation_failed;
-        memcpy(entry.values, values, (size_t)count * sizeof(int64_t));
+        if (!entry.values) return 0;
+        memcpy(entry.values, request->values, (size_t)count * sizeof(int64_t));
     }
-    if (heap && (count || arena->traced)) {
-            native_exception_layout_t *layout = arena->layouts;
-            while (layout && layout->tag != tag) layout = layout->next;
-            if (layout && layout->count != count) {
-                free(entry.values);
-                goto allocation_failed;
-            }
-            int64_t *roots = NULL;
-            int32_t slots = count ? count : 1;
-            if (!gc_heap_register_parked_roots(heap, slots,
-                    &entry.root_registration, &roots)) {
-                free(entry.values);
-                goto allocation_failed;
-            }
-            for (int32_t i = 0; i < slots; ++i)
-                roots[i] = i < count && (!layout || layout->roots[i]) ? values[i] : 0;
-            if (arena->traced && !gc_heap_bind_exception_roots(entry.root_registration,
-                    arena, entry.reference)) {
-                gc_heap_unregister_parked_roots(entry.root_registration);
-                free(entry.values);
-                goto allocation_failed;
-            }
+    entry.tag = request->tag;
+    entry.count = count;
+    if (request->heap && (count || traced)) {
+        int64_t *roots = NULL;
+        int32_t slots = count ? count : 1;
+        // Keep the out-parameter separate so the pending record can stay scalar.
+        void *registration = NULL;
+        if (!gc_heap_register_parked_roots(request->heap, slots, &registration, &roots)) goto failed;
+        entry.root_registration = registration;
+        int32_t mask_count = Moonbit_array_length(mask);
+        for (int32_t i = 0; i < slots; ++i)
+            roots[i] = i < count && (!mask_count || mask[i]) ? entry.values[i] : 0;
+        if (traced && !gc_heap_bind_exception_roots(entry.root_registration, request->arena, reference)) goto failed;
     }
-    arena->entries[arena->count++] = entry;
-    ++arena->next_reference;
-    return entry.reference;
-allocation_failed:
-    wasmoon_quota_release(arena->bytes_quota, bytes);
-    wasmoon_quota_release(arena->objects_quota, 1);
+    entry.byte_charge = byte_charge;
+    entry.object_charge = object_charge;
+    storage->entries[storage->count++] = entry;
+    return 1;
+failed:
+    exception_payload_close(storage, &entry);
     return 0;
 }
 
-static native_exception_t *exception_arena_lookup(native_exception_arena_t *arena,
-    int64_t reference) {
-    if (!arena || reference <= 0 || !(reference & GC_EXCEPTION_REF_TAG)) return NULL;
-    size_t low = 0, high = arena->count;
-    while (low < high) {
-        size_t middle = low + (high - low) / 2;
-        if (arena->entries[middle].reference < reference) low = middle + 1;
-        else high = middle;
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_tag(exception_storage_t *storage, int32_t index) {
+    native_exception_t *entry = exception_storage_at(storage, index);
+    return entry && entry->count >= 0 ? entry->tag : -1;
+}
+MOONBIT_FFI_EXPORT int64_t *wasmoon_exception_storage_values(exception_storage_t *storage, int32_t index) {
+    native_exception_t *entry = exception_storage_at(storage, index);
+    int32_t count = entry && entry->count >= 0 ? entry->count : 0;
+    int64_t *values = moonbit_make_int64_array(count, 0);
+    if (count) memcpy(values, entry->values, (size_t)count * sizeof(int64_t));
+    return values;
+}
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_storage_on_heap(exception_storage_t *storage, int32_t index, int64_t heap) {
+    native_exception_t *entry = exception_storage_at(storage, index);
+    return entry && gc_heap_registration_heap(entry->root_registration) == (GcHeap *)(uintptr_t)heap;
+}
+MOONBIT_FFI_EXPORT int64_t wasmoon_exception_layout_address(const int32_t *mask) { return (int64_t)(uintptr_t)mask; }
+MOONBIT_FFI_EXPORT void wasmoon_exception_root_write(int64_t *roots, int32_t index, int64_t value) { roots[index] = value; }
+
+static void finalize_exception_arena(void *object) {
+    native_exception_arena_t *arena = object;
+    // The storage finalizer unregisters its leases at the last state release.
+    // Neither state nor physical storage owns an edge back to this adapter.
+    if (arena->state) moonbit_decref(arena->state);
+    free(arena->callbacks);
+}
+
+MOONBIT_FFI_EXPORT native_exception_arena_t *wasmoon_exception_arena_new(
+    void *state, exception_storage_t *storage,
+    int64_t (*insert)(void *, exception_insert_request_t *, int32_t, int32_t),
+    int64_t (*lookup)(void *, int64_t),
+    int64_t (*layout)(void *, int32_t),
+    void (*mark)(void *, int64_t), int32_t (*marked_count)(void *),
+    void (*copy_marked)(void *, int64_t *), void (*reset_marks)(void *),
+    void (*sweep)(void *, int64_t)
+) {
+    native_exception_arena_t *arena = moonbit_make_external_object(finalize_exception_arena, sizeof(*arena));
+    memset(arena, 0, sizeof(*arena));
+    arena->callbacks = wasmoon_native_malloc(sizeof(*arena->callbacks));
+    if (arena->callbacks) {
+        *arena->callbacks = (exception_callbacks_t){insert, lookup, layout, mark, marked_count, copy_marked, reset_marks, sweep};
+        moonbit_incref(state);
+        arena->state = state;
+        arena->storage = storage;
     }
-    return low < arena->count && arena->entries[low].reference == reference
-        ? &arena->entries[low] : NULL;
+    return arena;
 }
 
-static void exception_entry_free(native_exception_t *entry) {
-    if (entry->root_registration) gc_heap_unregister_parked_roots(entry->root_registration);
-    free(entry->values);
-    wasmoon_quota_release(entry->bytes_quota, 16 + (int64_t)entry->count * 16);
-    wasmoon_quota_release(entry->objects_quota, 1);
+MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_is_available(native_exception_arena_t *arena) {
+    return arena && arena->callbacks;
 }
 
-void exception_arena_mark(native_exception_arena_t *arena, int64_t reference) {
-    native_exception_t *entry = exception_arena_lookup(arena, reference);
-    if (entry) entry->marked = 1;
+void exception_arena_release(native_exception_arena_t *arena) {
+    if (arena) moonbit_decref(arena);
 }
 
-int32_t exception_arena_marked_count(native_exception_arena_t *arena) {
-    int32_t count = 0;
-    if (arena) for (size_t i = 0; i < arena->count; ++i)
-        if (arena->entries[i].marked) ++count;
-    return count;
+// Callbacks borrow the retained state and cannot suspend or transfer control.
+// In particular, native throws only occur after these frames have returned.
+static WASMOON_NO_FUNCTION_SANITIZE int64_t exception_arena_insert(native_exception_arena_t *arena,
+    GcHeap *heap, int32_t tag, const int64_t *values, int32_t count) {
+    if (!arena || count < 0 || (count && !values)) return -9;
+    exception_insert_request_t request = {arena, gc_heap_live(heap), tag, count, values};
+    return arena->callbacks->insert(arena->state, &request, tag, count);
 }
 
-void exception_arena_copy_marked(native_exception_arena_t *arena, int64_t *roots) {
-    if (arena) for (size_t i = 0; i < arena->count; ++i)
-        if (arena->entries[i].marked) *roots++ = arena->entries[i].reference;
+static WASMOON_NO_FUNCTION_SANITIZE native_exception_t *exception_arena_lookup(native_exception_arena_t *arena, int64_t reference) {
+    if (!arena) return NULL;
+    // The callback returns slot + 1 after full identity/liveness validation.
+    int64_t slot = arena->callbacks->lookup(arena->state, reference);
+    native_exception_t *entry = slot > 0 && slot <= INT32_MAX
+        ? exception_storage_at(arena->storage, (int32_t)slot - 1) : NULL;
+    return entry && entry->count >= 0 ? entry : NULL;
 }
 
-void exception_arena_reset_marks(native_exception_arena_t *arena) {
-    if (arena) for (size_t i = 0; i < arena->count; ++i) arena->entries[i].marked = 0;
+static WASMOON_NO_FUNCTION_SANITIZE const int32_t *exception_layout(native_exception_arena_t *arena, int32_t tag) {
+    return arena ? (const int32_t *)(uintptr_t)arena->callbacks->layout(arena->state, tag) : NULL;
 }
 
-void exception_arena_sweep(native_exception_arena_t *arena, GcHeap *heap) {
-    if (!arena || !arena->traced) return;
-    size_t retained = 0;
-    for (size_t i = 0; i < arena->count; ++i) {
-        native_exception_t entry = arena->entries[i];
-        if (gc_heap_registration_heap(entry.root_registration) == heap && !entry.marked)
-            exception_entry_free(&entry);
-        else {
-            entry.marked = 0;
-            arena->entries[retained++] = entry;
-        }
-    }
-    arena->count = retained;
-    if (!retained) {
-        heap->exception_arena = NULL;
-        free(arena->entries);
-        arena->entries = NULL;
-        arena->capacity = 0;
-    }
+WASMOON_NO_FUNCTION_SANITIZE void exception_arena_mark(native_exception_arena_t *arena, int64_t reference) {
+    if (arena) arena->callbacks->mark(arena->state, reference);
+}
+WASMOON_NO_FUNCTION_SANITIZE int32_t exception_arena_marked_count(native_exception_arena_t *arena) {
+    return arena ? arena->callbacks->marked_count(arena->state) : 0;
+}
+WASMOON_NO_FUNCTION_SANITIZE void exception_arena_copy_marked(native_exception_arena_t *arena, int64_t *roots) {
+    if (arena) arena->callbacks->copy_marked(arena->state, roots);
+}
+WASMOON_NO_FUNCTION_SANITIZE void exception_arena_reset_marks(native_exception_arena_t *arena) {
+    if (arena) arena->callbacks->reset_marks(arena->state);
+}
+WASMOON_NO_FUNCTION_SANITIZE void exception_arena_sweep(native_exception_arena_t *arena, GcHeap *heap) {
+    if (arena) arena->callbacks->sweep(arena->state, (int64_t)(uintptr_t)heap);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_exception_arena_enable_reclamation(void *owner) {
-    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
-    if (arena) arena->traced = 1;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_exception_arena_release_snapshot(void *owner, int64_t reference) {
-    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
-    native_exception_t *entry = exception_arena_lookup(arena, reference);
-    if (!entry) return;
-    size_t index = (size_t)(entry - arena->entries);
-    GcHeap *heap = gc_heap_registration_heap(entry->root_registration);
-    if (arena->count == 1 && heap && heap->exception_arena == arena)
-        heap->exception_arena = NULL;
-    exception_entry_free(entry);
-    memmove(entry, entry + 1, (arena->count - index - 1) * sizeof(*entry));
-    --arena->count;
-    if (!arena->count) {
-        free(arena->entries);
-        arena->entries = NULL;
-        arena->capacity = 0;
-    }
-}
-
-static void finalize_exception_arena(void *owner) {
-    exception_arena_release(*(native_exception_arena_t **)owner);
-}
-
-MOONBIT_FFI_EXPORT void *wasmoon_exception_arena_new(void) {
-    native_exception_arena_t **owner = moonbit_make_external_object(
-        finalize_exception_arena, sizeof(*owner));
-    *owner = exception_arena_new();
-    return owner;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_exception_arena_clear(void *owner) {
-    exception_arena_clear(*(native_exception_arena_t **)owner);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_exception_arena_bind(void *context, void *owner) {
+MOONBIT_FFI_EXPORT void wasmoon_exception_arena_bind(void *context, native_exception_arena_t *arena) {
     jit_context_t *ctx = (jit_context_t *)wasmoon_jit_context_ptr(context);
-    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
     if (ctx && arena != ctx_runtime(ctx)->exception_arena) {
-        if (arena) ++arena->references;
+        moonbit_incref(arena);
         exception_arena_release(ctx_runtime(ctx)->exception_arena);
         ctx_runtime(ctx)->exception_arena = arena;
     }
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_define_tag(void *owner,
-    int32_t tag, const int32_t *roots, int32_t count) {
-    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
-    if (!arena || arena->sealed || count < 0) return 0;
-    for (native_exception_layout_t *entry = arena->layouts; entry; entry = entry->next)
-        if (entry->tag == tag) return 1;
-    native_exception_layout_t *layout = wasmoon_native_calloc(1, sizeof(*layout));
-    if (!layout) return 0;
-    if (count) {
-        layout->roots = wasmoon_native_malloc((size_t)count * sizeof(int32_t));
-        if (!layout->roots) { free(layout); return 0; }
-        memcpy(layout->roots, roots, (size_t)count * sizeof(int32_t));
+MOONBIT_FFI_EXPORT void wasmoon_exception_arena_set_factory(void *context, native_exception_arena_t *(*factory)(void)) {
+    jit_context_t *ctx = (jit_context_t *)wasmoon_jit_context_ptr(context);
+    if (ctx) ctx_runtime(ctx)->exception_arena_factory = factory;
+}
+
+static WASMOON_NO_FUNCTION_SANITIZE native_exception_arena_t *exception_ensure_arena(jit_context_t *ctx) {
+    jit_runtime_state_t *runtime = ctx_runtime(ctx);
+    if (!runtime->exception_arena && runtime->exception_arena_factory) {
+        native_exception_arena_t *arena = runtime->exception_arena_factory();
+        if (wasmoon_exception_arena_is_available(arena)) runtime->exception_arena = arena;
+        else exception_arena_release(arena);
     }
-    layout->count = count;
-    layout->tag = tag;
-    layout->next = arena->layouts;
-    arena->layouts = layout;
-    return 1;
+    return runtime->exception_arena;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_insert(void *owner,
+// Managed insertions use the same synchronous request as compiled guest code.
+MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_insert(native_exception_arena_t *arena,
     GcHeap *heap, int32_t tag, const int64_t *values, int32_t count) {
-    return exception_arena_insert(*(native_exception_arena_t **)owner,
-        heap, tag, values, count);
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_tag(void *owner, int64_t ref) {
-    native_exception_t *entry = exception_arena_lookup(*(native_exception_arena_t **)owner, ref);
-    return entry ? entry->tag : -1;
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_count(void *owner, int64_t ref) {
-    native_exception_t *entry = exception_arena_lookup(*(native_exception_arena_t **)owner, ref);
-    return entry ? entry->count : -1;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_exception_arena_value(void *owner, int64_t ref, int32_t index) {
-    native_exception_t *entry = exception_arena_lookup(*(native_exception_arena_t **)owner, ref);
-    return entry && index >= 0 && index < entry->count ? entry->values[index] : 0;
+    int64_t result = exception_arena_insert(arena, heap, tag, values, count);
+    return result > 0 ? result : 0;
 }
 
 static int64_t WASMOON_GUEST_ABI exception_get_ref_impl(jit_context_t *ctx) {
     ctx = exception_activation_context(ctx);
     jit_execution_state_t *state = ctx_execution(ctx);
     if (!state->exception_ref) {
-        if (!ctx_runtime(ctx)->exception_arena)
-            ctx_runtime(ctx)->exception_arena = exception_arena_new();
-        state->exception_ref = exception_arena_insert(ctx_runtime(ctx)->exception_arena,
+        int64_t reference = exception_arena_insert(exception_ensure_arena(ctx),
             ctx_gc_heap(ctx), state->exception_tag, state->exception_values,
             state->exception_value_count);
-        if (!state->exception_ref) {
-            native_exception_arena_t *arena = ctx_runtime(ctx)->exception_arena;
-            g_trap_code = arena && arena->quota_denied
-                ? arena->quota_denied : WASMOON_TRAP_OUT_OF_MEMORY;
+        if (reference <= 0) {
+            g_trap_code = (int32_t)-reference;
             siglongjmp(g_trap_jmp_buf, 1);
         }
+        state->exception_ref = reference;
     }
     return state->exception_ref;
 }
@@ -336,12 +342,10 @@ int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_
         if (roots) roots[0] = state->exception_ref;
         return 1;
     }
-    native_exception_layout_t *layout = ctx_runtime(ctx)->exception_arena
-        ? ctx_runtime(ctx)->exception_arena->layouts : NULL;
-    while (layout && layout->tag != state->exception_tag) layout = layout->next;
+    const int32_t *layout = exception_layout(ctx_runtime(ctx)->exception_arena, state->exception_tag);
     int32_t count = 0;
     for (int32_t i = 0; i < state->exception_value_count; ++i) {
-        if (state->exception_values && (!layout || (i < layout->count && layout->roots[i]))) {
+        if (state->exception_values && (!layout || (i < Moonbit_array_length(layout) && layout[i]))) {
             if (roots) roots[count] = state->exception_values[i];
             ++count;
         }
@@ -357,11 +361,9 @@ void exception_mark_activation_roots(GcHeap *heap, jit_context_t *ctx,
         gc_heap_mark_roots(heap, &state->exception_ref, 1);
         return;
     }
-    native_exception_layout_t *layout = ctx_runtime(ctx)->exception_arena
-        ? ctx_runtime(ctx)->exception_arena->layouts : NULL;
-    while (layout && layout->tag != state->exception_tag) layout = layout->next;
+    const int32_t *layout = exception_layout(ctx_runtime(ctx)->exception_arena, state->exception_tag);
     for (int32_t i = 0; i < state->exception_value_count; ++i) {
-        if (state->exception_values && (!layout || (i < layout->count && layout->roots[i]))) {
+        if (state->exception_values && (!layout || (i < Moonbit_array_length(layout) && layout[i]))) {
             gc_heap_mark_roots(heap, &state->exception_values[i], 1);
         }
     }
@@ -812,13 +814,9 @@ int64_t exception_capture_current(jit_context_t *ctx) {
 int64_t exception_capture_payload(jit_context_t *ctx, int32_t tag, const int64_t *values, int32_t count) {
     if (tag >= 0 && tag < ctx_runtime(ctx)->callable_tag_count) tag = ctx_runtime(ctx)->callable_tags[tag];
     jit_context_t *active = exception_activation_context(ctx);
-    if (!ctx_runtime(active)->exception_arena)
-        ctx_runtime(active)->exception_arena = exception_arena_new();
-    int64_t reference = exception_arena_insert(ctx_runtime(active)->exception_arena, ctx_gc_heap(active), tag, values, count);
-    if (!reference) {
-        native_exception_arena_t *arena = ctx_runtime(active)->exception_arena;
-        g_trap_code = arena && arena->quota_denied
-            ? arena->quota_denied : WASMOON_TRAP_OUT_OF_MEMORY;
+    int64_t reference = exception_arena_insert(exception_ensure_arena(active), ctx_gc_heap(active), tag, values, count);
+    if (reference <= 0) {
+        g_trap_code = (int32_t)-reference;
         siglongjmp(g_trap_jmp_buf, 1);
     }
     return reference;
@@ -838,20 +836,3 @@ WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_throw_tag);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_begin);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_exception_try_end);
 #endif
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_is_available(void *owner) {
-    return owner && *(native_exception_arena_t **)owner != NULL;
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_bind_quotas(void *owner, wasmoon_quota_t *bytes, wasmoon_quota_t *objects) {
-    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
-    if (!arena || arena->sealed || arena->count || arena->bytes_quota || arena->objects_quota) return 0;
-    moonbit_incref(bytes); moonbit_incref(objects);
-    arena->bytes_quota = bytes; arena->objects_quota = objects;
-    return 1;
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_exception_arena_quota_denied(void *owner) {
-    native_exception_arena_t *arena = *(native_exception_arena_t **)owner;
-    return arena ? arena->quota_denied : 0;
-}

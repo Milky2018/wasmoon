@@ -1,0 +1,837 @@
+{
+  "method": "Same executable and State layout, distinct fully compiled original/fast C append functions, no omitted operations. 21 shuffled serial paired rounds after2warmups. proc_pid_rusage V4 instruction/cycle counters sampled at two guest THREAD_CPUTIME calls; clocks and iteration count checked by guest. No startup/compiler/exit cleanup in counter interval. Process counters include a fixed hostcall/syscall envelope and any other process threads; no active auxiliary workload. No simultaneous builds/tests/profilers.",
+  "binaries": {
+    "original": "56cd05b04fed5ec75d5b692cfcb3982ac365a8b390af6effd6a9d6811c3a9356",
+    "empty_fast": "56cd05b04fed5ec75d5b692cfcb3982ac365a8b390af6effd6a9d6811c3a9356"
+  },
+  "results": [
+    {
+      "workload": "snapshots",
+      "n": 300000,
+      "samples": {
+        "original": [
+          {
+            "guest_ns": 35337000,
+            "cpu_ns": 35352875,
+            "instructions": 596330689,
+            "cycles": 136018615
+          },
+          {
+            "guest_ns": 32409000,
+            "cpu_ns": 32420292,
+            "instructions": 596138150,
+            "cycles": 123521410
+          },
+          {
+            "guest_ns": 31477000,
+            "cpu_ns": 31489500,
+            "instructions": 595937103,
+            "cycles": 120445679
+          },
+          {
+            "guest_ns": 31421000,
+            "cpu_ns": 31337125,
+            "instructions": 574525433,
+            "cycles": 121882954
+          },
+          {
+            "guest_ns": 35223000,
+            "cpu_ns": 35238208,
+            "instructions": 596170141,
+            "cycles": 126562860
+          },
+          {
+            "guest_ns": 31889000,
+            "cpu_ns": 31902375,
+            "instructions": 596150051,
+            "cycles": 119578660
+          },
+          {
+            "guest_ns": 30808000,
+            "cpu_ns": 30781500,
+            "instructions": 596098031,
+            "cycles": 116980434
+          },
+          {
+            "guest_ns": 30313000,
+            "cpu_ns": 30297792,
+            "instructions": 596095835,
+            "cycles": 118317740
+          },
+          {
+            "guest_ns": 32053000,
+            "cpu_ns": 32065083,
+            "instructions": 596003246,
+            "cycles": 121808419
+          },
+          {
+            "guest_ns": 35105000,
+            "cpu_ns": 35082375,
+            "instructions": 596320218,
+            "cycles": 134030648
+          },
+          {
+            "guest_ns": 32292000,
+            "cpu_ns": 32037000,
+            "instructions": 596452477,
+            "cycles": 119226551
+          },
+          {
+            "guest_ns": 32126000,
+            "cpu_ns": 32142958,
+            "instructions": 596124609,
+            "cycles": 121234393
+          },
+          {
+            "guest_ns": 32538000,
+            "cpu_ns": 32551375,
+            "instructions": 574641530,
+            "cycles": 123724215
+          },
+          {
+            "guest_ns": 32927000,
+            "cpu_ns": 32856041,
+            "instructions": 574611273,
+            "cycles": 125186922
+          },
+          {
+            "guest_ns": 30496000,
+            "cpu_ns": 30478917,
+            "instructions": 596056021,
+            "cycles": 115106383
+          },
+          {
+            "guest_ns": 32095000,
+            "cpu_ns": 32025709,
+            "instructions": 596229634,
+            "cycles": 124536928
+          },
+          {
+            "guest_ns": 30796000,
+            "cpu_ns": 30808625,
+            "instructions": 574516818,
+            "cycles": 116722112
+          },
+          {
+            "guest_ns": 33120000,
+            "cpu_ns": 33042625,
+            "instructions": 596374688,
+            "cycles": 126909927
+          },
+          {
+            "guest_ns": 35353000,
+            "cpu_ns": 35293708,
+            "instructions": 574601540,
+            "cycles": 133518072
+          },
+          {
+            "guest_ns": 32410000,
+            "cpu_ns": 32343333,
+            "instructions": 596173709,
+            "cycles": 120702523
+          },
+          {
+            "guest_ns": 31247000,
+            "cpu_ns": 31265833,
+            "instructions": 596104375,
+            "cycles": 115909538
+          }
+        ],
+        "empty_fast": [
+          {
+            "guest_ns": 29853000,
+            "cpu_ns": 29867500,
+            "instructions": 573958416,
+            "cycles": 113471713
+          },
+          {
+            "guest_ns": 30454000,
+            "cpu_ns": 30436750,
+            "instructions": 595729223,
+            "cycles": 114740578
+          },
+          {
+            "guest_ns": 29262000,
+            "cpu_ns": 29274208,
+            "instructions": 573961310,
+            "cycles": 110831672
+          },
+          {
+            "guest_ns": 31464000,
+            "cpu_ns": 31438083,
+            "instructions": 574432001,
+            "cycles": 118187308
+          },
+          {
+            "guest_ns": 30547000,
+            "cpu_ns": 30560833,
+            "instructions": 595558079,
+            "cycles": 113461953
+          },
+          {
+            "guest_ns": 30401000,
+            "cpu_ns": 30359833,
+            "instructions": 595910794,
+            "cycles": 114355912
+          },
+          {
+            "guest_ns": 30178000,
+            "cpu_ns": 30136375,
+            "instructions": 595859188,
+            "cycles": 113381573
+          },
+          {
+            "guest_ns": 29698000,
+            "cpu_ns": 29710750,
+            "instructions": 595627622,
+            "cycles": 112595722
+          },
+          {
+            "guest_ns": 32769000,
+            "cpu_ns": 32781500,
+            "instructions": 595744621,
+            "cycles": 125422282
+          },
+          {
+            "guest_ns": 29751000,
+            "cpu_ns": 29763958,
+            "instructions": 573921206,
+            "cycles": 113220655
+          },
+          {
+            "guest_ns": 32406000,
+            "cpu_ns": 32423167,
+            "instructions": 595805776,
+            "cycles": 123108846
+          },
+          {
+            "guest_ns": 29171000,
+            "cpu_ns": 29146584,
+            "instructions": 574063008,
+            "cycles": 113111811
+          },
+          {
+            "guest_ns": 30563000,
+            "cpu_ns": 30576708,
+            "instructions": 595597677,
+            "cycles": 115379017
+          },
+          {
+            "guest_ns": 29795000,
+            "cpu_ns": 29809542,
+            "instructions": 595604701,
+            "cycles": 112345324
+          },
+          {
+            "guest_ns": 30212000,
+            "cpu_ns": 30225958,
+            "instructions": 574153414,
+            "cycles": 113263019
+          },
+          {
+            "guest_ns": 31211000,
+            "cpu_ns": 31223125,
+            "instructions": 595595876,
+            "cycles": 120002942
+          },
+          {
+            "guest_ns": 33393000,
+            "cpu_ns": 33407042,
+            "instructions": 574115435,
+            "cycles": 124819795
+          },
+          {
+            "guest_ns": 30213000,
+            "cpu_ns": 30225375,
+            "instructions": 595590169,
+            "cycles": 114141361
+          },
+          {
+            "guest_ns": 30987000,
+            "cpu_ns": 31011625,
+            "instructions": 573971215,
+            "cycles": 112896823
+          },
+          {
+            "guest_ns": 30957000,
+            "cpu_ns": 30965583,
+            "instructions": 574262079,
+            "cycles": 115366593
+          },
+          {
+            "guest_ns": 33170000,
+            "cpu_ns": 33184958,
+            "instructions": 595735053,
+            "cycles": 123062796
+          }
+        ]
+      },
+      "median": {
+        "original": {
+          "guest_ns": 32126000,
+          "cpu_ns": 32065083,
+          "instructions": 596104375,
+          "cycles": 121808419
+        },
+        "empty_fast": {
+          "guest_ns": 30454000,
+          "cpu_ns": 30436750,
+          "instructions": 595590169,
+          "cycles": 114141361
+        }
+      }
+    },
+    {
+      "workload": "snapshots-word",
+      "n": 300000,
+      "samples": {
+        "original": [
+          {
+            "guest_ns": 53371000,
+            "cpu_ns": 53328416,
+            "instructions": 1003034572,
+            "cycles": 204173628
+          },
+          {
+            "guest_ns": 54566000,
+            "cpu_ns": 54586042,
+            "instructions": 1003030088,
+            "cycles": 207595329
+          },
+          {
+            "guest_ns": 56274000,
+            "cpu_ns": 56290500,
+            "instructions": 1003117499,
+            "cycles": 207816218
+          },
+          {
+            "guest_ns": 55466000,
+            "cpu_ns": 55484166,
+            "instructions": 1002928010,
+            "cycles": 210864698
+          },
+          {
+            "guest_ns": 54114000,
+            "cpu_ns": 54131875,
+            "instructions": 1003066288,
+            "cycles": 207548615
+          },
+          {
+            "guest_ns": 53084000,
+            "cpu_ns": 53099250,
+            "instructions": 1002922093,
+            "cycles": 205372959
+          },
+          {
+            "guest_ns": 53154000,
+            "cpu_ns": 53154750,
+            "instructions": 1002975449,
+            "cycles": 207389860
+          },
+          {
+            "guest_ns": 55474000,
+            "cpu_ns": 55465791,
+            "instructions": 981665111,
+            "cycles": 212026739
+          },
+          {
+            "guest_ns": 56014000,
+            "cpu_ns": 55936000,
+            "instructions": 1003200039,
+            "cycles": 215997423
+          },
+          {
+            "guest_ns": 56966000,
+            "cpu_ns": 56983042,
+            "instructions": 1006765932,
+            "cycles": 218350651
+          },
+          {
+            "guest_ns": 55062000,
+            "cpu_ns": 54986541,
+            "instructions": 1006578664,
+            "cycles": 209422018
+          },
+          {
+            "guest_ns": 56924000,
+            "cpu_ns": 56935875,
+            "instructions": 1004031677,
+            "cycles": 217332537
+          },
+          {
+            "guest_ns": 57426000,
+            "cpu_ns": 57441333,
+            "instructions": 1002845649,
+            "cycles": 214155058
+          },
+          {
+            "guest_ns": 55010000,
+            "cpu_ns": 55027666,
+            "instructions": 981776598,
+            "cycles": 208515291
+          },
+          {
+            "guest_ns": 53419000,
+            "cpu_ns": 53433875,
+            "instructions": 1002950700,
+            "cycles": 205948438
+          },
+          {
+            "guest_ns": 54274000,
+            "cpu_ns": 54287792,
+            "instructions": 981289824,
+            "cycles": 208366761
+          },
+          {
+            "guest_ns": 57953000,
+            "cpu_ns": 57580625,
+            "instructions": 1003468274,
+            "cycles": 214809590
+          },
+          {
+            "guest_ns": 61461000,
+            "cpu_ns": 60035375,
+            "instructions": 1003446519,
+            "cycles": 213032795
+          },
+          {
+            "guest_ns": 73048000,
+            "cpu_ns": 60895333,
+            "instructions": 1003868238,
+            "cycles": 216712794
+          },
+          {
+            "guest_ns": 93925000,
+            "cpu_ns": 67642333,
+            "instructions": 982765941,
+            "cycles": 221578407
+          },
+          {
+            "guest_ns": 62811000,
+            "cpu_ns": 62381208,
+            "instructions": 1007258305,
+            "cycles": 222457990
+          }
+        ],
+        "empty_fast": [
+          {
+            "guest_ns": 51817000,
+            "cpu_ns": 51730833,
+            "instructions": 981426693,
+            "cycles": 197680804
+          },
+          {
+            "guest_ns": 51506000,
+            "cpu_ns": 51510875,
+            "instructions": 1002689607,
+            "cycles": 196846061
+          },
+          {
+            "guest_ns": 53893000,
+            "cpu_ns": 53860792,
+            "instructions": 1002933597,
+            "cycles": 204434785
+          },
+          {
+            "guest_ns": 55970000,
+            "cpu_ns": 55961667,
+            "instructions": 1002946032,
+            "cycles": 212738476
+          },
+          {
+            "guest_ns": 51217000,
+            "cpu_ns": 51140083,
+            "instructions": 1002859278,
+            "cycles": 198113135
+          },
+          {
+            "guest_ns": 53654000,
+            "cpu_ns": 53671250,
+            "instructions": 1002659848,
+            "cycles": 203272984
+          },
+          {
+            "guest_ns": 50630000,
+            "cpu_ns": 50647291,
+            "instructions": 1002900209,
+            "cycles": 191158694
+          },
+          {
+            "guest_ns": 53536000,
+            "cpu_ns": 53531625,
+            "instructions": 1002686346,
+            "cycles": 203494239
+          },
+          {
+            "guest_ns": 50450000,
+            "cpu_ns": 50467958,
+            "instructions": 1002569467,
+            "cycles": 195741213
+          },
+          {
+            "guest_ns": 55702000,
+            "cpu_ns": 55721541,
+            "instructions": 1007510698,
+            "cycles": 207954994
+          },
+          {
+            "guest_ns": 51987000,
+            "cpu_ns": 52001750,
+            "instructions": 1006473716,
+            "cycles": 196270287
+          },
+          {
+            "guest_ns": 59829000,
+            "cpu_ns": 59796500,
+            "instructions": 1002663625,
+            "cycles": 202517069
+          },
+          {
+            "guest_ns": 64408000,
+            "cpu_ns": 64395500,
+            "instructions": 1002815222,
+            "cycles": 208772712
+          },
+          {
+            "guest_ns": 53384000,
+            "cpu_ns": 53370500,
+            "instructions": 1002649505,
+            "cycles": 198141147
+          },
+          {
+            "guest_ns": 51877000,
+            "cpu_ns": 51892500,
+            "instructions": 981059242,
+            "cycles": 200529719
+          },
+          {
+            "guest_ns": 50642000,
+            "cpu_ns": 50652042,
+            "instructions": 1002655644,
+            "cycles": 192872150
+          },
+          {
+            "guest_ns": 55935000,
+            "cpu_ns": 54836583,
+            "instructions": 1003094084,
+            "cycles": 198216771
+          },
+          {
+            "guest_ns": 56107000,
+            "cpu_ns": 56041917,
+            "instructions": 1002931123,
+            "cycles": 203953199
+          },
+          {
+            "guest_ns": 55981000,
+            "cpu_ns": 55926750,
+            "instructions": 1003235163,
+            "cycles": 201958396
+          },
+          {
+            "guest_ns": 92024000,
+            "cpu_ns": 60582125,
+            "instructions": 1005510040,
+            "cycles": 208671866
+          },
+          {
+            "guest_ns": 79380000,
+            "cpu_ns": 62586000,
+            "instructions": 1007723075,
+            "cycles": 214891645
+          }
+        ]
+      },
+      "median": {
+        "original": {
+          "guest_ns": 55474000,
+          "cpu_ns": 55484166,
+          "instructions": 1003034572,
+          "cycles": 210864698
+        },
+        "empty_fast": {
+          "guest_ns": 53654000,
+          "cpu_ns": 53671250,
+          "instructions": 1002859278,
+          "cycles": 201958396
+        }
+      }
+    },
+    {
+      "workload": "rethrow",
+      "n": 2000000,
+      "samples": {
+        "original": [
+          {
+            "guest_ns": 195638000,
+            "cpu_ns": 195383667,
+            "instructions": 3674825808,
+            "cycles": 703182590
+          },
+          {
+            "guest_ns": 186443000,
+            "cpu_ns": 186354125,
+            "instructions": 3674349281,
+            "cycles": 671054994
+          },
+          {
+            "guest_ns": 193440000,
+            "cpu_ns": 193359375,
+            "instructions": 3674963640,
+            "cycles": 690406691
+          },
+          {
+            "guest_ns": 188288000,
+            "cpu_ns": 188291750,
+            "instructions": 3674299040,
+            "cycles": 700398609
+          },
+          {
+            "guest_ns": 182749000,
+            "cpu_ns": 182726625,
+            "instructions": 3674455595,
+            "cycles": 680055546
+          },
+          {
+            "guest_ns": 189619000,
+            "cpu_ns": 189645250,
+            "instructions": 3674426506,
+            "cycles": 710986876
+          },
+          {
+            "guest_ns": 176405000,
+            "cpu_ns": 176430250,
+            "instructions": 3674394089,
+            "cycles": 663467683
+          },
+          {
+            "guest_ns": 195978000,
+            "cpu_ns": 195865250,
+            "instructions": 3674482465,
+            "cycles": 731180140
+          },
+          {
+            "guest_ns": 179846000,
+            "cpu_ns": 179855167,
+            "instructions": 3674433941,
+            "cycles": 671752685
+          },
+          {
+            "guest_ns": 201344000,
+            "cpu_ns": 201320541,
+            "instructions": 3674414608,
+            "cycles": 756480363
+          },
+          {
+            "guest_ns": 184826000,
+            "cpu_ns": 184828625,
+            "instructions": 3674341261,
+            "cycles": 693546913
+          },
+          {
+            "guest_ns": 199347000,
+            "cpu_ns": 199375875,
+            "instructions": 3674349990,
+            "cycles": 745634945
+          },
+          {
+            "guest_ns": 189883000,
+            "cpu_ns": 189172709,
+            "instructions": 3674629786,
+            "cycles": 713351091
+          },
+          {
+            "guest_ns": 181383000,
+            "cpu_ns": 181325167,
+            "instructions": 3674540751,
+            "cycles": 676773451
+          },
+          {
+            "guest_ns": 200798000,
+            "cpu_ns": 200823833,
+            "instructions": 3674406721,
+            "cycles": 749622420
+          },
+          {
+            "guest_ns": 185154000,
+            "cpu_ns": 185177459,
+            "instructions": 3674267546,
+            "cycles": 693907641
+          },
+          {
+            "guest_ns": 183708000,
+            "cpu_ns": 183732834,
+            "instructions": 3674356785,
+            "cycles": 687002346
+          },
+          {
+            "guest_ns": 188302000,
+            "cpu_ns": 188326042,
+            "instructions": 3674303902,
+            "cycles": 704778614
+          },
+          {
+            "guest_ns": 190634000,
+            "cpu_ns": 189863583,
+            "instructions": 3674718933,
+            "cycles": 691364954
+          },
+          {
+            "guest_ns": 183441000,
+            "cpu_ns": 183268167,
+            "instructions": 3674534923,
+            "cycles": 680062108
+          },
+          {
+            "guest_ns": 184533000,
+            "cpu_ns": 183810917,
+            "instructions": 3675284327,
+            "cycles": 681837249
+          }
+        ],
+        "empty_fast": [
+          {
+            "guest_ns": 213661000,
+            "cpu_ns": 213468875,
+            "instructions": 3674774438,
+            "cycles": 747553398
+          },
+          {
+            "guest_ns": 201552000,
+            "cpu_ns": 201424917,
+            "instructions": 3674522341,
+            "cycles": 723798775
+          },
+          {
+            "guest_ns": 194837000,
+            "cpu_ns": 194777625,
+            "instructions": 3674448043,
+            "cycles": 691427304
+          },
+          {
+            "guest_ns": 198806000,
+            "cpu_ns": 198790083,
+            "instructions": 3674403006,
+            "cycles": 700284508
+          },
+          {
+            "guest_ns": 184954000,
+            "cpu_ns": 184903209,
+            "instructions": 3674322815,
+            "cycles": 698623983
+          },
+          {
+            "guest_ns": 186382000,
+            "cpu_ns": 186391708,
+            "instructions": 3674470307,
+            "cycles": 699458556
+          },
+          {
+            "guest_ns": 182899000,
+            "cpu_ns": 182925917,
+            "instructions": 3674327372,
+            "cycles": 682033490
+          },
+          {
+            "guest_ns": 181688000,
+            "cpu_ns": 181716750,
+            "instructions": 3674230059,
+            "cycles": 680836845
+          },
+          {
+            "guest_ns": 181840000,
+            "cpu_ns": 181758000,
+            "instructions": 3674417820,
+            "cycles": 680275762
+          },
+          {
+            "guest_ns": 182343000,
+            "cpu_ns": 182363875,
+            "instructions": 3674257050,
+            "cycles": 684892583
+          },
+          {
+            "guest_ns": 182375000,
+            "cpu_ns": 182400000,
+            "instructions": 3674308737,
+            "cycles": 681940508
+          },
+          {
+            "guest_ns": 187462000,
+            "cpu_ns": 187440208,
+            "instructions": 3674340541,
+            "cycles": 698700959
+          },
+          {
+            "guest_ns": 177857000,
+            "cpu_ns": 177862333,
+            "instructions": 3674232684,
+            "cycles": 664603218
+          },
+          {
+            "guest_ns": 190736000,
+            "cpu_ns": 190550917,
+            "instructions": 3674615856,
+            "cycles": 702430153
+          },
+          {
+            "guest_ns": 181252000,
+            "cpu_ns": 181279750,
+            "instructions": 3674346930,
+            "cycles": 676311815
+          },
+          {
+            "guest_ns": 181477000,
+            "cpu_ns": 181504000,
+            "instructions": 3674459450,
+            "cycles": 680358244
+          },
+          {
+            "guest_ns": 186608000,
+            "cpu_ns": 186632375,
+            "instructions": 3674401333,
+            "cycles": 702331276
+          },
+          {
+            "guest_ns": 178131000,
+            "cpu_ns": 178154417,
+            "instructions": 3674214476,
+            "cycles": 665651458
+          },
+          {
+            "guest_ns": 182605000,
+            "cpu_ns": 182330875,
+            "instructions": 3674309376,
+            "cycles": 675480506
+          },
+          {
+            "guest_ns": 189915000,
+            "cpu_ns": 189682542,
+            "instructions": 3674622585,
+            "cycles": 700532794
+          },
+          {
+            "guest_ns": 185654000,
+            "cpu_ns": 185534083,
+            "instructions": 3674543202,
+            "cycles": 692090890
+          }
+        ]
+      },
+      "median": {
+        "original": {
+          "guest_ns": 188288000,
+          "cpu_ns": 188291750,
+          "instructions": 3674426506,
+          "cycles": 693546913
+        },
+        "empty_fast": {
+          "guest_ns": 184954000,
+          "cpu_ns": 184903209,
+          "instructions": 3674401333,
+          "cycles": 691427304
+        }
+      }
+    }
+  ]
+}

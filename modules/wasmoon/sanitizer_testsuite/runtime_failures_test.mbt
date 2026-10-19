@@ -577,3 +577,52 @@ test "closed JIT module preparation returns errors instead of reporting no-op su
   inspect(rejected, content="true")
   module_.close()
 }
+
+///|
+test "native snapshot callback returns before allocation traps unwind guest frames" {
+  let module_ = @wat.parse(
+    (
+      #|(module (import "host" "arm" (func $arm)) (tag $e (param i32))
+      #|  (func (export "run") (result i32)
+      #|    (block $caught (result exnref)
+      #|      (try_table (catch_all_ref $caught) (call $arm) (throw $e (i32.const 42))) unreachable)
+      #|    drop i32.const 42))
+    ),
+  )
+  @validator.validate_module(module_)
+  let store = @runtime.Store::with_c_heap()
+  let linker = @runtime.Linker::with_store(store)
+  defer linker.close()
+  linker.add_host_func("host", "arm", fn(_) { [] })
+  let instance = @executor.instantiate_with_linker(linker, "guest", module_)
+  let context = build_gc_root_context(module_, instance, store)
+  defer context.close()
+  let attempt = Ref(0)
+  let cleaned = Ref(false)
+  context.jit_module.set_hostcall_callback(fn() {
+    defer {
+      cleaned.val = true
+    }
+    runtime_fail_native_allocation(attempt.val)
+    HostcallCompleted
+  })
+  defer runtime_fail_native_allocation(0)
+  for failure in [1, 2, 3, 4, 5] {
+    attempt.val = failure
+    cleaned.val = false
+    try context.call_core_func(store, instance, 1, []) catch {
+      Trap(message) => assert_true(message.contains("out of memory"))
+      error => fail(error.to_string())
+    } noraise {
+      _ => fail("snapshot allocation unexpectedly succeeded")
+    }
+    runtime_fail_native_allocation(0)
+    assert_true(cleaned.val)
+    attempt.val = 0
+    debug_inspect(
+      context.call_core_func(store, instance, 1, []),
+      content="[I32(42)]",
+    )
+    store.collect_garbage() |> ignore
+  }
+}

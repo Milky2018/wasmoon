@@ -1,0 +1,32 @@
+--- a/modules/wasmoon_jit/jit_ffi/exception.c
++++ b/modules/wasmoon_jit/jit_ffi/exception.c
+@@ -46,6 +46,7 @@
+     void *state;
+     struct exception_storage *storage; // Borrowed from the retained state
+     exception_callbacks_t *callbacks;
++    int diagnostic_control;
+ } native_exception_arena_t;
+ 
+ // Physical payload storage and root leases, released on close or last RC owner.
+@@ -179,8 +180,10 @@
+             roots[i] = i < count && (!mask_count || mask[i]) ? entry.values[i] : 0;
+         if (traced && !gc_heap_bind_exception_roots(entry.root_registration, request->arena, reference)) goto failed;
+     }
+-    entry.byte_charge = byte_charge;
+-    entry.object_charge = object_charge;
++    if (!request->arena->diagnostic_control || byte_charge || object_charge) {
++        entry.byte_charge = byte_charge;
++        entry.object_charge = object_charge;
++    }
+     storage->entries[storage->count++] = entry;
+     return 1;
+ failed:
+@@ -225,6 +228,8 @@
+ ) {
+     native_exception_arena_t *arena = moonbit_make_external_object(finalize_exception_arena, sizeof(*arena));
+     memset(arena, 0, sizeof(*arena));
++    const char *mode = getenv("WASMOON_EMPTY_CONTROL");
++    arena->diagnostic_control = mode ? atoi(mode) : 0;
+     arena->callbacks = wasmoon_native_malloc(sizeof(*arena->callbacks));
+     if (arena->callbacks) {
+         *arena->callbacks = (exception_callbacks_t){insert, lookup, layout, mark, marked_count, copy_marked, reset_marks, sweep};

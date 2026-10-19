@@ -1,0 +1,32 @@
+[
+  {
+    "variant": "before-exact",
+    "compile_flags": [
+      "/usr/bin/cc",
+      "-O2",
+      "-fwrapv",
+      "-fno-strict-aliasing",
+      "-DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC",
+      "-I/Users/zhengyu/.moon/include",
+      "-Imodules/wasmoon_jit/jit_ffi"
+    ],
+    "aggregate_alloca": true,
+    "fixed_record_memcpy_40": true,
+    "pointer_alloca_count": 1
+  },
+  {
+    "variant": "final-exact",
+    "compile_flags": [
+      "/usr/bin/cc",
+      "-O2",
+      "-fwrapv",
+      "-fno-strict-aliasing",
+      "-DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC",
+      "-I/Users/zhengyu/.moon/include",
+      "-Imodules/wasmoon_jit/jit_ffi"
+    ],
+    "aggregate_alloca": false,
+    "fixed_record_memcpy_40": false,
+    "pointer_alloca_count": 2
+  }
+]

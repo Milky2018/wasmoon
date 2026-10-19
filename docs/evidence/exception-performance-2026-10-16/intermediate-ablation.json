@@ -1,0 +1,399 @@
+{
+  "diagnostic_only": true,
+  "method": "Same executable, constructor-only flags; disabling accounting is an attribution control, never a production proposal. 11 measured shuffled serial rounds after 2 warmups; checked guest thread CPU time.",
+  "binary_sha256": "04f7b679dd4663c507572ab39d80ee825d0f3bf6eabadd63ad0ab14ff06c1845",
+  "results": [
+    {
+      "workload": "snapshots",
+      "count": 300000,
+      "samples": {
+        "all_enabled": [
+          {
+            "guest_ns": 34441000,
+            "cpu_ns": 34415125
+          },
+          {
+            "guest_ns": 35414000,
+            "cpu_ns": 35384417
+          },
+          {
+            "guest_ns": 34022000,
+            "cpu_ns": 33904292
+          },
+          {
+            "guest_ns": 37834000,
+            "cpu_ns": 37776792
+          },
+          {
+            "guest_ns": 35235000,
+            "cpu_ns": 35242958
+          },
+          {
+            "guest_ns": 34367000,
+            "cpu_ns": 34261084
+          },
+          {
+            "guest_ns": 35258000,
+            "cpu_ns": 35266167
+          },
+          {
+            "guest_ns": 38140000,
+            "cpu_ns": 38146959
+          },
+          {
+            "guest_ns": 36930000,
+            "cpu_ns": 36937291
+          },
+          {
+            "guest_ns": 30636000,
+            "cpu_ns": 30642416
+          },
+          {
+            "guest_ns": 35041000,
+            "cpu_ns": 34968375
+          }
+        ],
+        "without_layout_cache": [
+          {
+            "guest_ns": 36995000,
+            "cpu_ns": 36928917
+          },
+          {
+            "guest_ns": 37827000,
+            "cpu_ns": 37811000
+          },
+          {
+            "guest_ns": 35086000,
+            "cpu_ns": 35038458
+          },
+          {
+            "guest_ns": 39966000,
+            "cpu_ns": 39973875
+          },
+          {
+            "guest_ns": 37407000,
+            "cpu_ns": 37417583
+          },
+          {
+            "guest_ns": 36630000,
+            "cpu_ns": 36598875
+          },
+          {
+            "guest_ns": 37348000,
+            "cpu_ns": 37313833
+          },
+          {
+            "guest_ns": 35723000,
+            "cpu_ns": 35686583
+          },
+          {
+            "guest_ns": 35456000,
+            "cpu_ns": 35463375
+          },
+          {
+            "guest_ns": 34818000,
+            "cpu_ns": 34826000
+          },
+          {
+            "guest_ns": 35158000,
+            "cpu_ns": 35166000
+          }
+        ],
+        "without_lookup_hint": [
+          {
+            "guest_ns": 34018000,
+            "cpu_ns": 33937792
+          },
+          {
+            "guest_ns": 35335000,
+            "cpu_ns": 35342333
+          },
+          {
+            "guest_ns": 35581000,
+            "cpu_ns": 35500875
+          },
+          {
+            "guest_ns": 34160000,
+            "cpu_ns": 34137333
+          },
+          {
+            "guest_ns": 34498000,
+            "cpu_ns": 34504917
+          },
+          {
+            "guest_ns": 35127000,
+            "cpu_ns": 34897625
+          },
+          {
+            "guest_ns": 38399000,
+            "cpu_ns": 38395875
+          },
+          {
+            "guest_ns": 34909000,
+            "cpu_ns": 34494250
+          },
+          {
+            "guest_ns": 35139000,
+            "cpu_ns": 35148167
+          },
+          {
+            "guest_ns": 35161000,
+            "cpu_ns": 35169708
+          },
+          {
+            "guest_ns": 38299000,
+            "cpu_ns": 38272000
+          }
+        ],
+        "without_accounting_DIAGNOSTIC_ONLY": [
+          {
+            "guest_ns": 38215000,
+            "cpu_ns": 38220625
+          },
+          {
+            "guest_ns": 37656000,
+            "cpu_ns": 37596917
+          },
+          {
+            "guest_ns": 36582000,
+            "cpu_ns": 35047250
+          },
+          {
+            "guest_ns": 38320000,
+            "cpu_ns": 38320000
+          },
+          {
+            "guest_ns": 34512000,
+            "cpu_ns": 34521958
+          },
+          {
+            "guest_ns": 33882000,
+            "cpu_ns": 33889750
+          },
+          {
+            "guest_ns": 33983000,
+            "cpu_ns": 33942375
+          },
+          {
+            "guest_ns": 38648000,
+            "cpu_ns": 38478250
+          },
+          {
+            "guest_ns": 34083000,
+            "cpu_ns": 34091042
+          },
+          {
+            "guest_ns": 36667000,
+            "cpu_ns": 36673042
+          },
+          {
+            "guest_ns": 35336000,
+            "cpu_ns": 35204459
+          }
+        ]
+      },
+      "median": {
+        "all_enabled": 35242958,
+        "without_layout_cache": 36598875,
+        "without_lookup_hint": 35148167,
+        "without_accounting_DIAGNOSTIC_ONLY": 35204459
+      }
+    },
+    {
+      "workload": "rethrow",
+      "count": 2000000,
+      "samples": {
+        "all_enabled": [
+          {
+            "guest_ns": 202688000,
+            "cpu_ns": 201918500
+          },
+          {
+            "guest_ns": 179264000,
+            "cpu_ns": 179245416
+          },
+          {
+            "guest_ns": 209444000,
+            "cpu_ns": 209207667
+          },
+          {
+            "guest_ns": 192974000,
+            "cpu_ns": 192870209
+          },
+          {
+            "guest_ns": 191355000,
+            "cpu_ns": 191355458
+          },
+          {
+            "guest_ns": 196887000,
+            "cpu_ns": 196883334
+          },
+          {
+            "guest_ns": 190995000,
+            "cpu_ns": 190986125
+          },
+          {
+            "guest_ns": 194370000,
+            "cpu_ns": 194359541
+          },
+          {
+            "guest_ns": 183409000,
+            "cpu_ns": 183414042
+          },
+          {
+            "guest_ns": 220076000,
+            "cpu_ns": 210412125
+          },
+          {
+            "guest_ns": 209793000,
+            "cpu_ns": 208965875
+          }
+        ],
+        "without_layout_cache": [
+          {
+            "guest_ns": 187923000,
+            "cpu_ns": 187913167
+          },
+          {
+            "guest_ns": 194504000,
+            "cpu_ns": 193904041
+          },
+          {
+            "guest_ns": 182715000,
+            "cpu_ns": 182719334
+          },
+          {
+            "guest_ns": 187926000,
+            "cpu_ns": 187898167
+          },
+          {
+            "guest_ns": 177143000,
+            "cpu_ns": 177152333
+          },
+          {
+            "guest_ns": 182370000,
+            "cpu_ns": 182344625
+          },
+          {
+            "guest_ns": 194767000,
+            "cpu_ns": 192732166
+          },
+          {
+            "guest_ns": 185841000,
+            "cpu_ns": 185847666
+          },
+          {
+            "guest_ns": 195565000,
+            "cpu_ns": 195298125
+          },
+          {
+            "guest_ns": 242304000,
+            "cpu_ns": 222965417
+          },
+          {
+            "guest_ns": 203908000,
+            "cpu_ns": 203762083
+          }
+        ],
+        "without_lookup_hint": [
+          {
+            "guest_ns": 193897000,
+            "cpu_ns": 193434250
+          },
+          {
+            "guest_ns": 206408000,
+            "cpu_ns": 206254292
+          },
+          {
+            "guest_ns": 202169000,
+            "cpu_ns": 202050042
+          },
+          {
+            "guest_ns": 194050000,
+            "cpu_ns": 194052250
+          },
+          {
+            "guest_ns": 187332000,
+            "cpu_ns": 187325084
+          },
+          {
+            "guest_ns": 179692000,
+            "cpu_ns": 179697542
+          },
+          {
+            "guest_ns": 190865000,
+            "cpu_ns": 190839125
+          },
+          {
+            "guest_ns": 180986000,
+            "cpu_ns": 180991417
+          },
+          {
+            "guest_ns": 195140000,
+            "cpu_ns": 193715166
+          },
+          {
+            "guest_ns": 194373000,
+            "cpu_ns": 193469500
+          },
+          {
+            "guest_ns": 202550000,
+            "cpu_ns": 202126375
+          }
+        ],
+        "without_accounting_DIAGNOSTIC_ONLY": [
+          {
+            "guest_ns": 205007000,
+            "cpu_ns": 204109125
+          },
+          {
+            "guest_ns": 203597000,
+            "cpu_ns": 203132958
+          },
+          {
+            "guest_ns": 192229000,
+            "cpu_ns": 192193500
+          },
+          {
+            "guest_ns": 187046000,
+            "cpu_ns": 187027958
+          },
+          {
+            "guest_ns": 213246000,
+            "cpu_ns": 213223000
+          },
+          {
+            "guest_ns": 180787000,
+            "cpu_ns": 180792750
+          },
+          {
+            "guest_ns": 187904000,
+            "cpu_ns": 187797792
+          },
+          {
+            "guest_ns": 186054000,
+            "cpu_ns": 186056958
+          },
+          {
+            "guest_ns": 212007000,
+            "cpu_ns": 203600250
+          },
+          {
+            "guest_ns": 261185000,
+            "cpu_ns": 230271791
+          },
+          {
+            "guest_ns": 208065000,
+            "cpu_ns": 207853459
+          }
+        ]
+      },
+      "median": {
+        "all_enabled": 194359541,
+        "without_layout_cache": 187913167,
+        "without_lookup_hint": 193469500,
+        "without_accounting_DIAGNOSTIC_ONLY": 203132958
+      }
+    }
+  ]
+}

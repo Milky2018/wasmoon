@@ -1,0 +1,53 @@
+
+target/exception-perf/wasmoon-before:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+000000010040da98 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup>:
+10040da98: a9be4ff4    	stp	x20, x19, [sp, #-0x20]!
+10040da9c: a9017bfd    	stp	x29, x30, [sp, #0x10]
+10040daa0: 910043fd    	add	x29, sp, #0x10
+10040daa4: f9400000    	ldr	x0, [x0]
+10040daa8: 97fffd33    	bl	0x10040cf74 <__M0MPB3Map3getGlRP39Milky201812wasmoon__jit8jit__ffi14ExceptionEntryE>
+10040daac: b4000460    	cbz	x0, 0x10040db38 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xa0>
+10040dab0: f9400013    	ldr	x19, [x0]
+10040dab4: b85f8c08    	ldr	w8, [x0, #-0x8]!
+10040dab8: 13057d09    	asr	w9, w8, #5
+10040dabc: 7100093f    	cmp	w9, #0x2
+10040dac0: 5400018b    	b.lt	0x10040daf0 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x58>
+10040dac4: 51008108    	sub	w8, w8, #0x20
+10040dac8: b9000008    	str	w8, [x0]
+10040dacc: b40003d3    	cbz	x19, 0x10040db44 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xac>
+10040dad0: b85f8268    	ldur	w8, [x19, #-0x8]
+10040dad4: 7100811f    	cmp	w8, #0x20
+10040dad8: 5400006b    	b.lt	0x10040dae4 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x4c>
+10040dadc: 11008108    	add	w8, w8, #0x20
+10040dae0: b81f8268    	stur	w8, [x19, #-0x8]
+10040dae4: aa1303e0    	mov	x0, x19
+10040dae8: 940f140c    	bl	0x1007d2b18 <_wasmoon_exception_payload_address>
+10040daec: 14000007    	b	0x10040db08 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x70>
+10040daf0: 7100053f    	cmp	w9, #0x1
+10040daf4: 54000041    	b.ne	0x10040dafc <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x64>
+10040daf8: 940f779f    	bl	0x1007eb974 <_mi_free_size_aligned>
+10040dafc: aa1303e0    	mov	x0, x19
+10040db00: 940f1406    	bl	0x1007d2b18 <_wasmoon_exception_payload_address>
+10040db04: b40001b3    	cbz	x19, 0x10040db38 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xa0>
+10040db08: b85f8268    	ldur	w8, [x19, #-0x8]
+10040db0c: 7101011f    	cmp	w8, #0x40
+10040db10: 5400008b    	b.lt	0x10040db20 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0x88>
+10040db14: 51008108    	sub	w8, w8, #0x20
+10040db18: b81f8268    	stur	w8, [x19, #-0x8]
+10040db1c: 14000007    	b	0x10040db38 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xa0>
+10040db20: 7100811f    	cmp	w8, #0x20
+10040db24: 540000ab    	b.lt	0x10040db38 <__M0MP39Milky201812wasmoon__jit8jit__ffi14ExceptionState6lookup+0xa0>
+10040db28: aa0003f4    	mov	x20, x0
+10040db2c: aa1303e0    	mov	x0, x19
+10040db30: 940f4bcd    	bl	0x1007e0a64 <_moonbit_drop_object>
+10040db34: aa1403e0    	mov	x0, x20
+10040db38: a9417bfd    	ldp	x29, x30, [sp, #0x10]
+10040db3c: a8c24ff4    	ldp	x20, x19, [sp], #0x20
+10040db40: d65f03c0    	ret
+10040db44: d2800000    	mov	x0, #0x0                ; =0
+10040db48: a9417bfd    	ldp	x29, x30, [sp, #0x10]
+10040db4c: a8c24ff4    	ldp	x20, x19, [sp], #0x20
+10040db50: 140f13f2    	b	0x1007d2b18 <_wasmoon_exception_payload_address>

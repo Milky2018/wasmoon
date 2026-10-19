@@ -18,8 +18,10 @@ static int run_exception_failure(jit_trap_activation_t *activation, int mode) {
     return (int)activation->code;
 }
 
-MOONBIT_FFI_EXPORT int wasmoon_test_native_failure_recovery(void) {
-    jit_context_t *ctx = alloc_context_internal(0);
+extern int64_t wasmoon_jit_context_ptr(void *context);
+
+MOONBIT_FFI_EXPORT int wasmoon_test_native_failure_recovery(void *context) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
     if (!ctx) return 0;
     int passed = 1;
     for (int mode = 1; mode <= 4; ++mode) {
@@ -63,6 +65,5 @@ MOONBIT_FFI_EXPORT int wasmoon_test_native_failure_recovery(void) {
     jit_trap_activation_init(&entry, ctx);
     if (!jit_trap_activation_push(&entry)) passed = 0;
     else jit_trap_activation_pop(&entry);
-    free_context_internal(ctx);
     return passed;
 }
