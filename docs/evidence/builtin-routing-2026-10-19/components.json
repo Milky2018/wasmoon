@@ -1,0 +1,44 @@
+[
+  {
+    "suite": "stable",
+    "engine": "jit",
+    "files": 23,
+    "commands": 845,
+    "skips": 0
+  },
+  {
+    "suite": "stable",
+    "engine": "interp",
+    "files": 23,
+    "commands": 845,
+    "skips": 0
+  },
+  {
+    "suite": "async",
+    "engine": "jit",
+    "files": 24,
+    "commands": 153,
+    "skips": 0
+  },
+  {
+    "suite": "async",
+    "engine": "interp",
+    "files": 24,
+    "commands": 153,
+    "skips": 0
+  },
+  {
+    "suite": "future",
+    "engine": "jit",
+    "files": 12,
+    "commands": 387,
+    "skips": 0
+  },
+  {
+    "suite": "future",
+    "engine": "interp",
+    "files": 12,
+    "commands": 387,
+    "skips": 0
+  }
+]

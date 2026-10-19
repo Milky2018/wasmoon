@@ -1,0 +1,39 @@
+Fresh macOS ARM64 release build at aac8ce10 (same source tree as accepted c6c92283).
+Archive members:
+__.SYMDEF SORTED
+jit.o
+cleanup.o
+atomic.o
+atomic_wait.o
+trap.o
+exec_mem.o
+jit_context.o
+native_alloc.o
+quota.o
+memory_ops.o
+segment_ops.o
+gc_type_cache.o
+gc_ops.o
+gc_allocator.o
+gc_heap.o
+exception.o
+host_exit.o
+fiber.o
+guest_continuation.o
+trampoline_call_x86_64.o
+windows_context_x86_64.o
+msvc_guest_bridges.o
+stack_switch_aarch64.o
+stack_switch_x86_64.o
+dwarf.o
+atomic_test_support.o
+context_test_support.o
+failure_test_support.o
+fiber_register_probe_aarch64.o
+fiber_register_probe_x86_64.o
+fiber_test_support.o
+test_guest_bridges.o
+trap_test_support.o
+
+Linked CLI: no wasmoon_test_ symbols.
+CLI SHA256: 23bf9babb242439694bba3784599067999896ddc29d601267cfadaaf0816e24c

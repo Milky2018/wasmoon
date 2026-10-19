@@ -3,9 +3,11 @@
 ISS-635 tracks this migration. GC allocation retry and collection coordination,
 exception registries and continuation lifecycle now have MoonBit owners. Native
 test layouts live with their implementation. PR #541 supplies platform acceptance
-for the exception work (ISS-637). The newer continuation and collection changes
-have local regression evidence and still require Linux/Windows CI. This document
-describes the current boundary, not completion of the whole epic.
+for the exception work (ISS-637). PR #542 supplies Linux/Windows acceptance
+for continuation and collection changes and closes test-layout validation.
+[Receipts](evidence/runtime-migration-acceptance-2026-10-19/ci.json) distinguish
+CI from historical local measurements. This document describes the current
+boundary, not completion of the whole epic.
 
 ## State and owners
 
@@ -18,6 +20,7 @@ describes the current boundary, not completion of the whole epic.
 | Stable exception identity, tag layouts, payload registry, admission and reclamation | MoonBit `ExceptionState` with packed numeric metadata and an RC-retained native callback view | One RC storage owner holds fallible payload buffers and physical root/quota leases. C has no identity registry or reclamation decisions. Handler jump buffers remain a control-transfer primitive. |
 | Continuation identities, admission, marks, retirement and sealing | MoonBit `ContinuationState`; an RC bridge retains it | RC physical storage owns bodies, buffers and root/quota leases. Active native cancellation scopes pin bodies directly. Saved machine stacks, platform contexts and stack transfers remain native primitives. |
 | Immutable callable metadata | MoonBit registry with RC-retained native array view | Existing example of one logical owner and direct native reads without a second mutable registry. |
+| Builtin/import semantics and typed values | MoonBit Store host functions plus the shared hostcall trampoline | Native code transports typed value slots and performs ABI entry/exit; import names do not select duplicate C host implementations. ISS-640 has local validation, with new platform acceptance pending. |
 | Tests that allocate private activation layouts | `jit_ffi/testing`, compiled by `jit_ffi` | Test callers retain the `native_test_support` MoonBit facade. No other package allocates a copy of the private activation layout. |
 
 ## Synchronous GC allocation call
@@ -109,7 +112,7 @@ because construction and collection methods share private state and the closed
 native callback contract; no public registry/layout getters are introduced.
 See [collection evidence](evidence/gc-coordination-2026-10-19/README.md) for
 before/after failures, negative controls, source hashes, local gates and measured
-fast/slow paths. New platform acceptance remains pending under ISS-636.
+fast/slow paths. PR #542 completes the platform acceptance under ISS-636.
 
 ## Exception registry and native control transfer
 
@@ -233,15 +236,17 @@ header. The installed stable toolchain remains unchanged.
 See [local evidence](evidence/native-runtime-policy-2026-10-16/README.md).
 Local macOS ASan/UBSan is not Linux leak detection or Windows compiler
 acceptance. ISS-637 is closed with the accepted PR #541 CI receipts and measured
-performance investigation. ISS-638 remains in progress for platform acceptance
-of the new continuation paths. ISS-636 has completed local collection
-coordination and review, with new platform acceptance pending; ISS-639 needs
-final archive/platform acceptance reconciliation. Their historical pending notes must be checked
-against PR #541 rather than interpreted as new missing implementations.
+performance investigation. ISS-636, ISS-638 and ISS-639 are closed with
+PR #542 acceptance and a fresh
+macOS release archive/symbol check. Both Windows compilers execute the actual
+MASM bridges and native tests; no Windows release symbol audit is claimed.
+Historical pending notes in local measurement receipts describe their original
+state and are not relabeled as CI evidence.
 
 The old C prepare/finish/abort protocol and visitor storage have been removed.
-The remaining work for this slice is cross-platform acceptance and reconciliation
-of the earlier test-layout receipts. Native stack-map traversal, physical payload
+The remaining review concerns semantic type checking and continuation
+handler/forwarding decisions still interleaved with native control primitives.
+Native stack-map traversal, physical payload
 scans, fiber/context assembly, ABI entry points and raw OS/buffer operations
 remain machine/storage mechanisms. Their presence alone is not an outstanding
 instruction to translate every C line.

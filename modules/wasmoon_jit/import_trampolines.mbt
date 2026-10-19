@@ -1,38 +1,13 @@
-/// Built-in import trampolines supported by the native JIT.
+/// Import resolution for the native JIT.
 
 ///|
-/// Trampoline registry - maps (module, field) to function pointer getter.
-let import_trampolines : Map[String, Map[String, () -> Int64]] = {
-  let m : Map[String, Map[String, () -> Int64]] = Map([])
-  m["spectest"] = {
-    "print": get_spectest_print_ptr,
-    "print_i32": get_spectest_print_i32_ptr,
-    "print_i64": get_spectest_print_i64_ptr,
-    "print_f32": get_spectest_print_f32_ptr,
-    "print_f64": get_spectest_print_f64_ptr,
-    "print_i32_f32": get_spectest_print_i32_f32_ptr,
-    "print_f64_f64": get_spectest_print_f64_f64_ptr,
-    "print_char": get_spectest_print_char_ptr,
-  }
-  m
-}
-
-///|
-/// Get trampoline function pointer for an import.
-/// Returns None if the import is not supported by JIT.
+/// Builtins use linked host functions and the typed hostcall bridge. No raw
+/// native fallback is provided; callers without a Store must supply imports.
 pub fn get_import_trampoline(
-  module_name : String,
-  field_name : String,
+  _module_name : String,
+  _field_name : String,
 ) -> Int64? {
-  // All platforms share the portable WASI host implementation across engines.
-  // Returning None selects the existing hostcall bridge, not interpretation.
-  if module_name == "wasi_snapshot_preview1" {
-    return None
-  }
-  import_trampolines
-  .get(module_name)
-  .bind(fn(m) { m.get(field_name) })
-  .map(fn(f) { f() })
+  None
 }
 
 ///|
@@ -41,14 +16,9 @@ pub fn resolve_import_function_ptr(
   module_name : String,
   field_name : String,
 ) -> Int64? {
-  match external_imports.get(module_name) {
-    Some(module_imports) =>
-      match module_imports.get(field_name) {
-        Some(ptr) => Some(ptr)
-        None => get_import_trampoline(module_name, field_name)
-      }
-    None => get_import_trampoline(module_name, field_name)
-  }
+  external_imports
+  .get(module_name)
+  .bind(module_imports => module_imports.get(field_name))
 }
 
 ///|
@@ -80,7 +50,7 @@ pub fn resolve_import_function(
 }
 
 ///|
-/// Check if a module is known to JIT (has trampoline support).
+/// Recognize the standard spectest resources shared with the interpreter.
 pub fn is_jit_supported_module(module_name : String) -> Bool {
-  import_trampolines.contains(module_name)
+  module_name == "spectest"
 }

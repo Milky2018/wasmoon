@@ -973,90 +973,6 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
     return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
 }
 
-// ============ Spectest Trampolines ============
-
-static void WASMOON_GUEST_ABI spectest_print_impl(int64_t func_table, int64_t mem_base) {
-    (void)func_table;
-    (void)mem_base;
-}
-
-static void WASMOON_GUEST_ABI spectest_print_i32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
-    (void)func_table;
-    (void)mem_base;
-    (void)arg0;
-}
-
-static void WASMOON_GUEST_ABI spectest_print_i64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
-    (void)func_table;
-    (void)mem_base;
-    (void)arg0;
-}
-
-static void WASMOON_GUEST_ABI spectest_print_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
-    (void)func_table;
-    (void)mem_base;
-    (void)arg0;
-}
-
-static void WASMOON_GUEST_ABI spectest_print_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
-    (void)func_table;
-    (void)mem_base;
-    (void)arg0;
-}
-
-static void WASMOON_GUEST_ABI spectest_print_i32_f32_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
-    (void)func_table;
-    (void)mem_base;
-    (void)arg0;
-    (void)arg1;
-}
-
-static void WASMOON_GUEST_ABI spectest_print_f64_f64_impl(int64_t func_table, int64_t mem_base, int64_t arg0, int64_t arg1) {
-    (void)func_table;
-    (void)mem_base;
-    (void)arg0;
-    (void)arg1;
-}
-
-static void WASMOON_GUEST_ABI spectest_print_char_impl(int64_t func_table, int64_t mem_base, int64_t arg0) {
-    (void)func_table;
-    (void)mem_base;
-    putchar((int)arg0);
-    fflush(stdout);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_ptr(void) {
-    return WASMOON_GUEST_ADDRESS(spectest_print_impl);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i32_ptr(void) {
-    return WASMOON_GUEST_ADDRESS(spectest_print_i32_impl);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i64_ptr(void) {
-    return WASMOON_GUEST_ADDRESS(spectest_print_i64_impl);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f32_ptr(void) {
-    return WASMOON_GUEST_ADDRESS(spectest_print_f32_impl);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_ptr(void) {
-    return WASMOON_GUEST_ADDRESS(spectest_print_f64_impl);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_i32_f32_ptr(void) {
-    return WASMOON_GUEST_ADDRESS(spectest_print_i32_f32_impl);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_f64_f64_ptr(void) {
-    return WASMOON_GUEST_ADDRESS(spectest_print_f64_f64_impl);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_spectest_print_char_ptr(void) {
-    return WASMOON_GUEST_ADDRESS(spectest_print_char_impl);
-}
-
 // ============ Linear Memory Allocation FFI Exports ============
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_memory(int64_t size) {
@@ -2076,14 +1992,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling_managed(void *con
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)
-WASMOON_DEFINE_GUEST_TARGET(spectest_print_char_impl);
-WASMOON_DEFINE_GUEST_TARGET(spectest_print_f32_impl);
-WASMOON_DEFINE_GUEST_TARGET(spectest_print_f64_f64_impl);
-WASMOON_DEFINE_GUEST_TARGET(spectest_print_f64_impl);
-WASMOON_DEFINE_GUEST_TARGET(spectest_print_i32_f32_impl);
-WASMOON_DEFINE_GUEST_TARGET(spectest_print_i32_impl);
-WASMOON_DEFINE_GUEST_TARGET(spectest_print_i64_impl);
-WASMOON_DEFINE_GUEST_TARGET(spectest_print_impl);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_cancel_poll);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_gc_pop_root_scope_or_trap);
 WASMOON_DEFINE_GUEST_TARGET(wasmoon_jit_gc_push_root_scope_or_trap);

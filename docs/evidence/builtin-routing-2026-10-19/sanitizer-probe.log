@@ -1,0 +1,59 @@
+=================================================================
+==68716==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x00010faa1108 at pc 0x00010243fcf0 bp 0x00016dc1b230 sp 0x00016dc1b228
+READ of size 4 at 0x00010faa1108 thread T0
+    #0 0x00010243fcec in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test61____test__696e737472756d656e746174696f6e5f746573742e6d6274__0 instrumentation_test.mbt:22
+    #1 0x0001021f666c in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test71____test__696e737472756d656e746174696f6e5f746573742e6d6274__0_2edyncall wasmoon_sanitizer.blackbox_test.c:257880
+    #2 0x00010229cb98 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test45moonbit__test__driver__internal__catch__error __generated_driver_for_blackbox_test.mbt:432
+    #3 0x000102284314 in _M0IP29Milky201834wasmoon__sanitizer__blackbox__test41MoonBit__Test__Driver__Internal__No__ArgsP29Milky201834wasmoon__sanitizer__blackbox__test21MoonBit__Test__Driver9run__test __generated_driver_for_blackbox_test.mbt:686
+    #4 0x0001022805a8 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test44moonbit__test__driver__internal__do__execute __generated_driver_for_blackbox_test.mbt:948
+    #5 0x00010624ef94 in main __generated_driver_for_blackbox_test.mbt:790
+    #6 0x0001847e44e0 in start+0x1b4c (dyld:arm64e+0x204e0)
+
+0x00010faa1108 is located 0 bytes after 4000008-byte region [0x00010f6d0800,0x00010faa1108)
+allocated by thread T0 here:
+    #0 0x000108841164 in malloc+0x78 (libclang_rt.asan_osx_dynamic.dylib:arm64e+0x41164)
+    #1 0x000106355a94 in moonbit_make_int32_array runtime.c:1223
+    #2 0x00010243fbc8 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test61____test__696e737472756d656e746174696f6e5f746573742e6d6274__0 instrumentation_test.mbt:21
+    #3 0x0001021f666c in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test71____test__696e737472756d656e746174696f6e5f746573742e6d6274__0_2edyncall wasmoon_sanitizer.blackbox_test.c:257880
+    #4 0x00010229cb98 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test45moonbit__test__driver__internal__catch__error __generated_driver_for_blackbox_test.mbt:432
+    #5 0x000102284314 in _M0IP29Milky201834wasmoon__sanitizer__blackbox__test41MoonBit__Test__Driver__Internal__No__ArgsP29Milky201834wasmoon__sanitizer__blackbox__test21MoonBit__Test__Driver9run__test __generated_driver_for_blackbox_test.mbt:686
+    #6 0x0001022805a8 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test44moonbit__test__driver__internal__do__execute __generated_driver_for_blackbox_test.mbt:948
+    #7 0x00010624ef94 in main __generated_driver_for_blackbox_test.mbt:790
+    #8 0x0001847e44e0 in start+0x1b4c (dyld:arm64e+0x204e0)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow instrumentation_test.mbt:22 in _M0FP29Milky201834wasmoon__sanitizer__blackbox__test61____test__696e737472756d656e746174696f6e5f746573742e6d6274__0
+Shadow bytes around the buggy address:
+  0x00010faa0e80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00010faa0f00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00010faa0f80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00010faa1000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x00010faa1080: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x00010faa1100: 00[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x00010faa1180: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x00010faa1200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x00010faa1280: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x00010faa1300: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x00010faa1380: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==68716==ABORTING
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"instrumentation_test.mbt","index":0}
+----- END MOON TEST RESULT -----

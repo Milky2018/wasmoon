@@ -333,40 +333,6 @@ extern "c" fn c_native_fiber_guard_size(fiber : NativeFiberObject) -> Int64 = "w
 ///|
 extern "c" fn c_native_hostcall_suspend_event() -> Int64 = "wasmoon_native_hostcall_suspend_event"
 
-// ============ WASI Trampoline Pointers ============
-
-///|
-/// Get spectest print trampoline pointer
-extern "c" fn c_jit_get_spectest_print_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_ptr"
-
-///|
-/// Get spectest print_i32 trampoline pointer
-extern "c" fn c_jit_get_spectest_print_i32_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_i32_ptr"
-
-///|
-/// Get spectest print_i64 trampoline pointer
-extern "c" fn c_jit_get_spectest_print_i64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_i64_ptr"
-
-///|
-/// Get spectest print_f32 trampoline pointer
-extern "c" fn c_jit_get_spectest_print_f32_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f32_ptr"
-
-///|
-/// Get spectest print_f64 trampoline pointer
-extern "c" fn c_jit_get_spectest_print_f64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f64_ptr"
-
-///|
-/// Get spectest print_i32_f32 trampoline pointer
-extern "c" fn c_jit_get_spectest_print_i32_f32_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_i32_f32_ptr"
-
-///|
-/// Get spectest print_f64_f64 trampoline pointer
-extern "c" fn c_jit_get_spectest_print_f64_f64_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_f64_f64_ptr"
-
-///|
-/// Get spectest print_char trampoline pointer
-extern "c" fn c_jit_get_spectest_print_char_ptr() -> Int64 = "wasmoon_jit_get_spectest_print_char_ptr"
-
 // ============ Bulk Memory Operations ============
 
 ///|

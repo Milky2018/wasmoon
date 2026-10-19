@@ -1,0 +1,23 @@
+(lldb) target create "_build/iss639-acceptance/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe"
+Current executable set to '/Users/zhengyu/Documents/projects/wasmoon/_build/iss639-acceptance/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe' (arm64).
+(lldb) settings set -- target.run-args  "test" "docs/evidence/exception-rootcause-2026-10-16/spectest-char.wast"
+(lldb) breakpoint set -n spectest_print_char_impl
+Breakpoint 1: where = wasmoon.exe`spectest_print_char_impl, address = 0x00000001007c39d8
+(lldb) run
+Running WAST script: docs/evidence/exception-rootcause-2026-10-16/spectest-char.wast
+JIT: enabled
+==================================================
+Process 26244 launched: '/Users/zhengyu/Documents/projects/wasmoon/_build/iss639-acceptance/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe' (arm64)
+Process 26244 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: 0x00000001007c39d8 wasmoon.exe`spectest_print_char_impl
+wasmoon.exe`spectest_print_char_impl:
+->  0x1007c39d8 <+0>:  stp    x29, x30, [sp, #-0x10]!
+    0x1007c39dc <+4>:  mov    x29, sp
+    0x1007c39e0 <+8>:  mov    x0, x2
+    0x1007c39e4 <+12>: bl     0x1007f08c0               ; symbol stub for: putchar
+Target 0: (wasmoon.exe) stopped.
+(lldb) register read x0 x1 x2
+      x0 = 0x000000010123dc00
+      x1 = 0x0000000000000041
+      x2 = 0x0000000100cdc000

@@ -991,7 +991,8 @@ fn x64_emit_load_result_from_values_vec(
     Reg(preg) => x64_emit_load_slot(code, ty, preg.index, values_offset)
     ReturnArea(offset~, ..) => {
       let scratch = match hostcall_scalar_class(ty) {
-        Int => 10
+        // r10 already holds the eighth integer result. r11 is call scratch.
+        Int => 11
         Float32 | Float64 | Vector => 15
       }
       x64_emit_load_slot(code, ty, scratch, values_offset)

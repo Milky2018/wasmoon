@@ -1,0 +1,111 @@
+{
+  "revision": "aac8ce10be6096dc0b843e54613265017bbad762",
+  "source_dirty": true,
+  "delivery": false,
+  "platform": "macOS ARM64",
+  "toolchain": "moon 0.1.20261012 (748b63c 2026-10-12) ~/.moon/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) ~/.moon/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "code_sha256": {
+    "modules/wasmoon/jit/artifact_runtime_test.mbt": "849a327b927567e036a173f6bc9cbf20a37026dbf8bc5927461247af50beee05",
+    "modules/wasmoon/wast/jit/support.mbt": "cb4ea47fee3106781783f141d5ae3fb3208425e9da74d35409eefbe4c932617c",
+    "modules/wasmoon_jit/hostcall_import_trampoline.mbt": "d7678003477f5f411709ccc4aef11348e50da04666485befc36a4675300edc4e",
+    "modules/wasmoon_jit/import_trampolines.mbt": "b53fc8f389ca88dc2ac10e355cbc00bd9c4b0e2e094547dd67dc25b0d2c28018",
+    "modules/wasmoon_jit/import_trampolines_wbtest.mbt": "b347455c320e03117070a9c6a8208026cae2fc2cf7149c64b9c29165d95fb6de",
+    "modules/wasmoon_jit/jit_ffi/jit.c": "2ac4e33e64cdfbeed8b607c29fd44738373695abbda454e09f9fd154cc68291e",
+    "modules/wasmoon_jit/jit_ffi/msvc_guest_bridges.asm": "aecc84635e22a0a52f132d37463f3c450d929c227299d4906497a480e5c90b54",
+    "modules/wasmoon_jit/jit_ffi/msvc_guest_bridges.h": "2ea4be4bd7b0bf487e10b74646f1d68d79d63aa068fa8407f754ed1447237b89",
+    "modules/wasmoon_jit/native_context_wasi.mbt": "91f34f87d9ce0a5e6a9266c2c586fd779350a4d4959a57edd9580f8ec563f2e2",
+    "modules/wasmoon_jit/native_ffi.mbt": "565aa416fa8214b78ed3ee1b001887ac1158098756068fd9590401cdf85eba90",
+    "modules/wasmoon_jit/wasmoon_jit_test.mbt": "fdca81de0854674cb3082ec221581233924e8b12b50dee2db0032155d416c82b",
+    "modules/wasmoon/sanitizer_testsuite/builtin_routing_test.mbt": "ef99f5a5bb2530a96e39759da3daa969dd8a086f064160f51334bd1c0200f58c"
+  },
+  "native_tests": 2747,
+  "strict_c_stubs": 43,
+  "python_tests": 172,
+  "python_platform_skips": 54,
+  "sanitizer_tests": 184,
+  "core_files_per_engine": 258,
+  "core_assertions_per_engine": 62563,
+  "components": [
+    {
+      "suite": "stable",
+      "engine": "jit",
+      "files": 23,
+      "commands": 845,
+      "skips": 0
+    },
+    {
+      "suite": "stable",
+      "engine": "interp",
+      "files": 23,
+      "commands": 845,
+      "skips": 0
+    },
+    {
+      "suite": "async",
+      "engine": "jit",
+      "files": 24,
+      "commands": 153,
+      "skips": 0
+    },
+    {
+      "suite": "async",
+      "engine": "interp",
+      "files": 24,
+      "commands": 153,
+      "skips": 0
+    },
+    {
+      "suite": "future",
+      "engine": "jit",
+      "files": 12,
+      "commands": 387,
+      "skips": 0
+    },
+    {
+      "suite": "future",
+      "engine": "interp",
+      "files": 12,
+      "commands": 387,
+      "skips": 0
+    }
+  ],
+  "limitations": [
+    "New Linux/Windows CI acceptance pending",
+    "macOS LSan not applicable",
+    "Explicit raw import pointers retain a caller-provided guest signature contract"
+  ],
+  "sanitizer_executed_source_sha256": {
+    "modules/wasmoon/wast/jit/support.mbt": "cb4ea47fee3106781783f141d5ae3fb3208425e9da74d35409eefbe4c932617c",
+    "modules/wasmoon_jit/hostcall_import_trampoline.mbt": "d7678003477f5f411709ccc4aef11348e50da04666485befc36a4675300edc4e",
+    "modules/wasmoon_jit/import_trampolines.mbt": "b53fc8f389ca88dc2ac10e355cbc00bd9c4b0e2e094547dd67dc25b0d2c28018",
+    "modules/wasmoon_jit/import_trampolines_wbtest.mbt": "b347455c320e03117070a9c6a8208026cae2fc2cf7149c64b9c29165d95fb6de",
+    "modules/wasmoon_jit/jit_ffi/jit.c": "2ac4e33e64cdfbeed8b607c29fd44738373695abbda454e09f9fd154cc68291e",
+    "modules/wasmoon_jit/jit_ffi/msvc_guest_bridges.asm": "aecc84635e22a0a52f132d37463f3c450d929c227299d4906497a480e5c90b54",
+    "modules/wasmoon_jit/jit_ffi/msvc_guest_bridges.h": "2ea4be4bd7b0bf487e10b74646f1d68d79d63aa068fa8407f754ed1447237b89",
+    "modules/wasmoon_jit/native_context_wasi.mbt": "91f34f87d9ce0a5e6a9266c2c586fd779350a4d4959a57edd9580f8ec563f2e2",
+    "modules/wasmoon_jit/native_ffi.mbt": "565aa416fa8214b78ed3ee1b001887ac1158098756068fd9590401cdf85eba90",
+    "modules/wasmoon/sanitizer_testsuite/builtin_routing_test.mbt": "ef99f5a5bb2530a96e39759da3daa969dd8a086f064160f51334bd1c0200f58c"
+  },
+  "ordinary_test_note": "The artifact import-relocation fixture installs a real guest code pointer, preserving its direct-import branch. It is verified by ordinary native tests; its package tests are not executed by the isolated sanitizer fixture.",
+  "release_binary_sha256": "5e64760fb53abc6399a56356eb5fba2231a08c0471b417937c086dc92d6b4001",
+  "x64_probe": {
+    "execution": "macOS x86_64 via Rosetta",
+    "before_exit": 1,
+    "before_result_7": 109,
+    "expected_result_7": 107,
+    "after_exit": 0,
+    "after_all_results": [
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109
+    ],
+    "source_control": "Only r10/r11 scratch choice mutated and restored in local workspace; emitted source built with explicit moon.work"
+  }
+}
