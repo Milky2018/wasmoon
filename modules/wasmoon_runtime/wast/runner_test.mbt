@@ -79,3 +79,16 @@ test "assert_invalid requires successful decoding and a validation rejection" {
   assert_eq(result.failed, 4)
   assert_eq(result.unsupported.length(), 0)
 }
+
+///|
+test "engine continuation storage restrictions cannot satisfy assert_invalid" {
+  let source =
+    #|(assert_invalid (module
+    #|  (type $f (func)) (type $c (cont $f))
+    #|  (type $s (struct (field (ref null $c))))
+    #|  (func struct.new_default $s drop)) "engine GC restriction")
+  let result = @wast.run_script(source, stack_switching=true)
+  assert_eq(result.passed, 0)
+  assert_eq(result.failed, 1)
+  assert_eq(result.unsupported.length(), 0)
+}
