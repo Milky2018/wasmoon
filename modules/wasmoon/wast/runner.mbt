@@ -452,22 +452,6 @@ pub fn run_wast_command(
 }
 
 ///|
-fn format_action(action : @wat.WastAction) -> String {
-  match action {
-    Invoke(module_name, func_name, _args) =>
-      match module_name {
-        Some(m) => "(\{m}.\{func_name})"
-        None => "(\{func_name})"
-      }
-    Get(module_name, global_name) =>
-      match module_name {
-        Some(m) => "(get \{m}.\{global_name})"
-        None => "(get \{global_name})"
-      }
-  }
-}
-
-///|
 fn check_assert_return(
   ctx : WastContext,
   action : @wat.WastAction,

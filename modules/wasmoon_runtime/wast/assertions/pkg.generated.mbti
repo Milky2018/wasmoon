@@ -8,7 +8,11 @@ import {
 }
 
 // Values
+pub fn check_action_outcome(@parser.WastCommand, @parser.WastAction, Result[Array[@types.Value], WastRunnerError], String?) -> (String, String?)
+
 pub fn classify_runtime_failure(@runtime.RuntimeError) -> WastRunnerError
+
+pub fn format_action(@parser.WastAction) -> String
 
 pub fn module_is_invalid(@parser.WastModuleSource, bulk_memory~ : Bool, stack_switching~ : Bool) -> Bool raise WastRunnerError
 
