@@ -19,6 +19,9 @@ def instrument_tls(source: str) -> str:
         ("init_server", "struct Context *ctx, unsigned char *pfx_content", "ctx, pfx_content"),
         ("init_client", "struct Context *ctx, int32_t verify", "ctx, verify"),
         ("verify_peer_certificate", "struct Context *ctx, LPWSTR host_name", "ctx, host_name"),
+        ("add_root_certificate", "struct Context *ctx, unsigned char *der", "ctx, der"),
+        ("connect", "struct Context *ctx, LPWSTR host_name, char *in_buffer, int32_t in_buffer_offset, int32_t in_buffer_len, char *out_buffer, int32_t out_buffer_offset, int32_t out_buffer_len", "ctx, host_name, in_buffer, in_buffer_offset, in_buffer_len, out_buffer, out_buffer_offset, out_buffer_len"),
+        ("accept", "struct Context *ctx, char *in_buffer, int32_t in_buffer_offset, int32_t in_buffer_len, char *out_buffer, int32_t out_buffer_offset, int32_t out_buffer_len", "ctx, in_buffer, in_buffer_offset, in_buffer_len, out_buffer, out_buffer_offset, out_buffer_len"),
     ]:
         symbol = "moonbitlang_async_schannel_" + name
         needle = "int32_t " + symbol + "("
