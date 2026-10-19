@@ -41,7 +41,23 @@ remain concurrent, which is why the TLS fixture still requires isolation.
 dirty precommit provenance, the counterfactual mutation and the unchanged
 source used for the passing controls. These macOS controls are not Windows CI
 acceptance. Ordinary native tests pass 2786/2786; info/fmt, strict native
-checking and the package-boundary audit pass. Supported-platform CI remains
-required before closing ISS-643.
+checking and the package-boundary audit pass. These local results retain their
+original provenance.
 The local receipt predates the CI serialization follow-up and retains the
 workflow hash for the isolation change before that separate scheduling change.
+
+## Clean CI acceptance
+
+All six jobs passed for repair head `357aee62` in
+[run 39272603678](https://github.com/Milky2018/wasmoon/actions/runs/39272603678).
+The [separate CI receipt](tls-isolation-ci.json) verifies the forced-blocking
+32/32 gate on all four native platforms, both Windows inventories at
+2786 tests / 60 packages, strict C 43, HTTP contract 110, misc 692 plus 72
+script-only runs, actual MASM probes and packaged wasm embedding. Linux
+sanitizer passed 193/193 with LSan enabled and all detection controls; native
+and actual wasm each passed 258 Core files / 62563 assertions. Both artifacts
+have clean source merge `c8d5c41d` with the expected main and repair parents.
+
+ISS-643 is closed with this downstream acceptance. The final documentation
+head requires a separate six-job CI run. Upstream async #669 remains open,
+and PR #545 remains unmerged during review.

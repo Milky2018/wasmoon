@@ -1,0 +1,264 @@
+{
+  "pr": "https://github.com/Milky2018/wasmoon/pull/545",
+  "repair_head": "357aee6217b25de2d25ae51977fb5a179ecf5010",
+  "base": "8f99719a69d32e79325edf06785039f4d3fbf071",
+  "repair_commits": [
+    "c5aa9c36965ae48675227a79ed158711cf426ef1",
+    "357aee6217b25de2d25ae51977fb5a179ecf5010"
+  ],
+  "run_id": 39272603678,
+  "run_url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678",
+  "status": "all six repair implementation jobs and all additional checks passed; final documentation head requires separate CI",
+  "source_revision": "c8d5c41d508e3f1981af68192093334403c67958",
+  "source_dirty": false,
+  "source_parents": [
+    "8f99719a69d32e79325edf06785039f4d3fbf071",
+    "357aee6217b25de2d25ae51977fb5a179ecf5010"
+  ],
+  "source_commit_api": "https://api.github.com/repos/Milky2018/wasmoon/commits/c8d5c41d508e3f1981af68192093334403c67958",
+  "source_commit_receipt_sha256": "36133856a826bff9783fd0a7b5af333579ebda6aa10572aa08c531975f460ad3",
+  "jobs": [
+    {
+      "name": "Linux ASan and UBSan",
+      "id": 118128562651,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128562651"
+    },
+    {
+      "name": "Linux AMD64",
+      "id": 118128562982,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128562982"
+    },
+    {
+      "name": "Wasm interpreter",
+      "id": 118128563027,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128563027"
+    },
+    {
+      "name": "Windows AMD64 (msvc)",
+      "id": 118128563254,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128563254"
+    },
+    {
+      "name": "macOS ARM64",
+      "id": 118128563265,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128563265"
+    },
+    {
+      "name": "Windows AMD64 (clang)",
+      "id": 118128563337,
+      "conclusion": "success",
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128563337"
+    }
+  ],
+  "blocking_tls_isolation": {
+    "Linux AMD64": {
+      "job_id": 118128562982,
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128562982",
+      "step": "verify blocking TLS fixture isolation",
+      "environment": {
+        "WASMOON_TEST_BLOCKING_TLS_SETUP": "1"
+      },
+      "injected_first_setup_block_ms": 3200,
+      "tests": 32,
+      "passed": 32,
+      "failed": 0,
+      "started_at": "2026-10-19T14:55:50Z",
+      "completed_at": "2026-10-19T14:55:59Z",
+      "job_log_sha256": "5129b6a30618cddc74b930fd19f966caf9ed50f3ec4dae6560e4af776d689e5f"
+    },
+    "macOS ARM64": {
+      "job_id": 118128563265,
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128563265",
+      "step": "verify blocking TLS fixture isolation",
+      "environment": {
+        "WASMOON_TEST_BLOCKING_TLS_SETUP": "1"
+      },
+      "injected_first_setup_block_ms": 3200,
+      "tests": 32,
+      "passed": 32,
+      "failed": 0,
+      "started_at": "2026-10-19T14:57:47Z",
+      "completed_at": "2026-10-19T14:57:59Z",
+      "job_log_sha256": "61ceaeb448189a76fdf30543d16dfa79f733dfd6b6966b514a7ee52d91cd5d32"
+    },
+    "Windows AMD64 (clang)": {
+      "job_id": 118128563337,
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128563337",
+      "step": "verify blocking TLS fixture isolation",
+      "environment": {
+        "WASMOON_TEST_BLOCKING_TLS_SETUP": "1"
+      },
+      "injected_first_setup_block_ms": 3200,
+      "tests": 32,
+      "passed": 32,
+      "failed": 0,
+      "started_at": "2026-10-19T15:05:25Z",
+      "completed_at": "2026-10-19T15:05:41Z",
+      "job_log_sha256": "5100ce449db22e57af42afbdad10ea7e54d35d0e8a9ca728c8cb8ea24f44fe15"
+    },
+    "Windows AMD64 (msvc)": {
+      "job_id": 118128563254,
+      "url": "https://github.com/Milky2018/wasmoon/actions/runs/39272603678/job/118128563254",
+      "step": "verify blocking TLS fixture isolation",
+      "environment": {
+        "WASMOON_TEST_BLOCKING_TLS_SETUP": "1"
+      },
+      "injected_first_setup_block_ms": 3200,
+      "tests": 32,
+      "passed": 32,
+      "failed": 0,
+      "started_at": "2026-10-19T15:05:15Z",
+      "completed_at": "2026-10-19T15:05:30Z",
+      "job_log_sha256": "25c08edcf4a2d3e32658bd0bc3b29c78ea3028d6bf2f94a11ca38c268d11b058"
+    }
+  },
+  "sanitizer": {
+    "version": "0.17.0",
+    "source_revision": "c8d5c41d508e3f1981af68192093334403c67958",
+    "source_dirty": false,
+    "build_reuse": "fresh",
+    "binary_sha256": "63e3ef9176b0c2d3cc84fe07b808c7558a9d3d3acf4ba3b1365e1285e88e8930",
+    "tests": "passed",
+    "event_loop": "passed",
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "lsan_probe": "detected",
+    "leak_detection": true,
+    "binary": "/home/runner/work/wasmoon/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+    "instrumentation": [
+      "address",
+      "undefined"
+    ],
+    "allocator": "system",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ]
+  },
+  "sanitizer_tests": 193,
+  "ordinary_leak_or_ub_reports": 0,
+  "lsan_positive_control_leaked_bytes": 17,
+  "portable": {
+    "focused_wasm_tests": 226,
+    "embedding": {
+      "result": 43,
+      "host_observed": 21,
+      "memory": 21,
+      "budget_released": true
+    },
+    "targets": {
+      "native": {
+        "artifact_sha256": "cde041fa4895ab88bb530c354626bfe3efd137cc3da85d0065cc057ca81f4cff",
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "wasm": {
+        "artifact_sha256": "6c4d859e30f5252df77ce216ecfdf97baa98383bdad7d4f09bdd2b594a1326a3",
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      }
+    }
+  },
+  "windows": {
+    "clang": {
+      "native_tests": 2786,
+      "packages": 60,
+      "inventory_sha256": "29d0642aeabe61f299b960c8a9d91ab688c35049c764a020f5ea6034d3c7f5f5",
+      "all_expected_tests_executed": true,
+      "strict_c_stubs": 43,
+      "wasi03_http_contract": {
+        "pass": 110
+      },
+      "misc": {
+        "pass": 692,
+        "script_only": 72,
+        "fail": 0,
+        "timeout": 0,
+        "unsupported": 0,
+        "deferred": 0,
+        "harness_error": 0
+      },
+      "native_probes": 53,
+      "existing_privilege_skips": 3,
+      "actual_masm_argument_probe": "passed",
+      "packaged_wasm_embedding": "passed",
+      "forced_blocking_http_tests": 32
+    },
+    "msvc": {
+      "native_tests": 2786,
+      "packages": 60,
+      "inventory_sha256": "6ed794cc2ed2277fee946faaf53620a4a8b54cd2e52abad9f6bf83eb92b6fb6c",
+      "all_expected_tests_executed": true,
+      "strict_c_stubs": 43,
+      "wasi03_http_contract": {
+        "pass": 110
+      },
+      "misc": {
+        "pass": 692,
+        "script_only": 72,
+        "fail": 0,
+        "timeout": 0,
+        "unsupported": 0,
+        "deferred": 0,
+        "harness_error": 0
+      },
+      "native_probes": 53,
+      "existing_privilege_skips": 3,
+      "actual_masm_argument_probe": "passed",
+      "packaged_wasm_embedding": "passed",
+      "forced_blocking_http_tests": 32
+    }
+  },
+  "upstream": {
+    "issue": "https://github.com/moonbitlang/async/issues/669",
+    "state_at_acceptance": "open",
+    "scope": "Downstream fixture isolation only; synchronous upstream PFX import is unchanged."
+  },
+  "historical_receipts_preserved": [
+    "ci.json",
+    "tls-isolation-local.json",
+    "http-timing-diagnosis.json"
+  ],
+  "raw_receipts": "ignored target/pr545-ci/357aee62-*",
+  "receipts": [
+    {
+      "file": "357aee62-sanitizer/summary.json",
+      "sha256": "294a3de18c3b5e968efdad93a5d8f756bd12178039d80cbf6238063fe40b29f6"
+    },
+    {
+      "file": "357aee62-sanitizer/tests.log",
+      "sha256": "a1e02be370c179d3a18060dca39aed6e976325ece308e5fe1b59955451755e98"
+    },
+    {
+      "file": "357aee62-sanitizer/probe.log",
+      "sha256": "7a524622eba4de4eefbccd9a0e377ad30631a695c0c0d2313a6df74f6ef0db78"
+    },
+    {
+      "file": "357aee62-sanitizer/native-probe.log",
+      "sha256": "a268558b80f1eb0263a0555caa155b3c9a69cece6681a395702b811703a8bcec"
+    },
+    {
+      "file": "357aee62-sanitizer/lsan-probe.log",
+      "sha256": "21d4df6a39959507679ca8e07f9b1513d11e1fb581427b90bddc0fae1a95e08d"
+    },
+    {
+      "file": "357aee62-wasm/portable-core-wast.json",
+      "sha256": "5dea3a41d0aa515ba863062b3e366f7c6fba9bc6bf61bb0a7837c559c4563855"
+    },
+    {
+      "file": "357aee62-wasm-job.log",
+      "sha256": "0349fd03525c3317ec234e849420f29bb130d7c92fae612f7decab288bb1fdd5"
+    }
+  ]
+}
