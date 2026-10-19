@@ -38,7 +38,9 @@ def main():
     fixtures = ROOT / "modules" / "wasmoon" / "sanitizer_testsuite"
     for source in fixtures.glob("*_test.mbt"):
         shutil.copy2(source, PACKAGE / source.name)
-    shutil.copy2(ROOT / "modules/wasmoon_runtime/runtime/portable_storage_test.mbt", PACKAGE)
+    for name in ("portable_storage_test.mbt", "resource_rollback_test.mbt",
+                 "table_lifetime_test.mbt", "heap_lifetime_test.mbt"):
+        shutil.copy2(ROOT / "modules/wasmoon_runtime/runtime" / name, PACKAGE)
     bounds = ROOT / "modules/wasmoon_runtime/native/host_io/wasi/bounds_test.mbt"
     (PACKAGE / "native_bounds_test.mbt").write_text(
         bounds.read_text().replace("@wasi.", "@native_host."))
