@@ -473,7 +473,11 @@ static int32_t WASMOON_GUEST_ABI continuation_resume(jit_context_t *ctx, int64_t
             if (code) continuation_trap(code);
             return -1;
         }
-        if (status != WASMOON_FIBER_ADVANCE_SUSPENDED) continuation_trap(8);
+        if (status != WASMOON_FIBER_ADVANCE_SUSPENDED) {
+            close_resumer(body, ownership);
+            continuation_trap(status == WASMOON_FIBER_ADVANCE_RESOURCE_FAILURE
+                ? WASMOON_TRAP_OUT_OF_MEMORY : WASMOON_TRAP_BACKEND);
+        }
         int64_t event = native_fiber_event_c(body->fiber);
         if (event != CONT_EVENT) {
             resume_value = wasmoon_native_fiber_yield(event);

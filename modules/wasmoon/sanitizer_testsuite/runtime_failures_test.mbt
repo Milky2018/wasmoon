@@ -40,7 +40,10 @@ test "failed binding of a suspended continuation releases roots and pending budg
     failure.val = attempt
     try context.call_core_func(store, instance, 3, []) catch {
       Trap(message) => {
-        assert_true(message.contains("out of memory"))
+        assert_true(
+          message.contains("out of memory"),
+          msg="allocation failure \{attempt}: \{message}",
+        )
         denied += 1
       }
       error => fail(error.to_string())
@@ -92,7 +95,10 @@ test "continuation scope allocation failure returns its consumed body budget" {
     failure.val = attempt
     try context.call_core_func(store, instance, 3, []) catch {
       Trap(message) => {
-        assert_true(message.contains("out of memory"))
+        assert_true(
+          message.contains("out of memory"),
+          msg="allocation failure \{attempt}: \{message}",
+        )
         denied += 1
       }
       error => fail(error.to_string())
