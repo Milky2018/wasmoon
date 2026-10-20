@@ -6,6 +6,8 @@ struct Table {
   mut native_table : @jit_ffi.NativeTableHandle?
   mut binding : ResourceBinding?
   mut closed : Bool
+  mut revision : Int64
+  mut native_sync : NativeTableSync?
   elem_type : @types.ValueType
   elements : Array[@types.Value]
   mut size : Int32
@@ -81,6 +83,8 @@ fn Table::allocate(
     closed: false,
     reservation,
     native_table: None,
+    revision: 0L,
+    native_sync: None,
   }
 }
 
@@ -152,6 +156,7 @@ pub fn Table::set_at(
   self.check_range(idx, 1L)
   guard value_fits_kind(value, self.elem_type) else { raise TypeMismatch }
   self.elements[idx.to_int()] = value
+  self.mark_modified()
 }
 
 ///|
@@ -210,6 +215,9 @@ pub fn Table::grow64(
     self.elements.push(init)
   }
   self.size = new_size.to_int()
+  if delta != 0L {
+    self.mark_modified()
+  }
   old_size.reinterpret_as_int64()
 }
 
@@ -241,6 +249,9 @@ pub fn Table::fill_at(
   let dest = dest.to_int()
   for i in 0..<n.to_int() {
     self.elements[dest + i] = value
+  }
+  if n != 0L {
+    self.mark_modified()
   }
 }
 
@@ -283,6 +294,9 @@ pub fn Table::copy_from_at(
     for i = n - 1; i >= 0; i = i - 1 {
       self.elements[dest + i] = src_table.elements[src + i]
     }
+  }
+  if n != 0 {
+    self.mark_modified()
   }
 }
 
@@ -328,5 +342,102 @@ pub fn Table::close(self : Table) -> Unit {
   self.elements.shrink_to_fit()
   self.size = 0
   self.native_table = None
+  self.native_sync = None
   self.reservation = None
+}
+
+///|
+/// A checkpoint belongs to the shared runtime table, not to a parked call.
+#cfg(target="native")
+priv struct NativeTableSync {
+  table : @jit_ffi.NativeTableHandle
+  runtime_revision : Int64
+  native_revision : Int64
+  encoder : Ref[Bool]?
+  callable_revision : Int64
+} derive(Debug)
+
+///|
+/// A different encoder can use different module-local fallback references.
+#cfg(target="native")
+pub fn Table::native_upload_needed(
+  self : Table,
+  table : @jit_ffi.NativeTableHandle,
+  encoder : Ref[Bool],
+  callable_revision : Int64,
+) -> Bool {
+  match self.native_sync {
+    Some(sync) =>
+      !(physical_equal(sync.table, table) &&
+      sync.runtime_revision == self.revision &&
+      sync.encoder is Some(previous) &&
+      physical_equal(previous, encoder) &&
+      sync.callable_revision == callable_revision)
+    None => true
+  }
+}
+
+///|
+#cfg(target="native")
+pub fn Table::native_upload_complete(
+  self : Table,
+  table : @jit_ffi.NativeTableHandle,
+  encoder : Ref[Bool],
+  callable_revision : Int64,
+) -> Unit {
+  self.native_sync = Some({
+    table,
+    runtime_revision: self.revision,
+    native_revision: table.revision(),
+    encoder: Some(encoder),
+    callable_revision,
+  })
+}
+
+///|
+#cfg(target="native")
+pub fn Table::native_download_needed(
+  self : Table,
+  table : @jit_ffi.NativeTableHandle,
+) -> Bool {
+  match self.native_sync {
+    Some(sync) =>
+      !physical_equal(sync.table, table) ||
+      sync.native_revision != table.revision()
+    None => true
+  }
+}
+
+///|
+/// Copyback acknowledges both revisions without invalidating the last encoding.
+#cfg(target="native")
+pub fn Table::native_download_complete(
+  self : Table,
+  table : @jit_ffi.NativeTableHandle,
+) -> Unit {
+  let previous = self.native_sync
+  self.native_sync = Some({
+    table,
+    runtime_revision: self.revision,
+    native_revision: table.revision(),
+    encoder: match previous {
+      Some(sync) if physical_equal(sync.table, table) => sync.encoder
+      _ => None
+    },
+    callable_revision: previous
+    .map(sync => sync.callable_revision)
+    .unwrap_or(-1L),
+  })
+}
+
+///|
+#cfg(target="native")
+fn Table::mark_modified(self : Table) -> Unit {
+  self.revision += 1L
+}
+
+///|
+#cfg(target="wasm")
+fn Table::mark_modified(_self : Table) -> Unit {
+
 }

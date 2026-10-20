@@ -500,6 +500,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_
         func_idx >= 0 && func_idx < ctx_func_count(ctx)) {
         ctx_table0_base(ctx)[table_idx * 2] = ctx_func_table(ctx)[func_idx];
         ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+        table_mark_mutated(ctx, 0);
     }
 }
 
@@ -615,6 +616,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(wasmoon_table_t *table, int
     if (index < 0 || (size_t)index >= table->size) return;
     table->entries[(size_t)index * 2] = (void *)(intptr_t)value;
     table->entries[(size_t)index * 2 + 1] = (void *)(intptr_t)type;
+    table->revision++;
 }
 
 // ============ Table Operations ============
@@ -2050,4 +2052,8 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_exec_bind_reservation(void *object, wasmoon_r
     moonbit_incref(reservation);
     code->reservation = reservation;
     return 1;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_table_revision(wasmoon_table_t *table) {
+    return table ? (int64_t)table->revision : 0;
 }

@@ -115,6 +115,7 @@ pub fn NativeTableHandle::bind_reservation(Self, Reservation) -> Bool
 pub fn NativeTableHandle::grow(Self, Int64) -> Int64
 pub fn NativeTableHandle::is_null(Self) -> Bool
 pub fn NativeTableHandle::null() -> Self
+pub fn NativeTableHandle::revision(Self) -> Int64
 pub fn NativeTableHandle::size(Self) -> Int32
 pub fn NativeTableHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeTableHandle

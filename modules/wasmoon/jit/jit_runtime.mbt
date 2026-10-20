@@ -83,6 +83,7 @@ struct JITModule {
   // Keep the transactionally installed artifact alive.
   mut installed_code : @wasmoon_jit.InstalledCode?
   mut cancellation_safepoints : Bool
+  table_encoding_identity : Ref[Bool]
 }
 
 ///|
@@ -100,6 +101,7 @@ pub fn JITModule::JITModule() -> JITModule {
     owned_trampolines: [],
     installed_code: None,
     cancellation_safepoints: false,
+    table_encoding_identity: Ref(false),
   }
 }
 
@@ -1544,4 +1546,10 @@ pub fn JITModule::set_execution_scope(
     }
   }
   true
+}
+
+///|
+/// Stable identity of this module's function-reference encoding environment.
+pub fn JITModule::table_encoding_identity(self : JITModule) -> Ref[Bool] {
+  self.table_encoding_identity
 }

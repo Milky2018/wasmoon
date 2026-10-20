@@ -450,6 +450,7 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, i
                                              int64_t slots_ptr, int32_t len);
 
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value);
+int64_t table_type_for_value(jit_context_t *ctx, int64_t value);
 
 
 void exception_arena_release(struct native_exception_arena *arena);

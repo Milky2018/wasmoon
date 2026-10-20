@@ -9,6 +9,7 @@ import {
   "Milky2018/wasmoon_runtime/native/execution",
   "Milky2018/wasmoon_runtime/native/ffi",
   "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -720,6 +721,7 @@ pub fn[T, E : Error] Store::in_execution_scope(Self, ExecutionScope?, () -> T ra
 pub fn Store::is_closed(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int32) -> Bool
 pub fn Store::jit_funcref_entries(Self) -> Array[StoreFuncrefEntry]
+pub fn Store::jit_funcref_revision(Self) -> Int64
 pub fn Store::leave_interpreter_boundary(Self) -> Unit
 pub fn Store::lookup_jit_funcref_ptr(Self, Int32) -> Int64?
 pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int32?
@@ -820,6 +822,10 @@ pub fn Table::get_limits64(Self) -> (Int64, Int64?)
 pub fn Table::grow(Self, Int32, @types.Value) -> Int32
 pub fn Table::grow64(Self, Int64, @types.Value) -> Int64 raise RuntimeError
 pub fn Table::is_table64(Self) -> Bool
+pub fn Table::native_download_complete(Self, @ffi.NativeTableHandle) -> Unit
+pub fn Table::native_download_needed(Self, @ffi.NativeTableHandle) -> Bool
+pub fn Table::native_upload_complete(Self, @ffi.NativeTableHandle, @ref.Ref[Bool], Int64) -> Unit
+pub fn Table::native_upload_needed(Self, @ffi.NativeTableHandle, @ref.Ref[Bool], Int64) -> Bool
 pub fn Table::set(Self, Int32, @types.Value) -> Unit raise RuntimeError
 pub fn Table::set_at(Self, Int64, @types.Value) -> Unit raise RuntimeError
 pub fn Table::size(Self) -> Int32

@@ -125,4 +125,11 @@ _Static_assert(offsetof(jit_context_owner_t, abi) == sizeof(jit_runtime_state_t)
 
 #include "context_fields.h"
 
+static inline void table_mark_mutated(jit_context_t *ctx, int index) {
+    if (ctx && index >= 0 && index < ctx_table_count(ctx) &&
+        ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[index].owner) {
+        ctx_runtime(ctx)->table_bindings[index].owner->revision++;
+    }
+}
+
 #endif

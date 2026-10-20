@@ -321,6 +321,45 @@ static void WASMOON_GUEST_ABI data_drop_impl(
 
 // ============ Table Segment Libcalls ============
 
+// Table entries use Store callable identities, including growth initializers.
+int64_t table_type_for_value(jit_context_t *ctx, int64_t val) {
+    if (!ctx) return -1;
+    // Infer the type index for funcref values so call_indirect can type-check.
+    // For non-funcref values, keep type_idx = -1.
+    int64_t type_idx = callable_type_for_value(ctx, val);
+    if (
+        type_idx < 0 &&
+        val != 0 &&
+        (val & FUNCREF_TAG) != 0 &&
+        ctx_runtime(ctx)->gc_func_table &&
+        ctx_runtime(ctx)->gc_func_type_indices
+    ) {
+        void* raw_ptr = (void*)(uintptr_t)(val & ~FUNCREF_TAG);
+        for (int i = 0; i < ctx_runtime(ctx)->gc_func_table_size; i++) {
+            if (ctx_runtime(ctx)->gc_func_table[i] == (int64_t)(uintptr_t)raw_ptr) {
+                int32_t t = ctx_runtime(ctx)->gc_func_type_indices[i];
+                if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
+                    t = ctx_runtime(ctx)->gc_canonical_indices[t];
+                }
+                type_idx = (int64_t)t;
+                break;
+            }
+        }
+    } else if (type_idx < 0 && val < 0 && ctx_runtime(ctx)->gc_func_type_indices) {
+        // IR-encoded funcref index: -(func_idx + 1)
+        int32_t func_idx = (int32_t)(-(val + 1));
+        if (func_idx >= 0 && func_idx < ctx_runtime(ctx)->gc_num_funcs) {
+            int32_t t = ctx_runtime(ctx)->gc_func_type_indices[func_idx];
+            if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
+                t = ctx_runtime(ctx)->gc_canonical_indices[t];
+            }
+            type_idx = (int64_t)t;
+        }
+    }
+
+    return type_idx;
+}
+
 // table.fill - Fill table region with a value
 static void WASMOON_GUEST_ABI table_fill_impl(
     jit_context_t *ctx,
@@ -371,38 +410,7 @@ static void WASMOON_GUEST_ABI table_fill_impl(
         return;
     }
 
-    // Infer the type index for funcref values so call_indirect can type-check.
-    // For non-funcref values, keep type_idx = -1.
-    int64_t type_idx = callable_type_for_value(ctx, val);
-    if (
-        type_idx < 0 &&
-        val != 0 &&
-        (val & FUNCREF_TAG) != 0 &&
-        ctx_runtime(ctx)->gc_func_table &&
-        ctx_runtime(ctx)->gc_func_type_indices
-    ) {
-        void* raw_ptr = (void*)(uintptr_t)(val & ~FUNCREF_TAG);
-        for (int i = 0; i < ctx_runtime(ctx)->gc_func_table_size; i++) {
-            if (ctx_runtime(ctx)->gc_func_table[i] == (int64_t)(uintptr_t)raw_ptr) {
-                int32_t t = ctx_runtime(ctx)->gc_func_type_indices[i];
-                if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
-                    t = ctx_runtime(ctx)->gc_canonical_indices[t];
-                }
-                type_idx = (int64_t)t;
-                break;
-            }
-        }
-    } else if (type_idx < 0 && val < 0 && ctx_runtime(ctx)->gc_func_type_indices) {
-        // IR-encoded funcref index: -(func_idx + 1)
-        int32_t func_idx = (int32_t)(-(val + 1));
-        if (func_idx >= 0 && func_idx < ctx_runtime(ctx)->gc_num_funcs) {
-            int32_t t = ctx_runtime(ctx)->gc_func_type_indices[func_idx];
-            if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
-                t = ctx_runtime(ctx)->gc_canonical_indices[t];
-            }
-            type_idx = (int64_t)t;
-        }
-    }
+    int64_t type_idx = table_type_for_value(ctx, val);
 
     // Fill (table entries are 2 slots: func_ptr and type_idx)
     for (int64_t i = 0; i < len; i++) {
@@ -410,6 +418,8 @@ static void WASMOON_GUEST_ABI table_fill_impl(
         table[idx] = (void *)(uintptr_t)val;               // value bits
         table[idx + 1] = (void *)(intptr_t)type_idx;       // type idx for funcref, -1 otherwise
     }
+
+    if (len > 0) table_mark_mutated(ctx, table_idx);
 
     if (table_debug_enabled() && table_idx == 0) {
         int64_t max_dump = table_size < 6 ? (int64_t)table_size : 6;
@@ -490,6 +500,7 @@ static void WASMOON_GUEST_ABI table_copy_impl(
     // Each entry is 2 slots
     if (len > 0) {
         memmove(dst_table + dst * 2, src_table + src * 2, (size_t)len * 2 * sizeof(void *));
+        table_mark_mutated(ctx, dst_table_idx);
     }
 }
 
@@ -562,6 +573,7 @@ static void WASMOON_GUEST_ABI table_init_impl(
         table[tbl_off] = (void *)(uintptr_t)elem_val;
         table[tbl_off + 1] = (void *)(intptr_t)elem_type;
     }
+    if (len > 0) table_mark_mutated(ctx, table_idx);
 }
 
 // elem.drop - Mark element segment as dropped

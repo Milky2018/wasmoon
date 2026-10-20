@@ -8,10 +8,16 @@ priv struct RegisteredTypeGraph {
 } derive(Debug)
 
 ///|
+priv struct RegisteredInstanceTypes {
+  instance : ModuleInstance
+  graph : RegisteredTypeGraph
+} derive(Debug)
+
+///|
 priv struct StoreTypeRegistry {
   representatives : Array[(RegisteredTypeGraph, Int32)]
   group_buckets : Map[Int64, Array[(RegisteredTypeGraph, Array[Int32])]]
-  mappings : Map[Int32, RegisteredTypeGraph]
+  mappings : Map[Int32, RegisteredInstanceTypes]
   mut initialization_graph : RegisteredTypeGraph?
   mut next_graph_id : Int64
   parents : Array[Int32]
@@ -42,11 +48,19 @@ fn StoreTypeRegistry::register(
   self : StoreTypeRegistry,
   instance : ModuleInstance,
 ) -> Array[Int32] {
-  self.register_graph(
-    instance.types,
-    instance.type_rec_groups,
-    instance.store_idx,
-  )
+  if self.mappings.get(instance.store_idx) is Some(cached) &&
+    physical_equal(cached.instance, instance) {
+    return cached.graph.mapping
+  }
+  // These snapshots are immutable. Compare them only when a new live instance
+  // adopts the initialization graph, never on an already registered lookup.
+  if self.initialization_graph is Some(graph) &&
+    graph.types == instance.types &&
+    graph.groups == instance.type_rec_groups {
+    self.mappings[instance.store_idx] = { instance, graph, }
+    return graph.mapping
+  }
+  self.register_graph(instance.types, instance.type_rec_groups, Some(instance)).mapping
 }
 
 ///|
@@ -54,26 +68,8 @@ fn StoreTypeRegistry::register_graph(
   self : StoreTypeRegistry,
   types : ArrayView[@types.SubType],
   groups : ArrayView[Int32],
-  store_index : Int32,
-) -> Array[Int32] {
-  // The negative index is private to the current set_module_types scope.
-  // Changing that scope invalidates this graph; rollback restores the old one.
-  if store_index < 0 && self.initialization_graph is Some(graph) {
-    return graph.mapping
-  }
-  if store_index >= 0 &&
-    self.mappings.get(store_index) is Some(graph) &&
-    graph.types == types &&
-    graph.groups == groups {
-    return graph.mapping
-  }
-  if store_index >= 0 &&
-    self.initialization_graph is Some(graph) &&
-    graph.types == types &&
-    graph.groups == groups {
-    self.mappings.set(store_index, graph)
-    return graph.mapping
-  }
+  instance : ModuleInstance?,
+) -> RegisteredTypeGraph {
   let mapping = Array::make(types.length(), -1)
   let graph = { id: self.next_graph_id, types, groups, mapping, }
   self.next_graph_id += 1L
@@ -127,10 +123,11 @@ fn StoreTypeRegistry::register_graph(
       }
     },
   )
-  if store_index >= 0 {
-    self.mappings.set(store_index, graph)
-  } else {
-    self.initialization_graph = Some(graph)
+  // Install ownership before publication: a refresh callback may reenter,
+  // replace the initialization scope, roll back, or close the Store.
+  match instance {
+    Some(instance) => self.mappings[instance.store_idx] = { instance, graph, }
+    None => self.initialization_graph = Some(graph)
   }
   for identity in first_new..<self.representatives.length() {
     let (_, index) = self.representatives[identity]
@@ -141,7 +138,7 @@ fn StoreTypeRegistry::register_graph(
   if self.representatives.length() > first_new {
     self.publish()
   }
-  mapping
+  graph
 }
 
 ///|
@@ -357,9 +354,13 @@ pub fn Store::func_type_is_subtype(
 
 ///|
 fn Store::module_type_indices(self : Store) -> Array[Int32] {
-  self.native_types.register_graph(
+  if self.native_types.initialization_graph is Some(graph) {
+    return graph.mapping
+  }
+  let graph = self.native_types.register_graph(
     self.module_types,
     self.module_rec_groups,
-    -1,
+    None,
   )
+  graph.mapping
 }

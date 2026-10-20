@@ -1,0 +1,1550 @@
+{
+  "scope": "Local dirty working-tree validation only; no CI or cross-platform acceptance claimed.",
+  "base_revision": "c61b68303685930a0180f9bc67a3eda32aa8aa29",
+  "base_tree_matches_merged_main": "38b5c1cfbd3f78596e6dfe694962c845382f835a",
+  "source_dirty": true,
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "moon": "moon 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moon\nmoonc v0.10.16+b1a0e846e (2026-10-16) ~/.moon/bin/moonc\nmoonrun 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+  "source_sha256": {
+    "modules/wasmoon/jit/jit_runtime.mbt": "6bb257ef5f6f4fd031c1d8b8164562bfca08909ac051d0276fcb1da795264e27",
+    "modules/wasmoon/jit/pkg.generated.mbti": "1c6c1357e636d3ae518e558b20d8dac4c7aa321bb8e9262171ec8acb77e1f3ac",
+    "modules/wasmoon/sanitizer_testsuite/jit_resumable_lifecycle_test.mbt": "b47cca022f1945a8280af176f9437648c98c7be905dd93eb817a262f920091e4",
+    "modules/wasmoon/sanitizer_testsuite/native_gc_roots_test.mbt": "2067d5189f29b92c9cdabd9da0934f85b43ff88a84898ca8c136f0c1003e4b47",
+    "modules/wasmoon/testsuite/cooperative_table_sync_test.mbt": "a0dc001cb13f832cae0bc10ebddb9f8415cbdfaa1b4b06552563c0ce2731b893",
+    "modules/wasmoon/wast/jit/registration_wbtest.mbt": "ae069102c45ccd418165b2fbb86a57df80c0fd056f7b5258c4e536bc2886240e",
+    "modules/wasmoon/wast/jit/support.mbt": "b430050849993a2e8c7db85e8517162c1fcb2064231fac000379ca45213d170e",
+    "modules/wasmoon_runtime/executor/gc_type_registration_test.mbt": "a12e9ce78d2c0ff9b11ebf8fcd300e4f58fd488d3c37ae0b4a8c14f81690752c",
+    "modules/wasmoon_runtime/native/ffi/jit.c": "529ec7317e0b93e2e86ccdb582ea8364c8f07c34d40487db8a6c99f3119d4b60",
+    "modules/wasmoon_runtime/native/ffi/jit_context.c": "25aede22dc46d136e9f10b87c6b572ac99ee7d810a4345c25f32aa496bb38121",
+    "modules/wasmoon_runtime/native/ffi/jit_context.h": "e5900da7bcdfc21e2204d96a26bf68fef5d4c23445b3e98874a8f1ee3aeda92f",
+    "modules/wasmoon_runtime/native/ffi/jit_ffi.h": "15f727a70af18968cfd764c7e3021494616b25ba4e91787ac4f440b1681c8700",
+    "modules/wasmoon_runtime/native/ffi/jit_internal.h": "9e1aa021040783cc05b88c3e0775496fabd47e0916933e874b592ba9b790e7ba",
+    "modules/wasmoon_runtime/native/ffi/memory_ops.c": "92652a022e0ef448b4aa4d1ce1bc619365d58e6020a40d1d7aec2c31a370f6e1",
+    "modules/wasmoon_runtime/native/ffi/pkg.generated.mbti": "055f70a38cec1bb84e4a9794ef3d9986b1865fdcf147d74eceef32789c458117",
+    "modules/wasmoon_runtime/native/ffi/segment_ops.c": "4e4fbc3615f7608eeadc7c92326b61f6826ba4d7f7260b353fdde9823a27e348",
+    "modules/wasmoon_runtime/native/ffi/table.mbt": "07f93847cccf7c5329876eb1dccd9a6216dd0753e91769efc560ecf620e3dce5",
+    "modules/wasmoon_runtime/runtime/funcref_registry.mbt": "2f34d2d061d367845541b8b6bb3ba5faae556461b70beb2d38ad20acae406c21",
+    "modules/wasmoon_runtime/runtime/pkg.generated.mbti": "2aa9d446b3491baa5fb27e2c3ea92ede0e3f3e3b4c7fe40fde363370dcacc932",
+    "modules/wasmoon_runtime/runtime/table.mbt": "c1541d39baefe56bc4c69a4ed0bdaf9fb51a21493a250feea37cd1bb571a8954",
+    "modules/wasmoon_runtime/runtime/type_registry.mbt": "45c8b48a51356cce6bf589065b744a4fecdb863140e8d66d693dbabfd622365c",
+    "modules/wasmoon_runtime/runtime/type_registry_wbtest.mbt": "25dcbb11f255201acd1adaae9d7bdae7daedf7d331a19dc05950505d08e88989"
+  },
+  "baseline": {
+    "source_revision": "c61b68303685930a0180f9bc67a3eda32aa8aa29",
+    "source_dirty": false,
+    "source_sha256": {
+      "modules/wasmoon/wast/jit/call.mbt": "4300f4920fe88fd0b4e1e8cd803b9b00b3adb88bbecdc9f8152b321d919e6b38",
+      "modules/wasmoon/wast/jit/support.mbt": "e2fdb09f29bd63064aab0a97a81f30fb18fef314d1aafda0e2bae4058d5c855a",
+      "modules/wasmoon_runtime/runtime/type_registry.mbt": "6e6d957defc73f79aa0cf16bf2ddefdb3c41bfe8c41c7a133d4b9d7b8491d042",
+      "modules/wasmoon_runtime/runtime/store.mbt": "8559bba5ecf2205c2e3a9a7fc012be060e4f1ce9f474b7be58e30790fe08d994",
+      "modules/wasmoon_runtime/runtime/table.mbt": "e2cefe907a8702298332427491bcebc9b896bb9895d94905da9dded6bffd7a00",
+      "modules/wasmoon_runtime/runtime/instance.mbt": "f553cd5fa6a4799953153601e9ff235d33ce6989377eea0ec9923acf30f35dfa",
+      "modules/wasmoon_runtime/native/ffi/jit_ffi.h": "07f500771a1897e7a22ad6dca62736c5763b2ff6bd2e0dd0b03481858ab4938f",
+      "modules/wasmoon_runtime/native/ffi/jit.c": "2ac4e33e64cdfbeed8b607c29fd44738373695abbda454e09f9fd154cc68291e",
+      "modules/wasmoon_runtime/native/ffi/memory_ops.c": "e88007aca73ab02fd4f0eccc03e41f29ae16a5ddecee63c3229b0caba83d46db",
+      "modules/wasmoon_runtime/native/ffi/segment_ops.c": "12ca1efbfe990bbd5c2465cf47ce50aa9ab012910e06decf883a7eed7b53c2d9"
+    },
+    "original_reproduction": {
+      "binary_sha256": "7554e2c540ba596da96b02c5ce6391ada4b4638a0e3d3e439fd6b0c50e5dcb7d",
+      "trials": [
+        [
+          {
+            "table": 0,
+            "ms": 3,
+            "yields": 976
+          },
+          {
+            "table": 100,
+            "ms": 171,
+            "yields": 976
+          },
+          {
+            "table": 1000,
+            "ms": 1887,
+            "yields": 976
+          }
+        ],
+        [
+          {
+            "table": 0,
+            "ms": 4,
+            "yields": 976
+          },
+          {
+            "table": 100,
+            "ms": 181,
+            "yields": 976
+          },
+          {
+            "table": 1000,
+            "ms": 1658,
+            "yields": 976
+          }
+        ],
+        [
+          {
+            "table": 0,
+            "ms": 4,
+            "yields": 976
+          },
+          {
+            "table": 100,
+            "ms": 172,
+            "yields": 976
+          },
+          {
+            "table": 1000,
+            "ms": 1697,
+            "yields": 976
+          }
+        ]
+      ]
+    },
+    "expanded_measurements": {
+      "full_resumable_call_runs": [
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 0,
+          "trial": 0,
+          "ms": 4,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 0,
+          "trial": 1,
+          "ms": 4,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 0,
+          "trial": 2,
+          "ms": 3,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 0,
+          "ms": 1733,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 1,
+          "ms": 1702,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 2,
+          "ms": 1698,
+          "yields": 976
+        },
+        {
+          "kind": "null",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 0,
+          "ms": 16,
+          "yields": 976
+        },
+        {
+          "kind": "null",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 1,
+          "ms": 16,
+          "yields": 976
+        },
+        {
+          "kind": "null",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 2,
+          "ms": 16,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 1,
+          "heap": true,
+          "table": 1000,
+          "trial": 0,
+          "ms": 62,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 1,
+          "heap": true,
+          "table": 1000,
+          "trial": 1,
+          "ms": 62,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 1,
+          "heap": true,
+          "table": 1000,
+          "trial": 2,
+          "ms": 63,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": false,
+          "table": 1000,
+          "trial": 0,
+          "ms": 1693,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": false,
+          "table": 1000,
+          "trial": 1,
+          "ms": 1782,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": false,
+          "table": 1000,
+          "trial": 2,
+          "ms": 1697,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 200,
+          "heap": true,
+          "table": 0,
+          "trial": 0,
+          "ms": 4,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 200,
+          "heap": true,
+          "table": 0,
+          "trial": 1,
+          "ms": 4,
+          "yields": 976
+        },
+        {
+          "kind": "func",
+          "types": 200,
+          "heap": true,
+          "table": 0,
+          "trial": 2,
+          "ms": 4,
+          "yields": 976
+        }
+      ],
+      "independent_phase_batches": [
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 0,
+          "trial": 0,
+          "upload_ms": 0,
+          "download_ms": 0,
+          "identity_ms": 0,
+          "gc_ms": 1,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 0,
+          "trial": 1,
+          "upload_ms": 0,
+          "download_ms": 0,
+          "identity_ms": 0,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 0,
+          "trial": 2,
+          "upload_ms": 0,
+          "download_ms": 0,
+          "identity_ms": 0,
+          "gc_ms": 1,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 0,
+          "upload_ms": 1875,
+          "download_ms": 15,
+          "identity_ms": 1721,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 1,
+          "upload_ms": 1758,
+          "download_ms": 15,
+          "identity_ms": 1702,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 2,
+          "upload_ms": 1695,
+          "download_ms": 15,
+          "identity_ms": 1673,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "null",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 0,
+          "upload_ms": 5,
+          "download_ms": 8,
+          "identity_ms": 1658,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "null",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 1,
+          "upload_ms": 5,
+          "download_ms": 8,
+          "identity_ms": 1640,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "null",
+          "types": 40,
+          "heap": true,
+          "table": 1000,
+          "trial": 2,
+          "upload_ms": 5,
+          "download_ms": 8,
+          "identity_ms": 1640,
+          "gc_ms": 1,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 1,
+          "heap": true,
+          "table": 1000,
+          "trial": 0,
+          "upload_ms": 43,
+          "download_ms": 15,
+          "identity_ms": 25,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 1,
+          "heap": true,
+          "table": 1000,
+          "trial": 1,
+          "upload_ms": 45,
+          "download_ms": 15,
+          "identity_ms": 25,
+          "gc_ms": 1,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 1,
+          "heap": true,
+          "table": 1000,
+          "trial": 2,
+          "upload_ms": 43,
+          "download_ms": 16,
+          "identity_ms": 26,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": false,
+          "table": 1000,
+          "trial": 0,
+          "upload_ms": 1699,
+          "download_ms": 15,
+          "identity_ms": 1674,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": false,
+          "table": 1000,
+          "trial": 1,
+          "upload_ms": 1709,
+          "download_ms": 16,
+          "identity_ms": 1670,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 40,
+          "heap": false,
+          "table": 1000,
+          "trial": 2,
+          "upload_ms": 1666,
+          "download_ms": 16,
+          "identity_ms": 1670,
+          "gc_ms": 0,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 200,
+          "heap": true,
+          "table": 0,
+          "trial": 0,
+          "upload_ms": 0,
+          "download_ms": 0,
+          "identity_ms": 0,
+          "gc_ms": 1,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 200,
+          "heap": true,
+          "table": 0,
+          "trial": 1,
+          "upload_ms": 0,
+          "download_ms": 1,
+          "identity_ms": 0,
+          "gc_ms": 1,
+          "checksum": 0
+        },
+        {
+          "kind": "func",
+          "types": 200,
+          "heap": true,
+          "table": 0,
+          "trial": 2,
+          "upload_ms": 0,
+          "download_ms": 0,
+          "identity_ms": 0,
+          "gc_ms": 1,
+          "checksum": 0
+        }
+      ],
+      "batches_per_case": 3,
+      "syncs_per_phase_batch": 976,
+      "identity_queries_per_batch": "976 * table_size, even in null control: a separate query-cost control, not part of that null table execution",
+      "clock_resolution_ms": 1,
+      "explicit_type_declarations": "types field is the number of explicit declarations; types=1 also infers the one-i32-parameter run signature, giving two actual types",
+      "all_builds_complete_before_serial_measurement": true,
+      "phase_measurements_are_independent_not_additive_spans": true
+    }
+  },
+  "after": {
+    "all_builds_complete_before_serial_measurement": true,
+    "return_value_assertion": "[I32(0)]",
+    "clock_resolution_ms": 1,
+    "executable_sha256": "1e6b3bcfe4a1746faadd1311a8b4719ca6f98cbefa4150a4e6ba47bac792906f",
+    "harness_sha256": {
+      "main.mbt": "3e17d366b0e39c1257528ba3ed9506dc348f052e3e5661bb343438de41597aeb",
+      "prepare.mbt": "70f787a1eb430ec3bca1dcceb4f796d0f21c931b665c8a29fab135c86766732f"
+    },
+    "measurements": [
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "3",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "0",
+        "ms": "3",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "3",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "1",
+        "ms": "3",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "0",
+        "ms": "5",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 0
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "0",
+        "ms": "3",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "3",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "3",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "0",
+        "ms": "3",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "1",
+        "ms": "5",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 1
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "0",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "0",
+        "ms": "3",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "100",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "3",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "true",
+        "table": "10000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "3",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "null",
+        "types": "40",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "0",
+        "ms": "3",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "1",
+        "heap": "true",
+        "table": "1000",
+        "trial": "2",
+        "ms": "3",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "1",
+        "ms": "3",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "40",
+        "heap": "false",
+        "table": "1000",
+        "trial": "2",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "0",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "1",
+        "ms": "4",
+        "yields": "976",
+        "process": 2
+      },
+      {
+        "kind": "func",
+        "types": "200",
+        "heap": "true",
+        "table": "0",
+        "trial": "2",
+        "ms": "5",
+        "yields": "976",
+        "process": 2
+      }
+    ]
+  },
+  "checks": [
+    {
+      "name": "fmt",
+      "command": [
+        "moon",
+        "fmt"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 0.086
+    },
+    {
+      "name": "info",
+      "command": [
+        "moon",
+        "info"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 0.96
+    },
+    {
+      "name": "check-native",
+      "command": [
+        "moon",
+        "check",
+        "--target",
+        "native",
+        "--warn-list",
+        "+73",
+        "--deny-warn"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 0.958
+    },
+    {
+      "name": "check-wasm",
+      "command": [
+        "moon",
+        "check",
+        "--target",
+        "wasm",
+        "--warn-list",
+        "+73",
+        "--deny-warn"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 0.274
+    },
+    {
+      "name": "full-native",
+      "command": [
+        "moon",
+        "test",
+        "--target",
+        "native",
+        "--no-parallelize"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 24.598
+    },
+    {
+      "name": "full-wasm",
+      "command": [
+        "moon",
+        "test",
+        "--target",
+        "wasm",
+        "--no-parallelize"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 6.435
+    },
+    {
+      "name": "boundaries",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/audit_module_boundaries.py"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 0.08
+    },
+    {
+      "name": "sanitizers-run",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/run_sanitizers.py"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 67.971
+    },
+    {
+      "name": "final-build",
+      "command": [
+        "moon",
+        "build",
+        ".",
+        "/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/cmd/wasmoon",
+        "/Users/zhengyu/Documents/projects/wasmoon/modules/wasmoon/cmd/wasmoon-tools",
+        "--target",
+        "native",
+        "--release",
+        "--target-dir",
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/after-build"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/current",
+      "exit": 0,
+      "seconds": 64.493
+    },
+    {
+      "name": "corpora",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/run_corpora.py"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 22.141
+    },
+    {
+      "name": "misc",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/run_wasmtime_misc.py",
+        "--wasmoon",
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/after-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe",
+        "--wasmoon-tools",
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/after-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe",
+        "--output",
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/misc-verified"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 39.809
+    },
+    {
+      "name": "core-portable",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/run_portable_core_wast.py",
+        "--output",
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/core-native-wasm.json"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 52.56
+    },
+    {
+      "name": "final-sizes-0",
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/after-build/native/release/build/repro/jit-tables/jit-tables.exe"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 0.508
+    },
+    {
+      "name": "final-sizes-1",
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/after-build/native/release/build/repro/jit-tables/jit-tables.exe"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 0.466
+    },
+    {
+      "name": "final-sizes-2",
+      "command": [
+        "/Users/zhengyu/Documents/projects/wasmoon/target/issue553/after-build/native/release/build/repro/jit-tables/jit-tables.exe"
+      ],
+      "cwd": "/Users/zhengyu/Documents/projects/wasmoon",
+      "exit": 0,
+      "seconds": 0.504
+    },
+    {
+      "name": "misc-full",
+      "command": [
+        "python3",
+        "scripts/run_wasmtime_misc.py",
+        "--wasmoon",
+        "target/issue553/after-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe",
+        "--wasmoon-tools",
+        "target/issue553/after-build/native/release/build/Milky2018/wasmoon/cmd/wasmoon-tools/wasmoon-tools.exe",
+        "--include-high-memory",
+        "--output",
+        "target/issue553/misc-full"
+      ],
+      "exit": 0
+    }
+  ],
+  "full_tests": {
+    "native": 2833,
+    "wasm": 1347
+  },
+  "core_jit": {
+    "total_files": 258,
+    "total_passed": 62563,
+    "total_failed": 0
+  },
+  "core_portable": {
+    "native": {
+      "files": 258,
+      "accepted_files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "unsupported": 0,
+      "artifact_sha256": "ba4e03bcc1a166a2290f1f734d266b69307cfc575cdfd56dc51c069879924595"
+    },
+    "wasm": {
+      "files": 258,
+      "accepted_files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "unsupported": 0,
+      "artifact_sha256": "bdcbc43c8d5eba3c446a9186d78ef7279fe52d500f2a57c783788e638d1f4411"
+    }
+  },
+  "components": {
+    "jit": [
+      {
+        "suite": "stable-0.2",
+        "files": 23,
+        "failed_files": 0,
+        "commands": 845,
+        "failed_commands": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "async-0.3",
+        "files": 24,
+        "failed_files": 0,
+        "commands": 153,
+        "failed_commands": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "future-gated",
+        "files": 12,
+        "failed_files": 0,
+        "commands": 387,
+        "failed_commands": 0,
+        "skipped": 0
+      }
+    ],
+    "interp": [
+      {
+        "suite": "stable-0.2",
+        "files": 23,
+        "failed_files": 0,
+        "commands": 845,
+        "failed_commands": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "async-0.3",
+        "files": 24,
+        "failed_files": 0,
+        "commands": 153,
+        "failed_commands": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "future-gated",
+        "files": 12,
+        "failed_files": 0,
+        "commands": 387,
+        "failed_commands": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "sanitizers": {
+    "version": "0.17.0",
+    "source_revision": "c61b68303685930a0180f9bc67a3eda32aa8aa29",
+    "source_dirty": true,
+    "build_reuse": "fresh",
+    "binary_sha256": "779d1d02041bdba133e0da6260323d807e3411448c0282b0bc8b6da0794bc07c",
+    "tests": "passed",
+    "event_loop": "passed",
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "lsan_probe": "not_applicable",
+    "leak_detection": false,
+    "binary": "/Users/zhengyu/Documents/projects/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+    "instrumentation": [
+      "address",
+      "undefined"
+    ],
+    "allocator": "system",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ],
+    "passed_tests": 206,
+    "copied_source_files_compared": 601,
+    "copied_source_mismatches": []
+  },
+  "raw_receipts": "Ignored target/issue553 and target/sanitizers; summarized hashes and results here are the archived receipt.",
+  "limits": [
+    "1 ms benchmark clock; setup and JIT compilation excluded; serial measurement after builds; 976 yields and I32(0) asserted.",
+    "Phase batches are independent controls, not additive timings.",
+    "Changed tables still require full copying; this is not a shared-storage redesign.",
+    "Local macOS LSan is unavailable; Linux/Windows CI has not run for this working tree.",
+    "No Wasmtime head-to-head performance comparison was performed."
+  ],
+  "misc": {
+    "include_high_memory": true,
+    "counts": {
+      "pass": 692,
+      "script_only": 72,
+      "fail": 0,
+      "timeout": 0,
+      "unsupported": 0,
+      "deferred": 0,
+      "harness_error": 0
+    }
+  }
+}

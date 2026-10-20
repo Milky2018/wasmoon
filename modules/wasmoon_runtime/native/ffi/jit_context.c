@@ -406,6 +406,7 @@ void ctx_set_indirect_internal(jit_context_t *ctx, int table_idx, int func_idx, 
         // Store func_ptr at offset 0, type_idx at offset 8
         ctx_table0_base(ctx)[table_idx * 2] = ctx_func_table(ctx)[func_idx];
         ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+        table_mark_mutated(ctx, 0);
     }
 }
 

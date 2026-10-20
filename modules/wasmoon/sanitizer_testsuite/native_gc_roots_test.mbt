@@ -218,3 +218,106 @@ test "native exception spills and scalar payloads are not conservative GC roots"
     }
   }
 }
+
+///|
+fn check_native_table_write_identity(
+  instructions : String,
+  index : Int32,
+  non_nullable~ : Bool = false,
+) -> Unit raise {
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let padding = @executor.instantiate_module_with_imports(
+    store,
+    @wat.parse("(module (type (func (param i64))))"),
+    Imports(store),
+  )
+  // The next module's local type zero is not Store identity zero.
+  store.native_type_indices(padding) |> ignore
+  let table = if non_nullable {
+    "(table 1 2 (ref $result) (ref.func $two)) "
+  } else {
+    "(table 1 2 funcref) "
+  }
+  let module_ = @wat.parse(
+    "(module (type $result (func (result i32))) " +
+    table +
+    "(func $two (type $result) i32.const 2) (elem $values func $two) " +
+    "(func (export \"write\") (result i32) " +
+    instructions +
+    " i32.const \{index} call_indirect (type $result)) " +
+    "(func (export \"read\") (result i32) i32.const \{index} call_indirect (type $result)))",
+  )
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    module_,
+    Imports(store),
+  )
+  let context = build_gc_root_context(module_, instance, store)
+  defer context.close()
+  assert_eq(context.call_core_func(store, instance, 1, []), [I32(2)])
+  assert_eq(context.call_core_func(store, instance, 2, []), [I32(2)])
+  assert_eq(store.get_table(instance.table_addrs[0]).size(), index + 1)
+  let native = store.get_jit_table(instance.table_addrs[0]).unwrap()
+  assert_eq(
+    native.get_entry_type(index),
+    store.get_func_canonical_type_idx(instance.func_addrs[0]),
+  )
+}
+
+///|
+test "table.init writes Store callable identities before an immediate indirect call" {
+  check_native_table_write_identity(
+    "i32.const 0 i32.const 0 i32.const 1 table.init $values", 0,
+  )
+}
+
+///|
+test "table.grow writes Store callable identities before an immediate indirect call" {
+  check_native_table_write_identity(
+    "ref.func $two i32.const 1 table.grow drop", 1,
+  )
+  check_native_table_write_identity(
+    "ref.func $two i32.const 1 table.grow drop",
+    1,
+    non_nullable=true,
+  )
+}
+
+///|
+test "table.init preserves the actual subtype of an imported function" {
+  let types = "(type $base (sub (func (result (ref null any))))) " +
+    "(type $child (sub $base (func (result (ref null eq))))) "
+  let source = @wat.parse(
+    "(module " + types + "(func (export \"f\") (type $child) ref.null eq))",
+  )
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let original = @executor.instantiate_module_with_imports(
+    store,
+    source,
+    Imports(store),
+  )
+  let original_context = build_gc_root_context(source, original, store)
+  defer original_context.close()
+  let imports = @runtime.Imports::Imports(store)
+  imports.add_func("a", "f", original.func_addrs[0])
+  let module_ = @wat.parse(
+    "(module " +
+    types +
+    "(import \"a\" \"f\" (func $f (type $base))) " +
+    "(table 1 2 funcref) (elem $values func $f) " +
+    "(func (export \"run\") (result i32) " +
+    "i32.const 0 i32.const 0 i32.const 1 table.init $values " +
+    "i32.const 0 call_indirect (type $child) ref.is_null) " +
+    "(func (export \"grow\") (result i32) ref.func $f i32.const 1 table.grow drop " +
+    "i32.const 1 call_indirect (type $child) ref.is_null))",
+  )
+  let instance = @executor.instantiate_module_with_imports(
+    store, module_, imports,
+  )
+  let context = build_gc_root_context(module_, instance, store)
+  defer context.close()
+  assert_eq(context.call_core_func(store, instance, 1, []), [I32(1)])
+  assert_eq(context.call_core_func(store, instance, 2, []), [I32(1)])
+}

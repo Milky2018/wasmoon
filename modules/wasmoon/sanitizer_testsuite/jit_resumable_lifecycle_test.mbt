@@ -110,3 +110,74 @@ test "resumable JIT rejects inconsistent function metadata before admission" {
   store.close()
   context.close()
 }
+
+///|
+test "parked table synchronization retains GC roots and releases cancellation state" {
+  let source =
+    #|(module
+    #| (type $value (struct (field i32)))
+    #| (table 1 (ref null $value))
+    #| (func (export "run") (param $remaining i32) (result i32)
+    #|  i32.const 0 i32.const 42 struct.new $value table.set
+    #|  (loop $again
+    #|   local.get $remaining i32.const 1 i32.sub local.tee $remaining br_if $again)
+    #|  i32.const 0 table.get struct.get $value 0))
+  let module_ = @wat.parse(source)
+  for cancel in [false, true] {
+    let store = @runtime.Store::with_c_heap()
+    defer store.close()
+    let instance = @executor.instantiate_module_with_imports(
+      store,
+      module_,
+      Imports(store),
+    )
+    let context = build_gc_root_context(
+      module_,
+      instance,
+      store,
+      enable_cancellation=true,
+    )
+    defer context.close()
+    assert_true(context.jit_module.set_cooperative_scheduling(true))
+    let state = store.native_execution_state()
+    let mut outcome = context.call_core_func_resumable(store, instance, 0, [
+      I32(10000),
+    ])
+    defer (if outcome is NativeCoreSuspended(_, continuation) {
+      continuation.cancel()
+    })
+    let table = store.get_table(instance.table_addrs[0])
+    let native = store.get_jit_table(instance.table_addrs[0]).unwrap().raw_ptr()
+    let revision = native.revision()
+    let mut yields = 0
+    while outcome is NativeCoreSuspended(CooperativeYield, continuation) {
+      yields += 1
+      assert_eq(state.active_depth(), 0)
+      guard table.get(0) is StructRef(_) else {
+        fail("table root was not published")
+      }
+      store.collect_garbage() |> ignore
+      assert_eq(native.revision(), revision)
+      if cancel {
+        continuation.cancel()
+        continuation.cancel()
+        break
+      }
+      outcome = continuation.continue_execution()
+    }
+    if !cancel {
+      assert_true(yields > 1)
+      guard outcome is NativeCoreReturned(values) else {
+        fail("unexpected suspension")
+      }
+      assert_eq(values, [I32(42)])
+    } else {
+      assert_eq(yields, 1)
+    }
+    assert_eq(state.active_depth(), 0)
+    assert_eq(state.live_count(), 0)
+    context.close()
+    store.close()
+    assert_true(context.jit_module.gc_environment_is_clear())
+  }
+}

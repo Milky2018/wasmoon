@@ -25,6 +25,7 @@ priv struct StoreFuncrefRegistry {
   store_to_ptr : Map[Int32, Array[StoreFuncrefMappingOwner]]
   ptr_to_store : Map[Int64, Array[StoreFuncrefMappingOwner]]
   next_registration : Ref[Int32]
+  mut revision : Int64
   owners : Array[NativeCallableOwner]
 } derive(Debug)
 
@@ -42,6 +43,7 @@ fn StoreFuncrefRegistry::new() -> StoreFuncrefRegistry {
     store_to_ptr: Map([]),
     ptr_to_store: Map([]),
     next_registration: Ref(0),
+    revision: 0L,
     owners: [],
   }
 }
@@ -64,6 +66,7 @@ fn StoreFuncrefRegistry::register(
   self : StoreFuncrefRegistry,
   entries : Array[StoreFuncrefEntry],
 ) -> StoreFuncrefRegistration {
+  self.revision += 1L
   let registration = self.next_registration.val
   self.next_registration.val = registration + 1
   for entry in entries {
@@ -92,6 +95,7 @@ pub fn StoreFuncrefRegistration::release(
     return
   }
   self.active.val = false
+  self.registry.revision += 1L
   for entry in self.entries {
     let { store_addr, func_ptr, } = entry
     if self.registry.store_to_ptr.get(store_addr) is Some(owners) {
@@ -151,6 +155,7 @@ fn StoreFuncrefRegistry::entries(
 
 ///|
 fn StoreFuncrefRegistry::clear(self : StoreFuncrefRegistry) -> Unit {
+  self.revision += 1L
   self.store_to_ptr.clear()
   self.ptr_to_store.clear()
   let owners = self.owners.copy()
@@ -200,4 +205,10 @@ priv struct NativeCallableOwner {
 ///|
 impl Debug for NativeCallableOwner with fn to_repr(_self) {
   Repr::literal("NativeCallableOwner")
+}
+
+///|
+/// Invalidate cached table encodings when executable function owners change.
+pub fn Store::jit_funcref_revision(self : Store) -> Int64 {
+  self.funcref_registry.revision
 }

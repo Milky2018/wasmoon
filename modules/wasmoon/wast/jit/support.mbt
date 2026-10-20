@@ -625,29 +625,40 @@ pub fn sync_jit_tables_to_store(
       Some(t) => t
       None => continue
     }
+    let native_table = jit_table.raw_ptr()
+    if !table.native_download_needed(native_table) {
+      continue
+    }
     jit_ctx.jit_module.refresh_table_layout(table_idx) |> ignore
     let mut runtime_size = table.size()
     let jit_size = jit_table.get_size()
+    let elem_type = table.get_elem_type()
     if jit_size > runtime_size {
       let delta = jit_size - runtime_size
       if delta > 0 {
-        if table.grow(delta, Null) < 0 {
+        // Non-nullable tables need a valid initializer while extending the
+        // interpreter mirror; all new slots are decoded below afterwards.
+        let init = decode_table_entry_value(
+          elem_type,
+          jit_table.get_entry_value(runtime_size),
+          store,
+          jit_ctx,
+        )
+        if table.grow(delta, init) < 0 {
           continue
         }
         runtime_size = table.size()
       }
     }
     let size = if runtime_size < jit_size { runtime_size } else { jit_size }
-    let elem_type = table.get_elem_type()
     for i in 0..<size {
       let raw_value = jit_table.get_entry_value(i)
       let decoded = decode_table_entry_value(
         elem_type, raw_value, store, jit_ctx,
       )
-      table.set(i, decoded) catch {
-        _ => ()
-      }
+      table.set(i, decoded)
     }
+    table.native_download_complete(native_table)
   }
 }
 
@@ -751,7 +762,7 @@ pub fn eval_elem_offset_expr(
 ///|
 /// Initialize element segments for call_indirect support
 pub fn init_elem_segments(
-  mod_ : @types.Module,
+  _mod_ : @types.Module,
   jm : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
@@ -767,38 +778,12 @@ pub fn init_elem_segments(
     globals.push(global)
   }
 
-  // Compute canonical type indices for structural type equivalence
-  // Structurally equivalent types will have the same canonical index
-  let canonical_types = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-
-  // Build function index -> table entry type mapping.
-  // - subtype mode: keep raw type indices
-  // - exact mode: use canonical indices for structural equivalence
+  use_subtype_indirect_check |> ignore
+  // Imported functions retain their actual Store type, which can be a subtype
+  // of the signature declared by this module's import.
   let func_table_types : Array[Int32] = []
-  for imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      let mapped_type = if use_subtype_indirect_check {
-        type_idx
-      } else if type_idx >= 0 && type_idx < canonical_types.length() {
-        canonical_types[type_idx]
-      } else {
-        type_idx
-      }
-      func_table_types.push(mapped_type)
-    }
-  }
-  for type_idx in mod_.funcs {
-    let mapped_type = if use_subtype_indirect_check {
-      type_idx
-    } else if type_idx >= 0 && type_idx < canonical_types.length() {
-      canonical_types[type_idx]
-    } else {
-      type_idx
-    }
-    func_table_types.push(mapped_type)
+  for address in instance.func_addrs {
+    func_table_types.push(store.get_func_canonical_type_idx(address))
   }
 
   // Get shared JIT tables from Store (one per runtime table)
@@ -877,37 +862,12 @@ pub fn init_bulk_segments(
     error =>
       raise LinkErrorDetail("native continuation preparation failed: \{error}")
   }
-  // Precompute canonical indices for type equivalence.
-  let canonical = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-
-  // Build func_idx -> table entry type idx mapping in module index space.
-  // - subtype mode: raw indices
-  // - exact mode: canonical indices
+  use_subtype_indirect_check |> ignore
+  // Imported functions retain their actual Store type, which can be a subtype
+  // of the signature declared by this module's import.
   let func_table_types : Array[Int32] = []
-  for imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      let mapped = if use_subtype_indirect_check {
-        type_idx
-      } else if type_idx >= 0 && type_idx < canonical.length() {
-        canonical[type_idx]
-      } else {
-        -1
-      }
-      func_table_types.push(mapped)
-    }
-  }
-  for type_idx in mod_.funcs {
-    let mapped = if use_subtype_indirect_check {
-      type_idx
-    } else if type_idx >= 0 && type_idx < canonical.length() {
-      canonical[type_idx]
-    } else {
-      -1
-    }
-    func_table_types.push(mapped)
+  for address in instance.func_addrs {
+    func_table_types.push(store.get_func_canonical_type_idx(address))
   }
 
   // Build store func_addr -> module func_idx map (for GlobalGet funcref).
@@ -1058,11 +1018,21 @@ pub fn sync_table_to_jit(
   use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
   use_subtype_indirect_check |> ignore
+  let native_table = jit_table.raw_ptr()
+  let encoder = jit_module.table_encoding_identity()
+  let callable_revision = store.jit_funcref_revision()
+  if !table.native_upload_needed(native_table, encoder, callable_revision) {
+    return
+  }
   let runtime_size = table.size()
+  if runtime_size > jit_table.get_size() &&
+    native_table.grow((runtime_size - jit_table.get_size()).to_int64()) < 0L {
+    raise TableAllocationFailed
+  }
   let jit_size = jit_table.get_size()
   let size = if runtime_size < jit_size { runtime_size } else { jit_size }
   for i in 0..<size {
-    let value = table.get(i) catch { _ => continue }
+    let value = table.get(i)
     let mut encoded : Int64 = NULL_REF
     let mut type_idx : Int32 = -1
     match value {
@@ -1088,6 +1058,7 @@ pub fn sync_table_to_jit(
     }
     jit_table.set(i, encoded, type_idx)
   }
+  table.native_upload_complete(native_table, encoder, callable_revision)
 }
 
 // ============================================================

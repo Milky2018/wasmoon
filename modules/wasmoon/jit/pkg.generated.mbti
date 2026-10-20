@@ -11,6 +11,7 @@ import {
   "Milky2018/wasmoon_runtime/native/ffi",
   "Milky2018/wasmoon_runtime/runtime",
   "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -133,6 +134,7 @@ pub fn JITModule::setup_gc(Self, @bridge.CHeap, Array[@types.SubType], Array[Int
 pub fn JITModule::setup_gc_with_func_table(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32], Int64, Int32) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::start_continuation_call(Self, JITFunction, Array[Int64]) -> JITContinuationOutcome raise JITTrap
+pub fn JITModule::table_encoding_identity(Self) -> @ref.Ref[Bool]
 pub fn JITModule::teardown_gc(Self) -> Unit
 pub fn JITModule::throw_exception_tag(Self, Int32) -> Unit raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::throw_exception_values(Self, Int32, Array[Int64]) -> Unit raise @wasmoon_jit.NativeSetupError

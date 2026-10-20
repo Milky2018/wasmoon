@@ -34,3 +34,10 @@ pub extern "c" fn NativeTableHandle::grow(
   self : NativeTableHandle,
   delta : Int64,
 ) -> Int64 = "wasmoon_table_grow_owned"
+
+///|
+/// Mutation revision of the shared descriptor, including guest writes and growth.
+#borrow(self)
+pub extern "c" fn NativeTableHandle::revision(
+  self : NativeTableHandle,
+) -> Int64 = "wasmoon_native_table_revision"
