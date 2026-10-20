@@ -29,6 +29,7 @@ fn Store::bind_table_storage(
 fn StoreReferences::encode_table_value(
   self : StoreReferences,
   value : @types.Value,
+  created_exceptions? : Array[Int32],
 ) -> (Int32, Int64) raise RuntimeError {
   match value {
     FuncRef(address) => {
@@ -36,7 +37,14 @@ fn StoreReferences::encode_table_value(
       (-1, 0x3000000000000000L | (address.to_int64() + 1L))
     }
     I31(value) => (-1, ((value & @types.I32_MAX).to_int64() << 1) | 1L)
-    ExnRef(index) => (-1, self.encode_native_exception(index))
+    ExnRef(index) =>
+      (
+        -1,
+        match created_exceptions {
+          Some(created) => self.encode_native_exception(index, created~)
+          None => self.encode_native_exception(index)
+        },
+      )
     ExternRef(index) => {
       let value = self.unwrap_extern(ExternRef(index))
       (

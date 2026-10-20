@@ -171,6 +171,9 @@ pub fn Table::grow64(
   self.ensure_open()
   guard value_fits_kind(init, self.elem_type) else { raise TypeMismatch }
   let old_size = self.size().to_uint64()
+  if delta == 0L {
+    return old_size.reinterpret_as_int64()
+  }
   let new_size = old_size + delta.reinterpret_as_uint64()
   if new_size < old_size {
     return -1L
@@ -462,8 +465,26 @@ fn Table::grow_storage(
       }
     }
     Native(storage) => {
-      let (type_index, value) = storage.references.encode_table_value(init)
-      return storage.table.raw_ptr().grow_value(delta, value, type_index)
+      if self.reservation is Some(reservation) && !reservation.resize(new_size) {
+        return -1L
+      }
+      let created : Array[Int32] = []
+      let mut committed = false
+      defer (if !committed {
+        for index in created {
+          storage.references.release_native_exception(index)
+        }
+        if self.reservation is Some(reservation) {
+          reservation.resize(old_size) |> ignore
+        }
+      })
+      let (type_index, value) = storage.references.encode_table_value(
+        init,
+        created_exceptions=created,
+      )
+      let result = storage.table.raw_ptr().grow_value(delta, value, type_index)
+      committed = result >= 0L
+      return result
     }
   }
   old_size

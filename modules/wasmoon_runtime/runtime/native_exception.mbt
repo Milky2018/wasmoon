@@ -145,11 +145,16 @@ fn StoreReferences::decode_exception_gc_word(
 fn StoreReferences::encode_native_exception(
   self : StoreReferences,
   index : Int32,
+  created~ : Array[Int32] = [],
 ) -> Int64 raise RuntimeError {
   self.ensure_open()
   if self.native.store_exception_to_native.get(index) is Some(reference) {
     return reference
   }
+  let checkpoint = created.length()
+  errdefer (while created.length() > checkpoint {
+    self.release_native_exception(created.pop().unwrap())
+  })
   let pending = [(index, false)]
   let visiting : Map[Int32, Bool] = Map([])
   while pending.pop() is Some((current, ready)) {
@@ -159,6 +164,7 @@ fn StoreReferences::encode_native_exception(
     let exception = self.get_exn(current)
     if ready {
       self.encode_exception_snapshot(current) |> ignore
+      created.push(current)
       visiting.remove(current)
     } else {
       // Wasm snapshots are immutable and acyclic. Reject a forged host cycle
@@ -268,5 +274,17 @@ fn Store::decode_heap_value(
     (ExternRef | RefExtern | NullExternRef, StructRef(_) | ArrayRef(_) | I31(_)) =>
       self.wrap_as_extern(value)
     _ => value
+  }
+}
+
+///|
+fn StoreReferences::release_native_exception(
+  self : StoreReferences,
+  index : Int32,
+) -> Unit {
+  if self.native.store_exception_to_native.get(index) is Some(reference) {
+    self.native.native_execution.exceptions().release_snapshot(reference)
+    self.native.store_exception_to_native.remove(index)
+    self.native.native_exception_to_store.remove(reference)
   }
 }

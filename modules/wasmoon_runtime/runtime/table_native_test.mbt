@@ -165,3 +165,81 @@ test "null-backed external wrappers retain identity through native tables and GC
     _ => fail("unrooted wrapper must be released")
   }
 }
+
+///|
+test "zero table growth does not encode an unused exception initializer" {
+  let budget = @runtime.ResourceBudget::new(gc_objects=1L)
+  let store = @runtime.Store::Store(resource_budget=Some(budget))
+  defer store.close()
+  let table = @runtime.Table::Table(ExnRef, 1, None)
+  store.alloc_table(table) |> ignore
+  let tag = store.alloc_tag({ params: [], results: [], })
+  let exception = store.alloc_exn(tag, [])
+  assert_eq(table.grow64(0L, ExnRef(exception)), 1L)
+  assert_eq(budget.used(GcObjects), 1L)
+}
+
+///|
+test "rejected table growth leaves initializer and table quotas unchanged" {
+  for objects in [1L, 2L] {
+    let budget = @runtime.ResourceBudget::new(
+      gc_objects=objects,
+      table_elements=1L,
+    )
+    let store = @runtime.Store::Store(resource_budget=Some(budget))
+    defer store.close()
+    let table = @runtime.Table::Table(ExnRef, 1, None)
+    store.alloc_table(table) |> ignore
+    let tag = store.alloc_tag({ params: [], results: [], })
+    let exception = store.alloc_exn(tag, [])
+    assert_eq(table.grow64(1L, ExnRef(exception)), -1L)
+    assert_eq(table.size(), 1)
+    assert_eq(table.get(0), Null)
+    assert_eq(budget.used(GcObjects), 1L)
+    assert_eq(budget.used(TableElements), 1L)
+  }
+}
+
+///|
+extern "c" fn fail_table_initializer_allocation(attempt : Int32) -> Unit = "wasmoon_native_fail_allocation_for_tests"
+
+///|
+test "failed native table growth rolls back snapshots and can be retried" {
+  let mut failures = 0
+  let mut successes = 0
+  for attempt in 1..<9 {
+    let budget = @runtime.ResourceBudget::new(gc_objects=4L, table_elements=2L)
+    let store = @runtime.Store::Store(resource_budget=Some(budget))
+    defer store.close()
+    let table = @runtime.Table::Table(ExnRef, 1, None)
+    store.alloc_table(table) |> ignore
+    let child_tag = store.alloc_tag({ params: [], results: [], })
+    let child = store.alloc_exn(child_tag, [])
+    let parent_tag = store.alloc_tag({ params: [ExnRef], results: [], })
+    let parent = store.alloc_exn(parent_tag, [ExnRef(child)])
+    fail_table_initializer_allocation(attempt)
+    let result = table.grow64(1L, ExnRef(parent)) catch {
+      OutOfMemory => -1L
+      error => {
+        fail_table_initializer_allocation(0)
+        raise error
+      }
+    }
+    fail_table_initializer_allocation(0)
+    if result < 0L {
+      failures += 1
+      assert_eq(table.size(), 1)
+      assert_eq(table.get(0), Null)
+      assert_eq(budget.used(TableElements), 1L)
+      assert_eq(budget.used(GcObjects), 2L)
+      assert_eq(table.grow64(1L, ExnRef(parent)), 1L)
+    } else {
+      successes += 1
+    }
+    assert_eq(table.get(1), ExnRef(parent))
+    assert_eq(budget.used(TableElements), 2L)
+    assert_eq(budget.used(GcObjects), 4L)
+  }
+  assert_true(failures > 0)
+  assert_true(successes > 0)
+}

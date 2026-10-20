@@ -102,10 +102,5 @@ fn Store::reclaim_native_continuations(self : Store) -> Unit {
 
 ///|
 fn Store::release_native_exception(self : Store, index : Int32) -> Unit {
-  if self.references.native.store_exception_to_native.get(index)
-    is Some(reference) {
-    self.native_execution.exceptions().release_snapshot(reference)
-    self.references.native.store_exception_to_native.remove(index)
-    self.references.native.native_exception_to_store.remove(reference)
-  }
+  self.references.release_native_exception(index)
 }
