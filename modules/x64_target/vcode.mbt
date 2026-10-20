@@ -638,7 +638,7 @@ fn require_tail_call_plan(
       )
     }
   }
-  if function.instruction_clobbers(instruction) != platform_call_clobbers() {
+  if function.instruction_clobbers(instruction) != internal_call_clobbers(plan) {
     raise InvalidInstruction(
       instruction~,
       message="tail call has an invalid caller-saved clobber set",
