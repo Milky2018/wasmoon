@@ -237,12 +237,9 @@ fn StoreReferences::encode_exception_snapshot(
   }
   self.native.native_exception_to_store.set(reference, index)
   self.native.store_exception_to_native.set(index, reference)
-  self.on_instantiation_rollback(fn() {
-    // Encoding may already have rolled this snapshot back and recreated it.
-    if self.native.store_exception_to_native.get(index) == Some(reference) {
-      self.release_native_exception(index)
-    }
-  })
+  if self.native.snapshot_allocations is Some(created) {
+    created.push((index, reference))
+  }
   reference
 }
 
@@ -293,4 +290,46 @@ fn StoreReferences::release_native_exception(
     self.native.store_exception_to_native.remove(index)
     self.native.native_exception_to_store.remove(reference)
   }
+}
+
+///|
+/// Run after resource rollback and before heap rollback. Managed Values need no
+/// native snapshot; only surviving native consumers retain provisional tokens.
+fn Store::register_native_exception_rollback(
+  self : Store,
+  registrar : RollbackRegistrar,
+) -> Unit {
+  let created : Array[(Int32, Int64)] = []
+  self.references.native.snapshot_allocations = Some(created)
+  registrar.on_finish(fn() {
+    self.references.native.snapshot_allocations = None
+  })
+  registrar.on_rollback(fn() {
+    if self.closed.val || created.is_empty() {
+      return
+    }
+    let trace = self.trace_gc_roots([])
+    // Incomplete root discovery cannot justify reclaiming a live token.
+    if trace.failed {
+      return
+    }
+    let pending = trace.native_exceptions.keys().to_array()
+    while pending.pop() is Some(index) {
+      if self.references.exns.get(index) is Some(exception) {
+        for value in exception.values {
+          if value is ExnRef(child) && !trace.native_exceptions.contains(child) {
+            trace.native_exceptions.set(child, true)
+            pending.push(child)
+          }
+        }
+      }
+    }
+    for (index, token) in created {
+      if !trace.native_exceptions.contains(index) &&
+        self.references.native.store_exception_to_native.get(index) ==
+        Some(token) {
+        self.references.release_native_exception(index)
+      }
+    }
+  })
 }

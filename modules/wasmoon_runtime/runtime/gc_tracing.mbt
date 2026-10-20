@@ -14,6 +14,7 @@ priv struct GcTrace {
   continuations : Map[Int64, Bool]
   native_continuations : Map[Int64, Bool]
   exceptions : Map[Int32, Bool]
+  native_exceptions : Map[Int32, Bool]
   mut failed : Bool
 }
 
@@ -22,17 +23,25 @@ fn Store::trace_gc_roots(
   self : Store,
   additional : Array[@types.Value],
 ) -> GcTrace {
+  let trace : GcTrace = {
+    objects: [],
+    wrappers: Map([]),
+    exceptions: Map([]),
+    native_exceptions: Map([]),
+    continuations: Map([]),
+    native_continuations: Map([]),
+    failed: false,
+  }
   let pending = additional.copy()
   for global in self.globals {
-    pending.push(global.root())
-  }
-  let mut failed = false
-  for table in self.tables {
-    for index in 0..<table.size() {
-      pending.push(table.root_at(index)) catch {
-        _ => failed = true
-      }
+    if global.native is Some(_) {
+      trace.push_native_root(global.root(), pending)
+    } else {
+      pending.push(global.root())
     }
+  }
+  for table in self.tables {
+    self.trace_table_roots(table, pending, trace)
   }
   for instance in self.instances {
     for index, values in instance.elem_values {
@@ -52,14 +61,6 @@ fn Store::trace_gc_roots(
         pending.push(value)
       }
     }
-  }
-  let trace : GcTrace = {
-    objects: [],
-    wrappers: Map([]),
-    exceptions: Map([]),
-    continuations: Map([]),
-    native_continuations: Map([]),
-    failed,
   }
   let visited : Map[Int32, Bool] = Map([])
   // Walk every representation with one worklist, including cycles through
@@ -277,4 +278,16 @@ pub fn Store::end_gc_tracing(self : Store) -> Unit {
 #cfg(target="native")
 impl Debug for GcTrace with fn to_repr(_self) {
   @debug.Repr::literal("GcTrace")
+}
+
+///|
+fn GcTrace::push_native_root(
+  self : GcTrace,
+  value : @types.Value,
+  pending : Array[@types.Value],
+) -> Unit {
+  if value is ExnRef(index) {
+    self.native_exceptions.set(index, true)
+  }
+  pending.push(value)
 }
