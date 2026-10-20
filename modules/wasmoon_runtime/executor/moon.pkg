@@ -12,6 +12,7 @@ import {
 
 import {
   "moonbitlang/async",
+  "Milky2018/wasm_core/wat",
 } for "test"
 
 import {

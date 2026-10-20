@@ -410,9 +410,9 @@ fn run_jit_with_opt_level(
 ) -> Result[Array[@types.Value], String] {
   func_name |> ignore
   try {
-    let linker = @runtime.Linker::Linker()
+    let store = @runtime.Store::with_c_heap()
+    let linker = @runtime.Linker::with_store(store)
     defer linker.close()
-    let store = linker.get_store()
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     let mut compile_error : String? = None
     guard @commands.compile_module_to_jit(
@@ -509,7 +509,7 @@ fn run_jit_with_opt_level(
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )
     jit_context.install_hostcall_dispatcher(store, instance)
-    let c_heap = @wasmoon_jit.CHeap::CHeap()
+    let c_heap = store.native_heap().unwrap()
     jm.setup_gc(c_heap, module_types, canonical_type_indices, func_type_indices) catch {
       err => return Err("GC setup failed: \{err}")
     }

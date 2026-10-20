@@ -349,6 +349,7 @@ pub fn Store::close(self : Store) -> Unit {
   self.native_types.representatives.clear()
   self.native_types.representatives.shrink_to_fit()
   self.native_types.mappings.clear()
+  self.native_types.initialization_graph = None
   self.native_types.parents.clear()
   self.native_types.parents.shrink_to_fit()
   self.native_types.views.clear()
@@ -541,12 +542,17 @@ pub fn Store::set_module_types(
   self.ensure_open()
   let old_types = self.module_types
   let old_rec_groups = self.module_rec_groups
+  let old_graph = self.native_types.initialization_graph
   self.on_instantiation_rollback(fn() {
-    self.module_types = old_types
-    self.module_rec_groups = old_rec_groups
+    if !self.closed.val {
+      self.module_types = old_types
+      self.module_rec_groups = old_rec_groups
+      self.native_types.initialization_graph = old_graph
+    }
   })
   self.module_types = types.copy()
   self.module_rec_groups = rec_groups.copy()
+  self.native_types.initialization_graph = None
 }
 
 ///|

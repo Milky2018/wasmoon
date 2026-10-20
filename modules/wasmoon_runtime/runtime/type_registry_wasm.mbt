@@ -9,11 +9,7 @@ fn Store::record_gc_type(
     Some(instance) => self.native_types.register(instance)[type_index]
     None =>
       if type_index >= 0 && type_index < self.module_types.length() {
-        self.native_types.register_graph(
-          self.module_types,
-          self.module_rec_groups,
-          -1,
-        )[type_index]
+        self.module_type_indices()[type_index]
       } else {
         -1
       }

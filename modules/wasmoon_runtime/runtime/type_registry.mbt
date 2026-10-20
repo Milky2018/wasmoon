@@ -1,11 +1,18 @@
 ///|
 /// Store-local identities retain recursive-group equivalence across modules.
+priv struct RegisteredTypeGraph {
+  id : Int64
+  types : ArrayView[@types.SubType]
+  groups : ArrayView[Int32]
+  mapping : Array[Int32]
+} derive(Debug)
+
+///|
 priv struct StoreTypeRegistry {
-  representatives : Array[(ArrayView[@types.SubType], ArrayView[Int32], Int32)]
-  mappings : Map[
-    Int32,
-    (ArrayView[@types.SubType], ArrayView[Int32], Array[Int32]),
-  ]
+  representatives : Array[(RegisteredTypeGraph, Int32)]
+  mappings : Map[Int32, RegisteredTypeGraph]
+  mut initialization_graph : RegisteredTypeGraph?
+  mut next_graph_id : Int64
   parents : Array[Int32]
   views : Array[NativeCallableTypeView]
   mut native_registry : @native_bridge.NativeCallableRegistry?
@@ -18,6 +25,8 @@ fn StoreTypeRegistry::new() -> StoreTypeRegistry {
   {
     representatives: [],
     mappings: Map([]),
+    initialization_graph: None,
+    next_graph_id: 0L,
     parents: [],
     views: [],
     native_registry: None,
@@ -45,25 +54,48 @@ fn StoreTypeRegistry::register_graph(
   groups : ArrayView[Int32],
   store_index : Int32,
 ) -> Array[Int32] {
+  // The negative index is private to the current set_module_types scope.
+  // Changing that scope invalidates this graph; rollback restores the old one.
+  if store_index < 0 && self.initialization_graph is Some(graph) {
+    return graph.mapping
+  }
   if store_index >= 0 &&
-    self.mappings.get(store_index)
-    is Some((cached_types, cached_groups, mapping)) &&
-    cached_types == types &&
-    cached_groups == groups {
-    return mapping
+    self.mappings.get(store_index) is Some(graph) &&
+    graph.types == types &&
+    graph.groups == groups {
+    return graph.mapping
+  }
+  if store_index >= 0 &&
+    self.initialization_graph is Some(graph) &&
+    graph.types == types &&
+    graph.groups == groups {
+    self.mappings.set(store_index, graph)
+    return graph.mapping
   }
   let mapping : Array[Int32] = []
+  let graph = { id: self.next_graph_id, types, groups, mapping, }
+  self.next_graph_id += 1L
+  // Reuse graph indices and completed equivalence results within this registration.
+  // These contexts must not outlive the two immutable graphs they compare.
+  let comparisons : Map[Int64, @types.TypeEquivalenceContext] = Map([])
   let first_new = self.representatives.length()
   for type_index in 0..<types.length() {
     let mut identity = -1
     for candidate, representative in self.representatives {
-      let (other_types, other_groups, index) = representative
-      let equivalent = @types.TypeEquivalenceContext::cross_module(
-        types,
-        other_types,
-        rec_groups1=groups,
-        rec_groups2=other_groups,
-      )
+      let (other, index) = representative
+      let equivalent = match comparisons.get(other.id) {
+        Some(context) => context
+        None => {
+          let context = @types.TypeEquivalenceContext::cross_module(
+            types,
+            other.types,
+            rec_groups1=groups,
+            rec_groups2=other.groups,
+          )
+          comparisons.set(other.id, context)
+          context
+        }
+      }
       if equivalent.types_equivalent(type_index, index) {
         identity = candidate
         break
@@ -71,16 +103,18 @@ fn StoreTypeRegistry::register_graph(
     }
     if identity < 0 {
       identity = self.representatives.length()
-      self.representatives.push((types, groups, type_index))
+      self.representatives.push((graph, type_index))
       self.parents.push(-1)
     }
     mapping.push(identity)
   }
   if store_index >= 0 {
-    self.mappings.set(store_index, (types, groups, mapping))
+    self.mappings.set(store_index, graph)
+  } else {
+    self.initialization_graph = Some(graph)
   }
   for identity in first_new..<self.representatives.length() {
-    let (_, _, index) = self.representatives[identity]
+    let (_, index) = self.representatives[identity]
     if types[index].supertypes is [parent, ..] {
       self.parents[identity] = mapping[parent]
     }
@@ -174,11 +208,7 @@ fn Store::record_gc_type(
     Some(instance) => self.native_types.register(instance)[type_index]
     None =>
       if type_index >= 0 && type_index < self.module_types.length() {
-        self.native_types.register_graph(
-          self.module_types,
-          self.module_rec_groups,
-          -1,
-        )[type_index]
+        self.module_type_indices()[type_index]
       } else {
         -1
       }
@@ -251,8 +281,8 @@ fn Store::gc_type_definition(
     None => self.native_types.heap_types.get(reference).unwrap_or(-1)
   }
   if identity >= 0 && identity < self.native_types.representatives.length() {
-    let (types, _, index) = self.native_types.representatives[identity]
-    return Some(types[index])
+    let (graph, index) = self.native_types.representatives[identity]
+    return Some(graph.types[index])
   }
   if fallback >= 0 && fallback < self.module_types.length() {
     Some(self.module_types[fallback])
@@ -303,5 +333,14 @@ pub fn Store::func_type_is_subtype(
   self.native_types.is_subtype(
     actual,
     self.native_types.register(instance)[expected],
+  )
+}
+
+///|
+fn Store::module_type_indices(self : Store) -> Array[Int32] {
+  self.native_types.register_graph(
+    self.module_types,
+    self.module_rec_groups,
+    -1,
   )
 }
