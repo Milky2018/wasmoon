@@ -123,6 +123,7 @@ pub fn NativeTableHandle::revision(Self) -> Int64
 pub fn NativeTableHandle::size(Self) -> Int32
 pub fn NativeTableHandle::to_repr(Self) -> @debug.Repr
 pub fn NativeTableHandle::use_store_references(Self) -> Unit
+pub fn NativeTableHandle::uses_store_references(Self) -> Bool
 pub fn NativeTableHandle::word(Self, Int32, Int32) -> Int64
 pub impl @debug.Debug for NativeTableHandle
 

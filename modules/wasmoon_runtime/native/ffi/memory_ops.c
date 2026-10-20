@@ -502,6 +502,10 @@ MOONBIT_FFI_EXPORT void wasmoon_table_use_store_references(wasmoon_table_t *owne
     if (owner) owner->store_references = 1;
 }
 
+MOONBIT_FFI_EXPORT int32_t wasmoon_table_uses_store_references(wasmoon_table_t *owner) {
+    return owner && owner->store_references;
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_table_grow_owned(wasmoon_table_t *owner, int64_t delta) {
     return table_grow_owner(owner, delta, 0, -1, SIZE_MAX);
 }

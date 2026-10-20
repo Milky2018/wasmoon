@@ -58,6 +58,12 @@ pub extern "c" fn NativeTableHandle::use_store_references(
 ) -> Unit = "wasmoon_table_use_store_references"
 
 ///|
+#borrow(self)
+pub extern "c" fn NativeTableHandle::uses_store_references(
+  self : NativeTableHandle,
+) -> Bool = "wasmoon_table_uses_store_references"
+
+///|
 /// Close runtime storage through every retained context binding.
 #borrow(self)
 pub extern "c" fn NativeTableHandle::invalidate(

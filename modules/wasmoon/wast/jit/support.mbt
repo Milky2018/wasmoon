@@ -253,6 +253,7 @@ pub fn register_owned_instance_funcrefs_for_jit(
       registry,
       local_types,
       instance.tag_addrs[:].to_owned(),
+      functions=instance.func_addrs[:].to_owned(),
     )
   }
   { lease, }
