@@ -14,10 +14,18 @@ fn Store::bind_table_storage(
       native.raw_ptr().use_store_references()
     _ => ()
   }
+  // Admission is one unpublished batch, including all nested snapshots.
+  let created : Array[Int32] = []
+  errdefer (while created.pop() is Some(index) {
+    references.release_native_exception(index)
+  })
   match table.storage {
     Managed(elements) =>
       for index, value in elements {
-        let (type_index, word) = references.encode_table_value(value)
+        let (type_index, word) = references.encode_table_value(
+          value,
+          created_exceptions=created,
+        )
         native.set(index, word, type_index)
       }
     Native(_) => raise InvalidHandle
