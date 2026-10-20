@@ -67,6 +67,15 @@ fn StoreReferences::decode_table_value(
   word : Int64,
   root : Bool,
 ) -> @types.Value raise RuntimeError {
+  // A wrapped null has a zero payload but a nonnull external identity.
+  if (match type_ {
+      ExternRef | RefExtern | NullExternRef => true
+      _ => false
+    }) &&
+    metadata >= 0 {
+    guard self.wrapped_externs.contains(metadata) else { raise InvalidHandle }
+    return ExternRef(-1 - metadata)
+  }
   if word == 0L {
     return Null
   }
@@ -85,12 +94,7 @@ fn StoreReferences::decode_table_value(
     | NullContRef
     | RefNoCont => @native_bridge.i64_to_value(word, type_)
     ExternRef | RefExtern | NullExternRef =>
-      if metadata >= 0 {
-        guard self.wrapped_externs.contains(metadata) else {
-          raise InvalidHandle
-        }
-        ExternRef(-1 - metadata)
-      } else if @native_bridge.decode_externref(word) is Some(index) {
+      if @native_bridge.decode_externref(word) is Some(index) {
         ExternRef(index)
       } else {
         let value = self.decode_table_gc_word(word)

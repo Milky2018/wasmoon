@@ -138,3 +138,30 @@ test "late CHeap activation decodes native exception array payloads" {
   assert_eq(store.get_exn(exception).values, [ArrayRef(array)])
   assert_eq(store.encode_native_exception(exception), token)
 }
+
+///|
+test "null-backed external wrappers retain identity through native tables and GC" {
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let wrapped = store.wrap_as_extern(Null)
+  let initial = @runtime.Table::Table(RefExtern, 1, None, init_value=wrapped)
+  store.alloc_table(initial) |> ignore
+  assert_eq(initial.get(0), wrapped)
+  let mutated = @runtime.Table::Table(ExternRef, 2, None)
+  store.alloc_table(mutated) |> ignore
+  mutated.set(0, wrapped)
+  mutated.copy_from(1, initial, 0, 1)
+  assert_eq(mutated.get(0), wrapped)
+  assert_eq(mutated.get(1), wrapped)
+  assert_eq(store.collect_garbage(), 0)
+  assert_eq(store.unwrap_extern(initial.get(0)), Null)
+  initial.close()
+  mutated.fill(0, Null, 2)
+  store.collect_garbage() |> ignore
+  try store.unwrap_extern(wrapped) catch {
+    UndefinedElement => ()
+    error => raise error
+  } noraise {
+    _ => fail("unrooted wrapper must be released")
+  }
+}
