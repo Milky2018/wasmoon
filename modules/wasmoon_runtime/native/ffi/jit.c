@@ -498,9 +498,21 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_
     if (ctx && ctx_table0_base(ctx) &&
         table_idx >= 0 && (size_t)table_idx < ctx_table0_elements(ctx) &&
         func_idx >= 0 && func_idx < ctx_func_count(ctx)) {
-        int64_t pointer = (int64_t)(intptr_t)ctx_func_table(ctx)[func_idx];
-        ctx_table0_base(ctx)[table_idx * 2] = (void *)(intptr_t)(
-            pointer ? pointer | FUNCREF_TAG : -(int64_t)(func_idx + 1));
+        jit_runtime_state_t *state = ctx_runtime(ctx);
+        int64_t value = -(int64_t)(func_idx + 1);
+        if (state->table_bindings && state->table_bindings[0].owner &&
+            state->table_bindings[0].owner->store_references) {
+            // A borrowed Store table never accepts executable-pointer identity.
+            // Reject incomplete setup without changing its entry or revision.
+            if (func_idx >= state->callable_function_count ||
+                !state->callable_functions || state->callable_functions[func_idx] < 0)
+                return;
+            value = callable_store_reference(ctx, value);
+        } else {
+            int64_t pointer = (int64_t)(intptr_t)ctx_func_table(ctx)[func_idx];
+            if (pointer) value = pointer | FUNCREF_TAG;
+        }
+        ctx_table0_base(ctx)[table_idx * 2] = (void *)(intptr_t)value;
         ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
         table_mark_mutated(ctx, 0);
     }
