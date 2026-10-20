@@ -1,0 +1,287 @@
+{
+  "kind": "local working-tree validation, not CI",
+  "issue": "https://github.com/Milky2018/wasmoon/issues/548",
+  "baseline_revision": "7854228a50434f587992e17e1a9f40bb363a99a3",
+  "candidate_base_revision": "7854228a50434f587992e17e1a9f40bb363a99a3",
+  "candidate_source_dirty": true,
+  "platform": {
+    "os": "26.7",
+    "architecture": "arm64",
+    "toolchain": "moon 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moon\nmoonc v0.10.16+b1a0e846e (2026-10-16) ~/.moon/bin/moonc\nmoonrun 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg"
+  },
+  "performance": {
+    "execution": "Release binaries built separately; all benchmark processes ran serially after this task's test/build workers exited. Each synthetic case uses a fresh Store. Compilation is outside timed sections.",
+    "clock": "monotonic milliseconds; 0/1ms results are near measurement resolution",
+    "synthetic": {
+      "types": 100,
+      "trials_per_case": 2,
+      "cases": [
+        {
+          "mode": "raw",
+          "globals": 0,
+          "baseline_ms": [
+            2,
+            1
+          ],
+          "candidate_ms": [
+            2,
+            2
+          ]
+        },
+        {
+          "mode": "raw",
+          "globals": 1,
+          "baseline_ms": [
+            50,
+            51
+          ],
+          "candidate_ms": [
+            1,
+            2
+          ]
+        },
+        {
+          "mode": "raw",
+          "globals": 10,
+          "baseline_ms": [
+            978,
+            508
+          ],
+          "candidate_ms": [
+            2,
+            2
+          ]
+        },
+        {
+          "mode": "raw",
+          "globals": 100,
+          "baseline_ms": [
+            4916,
+            4829
+          ],
+          "candidate_ms": [
+            2,
+            2
+          ]
+        },
+        {
+          "mode": "validated",
+          "globals": 0,
+          "baseline_ms": [
+            1,
+            0
+          ],
+          "candidate_ms": [
+            0,
+            0
+          ]
+        },
+        {
+          "mode": "validated",
+          "globals": 1,
+          "baseline_ms": [
+            49,
+            48
+          ],
+          "candidate_ms": [
+            1,
+            1
+          ]
+        },
+        {
+          "mode": "validated",
+          "globals": 10,
+          "baseline_ms": [
+            508,
+            489
+          ],
+          "candidate_ms": [
+            1,
+            1
+          ]
+        },
+        {
+          "mode": "validated",
+          "globals": 100,
+          "baseline_ms": [
+            4900,
+            5114
+          ],
+          "candidate_ms": [
+            1,
+            1
+          ]
+        }
+      ],
+      "binaries": {
+        "baseline": "b4ad9386a960d976134d979d5834510f973f402a3c6f89b542ce772cb83bb89c",
+        "candidate": "a04541d2360134c89a49f20598df7dedbb073b6da948d728a7885e278d7e1eba"
+      },
+      "source_sha256": "362ca8d990a95d7e7347e8dec4337e4fe5238100ce3060d86604c6af486cd2aa"
+    },
+    "real_cmp": {
+      "fixture_sha256": "cf38253bbbf063c3a90cd1b848da15a750a2ef470c75b3a8322d6e58377e2076",
+      "core_source_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+      "types": 233,
+      "globals": 19,
+      "start_executed": false,
+      "scope": "Prevalidated unstarted instantiation only; function imports trap if unexpectedly invoked. No full guest execution or original 89-second embedding result is claimed.",
+      "before_ms": [
+        2135,
+        2104,
+        2074
+      ],
+      "after_ms": [
+        7,
+        7,
+        7
+      ],
+      "binaries": {
+        "baseline": "631596d36d2f3cbdda0d9ade8e3644a42b73f8a91a7daf5c8403633b5c3492fa",
+        "candidate": "9d8adab40cd642737dd0e2410a59986873c4154e86d813ddd5305c12ce940db2"
+      },
+      "source_sha256": "51d7f5b6a061a0c6b2bf7d4093b24313d1a692b61d330bb7c721d7f3c6e23f08"
+    }
+  },
+  "regression_controls": {
+    "mapping_reuse": "failed before optimization on native and wasm; passes afterward",
+    "close_during_rollback": "failed before terminal-close guard; passes afterward",
+    "jit_comparison_helper": "new GC-global fixture failed on unchanged main and candidate because initialized globals and JIT execution used different heaps; shared Store-owned CHeap preserves expected value 43 and parity"
+  },
+  "validation": {
+    "info_fmt_strict_native_wasm_warning73": "passed",
+    "module_boundaries": "passed",
+    "native_tests": 2808,
+    "wasm_tests": 1333,
+    "core": {
+      "native": {
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "wasm": {
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      }
+    },
+    "core_jit": {
+      "files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "errors": 0
+    },
+    "component": {
+      "jit": {
+        "files": 59,
+        "commands": 1385,
+        "failed": 0,
+        "skipped": 0
+      },
+      "interp": {
+        "files": 59,
+        "commands": 1385,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "misc": {
+      "pass": 692,
+      "script_only": 72,
+      "fail": 0,
+      "timeout": 0,
+      "unsupported": 0,
+      "deferred": 0,
+      "harness_error": 0
+    },
+    "python_tests": 173,
+    "existing_python_platform_skips": 54,
+    "sanitizer_tests": 200,
+    "sanitizer": {
+      "version": "0.17.0",
+      "source_revision": "7854228a50434f587992e17e1a9f40bb363a99a3",
+      "source_dirty": true,
+      "build_reuse": "fresh",
+      "binary_sha256": "6f8e475339f41a1fc6a74bebe2c1400548c497803729d40546f3bde1f8b7762e",
+      "tests": "passed",
+      "event_loop": "passed",
+      "asan_probe": "detected",
+      "native_asan_probe": "detected",
+      "lsan_probe": "not_applicable",
+      "leak_detection": false,
+      "binary": "/Users/zhengyu/Documents/projects/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+      "instrumentation": [
+        "address",
+        "undefined"
+      ],
+      "allocator": "system",
+      "exclusions": [
+        "MoonBit runtime objects",
+        "JIT machine code"
+      ]
+    }
+  },
+  "source_manifest": [
+    {
+      "file": "modules/wasmoon/testsuite/compare.mbt",
+      "candidate_sha256": "6c60087d79eaa1f70156ec6dfb5fda393b39d3ab85dae7c84c037a0805dd02f4",
+      "baseline_sha256": "8b6b59e66661793161371998ff82447cdad0d761db8956be9000bd19c799fc33"
+    },
+    {
+      "file": "modules/wasmoon/testsuite/gc_global_type_registration_test.mbt",
+      "candidate_sha256": "ec8885b632f131e24e888a5f5ba730bb9fd33fbe373d93d543a2dcdb657bcc03",
+      "baseline_sha256": null
+    },
+    {
+      "file": "modules/wasmoon_runtime/executor/gc_type_registration_test.mbt",
+      "candidate_sha256": "8c20a141fe9011a07a4d04ba8194c2a17a29a4539c32eaa712c95ecfd040e0c1",
+      "baseline_sha256": null
+    },
+    {
+      "file": "modules/wasmoon_runtime/executor/moon.pkg",
+      "candidate_sha256": "faa71e09ea13f1eb01096203f8095cd5e6381e718e094cf9eb3a023d26d0e2e6",
+      "baseline_sha256": "00d557f74467d2f36c4590e21f799e5b44a5850fd7a815e31c5580a37cf45cda"
+    },
+    {
+      "file": "modules/wasmoon_runtime/runtime/store.mbt",
+      "candidate_sha256": "4f3ec863ee0b6f6e8b8971188b2c6cbfc85a30b248140737038fc69328779ff1",
+      "baseline_sha256": "1ae8073e767f0df4752ff904e3980020eb76acf71a7fdb3c317a950cc3419224"
+    },
+    {
+      "file": "modules/wasmoon_runtime/runtime/store_wasm.mbt",
+      "candidate_sha256": "19db83cdac1a3fdc123108b329337de8fbf547640a94d08521a96946eb01b7e2",
+      "baseline_sha256": "5493e112424cb66033f11f84eb1382b0857b4187378fd4dade19f071b986e220"
+    },
+    {
+      "file": "modules/wasmoon_runtime/runtime/type_registry.mbt",
+      "candidate_sha256": "a7be177f75de2a95b776052f7b2d9be5de9762a1b3555d2c838ed73bbe59368b",
+      "baseline_sha256": "231cf1fba03137885703a28bb56e302639790704128697e39d501d0a962e7d5d"
+    },
+    {
+      "file": "modules/wasmoon_runtime/runtime/type_registry_wasm.mbt",
+      "candidate_sha256": "38befcf6b113e35efb9747931612c3134d695fda6918a1366332dd618268ed51",
+      "baseline_sha256": "6a743477b1803f5b1dc676d58a450eed34b2a35baf08493c8282b5815783e803"
+    },
+    {
+      "file": "modules/wasmoon_runtime/runtime/type_registry_wbtest.mbt",
+      "candidate_sha256": "a4ebe43c264779918738caf7894367bbd5543f9f1a15e66ef42c0e71e6f4f801",
+      "baseline_sha256": null
+    },
+    {
+      "file": "scripts/run_sanitizers.py",
+      "candidate_sha256": "b9e537a185544751f6f5a2d02d35b20f78448ff7aea78d1d6e8e70a387be9cf1",
+      "baseline_sha256": "070c1218e8f73d25a6884e6caa4fa61fd8156ba0cdf821bad176bb0e8ae6344f"
+    }
+  ],
+  "raw_receipts": "ignored target/issue548 and target/sanitizers",
+  "profile_receipt": {
+    "file": "target/issue548/baseline.sample.txt",
+    "sha256": "4f077d030528fb201401df0e7ebdfd1c7b7f8c49cadb0d52ed7120d80c20da4b",
+    "observation": "Repeated cross_module/RecGroupIndex construction dominates the sampled GC allocation path."
+  },
+  "raw_performance_sha256": "49ca42d2002ff84806973f357470972ecf4d1b339065c0c62eb7ffad6e6a8819"
+}

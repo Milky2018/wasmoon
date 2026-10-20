@@ -150,7 +150,9 @@ pub fn Store::close(self : Store) -> Unit {
   self.funcref_registry.clear()
   self.native_types.representatives.clear()
   self.native_types.representatives.shrink_to_fit()
+  self.native_types.group_buckets.clear()
   self.native_types.mappings.clear()
+  self.native_types.initialization_graph = None
   self.native_types.parents.clear()
   self.native_types.parents.shrink_to_fit()
   self.native_types.views.clear()

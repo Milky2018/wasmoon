@@ -41,6 +41,8 @@ def main():
     for name in ("portable_storage_test.mbt", "resource_rollback_test.mbt",
                  "table_lifetime_test.mbt", "heap_lifetime_test.mbt"):
         shutil.copy2(ROOT / "modules/wasmoon_runtime/runtime" / name, PACKAGE)
+    shutil.copy2(ROOT / "modules/wasmoon_runtime/executor/gc_type_registration_test.mbt",
+                 PACKAGE)
     bounds = ROOT / "modules/wasmoon_runtime/native/host_io/wasi/bounds_test.mbt"
     (PACKAGE / "native_bounds_test.mbt").write_text(
         bounds.read_text().replace("@wasi.", "@native_host."))

@@ -1,0 +1,382 @@
+{
+  "scope": "Local dirty working-tree evidence; not supported-platform CI acceptance",
+  "base_revision": "ccb0bfece0de11d438de3d5d5aabc889b9f5a3ec",
+  "source_dirty": true,
+  "source_sha256": {
+    "modules/wasm_core/types/canonical.mbt": "99a7fb0f364f15a262bb26e055ca16f154c37a6cb120129346d455b589d04099",
+    "modules/wasm_core/types/equivalence.mbt": "6ec4db690803314aff0e5565fa99fbad6da99507d31f0d75843035cdb1ce3dfc",
+    "modules/wasmoon_runtime/runtime/type_registry.mbt": "6e6d957defc73f79aa0cf16bf2ddefdb3c41bfe8c41c7a133d4b9d7b8491d042",
+    "modules/wasmoon_runtime/runtime/store.mbt": "8559bba5ecf2205c2e3a9a7fc012be060e4f1ce9f474b7be58e30790fe08d994",
+    "modules/wasmoon_runtime/runtime/store_wasm.mbt": "4d07f12f6f312057aa4fa1dbf88066b759929cfc3fd93c43781b28d1b1807090",
+    "modules/wasm_core/types/canonical_wbtest.mbt": "ab289752b132db5d25232811f988651994765a690aad835c58a9e1b9a21b743a",
+    "modules/wasmoon_runtime/runtime/type_registry_wbtest.mbt": "db95596f4ef5080975be4fabb9243bc38fedab400594d981bfb859d6c757cc83",
+    "modules/wasmoon_runtime/executor/gc_type_registration_test.mbt": "31a28238d3ded506542398f2050461ed49ceb1930094964e1108b6329298f10b",
+    "modules/wasmoon_runtime/executor/instantiate_scale_test.mbt": "031dbd15993d5cf79e1db3f32777d82b7de4b66264e77c647745c2daf7f37aed"
+  },
+  "adapted_from": "https://github.com/Milky2018/wasmoon/pull/554/commits/727c352f119f20cf4b2ca2634958922796c64671",
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "toolchain": "moon 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moon\nmoonc v0.10.16+b1a0e846e (2026-10-16) ~/.moon/bin/moonc\nmoonrun 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+  "benchmark": {
+    "construction_and_compilation_excluded": true,
+    "serial_after_build_and_test_workers_finished": true,
+    "trials_per_case": 3,
+    "clock_resolution_ms": 1,
+    "module": "distinct singleton function types referencing earlier types; one struct; zero or one GC global; one empty exported function not executed",
+    "baseline_production_revision": "ccb0bfece0de11d438de3d5d5aabc889b9f5a3ec",
+    "baseline_production_sha256": {
+      "modules/wasm_core/types/equivalence.mbt": "e06e22f2ea33f5c3c1fa64753fae66075a3b17b8cf5330d3811236bf630a573d",
+      "modules/wasmoon_runtime/runtime/type_registry.mbt": "a7be177f75de2a95b776052f7b2d9be5de9762a1b3555d2c838ed73bbe59368b",
+      "modules/wasmoon_runtime/runtime/store.mbt": "4f3ec863ee0b6f6e8b8971188b2c6cbfc85a30b248140737038fc69328779ff1",
+      "modules/wasmoon_runtime/runtime/store_wasm.mbt": "19db83cdac1a3fdc123108b329337de8fbf547640a94d08521a96946eb01b7e2"
+    },
+    "baseline_build_had_untracked_scale_test": true,
+    "harness_sha256": "198ea3a7242e6577c22200624a91138ce7e024050780b9f83d5f20c6feaf7d10",
+    "baseline_binary_sha256": "e625692a855cad710224235a9759a7021b634c03ba826190fbe3b0579ec94e86",
+    "candidate_binary_sha256": "5e67c095c274467835f1b7ca620ba6b3c67bdcb454d7aa298e388ef5060b714c",
+    "results": {
+      "baseline": {
+        "measurements": [
+          {
+            "types": 1001,
+            "globals": 0,
+            "trial": 0,
+            "canonical_ms": 119,
+            "instantiate_ms": 361,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 0,
+            "trial": 1,
+            "canonical_ms": 114,
+            "instantiate_ms": 346,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 0,
+            "trial": 2,
+            "canonical_ms": 120,
+            "instantiate_ms": 344,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 1,
+            "trial": 0,
+            "canonical_ms": 118,
+            "instantiate_ms": 493,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 1,
+            "trial": 1,
+            "canonical_ms": 122,
+            "instantiate_ms": 474,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 1,
+            "trial": 2,
+            "canonical_ms": 121,
+            "instantiate_ms": 485,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 0,
+            "trial": 0,
+            "canonical_ms": 724,
+            "instantiate_ms": 2053,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 0,
+            "trial": 1,
+            "canonical_ms": 695,
+            "instantiate_ms": 2605,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 0,
+            "trial": 2,
+            "canonical_ms": 859,
+            "instantiate_ms": 2792,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 1,
+            "trial": 0,
+            "canonical_ms": 914,
+            "instantiate_ms": 3454,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 1,
+            "trial": 1,
+            "canonical_ms": 790,
+            "instantiate_ms": 3186,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 1,
+            "trial": 2,
+            "canonical_ms": 748,
+            "instantiate_ms": 3133,
+            "close_ms": 0
+          }
+        ],
+        "intentional_stop_after_2001_types": true,
+        "exit_code": -9
+      },
+      "candidate": {
+        "measurements": [
+          {
+            "types": 1001,
+            "globals": 0,
+            "trial": 0,
+            "canonical_ms": 0,
+            "instantiate_ms": 2,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 0,
+            "trial": 1,
+            "canonical_ms": 0,
+            "instantiate_ms": 1,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 0,
+            "trial": 2,
+            "canonical_ms": 0,
+            "instantiate_ms": 1,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 1,
+            "trial": 0,
+            "canonical_ms": 0,
+            "instantiate_ms": 1,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 1,
+            "trial": 1,
+            "canonical_ms": 1,
+            "instantiate_ms": 1,
+            "close_ms": 0
+          },
+          {
+            "types": 1001,
+            "globals": 1,
+            "trial": 2,
+            "canonical_ms": 1,
+            "instantiate_ms": 1,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 0,
+            "trial": 0,
+            "canonical_ms": 1,
+            "instantiate_ms": 2,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 0,
+            "trial": 1,
+            "canonical_ms": 1,
+            "instantiate_ms": 2,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 0,
+            "trial": 2,
+            "canonical_ms": 1,
+            "instantiate_ms": 2,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 1,
+            "trial": 0,
+            "canonical_ms": 0,
+            "instantiate_ms": 3,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 1,
+            "trial": 1,
+            "canonical_ms": 1,
+            "instantiate_ms": 3,
+            "close_ms": 0
+          },
+          {
+            "types": 2001,
+            "globals": 1,
+            "trial": 2,
+            "canonical_ms": 0,
+            "instantiate_ms": 3,
+            "close_ms": 0
+          },
+          {
+            "types": 5001,
+            "globals": 0,
+            "trial": 0,
+            "canonical_ms": 2,
+            "instantiate_ms": 6,
+            "close_ms": 1
+          },
+          {
+            "types": 5001,
+            "globals": 0,
+            "trial": 1,
+            "canonical_ms": 1,
+            "instantiate_ms": 6,
+            "close_ms": 0
+          },
+          {
+            "types": 5001,
+            "globals": 0,
+            "trial": 2,
+            "canonical_ms": 2,
+            "instantiate_ms": 6,
+            "close_ms": 0
+          },
+          {
+            "types": 5001,
+            "globals": 1,
+            "trial": 0,
+            "canonical_ms": 2,
+            "instantiate_ms": 7,
+            "close_ms": 1
+          },
+          {
+            "types": 5001,
+            "globals": 1,
+            "trial": 1,
+            "canonical_ms": 1,
+            "instantiate_ms": 8,
+            "close_ms": 0
+          },
+          {
+            "types": 5001,
+            "globals": 1,
+            "trial": 2,
+            "canonical_ms": 2,
+            "instantiate_ms": 7,
+            "close_ms": 0
+          }
+        ],
+        "intentional_stop_after_2001_types": false,
+        "exit_code": 0
+      }
+    },
+    "baseline_5001_types": "not measured; baseline process intentionally stopped after all 2001-type trials",
+    "discarded_exploratory_run": "An earlier baseline process overlapped builds and was terminated; none of its timings are used."
+  },
+  "validation": {
+    "native": {
+      "passed": 2819,
+      "failed": 0
+    },
+    "wasm": {
+      "passed": 1344,
+      "failed": 0
+    },
+    "final_types_only_fixture_executor_native": 171,
+    "final_types_only_fixture_executor_wasm": 170,
+    "core": {
+      "native": {
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "wasm": {
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      }
+    },
+    "core_jit": {
+      "files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "errors": 0
+    },
+    "components_each_native_engine": {
+      "files": 59,
+      "commands": 1385,
+      "failed": 0,
+      "skipped": 0
+    },
+    "misc_counts": {
+      "pass": 692,
+      "script_only": 72,
+      "fail": 0,
+      "timeout": 0,
+      "unsupported": 0,
+      "deferred": 0,
+      "harness_error": 0
+    },
+    "sanitizer": {
+      "version": "0.17.0",
+      "source_revision": "ccb0bfece0de11d438de3d5d5aabc889b9f5a3ec",
+      "source_dirty": true,
+      "build_reuse": "fresh",
+      "binary_sha256": "2333858a79fd400ec4e12043aacb97c42d63a4a40a9b1097fe10882b8ed61696",
+      "tests": "passed",
+      "event_loop": "passed",
+      "asan_probe": "detected",
+      "native_asan_probe": "detected",
+      "lsan_probe": "not_applicable",
+      "leak_detection": false,
+      "binary": "/Users/zhengyu/Documents/projects/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+      "instrumentation": [
+        "address",
+        "undefined"
+      ],
+      "allocator": "system",
+      "exclusions": [
+        "MoonBit runtime objects",
+        "JIT machine code"
+      ]
+    },
+    "sanitizer_test_count": 201,
+    "python": {
+      "tests": 174,
+      "existing_platform_skips": 54
+    },
+    "wasm_cleanup_omission_control": {
+      "without_group_buckets_clear": {
+        "passed": 0,
+        "failed": 1
+      },
+      "restored_cleanup": {
+        "passed": 1,
+        "failed": 0
+      }
+    },
+    "cli_sha256": "254abc1dda9aa82220ffb68f0820138a7421a84330ba30a5ffea5dcd8b2959fd",
+    "wasmoon_tools_sha256": "9cd94486e68fe8376a9a5584cc1a4e76db69baa5ad75e4c65e63fd4dca3a8742"
+  }
+}

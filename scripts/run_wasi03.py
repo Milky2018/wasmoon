@@ -105,7 +105,7 @@ def main():
             content = subprocess.check_output(["git", "-C", str(upstream), "show", f"{PIN}:tests/rust/testsuite/wasm32-wasip3/fs-tests.dir/{name}"])
             (fixtures / name).write_bytes(content)
         result = directory / "upstream.json"
-        cmd = [sys.executable, str(upstream / "test-runner/wasi_test_runner.py"),
+        cmd = [sys.executable, str(ROOT / "scripts/wasi03_upstream_runner.py"), str(upstream),
                "-t", str(work), "-r", str(ROOT / "scripts/wasi03_testsuite_adapter.py"),
                "--json-output-location", str(result), "--disable-colors"]
         env = os.environ | {"WASMOON": str(args.wasmoon.resolve()), "WASI03_ENGINE": engine, "WASI03_TIMEOUT": str(args.timeout)}
