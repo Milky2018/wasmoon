@@ -1713,7 +1713,9 @@ fn DirectLoweringSession::terminate_tail_call(
     inputs,
     [],
     metadata,
-    clobbers=platform_call_clobbers(),
+    // Tail argument setup writes the hidden result-area register too. Roots
+    // must not occupy it even though the platform ABI treats it as preserved.
+    clobbers=internal_call_clobbers(plan),
   )
 }
 
