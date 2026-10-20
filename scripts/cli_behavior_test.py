@@ -17,6 +17,7 @@ CI runs this as its own step after the build.
 from __future__ import annotations
 
 import re
+import json
 import os
 import subprocess
 import sys
@@ -376,6 +377,51 @@ def check_explore_selection(tmp: Path) -> None:
         f"stdout={proc.stdout!r}, stderr={proc.stderr!r}",
     )
 
+def check_store_function_references(tmp: Path) -> None:
+    source = tmp / "store-function-references.wat"
+    source.write_text("""(module
+      (type $t (func (result i32)))
+      (func $f (type $t) i32.const 42)
+      (global $fref (ref $t) (ref.func $f))
+      (table 1 funcref)
+      (elem (i32.const 0) $f)
+      (elem $passive func $f)
+      (func (export "indirect") (result i32)
+        i32.const 0 call_indirect (type $t))
+      (func (export "reference") (result i32)
+        global.get $fref call_ref $t)
+      (func (export "bulk") (result i32)
+        i32.const 0 i32.const 0 i32.const 1 table.init $passive
+        i32.const 0 call_indirect (type $t)))""")
+    for mode in ((), ("--no-jit",)):
+        for name in ("indirect", "reference", "bulk"):
+            proc = run("run", str(source), "--invoke", name, *mode)
+            expect(
+                f"CLI Store function references: {name}, mode={mode}",
+                proc.returncode == 0 and proc.stdout.strip() == "42",
+                f"exit={proc.returncode}, stdout={proc.stdout!r}, stderr={proc.stderr!r}",
+            )
+
+    binary = tmp / "store-function-references.wasm"
+    subprocess.run(["wasm-tools", "parse", str(source), "-o", str(binary)],
+                   check=True, timeout=30)
+    (tmp / "function-cache").mkdir()
+    report = tmp / "function-reference-cache.json"
+    env = {**os.environ, "WASMOON_JIT_CACHE_DIR": str(tmp / "function-cache"),
+           "WASMOON_JIT_CACHE_REPORT": str(report)}
+    for hit in (False, True):
+        proc = subprocess.run(
+            [str(WASMOON), "run", str(binary), "--invoke", "indirect"],
+            cwd=ROOT, env=env, capture_output=True, text=True, timeout=120,
+        )
+        expect(f"CLI indirect call with cache_hit={hit}",
+               proc.returncode == 0 and proc.stdout.strip() == "42",
+               f"exit={proc.returncode}, stdout={proc.stdout!r}, stderr={proc.stderr!r}")
+        expect(f"CLI callable regression exercised cache_hit={hit}",
+               json.loads(report.read_text())["cache_hit"] == hit,
+               report.read_text())
+
+
 def check_component_exit_status(tmp: Path) -> None:
     template = '(component\n  (import "wasi:cli/exit@0.3.0" (instance $exit (export "exit-with-code" (func (param "status-code" u8)))))\n  (core func $exit (canon lower (func $exit "exit-with-code")))\n  (core module $M\n    (import "" "exit" (func $exit (param i32)))\n    (func (export "run") (result i32) i32.const 7 call $exit i32.const 0))\n  (core instance $m (instantiate $M (with "" (instance (export "exit" (func $exit))))))\n  (func $run (result (result)) (canon lift (core func $m "run")))\n  (instance $command (export "run" (func $run)))\n  (export "wasi:cli/run@0.2.11" (instance $command)))\n'
     for status in [0, 1, 7, 125]:
@@ -414,6 +460,7 @@ def main() -> int:
             check_invalid_modules(Path(directory))
             check_malformed_type_kind_across_commands(Path(directory))
             check_explore_selection(Path(directory))
+            check_store_function_references(Path(directory))
             check_component_exit_status(Path(directory))
     except Failure as failure:
         print(f"FAILED {failure}", file=sys.stderr)

@@ -1411,6 +1411,14 @@ fn run_with_jit(
           } else {
             None
           }
+          // Store-format references need their callable identities and type metadata
+          // before globals, tables or passive elements are exposed to native code.
+          @wast.register_instance_funcrefs_for_jit(jm, instance, store) catch {
+            error => {
+              @logger.error("Failed to register JIT callables: \{error}")
+              raise CommandFailure(1)
+            }
+          }
           // Initialize all memories (multi-memory support)
           let _ = @wast.init_jit_memories_from_store(instance, store, jm) catch {
             error => {
