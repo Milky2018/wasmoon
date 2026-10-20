@@ -88,3 +88,23 @@ Local follow-up validation passed native 2843/2843, wasm 1347/1347, strict check
 and fresh macOS ASan/UBSan 213/213 with both ASan controls detected. The original
 JSON receipt remains historical; it is not acceptance of this follow-up. Linux
 LSan and final-head CI remain pending.
+
+## CLI binding follow-up
+
+After the heap repair, an actual `run --invoke value` probe with an array table
+initializer still trapped with `null reference`, while interpreter mode returned
+42. The CLI had retained a separate legacy table initializer: it rewrote each
+shared entry, converting non-function references to null. This was a second
+migration regression, independent of the stale heap selector.
+
+CLI preparation now only binds the authoritative Store descriptors. A permanent
+regression first failed with `Null != ArrayRef(0)` and now verifies that repeated
+binding preserves array references, Store function identities and native mutation
+revisions. The real CLI returns 42 in both modes; the corresponding Component
+script passes two commands in each engine mode. Temporary fixtures were removed.
+
+Final local native tests pass 2844/2844. Core JIT passes 258 files/62563 assertions;
+all three Component suites pass on each native engine, each 59 files/1385 commands
+with zero failures or skips. Wasm 1347/1347 and the fresh 213-test sanitizer closure
+were validated for the heap repair; this follow-up changes only native CLI setup
+and its test. Final-head cross-platform CI remains pending.

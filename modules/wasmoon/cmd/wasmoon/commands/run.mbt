@@ -1209,67 +1209,19 @@ fn get_import_func_type_idx(
 }
 
 ///|
-/// Initialize JIT tables from runtime table state.
-/// This is required for call_indirect and table operations in JIT mode.
+/// Bind the Store's authoritative tables without rewriting their entries.
 fn init_jit_tables(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   jm : @jit.JITModule,
-  use_subtype_indirect_check : Bool,
 ) -> Unit raise @wasmoon_jit.NativeSetupError {
   if instance.table_addrs.is_empty() {
     return
   }
-  // Collect JIT tables in module table index order
-  let jit_tables : Array[@wasmoon_jit.JITTable?] = []
-  for table_addr in instance.table_addrs {
-    jit_tables.push(store.get_jit_table(table_addr))
-  }
-  // Build store func address -> module func index map
-  let func_addr_to_idx : Map[Int32, Int32] = Map([])
-  for i, addr in instance.func_addrs {
-    func_addr_to_idx.set(addr, i)
-  }
-  // Copy table contents into JIT tables as (funcref?, type_idx) pairs
-  let elem_init : Array[(Int32, Int32, Int32?, Int32)] = []
-  for table_idx, table_addr in instance.table_addrs {
-    let runtime_table = store.get_table(table_addr) catch { _ => continue }
-    // Avoid writing past the allocated JIT table size (JIT tables are sized at instantiation).
-    let max_entries = match jit_tables[table_idx] {
-      Some(t) => t.get_size()
-      None => 0
-    }
-    let size = runtime_table.size().min(max_entries)
-    for elem_idx in 0..<size {
-      let value = runtime_table.get(elem_idx) catch { _ => continue }
-      match value {
-        FuncRef(store_addr) => {
-          let func_idx = func_addr_to_idx.get(store_addr)
-          let raw_type_idx = match func_idx {
-            Some(idx) =>
-              if idx >= 0 && idx < instance.func_type_indices.length() {
-                instance.func_type_indices[idx]
-              } else {
-                -1
-              }
-            None => -1
-          }
-          let type_idx = if use_subtype_indirect_check {
-            raw_type_idx
-          } else if raw_type_idx >= 0 &&
-            raw_type_idx < instance.canonical_type_indices.length() {
-            instance.canonical_type_indices[raw_type_idx]
-          } else {
-            raw_type_idx
-          }
-          elem_init.push((table_idx, elem_idx, func_idx, type_idx))
-        }
-        // Null and non-funcref entries are written as null to keep shared tables consistent.
-        _ => elem_init.push((table_idx, elem_idx, None, -1))
-      }
-    }
-  }
-  jm.init_shared_tables(jit_tables, elem_init)
+  let tables = Array::makei(instance.table_addrs.length(), i => {
+    store.get_jit_table(instance.table_addrs[i])
+  })
+  jm.init_shared_tables(tables, [])
 }
 
 ///|
@@ -1480,7 +1432,7 @@ fn run_with_jit(
               mod_,
             )
             is Some(_)
-          init_jit_tables(instance, store, jm, use_subtype_indirect_check) catch {
+          init_jit_tables(instance, store, jm) catch {
             error => {
               @logger.error("Failed to initialize JIT table bindings: \{error}")
               raise CommandFailure(1)

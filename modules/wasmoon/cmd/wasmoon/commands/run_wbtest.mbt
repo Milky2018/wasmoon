@@ -373,3 +373,47 @@ test "NaN policy survives serialization and separates JIT cache entries" {
   inspect(rejected, content="true")
   inspect(@fs.path_exists(path), content="false")
 }
+
+///|
+test "CLI JIT table binding preserves authoritative GC and function entries" {
+  let code = @core_wat.parse(
+    (
+      #|(module
+      #| (type $a (array (mut i32)))
+      #| (func $f)
+      #| (table 1 (ref $a) (array.new_fixed $a 1 (i32.const 42)))
+      #| (table 1 funcref (ref.func $f)))
+    ),
+  )
+  let store = @runtime.Store::Store()
+  defer store.close()
+  store.enable_c_heap()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    code,
+    Imports(store),
+  )
+  guard compile_module_to_jit(code, false, false, 0, false)
+    is Some((artifact, _)) else {
+    fail("expected native compilation")
+  }
+  let module_ = @jit.JITModule::load_artifact(
+    verify_compiled_jit_artifact(artifact),
+    @wast.build_func_signatures(code),
+  )
+  defer module_.close()
+  let table = store.get_table(instance.table_addrs[0])
+  let expected = table.get(0)
+  guard expected is ArrayRef(_) else { fail("expected array initializer") }
+  let native = store.get_jit_table(instance.table_addrs[0]).unwrap()
+  let revision = native.raw_ptr().revision()
+  for _ in 0..<2 {
+    init_jit_tables(instance, store, module_)
+    assert_eq(table.get(0), expected)
+    assert_eq(native.raw_ptr().revision(), revision)
+    assert_eq(
+      store.get_table(instance.table_addrs[1]).get(0),
+      FuncRef(instance.func_addrs[0]),
+    )
+  }
+}
