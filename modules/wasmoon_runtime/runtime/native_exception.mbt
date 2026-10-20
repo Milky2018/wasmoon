@@ -88,6 +88,8 @@ fn StoreReferences::decode_native_exception(
         | NullFuncRef =>
           if raw == 0L {
             Null
+          } else if @native_bridge.decode_store_funcref(raw) is Some(address) {
+            FuncRef(address)
           } else {
             guard self.funcref_registry.lookup_store_addr(
                 @native_bridge.untag_funcref_ptr(raw),
@@ -205,10 +207,8 @@ fn StoreReferences::encode_exception_snapshot(
       ExnRef(index) =>
         words.push(self.native.store_exception_to_native.get(index).unwrap())
       FuncRef(address) => {
-        guard self.funcref_registry.lookup_ptr(address) is Some(pointer) else {
-          raise UndefinedElement
-        }
-        words.push(@native_bridge.tag_funcref_ptr(pointer))
+        guard address >= 0 else { raise UndefinedElement }
+        words.push(@native_bridge.encode_store_funcref(address))
       }
       ExternRef(_) => {
         let inner = self.unwrap_extern(value)
