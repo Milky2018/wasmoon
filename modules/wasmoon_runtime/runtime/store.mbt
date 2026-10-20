@@ -37,8 +37,6 @@ pub struct Store {
   priv tag_type_indices : Array[Int32] // Original type index for each tag
   priv tag_owners : Array[FuncOwner] // Owner module for each tag
   priv heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
-  // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
-  priv mut c_heap : @native_bridge.CHeap?
   // Module types for CHeap type lookups (needed to decode Int64 to Value)
   priv mut module_types : Array[@types.SubType]
   // Module rec groups for canonical type index computation
@@ -91,7 +89,7 @@ fn Store::register_rollback(
   registrar.on_rollback(
     self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
   )
-  if self.c_heap is Some(heap) {
+  if self.references.native.c_heap is Some(heap) {
     registrar.on_rollback(
       heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
     )
@@ -216,7 +214,6 @@ pub fn Store::Store(
     tag_type_indices: [],
     tag_owners: [],
     heap: managed_heap,
-    c_heap: None,
     module_types: [],
     module_rec_groups: [],
     func_owners: [],
@@ -302,7 +299,6 @@ pub fn Store::with_c_heap(
     tag_type_indices: [],
     tag_owners: [],
     heap: managed_heap,
-    c_heap: Some(heap),
     module_types: [],
     module_rec_groups: [],
     func_owners: [],
@@ -422,9 +418,9 @@ pub fn Store::close(self : Store) -> Unit {
   self.references.exns.clear()
   self.references.auxiliary_leases.clear()
   self.heap.close()
-  if self.c_heap is Some(heap) {
+  if self.references.native.c_heap is Some(heap) {
     heap.free()
-    self.c_heap = None
+    self.references.native.c_heap = None
   }
   // These arrays are borrowed from the parsed module and may be reused by
   // other stores. Closing a store must only drop its own references.
@@ -540,7 +536,7 @@ pub fn GcRootLease::snapshot(self : GcRootLease) -> Array[@types.Value] {
 #cfg(target="native")
 pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
   self.ensure_open()
-  if self.c_heap is None {
+  if self.references.native.c_heap is None {
     guard self.heap.stats().live_objects == 0 else {
       raise HeapRepresentationInUse
     }
@@ -548,7 +544,7 @@ pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
       _ => raise OutOfMemory
     }
     self.bind_gc_budget(heap)
-    self.c_heap = Some(heap)
+    self.references.native.c_heap = Some(heap)
     self.native_execution.exceptions().enable_reclamation()
   }
 }
@@ -580,7 +576,7 @@ pub fn Store::set_module_types(
 /// Get the C heap pointer (for JIT)
 #cfg(target="native")
 pub fn Store::get_c_heap_ptr(self : Store) -> @native_bridge.GCHeapHandle {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.get_ptr()
     None => @native_bridge.GCHeapHandle::null()
   }
@@ -590,7 +586,7 @@ pub fn Store::get_c_heap_ptr(self : Store) -> @native_bridge.GCHeapHandle {
 /// Check if C heap is enabled
 #cfg(target="native")
 pub fn Store::has_c_heap(self : Store) -> Bool {
-  self.c_heap is Some(_)
+  self.references.native.c_heap is Some(_)
 }
 
 ///|
@@ -960,7 +956,7 @@ pub fn Store::alloc_struct(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
-  let reference = match self.c_heap {
+  let reference = match self.references.native.c_heap {
     Some(heap) => {
       let encoded = fields.map(value => self.encode_heap_value(value))
       heap.alloc_struct(type_idx, encoded) catch {
@@ -988,7 +984,7 @@ pub fn Store::alloc_array(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
-  let reference = match self.c_heap {
+  let reference = match self.references.native.c_heap {
     Some(heap) => {
       let encoded = elements.map(value => self.encode_heap_value(value))
       heap.alloc_array_from_values(type_idx, encoded) catch {
@@ -1012,7 +1008,7 @@ pub fn Store::struct_get(
   field_idx : Int32,
 ) -> @types.Value raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(struct_idx)
       let field_type = self.get_struct_field_type(
@@ -1037,7 +1033,7 @@ pub fn Store::struct_set(
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) =>
       heap.struct_set(struct_idx, field_idx, self.encode_heap_value(value))
     None => self.heap.struct_set(struct_idx, field_idx, value)
@@ -1052,7 +1048,7 @@ pub fn Store::array_len(
   array_idx : Int32,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.array_len(array_idx)
     None => self.heap.array_len(array_idx)
   }
@@ -1067,7 +1063,7 @@ pub fn Store::array_get(
   elem_idx : Int32,
 ) -> @types.Value raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(array_idx)
       let elem_type = self.get_array_elem_type(type_idx, array_idx)
@@ -1092,7 +1088,7 @@ pub fn Store::array_set(
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       let encoded = self.encode_heap_value(value)
       heap.array_set(array_idx, elem_idx, encoded) catch {
@@ -1116,7 +1112,7 @@ pub fn Store::array_fill(
   count : Int32,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       let encoded = self.encode_heap_value(value)
       heap.array_fill(array_idx, offset, encoded, count) catch {
@@ -1141,7 +1137,7 @@ pub fn Store::array_copy(
   count : Int32,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) =>
       heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
@@ -1161,7 +1157,7 @@ pub fn Store::get_gc_type_idx(
   idx : Int32,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.get_type_idx(idx)
     None => self.heap.get_type_idx(idx)
   }
@@ -1171,7 +1167,7 @@ pub fn Store::get_gc_type_idx(
 /// Check if a GC object reference is valid
 #cfg(target="native")
 pub fn Store::is_gc_valid(self : Store, idx : Int32) -> Bool {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.is_valid(idx)
     None => self.heap.is_valid(idx)
   }
@@ -1522,7 +1518,7 @@ pub fn Store::collect_garbage(
   defer {
     self.gc_in_collect = false
   }
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       self.begin_gc_tracing()
       defer self.end_gc_tracing()
@@ -1553,7 +1549,7 @@ pub fn Store::collect_garbage(
 /// Returns true if heap usage exceeds the threshold (default 75%)
 #cfg(target="native")
 pub fn Store::should_collect(self : Store, threshold~ : Double = 0.75) -> Bool {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.should_collect(threshold~)
     None => false
   }
@@ -1580,7 +1576,7 @@ pub fn Store::maybe_collect(
 /// or (0, 0, 0, 0, 0) if no C heap is enabled
 #cfg(target="native")
 pub fn Store::get_gc_stats(self : Store) -> (Int64, Int64, Int32, Int32, Int32) {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) =>
       (
         heap.get_size(),

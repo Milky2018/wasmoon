@@ -168,7 +168,7 @@ fn Store::release_unreachable_handles(self : Store, trace : GcTrace) -> Unit {
 ///|
 #cfg(target="native")
 fn Store::install_gc_tracing(self : Store) -> Unit {
-  guard self.c_heap is Some(heap) else { return }
+  guard self.references.native.c_heap is Some(heap) else { return }
   self.native_execution.exceptions().enable_reclamation()
   heap.bind_root_visitor(fn(phase, words) {
     if phase == 2 {
@@ -268,7 +268,7 @@ pub fn Store::end_gc_tracing(self : Store) -> Unit {
     return
   }
   self.gc_tracing_depth -= 1
-  if self.gc_tracing_depth == 0 && self.c_heap is Some(heap) {
+  if self.gc_tracing_depth == 0 && self.references.native.c_heap is Some(heap) {
     heap.clear_root_visitor()
   }
 }

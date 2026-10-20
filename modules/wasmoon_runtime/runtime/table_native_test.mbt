@@ -75,3 +75,66 @@ test "native table backing does not retain an otherwise unreferenced Store" {
   allocate_unretained_table_store()
   assert_eq(shared_table_live_count(), before)
 }
+
+///|
+test "late CHeap activation updates tables admitted before and after the switch" {
+  for before_activation in [true, false] {
+    let store = @runtime.Store::Store()
+    defer store.close()
+    let table = @runtime.Table::Table(RefNullEq, 2, None)
+    if before_activation {
+      store.alloc_table(table) |> ignore
+    }
+    store.enable_c_heap()
+    store.enable_c_heap()
+    if !before_activation {
+      store.alloc_table(table) |> ignore
+    }
+    let array = store.alloc_array(0, [I32(42)])
+    let structure = store.alloc_struct(0, [I32(17)])
+    table.set(0, ArrayRef(array))
+    table.set(1, StructRef(structure))
+    assert_eq(table.get(0), ArrayRef(array))
+    assert_eq(table.get(1), StructRef(structure))
+    store.close()
+    assert_false(store.has_c_heap())
+  }
+}
+
+///|
+test "late CHeap activation traces table roots and reclaims unrelated garbage" {
+  let store = @runtime.Store::Store()
+  defer store.close()
+  let table = @runtime.Table::Table(RefNullEq, 1, None)
+  store.alloc_table(table) |> ignore
+  store.enable_c_heap()
+  let rooted = store.alloc_array(0, [I32(42)])
+  table.set(0, ArrayRef(rooted))
+  let garbage = store.alloc_array(0, [I32(9)])
+  assert_eq(store.collect_garbage(), 1)
+  assert_true(store.is_gc_valid(rooted))
+  assert_false(store.is_gc_valid(garbage))
+  table.set(0, Null)
+  assert_eq(store.collect_garbage(), 1)
+  assert_false(store.is_gc_valid(rooted))
+}
+
+///|
+test "late CHeap activation decodes native exception array payloads" {
+  let store = @runtime.Store::Store()
+  defer store.close()
+  store.enable_c_heap()
+  let tag = store.alloc_tag({ params: [RefNullEq], results: [], })
+  let array = store.alloc_array(0, [I32(42)])
+  let arena = store.native_execution_state().exceptions()
+  assert_true(arena.define_tag(tag, [RefNullEq]))
+  let token = arena.insert(store.get_c_heap_ptr(), tag, [
+    (array.to_int64() + 1L) << 1,
+  ])
+  assert_true(token != 0L)
+  guard store.decode_native_exception(token) is ExnRef(exception) else {
+    fail("expected native exception")
+  }
+  assert_eq(store.get_exn(exception).values, [ArrayRef(array)])
+  assert_eq(store.encode_native_exception(exception), token)
+}

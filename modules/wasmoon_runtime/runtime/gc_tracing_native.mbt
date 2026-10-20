@@ -17,7 +17,7 @@ fn Store::trace_native_continuation(
         }
       } else if @native_bridge.decode_gc_heap_ref(word) is Some(child) {
         pending.push(
-          if self.c_heap is Some(heap) && heap.is_array(child) {
+          if self.references.native.c_heap is Some(heap) && heap.is_array(child) {
             ArrayRef(child)
           } else {
             StructRef(child)
@@ -35,7 +35,7 @@ fn Store::trace_object_fields(
   pending : Array[@types.Value],
   trace : GcTrace,
 ) -> Unit {
-  match self.c_heap {
+  match self.references.native.c_heap {
     None =>
       try {
         match self.heap.get(index) {

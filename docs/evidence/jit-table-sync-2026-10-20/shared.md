@@ -67,3 +67,24 @@ takes 9–10 ms and shared native backing 26–29 ms. This isolates a real per-e
 codec/access cost; it is not an old-versus-new interpreter benchmark or evidence
 that all table workloads improve. Shared storage removes boundary copying and
 duplicate authority while retaining this tradeoff.
+
+## Late native heap activation follow-up
+
+Review of `a0bc63df182c330c925756ec9212f414fb8cca44` found that the new codecs
+captured an immutable heap selector while `enable_c_heap()` updated a separate
+Store field. This is an introduced regression: valid heap references could be
+read from the empty managed heap, GC returned -1, and array exception payloads
+could be classified as structs. Three public-API regressions reproduced these
+failures before the repair.
+
+The native reference arena now owns the only mutable CHeap slot. Store
+allocation, type metadata, budgets, rollback, tracing and reference codecs all
+read that slot. Late activation publishes it only after budget binding succeeds;
+close clears the same slot. No Store back-reference is added. Both table
+admission orders, repeated activation, array/struct identity, GC reclamation,
+exception payload decoding and terminal heap release are covered.
+
+Local follow-up validation passed native 2843/2843, wasm 1347/1347, strict checks,
+and fresh macOS ASan/UBSan 213/213 with both ASan controls detected. The original
+JSON receipt remains historical; it is not acceptance of this follow-up. Linux
+LSan and final-head CI remain pending.

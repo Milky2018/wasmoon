@@ -180,7 +180,7 @@ fn Store::bind_gc_budget(
 ///|
 #cfg(target="native")
 fn Store::gc_allocation_error(self : Store) -> RuntimeError {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) =>
       match heap.get_ptr().quota_denied() {
         1 => ResourceLimitExceeded(GcBytes)
@@ -209,7 +209,8 @@ pub fn Store::reserve_gc_array_work(
     errdefer bytes.release()
     let objects = budget.reserve(
       GcObjects,
-      if self.c_heap is Some(_) || self.heap.free_list.is_empty() {
+      if self.references.native.c_heap is Some(_) ||
+        self.heap.free_list.is_empty() {
         1L
       } else {
         0L
@@ -239,7 +240,7 @@ pub fn Store::alloc_array_repeated(
     self.check_instance(instance)
   }
   let encoded = self.encode_heap_value(value)
-  let reference = match self.c_heap {
+  let reference = match self.references.native.c_heap {
     Some(heap) =>
       heap.alloc_array(type_idx, length, encoded) catch {
         OutOfMemory => raise self.gc_allocation_error()

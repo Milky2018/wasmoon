@@ -233,7 +233,7 @@ fn Store::record_gc_type(
         -1
       }
   }
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.set_runtime_type(index, identity)
     None => self.native_types.heap_types[index] = identity
   }
@@ -253,7 +253,7 @@ pub fn Store::gc_type_is_subtype(
   guard expected >= 0 && expected < instance.types.length() else {
     return false
   }
-  let actual = match self.c_heap {
+  let actual = match self.references.native.c_heap {
     Some(heap) => heap.runtime_type(reference)
     None => self.native_types.heap_types.get(reference).unwrap_or(-1)
   }
@@ -296,7 +296,7 @@ fn Store::gc_type_definition(
   reference : Int32,
   fallback : Int32,
 ) -> @types.SubType? {
-  let identity = match self.c_heap {
+  let identity = match self.references.native.c_heap {
     Some(heap) => heap.runtime_type(reference)
     None => self.native_types.heap_types.get(reference).unwrap_or(-1)
   }

@@ -258,7 +258,7 @@ fn Store::decode_heap_value(
     ExnRef(index) =>
       self.decode_native_exception(@native_bridge.encode_exception_ref(index))
     StructRef(index) =>
-      match self.c_heap {
+      match self.references.native.c_heap {
         Some(heap) if heap.is_array(index) => ArrayRef(index)
         _ => value
       }

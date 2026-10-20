@@ -60,7 +60,7 @@ pub fn Store::get_instance(
 /// Native integration capability; not part of the portable embedding interface.
 #cfg(target="native")
 pub fn Store::native_heap(self : Store) -> @native_bridge.CHeap? {
-  self.c_heap
+  self.references.native.c_heap
 }
 
 ///|

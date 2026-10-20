@@ -13,7 +13,7 @@ test "Store close releases owned state and is idempotent" {
     (
       store.funcs.length(),
       store.mems.length(),
-      store.c_heap is Some(_),
+      store.native_heap() is Some(_),
       store.closed.val,
     ),
     content="(1, 1, true, false)",
@@ -25,7 +25,7 @@ test "Store close releases owned state and is idempotent" {
       store.funcs.length(),
       store.mems.length(),
       store.instances.length(),
-      store.c_heap is Some(_),
+      store.native_heap() is Some(_),
       store.closed.val,
     ),
     content="(0, 0, 0, false, true)",
