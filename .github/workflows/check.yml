@@ -29,6 +29,39 @@ env:
   MOONBIT_TOOLCHAIN_VERSION: "latest"
 
 jobs:
+  portable-interpreter:
+    if: ${{ inputs.windows_only != true && inputs.sanitizers_only != true }}
+    name: Wasm interpreter
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: install stable toolchain
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh \
+            | bash -s "$MOONBIT_TOOLCHAIN_VERSION"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: check and execute portable runtime packages
+        run: |
+          moon version --all
+          moon update
+          moon check modules/wasmoon_runtime/runtime modules/wasmoon_runtime/executor \
+            --target wasm --warn-list +73 --deny-warn
+          moon test modules/wasmoon_runtime/runtime modules/wasmoon_runtime/executor \
+            modules/wasmoon_runtime/wast --target wasm --warn-list +73 --deny-warn
+          moon run modules/wasmoon_runtime/examples/embedding \
+            --target wasm --warn-list +73 --deny-warn
+      - name: compare native and wasm-hosted Core WAST
+        run: python3 scripts/run_portable_core_wast.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portable-interpreter-evidence
+          path: target/portable-core-wast.json
+
   native-platform:
     if: ${{ inputs.windows_only != true && inputs.sanitizers_only != true }}
     name: ${{ matrix.name }}
@@ -40,10 +73,8 @@ jobs:
         include:
           - name: Linux AMD64
             os: ubuntu-latest
-            native_test_args: --no-parallelize
           - name: macOS ARM64
             os: macos-latest
-            native_test_args: ""
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,20 +137,25 @@ jobs:
       - name: run native tests
         run: |
           VCODE_REGALLOC_VALIDATION=1 \
-            moon test --target native ${{ matrix.native_test_args }}
+            moon test --target native --no-parallelize
 
       - name: test native and async event loop integration
         timeout-minutes: 2
         run: moon run modules/wasmoon/testsuite/native_event_loop --target native
+
+      - name: verify blocking TLS fixture isolation
+        env:
+          WASMOON_TEST_BLOCKING_TLS_SETUP: "1"
+        run: moon test modules/wasmoon/wasi_http --target native --no-parallelize --warn-list +73 --deny-warn
 
       - name: build Wasmoon
         id: build
         run: |
           moon build --target native --release
           if nm \
-            target/native/release/build/Milky2018/wasmoon_jit/jit_ffi/libjit_ffi.a \
+            target/native/release/build/Milky2018/wasmoon_runtime/native/ffi/libffi.a \
             | grep "live_gc_frame_count" >/dev/null; then
-            echo "release libjit_ffi.a contains test-only GC frame counters"
+            echo "release libffi.a contains test-only GC frame counters"
             exit 1
           fi
           ./install.sh
@@ -497,6 +533,12 @@ jobs:
         env:
           VCODE_REGALLOC_VALIDATION: "1"
         run: python scripts/run_native_packages.py --output target/windows-native-tests
+      - name: verify blocking TLS fixture isolation
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
+        env:
+          WASMOON_TEST_BLOCKING_TLS_SETUP: "1"
+        run: moon test modules/wasmoon/wasi_http --target native --no-parallelize --warn-list +73 --deny-warn
+
       - name: upload Windows test evidence
         uses: actions/upload-artifact@v4
         if: always()

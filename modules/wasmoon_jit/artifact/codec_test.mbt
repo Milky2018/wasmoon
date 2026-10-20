@@ -2,9 +2,12 @@
 fn decode_result(
   bytes : Bytes,
   limits~ : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
-) -> Result[@artifact.Artifact, @artifact.ArtifactDecodeError] {
-  Ok(@artifact.decode(bytes, limits~)) catch {
-    error => Err(error)
+) -> @artifact.ArtifactDecodeError? {
+  try {
+    @artifact.decode(bytes, limits~) |> ignore
+    None
+  } catch {
+    error => Some(error)
   }
 }
 
@@ -14,8 +17,8 @@ fn decode_error(
   limits~ : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
 ) -> @artifact.ArtifactDecodeError {
   match decode_result(bytes, limits~) {
-    Err(error) => error
-    Ok(_) => abort("expected artifact decoding to fail")
+    Some(error) => error
+    None => abort("expected artifact decoding to fail")
   }
 }
 
@@ -304,7 +307,7 @@ test "decoder enforces every variable-length resource class" {
 test "every proper encoded prefix is rejected as truncated" {
   let encoded = @artifact.encode(sample_artifact())
   for length in 0..<encoded.length() {
-    assert_true(decode_result(prefix(encoded, length)) is Err(_))
+    assert_true(decode_result(prefix(encoded, length)) is Some(_))
   }
 }
 

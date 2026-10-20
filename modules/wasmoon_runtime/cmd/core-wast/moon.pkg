@@ -1,0 +1,8 @@
+import {
+  "Milky2018/wasmoon_runtime/wast",
+  "moonbitlang/core/env",
+  "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
+}
+
+pkgtype(kind: "executable")

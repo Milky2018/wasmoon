@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn compute_use_counts(@milkir.Function) -> Array[Int]
+pub fn compute_use_counts(@milkir.Function) -> Array[Int32]
 
 pub fn is_cheap_rematerializable_constant(@milkir.Inst) -> Bool
 
@@ -18,8 +18,8 @@ pub fn opcode_semantics(@milkir.Opcode) -> OpcodeSemantics
 pub struct FunctionAnalysis {
   cfg : @milkir.CFG
   dominance : @milkir.Dominance
-  domtree : Array[Array[Int]]
-  block_idx : Array[Int]
+  domtree : Array[Array[Int32]]
+  block_idx : Array[Int32]
 }
 pub fn FunctionAnalysis::build(@milkir.Function) -> Self
 

@@ -101,7 +101,7 @@ pub(all) struct ResourceDecl {
 
 pub(all) enum TokenKind {
   Ident(String)
-  IntLit(Int)
+  IntLit(Int32)
   StrLit(String)
   KwPackage
   KwInterface

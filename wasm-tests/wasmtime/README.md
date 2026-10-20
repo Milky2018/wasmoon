@@ -39,8 +39,17 @@ commands, exit codes, counts, logs and available JIT compilation traces.
 
 ## Execution contracts
 
-Core scripts execute unchanged through `wasmoon test`, with `--no-jit` in the
-interpreter lane. The runner enables `WASMOON_WAST_REGISTER_NAMED_MODULES=1`
+Core scripts execute unchanged through `wasmoon test --wasmtime-validation`,
+with `--no-jit` in the interpreter lane. This explicit profile mirrors Wasmtime's
+`assert_invalid` build acceptance: after successful parsing and Core validation,
+it also checks the typed GC/continuation storage build restriction and its
+expected diagnostic. Ordinary WAST and the portable conformance runner retain
+strict Core-invalidity semantics; parse errors, unrelated runtime errors and
+successful builds cannot satisfy this compatibility check. Reports record the
+`wasmtime-engine-build` validation profile. The pinned upstream
+[WAST adapter](https://github.com/bytecodealliance/wasmtime/blob/46c23a87dac1465986a8ad53ba6a7ae49372857b/crates/wast/src/wast.rs#L707-L722)
+checks module build failure for this directive; it does not restrict rejection
+to the Core validation phase. The runner enables `WASMOON_WAST_REGISTER_NAMED_MODULES=1`
 to reproduce Wasmtime's automatic registration of named modules for imports.
 Ordinary WAST execution keeps explicit `register` semantics by default. Reports
 record this compatibility setting. Bare `invoke` commands must complete without

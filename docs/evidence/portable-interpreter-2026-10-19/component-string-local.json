@@ -1,0 +1,109 @@
+{
+  "source_revision": "99b749d3d8d604d8c4cbb5f4f339bfac0ea7570e",
+  "source_dirty": true,
+  "platform": "macOS ARM64",
+  "scope": "Local working-tree validation of component string fix before commit; not Linux/Windows CI acceptance",
+  "inputs": {
+    "modules/wasm_core/wat/parser/string_literal.mbt": "d1c0b94f677ad488a8e3b2f7c02182274872ce5b7f7d5e5118e0914b8dd9e627",
+    "modules/wasm_core/wat/parser_api.mbt": "b5bf17ce6a1df8f8c385bc16c22971d39497065162cac17203b1d87a4767f4b1",
+    "modules/wasm_core/wat/string_literal_test.mbt": "e64484a752d1dd0583481b7e59edcff8d1b476a19f1079508351c0eef96aa952",
+    "modules/wasm_component/text/component_wat.mbt": "71d05c4528fa222789607ad8fed877cf38d932e8eefc822cbf32c5ee1d981502",
+    "modules/wasm_component/text/string_literal_test.mbt": "16c2fa917b0bc917e3d1260758e889278b673c636a9d23a2844df026b89f30c1",
+    "modules/wasm_component/text/moon.pkg": "d318776720115932b891e85daabb86935cd94d39ac06fd2844962d6b4caf047e",
+    "modules/wasm_core/wat/pkg.generated.mbti": "781f28a2dc59350b545039fbce5d5546b1ec1abefdc5ea31091a07cefebdab20",
+    "modules/wasm_core/wat/parser/pkg.generated.mbti": "ac08101034c6557c65d57add276635c173553acc6f88d022437e8f0e8152c22f"
+  },
+  "checks": {
+    "native": {
+      "total": 2781,
+      "passed": 2781,
+      "failed": 0,
+      "log_sha256": "2ad5d6b0ef50c3cbf3c1388c3fa2e0afcc282055f651428c31c7443bfbc9532f"
+    },
+    "wasm": {
+      "total": 1309,
+      "passed": 1309,
+      "failed": 0,
+      "log_sha256": "e244bdbacfa44fc521139f9246d174b706da85beef172e176b05e56a36e15488"
+    },
+    "component_text_native": {
+      "total": 18,
+      "passed": 18,
+      "failed": 0,
+      "log_sha256": "8c71a392f6b0e5e5e495f4cb5785083e4c503ff3319676cc1f1844ba6f5a1835"
+    },
+    "component_text_wasm": {
+      "total": 18,
+      "passed": 18,
+      "failed": 0,
+      "log_sha256": "8c71a392f6b0e5e5e495f4cb5785083e4c503ff3319676cc1f1844ba6f5a1835"
+    },
+    "core_wat_native": {
+      "total": 87,
+      "passed": 87,
+      "failed": 0,
+      "log_sha256": "df148ef8dbc02e357e66b1bfcd3d0dc9599870900c53363b16657e1858eeeb0a"
+    },
+    "core_wat_wasm": {
+      "total": 87,
+      "passed": 87,
+      "failed": 0,
+      "log_sha256": "df148ef8dbc02e357e66b1bfcd3d0dc9599870900c53363b16657e1858eeeb0a"
+    }
+  },
+  "component": {
+    "jit": {
+      "stable": {
+        "files": 23,
+        "passed": 845,
+        "failed": 0,
+        "skipped": 0,
+        "log_sha256": "a2e544b530e91adc4b7a61ed7b8dfd645e58efa9e8e24575c47dbf9ababb3508"
+      },
+      "async": {
+        "files": 24,
+        "passed": 153,
+        "failed": 0,
+        "skipped": 0,
+        "log_sha256": "1bb6750090b6aa6c70498b479839c570b29aea2abdc03f4e847b3741ea742a82"
+      },
+      "future": {
+        "files": 12,
+        "passed": 387,
+        "failed": 0,
+        "skipped": 0,
+        "log_sha256": "973a6ea55e0bb6703eb41810f31f1d81dffc93817d530c4863011567f880f492"
+      }
+    },
+    "interp": {
+      "stable": {
+        "files": 23,
+        "passed": 845,
+        "failed": 0,
+        "skipped": 0,
+        "log_sha256": "b88898616927622b27f905ccfe7c25f5f6b1f8209b481a21de57b8bc87f3df51"
+      },
+      "async": {
+        "files": 24,
+        "passed": 153,
+        "failed": 0,
+        "skipped": 0,
+        "log_sha256": "ca46cef90531bcaefe4056793c885e8b7349f48ef481397683fb2edb23524423"
+      },
+      "future": {
+        "files": 12,
+        "passed": 387,
+        "failed": 0,
+        "skipped": 0,
+        "log_sha256": "8742b82cb5ffa8c076df20fbb8e4a0c19bba4fb4a8db8b85693f74dba3bf32b1"
+      }
+    }
+  },
+  "public_cli_repro": {
+    "source": "(component (core module $m (func (export \"\\c3\\a9\"))) (core instance $i (instantiate $m)) (alias core export $i \"\\c3\\a9\" (core func $f)))",
+    "artifact_sha256": "f6a81feb86d59365fd3f0a37d458bfa689513f3064abc9a9a19fbfd323b8187c",
+    "wasm_tools_version": "wasm-tools 1.254.0",
+    "wasm_tools_validate": "passed",
+    "wasmoon_validate": "component validated ok\ncomponent version=13 layer=1 sections=3\ncore_modules=1 core_instances=1 core_types=0 nested_components=0\ntypes=0 imports=0 exports=0 instances=0 aliases=1 canons=0 start=false"
+  }
+}

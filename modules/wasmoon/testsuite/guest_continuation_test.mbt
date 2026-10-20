@@ -124,7 +124,22 @@ test "guest continuation GC capability: unused storage types remain valid" {
     " (func (export \"run\") (result i32) i32.const 42))"
   let used = "(module " + types + " (func struct.new_default $s drop))"
   // The module is valid WebAssembly; the restriction belongs to the engine.
-  @validator.validate_module(@wat.parse(used), stack_switching=true)
+  let used_module = @wat.parse(used)
+  @validator.validate_module(used_module, stack_switching=true)
+  let store = @runtime.Store::Store()
+  defer store.close()
+  try
+    @executor.instantiate_module_with_imports(
+      store,
+      used_module,
+      Imports(store),
+    )
+  catch {
+    UnsupportedGcContinuationStorage => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("engine admitted unsupported continuation storage")
+  }
   let script = unused +
     "(assert_return (invoke \"run\") (i32.const 42))" +
     "(assert_invalid " +
@@ -137,5 +152,6 @@ test "guest continuation GC capability: unused storage types remain valid" {
     false,
     stack_switching=true,
   )
-  debug_inspect((result.passed, result.failed), content="(2, 0)")
+  debug_inspect((result.passed, result.failed), content="(1, 1)")
+  assert_true(result.failures[0].contains("module should have been invalid"))
 }

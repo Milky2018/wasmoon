@@ -1,0 +1,157 @@
+{
+  "source_revision": "8c0056b67a5e8f7bfb9d1c4226271e61f421835c",
+  "source_dirty": false,
+  "platform": "macOS ARM64",
+  "scope": "Local review-fix regression evidence, not Linux LSan or Windows CI acceptance",
+  "commits": [
+    {
+      "revision": "956ba170a49176205979f219e219aae2c764c502",
+      "subject": "fix: release exception reservations during rollback"
+    },
+    {
+      "revision": "a1e9fa050d754fb635df8d94dd106538bb76c82c",
+      "subject": "fix: release provisional continuation work on admission failure"
+    },
+    {
+      "revision": "dbbadd2b8cba171803d072c50d5579cc11399a7d",
+      "subject": "fix: keep standalone table closure terminal"
+    },
+    {
+      "revision": "aa45d5b02fa12bd45274bd08e37032cbb82c539d",
+      "subject": "fix: expose terminal cleanup for standalone GC heaps"
+    },
+    {
+      "revision": "cf496267eb6815df3858671ead463975a398ef0b",
+      "subject": "fix: require decoding before WAST invalid assertions"
+    },
+    {
+      "revision": "360c253903bd27874da0d1da74ee918fc922c562",
+      "subject": "refactor: share WAST completed-action verdicts"
+    },
+    {
+      "revision": "ec5801a7357fea94147bcd707926435a5451a081",
+      "subject": "test: include portable lifetime regressions in sanitizers"
+    },
+    {
+      "revision": "eb4f1feec310836e3845a76e574c2722b4c2bb9b",
+      "subject": "test: distinguish engine capabilities from Core invalidity"
+    },
+    {
+      "revision": "49953a0e072a360dab3e40fb161f42014a79c363",
+      "subject": "fix: defer natural alignment rejection to validation"
+    },
+    {
+      "revision": "e79fc0d92bd4eb886e3751d1f02df01fdcaee185",
+      "subject": "fix: preserve text limits until address-width validation"
+    },
+    {
+      "revision": "c3ab492c6bfa6d39a6d8d2a14ab2b354302c9116",
+      "subject": "fix: validate numeric indirect-call type indices after parsing"
+    },
+    {
+      "revision": "8c0056b67a5e8f7bfb9d1c4226271e61f421835c",
+      "subject": "fix: validate table initializer global scope for text and binary"
+    }
+  ],
+  "checks": {
+    "native": {
+      "total": 2777,
+      "passed": 2777,
+      "failed": 0,
+      "log_sha256": "72e3159a4abb6adb46c5ab53fb8009d7572c1edc370908771499436c5bf7195f"
+    },
+    "wasm": {
+      "total": 1305,
+      "passed": 1305,
+      "failed": 0,
+      "log_sha256": "0bcc684a7baf3ef47ef66a4894e5f77b756715a6a160dac3e20682452ec13b4e"
+    },
+    "portable_wasm": {
+      "total": 226,
+      "passed": 226,
+      "failed": 0,
+      "log_sha256": "0c4ae24ed636acadf7b01f8147a3f6513f0836739ee6b05048c37daf9ea7c94c"
+    },
+    "sanitizer": {
+      "total": 193,
+      "passed": 193,
+      "failed": 0,
+      "log_sha256": "bd46e1316c5dbcee3b005a305f1a843909022213546b67e5bb289a4985af6eef"
+    },
+    "strict_c": {
+      "stubs": 43,
+      "warnings": "denied"
+    },
+    "moon_check": {
+      "targets": [
+        "native",
+        "wasm"
+      ],
+      "warn_list": "+73",
+      "deny_warn": true
+    },
+    "embedding": "portable interpreter: result=43, host observed=21, memory=21, budget released"
+  },
+  "sanitizer": {
+    "version": "0.17.0",
+    "source_revision": "8c0056b67a5e8f7bfb9d1c4226271e61f421835c",
+    "source_dirty": false,
+    "build_reuse": "fresh",
+    "binary_sha256": "1b2465af4be54624b933da545de7b2b38dd0f458a70f328caf3fa1c3cde6d92a",
+    "tests": "passed",
+    "event_loop": "passed",
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "lsan_probe": "not_applicable",
+    "leak_detection": false,
+    "binary": "/Users/zhengyu/Documents/projects/wasmoon/target/sanitizers/build/native/debug/test/Milky2018/wasmoon_sanitizer/wasmoon_sanitizer.blackbox_test.exe",
+    "instrumentation": [
+      "address",
+      "undefined"
+    ],
+    "allocator": "system",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ]
+  },
+  "core": {
+    "native": {
+      "artifact_sha256": "8bd625b7434af1e54cc88f2b5f92163a1b119fe32aff78b56d834741a0fb4cd9",
+      "files": 258,
+      "accepted_files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "unsupported": 0
+    },
+    "wasm": {
+      "artifact_sha256": "24118c0030adfd0e2c9134f763f0f86879e299b0857e4805df4a35339d0e360e",
+      "files": 258,
+      "accepted_files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "unsupported": 0
+    },
+    "jit": {
+      "binary_sha256": "20c7bdb87b10328cbacffaae0bebf4c2b94e2de6cfda303abb804a813a3e3248",
+      "files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "strict_phase_negative_control": {
+    "native": {
+      "files": 258,
+      "passed": 62544,
+      "failed": 19,
+      "unsupported": 0
+    },
+    "wasm": {
+      "files": 258,
+      "passed": 62544,
+      "failed": 19,
+      "unsupported": 0
+    }
+  }
+}

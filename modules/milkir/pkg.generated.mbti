@@ -6,28 +6,28 @@ import {
 }
 
 // Values
-pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
+pub fn build_dominator_tree(Array[Int32]) -> Array[Array[Int32]]
 
-pub fn[Scope] visit_dominator_tree(Array[Array[Int]], Int, (Int) -> (Scope, Bool), (Scope) -> Unit) -> Unit
+pub fn[Scope] visit_dominator_tree(Array[Array[Int32]], Int32, (Int32) -> (Scope, Bool), (Scope) -> Unit) -> Unit
 
 // Errors
 pub suberror VerifyError {
-  MissingTerminator(block_id~ : Int)
+  MissingTerminator(block_id~ : Int32)
   EmptyFunction
-  UndefinedValue(value_id~ : Int)
-  ForeignValue(value_id~ : Int)
-  ForeignBlock(block_id~ : Int)
-  ForeignInstruction(inst_id~ : Int)
-  ForeignGlobalValue(global_value_id~ : Int)
-  DuplicateBlockId(block_id~ : Int)
-  DuplicateValueDefinition(value_id~ : Int)
-  DuplicateInstructionId(inst_id~ : Int)
-  UnplacedInstruction(inst_id~ : Int)
-  InstructionPlacementMismatch(inst_id~ : Int)
-  UseBeforeDefinition(value_id~ : Int)
-  NonDominatingUse(value_id~ : Int, defining_block~ : Int, use_block~ : Int)
-  InstructionOperandMismatch(inst_id~ : Int)
-  InvalidBlockTarget(block_id~ : Int)
+  UndefinedValue(value_id~ : Int32)
+  ForeignValue(value_id~ : Int32)
+  ForeignBlock(block_id~ : Int32)
+  ForeignInstruction(inst_id~ : Int32)
+  ForeignGlobalValue(global_value_id~ : Int32)
+  DuplicateBlockId(block_id~ : Int32)
+  DuplicateValueDefinition(value_id~ : Int32)
+  DuplicateInstructionId(inst_id~ : Int32)
+  UnplacedInstruction(inst_id~ : Int32)
+  InstructionPlacementMismatch(inst_id~ : Int32)
+  UseBeforeDefinition(value_id~ : Int32)
+  NonDominatingUse(value_id~ : Int32, defining_block~ : Int32, use_block~ : Int32)
+  InstructionOperandMismatch(inst_id~ : Int32)
+  InvalidBlockTarget(block_id~ : Int32)
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)
   UnverifiableInstruction(message~ : String)
@@ -42,26 +42,26 @@ pub impl Show for VerifyError
 
 // Types and methods
 pub(all) enum AliasRegion {
-  Heap(Int)
-  Table(Int)
+  Heap(Int32)
+  Table(Int32)
   Context
   Other
 } derive(Eq, Hash, @debug.Debug)
 pub fn AliasRegion::equal(Self, Self) -> Bool
-pub fn AliasRegion::hash(Self) -> Int
+pub fn AliasRegion::hash(Self) -> Int32
 pub fn AliasRegion::hash_combine(Self, Hasher) -> Unit
 pub fn AliasRegion::not_equal(Self, Self) -> Bool
 pub fn AliasRegion::to_repr(Self) -> @debug.Repr
 
 pub(all) enum AtomicMemoryOp {
-  Load(Type, Int)
-  Store(Type, Int)
-  Rmw(Type, Int, AtomicRmwOp)
-  CompareExchange(Type, Int)
+  Load(Type, Int32)
+  Store(Type, Int32)
+  Rmw(Type, Int32, AtomicRmwOp)
+  CompareExchange(Type, Int32)
   Fence
 } derive(Eq, Hash, @debug.Debug)
 pub fn AtomicMemoryOp::equal(Self, Self) -> Bool
-pub fn AtomicMemoryOp::hash(Self) -> Int
+pub fn AtomicMemoryOp::hash(Self) -> Int32
 pub fn AtomicMemoryOp::hash_combine(Self, Hasher) -> Unit
 pub fn AtomicMemoryOp::not_equal(Self, Self) -> Bool
 pub fn AtomicMemoryOp::to_repr(Self) -> @debug.Repr
@@ -75,72 +75,72 @@ pub(all) enum AtomicRmwOp {
   Exchange
 } derive(Eq, Hash, @debug.Debug)
 pub fn AtomicRmwOp::equal(Self, Self) -> Bool
-pub fn AtomicRmwOp::hash(Self) -> Int
+pub fn AtomicRmwOp::hash(Self) -> Int32
 pub fn AtomicRmwOp::hash_combine(Self, Hasher) -> Unit
 pub fn AtomicRmwOp::not_equal(Self, Self) -> Bool
 pub fn AtomicRmwOp::to_repr(Self) -> @debug.Repr
 
 pub struct Block {
-  id : Int
+  id : Int32
   params : Array[(Value, Type)]
   mut terminator : Terminator?
   // private fields
 }
 pub fn Block::append_inst(Self, Inst) -> Unit
 pub fn Block::clear_instructions_for_move(Self) -> Unit
-pub fn Block::instruction_count(Self) -> Int
-pub fn Block::instruction_ids(Self) -> ArrayView[Int]
-pub fn Block::retain_instruction_ids(Self, (Int) -> Bool) -> Unit
+pub fn Block::instruction_count(Self) -> Int32
+pub fn Block::instruction_ids(Self) -> ArrayView[Int32]
+pub fn Block::retain_instruction_ids(Self, (Int32) -> Bool) -> Unit
 pub fn Block::set_instructions(Self, Array[Inst]) -> Unit
 pub fn Block::set_terminator(Self, Terminator) -> Unit
-pub fn Block::take_inst_at(Self, Int) -> Int?
+pub fn Block::take_inst_at(Self, Int32) -> Int32?
 pub fn Block::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Block
 
 pub struct CFG {
-  size : Int
-  num_blocks : Int
-  successors : Array[Array[Int]]
-  predecessors : Array[Array[Int]]
+  size : Int32
+  num_blocks : Int32
+  successors : Array[Array[Int32]]
+  predecessors : Array[Array[Int32]]
   valid : Array[Bool]
 } derive(@debug.Debug)
 pub fn CFG::build(Function) -> Self
 pub fn CFG::compute_dominance(Self) -> Dominance
-pub fn CFG::compute_dominators(Self) -> Array[Int]
-pub fn CFG::dominates(Self, Int, Int) -> Bool
-pub fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
+pub fn CFG::compute_dominators(Self) -> Array[Int32]
+pub fn CFG::dominates(Self, Int32, Int32) -> Bool
+pub fn CFG::find_back_edges(Self) -> Array[(Int32, Int32)]
 pub fn CFG::find_loops(Self) -> Array[Loop]
-pub fn CFG::get_loop_preheader(Self, Loop) -> Int?
-pub fn CFG::get_predecessors(Self, Int) -> Array[Int]
-pub fn CFG::get_successors(Self, Int) -> Array[Int]
-pub fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
-pub fn CFG::is_exit_block(Self, Int) -> Bool
-pub fn CFG::is_valid(Self, Int) -> Bool
-pub fn CFG::postorder(Self) -> Array[Int]
-pub fn CFG::reverse_postorder(Self) -> Array[Int]
+pub fn CFG::get_loop_preheader(Self, Loop) -> Int32?
+pub fn CFG::get_predecessors(Self, Int32) -> Array[Int32]
+pub fn CFG::get_successors(Self, Int32) -> Array[Int32]
+pub fn CFG::is_entry_or_unreachable(Self, Int32) -> Bool
+pub fn CFG::is_exit_block(Self, Int32) -> Bool
+pub fn CFG::is_valid(Self, Int32) -> Bool
+pub fn CFG::postorder(Self) -> Array[Int32]
+pub fn CFG::reverse_postorder(Self) -> Array[Int32]
 pub fn CFG::to_dot(Self, String) -> String
 pub fn CFG::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CallOp {
   Direct(ExternalSymbol, Signature)
-  Pointer(Int, Int)
+  Pointer(Int32, Int32)
 } derive(Eq, Hash, @debug.Debug)
 pub fn CallOp::equal(Self, Self) -> Bool
-pub fn CallOp::hash(Self) -> Int
+pub fn CallOp::hash(Self) -> Int32
 pub fn CallOp::hash_combine(Self, Hasher) -> Unit
 pub fn CallOp::not_equal(Self, Self) -> Bool
 pub fn CallOp::to_repr(Self) -> @debug.Repr
 
 pub struct ContextField {
   dialect : String
-  key : Int
-  parameters : FixedArray[Int]
+  key : Int32
+  parameters : FixedArray[Int32]
   ty : Type
 } derive(@debug.Debug)
 pub fn ContextField::equal(Self, Self) -> Bool
-pub fn ContextField::hash(Self) -> Int
+pub fn ContextField::hash(Self) -> Int32
 pub fn ContextField::hash_combine(Self, Hasher) -> Unit
-pub fn ContextField::new(String, Int, FixedArray[Int], Type) -> Self
+pub fn ContextField::new(String, Int32, FixedArray[Int32], Type) -> Self
 pub fn ContextField::not_equal(Self, Self) -> Bool
 pub fn ContextField::to_repr(Self) -> @debug.Repr
 pub impl Eq for ContextField
@@ -161,25 +161,25 @@ pub(all) enum ConversionOp {
   Bitcast
 } derive(Eq, Hash, @debug.Debug)
 pub fn ConversionOp::equal(Self, Self) -> Bool
-pub fn ConversionOp::hash(Self) -> Int
+pub fn ConversionOp::hash(Self) -> Int32
 pub fn ConversionOp::hash_combine(Self, Hasher) -> Unit
 pub fn ConversionOp::not_equal(Self, Self) -> Bool
 pub fn ConversionOp::to_repr(Self) -> @debug.Repr
 
 pub struct Dominance {
-  idom : Array[Int]
+  idom : Array[Int32]
   // private fields
 }
-pub fn Dominance::dominates(Self, Int, Int) -> Bool
+pub fn Dominance::dominates(Self, Int32, Int32) -> Bool
 
 pub struct ExtOp {
   dialect : String
   opcode : String
-  immediates : FixedArray[Int]
+  immediates : FixedArray[Int32]
 } derive(@debug.Debug)
-pub fn ExtOp::ExtOp(String, String, FixedArray[Int]) -> Self
+pub fn ExtOp::ExtOp(String, String, FixedArray[Int32]) -> Self
 pub fn ExtOp::equal(Self, Self) -> Bool
-pub fn ExtOp::hash(Self) -> Int
+pub fn ExtOp::hash(Self) -> Int32
 pub fn ExtOp::hash_combine(Self, Hasher) -> Unit
 pub fn ExtOp::matches_descriptor(Self, ExtOpDescriptor) -> Bool
 pub fn ExtOp::not_equal(Self, Self) -> Bool
@@ -190,18 +190,18 @@ pub impl Hash for ExtOp
 pub(all) struct ExtOpDescriptor {
   dialect : String
   opcode : String
-  min_immediates : Int
-  max_immediates : Int
+  min_immediates : Int32
+  max_immediates : Int32
 } derive(Eq, Hash, @debug.Debug)
-pub fn ExtOpDescriptor::ExtOpDescriptor(String, String, Int) -> Self
-pub fn ExtOpDescriptor::accepts_immediate_count(Self, Int) -> Bool
+pub fn ExtOpDescriptor::ExtOpDescriptor(String, String, Int32) -> Self
+pub fn ExtOpDescriptor::accepts_immediate_count(Self, Int32) -> Bool
 pub fn ExtOpDescriptor::equal(Self, Self) -> Bool
 pub fn ExtOpDescriptor::expected_immediate_count(Self) -> String
-pub fn ExtOpDescriptor::hash(Self) -> Int
+pub fn ExtOpDescriptor::hash(Self) -> Int32
 pub fn ExtOpDescriptor::hash_combine(Self, Hasher) -> Unit
 pub fn ExtOpDescriptor::not_equal(Self, Self) -> Bool
 pub fn ExtOpDescriptor::to_repr(Self) -> @debug.Repr
-pub fn ExtOpDescriptor::with_immediate_range(String, String, Int, Int) -> Self
+pub fn ExtOpDescriptor::with_immediate_range(String, String, Int32, Int32) -> Self
 
 pub struct ExtensionInstView {
   op : ExtOp
@@ -215,7 +215,7 @@ pub struct ExternalSymbol {
 } derive(Eq, Hash, @debug.Debug)
 pub fn ExternalSymbol::ExternalSymbol(String) -> Self
 pub fn ExternalSymbol::equal(Self, Self) -> Bool
-pub fn ExternalSymbol::hash(Self) -> Int
+pub fn ExternalSymbol::hash(Self) -> Int32
 pub fn ExternalSymbol::hash_combine(Self, Hasher) -> Unit
 pub fn ExternalSymbol::not_equal(Self, Self) -> Bool
 pub fn ExternalSymbol::to_repr(Self) -> @debug.Repr
@@ -229,7 +229,7 @@ pub(all) enum FloatBinaryOp {
   Max
 } derive(Eq, Hash, @debug.Debug)
 pub fn FloatBinaryOp::equal(Self, Self) -> Bool
-pub fn FloatBinaryOp::hash(Self) -> Int
+pub fn FloatBinaryOp::hash(Self) -> Int32
 pub fn FloatBinaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn FloatBinaryOp::not_equal(Self, Self) -> Bool
 pub fn FloatBinaryOp::to_repr(Self) -> @debug.Repr
@@ -243,7 +243,7 @@ pub(all) enum FloatCC {
   Ge
 } derive(Eq, Hash, @debug.Debug)
 pub fn FloatCC::equal(Self, Self) -> Bool
-pub fn FloatCC::hash(Self) -> Int
+pub fn FloatCC::hash(Self) -> Int32
 pub fn FloatCC::hash_combine(Self, Hasher) -> Unit
 pub fn FloatCC::not_equal(Self, Self) -> Bool
 pub fn FloatCC::to_repr(Self) -> @debug.Repr
@@ -258,7 +258,7 @@ pub(all) enum FloatUnaryOp {
   Nearest
 } derive(Eq, Hash, @debug.Debug)
 pub fn FloatUnaryOp::equal(Self, Self) -> Bool
-pub fn FloatUnaryOp::hash(Self) -> Int
+pub fn FloatUnaryOp::hash(Self) -> Int32
 pub fn FloatUnaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn FloatUnaryOp::not_equal(Self, Self) -> Bool
 pub fn FloatUnaryOp::to_repr(Self) -> @debug.Repr
@@ -270,30 +270,30 @@ pub struct Function {
   blocks : Array[Block]
   external_symbols : Array[ExternalSymbol]
   global_values : Array[(GlobalValue, GlobalValueData)]
-  mut next_value_id : Int
-  mut next_inst_id : Int
-  mut next_block_id : Int
-  mut next_global_value_id : Int
+  mut next_value_id : Int32
+  mut next_inst_id : Int32
+  mut next_block_id : Int32
+  mut next_global_value_id : Int32
   // private fields
 }
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
-pub fn Function::block_instruction_at(Self, Block, Int) -> Inst?
-pub fn Function::block_instruction_ids(Self, Block) -> ArrayView[Int]
+pub fn Function::block_instruction_at(Self, Block, Int32) -> Inst?
+pub fn Function::block_instruction_ids(Self, Block) -> ArrayView[Int32]
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
 pub fn Function::declare_global_value(Self, GlobalValueData) -> GlobalValue
 pub fn Function::defining_inst(Self, Value) -> Inst?
 pub fn Function::discard_inst(Self, Inst) -> Unit
 pub fn Function::global_value_data(Self, GlobalValue) -> GlobalValueData?
-pub fn Function::instruction_by_id(Self, Int) -> Inst?
+pub fn Function::instruction_by_id(Self, Int32) -> Inst?
 pub fn Function::new_block(Self, Array[Value]) -> Block
 pub fn Function::new_block0(Self) -> Block
 pub fn Function::new_empty(String) -> Self
 pub fn Function::new_inst(Self, Opcode, Array[Value], Array[Value]) -> Inst
 pub fn Function::new_value(Self, Type) -> Value
-pub fn Function::param(Self, Int) -> Value?
+pub fn Function::param(Self, Int32) -> Value?
 pub fn Function::print(Self) -> String
-pub fn Function::retain_block_params(Self, Block, Array[Int]) -> Unit
+pub fn Function::retain_block_params(Self, Block, Array[Int32]) -> Unit
 pub fn Function::retain_blocks(Self, (Block) -> Bool) -> Unit
 pub fn Function::signature(Self) -> Signature
 pub fn Function::to_repr(Self) -> @debug.Repr
@@ -310,11 +310,11 @@ pub fn FunctionBuilder::add_param(Self, Type) -> Value
 pub fn FunctionBuilder::add_result(Self, Type) -> Unit
 pub fn FunctionBuilder::append_block_params_for_function_params(Self, Block) -> Unit
 pub fn FunctionBuilder::append_block_params_for_function_returns(Self, Block) -> Unit
-pub fn FunctionBuilder::atomic_compare_exchange(Self, Int, Value, Value, Value, Value) -> Value
+pub fn FunctionBuilder::atomic_compare_exchange(Self, Int32, Value, Value, Value, Value) -> Value
 pub fn FunctionBuilder::atomic_fence(Self) -> Unit
-pub fn FunctionBuilder::atomic_load(Self, Type, Int, Value, Value) -> Value
-pub fn FunctionBuilder::atomic_rmw(Self, AtomicRmwOp, Int, Value, Value, Value) -> Value
-pub fn FunctionBuilder::atomic_store(Self, Int, Value, Value, Value) -> Unit
+pub fn FunctionBuilder::atomic_load(Self, Type, Int32, Value, Value) -> Value
+pub fn FunctionBuilder::atomic_rmw(Self, AtomicRmwOp, Int32, Value, Value, Value) -> Value
+pub fn FunctionBuilder::atomic_store(Self, Int32, Value, Value, Value) -> Unit
 pub fn FunctionBuilder::band(Self, Value, Value) -> Value
 pub fn FunctionBuilder::bitcast(Self, Type, Value) -> Value
 pub fn FunctionBuilder::block_params(Self, Block) -> Array[Value]
@@ -378,7 +378,7 @@ pub fn FunctionBuilder::icmp_ugt(Self, Value, Value) -> Value
 pub fn FunctionBuilder::icmp_ule(Self, Value, Value) -> Value
 pub fn FunctionBuilder::icmp_ult(Self, Value, Value) -> Value
 pub fn FunctionBuilder::iconst(Self, Type, Int64) -> Value
-pub fn FunctionBuilder::iconst_i32(Self, Int) -> Value
+pub fn FunctionBuilder::iconst_i32(Self, Int32) -> Value
 pub fn FunctionBuilder::iconst_i64(Self, Int64) -> Value
 pub fn FunctionBuilder::imul(Self, Value, Value) -> Value
 pub fn FunctionBuilder::ireduce(Self, Type, Value) -> Value
@@ -386,7 +386,7 @@ pub fn FunctionBuilder::ishl(Self, Value, Value) -> Value
 pub fn FunctionBuilder::isub(Self, Value, Value) -> Value
 pub fn FunctionBuilder::jump(Self, Block, Array[Value]) -> Unit
 pub fn FunctionBuilder::load_ptr(Self, Type, Value, Value) -> Value
-pub fn FunctionBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
+pub fn FunctionBuilder::load_ptr_narrow(Self, Type, Int32, Bool, Value, Value) -> Value
 pub fn FunctionBuilder::popcnt(Self, Value) -> Value
 pub fn FunctionBuilder::print(Self) -> String
 pub fn FunctionBuilder::return_(Self, Array[Value]) -> Unit
@@ -403,7 +403,7 @@ pub fn FunctionBuilder::smulh(Self, Value, Value) -> Value
 pub fn FunctionBuilder::srem(Self, Value, Value) -> Value
 pub fn FunctionBuilder::sshr(Self, Value, Value) -> Value
 pub fn FunctionBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
-pub fn FunctionBuilder::store_ptr_narrow(Self, Int, Value, Value, Value) -> Unit
+pub fn FunctionBuilder::store_ptr_narrow(Self, Int32, Value, Value, Value) -> Unit
 pub fn FunctionBuilder::switch_to_block(Self, Block) -> Unit
 pub fn FunctionBuilder::trap(Self, String) -> Unit
 pub fn FunctionBuilder::udiv(Self, Value, Value) -> Value
@@ -417,25 +417,25 @@ pub fn FunctionBuilder::v128_andnot(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_anytrue(Self, Value) -> Value
 pub fn FunctionBuilder::v128_bitselect(Self, Value, Value, Value) -> Value
 pub fn FunctionBuilder::v128_const(Self, Bytes) -> Value
-pub fn FunctionBuilder::v128_extract16s(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_extract16u(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_extract32(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_extract64(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_extract8s(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_extract8u(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_extract_f32(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_extract_f64(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_extract16s(Self, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_extract16u(Self, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_extract32(Self, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_extract64(Self, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_extract8s(Self, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_extract8u(Self, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_extract_f32(Self, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_extract_f64(Self, Value, Int32) -> Value
 pub fn FunctionBuilder::v128_load_lane_with_addr(Self, VectorMemoryOp, Value, Value) -> Value
 pub fn FunctionBuilder::v128_load_with_addr(Self, VectorMemoryOp, Value) -> Value
 pub fn FunctionBuilder::v128_not(Self, Value) -> Value
 pub fn FunctionBuilder::v128_or(Self, Value, Value) -> Value
-pub fn FunctionBuilder::v128_replace16(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_replace32(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_replace64(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_replace8(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_replace_f32(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_replace_f64(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_shuffle(Self, Value, Value, FixedArray[Int]) -> Value
+pub fn FunctionBuilder::v128_replace16(Self, Value, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_replace32(Self, Value, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_replace64(Self, Value, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_replace8(Self, Value, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_replace_f32(Self, Value, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_replace_f64(Self, Value, Value, Int32) -> Value
+pub fn FunctionBuilder::v128_shuffle(Self, Value, Value, FixedArray[Int32]) -> Value
 pub fn FunctionBuilder::v128_splat16(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat32(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat64(Self, Value) -> Value
@@ -447,11 +447,11 @@ pub fn FunctionBuilder::v128_swizzle(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_xor(Self, Value, Value) -> Value
 
 pub struct GlobalValue {
-  id : Int
+  id : Int32
   // private fields
 }
 pub fn GlobalValue::equal(Self, Self) -> Bool
-pub fn GlobalValue::hash(Self) -> Int
+pub fn GlobalValue::hash(Self) -> Int32
 pub fn GlobalValue::hash_combine(Self, Hasher) -> Unit
 pub fn GlobalValue::not_equal(Self, Self) -> Bool
 pub fn GlobalValue::to_repr(Self) -> @debug.Repr
@@ -464,7 +464,7 @@ pub(all) enum GlobalValueData {
 } derive(Eq, Hash, @debug.Debug)
 pub fn GlobalValueData::context_field(ContextField, GlobalValueStability, AliasRegion) -> Self
 pub fn GlobalValueData::equal(Self, Self) -> Bool
-pub fn GlobalValueData::hash(Self) -> Int
+pub fn GlobalValueData::hash(Self) -> Int32
 pub fn GlobalValueData::hash_combine(Self, Hasher) -> Unit
 pub fn GlobalValueData::not_equal(Self, Self) -> Bool
 pub fn GlobalValueData::to_repr(Self) -> @debug.Repr
@@ -474,13 +474,13 @@ pub(all) enum GlobalValueStability {
   Mutable
 } derive(Eq, Hash, @debug.Debug)
 pub fn GlobalValueStability::equal(Self, Self) -> Bool
-pub fn GlobalValueStability::hash(Self) -> Int
+pub fn GlobalValueStability::hash(Self) -> Int32
 pub fn GlobalValueStability::hash_combine(Self, Hasher) -> Unit
 pub fn GlobalValueStability::not_equal(Self, Self) -> Bool
 pub fn GlobalValueStability::to_repr(Self) -> @debug.Repr
 
 pub struct Inst {
-  id : Int
+  id : Int32
   results : Array[Value]
   mut opcode : Opcode
   args : Array[Value]
@@ -492,7 +492,7 @@ pub fn Inst::add_metadata(Self, Metadata) -> Unit
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::equal(Self, Self) -> Bool
 pub fn Inst::first_result(Self) -> Value?
-pub fn Inst::hash(Self) -> Int
+pub fn Inst::hash(Self) -> Int32
 pub fn Inst::hash_combine(Self, Hasher) -> Unit
 pub fn Inst::not_equal(Self, Self) -> Bool
 pub fn Inst::set_opcode(Self, Opcode) -> Unit
@@ -521,7 +521,7 @@ pub(all) enum IntBinaryOp {
   RotateRight
 } derive(Eq, Hash, @debug.Debug)
 pub fn IntBinaryOp::equal(Self, Self) -> Bool
-pub fn IntBinaryOp::hash(Self) -> Int
+pub fn IntBinaryOp::hash(Self) -> Int32
 pub fn IntBinaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn IntBinaryOp::not_equal(Self, Self) -> Bool
 pub fn IntBinaryOp::to_repr(Self) -> @debug.Repr
@@ -539,7 +539,7 @@ pub(all) enum IntCC {
   Uge
 } derive(Eq, Hash, @debug.Debug)
 pub fn IntCC::equal(Self, Self) -> Bool
-pub fn IntCC::hash(Self) -> Int
+pub fn IntCC::hash(Self) -> Int32
 pub fn IntCC::hash_combine(Self, Hasher) -> Unit
 pub fn IntCC::not_equal(Self, Self) -> Bool
 pub fn IntCC::to_repr(Self) -> @debug.Repr
@@ -551,29 +551,29 @@ pub(all) enum IntUnaryOp {
   PopulationCount
 } derive(Eq, Hash, @debug.Debug)
 pub fn IntUnaryOp::equal(Self, Self) -> Bool
-pub fn IntUnaryOp::hash(Self) -> Int
+pub fn IntUnaryOp::hash(Self) -> Int32
 pub fn IntUnaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn IntUnaryOp::not_equal(Self, Self) -> Bool
 pub fn IntUnaryOp::to_repr(Self) -> @debug.Repr
 
 pub struct Loop {
-  header : Int
-  blocks : Array[Int]
-  back_edges : Array[(Int, Int)]
+  header : Int32
+  blocks : Array[Int32]
+  back_edges : Array[(Int32, Int32)]
 } derive(@debug.Debug)
-pub fn Loop::contains(Self, Int) -> Bool
+pub fn Loop::contains(Self, Int32) -> Bool
 pub fn Loop::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MemoryOp {
   Atomic(AtomicMemoryOp)
   Load(Type)
   Store(Type)
-  LoadNarrow(Type, Int, Bool)
-  StoreNarrow(Int)
+  LoadNarrow(Type, Int32, Bool)
+  StoreNarrow(Int32)
   Vector(VectorMemoryOp)
 } derive(Eq, Hash, @debug.Debug)
 pub fn MemoryOp::equal(Self, Self) -> Bool
-pub fn MemoryOp::hash(Self) -> Int
+pub fn MemoryOp::hash(Self) -> Int32
 pub fn MemoryOp::hash_combine(Self, Hasher) -> Unit
 pub fn MemoryOp::not_equal(Self, Self) -> Bool
 pub fn MemoryOp::to_repr(Self) -> @debug.Repr
@@ -595,7 +595,7 @@ pub(all) enum Opcode {
   Vector(VectorOp)
 } derive(Eq, Hash, @debug.Debug)
 pub fn Opcode::equal(Self, Self) -> Bool
-pub fn Opcode::hash(Self) -> Int
+pub fn Opcode::hash(Self) -> Int32
 pub fn Opcode::hash_combine(Self, Hasher) -> Unit
 pub fn Opcode::not_equal(Self, Self) -> Bool
 pub fn Opcode::output(Self, &Logger) -> Unit
@@ -605,7 +605,7 @@ pub impl Show for Opcode
 
 pub(all) enum ScalarOp {
   IntConst(Int64)
-  FloatConst32(UInt)
+  FloatConst32(UInt32)
   FloatConst64(UInt64)
   IntBinary(IntBinaryOp)
   IntUnary(IntUnaryOp)
@@ -614,12 +614,12 @@ pub(all) enum ScalarOp {
   FloatUnary(FloatUnaryOp)
   FloatCompare(FloatCC)
   Convert(ConversionOp)
-  SignExtendFrom(Int)
+  SignExtendFrom(Int32)
   Select
   Copy
 } derive(Eq, Hash, @debug.Debug)
 pub fn ScalarOp::equal(Self, Self) -> Bool
-pub fn ScalarOp::hash(Self) -> Int
+pub fn ScalarOp::hash(Self) -> Int32
 pub fn ScalarOp::hash_combine(Self, Hasher) -> Unit
 pub fn ScalarOp::not_equal(Self, Self) -> Bool
 pub fn ScalarOp::to_repr(Self) -> @debug.Repr
@@ -630,22 +630,22 @@ pub struct Signature {
 } derive(Eq, Hash, @debug.Debug)
 pub fn Signature::Signature(Array[Type], Array[Type]) -> Self
 pub fn Signature::equal(Self, Self) -> Bool
-pub fn Signature::hash(Self) -> Int
+pub fn Signature::hash(Self) -> Int32
 pub fn Signature::hash_combine(Self, Hasher) -> Unit
 pub fn Signature::not_equal(Self, Self) -> Bool
 pub fn Signature::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Terminator {
-  Jump(Int, Array[Value])
-  Branch(Value, Int, Array[Value], Int, Array[Value])
-  Brz(Value, Int, Int)
-  Brnz(Value, Int, Int)
-  BrTable(Value, Array[Int], Int)
+  Jump(Int32, Array[Value])
+  Branch(Value, Int32, Array[Value], Int32, Array[Value])
+  Brz(Value, Int32, Int32)
+  Brnz(Value, Int32, Int32)
+  BrTable(Value, Array[Int32], Int32)
   Return(Array[Value])
   Trap(String)
   TrapExit(String)
 } derive(@debug.Debug)
-pub fn Terminator::targets(Self) -> Array[Int]
+pub fn Terminator::targets(Self) -> Array[Int32]
 pub fn Terminator::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Type {
@@ -660,7 +660,7 @@ pub(all) enum Type {
   OpaqueRef
 } derive(Eq, Hash, @debug.Debug)
 pub fn Type::equal(Self, Self) -> Bool
-pub fn Type::hash(Self) -> Int
+pub fn Type::hash(Self) -> Int32
 pub fn Type::hash_combine(Self, Hasher) -> Unit
 pub fn Type::not_equal(Self, Self) -> Bool
 pub fn Type::output(Self, &Logger) -> Unit
@@ -669,12 +669,12 @@ pub fn Type::to_string(Self) -> String
 pub impl Show for Type
 
 pub struct Value {
-  id : Int
+  id : Int32
   ty : Type
   // private fields
 }
 pub fn Value::equal(Self, Self) -> Bool
-pub fn Value::hash(Self) -> Int
+pub fn Value::hash(Self) -> Int32
 pub fn Value::hash_combine(Self, Hasher) -> Unit
 pub fn Value::not_equal(Self, Self) -> Bool
 pub fn Value::to_repr(Self) -> @debug.Repr
@@ -690,7 +690,7 @@ pub(all) enum VectorBitwiseOp {
   Bitselect
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorBitwiseOp::equal(Self, Self) -> Bool
-pub fn VectorBitwiseOp::hash(Self) -> Int
+pub fn VectorBitwiseOp::hash(Self) -> Int32
 pub fn VectorBitwiseOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorBitwiseOp::not_equal(Self, Self) -> Bool
 pub fn VectorBitwiseOp::to_repr(Self) -> @debug.Repr
@@ -704,7 +704,7 @@ pub(all) enum VectorConversionOp {
   PromoteLowF32ToF64
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorConversionOp::equal(Self, Self) -> Bool
-pub fn VectorConversionOp::hash(Self) -> Int
+pub fn VectorConversionOp::hash(Self) -> Int32
 pub fn VectorConversionOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorConversionOp::not_equal(Self, Self) -> Bool
 pub fn VectorConversionOp::to_repr(Self) -> @debug.Repr
@@ -715,7 +715,7 @@ pub(all) enum VectorExtension {
   Unsigned
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorExtension::equal(Self, Self) -> Bool
-pub fn VectorExtension::hash(Self) -> Int
+pub fn VectorExtension::hash(Self) -> Int32
 pub fn VectorExtension::hash_combine(Self, Hasher) -> Unit
 pub fn VectorExtension::not_equal(Self, Self) -> Bool
 pub fn VectorExtension::to_repr(Self) -> @debug.Repr
@@ -731,7 +731,7 @@ pub(all) enum VectorFloatBinaryOp {
   PseudoMax
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorFloatBinaryOp::equal(Self, Self) -> Bool
-pub fn VectorFloatBinaryOp::hash(Self) -> Int
+pub fn VectorFloatBinaryOp::hash(Self) -> Int32
 pub fn VectorFloatBinaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorFloatBinaryOp::not_equal(Self, Self) -> Bool
 pub fn VectorFloatBinaryOp::to_repr(Self) -> @debug.Repr
@@ -745,7 +745,7 @@ pub(all) enum VectorFloatCompareOp {
   Ge
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorFloatCompareOp::equal(Self, Self) -> Bool
-pub fn VectorFloatCompareOp::hash(Self) -> Int
+pub fn VectorFloatCompareOp::hash(Self) -> Int32
 pub fn VectorFloatCompareOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorFloatCompareOp::not_equal(Self, Self) -> Bool
 pub fn VectorFloatCompareOp::to_repr(Self) -> @debug.Repr
@@ -755,7 +755,7 @@ pub(all) enum VectorFloatLane {
   F64
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorFloatLane::equal(Self, Self) -> Bool
-pub fn VectorFloatLane::hash(Self) -> Int
+pub fn VectorFloatLane::hash(Self) -> Int32
 pub fn VectorFloatLane::hash_combine(Self, Hasher) -> Unit
 pub fn VectorFloatLane::not_equal(Self, Self) -> Bool
 pub fn VectorFloatLane::to_repr(Self) -> @debug.Repr
@@ -770,7 +770,7 @@ pub(all) enum VectorFloatUnaryOp {
   Nearest
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorFloatUnaryOp::equal(Self, Self) -> Bool
-pub fn VectorFloatUnaryOp::hash(Self) -> Int
+pub fn VectorFloatUnaryOp::hash(Self) -> Int32
 pub fn VectorFloatUnaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorFloatUnaryOp::not_equal(Self, Self) -> Bool
 pub fn VectorFloatUnaryOp::to_repr(Self) -> @debug.Repr
@@ -780,7 +780,7 @@ pub(all) enum VectorFmaOp {
   NegatedAdd
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorFmaOp::equal(Self, Self) -> Bool
-pub fn VectorFmaOp::hash(Self) -> Int
+pub fn VectorFmaOp::hash(Self) -> Int32
 pub fn VectorFmaOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorFmaOp::not_equal(Self, Self) -> Bool
 pub fn VectorFmaOp::to_repr(Self) -> @debug.Repr
@@ -790,7 +790,7 @@ pub(all) enum VectorHalf {
   High
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorHalf::equal(Self, Self) -> Bool
-pub fn VectorHalf::hash(Self) -> Int
+pub fn VectorHalf::hash(Self) -> Int32
 pub fn VectorHalf::hash_combine(Self, Hasher) -> Unit
 pub fn VectorHalf::not_equal(Self, Self) -> Bool
 pub fn VectorHalf::to_repr(Self) -> @debug.Repr
@@ -809,7 +809,7 @@ pub(all) enum VectorIntBinaryOp {
   Q15MulrSaturating
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorIntBinaryOp::equal(Self, Self) -> Bool
-pub fn VectorIntBinaryOp::hash(Self) -> Int
+pub fn VectorIntBinaryOp::hash(Self) -> Int32
 pub fn VectorIntBinaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntBinaryOp::not_equal(Self, Self) -> Bool
 pub fn VectorIntBinaryOp::to_repr(Self) -> @debug.Repr
@@ -823,7 +823,7 @@ pub(all) enum VectorIntCompareOp {
   Ge(VectorSignedness)
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorIntCompareOp::equal(Self, Self) -> Bool
-pub fn VectorIntCompareOp::hash(Self) -> Int
+pub fn VectorIntCompareOp::hash(Self) -> Int32
 pub fn VectorIntCompareOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntCompareOp::not_equal(Self, Self) -> Bool
 pub fn VectorIntCompareOp::to_repr(Self) -> @debug.Repr
@@ -835,7 +835,7 @@ pub(all) enum VectorIntLane {
   I64
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorIntLane::equal(Self, Self) -> Bool
-pub fn VectorIntLane::hash(Self) -> Int
+pub fn VectorIntLane::hash(Self) -> Int32
 pub fn VectorIntLane::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntLane::not_equal(Self, Self) -> Bool
 pub fn VectorIntLane::to_repr(Self) -> @debug.Repr
@@ -845,7 +845,7 @@ pub(all) enum VectorIntShiftOp {
   Right(VectorSignedness)
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorIntShiftOp::equal(Self, Self) -> Bool
-pub fn VectorIntShiftOp::hash(Self) -> Int
+pub fn VectorIntShiftOp::hash(Self) -> Int32
 pub fn VectorIntShiftOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntShiftOp::not_equal(Self, Self) -> Bool
 pub fn VectorIntShiftOp::to_repr(Self) -> @debug.Repr
@@ -858,7 +858,7 @@ pub(all) enum VectorIntUnaryOp {
   ExtAddPairwise(VectorSignedness)
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorIntUnaryOp::equal(Self, Self) -> Bool
-pub fn VectorIntUnaryOp::hash(Self) -> Int
+pub fn VectorIntUnaryOp::hash(Self) -> Int32
 pub fn VectorIntUnaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntUnaryOp::not_equal(Self, Self) -> Bool
 pub fn VectorIntUnaryOp::to_repr(Self) -> @debug.Repr
@@ -872,7 +872,7 @@ pub(all) enum VectorLane {
   F64
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorLane::equal(Self, Self) -> Bool
-pub fn VectorLane::hash(Self) -> Int
+pub fn VectorLane::hash(Self) -> Int32
 pub fn VectorLane::hash_combine(Self, Hasher) -> Unit
 pub fn VectorLane::not_equal(Self, Self) -> Bool
 pub fn VectorLane::to_repr(Self) -> @debug.Repr
@@ -881,11 +881,11 @@ pub(all) enum VectorMemoryOp {
   LoadExtend(VectorIntLane, VectorSignedness)
   LoadSplat(VectorIntLane)
   LoadZero(VectorIntLane)
-  LoadLane(VectorIntLane, Int)
-  StoreLane(VectorIntLane, Int)
+  LoadLane(VectorIntLane, Int32)
+  StoreLane(VectorIntLane, Int32)
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorMemoryOp::equal(Self, Self) -> Bool
-pub fn VectorMemoryOp::hash(Self) -> Int
+pub fn VectorMemoryOp::hash(Self) -> Int32
 pub fn VectorMemoryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorMemoryOp::not_equal(Self, Self) -> Bool
 pub fn VectorMemoryOp::to_repr(Self) -> @debug.Repr
@@ -893,9 +893,9 @@ pub fn VectorMemoryOp::to_repr(Self) -> @debug.Repr
 pub(all) enum VectorOp {
   Const(Bytes)
   Splat(VectorLane)
-  ExtractLane(VectorLane, VectorExtension, Int)
-  ReplaceLane(VectorLane, Int)
-  Shuffle(FixedArray[Int])
+  ExtractLane(VectorLane, VectorExtension, Int32)
+  ReplaceLane(VectorLane, Int32)
+  Shuffle(FixedArray[Int32])
   Swizzle
   Bitwise(VectorBitwiseOp)
   Predicate(VectorPredicateOp)
@@ -911,7 +911,7 @@ pub(all) enum VectorOp {
   Relaxed(VectorRelaxedOp)
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorOp::equal(Self, Self) -> Bool
-pub fn VectorOp::hash(Self) -> Int
+pub fn VectorOp::hash(Self) -> Int32
 pub fn VectorOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorOp::not_equal(Self, Self) -> Bool
 pub fn VectorOp::to_repr(Self) -> @debug.Repr
@@ -922,7 +922,7 @@ pub(all) enum VectorPredicateOp {
   Bitmask(VectorIntLane)
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorPredicateOp::equal(Self, Self) -> Bool
-pub fn VectorPredicateOp::hash(Self) -> Int
+pub fn VectorPredicateOp::hash(Self) -> Int32
 pub fn VectorPredicateOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorPredicateOp::not_equal(Self, Self) -> Bool
 pub fn VectorPredicateOp::to_repr(Self) -> @debug.Repr
@@ -940,7 +940,7 @@ pub(all) enum VectorRelaxedOp {
   Dot8To32AddSigned
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorRelaxedOp::equal(Self, Self) -> Bool
-pub fn VectorRelaxedOp::hash(Self) -> Int
+pub fn VectorRelaxedOp::hash(Self) -> Int32
 pub fn VectorRelaxedOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorRelaxedOp::not_equal(Self, Self) -> Bool
 pub fn VectorRelaxedOp::to_repr(Self) -> @debug.Repr
@@ -950,12 +950,12 @@ pub(all) enum VectorSignedness {
   Unsigned
 } derive(Eq, Hash, @debug.Debug)
 pub fn VectorSignedness::equal(Self, Self) -> Bool
-pub fn VectorSignedness::hash(Self) -> Int
+pub fn VectorSignedness::hash(Self) -> Int32
 pub fn VectorSignedness::hash_combine(Self, Hasher) -> Unit
 pub fn VectorSignedness::not_equal(Self, Self) -> Bool
 pub fn VectorSignedness::to_repr(Self) -> @debug.Repr
 
 // Type aliases
-pub type InstId = Int
+pub type InstId = Int32
 
 // Traits

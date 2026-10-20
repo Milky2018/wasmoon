@@ -19,10 +19,10 @@ class ProcessTests(unittest.TestCase):
         root = Path(cls.build.name)
         export = '__declspec(dllexport)' if os.name == 'nt' else ''
         (root / 'moonbit.h').write_text(f'#define MOONBIT_FFI_EXPORT {export}\n')
-        source = ROOT / 'modules/wasmoon_jit/host_io/wasi/process_native.c'
+        source = ROOT / 'modules/wasmoon_runtime/native/ffi/host_io/wasi/process_native.c'
         cls.library = root / ('process.dll' if os.name == 'nt' else 'process.so')
         if os.name == 'nt':
-            backend = ROOT / 'modules/wasmoon_jit/host_io'
+            backend = ROOT / 'modules/wasmoon_runtime/native/ffi/host_io'
             command = [os.environ.get('WASMOON_MSVC_CL', 'clang-cl'), '/std:c11',
                        '/D_CRT_SECURE_NO_WARNINGS', '/LD', '/MD', '/I' + str(root), str(source),
                        *[str(backend / name) for name in ('windows_io.c', 'windows_input.c', 'windows_fs.c')],

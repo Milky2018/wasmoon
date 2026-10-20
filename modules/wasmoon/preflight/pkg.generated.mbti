@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/preflight"
 
 // Values
-pub fn validate_jit(Bytes, opt_level? : Int) -> PreflightResult
+pub fn validate_jit(Bytes, opt_level? : Int32) -> PreflightResult
 
 pub fn validate_module(Bytes) -> PreflightResult
 
@@ -13,20 +13,20 @@ pub struct PreflightDiagnostic {
   severity : PreflightSeverity
   stage : PreflightStage
   message : String
-  func_idx : Int?
+  func_idx : Int32?
   func_name : String?
 }
-pub fn PreflightDiagnostic::PreflightDiagnostic(PreflightSeverity, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Self
+pub fn PreflightDiagnostic::PreflightDiagnostic(PreflightSeverity, PreflightStage, String, func_idx? : Int32?, func_name? : String?) -> Self
 
 pub struct PreflightResult {
   mut ok : Bool
   diagnostics : Array[PreflightDiagnostic]
-  mut total_funcs : Int
-  mut checked_funcs : Int
+  mut total_funcs : Int32
+  mut checked_funcs : Int32
 }
 pub fn PreflightResult::PreflightResult() -> Self
-pub fn PreflightResult::add_error(Self, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Unit
-pub fn PreflightResult::add_warning(Self, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Unit
+pub fn PreflightResult::add_error(Self, PreflightStage, String, func_idx? : Int32?, func_name? : String?) -> Unit
+pub fn PreflightResult::add_warning(Self, PreflightStage, String, func_idx? : Int32?, func_name? : String?) -> Unit
 
 pub(all) enum PreflightSeverity {
   Error

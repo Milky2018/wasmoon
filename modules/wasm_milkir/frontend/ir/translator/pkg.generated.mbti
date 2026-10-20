@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub fn translate_function(@types.Module, Int, @embedding.EmbeddingEnvironment, name? : String, memory_max_override? : Int?) -> @milkir.Function
+pub fn translate_function(@types.Module, Int32, @embedding.EmbeddingEnvironment, name? : String, memory_max_override? : Int32?) -> @milkir.Function
 
 pub fn translate_function_body(TranslationContext, String, @types.FuncType, ArrayView[@types.ValueType], ArrayView[@types.Instruction]) -> @milkir.Function
 
@@ -17,7 +17,7 @@ pub fn translate_function_body(TranslationContext, String, @types.FuncType, Arra
 
 // Types and methods
 type TranslationContext
-pub fn TranslationContext::from_module(@types.Module, @embedding.EmbeddingEnvironment, memory_max_override? : Int?, func_base? : Int, import_remap? : Array[Int]) -> Self
+pub fn TranslationContext::from_module(@types.Module, @embedding.EmbeddingEnvironment, memory_max_override? : Int32?, func_base? : Int32, import_remap? : Array[Int32]) -> Self
 pub fn TranslationContext::wasm_validation_context(Self) -> @wasm_milkir.WasmValidationContext
 
 // Type aliases

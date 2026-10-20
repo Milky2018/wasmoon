@@ -815,22 +815,6 @@ fn instantiate_component(
 }
 
 ///|
-fn run_invoke(
-  instance : @runtime_impl.ComponentInstance,
-  field : String,
-  args : Array[@runtime_impl.ComponentValue],
-) -> Result[
-  Array[@runtime_impl.ComponentValue],
-  @runtime_impl.ComponentRuntimeError,
-] {
-  try instance.call_exported_func(field, args) catch {
-    e => Err(e)
-  } noraise {
-    values => Ok(values)
-  }
-}
-
-///|
 fn make_const_u32_func(value : Int32) -> @runtime_impl.ComponentFunc {
   let func_type : @component_types.FuncType = {
     is_async: false,
@@ -1197,7 +1181,12 @@ fn run_component_script_impl(
             continue
           }
         }
-        let call_result = run_invoke(instance, field, args)
+        let call_result : Result[
+          Array[@runtime_impl.ComponentValue],
+          @runtime_impl.ComponentRuntimeError,
+        ] = Ok(instance.call_exported_func(field, args)) catch {
+          error => Err(error)
+        }
         match cmd.type_ {
           "invoke" =>
             match call_result {

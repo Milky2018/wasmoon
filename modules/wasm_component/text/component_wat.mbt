@@ -20,7 +20,7 @@ pub impl Show for ComponentTextError with fn output(self, logger) {
 ///|
 priv enum SExpr {
   Atom(String)
-  Str(String)
+  Str(Bytes, String) // literal bytes and original WAT spelling
   List(Array[SExpr])
 }
 
@@ -136,72 +136,18 @@ fn TextReader::skip_ws_and_comments(
 }
 
 ///|
-fn is_hex_digit(ch : Char) -> Bool {
-  ('0' <= ch && ch <= '9') ||
-  ('a' <= ch && ch <= 'f') ||
-  ('A' <= ch && ch <= 'F')
-}
-
-///|
-fn hex_digit_value(ch : Char) -> Int32 {
-  if '0' <= ch && ch <= '9' {
-    ch.to_int() - '0'.to_int()
-  } else if 'a' <= ch && ch <= 'f' {
-    ch.to_int() - 'a'.to_int() + 10
-  } else if 'A' <= ch && ch <= 'F' {
-    ch.to_int() - 'A'.to_int() + 10
-  } else {
-    -1
-  }
-}
-
-///|
-fn TextReader::read_string(
-  self : TextReader,
-) -> String raise ComponentTextError {
-  let out = StringBuilder::StringBuilder()
+fn TextReader::read_string(self : TextReader) -> Bytes raise ComponentTextError {
+  let start = self.pos
   self.next_char() |> ignore // consume opening quote
-  while !self.is_eof() {
-    let ch = match self.next_char() {
-      Some(ch) => ch
-      None => raise ParseError("unterminated string literal")
-    }
+  while self.next_char() is Some(ch) {
     if ch == '"' {
-      return out.to_string()
-    }
-    if ch != '\\' {
-      out.write_char(ch)
-      continue
-    }
-    if self.is_eof() {
-      raise ParseError("unterminated string escape")
-    }
-    let esc = match self.next_char() {
-      Some(ch) => ch
-      None => raise ParseError("unterminated string escape")
-    }
-    if esc == 'n' {
-      out.write_char('\n')
-    } else if esc == 'r' {
-      out.write_char('\r')
-    } else if esc == 't' {
-      out.write_char('\t')
-    } else if esc == '"' {
-      out.write_char('"')
-    } else if esc == '\\' {
-      out.write_char('\\')
-    } else if is_hex_digit(esc) &&
-      self.peek_char() is Some(next_ch) &&
-      is_hex_digit(next_ch) {
-      let hi = hex_digit_value(esc)
-      let lo_ch = match self.next_char() {
-        Some(ch) => ch
-        None => raise ParseError("unterminated hex escape")
+      return @wat.parse_string_literal(self.input[start:self.pos].to_owned()) catch {
+        error => raise ParseError(error.to_string())
       }
-      let lo = hex_digit_value(lo_ch)
-      out.write_char((hi * 16 + lo).unsafe_to_char())
-    } else {
-      out.write_char(esc)
+    }
+    // Scan the boundary only; Core WAT owns escape and character validation.
+    if ch == '\\' && self.next_char() is None {
+      raise ParseError("unterminated string escape")
     }
   }
   raise ParseError("unterminated string literal")
@@ -257,7 +203,9 @@ fn parse_sexpr(reader : TextReader) -> SExpr raise ComponentTextError {
     raise ParseError("unexpected ')'")
   }
   if first == Some('"') {
-    return Str(reader.read_string())
+    let start = reader.pos
+    let text = reader.read_string()
+    return Str(text, reader.input[start:reader.pos].to_owned())
   }
   Atom(reader.read_atom())
 }
@@ -659,16 +607,18 @@ fn parse_name_text(
   expr : SExpr,
   context : String,
 ) -> String raise ComponentTextError {
-  if expr is Str(text) {
-    return text
+  if expr is Str(bytes, _) {
+    return @utf8.decode(bytes, ignore_bom=false) catch {
+      _ => raise ParseError("\{context} must be valid UTF-8")
+    }
   }
   if expr is Atom(text) {
     return text
   }
   if expr is List(items) {
     if items.length() == 2 && items[0] is Atom("interface") {
-      if items[1] is Str(text) {
-        return text
+      if items[1] is Str(_, _) {
+        return parse_name_text(items[1], context)
       }
       if items[1] is Atom(text) {
         return text
@@ -909,33 +859,12 @@ fn int_array_to_bytes(values : Array[Int32]) -> Bytes {
 }
 
 ///|
-fn escape_wat_string(text : String) -> String {
-  let out = StringBuilder::StringBuilder()
-  out.write_char('"')
-  for ch in text {
-    if ch == '"' {
-      out.write_string("\\\"")
-    } else if ch == '\\' {
-      out.write_string("\\\\")
-    } else if ch == '\n' {
-      out.write_string("\\n")
-    } else if ch == '\r' {
-      out.write_string("\\r")
-    } else if ch == '\t' {
-      out.write_string("\\t")
-    } else {
-      out.write_char(ch)
-    }
-  }
-  out.write_char('"')
-  out.to_string()
-}
-
-///|
 fn sexpr_to_wat(expr : SExpr) -> String {
   match expr {
     Atom(text) => text
-    Str(text) => escape_wat_string(text)
+    // Core strings are byte strings. Re-emitting decoded text would change
+    // byte escapes (and allow invalid escapes to disappear before validation).
+    Str(_, spelling) => spelling
     List(items) => {
       let out = StringBuilder::StringBuilder()
       out.write_char('(')
@@ -1109,12 +1038,9 @@ fn parse_func_sig(
           continue
         }
         if items.length() == 3 {
-          let label = if items[1] is Str(name) {
-            name
-          } else if items[1] is Atom(name) {
-            name
-          } else {
-            raise Unsupported("unsupported param label")
+          let label = match items[1] {
+            Str(_, _) | Atom(_) => parse_name_text(items[1], "param label")
+            _ => raise Unsupported("unsupported param label")
           }
           let ty = parse_valtype(items[2], state)
           params.push({ label, ty, })
@@ -1620,12 +1546,9 @@ fn parse_inline_func_sig(
           continue
         }
         if items.length() == 3 {
-          let label = if items[1] is Str(name) {
-            name
-          } else if items[1] is Atom(name) {
-            name
-          } else {
-            raise Unsupported("unsupported param label")
+          let label = match items[1] {
+            Str(_, _) | Atom(_) => parse_name_text(items[1], "param label")
+            _ => raise Unsupported("unsupported param label")
           }
           let (ty, next_next_count, ty_decl_count) = parse_inline_valtype_encoding(
             items[2],
@@ -7415,19 +7338,6 @@ fn keep_wbtest_imports_used() -> Unit {
 }
 
 ///|
-fn decode_wat_binary_string(text : String) -> Bytes raise ComponentTextError {
-  let out : Array[Byte] = []
-  for ch in text {
-    let code = ch.to_int()
-    if code < 0 || code > 0xff {
-      raise ParseError("binary form contains non-byte character")
-    }
-    out.push(code.to_byte())
-  }
-  Bytes::from_array(out)
-}
-
-///|
 pub fn parse_component_wat(input : String) -> Bytes raise ComponentTextError {
   keep_wbtest_imports_used()
   let reader = TextReader::TextReader(input)
@@ -7451,8 +7361,7 @@ pub fn parse_component_wat(input : String) -> Bytes raise ComponentTextError {
         index += 1
         let out : Array[Byte] = []
         for i in index..<items.length() {
-          if items[i] is Str(text) {
-            let bytes = decode_wat_binary_string(text)
+          if items[i] is Str(bytes, _) {
             for b in bytes {
               out.push(b)
             }

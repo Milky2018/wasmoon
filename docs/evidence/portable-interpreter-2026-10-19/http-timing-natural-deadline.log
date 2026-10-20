@@ -1,0 +1,349 @@
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"wire_wbtest.mbt","index":2}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"wire_wbtest.mbt","index":2,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"uri_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"uri_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"uri_wbtest.mbt","index":1}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"uri_wbtest.mbt","index":1,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"surface_preview3_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"surface_preview3_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"message_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"message_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"message_wbtest.mbt","index":1}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"message_wbtest.mbt","index":1,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"message_wbtest.mbt","index":2}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"message_wbtest.mbt","index":2,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"message_wbtest.mbt","index":3}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"message_wbtest.mbt","index":3,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"wire_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"wire_wbtest.mbt","index":1}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"wire_wbtest.mbt","index":3}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"tls_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":1}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":2}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":3}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":4}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":5}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"wire_wbtest.mbt","index":1,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":6}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"wire_wbtest.mbt","index":3,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":7}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"wire_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":8}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":6,"message":"Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"client_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":4,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"cancel_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":8,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"cancel_wbtest.mbt","index":1}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":1,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"cancel_wbtest.mbt","index":2}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":3,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"cancel_wbtest.mbt","index":3}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":2,"message":"wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"client_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"cancel_wbtest.mbt","index":2,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"cancel_wbtest.mbt","index":1,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"cancel_wbtest.mbt","index":3,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"cancel_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"tls_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":5,"message":""}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":7,"message":""}
+----- END MOON TEST RESULT -----
+[HTTP-TIMING] event=9000 qpc_ms=514114.512 wall_ms=13436891832523 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514114.603 wall_ms=13436891832523 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514114.654 wall_ms=13436891832523 tid=7472
+[HTTP-TIMING] event=100 qpc_ms=514114.679 wall_ms=13436891832523 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514115.279 wall_ms=13436891832523 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514115.383 wall_ms=13436891832523 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514115.398 wall_ms=13436891832523 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514115.402 wall_ms=13436891832523 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514116.316 wall_ms=13436891832525 tid=7472
+[HTTP-TIMING] event=10000 qpc_ms=514118.165 wall_ms=13436891832527 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514119.096 wall_ms=13436891832527 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514119.450 wall_ms=13436891832527 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514119.635 wall_ms=13436891832529 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514119.651 wall_ms=13436891832529 tid=7472
+[HTTP-TIMING] event=3200 qpc_ms=514119.656 wall_ms=13436891832529 tid=7472
+[HTTP-TIMING] event=9200 qpc_ms=514119.660 wall_ms=13436891832529 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514119.822 wall_ms=13436891832529 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514121.088 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514121.141 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514121.152 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514121.175 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514121.313 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514121.339 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514121.365 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514121.386 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514121.399 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514121.425 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514121.436 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=3200 qpc_ms=514121.439 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=9200 qpc_ms=514121.442 wall_ms=13436891832530 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514122.030 wall_ms=13436891832531 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514122.045 wall_ms=13436891832531 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514122.051 wall_ms=13436891832531 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514122.310 wall_ms=13436891832531 tid=7472
+[HTTP-TIMING] event=10000 qpc_ms=514122.469 wall_ms=13436891832531 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514122.522 wall_ms=13436891832531 tid=7472
+[HTTP-TIMING] event=800 qpc_ms=514122.562 wall_ms=13436891832531 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514122.582 wall_ms=13436891832531 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514122.596 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=3200 qpc_ms=514122.599 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9200 qpc_ms=514122.604 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=10000 qpc_ms=514122.690 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9030 qpc_ms=514122.703 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=10000 qpc_ms=514122.710 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9080 qpc_ms=514122.722 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=10000 qpc_ms=514122.727 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514122.756 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514122.784 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514122.810 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514122.838 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514122.866 wall_ms=13436891832532 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514123.563 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=10000 qpc_ms=514123.601 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=801 qpc_ms=514123.808 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514123.960 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=802 qpc_ms=514124.229 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514124.256 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514124.263 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=3200 qpc_ms=514124.274 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=9200 qpc_ms=514124.299 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514124.437 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514124.473 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514124.500 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514124.546 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514124.602 wall_ms=13436891832533 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514124.824 wall_ms=13436891832534 tid=7472
+[HTTP-TIMING] event=803 qpc_ms=514124.837 wall_ms=13436891832534 tid=7472
+[HTTP-TIMING] event=10000 qpc_ms=514124.892 wall_ms=13436891832534 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514124.925 wall_ms=13436891832534 tid=7472
+[HTTP-TIMING] init_client begin 514125.106
+[HTTP-TIMING] init_client end 514126.295 elapsed=1.188 result=0
+[HTTP-TIMING] event=4000 qpc_ms=514126.355 wall_ms=13436891832535 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514126.362 wall_ms=13436891832535 tid=7472
+[HTTP-TIMING] event=3200 qpc_ms=514126.365 wall_ms=13436891832535 tid=7472
+[HTTP-TIMING] event=9200 qpc_ms=514126.369 wall_ms=13436891832535 tid=7472
+[HTTP-TIMING] event=101 qpc_ms=514126.377 wall_ms=13436891832535 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514126.722 wall_ms=13436891832536 tid=7472
+[HTTP-TIMING] event=9080 qpc_ms=514127.106 wall_ms=13436891832536 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514127.208 wall_ms=13436891832536 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514127.222 wall_ms=13436891832536 tid=7472
+[HTTP-TIMING] event=3200 qpc_ms=514127.226 wall_ms=13436891832536 tid=7472
+[HTTP-TIMING] event=9200 qpc_ms=514127.231 wall_ms=13436891832536 tid=7472
+[HTTP-TIMING] event=10000 qpc_ms=514127.326 wall_ms=13436891832536 tid=7472
+[HTTP-TIMING] init_server begin 514127.430
+[HTTP-TIMING] api=pfx_import qpc_ms=514640.869 elapsed=513.418 cpu_ms=0.000
+[HTTP-TIMING] api=find_certificate qpc_ms=514640.910 elapsed=0.005 cpu_ms=0.000
+[HTTP-TIMING] api=acquire_server_credentials qpc_ms=514642.555 elapsed=1.641 cpu_ms=15.625
+[HTTP-TIMING] init_server end 514642.601 elapsed=515.171 result=0
+[HTTP-TIMING] accept begin 514642.625
+[HTTP-TIMING] accept end 514642.710 elapsed=0.085 result=1
+[HTTP-TIMING] event=4000 qpc_ms=514642.955 wall_ms=13436891833051 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514642.970 wall_ms=13436891833051 tid=7472
+[HTTP-TIMING] event=3030 qpc_ms=514642.973 wall_ms=13436891833051 tid=7472
+[HTTP-TIMING] event=9030 qpc_ms=514642.976 wall_ms=13436891833051 tid=7472
+[HTTP-TIMING] event=9030 qpc_ms=514643.036 wall_ms=13436891833051 tid=7472
+[HTTP-TIMING] event=20080 qpc_ms=514643.109 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514643.174 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514643.183 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=3080 qpc_ms=514643.186 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=9080 qpc_ms=514643.193 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=102 qpc_ms=514643.324 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=804 qpc_ms=514643.348 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=805 qpc_ms=514643.358 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514643.360 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=3050 qpc_ms=514643.362 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=9050 qpc_ms=514643.365 wall_ms=13436891833052 tid=7472
+[HTTP-TIMING] event=20200 qpc_ms=514643.440 wall_ms=13436891833053 tid=7472
+[HTTP-TIMING] event=806 qpc_ms=514643.649 wall_ms=13436891833053 tid=7472
+[HTTP-TIMING] event=20030 qpc_ms=514643.753 wall_ms=13436891833053 tid=7472
+[HTTP-TIMING] event=807 qpc_ms=514643.971 wall_ms=13436891833053 tid=7472
+[HTTP-TIMING] add_root_certificate begin 514644.075
+[HTTP-TIMING] add_root_certificate end 514644.123 elapsed=0.048 result=0
+[HTTP-TIMING] connect begin 514644.136
+[HTTP-TIMING] connect end 514645.095 elapsed=0.959 result=2
+[HTTP-TIMING] event=4000 qpc_ms=514645.349 wall_ms=13436891833054 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514645.365 wall_ms=13436891833054 tid=7472
+[HTTP-TIMING] event=3010 qpc_ms=514645.368 wall_ms=13436891833054 tid=7472
+[HTTP-TIMING] connect begin 514645.386
+[HTTP-TIMING] connect end 514645.498 elapsed=0.113 result=1
+[HTTP-TIMING] accept begin 514645.530
+[HTTP-TIMING] accept end 514648.140 elapsed=2.610 result=2
+[HTTP-TIMING] event=4000 qpc_ms=514648.207 wall_ms=13436891833057 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514648.221 wall_ms=13436891833057 tid=7472
+[HTTP-TIMING] event=3030 qpc_ms=514648.224 wall_ms=13436891833057 tid=7472
+[HTTP-TIMING] event=9080 qpc_ms=514648.389 wall_ms=13436891833057 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514648.404 wall_ms=13436891833057 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514648.407 wall_ms=13436891833057 tid=7472
+[HTTP-TIMING] event=3050 qpc_ms=514648.415 wall_ms=13436891833057 tid=7472
+[HTTP-TIMING] accept begin 514648.549
+[HTTP-TIMING] accept end 514648.623 elapsed=0.074 result=1
+[HTTP-TIMING] connect begin 514648.649
+[HTTP-TIMING] connect end 514650.681 elapsed=2.031 result=0
+[HTTP-TIMING] verify_peer_certificate begin 514650.919
+[HTTP-TIMING] verify_peer_certificate end 514654.413 elapsed=3.493 result=0
+[HTTP-TIMING] accept begin 514654.451
+[HTTP-TIMING] accept end 514654.588 elapsed=0.137 result=0
+[HTTP-TIMING] event=4000 qpc_ms=514655.085 wall_ms=13436891833063 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514655.107 wall_ms=13436891833063 tid=7472
+[HTTP-TIMING] event=3080 qpc_ms=514655.110 wall_ms=13436891833063 tid=7472
+[HTTP-TIMING] event=9080 qpc_ms=514655.125 wall_ms=13436891833063 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514655.148 wall_ms=13436891833063 tid=7472
+[HTTP-TIMING] event=39000 qpc_ms=514656.719 wall_ms=13436891833065 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514656.763 wall_ms=13436891833065 tid=7472
+[HTTP-TIMING] connect begin 514657.645
+[HTTP-TIMING] connect end 514657.980 elapsed=0.335 result=0
+[HTTP-TIMING] event=9000 qpc_ms=514658.304 wall_ms=13436891833067 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514659.353 wall_ms=13436891833068 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514659.765 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514659.833 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514659.867 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=39000 qpc_ms=514660.117 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514660.166 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514660.740 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514660.781 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=39000 qpc_ms=514660.839 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=39000 qpc_ms=514660.853 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514660.883 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514660.916 wall_ms=13436891833069 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514661.430 wall_ms=13436891833070 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514661.613 wall_ms=13436891833070 tid=7472
+[HTTP-TIMING] event=39000 qpc_ms=514661.672 wall_ms=13436891833070 tid=7472
+[HTTP-TIMING] event=39000 qpc_ms=514661.687 wall_ms=13436891833070 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514661.707 wall_ms=13436891833071 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514661.734 wall_ms=13436891833071 tid=7472
+[HTTP-TIMING] event=9000 qpc_ms=514663.588 wall_ms=13436891833072 tid=7472
+[HTTP-TIMING] event=39000 qpc_ms=514663.743 wall_ms=13436891833073 tid=7472
+[HTTP-TIMING] event=4000 qpc_ms=514663.980 wall_ms=13436891833073 tid=7472
+[HTTP-TIMING] event=4001 qpc_ms=514663.996 wall_ms=13436891833073 tid=7472
+[HTTP-TIMING] event=33000 qpc_ms=514663.999 wall_ms=13436891833073 tid=7472
+[HTTP-TIMING] event=39000 qpc_ms=514664.402 wall_ms=13436891833073 tid=7472
+[HTTP-TIMING] init_client begin 514666.283
+[HTTP-TIMING] init_client end 514666.487 elapsed=0.204 result=0
+[HTTP-TIMING] connect begin 514666.503
+[HTTP-TIMING] connect end 514667.333 elapsed=0.830 result=2
+[HTTP-TIMING] connect begin 514667.401
+[HTTP-TIMING] connect end 514667.474 elapsed=0.073 result=1
+[HTTP-TIMING] init_server begin 514667.675
+[HTTP-TIMING] api=pfx_import qpc_ms=515017.311 elapsed=349.616 cpu_ms=0.000
+[HTTP-TIMING] api=find_certificate qpc_ms=515017.343 elapsed=0.002 cpu_ms=0.000
+[HTTP-TIMING] api=acquire_server_credentials qpc_ms=515018.656 elapsed=1.309 cpu_ms=0.000
+[HTTP-TIMING] init_server end 515018.700 elapsed=351.025 result=0
+[HTTP-TIMING] accept begin 515018.723
+[HTTP-TIMING] accept end 515018.790 elapsed=0.067 result=1
+[HTTP-TIMING] accept begin 515018.861
+[HTTP-TIMING] accept end 515021.519 elapsed=2.658 result=2
+[HTTP-TIMING] event=20080 qpc_ms=515021.666 wall_ms=13436891833431 tid=7472
+[HTTP-TIMING] event=20080 qpc_ms=515021.685 wall_ms=13436891833431 tid=7472
+[HTTP-TIMING] accept begin 515021.708
+[HTTP-TIMING] accept end 515021.772 elapsed=0.064 result=1
+[HTTP-TIMING] connect begin 515021.827
+[HTTP-TIMING] connect end 515022.524 elapsed=0.697 result=3
+[HTTP-TIMING] accept begin 515022.975
+[HTTP-TIMING] accept end 515023.055 elapsed=0.079 result=1

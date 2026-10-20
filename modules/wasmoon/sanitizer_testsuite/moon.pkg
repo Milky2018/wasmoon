@@ -21,3 +21,5 @@ import {
   "moonbitlang/async",
   "moonbitlang/x/fs",
 } for "test"
+
+supported_targets = "+native"

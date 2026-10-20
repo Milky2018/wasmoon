@@ -1,7 +1,4 @@
 ///|
-pub extend CHeap with Debug::{to_repr}
-
-///|
 pub extend FunctionTemperature with Show::{output}
 
 ///|
@@ -12,12 +9,6 @@ pub extend GCSetupError with Show::{to_string, output}
 
 ///|
 pub extend GcSafepoint with Debug::{to_repr}
-
-///|
-pub extend GcSlot with Debug::{to_repr}
-
-///|
-pub extend GcSlot with Eq::{not_equal, equal}
 
 ///|
 pub extend HostcallImportTrampolineError with Debug::{to_repr}
@@ -33,12 +24,6 @@ pub extend ImportFunctionResolution with Debug::{to_repr}
 
 ///|
 pub extend ImportFunctionResolution with Eq::{not_equal, equal}
-
-///|
-pub extend JITTable with Debug::{to_repr}
-
-///|
-pub extend JITTableOwner with Debug::{to_repr}
 
 ///|
 pub extend JitCodeObject with Debug::{to_repr}

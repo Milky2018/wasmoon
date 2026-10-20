@@ -23,14 +23,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -45,7 +45,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -73,21 +73,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
           _ => false
         }
 
-        // Parse limits (use u64 for memory64)
-        let min = if is_memory64 {
-          self.parse_u64()
-        } else {
-          self.parse_u32().to_int64() & 0xFFFF_FFFFL
-        }
+        // Parse unsigned 64-bit limits; the validator checks address-type bounds
+        let min = self.parse_u64()
         let max = match self.current.token {
-          Number(_) =>
-            Some(
-              if is_memory64 {
-                self.parse_u64()
-              } else {
-                self.parse_u32().to_int64() & 0xFFFF_FFFFL
-              },
-            )
+          Number(_) => Some(self.parse_u64())
           _ => None
         }
         let is_shared = self.current.token == Keyword("shared")
@@ -116,7 +105,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               match self.current.token {
                 String_(s) => {
                   self.advance()
-                  s
+                  decode_text(s)
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
               }
@@ -137,7 +126,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -150,14 +139,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               let mod_name = match self.current.token {
                 String_(s) => {
                   self.advance()
-                  s
+                  decode_text(s)
                 }
                 _ => raise UnexpectedToken("expected module name", self.loc())
               }
               let import_name = match self.current.token {
                 String_(s) => {
                   self.advance()
-                  s
+                  decode_text(s)
                 }
                 _ => raise UnexpectedToken("expected import name", self.loc())
               }
@@ -174,21 +163,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                 }
                 _ => false
               }
-              // Parse limits (use u64 for memory64)
-              let min = if is_memory64 {
-                self.parse_u64()
-              } else {
-                self.parse_u32().to_int64() & 0xFFFF_FFFFL
-              }
+              // Parse unsigned 64-bit limits; the validator checks address-type bounds
+              let min = self.parse_u64()
               let max = match self.current.token {
-                Number(_) =>
-                  Some(
-                    if is_memory64 {
-                      self.parse_u64()
-                    } else {
-                      self.parse_u32().to_int64() & 0xFFFF_FFFFL
-                    },
-                  )
+                Number(_) => Some(self.parse_u64())
                 _ => None
               }
               let is_shared = self.current.token == Keyword("shared")
@@ -334,21 +312,10 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
     }
   }
 
-  // Parse limits (use u64 for memory64)
-  let min = if is_memory64 {
-    self.parse_u64()
-  } else {
-    self.parse_u32().to_int64() & 0xFFFF_FFFFL
-  }
+  // Parse unsigned 64-bit limits; the validator checks address-type bounds
+  let min = self.parse_u64()
   let max = match self.current.token {
-    Number(_) =>
-      Some(
-        if is_memory64 {
-          self.parse_u64()
-        } else {
-          self.parse_u32().to_int64() & 0xFFFF_FFFFL
-        },
-      )
+    Number(_) => Some(self.parse_u64())
     _ => None
   }
   let is_shared = self.current.token == Keyword("shared")
@@ -384,10 +351,10 @@ fn Parser::parse_optional_page_size_log2(self : Parser) -> Int32 raise WatError 
     return 16
   }
   self.advance()
-  let page_size = self.parse_u32()
-  if page_size == 0 || page_size > 65536 || (page_size & (page_size - 1)) != 0 {
+  let page_size = self.parse_u64().reinterpret_as_uint64()
+  if page_size == 0UL || (page_size & (page_size - 1UL)) != 0UL {
     raise UnexpectedToken(
-      "memory page size must be a power of two between 1 and 65536",
+      "memory page size must be a nonzero u64 power of two",
       self.loc(),
     )
   }
@@ -420,14 +387,14 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -442,7 +409,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -517,7 +484,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         self.advance()
         match self.current.token {
           String_(s) => {
-            export_names.push(s)
+            export_names.push(decode_text(s))
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -530,14 +497,14 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -552,7 +519,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
               self.advance()
               match self.current.token {
                 String_(s) => {
-                  export_names.push(s)
+                  export_names.push(decode_text(s))
                   self.advance()
                 }
                 _ => raise UnexpectedToken("expected export name", self.loc())
@@ -675,7 +642,7 @@ fn Parser::parse_table_def(
         self.advance()
         match self.current.token {
           String_(s) => {
-            export_names.push(s)
+            export_names.push(decode_text(s))
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -709,14 +676,14 @@ fn Parser::parse_table_def(
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }
@@ -727,7 +694,7 @@ fn Parser::parse_table_def(
           self.expect_keyword("export")
           match self.current.token {
             String_(name) => {
-              export_names.push(name)
+              export_names.push(decode_text(name))
               self.advance()
             }
             _ => raise UnexpectedToken("expected export name", self.loc())
@@ -742,20 +709,9 @@ fn Parser::parse_table_def(
         }
 
         // Parse limits - use u64 for table64, u32 for table32
-        let min = if is_table64 {
-          self.parse_u64()
-        } else {
-          self.parse_u32().to_int64() & 0xFFFF_FFFFL
-        }
+        let min = self.parse_u64()
         let max = match self.current.token {
-          Number(_) =>
-            Some(
-              if is_table64 {
-                self.parse_u64()
-              } else {
-                self.parse_u32().to_int64() & 0xFFFF_FFFFL
-              },
-            )
+          Number(_) => Some(self.parse_u64())
           _ => None
         }
         // Parse element type
@@ -768,6 +724,7 @@ fn Parser::parse_table_def(
           name: import_name,
           desc: Table({ elem_type, limits: { min, max, }, is_table64, }),
         }
+        self.check_import_order(mod_)
         mod_.imports.push(imp)
         return (None, export_names, None, table_name)
       }
@@ -1056,28 +1013,16 @@ fn Parser::parse_table_def(
         }
       }
       // Parse limits - use u64 for table64, u32 for table32
-      let min = if is_table64 {
-        self.parse_u64()
-      } else {
-        self.parse_u32().to_int64() & 0xFFFF_FFFFL
-      }
+      let min = self.parse_u64()
       let max = match self.current.token {
-        Number(_) =>
-          Some(
-            if is_table64 {
-              self.parse_u64()
-            } else {
-              self.parse_u32().to_int64() & 0xFFFF_FFFFL
-            },
-          )
+        Number(_) => Some(self.parse_u64())
         _ => None
       }
       let elem_type = self.parse_value_type()
       // Check for optional default init expression (ref.func $f) or (ref.null func) or (global.get $g)
       let table_init : Array[@types.Instruction]? = if self.current.token ==
         LParen {
-        // Parse the init expression - validate global.get references
-        // Table init expressions can only reference imported globals, not module-defined globals
+        // Decode the initializer; constant-expression scope belongs to validation.
         self.advance()
         match self.current.token {
           Keyword("ref.func") => {
@@ -1094,16 +1039,7 @@ fn Parser::parse_table_def(
           }
           Keyword("global.get") => {
             self.advance()
-            // Parse and validate the global index
             let global_idx = self.parse_global_idx()
-            // Check if this global is imported (only imported globals can be used in table init)
-            let num_imported_globals = count_global_imports(mod_.imports)
-            if global_idx >= num_imported_globals {
-              raise UndefinedIdentifier(
-                "unknown global (table init can only reference imported globals)",
-                self.loc(),
-              )
-            }
             self.expect_rparen()
             Some([GlobalGet(global_idx)])
           }
@@ -1140,7 +1076,7 @@ fn Parser::parse_export_def(
   let name = match self.current.token {
     String_(s) => {
       self.advance()
-      s
+      decode_text(s)
     }
     _ => raise UnexpectedToken("expected export name", self.loc())
   }
@@ -1210,14 +1146,14 @@ fn Parser::parse_import_def(
   let mod_name = match self.current.token {
     String_(s) => {
       self.advance()
-      s
+      decode_text(s)
     }
     _ => raise UnexpectedToken("expected module name", self.loc())
   }
   let name = match self.current.token {
     String_(s) => {
       self.advance()
-      s
+      decode_text(s)
     }
     _ => raise UnexpectedToken("expected import name", self.loc())
   }
@@ -1285,21 +1221,10 @@ fn Parser::parse_import_def(
         }
         _ => false
       }
-      // Parse limits (use u64 for memory64)
-      let min = if is_memory64 {
-        self.parse_u64()
-      } else {
-        self.parse_u32().to_int64() & 0xFFFF_FFFFL
-      }
+      // Parse unsigned 64-bit limits; the validator checks address-type bounds
+      let min = self.parse_u64()
       let max = match self.current.token {
-        Number(_) =>
-          Some(
-            if is_memory64 {
-              self.parse_u64()
-            } else {
-              self.parse_u32().to_int64() & 0xFFFF_FFFFL
-            },
-          )
+        Number(_) => Some(self.parse_u64())
         _ => None
       }
       let is_shared = self.current.token == Keyword("shared")
@@ -1322,21 +1247,10 @@ fn Parser::parse_import_def(
       if is_table64 {
         self.advance()
       }
-      // Use u64 for table64 limits, u32 for table32
-      let min = if is_table64 {
-        self.parse_u64()
-      } else {
-        self.parse_u32().to_int64() & 0xFFFF_FFFFL
-      }
+      // Decode limits independently of the table address type
+      let min = self.parse_u64()
       let max = match self.current.token {
-        Number(_) =>
-          Some(
-            if is_table64 {
-              self.parse_u64()
-            } else {
-              self.parse_u32().to_int64() & 0xFFFF_FFFFL
-            },
-          )
+        Number(_) => Some(self.parse_u64())
         _ => None
       }
       let elem_type = self.parse_value_type()
@@ -1825,7 +1739,7 @@ fn Parser::parse_tag_def(
         self.advance()
         match self.current.token {
           String_(s) => {
-            export_names.push(s)
+            export_names.push(decode_text(s))
             self.advance()
           }
           _ => raise UnexpectedToken("expected export name", self.loc())
@@ -1838,14 +1752,14 @@ fn Parser::parse_tag_def(
         let mod_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
-            s
+            decode_text(s)
           }
           _ => raise UnexpectedToken("expected import name", self.loc())
         }

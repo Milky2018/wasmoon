@@ -1,0 +1,55 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/wast"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/wat/parser",
+  "Milky2018/wasmoon_runtime/runtime",
+  "Milky2018/wasmoon_runtime/wast/assertions",
+}
+
+// Values
+pub fn classify_runtime_failure(@runtime.RuntimeError) -> @assertions.WastRunnerError
+
+pub fn invoke_action(CoreWastContext, @parser.WastAction) -> Array[@types.Value] raise @assertions.WastRunnerError
+
+pub fn run_script(String, stack_switching? : Bool) -> WastResult raise
+
+pub fn run_wast_command(CoreWastContext, @parser.WastCommand, Int32, WastResult, String, Bool) -> Unit
+
+pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : ArrayView[Int32]) -> Bool
+
+pub fn wast_trap_message_matches(String, String) -> Bool
+
+pub fn wast_value_to_runtime(@parser.WastValue, func_addrs? : ArrayView[Int32]) -> @types.Value raise @assertions.WastRunnerError
+
+// Errors
+
+// Types and methods
+pub struct CoreWastContext {
+  store : @runtime.Store
+  mut closed : Bool
+  mut current_module : @runtime.ModuleInstance?
+  named_modules : Map[String, @runtime.ModuleInstance]
+  module_definitions : Map[String, @types.Module]
+  mut current_definition : @types.Module?
+  registered_modules : Map[String, @runtime.ModuleInstance]
+  stack_switching : Bool
+}
+pub fn CoreWastContext::build_imports(Self) -> @runtime.Imports
+pub fn CoreWastContext::close(Self) -> Unit
+pub fn CoreWastContext::new(stack_switching? : Bool) -> Self raise @runtime.RuntimeError
+
+pub struct WastResult {
+  mut passed : Int32
+  mut failed : Int32
+  skipped : Int32
+  failures : Array[String]
+  unsupported : Array[String]
+}
+pub fn WastResult::WastResult() -> Self
+
+// Type aliases
+pub using @assertions {type WastRunnerError}
+
+// Traits

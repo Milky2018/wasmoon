@@ -1,20 +1,3 @@
 import {
-  "Milky2018/wasm_core/types",
-  "Milky2018/wasm_core/validator",
-  "Milky2018/wasmoon/runtime",
-  "Milky2018/wasmoon_jit",
-  "Milky2018/wasmoon/logger",
-  "moonbitlang/core/env",
-  "moonbitlang/core/buffer",
-  "moonbitlang/core/debug",
-  "moonbitlang/core/math",
+  "Milky2018/wasmoon_runtime/executor" @implementation,
 }
-
-import {
-  "moonbitlang/async",
-} for "test"
-
-import {
-  "moonbitlang/core/double",
-  "moonbitlang/core/float",
-} for "wbtest"

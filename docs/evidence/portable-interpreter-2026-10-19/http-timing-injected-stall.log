@@ -1,0 +1,96 @@
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"timeout_wbtest.mbt","index":8}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"start","file":"tls_wbtest.mbt","index":0}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":8,"message":"TimeoutError"}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"timeout_wbtest.mbt","index":0,"message":"wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: []> != <Bytes: [0x68, 0x69]>`\ndiff:\n<Bytes: -[] +[0x68, 0x69]>"}
+----- END MOON TEST RESULT -----
+----- BEGIN MOON TEST RESULT -----
+{"type":"result","file":"tls_wbtest.mbt","index":0,"message":""}
+----- END MOON TEST RESULT -----
+[HTTP-TIMING] event=100 qpc_ms=581938.183 wall_ms=13436891900343 tid=9060
+[HTTP-TIMING] event=800 qpc_ms=581938.241 wall_ms=13436891900343 tid=9060
+[HTTP-TIMING] event=10000 qpc_ms=581938.894 wall_ms=13436891900345 tid=9060
+[HTTP-TIMING] event=801 qpc_ms=581938.975 wall_ms=13436891900345 tid=9060
+[HTTP-TIMING] event=802 qpc_ms=581939.096 wall_ms=13436891900345 tid=9060
+[HTTP-TIMING] event=4000 qpc_ms=581939.132 wall_ms=13436891900345 tid=9060
+[HTTP-TIMING] event=803 qpc_ms=581939.145 wall_ms=13436891900345 tid=9060
+[HTTP-TIMING] event=9000 qpc_ms=581941.130 wall_ms=13436891900347 tid=9060
+[HTTP-TIMING] event=10000 qpc_ms=581941.422 wall_ms=13436891900347 tid=9060
+[HTTP-TIMING] event=9000 qpc_ms=581941.492 wall_ms=13436891900347 tid=9060
+[HTTP-TIMING] event=9000 qpc_ms=581941.842 wall_ms=13436891900347 tid=9060
+[HTTP-TIMING] event=101 qpc_ms=581941.946 wall_ms=13436891900347 tid=9060
+[HTTP-TIMING] event=10000 qpc_ms=581942.206 wall_ms=13436891900347 tid=9060
+[HTTP-TIMING] init_client begin 581944.479
+[HTTP-TIMING] init_client end 581945.652 elapsed=1.172 result=0
+[HTTP-TIMING] init_server begin 581945.897
+[HTTP-TIMING] api=pfx_import qpc_ms=585458.518 elapsed=11.850 cpu_ms=15.625
+[HTTP-TIMING] api=find_certificate qpc_ms=585458.553 elapsed=0.006 cpu_ms=0.000
+[HTTP-TIMING] api=acquire_server_credentials qpc_ms=585459.898 elapsed=1.340 cpu_ms=0.000
+[HTTP-TIMING] init_server end 585459.947 elapsed=3514.050 result=0
+[HTTP-TIMING] accept begin 585459.968
+[HTTP-TIMING] accept end 585460.072 elapsed=0.104 result=1
+[HTTP-TIMING] event=102 qpc_ms=585460.161 wall_ms=13436891903864 tid=9060
+[HTTP-TIMING] event=804 qpc_ms=585460.245 wall_ms=13436891903864 tid=9060
+[HTTP-TIMING] event=805 qpc_ms=585460.256 wall_ms=13436891903864 tid=9060
+[HTTP-TIMING] event=4001 qpc_ms=585460.261 wall_ms=13436891903864 tid=9060
+[HTTP-TIMING] event=3050 qpc_ms=585460.266 wall_ms=13436891903864 tid=9060
+[HTTP-TIMING] event=9050 qpc_ms=585460.277 wall_ms=13436891903864 tid=9060
+[HTTP-TIMING] event=21000 qpc_ms=585460.292 wall_ms=13436891903864 tid=9060
+[HTTP-TIMING] add_root_certificate begin 585460.435
+[HTTP-TIMING] add_root_certificate end 585460.480 elapsed=0.045 result=0
+[HTTP-TIMING] connect begin 585460.494
+[HTTP-TIMING] connect end 585461.452 elapsed=0.958 result=2
+[HTTP-TIMING] event=806 qpc_ms=585461.610 wall_ms=13436891903866 tid=9060
+[HTTP-TIMING] connect begin 585461.674
+[HTTP-TIMING] connect end 585461.782 elapsed=0.107 result=1
+[HTTP-TIMING] accept begin 585461.813
+[HTTP-TIMING] accept end 585464.484 elapsed=2.671 result=2
+[HTTP-TIMING] event=807 qpc_ms=585464.607 wall_ms=13436891903870 tid=9060
+[HTTP-TIMING] accept begin 585464.647
+[HTTP-TIMING] accept end 585464.728 elapsed=0.081 result=1
+[HTTP-TIMING] connect begin 585464.757
+[HTTP-TIMING] connect end 585466.473 elapsed=1.715 result=0
+[HTTP-TIMING] verify_peer_certificate begin 585466.556
+[HTTP-TIMING] verify_peer_certificate end 585469.894 elapsed=3.337 result=0
+[HTTP-TIMING] accept begin 585469.936
+[HTTP-TIMING] accept end 585470.063 elapsed=0.127 result=0
+[HTTP-TIMING] event=4000 qpc_ms=585470.119 wall_ms=13436891903874 tid=9060
+[HTTP-TIMING] event=4001 qpc_ms=585470.132 wall_ms=13436891903874 tid=9060
+[HTTP-TIMING] event=3050 qpc_ms=585470.136 wall_ms=13436891903874 tid=9060
+[HTTP-TIMING] event=9000 qpc_ms=585470.190 wall_ms=13436891903876 tid=9060
+[HTTP-TIMING] event=39000 qpc_ms=585471.419 wall_ms=13436891903876 tid=9060
+[HTTP-TIMING] event=9000 qpc_ms=585471.466 wall_ms=13436891903876 tid=9060
+[HTTP-TIMING] connect begin 585471.652
+[HTTP-TIMING] connect end 585471.960 elapsed=0.308 result=0
+[HTTP-TIMING] event=9000 qpc_ms=585472.107 wall_ms=13436891903876 tid=9060
+[HTTP-TIMING] event=9000 qpc_ms=585472.173 wall_ms=13436891903876 tid=9060
+[HTTP-TIMING] init_client begin 585476.339
+[HTTP-TIMING] init_client end 585476.548 elapsed=0.209 result=0
+[HTTP-TIMING] connect begin 585476.566
+[HTTP-TIMING] connect end 585477.373 elapsed=0.807 result=2
+[HTTP-TIMING] connect begin 585477.429
+[HTTP-TIMING] connect end 585477.498 elapsed=0.069 result=1
+[HTTP-TIMING] init_server begin 585477.684
+[HTTP-TIMING] api=pfx_import qpc_ms=589014.001 elapsed=34.822 cpu_ms=0.000
+[HTTP-TIMING] api=find_certificate qpc_ms=589014.033 elapsed=0.003 cpu_ms=0.000
+[HTTP-TIMING] api=acquire_server_credentials qpc_ms=589018.092 elapsed=4.053 cpu_ms=0.000
+[HTTP-TIMING] init_server end 589018.134 elapsed=3540.451 result=0
+[HTTP-TIMING] accept begin 589018.148
+[HTTP-TIMING] accept end 589018.220 elapsed=0.072 result=1
+[HTTP-TIMING] accept begin 589018.280
+[HTTP-TIMING] accept end 589020.980 elapsed=2.700 result=2
+[HTTP-TIMING] accept begin 589021.089
+[HTTP-TIMING] accept end 589021.151 elapsed=0.062 result=1
+[HTTP-TIMING] connect begin 589021.182
+[HTTP-TIMING] connect end 589021.942 elapsed=0.761 result=3
+[HTTP-TIMING] accept begin 589022.365
+[HTTP-TIMING] accept end 589022.434 elapsed=0.068 result=1

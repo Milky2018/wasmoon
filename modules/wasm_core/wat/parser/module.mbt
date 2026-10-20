@@ -357,12 +357,12 @@ fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
       match lane_type {
         "i8x16" =>
           for _ in 0..<16 {
-            let v = self.parse_i32()
+            let v = self.parse_lane_integer(8)
             buf.write_byte(v.to_byte())
           }
         "i16x8" =>
           for _ in 0..<8 {
-            let v = self.parse_i32()
+            let v = self.parse_lane_integer(16)
             buf.write_byte(v.to_byte())
             buf.write_byte((v >> 8).to_byte())
           }
@@ -732,6 +732,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.advance()
             // Register type name if present
             if self.current.token is Id(name) {
+              check_new_name(self.type_names, name, self.loc())
               self.type_names.set(name, type_idx)
               self.advance()
             }
@@ -748,6 +749,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
               if self.current.token == Keyword("type") {
                 self.advance()
                 if self.current.token is Id(name) {
+                  check_new_name(self.type_names, name, self.loc())
                   self.type_names.set(name, type_idx)
                   self.advance()
                 }
@@ -775,6 +777,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   self.advance()
                   // Check for function name
                   if self.current.token is Id(name) {
+                    check_new_name(self.func_names, name, self.loc())
                     self.func_names.set(name, func_idx)
                     self.advance()
                   }
@@ -786,6 +789,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   self.advance()
                   // Check for global name
                   if self.current.token is Id(name) {
+                    check_new_name(self.global_names, name, self.loc())
                     self.global_names.set(name, global_idx)
                     self.advance()
                   }
@@ -797,6 +801,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   self.advance()
                   // Check for memory name
                   if self.current.token is Id(name) {
+                    check_new_name(self.memory_names, name, self.loc())
                     self.memory_names.set(name, memory_idx)
                     self.advance()
                   }
@@ -808,6 +813,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   self.advance()
                   // Check for table name
                   if self.current.token is Id(name) {
+                    check_new_name(self.table_names, name, self.loc())
                     self.table_names.set(name, table_idx)
                     self.advance()
                   }
@@ -819,6 +825,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   self.advance()
                   // Check for tag name
                   if self.current.token is Id(name) {
+                    check_new_name(self.tag_names, name, self.loc())
                     self.tag_names.set(name, tag_idx)
                     self.advance()
                   }
@@ -840,6 +847,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.advance()
             // Check for function name
             if self.current.token is Id(name) {
+              check_new_name(self.func_names, name, self.loc())
               self.func_names.set(name, func_idx)
               self.advance()
             }
@@ -852,6 +860,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.advance()
             // Check for global name
             if self.current.token is Id(name) {
+              check_new_name(self.global_names, name, self.loc())
               self.global_names.set(name, global_idx)
               self.advance()
             }
@@ -864,6 +873,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.advance()
             // Check for memory name
             if self.current.token is Id(name) {
+              check_new_name(self.memory_names, name, self.loc())
               self.memory_names.set(name, memory_idx)
               self.advance()
             }
@@ -876,6 +886,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.advance()
             // Check for table name
             if self.current.token is Id(name) {
+              check_new_name(self.table_names, name, self.loc())
               self.table_names.set(name, table_idx)
               self.advance()
             }
@@ -888,6 +899,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.advance()
             // Check for tag name
             if self.current.token is Id(name) {
+              check_new_name(self.tag_names, name, self.loc())
               self.tag_names.set(name, tag_idx)
               self.advance()
             }
@@ -900,6 +912,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.advance()
             // Check for data name
             if self.current.token is Id(name) {
+              check_new_name(self.data_names, name, self.loc())
               self.data_names.set(name, data_idx)
               self.advance()
             }
@@ -912,6 +925,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             self.advance()
             // Check for elem name
             if self.current.token is Id(name) {
+              check_new_name(self.elem_names, name, self.loc())
               self.elem_names.set(name, elem_idx)
               self.advance()
             }
@@ -1030,6 +1044,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
               InlineImport(imp, export_names) => {
                 // Add the import and optionally export it
                 let func_idx = count_func_imports(mod_.imports)
+                self.check_import_order(mod_)
                 mod_.imports.push(imp)
                 for name in export_names {
                   mod_.exports.push({ name, desc: Func(func_idx), })
@@ -1053,6 +1068,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                     memory_import_count += 1
                   }
                 }
+                self.check_import_order(mod_)
                 mod_.imports.push(imp)
                 for name in export_names {
                   mod_.exports.push({ name, desc: Memory(memory_import_count), })
@@ -1101,6 +1117,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                     global_import_count += 1
                   }
                 }
+                self.check_import_order(mod_)
                 mod_.imports.push(imp)
                 for name in export_names {
                   mod_.exports.push({ name, desc: Global(global_import_count), })
@@ -1113,6 +1130,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           }
           Keyword("import") => {
             let imp = self.parse_import_def(mod_)
+            self.check_import_order(mod_)
             mod_.imports.push(imp)
           }
           Keyword("table") => {
@@ -1142,6 +1160,9 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("start") => {
             self.advance() // skip "start"
             let func_idx = self.parse_func_idx()
+            if mod_.start is Some(_) {
+              raise ParseError("Multiple start declarations", self.loc())
+            }
             mod_.start = Some(func_idx)
             self.expect_rparen()
           }
@@ -1167,6 +1188,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
               }
               TagImport(imp, export_names) => {
                 let tag_idx = count_tag_imports(mod_.imports)
+                self.check_import_order(mod_)
                 mod_.imports.push(imp)
                 for name in export_names {
                   mod_.exports.push({ name, desc: Tag(tag_idx), })
@@ -1188,4 +1210,91 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
     mod_.func_names.set(idx, name)
   }
   mod_
+}
+
+///|
+fn Parser::parse_lane_integer(
+  self : Parser,
+  width : Int32,
+) -> Int32 raise WatError {
+  match self.current.token {
+    Number(s) => {
+      self.advance()
+      integer_literal(s, width, true).to_int()
+    }
+    _ => raise UnexpectedToken("Expected integer lane", self.loc())
+  }
+}
+
+///|
+fn check_new_name(
+  names : Map[String, Int32],
+  name : String,
+  loc : SourceLoc,
+) -> Unit raise WatError {
+  if names.contains(name) {
+    raise ParseError("Duplicate identifier: \{name}", loc)
+  }
+}
+
+///|
+fn Parser::check_import_order(
+  self : Parser,
+  module_ : @types.Module,
+) -> Unit raise WatError {
+  if !module_.funcs.is_empty() ||
+    !module_.tables.is_empty() ||
+    !module_.memories.is_empty() ||
+    !module_.globals.is_empty() ||
+    !module_.tags.is_empty() {
+    raise ParseError("Import after definition", self.loc())
+  }
+}
+
+///|
+fn Parser::parse_lane_index(self : Parser) -> Int32 raise WatError {
+  let index = self.parse_u32()
+  if index < 0 || index > 255 {
+    raise ParseError("Lane index exceeds u8", self.loc())
+  }
+  index
+}
+
+///|
+fn Parser::check_inline_type(
+  self : Parser,
+  idx : Int32,
+  params : Array[@types.ValueType],
+  results : Array[@types.ValueType],
+  present : Bool,
+) -> Unit raise WatError {
+  if !present {
+    return
+  }
+  if idx < 0 || idx >= self.types.length() {
+    raise ParseError("Unknown type", self.loc())
+  }
+  guard self.types[idx].composite is Func(ft) else {
+    raise ParseError("Expected function type", self.loc())
+  }
+  if ft.params != ReadOnlyArray::from_array(params) ||
+    ft.results != ReadOnlyArray::from_array(results) {
+    raise ParseError(
+      "Inline function type does not match referenced type",
+      self.loc(),
+    )
+  }
+}
+
+///|
+fn Parser::parse_matching_label(
+  self : Parser,
+  label : String?,
+) -> Unit raise WatError {
+  if self.current.token is Id(name) {
+    if label != Some(name) {
+      raise ParseError("Mismatching label", self.loc())
+    }
+    self.advance()
+  }
 }

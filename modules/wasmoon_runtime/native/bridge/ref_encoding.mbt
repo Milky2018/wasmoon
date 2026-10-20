@@ -1,0 +1,115 @@
+/// Reference encoding helpers for JIT/runtime interop.
+///
+/// There are multiple representations used for references:
+/// - Raw lowered values: null = 0
+/// - Funcref (index form): raw = -(func_idx + 1)  (so -1 is func_idx 0, not null)
+/// - Funcref (pointer form): raw = func_ptr | FUNCREF_TAG
+/// - Externref: raw = EXTERNREF_TAG | (host_idx << 1)
+/// - GC refs: raw = (heap_idx0 + 1) << 1
+/// - i31: raw = (value << 1) | 1
+
+///|
+/// Native exception handles have their own tag, distinct from odd i31 words.
+pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000L
+
+///|
+pub fn encode_exception_ref(index : Int32) -> Int64 {
+  EXCEPTION_REF_TAG | (index.to_int64() << 1) | 1L
+}
+
+///|
+pub fn is_exception_ref(raw : Int64) -> Bool {
+  raw > 0L && (raw & EXCEPTION_REF_TAG) != 0L
+}
+
+///|
+pub fn is_null_ref(raw : Int64) -> Bool {
+  raw == @wasm_milkir.NULL_REF
+}
+
+///|
+pub fn encode_null_ref() -> Int64 {
+  @wasm_milkir.NULL_REF
+}
+
+///|
+pub fn encode_funcref_idx(func_idx : Int32) -> Int64 {
+  -(func_idx.to_int64() + 1L)
+}
+
+///|
+pub fn decode_funcref_idx(raw : Int64) -> Int32? {
+  if raw < 0L {
+    Some((-(raw + 1L)).to_int())
+  } else {
+    None
+  }
+}
+
+///|
+pub fn is_funcref_ptr(raw : Int64) -> Bool {
+  (raw & @wasm_milkir.FUNCREF_TAG) != 0L
+}
+
+///|
+pub fn tag_funcref_ptr(func_ptr : Int64) -> Int64 {
+  func_ptr | @wasm_milkir.FUNCREF_TAG
+}
+
+///|
+pub fn untag_funcref_ptr(tagged_ptr : Int64) -> Int64 {
+  // Clear bit 61
+  tagged_ptr & 0xDFFFFFFFFFFFFFFFL
+}
+
+///|
+pub fn encode_externref(host_idx : Int32) -> Int64 {
+  @wasm_milkir.EXTERNREF_TAG | (host_idx.to_int64() << 1)
+}
+
+///|
+pub fn decode_externref(raw : Int64) -> Int32? {
+  if (raw & @wasm_milkir.EXTERNREF_TAG) != 0L {
+    // Clear the tag bit and shift back.
+    Some(((raw ^ @wasm_milkir.EXTERNREF_TAG) >> 1).to_int())
+  } else {
+    None
+  }
+}
+
+///|
+pub fn encode_gc_heap_ref(heap_idx0 : Int32) -> Int64 {
+  (heap_idx0 + 1).to_int64() << 1
+}
+
+///|
+pub fn decode_gc_heap_ref(raw : Int64) -> Int32? {
+  if raw == @wasm_milkir.NULL_REF {
+    None
+  } else if (
+      raw &
+      (
+        @wasm_milkir.FUNCREF_TAG |
+        @wasm_milkir.EXTERNREF_TAG |
+        EXCEPTION_REF_TAG
+      )
+    ) !=
+    0L {
+    None
+  } else if (raw & 1L) == 1L {
+    None
+  } else {
+    Some(((raw >> 1) - 1L).to_int())
+  }
+}
+
+///|
+/// Decode a heap reference from JIT representation
+/// Returns 0-based heap_idx for MoonBit Store/CHeap
+pub fn decode_heap_ref(encoded : Int64) -> Int32 {
+  // Shift right to get 1-based gc_ref, then convert to 0-based
+  (encoded >> 1).to_int() - 1
+}
+
+// ============ GC Libcall Function Pointers ============
+// These return function pointers to C helper functions

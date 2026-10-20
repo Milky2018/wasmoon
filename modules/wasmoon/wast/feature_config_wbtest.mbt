@@ -64,3 +64,59 @@ test "disabled bulk memory retains active table64 elements and reference table o
   )
   assert_eq((result.passed, result.failed), (1, 0))
 }
+
+///|
+test "Wasmtime invalidity profile checks only the typed engine build restriction" {
+  let module_ =
+    #|(module (type $f (func)) (type $c (cont $f))
+    #| (type $s (struct (field (ref null $c))))
+    #| (func struct.new_default $s drop))
+  @validator.validate_module(@wat.parse(module_), stack_switching=true)
+  let assertion = "(assert_invalid " +
+    module_ +
+    " \"Stack switching feature not compatible with GC\")"
+  for use_jit in [false, true] {
+    let strict = run_wast_commands(
+      parse(assertion),
+      ".",
+      use_jit,
+      false,
+      stack_switching=true,
+    )
+    assert_eq((strict.passed, strict.failed), (0, 1))
+    let compatible = run_wast_commands(
+      parse(assertion),
+      ".",
+      use_jit,
+      false,
+      stack_switching=true,
+      wasmtime_validation=true,
+    )
+    assert_eq((compatible.passed, compatible.failed), (1, 0))
+    for
+      source in [
+        "(assert_invalid (module) \"Stack switching feature not compatible with GC\")",
+        "(assert_invalid (module quote \"(module (func i32.const 0e))\") \"Stack switching feature not compatible with GC\")",
+        "(assert_invalid " + module_ + " \"unrelated build error\")",
+      ] {
+      let result = run_wast_commands(
+        parse(source),
+        ".",
+        use_jit,
+        false,
+        stack_switching=true,
+        wasmtime_validation=true,
+      )
+      assert_eq((result.passed, result.failed), (0, 1))
+    }
+    let nested = run_wast_commands(
+      parse("(thread $child " + assertion + ") (wait $child)"),
+      ".",
+      use_jit,
+      false,
+      stack_switching=true,
+      wasmtime_validation=true,
+    )
+    assert_eq((nested.passed, nested.failed), (1, 0))
+  }
+}

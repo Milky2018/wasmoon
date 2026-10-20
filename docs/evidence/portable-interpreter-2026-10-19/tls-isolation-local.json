@@ -1,0 +1,85 @@
+{
+  "scope": "downstream test fixture isolation; upstream async implementation unchanged",
+  "upstream_issue": "https://github.com/moonbitlang/async/issues/669",
+  "counterfactual_shared_executable": {
+    "diagnostic_only": true,
+    "source_dirty_during_build": true,
+    "counterfactual": "TLS test moved back to the whitebox executable; aliases and test imports adjusted only",
+    "blocking_test_flag": "WASMOON_TEST_BLOCKING_TLS_SETUP=1",
+    "stall_ms": 3200,
+    "elapsed_seconds": 3.2454897919960786,
+    "actual_fix_source_sha256": "fafc1e5ecfe9913d9fe4702fd6f50cf336c5cda980d9f80c55b85f569abfcc2b",
+    "verdicts": [
+      {
+        "type": "result",
+        "file": "timeout_wbtest.mbt",
+        "index": 8,
+        "message": "TimeoutError"
+      },
+      {
+        "type": "result",
+        "file": "timeout_wbtest.mbt",
+        "index": 0,
+        "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: []> != <Bytes: [0x68, 0x69]>`\ndiff:\n<Bytes: -[] +[0x68, 0x69]>"
+      },
+      {
+        "type": "result",
+        "file": "tls_wbtest.mbt",
+        "index": 0,
+        "message": ""
+      }
+    ]
+  },
+  "isolated_executables": {
+    "kind": "local controlled regression",
+    "source_revision": "49d7286889986271050b58b973d472a269e239ee",
+    "source_dirty": true,
+    "temporary_source_mutation": false,
+    "control": "WASMOON_TEST_BLOCKING_TLS_SETUP=1; 3200ms first server setup",
+    "source_sha256": {
+      "modules/wasmoon/wasi_http/tls_test.mbt": "fafc1e5ecfe9913d9fe4702fd6f50cf336c5cda980d9f80c55b85f569abfcc2b",
+      "modules/wasmoon/wasi_http/moon.pkg": "f345fa54168fba5c00fb42438dac3b769694f34907e7c4b83bf23652334c49c4",
+      ".github/workflows/check.yml": "daa2298b02f86c4470068543c1bcafed15b1f05cb3c92f4af973452c7748ebab"
+    },
+    "native_workspace": 2786,
+    "http_package": 32,
+    "tls_test_executable": "blackbox",
+    "timeout_test_executable": "whitebox",
+    "controlled_runs": [
+      {
+        "mode": "parallel",
+        "passed": 32,
+        "failed": 0,
+        "elapsed_seconds": 6.061952415999258,
+        "log": "parallel.log"
+      },
+      {
+        "mode": "serial",
+        "passed": 32,
+        "failed": 0,
+        "elapsed_seconds": 3.4969442500005243,
+        "log": "serial.log"
+      }
+    ]
+  },
+  "archived_logs": [
+    {
+      "path": "tls-isolation-shared-control.log",
+      "raw_sha256": "c5e3dc3cb93bc151d58e9dcab906d13eec82da9e03a205cefe9d0e922b7c35a2",
+      "archived_sha256": "c5e3dc3cb93bc151d58e9dcab906d13eec82da9e03a205cefe9d0e922b7c35a2",
+      "presentation_only_normalization": "CRLF to LF and trailing whitespace removed"
+    },
+    {
+      "path": "tls-isolation-parallel.log",
+      "raw_sha256": "08dc4f2cea9a9a7cd93da9c2067009b8f022eb791620ac1f671cf093cc204337",
+      "archived_sha256": "08dc4f2cea9a9a7cd93da9c2067009b8f022eb791620ac1f671cf093cc204337",
+      "presentation_only_normalization": "CRLF to LF and trailing whitespace removed"
+    },
+    {
+      "path": "tls-isolation-serial.log",
+      "raw_sha256": "08dc4f2cea9a9a7cd93da9c2067009b8f022eb791620ac1f671cf093cc204337",
+      "archived_sha256": "08dc4f2cea9a9a7cd93da9c2067009b8f022eb791620ac1f671cf093cc204337",
+      "presentation_only_normalization": "CRLF to LF and trailing whitespace removed"
+    }
+  ]
+}

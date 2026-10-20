@@ -16,7 +16,7 @@ class ResolverLifecycleTests(unittest.TestCase):
             subprocess.run([
                 'cc', '-pthread', '-Wall', '-Wextra', '-Werror',
                 '-I', str(Path(os.environ.get('MOON_HOME', Path.home() / '.moon')) / 'include'),
-                '-I', str(ROOT / 'modules/wasmoon_jit/host_io/wasi'),
+                '-I', str(ROOT / 'modules/wasmoon_runtime/native/ffi/host_io/wasi'),
                 str(ROOT / 'scripts/tests/native/resolver_lifecycle.c'),
                 '-o', str(binary),
             ], check=True)

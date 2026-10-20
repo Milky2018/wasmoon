@@ -464,7 +464,7 @@ fn normalize_async_jit_call_error(error : Error) -> JITCoreCallError {
     HostInvocation(_) as call_error => call_error
     GcSetupFailed(_) as call_error => call_error
     ExecutionStateFailure(_) as call_error => call_error
-    @runtime.AsyncHostCallCancelled => Cancelled
+    @runtime.RuntimeError::AsyncHostCallCancelled => Cancelled
     _ => HostInvocation(@runtime.normalize_async_host_error(error))
   }
 }

@@ -12,15 +12,16 @@ import {
   "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit/artifact/installer",
   "Milky2018/wasmoon_jit/artifact/loader",
-  "Milky2018/wasmoon_jit/context/layout",
-  "Milky2018/wasmoon_jit/jit_ffi",
-  "Milky2018/wasmoon_jit/native/callable",
-  "Milky2018/wasmoon_jit/native/execution",
-  "Milky2018/wasmoon_jit/perf",
+  "Milky2018/wasmoon_runtime/control",
+  "Milky2018/wasmoon_runtime/native/bridge",
+  "Milky2018/wasmoon_runtime/native/callable",
+  "Milky2018/wasmoon_runtime/native/execution",
+  "Milky2018/wasmoon_runtime/native/ffi",
+  "Milky2018/wasmoon_runtime/native/layout",
+  "Milky2018/wasmoon_runtime/runtime",
   "Milky2018/x64_target",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
-  "moonbitlang/core/ref",
 }
 
 // Values
@@ -28,13 +29,13 @@ pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
 
 pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-9"
 
-pub const WASMOON_JIT_ABI_VERSION : Int = 7
+pub const WASMOON_JIT_ABI_VERSION : Int32 = 7
 
-pub fn alloc_guarded_memory_desc(Int, Int?, is_shared? : Bool) -> @jit_ffi.MemoryDescriptor
+pub fn alloc_guarded_memory_desc(Int32, Int32?, is_shared? : Bool) -> @ffi.MemoryDescriptor
 
 pub fn alloc_memory(Int64) -> Int64
 
-pub fn alloc_memory_desc(Int64, Int64?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> @jit_ffi.MemoryDescriptor
+pub fn alloc_memory_desc(Int64, Int64?, is_memory64? : Bool, page_size_log2? : Int32, is_shared? : Bool) -> @ffi.MemoryDescriptor
 
 pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@native_types.ExternalSymbol], data_symbols~ : Array[@native_types.DataSymbol]) -> @loader.ArtifactCompatibility
 
@@ -42,17 +43,17 @@ pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentit
 
 pub fn atomic_fence() -> Unit
 
-pub fn atomic_notify(@jit_ffi.MemoryDescriptor, Int64, Int) -> Int
+pub fn atomic_notify(@ffi.MemoryDescriptor, Int64, Int32) -> Int32
 
-pub fn atomic_wait_begin(@jit_ffi.MemoryDescriptor, Int64, Int, Int64, Int64) -> NativeAtomicWait?
+pub fn atomic_wait_begin(@ffi.MemoryDescriptor, Int64, Int32, Int64, Int64) -> @bridge.NativeAtomicWait?
 
 pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature], context_shape? : @layout.ContextShape) -> @artifact.CompatibilityManifest
 
-pub fn build_entry_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], NativeTarget) -> Array[Int] raise HostcallImportTrampolineError
+pub fn build_entry_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], NativeTarget) -> Array[Int32] raise HostcallImportTrampolineError
 
 pub fn build_host_artifact_manifest(module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature], context_shape? : @layout.ContextShape) -> @artifact.CompatibilityManifest raise JitPipelineError
 
-pub fn build_hostcall_import_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], Int, NativeTarget) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
+pub fn build_hostcall_import_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], Int32, NativeTarget) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
 pub fn can_use_reusable_entry_trampoline(ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Bool
 
@@ -60,47 +61,47 @@ pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
 pub fn collect_gc_root_args(Array[Int64], ArrayView[@types.ValueType]) -> Array[Int64]
 
-pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int], context_shape? : @layout.ContextShape) -> @artifact.FunctionCode raise JitPipelineError
+pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int32, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32], context_shape? : @layout.ContextShape) -> @artifact.FunctionCode raise JitPipelineError
 
-pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int], context_shape? : @layout.ContextShape, function_index? : Int) -> JitPipelineDiagnostics raise JitPipelineError
+pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32], context_shape? : @layout.ContextShape, function_index? : Int32) -> JitPipelineDiagnostics raise JitPipelineError
 
 pub fn context_shape(@types.Module) -> @layout.ContextShape
 
 pub fn cooperative_idle() -> Unit
 
-pub fn count_entry_trampoline_slots(ArrayView[@types.ValueType]) -> Int
+pub fn count_entry_trampoline_slots(ArrayView[@types.ValueType]) -> Int32
 
-pub fn decode_externref(Int64) -> Int?
+pub fn decode_externref(Int64) -> Int32?
 
-pub fn decode_funcref_idx(Int64) -> Int?
+pub fn decode_funcref_idx(Int64) -> Int32?
 
-pub fn decode_gc_heap_ref(Int64) -> Int?
+pub fn decode_gc_heap_ref(Int64) -> Int32?
 
-pub fn decode_heap_ref(Int64) -> Int
+pub fn decode_heap_ref(Int64) -> Int32
 
-pub fn decode_i31(Int64) -> Int
+pub fn decode_i31(Int64) -> Int32
 
-pub fn encode_exception_ref(Int) -> Int64
+pub fn encode_exception_ref(Int32) -> Int64
 
-pub fn encode_externref(Int) -> Int64
+pub fn encode_externref(Int32) -> Int64
 
-pub fn encode_funcref_idx(Int) -> Int64
+pub fn encode_funcref_idx(Int32) -> Int64
 
-pub fn encode_gc_heap_ref(Int) -> Int64
+pub fn encode_gc_heap_ref(Int32) -> Int64
 
-pub fn encode_heap_ref(Int) -> Int64
+pub fn encode_heap_ref(Int32) -> Int64
 
-pub fn encode_i31(Int) -> Int64
+pub fn encode_i31(Int32) -> Int64
 
 pub fn encode_null_ref() -> Int64
 
 pub fn entry_trampoline_signature_hash(ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Int64
 
-pub fn entry_trampoline_type_codes(ArrayView[@types.ValueType]) -> Array[Int]
+pub fn entry_trampoline_type_codes(ArrayView[@types.ValueType]) -> Array[Int32]
 
-pub fn entry_trampoline_value_type_code(@types.ValueType) -> Int
+pub fn entry_trampoline_value_type_code(@types.ValueType) -> Int32
 
-pub fn format_signal_name(Int) -> String
+pub fn format_signal_name(Int32) -> String
 
 pub fn format_trap_report_message(TrapReport) -> String
 
@@ -108,35 +109,35 @@ pub fn format_u64_hex(Int64) -> String
 
 pub fn free_memory(Int64) -> Unit
 
-pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
+pub fn gc_debug_set_fail_alloc(Int32, fail_every? : Int32) -> Unit
 
-pub fn get_hostcall_func_addr() -> Int
+pub fn get_hostcall_func_addr() -> Int32
 
-pub fn get_hostcall_num_arg_slots() -> Int
+pub fn get_hostcall_num_arg_slots() -> Int32
 
-pub fn get_hostcall_num_result_slots() -> Int
+pub fn get_hostcall_num_result_slots() -> Int32
 
 pub fn get_import_trampoline(String, String) -> Int64?
 
 pub fn get_last_trap_details() -> TrapDetails
 
-pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
+pub fn get_temperature(Int32, HotThreshold) -> FunctionTemperature
 
 pub fn host_native_target() -> NativeTarget raise JitPipelineError
 
 pub fn host_operating_system_abi() -> @artifact.OperatingSystemAbi raise JitPipelineError
 
-pub fn hostcall_value_byte_count(@types.ValueType) -> Int
+pub fn hostcall_value_byte_count(@types.ValueType) -> Int32
 
-pub fn hostcall_value_slot_count(@types.ValueType) -> Int
+pub fn hostcall_value_slot_count(@types.ValueType) -> Int32
 
-pub fn hostcall_value_slot_read(Int) -> Int64
+pub fn hostcall_value_slot_read(Int32) -> Int64
 
-pub fn hostcall_value_slot_write(Int, Int64) -> Unit
+pub fn hostcall_value_slot_write(Int32, Int64) -> Unit
 
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
-pub fn is_cancelled_trap_code(Int) -> Bool
+pub fn is_cancelled_trap_code(Int32) -> Bool
 
 pub fn is_exception_ref(Int64) -> Bool
 
@@ -150,59 +151,59 @@ pub fn is_null(Int64) -> Bool
 
 pub fn is_null_ref(Int64) -> Bool
 
-pub fn is_wasi_exit_trap_code(Int) -> Bool
+pub fn is_wasi_exit_trap_code(Int32) -> Bool
 
-pub fn jit_trap_message(Int) -> String
+pub fn jit_trap_message(Int32) -> String
 
 pub fn load_artifact(Bytes, @loader.ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise @loader.ArtifactLoadError
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
-pub fn memory_atomic_compare_exchange(@jit_ffi.MemoryDescriptor, Int64, Int, Int64, Int64) -> Int64
+pub fn memory_atomic_compare_exchange(@ffi.MemoryDescriptor, Int64, Int32, Int64, Int64) -> Int64
 
-pub fn memory_atomic_load(@jit_ffi.MemoryDescriptor, Int64, Int) -> Int64
+pub fn memory_atomic_load(@ffi.MemoryDescriptor, Int64, Int32) -> Int64
 
-pub fn memory_atomic_rmw(@jit_ffi.MemoryDescriptor, Int64, Int, Int, Int64) -> Int64
+pub fn memory_atomic_rmw(@ffi.MemoryDescriptor, Int64, Int32, Int32, Int64) -> Int64
 
-pub fn memory_atomic_store(@jit_ffi.MemoryDescriptor, Int64, Int, Int64) -> Unit
+pub fn memory_atomic_store(@ffi.MemoryDescriptor, Int64, Int32, Int64) -> Unit
 
-pub fn memory_descriptor_copy(@jit_ffi.MemoryDescriptor, Int64, @jit_ffi.MemoryDescriptor, Int64, Int64) -> Int
+pub fn memory_descriptor_copy(@ffi.MemoryDescriptor, Int64, @ffi.MemoryDescriptor, Int64, Int64) -> Int32
 
-pub fn memory_descriptor_fill(@jit_ffi.MemoryDescriptor, Int64, Int, Int) -> Int
+pub fn memory_descriptor_fill(@ffi.MemoryDescriptor, Int64, Int32, Int32) -> Int32
 
-pub fn memory_descriptor_fill64(@jit_ffi.MemoryDescriptor, Int64, Int, Int64) -> Int
+pub fn memory_descriptor_fill64(@ffi.MemoryDescriptor, Int64, Int32, Int64) -> Int32
 
-pub fn memory_descriptor_grow(@jit_ffi.MemoryDescriptor, Int, Int) -> Int
+pub fn memory_descriptor_grow(@ffi.MemoryDescriptor, Int32, Int32) -> Int32
 
-pub fn memory_descriptor_grow64(@jit_ffi.MemoryDescriptor, Int64) -> Int64
+pub fn memory_descriptor_grow64(@ffi.MemoryDescriptor, Int64) -> Int64
 
 pub fn memory_descriptor_layout() -> MemoryDescriptorLayout
 
-pub fn memory_descriptor_length(@jit_ffi.MemoryDescriptor) -> Int64
+pub fn memory_descriptor_length(@ffi.MemoryDescriptor) -> Int64
 
-pub fn memory_descriptor_move(@jit_ffi.MemoryDescriptor, Int64, Int64, Int) -> Int
+pub fn memory_descriptor_move(@ffi.MemoryDescriptor, Int64, Int64, Int32) -> Int32
 
-pub fn memory_descriptor_read(@jit_ffi.MemoryDescriptor, Int64, FixedArray[Byte], Int) -> Int
+pub fn memory_descriptor_read(@ffi.MemoryDescriptor, Int64, FixedArray[Byte], Int32) -> Int32
 
-pub fn memory_descriptor_write(@jit_ffi.MemoryDescriptor, Int64, FixedArray[Byte], Int) -> Int
+pub fn memory_descriptor_write(@ffi.MemoryDescriptor, Int64, FixedArray[Byte], Int32) -> Int32
 
-pub fn memory_descriptor_write_bytes(@jit_ffi.MemoryDescriptor, Int64, Bytes, Int) -> Int
+pub fn memory_descriptor_write_bytes(@ffi.MemoryDescriptor, Int64, Bytes, Int32) -> Int32
 
-pub fn native_value_slot_read(Int64, Int) -> Int64
+pub fn native_value_slot_read(Int64, Int32) -> Int64
 
-pub fn native_value_slot_write(Int64, Int, Int64) -> Unit
+pub fn native_value_slot_write(Int64, Int32, Int64) -> Unit
 
 pub fn plan_entry_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_hostcall_import_trampoline_layout(ArrayView[@types.ValueType], ArrayView[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
+pub fn plan_hostcall_import_trampoline_layout(ArrayView[@types.ValueType], ArrayView[@types.ValueType], Int32, Int32) -> HostcallImportTrampolineLayout
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_wasm_body_aarch64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
+pub fn plan_wasm_body_aarch64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
 pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
+pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
 pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) -> ImportFunctionResolution
 
@@ -212,7 +213,7 @@ pub fn sanitize_debug_filename(String) -> String
 
 pub fn shaped_vmcontext_layout(@layout.ContextShape) -> VMContextLayout
 
-pub fn slot_to_value(GcSlot, @types.ValueType) -> @types.Value
+pub fn slot_to_value(@bridge.GcSlot, @types.ValueType) -> @types.Value
 
 pub fn tag_funcref_ptr(Int64) -> Int64
 
@@ -222,7 +223,7 @@ pub fn untag_funcref_ptr(Int64) -> Int64
 
 pub fn value_to_i64(@types.Value) -> Int64
 
-pub fn value_to_slot(@types.Value) -> GcSlot
+pub fn value_to_slot(@types.Value) -> @bridge.GcSlot
 
 pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
@@ -232,27 +233,21 @@ pub fn vmcontext_layout() -> VMContextLayout
 
 pub fn wasm_function_signature(@types.FuncType) -> @native_types.Signature
 
-pub fn wasm_import_identity(Int, String, String, @types.FuncType) -> @artifact.ImportIdentity
+pub fn wasm_import_identity(Int32, String, String, @types.FuncType) -> @artifact.ImportIdentity
 
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 
-pub fn wasm_trap_payload(String) -> Int
+pub fn wasm_trap_payload(String) -> Int32
 
 pub fn wasmoon_runtime_external_symbols() -> Array[@native_types.ExternalSymbol]
 
 // Errors
-pub(all) suberror CHeapError {
-  OutOfBoundsArrayAccess
-  NullReference
-  OutOfMemory
-}
-
 pub(all) suberror GCSetupError {
   MissingJITContext
   InvalidMetadata
-  InvalidFuncCount(num_funcs~ : Int)
-  FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
-  MissingFunctionTableContext(num_funcs~ : Int)
+  InvalidFuncCount(num_funcs~ : Int32)
+  FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int32, num_funcs~ : Int32)
+  MissingFunctionTableContext(num_funcs~ : Int32)
 } derive(@debug.Debug)
 pub fn GCSetupError::output(Self, &Logger) -> Unit
 pub fn GCSetupError::to_repr(Self) -> @debug.Repr
@@ -279,11 +274,11 @@ pub suberror JitPipelineError {
   X64CompilationFailed(cause~ : @x64_target.X64CompileError)
   AArch64LinkPreparationFailed(cause~ : @aarch64_target.AArch64LinkError)
   X64LinkPreparationFailed(cause~ : @x64_target.X64LinkError)
-  InvalidJitRelocation(target~ : NativeTarget, index~ : Int, message~ : String)
+  InvalidJitRelocation(target~ : NativeTarget, index~ : Int32, message~ : String)
   UnsupportedEntrySignature(message~ : String)
-  UnsupportedHostArchitecture(tag~ : Int)
-  UnsupportedHostOsAbi(tag~ : Int)
-  InvalidFunctionIndex(index~ : Int)
+  UnsupportedHostArchitecture(tag~ : Int32)
+  UnsupportedHostOsAbi(tag~ : Int32)
+  InvalidFunctionIndex(index~ : Int32)
 } derive(@debug.Debug)
 pub fn JitPipelineError::output(Self, &Logger) -> Unit
 pub fn JitPipelineError::to_repr(Self) -> @debug.Repr
@@ -294,9 +289,9 @@ pub suberror NativeFiberError {
   StackAllocationFailed(Int64)
   WrongThread
   InvalidTransition(NativeFiberPhase)
-  InvalidState(Int)
+  InvalidState(Int32)
   UnexpectedYield(Int64)
-  NativeFailure(Int)
+  NativeFailure(Int32)
 } derive(Eq, @debug.Debug)
 pub fn NativeFiberError::equal(Self, Self) -> Bool
 pub fn NativeFiberError::not_equal(Self, Self) -> Bool
@@ -324,66 +319,24 @@ pub struct BacktraceFrame {
   pc : Int64
   name : String
   offset : Int64
-  func_idx : Int
+  func_idx : Int32
 }
 
-pub struct CHeap {
-  // private fields
-} derive(@debug.Debug)
-pub fn CHeap::CHeap(capacity? : Int) -> Self raise CHeapError
-pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
-pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
-pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
-pub fn CHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise CHeapError
-pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise CHeapError
-pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value raise CHeapError
-pub fn CHeap::array_len(Self, Int) -> Int
-pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise CHeapError
-pub fn CHeap::bind_root_visitor(Self, (Int, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
-pub fn CHeap::clear_root_visitor(Self) -> Unit
-pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
-pub fn CHeap::collect_raw(Self, Array[Int64]) -> Int
-pub fn CHeap::free(Self) -> Unit
-pub fn CHeap::get_barrier_writes(Self) -> Int
-pub fn CHeap::get_base(Self) -> Int64
-pub fn CHeap::get_capacity(Self) -> Int64
-pub fn CHeap::get_kind(Self, Int) -> Int
-pub fn CHeap::get_object_count(Self) -> Int
-pub fn CHeap::get_offset(Self, Int) -> Int
-pub fn CHeap::get_ptr(Self) -> @jit_ffi.GCHeapHandle
-pub fn CHeap::get_size(Self) -> Int64
-pub fn CHeap::get_total_allocations(Self) -> Int
-pub fn CHeap::get_total_collections(Self) -> Int
-pub fn CHeap::get_type_idx(Self, Int) -> Int
-pub fn CHeap::get_usage_ratio(Self) -> Double
-pub fn CHeap::is_array(Self, Int) -> Bool
-pub fn CHeap::is_struct(Self, Int) -> Bool
-pub fn CHeap::is_valid(Self, Int) -> Bool
-pub fn CHeap::make_allocation_rollback(Self, () -> Array[@types.Value]) -> () -> Unit
-pub fn CHeap::reference_candidates(Self, Int) -> FixedArray[Int64]
-pub fn CHeap::runtime_type(Self, Int) -> Int
-pub fn CHeap::set_runtime_type(Self, Int, Int) -> Unit
-pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
-pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
-pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
-pub fn CHeap::to_repr(Self) -> @debug.Repr
-pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
-
 pub(all) struct CallCounter {
-  counts : Map[Int, Int]
-  mut total_calls : Int
+  counts : Map[Int32, Int32]
+  mut total_calls : Int32
 }
 pub fn CallCounter::CallCounter() -> Self
 pub fn CallCounter::clear(Self) -> Unit
-pub fn CallCounter::get_count(Self, Int) -> Int
-pub fn CallCounter::increment(Self, Int) -> Int
-pub fn CallCounter::reset(Self, Int) -> Unit
-pub fn CallCounter::total(Self) -> Int
-pub fn CallCounter::unique_functions(Self) -> Int
+pub fn CallCounter::get_count(Self, Int32) -> Int32
+pub fn CallCounter::increment(Self, Int32) -> Int32
+pub fn CallCounter::reset(Self, Int32) -> Unit
+pub fn CallCounter::total(Self) -> Int32
+pub fn CallCounter::unique_functions(Self) -> Int32
 
 pub type DWARFBuilder
 pub fn DWARFBuilder::DWARFBuilder() -> Self
-pub fn DWARFBuilder::add_function(Self, String, Int64, Int, Int) -> Unit
+pub fn DWARFBuilder::add_function(Self, String, Int64, Int32, Int32) -> Unit
 pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]
 pub fn DWARFBuilder::destroy(Self) -> Unit
 pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
@@ -393,7 +346,7 @@ pub fn DWARFBuilder::unregister(Self) -> Unit
 
 pub struct FunctionInfo {
   name : String
-  func_idx : Int
+  func_idx : Int32
   offset : Int64
 }
 
@@ -407,36 +360,28 @@ pub fn FunctionTemperature::to_string(Self) -> String
 pub impl Show for FunctionTemperature
 
 pub struct GcSafepoint {
-  code_offset : Int
-  live_refs : Array[Int]
+  code_offset : Int32
+  live_refs : Array[Int32]
   metadata : Int64
 } derive(@debug.Debug)
-pub fn GcSafepoint::GcSafepoint(Int, Array[Int], Int64) -> Self
+pub fn GcSafepoint::GcSafepoint(Int32, Array[Int32], Int64) -> Self
 pub fn GcSafepoint::to_repr(Self) -> @debug.Repr
 
-pub struct GcSlot {
-  lo : Int64
-  hi : Int64
-} derive(Eq, @debug.Debug)
-pub fn GcSlot::equal(Self, Self) -> Bool
-pub fn GcSlot::not_equal(Self, Self) -> Bool
-pub fn GcSlot::to_repr(Self) -> @debug.Repr
-
 pub(all) struct HostcallImportTrampolineCode {
-  code : Array[Int]
+  code : Array[Int32]
 }
 
 pub(all) struct HostcallImportTrampolineLayout {
-  arg_slots : Int
-  result_slots : Int
-  values_vec_bytes : Int
-  int_overflow_count : Int
+  arg_slots : Int32
+  result_slots : Int32
+  values_vec_bytes : Int32
+  int_overflow_count : Int32
   float_overflow_types : Array[@types.ValueType]
 }
 
 pub(all) struct HotThreshold {
-  warm_threshold : Int
-  hot_threshold : Int
+  warm_threshold : Int32
+  hot_threshold : Int32
 }
 pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
@@ -444,32 +389,19 @@ pub fn HotThreshold::default() -> Self
 
 pub(all) enum ImportFunctionResolution {
   DirectImportFunction(Int64)
-  HostImportFunctionAddr(Int)
+  HostImportFunctionAddr(Int32)
   UnsupportedImportFunction
 } derive(Eq, @debug.Debug)
 pub fn ImportFunctionResolution::equal(Self, Self) -> Bool
 pub fn ImportFunctionResolution::not_equal(Self, Self) -> Bool
 pub fn ImportFunctionResolution::to_repr(Self) -> @debug.Repr
 
-pub struct InvocationControl {
-  deadline : (@perf.Instant, Double)?
-  cancel : (() -> Bool)?
-  mut cancelled : Bool
-  mut timed_out : Bool
-  exhausted : @ref.Ref[Bool]
-  // private fields
-}
-pub fn InvocationControl::expired(Self) -> Bool
-pub fn InvocationControl::new(Int?, (() -> Bool)?, safepoints? : Int64?) -> Self?
-pub fn InvocationControl::poll(Self) -> Bool
-pub fn InvocationControl::preflight(Self) -> Bool
-
 pub struct JITDebugDB {
-  entries : Map[Int, JITFunctionDebug]
+  entries : Map[Int32, JITFunctionDebug]
 }
 pub fn JITDebugDB::JITDebugDB() -> Self
-pub fn JITDebugDB::get(Self, Int) -> JITFunctionDebug?
-pub fn JITDebugDB::set(Self, Int, JITFunctionDebug) -> Unit
+pub fn JITDebugDB::get(Self, Int32) -> JITFunctionDebug?
+pub fn JITDebugDB::set(Self, Int32, JITFunctionDebug) -> Unit
 
 pub struct JITFunctionDebug {
   ir : String
@@ -479,25 +411,10 @@ pub struct JITFunctionDebug {
 }
 pub fn JITFunctionDebug::JITFunctionDebug(String, String, String, String) -> Self
 
-type JITTable derive(@debug.Debug)
-pub fn JITTable::get_entry_type(Self, Int) -> Int
-pub fn JITTable::get_entry_value(Self, Int) -> Int64
-pub fn JITTable::get_max(Self) -> Int64?
-pub fn JITTable::get_size(Self) -> Int
-pub fn JITTable::raw_ptr(Self) -> @jit_ffi.NativeTableHandle
-pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
-pub fn JITTable::to_repr(Self) -> @debug.Repr
-
-type JITTableOwner derive(@debug.Debug)
-pub fn JITTableOwner::close(Self) -> Unit
-pub fn JITTableOwner::table(Self) -> JITTable
-pub fn JITTableOwner::to_repr(Self) -> @debug.Repr
-pub fn JITTableOwner::try_alloc(Int, Int64?) -> Self?
-
 pub struct JitCodeObject {
   // private fields
 } derive(@debug.Debug)
-pub fn JitCodeObject::get_bytes(Self) -> Array[Int]
+pub fn JitCodeObject::get_bytes(Self) -> Array[Int32]
 pub fn JitCodeObject::to_repr(Self) -> @debug.Repr
 
 pub(all) struct JitIntegrationPlan {
@@ -524,21 +441,9 @@ pub fn LoadedArtifact::context_layout(Self) -> @layout.ContextLayout?
 pub fn LoadedArtifact::verified(Self) -> @loader.LoadedArtifact
 
 pub(all) struct MemoryDescriptorLayout {
-  base_offset : Int
-  current_length_offset : Int
+  base_offset : Int32
+  current_length_offset : Int32
 }
-
-pub struct MemoryInfo {
-  ptr : @jit_ffi.MemoryDescriptor
-  size : Int64
-  max_pages : Int?
-}
-pub fn MemoryInfo::MemoryInfo(@jit_ffi.MemoryDescriptor, Int64, Int?) -> Self
-
-pub type NativeAtomicWait
-pub fn NativeAtomicWait::cancel(Self) -> Unit
-pub fn NativeAtomicWait::pause(Self) -> Unit
-pub fn NativeAtomicWait::poll(Self) -> Int
 
 pub struct NativeCallable {
   context : NativeJITContext
@@ -550,8 +455,8 @@ pub fn NativeCallable::release(Self) -> Unit
 pub struct NativeCompiler {
   // private fields
 }
-pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
-pub fn NativeCompiler::diagnose_wasm_body(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
+pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int32, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> @artifact.FunctionCode raise JitPipelineError
+pub fn NativeCompiler::diagnose_wasm_body(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int32, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> JitPipelineDiagnostics raise JitPipelineError
 pub fn NativeCompiler::new(NativeTarget, context_shape? : @layout.ContextShape) -> Self
 
 type NativeFiber
@@ -586,8 +491,8 @@ pub fn NativeFiberPhase::to_repr(Self) -> @debug.Repr
 
 pub(all) enum NativeHostcallOutcome {
   HostcallCompleted
-  HostcallExit(Int)
-  HostcallTrap(Int)
+  HostcallExit(Int32)
+  HostcallTrap(Int32)
   HostcallSuspended
 } derive(Eq, @debug.Debug)
 pub fn NativeHostcallOutcome::equal(Self, Self) -> Bool
@@ -595,61 +500,62 @@ pub fn NativeHostcallOutcome::not_equal(Self, Self) -> Bool
 pub fn NativeHostcallOutcome::to_repr(Self) -> @debug.Repr
 
 type NativeJITContext
-pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.MemoryDescriptor
-pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
+pub fn NativeJITContext::alloc_guarded_memory(Self, Int32, Int32?) -> @ffi.MemoryDescriptor
+pub fn NativeJITContext::alloc_indirect_table(Self, Int32) -> Bool
 pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise @installer.JitInstallError
-pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int], Array[Int]) -> Unit
+pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int32], Array[Int32]) -> Unit
 pub fn NativeJITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn NativeJITContext::bind_segment_drop_flags(Self, FixedArray[Bool], FixedArray[Bool]) -> Unit
-pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int raise NativeFiberError
+pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int32, Bool) -> Int32 raise NativeFiberError
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
 pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
 pub fn NativeJITContext::clear_segments(Self) -> Unit
 #alias(alloc_wasm_stack, deprecated)
 pub fn NativeJITContext::configure_native_fiber_stack_size(Self, Int64) -> Bool
-pub fn NativeJITContext::define_continuation_type(Self, Int, Int64, ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Bool
-pub fn NativeJITContext::func_count(Self) -> Int
-pub fn NativeJITContext::func_ptr(Self, Int) -> Int64
+pub fn NativeJITContext::define_continuation_type(Self, Int32, Int64, ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Bool
+pub fn NativeJITContext::func_count(Self) -> Int32
+pub fn NativeJITContext::func_ptr(Self, Int32) -> Int64
 pub fn NativeJITContext::gc_begin_frame(Self, Int64) -> Unit raise NativeSetupError
-pub fn NativeJITContext::gc_collect_for_alloc(Self, Array[Int64]) -> Int
+pub fn NativeJITContext::gc_collect_for_alloc(Self, Array[Int64]) -> Int32
 pub fn NativeJITContext::gc_end_frame(Self) -> Unit
 pub fn NativeJITContext::gc_environment_is_clear(Self) -> Bool
 pub fn NativeJITContext::gc_set_root_scratch(Self, Array[Int64]) -> Bool
 pub fn NativeJITContext::gc_set_safepoint_table(Self, Int64) -> Unit
-pub fn NativeJITContext::gc_use_func_safepoints(Self, Int) -> Unit
+pub fn NativeJITContext::gc_use_func_safepoints(Self, Int32) -> Unit
 pub fn NativeJITContext::has_callable_metadata(Self) -> Bool
 #alias(has_wasm_stack, deprecated)
 pub fn NativeJITContext::has_configured_native_fiber_stack_size(Self) -> Bool
-pub fn NativeJITContext::memory_descriptor(Self, Int) -> @jit_ffi.MemoryDescriptor
-pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
-pub fn NativeJITContext::memory_size(Self, Int) -> Int64
-pub fn NativeJITContext::refresh_table_layout(Self, Int) -> Bool
-pub fn NativeJITContext::register_safepoints(Self, Int, Array[@code_object.SafepointSite]) -> Bool
-pub fn NativeJITContext::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
+pub fn NativeJITContext::memory_descriptor(Self, Int32) -> @ffi.MemoryDescriptor
+pub fn NativeJITContext::memory_ptr(Self, Int32) -> Int64
+pub fn NativeJITContext::memory_size(Self, Int32) -> Int64
+pub fn NativeJITContext::refresh_table_layout(Self, Int32) -> Bool
+pub fn NativeJITContext::register_safepoints(Self, Int32, Array[@code_object.SafepointSite]) -> Bool
+pub fn NativeJITContext::set_callable_types(Self, Array[Int32], Array[Int32], Array[(Int64, Int32)], Array[Int32]) -> Unit
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
-pub fn NativeJITContext::set_continuation_arena(Self, @jit_ffi.NativeContinuationArena) -> Unit
+pub fn NativeJITContext::set_continuation_arena(Self, @ffi.NativeContinuationArena) -> Unit
 pub fn NativeJITContext::set_cooperative_scheduling(Self, Bool) -> Unit
-pub fn NativeJITContext::set_exception_arena(Self, @jit_ffi.NativeExceptionArena) -> Unit
-pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
-pub fn NativeJITContext::set_gc_heap(Self, CHeap) -> Unit
-pub fn NativeJITContext::set_gc_heap_ptr(Self, @jit_ffi.GCHeapHandle) -> Unit
+pub fn NativeJITContext::set_exception_arena(Self, @ffi.NativeExceptionArena) -> Unit
+pub fn NativeJITContext::set_func(Self, Int32, Int64) -> Unit
+pub fn NativeJITContext::set_gc_heap(Self, @bridge.CHeap) -> Unit
+pub fn NativeJITContext::set_gc_heap_ptr(Self, @ffi.GCHeapHandle) -> Unit
 pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
 pub fn NativeJITContext::set_hostcall_callback(Self, () -> NativeHostcallOutcome) -> Unit
-pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
-pub fn NativeJITContext::set_memory(Self, @jit_ffi.MemoryDescriptor) -> Unit
-pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit raise NativeSetupError
-pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit raise NativeSetupError
-pub fn NativeJITContext::setup_gc(Self, CHeap, Array[@types.SubType], Array[Int], Array[Int]) -> Unit raise GCSetupError
-pub fn NativeJITContext::setup_gc_with_func_table(Self, CHeap, Array[@types.SubType], Array[Int], Array[Int], Int64, Int) -> Unit raise GCSetupError
+pub fn NativeJITContext::set_indirect(Self, Int32, Int32, Int32) -> Unit
+pub fn NativeJITContext::set_memory(Self, @ffi.MemoryDescriptor) -> Unit
+pub fn NativeJITContext::set_memory_pointers(Self, Array[@bridge.MemoryInfo]) -> Unit raise NativeSetupError
+pub fn NativeJITContext::set_table_pointers(Self, Array[@bridge.JITTable?]) -> Unit raise NativeSetupError
+pub fn NativeJITContext::setup_gc(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32]) -> Unit raise GCSetupError
+pub fn NativeJITContext::setup_gc_with_func_table(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32], Int64, Int32) -> Unit raise GCSetupError
 pub fn NativeJITContext::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit raise NativeSetupError
-pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int, stack_size? : Int64) -> NativeJITContinuation raise NativeFiberError
-pub fn NativeJITContext::take_wasi_exit_code(Self) -> Int
+pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int32, stack_size? : Int64) -> NativeJITContinuation raise NativeFiberError
+pub fn NativeJITContext::take_wasi_exit_code(Self) -> Int32
 pub fn NativeJITContext::teardown_gc(Self) -> Unit
-pub fn NativeJITContext::throw_exception_tag(Self, Int) -> Unit raise NativeSetupError
-pub fn NativeJITContext::throw_exception_values(Self, Int, Array[Int64]) -> Unit raise NativeSetupError
-pub fn NativeJITContext::throw_store_exception_values(Self, Int, Array[Int64]) -> Unit raise NativeSetupError
-pub fn NativeJITContext::try_alloc(Int, layout? : @layout.ContextLayout?) -> Self?
+pub fn NativeJITContext::throw_exception_tag(Self, Int32) -> Unit raise NativeSetupError
+pub fn NativeJITContext::throw_exception_values(Self, Int32, Array[Int64]) -> Unit raise NativeSetupError
+pub fn NativeJITContext::throw_store_exception_values(Self, Int32, Array[Int64]) -> Unit raise NativeSetupError
+pub fn NativeJITContext::try_alloc(Int32, layout? : @layout.ContextLayout?) -> Self?
+pub impl @runtime.SegmentDropBinding for NativeJITContext
 
 type NativeJITContinuation
 pub fn NativeJITContinuation::cancel(Self) -> Unit raise NativeFiberError
@@ -660,7 +566,7 @@ pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
 pub(all) enum NativeJITContinuationEvent {
   NativeSuspended(NativeSuspensionReason)
   NativeJITCompleted
-  NativeJITTrapped(Int)
+  NativeJITTrapped(Int32)
 } derive(Eq, @debug.Debug)
 pub fn NativeJITContinuationEvent::equal(Self, Self) -> Bool
 pub fn NativeJITContinuationEvent::not_equal(Self, Self) -> Bool
@@ -686,19 +592,19 @@ pub fn NativeTarget::to_repr(Self) -> @debug.Repr
 pub(all) struct Profiler {
   counter : CallCounter
   threshold : HotThreshold
-  hot_functions : @hashset.HashSet[Int]
-  pending_compilation : @hashset.HashSet[Int]
-  compiled_functions : @hashset.HashSet[Int]
+  hot_functions : @hashset.HashSet[Int32]
+  pending_compilation : @hashset.HashSet[Int32]
+  compiled_functions : @hashset.HashSet[Int32]
 }
 pub fn Profiler::Profiler(HotThreshold) -> Self
-pub fn Profiler::get_function_temperature(Self, Int) -> FunctionTemperature
-pub fn Profiler::get_pending(Self) -> Array[Int]
-pub fn Profiler::is_compiled(Self, Int) -> Bool
-pub fn Profiler::mark_compiled(Self, Int) -> Unit
+pub fn Profiler::get_function_temperature(Self, Int32) -> FunctionTemperature
+pub fn Profiler::get_pending(Self) -> Array[Int32]
+pub fn Profiler::is_compiled(Self, Int32) -> Bool
+pub fn Profiler::mark_compiled(Self, Int32) -> Unit
 pub fn Profiler::output(Self, &Logger) -> Unit
-pub fn Profiler::record_call(Self, Int) -> (Int, Bool)
-pub fn Profiler::should_use_jit(Self, Int) -> Bool
-pub fn Profiler::stats(Self) -> (Int, Int, Int, Int)
+pub fn Profiler::record_call(Self, Int32) -> (Int32, Bool)
+pub fn Profiler::should_use_jit(Self, Int32) -> Bool
+pub fn Profiler::stats(Self) -> (Int32, Int32, Int32, Int32)
 pub fn Profiler::to_string(Self) -> String
 pub impl Show for Profiler
 
@@ -721,14 +627,14 @@ pub fn RuntimeSymbolResolver::to_repr(Self) -> @debug.Repr
 pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> Self
 
 pub struct TrapDetails {
-  signal : Int
+  signal : Int32
   pc : Int64
   lr : Int64
   fp : Int64
   frame_lr : Int64
   fault_addr : Int64
-  brk_imm : Int
-  func_idx : Int
+  brk_imm : Int32
+  func_idx : Int32
   x0 : Int64
   x1 : Int64
   x2 : Int64
@@ -746,15 +652,15 @@ pub fn TrapDetails::TrapDetails() -> Self
 pub(all) struct TrapReport {
   trap_kind : String
   message : String
-  signal : Int
+  signal : Int32
   signal_name : String
   pc : Int64
   lr : Int64
   fp : Int64
   frame_lr : Int64
   fault_addr : Int64
-  brk_imm : Int
-  wasm_func_idx : Int?
+  brk_imm : Int32
+  wasm_func_idx : Int32?
   wasm_func_name : String?
   wasm_offset : Int64?
   wasm_frames : Array[WasmTrapFrame]
@@ -763,34 +669,34 @@ pub(all) struct TrapReport {
 }
 
 pub(all) struct VMContextLayout {
-  memory0_offset : Int
-  memory0_base_offset : Int
-  memory0_size_offset : Int
-  func_table_offset : Int
-  table0_base_offset : Int
-  table0_elements_offset : Int
-  globals_offset : Int
-  tables_offset : Int
-  table_count_offset : Int
-  func_count_offset : Int
-  table_sizes_offset : Int
-  table_max_sizes_offset : Int
-  memories_offset : Int
-  memory_count_offset : Int
-  debug_current_func_idx_offset : Int
-  gc_heap_ptr_offset : Int
-  gc_heap_limit_offset : Int
-  gc_heap_offset : Int
-  pointer_stride : Int
-  global_value_stride : Int
-  table_entry_value_offset : Int
-  table_entry_stride : Int
-  func_table_entry_stride : Int
+  memory0_offset : Int32
+  memory0_base_offset : Int32
+  memory0_size_offset : Int32
+  func_table_offset : Int32
+  table0_base_offset : Int32
+  table0_elements_offset : Int32
+  globals_offset : Int32
+  tables_offset : Int32
+  table_count_offset : Int32
+  func_count_offset : Int32
+  table_sizes_offset : Int32
+  table_max_sizes_offset : Int32
+  memories_offset : Int32
+  memory_count_offset : Int32
+  debug_current_func_idx_offset : Int32
+  gc_heap_ptr_offset : Int32
+  gc_heap_limit_offset : Int32
+  gc_heap_offset : Int32
+  pointer_stride : Int32
+  global_value_stride : Int32
+  table_entry_value_offset : Int32
+  table_entry_stride : Int32
+  func_table_entry_stride : Int32
 }
 
 pub(all) struct WasmTrapFrame {
   pc : Int64
-  func_idx : Int
+  func_idx : Int32
   func_name : String
   wasm_offset : Int64
 }
@@ -802,11 +708,17 @@ pub using @loader {type ArtifactIncompatible}
 
 pub using @loader {type ArtifactLoadError}
 
+pub using @bridge {type CHeap}
+
+pub using @bridge {type CHeapError}
+
 pub using @layout {type ContextLayout}
 
 pub using @layout {type ContextShape}
 
-pub using @jit_ffi {type GCHeapHandle}
+pub using @ffi {type GCHeapHandle}
+
+pub using @bridge {type GcSlot}
 
 pub using @installer {type InstalledCode}
 
@@ -816,17 +728,27 @@ pub using @installer {type InstalledImport}
 
 pub using @installer {type InstalledTrampoline}
 
+pub using @control {type InvocationControl}
+
+pub using @bridge {type JITTable}
+
+pub using @bridge {type JITTableOwner}
+
 pub using @installer {type JitCodeInstaller}
 
 pub using @installer {type JitInstallError}
 
-pub using @jit_ffi {type MemoryDescriptor}
+pub using @ffi {type MemoryDescriptor}
+
+pub using @bridge {type MemoryInfo}
+
+pub using @bridge {type NativeAtomicWait}
 
 pub using @callable {type NativeCallableRegistry}
 
-pub using @jit_ffi {type NativeContinuationArena}
+pub using @ffi {type NativeContinuationArena}
 
-pub using @jit_ffi {type NativeExceptionArena}
+pub using @ffi {type NativeExceptionArena}
 
 pub using @execution {type NativeExecutionState}
 
@@ -836,6 +758,6 @@ pub using @execution {type NativeInvocationHandle}
 
 pub using @execution {type NativeInvocationPhase}
 
-pub using @jit_ffi {type NativeTableHandle}
+pub using @ffi {type NativeTableHandle}
 
 // Traits

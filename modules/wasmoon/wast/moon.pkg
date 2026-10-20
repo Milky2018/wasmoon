@@ -1,4 +1,6 @@
 import {
+  "Milky2018/wasmoon_runtime/wast/spectest",
+  "Milky2018/wasmoon_runtime/wast/assertions",
   "Milky2018/wasmoon/wast/jit" @jit_support,
   "Milky2018/wasm_core/wat",
   "Milky2018/wasm_core/types",
@@ -11,3 +13,5 @@ import {
   "Milky2018/wasmoon/wasi",
   "moonbitlang/core/hashset",
 }
+
+supported_targets = "+native"

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-FFI = ROOT / 'modules/wasmoon_jit/jit_ffi'
+FFI = ROOT / 'modules/wasmoon_runtime/native/ffi'
 
 
 @unittest.skipUnless(os.name == 'nt', 'requires Microsoft C and MASM')

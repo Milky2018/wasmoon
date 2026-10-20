@@ -92,7 +92,7 @@ test "resuspension transfers ownership without retaining consumed handles" {
 ///|
 test "closing Store inside host call prevents suspension publication" {
   try parked_host_call(Ref(false), close_in_host=true) catch {
-    @runtime.StoreClosed => ()
+    @runtime.RuntimeError::StoreClosed => ()
     error => raise error
   } noraise {
     _ => fail("expected closed Store")

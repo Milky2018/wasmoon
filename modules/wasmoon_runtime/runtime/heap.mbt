@@ -1,0 +1,906 @@
+///|
+/// GC Object representation
+/// Stores either a struct instance or an array instance
+pub(all) enum GCObject {
+  Struct(StructInstance)
+  Array(ArrayInstance)
+} derive(Debug)
+
+///|
+const GC_OBJECT_HEADER_BYTES : Int64 = 16L
+
+///|
+const GC_VALUE_SLOT_BYTES : Int64 = 8L
+
+///|
+/// Struct instance - stores field values
+pub(all) struct StructInstance {
+  type_idx : Int32 // Index of the struct type in the module
+  fields : Array[@types.Value] // Field values
+} derive(Debug)
+
+///|
+/// Array instance - stores element values and length
+pub(all) struct ArrayInstance {
+  type_idx : Int32 // Index of the array type in the module
+  elements : Array[@types.Value] // Element values
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for StructInstance with fn output(self, logger) {
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
+}
+
+///|
+pub impl Show for ArrayInstance with fn output(self, logger) {
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
+}
+
+///|
+pub impl Show for GCObject with fn output(self, logger) {
+  logger.write_string(@types.compact_show_repr(Repr(self).to_string()))
+}
+
+///|
+/// GC Heap - manages all GC objects with mark-sweep garbage collection
+pub struct MarkSweepHeap {
+  priv resource_budget : ResourceBudget?
+  priv mut closed : Bool
+  priv mut byte_reservation : @jit_ffi.Reservation?
+  priv mut object_reservation : @jit_ffi.Reservation?
+  priv mut budget_live_bytes : Int64
+  objects : Array[GCObject?] // None means slot is free (tombstone)
+  marks : Array[Bool] // Mark bits for GC
+  free_list : Array[Int32] // List of free slot indices for reuse
+  mut total_live : Int32 // Count of live objects
+  mut gc_threshold : Int32 // Trigger GC when total_live exceeds this
+  mut collections : Int32 // Number of GC cycles performed
+  mut bytes_allocated : Int64 // Cumulative allocated bytes
+  mut bytes_collected : Int64 // Cumulative collected bytes
+} derive(Debug)
+
+///|
+/// GC statistics
+pub struct GCStats {
+  total_objects : Int32 // Total slots in heap
+  live_objects : Int32 // Number of live objects
+  free_slots : Int32 // Number of free slots
+  collections : Int32 // Number of GC cycles performed
+  bytes_allocated : Int64 // Cumulative allocated bytes
+  bytes_collected : Int64 // Cumulative collected bytes
+} derive(Debug)
+
+///|
+/// Create a new empty GC heap
+pub fn MarkSweepHeap::MarkSweepHeap(
+  resource_budget~ : ResourceBudget? = None,
+) -> MarkSweepHeap {
+  {
+    resource_budget,
+    closed: false,
+    byte_reservation: None,
+    object_reservation: None,
+    budget_live_bytes: 0L,
+    objects: [],
+    marks: [],
+    free_list: [],
+    total_live: 0,
+    gc_threshold: 1000, // Default: trigger GC after 1000 allocations
+    collections: 0,
+    bytes_allocated: 0L,
+    bytes_collected: 0L,
+  }
+}
+
+///|
+/// Create a new GC heap with custom threshold
+pub fn MarkSweepHeap::with_threshold(
+  threshold : Int32,
+  resource_budget~ : ResourceBudget? = None,
+) -> MarkSweepHeap {
+  {
+    resource_budget,
+    closed: false,
+    byte_reservation: None,
+    object_reservation: None,
+    budget_live_bytes: 0L,
+    objects: [],
+    marks: [],
+    free_list: [],
+    total_live: 0,
+    gc_threshold: threshold,
+    collections: 0,
+    bytes_allocated: 0L,
+    bytes_collected: 0L,
+  }
+}
+
+///|
+/// Get GC statistics
+pub fn MarkSweepHeap::stats(self : MarkSweepHeap) -> GCStats {
+  {
+    total_objects: self.objects.length(),
+    live_objects: self.total_live,
+    free_slots: self.free_list.length(),
+    collections: self.collections,
+    bytes_allocated: self.bytes_allocated,
+    bytes_collected: self.bytes_collected,
+  }
+}
+
+///|
+fn MarkSweepHeap::make_allocation_rollback(
+  self : MarkSweepHeap,
+  roots : () -> Array[@types.Value],
+) -> () -> Unit {
+  let occupied = []
+  for object in self.objects {
+    occupied.push(object is Some(_))
+  }
+  let free_list = self.free_list.copy()
+  fn() {
+    self.mark_roots(roots())
+    for i in 0..<self.objects.length() {
+      let existed = i < occupied.length() && occupied[i]
+      if !existed && self.objects[i] is Some(object) && !self.marks[i] {
+        self.release_budget_object(object)
+        self.bytes_collected += gc_object_size_bytes(object)
+        self.objects[i] = None
+      }
+      self.marks[i] = false
+    }
+    let mut retained_length = self.objects.length()
+    while retained_length > occupied.length() &&
+          self.objects[retained_length - 1] is None {
+      retained_length -= 1
+    }
+    if self.object_reservation is Some(reservation) {
+      reservation.resize(retained_length.to_int64()) |> ignore
+    }
+    self.objects.truncate(retained_length)
+    self.marks.truncate(retained_length)
+    self.free_list.clear()
+    self.total_live = 0
+    let restored_free = Array::make(self.objects.length(), false)
+    for index in free_list {
+      if index < self.objects.length() && self.objects[index] is None {
+        self.free_list.push(index)
+        restored_free[index] = true
+      }
+    }
+    for i, object in self.objects {
+      match object {
+        Some(_) => self.total_live += 1
+        None =>
+          if !restored_free[i] {
+            self.free_list.push(i)
+            restored_free[i] = true
+          }
+      }
+    }
+  }
+}
+
+///|
+/// Release all objects and quota capacity. Closing is terminal and idempotent.
+pub fn MarkSweepHeap::close(self : MarkSweepHeap) -> Unit {
+  self.closed = true
+  if self.byte_reservation is Some(reservation) {
+    reservation.close()
+  }
+  if self.object_reservation is Some(reservation) {
+    reservation.close()
+  }
+  self.byte_reservation = None
+  self.object_reservation = None
+  self.budget_live_bytes = 0L
+  self.objects.clear()
+  self.objects.shrink_to_fit()
+  self.marks.clear()
+  self.marks.shrink_to_fit()
+  self.free_list.clear()
+  self.free_list.shrink_to_fit()
+  self.total_live = 0
+}
+
+///|
+/// Allocate a struct instance and return its reference index
+pub fn MarkSweepHeap::alloc_struct(
+  self : MarkSweepHeap,
+  type_idx : Int32,
+  fields : Array[@types.Value],
+) -> Int32 raise RuntimeError {
+  self.admit_gc_object(16L + fields.length().to_int64() * 16L)
+  let obj = GCObject::Struct({ type_idx, fields: fields.copy(), })
+  self.alloc_object(obj)
+}
+
+///|
+/// Allocate an array instance and return its reference index
+pub fn MarkSweepHeap::alloc_array(
+  self : MarkSweepHeap,
+  type_idx : Int32,
+  elements : Array[@types.Value],
+) -> Int32 raise RuntimeError {
+  self.admit_gc_object(32L + elements.length().to_int64() * 16L)
+  let obj = GCObject::Array({ type_idx, elements: elements.copy(), })
+  self.alloc_object(obj)
+}
+
+///|
+fn gc_object_size_bytes(obj : GCObject) -> Int64 {
+  match obj {
+    Struct(instance) =>
+      GC_OBJECT_HEADER_BYTES +
+      instance.fields.length().to_int64() * GC_VALUE_SLOT_BYTES
+    Array(instance) =>
+      GC_OBJECT_HEADER_BYTES +
+      instance.elements.length().to_int64() * GC_VALUE_SLOT_BYTES
+  }
+}
+
+///|
+/// Internal: allocate an object, reusing free slots if available
+fn MarkSweepHeap::alloc_object(self : MarkSweepHeap, obj : GCObject) -> Int32 {
+  self.total_live += 1
+  self.budget_live_bytes += gc_budget_size(obj)
+  self.bytes_allocated += gc_object_size_bytes(obj)
+  // Try to reuse a free slot
+  if self.free_list.length() > 0 {
+    let idx = self.free_list.pop().unwrap()
+    self.objects[idx] = Some(obj)
+    self.marks[idx] = false
+    return idx
+  }
+  // Allocate new slot
+  let idx = self.objects.length()
+  self.objects.push(Some(obj))
+  self.marks.push(false)
+  idx
+}
+
+///|
+/// Get an object by reference index
+pub fn MarkSweepHeap::get(
+  self : MarkSweepHeap,
+  idx : Int32,
+) -> GCObject raise RuntimeError {
+  if idx < 0 || idx >= self.objects.length() {
+    raise UndefinedElement
+  }
+  match self.objects[idx] {
+    Some(obj) => obj
+    None => raise UndefinedElement // Object was collected
+  }
+}
+
+///|
+/// Get a struct instance by reference index
+pub fn MarkSweepHeap::get_struct(
+  self : MarkSweepHeap,
+  idx : Int32,
+) -> StructInstance raise RuntimeError {
+  match self.get(idx) {
+    Struct(s) => s
+    Array(_) => raise TypeMismatch
+  }
+}
+
+///|
+/// Get an array instance by reference index
+pub fn MarkSweepHeap::get_array(
+  self : MarkSweepHeap,
+  idx : Int32,
+) -> ArrayInstance raise RuntimeError {
+  match self.get(idx) {
+    Array(a) => a
+    Struct(_) => raise TypeMismatch
+  }
+}
+
+///|
+/// Get a struct field value
+pub fn MarkSweepHeap::struct_get(
+  self : MarkSweepHeap,
+  struct_idx : Int32,
+  field_idx : Int32,
+) -> @types.Value raise RuntimeError {
+  let s = self.get_struct(struct_idx)
+  if field_idx < 0 || field_idx >= s.fields.length() {
+    raise UndefinedElement
+  }
+  s.fields[field_idx]
+}
+
+///|
+/// Set a struct field value
+pub fn MarkSweepHeap::struct_set(
+  self : MarkSweepHeap,
+  struct_idx : Int32,
+  field_idx : Int32,
+  value : @types.Value,
+) -> Unit raise RuntimeError {
+  let s = self.get_struct(struct_idx)
+  if field_idx < 0 || field_idx >= s.fields.length() {
+    raise UndefinedElement
+  }
+  s.fields[field_idx] = value
+}
+
+///|
+/// Get array length
+pub fn MarkSweepHeap::array_len(
+  self : MarkSweepHeap,
+  array_idx : Int32,
+) -> Int32 raise RuntimeError {
+  let a = self.get_array(array_idx)
+  a.elements.length()
+}
+
+///|
+/// Get an array element value
+pub fn MarkSweepHeap::array_get(
+  self : MarkSweepHeap,
+  array_idx : Int32,
+  elem_idx : Int32,
+) -> @types.Value raise RuntimeError {
+  let a = self.get_array(array_idx)
+  if elem_idx < 0 || elem_idx >= a.elements.length() {
+    raise OutOfBoundsArrayAccess
+  }
+  a.elements[elem_idx]
+}
+
+///|
+/// Set an array element value
+pub fn MarkSweepHeap::array_set(
+  self : MarkSweepHeap,
+  array_idx : Int32,
+  elem_idx : Int32,
+  value : @types.Value,
+) -> Unit raise RuntimeError {
+  let a = self.get_array(array_idx)
+  if elem_idx < 0 || elem_idx >= a.elements.length() {
+    raise OutOfBoundsArrayAccess
+  }
+  a.elements[elem_idx] = value
+}
+
+///|
+/// Fill array elements with a value
+pub fn MarkSweepHeap::array_fill(
+  self : MarkSweepHeap,
+  array_idx : Int32,
+  offset : Int32,
+  value : @types.Value,
+  count : Int32,
+) -> Unit raise RuntimeError {
+  let a = self.get_array(array_idx)
+  if offset < 0 || count < 0 || offset + count > a.elements.length() {
+    raise OutOfBoundsArrayAccess
+  }
+  for i in offset..<(offset + count) {
+    a.elements[i] = value
+  }
+}
+
+///|
+/// Copy elements between arrays
+pub fn MarkSweepHeap::array_copy(
+  self : MarkSweepHeap,
+  dst_idx : Int32,
+  dst_offset : Int32,
+  src_idx : Int32,
+  src_offset : Int32,
+  count : Int32,
+) -> Unit raise RuntimeError {
+  let dst = self.get_array(dst_idx)
+  let src = self.get_array(src_idx)
+  if dst_offset < 0 ||
+    src_offset < 0 ||
+    count < 0 ||
+    dst_offset + count > dst.elements.length() ||
+    src_offset + count > src.elements.length() {
+    raise OutOfBoundsArrayAccess
+  }
+  // Handle overlapping copy correctly
+  if dst_idx == src_idx && dst_offset > src_offset {
+    // Copy backwards to handle overlap
+    for i = count - 1; i >= 0; i = i - 1 {
+      dst.elements[dst_offset + i] = src.elements[src_offset + i]
+    }
+  } else {
+    // Copy forwards
+    for i in 0..<count {
+      dst.elements[dst_offset + i] = src.elements[src_offset + i]
+    }
+  }
+}
+
+///|
+/// Get the type index of an object
+pub fn MarkSweepHeap::get_type_idx(
+  self : MarkSweepHeap,
+  idx : Int32,
+) -> Int32 raise RuntimeError {
+  match self.get(idx) {
+    Struct(s) => s.type_idx
+    Array(a) => a.type_idx
+  }
+}
+
+///|
+/// Get total number of allocated objects (including free slots)
+pub fn MarkSweepHeap::length(self : MarkSweepHeap) -> Int32 {
+  self.objects.length()
+}
+
+// ============================================================
+// Mark-Sweep Garbage Collection
+// ============================================================
+
+///|
+/// Check if an object index is valid and alive
+pub fn MarkSweepHeap::is_alive(self : MarkSweepHeap, idx : Int32) -> Bool {
+  if idx < 0 || idx >= self.objects.length() {
+    return false
+  }
+  self.objects[idx] is Some(_)
+}
+
+///|
+/// Mark an object as reachable (and recursively mark referenced objects)
+pub fn MarkSweepHeap::mark(self : MarkSweepHeap, idx : Int32) -> Unit {
+  let pending = [idx]
+  while pending.pop() is Some(index) {
+    if !self.is_alive(index) || self.marks[index] {
+      continue
+    }
+    self.marks[index] = true
+    let values = match self.objects[index] {
+      Some(Struct(object)) => object.fields
+      Some(Array(object)) => object.elements
+      None => continue
+    }
+    for value in values {
+      match value {
+        StructRef(child) | ArrayRef(child) => pending.push(child)
+        _ => ()
+      }
+    }
+  }
+}
+
+///|
+/// Mark objects referenced by a value
+fn MarkSweepHeap::mark_value(
+  self : MarkSweepHeap,
+  value : @types.Value,
+) -> Unit {
+  match value {
+    StructRef(idx) => self.mark(idx)
+    ArrayRef(idx) => self.mark(idx)
+    _ => () // Other values don't reference GC objects
+  }
+}
+
+///|
+/// Mark all objects reachable from the given roots
+pub fn MarkSweepHeap::mark_roots(
+  self : MarkSweepHeap,
+  roots : Array[@types.Value],
+) -> Unit {
+  for root in roots {
+    self.mark_value(root)
+  }
+}
+
+///|
+/// Sweep phase: collect all unmarked objects
+pub fn MarkSweepHeap::sweep(self : MarkSweepHeap) -> Int32 {
+  let mut collected = 0
+  for i in 0..<self.objects.length() {
+    if self.objects[i] is Some(object) && !self.marks[i] {
+      // Object is not reachable, collect it
+      self.release_budget_object(object)
+      self.bytes_collected += gc_object_size_bytes(object)
+      self.objects[i] = None
+      self.free_list.push(i)
+      self.total_live -= 1
+      collected += 1
+    }
+    // Reset mark bit for next collection
+    self.marks[i] = false
+  }
+  collected
+}
+
+///|
+/// Perform a full garbage collection cycle
+/// Returns the number of objects collected
+pub fn MarkSweepHeap::collect(
+  self : MarkSweepHeap,
+  roots : Array[@types.Value],
+) -> Int32 {
+  // Mark phase
+  self.mark_roots(roots)
+  // Sweep phase
+  let collected = self.sweep()
+  self.collections += 1
+  collected
+}
+
+///|
+/// Check if GC should be triggered based on allocation count
+pub fn MarkSweepHeap::should_collect(self : MarkSweepHeap) -> Bool {
+  self.total_live >= self.gc_threshold
+}
+
+///|
+/// Set the GC threshold
+pub fn MarkSweepHeap::set_threshold(
+  self : MarkSweepHeap,
+  threshold : Int32,
+) -> Unit {
+  self.gc_threshold = threshold
+}
+
+///|
+/// Get the current GC threshold
+pub fn MarkSweepHeap::get_threshold(self : MarkSweepHeap) -> Int32 {
+  self.gc_threshold
+}
+
+///|
+/// Check if an object reference is valid and alive
+pub fn MarkSweepHeap::is_valid(self : MarkSweepHeap, idx : Int32) -> Bool {
+  self.is_alive(idx)
+}
+
+// ============================================================
+// Trait Implementations for MarkSweepHeap
+// ============================================================
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn alloc_struct(self, type_idx, fields) -> Int32 raise RuntimeError {
+  MarkSweepHeap::alloc_struct(self, type_idx, fields)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn alloc_array(self, type_idx, elements) -> Int32 raise RuntimeError {
+  MarkSweepHeap::alloc_array(self, type_idx, elements)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn struct_get(
+  self,
+  struct_idx,
+  field_idx,
+) -> @types.Value {
+  MarkSweepHeap::struct_get(self, struct_idx, field_idx)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn struct_set(
+  self,
+  struct_idx,
+  field_idx,
+  value,
+) -> Unit {
+  MarkSweepHeap::struct_set(self, struct_idx, field_idx, value)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn array_len(self, array_idx) -> Int32 {
+  MarkSweepHeap::array_len(self, array_idx)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn array_get(self, array_idx, elem_idx) -> @types.Value {
+  MarkSweepHeap::array_get(self, array_idx, elem_idx)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn array_set(
+  self,
+  array_idx,
+  elem_idx,
+  value,
+) -> Unit {
+  MarkSweepHeap::array_set(self, array_idx, elem_idx, value)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn array_fill(
+  self,
+  array_idx,
+  offset,
+  value,
+  count,
+) -> Unit {
+  MarkSweepHeap::array_fill(self, array_idx, offset, value, count)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn array_copy(
+  self,
+  dst_idx,
+  dst_offset,
+  src_idx,
+  src_offset,
+  count,
+) -> Unit {
+  MarkSweepHeap::array_copy(
+    self, dst_idx, dst_offset, src_idx, src_offset, count,
+  )
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn get_type_idx(self, idx) -> Int32 {
+  MarkSweepHeap::get_type_idx(self, idx)
+}
+
+///|
+pub impl GcHeap for MarkSweepHeap with fn is_valid(self, idx) -> Bool {
+  MarkSweepHeap::is_valid(self, idx)
+}
+
+// ============================================================
+// GcRuntime Trait Implementation for MarkSweepHeap
+// ============================================================
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn should_collect(self) -> Bool {
+  MarkSweepHeap::should_collect(self)
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn collect(self, roots) -> Unit {
+  MarkSweepHeap::collect(self, roots) |> ignore
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn force_collect(self, roots) -> Unit {
+  MarkSweepHeap::collect(self, roots) |> ignore
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn write_barrier_pre(
+  _self,
+  _obj_idx,
+  _old_value,
+  _new_value,
+) -> Unit {
+  // No-op for stop-the-world mark-sweep GC
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn write_barrier_post(
+  _self,
+  _obj_idx,
+  _new_value,
+) -> Unit {
+  // No-op for stop-the-world mark-sweep GC
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn read_barrier(_self, idx) -> @types.Value {
+  // No-op for stop-the-world GC - just return the reference unchanged
+  StructRef(idx)
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn stats(self) -> GcStats {
+  let old_stats = MarkSweepHeap::stats(self)
+  {
+    total_slots: old_stats.total_objects,
+    live_objects: old_stats.live_objects,
+    free_slots: old_stats.free_slots,
+    collections: old_stats.collections,
+    bytes_allocated: old_stats.bytes_allocated,
+    bytes_collected: old_stats.bytes_collected,
+  }
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn collection_count(self) -> Int32 {
+  self.collections
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn set_threshold(self, threshold) -> Unit {
+  MarkSweepHeap::set_threshold(self, threshold)
+}
+
+///|
+pub impl GcRuntime for MarkSweepHeap with fn get_threshold(self) -> Int32 {
+  MarkSweepHeap::get_threshold(self)
+}
+
+// ============================================================
+// GcManager Trait Implementation for MarkSweepHeap
+// ============================================================
+
+///|
+pub impl GcManager for MarkSweepHeap with fn alloc_struct(
+  self,
+  type_idx,
+  fields,
+) -> Int32 raise RuntimeError {
+  MarkSweepHeap::alloc_struct(self, type_idx, fields)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn alloc_array(
+  self,
+  type_idx,
+  elements,
+) -> Int32 raise RuntimeError {
+  MarkSweepHeap::alloc_array(self, type_idx, elements)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn struct_get(
+  self,
+  struct_idx,
+  field_idx,
+) -> @types.Value {
+  MarkSweepHeap::struct_get(self, struct_idx, field_idx)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn struct_set(
+  self,
+  struct_idx,
+  field_idx,
+  value,
+) -> Unit {
+  MarkSweepHeap::struct_set(self, struct_idx, field_idx, value)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn array_len(self, array_idx) -> Int32 {
+  MarkSweepHeap::array_len(self, array_idx)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn array_get(
+  self,
+  array_idx,
+  elem_idx,
+) -> @types.Value {
+  MarkSweepHeap::array_get(self, array_idx, elem_idx)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn array_set(
+  self,
+  array_idx,
+  elem_idx,
+  value,
+) -> Unit {
+  MarkSweepHeap::array_set(self, array_idx, elem_idx, value)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn array_fill(
+  self,
+  array_idx,
+  offset,
+  value,
+  count,
+) -> Unit {
+  MarkSweepHeap::array_fill(self, array_idx, offset, value, count)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn array_copy(
+  self,
+  dst_idx,
+  dst_offset,
+  src_idx,
+  src_offset,
+  count,
+) -> Unit {
+  MarkSweepHeap::array_copy(
+    self, dst_idx, dst_offset, src_idx, src_offset, count,
+  )
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn get_type_idx(self, idx) -> Int32 {
+  MarkSweepHeap::get_type_idx(self, idx)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn is_valid(self, idx) -> Bool {
+  MarkSweepHeap::is_valid(self, idx)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn should_collect(self) -> Bool {
+  MarkSweepHeap::should_collect(self)
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn collect(self, roots) -> Unit {
+  MarkSweepHeap::collect(self, roots) |> ignore
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn stats(self) -> GcStats {
+  let old_stats = MarkSweepHeap::stats(self)
+  {
+    total_slots: old_stats.total_objects,
+    live_objects: old_stats.live_objects,
+    free_slots: old_stats.free_slots,
+    collections: old_stats.collections,
+    bytes_allocated: old_stats.bytes_allocated,
+    bytes_collected: old_stats.bytes_collected,
+  }
+}
+
+///|
+pub impl GcManager for MarkSweepHeap with fn write_barrier(
+  _self,
+  _obj_idx,
+  _old_value,
+  _new_value,
+) -> Unit {
+  // No-op for stop-the-world mark-sweep GC
+}
+
+///|
+fn gc_budget_size(object : GCObject) -> Int64 {
+  match object {
+    Struct(instance) => 16L + instance.fields.length().to_int64() * 16L
+    Array(instance) => 32L + instance.elements.length().to_int64() * 16L
+  }
+}
+
+///|
+fn MarkSweepHeap::admit_gc_object(
+  self : MarkSweepHeap,
+  bytes : Int64,
+) -> Unit raise RuntimeError {
+  guard !self.closed else { raise InvalidHandle }
+  if self.resource_budget is Some(budget) {
+    let next_bytes = self.budget_live_bytes + bytes
+    let byte_reservation = match self.byte_reservation {
+      Some(reservation) => {
+        guard reservation.resize(next_bytes) else {
+          raise ResourceLimitExceeded(GcBytes)
+        }
+        reservation
+      }
+      None => budget.reservation(GcBytes, next_bytes)
+    }
+    errdefer byte_reservation.resize(self.budget_live_bytes) |> ignore
+    let next_objects = self.objects.length().to_int64() +
+      (if self.free_list.is_empty() { 1L } else { 0L })
+    let object_reservation = match self.object_reservation {
+      Some(reservation) => {
+        guard reservation.resize(next_objects) else {
+          raise ResourceLimitExceeded(GcObjects)
+        }
+        reservation
+      }
+      None => budget.reservation(GcObjects, next_objects)
+    }
+    self.byte_reservation = Some(byte_reservation)
+    self.object_reservation = Some(object_reservation)
+  }
+}
+
+///|
+fn MarkSweepHeap::release_budget_object(
+  self : MarkSweepHeap,
+  object : GCObject,
+) -> Unit {
+  self.budget_live_bytes -= gc_budget_size(object)
+  if self.byte_reservation is Some(reservation) {
+    reservation.resize(self.budget_live_bytes) |> ignore
+  }
+}

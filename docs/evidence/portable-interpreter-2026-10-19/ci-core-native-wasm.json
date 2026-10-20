@@ -1,0 +1,5188 @@
+{
+  "source_revision": "dae81454402cc70e80438762f1ec6f5dabf13232",
+  "source_dirty": false,
+  "moon": "moon 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moon\nmoonc v0.10.16+b1a0e846e (2026-10-16) ~/.moon/bin/moonc\nmoonrun 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+  "moonrun": "moonrun 0.1.20261016 (1af328f 2026-10-16)",
+  "targets": {
+    "native": {
+      "artifact_sha256": "cde041fa4895ab88bb530c354626bfe3efd137cc3da85d0065cc057ca81f4cff",
+      "files": 258,
+      "accepted_files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "unsupported": 0,
+      "entries": [
+        {
+          "file": "spec/address.wast",
+          "sha256": "108586531ce4b9445342a1f7c25880fd7deacb6e330b8a9f4430f7de7bd67f32",
+          "passed": 256,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006859
+        },
+        {
+          "file": "spec/align.wast",
+          "sha256": "b6b37225b83a1d68da1299ac40266ca5b0486c6468a47484b9c15ca357aeaef6",
+          "passed": 140,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006964
+        },
+        {
+          "file": "spec/annotations.wast",
+          "sha256": "b1f707945949cd756a28ed27dc2392c0ac0ef4c23546290f353af41a7cb48443",
+          "passed": 64,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002767
+        },
+        {
+          "file": "spec/binary-leb128.wast",
+          "sha256": "f9991c07e3c7a07f991bccaa5e95a2622626d6b2857db64a579fa1fa54ab5e1e",
+          "passed": 58,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002946
+        },
+        {
+          "file": "spec/binary.wast",
+          "sha256": "ce57b323396cdf687a0b5a872afa9d37e7dc03e05444084bb2062f570d087e50",
+          "passed": 107,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002969
+        },
+        {
+          "file": "spec/block.wast",
+          "sha256": "436230d4bb629da323ee97c56a5580545f3dea7818eeb9a362a6c234f5af18d7",
+          "passed": 222,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.010716
+        },
+        {
+          "file": "spec/br.wast",
+          "sha256": "ac34486d8787d469dc7940f8e77c6b4b5999cf9d6c8918138d13b3e58460cae9",
+          "passed": 96,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006431
+        },
+        {
+          "file": "spec/br_if.wast",
+          "sha256": "b75341e227315fc7765944e3ac09bcb1a15ca918a72c7dd478b2068147792658",
+          "passed": 118,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005247
+        },
+        {
+          "file": "spec/br_on_non_null.wast",
+          "sha256": "94881465822bd6b7f186be21c0759b6342a04a4af5c1308118e74d09fb16a067",
+          "passed": 9,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002517
+        },
+        {
+          "file": "spec/br_on_null.wast",
+          "sha256": "56904bb13112422b37dcf8f47a72c3d8025e9eebc660d2cad123d7f06de50a2a",
+          "passed": 7,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002339
+        },
+        {
+          "file": "spec/br_table.wast",
+          "sha256": "9a44bc44564b70bc92e84cea94f6e7d1d3df1725619fcbf5f1d6cf3340f793a1",
+          "passed": 185,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.014099
+        },
+        {
+          "file": "spec/bulk-memory/bulk.wast",
+          "sha256": "ab18cda421479c911bcd504deff2911ce9d44f5be9d95e3e0308fff0a6bc492a",
+          "passed": 66,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003628
+        },
+        {
+          "file": "spec/bulk-memory/memory_copy.wast",
+          "sha256": "059813c4cd9e79cf3a287409842b9212f6f48b4a6a5f597f22c81631e7b55d08",
+          "passed": 4402,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.16131
+        },
+        {
+          "file": "spec/bulk-memory/memory_fill.wast",
+          "sha256": "b8a7dccdf72878d11497a5d13ca3c628552b690f5386ef56b0a46c5dd711ad1f",
+          "passed": 84,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.132245
+        },
+        {
+          "file": "spec/bulk-memory/memory_init.wast",
+          "sha256": "e01fbd647657b597e54d90b02d61b808127447ca76d264d93fc5c4e69b3fde84",
+          "passed": 207,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007364
+        },
+        {
+          "file": "spec/bulk-memory/table-sub.wast",
+          "sha256": "e40ed421ae67bd38f30b4830155134ff330f3f3f85b0f307ecdd6cb1a0d4ffe5",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001769
+        },
+        {
+          "file": "spec/bulk-memory/table_copy.wast",
+          "sha256": "254022f7c24c01029982055b4e33a3eb0ac3b2a981aed7573146cb575d22c0ad",
+          "passed": 1649,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.029012
+        },
+        {
+          "file": "spec/bulk-memory/table_fill.wast",
+          "sha256": "e8da6efbfba19dfe8bc73752f522891a018a21f1fd5f897f3abbe3b265d2c2cf",
+          "passed": 44,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002237
+        },
+        {
+          "file": "spec/bulk-memory/table_init.wast",
+          "sha256": "1d7309221d578cfa8475aa402f6d935bc89a3139ed0c468f5623df1b34972ab4",
+          "passed": 729,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.024795
+        },
+        {
+          "file": "spec/call.wast",
+          "sha256": "faa694f3141b25cb1cf25104298a535ddea8058396825f532b69d0912074d905",
+          "passed": 90,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.033244
+        },
+        {
+          "file": "spec/call_indirect.wast",
+          "sha256": "5175284ea9f077fa44986aca0f0aa6348c26b80644e4601800f1f495cb64a19e",
+          "passed": 169,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.088573
+        },
+        {
+          "file": "spec/call_ref.wast",
+          "sha256": "742dae3d3abb20d42312bb74c778c503ce17171475420dafb529e4fe35008369",
+          "passed": 31,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.018149
+        },
+        {
+          "file": "spec/comments.wast",
+          "sha256": "0d3251bbe35291f80c6861cdc8b869d0c3da23836345d79210765fd80351b64f",
+          "passed": 3,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00199
+        },
+        {
+          "file": "spec/const.wast",
+          "sha256": "b1a378d5b7ddb4d4acb5ae2959ac938dfe0d9e3c2864df457bc098d3f2e00f37",
+          "passed": 376,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.01623
+        },
+        {
+          "file": "spec/conversions.wast",
+          "sha256": "70eeec77b5c5c4fa6c9547f97ac56c1e21ebd5e2a10e7318f2e22100d5f6f056",
+          "passed": 618,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.015082
+        },
+        {
+          "file": "spec/custom.wast",
+          "sha256": "59067c2c216fe1d6ac1249dbf9fc33573fb23b45b1bf5cc8f8a6eca14cf96f10",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001911
+        },
+        {
+          "file": "spec/data.wast",
+          "sha256": "991bfcf105a8eb23b92b6d59a8e2e6ef8f65111006bcfc35aa7b296eda45664d",
+          "passed": 34,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004134
+        },
+        {
+          "file": "spec/elem.wast",
+          "sha256": "087cfbccfd746458d46e10ea763aecea5f925bc1578e8fdf73eddfd47be68cda",
+          "passed": 72,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006833
+        },
+        {
+          "file": "spec/endianness.wast",
+          "sha256": "5d13436c8b6fe6099b89c5a16452e7d38fa170b2553b2983cf91b1fe4e5190ad",
+          "passed": 68,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004027
+        },
+        {
+          "file": "spec/exceptions/tag.wast",
+          "sha256": "15a8c36165de51b8d006f5d2afb3a6e9b69ea4d9915451c86a1a62b74843957f",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002763
+        },
+        {
+          "file": "spec/exceptions/throw.wast",
+          "sha256": "a0deb9073850b6b3fe2b6e8928fdf32a83a2d00b3e77744c9a81b10aa30f3bf8",
+          "passed": 12,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001938
+        },
+        {
+          "file": "spec/exceptions/throw_ref.wast",
+          "sha256": "577a4bdc3fb22331f4a2b50d025316f6a445dd261e12fe043eda8be4b822b42d",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002138
+        },
+        {
+          "file": "spec/exceptions/try_table.wast",
+          "sha256": "6aa3bff369a23b8f2c508bb71bc6abf9986d39033777b6a6c0561e6443c79b06",
+          "passed": 58,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004261
+        },
+        {
+          "file": "spec/exports.wast",
+          "sha256": "ba054413af525e2acc7a11b3934a78d37e3c879c97bc055bffca5e38ccd5af0b",
+          "passed": 41,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003773
+        },
+        {
+          "file": "spec/f32.wast",
+          "sha256": "91c9e9edf5500659040c6b7657fbaa942ad6c0526d80d2ea558e406257a8674f",
+          "passed": 2513,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.0226
+        },
+        {
+          "file": "spec/f32_bitwise.wast",
+          "sha256": "8a514cd0c6c34cccbcd4deda8b3f1898cab2985a360d0ec10a4b1725027f0b64",
+          "passed": 363,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007112
+        },
+        {
+          "file": "spec/f32_cmp.wast",
+          "sha256": "dc16e4361250dbf9ef2b91481e25964d6c31f9f593f2e31f08d5b4f5028a376f",
+          "passed": 2406,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.028592
+        },
+        {
+          "file": "spec/f64.wast",
+          "sha256": "b8b85a753f13ae27d20ca8cb97ab58b30606854deb4fb829caac93785a90b0f7",
+          "passed": 2513,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.023066
+        },
+        {
+          "file": "spec/f64_bitwise.wast",
+          "sha256": "efd4e70d58ee853b4509352292058841b775ccea4cfd3060ddd350b8ccd4db32",
+          "passed": 363,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007285
+        },
+        {
+          "file": "spec/f64_cmp.wast",
+          "sha256": "aabcd2c5af0670a9f7ce2cfd19befd3142c300fa5091575fad21a3726dcfb8c0",
+          "passed": 2406,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.019856
+        },
+        {
+          "file": "spec/fac.wast",
+          "sha256": "160f50dd99afe4c87f9a49424887e6fd94baa79b20f0e07567b867e866b583d2",
+          "passed": 7,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.010862
+        },
+        {
+          "file": "spec/float_exprs.wast",
+          "sha256": "f1659759fc66b9d7d46738adaefd9d9ff6d6a433d3192c762aa32f052fe6d071",
+          "passed": 819,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.025713
+        },
+        {
+          "file": "spec/float_literals.wast",
+          "sha256": "3702a2fa976e18929371b165b8bcdd63866fdc3dfdb1a4f4fdaa5b5ff7e53bb2",
+          "passed": 177,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00893
+        },
+        {
+          "file": "spec/float_memory.wast",
+          "sha256": "90c221916244bbf3bb9b8008b8a68174d9db7ecb7b65fa75d116650cfb237750",
+          "passed": 60,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002992
+        },
+        {
+          "file": "spec/float_misc.wast",
+          "sha256": "03247e5060c34d2db3e3602cd25f1fa5179239ba175f95c6a509bd5c1859de81",
+          "passed": 470,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.008229
+        },
+        {
+          "file": "spec/forward.wast",
+          "sha256": "a387e07010b2846f37491ea2cfb9efaa6a334dc84377c4788754a5c6d8abdb6b",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001886
+        },
+        {
+          "file": "spec/func.wast",
+          "sha256": "fb48ac22e13b3f5bd34063e194756af2f558b99d0f6f230e871c0b6d56849497",
+          "passed": 171,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007814
+        },
+        {
+          "file": "spec/func_ptrs.wast",
+          "sha256": "a322e40d162db20e117f677b1a4501691e797e484d01ccd2b7fd655ba07275d2",
+          "passed": 32,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002372
+        },
+        {
+          "file": "spec/gc/array.wast",
+          "sha256": "61d8691c85dac5777daf883e1625cfe64084546bb3bc95db8d39229f83889f58",
+          "passed": 47,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007586
+        },
+        {
+          "file": "spec/gc/array_copy.wast",
+          "sha256": "ab7001b78dfd3a4ba593fea582d6df85de10848f4c3795430d3456df89b59627",
+          "passed": 34,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002794
+        },
+        {
+          "file": "spec/gc/array_fill.wast",
+          "sha256": "07695ad2313c12f481fbf98df6ed220d8b38dc37af6acbad60b2ab84655d6b7e",
+          "passed": 29,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00201
+        },
+        {
+          "file": "spec/gc/array_init_data.wast",
+          "sha256": "e2c7c86941197d0c9110642090cbf0fd38c10cb538d97a4c08e2d481f8a12861",
+          "passed": 44,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002636
+        },
+        {
+          "file": "spec/gc/array_init_elem.wast",
+          "sha256": "ac85534e52afc239c3f6a21e23f747615f8772c9543feb5e2d19ea64dd1e3e0d",
+          "passed": 22,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002088
+        },
+        {
+          "file": "spec/gc/array_new_data.wast",
+          "sha256": "7ba5e58b6e0ca861c336aec3c3c158e0464ef95cdec4e3a7a352242d4b0daecd",
+          "passed": 23,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002146
+        },
+        {
+          "file": "spec/gc/array_new_elem.wast",
+          "sha256": "d68edfe34588237532a955b3aedd1a5b6b662c25b8cfb0913d2802cb6c7444b4",
+          "passed": 18,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001994
+        },
+        {
+          "file": "spec/gc/binary-gc.wast",
+          "sha256": "dba71997b80a60f04d1afd330ee205cd4187cb6c71c4630472efb11116fae160",
+          "passed": 1,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001311
+        },
+        {
+          "file": "spec/gc/br_on_cast.wast",
+          "sha256": "bbdbb58b8d9a9fe4cb1ea996506093ac66d250bf48d18c7f2b0bb46830e5fe24",
+          "passed": 31,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00384
+        },
+        {
+          "file": "spec/gc/br_on_cast_fail.wast",
+          "sha256": "2c92c69b2a529a5fe6755289fb548eb2f604cf38b6468b7fa9ff856c732611fe",
+          "passed": 31,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004211
+        },
+        {
+          "file": "spec/gc/extern.wast",
+          "sha256": "051adf39ca6251b7660ac3fe7dca4326d9315c350467b15f867054a580eadc0b",
+          "passed": 16,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001982
+        },
+        {
+          "file": "spec/gc/i31.wast",
+          "sha256": "5b315d36a0260257632d4a6d9b4520900ae6db45c824035f99bf9614b489709f",
+          "passed": 57,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003114
+        },
+        {
+          "file": "spec/gc/ref_cast.wast",
+          "sha256": "ec8aa37df451f0c7fbb99f26dfba2b8a415cb32bd721214a3396f8c4fdacc674",
+          "passed": 40,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003554
+        },
+        {
+          "file": "spec/gc/ref_eq.wast",
+          "sha256": "fbb1ddcae04eea3bd2cdd650efcf67a23579f7a11ba5e464b5f1aa93150e073f",
+          "passed": 87,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002813
+        },
+        {
+          "file": "spec/gc/ref_test.wast",
+          "sha256": "cec66b0e8cf537bb47e07265c1d4c7ba56be75179c2647456561f8dbfef64a9b",
+          "passed": 68,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004046
+        },
+        {
+          "file": "spec/gc/struct.wast",
+          "sha256": "3f8c48fdf69277b66b9063be2675a56055f27ea281eb4ae37ad8ff80744ba7b7",
+          "passed": 24,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003807
+        },
+        {
+          "file": "spec/gc/type-subtyping.wast",
+          "sha256": "586b8e53cab2c1db00499278f404e0db07673a93647cadab9f1f08c972d23e83",
+          "passed": 61,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.010318
+        },
+        {
+          "file": "spec/global.wast",
+          "sha256": "0899df8c814d953d56a22b04d518fda6c7e6aab5a0d0472367a830e31821ee40",
+          "passed": 114,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005314
+        },
+        {
+          "file": "spec/i32.wast",
+          "sha256": "f3b7e8fd641893ea0989a8ab801fce0654d276d27b5cad9cf482291a422cffe8",
+          "passed": 459,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007965
+        },
+        {
+          "file": "spec/i64.wast",
+          "sha256": "7d0e27a617565e0685aef56cee01b2b4890084068e3989168c41d14c56b1945e",
+          "passed": 415,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006296
+        },
+        {
+          "file": "spec/id.wast",
+          "sha256": "7d876e4681a3b8e5e22b6668d3577709a074e34ee7a2b62e16a5dabd38139ca0",
+          "passed": 6,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002499
+        },
+        {
+          "file": "spec/if.wast",
+          "sha256": "291eaa26f1951a70560cf9942edc4345557718693ec0dd60b32c560310ea81f0",
+          "passed": 240,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.010394
+        },
+        {
+          "file": "spec/imports.wast",
+          "sha256": "e10cb0afdfa72f275b88862e66f0bbc6aa1b5447ad7a16db401274cad4ac3ee0",
+          "passed": 144,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.009614
+        },
+        {
+          "file": "spec/inline-module.wast",
+          "sha256": "fcaab83e53f188536b952c7d66e663f8c1e7e7bd52e3272a32c5c921654ec44a",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001838
+        },
+        {
+          "file": "spec/instance.wast",
+          "sha256": "9ce795cf5999d693c08b86b1bac956b8cb127a52990d5e2bd84969e275e51e65",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002763
+        },
+        {
+          "file": "spec/int_exprs.wast",
+          "sha256": "e8b884e16bdbed0270e9b912eaa60a0e8688831e7574be98c00a60dcc667ed2b",
+          "passed": 89,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004992
+        },
+        {
+          "file": "spec/int_literals.wast",
+          "sha256": "1087900dd58f95f6c5db0c1ec7bbad1fb67b45accda5b079df2f3647cbb13038",
+          "passed": 50,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00339
+        },
+        {
+          "file": "spec/labels.wast",
+          "sha256": "c4f00b0b980f9b33487a002b495dc186d35232bf726fa60982a4c1b226275a26",
+          "passed": 28,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003659
+        },
+        {
+          "file": "spec/left-to-right.wast",
+          "sha256": "1a7376ac279bcf95b2493d6c2413721e14c35dfcd47fbfdffcb203aad8cb5a16",
+          "passed": 95,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007647
+        },
+        {
+          "file": "spec/linking.wast",
+          "sha256": "88bcdcad7b029df279ce5985ed1c4489dea57c32fd173fff94516fdbd78caea8",
+          "passed": 133,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006662
+        },
+        {
+          "file": "spec/load.wast",
+          "sha256": "2f69ef5634207e065d022d7c26c92016ff1d14a94c5c755927d37fe14e63e256",
+          "passed": 96,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004748
+        },
+        {
+          "file": "spec/local_get.wast",
+          "sha256": "7829b58483bc8a158e97335c63a82db0fb9123555bcde27f779914254fe12c3e",
+          "passed": 35,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003244
+        },
+        {
+          "file": "spec/local_init.wast",
+          "sha256": "4a496f820a6863d429c772f4ac85018944fa96e1f1cec6df9fc9231c9795890d",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00188
+        },
+        {
+          "file": "spec/local_set.wast",
+          "sha256": "93df4f2089fce0a8f453635d4fcc750d676edb24af3826ba221a347a8da2df45",
+          "passed": 52,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004415
+        },
+        {
+          "file": "spec/local_tee.wast",
+          "sha256": "36cea2d29048fcd9567358a74cce59169a64be6d282bc8aaac99a4b3a5e03dcf",
+          "passed": 97,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.008705
+        },
+        {
+          "file": "spec/loop.wast",
+          "sha256": "8c9f440c7c113e6641652f1eec790e826db63938540b6edb94c702d98a9d4b8d",
+          "passed": 119,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007947
+        },
+        {
+          "file": "spec/memory.wast",
+          "sha256": "fd3d84dd0bd5f6632eff0c29249329194df9fbae146d2769f717ec849080e31a",
+          "passed": 79,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003679
+        },
+        {
+          "file": "spec/memory64/address64.wast",
+          "sha256": "2c0a5b0c7c5393eb302b597ba0c0f3f5f4baf02b1d577b4e686c8ecf68af7066",
+          "passed": 238,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005568
+        },
+        {
+          "file": "spec/memory64/align64.wast",
+          "sha256": "42ed1ef7232928693b6469277ba467352d95f9e01309b0ea36298c7ab4336efc",
+          "passed": 131,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006689
+        },
+        {
+          "file": "spec/memory64/binary_leb128_64.wast",
+          "sha256": "8f93914dcb0c4486f777e49f71d4efd5b14bcb7ac365083c2b0b0c974b14fc79",
+          "passed": 1,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001522
+        },
+        {
+          "file": "spec/memory64/bulk64.wast",
+          "sha256": "2fab31081f13b4838f65ceb134a8e7d573e16fccea8c325160b011691bbc356c",
+          "passed": 45,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002495
+        },
+        {
+          "file": "spec/memory64/call_indirect64.wast",
+          "sha256": "1624a745dc4ea54431e736204bb991e815391852d62f60bd967734d0d74058ec",
+          "passed": 1,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001941
+        },
+        {
+          "file": "spec/memory64/endianness64.wast",
+          "sha256": "81822902583b0c51918b41d40a46ac4e240e3ac47a17384f1675ba3fa3445d99",
+          "passed": 68,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003703
+        },
+        {
+          "file": "spec/memory64/float_memory64.wast",
+          "sha256": "a271f4839d25d2295947c19af442ca08543d56f625a123c442856317b67bf3fd",
+          "passed": 60,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003016
+        },
+        {
+          "file": "spec/memory64/load64.wast",
+          "sha256": "9d9d5d47951e0837315c1923cd2869f92c76de8dde90a8ce70dae8b7aa492bea",
+          "passed": 96,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004722
+        },
+        {
+          "file": "spec/memory64/memory64-imports.wast",
+          "sha256": "4e81d9f4a4aea2595a355ed6a4f027cf2e2ea9772922a82e9653bd0aebe96f05",
+          "passed": 30,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003852
+        },
+        {
+          "file": "spec/memory64/memory64.wast",
+          "sha256": "30ae609b81ca6850c007a2d3aeae88c1b0d90690e8861e9af1778d896df12eda",
+          "passed": 60,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003234
+        },
+        {
+          "file": "spec/memory64/memory_copy64.wast",
+          "sha256": "c97bf5fa7838ee06f71b4bb26f0fcb91adf25bb054e41f6b9c2051ddcdf701a7",
+          "passed": 4402,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.157968
+        },
+        {
+          "file": "spec/memory64/memory_fill64.wast",
+          "sha256": "f55f902dae42e7c91af3df1fc6684f5ae3e251ac5e476eecdcf7ab9461855e3d",
+          "passed": 84,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.127912
+        },
+        {
+          "file": "spec/memory64/memory_grow64.wast",
+          "sha256": "cf0a5687d5bc1923f6a9900fe17a0218e6d5c77bc8eb128886e52b36ded65290",
+          "passed": 45,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.186403
+        },
+        {
+          "file": "spec/memory64/memory_init64.wast",
+          "sha256": "c1cd9f32a0e30ec3237cc87b4bc52477e74123db764cbd2807a3ac9d1f83e38e",
+          "passed": 207,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007594
+        },
+        {
+          "file": "spec/memory64/memory_redundancy64.wast",
+          "sha256": "aeca2499e8e5efa7fe9a5d1037000ff4094ee5dffda75916f4b6053389fd01b0",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002085
+        },
+        {
+          "file": "spec/memory64/memory_trap64.wast",
+          "sha256": "70b265f0b93e7aa7e05fdb72e113506c2886a116787f412c394ae93e00beeb83",
+          "passed": 170,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004302
+        },
+        {
+          "file": "spec/memory64/table64.wast",
+          "sha256": "4822e3d2df3f0e500c2a469026851b71d4477620a9b770bba7aad4819ed531fb",
+          "passed": 3,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002037
+        },
+        {
+          "file": "spec/memory64/table_copy64.wast",
+          "sha256": "3e0bd17a7f59634b7d19d30473876505ef031b1aebc42787deb91afd1a35d0d3",
+          "passed": 1649,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.026488
+        },
+        {
+          "file": "spec/memory64/table_copy_mixed.wast",
+          "sha256": "897f55132bcb1d98a8ae98ceff3023825d374eef61eba1c8daf77c5990a32444",
+          "passed": 3,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001829
+        },
+        {
+          "file": "spec/memory64/table_fill64.wast",
+          "sha256": "d175938336e7032155a610675bed836b80b0563b68fb7991da4cfe41231ebcf5",
+          "passed": 79,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002831
+        },
+        {
+          "file": "spec/memory64/table_get64.wast",
+          "sha256": "c8b83a046b3b40c8b36a88912c89203474218e08e9b16f07e35cea51c4fe5eb6",
+          "passed": 9,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001797
+        },
+        {
+          "file": "spec/memory64/table_grow64.wast",
+          "sha256": "b98502832935f806f34eb56e3231abf744b89cb5bde21ddc1374a0b7b31bba70",
+          "passed": 21,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001992
+        },
+        {
+          "file": "spec/memory64/table_init64.wast",
+          "sha256": "618de56aed94b069d49ba537f7bd6a2b9891dfb845baf638897256fa355b72c6",
+          "passed": 819,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.019388
+        },
+        {
+          "file": "spec/memory64/table_set64.wast",
+          "sha256": "4ea80f5012f8955eee0723e50a0f46a4ab2843ef57ed4f276d82795e0e01e909",
+          "passed": 18,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002164
+        },
+        {
+          "file": "spec/memory64/table_size64.wast",
+          "sha256": "30d08e2f8e62ba0fd1462223da9cb947c50a561faa3ca16e51f55fa3c46ce25b",
+          "passed": 36,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001907
+        },
+        {
+          "file": "spec/memory_grow.wast",
+          "sha256": "02b16fdd007a9fb078823e2cf673e86c0d48f19ebdf4e7a09f282e6ae859a3d1",
+          "passed": 96,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.190473
+        },
+        {
+          "file": "spec/memory_redundancy.wast",
+          "sha256": "5c7e66c660367c5b163148b5d4d7173611ab825d2614d77392c2883c308888d1",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002419
+        },
+        {
+          "file": "spec/memory_size.wast",
+          "sha256": "71570412caf937a389127b7ffd104efe24b89d0ccd1202d48bcf04f50bd62f76",
+          "passed": 38,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002071
+        },
+        {
+          "file": "spec/memory_trap.wast",
+          "sha256": "b3209d2a07576a4961c6043b097f26457900a4eaee2b4df96a5359bea2d2ebb5",
+          "passed": 180,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003727
+        },
+        {
+          "file": "spec/multi-memory/address0.wast",
+          "sha256": "0ae3d1d2578c4da0699e57eb75a589f712fe5577e53bf1ffc80a9e0cdbff5e77",
+          "passed": 91,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002704
+        },
+        {
+          "file": "spec/multi-memory/address1.wast",
+          "sha256": "2039d4dcec17c94917a3f7923c55e55e29e7b19e6204095f2081a186866f1c1a",
+          "passed": 126,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004714
+        },
+        {
+          "file": "spec/multi-memory/align0.wast",
+          "sha256": "a5bce1892f58d0716217bb2b9520570676e3100dfd855e9088e2048cbc4a2280",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002048
+        },
+        {
+          "file": "spec/multi-memory/binary0.wast",
+          "sha256": "8153bbe3d79578edd8486b87ab70a914d375907a3f0fb71b4c4373628b12dc2a",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001504
+        },
+        {
+          "file": "spec/multi-memory/data0.wast",
+          "sha256": "7e12af1c9c52716cc7df1b407c302b39aa2eed150486f1214f64c5381ec44140",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001829
+        },
+        {
+          "file": "spec/multi-memory/data1.wast",
+          "sha256": "effa6a1484493ef5d28bad9f93a9a1f2f462e4748b079c07af02178cbc62f565",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002031
+        },
+        {
+          "file": "spec/multi-memory/data_drop0.wast",
+          "sha256": "4cd981a5ab79836baa05834322e42636bd8dc2c05204130cec18bff78d933a55",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002709
+        },
+        {
+          "file": "spec/multi-memory/exports0.wast",
+          "sha256": "5d4215df4a11585a1d2f3393cfdb25eda3d842df6123bf51383dd30fdbfc171e",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002
+        },
+        {
+          "file": "spec/multi-memory/float_exprs0.wast",
+          "sha256": "0f170be704a1e36d2f453d08b597cab3332cd0128332f4eb04432bb4cf089f0a",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001635
+        },
+        {
+          "file": "spec/multi-memory/float_exprs1.wast",
+          "sha256": "8fc3383298eac32d2d99114f818c41cc33d710a2d753daa48bb4001c5b8f0c5b",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002426
+        },
+        {
+          "file": "spec/multi-memory/float_memory0.wast",
+          "sha256": "915985df616d6d6dbda999d682fd70344ace735f64c339d53c49ec8d6ad1e5a2",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001945
+        },
+        {
+          "file": "spec/multi-memory/imports0.wast",
+          "sha256": "8e952d2f3c29bf3fc8afe5264bb09a40233e8b75b73076c6b1690d0d99080901",
+          "passed": 6,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001827
+        },
+        {
+          "file": "spec/multi-memory/imports1.wast",
+          "sha256": "ed4e1b3c87bb3adf4e5252aa7fb1b8023f8a7051b81cffe95b0ee6f4099fd29d",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001507
+        },
+        {
+          "file": "spec/multi-memory/imports2.wast",
+          "sha256": "0bb7710256a6182bd7e22e13bb9c176aa84136b7077ef7bc6862079e5478bbd6",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001747
+        },
+        {
+          "file": "spec/multi-memory/imports3.wast",
+          "sha256": "b130b3336a212eb926203d87bf377519a982db51126a78523b546a7850b63d4b",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001802
+        },
+        {
+          "file": "spec/multi-memory/imports4.wast",
+          "sha256": "ab45e1db2f5405f3a31b0e1c2320add2d2323e92f56bc3b8c2b61d1f11b8b48c",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001972
+        },
+        {
+          "file": "spec/multi-memory/linking0.wast",
+          "sha256": "54a8ed8cd839a63cb39aa2613e36629b04c87d4693dcca2a98bddb1ddffc527a",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002127
+        },
+        {
+          "file": "spec/multi-memory/linking1.wast",
+          "sha256": "ce06017db2c85c3480e34cebe639f612745fc1ffda1272bc6ab3e4272b2d4171",
+          "passed": 9,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00179
+        },
+        {
+          "file": "spec/multi-memory/linking2.wast",
+          "sha256": "96a364eb12eef12e6a4d9f926166167a91aabe217b94e682342213b386c60587",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001606
+        },
+        {
+          "file": "spec/multi-memory/linking3.wast",
+          "sha256": "2487cc4e0b85d8e94bf32816a6b00a7fa477817a65de5a6588ce55a930d3f5d4",
+          "passed": 10,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002028
+        },
+        {
+          "file": "spec/multi-memory/load0.wast",
+          "sha256": "00dbea5cae594b8a16f4a177aa1ef5f72c3042c8c31f33e1577f696ccf7339d8",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001467
+        },
+        {
+          "file": "spec/multi-memory/load1.wast",
+          "sha256": "19b977db2c0aac9654909a7378572fe1e6a1551a49059b46948d68e788737021",
+          "passed": 15,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001497
+        },
+        {
+          "file": "spec/multi-memory/load2.wast",
+          "sha256": "a270a935feaab17acf2192526ccc1e3d8b7f90551afbc9e9152655e9f63c0747",
+          "passed": 37,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003262
+        },
+        {
+          "file": "spec/multi-memory/memory-multi.wast",
+          "sha256": "622e23c6952721b4f3fae1ebda5feef668741a7ed2cde84ba4068153efbaef70",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001951
+        },
+        {
+          "file": "spec/multi-memory/memory_copy0.wast",
+          "sha256": "5434c232c4e29e89888a1e05a42b298186c6a18263aef5d74666d967f9402aac",
+          "passed": 21,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001916
+        },
+        {
+          "file": "spec/multi-memory/memory_copy1.wast",
+          "sha256": "0c0a25890b3415d7cf0a0f43cd7904ad44e9e2fc6a1462fef48703102805e1bc",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001609
+        },
+        {
+          "file": "spec/multi-memory/memory_fill0.wast",
+          "sha256": "d747201062f410ed64b23ca9687397c33e8f5adbcd4dda54ea742e903922f767",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001709
+        },
+        {
+          "file": "spec/multi-memory/memory_grow.wast",
+          "sha256": "8e7f73d02a5929e5a9bef22ad84fe4bab27ae30aaf14021d9c4cc1bb67f16a94",
+          "passed": 47,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002129
+        },
+        {
+          "file": "spec/multi-memory/memory_init0.wast",
+          "sha256": "b13986c12b2d0c4d9150a004b1cf209e06ec91010e5dfe9abc21258ccb678687",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001483
+        },
+        {
+          "file": "spec/multi-memory/memory_size0.wast",
+          "sha256": "34280de026ac1d919583b866e6e7c722337f6445c157f4bf80895e46f49290a3",
+          "passed": 7,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001458
+        },
+        {
+          "file": "spec/multi-memory/memory_size1.wast",
+          "sha256": "7856b32b39b9bf839f90f0f818177d85e8ab704d6933c7b68bd7b90e1829b1fa",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001508
+        },
+        {
+          "file": "spec/multi-memory/memory_size2.wast",
+          "sha256": "4737a54f4aa62ec6b10f4ef8c299fb7e354941ce13a8def85a79b1e24413bc39",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001582
+        },
+        {
+          "file": "spec/multi-memory/memory_size3.wast",
+          "sha256": "e8c279897c70d60be758c571c2864a3b2da87d404dfe43e65ac91ad3e139281e",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001877
+        },
+        {
+          "file": "spec/multi-memory/memory_size_import.wast",
+          "sha256": "88162d640f690c64bb8d27cf3e3d25b47abf915677a2d2e6d554396f403e0f94",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001864
+        },
+        {
+          "file": "spec/multi-memory/memory_trap0.wast",
+          "sha256": "2ff7905e32759145f5be3a6910f09edce9f781a98f9eb602dbd96da1c5315409",
+          "passed": 13,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00184
+        },
+        {
+          "file": "spec/multi-memory/memory_trap1.wast",
+          "sha256": "c0bfa1f480766ccfc1c0a4cdefa26b8ae8d01004414c5498afdb2131ab99375c",
+          "passed": 167,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003321
+        },
+        {
+          "file": "spec/multi-memory/start0.wast",
+          "sha256": "139c266bd44d5f821b6d0b994ff1ec2a5e659357cd21921dfadf5b679a1dec0a",
+          "passed": 6,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001513
+        },
+        {
+          "file": "spec/multi-memory/store0.wast",
+          "sha256": "971c814c669b126ac3dc11e9a6185d315af2ba996cb416d9e3e26773bcee0c71",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001476
+        },
+        {
+          "file": "spec/multi-memory/store1.wast",
+          "sha256": "e03b4970ac4e6322bbc8b46e17c226f18c7f8102f5f3e1aca91a889b87fe2cad",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001657
+        },
+        {
+          "file": "spec/multi-memory/store2.wast",
+          "sha256": "e475f48b1117bc5c73e9d61eb90f60a77698ead83623a97757f25863bd8ec41d",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002036
+        },
+        {
+          "file": "spec/multi-memory/traps0.wast",
+          "sha256": "43a8f235560f920409936d541a8f44feaa1f82c34f22ef505c4d5c38b3678499",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002242
+        },
+        {
+          "file": "spec/names.wast",
+          "sha256": "b094bbd01c91fe23fe671ea7b28b7b8f5113ffcb9594f5972e1e8f5581e3976c",
+          "passed": 482,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.017144
+        },
+        {
+          "file": "spec/nop.wast",
+          "sha256": "af9221ba075f91795c4e19ce6dc66aae5b0bdf0fce657a066755533d3fe0c113",
+          "passed": 87,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005263
+        },
+        {
+          "file": "spec/obsolete-keywords.wast",
+          "sha256": "acdec79f6d3bd5624a8bf9c8dc299309e52813cb25ff2505bab887ac7d0aaacf",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001718
+        },
+        {
+          "file": "spec/ref.wast",
+          "sha256": "e88b1fa4593cb2fe89bfebba31ba85cec6ad141b444194a79f50265263429b4c",
+          "passed": 12,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001731
+        },
+        {
+          "file": "spec/ref_as_non_null.wast",
+          "sha256": "0dac757a473d996c692863a45bbdd04d9ce2300e736a0d148b2db72b1a61cd2c",
+          "passed": 5,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001572
+        },
+        {
+          "file": "spec/ref_func.wast",
+          "sha256": "ff3d74f5e997d7a71a41d931235c345567136802a9f643f26872013242386d5f",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001913
+        },
+        {
+          "file": "spec/ref_is_null.wast",
+          "sha256": "876a66f7cd8cce163d62a2e8c2c4023a9aaf83c0b502f01521c7e689ee11d94f",
+          "passed": 18,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002069
+        },
+        {
+          "file": "spec/ref_null.wast",
+          "sha256": "63330c3c5f1bd0decb7473ba0c73378ce685edb16ce24714b2f7fab05ae68529",
+          "passed": 32,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.0026
+        },
+        {
+          "file": "spec/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
+          "sha256": "fa3885a95e4818e8aa9782dc8d9fb76a94b511114730ffc0b31d471ddab5b068",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001485
+        },
+        {
+          "file": "spec/relaxed-simd/i32x4_relaxed_trunc.wast",
+          "sha256": "8f93d17c35f0a4076df7c32219f029ec4fc18a17562f783618d522c67f282126",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00163
+        },
+        {
+          "file": "spec/relaxed-simd/i8x16_relaxed_swizzle.wast",
+          "sha256": "9d0a89c5b2b2100c5b73fb1b2d6bdeab3c8cd4b5fcab3d78d3e13e363d8738cb",
+          "passed": 5,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001471
+        },
+        {
+          "file": "spec/relaxed-simd/relaxed_dot_product.wast",
+          "sha256": "5de2c0cd58e7303f0e568d7484574385b5a697e3fbd06e71017840babe7ec66d",
+          "passed": 10,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001788
+        },
+        {
+          "file": "spec/relaxed-simd/relaxed_laneselect.wast",
+          "sha256": "8bb3de6928e82faacdfe33f965fa02cffb85b9a1b91f2909f16dcdd84c8d9e58",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001895
+        },
+        {
+          "file": "spec/relaxed-simd/relaxed_madd_nmadd.wast",
+          "sha256": "a215fe366cba851c96f83e3ba5c97ac3ed15663375305ce99785e7c32a7da355",
+          "passed": 17,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002737
+        },
+        {
+          "file": "spec/relaxed-simd/relaxed_min_max.wast",
+          "sha256": "388bfaded12558cc7b5c4e7e4636d6020fbe3c67d3c0affc9ffbe3656f5f513c",
+          "passed": 24,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002732
+        },
+        {
+          "file": "spec/return.wast",
+          "sha256": "987f665cbf9be3d240325fcc14bfa449e8fb8ad9e8193afa3aff03ddb33bd7ce",
+          "passed": 83,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004293
+        },
+        {
+          "file": "spec/return_call.wast",
+          "sha256": "2f64a60509f0aa6858af8e6e0858345e8842f3e88c166d5e67f5a18ca19754b1",
+          "passed": 44,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 2.07271
+        },
+        {
+          "file": "spec/return_call_indirect.wast",
+          "sha256": "9db2b4e0b3e285d11de56164cbb62241d31065f7c4f9b98d46b33b9cb609ec80",
+          "passed": 76,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.379485
+        },
+        {
+          "file": "spec/return_call_ref.wast",
+          "sha256": "6d5c36e8c8336b83dd0e3544877ce244baf4170cb4b12d5e91582817a4c04e98",
+          "passed": 46,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 2.738437
+        },
+        {
+          "file": "spec/select.wast",
+          "sha256": "2acdd7bb97af6f6f4b15538ee91ebc0a2cc4390d81010b2601e44c4f0f4ef836",
+          "passed": 154,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006516
+        },
+        {
+          "file": "spec/simd/simd_address.wast",
+          "sha256": "d3316f20215003a3676403883065fa5de6d70acd6e880ea57be1cc93970a6e00",
+          "passed": 46,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002925
+        },
+        {
+          "file": "spec/simd/simd_align.wast",
+          "sha256": "8ce2f85a318248d843a53a7905c2fa34e71c9b931c4b0edcb163b23bb035d997",
+          "passed": 54,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005182
+        },
+        {
+          "file": "spec/simd/simd_bit_shift.wast",
+          "sha256": "75743d82db9ef761a1bc0637bf684083d81c3eaf67403b6c5ca3eedf28e6c3c4",
+          "passed": 250,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00663
+        },
+        {
+          "file": "spec/simd/simd_bitwise.wast",
+          "sha256": "df1e9e6284f7bf22dd090b4bf5390a331b15cfd4e11ad1fd52ad74a69ce67130",
+          "passed": 167,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005895
+        },
+        {
+          "file": "spec/simd/simd_boolean.wast",
+          "sha256": "ed21bfb6d0f04f921a7df2c18de9dbce35d85eb71fd9ef1c6397bfc9e5c8ac2a",
+          "passed": 275,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007638
+        },
+        {
+          "file": "spec/simd/simd_const.wast",
+          "sha256": "0ff6c20d21eea9e34a40a05c24c6573bb2b3925f394c177fac5b6593c30a33b4",
+          "passed": 446,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.021469
+        },
+        {
+          "file": "spec/simd/simd_conversions.wast",
+          "sha256": "35d0888db2be09991d646ec5ab8a2cb836154aaf892fbcf3be220d841fef4f71",
+          "passed": 280,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.009005
+        },
+        {
+          "file": "spec/simd/simd_f32x4.wast",
+          "sha256": "9241562e96a55cde607e7879b5bf212d1dd2a667cbd7b93274ca41bf7e976dcf",
+          "passed": 788,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.031129
+        },
+        {
+          "file": "spec/simd/simd_f32x4_arith.wast",
+          "sha256": "177b579abb1ea05c8b4a6c8b8b9e6770473334013b4f3e6c72cc9a414c03d1ef",
+          "passed": 1819,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.053459
+        },
+        {
+          "file": "spec/simd/simd_f32x4_cmp.wast",
+          "sha256": "b6f6e954fd3bb24443dedf94f1ecac30ad9132e0dd2aa00b9ffa625aec74370e",
+          "passed": 2605,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.064897
+        },
+        {
+          "file": "spec/simd/simd_f32x4_pmin_pmax.wast",
+          "sha256": "cc02c29c672c70ab8e11765e89aaf848d0133f142c690f6dd0829652242c971e",
+          "passed": 3886,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.235925
+        },
+        {
+          "file": "spec/simd/simd_f32x4_rounding.wast",
+          "sha256": "e52cdc74455b65eb7779a24fbbeb0a0bb12770f31a90aefcb65f85899e6b9780",
+          "passed": 200,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.011203
+        },
+        {
+          "file": "spec/simd/simd_f64x2.wast",
+          "sha256": "21c46c7e147f164acce4f2752d24183b2b0aee55446af1f17a00b2b8d2fc7d0b",
+          "passed": 801,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.014544
+        },
+        {
+          "file": "spec/simd/simd_f64x2_arith.wast",
+          "sha256": "d1f24be8c50c86b24950e8c024f892d24f65fc3dfea1b0df3dde6121adbac8c7",
+          "passed": 1822,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.033167
+        },
+        {
+          "file": "spec/simd/simd_f64x2_cmp.wast",
+          "sha256": "5f96c51af01079d7d65c135f4aa996fa0aa53d6109f7cce7e52d7adaf59e931d",
+          "passed": 2683,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.041568
+        },
+        {
+          "file": "spec/simd/simd_f64x2_pmin_pmax.wast",
+          "sha256": "aad07876628180daa0735891447e3e00bbfac3119235d57d74e7ab9cfa67bafa",
+          "passed": 3886,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.063632
+        },
+        {
+          "file": "spec/simd/simd_f64x2_rounding.wast",
+          "sha256": "e986cff25060f411ee69015bed0a31b26520c082232c21ba55901de9036df5f4",
+          "passed": 200,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004549
+        },
+        {
+          "file": "spec/simd/simd_i16x8_arith.wast",
+          "sha256": "bf5fe83b4763f578e82bf4c2f2abbc98e28d3d4a4f2300850366df57c5f3cf8c",
+          "passed": 192,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005436
+        },
+        {
+          "file": "spec/simd/simd_i16x8_arith2.wast",
+          "sha256": "8cb98b24c8a122c1d6ebf9017aa3b71bf27d7bea06ae991c4561d5caac965359",
+          "passed": 170,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006456
+        },
+        {
+          "file": "spec/simd/simd_i16x8_cmp.wast",
+          "sha256": "d579026e21d7b0a923582a4bad223e24bae9218138b6ea98b02bfa114c91e5ba",
+          "passed": 463,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.010738
+        },
+        {
+          "file": "spec/simd/simd_i16x8_extadd_pairwise_i8x16.wast",
+          "sha256": "f2fd15db7d7960b3cbb846bc6cdb7af91b4ddf7fda433438732d728c0bcc6900",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002082
+        },
+        {
+          "file": "spec/simd/simd_i16x8_extmul_i8x16.wast",
+          "sha256": "c19eb5f9fba0664d3f29573cf7dbcc49a0ec95353dfb9cdf0725f7e5d878f3c1",
+          "passed": 116,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005126
+        },
+        {
+          "file": "spec/simd/simd_i16x8_q15mulr_sat_s.wast",
+          "sha256": "58a9a5ea3cab2dbc5e299045751d05be5bc72f587e348e7d14583e28f690a2b6",
+          "passed": 29,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002663
+        },
+        {
+          "file": "spec/simd/simd_i16x8_sat_arith.wast",
+          "sha256": "ddee04e7f5f056b7b5f684c78405c00e056323bc4d7d4ffcfe91c1b0da89f681",
+          "passed": 220,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005773
+        },
+        {
+          "file": "spec/simd/simd_i32x4_arith.wast",
+          "sha256": "cbba894d51df7a80a68467d69c3393903303e34262c0d0f2c3d57279ae80041d",
+          "passed": 192,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006346
+        },
+        {
+          "file": "spec/simd/simd_i32x4_arith2.wast",
+          "sha256": "f812fe268684aff5578eeeb0cb758ec95e5057ac2152eeb343a7ad8deb8cfb11",
+          "passed": 147,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005715
+        },
+        {
+          "file": "spec/simd/simd_i32x4_cmp.wast",
+          "sha256": "dae265cf89893130060d79df6065c9072e2f4874f151aa761b2a51ff33c249b6",
+          "passed": 473,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.010201
+        },
+        {
+          "file": "spec/simd/simd_i32x4_dot_i16x8.wast",
+          "sha256": "ac814511164c6c603c95c0d70ab13b8af4c448683807d4d7d36df746afd1c414",
+          "passed": 31,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002862
+        },
+        {
+          "file": "spec/simd/simd_i32x4_extadd_pairwise_i16x8.wast",
+          "sha256": "8b91b3ccc0be510e08c480dfc18d0b32fb823e955f9b07d80c7f886a13b3672b",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002074
+        },
+        {
+          "file": "spec/simd/simd_i32x4_extmul_i16x8.wast",
+          "sha256": "ddcad7c3853d61bec50895c3321fe2f08b04ec126dfeaf6ba5135693814eabe6",
+          "passed": 116,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004135
+        },
+        {
+          "file": "spec/simd/simd_i32x4_trunc_sat_f32x4.wast",
+          "sha256": "f81cace2c315c3bed5f49083c3319f3657835dd0e0d35b27e6f14019da71ad13",
+          "passed": 106,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.008188
+        },
+        {
+          "file": "spec/simd/simd_i32x4_trunc_sat_f64x2.wast",
+          "sha256": "0102d49059499276dae193c3a1e0a09c2f24f98336502a1c36147cfc9bcbdb76",
+          "passed": 106,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004761
+        },
+        {
+          "file": "spec/simd/simd_i64x2_arith.wast",
+          "sha256": "ea38542e3e041a30bdde53222c073eda824ef11c5254cb31bfa9fbc6dc3bb77a",
+          "passed": 198,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00471
+        },
+        {
+          "file": "spec/simd/simd_i64x2_arith2.wast",
+          "sha256": "3dee5436933d5296b3cc44219b3287586ba0506ec95ab7c34523c7b2d475d870",
+          "passed": 23,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001867
+        },
+        {
+          "file": "spec/simd/simd_i64x2_cmp.wast",
+          "sha256": "d6cf1cd59ae54427a0d6defabd286099ba12e2d797a31629203a7ad3e1ad5161",
+          "passed": 112,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004406
+        },
+        {
+          "file": "spec/simd/simd_i64x2_extmul_i32x4.wast",
+          "sha256": "cd293131cbe56c29a766f0d4b75ff80527dabb1cf4fc8f491c47f289a6afcd1f",
+          "passed": 116,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003668
+        },
+        {
+          "file": "spec/simd/simd_i8x16_arith.wast",
+          "sha256": "32d53d175ae2cf56aef5e495d6e9e0a8bc6d08e96aabdc998bcb140f045da7bd",
+          "passed": 129,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004749
+        },
+        {
+          "file": "spec/simd/simd_i8x16_arith2.wast",
+          "sha256": "3ed841ff2a376e2f9599b96d0026b55c1fb9544c71e5cdb18f4fde3b197a5890",
+          "passed": 209,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007875
+        },
+        {
+          "file": "spec/simd/simd_i8x16_cmp.wast",
+          "sha256": "1d2ef2b1b72ce3ccc691eee9f107f25c765a0aa89bb532ab5ae12431e2d940b2",
+          "passed": 443,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.018022
+        },
+        {
+          "file": "spec/simd/simd_i8x16_sat_arith.wast",
+          "sha256": "5ac0f7c3c7327a5e2a79f397fd7189e162ec19ea0d2822e5d2a3fe0ad2a92b2c",
+          "passed": 212,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006975
+        },
+        {
+          "file": "spec/simd/simd_int_to_int_extend.wast",
+          "sha256": "27f571596bc0648b2aaff8d6370669f1dd90c8392379bb637390a6670dac4bc6",
+          "passed": 252,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.006402
+        },
+        {
+          "file": "spec/simd/simd_lane.wast",
+          "sha256": "64828de1bdcc98621ae7d6d5ca84618d30af1665df4c80b4e05c60e6eab70fd3",
+          "passed": 463,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.01606
+        },
+        {
+          "file": "spec/simd/simd_linking.wast",
+          "sha256": "de180555d0846bd91086b70fcc6da258e380008355bf72977a9a8522c3fa56af",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001836
+        },
+        {
+          "file": "spec/simd/simd_load.wast",
+          "sha256": "310d1d2a48087a52d845ad353a972b87fa7b37dae2d9b2341c812466a61283bb",
+          "passed": 25,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003364
+        },
+        {
+          "file": "spec/simd/simd_load16_lane.wast",
+          "sha256": "4b0f6e1e286b3d1305fe459679eb044b6967f355332ae22afc31139d95084bb0",
+          "passed": 35,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003181
+        },
+        {
+          "file": "spec/simd/simd_load32_lane.wast",
+          "sha256": "4653d8ee15db4c1c4eb2b24f6d10bad3fc90c684318d6ef4a2c2fae303f70237",
+          "passed": 23,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002534
+        },
+        {
+          "file": "spec/simd/simd_load64_lane.wast",
+          "sha256": "6f03666aeb820225f6d0f0a16ec4c53afc64112f2cf75fb095c65290a9fbf429",
+          "passed": 15,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00226
+        },
+        {
+          "file": "spec/simd/simd_load8_lane.wast",
+          "sha256": "fa5d45d0799476a3bf1c91733b3108ed5df9d42c9be8ef929db9918bfa5e46f9",
+          "passed": 51,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004226
+        },
+        {
+          "file": "spec/simd/simd_load_extend.wast",
+          "sha256": "a09798f35d733564adcb62a469663158fd445eb1ecea94c4b78158da4a381b7c",
+          "passed": 102,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005061
+        },
+        {
+          "file": "spec/simd/simd_load_splat.wast",
+          "sha256": "456dfe1f1e981d7dc0183d4febd2a7cb5b8214e9962e3451935443a89c6c936d",
+          "passed": 124,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005363
+        },
+        {
+          "file": "spec/simd/simd_load_zero.wast",
+          "sha256": "a9c6aead086388cbad3adbbd028f731be51300bc774dda247cb301d0b03f4a43",
+          "passed": 37,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00429
+        },
+        {
+          "file": "spec/simd/simd_memory-multi.wast",
+          "sha256": "bef9c29ed24ba98c6defaf365c27d0d31052b894f9fb10df23ee66bbf77d421c",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002225
+        },
+        {
+          "file": "spec/simd/simd_select.wast",
+          "sha256": "9df4716bca0b093e876481b568e5f07e39684c5059463e595d8eb1cbcafa605b",
+          "passed": 6,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002056
+        },
+        {
+          "file": "spec/simd/simd_splat.wast",
+          "sha256": "192d900a7b69a5edf765da03e24deab149c1c8baa6d020ee81097b4d2f5ecec8",
+          "passed": 181,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.007088
+        },
+        {
+          "file": "spec/simd/simd_store.wast",
+          "sha256": "9385ff9e13c9db0481a03660653fb1c488670785a20b699aded8bf60ec982405",
+          "passed": 26,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003004
+        },
+        {
+          "file": "spec/simd/simd_store16_lane.wast",
+          "sha256": "a1f489b2cffbdfa26ef32086874802fcf1d7ebe89ef5ecb97d8921e1cbf38b1d",
+          "passed": 35,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003779
+        },
+        {
+          "file": "spec/simd/simd_store32_lane.wast",
+          "sha256": "dbc1cfb67364ce4c007b6df8b1a06349da7b0cba03a49259d38cb3b6ab3c8608",
+          "passed": 23,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004274
+        },
+        {
+          "file": "spec/simd/simd_store64_lane.wast",
+          "sha256": "3112a00a0c56ba9b8c006478b87c8f63d572db446818a8f70052da9ee6eb359e",
+          "passed": 15,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002873
+        },
+        {
+          "file": "spec/simd/simd_store8_lane.wast",
+          "sha256": "0a3b8bdba08291e4e0e16468ab4c03fa868e71fa270b57f17c0a27046d1c94bf",
+          "passed": 51,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005497
+        },
+        {
+          "file": "spec/skip-stack-guard-page.wast",
+          "sha256": "6392fe50486ae71c758f6f15f756cf6336fcab3b53155488f3be21fbe7bc98c4",
+          "passed": 10,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.137341
+        },
+        {
+          "file": "spec/stack.wast",
+          "sha256": "c4931ad2e3eb0b32f479ed057f4c20a4ee33348a02066209ac34d3a5f27107d7",
+          "passed": 5,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003843
+        },
+        {
+          "file": "spec/start.wast",
+          "sha256": "74749f68d2c69219f42148a7d1c35286f33020674df35515ad04587a369038ff",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002356
+        },
+        {
+          "file": "spec/store.wast",
+          "sha256": "d35ff73bab2729d3747605072cf437d863104bca375d743cbe9a7ab4b2269ab9",
+          "passed": 67,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003374
+        },
+        {
+          "file": "spec/switch.wast",
+          "sha256": "56addb6d426e9f8128ec7666dc8b0656f5625eb41b0657d219495afeeddfa8b1",
+          "passed": 27,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002194
+        },
+        {
+          "file": "spec/table.wast",
+          "sha256": "7aae3291bc6899625261a1bb33fec98246e8c8abe0488fcc43c79cf65900848b",
+          "passed": 28,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002624
+        },
+        {
+          "file": "spec/table_get.wast",
+          "sha256": "30c289fd0d88affa4750387cd7ef300aa92543ec7e3670d74babe2f92644a97e",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00184
+        },
+        {
+          "file": "spec/table_grow.wast",
+          "sha256": "49ce2d481ae5a684251b88d873cb5da30d92ac7514388b208f6f2ab1cf3f40aa",
+          "passed": 48,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002769
+        },
+        {
+          "file": "spec/table_set.wast",
+          "sha256": "8d41c2420113cc1e9fb04f30b4fd7b67acccbbd7f95d8c5bcc058091b6ed52ce",
+          "passed": 25,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002001
+        },
+        {
+          "file": "spec/table_size.wast",
+          "sha256": "fd286e59440de7f807f726e50d2a651ebeace85d3657142d1207b7afd96d261d",
+          "passed": 38,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.001807
+        },
+        {
+          "file": "spec/token.wast",
+          "sha256": "aab16ea0e421d4e41ad853805154764f10baae89b43a98d122173841b50c3312",
+          "passed": 26,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002232
+        },
+        {
+          "file": "spec/traps.wast",
+          "sha256": "3c0615dd26ee186c9a8138e933ff068fd6679e4fc34756b4ab1605d1fc7f1ede",
+          "passed": 32,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002606
+        },
+        {
+          "file": "spec/type-canon.wast",
+          "sha256": "51506c9b325f4943c627b5bf42fbafcf30db33fe20922360ed4641932cbbbaf4",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.00168
+        },
+        {
+          "file": "spec/type-equivalence.wast",
+          "sha256": "b2dfe2e2c165b23e82092129be1f3141f3f11680f30bd0c4923aed06919f5cff",
+          "passed": 5,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004044
+        },
+        {
+          "file": "spec/type-rec.wast",
+          "sha256": "490fcb220f3dea47f5c41bd1971bd5f89a849071f34aeeb32c0a1bc7c85779a4",
+          "passed": 15,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002856
+        },
+        {
+          "file": "spec/type.wast",
+          "sha256": "72df248a2a7afe432a46aea636f96c8930a894bdc285f8fe365aa28736bc9f73",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003977
+        },
+        {
+          "file": "spec/unreachable.wast",
+          "sha256": "5ec91fd3df1ab694c77eb8d3e693d4e137fb96026d1c7f1b5bfd391cdaf6c89f",
+          "passed": 63,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004006
+        },
+        {
+          "file": "spec/unreached-invalid.wast",
+          "sha256": "f4dcbd0b6f25195224e6d04f6da04590f18563c97e89bd26d9194d2e3c4b92cc",
+          "passed": 121,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.005081
+        },
+        {
+          "file": "spec/unreached-valid.wast",
+          "sha256": "dff9172d39abecb5f922c90aab9e6cda712d0943c1319564c25850b4c7e1a250",
+          "passed": 10,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002467
+        },
+        {
+          "file": "spec/unwind.wast",
+          "sha256": "55da9a7d4d2dc19feb04fca3ab47eb842aa10202f2f9136fb3ca756c0b2bb931",
+          "passed": 49,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003345
+        },
+        {
+          "file": "spec/utf8-custom-section-id.wast",
+          "sha256": "20f6802e8ae0c9515d10687934f8f43a9312dfc64a52761f629f5547a689cb3a",
+          "passed": 176,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.002801
+        },
+        {
+          "file": "spec/utf8-import-field.wast",
+          "sha256": "1b9f2344c4b041c516079c5587c88d6fac1ec06c68d3328eaa5427f5b0242929",
+          "passed": 176,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.004684
+        },
+        {
+          "file": "spec/utf8-import-module.wast",
+          "sha256": "20449f8bb0249777e33aee76472009b48ec2ea3d3ecc78a8b8004173b47223c0",
+          "passed": 176,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003979
+        },
+        {
+          "file": "spec/utf8-invalid-encoding.wast",
+          "sha256": "ef0280c3f5ab3befef6755878a107b1f18dc9f302fb8edd339afd413e8c31e47",
+          "passed": 176,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.003725
+        }
+      ]
+    },
+    "wasm": {
+      "artifact_sha256": "6c4d859e30f5252df77ce216ecfdf97baa98383bdad7d4f09bdd2b594a1326a3",
+      "files": 258,
+      "accepted_files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "unsupported": 0,
+      "entries": [
+        {
+          "file": "spec/address.wast",
+          "sha256": "108586531ce4b9445342a1f7c25880fd7deacb6e330b8a9f4430f7de7bd67f32",
+          "passed": 256,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.213815
+        },
+        {
+          "file": "spec/align.wast",
+          "sha256": "b6b37225b83a1d68da1299ac40266ca5b0486c6468a47484b9c15ca357aeaef6",
+          "passed": 140,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.228491
+        },
+        {
+          "file": "spec/annotations.wast",
+          "sha256": "b1f707945949cd756a28ed27dc2392c0ac0ef4c23546290f353af41a7cb48443",
+          "passed": 64,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.171281
+        },
+        {
+          "file": "spec/binary-leb128.wast",
+          "sha256": "f9991c07e3c7a07f991bccaa5e95a2622626d6b2857db64a579fa1fa54ab5e1e",
+          "passed": 58,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.180383
+        },
+        {
+          "file": "spec/binary.wast",
+          "sha256": "ce57b323396cdf687a0b5a872afa9d37e7dc03e05444084bb2062f570d087e50",
+          "passed": 107,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.184732
+        },
+        {
+          "file": "spec/block.wast",
+          "sha256": "436230d4bb629da323ee97c56a5580545f3dea7818eeb9a362a6c234f5af18d7",
+          "passed": 222,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.268518
+        },
+        {
+          "file": "spec/br.wast",
+          "sha256": "ac34486d8787d469dc7940f8e77c6b4b5999cf9d6c8918138d13b3e58460cae9",
+          "passed": 96,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.194861
+        },
+        {
+          "file": "spec/br_if.wast",
+          "sha256": "b75341e227315fc7765944e3ac09bcb1a15ca918a72c7dd478b2068147792658",
+          "passed": 118,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.214465
+        },
+        {
+          "file": "spec/br_on_non_null.wast",
+          "sha256": "94881465822bd6b7f186be21c0759b6342a04a4af5c1308118e74d09fb16a067",
+          "passed": 9,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.1717
+        },
+        {
+          "file": "spec/br_on_null.wast",
+          "sha256": "56904bb13112422b37dcf8f47a72c3d8025e9eebc660d2cad123d7f06de50a2a",
+          "passed": 7,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.168466
+        },
+        {
+          "file": "spec/br_table.wast",
+          "sha256": "9a44bc44564b70bc92e84cea94f6e7d1d3df1725619fcbf5f1d6cf3340f793a1",
+          "passed": 185,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.288585
+        },
+        {
+          "file": "spec/bulk-memory/bulk.wast",
+          "sha256": "ab18cda421479c911bcd504deff2911ce9d44f5be9d95e3e0308fff0a6bc492a",
+          "passed": 66,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.194777
+        },
+        {
+          "file": "spec/bulk-memory/memory_copy.wast",
+          "sha256": "059813c4cd9e79cf3a287409842b9212f6f48b4a6a5f597f22c81631e7b55d08",
+          "passed": 4402,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.937258
+        },
+        {
+          "file": "spec/bulk-memory/memory_fill.wast",
+          "sha256": "b8a7dccdf72878d11497a5d13ca3c628552b690f5386ef56b0a46c5dd711ad1f",
+          "passed": 84,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.660609
+        },
+        {
+          "file": "spec/bulk-memory/memory_init.wast",
+          "sha256": "e01fbd647657b597e54d90b02d61b808127447ca76d264d93fc5c4e69b3fde84",
+          "passed": 207,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.205278
+        },
+        {
+          "file": "spec/bulk-memory/table-sub.wast",
+          "sha256": "e40ed421ae67bd38f30b4830155134ff330f3f3f85b0f307ecdd6cb1a0d4ffe5",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.143187
+        },
+        {
+          "file": "spec/bulk-memory/table_copy.wast",
+          "sha256": "254022f7c24c01029982055b4e33a3eb0ac3b2a981aed7573146cb575d22c0ad",
+          "passed": 1649,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.417577
+        },
+        {
+          "file": "spec/bulk-memory/table_fill.wast",
+          "sha256": "e8da6efbfba19dfe8bc73752f522891a018a21f1fd5f897f3abbe3b265d2c2cf",
+          "passed": 44,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.185834
+        },
+        {
+          "file": "spec/bulk-memory/table_init.wast",
+          "sha256": "1d7309221d578cfa8475aa402f6d935bc89a3139ed0c468f5623df1b34972ab4",
+          "passed": 729,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.353045
+        },
+        {
+          "file": "spec/call.wast",
+          "sha256": "faa694f3141b25cb1cf25104298a535ddea8058396825f532b69d0912074d905",
+          "passed": 90,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.31213
+        },
+        {
+          "file": "spec/call_indirect.wast",
+          "sha256": "5175284ea9f077fa44986aca0f0aa6348c26b80644e4601800f1f495cb64a19e",
+          "passed": 169,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.471139
+        },
+        {
+          "file": "spec/call_ref.wast",
+          "sha256": "742dae3d3abb20d42312bb74c778c503ce17171475420dafb529e4fe35008369",
+          "passed": 31,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.266672
+        },
+        {
+          "file": "spec/comments.wast",
+          "sha256": "0d3251bbe35291f80c6861cdc8b869d0c3da23836345d79210765fd80351b64f",
+          "passed": 3,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.169818
+        },
+        {
+          "file": "spec/const.wast",
+          "sha256": "b1a378d5b7ddb4d4acb5ae2959ac938dfe0d9e3c2864df457bc098d3f2e00f37",
+          "passed": 376,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.306012
+        },
+        {
+          "file": "spec/conversions.wast",
+          "sha256": "70eeec77b5c5c4fa6c9547f97ac56c1e21ebd5e2a10e7318f2e22100d5f6f056",
+          "passed": 618,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.243031
+        },
+        {
+          "file": "spec/custom.wast",
+          "sha256": "59067c2c216fe1d6ac1249dbf9fc33573fb23b45b1bf5cc8f8a6eca14cf96f10",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.126923
+        },
+        {
+          "file": "spec/data.wast",
+          "sha256": "991bfcf105a8eb23b92b6d59a8e2e6ef8f65111006bcfc35aa7b296eda45664d",
+          "passed": 34,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.090737
+        },
+        {
+          "file": "spec/elem.wast",
+          "sha256": "087cfbccfd746458d46e10ea763aecea5f925bc1578e8fdf73eddfd47be68cda",
+          "passed": 72,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.206565
+        },
+        {
+          "file": "spec/endianness.wast",
+          "sha256": "5d13436c8b6fe6099b89c5a16452e7d38fa170b2553b2983cf91b1fe4e5190ad",
+          "passed": 68,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.182481
+        },
+        {
+          "file": "spec/exceptions/tag.wast",
+          "sha256": "15a8c36165de51b8d006f5d2afb3a6e9b69ea4d9915451c86a1a62b74843957f",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.056631
+        },
+        {
+          "file": "spec/exceptions/throw.wast",
+          "sha256": "a0deb9073850b6b3fe2b6e8928fdf32a83a2d00b3e77744c9a81b10aa30f3bf8",
+          "passed": 12,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.158162
+        },
+        {
+          "file": "spec/exceptions/throw_ref.wast",
+          "sha256": "577a4bdc3fb22331f4a2b50d025316f6a445dd261e12fe043eda8be4b822b42d",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.157628
+        },
+        {
+          "file": "spec/exceptions/try_table.wast",
+          "sha256": "6aa3bff369a23b8f2c508bb71bc6abf9986d39033777b6a6c0561e6443c79b06",
+          "passed": 58,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.191977
+        },
+        {
+          "file": "spec/exports.wast",
+          "sha256": "ba054413af525e2acc7a11b3934a78d37e3c879c97bc055bffca5e38ccd5af0b",
+          "passed": 41,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.178318
+        },
+        {
+          "file": "spec/f32.wast",
+          "sha256": "91c9e9edf5500659040c6b7657fbaa942ad6c0526d80d2ea558e406257a8674f",
+          "passed": 2513,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.393913
+        },
+        {
+          "file": "spec/f32_bitwise.wast",
+          "sha256": "8a514cd0c6c34cccbcd4deda8b3f1898cab2985a360d0ec10a4b1725027f0b64",
+          "passed": 363,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.193451
+        },
+        {
+          "file": "spec/f32_cmp.wast",
+          "sha256": "dc16e4361250dbf9ef2b91481e25964d6c31f9f593f2e31f08d5b4f5028a376f",
+          "passed": 2406,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.355083
+        },
+        {
+          "file": "spec/f64.wast",
+          "sha256": "b8b85a753f13ae27d20ca8cb97ab58b30606854deb4fb829caac93785a90b0f7",
+          "passed": 2513,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.399329
+        },
+        {
+          "file": "spec/f64_bitwise.wast",
+          "sha256": "efd4e70d58ee853b4509352292058841b775ccea4cfd3060ddd350b8ccd4db32",
+          "passed": 363,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.20815
+        },
+        {
+          "file": "spec/f64_cmp.wast",
+          "sha256": "aabcd2c5af0670a9f7ce2cfd19befd3142c300fa5091575fad21a3726dcfb8c0",
+          "passed": 2406,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.387549
+        },
+        {
+          "file": "spec/fac.wast",
+          "sha256": "160f50dd99afe4c87f9a49424887e6fd94baa79b20f0e07567b867e866b583d2",
+          "passed": 7,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.218613
+        },
+        {
+          "file": "spec/float_exprs.wast",
+          "sha256": "f1659759fc66b9d7d46738adaefd9d9ff6d6a433d3192c762aa32f052fe6d071",
+          "passed": 819,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.430524
+        },
+        {
+          "file": "spec/float_literals.wast",
+          "sha256": "3702a2fa976e18929371b165b8bcdd63866fdc3dfdb1a4f4fdaa5b5ff7e53bb2",
+          "passed": 177,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.230176
+        },
+        {
+          "file": "spec/float_memory.wast",
+          "sha256": "90c221916244bbf3bb9b8008b8a68174d9db7ecb7b65fa75d116650cfb237750",
+          "passed": 60,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.195262
+        },
+        {
+          "file": "spec/float_misc.wast",
+          "sha256": "03247e5060c34d2db3e3602cd25f1fa5179239ba175f95c6a509bd5c1859de81",
+          "passed": 470,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.252859
+        },
+        {
+          "file": "spec/forward.wast",
+          "sha256": "a387e07010b2846f37491ea2cfb9efaa6a334dc84377c4788754a5c6d8abdb6b",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.146167
+        },
+        {
+          "file": "spec/func.wast",
+          "sha256": "fb48ac22e13b3f5bd34063e194756af2f558b99d0f6f230e871c0b6d56849497",
+          "passed": 171,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.228164
+        },
+        {
+          "file": "spec/func_ptrs.wast",
+          "sha256": "a322e40d162db20e117f677b1a4501691e797e484d01ccd2b7fd655ba07275d2",
+          "passed": 32,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.158728
+        },
+        {
+          "file": "spec/gc/array.wast",
+          "sha256": "61d8691c85dac5777daf883e1625cfe64084546bb3bc95db8d39229f83889f58",
+          "passed": 47,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.216487
+        },
+        {
+          "file": "spec/gc/array_copy.wast",
+          "sha256": "ab7001b78dfd3a4ba593fea582d6df85de10848f4c3795430d3456df89b59627",
+          "passed": 34,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.174526
+        },
+        {
+          "file": "spec/gc/array_fill.wast",
+          "sha256": "07695ad2313c12f481fbf98df6ed220d8b38dc37af6acbad60b2ab84655d6b7e",
+          "passed": 29,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.165642
+        },
+        {
+          "file": "spec/gc/array_init_data.wast",
+          "sha256": "e2c7c86941197d0c9110642090cbf0fd38c10cb538d97a4c08e2d481f8a12861",
+          "passed": 44,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.175525
+        },
+        {
+          "file": "spec/gc/array_init_elem.wast",
+          "sha256": "ac85534e52afc239c3f6a21e23f747615f8772c9543feb5e2d19ea64dd1e3e0d",
+          "passed": 22,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.155207
+        },
+        {
+          "file": "spec/gc/array_new_data.wast",
+          "sha256": "7ba5e58b6e0ca861c336aec3c3c158e0464ef95cdec4e3a7a352242d4b0daecd",
+          "passed": 23,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.165077
+        },
+        {
+          "file": "spec/gc/array_new_elem.wast",
+          "sha256": "d68edfe34588237532a955b3aedd1a5b6b662c25b8cfb0913d2802cb6c7444b4",
+          "passed": 18,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.156966
+        },
+        {
+          "file": "spec/gc/binary-gc.wast",
+          "sha256": "dba71997b80a60f04d1afd330ee205cd4187cb6c71c4630472efb11116fae160",
+          "passed": 1,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.021116
+        },
+        {
+          "file": "spec/gc/br_on_cast.wast",
+          "sha256": "bbdbb58b8d9a9fe4cb1ea996506093ac66d250bf48d18c7f2b0bb46830e5fe24",
+          "passed": 31,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.180747
+        },
+        {
+          "file": "spec/gc/br_on_cast_fail.wast",
+          "sha256": "2c92c69b2a529a5fe6755289fb548eb2f604cf38b6468b7fa9ff856c732611fe",
+          "passed": 31,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.183699
+        },
+        {
+          "file": "spec/gc/extern.wast",
+          "sha256": "051adf39ca6251b7660ac3fe7dca4326d9315c350467b15f867054a580eadc0b",
+          "passed": 16,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.160583
+        },
+        {
+          "file": "spec/gc/i31.wast",
+          "sha256": "5b315d36a0260257632d4a6d9b4520900ae6db45c824035f99bf9614b489709f",
+          "passed": 57,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.173295
+        },
+        {
+          "file": "spec/gc/ref_cast.wast",
+          "sha256": "ec8aa37df451f0c7fbb99f26dfba2b8a415cb32bd721214a3396f8c4fdacc674",
+          "passed": 40,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.178008
+        },
+        {
+          "file": "spec/gc/ref_eq.wast",
+          "sha256": "fbb1ddcae04eea3bd2cdd650efcf67a23579f7a11ba5e464b5f1aa93150e073f",
+          "passed": 87,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.20408
+        },
+        {
+          "file": "spec/gc/ref_test.wast",
+          "sha256": "cec66b0e8cf537bb47e07265c1d4c7ba56be75179c2647456561f8dbfef64a9b",
+          "passed": 68,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.218696
+        },
+        {
+          "file": "spec/gc/struct.wast",
+          "sha256": "3f8c48fdf69277b66b9063be2675a56055f27ea281eb4ae37ad8ff80744ba7b7",
+          "passed": 24,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.174417
+        },
+        {
+          "file": "spec/gc/type-subtyping.wast",
+          "sha256": "586b8e53cab2c1db00499278f404e0db07673a93647cadab9f1f08c972d23e83",
+          "passed": 61,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.217193
+        },
+        {
+          "file": "spec/global.wast",
+          "sha256": "0899df8c814d953d56a22b04d518fda6c7e6aab5a0d0472367a830e31821ee40",
+          "passed": 114,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.200878
+        },
+        {
+          "file": "spec/i32.wast",
+          "sha256": "f3b7e8fd641893ea0989a8ab801fce0654d276d27b5cad9cf482291a422cffe8",
+          "passed": 459,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.241309
+        },
+        {
+          "file": "spec/i64.wast",
+          "sha256": "7d0e27a617565e0685aef56cee01b2b4890084068e3989168c41d14c56b1945e",
+          "passed": 415,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.23856
+        },
+        {
+          "file": "spec/id.wast",
+          "sha256": "7d876e4681a3b8e5e22b6668d3577709a074e34ee7a2b62e16a5dabd38139ca0",
+          "passed": 6,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.163234
+        },
+        {
+          "file": "spec/if.wast",
+          "sha256": "291eaa26f1951a70560cf9942edc4345557718693ec0dd60b32c560310ea81f0",
+          "passed": 240,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.268745
+        },
+        {
+          "file": "spec/imports.wast",
+          "sha256": "e10cb0afdfa72f275b88862e66f0bbc6aa1b5447ad7a16db401274cad4ac3ee0",
+          "passed": 144,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.226874
+        },
+        {
+          "file": "spec/inline-module.wast",
+          "sha256": "fcaab83e53f188536b952c7d66e663f8c1e7e7bd52e3272a32c5c921654ec44a",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.046735
+        },
+        {
+          "file": "spec/instance.wast",
+          "sha256": "9ce795cf5999d693c08b86b1bac956b8cb127a52990d5e2bd84969e275e51e65",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.204622
+        },
+        {
+          "file": "spec/int_exprs.wast",
+          "sha256": "e8b884e16bdbed0270e9b912eaa60a0e8688831e7574be98c00a60dcc667ed2b",
+          "passed": 89,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.181425
+        },
+        {
+          "file": "spec/int_literals.wast",
+          "sha256": "1087900dd58f95f6c5db0c1ec7bbad1fb67b45accda5b079df2f3647cbb13038",
+          "passed": 50,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.180897
+        },
+        {
+          "file": "spec/labels.wast",
+          "sha256": "c4f00b0b980f9b33487a002b495dc186d35232bf726fa60982a4c1b226275a26",
+          "passed": 28,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.191386
+        },
+        {
+          "file": "spec/left-to-right.wast",
+          "sha256": "1a7376ac279bcf95b2493d6c2413721e14c35dfcd47fbfdffcb203aad8cb5a16",
+          "passed": 95,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.229766
+        },
+        {
+          "file": "spec/linking.wast",
+          "sha256": "88bcdcad7b029df279ce5985ed1c4489dea57c32fd173fff94516fdbd78caea8",
+          "passed": 133,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.212627
+        },
+        {
+          "file": "spec/load.wast",
+          "sha256": "2f69ef5634207e065d022d7c26c92016ff1d14a94c5c755927d37fe14e63e256",
+          "passed": 96,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.186481
+        },
+        {
+          "file": "spec/local_get.wast",
+          "sha256": "7829b58483bc8a158e97335c63a82db0fb9123555bcde27f779914254fe12c3e",
+          "passed": 35,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.172073
+        },
+        {
+          "file": "spec/local_init.wast",
+          "sha256": "4a496f820a6863d429c772f4ac85018944fa96e1f1cec6df9fc9231c9795890d",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.162043
+        },
+        {
+          "file": "spec/local_set.wast",
+          "sha256": "93df4f2089fce0a8f453635d4fcc750d676edb24af3826ba221a347a8da2df45",
+          "passed": 52,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.189625
+        },
+        {
+          "file": "spec/local_tee.wast",
+          "sha256": "36cea2d29048fcd9567358a74cce59169a64be6d282bc8aaac99a4b3a5e03dcf",
+          "passed": 97,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.213256
+        },
+        {
+          "file": "spec/loop.wast",
+          "sha256": "8c9f440c7c113e6641652f1eec790e826db63938540b6edb94c702d98a9d4b8d",
+          "passed": 119,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.219223
+        },
+        {
+          "file": "spec/memory.wast",
+          "sha256": "fd3d84dd0bd5f6632eff0c29249329194df9fbae146d2769f717ec849080e31a",
+          "passed": 79,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.168267
+        },
+        {
+          "file": "spec/memory64/address64.wast",
+          "sha256": "2c0a5b0c7c5393eb302b597ba0c0f3f5f4baf02b1d577b4e686c8ecf68af7066",
+          "passed": 238,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.207175
+        },
+        {
+          "file": "spec/memory64/align64.wast",
+          "sha256": "42ed1ef7232928693b6469277ba467352d95f9e01309b0ea36298c7ab4336efc",
+          "passed": 131,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.249235
+        },
+        {
+          "file": "spec/memory64/binary_leb128_64.wast",
+          "sha256": "8f93914dcb0c4486f777e49f71d4efd5b14bcb7ac365083c2b0b0c974b14fc79",
+          "passed": 1,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.13567
+        },
+        {
+          "file": "spec/memory64/bulk64.wast",
+          "sha256": "2fab31081f13b4838f65ceb134a8e7d573e16fccea8c325160b011691bbc356c",
+          "passed": 45,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.178436
+        },
+        {
+          "file": "spec/memory64/call_indirect64.wast",
+          "sha256": "1624a745dc4ea54431e736204bb991e815391852d62f60bd967734d0d74058ec",
+          "passed": 1,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.163333
+        },
+        {
+          "file": "spec/memory64/endianness64.wast",
+          "sha256": "81822902583b0c51918b41d40a46ac4e240e3ac47a17384f1675ba3fa3445d99",
+          "passed": 68,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.197074
+        },
+        {
+          "file": "spec/memory64/float_memory64.wast",
+          "sha256": "a271f4839d25d2295947c19af442ca08543d56f625a123c442856317b67bf3fd",
+          "passed": 60,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.17801
+        },
+        {
+          "file": "spec/memory64/load64.wast",
+          "sha256": "9d9d5d47951e0837315c1923cd2869f92c76de8dde90a8ce70dae8b7aa492bea",
+          "passed": 96,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.204096
+        },
+        {
+          "file": "spec/memory64/memory64-imports.wast",
+          "sha256": "4e81d9f4a4aea2595a355ed6a4f027cf2e2ea9772922a82e9653bd0aebe96f05",
+          "passed": 30,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.094571
+        },
+        {
+          "file": "spec/memory64/memory64.wast",
+          "sha256": "30ae609b81ca6850c007a2d3aeae88c1b0d90690e8861e9af1778d896df12eda",
+          "passed": 60,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.185392
+        },
+        {
+          "file": "spec/memory64/memory_copy64.wast",
+          "sha256": "c97bf5fa7838ee06f71b4bb26f0fcb91adf25bb054e41f6b9c2051ddcdf701a7",
+          "passed": 4402,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.909335
+        },
+        {
+          "file": "spec/memory64/memory_fill64.wast",
+          "sha256": "f55f902dae42e7c91af3df1fc6684f5ae3e251ac5e476eecdcf7ab9461855e3d",
+          "passed": 84,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.663925
+        },
+        {
+          "file": "spec/memory64/memory_grow64.wast",
+          "sha256": "cf0a5687d5bc1923f6a9900fe17a0218e6d5c77bc8eb128886e52b36ded65290",
+          "passed": 45,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.922034
+        },
+        {
+          "file": "spec/memory64/memory_init64.wast",
+          "sha256": "c1cd9f32a0e30ec3237cc87b4bc52477e74123db764cbd2807a3ac9d1f83e38e",
+          "passed": 207,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.213827
+        },
+        {
+          "file": "spec/memory64/memory_redundancy64.wast",
+          "sha256": "aeca2499e8e5efa7fe9a5d1037000ff4094ee5dffda75916f4b6053389fd01b0",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.151893
+        },
+        {
+          "file": "spec/memory64/memory_trap64.wast",
+          "sha256": "70b265f0b93e7aa7e05fdb72e113506c2886a116787f412c394ae93e00beeb83",
+          "passed": 170,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.192059
+        },
+        {
+          "file": "spec/memory64/table64.wast",
+          "sha256": "4822e3d2df3f0e500c2a469026851b71d4477620a9b770bba7aad4819ed531fb",
+          "passed": 3,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.053289
+        },
+        {
+          "file": "spec/memory64/table_copy64.wast",
+          "sha256": "3e0bd17a7f59634b7d19d30473876505ef031b1aebc42787deb91afd1a35d0d3",
+          "passed": 1649,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.406958
+        },
+        {
+          "file": "spec/memory64/table_copy_mixed.wast",
+          "sha256": "897f55132bcb1d98a8ae98ceff3023825d374eef61eba1c8daf77c5990a32444",
+          "passed": 3,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.158133
+        },
+        {
+          "file": "spec/memory64/table_fill64.wast",
+          "sha256": "d175938336e7032155a610675bed836b80b0563b68fb7991da4cfe41231ebcf5",
+          "passed": 79,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.168977
+        },
+        {
+          "file": "spec/memory64/table_get64.wast",
+          "sha256": "c8b83a046b3b40c8b36a88912c89203474218e08e9b16f07e35cea51c4fe5eb6",
+          "passed": 9,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.15699
+        },
+        {
+          "file": "spec/memory64/table_grow64.wast",
+          "sha256": "b98502832935f806f34eb56e3231abf744b89cb5bde21ddc1374a0b7b31bba70",
+          "passed": 21,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.150285
+        },
+        {
+          "file": "spec/memory64/table_init64.wast",
+          "sha256": "618de56aed94b069d49ba537f7bd6a2b9891dfb845baf638897256fa355b72c6",
+          "passed": 819,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.334812
+        },
+        {
+          "file": "spec/memory64/table_set64.wast",
+          "sha256": "4ea80f5012f8955eee0723e50a0f46a4ab2843ef57ed4f276d82795e0e01e909",
+          "passed": 18,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.172371
+        },
+        {
+          "file": "spec/memory64/table_size64.wast",
+          "sha256": "30d08e2f8e62ba0fd1462223da9cb947c50a561faa3ca16e51f55fa3c46ce25b",
+          "passed": 36,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.171456
+        },
+        {
+          "file": "spec/memory_grow.wast",
+          "sha256": "02b16fdd007a9fb078823e2cf673e86c0d48f19ebdf4e7a09f282e6ae859a3d1",
+          "passed": 96,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.982176
+        },
+        {
+          "file": "spec/memory_redundancy.wast",
+          "sha256": "5c7e66c660367c5b163148b5d4d7173611ab825d2614d77392c2883c308888d1",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.175881
+        },
+        {
+          "file": "spec/memory_size.wast",
+          "sha256": "71570412caf937a389127b7ffd104efe24b89d0ccd1202d48bcf04f50bd62f76",
+          "passed": 38,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.187839
+        },
+        {
+          "file": "spec/memory_trap.wast",
+          "sha256": "b3209d2a07576a4961c6043b097f26457900a4eaee2b4df96a5359bea2d2ebb5",
+          "passed": 180,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.191783
+        },
+        {
+          "file": "spec/multi-memory/address0.wast",
+          "sha256": "0ae3d1d2578c4da0699e57eb75a589f712fe5577e53bf1ffc80a9e0cdbff5e77",
+          "passed": 91,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.175619
+        },
+        {
+          "file": "spec/multi-memory/address1.wast",
+          "sha256": "2039d4dcec17c94917a3f7923c55e55e29e7b19e6204095f2081a186866f1c1a",
+          "passed": 126,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.181406
+        },
+        {
+          "file": "spec/multi-memory/align0.wast",
+          "sha256": "a5bce1892f58d0716217bb2b9520570676e3100dfd855e9088e2048cbc4a2280",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.169874
+        },
+        {
+          "file": "spec/multi-memory/binary0.wast",
+          "sha256": "8153bbe3d79578edd8486b87ab70a914d375907a3f0fb71b4c4373628b12dc2a",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.050972
+        },
+        {
+          "file": "spec/multi-memory/data0.wast",
+          "sha256": "7e12af1c9c52716cc7df1b407c302b39aa2eed150486f1214f64c5381ec44140",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.098018
+        },
+        {
+          "file": "spec/multi-memory/data1.wast",
+          "sha256": "effa6a1484493ef5d28bad9f93a9a1f2f462e4748b079c07af02178cbc62f565",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.083806
+        },
+        {
+          "file": "spec/multi-memory/data_drop0.wast",
+          "sha256": "4cd981a5ab79836baa05834322e42636bd8dc2c05204130cec18bff78d933a55",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.154405
+        },
+        {
+          "file": "spec/multi-memory/exports0.wast",
+          "sha256": "5d4215df4a11585a1d2f3393cfdb25eda3d842df6123bf51383dd30fdbfc171e",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.058076
+        },
+        {
+          "file": "spec/multi-memory/float_exprs0.wast",
+          "sha256": "0f170be704a1e36d2f453d08b597cab3332cd0128332f4eb04432bb4cf089f0a",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.187072
+        },
+        {
+          "file": "spec/multi-memory/float_exprs1.wast",
+          "sha256": "8fc3383298eac32d2d99114f818c41cc33d710a2d753daa48bb4001c5b8f0c5b",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.211142
+        },
+        {
+          "file": "spec/multi-memory/float_memory0.wast",
+          "sha256": "915985df616d6d6dbda999d682fd70344ace735f64c339d53c49ec8d6ad1e5a2",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.169798
+        },
+        {
+          "file": "spec/multi-memory/imports0.wast",
+          "sha256": "8e952d2f3c29bf3fc8afe5264bb09a40233e8b75b73076c6b1690d0d99080901",
+          "passed": 6,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.158373
+        },
+        {
+          "file": "spec/multi-memory/imports1.wast",
+          "sha256": "ed4e1b3c87bb3adf4e5252aa7fb1b8023f8a7051b81cffe95b0ee6f4099fd29d",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.166473
+        },
+        {
+          "file": "spec/multi-memory/imports2.wast",
+          "sha256": "0bb7710256a6182bd7e22e13bb9c176aa84136b7077ef7bc6862079e5478bbd6",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.192771
+        },
+        {
+          "file": "spec/multi-memory/imports3.wast",
+          "sha256": "b130b3336a212eb926203d87bf377519a982db51126a78523b546a7850b63d4b",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.150983
+        },
+        {
+          "file": "spec/multi-memory/imports4.wast",
+          "sha256": "ab45e1db2f5405f3a31b0e1c2320add2d2323e92f56bc3b8c2b61d1f11b8b48c",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.18739
+        },
+        {
+          "file": "spec/multi-memory/linking0.wast",
+          "sha256": "54a8ed8cd839a63cb39aa2613e36629b04c87d4693dcca2a98bddb1ddffc527a",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.180659
+        },
+        {
+          "file": "spec/multi-memory/linking1.wast",
+          "sha256": "ce06017db2c85c3480e34cebe639f612745fc1ffda1272bc6ab3e4272b2d4171",
+          "passed": 9,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.163309
+        },
+        {
+          "file": "spec/multi-memory/linking2.wast",
+          "sha256": "96a364eb12eef12e6a4d9f926166167a91aabe217b94e682342213b386c60587",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.188167
+        },
+        {
+          "file": "spec/multi-memory/linking3.wast",
+          "sha256": "2487cc4e0b85d8e94bf32816a6b00a7fa477817a65de5a6588ce55a930d3f5d4",
+          "passed": 10,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.168628
+        },
+        {
+          "file": "spec/multi-memory/load0.wast",
+          "sha256": "00dbea5cae594b8a16f4a177aa1ef5f72c3042c8c31f33e1577f696ccf7339d8",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.144176
+        },
+        {
+          "file": "spec/multi-memory/load1.wast",
+          "sha256": "19b977db2c0aac9654909a7378572fe1e6a1551a49059b46948d68e788737021",
+          "passed": 15,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.1776
+        },
+        {
+          "file": "spec/multi-memory/load2.wast",
+          "sha256": "a270a935feaab17acf2192526ccc1e3d8b7f90551afbc9e9152655e9f63c0747",
+          "passed": 37,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.204959
+        },
+        {
+          "file": "spec/multi-memory/memory-multi.wast",
+          "sha256": "622e23c6952721b4f3fae1ebda5feef668741a7ed2cde84ba4068153efbaef70",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.162443
+        },
+        {
+          "file": "spec/multi-memory/memory_copy0.wast",
+          "sha256": "5434c232c4e29e89888a1e05a42b298186c6a18263aef5d74666d967f9402aac",
+          "passed": 21,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.166473
+        },
+        {
+          "file": "spec/multi-memory/memory_copy1.wast",
+          "sha256": "0c0a25890b3415d7cf0a0f43cd7904ad44e9e2fc6a1462fef48703102805e1bc",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.158272
+        },
+        {
+          "file": "spec/multi-memory/memory_fill0.wast",
+          "sha256": "d747201062f410ed64b23ca9687397c33e8f5adbcd4dda54ea742e903922f767",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.178171
+        },
+        {
+          "file": "spec/multi-memory/memory_grow.wast",
+          "sha256": "8e7f73d02a5929e5a9bef22ad84fe4bab27ae30aaf14021d9c4cc1bb67f16a94",
+          "passed": 47,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.16186
+        },
+        {
+          "file": "spec/multi-memory/memory_init0.wast",
+          "sha256": "b13986c12b2d0c4d9150a004b1cf209e06ec91010e5dfe9abc21258ccb678687",
+          "passed": 8,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.14494
+        },
+        {
+          "file": "spec/multi-memory/memory_size0.wast",
+          "sha256": "34280de026ac1d919583b866e6e7c722337f6445c157f4bf80895e46f49290a3",
+          "passed": 7,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.150535
+        },
+        {
+          "file": "spec/multi-memory/memory_size1.wast",
+          "sha256": "7856b32b39b9bf839f90f0f818177d85e8ab704d6933c7b68bd7b90e1829b1fa",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.160992
+        },
+        {
+          "file": "spec/multi-memory/memory_size2.wast",
+          "sha256": "4737a54f4aa62ec6b10f4ef8c299fb7e354941ce13a8def85a79b1e24413bc39",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.170442
+        },
+        {
+          "file": "spec/multi-memory/memory_size3.wast",
+          "sha256": "e8c279897c70d60be758c571c2864a3b2da87d404dfe43e65ac91ad3e139281e",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.132994
+        },
+        {
+          "file": "spec/multi-memory/memory_size_import.wast",
+          "sha256": "88162d640f690c64bb8d27cf3e3d25b47abf915677a2d2e6d554396f403e0f94",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.167714
+        },
+        {
+          "file": "spec/multi-memory/memory_trap0.wast",
+          "sha256": "2ff7905e32759145f5be3a6910f09edce9f781a98f9eb602dbd96da1c5315409",
+          "passed": 13,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.177257
+        },
+        {
+          "file": "spec/multi-memory/memory_trap1.wast",
+          "sha256": "c0bfa1f480766ccfc1c0a4cdefa26b8ae8d01004414c5498afdb2131ab99375c",
+          "passed": 167,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.192748
+        },
+        {
+          "file": "spec/multi-memory/start0.wast",
+          "sha256": "139c266bd44d5f821b6d0b994ff1ec2a5e659357cd21921dfadf5b679a1dec0a",
+          "passed": 6,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.14704
+        },
+        {
+          "file": "spec/multi-memory/store0.wast",
+          "sha256": "971c814c669b126ac3dc11e9a6185d315af2ba996cb416d9e3e26773bcee0c71",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.149931
+        },
+        {
+          "file": "spec/multi-memory/store1.wast",
+          "sha256": "e03b4970ac4e6322bbc8b46e17c226f18c7f8102f5f3e1aca91a889b87fe2cad",
+          "passed": 4,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.178687
+        },
+        {
+          "file": "spec/multi-memory/store2.wast",
+          "sha256": "e475f48b1117bc5c73e9d61eb90f60a77698ead83623a97757f25863bd8ec41d",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.164813
+        },
+        {
+          "file": "spec/multi-memory/traps0.wast",
+          "sha256": "43a8f235560f920409936d541a8f44feaa1f82c34f22ef505c4d5c38b3678499",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.179577
+        },
+        {
+          "file": "spec/names.wast",
+          "sha256": "b094bbd01c91fe23fe671ea7b28b7b8f5113ffcb9594f5972e1e8f5581e3976c",
+          "passed": 482,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.264769
+        },
+        {
+          "file": "spec/nop.wast",
+          "sha256": "af9221ba075f91795c4e19ce6dc66aae5b0bdf0fce657a066755533d3fe0c113",
+          "passed": 87,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.228553
+        },
+        {
+          "file": "spec/obsolete-keywords.wast",
+          "sha256": "acdec79f6d3bd5624a8bf9c8dc299309e52813cb25ff2505bab887ac7d0aaacf",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.067925
+        },
+        {
+          "file": "spec/ref.wast",
+          "sha256": "e88b1fa4593cb2fe89bfebba31ba85cec6ad141b444194a79f50265263429b4c",
+          "passed": 12,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.175992
+        },
+        {
+          "file": "spec/ref_as_non_null.wast",
+          "sha256": "0dac757a473d996c692863a45bbdd04d9ce2300e736a0d148b2db72b1a61cd2c",
+          "passed": 5,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.16714
+        },
+        {
+          "file": "spec/ref_func.wast",
+          "sha256": "ff3d74f5e997d7a71a41d931235c345567136802a9f643f26872013242386d5f",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.189163
+        },
+        {
+          "file": "spec/ref_is_null.wast",
+          "sha256": "876a66f7cd8cce163d62a2e8c2c4023a9aaf83c0b502f01521c7e689ee11d94f",
+          "passed": 18,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.169709
+        },
+        {
+          "file": "spec/ref_null.wast",
+          "sha256": "63330c3c5f1bd0decb7473ba0c73378ce685edb16ce24714b2f7fab05ae68529",
+          "passed": 32,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.160092
+        },
+        {
+          "file": "spec/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
+          "sha256": "fa3885a95e4818e8aa9782dc8d9fb76a94b511114730ffc0b31d471ddab5b068",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.208062
+        },
+        {
+          "file": "spec/relaxed-simd/i32x4_relaxed_trunc.wast",
+          "sha256": "8f93d17c35f0a4076df7c32219f029ec4fc18a17562f783618d522c67f282126",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.154477
+        },
+        {
+          "file": "spec/relaxed-simd/i8x16_relaxed_swizzle.wast",
+          "sha256": "9d0a89c5b2b2100c5b73fb1b2d6bdeab3c8cd4b5fcab3d78d3e13e363d8738cb",
+          "passed": 5,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.218869
+        },
+        {
+          "file": "spec/relaxed-simd/relaxed_dot_product.wast",
+          "sha256": "5de2c0cd58e7303f0e568d7484574385b5a697e3fbd06e71017840babe7ec66d",
+          "passed": 10,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.216256
+        },
+        {
+          "file": "spec/relaxed-simd/relaxed_laneselect.wast",
+          "sha256": "8bb3de6928e82faacdfe33f965fa02cffb85b9a1b91f2909f16dcdd84c8d9e58",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.233076
+        },
+        {
+          "file": "spec/relaxed-simd/relaxed_madd_nmadd.wast",
+          "sha256": "a215fe366cba851c96f83e3ba5c97ac3ed15663375305ce99785e7c32a7da355",
+          "passed": 17,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.236256
+        },
+        {
+          "file": "spec/relaxed-simd/relaxed_min_max.wast",
+          "sha256": "388bfaded12558cc7b5c4e7e4636d6020fbe3c67d3c0affc9ffbe3656f5f513c",
+          "passed": 24,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.199291
+        },
+        {
+          "file": "spec/return.wast",
+          "sha256": "987f665cbf9be3d240325fcc14bfa449e8fb8ad9e8193afa3aff03ddb33bd7ce",
+          "passed": 83,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.186956
+        },
+        {
+          "file": "spec/return_call.wast",
+          "sha256": "2f64a60509f0aa6858af8e6e0858345e8842f3e88c166d5e67f5a18ca19754b1",
+          "passed": 44,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 6.86413
+        },
+        {
+          "file": "spec/return_call_indirect.wast",
+          "sha256": "9db2b4e0b3e285d11de56164cbb62241d31065f7c4f9b98d46b33b9cb609ec80",
+          "passed": 76,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 1.420455
+        },
+        {
+          "file": "spec/return_call_ref.wast",
+          "sha256": "6d5c36e8c8336b83dd0e3544877ce244baf4170cb4b12d5e91582817a4c04e98",
+          "passed": 46,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 9.205155
+        },
+        {
+          "file": "spec/select.wast",
+          "sha256": "2acdd7bb97af6f6f4b15538ee91ebc0a2cc4390d81010b2601e44c4f0f4ef836",
+          "passed": 154,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.228798
+        },
+        {
+          "file": "spec/simd/simd_address.wast",
+          "sha256": "d3316f20215003a3676403883065fa5de6d70acd6e880ea57be1cc93970a6e00",
+          "passed": 46,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.241692
+        },
+        {
+          "file": "spec/simd/simd_align.wast",
+          "sha256": "8ce2f85a318248d843a53a7905c2fa34e71c9b931c4b0edcb163b23bb035d997",
+          "passed": 54,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.258619
+        },
+        {
+          "file": "spec/simd/simd_bit_shift.wast",
+          "sha256": "75743d82db9ef761a1bc0637bf684083d81c3eaf67403b6c5ca3eedf28e6c3c4",
+          "passed": 250,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.297909
+        },
+        {
+          "file": "spec/simd/simd_bitwise.wast",
+          "sha256": "df1e9e6284f7bf22dd090b4bf5390a331b15cfd4e11ad1fd52ad74a69ce67130",
+          "passed": 167,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.307932
+        },
+        {
+          "file": "spec/simd/simd_boolean.wast",
+          "sha256": "ed21bfb6d0f04f921a7df2c18de9dbce35d85eb71fd9ef1c6397bfc9e5c8ac2a",
+          "passed": 275,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.332813
+        },
+        {
+          "file": "spec/simd/simd_const.wast",
+          "sha256": "0ff6c20d21eea9e34a40a05c24c6573bb2b3925f394c177fac5b6593c30a33b4",
+          "passed": 446,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.471853
+        },
+        {
+          "file": "spec/simd/simd_conversions.wast",
+          "sha256": "35d0888db2be09991d646ec5ab8a2cb836154aaf892fbcf3be220d841fef4f71",
+          "passed": 280,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.318333
+        },
+        {
+          "file": "spec/simd/simd_f32x4.wast",
+          "sha256": "9241562e96a55cde607e7879b5bf212d1dd2a667cbd7b93274ca41bf7e976dcf",
+          "passed": 788,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.49356
+        },
+        {
+          "file": "spec/simd/simd_f32x4_arith.wast",
+          "sha256": "177b579abb1ea05c8b4a6c8b8b9e6770473334013b4f3e6c72cc9a414c03d1ef",
+          "passed": 1819,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.758406
+        },
+        {
+          "file": "spec/simd/simd_f32x4_cmp.wast",
+          "sha256": "b6f6e954fd3bb24443dedf94f1ecac30ad9132e0dd2aa00b9ffa625aec74370e",
+          "passed": 2605,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.82536
+        },
+        {
+          "file": "spec/simd/simd_f32x4_pmin_pmax.wast",
+          "sha256": "cc02c29c672c70ab8e11765e89aaf848d0133f142c690f6dd0829652242c971e",
+          "passed": 3886,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 1.811517
+        },
+        {
+          "file": "spec/simd/simd_f32x4_rounding.wast",
+          "sha256": "e52cdc74455b65eb7779a24fbbeb0a0bb12770f31a90aefcb65f85899e6b9780",
+          "passed": 200,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.287889
+        },
+        {
+          "file": "spec/simd/simd_f64x2.wast",
+          "sha256": "21c46c7e147f164acce4f2752d24183b2b0aee55446af1f17a00b2b8d2fc7d0b",
+          "passed": 801,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.424908
+        },
+        {
+          "file": "spec/simd/simd_f64x2_arith.wast",
+          "sha256": "d1f24be8c50c86b24950e8c024f892d24f65fc3dfea1b0df3dde6121adbac8c7",
+          "passed": 1822,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.601813
+        },
+        {
+          "file": "spec/simd/simd_f64x2_cmp.wast",
+          "sha256": "5f96c51af01079d7d65c135f4aa996fa0aa53d6109f7cce7e52d7adaf59e931d",
+          "passed": 2683,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.730126
+        },
+        {
+          "file": "spec/simd/simd_f64x2_pmin_pmax.wast",
+          "sha256": "aad07876628180daa0735891447e3e00bbfac3119235d57d74e7ab9cfa67bafa",
+          "passed": 3886,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 1.063351
+        },
+        {
+          "file": "spec/simd/simd_f64x2_rounding.wast",
+          "sha256": "e986cff25060f411ee69015bed0a31b26520c082232c21ba55901de9036df5f4",
+          "passed": 200,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.253982
+        },
+        {
+          "file": "spec/simd/simd_i16x8_arith.wast",
+          "sha256": "bf5fe83b4763f578e82bf4c2f2abbc98e28d3d4a4f2300850366df57c5f3cf8c",
+          "passed": 192,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.274394
+        },
+        {
+          "file": "spec/simd/simd_i16x8_arith2.wast",
+          "sha256": "8cb98b24c8a122c1d6ebf9017aa3b71bf27d7bea06ae991c4561d5caac965359",
+          "passed": 170,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.300767
+        },
+        {
+          "file": "spec/simd/simd_i16x8_cmp.wast",
+          "sha256": "d579026e21d7b0a923582a4bad223e24bae9218138b6ea98b02bfa114c91e5ba",
+          "passed": 463,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.340241
+        },
+        {
+          "file": "spec/simd/simd_i16x8_extadd_pairwise_i8x16.wast",
+          "sha256": "f2fd15db7d7960b3cbb846bc6cdb7af91b4ddf7fda433438732d728c0bcc6900",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.235768
+        },
+        {
+          "file": "spec/simd/simd_i16x8_extmul_i8x16.wast",
+          "sha256": "c19eb5f9fba0664d3f29573cf7dbcc49a0ec95353dfb9cdf0725f7e5d878f3c1",
+          "passed": 116,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.247002
+        },
+        {
+          "file": "spec/simd/simd_i16x8_q15mulr_sat_s.wast",
+          "sha256": "58a9a5ea3cab2dbc5e299045751d05be5bc72f587e348e7d14583e28f690a2b6",
+          "passed": 29,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.20633
+        },
+        {
+          "file": "spec/simd/simd_i16x8_sat_arith.wast",
+          "sha256": "ddee04e7f5f056b7b5f684c78405c00e056323bc4d7d4ffcfe91c1b0da89f681",
+          "passed": 220,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.271546
+        },
+        {
+          "file": "spec/simd/simd_i32x4_arith.wast",
+          "sha256": "cbba894d51df7a80a68467d69c3393903303e34262c0d0f2c3d57279ae80041d",
+          "passed": 192,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.29357
+        },
+        {
+          "file": "spec/simd/simd_i32x4_arith2.wast",
+          "sha256": "f812fe268684aff5578eeeb0cb758ec95e5057ac2152eeb343a7ad8deb8cfb11",
+          "passed": 147,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.288303
+        },
+        {
+          "file": "spec/simd/simd_i32x4_cmp.wast",
+          "sha256": "dae265cf89893130060d79df6065c9072e2f4874f151aa761b2a51ff33c249b6",
+          "passed": 473,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.340017
+        },
+        {
+          "file": "spec/simd/simd_i32x4_dot_i16x8.wast",
+          "sha256": "ac814511164c6c603c95c0d70ab13b8af4c448683807d4d7d36df746afd1c414",
+          "passed": 31,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.219924
+        },
+        {
+          "file": "spec/simd/simd_i32x4_extadd_pairwise_i16x8.wast",
+          "sha256": "8b91b3ccc0be510e08c480dfc18d0b32fb823e955f9b07d80c7f886a13b3672b",
+          "passed": 20,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.1943
+        },
+        {
+          "file": "spec/simd/simd_i32x4_extmul_i16x8.wast",
+          "sha256": "ddcad7c3853d61bec50895c3321fe2f08b04ec126dfeaf6ba5135693814eabe6",
+          "passed": 116,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.258165
+        },
+        {
+          "file": "spec/simd/simd_i32x4_trunc_sat_f32x4.wast",
+          "sha256": "f81cace2c315c3bed5f49083c3319f3657835dd0e0d35b27e6f14019da71ad13",
+          "passed": 106,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.25355
+        },
+        {
+          "file": "spec/simd/simd_i32x4_trunc_sat_f64x2.wast",
+          "sha256": "0102d49059499276dae193c3a1e0a09c2f24f98336502a1c36147cfc9bcbdb76",
+          "passed": 106,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.222055
+        },
+        {
+          "file": "spec/simd/simd_i64x2_arith.wast",
+          "sha256": "ea38542e3e041a30bdde53222c073eda824ef11c5254cb31bfa9fbc6dc3bb77a",
+          "passed": 198,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.262927
+        },
+        {
+          "file": "spec/simd/simd_i64x2_arith2.wast",
+          "sha256": "3dee5436933d5296b3cc44219b3287586ba0506ec95ab7c34523c7b2d475d870",
+          "passed": 23,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.218791
+        },
+        {
+          "file": "spec/simd/simd_i64x2_cmp.wast",
+          "sha256": "d6cf1cd59ae54427a0d6defabd286099ba12e2d797a31629203a7ad3e1ad5161",
+          "passed": 112,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.229014
+        },
+        {
+          "file": "spec/simd/simd_i64x2_extmul_i32x4.wast",
+          "sha256": "cd293131cbe56c29a766f0d4b75ff80527dabb1cf4fc8f491c47f289a6afcd1f",
+          "passed": 116,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.258908
+        },
+        {
+          "file": "spec/simd/simd_i8x16_arith.wast",
+          "sha256": "32d53d175ae2cf56aef5e495d6e9e0a8bc6d08e96aabdc998bcb140f045da7bd",
+          "passed": 129,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.270768
+        },
+        {
+          "file": "spec/simd/simd_i8x16_arith2.wast",
+          "sha256": "3ed841ff2a376e2f9599b96d0026b55c1fb9544c71e5cdb18f4fde3b197a5890",
+          "passed": 209,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.309741
+        },
+        {
+          "file": "spec/simd/simd_i8x16_cmp.wast",
+          "sha256": "1d2ef2b1b72ce3ccc691eee9f107f25c765a0aa89bb532ab5ae12431e2d940b2",
+          "passed": 443,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.374319
+        },
+        {
+          "file": "spec/simd/simd_i8x16_sat_arith.wast",
+          "sha256": "5ac0f7c3c7327a5e2a79f397fd7189e162ec19ea0d2822e5d2a3fe0ad2a92b2c",
+          "passed": 212,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.280682
+        },
+        {
+          "file": "spec/simd/simd_int_to_int_extend.wast",
+          "sha256": "27f571596bc0648b2aaff8d6370669f1dd90c8392379bb637390a6670dac4bc6",
+          "passed": 252,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.279441
+        },
+        {
+          "file": "spec/simd/simd_lane.wast",
+          "sha256": "64828de1bdcc98621ae7d6d5ca84618d30af1665df4c80b4e05c60e6eab70fd3",
+          "passed": 463,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.372759
+        },
+        {
+          "file": "spec/simd/simd_linking.wast",
+          "sha256": "de180555d0846bd91086b70fcc6da258e380008355bf72977a9a8522c3fa56af",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.05293
+        },
+        {
+          "file": "spec/simd/simd_load.wast",
+          "sha256": "310d1d2a48087a52d845ad353a972b87fa7b37dae2d9b2341c812466a61283bb",
+          "passed": 25,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.25406
+        },
+        {
+          "file": "spec/simd/simd_load16_lane.wast",
+          "sha256": "4b0f6e1e286b3d1305fe459679eb044b6967f355332ae22afc31139d95084bb0",
+          "passed": 35,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.232211
+        },
+        {
+          "file": "spec/simd/simd_load32_lane.wast",
+          "sha256": "4653d8ee15db4c1c4eb2b24f6d10bad3fc90c684318d6ef4a2c2fae303f70237",
+          "passed": 23,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.228773
+        },
+        {
+          "file": "spec/simd/simd_load64_lane.wast",
+          "sha256": "6f03666aeb820225f6d0f0a16ec4c53afc64112f2cf75fb095c65290a9fbf429",
+          "passed": 15,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.241932
+        },
+        {
+          "file": "spec/simd/simd_load8_lane.wast",
+          "sha256": "fa5d45d0799476a3bf1c91733b3108ed5df9d42c9be8ef929db9918bfa5e46f9",
+          "passed": 51,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.241885
+        },
+        {
+          "file": "spec/simd/simd_load_extend.wast",
+          "sha256": "a09798f35d733564adcb62a469663158fd445eb1ecea94c4b78158da4a381b7c",
+          "passed": 102,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.26206
+        },
+        {
+          "file": "spec/simd/simd_load_splat.wast",
+          "sha256": "456dfe1f1e981d7dc0183d4febd2a7cb5b8214e9962e3451935443a89c6c936d",
+          "passed": 124,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.256711
+        },
+        {
+          "file": "spec/simd/simd_load_zero.wast",
+          "sha256": "a9c6aead086388cbad3adbbd028f731be51300bc774dda247cb301d0b03f4a43",
+          "passed": 37,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.221065
+        },
+        {
+          "file": "spec/simd/simd_memory-multi.wast",
+          "sha256": "bef9c29ed24ba98c6defaf365c27d0d31052b894f9fb10df23ee66bbf77d421c",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.151912
+        },
+        {
+          "file": "spec/simd/simd_select.wast",
+          "sha256": "9df4716bca0b093e876481b568e5f07e39684c5059463e595d8eb1cbcafa605b",
+          "passed": 6,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.160711
+        },
+        {
+          "file": "spec/simd/simd_splat.wast",
+          "sha256": "192d900a7b69a5edf765da03e24deab149c1c8baa6d020ee81097b4d2f5ecec8",
+          "passed": 181,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.265995
+        },
+        {
+          "file": "spec/simd/simd_store.wast",
+          "sha256": "9385ff9e13c9db0481a03660653fb1c488670785a20b699aded8bf60ec982405",
+          "passed": 26,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.253322
+        },
+        {
+          "file": "spec/simd/simd_store16_lane.wast",
+          "sha256": "a1f489b2cffbdfa26ef32086874802fcf1d7ebe89ef5ecb97d8921e1cbf38b1d",
+          "passed": 35,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.238245
+        },
+        {
+          "file": "spec/simd/simd_store32_lane.wast",
+          "sha256": "dbc1cfb67364ce4c007b6df8b1a06349da7b0cba03a49259d38cb3b6ab3c8608",
+          "passed": 23,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.247118
+        },
+        {
+          "file": "spec/simd/simd_store64_lane.wast",
+          "sha256": "3112a00a0c56ba9b8c006478b87c8f63d572db446818a8f70052da9ee6eb359e",
+          "passed": 15,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.239354
+        },
+        {
+          "file": "spec/simd/simd_store8_lane.wast",
+          "sha256": "0a3b8bdba08291e4e0e16468ab4c03fa868e71fa270b57f17c0a27046d1c94bf",
+          "passed": 51,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.276869
+        },
+        {
+          "file": "spec/skip-stack-guard-page.wast",
+          "sha256": "6392fe50486ae71c758f6f15f756cf6336fcab3b53155488f3be21fbe7bc98c4",
+          "passed": 10,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.606607
+        },
+        {
+          "file": "spec/stack.wast",
+          "sha256": "c4931ad2e3eb0b32f479ed057f4c20a4ee33348a02066209ac34d3a5f27107d7",
+          "passed": 5,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.196744
+        },
+        {
+          "file": "spec/start.wast",
+          "sha256": "74749f68d2c69219f42148a7d1c35286f33020674df35515ad04587a369038ff",
+          "passed": 11,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.162362
+        },
+        {
+          "file": "spec/store.wast",
+          "sha256": "d35ff73bab2729d3747605072cf437d863104bca375d743cbe9a7ab4b2269ab9",
+          "passed": 67,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.181922
+        },
+        {
+          "file": "spec/switch.wast",
+          "sha256": "56addb6d426e9f8128ec7666dc8b0656f5625eb41b0657d219495afeeddfa8b1",
+          "passed": 27,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.179135
+        },
+        {
+          "file": "spec/table.wast",
+          "sha256": "7aae3291bc6899625261a1bb33fec98246e8c8abe0488fcc43c79cf65900848b",
+          "passed": 28,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.165137
+        },
+        {
+          "file": "spec/table_get.wast",
+          "sha256": "30c289fd0d88affa4750387cd7ef300aa92543ec7e3670d74babe2f92644a97e",
+          "passed": 14,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.198423
+        },
+        {
+          "file": "spec/table_grow.wast",
+          "sha256": "49ce2d481ae5a684251b88d873cb5da30d92ac7514388b208f6f2ab1cf3f40aa",
+          "passed": 48,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.172419
+        },
+        {
+          "file": "spec/table_set.wast",
+          "sha256": "8d41c2420113cc1e9fb04f30b4fd7b67acccbbd7f95d8c5bcc058091b6ed52ce",
+          "passed": 25,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.193751
+        },
+        {
+          "file": "spec/table_size.wast",
+          "sha256": "fd286e59440de7f807f726e50d2a651ebeace85d3657142d1207b7afd96d261d",
+          "passed": 38,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.166901
+        },
+        {
+          "file": "spec/token.wast",
+          "sha256": "aab16ea0e421d4e41ad853805154764f10baae89b43a98d122173841b50c3312",
+          "passed": 26,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.15521
+        },
+        {
+          "file": "spec/traps.wast",
+          "sha256": "3c0615dd26ee186c9a8138e933ff068fd6679e4fc34756b4ab1605d1fc7f1ede",
+          "passed": 32,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.176753
+        },
+        {
+          "file": "spec/type-canon.wast",
+          "sha256": "51506c9b325f4943c627b5bf42fbafcf30db33fe20922360ed4641932cbbbaf4",
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.051604
+        },
+        {
+          "file": "spec/type-equivalence.wast",
+          "sha256": "b2dfe2e2c165b23e82092129be1f3141f3f11680f30bd0c4923aed06919f5cff",
+          "passed": 5,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.18973
+        },
+        {
+          "file": "spec/type-rec.wast",
+          "sha256": "490fcb220f3dea47f5c41bd1971bd5f89a849071f34aeeb32c0a1bc7c85779a4",
+          "passed": 15,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.190344
+        },
+        {
+          "file": "spec/type.wast",
+          "sha256": "72df248a2a7afe432a46aea636f96c8930a894bdc285f8fe365aa28736bc9f73",
+          "passed": 2,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.061593
+        },
+        {
+          "file": "spec/unreachable.wast",
+          "sha256": "5ec91fd3df1ab694c77eb8d3e693d4e137fb96026d1c7f1b5bfd391cdaf6c89f",
+          "passed": 63,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.175445
+        },
+        {
+          "file": "spec/unreached-invalid.wast",
+          "sha256": "f4dcbd0b6f25195224e6d04f6da04590f18563c97e89bd26d9194d2e3c4b92cc",
+          "passed": 121,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.192251
+        },
+        {
+          "file": "spec/unreached-valid.wast",
+          "sha256": "dff9172d39abecb5f922c90aab9e6cda712d0943c1319564c25850b4c7e1a250",
+          "passed": 10,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.198266
+        },
+        {
+          "file": "spec/unwind.wast",
+          "sha256": "55da9a7d4d2dc19feb04fca3ab47eb842aa10202f2f9136fb3ca756c0b2bb931",
+          "passed": 49,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.205154
+        },
+        {
+          "file": "spec/utf8-custom-section-id.wast",
+          "sha256": "20f6802e8ae0c9515d10687934f8f43a9312dfc64a52761f629f5547a689cb3a",
+          "passed": 176,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.073072
+        },
+        {
+          "file": "spec/utf8-import-field.wast",
+          "sha256": "1b9f2344c4b041c516079c5587c88d6fac1ec06c68d3328eaa5427f5b0242929",
+          "passed": 176,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.101592
+        },
+        {
+          "file": "spec/utf8-import-module.wast",
+          "sha256": "20449f8bb0249777e33aee76472009b48ec2ea3d3ecc78a8b8004173b47223c0",
+          "passed": 176,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.111125
+        },
+        {
+          "file": "spec/utf8-invalid-encoding.wast",
+          "sha256": "ef0280c3f5ab3befef6755878a107b1f18dc9f302fb8edd339afd413e8c31e47",
+          "passed": 176,
+          "failed": 0,
+          "unsupported": 0,
+          "exit_code": 0,
+          "accepted": true,
+          "seconds": 0.070994
+        }
+      ]
+    }
+  }
+}

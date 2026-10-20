@@ -29,28 +29,28 @@ pub fn EmbeddingEnvironment::to_repr(Self) -> @debug.Repr
 pub fn EmbeddingEnvironment::wasm_runtime_symbols(Self) -> @wasm_milkir.RuntimeSymbols
 
 pub(all) struct MemoryDescriptorLayout {
-  base_offset : Int
-  current_length_offset : Int
+  base_offset : Int32
+  current_length_offset : Int32
 } derive(Eq, @debug.Debug)
 pub fn MemoryDescriptorLayout::equal(Self, Self) -> Bool
 pub fn MemoryDescriptorLayout::not_equal(Self, Self) -> Bool
 pub fn MemoryDescriptorLayout::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RuntimeLayout {
-  memory0_base_offset : Int
-  memory0_size_offset : Int
-  func_table_offset : Int
-  table0_base_offset : Int
-  table0_elements_offset : Int
-  globals_offset : Int
-  tables_offset : Int
-  table_sizes_offset : Int
-  memories_offset : Int
-  pointer_stride : Int
-  global_value_stride : Int
-  table_entry_value_offset : Int
-  table_entry_stride : Int
-  func_table_entry_stride : Int
+  memory0_base_offset : Int32
+  memory0_size_offset : Int32
+  func_table_offset : Int32
+  table0_base_offset : Int32
+  table0_elements_offset : Int32
+  globals_offset : Int32
+  tables_offset : Int32
+  table_sizes_offset : Int32
+  memories_offset : Int32
+  pointer_stride : Int32
+  global_value_stride : Int32
+  table_entry_value_offset : Int32
+  table_entry_stride : Int32
+  func_table_entry_stride : Int32
 } derive(Eq, @debug.Debug)
 pub fn RuntimeLayout::equal(Self, Self) -> Bool
 pub fn RuntimeLayout::not_equal(Self, Self) -> Bool

@@ -3,12 +3,13 @@ package "Milky2018/wasmoon/jit"
 
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact/installer",
-  "Milky2018/wasmoon_jit/jit_ffi",
-  "Milky2018/wasmoon_jit/native/callable",
-  "Milky2018/wasmoon_jit/native/execution",
+  "Milky2018/wasmoon_runtime/native/bridge",
+  "Milky2018/wasmoon_runtime/native/callable",
+  "Milky2018/wasmoon_runtime/native/execution",
+  "Milky2018/wasmoon_runtime/native/ffi",
+  "Milky2018/wasmoon_runtime/runtime",
   "moonbitlang/core/debug",
 }
 
@@ -16,13 +17,13 @@ import {
 
 // Errors
 pub suberror JITModuleLoadError {
-  ContextAllocationFailed(total_funcs~ : Int)
-  UnsupportedImport(import_idx~ : Int, module_name~ : String, func_name~ : String)
-  ImportTrampolineAllocationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, code_size~ : Int)
-  ImportTrampolineCompilationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, message~ : String)
+  ContextAllocationFailed(total_funcs~ : Int32)
+  UnsupportedImport(import_idx~ : Int32, module_name~ : String, func_name~ : String)
+  ImportTrampolineAllocationFailed(import_idx~ : Int32, module_name~ : String, func_name~ : String, code_size~ : Int32)
+  ImportTrampolineCompilationFailed(import_idx~ : Int32, module_name~ : String, func_name~ : String, message~ : String)
   ArtifactInstallationFailed(cause~ : @installer.JitInstallError)
   CodeQuotaExceeded
-  FunctionMetadataRegistrationFailed(func_idx~ : Int, message~ : String)
+  FunctionMetadataRegistrationFailed(func_idx~ : Int32, message~ : String)
 } derive(@debug.Debug)
 pub fn JITModuleLoadError::output(Self, &Logger) -> Unit
 pub fn JITModuleLoadError::to_repr(Self) -> @debug.Repr
@@ -32,7 +33,7 @@ pub impl Show for JITModuleLoadError
 pub suberror JITTrap {
   JITTrap(String)
   JITNativeFiberFailure(String)
-  JITExit(Int)
+  JITExit(Int32)
   JITCancelled
   JITResourceLimit(@runtime.ResourceKind)
 } derive(@debug.Debug)
@@ -42,8 +43,8 @@ pub fn JITTrap::to_string(Self) -> String
 pub impl Show for JITTrap
 
 pub suberror PolycallError {
-  InputNumber(Int, Int)
-  OutputNumber(Int, Int)
+  InputNumber(Int32, Int32)
+  OutputNumber(Int32, Int32)
   JIT(JITTrap)
 }
 
@@ -71,7 +72,7 @@ pub(all) enum JITContinuationOutcome {
 }
 
 pub struct JITFunction {
-  func_idx : Int
+  func_idx : Int32
   name : String
   param_types : ReadOnlyArray[@types.ValueType]
   result_types : ReadOnlyArray[@types.ValueType]
@@ -80,12 +81,12 @@ pub struct JITFunction {
 
 type JITModule
 pub fn JITModule::JITModule() -> Self
-pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> @jit_ffi.MemoryDescriptor
-pub fn JITModule::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int], Array[Int]) -> Unit
+pub fn JITModule::alloc_guarded_memory(Self, Int32, Int32?) -> @ffi.MemoryDescriptor
+pub fn JITModule::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int32], Array[Int32]) -> Unit
 pub fn JITModule::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITModule::bind_segment_drop_flags(Self, @runtime.ModuleInstance) -> Unit
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
-pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?, timeout_ms? : Int?) -> JITCallResult
+pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?, timeout_ms? : Int32?) -> JITCallResult
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::clear_hostcall_callback(Self) -> Unit
 pub fn JITModule::clear_segments(Self) -> Unit
@@ -93,49 +94,49 @@ pub fn JITModule::close(Self) -> Unit
 #alias(alloc_wasm_stack, deprecated)
 pub fn JITModule::configure_native_fiber_stack_size(Self, Int64) -> Bool
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
-pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
+pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int32, JITFunction, Int32)?
 pub fn JITModule::gc_begin_frame(Self, Int64) -> Unit raise JITTrap
 pub fn JITModule::gc_end_frame(Self) -> Unit
 pub fn JITModule::gc_environment_is_clear(Self) -> Bool
 pub fn JITModule::gc_set_root_scratch(Self, Array[Int64]) -> Bool
 pub fn JITModule::gc_set_safepoint_table(Self, Int64) -> Unit
-pub fn JITModule::gc_use_func_safepoints(Self, Int) -> Unit
-pub fn JITModule::get_func(Self, Int) -> JITFunction?
+pub fn JITModule::gc_use_func_safepoints(Self, Int32) -> Unit
+pub fn JITModule::get_func(Self, Int32) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
-pub fn JITModule::get_func_count(Self) -> Int
-pub fn JITModule::get_func_ptr(Self, Int) -> Int64
+pub fn JITModule::get_func_count(Self) -> Int32
+pub fn JITModule::get_func_ptr(Self, Int32) -> Int64
 pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
 pub fn JITModule::get_last_trap_report(Self) -> @wasmoon_jit.TrapReport?
-pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
-pub fn JITModule::get_memory_size(Self, Int) -> Int64
+pub fn JITModule::get_memory_ptr(Self, Int32) -> Int64
+pub fn JITModule::get_memory_size(Self, Int32) -> Int64
 pub fn JITModule::has_callable_metadata(Self) -> Bool
 #alias(has_wasm_stack, deprecated)
 pub fn JITModule::has_configured_native_fiber_stack_size(Self) -> Bool
-pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
-pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit raise @wasmoon_jit.NativeSetupError
+pub fn JITModule::init_indirect_table(Self, Int32, Array[(Int32, Int32, Int32)]) -> Unit
+pub fn JITModule::init_shared_tables(Self, Array[@bridge.JITTable?], Array[(Int32, Int32, Int32?, Int32)]) -> Unit raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::load_artifact(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?, resource_budget? : @runtime.ResourceBudget?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?, resource_budget? : @runtime.ResourceBudget?) -> Self raise JITModuleLoadError
 pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @execution.NativeExecutionState) -> Unit raise JITTrap
-pub fn JITModule::refresh_table_layout(Self, Int) -> Bool
+pub fn JITModule::refresh_table_layout(Self, Int32) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
-pub fn JITModule::set_callable_types(Self, Array[Int], Array[Int], Array[(Int64, Int)], Array[Int]) -> Unit
+pub fn JITModule::set_callable_types(Self, Array[Int32], Array[Int32], Array[(Int64, Int32)], Array[Int32]) -> Unit
 pub fn JITModule::set_cooperative_scheduling(Self, Bool) -> Bool
-pub fn JITModule::set_exception_arena(Self, @jit_ffi.NativeExceptionArena) -> Unit
+pub fn JITModule::set_exception_arena(Self, @ffi.NativeExceptionArena) -> Unit
 pub fn JITModule::set_execution_scope(Self, @runtime.ExecutionScope?) -> Bool
-pub fn JITModule::set_gc_heap(Self, @jit_ffi.GCHeapHandle) -> Unit
+pub fn JITModule::set_gc_heap(Self, @ffi.GCHeapHandle) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit
-pub fn JITModule::set_memory(Self, @jit_ffi.MemoryDescriptor) -> Unit
-pub fn JITModule::set_memory_pointers(Self, Array[@wasmoon_jit.MemoryInfo]) -> Unit raise @wasmoon_jit.NativeSetupError
-pub fn JITModule::setup_gc(Self, @wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], Array[Int]) -> Unit raise @wasmoon_jit.GCSetupError
-pub fn JITModule::setup_gc_with_func_table(Self, @wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], Array[Int], Int64, Int) -> Unit raise @wasmoon_jit.GCSetupError
+pub fn JITModule::set_memory(Self, @ffi.MemoryDescriptor) -> Unit
+pub fn JITModule::set_memory_pointers(Self, Array[@bridge.MemoryInfo]) -> Unit raise @wasmoon_jit.NativeSetupError
+pub fn JITModule::setup_gc(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32]) -> Unit raise @wasmoon_jit.GCSetupError
+pub fn JITModule::setup_gc_with_func_table(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32], Int64, Int32) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::start_continuation_call(Self, JITFunction, Array[Int64]) -> JITContinuationOutcome raise JITTrap
 pub fn JITModule::teardown_gc(Self) -> Unit
-pub fn JITModule::throw_exception_tag(Self, Int) -> Unit raise @wasmoon_jit.NativeSetupError
-pub fn JITModule::throw_exception_values(Self, Int, Array[Int64]) -> Unit raise @wasmoon_jit.NativeSetupError
-pub fn JITModule::throw_store_exception_values(Self, Int, Array[Int64]) -> Unit raise @wasmoon_jit.NativeSetupError
+pub fn JITModule::throw_exception_tag(Self, Int32) -> Unit raise @wasmoon_jit.NativeSetupError
+pub fn JITModule::throw_exception_values(Self, Int32, Array[Int64]) -> Unit raise @wasmoon_jit.NativeSetupError
+pub fn JITModule::throw_store_exception_values(Self, Int32, Array[Int64]) -> Unit raise @wasmoon_jit.NativeSetupError
 
 pub(all) struct Single[A](A)
 pub fn[A : @types.FromInt64] Single::from_int64_array(Array[Int64]) -> Self[A]

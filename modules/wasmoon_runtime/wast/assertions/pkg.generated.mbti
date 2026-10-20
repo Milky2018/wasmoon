@@ -1,0 +1,44 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/wast/assertions"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/wat/parser",
+  "Milky2018/wasmoon_runtime/runtime",
+}
+
+// Values
+pub fn check_action_outcome(@parser.WastCommand, @parser.WastAction, Result[Array[@types.Value], WastRunnerError], String?) -> (String, String?)
+
+pub fn classify_runtime_failure(@runtime.RuntimeError) -> WastRunnerError
+
+pub fn format_action(@parser.WastAction) -> String
+
+pub fn validate_module_source(@parser.WastModuleSource, bulk_memory~ : Bool, stack_switching~ : Bool) -> @types.Module? raise WastRunnerError
+
+pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : ArrayView[Int32]) -> Bool
+
+pub fn wast_trap_message_matches(String, String) -> Bool
+
+pub fn wast_value_to_runtime(@parser.WastValue, func_addrs? : ArrayView[Int32]) -> @types.Value raise WastRunnerError
+
+// Errors
+pub(all) suberror WastRunnerError {
+  UnsupportedCapability(String)
+  ModuleNotFound(String)
+  NoCurrentModule
+  GuestTrap(String)
+  GuestException
+  GuestSuspension
+  GuestExhaustion(String)
+  RuntimeError(String)
+}
+pub fn WastRunnerError::output(Self, &Logger) -> Unit
+pub fn WastRunnerError::to_string(Self) -> String
+pub impl Show for WastRunnerError
+
+// Types and methods
+
+// Type aliases
+
+// Traits

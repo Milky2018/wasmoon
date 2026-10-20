@@ -1,0 +1,32 @@
+import {
+  "Milky2018/wasmoon_runtime/control",
+  "moonbitlang/core/debug",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/parser",
+  "Milky2018/wasm_core/validator",
+  "Milky2018/wasmoon_runtime/native/bridge" @native_bridge,
+  "Milky2018/wasmoon_runtime/native/ffi" @jit_ffi,
+  "Milky2018/wasmoon_runtime/logger",
+  "moonbitlang/async",
+  "moonbitlang/core/env",
+}
+
+options(
+  targets: {
+    "memory_lifetime_test.mbt": [ "native" ],
+    "store_close_wbtest.mbt": [ "native" ],
+    "gc_tracing_native.mbt": [ "native" ],
+    "gc_tracing_wasm.mbt": [ "wasm" ],
+    "store_wasm.mbt": [ "wasm" ],
+    "type_registry_wasm.mbt": [ "wasm" ],
+    "table_wasm.mbt": [ "wasm" ],
+    "resource_budget_wasm.mbt": [ "wasm" ],
+    "rooted_value_wasm.mbt": [ "wasm" ],
+    "store_inspection_wasm.mbt": [ "wasm" ],
+    "native_exception.mbt": [ "native" ],
+    "memory_native.mbt": [ "native" ],
+    "memory_wasm.mbt": [ "wasm" ],
+    "memory_atomic.mbt": [ "native" ],
+    "atomic_wait_test.mbt": [ "native" ],
+  },
+)

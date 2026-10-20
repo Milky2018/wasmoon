@@ -1,0 +1,88 @@
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: ran 300 tasks, now up to date
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-wasm_core-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-wasm_component-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-wasm_milkir-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-milkir-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-vcode-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-regalloc-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-vcode_regalloc-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-x64_target-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-aarch64_target-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-wasmoon_runtime-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-wasmoon_jit-0.17.0.zip
++ moon package --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build
+Running moon check ...
+Finished. moon: no work to do
+Check passed
+Package to /private/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/package-build/publish/Milky2018-wasmoon-0.17.0.zip
++ moon install /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/slot-11/source/cmd/wasmoon --bin /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/bin --target-dir /var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/build
+Using cached marianoguerra/uri@0.1.2
+Using cached moonbitlang/async@0.22.4
+Using cached moonbitlang/x@0.5.5
+libtool: warning: 'runtime-epoll.o' has no symbols
+libtool: warning: 'runtime-io_windows.o' has no symbols
+libtool: warning: 'runtime-iocp.o' has no symbols
+libtool: warning: 'runtime-schannel.o' has no symbols
+libtool: warning: 'runtime-watch_windows.o' has no symbols
+libtool: warning: 'windows_fs.o' has no symbols
+libtool: warning: 'windows_input.o' has no symbols
+libtool: warning: 'reactor_windows.o' has no symbols
+libtool: warning: 'trampoline_call_x86_64.o' has no symbols
+libtool: warning: 'windows_context_x86_64.o' has no symbols
+libtool: warning: 'msvc_guest_bridges.o' has no symbols
+libtool: warning: 'stack_switch_x86_64.o' has no symbols
+libtool: warning: 'fiber_register_probe_x86_64.o' has no symbols
+libtool: warning: 'test_guest_bridges.o' has no symbols
+libtool: warning: 'watch_windows.o' has no symbols
+libtool: warning: 'stub.o' has no symbols
+libtool: warning: 'schannel.o' has no symbols
+libtool: warning: 'epoll.o' has no symbols
+libtool: warning: 'iocp.o' has no symbols
+libtool: warning: 'io_windows.o' has no symbols
+Finished. moon: ran 230 tasks, now up to date
+Success: Installed `wasmoon` to `/var/folders/n6/d4863hyd3078tg52nj9vppjr0000gn/T/wasmoon-packaged-install-eqj2k2w7/bin/wasmoon`
+Packaged installation and WASI execution passed on both engines.
+Packaged wasm interpreter embedding passed.

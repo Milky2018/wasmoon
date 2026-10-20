@@ -1,0 +1,9 @@
+import {
+  "Milky2018/wasmoon_runtime/native/ffi" @jit_ffi,
+}
+
+options(
+  targets: { "platform.mbt": [ "native" ] },
+)
+
+supported_targets = "+native"

@@ -1,0 +1,362 @@
+{
+  "diagnosis_not_a_runtime_fix": true,
+  "original_head": "9439b7800962bd5b4600d1d12a6622de755683ed",
+  "original_failure_run": 39249161277,
+  "original_failure_attempt": 1,
+  "original_failed_job": 118048404823,
+  "original_failure_exact_signature_reproduced_naturally": false,
+  "exact_signature_positive_control": "3500ms synchronous Sleep in TLS server initialization; both original failures; TLS verification test passes",
+  "experiments": [
+    {
+      "run": 39262149808,
+      "compiler": "clang",
+      "diagnostic_head": "8b25292f0e85e3b0bd4998f499a0f717fa3427ec",
+      "diagnostic_only": true,
+      "source_modified_for_tracing": true,
+      "sources_restored": true,
+      "whole_workspace_exit_code": 0,
+      "cohort_runs": 1200,
+      "failed_cohort_runs": 3,
+      "failed_test_verdicts": 3,
+      "failures": [
+        {
+          "repeat": 209,
+          "cohort": "whole-package",
+          "log": "209-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 271,
+          "cohort": "whole-package",
+          "log": "271-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        },
+        {
+          "repeat": 275,
+          "cohort": "whole-package",
+          "log": "275-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        }
+      ],
+      "summary_sha256": "2b461391396c7f8074c3a767ad70c9f8c486500055f44c736b84411ff2a9277d"
+    },
+    {
+      "run": 39262149808,
+      "compiler": "msvc",
+      "diagnostic_head": "8b25292f0e85e3b0bd4998f499a0f717fa3427ec",
+      "diagnostic_only": true,
+      "source_modified_for_tracing": true,
+      "sources_restored": true,
+      "whole_workspace_exit_code": 0,
+      "cohort_runs": 1200,
+      "failed_cohort_runs": 5,
+      "failed_test_verdicts": 5,
+      "failures": [
+        {
+          "repeat": 100,
+          "cohort": "whole-package",
+          "log": "100-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        },
+        {
+          "repeat": 189,
+          "cohort": "whole-package",
+          "log": "189-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 191,
+          "cohort": "whole-package",
+          "log": "191-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        },
+        {
+          "repeat": 192,
+          "cohort": "whole-package",
+          "log": "192-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 255,
+          "cohort": "whole-package",
+          "log": "255-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        }
+      ],
+      "summary_sha256": "6335b5174b90fccbcffe3dee395cbd6dd24490b52a8df4fcb18c1938aca205b6"
+    },
+    {
+      "run": 39263705985,
+      "compiler": "clang",
+      "diagnostic_head": "ecc611eba875b53f852d33692f53be835701dd2a",
+      "diagnostic_only": true,
+      "source_modified_for_tracing": true,
+      "sources_restored": true,
+      "whole_workspace_exit_code": 0,
+      "cohort_runs": 1200,
+      "failed_cohort_runs": 10,
+      "failed_test_verdicts": 13,
+      "failures": [
+        {
+          "repeat": 17,
+          "cohort": "whole-package",
+          "log": "17-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        },
+        {
+          "repeat": 18,
+          "cohort": "whole-package",
+          "log": "18-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 20,
+          "cohort": "whole-package",
+          "log": "20-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 171,
+          "cohort": "whole-package",
+          "log": "171-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            },
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 172,
+          "cohort": "whole-package",
+          "log": "172-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            },
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 176,
+          "cohort": "whole-package",
+          "log": "176-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 178,
+          "cohort": "whole-package",
+          "log": "178-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            },
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        },
+        {
+          "repeat": 234,
+          "cohort": "whole-package",
+          "log": "234-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        },
+        {
+          "repeat": 240,
+          "cohort": "whole-package",
+          "log": "240-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 8,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        },
+        {
+          "repeat": 288,
+          "cohort": "whole-package",
+          "log": "288-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            }
+          ]
+        }
+      ],
+      "summary_sha256": "6e65890d9831069d19a1df7663fdc5f478b86a39e2f71245fb2bcfe1069a8833"
+    },
+    {
+      "run": 39263705985,
+      "compiler": "msvc",
+      "diagnostic_head": "ecc611eba875b53f852d33692f53be835701dd2a",
+      "diagnostic_only": true,
+      "source_modified_for_tracing": true,
+      "sources_restored": true,
+      "whole_workspace_exit_code": 0,
+      "cohort_runs": 1200,
+      "failed_cohort_runs": 1,
+      "failed_test_verdicts": 2,
+      "failures": [
+        {
+          "repeat": 215,
+          "cohort": "whole-package",
+          "log": "215-whole-package.log",
+          "verdicts": [
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 6,
+              "message": "Milky2018/wasmoon/wasi_http.HttpTransportError.HttpTransportError"
+            },
+            {
+              "type": "result",
+              "file": "timeout_wbtest.mbt",
+              "index": 2,
+              "message": "wasi_http/timeout_wbtest.mbt:107:9-107:54@Milky2018/wasmoon FAILED: `<Bytes: [0x68, 0x69]> != <Bytes: [0x68]>`\ndiff:\n<Bytes: [0x68, -0x69]>"
+            }
+          ]
+        }
+      ],
+      "summary_sha256": "be1baad153a28b1b60c237b2fbdf0132d989e9f8bf30e069e8b0648783d8a990"
+    }
+  ],
+  "archived_examples": [
+    {
+      "path": "http-timing-natural-backpressure.log",
+      "raw_sha256": "27c7a3ef54a22f96c2dcce8ea33e9427b2b661a45cf73d70ad6dcb94c3a4b19e",
+      "archived_sha256": "3aa89c79e6ddeed10d5ff1ba5850c27bae2129cad989dcabacb61a94aebc98ba",
+      "presentation_only_normalization": "CRLF to LF; trailing whitespace removed"
+    },
+    {
+      "path": "http-timing-natural-deadline.log",
+      "raw_sha256": "9bcd8399d47fc5f19cd111df147c2abc29edc47a84546ceeed0c34d2be725694",
+      "archived_sha256": "9f3e3cbd736c6a9b8f35e104e2eda03224aad061aec01b58cc0d4ff8174e215e",
+      "presentation_only_normalization": "CRLF to LF; trailing whitespace removed"
+    },
+    {
+      "path": "http-timing-injected-stall.log",
+      "raw_sha256": "b2d2140c24e6ab4d918ba433abdb2bec8a3b99101af3861f417bd9e6f8882594",
+      "archived_sha256": "acc4365e2b2d06410c65eeab6f46843ad1ed628ab0a6a055326c4164a37c2f88",
+      "presentation_only_normalization": "CRLF to LF; trailing whitespace removed"
+    }
+  ]
+}

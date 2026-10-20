@@ -23,6 +23,7 @@ REUSABLE_MODULES = [
 FORBIDDEN_IMPORT_PREFIXES = [
     "Milky2018/wasmoon",
     "Milky2018/wasmoon_jit",
+    "Milky2018/wasmoon_runtime",
 ]
 
 def iter_package_manifests(module_dir: Path):

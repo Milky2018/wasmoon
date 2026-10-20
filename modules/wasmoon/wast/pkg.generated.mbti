@@ -4,9 +4,10 @@ package "Milky2018/wasmoon/wast"
 import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_core/wat/parser",
-  "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/wasi",
-  "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_runtime/native/bridge",
+  "Milky2018/wasmoon_runtime/runtime",
+  "Milky2018/wasmoon_runtime/wast/assertions",
   "moonbitlang/core/hashset",
 }
 
@@ -23,17 +24,19 @@ pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], A
 
 pub fn builtin_jit_modules() -> Array[String]
 
-pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int)]
+pub fn classify_runtime_failure(@runtime.RuntimeError) -> @assertions.WastRunnerError
 
-pub fn count_func_imports(Array[@types.Import]) -> Int
+pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int32)]
+
+pub fn count_func_imports(Array[@types.Import]) -> Int32
 
 pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
-pub fn eval_elem_offset_expr(ArrayView[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int raise @runtime.RuntimeError
+pub fn eval_elem_offset_expr(ArrayView[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int32 raise @runtime.RuntimeError
 
 pub fn exports_shared_resources(@types.Module) -> Bool
 
-pub fn get_func_name(@types.Module, Int) -> String
+pub fn get_func_name(@types.Module, Int32) -> String
 
 pub fn has_cross_module_imports(@types.Module) -> Bool
 
@@ -47,9 +50,9 @@ pub fn init_elem_segments(@types.Module, @Milky2018/wasmoon/jit.JITModule, @runt
 
 pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Int64 raise @runtime.RuntimeError
 
-pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo] raise @runtime.RuntimeError
+pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Array[@bridge.MemoryInfo] raise @runtime.RuntimeError
 
-pub fn invoke_action(WastContext, @parser.WastAction) -> Array[@types.Value] raise WastRunnerError
+pub fn invoke_action(WastContext, @parser.WastAction) -> Array[@types.Value] raise @assertions.WastRunnerError
 
 pub fn parse(String) -> @parser.WastScript raise @parser.WatError
 
@@ -57,35 +60,25 @@ pub fn register_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule, @run
 
 pub fn register_owned_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> @Milky2018/wasmoon/wast/jit.FuncrefRegistration raise @runtime.RuntimeError
 
-pub fn run_wast_command(WastContext, @parser.WastCommand, Int, WastResult, String, Bool) -> Unit
+pub fn run_wast_command(WastContext, @parser.WastCommand, Int32, WastResult, String, Bool) -> Unit
 
-pub fn run_wast_commands(@parser.WastScript, String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool) -> WastResult
+pub fn run_wast_commands(@parser.WastScript, String, Bool, Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool, wasmtime_validation? : Bool) -> WastResult
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Unit
 
 pub fn sync_jit_tables_to_store(@Milky2018/wasmoon/wast/jit.JITModuleContext, @runtime.Store) -> Unit raise @runtime.RuntimeError
 
-pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
+pub fn sync_table_to_jit(@runtime.Table, @bridge.JITTable, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
 pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
-pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : ArrayView[Int]) -> Bool
+pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : ArrayView[Int32]) -> Bool
 
-pub fn wast_value_to_runtime(@parser.WastValue, func_addrs? : ArrayView[Int]) -> @types.Value raise WastRunnerError
+pub fn wast_trap_message_matches(String, String) -> Bool
+
+pub fn wast_value_to_runtime(@parser.WastValue, func_addrs? : ArrayView[Int32]) -> @types.Value raise @assertions.WastRunnerError
 
 // Errors
-pub(all) suberror WastRunnerError {
-  ModuleNotFound(String)
-  NoCurrentModule
-  GuestTrap(String)
-  GuestException
-  GuestSuspension
-  GuestExhaustion(String)
-  RuntimeError(String)
-}
-pub fn WastRunnerError::output(Self, &Logger) -> Unit
-pub fn WastRunnerError::to_string(Self) -> String
-pub impl Show for WastRunnerError
 
 // Types and methods
 pub struct WastContext {
@@ -106,15 +99,15 @@ pub struct WastContext {
   wasi_ctx : @wasi.WasiContext
   // private fields
 }
-pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool) -> Self raise @runtime.RuntimeError
+pub fn WastContext::WastContext(Bool, bulk_memory? : Bool, stack_switching? : Bool, nan_canonicalization? : Bool, jit_compiler? : @Milky2018/wasmoon/wast/jit.JITCompiler?, register_named_modules? : Bool, wasmtime_validation? : Bool) -> Self raise @runtime.RuntimeError
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
 pub fn WastContext::close(Self) -> Unit
 pub fn WastContext::get_store(Self) -> @runtime.Store
 
 pub struct WastResult {
-  mut passed : Int
-  mut failed : Int
-  skipped : Int
+  mut passed : Int32
+  mut failed : Int32
+  skipped : Int32
   failures : Array[String]
 }
 pub fn WastResult::WastResult() -> Self
@@ -137,6 +130,8 @@ pub using @parser {type WastAction}
 pub using @parser {type WastCommand}
 
 pub using @parser {type WastModuleSource}
+
+pub using @assertions {type WastRunnerError}
 
 pub using @parser {type WastScript}
 

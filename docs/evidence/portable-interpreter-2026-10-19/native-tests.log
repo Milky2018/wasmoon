@@ -1,0 +1,10 @@
+Error: Native pipeline error: Milky2018/wasmoon/cmd/wasmoon/commands.ExpectedExploreCompileFailure.ExpectedExploreCompileFailure
+HTML report written to: /tmp/wasmoon-explore-status-1792398663218.html
+HTML report written to: /tmp/wasmoon-x64-result-spills-i32-1792398663220.html
+HTML report written to: /tmp/wasmoon-x64-result-spills-f64-1792398663224.html
+HTML report written to: /tmp/wasmoon-x64-result-spills-v128-1792398663227.html
+HTML report written to: /tmp/wasmoon-explore-parity-1792398663230.html
+HTML report written to: /tmp/wasmoon-explore-parity-1792398663230.html
+HTML report written to: /tmp/wasmoon-explore-parity-1792398663230.html
+HTML report written to: /tmp/wasmoon-explore-parity-1792398663230.html
+Total tests: 2765, passed: 2765, failed: 0.

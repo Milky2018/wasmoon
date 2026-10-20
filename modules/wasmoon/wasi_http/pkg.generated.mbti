@@ -48,12 +48,12 @@ pub fn HttpFields::set(Self, String, Array[Bytes]) -> Result[Unit, HeaderError]
 pub struct HttpHost {
   linker : @runtime_impl.ComponentLinker
   runtime : @runtime_impl.HostRuntimeState
-  resources : Map[Int, HttpResource]
+  resources : Map[Int32, HttpResource]
   bodies : Array[HttpBody]
   wake : @cond_var.Cond
   pending : Array[HttpInvocation]
   spawn : @ref.Ref[((async () -> Unit) -> @async.Task[Unit])?]
-  next_id : @ref.Ref[Int]
+  next_id : @ref.Ref[Int32]
   types : Array[@model.TypeDef?]
   resource_types : Map[String, @model.TypeDef?]
 }

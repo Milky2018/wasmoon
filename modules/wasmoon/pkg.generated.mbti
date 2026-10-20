@@ -4,7 +4,7 @@ package "Milky2018/wasmoon"
 import {
   "Milky2018/milkir",
   "Milky2018/wasm_milkir/frontend/embedding",
-  "Milky2018/wasmoon_jit/context/layout",
+  "Milky2018/wasmoon_runtime/native/layout",
 }
 
 // Values

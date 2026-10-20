@@ -20,3 +20,5 @@ import {
 options(
   targets: { "ffi_native.mbt": [ "native" ] },
 )
+
+supported_targets = "+native"

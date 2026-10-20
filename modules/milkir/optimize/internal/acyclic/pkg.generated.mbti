@@ -7,20 +7,20 @@ import {
 }
 
 // Values
-pub fn run_acyclic_optimization_with_budget_and_analysis(@milkir.Function, Int, @analysis.FunctionAnalysis) -> AcyclicOptimizeStats
+pub fn run_acyclic_optimization_with_budget_and_analysis(@milkir.Function, Int32, @analysis.FunctionAnalysis) -> AcyclicOptimizeStats
 
 // Errors
 
 // Types and methods
 pub struct AcyclicOptimizeStats {
   changed : Bool
-  work_done : Int
+  work_done : Int32
   budget_exhausted : Bool
-  value_lookup_probes : Int
+  value_lookup_probes : Int32
   rewrite_changed : Bool
-  rewrite_attempts : Int
-  rewrite_applied : Int
-  rewrite_created_instructions : Int
+  rewrite_attempts : Int32
+  rewrite_applied : Int32
+  rewrite_created_instructions : Int32
 }
 
 // Type aliases

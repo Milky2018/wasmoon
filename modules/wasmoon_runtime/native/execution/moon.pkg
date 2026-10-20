@@ -1,0 +1,16 @@
+import {
+  "Milky2018/wasmoon_runtime/native/ffi" @jit_ffi,
+  "Milky2018/wasm_core/types",
+}
+
+options(
+  targets: {
+    "errors.mbt": [ "native" ],
+    "supported_native.mbt": [ "native" ],
+    "supported_wasm.mbt": [ "wasm" ],
+    "arenas.mbt": [ "native" ],
+    "trait_extensions.mbt": [ "native" ],
+    "state_test.mbt": [ "native" ],
+    "state.mbt": [ "native" ],
+  },
+)

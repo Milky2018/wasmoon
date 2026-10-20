@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn encode(@types.Module) -> Array[Int]
+pub fn encode(@types.Module) -> Array[Int32]
 
 // Errors
 

@@ -12,7 +12,7 @@ pub fn clear_optimization_metrics_sink() -> Unit
 
 pub fn install_optimization_metrics_sink(OptimizationMetricsSink) -> Unit
 
-pub fn instruction_count(@milkir.Function) -> Int
+pub fn instruction_count(@milkir.Function) -> Int32
 
 pub fn optimize(@milkir.Function) -> OptResult
 
@@ -27,7 +27,7 @@ pub(all) enum OptLevel {
   O2
   O3
 }
-pub fn OptLevel::from_int(Int) -> Self
+pub fn OptLevel::from_int(Int32) -> Self
 
 pub struct OptResult {
   mut changed : Bool
@@ -41,14 +41,14 @@ pub fn OptimizationMetricsSink::new(() -> Int64, (OptimizationPassMetric) -> Uni
 pub struct OptimizationPassMetric {
   name : String
   duration_us : Int64
-  before_insts : Int
-  after_insts : Int
+  before_insts : Int32
+  after_insts : Int32
   changed : Bool
-  rewrite_attempts : Int?
-  rewrite_apps : Int?
-  rewrite_created_insts : Int?
-  work_done : Int?
-  value_lookup_probes : Int?
+  rewrite_attempts : Int32?
+  rewrite_apps : Int32?
+  rewrite_created_insts : Int32?
+  work_done : Int32?
+  value_lookup_probes : Int32?
   budget_exhausted : Bool?
 }
 

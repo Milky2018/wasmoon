@@ -12,15 +12,15 @@ pub fn build(Architecture, Array[Byte], relocations? : Array[Relocation], source
 // Errors
 pub suberror CodeObjectVerifyError {
   EmptyCode
-  MisalignedCodeSize(size~ : Int)
-  InvalidRelocation(index~ : Int, message~ : String)
-  DuplicateRelocationOffset(offset~ : Int)
-  InvalidSourceSite(index~ : Int, offset~ : Int)
-  InvalidTrapSite(index~ : Int, offset~ : Int)
-  InvalidSafepointSite(index~ : Int, offset~ : Int)
-  InvalidRootLocation(safepoint~ : Int, root~ : Int)
-  InvalidStackMap(safepoint~ : Int)
-  InvalidUnwindDirective(index~ : Int, message~ : String)
+  MisalignedCodeSize(size~ : Int32)
+  InvalidRelocation(index~ : Int32, message~ : String)
+  DuplicateRelocationOffset(offset~ : Int32)
+  InvalidSourceSite(index~ : Int32, offset~ : Int32)
+  InvalidTrapSite(index~ : Int32, offset~ : Int32)
+  InvalidSafepointSite(index~ : Int32, offset~ : Int32)
+  InvalidRootLocation(safepoint~ : Int32, root~ : Int32)
+  InvalidStackMap(safepoint~ : Int32)
+  InvalidUnwindDirective(index~ : Int32, message~ : String)
 } derive(Eq, @debug.Debug)
 pub fn CodeObjectVerifyError::equal(Self, Self) -> Bool
 pub fn CodeObjectVerifyError::not_equal(Self, Self) -> Bool
@@ -47,13 +47,13 @@ pub fn RegisterBank::not_equal(Self, Self) -> Bool
 pub fn RegisterBank::to_repr(Self) -> @debug.Repr
 
 pub struct Relocation {
-  offset : Int
+  offset : Int32
   kind : RelocationKind
   target : RelocationTarget
   addend : Int64
 } derive(Eq, @debug.Debug)
 pub fn Relocation::equal(Self, Self) -> Bool
-pub fn Relocation::new(Int, RelocationKind, RelocationTarget, addend? : Int64) -> Self
+pub fn Relocation::new(Int32, RelocationKind, RelocationTarget, addend? : Int64) -> Self
 pub fn Relocation::not_equal(Self, Self) -> Bool
 pub fn Relocation::to_repr(Self) -> @debug.Repr
 
@@ -79,41 +79,41 @@ pub fn RelocationTarget::not_equal(Self, Self) -> Bool
 pub fn RelocationTarget::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RootLocation {
-  Register(RegisterBank, Int)
-  Stack(offset~ : Int, ty~ : @native_types.ValueType)
+  Register(RegisterBank, Int32)
+  Stack(offset~ : Int32, ty~ : @native_types.ValueType)
 } derive(Eq, @debug.Debug)
 pub fn RootLocation::equal(Self, Self) -> Bool
 pub fn RootLocation::not_equal(Self, Self) -> Bool
 pub fn RootLocation::to_repr(Self) -> @debug.Repr
 
 pub struct SafepointSite {
-  offset : Int
+  offset : Int32
   kind : @native_types.SafepointKind
   roots : Array[RootLocation]
   source : @native_types.SourceLocation?
   stack_map : @native_types.StackMapMetadata?
 } derive(Eq, @debug.Debug)
 pub fn SafepointSite::equal(Self, Self) -> Bool
-pub fn SafepointSite::new(Int, @native_types.SafepointKind, Array[RootLocation], source? : @native_types.SourceLocation, stack_map? : @native_types.StackMapMetadata) -> Self
+pub fn SafepointSite::new(Int32, @native_types.SafepointKind, Array[RootLocation], source? : @native_types.SourceLocation, stack_map? : @native_types.StackMapMetadata) -> Self
 pub fn SafepointSite::not_equal(Self, Self) -> Bool
 pub fn SafepointSite::to_repr(Self) -> @debug.Repr
 
 pub struct SourceSite {
-  offset : Int
+  offset : Int32
   source : @native_types.SourceLocation
 } derive(Eq, @debug.Debug)
 pub fn SourceSite::equal(Self, Self) -> Bool
-pub fn SourceSite::new(Int, @native_types.SourceLocation) -> Self
+pub fn SourceSite::new(Int32, @native_types.SourceLocation) -> Self
 pub fn SourceSite::not_equal(Self, Self) -> Bool
 pub fn SourceSite::to_repr(Self) -> @debug.Repr
 
 pub struct TrapSite {
-  offset : Int
+  offset : Int32
   reason : @native_types.TrapReason
   source : @native_types.SourceLocation?
 } derive(Eq, @debug.Debug)
 pub fn TrapSite::equal(Self, Self) -> Bool
-pub fn TrapSite::new(Int, @native_types.TrapReason, source? : @native_types.SourceLocation) -> Self
+pub fn TrapSite::new(Int32, @native_types.TrapReason, source? : @native_types.SourceLocation) -> Self
 pub fn TrapSite::not_equal(Self, Self) -> Bool
 pub fn TrapSite::to_repr(Self) -> @debug.Repr
 
@@ -131,18 +131,18 @@ pub fn UnlinkedCodeObject::unwind(Self) -> Array[UnwindDirective]
 pub fn UnlinkedCodeObject::verify(Self) -> Unit raise CodeObjectVerifyError
 
 pub struct UnwindDirective {
-  offset : Int
+  offset : Int32
   operation : UnwindOperation
 } derive(Eq, @debug.Debug)
 pub fn UnwindDirective::equal(Self, Self) -> Bool
-pub fn UnwindDirective::new(Int, UnwindOperation) -> Self
+pub fn UnwindDirective::new(Int32, UnwindOperation) -> Self
 pub fn UnwindDirective::not_equal(Self, Self) -> Bool
 pub fn UnwindDirective::to_repr(Self) -> @debug.Repr
 
 pub(all) enum UnwindOperation {
-  StackAlloc(size~ : Int)
-  SetFramePointer(RegisterBank, Int, cfa_offset~ : Int)
-  SaveRegister(RegisterBank, Int, cfa_offset~ : Int)
+  StackAlloc(size~ : Int32)
+  SetFramePointer(RegisterBank, Int32, cfa_offset~ : Int32)
+  SaveRegister(RegisterBank, Int32, cfa_offset~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn UnwindOperation::equal(Self, Self) -> Bool
 pub fn UnwindOperation::not_equal(Self, Self) -> Bool

@@ -672,6 +672,9 @@ graph TD
   ISS_638["ISS-638: Move continuation lifecycle decisions into MoonBit"]
   ISS_639["ISS-639: Keep private native test layouts with their implementation owner"]
   ISS_640["ISS-640: Verify native builtin import argument routing through behavior"]
+  ISS_641["ISS-641: Run the Core interpreter on the wasm target without native runtime dependencies"]
+  ISS_642["ISS-642: Enforce WAT text validity and remove quoted-malformed false positives"]
+  ISS_643["ISS-643: Isolate TLS credential setup from HTTP timing tests"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

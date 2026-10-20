@@ -8,6 +8,7 @@ members = [
   "./modules/vcode_regalloc",
   "./modules/x64_target",
   "./modules/aarch64_target",
+  "./modules/wasmoon_runtime",
   "./modules/wasmoon_jit",
   "./modules/wasmoon",
 ]

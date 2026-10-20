@@ -18,30 +18,30 @@ pub(all) suberror ValidationError {
   TypeMismatch(String)
   StackUnderflow(String)
   StackHeightMismatch(String)
-  InvalidFunctionIndex(Int)
-  InvalidTypeIndex(Int)
-  InvalidLocalIndex(Int)
-  InvalidGlobalIndex(Int)
-  InvalidTableIndex(Int)
-  InvalidMemoryIndex(Int)
-  InvalidLabelIndex(Int)
-  InvalidElemIndex(Int)
-  InvalidDataIndex(Int)
-  UnknownTag(Int)
-  UnknownType(Int)
+  InvalidFunctionIndex(Int32)
+  InvalidTypeIndex(Int32)
+  InvalidLocalIndex(Int32)
+  InvalidGlobalIndex(Int32)
+  InvalidTableIndex(Int32)
+  InvalidMemoryIndex(Int32)
+  InvalidLabelIndex(Int32)
+  InvalidElemIndex(Int32)
+  InvalidDataIndex(Int32)
+  UnknownTag(Int32)
+  UnknownType(Int32)
   UnreachableCode
   MultipleMemories
   MultipleTables
   InvalidLimits(String)
   InvalidAlignment(String)
-  InvalidLaneIndex(Int, Int)
+  InvalidLaneIndex(Int32, Int32)
   ConstantExpressionRequired
   MutableGlobalInConstExpr
   DuplicateExportName(String)
   UnknownExport(String)
-  UninitializedLocal(Int)
+  UninitializedLocal(Int32)
   InvalidStartFunction(String)
-  UndeclaredFunctionReference(Int)
+  UndeclaredFunctionReference(Int32)
   UnsupportedInstruction(String)
   WithContext(ValidationErrorContext)
 } derive(@debug.Debug)
@@ -54,15 +54,15 @@ pub impl Show for ValidationError
 pub struct ValidatedModule {
   // private fields
 }
-pub fn ValidatedModule::function(Self, Int) -> (@types.FunctionCode, Int, @types.FuncType)?
+pub fn ValidatedModule::function(Self, Int32) -> (@types.FunctionCode, Int32, @types.FuncType)?
 pub fn ValidatedModule::new(@types.Module, bulk_memory? : Bool, stack_switching? : Bool) -> Self raise ValidationError
 pub fn ValidatedModule::snapshot(Self) -> @types.Module
-pub fn ValidatedModule::start(Self) -> Int?
+pub fn ValidatedModule::start(Self) -> Int32?
 
 pub(all) struct ValidationErrorContext {
   error_msg : String
-  func_idx : Int?
-  instr_offset : Int?
+  func_idx : Int32?
+  instr_offset : Int32?
   instruction : String?
 } derive(@debug.Debug)
 pub fn ValidationErrorContext::ValidationErrorContext(String) -> Self
@@ -71,8 +71,8 @@ pub fn ValidationErrorContext::from_error(ValidationError) -> Self
 pub fn ValidationErrorContext::output(Self, &Logger) -> Unit
 pub fn ValidationErrorContext::to_repr(Self) -> @debug.Repr
 pub fn ValidationErrorContext::to_string(Self) -> String
-pub fn ValidationErrorContext::with_func_idx(Self, Int) -> Self
-pub fn ValidationErrorContext::with_instr_offset(Self, Int) -> Self
+pub fn ValidationErrorContext::with_func_idx(Self, Int32) -> Self
+pub fn ValidationErrorContext::with_instr_offset(Self, Int32) -> Self
 pub fn ValidationErrorContext::with_instruction(Self, String) -> Self
 pub impl Show for ValidationErrorContext
 

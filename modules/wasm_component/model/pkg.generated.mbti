@@ -35,15 +35,15 @@ pub suberror ComponentParseError {
   UnexpectedEndOfInput
   Leb128TooLarge
   NotAComponent
-  UnsupportedComponentPreamble(Int, Int)
+  UnsupportedComponentPreamble(Int32, Int32)
   InvalidTypeSection
   InvalidInstanceSection
   InvalidAliasSection
   InvalidCanonSection
   InvalidStartSection
-  UnsupportedCanonOpcode(Int)
+  UnsupportedCanonOpcode(Int32)
   InvalidUtf8
-  UnsupportedTypeOpcode(Int)
+  UnsupportedTypeOpcode(Int32)
 }
 pub fn ComponentParseError::output(Self, &Logger) -> Unit
 pub fn ComponentParseError::to_string(Self) -> String
@@ -62,9 +62,9 @@ pub fn Alias::to_string(Self) -> String
 pub impl Show for Alias
 
 pub(all) enum AliasTarget {
-  Export(Int, String)
-  CoreExport(Int, String)
-  Outer(Int, Int)
+  Export(Int32, String)
+  CoreExport(Int32, String)
+  Outer(Int32, Int32)
 } derive(Eq, @debug.Debug)
 pub fn AliasTarget::equal(Self, Self) -> Bool
 pub fn AliasTarget::not_equal(Self, Self) -> Bool
@@ -73,7 +73,7 @@ pub fn AliasTarget::to_repr(Self) -> @debug.Repr
 pub(all) enum BinaryKind {
   CoreModule
   Component
-  UnknownPreamble(Int, Int)
+  UnknownPreamble(Int32, Int32)
 } derive(Eq, @debug.Debug)
 pub fn BinaryKind::equal(Self, Self) -> Bool
 pub fn BinaryKind::not_equal(Self, Self) -> Bool
@@ -83,12 +83,12 @@ pub fn BinaryKind::to_string(Self) -> String
 pub impl Show for BinaryKind
 
 pub(all) enum Canon {
-  Lift(Int, Array[CanonOpt], Int)
-  Lower(Int, Array[CanonOpt])
+  Lift(Int32, Array[CanonOpt], Int32)
+  Lower(Int32, Array[CanonOpt])
   BackpressureInc
   BackpressureDec
-  ContextGet(@types.ValueType, Int)
-  ContextSet(@types.ValueType, Int)
+  ContextGet(@types.ValueType, Int32)
+  ContextSet(@types.ValueType, Int32)
   TaskReturn(ValType?, Array[CanonOpt])
   TaskCancel
   ThreadIndex
@@ -99,34 +99,34 @@ pub(all) enum Canon {
   ThreadYieldThenPromote(Bool)
   ThreadResumeLater
   ThreadSuspend(Bool)
-  ThreadNewIndirect(Int, Int)
+  ThreadNewIndirect(Int32, Int32)
   WaitableSetNew
-  WaitableSetWait(Bool, Int)
-  WaitableSetPoll(Bool, Int)
+  WaitableSetWait(Bool, Int32)
+  WaitableSetPoll(Bool, Int32)
   WaitableSetDrop
   WaitableJoin
   SubtaskCancel(Bool)
   SubtaskDrop
-  StreamNew(Int)
-  StreamRead(Int, Array[CanonOpt])
-  StreamWrite(Int, Array[CanonOpt])
-  StreamCancelRead(Int, Bool)
-  StreamCancelWrite(Int, Bool)
-  StreamDropReadable(Int)
-  StreamDropWritable(Int)
-  FutureNew(Int)
-  FutureRead(Int, Array[CanonOpt])
-  FutureWrite(Int, Array[CanonOpt])
-  FutureCancelRead(Int, Bool)
-  FutureCancelWrite(Int, Bool)
-  FutureDropReadable(Int)
-  FutureDropWritable(Int)
+  StreamNew(Int32)
+  StreamRead(Int32, Array[CanonOpt])
+  StreamWrite(Int32, Array[CanonOpt])
+  StreamCancelRead(Int32, Bool)
+  StreamCancelWrite(Int32, Bool)
+  StreamDropReadable(Int32)
+  StreamDropWritable(Int32)
+  FutureNew(Int32)
+  FutureRead(Int32, Array[CanonOpt])
+  FutureWrite(Int32, Array[CanonOpt])
+  FutureCancelRead(Int32, Bool)
+  FutureCancelWrite(Int32, Bool)
+  FutureDropReadable(Int32)
+  FutureDropWritable(Int32)
   ErrorContextNew(Array[CanonOpt])
   ErrorContextDebugMessage(Array[CanonOpt])
   ErrorContextDrop
-  ResourceNew(Int)
-  ResourceDrop(Int)
-  ResourceRep(Int)
+  ResourceNew(Int32)
+  ResourceDrop(Int32)
+  ResourceRep(Int32)
 } derive(Eq, @debug.Debug)
 pub fn Canon::equal(Self, Self) -> Bool
 pub fn Canon::not_equal(Self, Self) -> Bool
@@ -137,13 +137,13 @@ pub impl Show for Canon
 
 pub(all) enum CanonOpt {
   StringEncoding(StringEncoding)
-  Memory(Int)
-  Realloc(Int)
-  PostReturn(Int)
-  CoreType(Int)
+  Memory(Int32)
+  Realloc(Int32)
+  PostReturn(Int32)
+  CoreType(Int32)
   Gc
   Async
-  Callback(Int)
+  Callback(Int32)
 } derive(Eq, @debug.Debug)
 pub fn CanonOpt::equal(Self, Self) -> Bool
 pub fn CanonOpt::not_equal(Self, Self) -> Bool
@@ -173,8 +173,8 @@ pub fn Component::to_string(Self) -> String
 pub impl Show for Component
 
 pub struct ComponentBinary {
-  version : Int
-  layer : Int
+  version : Int32
+  layer : Int32
   sections : Array[Section]
 } derive(Eq, @debug.Debug)
 pub fn ComponentBinary::equal(Self, Self) -> Bool
@@ -184,8 +184,8 @@ pub fn ComponentBinary::to_repr(Self) -> @debug.Repr
 pub(all) enum ComponentDecl {
   CoreType(Bytes)
   Type(TypeDef)
-  AliasOuter(Int, Int, Int)
-  AliasInstanceExport(Int, Int, String)
+  AliasOuter(Int32, Int32, Int32)
+  AliasInstanceExport(Int32, Int32, String)
   Import(String, Array[NameAttribute], ExternDesc)
   Export(String, Array[NameAttribute], ExternDesc)
 } derive(Eq, @debug.Debug)
@@ -209,7 +209,7 @@ pub fn CoreInstanceDecl::not_equal(Self, Self) -> Bool
 pub fn CoreInstanceDecl::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CoreInstanceExpr {
-  Instantiate(Int, Array[CoreInstantiateArg])
+  Instantiate(Int32, Array[CoreInstantiateArg])
   InlineExports(Array[CoreInlineExport])
 } derive(Eq, @debug.Debug)
 pub fn CoreInstanceExpr::equal(Self, Self) -> Bool
@@ -243,12 +243,12 @@ pub fn ExportName::not_equal(Self, Self) -> Bool
 pub fn ExportName::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ExternDesc {
-  CoreModuleType(Int)
-  FuncType(Int)
+  CoreModuleType(Int32)
+  FuncType(Int32)
   Value(ValueBound)
   Type(TypeBound)
-  ComponentType(Int)
-  InstanceType(Int)
+  ComponentType(Int32)
+  InstanceType(Int32)
 } derive(Eq, @debug.Debug)
 pub fn ExternDesc::equal(Self, Self) -> Bool
 pub fn ExternDesc::not_equal(Self, Self) -> Bool
@@ -302,8 +302,8 @@ pub fn Instance::to_repr(Self) -> @debug.Repr
 pub(all) enum InstanceDecl {
   CoreType(Bytes)
   Type(TypeDef)
-  AliasOuter(Int, Int, Int)
-  AliasInstanceExport(Int, Int, String)
+  AliasOuter(Int32, Int32, Int32)
+  AliasInstanceExport(Int32, Int32, String)
   Export(String, Array[NameAttribute], ExternDesc)
 } derive(Eq, @debug.Debug)
 pub fn InstanceDecl::equal(Self, Self) -> Bool
@@ -311,7 +311,7 @@ pub fn InstanceDecl::not_equal(Self, Self) -> Bool
 pub fn InstanceDecl::to_repr(Self) -> @debug.Repr
 
 pub(all) enum InstanceExpr {
-  Instantiate(Int, Array[InstantiateArg])
+  Instantiate(Int32, Array[InstantiateArg])
   InlineExports(Array[InlineExport])
 } derive(Eq, @debug.Debug)
 pub fn InstanceExpr::equal(Self, Self) -> Bool
@@ -383,7 +383,7 @@ pub fn ResourceKind::not_equal(Self, Self) -> Bool
 pub fn ResourceKind::to_repr(Self) -> @debug.Repr
 
 pub struct Section {
-  id : Int
+  id : Int32
   payload : Bytes
 } derive(Eq, @debug.Debug)
 pub fn Section::equal(Self, Self) -> Bool
@@ -391,7 +391,7 @@ pub fn Section::not_equal(Self, Self) -> Bool
 pub fn Section::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Sort {
-  Core(Int)
+  Core(Int32)
   Func
   Value
   Type
@@ -404,7 +404,7 @@ pub fn Sort::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SortIdx {
   sort : Sort
-  idx : Int
+  idx : Int32
 } derive(Eq, @debug.Debug)
 pub fn SortIdx::equal(Self, Self) -> Bool
 pub fn SortIdx::not_equal(Self, Self) -> Bool
@@ -414,9 +414,9 @@ pub fn SortIdx::to_string(Self) -> String
 pub impl Show for SortIdx
 
 pub(all) struct Start {
-  func_idx : Int
-  args : Array[Int]
-  results : Int
+  func_idx : Int32
+  args : Array[Int32]
+  results : Int32
 } derive(Eq, @debug.Debug)
 pub fn Start::equal(Self, Self) -> Bool
 pub fn Start::not_equal(Self, Self) -> Bool
@@ -435,7 +435,7 @@ pub fn StringEncoding::not_equal(Self, Self) -> Bool
 pub fn StringEncoding::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TypeBound {
-  Eq(Int)
+  Eq(Int32)
   SubResource
 } derive(Eq, @debug.Debug)
 pub fn TypeBound::equal(Self, Self) -> Bool
@@ -446,7 +446,7 @@ pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
   List(ValType)
-  FixedList(ValType, Int)
+  FixedList(ValType, Int32)
   MapType(ValType, ValType)
   Record(Array[RecordField])
   Variant(Array[VariantCase])
@@ -455,11 +455,11 @@ pub(all) enum TypeDef {
   Enum(Array[String])
   Option(ValType)
   Result(ValType?, ValType?)
-  Own(Int)
-  Borrow(Int)
+  Own(Int32)
+  Borrow(Int32)
   Stream(ValType?)
   Future(ValType?)
-  ResourceType(Int, Int, Int?, ResourceKind)
+  ResourceType(Int32, Int32, Int32?, ResourceKind)
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
@@ -472,7 +472,7 @@ pub fn TypeDef::to_string(Self) -> String
 pub impl Show for TypeDef
 
 pub(all) enum ValType {
-  TypeIdx(Int)
+  TypeIdx(Int32)
   Prim(PrimValType)
 } derive(Eq, @debug.Debug)
 pub fn ValType::equal(Self, Self) -> Bool
@@ -480,7 +480,7 @@ pub fn ValType::not_equal(Self, Self) -> Bool
 pub fn ValType::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ValueBound {
-  Eq(Int)
+  Eq(Int32)
   Type(ValType)
 } derive(Eq, @debug.Debug)
 pub fn ValueBound::equal(Self, Self) -> Bool
@@ -490,7 +490,7 @@ pub fn ValueBound::to_repr(Self) -> @debug.Repr
 pub(all) struct VariantCase {
   label : String
   ty : ValType?
-  refines : Int?
+  refines : Int32?
 } derive(Eq, @debug.Debug)
 pub fn VariantCase::equal(Self, Self) -> Bool
 pub fn VariantCase::not_equal(Self, Self) -> Bool

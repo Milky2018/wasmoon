@@ -11,24 +11,26 @@ pub fn format_wat_error(@parser.WatError, String) -> String
 
 pub fn parse(String, implicit_module? : Bool) -> @types.Module raise @parser.WatError
 
+pub fn parse_string_literal(String) -> Bytes raise @parser.WatError
+
 pub fn parse_wast(String) -> @parser.WastScript raise @parser.WatError
 
 pub fn render(@types.Module) -> String raise WatPrintError
 
-pub fn render_function(@types.Module, Int) -> String raise WatPrintError
+pub fn render_function(@types.Module, Int32) -> String raise WatPrintError
 
 // Errors
 pub(all) suberror WatPrintError {
-  NotAFunctionType(Int)
-  FunctionCodeCountMismatch(declarations~ : Int, bodies~ : Int)
-  FunctionIndexOutOfBounds(Int)
-  ImportedFunction(Int)
-  TypeRecGroupCountMismatch(types~ : Int, groups~ : Int)
-  NonContiguousTypeRecGroup(Int)
-  InvalidMemoryPageSizeLog2(Int)
-  InvalidV128ConstantLength(Int)
-  InvalidShuffleLaneCount(Int)
-  InvalidAtomicSubopcode(Int)
+  NotAFunctionType(Int32)
+  FunctionCodeCountMismatch(declarations~ : Int32, bodies~ : Int32)
+  FunctionIndexOutOfBounds(Int32)
+  ImportedFunction(Int32)
+  TypeRecGroupCountMismatch(types~ : Int32, groups~ : Int32)
+  NonContiguousTypeRecGroup(Int32)
+  InvalidMemoryPageSizeLog2(Int32)
+  InvalidV128ConstantLength(Int32)
+  InvalidShuffleLaneCount(Int32)
+  InvalidAtomicSubopcode(Int32)
 }
 pub fn WatPrintError::output(Self, &Logger) -> Unit
 pub fn WatPrintError::to_string(Self) -> String

@@ -10,18 +10,18 @@ import {
 }
 
 // Values
-pub fn function_signature(@milkir.Function, environment_parameters? : Array[(Int, @native_types.ValueType)]) -> @native_types.Signature
+pub fn function_signature(@milkir.Function, environment_parameters? : Array[(Int32, @native_types.ValueType)]) -> @native_types.Signature
 
 pub fn lower_core_to_sink(@milkir.Function, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, verify_input? : Bool, on_event? : (NativeLowerEvent) -> Unit) -> Unit raise NativeLowerError
 
-pub fn lower_dialect_to_sink(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, (@milkir.GlobalValueData) -> String?, Array[(Int, @native_types.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?, (@milkir.ContextField) -> @native_types.EnvironmentField?, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, verify_input? : Bool, on_event? : (NativeLowerEvent) -> Unit) -> Unit raise NativeLowerError
+pub fn lower_dialect_to_sink(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, (@milkir.GlobalValueData) -> String?, Array[(Int32, @native_types.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?, (@milkir.ContextField) -> @native_types.EnvironmentField?, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, verify_input? : Bool, on_event? : (NativeLowerEvent) -> Unit) -> Unit raise NativeLowerError
 
 // Errors
 pub suberror NativeLowerError {
   InvalidMilkIR(message~ : String)
-  UnsupportedOperation(block_id~ : Int, instruction_id~ : Int, message~ : String)
-  MissingValue(value_id~ : Int)
-  MissingBlock(block_id~ : Int)
+  UnsupportedOperation(block_id~ : Int32, instruction_id~ : Int32, message~ : String)
+  MissingValue(value_id~ : Int32)
+  MissingBlock(block_id~ : Int32)
   InvalidTargetLowering(message~ : String)
 } derive(Eq, @debug.Debug)
 pub fn NativeLowerError::equal(Self, Self) -> Bool

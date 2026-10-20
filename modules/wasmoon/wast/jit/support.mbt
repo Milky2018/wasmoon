@@ -1552,7 +1552,7 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
           raise AsyncHostRequiresAsyncCall
         }
         guard self.async_host_drivers.get(invocation_id) is Some(driver) else {
-          let error = @runtime.AsyncHostRequiresAsyncCall
+          let error = @runtime.RuntimeError::AsyncHostRequiresAsyncCall
           self.async_host_errors.set(invocation_id, error)
           raise error
         }

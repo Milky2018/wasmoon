@@ -1,20 +1,5 @@
 import {
-  "Milky2018/wasmoon_jit/host_io",
+  "Milky2018/wasmoon_runtime/native/host_io/wasi" @implementation,
 }
 
-import {
-  "Milky2018/wasmoon_jit/host_io/reactor",
-} for "test"
-
-options(
-  "native-stub": [
-    "ffi_native.c",
-    "socket_native.c",
-    "resolver_native.c",
-    "file_semantics_native.c",
-    "socket_semantics_native.c",
-    "process_native.c",
-    "poll_native.c",
-    "directory_native.c",
-  ],
-)
+supported_targets = "+native"

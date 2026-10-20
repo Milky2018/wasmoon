@@ -252,8 +252,9 @@ class WorkflowGateTests(unittest.TestCase):
         self.assertIn("name: macOS ARM64", workflow)
         self.assertIn("runs-on: ${{ matrix.os }}", workflow)
         self.assertIn("if: runner.os == 'Linux'", workflow)
-        self.assertIn("native_test_args: --no-parallelize", workflow)
-        self.assertIn("native_test_args: \"\"", workflow)
+        native_job = workflow.split("  native-platform:", 1)[1].split("  windows-native:", 1)[0]
+        self.assertIn("moon test --target native --no-parallelize", native_job)
+        self.assertNotIn("matrix.native_test_args", native_job)
         self.assertNotIn("  linux-amd64:", workflow)
         self.assertNotIn("  macos-arm64:", workflow)
         self.assertIn("scripts/check_committed_diff.py", workflow)

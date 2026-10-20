@@ -12,4 +12,5 @@ pub using @parser {
   format_wat_error,
   parse,
   parse_wast,
+  parse_string_literal,
 }

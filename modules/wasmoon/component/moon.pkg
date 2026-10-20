@@ -13,3 +13,5 @@ import {
   "Milky2018/wasm_component/text" @component_text,
   "moonbitlang/async",
 } for "wbtest"
+
+supported_targets = "+native"

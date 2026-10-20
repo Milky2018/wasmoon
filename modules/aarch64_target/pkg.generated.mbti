@@ -14,9 +14,9 @@ import {
 // Values
 pub fn allocate(@vcode.Function[AArch64Inst]) -> @vcode.Allocation raise AArch64AllocationError
 
-pub fn compile(@vcode.Function[AArch64Inst], on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
+pub fn compile(@vcode.Function[AArch64Inst], on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError
 
-pub fn compile_selected(SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
+pub fn compile_selected(SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError
 
 pub fn diagnose_selected(SelectedFunction) -> CompilationDiagnostics raise AArch64CompileError
 
@@ -64,16 +64,16 @@ pub suberror AArch64EmitError {
   MissingStackObjectArea
   MissingResultArea
   MissingEmergencyMoveArea
-  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
-  FrameOffsetOutOfRange(offset~ : Int)
+  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int32)
+  FrameOffsetOutOfRange(offset~ : Int32)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
   InvalidVectorInstruction
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
-  BranchLabelUnbound(label~ : Int)
-  BranchSpanNotFixed(offset~ : Int)
-  BranchOutOfRange(offset~ : Int, bits~ : Int)
+  BranchLabelUnbound(label~ : Int32)
+  BranchSpanNotFixed(offset~ : Int32)
+  BranchOutOfRange(offset~ : Int32, bits~ : Int32)
 } derive(@debug.Debug)
 pub fn AArch64EmitError::output(Self, &Logger) -> Unit
 pub fn AArch64EmitError::to_repr(Self) -> @debug.Repr
@@ -83,15 +83,15 @@ pub impl Show for AArch64EmitError
 pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
-  InvalidSavedRegister(reg~ : @allocation_types.PhysicalReg, offset~ : Int)
+  InvalidSavedRegister(reg~ : @allocation_types.PhysicalReg, offset~ : Int32)
   InvalidStackSlot(slot~ : @vcode.StackSlot)
-  OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
-  ResultAreaMismatch(expected~ : Int, actual~ : Int)
-  TailAreaMismatch(expected_incoming~ : Int, actual_incoming~ : Int, expected_tail~ : Int, actual_tail~ : Int)
+  OutgoingAreaMismatch(expected~ : Int32, actual~ : Int32)
+  ResultAreaMismatch(expected~ : Int32, actual~ : Int32)
+  TailAreaMismatch(expected_incoming~ : Int32, actual_incoming~ : Int32, expected_tail~ : Int32, actual_tail~ : Int32)
   InvalidStackObjectArea(message~ : String)
   MovePlanningFailed(cause~ : @vcode.MoveResolveError)
-  InvalidEmergencyMoveArea(offset~ : Int?)
-  StaleAllocation(expected_edits~ : Int, actual_edits~ : Int)
+  InvalidEmergencyMoveArea(offset~ : Int32?)
+  StaleAllocation(expected_edits~ : Int32, actual_edits~ : Int32)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
 pub fn AArch64FrameError::output(Self, &Logger) -> Unit
@@ -102,9 +102,9 @@ pub impl Show for AArch64FrameError
 pub suberror AArch64LinkError {
   InvalidCodeObject(message~ : String)
   InvalidCodeBase(address~ : Int64)
-  UnresolvedRelocation(index~ : Int)
-  RelocationOutOfRange(index~ : Int)
-  UnsupportedRelocation(index~ : Int)
+  UnresolvedRelocation(index~ : Int32)
+  RelocationOutOfRange(index~ : Int32)
+  UnsupportedRelocation(index~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn AArch64LinkError::equal(Self, Self) -> Bool
 pub fn AArch64LinkError::not_equal(Self, Self) -> Bool
@@ -114,7 +114,7 @@ pub fn AArch64LinkError::to_string(Self) -> String
 pub impl Show for AArch64LinkError
 
 pub suberror AArch64LowerError {
-  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @native_lowering.Operation)
+  UnsupportedOperation(block_index~ : Int32, instruction_index~ : Int32, operation~ : @native_lowering.Operation)
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
@@ -125,10 +125,10 @@ pub fn AArch64LowerError::to_string(Self) -> String
 pub impl Show for AArch64LowerError
 
 pub suberror InternalAbiError {
-  InvalidRegister(role~ : String, index~ : Int)
-  DuplicateRegister(role~ : String, index~ : Int)
-  ContextRegisterReused(index~ : Int)
-  ResultAreaRegisterReused(index~ : Int)
+  InvalidRegister(role~ : String, index~ : Int32)
+  DuplicateRegister(role~ : String, index~ : Int32)
+  ContextRegisterReused(index~ : Int32)
+  ResultAreaRegisterReused(index~ : Int32)
   InvalidSignature(message~ : String)
 } derive(Eq, @debug.Debug)
 pub fn InternalAbiError::equal(Self, Self) -> Bool
@@ -252,25 +252,25 @@ pub fn AArch64FloatUnary::to_repr(Self) -> @debug.Repr
 pub struct AArch64Frame {
   // private fields
 }
-pub fn AArch64Frame::alignment(Self) -> Int
-pub fn AArch64Frame::emergency_move_offset(Self) -> Int?
-pub fn AArch64Frame::frame_size(Self) -> Int
-pub fn AArch64Frame::incoming_args_size(Self) -> Int
-pub fn AArch64Frame::outgoing_args_size(Self) -> Int
-pub fn AArch64Frame::saved_registers(Self) -> Array[(@allocation_types.PhysicalReg, Int)]
-pub fn AArch64Frame::slot_offset(Self, @vcode.StackSlot) -> Int?
-pub fn AArch64Frame::stack_object_offset(Self, AArch64StackObject) -> Int?
+pub fn AArch64Frame::alignment(Self) -> Int32
+pub fn AArch64Frame::emergency_move_offset(Self) -> Int32?
+pub fn AArch64Frame::frame_size(Self) -> Int32
+pub fn AArch64Frame::incoming_args_size(Self) -> Int32
+pub fn AArch64Frame::outgoing_args_size(Self) -> Int32
+pub fn AArch64Frame::saved_registers(Self) -> Array[(@allocation_types.PhysicalReg, Int32)]
+pub fn AArch64Frame::slot_offset(Self, @vcode.StackSlot) -> Int32?
+pub fn AArch64Frame::stack_object_offset(Self, AArch64StackObject) -> Int32?
 pub fn AArch64Frame::summary(Self) -> String
-pub fn AArch64Frame::tail_args_size(Self) -> Int
+pub fn AArch64Frame::tail_args_size(Self) -> Int32
 
 pub(all) enum AArch64Inst {
   IncomingReg(@native_types.ValueType, @allocation_types.PhysicalReg)
-  IncomingStack(@native_types.ValueType, Int)
+  IncomingStack(@native_types.ValueType, Int32)
   IncomingResultArea(@allocation_types.PhysicalReg)
   IncomingCallResult(@native_types.ValueType, @allocation_types.PhysicalReg)
-  IncomingCallAreaResult(@native_types.ValueType, Int)
+  IncomingCallAreaResult(@native_types.ValueType, Int32)
   OutgoingReg(@native_types.ValueType, @allocation_types.PhysicalReg)
-  OutgoingAreaResult(@native_types.ValueType, Int)
+  OutgoingAreaResult(@native_types.ValueType, Int32)
   KeepAlive(@native_types.ValueType)
   LoadConstant(GprWidth, UInt64)
   LoadVectorConstant(UInt64, UInt64)
@@ -284,9 +284,9 @@ pub(all) enum AArch64Inst {
   SpectreGuard
   VectorSelect
   VectorSplat(@native_lowering.VectorLane)
-  VectorExtractLane(@native_lowering.VectorLane, Int, @native_types.Signedness?)
-  VectorReplaceLane(@native_lowering.VectorLane, Int)
-  VectorShuffle(FixedArray[Int])
+  VectorExtractLane(@native_lowering.VectorLane, Int32, @native_types.Signedness?)
+  VectorReplaceLane(@native_lowering.VectorLane, Int32)
+  VectorShuffle(FixedArray[Int32])
   VectorSwizzle
   VectorBitwise(@native_lowering.VectorBitwiseOp)
   VectorIntUnary(@native_lowering.VectorLane, AArch64VectorIntUnary)
@@ -306,8 +306,8 @@ pub(all) enum AArch64Inst {
   IntBinaryImmediate(GprWidth, AArch64IntBinary, UInt64)
   IntMultiplyAdd(GprWidth)
   IntShiftRegister(GprWidth, AArch64Shift)
-  IntShiftImmediate(GprWidth, AArch64Shift, Int)
-  IntAddShiftedLeft(GprWidth, Int)
+  IntShiftImmediate(GprWidth, AArch64Shift, Int32)
+  IntAddShiftedLeft(GprWidth, Int32)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native_types.Signedness)
   IntWithOverflow(GprWidth, @native_lowering.IntOverflowOp)
@@ -325,18 +325,18 @@ pub(all) enum AArch64Inst {
   Convert(AArch64Conversion)
   AddAddress
   AddAddressImmediate(UInt64)
-  AddAddressUxtw(Int)
+  AddAddressUxtw(Int32)
   ScalarLoad(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, UInt64)
-  ScalarLoadUxtw(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, Int)
+  ScalarLoadUxtw(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, Int32)
   ScalarStore(@native_types.AccessWidth, @native_types.ValueType, UInt64)
-  ScalarStoreUxtw(@native_types.AccessWidth, @native_types.ValueType, Int)
+  ScalarStoreUxtw(@native_types.AccessWidth, @native_types.ValueType, Int32)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
   VectorLoadSplat(@native_lowering.VectorLane, UInt64)
   VectorLoadExtend(@native_lowering.VectorLane, @native_types.Signedness, UInt64)
   VectorLoadZero(@native_types.AccessWidth, UInt64)
-  VectorLoadLane(@native_lowering.VectorLane, Int, UInt64)
-  VectorStoreLane(@native_lowering.VectorLane, Int, UInt64)
+  VectorLoadLane(@native_lowering.VectorLane, Int32, UInt64)
+  VectorStoreLane(@native_lowering.VectorLane, Int32, UInt64)
   AtomicLoad(@native_types.AccessWidth, @native_types.ValueType)
   AtomicStore(@native_types.AccessWidth, @native_types.ValueType)
   AtomicRmw(@native_types.AccessWidth, @native_types.ValueType, @native_lowering.AtomicRmwOp)
@@ -391,7 +391,7 @@ pub struct AArch64LinkPlan {
 pub fn AArch64LinkPlan::code(Self) -> Array[Byte]
 pub fn AArch64LinkPlan::link(Self, Int64, (@code_object.RelocationTarget) -> Int64?) -> Array[Byte] raise AArch64LinkError
 pub fn AArch64LinkPlan::to_repr(Self) -> @debug.Repr
-pub fn AArch64LinkPlan::veneer_offsets(Self) -> Array[Int]
+pub fn AArch64LinkPlan::veneer_offsets(Self) -> Array[Int32]
 
 pub(all) enum AArch64Shift {
   Lsl
@@ -404,12 +404,12 @@ pub fn AArch64Shift::not_equal(Self, Self) -> Bool
 pub fn AArch64Shift::to_repr(Self) -> @debug.Repr
 
 pub struct AArch64StackObject {
-  id : Int
-  size : Int
-  alignment : Int
+  id : Int32
+  size : Int32
+  alignment : Int32
 } derive(Eq, @debug.Debug)
 pub fn AArch64StackObject::equal(Self, Self) -> Bool
-pub fn AArch64StackObject::new(Int, Int, Int) -> Self
+pub fn AArch64StackObject::new(Int32, Int32, Int32) -> Self
 pub fn AArch64StackObject::not_equal(Self, Self) -> Bool
 pub fn AArch64StackObject::to_repr(Self) -> @debug.Repr
 
@@ -486,7 +486,7 @@ pub(all) struct CompilationDiagnostics {
 pub struct CompilationSession {
   // private fields
 }
-pub fn CompilationSession::compile_selected(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool, on_diagnostics? : ((String, String) -> Unit)?) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
+pub fn CompilationSession::compile_selected(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool, on_diagnostics? : ((String, String) -> Unit)?) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError
 pub fn CompilationSession::new() -> Self
 
 pub struct DirectLoweringSession {
@@ -507,7 +507,7 @@ pub fn GprWidth::to_repr(Self) -> @debug.Repr
 pub struct InternalAbi {
   // private fields
 }
-pub fn InternalAbi::new(Int, Int, Array[Int], Array[Int], Array[Int], Array[Int]) -> Self raise InternalAbiError
+pub fn InternalAbi::new(Int32, Int32, Array[Int32], Array[Int32], Array[Int32], Array[Int32]) -> Self raise InternalAbiError
 
 pub struct InternalCallPlan {
   // private fields
@@ -520,8 +520,8 @@ pub struct LoweringContext {
   // private fields
 }
 pub fn LoweringContext::new(InternalAbi) -> Self
-pub fn LoweringContext::with_environment_field(Self, @native_types.EnvironmentField, Array[Int]) -> Self
-pub fn LoweringContext::with_environment_field_resolver(Self, (@native_types.EnvironmentField) -> Array[Int]?) -> Self
+pub fn LoweringContext::with_environment_field(Self, @native_types.EnvironmentField, Array[Int32]) -> Self
+pub fn LoweringContext::with_environment_field_resolver(Self, (@native_types.EnvironmentField) -> Array[Int32]?) -> Self
 
 pub struct SelectedFunction {
   // private fields

@@ -25,6 +25,7 @@ def main() -> None:
         package_build = stage / 'package-build'
         members = []
         command = None
+        embedding = None
         for index, member in enumerate(workspace['members']):
             source = ROOT / member
             run(['moon', 'package', '--target-dir', str(package_build)], source)
@@ -38,6 +39,8 @@ def main() -> None:
                 archive.extractall(destination)
             archives[0].unlink()
             members.append(destination.relative_to(stage).as_posix())
+            if source.name == 'wasmoon_runtime':
+                embedding = destination / 'examples/embedding'
             if source.name == 'wasmoon':
                 command = destination / 'cmd/wasmoon'
         if command is None:
@@ -80,6 +83,15 @@ def main() -> None:
             if result.stdout != 'isolated-install-ok\n':
                 raise RuntimeError(f'Unexpected guest output: {result.stdout!r}; {result.stderr}')
         print('Packaged installation and WASI execution passed on both engines.', flush=True)
+        if embedding is None:
+            raise RuntimeError('Portable runtime module is missing from the workspace')
+        result = subprocess.run(['moon', 'run', str(embedding), '--target', 'wasm',
+                                 '--target-dir', str(build), '--warn-list', '+73',
+                                 '--deny-warn'], cwd=stage, capture_output=True,
+                                text=True, check=True)
+        if result.stdout.strip() != 'portable interpreter: result=43, host observed=21, memory=21, budget released':
+            raise RuntimeError(f'Unexpected portable output: {result.stdout!r}; {result.stderr}')
+        print('Packaged wasm interpreter embedding passed.', flush=True)
 
 
 if __name__ == '__main__':

@@ -117,7 +117,7 @@ test "read_number: nan without sign" {
 test "read_number: nan with payload and underscores" {
   let lexer = Lexer::Lexer("nan:0x7f_ffff abc")
   // Underscores are skipped in the payload
-  inspect(lexer.read_number(), content="nan:0x7fffff")
+  inspect(lexer.read_number(), content="nan:0x7f_ffff")
 }
 
 ///|

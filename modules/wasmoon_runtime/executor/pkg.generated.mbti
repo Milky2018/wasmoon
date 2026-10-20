@@ -1,0 +1,175 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/executor"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/validator",
+  "Milky2018/wasmoon_runtime/runtime",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
+pub async fn call_exported_func_async(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
+pub fn call_exported_func_with_options(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value], options? : CallExportOptions) -> CallExportResult
+
+pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
+pub async fn call_func_by_index_async(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
+
+pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], (@runtime.RuntimeError) -> Int64?, cooperative? : Bool) -> ResumableCallOutcome raise @runtime.RuntimeError
+
+pub fn call_func_by_index_resumable_async_with_exception(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], @runtime.AsyncHostCallDriver) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
+
+pub fn call_func_by_index_with_exception(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> InvokeWithExceptionResult raise @runtime.RuntimeError
+
+pub fn eval_const_expr(ArrayView[@types.Instruction], func_addrs? : Array[Int32], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
+
+pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
+
+pub fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+
+pub fn instantiate_module_with_import_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> InstantiateWithImportDiagnosticsResult
+
+pub fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub async fn instantiate_module_with_imports_async(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub fn instantiate_module_with_imports_unstarted(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+
+pub fn instantiate_validated_module(@validator.ValidatedModule) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+
+pub fn instantiate_validated_module_with_imports_unstarted(@runtime.Store, @validator.ValidatedModule, @runtime.Imports, admission? : @runtime.InstanceAdmission) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub fn instantiate_validated_module_with_init(@validator.ValidatedModule) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+
+pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub async fn instantiate_with_linker_async(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub fn validate_continuation_gc_storage(@types.Module) -> Unit raise @runtime.RuntimeError
+
+pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError
+
+// Errors
+
+// Types and methods
+pub struct CallExportFailure {
+  kind : CallExportFailureKind
+  message : String
+  runtime_error : @runtime.RuntimeError?
+}
+pub fn CallExportFailure::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for CallExportFailure
+
+pub(all) enum CallExportFailureKind {
+  ExportNotFound
+  NotFunctionExport
+  Trap
+  HostInvocation
+  Cancelled
+  TimedOut
+  InvalidOption
+  UnsupportedOption
+} derive(@debug.Debug)
+pub fn CallExportFailureKind::to_repr(Self) -> @debug.Repr
+
+pub struct CallExportOptions {
+  timeout_ms : Int32?
+  fuel : Int32?
+  budget : Int32?
+  cancel : (() -> Bool)?
+}
+pub fn CallExportOptions::CallExportOptions(timeout_ms? : Int32?, fuel? : Int32?, budget? : Int32?, cancel? : (() -> Bool)?) -> Self
+
+pub(all) enum CallExportResult {
+  Ok(Array[@types.Value])
+  Err(CallExportFailure)
+} derive(@debug.Debug)
+pub fn CallExportResult::to_repr(Self) -> @debug.Repr
+
+type ExecContext derive(@debug.Debug)
+pub fn ExecContext::call_func(Self, Int32, Array[@types.Value]) -> Array[@types.Value] raise
+pub fn ExecContext::exec_tail_call(Self, Int32) -> Unit raise
+pub fn ExecContext::exec_tail_call_indirect(Self, Int32, Int32) -> Unit raise
+pub fn ExecContext::exec_tail_call_ref(Self, Int32) -> Unit raise
+pub fn ExecContext::to_repr(Self) -> @debug.Repr
+
+type ExecutionContinuation
+pub fn ExecutionContinuation::cancel(Self) -> Unit
+pub fn ExecutionContinuation::continue_execution(Self) -> ResumableCallOutcome raise @runtime.RuntimeError
+pub fn ExecutionContinuation::continue_execution_with_exception(Self) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
+pub fn ExecutionContinuation::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for ExecutionContinuation
+
+pub struct Function {
+  // private fields
+}
+pub fn Function::as_value(Self) -> @runtime.RootedValue raise @runtime.RuntimeError
+pub fn Function::call(Self, ArrayView[@runtime.RootedValue]) -> Array[@runtime.RootedValue] raise @runtime.RuntimeError
+pub async fn Function::call_async(Self, ArrayView[@runtime.RootedValue]) -> Array[@runtime.RootedValue] raise @runtime.RuntimeError
+pub fn Function::close(Self) -> Unit
+pub fn Function::from_export(@runtime.Store, @runtime.ModuleInstance, String) -> Self raise @runtime.RuntimeError
+
+pub struct ImportDiagnostic {
+  import_index : Int32
+  module_name : String
+  name : String
+  kind : ImportDiagnosticKind
+  expected : String
+  actual : String?
+  message : String
+}
+
+pub(all) enum ImportDiagnosticKind {
+  MissingImport
+  ImportKindMismatch
+  ImportTypeMismatch
+}
+
+pub struct ImportDiagnosticsResult {
+  mut ok : Bool
+  diagnostics : Array[ImportDiagnostic]
+}
+pub fn ImportDiagnosticsResult::ImportDiagnosticsResult() -> Self
+
+pub(all) enum InstantiateWithImportDiagnosticsResult {
+  Ok(@runtime.ModuleInstance)
+  ImportError(ImportDiagnosticsResult)
+  RuntimeFailure(@runtime.RuntimeError)
+}
+
+pub(all) enum InvokeWithExceptionResult {
+  Returned(Array[@types.Value])
+  Thrown(Int32, Array[@types.Value])
+  HostFailed(@runtime.RuntimeError)
+}
+
+pub(all) enum ResumableCallOutcome {
+  Returned(Array[@types.Value])
+  Suspended(SuspensionReason, ExecutionContinuation)
+} derive(@debug.Debug)
+pub fn ResumableCallOutcome::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ResumableCallWithExceptionOutcome {
+  ResumableReturned(Array[@types.Value])
+  ResumableSuspended(ExecutionContinuation)
+  ResumableThrown(Int32, Array[@types.Value])
+  ResumableHostFailed(@runtime.RuntimeError)
+}
+
+pub(all) enum SuspensionReason {
+  HostCall(Int64)
+  CooperativeYield
+  AtomicWait
+  GuestEffect(@runtime.GuestContinuationEffect)
+} derive(@debug.Debug)
+pub fn SuspensionReason::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

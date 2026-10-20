@@ -11,6 +11,8 @@ pub fn format_wat_error(WatError, String) -> String
 
 pub fn parse(String, implicit_module? : Bool) -> @types.Module raise WatError
 
+pub fn parse_string_literal(String) -> Bytes raise WatError
+
 pub fn parse_wast(String) -> WastScript raise WatError
 
 // Errors
@@ -29,8 +31,8 @@ pub impl Show for WatError
 
 // Types and methods
 pub(all) struct SourceLoc {
-  line : Int
-  column : Int
+  line : Int32
+  column : Int32
 }
 pub fn SourceLoc::output(Self, &Logger) -> Unit
 pub fn SourceLoc::to_string(Self) -> String
@@ -59,7 +61,7 @@ pub enum WastCommand {
   AssertUnlinkable(WastModuleSource, String)
   Register(String, String?)
   Action(WastAction)
-  Thread(String, String?, Array[(WastCommand, Int)])
+  Thread(String, String?, Array[(WastCommand, Int32)])
   Wait(String)
 } derive(@debug.Debug)
 pub fn WastCommand::to_repr(Self) -> @debug.Repr
@@ -83,11 +85,11 @@ pub enum WastModuleSource {
 pub fn WastModuleSource::to_repr(Self) -> @debug.Repr
 
 pub struct WastScript {
-  commands : Array[(WastCommand, Int)]
+  commands : Array[(WastCommand, Int32)]
 }
 
 pub enum WastValue {
-  I32(Int)
+  I32(Int32)
   I64(Int64)
   F32(Float)
   F64(Double)
@@ -98,11 +100,11 @@ pub enum WastValue {
   F64ArithmeticNan
   V128Pattern(Array[WastLaneValue])
   RefNull(String)
-  RefExtern(Int)
+  RefExtern(Int32)
   RefExternAny
-  RefHost(Int)
+  RefHost(Int32)
   RefFunc
-  RefFuncIndex(Int)
+  RefFuncIndex(Int32)
   RefArray
   RefStruct
   RefEq

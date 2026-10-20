@@ -30,9 +30,9 @@ class WindowsFileTests(unittest.TestCase):
                  "pread", "pwrite", "write", "getfl", "setfl", "dup", "dup2", "symlinkat", "ftruncate", "renameat"]
         subprocess.run([
             os.environ.get("WASMOON_MSVC_CL", "clang-cl"), "/std:c11", "/D_CRT_SECURE_NO_WARNINGS", "/LD", "/MD", "/I" + str(directory),
-            str(ROOT / "modules/wasmoon_jit/host_io/windows_io.c"),
-            str(ROOT / "modules/wasmoon_jit/host_io/windows_input.c"),
-            str(ROOT / "modules/wasmoon_jit/host_io/windows_fs.c"),
+            str(ROOT / "modules/wasmoon_runtime/native/ffi/host_io/windows_io.c"),
+            str(ROOT / "modules/wasmoon_runtime/native/ffi/host_io/windows_input.c"),
+            str(ROOT / "modules/wasmoon_runtime/native/ffi/host_io/windows_fs.c"),
             str(ROOT / "scripts/tests/native/windows_symlink.c"),
             "/link", "/OUT:" + str(library),
             *["/EXPORT:wasmoon_windows_" + name for name in names],

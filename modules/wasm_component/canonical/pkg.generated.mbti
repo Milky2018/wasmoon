@@ -7,17 +7,17 @@ import {
 }
 
 // Values
-pub fn canonical_abi_plan(@model.ValType, Array[@model.TypeDef?], Bool, max_flat? : Int) -> CanonicalAbiPlan?
+pub fn canonical_abi_plan(@model.ValType, Array[@model.TypeDef?], Bool, max_flat? : Int32) -> CanonicalAbiPlan?
 
-pub fn canonical_discriminant_layout(Int) -> (Int, Int)
+pub fn canonical_discriminant_layout(Int32) -> (Int32, Int32)
 
-pub fn canonical_flat_types(@model.ValType, Array[@model.TypeDef?], @types.ValueType, max_flat? : Int) -> Array[@types.ValueType]?
+pub fn canonical_flat_types(@model.ValType, Array[@model.TypeDef?], @types.ValueType, max_flat? : Int32) -> Array[@types.ValueType]?
 
 pub fn canonical_lift_core_func_type(@model.FuncType, Array[@model.TypeDef?], @types.ValueType) -> @types.FuncType?
 
 pub fn canonical_lower_core_func_type(@model.FuncType, Array[@model.TypeDef?], @types.ValueType) -> @types.FuncType?
 
-pub fn canonical_memory_layout(@model.ValType, Array[@model.TypeDef?], Bool) -> (Int, Int)?
+pub fn canonical_memory_layout(@model.ValType, Array[@model.TypeDef?], Bool) -> (Int32, Int32)?
 
 pub fn canonical_value_contains_memory(@model.ValType, Array[@model.TypeDef?]) -> Bool
 
@@ -29,7 +29,7 @@ pub(all) struct CanonicalAbiPlan {
   types : Array[@model.TypeDef?]
   memory64 : Bool
   flat : Array[@types.ValueType]
-  layout : (Int, Int)?
+  layout : (Int32, Int32)?
   contains_memory : Bool
 }
 

@@ -1,0 +1,4 @@
+options(
+  "native-stub": [ "registry.c" ],
+  targets: { "view.mbt": [ "native" ], "view_wasm.mbt": [ "wasm" ] },
+)

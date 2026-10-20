@@ -1,0 +1,2 @@
+import { "Milky2018/wasmoon/executor", "Milky2018/wasmoon_jit/perf", "Milky2018/wasm_core/wat", "moonbitlang/core/env", }
+pkgtype(kind: "executable")

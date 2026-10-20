@@ -17,65 +17,65 @@ pub const WASM_DIALECT : String = "wasm"
 
 pub fn any_convert_extern(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
-pub fn array_copy(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn array_copy(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn array_fill(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn array_fill(@milkir.FunctionBuilder, Int32, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn array_get(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Type) -> @milkir.Value
+pub fn array_get(@milkir.FunctionBuilder, Int32, @milkir.Value, @milkir.Value, @milkir.Type) -> @milkir.Value
 
-pub fn array_get_s(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, Int) -> @milkir.Value
+pub fn array_get_s(@milkir.FunctionBuilder, Int32, @milkir.Value, @milkir.Value, Int32) -> @milkir.Value
 
-pub fn array_get_u(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, Int) -> @milkir.Value
+pub fn array_get_u(@milkir.FunctionBuilder, Int32, @milkir.Value, @milkir.Value, Int32) -> @milkir.Value
 
-pub fn array_init_data(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn array_init_data(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn array_init_elem(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn array_init_elem(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
 pub fn array_len(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
-pub fn array_new(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+pub fn array_new(@milkir.FunctionBuilder, Int32, @milkir.Value, @milkir.Value) -> @milkir.Value
 
-pub fn array_new_data(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+pub fn array_new_data(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, @milkir.Value) -> @milkir.Value
 
-pub fn array_new_default(@milkir.FunctionBuilder, Int, @milkir.Value) -> @milkir.Value
+pub fn array_new_default(@milkir.FunctionBuilder, Int32, @milkir.Value) -> @milkir.Value
 
-pub fn array_new_elem(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+pub fn array_new_elem(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, @milkir.Value) -> @milkir.Value
 
-pub fn array_new_fixed(@milkir.FunctionBuilder, Int, Int, Array[@milkir.Value]) -> @milkir.Value
+pub fn array_new_fixed(@milkir.FunctionBuilder, Int32, Int32, Array[@milkir.Value]) -> @milkir.Value
 
-pub fn array_set(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn array_set(@milkir.FunctionBuilder, Int32, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn atomic_notify(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+pub fn atomic_notify(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, @milkir.Value, @milkir.Value) -> @milkir.Value
 
-pub fn atomic_wait(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> @milkir.Value
+pub fn atomic_wait(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, @milkir.Value, @milkir.Value, @milkir.Value) -> @milkir.Value
 
-pub fn call_indirect_multi(@milkir.FunctionBuilder, Int, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
+pub fn call_indirect_multi(@milkir.FunctionBuilder, Int32, Int32, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
 
-pub fn call_multi(@milkir.FunctionBuilder, Int, Array[@milkir.Type], Array[@milkir.Value]) -> Array[@milkir.Value]
+pub fn call_multi(@milkir.FunctionBuilder, Int32, Array[@milkir.Type], Array[@milkir.Value]) -> Array[@milkir.Value]
 
-pub fn call_ref_multi(@milkir.FunctionBuilder, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
+pub fn call_ref_multi(@milkir.FunctionBuilder, Int32, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
 
 pub fn continuation_operation(@milkir.FunctionBuilder, WasmOpcode, Array[@milkir.Type], Array[@milkir.Value]) -> Array[@milkir.Value]
 
-pub fn data_drop(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int) -> Unit
+pub fn data_drop(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32) -> Unit
 
 pub fn decode(@milkir.ExtOp) -> WasmOpcode?
 
 pub fn decode_error(@milkir.ExtOp) -> String?
 
-pub fn decode_memory_base_context_field(@milkir.ContextField) -> Int?
+pub fn decode_memory_base_context_field(@milkir.ContextField) -> Int32?
 
 pub fn decode_opcode(@milkir.Opcode) -> WasmOpcode?
 
-pub fn delegate(@milkir.FunctionBuilder, Int) -> Unit
+pub fn delegate(@milkir.FunctionBuilder, Int32) -> Unit
 
 pub fn descriptor(WasmOpcode) -> @milkir.ExtOpDescriptor
 
 pub fn descriptor_by_name(String) -> @milkir.ExtOpDescriptor?
 
-pub fn elem_drop(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int) -> Unit
+pub fn elem_drop(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32) -> Unit
 
-pub fn emit_throw(@milkir.FunctionBuilder, Int, Array[@milkir.Value]) -> Unit
+pub fn emit_throw(@milkir.FunctionBuilder, Int32, Array[@milkir.Value]) -> Unit
 
 pub fn emit_throw_ref(@milkir.FunctionBuilder, @milkir.Value) -> Unit
 
@@ -87,13 +87,13 @@ pub fn get_exception_ref(@milkir.FunctionBuilder) -> @milkir.Value
 
 pub fn get_exception_tag(@milkir.FunctionBuilder) -> @milkir.Value
 
-pub fn get_exception_value(@milkir.FunctionBuilder, Int) -> @milkir.Value
+pub fn get_exception_value(@milkir.FunctionBuilder, Int32) -> @milkir.Value
 
 pub fn get_exception_value_count(@milkir.FunctionBuilder) -> @milkir.Value
 
-pub fn get_func_ref(@milkir.FunctionBuilder, Int) -> @milkir.Value
+pub fn get_func_ref(@milkir.FunctionBuilder, Int32) -> @milkir.Value
 
-pub fn get_spilled_local(@milkir.FunctionBuilder, Int) -> @milkir.Value
+pub fn get_spilled_local(@milkir.FunctionBuilder, Int32) -> @milkir.Value
 
 pub fn i31_get_s(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
@@ -101,57 +101,57 @@ pub fn i31_get_u(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
 pub fn i31_new(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
-pub fn load_mem_base(@milkir.FunctionBuilder, @milkir.Value, Int, @milkir.GlobalValueStability) -> @milkir.Value
+pub fn load_mem_base(@milkir.FunctionBuilder, @milkir.Value, Int32, @milkir.GlobalValueStability) -> @milkir.Value
 
-pub fn memory_base_context_field(Int) -> @milkir.ContextField
+pub fn memory_base_context_field(Int32) -> @milkir.ContextField
 
-pub fn memory_copy(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_copy(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, Int32, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_fill(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_fill(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_grow(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, max_pages? : Int, is_memory64? : Bool) -> @milkir.Value
+pub fn memory_grow(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, @milkir.Value, max_pages? : Int32, is_memory64? : Bool) -> @milkir.Value
 
-pub fn memory_init(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_init(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, Int32, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_size(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, is_memory64? : Bool) -> @milkir.Value
+pub fn memory_size(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, is_memory64? : Bool) -> @milkir.Value
 
-pub fn ref_cast(@milkir.FunctionBuilder, Int, Bool, @milkir.Value, @milkir.Type) -> @milkir.Value
+pub fn ref_cast(@milkir.FunctionBuilder, Int32, Bool, @milkir.Value, @milkir.Type) -> @milkir.Value
 
 pub fn ref_eq(@milkir.FunctionBuilder, @milkir.Value, @milkir.Value) -> @milkir.Value
 
-pub fn ref_test(@milkir.FunctionBuilder, Int, Bool, @milkir.Value) -> @milkir.Value
+pub fn ref_test(@milkir.FunctionBuilder, Int32, Bool, @milkir.Value) -> @milkir.Value
 
-pub fn return_call_indirect_multi(@milkir.FunctionBuilder, Int, Int, @milkir.Value, Array[@milkir.Value]) -> Unit
+pub fn return_call_indirect_multi(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, Array[@milkir.Value]) -> Unit
 
-pub fn return_call_multi(@milkir.FunctionBuilder, Int, Array[@milkir.Value]) -> Unit
+pub fn return_call_multi(@milkir.FunctionBuilder, Int32, Array[@milkir.Value]) -> Unit
 
-pub fn return_call_ref_multi(@milkir.FunctionBuilder, Int, @milkir.Value, Array[@milkir.Value]) -> Unit
+pub fn return_call_ref_multi(@milkir.FunctionBuilder, Int32, @milkir.Value, Array[@milkir.Value]) -> Unit
 
 pub fn spill_locals_for_throw(@milkir.FunctionBuilder, Array[@milkir.Value]) -> Unit
 
-pub fn struct_get(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Type) -> @milkir.Value
+pub fn struct_get(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, @milkir.Type) -> @milkir.Value
 
-pub fn struct_get_s(@milkir.FunctionBuilder, Int, Int, @milkir.Value, Int) -> @milkir.Value
+pub fn struct_get_s(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, Int32) -> @milkir.Value
 
-pub fn struct_get_u(@milkir.FunctionBuilder, Int, Int, @milkir.Value, Int) -> @milkir.Value
+pub fn struct_get_u(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, Int32) -> @milkir.Value
 
-pub fn struct_new(@milkir.FunctionBuilder, Int, Array[@milkir.Value]) -> @milkir.Value
+pub fn struct_new(@milkir.FunctionBuilder, Int32, Array[@milkir.Value]) -> @milkir.Value
 
-pub fn struct_new_default(@milkir.FunctionBuilder, Int) -> @milkir.Value
+pub fn struct_new_default(@milkir.FunctionBuilder, Int32) -> @milkir.Value
 
-pub fn struct_set(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Value) -> Unit
+pub fn struct_set(@milkir.FunctionBuilder, Int32, Int32, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_copy(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_copy(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, Int32, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_fill(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_fill(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_grow(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, is_table64? : Bool) -> @milkir.Value
+pub fn table_grow(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, @milkir.Value, @milkir.Value, is_table64? : Bool) -> @milkir.Value
 
-pub fn table_init(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_init(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int32, Int32, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn try_table_begin(@milkir.FunctionBuilder, Int) -> @milkir.Value
+pub fn try_table_begin(@milkir.FunctionBuilder, Int32) -> @milkir.Value
 
-pub fn try_table_end(@milkir.FunctionBuilder, Int) -> Unit
+pub fn try_table_end(@milkir.FunctionBuilder, Int32) -> Unit
 
 pub fn validate_extension(@milkir.ExtensionInstView) -> String?
 
@@ -177,7 +177,7 @@ pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
 
 pub(all) enum WasmDefinedTypeContract {
   Function(WasmFunctionContract)
-  Continuation(Int)
+  Continuation(Int32)
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
 } derive(Eq, @debug.Debug)
@@ -203,60 +203,60 @@ pub fn WasmFunctionContract::not_equal(Self, Self) -> Bool
 pub fn WasmFunctionContract::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WasmOpcode {
-  WasmCall(Int)
-  WasmCallIndirect(Int, Int)
-  CallRef(Int)
-  ReturnCall(Int)
-  ReturnCallIndirect(Int, Int)
-  ReturnCallRef(Int)
-  GetFuncRef(Int)
-  StructNew(Int)
-  StructNewDefault(Int)
-  StructGet(Int, Int)
-  StructGetS(Int, Int, Int)
-  StructGetU(Int, Int, Int)
-  StructSet(Int, Int)
-  ArrayNew(Int)
-  ArrayNewDefault(Int)
-  ArrayNewFixed(Int, Int)
-  ArrayGet(Int)
-  ArrayGetS(Int, Int)
-  ArrayGetU(Int, Int)
-  ArraySet(Int)
+  WasmCall(Int32)
+  WasmCallIndirect(Int32, Int32)
+  CallRef(Int32)
+  ReturnCall(Int32)
+  ReturnCallIndirect(Int32, Int32)
+  ReturnCallRef(Int32)
+  GetFuncRef(Int32)
+  StructNew(Int32)
+  StructNewDefault(Int32)
+  StructGet(Int32, Int32)
+  StructGetS(Int32, Int32, Int32)
+  StructGetU(Int32, Int32, Int32)
+  StructSet(Int32, Int32)
+  ArrayNew(Int32)
+  ArrayNewDefault(Int32)
+  ArrayNewFixed(Int32, Int32)
+  ArrayGet(Int32)
+  ArrayGetS(Int32, Int32)
+  ArrayGetU(Int32, Int32)
+  ArraySet(Int32)
   ArrayLen
-  ArrayFill(Int)
-  ArrayCopy(Int, Int)
-  ArrayNewData(Int, Int)
-  ArrayNewElem(Int, Int)
-  ArrayInitData(Int, Int)
-  ArrayInitElem(Int, Int)
+  ArrayFill(Int32)
+  ArrayCopy(Int32, Int32)
+  ArrayNewData(Int32, Int32)
+  ArrayNewElem(Int32, Int32)
+  ArrayInitData(Int32, Int32)
+  ArrayInitElem(Int32, Int32)
   I31New
   I31GetS
   I31GetU
-  RefTest(Int, Bool)
-  RefCast(Int, Bool)
+  RefTest(Int32, Bool)
+  RefCast(Int32, Bool)
   AnyConvertExtern
   ExternConvertAny
   RefEq
-  Throw(Int)
+  Throw(Int32)
   ThrowRef
-  TryTableBegin(Int)
-  TryTableEnd(Int)
+  TryTableBegin(Int32)
+  TryTableEnd(Int32)
   GetExceptionTag
-  GetExceptionValue(Int)
+  GetExceptionValue(Int32)
   GetExceptionValueCount
-  Delegate(Int)
-  SpillLocalsForThrow(Int)
-  GetSpilledLocal(Int)
+  Delegate(Int32)
+  SpillLocalsForThrow(Int32)
+  GetSpilledLocal(Int32)
   GetExceptionRef
-  ContNew(Int)
-  ContBind(Int, Int)
-  ContSuspend(Int)
-  ContResume(Int, Int, Int, Int)
-  ContSwitch(Int, Int)
+  ContNew(Int32)
+  ContBind(Int32, Int32)
+  ContSuspend(Int32)
+  ContResume(Int32, Int32, Int32, Int32)
+  ContSwitch(Int32, Int32)
 } derive(Eq, Hash, @debug.Debug)
 pub fn WasmOpcode::equal(Self, Self) -> Bool
-pub fn WasmOpcode::hash(Self) -> Int
+pub fn WasmOpcode::hash(Self) -> Int32
 pub fn WasmOpcode::hash_combine(Self, Hasher) -> Unit
 pub fn WasmOpcode::not_equal(Self, Self) -> Bool
 pub fn WasmOpcode::to_repr(Self) -> @debug.Repr
@@ -351,13 +351,13 @@ pub fn WasmValidationContext::validate_extension(Self, @milkir.ExtensionInstView
 pub fn WasmValidationContext::validate_global_value(Self, @milkir.GlobalValueData) -> String?
 
 pub(all) struct WasmValidationResolvers {
-  function_contract : (Int) -> WasmFunctionContract?
-  defined_type_contract : (Int) -> WasmDefinedTypeContract?
-  table_contract : (Int) -> WasmTableContract?
-  tag_contract : (Int) -> WasmFunctionContract?
-  memory_exists : (Int) -> Bool
-  data_segment_exists : (Int) -> Bool
-  element_segment_type : (Int) -> @milkir.Type?
+  function_contract : (Int32) -> WasmFunctionContract?
+  defined_type_contract : (Int32) -> WasmDefinedTypeContract?
+  table_contract : (Int32) -> WasmTableContract?
+  tag_contract : (Int32) -> WasmFunctionContract?
+  memory_exists : (Int32) -> Bool
+  data_segment_exists : (Int32) -> Bool
+  element_segment_type : (Int32) -> @milkir.Type?
 }
 
 // Type aliases

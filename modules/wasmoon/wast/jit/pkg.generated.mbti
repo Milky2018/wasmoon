@@ -3,9 +3,10 @@ package "Milky2018/wasmoon/wast/jit"
 
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon_jit",
-  "Milky2018/wasmoon_jit/native/execution",
+  "Milky2018/wasmoon_runtime/native/bridge",
+  "Milky2018/wasmoon_runtime/native/execution",
+  "Milky2018/wasmoon_runtime/runtime",
   "moonbitlang/core/debug",
 }
 
@@ -14,15 +15,15 @@ pub fn build_external_imports_for_jit(@types.Module, @runtime.ModuleInstance, @r
 
 pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], Array[@types.ValueType])]
 
-pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int)]
+pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int32)]
 
-pub fn count_func_imports(Array[@types.Import]) -> Int
+pub fn count_func_imports(Array[@types.Import]) -> Int32
 
-pub fn eval_elem_offset_expr(ArrayView[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int raise @runtime.RuntimeError
+pub fn eval_elem_offset_expr(ArrayView[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int32 raise @runtime.RuntimeError
 
 pub fn exports_shared_resources(@types.Module) -> Bool
 
-pub fn get_func_name(@types.Module, Int) -> String
+pub fn get_func_name(@types.Module, Int32) -> String
 
 pub fn has_cross_module_imports(@types.Module) -> Bool
 
@@ -36,7 +37,7 @@ pub fn init_elem_segments(@types.Module, @Milky2018/wasmoon/jit.JITModule, @runt
 
 pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Int64 raise @runtime.RuntimeError
 
-pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo] raise @runtime.RuntimeError
+pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Array[@bridge.MemoryInfo] raise @runtime.RuntimeError
 
 pub fn register_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit raise @runtime.RuntimeError
 
@@ -46,19 +47,19 @@ pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @Milk
 
 pub fn sync_jit_tables_to_store(JITModuleContext, @runtime.Store) -> Unit raise @runtime.RuntimeError
 
-pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
+pub fn sync_table_to_jit(@runtime.Table, @bridge.JITTable, @Milky2018/wasmoon/jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
 pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
 
 // Errors
 pub(all) suberror JITCoreCallError {
-  FunctionUnavailable(Int)
-  ArgumentTypeMismatch(Int)
-  ResultTypeMismatch(Int)
+  FunctionUnavailable(Int32)
+  ArgumentTypeMismatch(Int32)
+  ResultTypeMismatch(Int32)
   Trap(String)
   NativeFiberFailure(String)
   Cancelled
-  Exit(Int)
+  Exit(Int32)
   HostInvocation(@runtime.RuntimeError)
   GcSetupFailed(String)
   ExecutionStateFailure(@execution.NativeExecutionStateError)
@@ -91,21 +92,21 @@ pub fn JITCoreContinuation::continue_execution(Self) -> JITCoreCallOutcome raise
 pub struct JITModuleContext {
   jit_module : @Milky2018/wasmoon/jit.JITModule
   globals_ptr : Int64
-  global_addrs : ReadOnlyArray[Int]
-  table_addrs : ReadOnlyArray[Int]
-  func_addrs : ReadOnlyArray[Int]
-  func_type_indices : ReadOnlyArray[Int]
-  canonical_type_indices : ReadOnlyArray[Int]
+  global_addrs : ReadOnlyArray[Int32]
+  table_addrs : ReadOnlyArray[Int32]
+  func_addrs : ReadOnlyArray[Int32]
+  func_type_indices : ReadOnlyArray[Int32]
+  canonical_type_indices : ReadOnlyArray[Int32]
   module_types : ReadOnlyArray[@types.SubType]
-  module_rec_groups : ReadOnlyArray[Int]
+  module_rec_groups : ReadOnlyArray[Int32]
   use_subtype_indirect_check : Bool
   // private fields
 }
-pub fn JITModuleContext::JITModuleContext(@Milky2018/wasmoon/jit.JITModule, Int64, ArrayView[Int], ArrayView[Int], ArrayView[Int], ArrayView[Int], ArrayView[Int], ArrayView[@types.SubType], ArrayView[Int], Bool) -> Self
+pub fn JITModuleContext::JITModuleContext(@Milky2018/wasmoon/jit.JITModule, Int64, ArrayView[Int32], ArrayView[Int32], ArrayView[Int32], ArrayView[Int32], ArrayView[Int32], ArrayView[@types.SubType], ArrayView[Int32], Bool) -> Self
 pub fn JITModuleContext::bind_instance(Self, @runtime.Store, @runtime.ModuleInstance) -> Unit raise @runtime.RuntimeError
-pub fn JITModuleContext::call_core_func(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
-pub async fn JITModuleContext::call_core_func_async(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
-pub fn JITModuleContext::call_core_func_resumable(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> JITCoreCallOutcome raise JITCoreCallError
+pub fn JITModuleContext::call_core_func(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
+pub async fn JITModuleContext::call_core_func_async(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
+pub fn JITModuleContext::call_core_func_resumable(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallOutcome raise JITCoreCallError
 pub fn JITModuleContext::close(Self) -> Unit
 pub fn JITModuleContext::install_hostcall_dispatcher(Self, @runtime.Store, @runtime.ModuleInstance, before_dispatch? : () -> Unit raise @runtime.RuntimeError, after_dispatch? : () -> Unit raise @runtime.RuntimeError, classify_suspension? : (@runtime.RuntimeError) -> Bool) -> Unit raise @runtime.RuntimeError
 

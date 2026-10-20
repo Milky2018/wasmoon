@@ -3,8 +3,8 @@ package "Milky2018/wasmoon/testsuite"
 
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_runtime/runtime",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
@@ -12,7 +12,7 @@ import {
 // Values
 pub fn compare_jit_interp(String, String, Array[@types.Value]) -> CompareResult
 
-pub fn compare_jit_interp_with_opt_level(String, String, Array[@types.Value], Int) -> CompareResult
+pub fn compare_jit_interp_with_opt_level(String, String, Array[@types.Value], Int32) -> CompareResult
 
 pub fn compare_result_errors_contain(CompareResult, String) -> Bool
 
@@ -32,7 +32,7 @@ pub fn run_assert_trap(TestContext, String?, String, Array[TestValue], String) -
 
 pub fn run_interp_only(String, String, Array[@types.Value]) -> Result[Array[@types.Value], String]
 
-pub fn run_jit(@types.Module, String, Int, Array[@types.Value], ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Result[Array[@types.Value], String]
+pub fn run_jit(@types.Module, String, Int32, Array[@types.Value], ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Result[Array[@types.Value], String]
 
 pub fn run_json_tests(String, String, (String) -> Bytes raise) -> TestResult raise TestRunnerError
 
@@ -93,7 +93,7 @@ pub enum TestCommand {
 pub fn TestCommand::to_repr(Self) -> @debug.Repr
 
 pub struct TestCommandWithLine {
-  line : Int?
+  line : Int32?
   command : TestCommand
 } derive(@debug.Debug)
 pub fn TestCommandWithLine::to_repr(Self) -> @debug.Repr
@@ -112,9 +112,9 @@ pub fn TestContext::load_module(Self, Bytes, String?) -> @runtime.ModuleInstance
 pub fn TestContext::set_current_module(Self, @runtime.ModuleInstance) -> Unit
 
 pub(all) struct TestResult {
-  mut passed : Int
-  mut failed : Int
-  mut skipped : Int
+  mut passed : Int32
+  mut failed : Int32
+  mut skipped : Int32
   failures : Array[String]
   skip_reasons : Array[String]
   mut source_filename : String?

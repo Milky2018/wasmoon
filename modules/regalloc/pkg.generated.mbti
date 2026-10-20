@@ -9,7 +9,7 @@ import {
 // Values
 pub fn[F : FunctionView] allocate_function(F, MachineEnv, config? : RegallocConfig) -> AllocationPlan raise VerifyError
 
-pub fn reserve_spill_slot(Int, @allocation_types.RegClass) -> SpillSlotReservation
+pub fn reserve_spill_slot(Int32, @allocation_types.RegClass) -> SpillSlotReservation
 
 // Errors
 pub suberror VerifyError {
@@ -36,21 +36,21 @@ pub fn AllocationEdit::to_repr(Self) -> @debug.Repr
 pub struct AllocationPlan {
   // private fields
 }
-pub fn AllocationPlan::edit_at(Self, Int) -> AllocationEdit?
-pub fn AllocationPlan::edit_count(Self) -> Int
+pub fn AllocationPlan::edit_at(Self, Int32) -> AllocationEdit?
+pub fn AllocationPlan::edit_count(Self) -> Int32
 pub fn AllocationPlan::edits(Self) -> Array[AllocationEdit]
-pub fn AllocationPlan::instruction_operand_count(Self, Int) -> Int
+pub fn AllocationPlan::instruction_operand_count(Self, Int32) -> Int32
 pub fn AllocationPlan::operand_assignments(Self) -> Array[OperandAssignment]
-pub fn AllocationPlan::operand_instruction_count(Self) -> Int
-pub fn AllocationPlan::operand_location(Self, Int, Int) -> @allocation_types.AllocationLocation?
+pub fn AllocationPlan::operand_instruction_count(Self) -> Int32
+pub fn AllocationPlan::operand_location(Self, Int32, Int32) -> @allocation_types.AllocationLocation?
 pub fn AllocationPlan::operand_location_storage(Self) -> Array[Array[@allocation_types.AllocationLocation?]]
 pub fn AllocationPlan::output(Self, &Logger) -> Unit
-pub fn AllocationPlan::spill_count(Self) -> Int
-pub fn AllocationPlan::spill_slot(Self, Int) -> SpillSlotSpec?
-pub fn AllocationPlan::spill_slot_owner(Self, Int) -> Int?
+pub fn AllocationPlan::spill_count(Self) -> Int32
+pub fn AllocationPlan::spill_slot(Self, Int32) -> SpillSlotSpec?
+pub fn AllocationPlan::spill_slot_owner(Self, Int32) -> Int32?
 pub fn AllocationPlan::to_repr(Self) -> @debug.Repr
 pub fn AllocationPlan::to_string(Self) -> String
-pub fn AllocationPlan::value_location(Self, Int) -> @allocation_types.AllocationLocation?
+pub fn AllocationPlan::value_location(Self, Int32) -> @allocation_types.AllocationLocation?
 pub fn AllocationPlan::value_location_storage(Self) -> Array[@allocation_types.AllocationLocation?]
 pub impl Show for AllocationPlan
 pub impl @debug.Debug for AllocationPlan
@@ -63,25 +63,25 @@ pub fn[F : FunctionView, S : AllocationSink] AllocationSession::allocate_into(Se
 pub fn AllocationSession::new() -> Self
 
 pub struct BundleAllocationStatistics {
-  mut queue_pops : Int
-  mut register_probes : Int
-  mut occupied_segments_scanned : Int
-  mut conflicts : Int
-  mut evictions : Int
-  mut bundle_splits : Int
-  mut second_chance_attempts : Int
-  mut max_queue_length : Int
+  mut queue_pops : Int32
+  mut register_probes : Int32
+  mut occupied_segments_scanned : Int32
+  mut conflicts : Int32
+  mut evictions : Int32
+  mut bundle_splits : Int32
+  mut second_chance_attempts : Int32
+  mut max_queue_length : Int32
 } derive(Eq, @debug.Debug)
-pub fn BundleAllocationStatistics::bundle_splits(Self) -> Int
-pub fn BundleAllocationStatistics::conflicts(Self) -> Int
+pub fn BundleAllocationStatistics::bundle_splits(Self) -> Int32
+pub fn BundleAllocationStatistics::conflicts(Self) -> Int32
 pub fn BundleAllocationStatistics::equal(Self, Self) -> Bool
-pub fn BundleAllocationStatistics::evictions(Self) -> Int
-pub fn BundleAllocationStatistics::max_queue_length(Self) -> Int
+pub fn BundleAllocationStatistics::evictions(Self) -> Int32
+pub fn BundleAllocationStatistics::max_queue_length(Self) -> Int32
 pub fn BundleAllocationStatistics::not_equal(Self, Self) -> Bool
-pub fn BundleAllocationStatistics::occupied_segments_scanned(Self) -> Int
-pub fn BundleAllocationStatistics::queue_pops(Self) -> Int
-pub fn BundleAllocationStatistics::register_probes(Self) -> Int
-pub fn BundleAllocationStatistics::second_chance_attempts(Self) -> Int
+pub fn BundleAllocationStatistics::occupied_segments_scanned(Self) -> Int32
+pub fn BundleAllocationStatistics::queue_pops(Self) -> Int32
+pub fn BundleAllocationStatistics::register_probes(Self) -> Int32
+pub fn BundleAllocationStatistics::second_chance_attempts(Self) -> Int32
 pub fn BundleAllocationStatistics::to_repr(Self) -> @debug.Repr
 
 type DenseCfgEdges derive(@debug.Debug)
@@ -91,48 +91,48 @@ type DenseLiveSets derive(@debug.Debug)
 pub fn DenseLiveSets::to_repr(Self) -> @debug.Repr
 
 pub(all) enum EditPosition {
-  Before(Int)
-  After(Int)
-  Edge(source_block~ : Int, successor_index~ : Int)
+  Before(Int32)
+  After(Int32)
+  Edge(source_block~ : Int32, successor_index~ : Int32)
 } derive(Eq, Hash, @debug.Debug)
 pub fn EditPosition::equal(Self, Self) -> Bool
-pub fn EditPosition::hash(Self) -> Int
+pub fn EditPosition::hash(Self) -> Int32
 pub fn EditPosition::hash_combine(Self, Hasher) -> Unit
 pub fn EditPosition::not_equal(Self, Self) -> Bool
 pub fn EditPosition::to_repr(Self) -> @debug.Repr
 
 type LiveRange derive(@debug.Debug)
-pub fn LiveRange::LiveRange(Int, @allocation_types.VirtualReg) -> Self
+pub fn LiveRange::LiveRange(Int32, @allocation_types.VirtualReg) -> Self
 pub fn LiveRange::add_range(Self, ProgramRange) -> Unit
 pub fn LiveRange::add_use(Self, UsePosition) -> Unit
 pub fn LiveRange::end(Self) -> ProgramPoint?
 pub fn LiveRange::get_fixed_reg(Self) -> @allocation_types.PhysicalReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
 pub fn LiveRange::has_tie_at(Self, Self, ProgramPoint) -> Bool
-pub fn LiveRange::id(Self) -> Int
-pub fn LiveRange::is_live_across(Self, ProgramPoint, Array[Int]) -> Bool
-pub fn LiveRange::overlap_allowed_by_tie(Self, Self, Array[Int]) -> Bool
-pub fn LiveRange::overlaps(Self, Self, Array[Int]) -> Bool
-pub fn LiveRange::range_at(Self, Int) -> ProgramRange?
-pub fn LiveRange::range_count(Self) -> Int
+pub fn LiveRange::id(Self) -> Int32
+pub fn LiveRange::is_live_across(Self, ProgramPoint, Array[Int32]) -> Bool
+pub fn LiveRange::overlap_allowed_by_tie(Self, Self, Array[Int32]) -> Bool
+pub fn LiveRange::overlaps(Self, Self, Array[Int32]) -> Bool
+pub fn LiveRange::range_at(Self, Int32) -> ProgramRange?
+pub fn LiveRange::range_count(Self) -> Int32
 pub fn LiveRange::start(Self) -> ProgramPoint?
 pub fn LiveRange::to_repr(Self) -> @debug.Repr
-pub fn LiveRange::total_length(Self) -> Int
+pub fn LiveRange::total_length(Self) -> Int32
 pub fn LiveRange::touch(Self, ProgramPoint) -> Unit
-pub fn LiveRange::touch_with_order(Self, ProgramPoint, Array[Int]) -> Unit
-pub fn LiveRange::use_at(Self, Int) -> UsePosition?
-pub fn LiveRange::use_count(Self) -> Int
+pub fn LiveRange::touch_with_order(Self, ProgramPoint, Array[Int32]) -> Unit
+pub fn LiveRange::use_at(Self, Int32) -> UsePosition?
+pub fn LiveRange::use_count(Self) -> Int32
 pub fn LiveRange::vreg(Self) -> @allocation_types.VirtualReg
 
 type LiveRangeSet derive(@debug.Debug)
-pub fn LiveRangeSet::LiveRangeSet(Array[Int]) -> Self
+pub fn LiveRangeSet::LiveRangeSet(Array[Int32]) -> Self
 pub fn LiveRangeSet::add_range(Self, LiveRange) -> Unit
-pub fn LiveRangeSet::block_order(Self) -> Array[Int]
-pub fn LiveRangeSet::block_order_at(Self, Int) -> Int?
-pub fn LiveRangeSet::block_order_count(Self) -> Int
-pub fn LiveRangeSet::get(Self, Int) -> LiveRange
+pub fn LiveRangeSet::block_order(Self) -> Array[Int32]
+pub fn LiveRangeSet::block_order_at(Self, Int32) -> Int32?
+pub fn LiveRangeSet::block_order_count(Self) -> Int32
+pub fn LiveRangeSet::get(Self, Int32) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, @allocation_types.VirtualReg) -> LiveRange?
-pub fn LiveRangeSet::length(Self) -> Int
+pub fn LiveRangeSet::length(Self) -> Int32
 pub fn LiveRangeSet::to_repr(Self) -> @debug.Repr
 
 pub struct MachineEnv {
@@ -150,8 +150,8 @@ pub fn MachineEnv::with_fixed_operand_regs(Self, Array[@allocation_types.Physica
 pub fn MachineEnv::with_operand_scratch_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
 
 pub struct OperandAssignment {
-  instruction : Int
-  operand : Int
+  instruction : Int32
+  operand : Int32
   location : @allocation_types.AllocationLocation
 } derive(Eq, @debug.Debug)
 pub fn OperandAssignment::equal(Self, Self) -> Bool
@@ -159,11 +159,11 @@ pub fn OperandAssignment::not_equal(Self, Self) -> Bool
 pub fn OperandAssignment::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ProgramPoint {
-  block : Int
-  inst : Int
+  block : Int32
+  inst : Int32
 } derive(Eq, @debug.Debug)
-pub fn ProgramPoint::ProgramPoint(Int, Int) -> Self
-pub fn ProgramPoint::compare_with_order(Self, Self, Array[Int]) -> Int
+pub fn ProgramPoint::ProgramPoint(Int32, Int32) -> Self
+pub fn ProgramPoint::compare_with_order(Self, Self, Array[Int32]) -> Int32
 pub fn ProgramPoint::equal(Self, Self) -> Bool
 pub fn ProgramPoint::not_equal(Self, Self) -> Bool
 pub fn ProgramPoint::to_repr(Self) -> @debug.Repr
@@ -173,10 +173,10 @@ pub(all) struct ProgramRange {
   end : ProgramPoint
 } derive(Eq, @debug.Debug)
 pub fn ProgramRange::ProgramRange(ProgramPoint, ProgramPoint) -> Self
-pub fn ProgramRange::contains(Self, ProgramPoint, Array[Int]) -> Bool
+pub fn ProgramRange::contains(Self, ProgramPoint, Array[Int32]) -> Bool
 pub fn ProgramRange::equal(Self, Self) -> Bool
 pub fn ProgramRange::not_equal(Self, Self) -> Bool
-pub fn ProgramRange::overlaps(Self, Self, Array[Int]) -> Bool
+pub fn ProgramRange::overlaps(Self, Self, Array[Int32]) -> Bool
 pub fn ProgramRange::to_repr(Self) -> @debug.Repr
 
 pub struct RegallocConfig {
@@ -208,20 +208,20 @@ pub fn RegallocPhase::to_string(Self) -> String
 pub impl Show for RegallocPhase
 
 pub(all) struct SpillSlotReservation {
-  slot : Int
-  next_slot : Int
-  slots_used : Int
+  slot : Int32
+  next_slot : Int32
+  slots_used : Int32
 } derive(Eq, @debug.Debug)
 pub fn SpillSlotReservation::equal(Self, Self) -> Bool
 pub fn SpillSlotReservation::not_equal(Self, Self) -> Bool
 pub fn SpillSlotReservation::to_repr(Self) -> @debug.Repr
 
 pub struct SpillSlotSpec {
-  size : Int
-  alignment : Int
+  size : Int32
+  alignment : Int32
 } derive(Eq, @debug.Debug)
 pub fn SpillSlotSpec::equal(Self, Self) -> Bool
-pub fn SpillSlotSpec::new(Int, Int) -> Self
+pub fn SpillSlotSpec::new(Int32, Int32) -> Self
 pub fn SpillSlotSpec::not_equal(Self, Self) -> Bool
 pub fn SpillSlotSpec::to_repr(Self) -> @debug.Repr
 
@@ -239,14 +239,14 @@ pub(all) struct UsePosition {
   kind : UseKind
   constraint : @allocation_types.AllocationConstraint
   preference : @allocation_types.PhysicalReg?
-  tie_id : Int
+  tie_id : Int32
 } derive(Eq, @debug.Debug)
 pub fn UsePosition::UsePosition(ProgramPoint, UseKind, @allocation_types.AllocationConstraint) -> Self
 pub fn UsePosition::equal(Self, Self) -> Bool
 pub fn UsePosition::not_equal(Self, Self) -> Bool
 pub fn UsePosition::to_repr(Self) -> @debug.Repr
 pub fn UsePosition::with_preference(Self, @allocation_types.PhysicalReg?) -> Self
-pub fn UsePosition::with_tie(Self, Int) -> Self
+pub fn UsePosition::with_tie(Self, Int32) -> Self
 
 // Type aliases
 pub using @allocation_types {type AllocationLocation as Location}
@@ -268,33 +268,33 @@ pub using @allocation_types {type VirtualReg}
 // Traits
 pub(open) trait AllocationSink {
   fn assign_value(Self, @allocation_types.VirtualReg, @allocation_types.AllocationLocation) -> Unit
-  fn assign_operand(Self, Int, Int, @allocation_types.AllocationLocation) -> Unit
-  fn create_spill_slot(Self, Int, Int, Int) -> Int
-  fn value_location(Self, Int) -> @allocation_types.AllocationLocation?
-  fn operand_location(Self, Int, Int) -> @allocation_types.AllocationLocation?
-  fn spill_slot(Self, Int) -> SpillSlotSpec?
+  fn assign_operand(Self, Int32, Int32, @allocation_types.AllocationLocation) -> Unit
+  fn create_spill_slot(Self, Int32, Int32, Int32) -> Int32
+  fn value_location(Self, Int32) -> @allocation_types.AllocationLocation?
+  fn operand_location(Self, Int32, Int32) -> @allocation_types.AllocationLocation?
+  fn spill_slot(Self, Int32) -> SpillSlotSpec?
   fn add_edit(Self, AllocationEdit) -> Unit
   fn edits(Self) -> Array[AllocationEdit]
 }
 
 pub(open) trait FunctionView {
-  fn value_count(Self) -> Int
-  fn value_class(Self, Int) -> @allocation_types.RegClass
-  fn value_spill_size(Self, Int) -> Int
-  fn value_spill_alignment(Self, Int) -> Int
-  fn values_share_spill_slot(Self, Int, Int) -> Bool
-  fn entry_value_count(Self) -> Int
-  fn entry_value_at(Self, Int) -> @allocation_types.VirtualReg
-  fn block_count(Self) -> Int
-  fn block_id_at(Self, Int) -> Int
-  fn block_parameter_count(Self, Int) -> Int
-  fn block_parameter_at(Self, Int, Int) -> @allocation_types.VirtualReg
-  fn block_instruction_count(Self, Int) -> Int
-  fn block_instruction_at(Self, Int, Int) -> Int
-  fn block_successor_count(Self, Int) -> Int
-  fn block_successor_at(Self, Int, Int) -> Int
-  fn edge_argument_count(Self, Int, Int) -> Int
-  fn edge_argument_at(Self, Int, Int, Int) -> @allocation_types.VirtualReg
-  fn instruction_operands(Self, Int) -> ArrayView[@allocation_types.AllocationOperand]
-  fn instruction_clobbers(Self, Int) -> ArrayView[@allocation_types.PhysicalReg]
+  fn value_count(Self) -> Int32
+  fn value_class(Self, Int32) -> @allocation_types.RegClass
+  fn value_spill_size(Self, Int32) -> Int32
+  fn value_spill_alignment(Self, Int32) -> Int32
+  fn values_share_spill_slot(Self, Int32, Int32) -> Bool
+  fn entry_value_count(Self) -> Int32
+  fn entry_value_at(Self, Int32) -> @allocation_types.VirtualReg
+  fn block_count(Self) -> Int32
+  fn block_id_at(Self, Int32) -> Int32
+  fn block_parameter_count(Self, Int32) -> Int32
+  fn block_parameter_at(Self, Int32, Int32) -> @allocation_types.VirtualReg
+  fn block_instruction_count(Self, Int32) -> Int32
+  fn block_instruction_at(Self, Int32, Int32) -> Int32
+  fn block_successor_count(Self, Int32) -> Int32
+  fn block_successor_at(Self, Int32, Int32) -> Int32
+  fn edge_argument_count(Self, Int32, Int32) -> Int32
+  fn edge_argument_at(Self, Int32, Int32, Int32) -> @allocation_types.VirtualReg
+  fn instruction_operands(Self, Int32) -> ArrayView[@allocation_types.AllocationOperand]
+  fn instruction_clobbers(Self, Int32) -> ArrayView[@allocation_types.PhysicalReg]
 }

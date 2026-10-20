@@ -22,6 +22,8 @@ def main():
     count = 0
     failed = []
     for config in sorted((ROOT / 'modules').rglob('moon.pkg')):
+        if ".mooncakes" in config.relative_to(ROOT).parts:
+            continue
         declaration = re.search(r'"native-stub"\s*:\s*\[([^]]*)\]', config.read_text())
         if declaration is None:
             continue

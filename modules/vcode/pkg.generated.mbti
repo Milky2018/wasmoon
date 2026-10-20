@@ -8,11 +8,11 @@ import {
 }
 
 // Values
-pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
+pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int32, Int32, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
 
 pub fn plan_parallel_moves(Array[ParallelMove], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
 
-pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
+pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int32, Int32, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
 
 pub fn reg_class_for_value_type(@native_types.ValueType) -> @allocation_types.RegClass
 
@@ -35,18 +35,18 @@ pub suberror AllocationVerifyError {
   MissingValueLocation(value~ : Value)
   ForeignLocation(value~ : Value)
   LocationClassMismatch(value~ : Value)
-  MissingOperandLocation(instruction~ : Instruction, operand~ : Int)
-  OperandClassMismatch(instruction~ : Instruction, operand~ : Int)
-  RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int)
-  FixedConstraintViolation(instruction~ : Instruction, operand~ : Int)
-  PreservedHomeConstraintViolation(instruction~ : Instruction, operand~ : Int)
-  TiedConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  MissingOperandLocation(instruction~ : Instruction, operand~ : Int32)
+  OperandClassMismatch(instruction~ : Instruction, operand~ : Int32)
+  RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int32)
+  FixedConstraintViolation(instruction~ : Instruction, operand~ : Int32)
+  PreservedHomeConstraintViolation(instruction~ : Instruction, operand~ : Int32)
+  TiedConstraintViolation(instruction~ : Instruction, operand~ : Int32)
   Interference(left~ : Value, right~ : Value, location~ : Location)
   ClobberViolation(instruction~ : Instruction, value~ : Value)
   InvalidStackSlotLayout(slot~ : StackSlot)
-  InvalidEdit(index~ : Int)
-  MissingReload(instruction~ : Instruction, operand~ : Int)
-  InvalidEdgeMove(index~ : Int)
+  InvalidEdit(index~ : Int32)
+  MissingReload(instruction~ : Instruction, operand~ : Int32)
+  InvalidEdgeMove(index~ : Int32)
   MissingSafepointRoot(instruction~ : Instruction, value~ : Value)
   UnexpectedSafepointRoot(instruction~ : Instruction, value~ : Value)
 } derive(Eq, @debug.Debug)
@@ -58,17 +58,17 @@ pub fn AllocationVerifyError::to_string(Self) -> String
 pub impl Show for AllocationVerifyError
 
 pub suberror CallTransferError {
-  InvalidSourceClass(index~ : Int)
-  ForeignSourceStack(index~ : Int)
-  InvalidSourceStackType(index~ : Int, expected~ : @native_types.ValueType, actual~ : @native_types.ValueType)
-  InvalidSourceStackLayout(index~ : Int)
-  InvalidDestinationClass(index~ : Int)
-  InvalidStackOffset(index~ : Int, offset~ : Int)
-  InvalidOutgoingStackRange(start~ : Int, size~ : Int)
-  OutgoingStackDestinationOutOfRange(index~ : Int, offset~ : Int)
-  DuplicateRegisterDestination(index~ : Int, register~ : @allocation_types.PhysicalReg)
-  OverlappingStackDestination(first~ : Int, second~ : Int)
-  ProtectedLocationOverwrite(index~ : Int, location~ : Location)
+  InvalidSourceClass(index~ : Int32)
+  ForeignSourceStack(index~ : Int32)
+  InvalidSourceStackType(index~ : Int32, expected~ : @native_types.ValueType, actual~ : @native_types.ValueType)
+  InvalidSourceStackLayout(index~ : Int32)
+  InvalidDestinationClass(index~ : Int32)
+  InvalidStackOffset(index~ : Int32, offset~ : Int32)
+  InvalidOutgoingStackRange(start~ : Int32, size~ : Int32)
+  OutgoingStackDestinationOutOfRange(index~ : Int32, offset~ : Int32)
+  DuplicateRegisterDestination(index~ : Int32, register~ : @allocation_types.PhysicalReg)
+  OverlappingStackDestination(first~ : Int32, second~ : Int32)
+  ProtectedLocationOverwrite(index~ : Int32, location~ : Location)
   MoveResolutionFailed(cause~ : MoveResolveError)
 } derive(Eq, @debug.Debug)
 pub fn CallTransferError::equal(Self, Self) -> Bool
@@ -88,8 +88,8 @@ pub impl Show for EmissionVerifyError
 pub suberror FrameVerifyError {
   AllocationFailure(cause~ : AllocationVerifyError)
   SourceMismatch
-  InvalidFrameSize(size~ : Int)
-  InvalidFrameAlignment(alignment~ : Int)
+  InvalidFrameSize(size~ : Int32)
+  InvalidFrameAlignment(alignment~ : Int32)
   MissingStackSlot(slot~ : StackSlot)
   MisalignedStackSlot(slot~ : StackSlot)
   OverlappingStackSlots(left~ : StackSlot, right~ : StackSlot)
@@ -116,15 +116,15 @@ pub fn MoveResolveError::to_string(Self) -> String
 pub impl Show for MoveResolveError
 
 pub suberror VCodeBuildError {
-  InvalidParameter(index~ : Int)
-  InvalidBlockParameter(block~ : Block, index~ : Int)
+  InvalidParameter(index~ : Int32)
+  InvalidBlockParameter(block~ : Block, index~ : Int32)
   ForeignBlock(block~ : Block)
   ForeignValue(value~ : Value)
   InvalidOperandConstraint
   DuplicateTerminator(block~ : Block)
   BlockAlreadyTerminated(block~ : Block)
   InvalidEdgeArity(block~ : Block)
-  EdgeClassMismatch(block~ : Block, index~ : Int)
+  EdgeClassMismatch(block~ : Block, index~ : Int32)
   DuplicateClobber(reg~ : @allocation_types.PhysicalReg)
   InvalidSafepointRoot(value~ : Value)
   InvalidStackMap
@@ -144,10 +144,10 @@ pub suberror VCodeVerifyError {
   ForeignValue(instruction~ : Instruction, value~ : Value)
   ForeignBlock(instruction~ : Instruction, block~ : Block)
   InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
-  EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
-  InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
-  FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
-  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
+  EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int32)
+  InvalidTie(instruction~ : Instruction, operand~ : Int32, tied_to~ : Int32)
+  FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int32)
+  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int32)
   DuplicateClobber(instruction~ : Instruction, reg~ : @allocation_types.PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
   InvalidStackMap(instruction~ : Instruction)
@@ -169,24 +169,24 @@ pub struct Allocation {
 }
 pub fn Allocation::add_edit(Self, Edit) -> Bool
 pub fn Allocation::add_safepoint_root(Self, Instruction, Value, Location) -> Bool
-pub fn Allocation::allocated_operand_location_at(Self, Int, Int) -> @allocation_types.AllocationLocation?
-pub fn Allocation::allocated_value_location_at(Self, Int) -> @allocation_types.AllocationLocation?
-pub fn Allocation::assign_operand(Self, Instruction, Int, @allocation_types.PhysicalReg) -> Bool
-pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> Bool
+pub fn Allocation::allocated_operand_location_at(Self, Int32, Int32) -> @allocation_types.AllocationLocation?
+pub fn Allocation::allocated_value_location_at(Self, Int32) -> @allocation_types.AllocationLocation?
+pub fn Allocation::assign_operand(Self, Instruction, Int32, @allocation_types.PhysicalReg) -> Bool
+pub fn Allocation::assign_operand_location(Self, Instruction, Int32, Location) -> Bool
 pub fn Allocation::assign_value(Self, Value, Location) -> Bool
-pub fn Allocation::create_stack_slot(Self, @native_types.ValueType, Int, Int) -> StackSlot
-pub fn Allocation::edge_edits_at(Self, Block, Int) -> ArrayView[Edit]
-pub fn Allocation::edit_count(Self) -> Int
+pub fn Allocation::create_stack_slot(Self, @native_types.ValueType, Int32, Int32) -> StackSlot
+pub fn Allocation::edge_edits_at(Self, Block, Int32) -> ArrayView[Edit]
+pub fn Allocation::edit_count(Self) -> Int32
 pub fn Allocation::edits(Self) -> Array[Edit]
 pub fn Allocation::edits_at(Self, Instruction, PointPlacement) -> ArrayView[Edit]
 pub fn[Inst] Allocation::for_function(Function[Inst]) -> Self
-pub fn Allocation::operand_location(Self, Instruction, Int) -> Location?
+pub fn Allocation::operand_location(Self, Instruction, Int32) -> Location?
 pub fn Allocation::safepoint_roots(Self, Instruction) -> Array[(Value, Location)]
-pub fn Allocation::source_instruction_count(Self) -> Int
-pub fn Allocation::stack_slot_alignment(Self, StackSlot) -> Int?
-pub fn Allocation::stack_slot_at(Self, Int) -> StackSlot?
-pub fn Allocation::stack_slot_count(Self) -> Int
-pub fn Allocation::stack_slot_size(Self, StackSlot) -> Int?
+pub fn Allocation::source_instruction_count(Self) -> Int32
+pub fn Allocation::stack_slot_alignment(Self, StackSlot) -> Int32?
+pub fn Allocation::stack_slot_at(Self, Int32) -> StackSlot?
+pub fn Allocation::stack_slot_count(Self) -> Int32
+pub fn Allocation::stack_slot_size(Self, StackSlot) -> Int32?
 pub fn Allocation::stack_slot_type(Self, StackSlot) -> @native_types.ValueType?
 pub fn Allocation::statistics(Self) -> AllocationStatistics
 pub fn Allocation::summary(Self) -> String
@@ -195,28 +195,28 @@ pub fn Allocation::value_location(Self, Value) -> Location?
 pub struct AllocationBuilder[Inst] {
   // private fields
 }
-pub fn[Inst] AllocationBuilder::add_edge_transfer(Self[Inst], Int, Int, Int, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::add_edge_transfer(Self[Inst], Int32, Int32, Int32, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
 pub fn[Inst] AllocationBuilder::add_function_safepoint_roots(Self[Inst]) -> Bool
-pub fn[Inst] AllocationBuilder::add_safepoint_root(Self[Inst], Int, Int) -> Bool
-pub fn[Inst] AllocationBuilder::add_transfer(Self[Inst], Int, PointPlacement, Int, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
-pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int, Int, @allocation_types.AllocationLocation) -> Bool
-pub fn[Inst] AllocationBuilder::assign_value(Self[Inst], Int, @allocation_types.AllocationLocation) -> Bool
-pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int, Int, Int) -> Int
+pub fn[Inst] AllocationBuilder::add_safepoint_root(Self[Inst], Int32, Int32) -> Bool
+pub fn[Inst] AllocationBuilder::add_transfer(Self[Inst], Int32, PointPlacement, Int32, @allocation_types.AllocationLocation, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::assign_operand(Self[Inst], Int32, Int32, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::assign_value(Self[Inst], Int32, @allocation_types.AllocationLocation) -> Bool
+pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int32, Int32, Int32) -> Int32
 pub fn[Inst] AllocationBuilder::finish(Self[Inst]) -> Allocation
 pub fn[Inst] AllocationBuilder::finish_selected(Self[Inst]) -> Allocation?
 pub fn[Inst] AllocationBuilder::for_selected_function(Function[Inst]) -> Self[Inst]
-pub fn[Inst] AllocationBuilder::from_plan_storage(Function[Inst], Array[@allocation_types.AllocationLocation?], Array[Array[@allocation_types.AllocationLocation?]], Array[Int], Array[Int], Array[Int]) -> Self[Inst]?
+pub fn[Inst] AllocationBuilder::from_plan_storage(Function[Inst], Array[@allocation_types.AllocationLocation?], Array[Array[@allocation_types.AllocationLocation?]], Array[Int32], Array[Int32], Array[Int32]) -> Self[Inst]?
 pub fn[Inst] AllocationBuilder::new(Function[Inst]) -> Self[Inst]
-pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int, Int) -> Int
-pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int) -> @allocation_types.AllocationLocation?
-pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int) -> @native_types.ValueType
+pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int32, Int32) -> Int32
+pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int32) -> @allocation_types.AllocationLocation?
+pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int32) -> @native_types.ValueType
 
 pub struct AllocationStatistics {
-  spill_slots : Int
-  spills : Int
-  reloads : Int
-  reg_moves : Int
-  spill_to_spill : Int
+  spill_slots : Int32
+  spills : Int32
+  reloads : Int32
+  reg_moves : Int32
+  spill_to_spill : Int32
 } derive(Eq, @debug.Debug)
 pub fn AllocationStatistics::equal(Self, Self) -> Bool
 pub fn AllocationStatistics::not_equal(Self, Self) -> Bool
@@ -238,21 +238,21 @@ pub struct Builder[Inst] {
   // private fields
 }
 pub fn[Inst] Builder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
-pub fn[Inst] Builder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
+pub fn[Inst] Builder::block_parameter(Self[Inst], Block, Int32) -> Value raise VCodeBuildError
 pub fn[Inst] Builder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
 pub fn[Inst] Builder::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Builder::finish(Self[Inst]) -> Function[Inst]
 pub fn[Inst] Builder::new(String, Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::new_with_protocol(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::new_with_results(String, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
-pub fn[Inst] Builder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
+pub fn[Inst] Builder::parameter(Self[Inst], Int32) -> Value raise VCodeBuildError
 pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 
 pub struct CallTransfer {
   // private fields
 }
 pub fn CallTransfer::to_register(@native_types.ValueType, Location, @allocation_types.PhysicalReg) -> Self
-pub fn CallTransfer::to_stack(@native_types.ValueType, Location, Int) -> Self
+pub fn CallTransfer::to_stack(@native_types.ValueType, Location, Int32) -> Self
 
 pub struct CallTransferPlan {
   stack_transfers : Array[StackArgumentTransfer]
@@ -267,14 +267,14 @@ pub struct CheckedBuilder[Inst] {
 }
 pub fn[Inst] CheckedBuilder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::append_body_unconstrained(Self[Inst], Block, Inst, Array[Value], Array[@native_types.ValueType], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
-pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int32) -> Value raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
 pub fn[Inst] CheckedBuilder::entry_block(Self[Inst]) -> Block
 pub fn[Inst] CheckedBuilder::finish(Self[Inst]) -> Function[Inst] raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::new(String, Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::new_with_protocol(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::new_with_results(String, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
-pub fn[Inst] CheckedBuilder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::parameter(Self[Inst], Int32) -> Value raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 
 pub struct Edge {
@@ -287,7 +287,7 @@ pub struct Edit {
   point : ProgramPoint?
   kind : EditKind
 }
-pub fn Edit::edge_move(Block, Int, Value, Location, Location) -> Self
+pub fn Edit::edge_move(Block, Int32, Value, Location, Location) -> Self
 pub fn Edit::kind(Self) -> EditKind
 pub fn Edit::point(Self) -> ProgramPoint?
 pub fn Edit::register_move(ProgramPoint, Value, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Self
@@ -298,7 +298,7 @@ pub(all) enum EditKind {
   Spill(value~ : Value, reg~ : @allocation_types.PhysicalReg, slot~ : StackSlot)
   Reload(value~ : Value, slot~ : StackSlot, reg~ : @allocation_types.PhysicalReg)
   Move(value~ : Value, from~ : @allocation_types.PhysicalReg, to~ : @allocation_types.PhysicalReg)
-  EdgeMove(source~ : Block, successor_index~ : Int, value~ : Value, from~ : Location, to~ : Location)
+  EdgeMove(source~ : Block, successor_index~ : Int32, value~ : Value, from~ : Location, to~ : Location)
 } derive(Eq, @debug.Debug)
 pub fn EditKind::equal(Self, Self) -> Bool
 pub fn EditKind::not_equal(Self, Self) -> Bool
@@ -307,75 +307,75 @@ pub fn EditKind::to_repr(Self) -> @debug.Repr
 pub struct FrameLayout {
   // private fields
 }
-pub fn FrameLayout::alignment(Self) -> Int
-pub fn FrameLayout::frame_size(Self) -> Int
-pub fn[Inst] FrameLayout::new(Function[Inst], Allocation, Int, Int) -> Self
-pub fn FrameLayout::place_slot(Self, StackSlot, Int) -> Bool
-pub fn FrameLayout::slot_offset(Self, StackSlot) -> Int?
+pub fn FrameLayout::alignment(Self) -> Int32
+pub fn FrameLayout::frame_size(Self) -> Int32
+pub fn[Inst] FrameLayout::new(Function[Inst], Allocation, Int32, Int32) -> Self
+pub fn FrameLayout::place_slot(Self, StackSlot, Int32) -> Bool
+pub fn FrameLayout::slot_offset(Self, StackSlot) -> Int32?
 
 pub struct Function[Inst] {
   // private fields
 }
 pub fn[Inst] Function::after(Self[Inst], Instruction) -> ProgramPoint?
-pub fn[Inst] Function::allocation_block_instruction_at(Self[Inst], Int, Int) -> Int
-pub fn[Inst] Function::allocation_block_instruction_count(Self[Inst], Int) -> Int
-pub fn[Inst] Function::allocation_block_parameter_at(Self[Inst], Int, Int) -> @allocation_types.VirtualReg
-pub fn[Inst] Function::allocation_block_parameter_count(Self[Inst], Int) -> Int
-pub fn[Inst] Function::allocation_block_successor_at(Self[Inst], Int, Int) -> Int
-pub fn[Inst] Function::allocation_block_successor_count(Self[Inst], Int) -> Int
-pub fn[Inst] Function::allocation_edge_argument_at(Self[Inst], Int, Int, Int) -> @allocation_types.VirtualReg
-pub fn[Inst] Function::allocation_edge_argument_count(Self[Inst], Int, Int) -> Int
-pub fn[Inst] Function::allocation_entry_value_at(Self[Inst], Int) -> @allocation_types.VirtualReg
-pub fn[Inst] Function::allocation_instruction_clobbers(Self[Inst], Int) -> ArrayView[@allocation_types.PhysicalReg]
-pub fn[Inst] Function::allocation_instruction_operands(Self[Inst], Int) -> ArrayView[@allocation_types.AllocationOperand]
-pub fn[Inst] Function::allocation_layout_block_id_at(Self[Inst], Int) -> Int
-pub fn[Inst] Function::allocation_value_type_at(Self[Inst], Int) -> @native_types.ValueType
+pub fn[Inst] Function::allocation_block_instruction_at(Self[Inst], Int32, Int32) -> Int32
+pub fn[Inst] Function::allocation_block_instruction_count(Self[Inst], Int32) -> Int32
+pub fn[Inst] Function::allocation_block_parameter_at(Self[Inst], Int32, Int32) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_block_parameter_count(Self[Inst], Int32) -> Int32
+pub fn[Inst] Function::allocation_block_successor_at(Self[Inst], Int32, Int32) -> Int32
+pub fn[Inst] Function::allocation_block_successor_count(Self[Inst], Int32) -> Int32
+pub fn[Inst] Function::allocation_edge_argument_at(Self[Inst], Int32, Int32, Int32) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_edge_argument_count(Self[Inst], Int32, Int32) -> Int32
+pub fn[Inst] Function::allocation_entry_value_at(Self[Inst], Int32) -> @allocation_types.VirtualReg
+pub fn[Inst] Function::allocation_instruction_clobbers(Self[Inst], Int32) -> ArrayView[@allocation_types.PhysicalReg]
+pub fn[Inst] Function::allocation_instruction_operands(Self[Inst], Int32) -> ArrayView[@allocation_types.AllocationOperand]
+pub fn[Inst] Function::allocation_layout_block_id_at(Self[Inst], Int32) -> Int32
+pub fn[Inst] Function::allocation_value_type_at(Self[Inst], Int32) -> @native_types.ValueType
 pub fn[Inst] Function::allocation_vreg(Self[Inst], Value) -> @allocation_types.VirtualReg?
 pub fn[Inst] Function::before(Self[Inst], Instruction) -> ProgramPoint?
-pub fn[Inst] Function::block_at(Self[Inst], Int) -> Block?
+pub fn[Inst] Function::block_at(Self[Inst], Int32) -> Block?
 pub fn[Inst] Function::block_body(Self[Inst], Block) -> Array[Instruction]
-pub fn[Inst] Function::block_count(Self[Inst]) -> Int
-pub fn[Inst] Function::block_index(Self[Inst], Block) -> Int?
-pub fn[Inst] Function::block_instruction_at(Self[Inst], Block, Int) -> Instruction?
-pub fn[Inst] Function::block_instruction_count(Self[Inst], Block) -> Int
-pub fn[Inst] Function::block_parameter_at(Self[Inst], Block, Int) -> Value?
-pub fn[Inst] Function::block_parameter_count(Self[Inst], Block) -> Int
+pub fn[Inst] Function::block_count(Self[Inst]) -> Int32
+pub fn[Inst] Function::block_index(Self[Inst], Block) -> Int32?
+pub fn[Inst] Function::block_instruction_at(Self[Inst], Block, Int32) -> Instruction?
+pub fn[Inst] Function::block_instruction_count(Self[Inst], Block) -> Int32
+pub fn[Inst] Function::block_parameter_at(Self[Inst], Block, Int32) -> Value?
+pub fn[Inst] Function::block_parameter_count(Self[Inst], Block) -> Int32
 pub fn[Inst] Function::block_parameters(Self[Inst], Block) -> Array[Value]
 pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
 pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Function::instruction(Self[Inst], Instruction) -> Inst?
-pub fn[Inst] Function::instruction_allocation_operand_at(Self[Inst], Instruction, Int) -> @allocation_types.AllocationOperand?
-pub fn[Inst] Function::instruction_at(Self[Inst], Int) -> Instruction?
-pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int) -> @allocation_types.PhysicalReg?
-pub fn[Inst] Function::instruction_clobber_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_allocation_operand_at(Self[Inst], Instruction, Int32) -> @allocation_types.AllocationOperand?
+pub fn[Inst] Function::instruction_at(Self[Inst], Int32) -> Instruction?
+pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int32) -> @allocation_types.PhysicalReg?
+pub fn[Inst] Function::instruction_clobber_count(Self[Inst], Instruction) -> Int32
 pub fn[Inst] Function::instruction_clobbers(Self[Inst], Instruction) -> Array[@allocation_types.PhysicalReg]
-pub fn[Inst] Function::instruction_count(Self[Inst]) -> Int
-pub fn[Inst] Function::instruction_index(Self[Inst], Instruction) -> Int?
+pub fn[Inst] Function::instruction_count(Self[Inst]) -> Int32
+pub fn[Inst] Function::instruction_index(Self[Inst], Instruction) -> Int32?
 pub fn[Inst] Function::instruction_is_terminator(Self[Inst], Instruction) -> Bool
 pub fn[Inst] Function::instruction_metadata(Self[Inst], Instruction) -> InstructionMetadata?
-pub fn[Inst] Function::instruction_operand_at(Self[Inst], Instruction, Int) -> Operand?
-pub fn[Inst] Function::instruction_operand_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_operand_at(Self[Inst], Instruction, Int32) -> Operand?
+pub fn[Inst] Function::instruction_operand_count(Self[Inst], Instruction) -> Int32
 pub fn[Inst] Function::instruction_operands(Self[Inst], Instruction) -> Array[Operand]
 pub fn[Inst] Function::instruction_results(Self[Inst], Instruction) -> Array[Value]
-pub fn[Inst] Function::instruction_successor_argument_at(Self[Inst], Instruction, Int, Int) -> Value?
-pub fn[Inst] Function::instruction_successor_argument_count(Self[Inst], Instruction, Int) -> Int
-pub fn[Inst] Function::instruction_successor_at(Self[Inst], Instruction, Int) -> Edge?
-pub fn[Inst] Function::instruction_successor_count(Self[Inst], Instruction) -> Int
-pub fn[Inst] Function::instruction_successor_target(Self[Inst], Instruction, Int) -> Block?
+pub fn[Inst] Function::instruction_successor_argument_at(Self[Inst], Instruction, Int32, Int32) -> Value?
+pub fn[Inst] Function::instruction_successor_argument_count(Self[Inst], Instruction, Int32) -> Int32
+pub fn[Inst] Function::instruction_successor_at(Self[Inst], Instruction, Int32) -> Edge?
+pub fn[Inst] Function::instruction_successor_count(Self[Inst], Instruction) -> Int32
+pub fn[Inst] Function::instruction_successor_target(Self[Inst], Instruction, Int32) -> Block?
 pub fn[Inst] Function::instruction_successors(Self[Inst], Instruction) -> Array[Edge]
 pub fn[Inst] Function::layout(Self[Inst]) -> Array[Block]
-pub fn[Inst] Function::layout_block_at(Self[Inst], Int) -> Block?
+pub fn[Inst] Function::layout_block_at(Self[Inst], Int32) -> Block?
 pub fn[Inst] Function::name(Self[Inst]) -> String
-pub fn[Inst] Function::parameter_at(Self[Inst], Int) -> Value?
-pub fn[Inst] Function::parameter_count(Self[Inst]) -> Int
+pub fn[Inst] Function::parameter_at(Self[Inst], Int32) -> Value?
+pub fn[Inst] Function::parameter_count(Self[Inst]) -> Int32
 pub fn[Inst] Function::program_point_instruction(Self[Inst], ProgramPoint) -> Instruction?
 pub fn[Inst] Function::protocol(Self[Inst]) -> @native_types.CallProtocol
 pub fn[Inst] Function::result_types(Self[Inst]) -> Array[@native_types.ValueType]
 pub fn[Inst] Function::set_layout(Self[Inst], Array[Block]) -> Unit raise VCodeBuildError
 pub fn[Inst : @debug.Debug] Function::summary(Self[Inst]) -> String
-pub fn[Inst] Function::value_at(Self[Inst], Int) -> Value?
-pub fn[Inst] Function::value_count(Self[Inst]) -> Int
-pub fn[Inst] Function::value_index(Self[Inst], Value) -> Int?
+pub fn[Inst] Function::value_at(Self[Inst], Int32) -> Value?
+pub fn[Inst] Function::value_count(Self[Inst]) -> Int32
+pub fn[Inst] Function::value_index(Self[Inst], Value) -> Int32?
 pub fn[Inst] Function::value_type(Self[Inst], Value) -> @native_types.ValueType?
 
 pub struct Input {
@@ -429,7 +429,7 @@ pub struct Operand {
   constraint : @allocation_types.AllocationConstraint
   preference : @allocation_types.PhysicalReg?
   timing : @allocation_types.OperandTiming
-  tie_id : Int
+  tie_id : Int32
 } derive(Eq, @debug.Debug)
 pub fn Operand::equal(Self, Self) -> Bool
 pub fn Operand::not_equal(Self, Self) -> Bool
@@ -439,7 +439,7 @@ pub(all) enum OperandConstraint {
   Any
   AnyLocation
   Fixed(@allocation_types.PhysicalReg)
-  TiedTo(Int)
+  TiedTo(Int32)
 } derive(Eq, @debug.Debug)
 pub fn OperandConstraint::equal(Self, Self) -> Bool
 pub fn OperandConstraint::not_equal(Self, Self) -> Bool
@@ -454,7 +454,7 @@ pub struct Output {
 pub fn Output::any(@native_types.ValueType) -> Self
 pub fn Output::any_location(@native_types.ValueType) -> Self
 pub fn Output::fixed(@native_types.ValueType, @allocation_types.PhysicalReg) -> Self
-pub fn Output::tied(@native_types.ValueType, Int) -> Self
+pub fn Output::tied(@native_types.ValueType, Int32) -> Self
 pub fn Output::with_preference(Self, @allocation_types.PhysicalReg) -> Self
 pub fn Output::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
@@ -488,14 +488,14 @@ pub impl Eq for ProgramPoint
 pub impl @debug.Debug for ProgramPoint
 
 pub(all) struct RegallocLoopStatistics {
-  queue_pops : Int
-  register_probes : Int
-  occupied_segments_scanned : Int
-  conflicts : Int
-  evictions : Int
-  bundle_splits : Int
-  second_chance_attempts : Int
-  max_queue_length : Int
+  queue_pops : Int32
+  register_probes : Int32
+  occupied_segments_scanned : Int32
+  conflicts : Int32
+  evictions : Int32
+  bundle_splits : Int32
+  second_chance_attempts : Int32
+  max_queue_length : Int32
 } derive(Eq, @debug.Debug)
 pub fn RegallocLoopStatistics::equal(Self, Self) -> Bool
 pub fn RegallocLoopStatistics::not_equal(Self, Self) -> Bool
@@ -530,7 +530,7 @@ pub fn ResolvedMoveStep::to_repr(Self) -> @debug.Repr
 pub struct StackArgumentTransfer {
   ty : @native_types.ValueType
   source : Location
-  offset : Int
+  offset : Int32
   scratch : @allocation_types.PhysicalReg?
 } derive(Eq, @debug.Debug)
 pub fn StackArgumentTransfer::equal(Self, Self) -> Bool

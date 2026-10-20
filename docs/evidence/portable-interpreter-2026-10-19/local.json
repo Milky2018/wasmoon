@@ -1,0 +1,71 @@
+{
+  "base_revision": "8f99719a69d32e79325edf06785039f4d3fbf071",
+  "source_dirty": true,
+  "delivery": false,
+  "platform": "macOS ARM64",
+  "toolchain": "moon 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moon\nmoonc v0.10.16+b1a0e846e (2026-10-16) ~/.moon/bin/moonc\nmoonrun 0.1.20261016 (1af328f 2026-10-16) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+  "source_manifest": "source-manifest.json",
+  "native_tests": {
+    "passed": 2765,
+    "failed": 0
+  },
+  "wasm_workspace_tests": {
+    "passed": 1294,
+    "failed": 0
+  },
+  "wasm_interpreter_tests": {
+    "passed": 220,
+    "failed": 0
+  },
+  "strict_c_stubs": 43,
+  "script_tests": {
+    "total": 172,
+    "skipped": 54,
+    "failed": 0
+  },
+  "sanitizer_tests": {
+    "passed": 189,
+    "failed": 0
+  },
+  "linux_lsan": "pending_CI",
+  "windows_clang": "pending_CI",
+  "windows_msvc": "pending_CI",
+  "core": {
+    "files_per_engine": 258,
+    "assertions_per_engine": 62563,
+    "engines": [
+      "native interpreter",
+      "wasm-hosted interpreter",
+      "native JIT"
+    ],
+    "failed": 0,
+    "unsupported": 0
+  },
+  "component": {
+    "files_per_engine": 59,
+    "commands_per_engine": 1385,
+    "engines": [
+      "native interpreter",
+      "native JIT"
+    ],
+    "failed": 0,
+    "skipped": 0
+  },
+  "wasi03_http_contract": {
+    "passed": 110,
+    "failed": 0
+  },
+  "embedding": {
+    "target": "wasm",
+    "result": 43,
+    "host_observed": 21,
+    "memory": 21,
+    "budget_used_after_close": 0
+  },
+  "packaged_installation": {
+    "native_cli_both_engines": "passed",
+    "wasm_embedding": "passed",
+    "module_archives": 12
+  },
+  "native_cli_sha256": "a67824c7e0861339a62167804fed56cb74fc73fba1c0f2c5b87d3071f787a391"
+}

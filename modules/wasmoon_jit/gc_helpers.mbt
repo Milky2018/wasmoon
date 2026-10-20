@@ -118,17 +118,6 @@ pub fn encode_heap_ref(heap_idx : Int32) -> Int64 {
 }
 
 ///|
-/// Decode a heap reference from JIT representation
-/// Returns 0-based heap_idx for MoonBit Store/CHeap
-pub fn decode_heap_ref(encoded : Int64) -> Int32 {
-  // Shift right to get 1-based gc_ref, then convert to 0-based
-  (encoded >> 1).to_int() - 1
-}
-
-// ============ GC Libcall Function Pointers ============
-// These return function pointers to C helper functions
-
-///|
 /// Encode module types for native subtype and allocation helpers.
 fn gc_type_data(types : Array[@types.SubType]) -> FixedArray[Int32] {
   let num_types = types.length()
@@ -503,3 +492,6 @@ extern "c" fn context_has_callable_metadata(context : JITContext) -> Bool = "was
 pub fn NativeJITContext::has_callable_metadata(self : NativeJITContext) -> Bool {
   context_has_callable_metadata(self.handle)
 }
+
+///|
+pub using @runtime_bridge {decode_heap_ref}

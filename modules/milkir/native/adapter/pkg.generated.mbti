@@ -15,7 +15,7 @@ type InstructionContext
 pub fn InstructionContext::block_parameters(Self, @native_lowering.Block) -> Array[@native_lowering.Value]
 pub fn InstructionContext::branch(Self, @native_lowering.Value, @native_lowering.Block, Array[@native_lowering.Value], @native_lowering.Block, Array[@native_lowering.Value]) -> Unit
 pub fn InstructionContext::create_block(Self, Array[@native_types.ValueType]) -> @native_lowering.Block
-pub fn InstructionContext::create_stack_object(Self, Int, Int) -> @native_types.StackObject
+pub fn InstructionContext::create_stack_object(Self, Int32, Int32) -> @native_types.StackObject
 pub fn InstructionContext::emit(Self, @native_lowering.Operation, Array[@native_lowering.Value], Array[@native_types.ValueType]) -> Array[@native_lowering.Value]
 pub fn InstructionContext::emit_call(Self, @native_types.NativeCall, Array[@native_lowering.Value], Array[@native_types.ValueType]) -> Array[@native_lowering.Value]
 pub fn InstructionContext::emit_call_without_roots(Self, @native_types.NativeCall, Array[@native_lowering.Value], Array[@native_types.ValueType]) -> Array[@native_lowering.Value]

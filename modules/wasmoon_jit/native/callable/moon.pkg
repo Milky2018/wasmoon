@@ -1,3 +1,3 @@
-options(
-  "native-stub": [ "registry.c" ],
-)
+import {
+  "Milky2018/wasmoon_runtime/native/callable" @implementation,
+}

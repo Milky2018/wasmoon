@@ -1,0 +1,40 @@
+{
+  "sha": "dae81454402cc70e80438762f1ec6f5dabf13232",
+  "node_id": "C_kwDOQeiUEtoAKGRhZTgxNDU0NDAyY2M3MGU4MDQzODc2MmYxZWM2ZjVkYWJmMTMyMzI",
+  "url": "https://api.github.com/repos/Milky2018/wasmoon/git/commits/dae81454402cc70e80438762f1ec6f5dabf13232",
+  "html_url": "https://github.com/Milky2018/wasmoon/commit/dae81454402cc70e80438762f1ec6f5dabf13232",
+  "author": {
+    "name": "Milky",
+    "email": "37078809+Milky2018@users.noreply.github.com",
+    "date": "2026-10-19T11:39:51Z"
+  },
+  "committer": {
+    "name": "GitHub",
+    "email": "noreply@github.com",
+    "date": "2026-10-19T11:39:51Z"
+  },
+  "tree": {
+    "sha": "098da2f37ca4a623b67995d8f1ff017673f31ae4",
+    "url": "https://api.github.com/repos/Milky2018/wasmoon/git/trees/098da2f37ca4a623b67995d8f1ff017673f31ae4"
+  },
+  "message": "Merge cc6444158a18350f352264d123a2626f94052e84 into 8f99719a69d32e79325edf06785039f4d3fbf071",
+  "parents": [
+    {
+      "sha": "8f99719a69d32e79325edf06785039f4d3fbf071",
+      "url": "https://api.github.com/repos/Milky2018/wasmoon/git/commits/8f99719a69d32e79325edf06785039f4d3fbf071",
+      "html_url": "https://github.com/Milky2018/wasmoon/commit/8f99719a69d32e79325edf06785039f4d3fbf071"
+    },
+    {
+      "sha": "cc6444158a18350f352264d123a2626f94052e84",
+      "url": "https://api.github.com/repos/Milky2018/wasmoon/git/commits/cc6444158a18350f352264d123a2626f94052e84",
+      "html_url": "https://github.com/Milky2018/wasmoon/commit/cc6444158a18350f352264d123a2626f94052e84"
+    }
+  ],
+  "verification": {
+    "verified": true,
+    "reason": "valid",
+    "signature": "-----BEGIN PGP SIGNATURE-----\n\nwsFcBAABCAAQBQJq1gGHCRC1aQ7uu5UhlAAAzEMQAHXbCkI+XkQOk5QxvuarjD/K\nX3//Ig1BtAiZ8me34mXN8x48kl1LZw/DOtv3EQE6xVqI8ew0j2l/Tuz5z6bhgiaZ\no1tPmWqyi6op6G3cI5MDDs7dt73yBAeqgNZor2D1LIjmU/NUw+3mEWjpGcljOCjm\na4J8BYUlvKyz/iHtIQlaUTUA64ILP0c+iCXjxuS8MROzLTHA+gxuJaMeRuJx+bvK\nHsLYCYC8aR3PG9UDJbPgkvqM0+8YxrqgFKTmVyWPhsHHYTYt2ttWFTWTqYJu/ZrR\nIc6sPmkgv6O/gTTcPhit+0TvUFFopQ4blsB1VoPbMmJ6Ae01IRMDF5naMSMJKuID\nvqgGdLZYB4xHwHJtIFUna1qMpZRXloySOjd3a6aYIqQIAGTjSMRQG+Uygm9X0+Kc\nceI0QBhD4fjMd9b+kH2kEGGLbHUtyZVrei+2Ott+320k8yKfdRAjs5gglRVfwlQm\nSKLFb+GlgodRH065c1pCEuqKyDtVK6Y5K3aA4lVKaWoTwv3dVzkySFdX/fYjl1+K\nrJfGnNwLToKKlyayBNXo56ftOSPZ36u+AmRTAKZa0TLLlKsot4WkZSpLrURFheqG\ntckKvyMANQUUxf7ko3W2GFr5v7wVJjjSKTxH86RtSjZqMtgHrLBus9EAF1OrPQmY\nW3WlO1zdBWsb5FIR8DzK\n=itRF\n-----END PGP SIGNATURE-----\n",
+    "payload": "tree 098da2f37ca4a623b67995d8f1ff017673f31ae4\nparent 8f99719a69d32e79325edf06785039f4d3fbf071\nparent cc6444158a18350f352264d123a2626f94052e84\nauthor Milky <37078809+Milky2018@users.noreply.github.com> 1792409991 +0000\ncommitter GitHub <noreply@github.com> 1792409991 +0000\n\nMerge cc6444158a18350f352264d123a2626f94052e84 into 8f99719a69d32e79325edf06785039f4d3fbf071\n",
+    "verified_at": "2026-10-19T11:39:51Z"
+  }
+}

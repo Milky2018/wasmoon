@@ -191,15 +191,13 @@ test "parse_int64: unsigned i64 boundary" {
 
 ///|
 test "parse_hex_int: with underscores" {
-  let result = parse_hex_int("FFFF_FFFF") catch {
-    e => fail("Parse error: \{e}")
-  }
+  let result = parse_int("0xFFFF_FFFF") catch { e => fail("Parse error: \{e}") }
   inspect(result, content="-1")
 }
 
 ///|
 test "parse_hex_int64: with underscores" {
-  let result = parse_hex_int64("FFFF_FFFF_FFFF_FFFF") catch {
+  let result = parse_int64("0xFFFF_FFFF_FFFF_FFFF") catch {
     e => fail("Parse error: \{e}")
   }
   inspect(result, content="-1")
@@ -207,21 +205,19 @@ test "parse_hex_int64: with underscores" {
 
 ///|
 test "parse_hex_u32: with underscores" {
-  let result = parse_hex_u32("FFFF_FFFF") catch {
-    e => fail("Parse error: \{e}")
-  }
+  let result = parse_u32("0xFFFF_FFFF") catch { e => fail("Parse error: \{e}") }
   inspect(result, content="-1") // -1 when interpreted as signed
 }
 
 ///|
 test "parse_hex_int: simple hex" {
-  let result = parse_hex_int("FF") catch { e => fail("Parse error: \{e}") }
+  let result = parse_int("0xFF") catch { e => fail("Parse error: \{e}") }
   inspect(result, content="255")
 }
 
 ///|
 test "parse_hex_int64: simple hex" {
-  let result = parse_hex_int64("1_0000_0000") catch {
+  let result = parse_int64("0x1_0000_0000") catch {
     e => fail("Parse error: \{e}")
   }
   inspect(result, content="4294967296")
@@ -239,7 +235,7 @@ test "parse_u32: overflow raises error" {
 ///|
 test "parse_hex_u32: overflow raises error" {
   inspect(
-    parse_int_fails(() => parse_hex_u32("FFFF_FFFF_FFFF_FFFF")),
+    parse_int_fails(() => parse_u32("0xFFFF_FFFF_FFFF_FFFF")),
     content="true",
   )
 }

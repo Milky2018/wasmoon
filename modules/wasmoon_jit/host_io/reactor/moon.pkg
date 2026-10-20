@@ -1,9 +1,5 @@
 import {
-  "Milky2018/wasmoon_jit/host_io",
+  "Milky2018/wasmoon_runtime/native/host_io/reactor" @implementation,
 }
 
-options(
-  "native-stub": [ "reactor.c", "reactor_windows.c", "external_loop.c" ],
-  targets: { "reactor.mbt": [ "native" ] },
-  warn_list: "+73",
-)
+supported_targets = "+native"

@@ -6,7 +6,7 @@ import {
   "Milky2018/wasm_component/validator",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/component/runtime_impl/core",
-  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon_runtime/runtime",
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
 }
@@ -35,10 +35,10 @@ pub(all) struct AsyncState {
   concurrent_resources : ConcurrentResources
   trapped : @ref.Ref[Bool]
   core_engine : @core.CoreExecutionEngine
-  next_handle_by_component : Map[Int, Array[Int]]
-  free_handles_by_component : Map[Int, Array[Int]]
+  next_handle_by_component : Map[Int32, Array[Int32]]
+  free_handles_by_component : Map[Int32, Array[Int32]]
   stream_table : StreamTable
-  resource_tables : Map[Int, ResourceTable]
+  resource_tables : Map[Int32, ResourceTable]
   host_event_loop : @ref.Ref[HostEventLoop?]
   task_stack : Array[Int64]
   tasks : TaskRegistry
@@ -48,17 +48,17 @@ pub(all) struct AsyncState {
   in_async_callback : Array[Bool]
   waitable_sets : ConcurrentMap[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
-  event_revision : @ref.Ref[Int]
+  event_revision : @ref.Ref[Int32]
   waitable_events : Map[Int64, Array[WaitEvent]]
   sync_waitable_users : Map[Int64, Int64]
-  inflight_by_instance : Map[Int, Int]
-  pending_by_instance : Map[Int, Array[Int64]]
+  inflight_by_instance : Map[Int32, Int32]
+  pending_by_instance : Map[Int32, Array[Int64]]
   scheduler_cursor : Array[Int64?]
-  next_future_id : Array[Int]
-  futures : ConcurrentMap[Int, FutureState]
+  next_future_id : Array[Int32]
+  futures : ConcurrentMap[Int32, FutureState]
   future_endpoints : ConcurrentMap[Int64, FutureEndpoint]
-  host_future_values : Map[Int, HostFutureValue]
-  backpressure_by_instance : Map[Int, Int]
+  host_future_values : Map[Int32, HostFutureValue]
+  backpressure_by_instance : Map[Int32, Int32]
 } derive(@debug.Debug)
 pub fn AsyncState::AsyncState(StreamTable, core_engine? : @core.CoreExecutionEngine) -> Self
 pub fn AsyncState::to_repr(Self) -> @debug.Repr
@@ -95,10 +95,10 @@ pub(all) enum ComponentExtern {
   CoreModule(@types.Module)
   CoreInstance(CoreInstance)
   CoreFunc(@core.CoreFuncRef)
-  CoreTable(Int)
-  CoreMemory(Int)
-  CoreGlobal(Int)
-  CoreTag(Int)
+  CoreTable(Int32)
+  CoreMemory(Int32)
+  CoreGlobal(Int32)
+  CoreTag(Int32)
   CoreType(Bytes)
 }
 pub fn ComponentExtern::output(Self, &Logger) -> Unit
@@ -130,15 +130,15 @@ pub(all) struct ComponentInstance {
   core_instances : Array[CoreInstance]
   core_funcs : Array[@core.CoreFuncRef]
   core_types : Array[Bytes]
-  core_tables : Array[Int]
-  core_mems : Array[Int]
-  core_globals : Array[Int]
-  core_tags : Array[Int]
+  core_tables : Array[Int32]
+  core_mems : Array[Int32]
+  core_globals : Array[Int32]
+  core_tags : Array[Int32]
   exports : Map[String, ComponentExtern]
   store : @runtime.Store
 }
 pub fn ComponentInstance::call_exported_func(Self, String, Array[ComponentValue]) -> Array[ComponentValue] raise @core.ComponentRuntimeError
-pub fn ComponentInstance::get_core_instance(Self, Int) -> CoreInstance?
+pub fn ComponentInstance::get_core_instance(Self, Int32) -> CoreInstance?
 pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
 pub fn ComponentInstance::start_exported_func(Self, String, Array[ComponentValue], caller_table? : ResourceTable) -> ComponentInvocation raise @core.ComponentRuntimeError
 
@@ -184,25 +184,25 @@ pub fn ComponentLinker::with_core_execution_engine(@core.CoreExecutionEngine, re
 
 pub(all) enum ComponentValue {
   Bool(Bool)
-  S8(Int)
-  U8(Int)
-  S16(Int)
-  U16(Int)
-  S32(Int)
-  U32(Int)
+  S8(Int32)
+  U8(Int32)
+  S16(Int32)
+  U16(Int32)
+  S32(Int32)
+  U32(Int32)
   S64(Int64)
   U64(Int64)
   F32(Float)
   F64(Double)
   Char(Char)
   String(String)
-  EncodedString(String, @model.StringEncoding, Int)
+  EncodedString(String, @model.StringEncoding, Int32)
   GuestString(CanonicalGuestString)
   ErrorContext(String)
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
-  Variant(Int, ComponentValue?)
-  ResourceValue(Int)
+  Variant(Int32, ComponentValue?)
+  ResourceValue(Int32)
 } derive(Eq, @debug.Debug)
 pub fn ComponentValue::equal(Self, Self) -> Bool
 pub fn ComponentValue::not_equal(Self, Self) -> Bool
@@ -214,7 +214,7 @@ pub impl Show for ComponentValue
 pub struct ConcurrentMap[K, V] {
   // private fields
 }
-pub fn[K, V] ConcurrentMap::length(Self[K, V]) -> Int
+pub fn[K, V] ConcurrentMap::length(Self[K, V]) -> Int32
 
 type ConcurrentResourceLease derive(@debug.Debug)
 pub fn ConcurrentResourceLease::to_repr(Self) -> @debug.Repr
@@ -226,10 +226,10 @@ pub fn ConcurrentResources::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CoreInstance {
   funcs : Map[String, @core.CoreFuncRef]
-  tables : Map[String, Int]
-  memories : Map[String, Int]
-  globals : Map[String, Int]
-  tags : Map[String, Int]
+  tables : Map[String, Int32]
+  memories : Map[String, Int32]
+  globals : Map[String, Int32]
+  tags : Map[String, Int32]
 }
 pub fn CoreInstance::output(Self, &Logger) -> Unit
 pub fn CoreInstance::to_string(Self) -> String
@@ -284,33 +284,33 @@ type HostInstanceBuilder
 pub fn HostInstanceBuilder::add_async_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> HostFuture raise @core.ComponentRuntimeError) -> Unit raise @core.ComponentRuntimeError
 pub fn HostInstanceBuilder::add_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise @core.ComponentRuntimeError) -> Unit raise @core.ComponentRuntimeError
 pub fn HostInstanceBuilder::add_instance(Self, String, ComponentInstance) -> Unit raise @core.ComponentRuntimeError
-pub fn HostInstanceBuilder::add_type(Self, String, Int) -> Unit raise @core.ComponentRuntimeError
+pub fn HostInstanceBuilder::add_type(Self, String, Int32) -> Unit raise @core.ComponentRuntimeError
 pub fn HostInstanceBuilder::finish(Self) -> ComponentInstance
 pub fn HostInstanceBuilder::set_type_space(Self, Array[@model.TypeDef?]) -> Unit raise @core.ComponentRuntimeError
 
 type HostResourceDestructor
-pub fn HostResourceDestructor::HostResourceDestructor((Int) -> Unit) -> Self
-pub fn HostResourceDestructor::destroy(Self, Int) -> Unit
+pub fn HostResourceDestructor::HostResourceDestructor((Int32) -> Unit) -> Self
+pub fn HostResourceDestructor::destroy(Self, Int32) -> Unit
 
 type HostRuntimeState
 pub fn HostRuntimeState::HostRuntimeState() -> Self
 pub fn HostRuntimeState::async_state(Self) -> AsyncState
-pub fn HostRuntimeState::drop_host_readable_future(Self, ResourceTable, Int) -> Unit raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> Unit raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::move_readable_future(Self, ResourceTable, ResourceTable, Int) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::move_readable_stream(Self, ResourceTable, ResourceTable, Int) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::new_host_call_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], HostFuture) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], ComponentValue) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_future_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], () -> HostFutureValuePoll raise @core.ComponentRuntimeError, () -> Unit raise @core.ComponentRuntimeError) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], Array[ComponentValue]) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int) -> HostValueStreamPoll raise @core.ComponentRuntimeError, () -> Unit) -> Int raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::read_host_value_future(Self, ResourceTable, Int) -> HostFutureValuePoll raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::drop_host_readable_future(Self, ResourceTable, Int32) -> Unit raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int32) -> Unit raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::move_readable_future(Self, ResourceTable, ResourceTable, Int32) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::move_readable_stream(Self, ResourceTable, ResourceTable, Int32) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::new_host_call_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], HostFuture) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int32) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], ComponentValue) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_future_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], () -> HostFutureValuePoll raise @core.ComponentRuntimeError, () -> Unit raise @core.ComponentRuntimeError) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], Array[ComponentValue]) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int32) -> HostValueStreamPoll raise @core.ComponentRuntimeError, () -> Unit) -> Int32 raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int32) -> HostByteStreamRead raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::read_host_value_future(Self, ResourceTable, Int32) -> HostFutureValuePoll raise @core.ComponentRuntimeError
 pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
 pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise @core.ComponentRuntimeError, poll? : () -> Bool raise @core.ComponentRuntimeError) -> Unit raise @core.ComponentRuntimeError
-pub fn HostRuntimeState::set_max_concurrent_resources(Self, UInt) -> Unit raise @core.ComponentRuntimeError
+pub fn HostRuntimeState::set_max_concurrent_resources(Self, UInt32) -> Unit raise @core.ComponentRuntimeError
 pub fn HostRuntimeState::stream_table(Self) -> StreamTable
 
 type HostValueStream
@@ -335,34 +335,34 @@ type PendingStreamWrite derive(@debug.Debug)
 pub fn PendingStreamWrite::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ResourceHandle {
-  type_id : Int
-  rep : Int
+  type_id : Int32
+  rep : Int32
   dtor : @core.CoreFuncRef?
   host_dtor : HostResourceDestructor?
   kind : @model.ResourceKind
-  impl_component_id : Int
+  impl_component_id : Int32
   own : Bool
   borrow_scope : Int64?
-  num_lends : Array[Int]
+  num_lends : Array[Int32]
 } derive(@debug.Debug)
 pub fn ResourceHandle::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ResourceTable {
-  id : Int
-  next_handle : @ref.Ref[Int]
-  free_handles : @ref.Ref[Array[Int]]
-  entries : @ref.Ref[Map[Int, ResourceHandle]]
-  error_contexts : ConcurrentMap[Int, String]
-  next_error_context : @ref.Ref[Int]
+  id : Int32
+  next_handle : @ref.Ref[Int32]
+  free_handles : @ref.Ref[Array[Int32]]
+  entries : @ref.Ref[Map[Int32, ResourceHandle]]
+  error_contexts : ConcurrentMap[Int32, String]
+  next_error_context : @ref.Ref[Int32]
 } derive(@debug.Debug)
 pub fn ResourceTable::ResourceTable(resources? : ConcurrentResources) -> Self
-pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
-pub fn ResourceTable::free(Self, Int) -> ResourceHandle?
-pub fn ResourceTable::get(Self, Int) -> ResourceHandle?
+pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int32
+pub fn ResourceTable::free(Self, Int32) -> ResourceHandle?
+pub fn ResourceTable::get(Self, Int32) -> ResourceHandle?
 pub fn ResourceTable::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StreamEndpoint {
-  stream_id : Int
+  stream_id : Int32
   is_readable : Bool
   notified_peer_dropped : Array[Bool]
   in_waitable_set : @ref.Ref[Bool]
@@ -374,10 +374,10 @@ pub fn StreamState::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StreamTable {
   concurrent_resources : ConcurrentResources
-  next_stream_id : Array[Int]
+  next_stream_id : Array[Int32]
   endpoints : ConcurrentMap[Int64, StreamEndpoint]
-  streams : ConcurrentMap[Int, StreamState]
-  host_values : Map[Int, HostValueStream]
+  streams : ConcurrentMap[Int32, StreamState]
+  host_values : Map[Int32, HostValueStream]
 } derive(@debug.Debug)
 pub fn StreamTable::StreamTable(resource_budget? : @runtime.ResourceBudget?) -> Self
 pub fn StreamTable::to_repr(Self) -> @debug.Repr
@@ -399,7 +399,7 @@ pub fn SyncLowerState::to_repr(Self) -> @debug.Repr
 pub struct TaskRegistry {
   // private fields
 } derive(@debug.Debug)
-pub fn TaskRegistry::subtask_count(Self) -> Int
+pub fn TaskRegistry::subtask_count(Self) -> Int32
 pub fn TaskRegistry::to_repr(Self) -> @debug.Repr
 
 type TaskReturnContract derive(@debug.Debug)
