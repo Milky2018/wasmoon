@@ -181,42 +181,7 @@ pub fn validate_module(
     }
   }
 
-  // Validate exports
-  let export_names : Map[String, Unit] = Map([])
-  for exp in mod.exports {
-    // Check for duplicate export names
-    if export_names.contains(exp.name) {
-      raise DuplicateExportName(exp.name)
-    }
-    export_names.set(exp.name, ())
-    // Check that export references a valid entity
-    match exp.desc {
-      Func(idx) =>
-        if idx < 0 || idx >= ctx.funcs.length() {
-          raise UnknownExport("unknown function \{idx}")
-        }
-      Global(idx) =>
-        if idx < 0 || idx >= ctx.globals.length() {
-          raise UnknownExport("unknown global \{idx}")
-        }
-      Table(idx) =>
-        if idx < 0 || idx >= ctx.tables.length() {
-          raise UnknownExport("unknown table \{idx}")
-        }
-      Memory(idx) =>
-        if idx < 0 || idx >= ctx.mems.length() {
-          raise UnknownExport("unknown memory \{idx}")
-        }
-      Tag(idx) => {
-        // Validate tag index - count imported tags plus defined tags
-        let num_imported_tags = count_tag_imports(mod.imports)
-        let total_tags = num_imported_tags + mod.tags.length()
-        if idx >= total_tags {
-          raise UnknownExport("unknown tag \{idx}")
-        }
-      }
-    }
-  }
+  validate_exports(mod, ctx)
 
   // Validate start function if present
   if mod.start is Some(start_idx) {
@@ -428,6 +393,10 @@ pub fn validate_module_with_context(
     }
   }
 
+  validate_exports(mod, ctx) catch {
+    error => raise WithContext(ValidationErrorContext::from_error(error))
+  }
+
   // Validate start function if present
   if mod.start is Some(start_idx) {
     // Check that the function index is valid
@@ -483,6 +452,49 @@ fn validate_segment_features(
     match elem.mode {
       Active(_, _) => ()
       _ => raise TypeMismatch("bulk memory support is not enabled")
+    }
+  }
+}
+
+///|
+fn validate_exports(
+  mod : @types.Module,
+  ctx : ValidationContext,
+) -> Unit raise ValidationError {
+  // Validate exports
+  let export_names : Map[String, Unit] = Map([])
+  for exp in mod.exports {
+    // Check for duplicate export names
+    if export_names.contains(exp.name) {
+      raise DuplicateExportName(exp.name)
+    }
+    export_names.set(exp.name, ())
+    // Check that export references a valid entity
+    match exp.desc {
+      Func(idx) =>
+        if idx < 0 || idx >= ctx.funcs.length() {
+          raise UnknownExport("unknown function \{idx}")
+        }
+      Global(idx) =>
+        if idx < 0 || idx >= ctx.globals.length() {
+          raise UnknownExport("unknown global \{idx}")
+        }
+      Table(idx) =>
+        if idx < 0 || idx >= ctx.tables.length() {
+          raise UnknownExport("unknown table \{idx}")
+        }
+      Memory(idx) =>
+        if idx < 0 || idx >= ctx.mems.length() {
+          raise UnknownExport("unknown memory \{idx}")
+        }
+      Tag(idx) => {
+        // Validate tag index - count imported tags plus defined tags
+        let num_imported_tags = count_tag_imports(mod.imports)
+        let total_tags = num_imported_tags + mod.tags.length()
+        if idx < 0 || idx >= total_tags {
+          raise UnknownExport("unknown tag \{idx}")
+        }
+      }
     }
   }
 }
