@@ -783,3 +783,9 @@ extern "c" fn c_jit_ctx_get_memory_descriptor_managed(
   jit_context : JITContext,
   memidx : Int32,
 ) -> MemoryDescriptor = "wasmoon_jit_ctx_get_memory_descriptor_managed"
+
+///|
+extern "c" fn c_jit_get_table_get_ptr() -> Int64 = "wasmoon_jit_get_table_get_ptr"
+
+///|
+extern "c" fn c_jit_get_table_call_target_ptr() -> Int64 = "wasmoon_jit_get_table_call_target_ptr"

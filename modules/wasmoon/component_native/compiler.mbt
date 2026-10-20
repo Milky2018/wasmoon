@@ -435,15 +435,6 @@ fn load_component_jit_context(
     error =>
       raise NativeCompilationFailed("reference transfer failed: \{error}")
   }
-  @core_jit.sync_tables_to_jit(
-    instance,
-    store,
-    jit_module,
-    use_subtype_indirect_check=true,
-  ) catch {
-    error =>
-      raise NativeCompilationFailed("reference transfer failed: \{error}")
-  }
   let context = @core_jit.JITModuleContext(
     jit_module,
     globals_pointer,
@@ -456,20 +447,7 @@ fn load_component_jit_context(
     lowered_module.type_rec_groups.copy(),
     true,
   )
-  context.install_hostcall_dispatcher(
-    store,
-    instance,
-    before_dispatch=() => @core_jit.sync_jit_tables_to_store(context, store),
-    after_dispatch=() => {
-      @core_jit.sync_tables_to_jit(
-        instance,
-        store,
-        jit_module,
-        use_subtype_indirect_check=true,
-      )
-    },
-    classify_suspension~,
-  ) catch {
+  context.install_hostcall_dispatcher(store, instance, classify_suspension~) catch {
     error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
   }
   (context, funcrefs)

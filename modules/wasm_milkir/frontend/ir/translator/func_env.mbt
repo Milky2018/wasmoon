@@ -198,11 +198,7 @@ fn FuncEnvironment::translate_table_size(
 }
 
 ///|
-/// Translate table.get to IR primitives:
-/// 1. Load table_size, check bounds
-/// 2. Load table_base
-/// 3. Calculate address: table_base + elem_idx * 16
-/// 4. Load value
+/// Read the shared table through the runtime's stable-reference decoder.
 fn FuncEnvironment::translate_table_get(
   self : FuncEnvironment,
   builder : FunctionBuilder,
@@ -212,62 +208,17 @@ fn FuncEnvironment::translate_table_get(
   result_type : Type,
   is_table64~ : Bool = false,
 ) -> Value {
-  let layout = self.runtime_layout
-  // Get table size for bounds check
-  let (table_size, table_base) = if table_idx == 0 {
-    // Fast path for table 0
-    let size_offset = builder.iconst(
-      I64,
-      layout.table0_elements_offset.to_int64(),
-    )
-    let size = builder.load_ptr(I64, vmctx, size_offset)
-    let base_offset = builder.iconst(I64, layout.table0_base_offset.to_int64())
-    let base = builder.load_ptr(I64, vmctx, base_offset)
-    (size, base)
-  } else {
-    // General path: load from tables array
-    let sizes_offset = builder.iconst(I64, layout.table_sizes_offset.to_int64())
-    let sizes_ptr = builder.load_ptr(I64, vmctx, sizes_offset)
-    let idx_offset = builder.iconst(
-      I64,
-      (table_idx * layout.pointer_stride).to_int64(),
-    )
-    let size = builder.load_ptr(I64, sizes_ptr, idx_offset)
-    let tables_offset = builder.iconst(I64, layout.tables_offset.to_int64())
-    let tables_ptr = builder.load_ptr(I64, vmctx, tables_offset)
-    let base = builder.load_ptr(I64, tables_ptr, idx_offset)
-    (size, base)
-  }
-
-  // Bounds check: trap if elem_idx >= table_size
-  // For table64, elem_idx is already i64; for table32, extend to i64
-  let elem_idx_i64 = if is_table64 {
-    elem_idx
-  } else {
-    builder.uextend(I64, elem_idx)
-  }
-  let in_bounds = builder.icmp(Ult, elem_idx_i64, table_size)
-
-  // Create trap and continue blocks
-  let trap_block = builder.create_block()
-  let continue_block = builder.create_block()
-  builder.brnz(in_bounds, continue_block, trap_block)
-
-  // Trap block
-  builder.switch_to_block(trap_block)
-  builder.trap("table out of bounds")
-
-  // Continue block: load the value
-  builder.switch_to_block(continue_block)
-
-  // Calculate address: table_base + elem_idx * 16
-  let stride = builder.iconst(I64, layout.table_entry_stride.to_int64())
-  let byte_offset = builder.imul(elem_idx_i64, stride)
-  let addr = builder.iadd(table_base, byte_offset)
-
-  // Load the funcref value (first 8 bytes of entry)
-  let zero_offset = builder.iconst(I64, 0L)
-  builder.load_ptr(result_type, addr, zero_offset)
+  let index = if is_table64 { elem_idx } else { builder.uextend(I64, elem_idx) }
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol(self.runtime_symbols.symbol_name(TableGet))
+  builder
+  .call_symbol(symbol, Some(result_type), [
+    vmctx,
+    builder.iconst(I32, table_idx.to_int64()),
+    index,
+  ])
+  .unwrap()
 }
 
 ///|

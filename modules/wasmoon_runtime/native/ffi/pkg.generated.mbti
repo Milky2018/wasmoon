@@ -112,12 +112,18 @@ pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int32, Array[Int64])?
 
 pub type NativeTableHandle
 pub fn NativeTableHandle::bind_reservation(Self, Reservation) -> Bool
+pub fn NativeTableHandle::copy_from(Self, Int32, Self, Int32, Int32) -> Bool
+pub fn NativeTableHandle::fill(Self, Int32, Int32, Int64, Int32) -> Bool
 pub fn NativeTableHandle::grow(Self, Int64) -> Int64
+pub fn NativeTableHandle::grow_value(Self, Int64, Int64, Int32) -> Int64
+pub fn NativeTableHandle::invalidate(Self) -> Unit
 pub fn NativeTableHandle::is_null(Self) -> Bool
 pub fn NativeTableHandle::null() -> Self
 pub fn NativeTableHandle::revision(Self) -> Int64
 pub fn NativeTableHandle::size(Self) -> Int32
 pub fn NativeTableHandle::to_repr(Self) -> @debug.Repr
+pub fn NativeTableHandle::use_store_references(Self) -> Unit
+pub fn NativeTableHandle::word(Self, Int32, Int32) -> Int64
 pub impl @debug.Debug for NativeTableHandle
 
 pub type PreparedSafepoints

@@ -488,7 +488,18 @@ int64_t table_grow_ctx_internal(
     if (!ctx_runtime(ctx)->table_bindings[table_idx].owner->entries) return -1;
 
     size_t maximum = ctx_table_max_sizes(ctx) ? ctx_table_max_sizes(ctx)[table_idx] : SIZE_MAX;
-    return table_grow_owner(ctx_runtime(ctx)->table_bindings[table_idx].owner, delta, init_value, table_type_for_value(ctx, init_value), maximum);
+    wasmoon_table_t *owner = ctx_runtime(ctx)->table_bindings[table_idx].owner;
+    int64_t type = table_type_for_value(ctx, init_value);
+    if (owner->store_references) init_value = callable_store_reference(ctx, init_value);
+    return table_grow_owner(owner, delta, init_value, type, maximum);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_table_grow_value(wasmoon_table_t *owner, int64_t delta, int64_t value, int32_t type) {
+    return table_grow_owner(owner, delta, value, type, SIZE_MAX);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_table_use_store_references(wasmoon_table_t *owner) {
+    if (owner) owner->store_references = 1;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_table_grow_owned(wasmoon_table_t *owner, int64_t delta) {

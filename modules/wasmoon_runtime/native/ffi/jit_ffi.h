@@ -69,6 +69,7 @@ typedef struct {
     struct wasmoon_table_binding *bindings;
     wasmoon_reservation_t *reservation;
     uint64_t revision;
+    int store_references;
 } wasmoon_table_t;
 
 typedef struct wasmoon_table_binding {

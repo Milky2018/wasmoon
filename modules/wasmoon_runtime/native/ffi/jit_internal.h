@@ -353,6 +353,7 @@ int32_t gc_collect_for_alloc_internal(
 // Value encoding tags
 #define EXTERNREF_TAG 0x4000000000000000LL
 #define FUNCREF_TAG   0x2000000000000000LL
+#define STORE_FUNCREF_TAG 0x3000000000000000LL
 #define REF_TAGS_MASK (EXTERNREF_TAG | FUNCREF_TAG)
 
 // Type checking functions
@@ -450,6 +451,9 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, i
                                              int64_t slots_ptr, int32_t len);
 
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value);
+int64_t callable_store_reference(jit_context_t *ctx, int64_t value);
+int64_t callable_native_reference(jit_context_t *ctx, int64_t value);
+int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t expected);
 int64_t table_type_for_value(jit_context_t *ctx, int64_t value);
 
 

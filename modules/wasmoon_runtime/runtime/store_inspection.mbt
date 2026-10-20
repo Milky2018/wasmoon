@@ -33,14 +33,14 @@ pub fn Store::counts(self : Store) -> StoreCounts {
     tags: self.tags.length(),
     tag_type_indices: self.tag_type_indices.length(),
     tag_owners: self.tag_owners.length(),
-    exns: self.exns.length(),
-    wrapped_externs: self.wrapped_externs.length(),
+    exns: self.references.exns.length(),
+    wrapped_externs: self.references.wrapped_externs.length(),
     func_owners: self.func_owners.length(),
     instances: self.instances.length(),
     jit_tables: self.jit_tables.length(),
     heap_slots: self.heap.length(),
     heap_live: self.heap.stats().live_objects,
-    wrapped_extern_capacity: self.wrapped_externs.capacity(),
+    wrapped_extern_capacity: self.references.wrapped_externs.capacity(),
   }
 }
 

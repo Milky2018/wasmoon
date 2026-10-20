@@ -15,3 +15,15 @@ extern "c" fn publish(
   identities : FixedArray[Int32],
   entry_count : Int32,
 ) -> Unit = "wasmoon_callable_view_publish"
+
+///|
+#borrow(view, stores, pointers, references, reference_stores)
+extern "c" fn publish_functions(
+  view : NativeCallableView,
+  stores : FixedArray[Int32],
+  pointers : FixedArray[Int64],
+  count : Int32,
+  references : FixedArray[Int64],
+  reference_stores : FixedArray[Int32],
+  reference_count : Int32,
+) -> Unit = "wasmoon_callable_view_publish_functions"

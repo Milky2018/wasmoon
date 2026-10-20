@@ -1052,4 +1052,29 @@ wasmoon_jit_table_grow_msvc_guest PROC
     add rsp, 40
     ret
 wasmoon_jit_table_grow_msvc_guest ENDP
+EXTERN table_get_impl_msvc_target:QWORD
+PUBLIC table_get_impl_msvc_guest
+table_get_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r8, rdx
+    mov rcx, rdi
+    mov rdx, rsi
+    call QWORD PTR [table_get_impl_msvc_target]
+    add rsp, 40
+    ret
+table_get_impl_msvc_guest ENDP
+EXTERN table_call_target_impl_msvc_target:QWORD
+PUBLIC table_call_target_impl_msvc_guest
+table_call_target_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [table_call_target_impl_msvc_target]
+    add rsp, 40
+    ret
+table_call_target_impl_msvc_guest ENDP
 END

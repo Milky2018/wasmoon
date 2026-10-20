@@ -199,6 +199,10 @@ pub fn Store::native_callable_registry(
       registry
     }
   }
+  if self.funcref_registry.native is None {
+    self.funcref_registry.native = Some(registry)
+    self.funcref_registry.publish_functions()
+  }
   for entry in self.jit_funcref_entries() {
     let identity = self.get_func_canonical_type_idx(entry.store_addr)
     if self.native_types.entries.get(entry.func_ptr) != Some(identity) {

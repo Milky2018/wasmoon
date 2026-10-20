@@ -47,12 +47,6 @@ fn prepare_async_jit_context(
     store,
     use_subtype_indirect_check=true,
   )
-  @wast.sync_tables_to_jit(
-    instance,
-    store,
-    jit_module,
-    use_subtype_indirect_check=true,
-  )
   JITModuleContext(
     jit_module,
     globals_ptr,

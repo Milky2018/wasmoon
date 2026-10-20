@@ -101,7 +101,7 @@ int is_subtype_cached(int type1, int type2) {
     return is_subtype_cached_ctx(current_ctx(), type1, type2);
 }
 
-static int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected);
+int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected);
 
 // ============ ref.test Implementation ============
 
@@ -260,14 +260,55 @@ static inline int callable_subtype_registered(
     return 0;
 }
 
-static int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected) {
+int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected) {
     if (!ctx || !ctx_runtime(ctx)->callable_local_types)
         return is_subtype_cached_ctx(ctx, actual, local_expected);
     return callable_subtype_registered(ctx_runtime(ctx), actual, local_expected);
 }
 
+// Store references are stable table values; native entries are resolved at reads.
+int64_t callable_native_reference(jit_context_t *ctx, int64_t value) {
+    if ((value & STORE_FUNCREF_TAG) != STORE_FUNCREF_TAG || value < 0) return value;
+    const jit_callable_registry_t *registry = ctx ? ctx_runtime(ctx)->callable_registry : NULL;
+    if (!registry) return 0;
+    uint64_t address = (uint64_t)value & ~(uint64_t)STORE_FUNCREF_TAG;
+    if (!address || address - 1 > INT32_MAX) return 0;
+    int32_t low = 0, high = registry->function_count;
+    while (low < high) {
+        int32_t mid = low + (high - low) / 2;
+        if ((uint32_t)registry->function_stores[mid] < address - 1) low = mid + 1;
+        else high = mid;
+    }
+    return low < registry->function_count && registry->function_stores[low] == (int32_t)(address - 1)
+        ? registry->function_pointers[low] | FUNCREF_TAG : 0;
+}
+
+int64_t callable_store_reference(jit_context_t *ctx, int64_t value) {
+    if (!value || !ctx || (value >= 0 && (value & STORE_FUNCREF_TAG) == STORE_FUNCREF_TAG)) return value;
+    if (value >= 0 && !(value & FUNCREF_TAG)) return value;
+    uint64_t pointer;
+    if (value < 0) {
+        int64_t index = -(value + 1);
+        if (index < 0 || index >= ctx_func_count(ctx)) return value;
+        pointer = (uint64_t)(uintptr_t)ctx_func_table(ctx)[index];
+    } else pointer = (uint64_t)value & ~(uint64_t)FUNCREF_TAG;
+    const jit_callable_registry_t *registry = ctx_runtime(ctx)->callable_registry;
+    if (!registry) return value;
+    int32_t low = 0, high = registry->reference_count;
+    while (low < high) {
+        int32_t mid = low + (high - low) / 2;
+        if ((uint64_t)registry->reference_pointers[mid] < pointer) low = mid + 1;
+        else high = mid;
+    }
+    if (low < registry->reference_count && (uint64_t)registry->reference_pointers[low] == pointer)
+        return STORE_FUNCREF_TAG | ((int64_t)registry->reference_stores[low] + 1);
+    return value;
+}
+
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     if (!ctx || !value) return -1;
+    value = callable_native_reference(ctx, value);
+    if (!value) return -1;
     uint64_t pointer;
     if (value < 0) {
         int64_t index = -(value + 1);

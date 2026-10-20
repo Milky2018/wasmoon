@@ -360,6 +360,47 @@ int64_t table_type_for_value(jit_context_t *ctx, int64_t val) {
     return type_idx;
 }
 
+static void **table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
+    if (!ctx || !ctx_tables(ctx) || !ctx_table_sizes(ctx) || table_idx < 0 || table_idx >= ctx_table_count(ctx) || index < 0 ||
+        (uint64_t)index >= ctx_table_sizes(ctx)[table_idx]) {
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    return ctx_tables(ctx)[table_idx] + (size_t)index * 2;
+}
+
+static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t table_idx, int64_t index) {
+    void **entry = table_entry(ctx, table_idx, index);
+    if (!entry) return 0;
+    int64_t value = (int64_t)(intptr_t)entry[0];
+    if (ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[table_idx].owner &&
+        ctx_runtime(ctx)->table_bindings[table_idx].owner->store_references)
+        return callable_native_reference(ctx, value);
+    return value;
+}
+
+static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int32_t table_idx, int64_t index, int32_t expected) {
+    void **entry = table_entry(ctx, table_idx, index);
+    if (!entry) return 0;
+    int64_t value = (int64_t)(intptr_t)entry[0];
+    if (!value) {
+        g_trap_code = WASMOON_TRAP_UNINITIALIZED_ELEMENT;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    value = callable_native_reference(ctx, value);
+    int32_t actual = callable_type_for_value(ctx, value);
+    if (actual < 0 && !ctx_runtime(ctx)->callable_registry)
+        actual = (int32_t)(intptr_t)entry[1];
+    if (!value || !callable_subtype(ctx, actual, expected)) {
+        g_trap_code = WASMOON_TRAP_INDIRECT_TYPE;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    return value & ~FUNCREF_TAG;
+}
+
 // table.fill - Fill table region with a value
 static void WASMOON_GUEST_ABI table_fill_impl(
     jit_context_t *ctx,
@@ -411,6 +452,10 @@ static void WASMOON_GUEST_ABI table_fill_impl(
     }
 
     int64_t type_idx = table_type_for_value(ctx, val);
+
+    if (ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[table_idx].owner &&
+        ctx_runtime(ctx)->table_bindings[table_idx].owner->store_references)
+        val = callable_store_reference(ctx, val);
 
     // Fill (table entries are 2 slots: func_ptr and type_idx)
     for (int64_t i = 0; i < len; i++) {
@@ -570,6 +615,9 @@ static void WASMOON_GUEST_ABI table_init_impl(
         int64_t elem_val = seg_data[seg_off];
         int64_t elem_type = seg_data[seg_off + 1];
         int64_t tbl_off = (dst + i) * 2;
+        if (ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[table_idx].owner &&
+            ctx_runtime(ctx)->table_bindings[table_idx].owner->store_references)
+            elem_val = callable_store_reference(ctx, elem_val);
         table[tbl_off] = (void *)(uintptr_t)elem_val;
         table[tbl_off + 1] = (void *)(intptr_t)elem_type;
     }
@@ -601,6 +649,13 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_init_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_data_drop_ptr(void) {
     return WASMOON_GUEST_ADDRESS(data_drop_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_get_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(table_get_impl);
+}
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_call_target_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(table_call_target_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_fill_ptr(void) {
@@ -973,5 +1028,7 @@ WASMOON_DEFINE_GUEST_TARGET(gc_array_new_elem_impl);
 WASMOON_DEFINE_GUEST_TARGET(memory_init_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_copy_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_fill_impl);
+WASMOON_DEFINE_GUEST_TARGET(table_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(table_call_target_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_init_impl);
 #endif

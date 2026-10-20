@@ -177,7 +177,7 @@ test "another JIT instance publishes every shared table write to a parked reader
 }
 
 ///|
-test "native table copyback roots GC references while a call is parked" {
+test "shared native tables root GC references while a call is parked" {
   let source =
     #|(module
     #| (type $value (struct (field i32)))
@@ -252,4 +252,89 @@ test "native empty bulk operations and failed growth preserve the table revision
   assert_eq(context.call_core_func(store, instance, 0, []), [I32(-1)])
   assert_eq(table.revision(), revision)
   assert_eq(store.get_table(instance.table_addrs[0]).size(), 1)
+}
+
+///|
+test "host callbacks share table storage with an executing JIT call" {
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let table = @runtime.Table::Table(RefNullEq, 1, Some(1))
+  let address = store.alloc_table(table)
+  let seen = Ref(false)
+  let host = store.alloc_host_func(_ => {
+    seen.val = table.get(0) == I31(7)
+    table.set(0, I31(9))
+    []
+  })
+  let imports = @runtime.Imports::Imports(store)
+  imports.add_func("host", "mutate", host)
+  imports.add_table("host", "table", address)
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #| (import "host" "mutate" (func $host))
+      #| (import "host" "table" (table 1 1 eqref))
+      #| (func (export "run") (result i32)
+      #|  i32.const 0 i32.const 7 ref.i31 table.set
+      #|  call $host
+      #|  i32.const 0 table.get ref.cast (ref i31) i31.get_s))
+    ),
+  )
+  let instance = @executor.instantiate_module_with_imports(
+    store, module_, imports,
+  )
+  let context = prepare_async_jit_context(module_, instance, store)
+  defer context.close()
+  context.install_hostcall_dispatcher(store, instance)
+  assert_eq(context.call_core_func(store, instance, 1, []), [I32(9)])
+  assert_true(seen.val)
+}
+
+///|
+test "runtime table close invalidates already bound native contexts" {
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let module_ = @wat.parse(
+    "(module (table 1 eqref) (func (export \"read\") (result eqref) i32.const 0 table.get))",
+  )
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    module_,
+    Imports(store),
+  )
+  let context = prepare_async_jit_context(module_, instance, store)
+  defer context.close()
+  assert_eq(context.call_core_func(store, instance, 0, []), [Null])
+  store.get_table(instance.table_addrs[0]).close()
+  try context.call_core_func(store, instance, 0, []) catch {
+    Trap(_) => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("closed table remained accessible to compiled code")
+  }
+}
+
+///|
+test "shared table initializers preserve Store function identities" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #| (type $f (func))
+      #| (func $f)
+      #| (table 1 funcref (ref.func $f))
+      #| (func (export "get") (result funcref) i32.const 0 table.get))
+    ),
+  )
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    module_,
+    Imports(store),
+  )
+  let context = prepare_async_jit_context(module_, instance, store)
+  defer context.close()
+  assert_eq(context.call_core_func(store, instance, 1, []), [
+    FuncRef(instance.func_addrs[0]),
+  ])
 }

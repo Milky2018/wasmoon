@@ -157,7 +157,7 @@ fn Table::bind_budget(
     }
     None =>
       self.reservation = Some(
-        budget.reservation(TableElements, self.size.to_int64()),
+        budget.reservation(TableElements, self.size().to_int64()),
       )
   }
 }
@@ -312,21 +312,6 @@ pub fn InstanceAdmission::cancel(self : InstanceAdmission) -> Unit {
 }
 
 ///|
-fn Store::reserve_auxiliary_handle(
-  self : Store,
-  kind : Int32,
-  handle : Int64,
-  size : Int64,
-) -> Unit raise RuntimeError {
-  if self.resource_budget is Some(budget) {
-    let bytes = budget.reserve(GcBytes, size)
-    errdefer bytes.release()
-    let objects = budget.reserve(GcObjects, 1L)
-    self.auxiliary_leases.set((kind, handle), (bytes, objects))
-  }
-}
-
-///|
 /// Admit Store-owned metadata. A failed instantiation returns its reservations
 /// through the current transaction; committed metadata stays charged until close.
 pub fn Store::reserve_retained_resource(
@@ -355,25 +340,10 @@ pub fn ResourceLease::resize(self : ResourceLease, amount : Int64) -> Bool {
 }
 
 ///|
-#cfg(target="wasm")
 fn Store::release_auxiliary_handle(
   self : Store,
   kind : Int32,
   handle : Int64,
 ) -> Unit {
-  if self.auxiliary_leases.get((kind, handle)) is Some((bytes, objects)) {
-    bytes.release()
-    objects.release()
-  }
-  self.auxiliary_leases.remove((kind, handle))
-}
-
-///|
-#cfg(target="native")
-fn Store::release_auxiliary_handle(
-  self : Store,
-  kind : Int32,
-  handle : Int64,
-) -> Unit {
-  self.auxiliary_leases.remove((kind, handle))
+  self.references.release_auxiliary_handle(kind, handle)
 }

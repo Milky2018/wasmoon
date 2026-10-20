@@ -41,3 +41,53 @@ pub extern "c" fn NativeTableHandle::grow(
 pub extern "c" fn NativeTableHandle::revision(
   self : NativeTableHandle,
 ) -> Int64 = "wasmoon_native_table_revision"
+
+///|
+#borrow(self)
+pub extern "c" fn NativeTableHandle::grow_value(
+  self : NativeTableHandle,
+  delta : Int64,
+  value : Int64,
+  type_index : Int32,
+) -> Int64 = "wasmoon_table_grow_value"
+
+///|
+#borrow(self)
+pub extern "c" fn NativeTableHandle::use_store_references(
+  self : NativeTableHandle,
+) -> Unit = "wasmoon_table_use_store_references"
+
+///|
+/// Close runtime storage through every retained context binding.
+#borrow(self)
+pub extern "c" fn NativeTableHandle::invalidate(
+  self : NativeTableHandle,
+) -> Unit = "wasmoon_native_table_invalidate"
+
+///|
+#borrow(self)
+pub extern "c" fn NativeTableHandle::word(
+  self : NativeTableHandle,
+  index : Int32,
+  slot : Int32,
+) -> Int64 = "wasmoon_native_table_entry_word"
+
+///|
+#borrow(self)
+pub extern "c" fn NativeTableHandle::fill(
+  self : NativeTableHandle,
+  offset : Int32,
+  length : Int32,
+  value : Int64,
+  metadata : Int32,
+) -> Bool = "wasmoon_native_table_fill"
+
+///|
+#borrow(self, source)
+pub extern "c" fn NativeTableHandle::copy_from(
+  self : NativeTableHandle,
+  offset : Int32,
+  source : NativeTableHandle,
+  source_offset : Int32,
+  length : Int32,
+) -> Bool = "wasmoon_native_table_copy"

@@ -39,7 +39,7 @@ def main():
     for source in fixtures.glob("*_test.mbt"):
         shutil.copy2(source, PACKAGE / source.name)
     for name in ("portable_storage_test.mbt", "resource_rollback_test.mbt",
-                 "table_lifetime_test.mbt", "heap_lifetime_test.mbt"):
+                 "table_lifetime_test.mbt", "table_native_test.mbt", "heap_lifetime_test.mbt"):
         shutil.copy2(ROOT / "modules/wasmoon_runtime/runtime" / name, PACKAGE)
     shutil.copy2(ROOT / "modules/wasmoon_runtime/executor/gc_type_registration_test.mbt",
                  PACKAGE)

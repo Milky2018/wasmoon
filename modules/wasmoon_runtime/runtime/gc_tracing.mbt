@@ -26,9 +26,12 @@ fn Store::trace_gc_roots(
   for global in self.globals {
     pending.push(global.root())
   }
+  let mut failed = false
   for table in self.tables {
-    for index in 0..<table.size {
-      pending.push(table.elements[index])
+    for index in 0..<table.size() {
+      pending.push(table.root_at(index)) catch {
+        _ => failed = true
+      }
     }
   }
   for instance in self.instances {
@@ -56,7 +59,7 @@ fn Store::trace_gc_roots(
     exceptions: Map([]),
     continuations: Map([]),
     native_continuations: Map([]),
-    failed: false,
+    failed,
   }
   let visited : Map[Int32, Bool] = Map([])
   // Walk every representation with one worklist, including cycles through
@@ -66,7 +69,7 @@ fn Store::trace_gc_roots(
       ExternRef(handle) if handle < 0 => {
         let index = -1 - handle
         if !trace.wrappers.contains(index) &&
-          self.wrapped_externs.get(index) is Some(inner) {
+          self.references.wrapped_externs.get(index) is Some(inner) {
           trace.wrappers.set(index, true)
           pending.push(inner)
         }
@@ -82,7 +85,7 @@ fn Store::trace_gc_roots(
       ContRef(handle) => self.trace_native_continuation(handle, pending, trace)
       ExnRef(index) =>
         if !trace.exceptions.contains(index) &&
-          self.exns.get(index) is Some(exception) {
+          self.references.exns.get(index) is Some(exception) {
           trace.exceptions.set(index, true)
           for payload in exception.values {
             pending.push(payload)
@@ -133,21 +136,23 @@ fn Store::release_unreachable_handles(self : Store, trace : GcTrace) -> Unit {
       cancelled.push(body)
     }
   }
-  for index in self.wrapped_externs.keys().to_array() {
+  for index in self.references.wrapped_externs.keys().to_array() {
     if !trace.wrappers.contains(index) {
-      self.wrapped_externs.remove(index)
+      self.references.wrapped_externs.remove(index)
       self.release_auxiliary_handle(0, index.to_int64())
     }
   }
-  for index in self.exns.keys().to_array() {
+  for index in self.references.exns.keys().to_array() {
     if !trace.exceptions.contains(index) {
-      self.exns.remove(index)
+      self.references.exns.remove(index)
       self.release_auxiliary_handle(1, index.to_int64())
       self.release_native_exception(index)
     }
   }
-  self.wrapped_externs = compact_gc_registry(self.wrapped_externs)
-  self.exns = compact_gc_registry(self.exns)
+  self.references.wrapped_externs = compact_gc_registry(
+    self.references.wrapped_externs,
+  )
+  self.references.exns = compact_gc_registry(self.references.exns)
   self.guest_continuations = compact_gc_registry(self.guest_continuations)
   self.pinned_gc_roots = compact_gc_registry(self.pinned_gc_roots)
   for body in cancelled {

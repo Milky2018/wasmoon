@@ -22,12 +22,11 @@ pub struct Store {
   resource_budget : ResourceBudget?
   priv mut execution_scope : ExecutionScope?
   priv instance_leases : Array[ResourceLease]
-  priv mut next_exception : Int32
-  priv mut next_wrapped_extern : Int32
   priv mut gc_tracing_depth : Int32
   priv mut gc_in_collect : Bool
   priv mut gc_trace : GcTrace?
   priv mut interpreter_reentry_depth : Int32
+  priv references : StoreReferences
   priv funcs : Array[StoredFunction]
   priv func_types : Array[@types.FuncType] // Type of each function
   priv func_type_indices : Array[Int32] // Original type index for structural comparison
@@ -37,7 +36,6 @@ pub struct Store {
   priv tags : Array[@types.FuncType] // Tag types (params only, no results)
   priv tag_type_indices : Array[Int32] // Original type index for each tag
   priv tag_owners : Array[FuncOwner] // Owner module for each tag
-  priv mut exns : Map[Int32, ExnInstance] // Live exception snapshots, with non-reused handles
   priv heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
   // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
   priv mut c_heap : @native_bridge.CHeap?
@@ -47,8 +45,6 @@ pub struct Store {
   priv mut module_rec_groups : Array[Int32]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
-  priv auxiliary_leases : Map[(Int32, Int64), (ResourceLease, ResourceLease)]
-  priv mut wrapped_externs : Map[Int32, @types.Value]
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
   priv func_owners : Array[FuncOwner]
@@ -69,8 +65,6 @@ pub struct Store {
   native_execution : @native_bridge.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
   priv native_types : StoreTypeRegistry
-  priv native_exception_to_store : Map[Int64, Int32]
-  priv store_exception_to_native : Map[Int32, Int64]
   priv suspended_executions : Map[Int64, SuspendedExecutionCleanup]
   priv mut next_suspended_execution_id : Int64
   priv mut guest_continuations : Map[Int64, GuestContinuationBody]
@@ -88,7 +82,11 @@ fn Store::register_rollback(
   registrar : RollbackRegistrar,
 ) -> Unit {
   self.instantiation = Some(registrar)
-  registrar.on_finish(fn() { self.instantiation = None })
+  self.references.instantiation = Some(registrar)
+  registrar.on_finish(fn() {
+    self.instantiation = None
+    self.references.instantiation = None
+  })
   // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
   registrar.on_rollback(
     self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
@@ -181,6 +179,23 @@ pub fn Store::Store(
     }
   }
 
+  let closed = Ref(false)
+  let tags : Array[@types.FuncType] = []
+  let managed_heap = MarkSweepHeap(resource_budget~)
+  let funcref_registry = StoreFuncrefRegistry::new()
+  let references = StoreReferences::new(
+    resource_budget,
+    closed,
+    tags,
+    managed_heap,
+    funcref_registry,
+    {
+      native_execution,
+      c_heap: None,
+      native_exception_to_store: Map([]),
+      store_exception_to_native: Map([]),
+    },
+  )
   {
     nan_canonicalization,
     interpreter_limits,
@@ -188,8 +203,6 @@ pub fn Store::Store(
     execution_scope: None,
     instance_leases: [],
     interpreter_reentry_depth: 0,
-    next_exception: 0,
-    next_wrapped_extern: 0,
     gc_tracing_depth: 0,
     gc_in_collect: false,
     gc_trace: None,
@@ -199,16 +212,13 @@ pub fn Store::Store(
     tables: [],
     mems: [],
     globals: [],
-    tags: [],
+    tags,
     tag_type_indices: [],
     tag_owners: [],
-    exns: Map([]),
-    heap: MarkSweepHeap(resource_budget~),
+    heap: managed_heap,
     c_heap: None,
     module_types: [],
     module_rec_groups: [],
-    wrapped_externs: Map([]),
-    auxiliary_leases: Map([]),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -216,10 +226,8 @@ pub fn Store::Store(
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution,
-    funcref_registry: StoreFuncrefRegistry::new(),
+    funcref_registry,
     native_types: StoreTypeRegistry::new(),
-    native_exception_to_store: Map([]),
-    store_exception_to_native: Map([]),
     suspended_executions: Map([]),
     next_suspended_execution_id: 0L,
     guest_continuations: Map([]),
@@ -227,7 +235,8 @@ pub fn Store::Store(
     pinned_gc_roots: Map([]),
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
-    closed: Ref(false),
+    closed,
+    references,
   }
 }
 
@@ -256,6 +265,23 @@ pub fn Store::with_c_heap(
   let heap = @native_bridge.CHeap(capacity=initial_capacity) catch {
     _ => raise OutOfMemory
   }
+  let closed = Ref(false)
+  let tags : Array[@types.FuncType] = []
+  let managed_heap = MarkSweepHeap(resource_budget~)
+  let funcref_registry = StoreFuncrefRegistry::new()
+  let references = StoreReferences::new(
+    resource_budget,
+    closed,
+    tags,
+    managed_heap,
+    funcref_registry,
+    {
+      native_execution,
+      c_heap: Some(heap),
+      native_exception_to_store: Map([]),
+      store_exception_to_native: Map([]),
+    },
+  )
   let store : Store = {
     nan_canonicalization,
     interpreter_limits,
@@ -263,8 +289,6 @@ pub fn Store::with_c_heap(
     execution_scope: None,
     instance_leases: [],
     interpreter_reentry_depth: 0,
-    next_exception: 0,
-    next_wrapped_extern: 0,
     gc_tracing_depth: 0,
     gc_in_collect: false,
     gc_trace: None,
@@ -274,16 +298,13 @@ pub fn Store::with_c_heap(
     tables: [],
     mems: [],
     globals: [],
-    tags: [],
+    tags,
     tag_type_indices: [],
     tag_owners: [],
-    exns: Map([]),
-    heap: MarkSweepHeap(resource_budget~), // Used only when c_heap is None.
+    heap: managed_heap,
     c_heap: Some(heap),
     module_types: [],
     module_rec_groups: [],
-    wrapped_externs: Map([]),
-    auxiliary_leases: Map([]),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -291,10 +312,8 @@ pub fn Store::with_c_heap(
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution,
-    funcref_registry: StoreFuncrefRegistry::new(),
+    funcref_registry,
     native_types: StoreTypeRegistry::new(),
-    native_exception_to_store: Map([]),
-    store_exception_to_native: Map([]),
     suspended_executions: Map([]),
     next_suspended_execution_id: 0L,
     guest_continuations: Map([]),
@@ -302,7 +321,8 @@ pub fn Store::with_c_heap(
     pinned_gc_roots: Map([]),
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
-    closed: Ref(false),
+    closed,
+    references,
   }
   store.bind_gc_budget(heap)
   store.native_execution.exceptions().enable_reclamation()
@@ -397,10 +417,10 @@ pub fn Store::close(self : Store) -> Unit {
   self.tag_type_indices.shrink_to_fit()
   self.tag_owners.clear()
   self.tag_owners.shrink_to_fit()
-  self.native_exception_to_store.clear()
-  self.store_exception_to_native.clear()
-  self.exns.clear()
-  self.auxiliary_leases.clear()
+  self.references.native.native_exception_to_store.clear()
+  self.references.native.store_exception_to_native.clear()
+  self.references.exns.clear()
+  self.references.auxiliary_leases.clear()
   self.heap.close()
   if self.c_heap is Some(heap) {
     heap.free()
@@ -410,7 +430,7 @@ pub fn Store::close(self : Store) -> Unit {
   // other stores. Closing a store must only drop its own references.
   self.module_types = []
   self.module_rec_groups = []
-  self.wrapped_externs.clear()
+  self.references.wrapped_externs.clear()
   for owner in self.jit_table_owners {
     match owner {
       Some(owner) => owner.close()
@@ -580,19 +600,7 @@ pub fn Store::wrap_as_extern(
   self : Store,
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
-  self.ensure_open()
-  if self.next_wrapped_extern == 2147483647 {
-    raise AllocationTooLarge
-  }
-  self.reserve_auxiliary_handle(0, self.next_wrapped_extern.to_int64(), 16L)
-  let idx = self.next_wrapped_extern
-  self.next_wrapped_extern += 1
-  self.wrapped_externs.set(idx, value)
-  self.on_instantiation_rollback(fn() {
-    self.wrapped_externs.remove(idx)
-    self.release_auxiliary_handle(0, idx.to_int64())
-  })
-  ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
+  self.references.wrap_as_extern(value)
 }
 
 ///|
@@ -603,23 +611,7 @@ pub fn Store::unwrap_extern(
   self : Store,
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
-  self.ensure_open()
-  match value {
-    ExternRef(idx) =>
-      if idx < 0 {
-        // Wrapped internal value
-        let wrapped_idx = -1 - idx
-        match self.wrapped_externs.get(wrapped_idx) {
-          Some(value) => value
-          None => raise UndefinedElement
-        }
-      } else {
-        // Host externref - return as-is (it's already an internal representation)
-        value
-      }
-    Null => Null
-    _ => value
-  }
+  self.references.unwrap_extern(value)
 }
 
 ///|
@@ -762,12 +754,11 @@ pub fn Store::alloc_table(
     None
   }
   let idx = self.tables.length()
-  table.binding = Some(binding)
-  table.native_table = if table.reservation is Some(_) {
-    owner.map(owner => owner.table().raw_ptr())
-  } else {
-    None
+  if owner is Some(owner) {
+    errdefer owner.close()
+    self.bind_table_storage(table, owner.table())
   }
+  table.binding = Some(binding)
   self.on_instantiation_rollback(fn() {
     binding.active.val = false
     if idx < self.jit_table_owners.length() {
@@ -897,23 +888,7 @@ pub fn Store::alloc_exn(
   tag_addr : Int32,
   values : Array[@types.Value],
 ) -> Int32 raise RuntimeError {
-  self.ensure_open()
-  if self.next_exception == 2147483647 {
-    raise AllocationTooLarge
-  }
-  self.reserve_auxiliary_handle(
-    1,
-    self.next_exception.to_int64(),
-    16L + values.length().to_int64() * 16L,
-  )
-  let index = self.next_exception
-  self.next_exception += 1
-  self.exns.set(index, { tag_addr, values: values.copy(), })
-  self.on_instantiation_rollback(fn() {
-    self.exns.remove(index)
-    self.release_auxiliary_handle(1, index.to_int64())
-  })
-  index
+  self.references.alloc_exn(tag_addr, values)
 }
 
 ///|
@@ -922,11 +897,7 @@ pub fn Store::get_exn(
   self : Store,
   idx : Int32,
 ) -> ExnInstance raise RuntimeError {
-  self.ensure_open()
-  match self.exns.get(idx) {
-    Some(exception) => { ..exception, values: exception.values.copy(), }
-    None => raise UndefinedElement
-  }
+  self.references.get_exn(idx)
 }
 
 ///|

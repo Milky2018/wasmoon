@@ -14,8 +14,6 @@ struct Environment {
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
   function_table_field : @native_types.EnvironmentField
-  table_base_field : (Int32) -> @native_types.EnvironmentField
-  table_size_field : (Int32) -> @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
 }
 
@@ -24,18 +22,11 @@ pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
   function_table_field : @native_types.EnvironmentField,
-  table_base_field : (Int32) -> @native_types.EnvironmentField,
-  table_size_field : (Int32) -> @native_types.EnvironmentField,
+  _table_base_field : (Int32) -> @native_types.EnvironmentField,
+  _table_size_field : (Int32) -> @native_types.EnvironmentField,
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
 ) -> Environment {
-  {
-    function_symbol,
-    memory_base_field,
-    function_table_field,
-    table_base_field,
-    table_size_field,
-    runtime_symbol,
-  }
+  { function_symbol, memory_base_field, function_table_field, runtime_symbol, }
 }
 
 ///|
@@ -226,73 +217,6 @@ fn lower_get_function_reference(
 }
 
 ///|
-fn table_entry_address(
-  context : @adapter.InstructionContext,
-  table_index : Int32,
-  environment : Environment,
-) -> @lowering.Value {
-  let source_index = context.operands()[0]
-  let index = if context.operand_types()[0] == I32 {
-    context.emit(Convert(I64ExtendI32(Unsigned)), [source_index], [I64])[0]
-  } else {
-    source_index
-  }
-  let shift = context.emit(I64Const(4UL), [], [I64])[0]
-  let byte_offset = context.emit(IntBinary(ShiftLeft), [index, shift], [I64])[0]
-  let table = context.emit(
-      EnvironmentField((environment.table_base_field)(table_index), Mutable),
-      context.environment(),
-      [Ptr64],
-    )[0]
-  let table_size = context.emit(
-      EnvironmentField((environment.table_size_field)(table_index), Mutable),
-      context.environment(),
-      [I64],
-    )[0]
-  let in_bounds = context.emit(
-      IntCompare(UnsignedLessThan),
-      [index, table_size],
-      [I32],
-    )[0]
-  let address = context.emit(PointerOffset, [table, byte_offset], [Ptr64])[0]
-  let null = context.emit(NullPtr, [], [Ptr64])[0]
-  let guarded = context.emit(SpectreGuard, [in_bounds, address, null], [Ptr64])[0]
-  let continuation = context.create_block([])
-  let trap = context.create_block([])
-  context.branch(in_bounds, continuation, [], trap, [])
-  context.switch_to_block(trap)
-  context.set_trap_terminator(UndefinedElement)
-  context.switch_to_block(continuation)
-  guarded
-}
-
-///|
-fn check_indirect_type(
-  context : @adapter.InstructionContext,
-  entry : @lowering.Value,
-  type_index : Int32,
-  environment : Environment,
-) -> Unit {
-  let actual = context.emit(
-      Load(@lowering.LoadSpec::new(W32, None, I32, 8UL, Little, None)),
-      [entry],
-      [I32],
-    )[0]
-  let expected = i32_immediate(context, type_index)
-  context.emit_call_without_roots(
-    @native_types.NativeCall::new(
-      External((environment.runtime_symbol)(GcTypeCheckSubtype)),
-      @native_types.Signature::new([Ptr64, I32, I32], []),
-      Platform,
-      @native_types.CallBehavior::new(Read, true, false, false, false),
-    ),
-    [context.environment()[0], actual, expected],
-    [],
-  )
-  |> ignore
-}
-
-///|
 fn lower_indirect_call(
   context : @adapter.InstructionContext,
   type_index : Int32,
@@ -300,27 +224,25 @@ fn lower_indirect_call(
   environment : Environment,
   tail : Bool,
 ) -> Unit {
-  let entry = table_entry_address(context, table_index, environment)
-  let raw_pointer = context.emit(
-      Load(@lowering.LoadSpec::new(W64, None, Ptr64, 0UL, Little, None)),
-      [entry],
-      [Ptr64],
-    )[0]
-  let null = context.emit(NullPtr, [], [Ptr64])[0]
-  let is_null = context.emit(ReferenceCompare(Equal), [raw_pointer, null], [I32])[0]
-  let trap = context.create_block([])
-  let continuation = context.create_block([])
-  context.branch(is_null, trap, [], continuation, [])
-  context.switch_to_block(trap)
-  context.set_trap_terminator(UninitializedElement)
-  context.switch_to_block(continuation)
-  check_indirect_type(context, entry, type_index, environment)
-  let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [raw_pointer], [I64])[0]
-  let mask = context.emit(I64Const(0xDFFFFFFFFFFFFFFFUL), [], [I64])[0]
-  let untagged = context.emit(IntBinary(And), [bits, mask], [I64])[0]
-  let function_pointer = context.emit(
-      Convert(Bitcast(I64, Ptr64)),
-      [untagged],
+  let source_index = context.operands()[0]
+  let index = if context.operand_types()[0] == I32 {
+    context.emit(Convert(I64ExtendI32(Unsigned)), [source_index], [I64])[0]
+  } else {
+    source_index
+  }
+  let function_pointer = context.emit_call_without_roots(
+      @native_types.NativeCall::new(
+        External((environment.runtime_symbol)(TableCallTarget)),
+        @native_types.Signature::new([Ptr64, I32, I64, I32], [Ptr64]),
+        Platform,
+        @native_types.CallBehavior::new(Read, true, false, false, false),
+      ),
+      [
+        context.environment()[0],
+        i32_immediate(context, table_index),
+        index,
+        i32_immediate(context, type_index),
+      ],
       [Ptr64],
     )[0]
   let source_operands = context.operands()

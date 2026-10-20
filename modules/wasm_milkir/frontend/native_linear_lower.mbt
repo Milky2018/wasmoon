@@ -709,96 +709,39 @@ fn push_table_size(
 }
 
 ///|
-fn load_table_size_and_base(
-  builder : @milkir.FunctionBuilder,
-  env : EmbeddingEnvironment,
-  context : @milkir.Value,
-  table_idx : Int32,
-) -> (@milkir.Value, @milkir.Value)? {
-  guard env.runtime_layout() is Some(layout) else { return None }
-  if table_idx == 0 {
-    let size = builder.load_ptr(
-      I64,
-      context,
-      builder.iconst_i64(layout.table0_elements_offset.to_int64()),
-    )
-    let base = builder.load_ptr(
-      I64,
-      context,
-      builder.iconst_i64(layout.table0_base_offset.to_int64()),
-    )
-    Some((size, base))
-  } else {
-    let idx_offset = builder.iconst_i64(
-      (table_idx * layout.pointer_stride).to_int64(),
-    )
-    let sizes_ptr = builder.load_ptr(
-      I64,
-      context,
-      builder.iconst_i64(layout.table_sizes_offset.to_int64()),
-    )
-    let size = builder.load_ptr(I64, sizes_ptr, idx_offset)
-    let tables_ptr = builder.load_ptr(
-      I64,
-      context,
-      builder.iconst_i64(layout.tables_offset.to_int64()),
-    )
-    let base = builder.load_ptr(I64, tables_ptr, idx_offset)
-    Some((size, base))
-  }
-}
-
-///|
 fn push_table_get(
   builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
-  env : EmbeddingEnvironment,
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int32,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  guard env.runtime_layout() is Some(layout) else { return false }
   guard table_is_64(table_types, table_idx) is Some(is_table64) else {
     return false
   }
-  guard pop_value(stack) is Some(elem_idx) else { return false }
-  guard load_table_size_and_base(builder, env, context, table_idx)
-    is Some((table_size, table_base)) else {
-    return false
-  }
-  let elem_idx_i64 = if is_table64 {
-    elem_idx
+  guard pop_value(stack) is Some(index) else { return false }
+  let index = if is_table64 {
+    index
   } else {
-    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [elem_idx])
-      is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [index])
+      is Some(index) else {
       return false
     }
-    extended
+    index
   }
-  guard emit_op(builder, I32, Scalar(IntCompare(Ult)), [
-      elem_idx_i64, table_size,
-    ])
-    is Some(in_bounds) else {
-    return false
-  }
-  let trap_block = builder.create_block()
-  let continue_block = builder.create_block()
-  builder.brnz(in_bounds, continue_block, trap_block)
-  builder.switch_to_block(trap_block)
-  builder.trap("table out of bounds")
-  builder.switch_to_block(continue_block)
-  let byte_offset = builder.imul(
-    elem_idx_i64,
-    builder.iconst_i64(layout.table_entry_stride.to_int64()),
-  )
-  let addr = builder.iadd(table_base, byte_offset)
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol(runtime_symbols.symbol_name(TableGet))
   stack.push(
-    builder.load_ptr(
-      I64,
-      addr,
-      builder.iconst_i64(layout.table_entry_value_offset.to_int64()),
-    ),
+    builder
+    .call_symbol(symbol, Some(I64), [
+      context,
+      builder.iconst_i32(table_idx),
+      index,
+    ])
+    .unwrap(),
   )
   true
 }
@@ -2165,7 +2108,9 @@ fn try_lower_linear_function(
           return None
         }
       TableGet(idx) =>
-        if !push_table_get(builder, stack, env, vmctx, table_types, idx) {
+        if !push_table_get(
+            builder, stack, runtime_symbols, vmctx, table_types, idx,
+          ) {
           return None
         }
       TableSet(idx) =>

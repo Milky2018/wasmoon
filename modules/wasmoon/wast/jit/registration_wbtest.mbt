@@ -38,7 +38,7 @@ fn register_funcref_entries(
 }
 
 ///|
-test "table encoding invalidates when native function registration changes" {
+test "shared table values remain Store-local when function registrations change" {
   let store = @runtime.Store::Store()
   defer store.close()
   let address = store.alloc_host_func(fn(_) { [] })
@@ -48,44 +48,30 @@ test "table encoding invalidates when native function registration changes" {
     Some(1),
     init_value=FuncRef(address),
   )
-  let owner = @wasmoon_jit.JITTableOwner::try_alloc(1, Some(1L)).unwrap()
-  defer owner.close()
-  let native = owner.table()
-  let module_ = @compiled_jit.JITModule::JITModule()
-  defer module_.close()
-  let instance = @runtime.ModuleInstance::ModuleInstance()
+  let index = store.alloc_table(table)
+  let native = store.get_jit_table(index).unwrap()
+  let word = native.get_entry_value(0)
+  let revision = native.raw_ptr().revision()
   let first = store.register_jit_funcrefs([
     StoreFuncrefEntry(store_addr=address, func_ptr=100L),
   ])
   defer first.release()
-  sync_table_to_jit(table, native, module_, instance, store)
-  assert_eq(native.get_entry_value(0), @wasmoon_jit.tag_funcref_ptr(100L))
-  let revision = native.raw_ptr().revision()
-  sync_table_to_jit(table, native, module_, instance, store)
-  assert_eq(native.raw_ptr().revision(), revision)
   let second = store.register_jit_funcrefs([
     StoreFuncrefEntry(store_addr=address, func_ptr=200L),
   ])
-  defer second.release()
-  sync_table_to_jit(table, native, module_, instance, store)
-  assert_eq(native.get_entry_value(0), @wasmoon_jit.tag_funcref_ptr(200L))
   second.release()
-  sync_table_to_jit(table, native, module_, instance, store)
-  assert_eq(native.get_entry_value(0), @wasmoon_jit.tag_funcref_ptr(100L))
+  assert_eq(native.get_entry_value(0), word)
+  assert_eq(native.raw_ptr().revision(), revision)
+  assert_eq(table.get(0), FuncRef(address))
 }
 
 ///|
-test "empty and failed runtime table mutations do not invalidate synchronized entries" {
+test "empty and failed runtime mutations preserve the shared descriptor" {
   let store = @runtime.Store::Store()
   defer store.close()
   let table = @runtime.Table::Table(FuncRef, 1, Some(1))
-  let owner = @wasmoon_jit.JITTableOwner::try_alloc(1, Some(1L)).unwrap()
-  defer owner.close()
-  let native = owner.table()
-  let module_ = @compiled_jit.JITModule::JITModule()
-  defer module_.close()
-  let instance = @runtime.ModuleInstance::ModuleInstance()
-  sync_table_to_jit(table, native, module_, instance, store)
+  let index = store.alloc_table(table)
+  let native = store.get_jit_table(index).unwrap()
   let revision = native.raw_ptr().revision()
   table.fill(1, Null, 0)
   table.copy_from(1, table, 1, 0)
@@ -97,11 +83,5 @@ test "empty and failed runtime table mutations do not invalidate synchronized en
   } noraise {
     _ => fail("invalid set succeeded")
   }
-  sync_table_to_jit(table, native, module_, instance, store)
   assert_eq(native.raw_ptr().revision(), revision)
-  // Distinct module encodings must not share a checkpoint even with equal epochs.
-  let other = @compiled_jit.JITModule::JITModule()
-  defer other.close()
-  sync_table_to_jit(table, native, other, instance, store)
-  assert_true(native.raw_ptr().revision() != revision)
 }

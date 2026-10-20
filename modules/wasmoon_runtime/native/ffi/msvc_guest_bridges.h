@@ -73,4 +73,6 @@ extern void wasmoon_jit_i64_srem_msvc_guest(void);
 extern void wasmoon_jit_i64_udiv_msvc_guest(void);
 extern void wasmoon_jit_i64_urem_msvc_guest(void);
 extern void wasmoon_jit_table_grow_msvc_guest(void);
+extern void table_get_impl_msvc_guest(void);
+extern void table_call_target_impl_msvc_guest(void);
 #endif

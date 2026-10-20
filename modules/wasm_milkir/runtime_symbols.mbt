@@ -11,6 +11,8 @@ pub(all) enum WasmRuntimeHelper {
   MemoryCopy
   MemoryInit
   DataDrop
+  TableGet
+  TableCallTarget
   TableGrow
   TableFill
   TableCopy
@@ -76,6 +78,8 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     MemoryCopy => "memory_copy"
     MemoryInit => "memory_init"
     DataDrop => "data_drop"
+    TableGet => "table_get"
+    TableCallTarget => "table_call_target"
     TableGrow => "table_grow"
     TableFill => "table_fill"
     TableCopy => "table_copy"
