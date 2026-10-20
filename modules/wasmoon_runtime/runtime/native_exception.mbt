@@ -237,6 +237,12 @@ fn StoreReferences::encode_exception_snapshot(
   }
   self.native.native_exception_to_store.set(reference, index)
   self.native.store_exception_to_native.set(index, reference)
+  self.on_instantiation_rollback(fn() {
+    // Encoding may already have rolled this snapshot back and recreated it.
+    if self.native.store_exception_to_native.get(index) == Some(reference) {
+      self.release_native_exception(index)
+    }
+  })
   reference
 }
 
