@@ -3,6 +3,7 @@
 
 Install the upstream runner's requirements in the Python environment first.
 The caller supplies a checkout so no network access happens during execution.
+Per-case fixture workspaces are removed on exit; --output retains reports only.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -14,6 +15,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 from native_process import kill_process_tree
 
@@ -89,41 +91,45 @@ def main():
         case, engine = item
         directory = output / engine / case.stem
         directory.mkdir(parents=True)
-        # Guest fixtures can contain inaccessible paths and symlinks. Keep them
-        # outside the report tree consumed by artifact uploaders.
-        work = output.parent / (output.name + "-work") / engine / case.stem
-        work.mkdir(parents=True)
-        shutil.copy(suite / "manifest.json", work)
-        shutil.copy(overrides.get(case.name, case), work / case.name)
-        config = case.with_suffix(".json")
-        if config.exists():
-            shutil.copy(config, work)
-        # Preserve fixture inputs, never outputs from a prior local suite run.
-        fixtures = work / "fs-tests.dir"
-        fixtures.mkdir()
-        for name in ["a.txt", "b.txt"]:
-            content = subprocess.check_output(["git", "-C", str(upstream), "show", f"{PIN}:tests/rust/testsuite/wasm32-wasip3/fs-tests.dir/{name}"])
-            (fixtures / name).write_bytes(content)
-        result = directory / "upstream.json"
-        cmd = [sys.executable, str(ROOT / "scripts/wasi03_upstream_runner.py"), str(upstream),
-               "-t", str(work), "-r", str(ROOT / "scripts/wasi03_testsuite_adapter.py"),
-               "--json-output-location", str(result), "--disable-colors"]
-        env = os.environ | {"WASMOON": str(args.wasmoon.resolve()), "WASI03_ENGINE": engine, "WASI03_TIMEOUT": str(args.timeout)}
-        with (directory / "log.txt").open("w") as log:
-            proc = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)
-            try:
-                proc.wait(timeout=args.timeout)
-            except subprocess.TimeoutExpired:
-                kill_process_tree(proc)
-                proc.wait()
-                return {"name": case.stem, "engine": engine, "status": "timeout"}
-        if not result.exists():
-            return {"name": case.stem, "engine": engine, "status": "harness_error"}
-        tests = json.loads(result.read_text())["results"][0]["tests"]
-        if len(tests) != 1:
-            return {"name": case.stem, "engine": engine, "status": "harness_error"}
-        test = tests[0]
-        return {"name": case.stem, "engine": engine, "status": test["outcome"], "failures": test["failures"]}
+        # Guests may leave inaccessible paths and symlinks. TemporaryDirectory
+        # cleans these after success, failure or timeout; reports stay separate.
+        with tempfile.TemporaryDirectory(prefix="wasmoon-wasi03-") as temporary:
+            work = Path(temporary)
+            shutil.copy(suite / "manifest.json", work)
+            shutil.copy(overrides.get(case.name, case), work / case.name)
+            config = case.with_suffix(".json")
+            if config.exists():
+                shutil.copy(config, work)
+            # Preserve fixture inputs, never outputs from a prior local suite run.
+            fixtures = work / "fs-tests.dir"
+            fixtures.mkdir()
+            for name in ["a.txt", "b.txt"]:
+                content = subprocess.check_output(["git", "-C", str(upstream), "show", f"{PIN}:tests/rust/testsuite/wasm32-wasip3/fs-tests.dir/{name}"])
+                (fixtures / name).write_bytes(content)
+            result = directory / "upstream.json"
+            cmd = [sys.executable, str(ROOT / "scripts/wasi03_upstream_runner.py"), str(upstream),
+                   "-t", str(work), "-r", str(ROOT / "scripts/wasi03_testsuite_adapter.py"),
+                   "--json-output-location", str(result), "--disable-colors"]
+            env = os.environ | {"WASMOON": str(args.wasmoon.resolve()), "WASI03_ENGINE": engine, "WASI03_TIMEOUT": str(args.timeout)}
+            with (directory / "log.txt").open("w") as log:
+                proc = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)
+                try:
+                    proc.wait(timeout=args.timeout)
+                except subprocess.TimeoutExpired:
+                    kill_process_tree(proc)
+                    proc.wait()
+                    return {"name": case.stem, "engine": engine, "status": "timeout"}
+                except BaseException:
+                    kill_process_tree(proc)
+                    proc.wait()
+                    raise
+            if not result.exists():
+                return {"name": case.stem, "engine": engine, "status": "harness_error"}
+            tests = json.loads(result.read_text())["results"][0]["tests"]
+            if len(tests) != 1:
+                return {"name": case.stem, "engine": engine, "status": "harness_error"}
+            test = tests[0]
+            return {"name": case.stem, "engine": engine, "status": test["outcome"], "failures": test["failures"]}
 
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         results = list(pool.map(run, [(case, engine) for case in cases for engine in engines]))
