@@ -6,6 +6,24 @@ CI now uses `--http-contract-tests`, a documented two-guest source patch over th
 
 The authority setter now validates URI syntax separately from network destinations. `Host` and `HTTP2-Settings` are rejected as transport-controlled fields. The historical reports below describe earlier binaries and the previous regression gate.
 
+## Numeric loopback fixtures (2026-10-20)
+
+The launcher `scripts/wasi03_upstream_runner.py` overrides only the pinned
+runner's loopback endpoint `server_bind` method. It retains TCP binding and
+assigns the numeric `server_name` and `server_port` directly, avoiding
+`HTTPServer`'s unnecessary reverse lookup of `127.0.0.1`. On GitHub's macOS
+runner that lookup blocked for about 35 seconds before Wasmoon started.
+Endpoint handlers, guest inputs, assertions and watchdogs remain unchanged;
+the upstream checkout is not edited and other HTTPServer classes are unaffected.
+
+The [phase experiment](https://github.com/Milky2018/wasmoon/actions/runs/39367650678)
+and [native resolver sample](https://github.com/Milky2018/wasmoon/actions/runs/39368662604)
+isolated the delay before guest execution. An isolated
+[macOS verification](https://github.com/Milky2018/wasmoon/actions/runs/39375809857)
+of the fixed launcher passed all 110 HTTP contract profile executions in
+44 seconds; the earlier PR #552 step took 397 seconds. This verifies the
+launcher change independently of final submitted-head CI acceptance.
+
 ## Historical follow-up implementation and verification
 
 The initial audit below is retained as historical evidence. The fixes following

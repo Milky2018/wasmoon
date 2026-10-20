@@ -1,5 +1,6 @@
 """Verify corpus identity and explicit HTTP contract profile selection."""
 import importlib.util
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 import subprocess
 import tempfile
@@ -16,6 +17,21 @@ spec.loader.exec_module(runner)
 
 
 class GateTests(unittest.TestCase):
+    def test_loopback_endpoint_binds_without_reverse_lookup(self):
+        from wasi03_upstream_runner import bind_endpoint
+
+        class Endpoint(ThreadingHTTPServer):
+            server_bind = bind_endpoint
+
+        with patch("socket.getfqdn", side_effect=AssertionError("reverse lookup")), \
+             patch("socket.gethostbyaddr", side_effect=AssertionError("reverse lookup")):
+            with Endpoint(("127.0.0.1", 0), BaseHTTPRequestHandler) as server:
+                host, port = server.server_address
+                self.assertEqual(host, "127.0.0.1")
+                self.assertGreater(port, 0)
+                self.assertEqual(server.server_name, host)
+                self.assertEqual(server.server_port, port)
+
     @unittest.skipUnless(os.name == "nt", "Windows native exit status")
     def test_process_wrapper_preserves_native_exception_status(self):
         with tempfile.TemporaryDirectory() as directory:
