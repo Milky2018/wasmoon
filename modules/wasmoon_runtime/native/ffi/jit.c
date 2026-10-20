@@ -498,7 +498,9 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_
     if (ctx && ctx_table0_base(ctx) &&
         table_idx >= 0 && (size_t)table_idx < ctx_table0_elements(ctx) &&
         func_idx >= 0 && func_idx < ctx_func_count(ctx)) {
-        ctx_table0_base(ctx)[table_idx * 2] = ctx_func_table(ctx)[func_idx];
+        int64_t pointer = (int64_t)(intptr_t)ctx_func_table(ctx)[func_idx];
+        ctx_table0_base(ctx)[table_idx * 2] = (void *)(intptr_t)(
+            pointer ? pointer | FUNCREF_TAG : -(int64_t)(func_idx + 1));
         ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
         table_mark_mutated(ctx, 0);
     }
