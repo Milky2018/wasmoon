@@ -264,3 +264,24 @@ test "closing a Store during type graph rollback remains terminal" {
   assert_eq(store.counts().heap_live, 0)
   store.close()
 }
+
+///|
+test "GC fingerprints normalize external identities across shifted recursive groups" {
+  let store = @runtime.Store()
+  defer store.close()
+  let first = instantiate_gc_types(
+    store, "(module (type $f (func (param i32))) (rec (type $s (struct (field (ref null $f)))) (type $a (array (mut (ref null $s))))) (global (ref $s) (struct.new $s (ref.null $f))))",
+  )
+  let shifted = instantiate_gc_types(
+    store, "(module (type $padding (func (param i64))) (type $f0 (func (param i32))) (type $f (func (param i32))) (rec (type $s (struct (field (ref null $f)))) (type $a (array (mut (ref null $s))))) (global (ref $s) (struct.new $s (ref.null $f))))",
+  )
+  let a = store.native_type_indices(first)
+  let b = store.native_type_indices(shifted)
+  assert_eq(a[0], b[1])
+  assert_eq(b[1], b[2])
+  assert_eq(a[1], b[3])
+  assert_eq(a[2], b[4])
+  assert_true(
+    store.gc_type_is_subtype(first_gc_global(store, first), shifted, 3),
+  )
+}

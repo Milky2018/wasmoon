@@ -77,8 +77,10 @@ test "Store close drops initialization graph ownership" {
   store.set_module_types([registry_struct_type()])
   store.alloc_struct(0, [I32(1)]) |> ignore
   assert_true(store.native_types.initialization_graph is Some(_))
+  assert_false(store.native_types.group_buckets.is_empty())
   store.close()
   assert_true(store.native_types.initialization_graph is None)
+  assert_true(store.native_types.group_buckets.is_empty())
   assert_true(store.native_types.representatives.is_empty())
   assert_true(store.native_types.mappings.is_empty())
 }
@@ -102,5 +104,32 @@ test "rollback after Store close cannot restore a cached initialization graph" {
     _ => fail("transaction did not fail")
   }
   assert_true(store.native_types.initialization_graph is None)
+  assert_true(store.native_types.group_buckets.is_empty())
   assert_true(store.current_types().is_empty())
+}
+
+///|
+test "Store registration rejects colliding group candidates before reusing identities" {
+  let store = Store()
+  defer store.close()
+  store.set_module_types([registry_struct_type()])
+  let first = store.module_type_indices()[0]
+  let buckets = store.native_types.group_buckets.values().to_array()
+  let other = [
+    @types.SubType::simple(
+      Array({ element: { storage_type: Val(I64), mutable: true, }, }),
+    ),
+  ]
+  @types.fold_type_groups(other, external_identity=fn(_) { -1 }, visit=fn(
+    _,
+    fingerprint,
+  ) {
+    store.native_types.group_buckets[fingerprint] = buckets[0].copy()
+  })
+  store.set_module_types(other)
+  let second = store.module_type_indices()[0]
+  assert_false(first == second)
+  store.set_module_types(other)
+  assert_eq(store.module_type_indices()[0], second)
+  assert_eq(store.native_types.representatives.length(), 2)
 }

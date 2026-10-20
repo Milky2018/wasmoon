@@ -484,6 +484,72 @@ pub fn compute_canonical_type_indices(
   types : ArrayView[SubType],
   type_rec_groups~ : ArrayView[Int32] = [],
 ) -> Array[Int32] {
+  let canonical = Array::make(types.length(), -1)
+  let ctx = TypeEquivalenceContext::same_module(types, type_rec_groups~)
+  let buckets : Map[Int64, Array[Array[Int32]]] = Map([])
+  let mut unresolved = false
+  fold_type_groups(
+    types,
+    type_rec_groups~,
+    external_identity=fn(index) {
+      // Validators canonicalize before rejecting malformed type references.
+      // Keep those inputs out of indexed access and preserve their old behavior.
+      if index >= canonical.length() || canonical[index] < 0 {
+        unresolved = true
+        -1
+      } else {
+        canonical[index]
+      }
+    },
+    visit=fn(members, fingerprint) {
+      let candidates = buckets.get_or_default(fingerprint, [])
+      let representative = equivalent_type_group(ctx, members, candidates)
+      match representative {
+        Some(previous) =>
+          for position, index in members {
+            canonical[index] = canonical[previous[position]]
+          }
+        None => {
+          for index in members {
+            canonical[index] = index
+          }
+          candidates.push(members.to_owned())
+          buckets[fingerprint] = candidates
+        }
+      }
+    },
+  )
+  if unresolved {
+    canonical_type_indices_pairwise(types, type_rec_groups)
+  } else {
+    canonical
+  }
+}
+
+///|
+// Fingerprints only select candidates; even a colliding group must pass full
+// recursive-group equivalence, including members after the first one.
+fn equivalent_type_group(
+  ctx : TypeEquivalenceContext,
+  members : ArrayView[Int32],
+  candidates : Array[Array[Int32]],
+) -> Array[Int32]? {
+  for previous in candidates {
+    if members.length() == previous.length() &&
+      ctx.types_equivalent(members[0], previous[0]) {
+      return Some(previous)
+    }
+  }
+  None
+}
+
+///|
+// Preserve canonicalization of unvalidated forward/out-of-range references;
+// validated Wasm graphs always use the fingerprint path above.
+fn canonical_type_indices_pairwise(
+  types : ArrayView[SubType],
+  type_rec_groups : ArrayView[Int32],
+) -> Array[Int32] {
   let canonical : Array[Int32] = Array::make(types.length(), -1)
   let ctx = TypeEquivalenceContext::same_module(types, type_rec_groups~)
   for group_index, members in ctx.rec_groups1.groups {

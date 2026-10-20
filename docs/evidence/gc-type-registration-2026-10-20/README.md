@@ -121,3 +121,9 @@ Final local gates:
 
 Supported-platform CI remains pending. ISS-644 stays in progress until that
 acceptance is complete.
+
+## PR review follow-up
+
+The later [fingerprint-bucket follow-up](fingerprints.md) addresses first-time
+registration and canonicalization costs for large type sections. Its separate
+receipt preserves the provenance and results above as historical evidence.

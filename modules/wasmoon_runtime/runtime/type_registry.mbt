@@ -10,6 +10,7 @@ priv struct RegisteredTypeGraph {
 ///|
 priv struct StoreTypeRegistry {
   representatives : Array[(RegisteredTypeGraph, Int32)]
+  group_buckets : Map[Int64, Array[(RegisteredTypeGraph, Array[Int32])]]
   mappings : Map[Int32, RegisteredTypeGraph]
   mut initialization_graph : RegisteredTypeGraph?
   mut next_graph_id : Int64
@@ -24,6 +25,7 @@ priv struct StoreTypeRegistry {
 fn StoreTypeRegistry::new() -> StoreTypeRegistry {
   {
     representatives: [],
+    group_buckets: Map([]),
     mappings: Map([]),
     initialization_graph: None,
     next_graph_id: 0L,
@@ -72,42 +74,59 @@ fn StoreTypeRegistry::register_graph(
     self.mappings.set(store_index, graph)
     return graph.mapping
   }
-  let mapping : Array[Int32] = []
+  let mapping = Array::make(types.length(), -1)
   let graph = { id: self.next_graph_id, types, groups, mapping, }
   self.next_graph_id += 1L
   // Reuse graph indices and completed equivalence results within this registration.
   // These contexts must not outlive the two immutable graphs they compare.
   let comparisons : Map[Int64, @types.TypeEquivalenceContext] = Map([])
   let first_new = self.representatives.length()
-  for type_index in 0..<types.length() {
-    let mut identity = -1
-    for candidate, representative in self.representatives {
-      let (other, index) = representative
-      let equivalent = match comparisons.get(other.id) {
-        Some(context) => context
-        None => {
-          let context = @types.TypeEquivalenceContext::cross_module(
-            types,
-            other.types,
-            rec_groups1=groups,
-            rec_groups2=other.groups,
-          )
-          comparisons.set(other.id, context)
-          context
+  @types.fold_type_groups(
+    types,
+    type_rec_groups=groups,
+    external_identity=fn(index) {
+      if index < mapping.length() {
+        mapping[index]
+      } else {
+        -1
+      }
+    },
+    visit=fn(members, fingerprint) {
+      let candidates = self.group_buckets.get_or_default(fingerprint, [])
+      let mut matched = false
+      for (other, previous) in candidates {
+        let equivalent = match comparisons.get(other.id) {
+          Some(context) => context
+          None => {
+            let context = @types.TypeEquivalenceContext::cross_module(
+              types,
+              other.types,
+              rec_groups1=groups,
+              rec_groups2=other.groups,
+            )
+            comparisons[other.id] = context
+            context
+          }
+        }
+        if equivalent.types_equivalent(members[0], previous[0]) {
+          for position, index in members {
+            mapping[index] = other.mapping[previous[position]]
+          }
+          matched = true
+          break
         }
       }
-      if equivalent.types_equivalent(type_index, index) {
-        identity = candidate
-        break
+      if !matched {
+        for index in members {
+          mapping[index] = self.representatives.length()
+          self.representatives.push((graph, index))
+          self.parents.push(-1)
+        }
+        candidates.push((graph, members.to_owned()))
+        self.group_buckets[fingerprint] = candidates
       }
-    }
-    if identity < 0 {
-      identity = self.representatives.length()
-      self.representatives.push((graph, type_index))
-      self.parents.push(-1)
-    }
-    mapping.push(identity)
-  }
+    },
+  )
   if store_index >= 0 {
     self.mappings.set(store_index, graph)
   } else {
