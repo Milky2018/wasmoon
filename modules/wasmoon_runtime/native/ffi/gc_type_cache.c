@@ -270,7 +270,7 @@ int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected)
 int64_t callable_native_reference(jit_context_t *ctx, int64_t value) {
     if ((value & STORE_FUNCREF_TAG) != STORE_FUNCREF_TAG || value < 0) return value;
     const jit_callable_registry_t *registry = ctx ? ctx_runtime(ctx)->callable_registry : NULL;
-    if (!registry) return 0;
+    if (!registry) return value;
     uint64_t address = (uint64_t)value & ~(uint64_t)STORE_FUNCREF_TAG;
     if (!address || address - 1 > INT32_MAX) return 0;
     int32_t low = 0, high = registry->function_count;
@@ -280,7 +280,7 @@ int64_t callable_native_reference(jit_context_t *ctx, int64_t value) {
         else high = mid;
     }
     return low < registry->function_count && registry->function_stores[low] == (int32_t)(address - 1)
-        ? registry->function_pointers[low] | FUNCREF_TAG : 0;
+        ? registry->function_pointers[low] | FUNCREF_TAG : value;
 }
 
 int64_t callable_store_reference(jit_context_t *ctx, int64_t value) {
@@ -290,6 +290,9 @@ int64_t callable_store_reference(jit_context_t *ctx, int64_t value) {
     if (value < 0) {
         int64_t index = -(value + 1);
         if (index < 0 || index >= ctx_func_count(ctx)) return value;
+        jit_runtime_state_t *state = ctx_runtime(ctx);
+        if (index < state->callable_function_count && state->callable_functions[index] >= 0)
+            return STORE_FUNCREF_TAG | ((int64_t)state->callable_functions[index] + 1);
         pointer = (uint64_t)(uintptr_t)ctx_func_table(ctx)[index];
     } else pointer = (uint64_t)value & ~(uint64_t)FUNCREF_TAG;
     const jit_callable_registry_t *registry = ctx_runtime(ctx)->callable_registry;
@@ -307,10 +310,12 @@ int64_t callable_store_reference(jit_context_t *ctx, int64_t value) {
 
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     if (!ctx || !value) return -1;
-    value = callable_native_reference(ctx, value);
-    if (!value) return -1;
+    // The registry also indexes stable Store handles, including uncompiled
+    // functions. Only legacy index values need executable-pointer conversion.
     uint64_t pointer;
-    if (value < 0) {
+    if (value >= 0 && (value & STORE_FUNCREF_TAG) == STORE_FUNCREF_TAG) {
+        pointer = (uint64_t)value;
+    } else if (value < 0) {
         int64_t index = -(value + 1);
         if (index < 0 || index >= ctx_func_count(ctx)) return -1;
         pointer = (uint64_t)(uintptr_t)ctx_func_table(ctx)[index];

@@ -1009,7 +1009,7 @@ void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
             continuation_arena_mark(heap->continuation_arena, value);
             continue;
         }
-        if (value > 0 && (value & GC_EXCEPTION_REF_TAG)) {
+        if (value > 0 && (value & GC_REF_TAGS_MASK) == GC_EXCEPTION_REF_TAG) {
             exception_arena_mark(heap->exception_arena, value);
             continue;
         }

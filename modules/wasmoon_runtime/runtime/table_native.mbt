@@ -34,7 +34,7 @@ fn StoreReferences::encode_table_value(
   match value {
     FuncRef(address) => {
       guard address >= 0 else { raise UndefinedElement }
-      (-1, 0x3000000000000000L | (address.to_int64() + 1L))
+      (-1, @native_bridge.encode_store_funcref(address))
     }
     I31(value) => (-1, ((value & @types.I32_MAX).to_int64() << 1) | 1L)
     ExnRef(index) =>

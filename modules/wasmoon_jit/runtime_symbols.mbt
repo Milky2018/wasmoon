@@ -80,6 +80,8 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
   add(DataDrop, c_jit_get_data_drop_ptr())
   add(TableGet, c_jit_get_table_get_ptr())
   add(TableCallTarget, c_jit_get_table_call_target_ptr())
+  add(FuncRefCallTarget, c_jit_get_funcref_call_target_ptr())
+  add(FunctionReference, c_jit_get_function_reference_ptr())
   add(TableGrow, c_jit_get_table_grow_ptr())
   add(TableFill, c_jit_get_table_fill_ptr())
   add(TableCopy, c_jit_get_table_copy_ptr())

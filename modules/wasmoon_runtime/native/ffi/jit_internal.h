@@ -453,6 +453,7 @@ int64_t WASMOON_GUEST_ABI gc_alloc_array_from_slots_slow_impl(int64_t ctx_ptr, i
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value);
 int64_t callable_store_reference(jit_context_t *ctx, int64_t value);
 int64_t callable_native_reference(jit_context_t *ctx, int64_t value);
+int64_t callable_entry(jit_context_t *ctx, int64_t value);
 int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t expected);
 int64_t table_type_for_value(jit_context_t *ctx, int64_t value);
 

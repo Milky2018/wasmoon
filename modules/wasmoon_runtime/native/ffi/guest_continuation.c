@@ -333,7 +333,7 @@ static WASMOON_NO_FUNCTION_SANITIZE int64_t WASMOON_GUEST_ABI continuation_new(j
     while (type && type->index != index) type = type->next;
     native_continuation_arena_t *arena = ctx_runtime(ctx)->continuation_arena;
     if (!type || !arena) continuation_trap(8);
-    continuation_create_request_t request = {ctx, type, function};
+    continuation_create_request_t request = {ctx, type, callable_entry(ctx, function)};
     int64_t result = arena->callbacks->create(arena->state, &request);
     if (result >= 0) continuation_trap(result ? (int)result : 9);
     return result;

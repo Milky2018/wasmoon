@@ -61,7 +61,7 @@ pub fn GCHeapHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for GCHeapHandle
 
 pub type JITContext
-pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int32], FixedArray[Int32]) -> Unit
+pub fn JITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, FixedArray[Int32], FixedArray[Int32], functions? : FixedArray[Int32]) -> Unit
 pub fn JITContext::bind_continuation_arena(Self, NativeContinuationArena) -> Unit
 pub fn JITContext::bind_exception_arena(Self, NativeExceptionArena) -> Unit
 pub fn JITContext::bind_gc_function_addresses(Self, FixedArray[Int64]) -> Unit

@@ -13,7 +13,6 @@ const GC_SLOT_BYTES : Int32 = 16
 struct Environment {
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
-  function_table_field : @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
 }
 
@@ -21,12 +20,12 @@ struct Environment {
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
-  function_table_field : @native_types.EnvironmentField,
+  _function_table_field : @native_types.EnvironmentField,
   _table_base_field : (Int32) -> @native_types.EnvironmentField,
   _table_size_field : (Int32) -> @native_types.EnvironmentField,
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
 ) -> Environment {
-  { function_symbol, memory_base_field, function_table_field, runtime_symbol, }
+  { function_symbol, memory_base_field, runtime_symbol, }
 }
 
 ///|
@@ -89,18 +88,27 @@ fn lower_direct_tail_call(
 fn untag_callable_reference(
   context : @adapter.InstructionContext,
   reference : @lowering.Value,
+  environment : Environment,
 ) -> @lowering.Value {
   let address = context.emit(GcRefAddress, [reference], [Ptr64])[0]
   let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [address], [I64])[0]
-  let mask = context.emit(I64Const(0xDFFFFFFFFFFFFFFFUL), [], [I64])[0]
-  let untagged = context.emit(IntBinary(And), [bits, mask], [I64])[0]
-  context.emit(Convert(Bitcast(I64, Ptr64)), [untagged], [Ptr64])[0]
+  context.emit_call_without_roots(
+    @native_types.NativeCall::new(
+      External((environment.runtime_symbol)(FuncRefCallTarget)),
+      @native_types.Signature::new([Ptr64, I64], [Ptr64]),
+      Platform,
+      @native_types.CallBehavior::new(Read, true, false, false, false),
+    ),
+    [context.environment()[0], bits],
+    [Ptr64],
+  )[0]
 }
 
 ///|
 fn indirect_reference_call_contract(
   context : @adapter.InstructionContext,
   result_types : Array[@native_types.ValueType],
+  environment : Environment,
 ) -> (@native_types.NativeCall, Array[@lowering.Value]) {
   let source_operands = context.operands()
   let source_types = context.operand_types()
@@ -109,7 +117,7 @@ fn indirect_reference_call_contract(
     parameter_types.push(source_types[index])
   }
   let operands : Array[@lowering.Value] = [
-    untag_callable_reference(context, source_operands[0]),
+    untag_callable_reference(context, source_operands[0], environment),
   ]
   for value in context.environment() {
     operands.push(value)
@@ -129,19 +137,27 @@ fn indirect_reference_call_contract(
 }
 
 ///|
-fn lower_call_ref(context : @adapter.InstructionContext) -> Unit {
+fn lower_call_ref(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+) -> Unit {
   let (call, operands) = indirect_reference_call_contract(
     context,
     context.result_types(),
+    environment,
   )
   context.finish_call(call, operands)
 }
 
 ///|
-fn lower_tail_call_ref(context : @adapter.InstructionContext) -> Unit {
+fn lower_tail_call_ref(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+) -> Unit {
   let (call, operands) = indirect_reference_call_contract(
     context,
     context.function_result_types(),
+    environment,
   )
   context.tail_call(call, operands)
 }
@@ -193,27 +209,17 @@ fn lower_get_function_reference(
   function_index : Int32,
   environment : Environment,
 ) -> Unit {
-  let execution_environment = context.environment()[0]
-  let function_table = context.emit(
-      EnvironmentField(environment.function_table_field, Mutable),
-      [execution_environment],
-      [Ptr64],
+  let bits = context.emit_call_without_roots(
+      @native_types.NativeCall::new(
+        External((environment.runtime_symbol)(FunctionReference)),
+        @native_types.Signature::new([Ptr64, I32], [I64]),
+        Platform,
+        @native_types.CallBehavior::new(Read, false, false, false, false),
+      ),
+      [context.environment()[0], i32_immediate(context, function_index)],
+      [I64],
     )[0]
-  let offset = context.emit(I64Const((function_index * 8).to_uint64()), [], [
-      I64,
-    ])[0]
-  let entry = context.emit(PointerOffset, [function_table, offset], [Ptr64])[0]
-  let function_pointer = context.emit(
-      Load(@lowering.LoadSpec::new(W64, None, Ptr64, 0UL, Little, None)),
-      [entry],
-      [Ptr64],
-    )[0]
-  let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [function_pointer], [
-      I64,
-    ])[0]
-  let tag = context.emit(I64Const(0x2000000000000000UL), [], [I64])[0]
-  let tagged = context.emit(IntBinary(Or), [bits, tag], [I64])[0]
-  context.finish_operation(GcRefFromBits, [tagged])
+  context.finish_operation(GcRefFromBits, [bits])
 }
 
 ///|
@@ -1284,11 +1290,11 @@ fn lower_extension(
       None
     }
     CallRef(_) => {
-      lower_call_ref(context)
+      lower_call_ref(context, environment)
       None
     }
     ReturnCallRef(_) => {
-      lower_tail_call_ref(context)
+      lower_tail_call_ref(context, environment)
       None
     }
     I31New => {

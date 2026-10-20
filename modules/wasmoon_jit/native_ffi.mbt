@@ -789,3 +789,9 @@ extern "c" fn c_jit_get_table_get_ptr() -> Int64 = "wasmoon_jit_get_table_get_pt
 
 ///|
 extern "c" fn c_jit_get_table_call_target_ptr() -> Int64 = "wasmoon_jit_get_table_call_target_ptr"
+
+///|
+extern "c" fn c_jit_get_funcref_call_target_ptr() -> Int64 = "wasmoon_jit_get_funcref_call_target_ptr"
+
+///|
+extern "c" fn c_jit_get_function_reference_ptr() -> Int64 = "wasmoon_jit_get_function_reference_ptr"

@@ -270,6 +270,8 @@ pub(all) enum WasmRuntimeHelper {
   DataDrop
   TableGet
   TableCallTarget
+  FuncRefCallTarget
+  FunctionReference
   TableGrow
   TableFill
   TableCopy

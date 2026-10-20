@@ -1396,7 +1396,7 @@ pub fn JITModule::init_shared_tables(
             self.store_functions[index] >= 0 else {
             raise InvalidBinding("missing Store function identity")
           }
-          0x3000000000000000L | (self.store_functions[index].to_int64() + 1L)
+          @wasmoon_jit.encode_store_funcref(self.store_functions[index])
         } else {
           let pointer = self.get_func_ptr(index)
           if pointer == 0L {
@@ -1458,7 +1458,7 @@ pub fn JITModule::bind_callable_registry(
 ) -> Unit {
   self.store_functions = functions.copy()
   if self.context is Some(context) {
-    context.ctx.bind_callable_registry(registry, local_types, tags)
+    context.ctx.bind_callable_registry(registry, local_types, tags, functions~)
   }
 }
 

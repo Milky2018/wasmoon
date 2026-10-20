@@ -81,6 +81,7 @@ typedef struct jit_runtime_state {
     int32_t *callable_local_types;
     jit_callable_registry_t *callable_registry;
     int32_t *callable_tags;
+    int32_t *callable_functions;
 
     wasmoon_table_binding_t *table_bindings;
     // Pack scalar metadata after pointer fields.
@@ -95,6 +96,7 @@ typedef struct jit_runtime_state {
     int globals_managed;     // RC array versus legacy malloc-owned pointer table
     int callable_local_type_count;
     int callable_tag_count;
+    int callable_function_count;
 } jit_runtime_state_t;
 
 // Private state precedes the address passed to generated code. Its size is

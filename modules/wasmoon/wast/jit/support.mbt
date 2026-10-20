@@ -395,6 +395,8 @@ fn read_native_global(
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       if raw_value == 0L {
         Null
+      } else if @wasmoon_jit.decode_store_funcref(raw_value) is Some(address) {
+        FuncRef(address)
       } else if raw_value < 0L {
         // IR-encoded funcref: value = -(func_idx + 1)
         let mod_func_idx = (-(raw_value + 1L)).to_int()
@@ -844,6 +846,9 @@ fn decode_funcref_to_store_addr(
   if raw == NULL_REF {
     return Null
   }
+  if @wasmoon_jit.decode_store_funcref(raw) is Some(address) {
+    return FuncRef(address)
+  }
   match @wasmoon_jit.decode_funcref_idx(raw) {
     Some(mod_func_idx) =>
       if mod_func_idx >= 0 && mod_func_idx < instance.func_addrs.length() {
@@ -876,16 +881,20 @@ fn encode_store_funcref_for_jit(
   match value {
     Null => NULL_REF
     FuncRef(store_addr) =>
-      match
-        lookup_funcref_ptr_for_store_addr(
-          store, store_addr, jit_module, instance,
-        ) {
-        Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
-        None =>
-          match store_addr_to_module_func_idx(store_addr, instance) {
-            Some(func_idx) => @wasmoon_jit.encode_funcref_idx(func_idx)
-            None => NULL_REF
-          }
+      if jit_module.has_callable_metadata() {
+        @wasmoon_jit.encode_store_funcref(store_addr)
+      } else {
+        match
+          lookup_funcref_ptr_for_store_addr(
+            store, store_addr, jit_module, instance,
+          ) {
+          Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
+          None =>
+            match store_addr_to_module_func_idx(store_addr, instance) {
+              Some(index) => @wasmoon_jit.encode_funcref_idx(index)
+              None => NULL_REF
+            }
+        }
       }
     _ => NULL_REF
   }

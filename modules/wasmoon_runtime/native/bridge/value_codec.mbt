@@ -22,7 +22,7 @@ pub struct GcSlot {
 /// - f64: as-is (IEEE 754 bits)
 /// - v128: low 8 bytes, with the high 8 in `hi`
 /// - structref/arrayref: (gc_ref) << 1, where gc_ref = idx + 1 (even, low bit = 0)
-/// - funcref: function index + 1 (0 = null)
+/// - funcref: tagged Store function identity (0 = null)
 /// - externref: extern index + 1 (0 = null)
 /// - exnref: exception index + 1 (0 = null)
 /// - i31: (value << 1) | 1 (tagged, low bit = 1)
@@ -43,7 +43,7 @@ pub fn value_to_slot(value : @types.Value) -> GcSlot {
     // gc_ref is 1-based: StructRef(0) -> gc_ref=1 -> encoded=2
     StructRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L, }
     ArrayRef(idx) => { lo: (idx + 1).to_int64() << 1, hi: 0L, }
-    FuncRef(idx) => { lo: (idx + 1).to_int64(), hi: 0L, }
+    FuncRef(idx) => { lo: encode_store_funcref(idx), hi: 0L, }
     ExternRef(idx) => { lo: encode_externref(idx), hi: 0L, }
     ExnRef(idx) => { lo: encode_exception_ref(idx), hi: 0L, }
     // Store-owned continuation handles use an odd word, outside GC object indices.

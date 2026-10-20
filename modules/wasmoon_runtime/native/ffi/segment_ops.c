@@ -374,10 +374,48 @@ static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t tabl
     void **entry = table_entry(ctx, table_idx, index);
     if (!entry) return 0;
     int64_t value = (int64_t)(intptr_t)entry[0];
-    if (ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[table_idx].owner &&
-        ctx_runtime(ctx)->table_bindings[table_idx].owner->store_references)
-        return callable_native_reference(ctx, value);
+
     return value;
+}
+
+// Reference identity may exist before executable code is registered. Resolve
+// only at a call boundary, never by reinterpreting a Store handle as a pointer.
+int64_t callable_entry(jit_context_t *ctx, int64_t value) {
+    int trap = 0;
+    if (!value) trap = WASMOON_TRAP_NULL_REFERENCE;
+    else {
+        value = callable_native_reference(ctx, value);
+        if (value < 0) {
+            int64_t index = -(value + 1);
+            value = ctx && index < ctx_func_count(ctx)
+                ? (int64_t)(intptr_t)ctx_func_table(ctx)[index] : 0;
+        } else if ((value & STORE_FUNCREF_TAG) == STORE_FUNCREF_TAG) {
+            value = 0; // No executable mapping yet; the reference remains live.
+        } else if (value & FUNCREF_TAG) value &= ~FUNCREF_TAG;
+        else value = 0;
+        if (!value) trap = WASMOON_TRAP_BACKEND;
+    }
+    if (trap) {
+        g_trap_code = trap;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    return value;
+}
+
+static int64_t WASMOON_GUEST_ABI funcref_call_target_impl(jit_context_t *ctx, int64_t value) {
+    return callable_entry(ctx, value);
+}
+
+static int64_t WASMOON_GUEST_ABI function_reference_impl(jit_context_t *ctx, int32_t index) {
+    if (!ctx || index < 0 || index >= ctx_func_count(ctx)) return 0;
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    if (index < state->callable_function_count) {
+        int32_t address = state->callable_functions[index];
+        if (address >= 0) return STORE_FUNCREF_TAG | ((int64_t)address + 1);
+    }
+    int64_t pointer = (int64_t)(intptr_t)ctx_func_table(ctx)[index];
+    return pointer ? pointer | FUNCREF_TAG : -(int64_t)(index + 1);
 }
 
 static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int32_t table_idx, int64_t index, int32_t expected) {
@@ -389,7 +427,6 @@ static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int3
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
-    value = callable_native_reference(ctx, value);
     int32_t actual = callable_type_for_value(ctx, value);
     if (actual < 0 && !ctx_runtime(ctx)->callable_registry)
         actual = (int32_t)(intptr_t)entry[1];
@@ -398,7 +435,7 @@ static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int3
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
-    return value & ~FUNCREF_TAG;
+    return funcref_call_target_impl(ctx, value);
 }
 
 // table.fill - Fill table region with a value
@@ -653,6 +690,12 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_data_drop_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_get_ptr(void) {
     return WASMOON_GUEST_ADDRESS(table_get_impl);
+}
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_funcref_call_target_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(funcref_call_target_impl);
+}
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_function_reference_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(function_reference_impl);
 }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_call_target_ptr(void) {
     return WASMOON_GUEST_ADDRESS(table_call_target_impl);
@@ -1030,5 +1073,7 @@ WASMOON_DEFINE_GUEST_TARGET(table_copy_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_fill_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_get_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_call_target_impl);
+WASMOON_DEFINE_GUEST_TARGET(funcref_call_target_impl);
+WASMOON_DEFINE_GUEST_TARGET(function_reference_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_init_impl);
 #endif

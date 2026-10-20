@@ -132,7 +132,7 @@ test "live artifact and encoded artifact share verification" {
       #|      pointer_width: Bits64,
       #|    },
       #|    required_cpu_features: [],
-      #|    jit_abi_version: 7,
+      #|    jit_abi_version: 8,
       #|    codegen_revision: "direct-vcode-10",
       #|    module_identity: {
       #|      name: "artifact-producer",
@@ -172,4 +172,30 @@ test "live artifact and encoded artifact share verification" {
   )
   assert_eq(live, artifact)
   assert_eq(decoded, artifact)
+}
+
+///|
+test "current runtime rejects artifacts using the old function reference ABI" {
+  let legacy = { ..artifact_test_manifest(X64), jit_abi_version: 7, }
+  let artifact : @artifact.Artifact = {
+    manifest: legacy,
+    imports: [],
+    functions: [],
+  }
+  let compatibility = @wasmoon_jit.artifact_compatibility(
+    legacy,
+    available_cpu_features=[],
+    runtime_symbols=[],
+    data_symbols=[],
+  )
+  try @wasmoon_jit.verify_artifact(artifact, compatibility) catch {
+    Incompatible(cause=JitAbiVersionMismatch(expected~, actual~)) => {
+      assert_eq(expected, @wasmoon_jit.WASMOON_JIT_ABI_VERSION)
+      assert_eq(actual, 7)
+    }
+    error => raise error
+  } noraise {
+    _ =>
+      fail("old reference representations must not enter the current runtime")
+  }
 }

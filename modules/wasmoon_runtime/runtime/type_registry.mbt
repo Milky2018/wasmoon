@@ -210,6 +210,16 @@ pub fn Store::native_callable_registry(
       changed = true
     }
   }
+  // Type identity does not depend on whether executable code is registered.
+  for address in 0..<self.funcs.length() {
+    let identity = self.get_func_canonical_type_idx(address)
+    let reference = @native_bridge.encode_store_funcref(address)
+    if identity >= 0 &&
+      self.native_types.entries.get(reference) != Some(identity) {
+      self.native_types.entries[reference] = identity
+      changed = true
+    }
+  }
   if changed {
     self.native_types.publish()
   }

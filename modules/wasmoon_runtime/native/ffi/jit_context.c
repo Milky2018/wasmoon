@@ -304,6 +304,8 @@ void free_context_internal(jit_context_t *ctx) {
         moonbit_decref(ctx_runtime(ctx)->callable_registry);
     if (ctx_runtime(ctx)->callable_tags)
         moonbit_decref(ctx_runtime(ctx)->callable_tags);
+    if (ctx_runtime(ctx)->callable_functions)
+        moonbit_decref(ctx_runtime(ctx)->callable_functions);
     if (ctx_runtime(ctx)->gc_func_table) moonbit_decref(ctx_runtime(ctx)->gc_func_table);
 
     // Release each managed descriptor retained by the multi-memory array.
@@ -868,25 +870,31 @@ extern int64_t wasmoon_jit_context_ptr(void *context);
 MOONBIT_FFI_EXPORT void wasmoon_jit_bind_callable_registry(
     void *managed_context, void *registry,
     int32_t *local_types, int32_t local_count,
-    int32_t *tags, int32_t tag_count
+    int32_t *tags, int32_t tag_count,
+    int32_t *functions, int32_t function_count
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
     if (!ctx) return;
     // Preserve the legacy empty-local-map fallback while retaining nonempty arrays.
     int32_t *locals = local_count ? local_types : NULL;
     int32_t *tag_map = tag_count ? tags : NULL;
+    int32_t *function_map = function_count ? functions : NULL;
     moonbit_incref(registry);
     if (locals) moonbit_incref(locals);
     if (tag_map) moonbit_incref(tag_map);
+    if (function_map) moonbit_incref(function_map);
     jit_runtime_state_t *state = ctx_runtime(ctx);
     if (state->callable_registry) moonbit_decref(state->callable_registry);
     if (state->callable_local_types) moonbit_decref(state->callable_local_types);
     if (state->callable_tags) moonbit_decref(state->callable_tags);
+    if (state->callable_functions) moonbit_decref(state->callable_functions);
     state->callable_registry = registry;
     state->callable_local_types = locals;
     state->callable_local_type_count = local_count;
     state->callable_tags = tag_map;
     state->callable_tag_count = tag_count;
+    state->callable_functions = function_map;
+    state->callable_function_count = function_count;
 }
 
 // The MoonBit owner prepares typed arrays. Native helpers only retain/read them.
