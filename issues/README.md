@@ -685,6 +685,7 @@ graph TD
   ISS_647["ISS-647: Clean up WASI03 fixture workspaces after each case"]
   ISS_648["ISS-648: Group owned regression inputs by Core, Component and WASI"]
   ISS_649["ISS-649: Relocate imported test corpora under tests/upstream"]
+  ISS_656["ISS-656: Preserve shared constant dominance during native selection"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
