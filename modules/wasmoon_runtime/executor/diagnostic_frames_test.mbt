@@ -274,3 +274,224 @@ test "cross-module diagnostics report each function's owning instance" {
   ])
   assert_eq(failure.frames.map(f => f.function_index), [0, 1])
 }
+
+///|
+test "guest continuation diagnostics preserve the trapping body before unwind" {
+  let (store, instance) = @executor.instantiate_module(
+    @wat.parse(
+      (
+        #|(module (type $f (func)) (type $c (cont $f))
+        #| (func $body unreachable) (elem declare func $body)
+        #| (func $entry (resume $c (cont.new $c (ref.func $body)))))
+      ),
+    ),
+  )
+  defer store.close()
+  let failure = interpreter_failure_from(() => {
+    @executor.call_func_by_index_resumable_with_diagnostics(
+      store,
+      instance,
+      1,
+      [],
+      _ => None,
+    )
+  })
+  assert_true(failure.error is Unreachable)
+  assert_true(failure.kind is GuestTrap)
+  assert_eq(failure.frames.map(f => f.function_index), [0, 1])
+  assert_eq(failure.frames[0].instruction_path, [0])
+  assert_eq(failure.frames[1].instruction_path, [2])
+}
+
+///|
+test "guest body diagnostics survive repeated resumes and late opt in" {
+  let (store, instance) = @executor.instantiate_module(
+    @wat.parse(
+      (
+        #|(module (type $f (func)) (type $c (cont $f))
+        #| (func $body nop nop nop unreachable) (elem declare func $body)
+        #| (func $entry (resume $c (cont.new $c (ref.func $body)))))
+      ),
+    ),
+  )
+  defer store.close()
+  for late in [false, true] {
+    let mut outcome = if late {
+      @executor.call_func_by_index_resumable(
+        store,
+        instance,
+        1,
+        [],
+        _ => None,
+        cooperative=true,
+        cooperative_quantum=1,
+      )
+    } else {
+      @executor.call_func_by_index_resumable_with_diagnostics(
+        store,
+        instance,
+        1,
+        [],
+        _ => None,
+        cooperative=true,
+        cooperative_quantum=1,
+      )
+    }
+    // Enter the body and park it before enabling diagnostics on its parent.
+    for _ in 0..<2 {
+      guard outcome is Suspended(CooperativeYield, continuation) else {
+        fail("missing initial yield")
+      }
+      outcome = continuation.continue_execution()
+    }
+    let resumes = Ref(0)
+    let failure = interpreter_failure_from(() => {
+      while outcome is Suspended(CooperativeYield, continuation) {
+        resumes.val += 1
+        outcome = continuation.continue_execution_with_diagnostics()
+      }
+      outcome
+    })
+    assert_true(resumes.val >= 2)
+    assert_true(failure.error is Unreachable)
+    assert_true(failure.kind is GuestTrap)
+    assert_eq(failure.frames.map(f => f.function_index), [0, 1])
+    assert_eq(failure.frames[0].instruction_path, [3])
+    assert_eq(failure.frames[1].instruction_path, [2])
+    assert_eq(failure.frames[0].function_name, Some("body"))
+  }
+}
+
+///|
+test "guest effect resumes preserve body frames with the current caller chain" {
+  let (store, instance) = @executor.instantiate_module(
+    @wat.parse(
+      (
+        #|(module (type $f (func)) (type $c (cont $f)) (tag $yield)
+        #| (global $next (mut (ref null $c)) (ref.null $c))
+        #| (func $body suspend $yield suspend $yield unreachable)
+        #| (elem declare func $body)
+        #| (func $start (block $paused (result (ref $c))
+        #|   (resume $c (on $yield $paused) (cont.new $c (ref.func $body))) unreachable)
+        #|   global.set $next)
+        #| (func $step (block $paused (result (ref $c))
+        #|   (resume $c (on $yield $paused) (global.get $next)) unreachable)
+        #|   global.set $next)
+        #| (func $finish (resume $c (global.get $next))))
+      ),
+    ),
+  )
+  defer store.close()
+  guard @executor.call_func_by_index_resumable_with_diagnostics(
+      store,
+      instance,
+      1,
+      [],
+      _ => None,
+    )
+    is Returned(_) else {
+    fail("start did not return")
+  }
+  guard @executor.call_func_by_index_resumable_with_diagnostics(
+      store,
+      instance,
+      2,
+      [],
+      _ => None,
+    )
+    is Returned(_) else {
+    fail("step did not return")
+  }
+  let failure = interpreter_failure_from(() => {
+    @executor.call_func_by_index_resumable_with_diagnostics(
+      store,
+      instance,
+      3,
+      [],
+      _ => None,
+    )
+  })
+  assert_true(failure.error is Unreachable)
+  assert_eq(failure.frames.map(f => f.function_index), [0, 3])
+  assert_eq(failure.frames[0].instruction_path, [2])
+  assert_eq(failure.frames[1].instruction_path, [1])
+}
+
+///|
+test "guest body exceptions stay catchable and clear transported diagnostic frames" {
+  let (store, instance) = @executor.instantiate_module(
+    @wat.parse(
+      (
+        #|(module (type $f (func)) (type $c (cont $f)) (tag $e)
+        #| (func $body throw $e) (elem declare func $body)
+        #| (func $entry (block $done (try_table (catch_all $done)
+        #|   (resume $c (cont.new $c (ref.func $body))))) unreachable))
+      ),
+    ),
+  )
+  defer store.close()
+  let failure = interpreter_failure_from(() => {
+    @executor.call_func_by_index_resumable_with_diagnostics(
+      store,
+      instance,
+      1,
+      [],
+      _ => None,
+    )
+  })
+  assert_true(failure.error is Unreachable)
+  assert_eq(failure.frames.map(f => f.function_index), [1])
+  assert_eq(failure.frames[0].instruction_path, [1])
+  try
+    @executor.call_func_by_index_resumable(store, instance, 1, [], _ => None)
+  catch {
+    Unreachable => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("ordinary API lost its runtime error")
+  }
+}
+
+///|
+test "guest body host errors preserve their cause and provenance" {
+  let store = @runtime.Store()
+  defer store.close()
+  let host = store.alloc_host_func(
+    fn(_) raise @runtime.RuntimeError { raise TypeMismatch },
+    func_type={ params: [], results: [], },
+    type_idx=0,
+  )
+  let imports = @runtime.Imports::Imports(store)
+  imports.add_func("h", "fail", host)
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    @wat.parse(
+      (
+        #|(module (type $f (func)) (type $c (cont $f)) (import "h" "fail" (func $host))
+        #| (func $body call $host) (elem declare func $body)
+        #| (func $entry (resume $c (cont.new $c (ref.func $body)))))
+      ),
+    ),
+    imports,
+  )
+  let failure = interpreter_failure_from(() => {
+    @executor.call_func_by_index_resumable_with_diagnostics(
+      store,
+      instance,
+      2,
+      [],
+      _ => None,
+    )
+  })
+  assert_true(failure.error is TypeMismatch)
+  assert_true(failure.kind is HostFailure)
+  assert_eq(failure.frames.map(f => f.function_index), [1, 2])
+  try
+    @executor.call_func_by_index_resumable(store, instance, 2, [], _ => None)
+  catch {
+    TypeMismatch => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("ordinary API lost its host error")
+  }
+}

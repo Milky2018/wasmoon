@@ -19,7 +19,7 @@ test "cooperative quantum counts dispatches and retains the compatible default" 
           cooperative_quantum=quantum,
         )
       },
-      safepoints=Some(8L),
+      safepoints=Some(1L),
     )
     let mut yields = 0
     while outcome is Suspended(CooperativeYield, continuation) {
@@ -89,6 +89,7 @@ test "cooperative boundaries poll cancellation without resetting scope budgets" 
       )
     },
     cancel=Some(() => stopped.val),
+    safepoints=Some(1L),
   )
   guard outcome is Suspended(CooperativeYield, continuation) else {
     fail("expected yield")
@@ -225,4 +226,106 @@ test "different quanta preserve parked GC roots and independent invocation fairn
   guard second is Returned(second_values) else { fail("second did not return") }
   assert_eq(first_values, [I32(41)])
   assert_eq(second_values, [I32(42)])
+}
+
+///|
+test "cooperative scheduling preserves nested last-unit scopes and charged exhaustion" {
+  let (store, instance) = @executor.instantiate_module(
+    @wat.parse(
+      "(module (func (export \"straight\") (result i32) nop nop i32.const 42) (func call 0 drop))",
+    ),
+  )
+  defer store.close()
+  for quantum in [1, 16] {
+    let mut outcome = store.with_execution_limits(
+      () => {
+        store.with_execution_limits(
+          () => {
+            @executor.call_func_by_index_resumable(
+              store,
+              instance,
+              0,
+              [],
+              _ => None,
+              cooperative=true,
+              cooperative_quantum=quantum,
+            )
+          },
+          safepoints=Some(2L),
+        )
+      },
+      safepoints=Some(1L),
+    )
+    while outcome is Suspended(CooperativeYield, continuation) {
+      outcome = continuation.continue_execution()
+    }
+    guard outcome is Returned(values) else { fail("unexpected suspension") }
+    assert_eq(values, [I32(42)])
+    for budget in [0L, 1L] {
+      try
+        store.with_execution_limits(
+          () => {
+            let mut call = @executor.call_func_by_index_resumable(
+              store,
+              instance,
+              1,
+              [],
+              _ => None,
+              cooperative=true,
+              cooperative_quantum=quantum,
+            )
+            while call is Suspended(CooperativeYield, continuation) {
+              call = continuation.continue_execution()
+            }
+          },
+          safepoints=Some(budget),
+        )
+      catch {
+        @runtime.RuntimeError::ExecutionBudgetExceeded => ()
+        error => fail(error.to_string())
+      } noraise {
+        _ => fail("charged function entry ignored the budget")
+      }
+    }
+  }
+}
+
+///|
+test "cooperative scheduling observes exhaustion already latched by another charged call" {
+  let (store, instance) = @executor.instantiate_module(
+    @wat.parse("(module (func nop nop nop))"),
+  )
+  defer store.close()
+  let outcome = store.with_execution_limits(
+    () => {
+      let outcome = @executor.call_func_by_index_resumable(
+        store,
+        instance,
+        0,
+        [],
+        _ => None,
+        cooperative=true,
+        cooperative_quantum=1,
+      )
+      try
+        @executor.call_func_by_index_resumable(store, instance, 0, [], _ => None)
+      catch {
+        ExecutionBudgetExceeded => ()
+        error => fail(error.to_string())
+      } noraise {
+        _ => fail("second function entry did not exhaust the budget")
+      }
+      outcome
+    },
+    safepoints=Some(1L),
+  )
+  guard outcome is Suspended(CooperativeYield, continuation) else {
+    fail("missing yield")
+  }
+  try continuation.continue_execution() catch {
+    ExecutionBudgetExceeded => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("latched exhaustion was ignored")
+  }
 }

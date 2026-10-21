@@ -118,7 +118,11 @@ metadata at instantiation; unnamed functions retain indices and positions.
 Snapshots contain only immutable names, numbers and paths. They retain no Store,
 guest values, GC root leases or executable context, and remain readable after
 the failed continuation is consumed or the Store is closed. Handled guest
-exceptions discard provisional diagnostics before execution continues.
+exceptions discard provisional diagnostics before execution continues. Guest
+continuation failures prepend the body snapshot to the current resumer's frames,
+including subsequent body resumes; suspended or completed former callers are not
+part of that live chain. Enabling diagnostics on a parked continuation also enables
+capture in its existing child contexts.
 
 `instantiate_module_with_diagnostics(store, module_, imports)` also reports
 start-function frames. It preserves the existing Core publication and enclosing

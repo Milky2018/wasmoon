@@ -30,7 +30,7 @@ pub(all) suberror InterpreterDiagnosticError {
 
 ///|
 fn ExecContext::capture_failure(self : ExecContext, error : Error) -> Error {
-  guard self.capture_diagnostics && self.diagnostic_frames is None else {
+  guard self.capture_diagnostics.val && self.diagnostic_frames is None else {
     return error
   }
   match error {
@@ -107,7 +107,7 @@ pub fn call_func_by_index_resumable_with_diagnostics(
     classify_suspension~,
     cooperative~,
     cooperative_quantum~,
-    capture_diagnostics=true,
+    capture_diagnostics=Ref(true),
   ) catch {
     error => raise diagnostic_error(error, [])
   }
@@ -125,7 +125,7 @@ pub fn ExecutionContinuation::continue_execution_with_diagnostics(
 ) -> ResumableCallOutcome raise InterpreterDiagnosticError {
   let context = self.captured.map(captured => captured.context)
   if context is Some(context) {
-    context.capture_diagnostics = true
+    context.capture_diagnostics.val = true
   }
   self.continue_unchecked() catch {
     error => {
@@ -197,3 +197,33 @@ pub extend InterpreterFailure with Debug::{to_repr}
 
 ///|
 pub extend InterpreterDiagnosticError with Debug::{to_repr}
+
+///|
+/// Transport only owned diagnostic metadata across a guest-body callback.
+priv suberror GuestBodyFailure {
+  GuestBodyFailed(Error, ReadOnlyArray[InterpreterFrame])
+}
+
+///|
+fn ExecContext::guest_body_failure(self : ExecContext, error : Error) -> Error {
+  match self.diagnostic_frames {
+    Some(frames) => GuestBodyFailed(error, frames)
+    None => error
+  }
+}
+
+///|
+fn ExecContext::adopt_guest_failure(
+  self : ExecContext,
+  error : Error,
+  frames : ReadOnlyArray[InterpreterFrame],
+) -> Unit {
+  if self.capture_diagnostics.val {
+    self.capture_failure(error) |> ignore
+    let combined = frames[:].to_owned()
+    for frame in self.diagnostic_frames.unwrap_or([]) {
+      combined.push(frame)
+    }
+    self.diagnostic_frames = Some(ReadOnlyArray::from_array(combined))
+  }
+}
