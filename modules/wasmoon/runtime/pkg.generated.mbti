@@ -12,6 +12,8 @@ pub fn format_runtime_error(@Milky2018/wasmoon_runtime/runtime.RuntimeError) -> 
 
 pub fn normalize_async_host_error(Error) -> @Milky2018/wasmoon_runtime/runtime.RuntimeError
 
+pub fn normalize_host_error(Error) -> @Milky2018/wasmoon_runtime/runtime.RuntimeError
+
 pub fn runtime_capabilities() -> @Milky2018/wasmoon_runtime/runtime.RuntimeCapabilities
 
 pub fn runtime_version() -> String
@@ -99,6 +101,12 @@ pub using @Milky2018/wasmoon_runtime/runtime {type GuestContinuationInput}
 
 pub using @Milky2018/wasmoon_runtime/runtime {type GuestContinuationSignal}
 
+pub using @Milky2018/wasmoon_runtime/runtime {type GuestException}
+
+pub using @Milky2018/wasmoon_runtime/runtime {type HostCallOutcome}
+
+pub using @Milky2018/wasmoon_runtime/runtime {type HostGuestException}
+
 pub using @Milky2018/wasmoon_runtime/runtime {type Imports}
 
 pub using @Milky2018/wasmoon_runtime/runtime {type InstanceAdmission}
@@ -150,5 +158,7 @@ pub using @Milky2018/wasmoon_runtime/runtime {type StoreIdentity}
 pub using @Milky2018/wasmoon_runtime/runtime {type StructInstance}
 
 pub using @Milky2018/wasmoon_runtime/runtime {type Table}
+
+pub type ThrowingHostFunction = (@Milky2018/wasmoon_runtime/runtime.Caller, Array[@types.Value]) -> Array[@types.Value] raise
 
 // Traits

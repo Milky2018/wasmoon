@@ -118,10 +118,15 @@ struct ExecContext {
   mut resume_action : ResumeAction?
   mut suspension_reason : SuspensionReason?
   cooperative : Bool
+  cooperative_quantum : Int32
   mut instructions_left : Int32
   mut guest_input : @runtime.GuestContinuationInput?
   mut guest_pending : @runtime.GuestContinuationBody?
   mut suspension_roots : Array[@types.Value]
+  // Share opt-in with parked guest bodies without retaining the parent context.
+  capture_diagnostics : Ref[Bool]
+  mut diagnostic_frames : ReadOnlyArray[InterpreterFrame]?
+  mut host_exception_root : @runtime.GcRootLease?
 } derive(Debug)
 
 ///|
@@ -132,10 +137,16 @@ fn ExecContext::ExecContext(
   classify_suspension~ : (@runtime.RuntimeError) -> Int64? = fn(_) { None },
   async_host_driver~ : @runtime.AsyncHostCallDriver? = None,
   cooperative~ : Bool = false,
+  cooperative_quantum~ : Int32 = 1024,
+  capture_diagnostics~ : Ref[Bool] = Ref(false),
 ) -> ExecContext raise @runtime.RuntimeError {
   store.check_instance(instance)
+  guard cooperative_quantum > 0 else { raise TypeMismatch }
   {
-    stack: Stack(max_values=store.interpreter_limits.max_values),
+    stack: Stack(
+      max_values=store.interpreter_limits.max_values,
+      max_bytes=store.interpreter_limits.max_stack_bytes,
+    ),
     execution: [],
     running: false,
     store,
@@ -153,18 +164,29 @@ fn ExecContext::ExecContext(
     resume_action: None,
     suspension_reason: None,
     cooperative,
-    instructions_left: 1024,
+    cooperative_quantum,
+    instructions_left: cooperative_quantum,
     guest_input: None,
     guest_pending: None,
     suspension_roots: [],
+    capture_diagnostics,
+    diagnostic_frames: None,
+    host_exception_root: None,
   }
 }
 
 ///|
 /// Poll the invocation-local cancellation callback at a Wasm safepoint.
-fn ExecContext::check_cancellation(self : ExecContext) -> Unit raise {
+fn ExecContext::check_cancellation(
+  self : ExecContext,
+  charge~ : Bool = true,
+) -> Unit raise {
   if self.execution_scope is Some(scope) {
-    scope.check()
+    if charge {
+      scope.check()
+    } else {
+      scope.preflight()
+    }
   }
   if self.cancel is Some(poller) && (poller.callback)() {
     raise InvocationSignal::Cancelled

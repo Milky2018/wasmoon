@@ -24,6 +24,7 @@ Pass `interpreter_limits=InterpreterLimits::new(...)` to `Store::Store` or
 | `max_values` | 1,048,576 | `CallStackExhausted` allocating locals; `StackOverflow` pushing operands |
 | `max_controls` | 65,536 | `StackOverflow` |
 | `max_reentry_depth` | 64 | `CallStackExhausted` |
+| `max_stack_bytes` | `None` (unlimited) | `InterpreterStackBytesExceeded` |
 
 Frame, control and value limits apply to each interpreter context. Value slots
 include both live operands and function locals. They bound logical storage, not
@@ -31,6 +32,23 @@ exact allocator bytes or the guest GC heap. Controls include function, block,
 loop, if and try-table entries. Tail calls reuse the active-call budget.
 Configuration values must be positive. These settings also apply when a JIT
 import bridge explicitly executes an interpreted function.
+
+`max_stack_bytes=Some(1048576L)` optionally caps accounted live execution state
+in each interpreter context. The portable accounting charges 32 bytes for each
+operand/local slot (including room for a SIMD payload), 64 for each function
+frame, and 96 for each execution-control entry together with its branch label.
+Function entries also have a control entry. Admission checks precede the local,
+operand or control growth; ordinary return, branch, exception unwind and tail
+replacement return their charges. Suspending preserves the same stack and
+accounting; completion or cancellation discards it.
+
+This is an explicit logical byte model, not an exact allocator/RSS measurement.
+Array spare capacity, referenced guest objects, compiled code, temporary host
+arguments and root-lease copies are outside it. Count limits still apply
+independently. A new host reentry or guest-continuation body has its own context
+and byte budget, while the Store's existing native reentry-depth limit remains
+shared. Parked invocations retain their own budgets; this is not an aggregate
+Store memory limit. The optional limit must be positive when supplied.
 
 Native boundary depth counts host calls and guest-continuation body callbacks
 across nested interpreter contexts in the same Store.
@@ -47,6 +65,71 @@ chain needs cancellation or a separate execution-time policy, not a frame limit.
 WebAssembly permits implementation limits on frames and other execution
 resources; it does not require a configurable depth API or an explicit-stack
 implementation. This refactor addresses practical interpreter capacity.
+
+## Cooperative instruction quantum
+
+`call_func_by_index_resumable(..., cooperative=true,
+cooperative_quantum=16384)` dispatches at most that many guest instructions
+between `CooperativeYield` results. The quantum must be positive even when
+cooperation is disabled. Omitting it preserves the 1024-instruction default.
+It is independent of fuel, execution scopes and stack limits.
+
+The counter belongs to the invocation. Ordinary guest calls share it, and host
+or guest-effect suspension preserves its remainder. A newly started guest
+continuation body inherits the configured quantum with a fresh counter. An
+explicit host reentry creates a separate invocation and uses its own supplied
+configuration; it does not reset the caller's counter. Host callback execution
+time is not measured by this instruction counter.
+
+Each quantum boundary checks the captured execution scope before yielding,
+without charging another safepoint unit.
+Cancellation, deadlines and total budgets remain attached across suspension;
+completion or cancellation releases parked roots. The embedding chooses when
+to resume and whether to yield to its scheduler. Larger quanta trade scheduler
+overhead for less frequent scheduling opportunities, not more total fuel.
+
+`python3 scripts/benchmark_interpreter_quantum.py` measures synchronous calls,
+immediate resumptions and `async.sleep(0)` integration separately, serially,
+with loop-, call- and memory-heavy workloads. Every mode checks its result.
+`--wasm FILE --function-index N` adds a compiler-produced module without host
+imports whose selected function takes one i32 iteration argument. Builds and
+generated sources are automatically removed from an OS temporary directory.
+Timings are diagnostic samples, not CI performance thresholds.
+
+## Owned failure diagnostics
+
+Use `call_func_by_index_resumable_with_diagnostics` and
+`ExecutionContinuation::continue_execution_with_diagnostics` to receive
+`InterpreterDiagnosticError::InterpreterFailed(failure)` on failure. The
+ordinary entry/resume methods keep their existing `RuntimeError` contract and
+do not capture frames. Capture can also be enabled only when resuming an
+ordinary continuation.
+
+`failure.error` preserves the runtime cause. `failure.kind` distinguishes a
+guest trap, a host failure and an execution/preflight failure. `failure.frames`
+is an owned, innermost-first snapshot captured before unwind. Each frame has
+the owning Store-local module index, module-local function index, optional
+function name and an instruction path. A path such as `[3, 1]` means instruction
+3 of the function body and instruction 1 of its nested structured body; it is
+not a binary byte offset, source line or native backtrace. Positions identify
+the last dispatched instruction. Names are copied from validated module debug
+metadata at instantiation; unnamed functions retain indices and positions.
+
+Snapshots contain only immutable names, numbers and paths. They retain no Store,
+guest values, GC root leases or executable context, and remain readable after
+the failed continuation is consumed or the Store is closed. Handled guest
+exceptions discard provisional diagnostics before execution continues. Guest
+continuation failures prepend the body snapshot to the current resumer's frames,
+including subsequent body resumes; suspended or completed former callers are not
+part of that live chain. Enabling diagnostics on a parked continuation also enables
+capture in its existing child contexts.
+
+`instantiate_module_with_diagnostics(store, module_, imports)` also reports
+start-function frames. It preserves the existing Core publication and enclosing
+transaction policy: a Core start trap does not undo an instance that has already
+become publishable. Parsing, validation or admission failures before guest entry
+can have an empty frame list. Host/native reentry is a separate invocation;
+diagnostics describe the live guest call chain in the failed interpreter context.
 
 ## Acceptance
 
