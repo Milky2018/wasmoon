@@ -3,7 +3,7 @@ priv enum ExecutionKind {
   BlockControl
   LoopControl
   TryControl(ReadOnlyArray[@types.CatchHandler])
-  FunctionControl(@runtime.ModuleInstance, Int32)
+  FunctionControl(@runtime.ModuleInstance, Int32, Int32)
 } derive(Debug)
 
 ///|
@@ -35,6 +35,7 @@ fn ExecContext::enter_control(
   let arity = self.block_arity(bt)
   let params = self.block_param_arity(bt)
   let height = self.stack.size() - params
+  self.stack.reserve_control()
   self.push_label(
     kind is LoopControl,
     if kind is LoopControl {
@@ -56,22 +57,26 @@ fn ExecContext::enter_function(
   code : @types.FunctionCode,
   args : Array[@types.Value],
   arity : Int32,
+  address : Int32,
 ) -> Unit raise {
   self.check_cancellation()
   self.check_control_capacity()
   if self.frames.length() >= self.store.interpreter_limits.max_frames {
     raise @runtime.RuntimeError::CallStackExhausted
   }
-  // Reserve before allocating locals, including SIMD values.
-  self.stack.reserve(args.length()) catch {
-    _ => raise @runtime.RuntimeError::CallStackExhausted
+  // Check combined counts before addition and reserve bytes before allocation.
+  if args.length() >
+    self.store.interpreter_limits.max_values - code.locals.length() {
+    raise @runtime.RuntimeError::CallStackExhausted
   }
-  {
-    errdefer self.stack.release(args.length())
-    self.stack.reserve(code.locals.length()) catch {
-      _ => raise @runtime.RuntimeError::CallStackExhausted
-    }
+  let count = args.length() + code.locals.length()
+  self.stack.reserve_frame(count) catch {
+    StackOverflow => raise @runtime.RuntimeError::CallStackExhausted
+    error => raise error
   }
+  errdefer self.stack.release_frame(count)
+  self.stack.reserve_control()
+  errdefer self.stack.release_control()
   let locals = args.copy()
   for typ in code.locals {
     locals.push(
@@ -92,7 +97,7 @@ fn ExecContext::enter_function(
   self.execution.push({
     body: code.body,
     ip: 0,
-    kind: FunctionControl(saved, locals.length()),
+    kind: FunctionControl(saved, locals.length(), address),
     arity,
     height: self.stack.size(),
   })
@@ -104,6 +109,7 @@ fn ExecContext::finish_execution_frame(
   frame : ExecutionFrame,
   result : ExecBlockResult,
 ) -> Unit raise {
+  self.stack.release_control()
   match frame.kind {
     BlockControl | LoopControl =>
       self.finish_block_control(result, frame.arity, frame.height)
@@ -113,11 +119,11 @@ fn ExecContext::finish_execution_frame(
         self.finish_result_stack(frame.height, frame.arity)
       }
     }
-    FunctionControl(saved, locals) => {
+    FunctionControl(saved, locals, _) => {
       let caller = self.instance
       self.pop_label()
       self.pop_frame()
-      self.stack.release(locals)
+      self.stack.release_frame(locals)
       self.instance = saved
       match result {
         ExecBlockCompleted | ExecBlockRaised(Return) =>
@@ -133,9 +139,10 @@ fn ExecContext::finish_execution_frame(
           match function {
             WasmFunc(code) => {
               let owner = self.store.get_func_owner(address).unwrap_or(caller)
-              self.enter_function(owner, code, args, arity)
+              self.enter_function(owner, code, args, arity, address)
             }
-            HostFunc(host) => self.invoke_host_func(address, host, caller, args)
+            HostFunc(_) | ThrowingHostFunc(_) =>
+              self.invoke_host_func(address, function, caller, args)
             AsyncHostFunc(host) =>
               self.invoke_async_host_func(address, host, caller, args)
           }
@@ -160,6 +167,9 @@ fn ExecContext::run_execution(
     self.running = false
   }
   let mut pending = initial_error
+  if initial_error is Some(error) {
+    self.capture_failure(error) |> ignore
+  }
   while self.execution.length() > 0 {
     let frame = self.execution[self.execution.length() - 1]
     let result = try {
@@ -182,7 +192,8 @@ fn ExecContext::run_execution(
       } else {
         if self.cooperative {
           if self.instructions_left == 0 {
-            self.instructions_left = 1024
+            self.check_cancellation(charge=false)
+            self.instructions_left = self.cooperative_quantum
             self.set_base_resume_action(CooperativeYield, fn(_) { () })
             raise ExecutionSuspended
           }
@@ -194,7 +205,7 @@ fn ExecContext::run_execution(
       }
     } catch {
       ExecutionSuspended => raise ExecutionSuspended
-      error => Some(error)
+      error => Some(self.capture_failure(error))
     } noraise {
       _ => None
     }

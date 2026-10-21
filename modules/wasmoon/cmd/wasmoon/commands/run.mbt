@@ -1178,8 +1178,11 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
 }
 
 ///|
-/// Get function name from exports or generate default name
+/// Prefer binary/text debug names, then exports, then a stable index fallback.
 fn get_func_name(mod_ : @types.Module, func_idx : Int32) -> String {
+  if mod_.func_names.get(func_idx) is Some(name) {
+    return name
+  }
   // Look for exported name
   for exp in mod_.exports {
     if exp.desc is Func(idx) && idx == func_idx {
@@ -2274,7 +2277,7 @@ fn check_jit_import_support(
               continue
             }
           }
-          if !(inst is HostFunc(_)) {
+          if !(inst is (HostFunc(_) | ThrowingHostFunc(_))) {
             unsupported.push("\{imp.mod_name}.\{imp.name}")
           }
         }

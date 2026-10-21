@@ -18,6 +18,7 @@ pub struct ModuleInstance {
   priv dropped_elems : FixedArray[Bool] // true if elem segment has been dropped
   priv dropped_datas : FixedArray[Bool] // true if data segment has been dropped
   priv mut owner : Ref[Bool]?
+  priv function_names : Map[Int32, String]
 } derive(Debug)
 
 ///|
@@ -31,6 +32,7 @@ pub impl Show for ModuleInstance with fn output(self, logger) {
 pub fn ModuleInstance::ModuleInstance() -> ModuleInstance {
   {
     owner: None,
+    function_names: Map([]),
     types: [],
     type_rec_groups: [],
     canonical_type_indices: [],
@@ -48,6 +50,15 @@ pub fn ModuleInstance::ModuleInstance() -> ModuleInstance {
     dropped_elems: [],
     dropped_datas: [],
   }
+}
+
+///|
+/// Immutable debug metadata copied from the validated module snapshot.
+pub fn ModuleInstance::function_name(
+  self : ModuleInstance,
+  index : Int32,
+) -> String? {
+  self.function_names.get(index)
 }
 
 // Type-kind lookups on an instance.
@@ -393,6 +404,7 @@ pub fn Store::new_instance(
     ),
     store_idx: -1,
     owner: None,
+    function_names: module_.func_names.copy(),
     func_addrs: ReadOnlyArray::from_array(func_addrs),
     func_type_indices: ReadOnlyArray::from_array(func_type_indices),
     table_addrs: ReadOnlyArray::from_array(table_addrs),
@@ -422,7 +434,8 @@ pub fn Store::host_call_instance(
   address : Int32,
 ) -> ModuleInstance raise RuntimeError {
   self.ensure_open()
-  guard self.get_func_inst(address) is (HostFunc(_) | AsyncHostFunc(_)) else {
+  guard self.get_func_inst(address)
+    is (HostFunc(_) | ThrowingHostFunc(_) | AsyncHostFunc(_)) else {
     raise TypeMismatch
   }
   let signature = self.get_func_type(address)
@@ -454,7 +467,8 @@ pub fn Store::host_exports(
   for (name, value) in exports {
     let desc : @types.ExportDesc = match value {
       Func(address) => {
-        guard self.get_func_inst(address) is (HostFunc(_) | AsyncHostFunc(_)) else {
+        guard self.get_func_inst(address)
+          is (HostFunc(_) | ThrowingHostFunc(_) | AsyncHostFunc(_)) else {
           raise TypeMismatch
         }
         funcs.push(address)

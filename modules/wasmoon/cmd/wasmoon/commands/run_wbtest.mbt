@@ -417,3 +417,14 @@ test "CLI JIT table binding preserves authoritative GC and function entries" {
     )
   }
 }
+
+///|
+test "JIT names prefer function metadata then exports then indices" {
+  let module_ = @types.Module::simple([], [], [Nop], "exported")
+  assert_eq(build_jit_function_names(module_), ["exported"])
+  module_.func_names.set(0, "叶😀")
+  assert_eq(build_jit_function_names(module_), ["叶😀"])
+  module_.func_names.clear()
+  module_.exports.clear()
+  assert_eq(build_jit_function_names(module_), ["func_0"])
+}

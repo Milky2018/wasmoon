@@ -118,7 +118,8 @@ fn resolve_wast_call(
     error => raise classify_runtime_failure(error)
   }
   match function {
-    HostFunc(_) | AsyncHostFunc(_) => (instance, None, index)
+    HostFunc(_) | ThrowingHostFunc(_) | AsyncHostFunc(_) =>
+      (instance, None, index)
     WasmFunc(_) => {
       guard ctx.store.get_func_owner(address) is Some(owner) else {
         raise RuntimeError("imported function has no defining instance")

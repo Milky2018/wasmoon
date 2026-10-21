@@ -592,3 +592,38 @@ test "branch comparison sharing preserves constant-left fallback" {
     )
   }
 }
+
+///|
+test "terminator arguments do not absorb comparisons or shared constants" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("sibling_comparisons")
+  let input = builder.add_param(I32)
+  let choose = builder.add_param(I32)
+  builder.add_result(I32)
+  let left = builder.create_block()
+  let right = builder.create_block()
+  let join = builder.create_block()
+  let result = builder.add_block_param(join, I32)
+  let bound = builder.iconst_i32(65537)
+  builder.brnz(choose, left, right)
+  builder.switch_to_block(left)
+  let first = builder.icmp_slt(input, bound)
+  builder.jump(join, [first])
+  builder.switch_to_block(right)
+  let second = builder.icmp_slt(input, bound)
+  builder.jump(join, [second])
+  builder.switch_to_block(join)
+  builder.return_([result])
+  let function = builder.finalize()
+  function.verify_core()
+  let trace = trace_lowering(function)
+  let definitions = trace.operations
+    .mapi((i, operation) => {
+      if operation is I32Const(65537U) {
+        trace.operation_blocks[i]
+      } else {
+        -1
+      }
+    })
+    .filter(block => block >= 0)
+  debug_inspect(definitions, content="[0]")
+}
