@@ -9,6 +9,14 @@ fn continuation_roundtrip(source : String) -> Unit raise {
   assert_eq(@encoder.encode(decoded), @encoder.encode(module_))
   let rendered = @wat.parse(@wat.render(module_))
   @validator.validate_module(rendered, stack_switching=true)
+  // Text rendering uses numeric identifiers; this comparison checks semantic
+  // sections. Binary roundtrip above must preserve the function-name section.
+  assert_eq(decoded.func_names.length(), module_.func_names.length())
+  for index, name in module_.func_names {
+    assert_eq(decoded.func_names.get(index), Some(name))
+  }
+  rendered.func_names.clear()
+  module_.func_names.clear()
   assert_eq(@encoder.encode(rendered), @encoder.encode(module_))
 }
 

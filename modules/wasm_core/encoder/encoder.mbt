@@ -1746,7 +1746,43 @@ pub fn encode(mod : @types.Module) -> Array[Int32] {
   if !data_section.is_empty() {
     write_section(w, 11, data_section)
   }
+  let names = encode_function_names(mod)
+  if !names.is_empty() {
+    write_section(w, 0, names)
+  }
   w.to_bytes()
+}
+
+///|
+fn encode_function_names(mod : @types.Module) -> Array[Int32] {
+  let mut count = mod.funcs.length()
+  for import_ in mod.imports {
+    if import_.desc is Func(_) {
+      count += 1
+    }
+  }
+  let indices : Array[Int32] = []
+  for index, _ in mod.func_names {
+    if index >= 0 && index < count {
+      indices.push(index)
+    }
+  }
+  if indices.is_empty() {
+    return []
+  }
+  indices.sort()
+  let names = BinaryWriter()
+  names.write_u32(indices.length())
+  for index in indices {
+    names.write_u32(index)
+    names.write_name(mod.func_names[index])
+  }
+  let section = BinaryWriter()
+  section.write_name("name")
+  section.write_byte(1)
+  section.write_u32(names.buf.length())
+  section.write_array(names.buf)
+  section.to_bytes()
 }
 
 ///|
