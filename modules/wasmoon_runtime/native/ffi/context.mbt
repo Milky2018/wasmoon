@@ -29,7 +29,7 @@ pub fn JITContext::new(func_count : Int32) -> JITContext {
 }
 
 ///|
-#borrow(context, view, locals, tags)
+#borrow(context, view, locals, tags, functions)
 extern "c" fn bind_callable_view(
   context : JITContext,
   view : @callable.NativeCallableView,
@@ -37,6 +37,8 @@ extern "c" fn bind_callable_view(
   local_count : Int32,
   tags : FixedArray[Int32],
   tag_count : Int32,
+  functions : FixedArray[Int32],
+  function_count : Int32,
 ) -> Unit = "wasmoon_jit_bind_callable_registry"
 
 ///|
@@ -47,6 +49,7 @@ pub fn JITContext::bind_callable_registry(
   registry : @callable.NativeCallableRegistry,
   locals : FixedArray[Int32],
   tags : FixedArray[Int32],
+  functions~ : FixedArray[Int32] = [],
 ) -> Unit {
   bind_callable_view(
     self,
@@ -55,6 +58,8 @@ pub fn JITContext::bind_callable_registry(
     locals.length(),
     tags,
     tags.length(),
+    functions,
+    functions.length(),
   )
 }
 

@@ -1,113 +1,92 @@
 ///|
-/// WebAssembly table for function references
-struct Table {
-  mut reservation : @jit_ffi.Reservation?
-  mut binding : ResourceBinding?
-  mut closed : Bool
-  elem_type : @types.ValueType
-  elements : Array[@types.Value]
-  mut size : Int32
-  max : Int64?
-  is_table64 : Bool // true for table64 (i64-indexed table)
+priv enum TableStorage {
+  Managed(Array[@types.Value])
 } derive(Debug)
 
 ///|
-fn Table::allocate(
-  elem_type : @types.ValueType,
-  min : Int64,
-  max : Int64?,
-  init_value : @types.Value,
-  is_table64 : Bool,
-  resource_budget : ResourceBudget?,
-) -> Table raise RuntimeError {
-  if max is Some(maximum) &&
-    maximum.reinterpret_as_uint64() < min.reinterpret_as_uint64() {
-    raise InvalidTableType("maximum is below minimum")
-  }
-  // A native reference occupies one pointer-sized slot. Check multiplication
-  // before narrowing to the backing MoonBit array's supported element count.
-  if min.reinterpret_as_uint64() > 0x1FFF_FFFF_FFFF_FFFFUL {
-    raise TableAllocationOverflow
-  }
-  if min > 0x7FFF_FFFFL {
-    raise TableAllocationFailed
-  }
-  guard (match elem_type {
-    I32 | I64 | F32 | F64 | V128 => false
-    _ => true
-  }) else {
-    raise InvalidTableType("element type must be a reference type")
-  }
-  if min != 0L && !value_fits_kind(init_value, elem_type) {
-    raise TypeMismatch
-  }
-  let reservation = resource_budget.map(budget => {
-    budget.reservation(TableElements, min)
-  })
-  let size = min.to_int()
-  let elements : Array[@types.Value] = []
-  for _ in 0..<size {
-    elements.push(init_value)
-  }
-  {
-    elem_type,
-    elements,
-    size,
-    max,
-    is_table64,
-    binding: None,
-    closed: false,
-    reservation,
+fn Table::storage_size(self : Table) -> Int32 {
+  let Managed(elements) = self.storage
+  elements.length()
+}
+
+///|
+fn Table::read_element(self : Table, index : Int32) -> @types.Value {
+  let Managed(elements) = self.storage
+  elements[index]
+}
+
+///|
+fn Table::root_at(
+  self : Table,
+  index : Int32,
+) -> @types.Value raise RuntimeError {
+  self.ensure_open()
+  self.read_element(index)
+}
+
+///|
+fn Table::write_element(
+  self : Table,
+  index : Int32,
+  value : @types.Value,
+) -> Unit {
+  let Managed(elements) = self.storage
+  elements[index] = value
+}
+
+///|
+fn Table::fill_elements(
+  self : Table,
+  offset : Int32,
+  length : Int32,
+  value : @types.Value,
+) -> Unit {
+  let Managed(elements) = self.storage
+  for i in offset..<(offset + length) {
+    elements[i] = value
   }
 }
 
 ///|
-/// Grow using an unsigned table64 count, preserving allocation failures.
-pub fn Table::grow64(
+fn Table::copy_elements(
+  self : Table,
+  destination : Int32,
+  source : Table,
+  offset : Int32,
+  length : Int32,
+) -> Unit {
+  let Managed(elements) = self.storage
+  let Managed(source) = source.storage
+  if destination <= offset {
+    for i in 0..<length {
+      elements[destination + i] = source[offset + i]
+    }
+  } else {
+    for i = length - 1; i >= 0; i = i - 1 {
+      elements[destination + i] = source[offset + i]
+    }
+  }
+}
+
+///|
+fn Table::grow_storage(
   self : Table,
   delta : Int64,
   init : @types.Value,
-) -> Int64 raise RuntimeError {
-  self.ensure_open()
-  guard value_fits_kind(init, self.elem_type) else { raise TypeMismatch }
-  let old_size = self.size.to_uint64()
-  let new_size = old_size + delta.reinterpret_as_uint64()
-  if new_size < old_size {
+  old_size : Int64,
+  new_size : Int64,
+) -> Int64 {
+  if self.reservation is Some(reservation) && !reservation.resize(new_size) {
     return -1L
   }
-  if self.max is Some(max) && new_size > max.reinterpret_as_uint64() {
-    return -1L
+  let Managed(elements) = self.storage
+  for _ in 0..<delta.to_int() {
+    elements.push(init)
   }
-  if new_size > 0x1FFF_FFFF_FFFF_FFFFUL {
-    raise TableAllocationFailed
-  }
-  // Actual tables use MoonBit arrays and signed 32-bit native size metadata.
-  if new_size > 0x7FFF_FFFFUL {
-    return -1L
-  }
-  if self.reservation is Some(reservation) &&
-    !reservation.resize(new_size.reinterpret_as_int64()) {
-    return -1L
-  }
-
-  for _ in self.size..<new_size.to_int() {
-    self.elements.push(init)
-  }
-  self.size = new_size.to_int()
-  old_size.reinterpret_as_int64()
+  old_size
 }
 
 ///|
-pub fn Table::close(self : Table) -> Unit {
-  self.closed = true
-  if self.binding is Some(binding) {
-    binding.active.val = false
-  }
-  self.elements.clear()
-  self.elements.shrink_to_fit()
-  self.size = 0
-  if self.reservation is Some(reservation) {
-    reservation.close()
-  }
-  self.reservation = None
+fn Table::close_storage(self : Table) -> Unit {
+  self.storage = Managed([])
 }

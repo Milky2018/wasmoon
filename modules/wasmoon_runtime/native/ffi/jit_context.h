@@ -81,6 +81,7 @@ typedef struct jit_runtime_state {
     int32_t *callable_local_types;
     jit_callable_registry_t *callable_registry;
     int32_t *callable_tags;
+    int32_t *callable_functions;
 
     wasmoon_table_binding_t *table_bindings;
     // Pack scalar metadata after pointer fields.
@@ -95,6 +96,7 @@ typedef struct jit_runtime_state {
     int globals_managed;     // RC array versus legacy malloc-owned pointer table
     int callable_local_type_count;
     int callable_tag_count;
+    int callable_function_count;
 } jit_runtime_state_t;
 
 // Private state precedes the address passed to generated code. Its size is
@@ -124,5 +126,12 @@ static inline const jit_segments_state_t *ctx_segments_state(const jit_context_t
 _Static_assert(offsetof(jit_context_owner_t, abi) == sizeof(jit_runtime_state_t), "context ABI alignment");
 
 #include "context_fields.h"
+
+static inline void table_mark_mutated(jit_context_t *ctx, int index) {
+    if (ctx && index >= 0 && index < ctx_table_count(ctx) &&
+        ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[index].owner) {
+        ctx_runtime(ctx)->table_bindings[index].owner->revision++;
+    }
+}
 
 #endif

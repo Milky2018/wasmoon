@@ -368,7 +368,7 @@ test "lower globals through native VMContext loads and stores" {
 }
 
 ///|
-test "lower table size and get through native VMContext loads" {
+test "lower table size through VMContext and table get through the runtime" {
   let table : @types.Table = {
     type_: {
       elem_type: FuncRef,
@@ -391,7 +391,7 @@ test "lower table size and get through native VMContext loads" {
   let text = func.print()
   inspect(text.contains("load.i64"), content="true")
   inspect(text.contains("ireduce"), content="true")
-  inspect(text.contains("trap \"table out of bounds\""), content="true")
+  inspect(text.contains("call test.runtime.table_get"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }

@@ -14,6 +14,7 @@ priv struct GcTrace {
   continuations : Map[Int64, Bool]
   native_continuations : Map[Int64, Bool]
   exceptions : Map[Int32, Bool]
+  native_exceptions : Map[Int32, Bool]
   mut failed : Bool
 }
 
@@ -21,15 +22,30 @@ priv struct GcTrace {
 fn Store::trace_gc_roots(
   self : Store,
   additional : Array[@types.Value],
+  native_roots~ : Array[@types.Value] = [],
 ) -> GcTrace {
+  let trace : GcTrace = {
+    objects: [],
+    wrappers: Map([]),
+    exceptions: Map([]),
+    native_exceptions: Map([]),
+    continuations: Map([]),
+    native_continuations: Map([]),
+    failed: false,
+  }
   let pending = additional.copy()
+  for value in native_roots {
+    trace.push_native_root(value, pending)
+  }
   for global in self.globals {
-    pending.push(global.root())
+    if global.native is Some(_) {
+      trace.push_native_root(global.root(), pending)
+    } else {
+      pending.push(global.root())
+    }
   }
   for table in self.tables {
-    for index in 0..<table.size {
-      pending.push(table.elements[index])
-    }
+    self.trace_table_roots(table, pending, trace)
   }
   for instance in self.instances {
     for index, values in instance.elem_values {
@@ -50,14 +66,6 @@ fn Store::trace_gc_roots(
       }
     }
   }
-  let trace : GcTrace = {
-    objects: [],
-    wrappers: Map([]),
-    exceptions: Map([]),
-    continuations: Map([]),
-    native_continuations: Map([]),
-    failed: false,
-  }
   let visited : Map[Int32, Bool] = Map([])
   // Walk every representation with one worklist, including cycles through
   // externalized references or exception payloads. No host recursion is needed.
@@ -66,7 +74,7 @@ fn Store::trace_gc_roots(
       ExternRef(handle) if handle < 0 => {
         let index = -1 - handle
         if !trace.wrappers.contains(index) &&
-          self.wrapped_externs.get(index) is Some(inner) {
+          self.references.wrapped_externs.get(index) is Some(inner) {
           trace.wrappers.set(index, true)
           pending.push(inner)
         }
@@ -82,7 +90,7 @@ fn Store::trace_gc_roots(
       ContRef(handle) => self.trace_native_continuation(handle, pending, trace)
       ExnRef(index) =>
         if !trace.exceptions.contains(index) &&
-          self.exns.get(index) is Some(exception) {
+          self.references.exns.get(index) is Some(exception) {
           trace.exceptions.set(index, true)
           for payload in exception.values {
             pending.push(payload)
@@ -133,21 +141,23 @@ fn Store::release_unreachable_handles(self : Store, trace : GcTrace) -> Unit {
       cancelled.push(body)
     }
   }
-  for index in self.wrapped_externs.keys().to_array() {
+  for index in self.references.wrapped_externs.keys().to_array() {
     if !trace.wrappers.contains(index) {
-      self.wrapped_externs.remove(index)
+      self.references.wrapped_externs.remove(index)
       self.release_auxiliary_handle(0, index.to_int64())
     }
   }
-  for index in self.exns.keys().to_array() {
+  for index in self.references.exns.keys().to_array() {
     if !trace.exceptions.contains(index) {
-      self.exns.remove(index)
+      self.references.exns.remove(index)
       self.release_auxiliary_handle(1, index.to_int64())
       self.release_native_exception(index)
     }
   }
-  self.wrapped_externs = compact_gc_registry(self.wrapped_externs)
-  self.exns = compact_gc_registry(self.exns)
+  self.references.wrapped_externs = compact_gc_registry(
+    self.references.wrapped_externs,
+  )
+  self.references.exns = compact_gc_registry(self.references.exns)
   self.guest_continuations = compact_gc_registry(self.guest_continuations)
   self.pinned_gc_roots = compact_gc_registry(self.pinned_gc_roots)
   for body in cancelled {
@@ -162,8 +172,37 @@ fn Store::release_unreachable_handles(self : Store, trace : GcTrace) -> Unit {
 
 ///|
 #cfg(target="native")
+fn Store::decode_gc_root_words(
+  self : Store,
+  words : FixedArray[Int64],
+) -> Array[@types.Value] raise RuntimeError {
+  if words.length() == 1 && words[0] == -2L {
+    raise InvalidHandle
+  }
+  guard self.references.native.c_heap is Some(heap) else { return [] }
+  let roots : Array[@types.Value] = []
+  for word in words {
+    if word < 0L && (word & 1L) != 0L {
+      roots.push(ContRef(word >> 1))
+    } else if @native_bridge.is_exception_ref(word) {
+      roots.push(self.decode_native_exception(word))
+    } else if @native_bridge.decode_gc_heap_ref(word) is Some(index) {
+      roots.push(
+        if heap.is_array(index) {
+          ArrayRef(index)
+        } else {
+          StructRef(index)
+        },
+      )
+    }
+  }
+  roots
+}
+
+///|
+#cfg(target="native")
 fn Store::install_gc_tracing(self : Store) -> Unit {
-  guard self.c_heap is Some(heap) else { return }
+  guard self.references.native.c_heap is Some(heap) else { return }
   self.native_execution.exceptions().enable_reclamation()
   heap.bind_root_visitor(fn(phase, words) {
     if phase == 2 {
@@ -181,22 +220,7 @@ fn Store::install_gc_tracing(self : Store) -> Unit {
     }
     self.gc_in_collect = true
     try {
-      let roots : Array[@types.Value] = []
-      for word in words {
-        if word < 0L && (word & 1L) != 0L {
-          roots.push(ContRef(word >> 1))
-        } else if @native_bridge.is_exception_ref(word) {
-          roots.push(self.decode_native_exception(word))
-        } else if @native_bridge.decode_gc_heap_ref(word) is Some(index) {
-          roots.push(
-            if heap.is_array(index) {
-              ArrayRef(index)
-            } else {
-              StructRef(index)
-            },
-          )
-        }
-      }
+      let roots = self.decode_gc_root_words(words)
       // Explicit host roots were already expanded before entering native GC.
       if self.gc_trace is Some(trace) {
         for index in trace.wrappers.keys() {
@@ -263,7 +287,7 @@ pub fn Store::end_gc_tracing(self : Store) -> Unit {
     return
   }
   self.gc_tracing_depth -= 1
-  if self.gc_tracing_depth == 0 && self.c_heap is Some(heap) {
+  if self.gc_tracing_depth == 0 && self.references.native.c_heap is Some(heap) {
     heap.clear_root_visitor()
   }
 }
@@ -272,4 +296,16 @@ pub fn Store::end_gc_tracing(self : Store) -> Unit {
 #cfg(target="native")
 impl Debug for GcTrace with fn to_repr(_self) {
   @debug.Repr::literal("GcTrace")
+}
+
+///|
+fn GcTrace::push_native_root(
+  self : GcTrace,
+  value : @types.Value,
+  pending : Array[@types.Value],
+) -> Unit {
+  if value is ExnRef(index) {
+    self.native_exceptions.set(index, true)
+  }
+  pending.push(value)
 }

@@ -4,6 +4,7 @@ fn prepare_async_jit_context(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   cooperative~ : Bool = false,
+  local_compile_mask~ : Array[Bool]? = None,
 ) -> @wast.JITModuleContext raise {
   guard @commands.compile_module_to_jit(
       mod_,
@@ -11,6 +12,7 @@ fn prepare_async_jit_context(
       false,
       0,
       false,
+      local_compile_mask~,
       nan_canonicalization=store.nan_canonicalization,
       enable_cancellation=cooperative,
       stack_switching=true,
@@ -45,12 +47,6 @@ fn prepare_async_jit_context(
     jit_module,
     instance,
     store,
-    use_subtype_indirect_check=true,
-  )
-  @wast.sync_tables_to_jit(
-    instance,
-    store,
-    jit_module,
     use_subtype_indirect_check=true,
   )
   JITModuleContext(

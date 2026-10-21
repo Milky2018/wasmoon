@@ -498,8 +498,23 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_indirect(int64_t ctx_ptr, int table_
     if (ctx && ctx_table0_base(ctx) &&
         table_idx >= 0 && (size_t)table_idx < ctx_table0_elements(ctx) &&
         func_idx >= 0 && func_idx < ctx_func_count(ctx)) {
-        ctx_table0_base(ctx)[table_idx * 2] = ctx_func_table(ctx)[func_idx];
+        jit_runtime_state_t *state = ctx_runtime(ctx);
+        int64_t value = -(int64_t)(func_idx + 1);
+        if (state->table_bindings && state->table_bindings[0].owner &&
+            state->table_bindings[0].owner->store_references) {
+            // A borrowed Store table never accepts executable-pointer identity.
+            // Reject incomplete setup without changing its entry or revision.
+            if (func_idx >= state->callable_function_count ||
+                !state->callable_functions || state->callable_functions[func_idx] < 0)
+                return;
+            value = callable_store_reference(ctx, value);
+        } else {
+            int64_t pointer = (int64_t)(intptr_t)ctx_func_table(ctx)[func_idx];
+            if (pointer) value = pointer | FUNCREF_TAG;
+        }
+        ctx_table0_base(ctx)[table_idx * 2] = (void *)(intptr_t)value;
         ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
+        table_mark_mutated(ctx, 0);
     }
 }
 
@@ -607,14 +622,48 @@ MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_jit_alloc_shared_indirect_table(int 
     return table;
 }
 
+// Runtime close is terminal for every context borrowing this logical table.
+// JITTableOwner::close remains only a view-release capability.
+MOONBIT_FFI_EXPORT void wasmoon_native_table_invalidate(wasmoon_table_t *table) {
+    if (!table || !table->entries) return;
+    void **entries = table->entries;
+    table_publish_layout(table, NULL, 0);
+    table->revision++;
+    free(entries);
+    atomic_fetch_sub_explicit(&g_shared_indirect_table_live_count, 1, memory_order_relaxed);
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_debug_shared_indirect_table_live_count(void) {
     return atomic_load_explicit(&g_shared_indirect_table_live_count, memory_order_relaxed);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_native_table_fill(wasmoon_table_t *table, int32_t offset, int32_t length, int64_t value, int32_t metadata) {
+    if (!table || !table->entries || offset < 0 || length < 0 ||
+        (size_t)offset > table->size || (size_t)length > table->size - (size_t)offset) return 0;
+    for (int32_t i = 0; i < length; ++i) {
+        table->entries[((size_t)offset + i) * 2] = (void *)(intptr_t)value;
+        table->entries[((size_t)offset + i) * 2 + 1] = (void *)(intptr_t)metadata;
+    }
+    if (length) table->revision++;
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_native_table_copy(wasmoon_table_t *table, int32_t offset, wasmoon_table_t *source, int32_t source_offset, int32_t length) {
+    if (!table || !source || !table->entries || !source->entries || offset < 0 || source_offset < 0 || length < 0 ||
+        (size_t)offset > table->size || (size_t)length > table->size - (size_t)offset ||
+        (size_t)source_offset > source->size || (size_t)length > source->size - (size_t)source_offset) return 0;
+    if (length) {
+        memmove(table->entries + (size_t)offset * 2, source->entries + (size_t)source_offset * 2, (size_t)length * 2 * sizeof(void *));
+        table->revision++;
+    }
+    return 1;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(wasmoon_table_t *table, int index, int64_t value, int type) {
     if (index < 0 || (size_t)index >= table->size) return;
     table->entries[(size_t)index * 2] = (void *)(intptr_t)value;
     table->entries[(size_t)index * 2 + 1] = (void *)(intptr_t)type;
+    table->revision++;
 }
 
 // ============ Table Operations ============
@@ -2050,4 +2099,8 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_exec_bind_reservation(void *object, wasmoon_r
     moonbit_incref(reservation);
     code->reservation = reservation;
     return 1;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_table_revision(wasmoon_table_t *table) {
+    return table ? (int64_t)table->revision : 0;
 }

@@ -82,6 +82,7 @@ struct JITModule {
   owned_trampolines : Array[@wasmoon_jit.InstalledTrampoline]
   // Keep the transactionally installed artifact alive.
   mut installed_code : @wasmoon_jit.InstalledCode?
+  mut store_functions : Array[Int32]
   mut cancellation_safepoints : Bool
 }
 
@@ -99,6 +100,7 @@ pub fn JITModule::JITModule() -> JITModule {
     last_trap_report: None,
     owned_trampolines: [],
     installed_code: None,
+    store_functions: [],
     cancellation_safepoints: false,
   }
 }
@@ -1378,35 +1380,37 @@ pub fn JITModule::init_shared_tables(
   guard self.context is Some(ctx) else {
     raise InvalidBinding("missing JIT context")
   }
-  // Set up context to use the shared tables
-  ctx.set_table_pointers(jit_tables)
-  // Initialize table elements directly in the shared tables
-  for entry in elem_init {
-    let (table_idx, elem_idx, func_idx, type_hash) = entry
-    // Get the JIT table
+  // Validate all Store identities before publishing any initializer.
+  let writes : Array[(@wasmoon_jit.JITTable, Int32, Int64, Int32)] = []
+  for (table_idx, elem_idx, func_idx, type_hash) in elem_init {
     if table_idx < 0 || table_idx >= jit_tables.length() {
       continue
     }
-    let jit_table = match jit_tables[table_idx] {
-      Some(tbl) => tbl
-      None => continue
-    }
-    let funcref_value = match func_idx {
-      Some(idx) => {
-        let ptr = self.get_func_ptr(idx)
-        if ptr == 0L {
-          // Keep ref.func semantics even when this local function is not
-          // currently compiled into a concrete machine-code pointer.
-          @wasmoon_jit.encode_funcref_idx(idx)
-        } else {
-          @wasmoon_jit.tag_funcref_ptr(ptr)
-        }
-      }
+    guard jit_tables[table_idx] is Some(table) else { continue }
+    let value = match func_idx {
       None => @wasm_milkir.NULL_REF
+      Some(index) =>
+        if table.raw_ptr().uses_store_references() {
+          guard index >= 0 &&
+            index < self.store_functions.length() &&
+            self.store_functions[index] >= 0 else {
+            raise InvalidBinding("missing Store function identity")
+          }
+          @wasmoon_jit.encode_store_funcref(self.store_functions[index])
+        } else {
+          let pointer = self.get_func_ptr(index)
+          if pointer == 0L {
+            @wasmoon_jit.encode_funcref_idx(index)
+          } else {
+            @wasmoon_jit.tag_funcref_ptr(pointer)
+          }
+        }
     }
-
-    // Set the table entry (including null references)
-    jit_table.set(elem_idx, funcref_value, type_hash)
+    writes.push((table, elem_idx, value, type_hash))
+  }
+  ctx.set_table_pointers(jit_tables)
+  for (table, index, value, type_hash) in writes {
+    table.set(index, value, type_hash)
   }
 }
 
@@ -1450,9 +1454,11 @@ pub fn JITModule::bind_callable_registry(
   registry : @wasmoon_jit.NativeCallableRegistry,
   local_types : Array[Int32],
   tags : Array[Int32],
+  functions~ : Array[Int32] = [],
 ) -> Unit {
+  self.store_functions = functions.copy()
   if self.context is Some(context) {
-    context.ctx.bind_callable_registry(registry, local_types, tags)
+    context.ctx.bind_callable_registry(registry, local_types, tags, functions~)
   }
 }
 

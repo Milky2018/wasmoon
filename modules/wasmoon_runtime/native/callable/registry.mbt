@@ -43,6 +43,7 @@ pub fn NativeCallableRegistry::clear(self : NativeCallableRegistry) -> Unit {
   self.identities = []
   self.ordinals = []
   publish(self.view, self.parents, 0, self.addresses, self.identities, 0)
+  self.replace_functions([], [])
 }
 
 ///|
@@ -117,4 +118,27 @@ pub fn NativeCallableRegistry::replace(
     )
   }
   true
+}
+
+///|
+/// Function addresses in table storage stay Store-local across JIT registrations.
+/// Both sorted views are retained by the native view, without a Store callback.
+pub fn NativeCallableRegistry::replace_functions(
+  self : NativeCallableRegistry,
+  functions : Array[(Int32, Int64)],
+  references : Array[(Int64, Int32)],
+) -> Unit {
+  functions.sort_by((a, b) => a.0.compare(b.0))
+  references.sort_by((a, b) => {
+    a.0.reinterpret_as_uint64().compare(b.0.reinterpret_as_uint64())
+  })
+  publish_functions(
+    self.view,
+    FixedArray::makei(functions.length(), i => functions[i].0),
+    FixedArray::makei(functions.length(), i => functions[i].1),
+    functions.length(),
+    FixedArray::makei(references.length(), i => references[i].0),
+    FixedArray::makei(references.length(), i => references[i].1),
+    references.length(),
+  )
 }

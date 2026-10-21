@@ -1,6 +1,6 @@
 ///|
 /// Version of the Wasmoon internal JIT calling and runtime contract.
-pub const WASMOON_JIT_ABI_VERSION : Int32 = 7
+pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 
 ///|
 /// Revision of the current direct native target code generator.
@@ -8,7 +8,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int32 = 7
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-9"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-10"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int32 = "wasmoon_jit_host_operating_system_abi"
@@ -119,7 +119,7 @@ pub fn artifact_compatibility(
   {
     target: manifest.target,
     available_cpu_features: available_cpu_features.copy(),
-    jit_abi_version: manifest.jit_abi_version,
+    jit_abi_version: WASMOON_JIT_ABI_VERSION,
     codegen_revision: manifest.codegen_revision,
     module_identity: manifest.module_identity,
     policy: manifest.policy,

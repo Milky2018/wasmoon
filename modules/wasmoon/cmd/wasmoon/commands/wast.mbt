@@ -387,6 +387,13 @@ fn build_wast_compile_mask(mod_ : @types.Module) -> Array[Bool]? {
       pending_locals,
     )
   }
+  for table in mod_.tables {
+    if table.init is Some(initializer) {
+      collect_wast_reachable_from_instrs(
+        initializer, num_imports, compile_mask, pending_locals,
+      )
+    }
+  }
   for elem in mod_.elems {
     if elem.mode is Active(_, offset_expr) {
       collect_wast_reachable_from_instrs(
@@ -559,16 +566,6 @@ fn try_compile_jit_with_suspension(
           ) catch {
             error => return Err("WAST JIT reference transfer failed: \{error}")
           }
-          // One-time sync: copy interpreter table contents (including active elem init)
-          // into the shared JIT table memory before any JIT execution.
-          @wast.sync_tables_to_jit(
-            instance,
-            store,
-            jm,
-            use_subtype_indirect_check~,
-          ) catch {
-            error => return Err("WAST JIT reference transfer failed: \{error}")
-          }
           // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
           // Store global_addrs and func_addrs for syncing after JIT calls
           let global_addrs_copy : Array[Int32] = []
@@ -604,20 +601,9 @@ fn try_compile_jit_with_suspension(
             func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
             module_rec_groups_copy, use_subtype_indirect_check,
           )
-          // Cross an explicit state-coherence boundary around imported host or
-          // interpreter calls made from native component code.
           jit_ctx.install_hostcall_dispatcher(
             store,
             instance,
-            before_dispatch=() => @wast.sync_jit_tables_to_store(jit_ctx, store),
-            after_dispatch=() => {
-              @wast.sync_tables_to_jit(
-                instance,
-                store,
-                jm,
-                use_subtype_indirect_check~,
-              )
-            },
             classify_suspension~,
           ) catch {
             error => {

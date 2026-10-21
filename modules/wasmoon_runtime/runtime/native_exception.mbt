@@ -1,35 +1,51 @@
 ///|
-/// Translate an immutable native snapshot once, preserving Store identity at
-/// every subsequent interpreter/native boundary.
 pub fn Store::decode_native_exception(
   self : Store,
+  reference : Int64,
+) -> @types.Value raise RuntimeError {
+  self.references.decode_native_exception(reference)
+}
+
+///|
+pub fn Store::encode_native_exception(
+  self : Store,
+  index : Int32,
+) -> Int64 raise RuntimeError {
+  self.references.encode_native_exception(index)
+}
+
+///|
+/// Translate an immutable native snapshot once, preserving Store identity at
+/// every subsequent interpreter/native boundary.
+fn StoreReferences::decode_native_exception(
+  self : StoreReferences,
   reference : Int64,
 ) -> @types.Value raise RuntimeError {
   if reference == 0L {
     return Null
   }
-  if self.native_exception_to_store.get(reference) is Some(index) {
+  if self.native.native_exception_to_store.get(reference) is Some(index) {
     return ExnRef(index)
   }
   let pending = [reference]
   let created : Array[(Int64, Int32)] = []
   errdefer (for (reference, index) in created {
-    self.native_exception_to_store.remove(reference)
-    self.store_exception_to_native.remove(index)
+    self.native.native_exception_to_store.remove(reference)
+    self.native.store_exception_to_native.remove(index)
     self.exns.remove(index)
   })
   while !pending.is_empty() {
     let reference = pending.pop().unwrap()
-    guard self.native_execution.exceptions().snapshot(reference)
+    guard self.native.native_execution.exceptions().snapshot(reference)
       is Some((tag, words)) else {
       raise UndefinedElement
     }
-    let index = match self.native_exception_to_store.get(reference) {
+    let index = match self.native.native_exception_to_store.get(reference) {
       Some(index) => index
       None => {
         let index = self.alloc_exn(tag, [])
-        self.native_exception_to_store.set(reference, index)
-        self.store_exception_to_native.set(index, reference)
+        self.native.native_exception_to_store.set(reference, index)
+        self.native.store_exception_to_native.set(index, reference)
         created.push((reference, index))
         index
       }
@@ -48,16 +64,16 @@ pub fn Store::decode_native_exception(
           if raw == 0L {
             Null
           } else {
-            let child = match self.native_exception_to_store.get(raw) {
+            let child = match self.native.native_exception_to_store.get(raw) {
               Some(index) => index
               None => {
-                guard self.native_execution.exceptions().snapshot(raw)
+                guard self.native.native_execution.exceptions().snapshot(raw)
                   is Some((tag, _)) else {
                   raise UndefinedElement
                 }
                 let index = self.alloc_exn(tag, [])
-                self.native_exception_to_store.set(raw, index)
-                self.store_exception_to_native.set(index, raw)
+                self.native.native_exception_to_store.set(raw, index)
+                self.native.store_exception_to_native.set(index, raw)
                 created.push((raw, index))
                 pending.push(raw)
                 index
@@ -72,8 +88,10 @@ pub fn Store::decode_native_exception(
         | NullFuncRef =>
           if raw == 0L {
             Null
+          } else if @native_bridge.decode_store_funcref(raw) is Some(address) {
+            FuncRef(address)
           } else {
-            guard self.lookup_jit_funcref_store_addr(
+            guard self.funcref_registry.lookup_store_addr(
                 @native_bridge.untag_funcref_ptr(raw),
               )
               is Some(address) else {
@@ -104,18 +122,21 @@ pub fn Store::decode_native_exception(
       self.exns[index].values.push(value)
     }
   }
-  ExnRef(self.native_exception_to_store.get(reference).unwrap())
+  ExnRef(self.native.native_exception_to_store.get(reference).unwrap())
 }
 
 ///|
-fn Store::decode_exception_gc_word(self : Store, raw : Int64) -> @types.Value {
+fn StoreReferences::decode_exception_gc_word(
+  self : StoreReferences,
+  raw : Int64,
+) -> @types.Value {
   if raw == 0L {
     Null
   } else if (raw & 1L) != 0L {
     I31((raw >> 1).to_int())
   } else {
     let index = @native_bridge.decode_heap_ref(raw)
-    match self.c_heap {
+    match self.native.c_heap {
       Some(heap) if heap.is_array(index) => ArrayRef(index)
       _ => StructRef(index)
     }
@@ -123,23 +144,29 @@ fn Store::decode_exception_gc_word(self : Store, raw : Int64) -> @types.Value {
 }
 
 ///|
-pub fn Store::encode_native_exception(
-  self : Store,
+fn StoreReferences::encode_native_exception(
+  self : StoreReferences,
   index : Int32,
+  created~ : Array[Int32] = [],
 ) -> Int64 raise RuntimeError {
   self.ensure_open()
-  if self.store_exception_to_native.get(index) is Some(reference) {
+  if self.native.store_exception_to_native.get(index) is Some(reference) {
     return reference
   }
+  let checkpoint = created.length()
+  errdefer (while created.length() > checkpoint {
+    self.release_native_exception(created.pop().unwrap())
+  })
   let pending = [(index, false)]
   let visiting : Map[Int32, Bool] = Map([])
   while pending.pop() is Some((current, ready)) {
-    if self.store_exception_to_native.contains(current) {
+    if self.native.store_exception_to_native.contains(current) {
       continue
     }
     let exception = self.get_exn(current)
     if ready {
       self.encode_exception_snapshot(current) |> ignore
+      created.push(current)
       visiting.remove(current)
     } else {
       // Wasm snapshots are immutable and acyclic. Reject a forged host cycle
@@ -151,22 +178,22 @@ pub fn Store::encode_native_exception(
       pending.push((current, true))
       for value in exception.values {
         if value is ExnRef(child) &&
-          !self.store_exception_to_native.contains(child) {
+          !self.native.store_exception_to_native.contains(child) {
           pending.push((child, false))
         }
       }
     }
   }
-  self.store_exception_to_native.get(index).unwrap()
+  self.native.store_exception_to_native.get(index).unwrap()
 }
 
 ///|
-fn Store::encode_exception_snapshot(
-  self : Store,
+fn StoreReferences::encode_exception_snapshot(
+  self : StoreReferences,
   index : Int32,
 ) -> Int64 raise RuntimeError {
   let exception = self.get_exn(index)
-  if !self.native_execution
+  if !self.native.native_execution
     .exceptions()
     .define_tag(
       exception.tag_addr,
@@ -178,12 +205,10 @@ fn Store::encode_exception_snapshot(
   for value in exception.values {
     match value {
       ExnRef(index) =>
-        words.push(self.store_exception_to_native.get(index).unwrap())
+        words.push(self.native.store_exception_to_native.get(index).unwrap())
       FuncRef(address) => {
-        guard self.lookup_jit_funcref_ptr(address) is Some(pointer) else {
-          raise UndefinedElement
-        }
-        words.push(@native_bridge.tag_funcref_ptr(pointer))
+        guard address >= 0 else { raise UndefinedElement }
+        words.push(@native_bridge.encode_store_funcref(address))
       }
       ExternRef(_) => {
         let inner = self.unwrap_extern(value)
@@ -196,22 +221,25 @@ fn Store::encode_exception_snapshot(
       _ => words.push(@native_bridge.value_to_i64(value))
     }
   }
-  let heap = match self.c_heap {
+  let heap = match self.native.c_heap {
     Some(heap) => heap.get_ptr()
     None => @native_bridge.GCHeapHandle::null()
   }
-  let reference = self.native_execution
+  let reference = self.native.native_execution
     .exceptions()
     .insert(heap, exception.tag_addr, words)
   if reference == 0L {
-    match self.native_execution.exceptions().quota_denied() {
+    match self.native.native_execution.exceptions().quota_denied() {
       25 => raise ResourceLimitExceeded(GcBytes)
       26 => raise ResourceLimitExceeded(GcObjects)
       _ => raise OutOfMemory
     }
   }
-  self.native_exception_to_store.set(reference, index)
-  self.store_exception_to_native.set(index, reference)
+  self.native.native_exception_to_store.set(reference, index)
+  self.native.store_exception_to_native.set(index, reference)
+  if self.native.exception_allocations is Some(journal) {
+    journal.snapshots.push((index, reference))
+  }
   reference
 }
 
@@ -239,7 +267,7 @@ fn Store::decode_heap_value(
     ExnRef(index) =>
       self.decode_native_exception(@native_bridge.encode_exception_ref(index))
     StructRef(index) =>
-      match self.c_heap {
+      match self.references.native.c_heap {
         Some(heap) if heap.is_array(index) => ArrayRef(index)
         _ => value
       }
@@ -250,4 +278,77 @@ fn Store::decode_heap_value(
       self.wrap_as_extern(value)
     _ => value
   }
+}
+
+///|
+fn StoreReferences::release_native_exception(
+  self : StoreReferences,
+  index : Int32,
+) -> Unit {
+  if self.native.store_exception_to_native.get(index) is Some(reference) {
+    self.native.native_execution.exceptions().release_snapshot(reference)
+    self.native.store_exception_to_native.remove(index)
+    self.native.native_exception_to_store.remove(reference)
+  }
+}
+
+///|
+/// Run after resource rollback and before heap rollback. Discover the complete
+/// live graph before releasing either payload records or native snapshots.
+/// Managed Values alone need no snapshot; native consumers retain both.
+fn Store::register_native_exception_rollback(
+  self : Store,
+  registrar : RollbackRegistrar,
+) -> Unit {
+  let journal : ExceptionAllocationJournal = { instances: [], snapshots: [], }
+  self.references.native.exception_allocations = Some(journal)
+  registrar.on_finish(fn() {
+    self.references.native.exception_allocations = None
+  })
+  registrar.on_rollback(fn() {
+    if self.closed.val ||
+      (journal.instances.is_empty() && journal.snapshots.is_empty()) {
+      return
+    }
+    let native_roots = match self.references.native.c_heap {
+      Some(heap) =>
+        self.decode_gc_root_words(heap.get_ptr().execution_roots()) catch {
+          _ => return
+        }
+      None => []
+    }
+    let trace = self.trace_gc_roots([], native_roots~)
+    // Incomplete root discovery cannot justify reclaiming a live token.
+    if trace.failed {
+      return
+    }
+    let pending = trace.native_exceptions.keys().to_array()
+    while pending.pop() is Some(index) {
+      guard self.references.exns.get(index) is Some(exception) else {
+        // A missing payload is incomplete discovery, not an empty payload.
+        return
+      }
+      for value in exception.values {
+        if value is ExnRef(child) && !trace.native_exceptions.contains(child) {
+          trace.native_exceptions.set(child, true)
+          pending.push(child)
+        }
+      }
+    }
+    for (index, token) in journal.snapshots {
+      if !trace.native_exceptions.contains(index) &&
+        self.references.native.store_exception_to_native.get(index) ==
+        Some(token) {
+        self.references.release_native_exception(index)
+      }
+    }
+    // Payloads remain available through transitive discovery. Escaped handles
+    // keep their identity and quota; only unpublished instances are rolled back.
+    for index in journal.instances {
+      if !trace.exceptions.contains(index) {
+        self.references.exns.remove(index)
+        self.references.release_auxiliary_handle(1, index.to_int64())
+      }
+    }
+  })
 }

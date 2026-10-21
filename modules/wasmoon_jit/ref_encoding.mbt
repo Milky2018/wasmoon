@@ -4,6 +4,8 @@ pub using @runtime_bridge {
   is_exception_ref,
   is_null_ref,
   encode_null_ref,
+  encode_store_funcref,
+  decode_store_funcref,
   encode_funcref_idx,
   decode_funcref_idx,
   is_funcref_ptr,

@@ -44,3 +44,17 @@ fn Store::reclaim_native_continuations(_self : Store) -> Unit {
 fn Store::release_native_exception(_self : Store, _index : Int32) -> Unit {
   ()
 }
+
+///|
+fn Store::trace_table_roots(
+  _self : Store,
+  table : Table,
+  pending : Array[@types.Value],
+  trace : GcTrace,
+) -> Unit {
+  for index in 0..<table.size() {
+    pending.push(table.root_at(index)) catch {
+      _ => trace.failed = true
+    }
+  }
+}

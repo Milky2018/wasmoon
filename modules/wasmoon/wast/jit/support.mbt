@@ -253,6 +253,7 @@ pub fn register_owned_instance_funcrefs_for_jit(
       registry,
       local_types,
       instance.tag_addrs[:].to_owned(),
+      functions=instance.func_addrs[:].to_owned(),
     )
   }
   { lease, }
@@ -394,6 +395,8 @@ fn read_native_global(
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       if raw_value == 0L {
         Null
+      } else if @wasmoon_jit.decode_store_funcref(raw_value) is Some(address) {
+        FuncRef(address)
       } else if raw_value < 0L {
         // IR-encoded funcref: value = -(func_idx + 1)
         let mod_func_idx = (-(raw_value + 1L)).to_int()
@@ -512,177 +515,6 @@ fn encode_global_value_for_jit(
 }
 
 ///|
-fn decode_funcref_from_jit_ctx(
-  raw_value : Int64,
-  jit_ctx : JITModuleContext,
-  store : @runtime.Store,
-) -> @types.Value {
-  if raw_value == NULL_REF {
-    return Null
-  }
-  match @wasmoon_jit.decode_funcref_idx(raw_value) {
-    Some(func_idx) =>
-      if func_idx >= 0 && func_idx < jit_ctx.func_addrs.length() {
-        FuncRef(jit_ctx.func_addrs[func_idx])
-      } else {
-        Null
-      }
-    None =>
-      if @wasmoon_jit.is_funcref_ptr(raw_value) {
-        let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
-        let store_addr = match registered_funcref_store_addr(store, ptr) {
-          Some(addr) => Some(addr)
-          None => {
-            let mut found : Int32? = None
-            for idx, addr in jit_ctx.func_addrs {
-              if jit_ctx.jit_module.get_func_ptr(idx) == ptr {
-                found = Some(addr)
-                break
-              }
-            }
-            found
-          }
-        }
-        match store_addr {
-          Some(addr) => FuncRef(addr)
-          None => Null
-        }
-      } else {
-        FuncRef(raw_value.to_int())
-      }
-  }
-}
-
-///|
-fn decode_table_entry_value(
-  elem_type : @types.ValueType,
-  raw_value : Int64,
-  store : @runtime.Store,
-  jit_ctx : JITModuleContext,
-) -> @types.Value raise @runtime.RuntimeError {
-  match elem_type {
-    ContRef
-    | RefCont
-    | RefContTyped(_)
-    | RefNullContTyped(_)
-    | NullContRef
-    | RefNoCont => @wasmoon_jit.i64_to_value(raw_value, elem_type)
-    ExnRef | NullExnRef => store.decode_native_exception(raw_value)
-    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      decode_funcref_from_jit_ctx(raw_value, jit_ctx, store)
-    ExternRef | RefExtern | NullExternRef =>
-      decode_extern_value(raw_value, store)
-    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
-      if raw_value == NULL_REF {
-        Null
-      } else if (raw_value & EXTERNREF_TAG) != 0L {
-        match @wasmoon_jit.decode_externref(raw_value) {
-          Some(idx) => ExternRef(idx)
-          None => ExternRef(raw_value.to_int())
-        }
-      } else if @wasmoon_jit.is_funcref_ptr(raw_value) || raw_value < 0L {
-        decode_funcref_from_jit_ctx(raw_value, jit_ctx, store)
-      } else {
-        decode_gc_value(raw_value, store)
-      }
-    RefI31 | RefNullI31 =>
-      if raw_value == NULL_REF {
-        Null
-      } else if (raw_value & 1L) == 1L {
-        I31((raw_value >> 1).to_int())
-      } else {
-        Null
-      }
-    RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
-      if raw_value == NULL_REF {
-        Null
-      } else {
-        StructRef(@wasmoon_jit.decode_heap_ref(raw_value))
-      }
-    RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
-      if raw_value == NULL_REF {
-        Null
-      } else {
-        ArrayRef(@wasmoon_jit.decode_heap_ref(raw_value))
-      }
-    _ => Null
-  }
-}
-
-///|
-/// Sync JIT table contents back into interpreter tables.
-/// Required when JIT mutates imported/shared tables and later interpreter-based
-/// instantiation or evaluation needs to observe those updates.
-pub fn sync_jit_tables_to_store(
-  jit_ctx : JITModuleContext,
-  store : @runtime.Store,
-) -> Unit raise @runtime.RuntimeError {
-  guard jit_ctx.owner is Some(instance) else { raise InvalidHandle }
-  jit_ctx.bind_instance(store, instance)
-  for table_idx, table_addr in jit_ctx.table_addrs {
-    let table = store.get_table(table_addr) catch { _ => continue }
-    let jit_table = match store.get_jit_table(table_addr) {
-      Some(t) => t
-      None => continue
-    }
-    jit_ctx.jit_module.refresh_table_layout(table_idx) |> ignore
-    let mut runtime_size = table.size()
-    let jit_size = jit_table.get_size()
-    if jit_size > runtime_size {
-      let delta = jit_size - runtime_size
-      if delta > 0 {
-        if table.grow(delta, Null) < 0 {
-          continue
-        }
-        runtime_size = table.size()
-      }
-    }
-    let size = if runtime_size < jit_size { runtime_size } else { jit_size }
-    let elem_type = table.get_elem_type()
-    for i in 0..<size {
-      let raw_value = jit_table.get_entry_value(i)
-      let decoded = decode_table_entry_value(
-        elem_type, raw_value, store, jit_ctx,
-      )
-      table.set(i, decoded) catch {
-        _ => ()
-      }
-    }
-  }
-}
-
-///|
-/// Sync interpreter tables to JIT tables before JIT execution
-/// This ensures that table modifications made by the interpreter are visible to JIT
-pub fn sync_tables_to_jit(
-  instance : @runtime.ModuleInstance,
-  store : @runtime.Store,
-  jit_module : @compiled_jit.JITModule,
-  use_subtype_indirect_check~ : Bool = false,
-) -> Unit raise @runtime.RuntimeError {
-  store.check_instance(instance)
-  // Iterate over all tables in the instance
-  for table_addr in instance.table_addrs {
-    // Get the interpreter table
-    let table = store.get_table(table_addr) catch { _ => continue }
-    // Get the corresponding JIT table
-    let jit_table = match store.get_jit_table(table_addr) {
-      Some(jt) => jt
-      None => continue
-    }
-    // Sync the table
-    sync_table_to_jit(
-      table,
-      jit_table,
-      jit_module,
-      instance,
-      store,
-      use_subtype_indirect_check~,
-    )
-  }
-}
-
-///|
 /// Evaluate element segment offset constant expression
 /// Supports i32.const, i64.const (for table64), i32.add, i32.sub, i32.mul, global.get for computing offsets
 pub fn eval_elem_offset_expr(
@@ -751,105 +583,18 @@ pub fn eval_elem_offset_expr(
 ///|
 /// Initialize element segments for call_indirect support
 pub fn init_elem_segments(
-  mod_ : @types.Module,
+  _mod_ : @types.Module,
   jm : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
   store.check_instance(instance)
-  // Get global instances for evaluating offset expressions
-  let globals : Array[@runtime.GlobalInstance] = []
-  for global_addr in instance.global_addrs {
-    // All addresses in instance.global_addrs should exist in store
-    // If not, it's an internal error
-    let global = store.get_global(global_addr)
-    globals.push(global)
-  }
-
-  // Compute canonical type indices for structural type equivalence
-  // Structurally equivalent types will have the same canonical index
-  let canonical_types = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-
-  // Build function index -> table entry type mapping.
-  // - subtype mode: keep raw type indices
-  // - exact mode: use canonical indices for structural equivalence
-  let func_table_types : Array[Int32] = []
-  for imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      let mapped_type = if use_subtype_indirect_check {
-        type_idx
-      } else if type_idx >= 0 && type_idx < canonical_types.length() {
-        canonical_types[type_idx]
-      } else {
-        type_idx
-      }
-      func_table_types.push(mapped_type)
-    }
-  }
-  for type_idx in mod_.funcs {
-    let mapped_type = if use_subtype_indirect_check {
-      type_idx
-    } else if type_idx >= 0 && type_idx < canonical_types.length() {
-      canonical_types[type_idx]
-    } else {
-      type_idx
-    }
-    func_table_types.push(mapped_type)
-  }
-
-  // Get shared JIT tables from Store (one per runtime table)
-  let jit_tables : Array[@wasmoon_jit.JITTable?] = []
-  for table_addr in instance.table_addrs {
-    let jit_table = store.get_jit_table(table_addr)
-    jit_tables.push(jit_table)
-  }
-
-  // Build store func address -> module func index map.
-  let func_addr_to_idx : Map[Int32, Int32] = Map([])
-  for i, addr in instance.func_addrs {
-    func_addr_to_idx.set(addr, i)
-  }
-
-  // Initialize elements: (table_idx, elem_idx, func_idx?, canonical_type_idx)
-  // Copy from instantiated runtime table state so we preserve:
-  // - table declaration init expressions
-  // - active element segment effects
-  // - imported/exported table sharing behavior
-  let elem_init : Array[(Int32, Int32, Int32?, Int32)] = []
-  for table_idx, table_addr in instance.table_addrs {
-    let runtime_table = store.get_table(table_addr) catch { _ => continue }
-    let max_entries = match jit_tables[table_idx] {
-      Some(t) => t.get_size()
-      None => 0
-    }
-    let size = runtime_table.size().min(max_entries)
-    for elem_idx in 0..<size {
-      let value = runtime_table.get(elem_idx) catch { _ => continue }
-      match value {
-        FuncRef(store_addr) => {
-          let func_idx = func_addr_to_idx.get(store_addr)
-          let canonical_type_idx = match func_idx {
-            Some(idx) =>
-              if idx >= 0 && idx < func_table_types.length() {
-                func_table_types[idx]
-              } else {
-                -1
-              }
-            None => -1
-          }
-          elem_init.push((table_idx, elem_idx, func_idx, canonical_type_idx))
-        }
-        _ => elem_init.push((table_idx, elem_idx, None, -1))
-      }
-    }
-  }
-
-  // Initialize shared tables
-  jm.init_shared_tables(jit_tables, elem_init) catch {
+  use_subtype_indirect_check |> ignore
+  let tables = Array::makei(instance.table_addrs.length(), i => {
+    store.get_jit_table(instance.table_addrs[i])
+  })
+  jm.init_shared_tables(tables, []) catch {
     InvalidBinding(message) => raise LinkErrorDetail(message)
     _ => raise OutOfMemory
   }
@@ -877,37 +622,12 @@ pub fn init_bulk_segments(
     error =>
       raise LinkErrorDetail("native continuation preparation failed: \{error}")
   }
-  // Precompute canonical indices for type equivalence.
-  let canonical = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-
-  // Build func_idx -> table entry type idx mapping in module index space.
-  // - subtype mode: raw indices
-  // - exact mode: canonical indices
+  use_subtype_indirect_check |> ignore
+  // Imported functions retain their actual Store type, which can be a subtype
+  // of the signature declared by this module's import.
   let func_table_types : Array[Int32] = []
-  for imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      let mapped = if use_subtype_indirect_check {
-        type_idx
-      } else if type_idx >= 0 && type_idx < canonical.length() {
-        canonical[type_idx]
-      } else {
-        -1
-      }
-      func_table_types.push(mapped)
-    }
-  }
-  for type_idx in mod_.funcs {
-    let mapped = if use_subtype_indirect_check {
-      type_idx
-    } else if type_idx >= 0 && type_idx < canonical.length() {
-      canonical[type_idx]
-    } else {
-      -1
-    }
-    func_table_types.push(mapped)
+  for address in instance.func_addrs {
+    func_table_types.push(store.get_func_canonical_type_idx(address))
   }
 
   // Build store func_addr -> module func_idx map (for GlobalGet funcref).
@@ -1040,56 +760,6 @@ pub fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
   count
 }
 
-///|
-/// Sync interpreter table values to JIT table
-/// This is needed when interpreter modifies table entries that JIT will read
-/// Encoding for JIT table:
-/// - null = 0
-/// - i31 = (value << 1) | 1 (positive odd)
-/// - struct/array ref = gc_ref << 1 (positive even, gc_ref >= 1)
-/// - funcref = func_ptr | FUNCREF_TAG (bit 61 set)
-/// - externref = EXTERNREF_TAG | (host_idx << 1) (bit 62 set)
-pub fn sync_table_to_jit(
-  table : @runtime.Table,
-  jit_table : @wasmoon_jit.JITTable,
-  jit_module : @compiled_jit.JITModule,
-  instance : @runtime.ModuleInstance,
-  store : @runtime.Store,
-  use_subtype_indirect_check~ : Bool = false,
-) -> Unit raise @runtime.RuntimeError {
-  use_subtype_indirect_check |> ignore
-  let runtime_size = table.size()
-  let jit_size = jit_table.get_size()
-  let size = if runtime_size < jit_size { runtime_size } else { jit_size }
-  for i in 0..<size {
-    let value = table.get(i) catch { _ => continue }
-    let mut encoded : Int64 = NULL_REF
-    let mut type_idx : Int32 = -1
-    match value {
-      ContRef(_) => encoded = @wasmoon_jit.value_to_i64(value)
-      ExnRef(index) => encoded = store.encode_native_exception(index)
-      Null => {
-        encoded = NULL_REF
-        type_idx = -1
-      }
-      I31(n) => encoded = @wasmoon_jit.encode_i31(n)
-      StructRef(idx) | ArrayRef(idx) =>
-        // gc_ref is 1-based for the JIT/C heap: (idx + 1) << 1
-        encoded = @wasmoon_jit.encode_heap_ref(idx)
-      ExternRef(host_idx) => encoded = encode_extern_value(host_idx, store)
-      FuncRef(store_addr) => {
-        encoded = encode_store_funcref_for_jit(
-          value, store, jit_module, instance,
-        )
-        type_idx = store.get_func_canonical_type_idx(store_addr)
-      }
-      // Numeric types shouldn't be present in reference tables.
-      _ => encoded = NULL_REF
-    }
-    jit_table.set(i, encoded, type_idx)
-  }
-}
-
 // ============================================================
 // JIT Hostcall Bridge (Host Closures With Caller)
 // ============================================================
@@ -1176,6 +846,9 @@ fn decode_funcref_to_store_addr(
   if raw == NULL_REF {
     return Null
   }
+  if @wasmoon_jit.decode_store_funcref(raw) is Some(address) {
+    return FuncRef(address)
+  }
   match @wasmoon_jit.decode_funcref_idx(raw) {
     Some(mod_func_idx) =>
       if mod_func_idx >= 0 && mod_func_idx < instance.func_addrs.length() {
@@ -1208,16 +881,20 @@ fn encode_store_funcref_for_jit(
   match value {
     Null => NULL_REF
     FuncRef(store_addr) =>
-      match
-        lookup_funcref_ptr_for_store_addr(
-          store, store_addr, jit_module, instance,
-        ) {
-        Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
-        None =>
-          match store_addr_to_module_func_idx(store_addr, instance) {
-            Some(func_idx) => @wasmoon_jit.encode_funcref_idx(func_idx)
-            None => NULL_REF
-          }
+      if jit_module.has_callable_metadata() {
+        @wasmoon_jit.encode_store_funcref(store_addr)
+      } else {
+        match
+          lookup_funcref_ptr_for_store_addr(
+            store, store_addr, jit_module, instance,
+          ) {
+          Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
+          None =>
+            match store_addr_to_module_func_idx(store_addr, instance) {
+              Some(index) => @wasmoon_jit.encode_funcref_idx(index)
+              None => NULL_REF
+            }
+        }
       }
     _ => NULL_REF
   }
@@ -1660,9 +1337,8 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
         slot = slot + used
       }
 
-      // Imported code observes interpreter-owned globals and tables. Publish the
-      // caller's native state before dispatch, then pull mutations back before
-      // returning to native code.
+      // Callers may install additional host-dispatch hooks. Core globals and
+      // tables already share their authoritative native storage.
       before_dispatch()
       let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
         e => {

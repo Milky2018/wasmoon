@@ -378,6 +378,9 @@ void gc_heap_mark(GcHeap* heap, int32_t gc_ref);
  */
 void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots);
 
+// Copy active roots belonging to this heap, or count them when roots is NULL.
+int32_t jit_copy_active_gc_roots(GcHeap *heap, int64_t *roots);
+
 /**
  * Sweep unmarked objects
  * @param heap The GC heap

@@ -12,12 +12,12 @@ fn Store::trace_native_continuation(
       if word < 0L && (word & 1L) != 0L {
         pending.push(ContRef(word >> 1))
       } else if @native_bridge.is_exception_ref(word) {
-        pending.push(self.decode_native_exception(word)) catch {
+        trace.push_native_root(self.decode_native_exception(word), pending) catch {
           _ => trace.failed = true
         }
       } else if @native_bridge.decode_gc_heap_ref(word) is Some(child) {
         pending.push(
-          if self.c_heap is Some(heap) && heap.is_array(child) {
+          if self.references.native.c_heap is Some(heap) && heap.is_array(child) {
             ArrayRef(child)
           } else {
             StructRef(child)
@@ -35,7 +35,7 @@ fn Store::trace_object_fields(
   pending : Array[@types.Value],
   trace : GcTrace,
 ) -> Unit {
-  match self.c_heap {
+  match self.references.native.c_heap {
     None =>
       try {
         match self.heap.get(index) {
@@ -57,7 +57,7 @@ fn Store::trace_object_fields(
         Some({ composite: Struct(definition), .. }) =>
           for field, definition in definition.fields {
             if definition.storage_type is Val(ty) && gc_reference_type(ty) {
-              pending.push(self.struct_get(index, field)) catch {
+              trace.push_native_root(self.struct_get(index, field), pending) catch {
                 _ => trace.failed = true
               }
             }
@@ -65,7 +65,7 @@ fn Store::trace_object_fields(
         Some({ composite: Array(definition), .. }) =>
           if definition.element.storage_type is Val(ty) && gc_reference_type(ty) {
             for element in 0..<heap.array_len(index) {
-              pending.push(self.array_get(index, element)) catch {
+              trace.push_native_root(self.array_get(index, element), pending) catch {
                 _ => trace.failed = true
               }
             }
@@ -77,7 +77,10 @@ fn Store::trace_object_fields(
             if word < 0L && (word & 1L) != 0L {
               pending.push(ContRef(word >> 1))
             } else if @native_bridge.is_exception_ref(word) {
-              pending.push(self.decode_native_exception(word)) catch {
+              trace.push_native_root(
+                self.decode_native_exception(word),
+                pending,
+              ) catch {
                 _ => trace.failed = true
               }
             } else if @native_bridge.decode_gc_heap_ref(word) is Some(child) {
@@ -102,9 +105,25 @@ fn Store::reclaim_native_continuations(self : Store) -> Unit {
 
 ///|
 fn Store::release_native_exception(self : Store, index : Int32) -> Unit {
-  if self.store_exception_to_native.get(index) is Some(reference) {
-    self.native_execution.exceptions().release_snapshot(reference)
-    self.store_exception_to_native.remove(index)
-    self.native_exception_to_store.remove(reference)
+  self.references.release_native_exception(index)
+}
+
+///|
+fn Store::trace_table_roots(
+  _self : Store,
+  table : Table,
+  pending : Array[@types.Value],
+  trace : GcTrace,
+) -> Unit {
+  for index in 0..<table.size() {
+    try {
+      let value = table.root_at(index)
+      match table.storage {
+        Native(_) => trace.push_native_root(value, pending)
+        Managed(_) => pending.push(value)
+      }
+    } catch {
+      _ => trace.failed = true
+    }
   }
 }

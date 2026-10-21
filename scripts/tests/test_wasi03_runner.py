@@ -73,3 +73,84 @@ class GateTests(unittest.TestCase):
             patch_file.write_bytes(patch_file.read_bytes() + b"corrupt")
             with self.assertRaisesRegex(ValueError, "patch checksum mismatch"):
                 runner.http_contract_guests(root)
+
+    def test_case_workspaces_are_removed_and_reports_survive(self):
+        import contextlib
+        import io
+        import json
+
+        for outcome in ["pass", "fail", "missing", "malformed", "timeout"]:
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                upstream = root / "upstream"
+                suite = upstream / "tests/rust/testsuite/wasm32-wasip3"
+                suite.mkdir(parents=True)
+                guest = suite / "case.wasm"
+                guest.write_bytes(b"\0asm")
+                (suite / "manifest.json").write_text("{}")
+                (root / "scripts").mkdir()
+                (root / "scripts/wasi03-corpus.json").write_text(json.dumps({
+                    "revision": runner.PIN,
+                    "files": {guest.name: runner.corpus_digest(guest.name, guest.read_bytes())},
+                }))
+                sentinel = root / "sentinel.txt"
+                sentinel.write_text("keep")
+                # Exercise the real subprocess lifecycle, including inaccessible
+                # fixture directories and symlinks left by guest filesystem tests.
+                (root / "scripts/wasi03_upstream_runner.py").write_text(f'''
+import json, os, sys, time
+from pathlib import Path
+args = sys.argv
+work = Path(args[args.index("-t") + 1])
+result = Path(args[args.index("--json-output-location") + 1])
+(result.parent / "work-path.txt").write_text(str(work))
+assert (work / "case.wasm").read_bytes() == b"\\0asm"
+assert (work / "fs-tests.dir/a.txt").read_bytes() == b"fixture"
+if os.name != "nt":
+    (work / "outside").symlink_to({str(sentinel)!r})
+    locked = work / "locked"
+    locked.mkdir()
+    (locked / "file").write_text("temporary")
+    locked.chmod(0)
+print("fixture executed", flush=True)
+outcome = {outcome!r}
+if outcome == "timeout":
+    time.sleep(60)
+elif outcome == "malformed":
+    result.write_text("invalid json")
+elif outcome != "missing":
+    result.write_text(json.dumps({{"results": [{{"tests": [{{
+        "outcome": outcome, "failures": []
+    }}]}}]}}))
+''')
+                binary = root / "wasmoon"
+                binary.write_bytes(b"test runtime identity")
+                output = root / "reports"
+                argv = ["run_wasi03", "--upstream", str(upstream), "--wasmoon", str(binary),
+                        "--output", str(output), "--timeout", "2"]
+
+                def git_output(command, **kwargs):
+                    return runner.PIN + "\n" if "rev-parse" in command else b"fixture"
+
+                with patch.object(runner, "ROOT", root), patch.object(sys, "argv", argv), \
+                     patch.object(runner.subprocess, "check_output", side_effect=git_output), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    if outcome == "malformed":
+                        with self.assertRaises(json.JSONDecodeError):
+                            runner.main()
+                    else:
+                        self.assertEqual(runner.main(), int(outcome != "pass"))
+                workspaces = []
+                for engine in ["jit", "interp"]:
+                    report = output / engine / "case"
+                    work = Path((report / "work-path.txt").read_text())
+                    workspaces.append(work)
+                    self.assertFalse(work.exists(), f"leaked {outcome} workspace: {work}")
+                    self.assertFalse(work.is_relative_to(output.parent), str(work))
+                    self.assertIn("fixture executed", (report / "log.txt").read_text())
+                self.assertNotEqual(*workspaces)
+                self.assertEqual(sentinel.read_text(), "keep")
+                if outcome != "malformed":
+                    expected = "harness_error" if outcome == "missing" else outcome
+                    self.assertEqual(json.loads((output / "summary.json").read_text())["counts"],
+                                     {expected: 2})

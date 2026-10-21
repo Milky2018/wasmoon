@@ -6,10 +6,9 @@ pub struct Store {
   resource_budget : ResourceBudget?
   priv mut execution_scope : ExecutionScope?
   priv instance_leases : Array[ResourceLease]
-  priv mut next_exception : Int32
-  priv mut next_wrapped_extern : Int32
   priv mut gc_in_collect : Bool
   priv mut interpreter_reentry_depth : Int32
+  priv references : StoreReferences
   priv funcs : Array[StoredFunction]
   priv func_types : Array[@types.FuncType] // Type of each function
   priv func_type_indices : Array[Int32] // Original type index for structural comparison
@@ -19,7 +18,6 @@ pub struct Store {
   priv tags : Array[@types.FuncType] // Tag types (params only, no results)
   priv tag_type_indices : Array[Int32] // Original type index for each tag
   priv tag_owners : Array[FuncOwner] // Owner module for each tag
-  priv mut exns : Map[Int32, ExnInstance] // Live exception snapshots, with non-reused handles
   priv heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
   // Module types for managed GC type equivalence
   priv mut module_types : Array[@types.SubType]
@@ -27,8 +25,6 @@ pub struct Store {
   priv mut module_rec_groups : Array[Int32]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
-  priv auxiliary_leases : Map[(Int32, Int64), (ResourceLease, ResourceLease)]
-  priv mut wrapped_externs : Map[Int32, @types.Value]
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
   priv func_owners : Array[FuncOwner]
@@ -58,7 +54,11 @@ fn Store::register_rollback(
   registrar : RollbackRegistrar,
 ) -> Unit {
   self.instantiation = Some(registrar)
-  registrar.on_finish(fn() { self.instantiation = None })
+  self.references.instantiation = Some(registrar)
+  registrar.on_finish(fn() {
+    self.instantiation = None
+    self.references.instantiation = None
+  })
   // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
   registrar.on_rollback(
     self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
@@ -71,6 +71,18 @@ pub fn Store::Store(
   interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
   resource_budget~ : ResourceBudget? = None,
 ) -> Store {
+  let closed = Ref(false)
+  let tags : Array[@types.FuncType] = []
+  let managed_heap = MarkSweepHeap(resource_budget~)
+  let funcref_registry = StoreFuncrefRegistry::new()
+  let references = StoreReferences::new(
+    resource_budget,
+    closed,
+    tags,
+    managed_heap,
+    funcref_registry,
+    Empty,
+  )
   {
     nan_canonicalization,
     interpreter_limits,
@@ -78,8 +90,6 @@ pub fn Store::Store(
     execution_scope: None,
     instance_leases: [],
     interpreter_reentry_depth: 0,
-    next_exception: 0,
-    next_wrapped_extern: 0,
     gc_in_collect: false,
     funcs: [],
     func_types: [],
@@ -87,20 +97,17 @@ pub fn Store::Store(
     tables: [],
     mems: [],
     globals: [],
-    tags: [],
+    tags,
     tag_type_indices: [],
     tag_owners: [],
-    exns: Map([]),
-    heap: MarkSweepHeap(resource_budget~),
+    heap: managed_heap,
     module_types: [],
     module_rec_groups: [],
-    wrapped_externs: Map([]),
-    auxiliary_leases: Map([]),
     func_owners: [],
     instances: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
-    funcref_registry: StoreFuncrefRegistry::new(),
+    funcref_registry,
     native_types: StoreTypeRegistry::new(),
     suspended_executions: Map([]),
     next_suspended_execution_id: 0L,
@@ -109,7 +116,8 @@ pub fn Store::Store(
     pinned_gc_roots: Map([]),
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
-    closed: Ref(false),
+    closed,
+    references,
   }
 }
 
@@ -202,19 +210,19 @@ pub fn Store::close(self : Store) -> Unit {
   self.tag_type_indices.shrink_to_fit()
   self.tag_owners.clear()
   self.tag_owners.shrink_to_fit()
-  self.exns.clear()
-  for pair in self.auxiliary_leases.values() {
+  self.references.exns.clear()
+  for pair in self.references.auxiliary_leases.values() {
     pair.0.release()
     pair.1.release()
   }
-  self.auxiliary_leases.clear()
+  self.references.auxiliary_leases.clear()
   self.heap.close()
 
   // These arrays are borrowed from the parsed module and may be reused by
   // other stores. Closing a store must only drop its own references.
   self.module_types = []
   self.module_rec_groups = []
-  self.wrapped_externs.clear()
+  self.references.wrapped_externs.clear()
   self.wasi_mem_addr = None
   self.wasi_ctx_handle = 0
   self.instantiation = None

@@ -82,7 +82,7 @@ pub struct JITFunction {
 type JITModule
 pub fn JITModule::JITModule() -> Self
 pub fn JITModule::alloc_guarded_memory(Self, Int32, Int32?) -> @ffi.MemoryDescriptor
-pub fn JITModule::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int32], Array[Int32]) -> Unit
+pub fn JITModule::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int32], Array[Int32], functions? : Array[Int32]) -> Unit
 pub fn JITModule::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITModule::bind_segment_drop_flags(Self, @runtime.ModuleInstance) -> Unit
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap

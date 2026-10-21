@@ -17,6 +17,7 @@ pub fn NativeCallableRegistry::clear(Self) -> Unit
 pub fn NativeCallableRegistry::native_view(Self) -> NativeCallableView
 pub fn NativeCallableRegistry::new() -> Self
 pub fn NativeCallableRegistry::replace(Self, Array[Int32], Array[(Int64, Int32)]) -> Bool
+pub fn NativeCallableRegistry::replace_functions(Self, Array[(Int32, Int64)], Array[(Int64, Int32)]) -> Unit
 #deprecated
 pub fn NativeCallableRegistry::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeCallableRegistry

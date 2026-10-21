@@ -311,7 +311,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
   }
   let previous : @artifact.Artifact = {
     ..current,
-    manifest: { ..current.manifest, codegen_revision: "direct-vcode-8", },
+    manifest: { ..current.manifest, codegen_revision: "direct-vcode-9", },
   }
   let path = cache_test_file("previous-codegen")
   inspect(save_run_jit_cache(path, previous) is Ok(_), content="true")
@@ -327,7 +327,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("direct-vcode-9", "direct-vcode-8", true, false)
+      #|("direct-vcode-10", "direct-vcode-9", true, false)
     ),
   )
 }
@@ -372,4 +372,48 @@ test "NaN policy survives serialization and separates JIT cache entries" {
     is None
   inspect(rejected, content="true")
   inspect(@fs.path_exists(path), content="false")
+}
+
+///|
+test "CLI JIT table binding preserves authoritative GC and function entries" {
+  let code = @core_wat.parse(
+    (
+      #|(module
+      #| (type $a (array (mut i32)))
+      #| (func $f)
+      #| (table 1 (ref $a) (array.new_fixed $a 1 (i32.const 42)))
+      #| (table 1 funcref (ref.func $f)))
+    ),
+  )
+  let store = @runtime.Store::Store()
+  defer store.close()
+  store.enable_c_heap()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    code,
+    Imports(store),
+  )
+  guard compile_module_to_jit(code, false, false, 0, false)
+    is Some((artifact, _)) else {
+    fail("expected native compilation")
+  }
+  let module_ = @jit.JITModule::load_artifact(
+    verify_compiled_jit_artifact(artifact),
+    @wast.build_func_signatures(code),
+  )
+  defer module_.close()
+  let table = store.get_table(instance.table_addrs[0])
+  let expected = table.get(0)
+  guard expected is ArrayRef(_) else { fail("expected array initializer") }
+  let native = store.get_jit_table(instance.table_addrs[0]).unwrap()
+  let revision = native.raw_ptr().revision()
+  for _ in 0..<2 {
+    init_jit_tables(instance, store, module_)
+    assert_eq(table.get(0), expected)
+    assert_eq(native.raw_ptr().revision(), revision)
+    assert_eq(
+      store.get_table(instance.table_addrs[1]).get(0),
+      FuncRef(instance.func_addrs[0]),
+    )
+  }
 }

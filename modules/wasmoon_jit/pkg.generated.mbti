@@ -27,9 +27,9 @@ import {
 // Values
 pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
 
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-9"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-10"
 
-pub const WASMOON_JIT_ABI_VERSION : Int32 = 7
+pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 
 pub fn alloc_guarded_memory_desc(Int32, Int32?, is_shared? : Bool) -> @ffi.MemoryDescriptor
 
@@ -81,6 +81,8 @@ pub fn decode_heap_ref(Int64) -> Int32
 
 pub fn decode_i31(Int64) -> Int32
 
+pub fn decode_store_funcref(Int64) -> Int32?
+
 pub fn encode_exception_ref(Int32) -> Int64
 
 pub fn encode_externref(Int32) -> Int64
@@ -94,6 +96,8 @@ pub fn encode_heap_ref(Int32) -> Int64
 pub fn encode_i31(Int32) -> Int64
 
 pub fn encode_null_ref() -> Int64
+
+pub fn encode_store_funcref(Int32) -> Int64
 
 pub fn entry_trampoline_signature_hash(ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Int64
 
@@ -503,7 +507,7 @@ type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int32, Int32?) -> @ffi.MemoryDescriptor
 pub fn NativeJITContext::alloc_indirect_table(Self, Int32) -> Bool
 pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise @installer.JitInstallError
-pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int32], Array[Int32]) -> Unit
+pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int32], Array[Int32], functions? : Array[Int32]) -> Unit
 pub fn NativeJITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn NativeJITContext::bind_segment_drop_flags(Self, FixedArray[Bool], FixedArray[Bool]) -> Unit
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int32, Bool) -> Int32 raise NativeFiberError

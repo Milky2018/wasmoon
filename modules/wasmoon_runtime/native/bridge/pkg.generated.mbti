@@ -36,6 +36,8 @@ pub fn decode_gc_heap_ref(Int64) -> Int32?
 
 pub fn decode_heap_ref(Int64) -> Int32
 
+pub fn decode_store_funcref(Int64) -> Int32?
+
 pub fn encode_exception_ref(Int32) -> Int64
 
 pub fn encode_externref(Int32) -> Int64
@@ -45,6 +47,8 @@ pub fn encode_funcref_idx(Int32) -> Int64
 pub fn encode_gc_heap_ref(Int32) -> Int64
 
 pub fn encode_null_ref() -> Int64
+
+pub fn encode_store_funcref(Int32) -> Int64
 
 pub fn free_memory(Int64) -> Unit
 

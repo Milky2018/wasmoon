@@ -22,12 +22,11 @@ pub struct Store {
   resource_budget : ResourceBudget?
   priv mut execution_scope : ExecutionScope?
   priv instance_leases : Array[ResourceLease]
-  priv mut next_exception : Int32
-  priv mut next_wrapped_extern : Int32
   priv mut gc_tracing_depth : Int32
   priv mut gc_in_collect : Bool
   priv mut gc_trace : GcTrace?
   priv mut interpreter_reentry_depth : Int32
+  priv references : StoreReferences
   priv funcs : Array[StoredFunction]
   priv func_types : Array[@types.FuncType] // Type of each function
   priv func_type_indices : Array[Int32] // Original type index for structural comparison
@@ -37,18 +36,13 @@ pub struct Store {
   priv tags : Array[@types.FuncType] // Tag types (params only, no results)
   priv tag_type_indices : Array[Int32] // Original type index for each tag
   priv tag_owners : Array[FuncOwner] // Owner module for each tag
-  priv mut exns : Map[Int32, ExnInstance] // Live exception snapshots, with non-reused handles
   priv heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
-  // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
-  priv mut c_heap : @native_bridge.CHeap?
   // Module types for CHeap type lookups (needed to decode Int64 to Value)
   priv mut module_types : Array[@types.SubType]
   // Module rec groups for canonical type index computation
   priv mut module_rec_groups : Array[Int32]
   // Internal values wrapped as externref via extern.convert_any
   // Accessed using negative ExternRef indices: ExternRef(-1-i) = wrapped_externs[i]
-  priv auxiliary_leases : Map[(Int32, Int64), (ResourceLease, ResourceLease)]
-  priv mut wrapped_externs : Map[Int32, @types.Value]
   // Maps function address to its owning module instance
   // Used for cross-module call context switching
   priv func_owners : Array[FuncOwner]
@@ -69,8 +63,6 @@ pub struct Store {
   native_execution : @native_bridge.NativeExecutionState
   priv funcref_registry : StoreFuncrefRegistry
   priv native_types : StoreTypeRegistry
-  priv native_exception_to_store : Map[Int64, Int32]
-  priv store_exception_to_native : Map[Int32, Int64]
   priv suspended_executions : Map[Int64, SuspendedExecutionCleanup]
   priv mut next_suspended_execution_id : Int64
   priv mut guest_continuations : Map[Int64, GuestContinuationBody]
@@ -88,16 +80,21 @@ fn Store::register_rollback(
   registrar : RollbackRegistrar,
 ) -> Unit {
   self.instantiation = Some(registrar)
-  registrar.on_finish(fn() { self.instantiation = None })
+  self.references.instantiation = Some(registrar)
+  registrar.on_finish(fn() {
+    self.instantiation = None
+    self.references.instantiation = None
+  })
   // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
   registrar.on_rollback(
     self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
   )
-  if self.c_heap is Some(heap) {
+  if self.references.native.c_heap is Some(heap) {
     registrar.on_rollback(
       heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
     )
   }
+  self.register_native_exception_rollback(registrar)
 }
 
 ///|
@@ -181,6 +178,24 @@ pub fn Store::Store(
     }
   }
 
+  let closed = Ref(false)
+  let tags : Array[@types.FuncType] = []
+  let managed_heap = MarkSweepHeap(resource_budget~)
+  let funcref_registry = StoreFuncrefRegistry::new()
+  let references = StoreReferences::new(
+    resource_budget,
+    closed,
+    tags,
+    managed_heap,
+    funcref_registry,
+    {
+      native_execution,
+      c_heap: None,
+      exception_allocations: None,
+      native_exception_to_store: Map([]),
+      store_exception_to_native: Map([]),
+    },
+  )
   {
     nan_canonicalization,
     interpreter_limits,
@@ -188,8 +203,6 @@ pub fn Store::Store(
     execution_scope: None,
     instance_leases: [],
     interpreter_reentry_depth: 0,
-    next_exception: 0,
-    next_wrapped_extern: 0,
     gc_tracing_depth: 0,
     gc_in_collect: false,
     gc_trace: None,
@@ -199,16 +212,12 @@ pub fn Store::Store(
     tables: [],
     mems: [],
     globals: [],
-    tags: [],
+    tags,
     tag_type_indices: [],
     tag_owners: [],
-    exns: Map([]),
-    heap: MarkSweepHeap(resource_budget~),
-    c_heap: None,
+    heap: managed_heap,
     module_types: [],
     module_rec_groups: [],
-    wrapped_externs: Map([]),
-    auxiliary_leases: Map([]),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -216,10 +225,8 @@ pub fn Store::Store(
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution,
-    funcref_registry: StoreFuncrefRegistry::new(),
+    funcref_registry,
     native_types: StoreTypeRegistry::new(),
-    native_exception_to_store: Map([]),
-    store_exception_to_native: Map([]),
     suspended_executions: Map([]),
     next_suspended_execution_id: 0L,
     guest_continuations: Map([]),
@@ -227,7 +234,8 @@ pub fn Store::Store(
     pinned_gc_roots: Map([]),
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
-    closed: Ref(false),
+    closed,
+    references,
   }
 }
 
@@ -256,6 +264,24 @@ pub fn Store::with_c_heap(
   let heap = @native_bridge.CHeap(capacity=initial_capacity) catch {
     _ => raise OutOfMemory
   }
+  let closed = Ref(false)
+  let tags : Array[@types.FuncType] = []
+  let managed_heap = MarkSweepHeap(resource_budget~)
+  let funcref_registry = StoreFuncrefRegistry::new()
+  let references = StoreReferences::new(
+    resource_budget,
+    closed,
+    tags,
+    managed_heap,
+    funcref_registry,
+    {
+      native_execution,
+      c_heap: Some(heap),
+      exception_allocations: None,
+      native_exception_to_store: Map([]),
+      store_exception_to_native: Map([]),
+    },
+  )
   let store : Store = {
     nan_canonicalization,
     interpreter_limits,
@@ -263,8 +289,6 @@ pub fn Store::with_c_heap(
     execution_scope: None,
     instance_leases: [],
     interpreter_reentry_depth: 0,
-    next_exception: 0,
-    next_wrapped_extern: 0,
     gc_tracing_depth: 0,
     gc_in_collect: false,
     gc_trace: None,
@@ -274,16 +298,12 @@ pub fn Store::with_c_heap(
     tables: [],
     mems: [],
     globals: [],
-    tags: [],
+    tags,
     tag_type_indices: [],
     tag_owners: [],
-    exns: Map([]),
-    heap: MarkSweepHeap(resource_budget~), // Used only when c_heap is None.
-    c_heap: Some(heap),
+    heap: managed_heap,
     module_types: [],
     module_rec_groups: [],
-    wrapped_externs: Map([]),
-    auxiliary_leases: Map([]),
     func_owners: [],
     instances: [],
     jit_tables: [],
@@ -291,10 +311,8 @@ pub fn Store::with_c_heap(
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution,
-    funcref_registry: StoreFuncrefRegistry::new(),
+    funcref_registry,
     native_types: StoreTypeRegistry::new(),
-    native_exception_to_store: Map([]),
-    store_exception_to_native: Map([]),
     suspended_executions: Map([]),
     next_suspended_execution_id: 0L,
     guest_continuations: Map([]),
@@ -302,7 +320,8 @@ pub fn Store::with_c_heap(
     pinned_gc_roots: Map([]),
     next_pinned_gc_roots_id: 0L,
     instantiation: None,
-    closed: Ref(false),
+    closed,
+    references,
   }
   store.bind_gc_budget(heap)
   store.native_execution.exceptions().enable_reclamation()
@@ -397,20 +416,20 @@ pub fn Store::close(self : Store) -> Unit {
   self.tag_type_indices.shrink_to_fit()
   self.tag_owners.clear()
   self.tag_owners.shrink_to_fit()
-  self.native_exception_to_store.clear()
-  self.store_exception_to_native.clear()
-  self.exns.clear()
-  self.auxiliary_leases.clear()
+  self.references.native.native_exception_to_store.clear()
+  self.references.native.store_exception_to_native.clear()
+  self.references.exns.clear()
+  self.references.auxiliary_leases.clear()
   self.heap.close()
-  if self.c_heap is Some(heap) {
+  if self.references.native.c_heap is Some(heap) {
     heap.free()
-    self.c_heap = None
+    self.references.native.c_heap = None
   }
   // These arrays are borrowed from the parsed module and may be reused by
   // other stores. Closing a store must only drop its own references.
   self.module_types = []
   self.module_rec_groups = []
-  self.wrapped_externs.clear()
+  self.references.wrapped_externs.clear()
   for owner in self.jit_table_owners {
     match owner {
       Some(owner) => owner.close()
@@ -520,7 +539,7 @@ pub fn GcRootLease::snapshot(self : GcRootLease) -> Array[@types.Value] {
 #cfg(target="native")
 pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
   self.ensure_open()
-  if self.c_heap is None {
+  if self.references.native.c_heap is None {
     guard self.heap.stats().live_objects == 0 else {
       raise HeapRepresentationInUse
     }
@@ -528,7 +547,7 @@ pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
       _ => raise OutOfMemory
     }
     self.bind_gc_budget(heap)
-    self.c_heap = Some(heap)
+    self.references.native.c_heap = Some(heap)
     self.native_execution.exceptions().enable_reclamation()
   }
 }
@@ -560,7 +579,7 @@ pub fn Store::set_module_types(
 /// Get the C heap pointer (for JIT)
 #cfg(target="native")
 pub fn Store::get_c_heap_ptr(self : Store) -> @native_bridge.GCHeapHandle {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.get_ptr()
     None => @native_bridge.GCHeapHandle::null()
   }
@@ -570,7 +589,7 @@ pub fn Store::get_c_heap_ptr(self : Store) -> @native_bridge.GCHeapHandle {
 /// Check if C heap is enabled
 #cfg(target="native")
 pub fn Store::has_c_heap(self : Store) -> Bool {
-  self.c_heap is Some(_)
+  self.references.native.c_heap is Some(_)
 }
 
 ///|
@@ -580,19 +599,7 @@ pub fn Store::wrap_as_extern(
   self : Store,
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
-  self.ensure_open()
-  if self.next_wrapped_extern == 2147483647 {
-    raise AllocationTooLarge
-  }
-  self.reserve_auxiliary_handle(0, self.next_wrapped_extern.to_int64(), 16L)
-  let idx = self.next_wrapped_extern
-  self.next_wrapped_extern += 1
-  self.wrapped_externs.set(idx, value)
-  self.on_instantiation_rollback(fn() {
-    self.wrapped_externs.remove(idx)
-    self.release_auxiliary_handle(0, idx.to_int64())
-  })
-  ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
+  self.references.wrap_as_extern(value)
 }
 
 ///|
@@ -603,23 +610,7 @@ pub fn Store::unwrap_extern(
   self : Store,
   value : @types.Value,
 ) -> @types.Value raise RuntimeError {
-  self.ensure_open()
-  match value {
-    ExternRef(idx) =>
-      if idx < 0 {
-        // Wrapped internal value
-        let wrapped_idx = -1 - idx
-        match self.wrapped_externs.get(wrapped_idx) {
-          Some(value) => value
-          None => raise UndefinedElement
-        }
-      } else {
-        // Host externref - return as-is (it's already an internal representation)
-        value
-      }
-    Null => Null
-    _ => value
-  }
+  self.references.unwrap_extern(value)
 }
 
 ///|
@@ -762,12 +753,11 @@ pub fn Store::alloc_table(
     None
   }
   let idx = self.tables.length()
-  table.binding = Some(binding)
-  table.native_table = if table.reservation is Some(_) {
-    owner.map(owner => owner.table().raw_ptr())
-  } else {
-    None
+  if owner is Some(owner) {
+    errdefer owner.close()
+    self.bind_table_storage(table, owner.table())
   }
+  table.binding = Some(binding)
   self.on_instantiation_rollback(fn() {
     binding.active.val = false
     if idx < self.jit_table_owners.length() {
@@ -897,23 +887,7 @@ pub fn Store::alloc_exn(
   tag_addr : Int32,
   values : Array[@types.Value],
 ) -> Int32 raise RuntimeError {
-  self.ensure_open()
-  if self.next_exception == 2147483647 {
-    raise AllocationTooLarge
-  }
-  self.reserve_auxiliary_handle(
-    1,
-    self.next_exception.to_int64(),
-    16L + values.length().to_int64() * 16L,
-  )
-  let index = self.next_exception
-  self.next_exception += 1
-  self.exns.set(index, { tag_addr, values: values.copy(), })
-  self.on_instantiation_rollback(fn() {
-    self.exns.remove(index)
-    self.release_auxiliary_handle(1, index.to_int64())
-  })
-  index
+  self.references.alloc_exn(tag_addr, values)
 }
 
 ///|
@@ -922,11 +896,7 @@ pub fn Store::get_exn(
   self : Store,
   idx : Int32,
 ) -> ExnInstance raise RuntimeError {
-  self.ensure_open()
-  match self.exns.get(idx) {
-    Some(exception) => { ..exception, values: exception.values.copy(), }
-    None => raise UndefinedElement
-  }
+  self.references.get_exn(idx)
 }
 
 ///|
@@ -989,7 +959,7 @@ pub fn Store::alloc_struct(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
-  let reference = match self.c_heap {
+  let reference = match self.references.native.c_heap {
     Some(heap) => {
       let encoded = fields.map(value => self.encode_heap_value(value))
       heap.alloc_struct(type_idx, encoded) catch {
@@ -1017,7 +987,7 @@ pub fn Store::alloc_array(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
-  let reference = match self.c_heap {
+  let reference = match self.references.native.c_heap {
     Some(heap) => {
       let encoded = elements.map(value => self.encode_heap_value(value))
       heap.alloc_array_from_values(type_idx, encoded) catch {
@@ -1041,7 +1011,7 @@ pub fn Store::struct_get(
   field_idx : Int32,
 ) -> @types.Value raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(struct_idx)
       let field_type = self.get_struct_field_type(
@@ -1066,7 +1036,7 @@ pub fn Store::struct_set(
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) =>
       heap.struct_set(struct_idx, field_idx, self.encode_heap_value(value))
     None => self.heap.struct_set(struct_idx, field_idx, value)
@@ -1081,7 +1051,7 @@ pub fn Store::array_len(
   array_idx : Int32,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.array_len(array_idx)
     None => self.heap.array_len(array_idx)
   }
@@ -1096,7 +1066,7 @@ pub fn Store::array_get(
   elem_idx : Int32,
 ) -> @types.Value raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       let type_idx = heap.get_type_idx(array_idx)
       let elem_type = self.get_array_elem_type(type_idx, array_idx)
@@ -1121,7 +1091,7 @@ pub fn Store::array_set(
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       let encoded = self.encode_heap_value(value)
       heap.array_set(array_idx, elem_idx, encoded) catch {
@@ -1145,7 +1115,7 @@ pub fn Store::array_fill(
   count : Int32,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       let encoded = self.encode_heap_value(value)
       heap.array_fill(array_idx, offset, encoded, count) catch {
@@ -1170,7 +1140,7 @@ pub fn Store::array_copy(
   count : Int32,
 ) -> Unit raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) =>
       heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
@@ -1190,7 +1160,7 @@ pub fn Store::get_gc_type_idx(
   idx : Int32,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.get_type_idx(idx)
     None => self.heap.get_type_idx(idx)
   }
@@ -1200,7 +1170,7 @@ pub fn Store::get_gc_type_idx(
 /// Check if a GC object reference is valid
 #cfg(target="native")
 pub fn Store::is_gc_valid(self : Store, idx : Int32) -> Bool {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.is_valid(idx)
     None => self.heap.is_valid(idx)
   }
@@ -1551,7 +1521,7 @@ pub fn Store::collect_garbage(
   defer {
     self.gc_in_collect = false
   }
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => {
       self.begin_gc_tracing()
       defer self.end_gc_tracing()
@@ -1582,7 +1552,7 @@ pub fn Store::collect_garbage(
 /// Returns true if heap usage exceeds the threshold (default 75%)
 #cfg(target="native")
 pub fn Store::should_collect(self : Store, threshold~ : Double = 0.75) -> Bool {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) => heap.should_collect(threshold~)
     None => false
   }
@@ -1609,7 +1579,7 @@ pub fn Store::maybe_collect(
 /// or (0, 0, 0, 0, 0) if no C heap is enabled
 #cfg(target="native")
 pub fn Store::get_gc_stats(self : Store) -> (Int64, Int64, Int32, Int32, Int32) {
-  match self.c_heap {
+  match self.references.native.c_heap {
     Some(heap) =>
       (
         heap.get_size(),

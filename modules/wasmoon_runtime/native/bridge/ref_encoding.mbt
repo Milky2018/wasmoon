@@ -19,7 +19,7 @@ pub fn encode_exception_ref(index : Int32) -> Int64 {
 
 ///|
 pub fn is_exception_ref(raw : Int64) -> Bool {
-  raw > 0L && (raw & EXCEPTION_REF_TAG) != 0L
+  raw > 0L && (raw & 0x7000000000000000L) == EXCEPTION_REF_TAG
 }
 
 ///|
@@ -113,3 +113,22 @@ pub fn decode_heap_ref(encoded : Int64) -> Int32 {
 
 // ============ GC Libcall Function Pointers ============
 // These return function pointers to C helper functions
+
+///|
+/// Stable Store function identity; executable registration is independent.
+pub fn encode_store_funcref(address : Int32) -> Int64 {
+  0x3000000000000000L | (address.to_int64() + 1L)
+}
+
+///|
+pub fn decode_store_funcref(raw : Int64) -> Int32? {
+  if raw <= 0L || (raw & 0x7000000000000000L) != 0x3000000000000000L {
+    return None
+  }
+  let address = raw & 0x0FFFFFFFFFFFFFFFL
+  if address == 0L || address > 0x80000000L {
+    None
+  } else {
+    Some((address - 1L).to_int())
+  }
+}

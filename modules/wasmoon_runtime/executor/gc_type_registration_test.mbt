@@ -285,3 +285,33 @@ test "GC fingerprints normalize external identities across shifted recursive gro
     store.gc_type_is_subtype(first_gc_global(store, first), shifted, 3),
   )
 }
+
+///|
+test "registered type mappings reject rolled-back and foreign instance identities" {
+  let store = @runtime.Store()
+  defer store.close()
+  let source = "(module (type (func (param i64))))"
+  let original = instantiate_gc_types(store, source)
+  let original_mapping = store.native_type_indices(original)
+  let linker = @runtime.Linker::with_store(store)
+  defer linker.close()
+  let transaction = @runtime.InstantiationTransaction::new()
+  defer transaction.rollback()
+  linker.register_rollback(transaction.registrar())
+  let stale = instantiate_gc_types(store, "(module (type (func (param f64))))")
+  let stale_mapping = store.native_type_indices(stale)
+  transaction.rollback()
+  let replacement = instantiate_gc_types(
+    store, "(module (type (func (param i32))))",
+  )
+  assert_true(store.native_type_indices(stale).is_empty())
+  assert_false(store.native_type_indices(replacement)[0] == stale_mapping[0])
+  assert_eq(store.native_type_indices(original), original_mapping)
+  let foreign = @runtime.Store()
+  defer foreign.close()
+  let other = instantiate_gc_types(foreign, source)
+  assert_true(store.native_type_indices(other).is_empty())
+  store.close()
+  assert_true(store.native_type_indices(original).is_empty())
+  assert_true(store.native_type_indices(replacement).is_empty())
+}

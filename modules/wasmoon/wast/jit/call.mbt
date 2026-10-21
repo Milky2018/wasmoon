@@ -88,18 +88,13 @@ fn prepare_jit_core_environment(
   instance : @runtime.ModuleInstance,
   scope : @runtime.ExecutionScope?,
 ) -> Bool raise JITCoreCallError {
+  store.check_instance(instance) catch {
+    error => raise HostInvocation(error)
+  }
   guard context.jit_module.set_execution_scope(scope) else {
     raise HostInvocation(ExecutionLimitsUnavailable)
   }
   errdefer context.jit_module.set_execution_scope(None) |> ignore
-  sync_tables_to_jit(
-    instance,
-    store,
-    context.jit_module,
-    use_subtype_indirect_check=context.use_subtype_indirect_check,
-  ) catch {
-    error => raise HostInvocation(error)
-  }
   match store.native_heap() {
     Some(heap) => {
       context.jit_module.setup_gc(
@@ -123,15 +118,11 @@ fn finish_jit_core_environment(
   context : JITModuleContext,
   store : @runtime.Store,
   gc_active : Bool,
-) -> Unit raise JITCoreCallError {
+) -> Unit {
   defer (if gc_active { store.end_gc_tracing() })
   defer context.jit_module.set_execution_scope(None) |> ignore
   if gc_active {
     context.jit_module.teardown_gc()
-  }
-
-  sync_jit_tables_to_store(context, store) catch {
-    error => raise HostInvocation(error)
   }
 }
 

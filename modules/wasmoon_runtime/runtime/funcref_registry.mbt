@@ -25,6 +25,7 @@ priv struct StoreFuncrefRegistry {
   store_to_ptr : Map[Int32, Array[StoreFuncrefMappingOwner]]
   ptr_to_store : Map[Int64, Array[StoreFuncrefMappingOwner]]
   next_registration : Ref[Int32]
+  mut native : @native_bridge.NativeCallableRegistry?
   owners : Array[NativeCallableOwner]
 } derive(Debug)
 
@@ -42,6 +43,7 @@ fn StoreFuncrefRegistry::new() -> StoreFuncrefRegistry {
     store_to_ptr: Map([]),
     ptr_to_store: Map([]),
     next_registration: Ref(0),
+    native: None,
     owners: [],
   }
 }
@@ -81,6 +83,7 @@ fn StoreFuncrefRegistry::register(
       None => self.ptr_to_store.set(func_ptr, [owner])
     }
   }
+  self.publish_functions()
   { registry: self, registration, entries, active: Ref(true), }
 }
 
@@ -107,6 +110,7 @@ pub fn StoreFuncrefRegistration::release(
       }
     }
   }
+  self.registry.publish_functions()
 }
 
 ///|
@@ -153,6 +157,8 @@ fn StoreFuncrefRegistry::entries(
 fn StoreFuncrefRegistry::clear(self : StoreFuncrefRegistry) -> Unit {
   self.store_to_ptr.clear()
   self.ptr_to_store.clear()
+  self.publish_functions()
+  self.native = None
   let owners = self.owners.copy()
   self.owners.clear()
   self.owners.shrink_to_fit()
@@ -200,4 +206,20 @@ priv struct NativeCallableOwner {
 ///|
 impl Debug for NativeCallableOwner with fn to_repr(_self) {
   Repr::literal("NativeCallableOwner")
+}
+
+///|
+fn StoreFuncrefRegistry::publish_functions(self : StoreFuncrefRegistry) -> Unit {
+  if self.native is Some(registry) {
+    let functions : Array[(Int32, Int64)] = []
+    for address, owners in self.store_to_ptr {
+      if !owners.is_empty() {
+        functions.push((address, owners[owners.length() - 1].func_ptr))
+      }
+    }
+    registry.replace_functions(
+      functions,
+      self.entries().map(entry => (entry.func_ptr, entry.store_addr)),
+    )
+  }
 }

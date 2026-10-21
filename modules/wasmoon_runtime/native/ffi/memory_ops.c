@@ -420,7 +420,7 @@ void WASMOON_GUEST_ABI memory_copy_indexed_internal(jit_context_t *ctx, int32_t 
 
 // ============ Table Operations ============
 
-static int64_t table_grow_owner(wasmoon_table_t *owner, int64_t delta, int64_t init_value, size_t maximum) {
+static int64_t table_grow_owner(wasmoon_table_t *owner, int64_t delta, int64_t init_value, int64_t init_type, size_t maximum) {
     if (!owner || !owner->entries || delta < 0) return -1;
     size_t old_size = owner->size;
     if (delta == 0) return (int64_t)old_size;
@@ -461,11 +461,12 @@ static int64_t table_grow_owner(wasmoon_table_t *owner, int64_t delta, int64_t i
     // Initialize new elements with init_value
     for (size_t i = old_size; i < new_size; i++) {
         new_table[i * 2] = (void *)init_value;      // func_ptr
-        new_table[i * 2 + 1] = (void*)(intptr_t)(-1); // type_idx (unknown)
+        new_table[i * 2 + 1] = (void*)(intptr_t)init_type;
     }
 
     // Publish reallocations to every context retaining this stable owner.
     table_publish_layout(owner, new_table, new_size);
+    owner->revision++;
 
     // Free old table
     if (old_table) {
@@ -487,11 +488,26 @@ int64_t table_grow_ctx_internal(
     if (!ctx_runtime(ctx)->table_bindings[table_idx].owner->entries) return -1;
 
     size_t maximum = ctx_table_max_sizes(ctx) ? ctx_table_max_sizes(ctx)[table_idx] : SIZE_MAX;
-    return table_grow_owner(ctx_runtime(ctx)->table_bindings[table_idx].owner, delta, init_value, maximum);
+    wasmoon_table_t *owner = ctx_runtime(ctx)->table_bindings[table_idx].owner;
+    int64_t type = table_type_for_value(ctx, init_value);
+    if (owner->store_references) init_value = callable_store_reference(ctx, init_value);
+    return table_grow_owner(owner, delta, init_value, type, maximum);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_table_grow_value(wasmoon_table_t *owner, int64_t delta, int64_t value, int32_t type) {
+    return table_grow_owner(owner, delta, value, type, SIZE_MAX);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_table_use_store_references(wasmoon_table_t *owner) {
+    if (owner) owner->store_references = 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_table_uses_store_references(wasmoon_table_t *owner) {
+    return owner && owner->store_references;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_table_grow_owned(wasmoon_table_t *owner, int64_t delta) {
-    return table_grow_owner(owner, delta, 0, SIZE_MAX);
+    return table_grow_owner(owner, delta, 0, -1, SIZE_MAX);
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

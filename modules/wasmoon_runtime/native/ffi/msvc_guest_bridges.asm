@@ -170,6 +170,34 @@ exception_get_ref_impl_msvc_guest PROC
     add rsp, 40
     ret
 exception_get_ref_impl_msvc_guest ENDP
+EXTERN funcref_call_target_impl_msvc_target:QWORD
+PUBLIC funcref_call_target_impl_msvc_guest
+funcref_call_target_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [funcref_call_target_impl_msvc_target]
+    add rsp, 40
+    ret
+funcref_call_target_impl_msvc_guest ENDP
+EXTERN function_reference_impl_msvc_target:QWORD
+PUBLIC function_reference_impl_msvc_guest
+function_reference_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [function_reference_impl_msvc_target]
+    add rsp, 40
+    ret
+function_reference_impl_msvc_guest ENDP
 EXTERN gc_alloc_array_from_slots_slow_impl_msvc_target:QWORD
 PUBLIC gc_alloc_array_from_slots_slow_impl_msvc_guest
 gc_alloc_array_from_slots_slow_impl_msvc_guest PROC
@@ -668,6 +696,20 @@ memory_size_indexed_internal_msvc_guest PROC
     add rsp, 40
     ret
 memory_size_indexed_internal_msvc_guest ENDP
+EXTERN table_call_target_impl_msvc_target:QWORD
+PUBLIC table_call_target_impl_msvc_guest
+table_call_target_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [table_call_target_impl_msvc_target]
+    add rsp, 40
+    ret
+table_call_target_impl_msvc_guest ENDP
 EXTERN table_copy_impl_msvc_target:QWORD
 PUBLIC table_copy_impl_msvc_guest
 table_copy_impl_msvc_guest PROC
@@ -699,6 +741,20 @@ table_fill_impl_msvc_guest PROC
     add rsp, 40
     ret
 table_fill_impl_msvc_guest ENDP
+EXTERN table_get_impl_msvc_target:QWORD
+PUBLIC table_get_impl_msvc_guest
+table_get_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [table_get_impl_msvc_target]
+    add rsp, 40
+    ret
+table_get_impl_msvc_guest ENDP
 EXTERN table_init_impl_msvc_target:QWORD
 PUBLIC table_init_impl_msvc_guest
 table_init_impl_msvc_guest PROC

@@ -475,7 +475,6 @@ fn run_jit_with_opt_level(
       store,
       use_subtype_indirect_check~,
     )
-    @wast.sync_tables_to_jit(instance, store, jm, use_subtype_indirect_check~)
     let global_addrs : Array[Int32] = []
     for addr in instance.global_addrs {
       global_addrs.push(addr)

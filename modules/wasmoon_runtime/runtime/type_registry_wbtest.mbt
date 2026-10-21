@@ -133,3 +133,60 @@ test "Store registration rejects colliding group candidates before reusing ident
   assert_eq(store.module_type_indices()[0], second)
   assert_eq(store.native_types.representatives.length(), 2)
 }
+
+///|
+test "callable publication cannot restore graph caches after reentrant Store close" {
+  for registered in [false, true] {
+    let store = Store()
+    defer store.close()
+    let instance = store.new_instance(
+      @validator.ValidatedModule::new({
+        ..@types.Module::empty(),
+        types: [registry_struct_type()],
+        type_rec_groups: [0],
+      }),
+      func_addrs=[],
+      table_addrs=[],
+      mem_addrs=[],
+      global_addrs=[],
+      tag_addrs=[],
+      elem_values=[],
+    )
+    store.set_module_types([registry_struct_type()])
+    let armed = Ref(false)
+    store.bind_native_callable_view(fn(_, _) { if armed.val { store.close() } })
+    armed.val = true
+    if registered {
+      store.native_type_indices(instance) |> ignore
+    } else {
+      store.module_type_indices() |> ignore
+    }
+    assert_true(store.is_closed())
+    assert_true(store.native_types.mappings.is_empty())
+    assert_true(store.native_types.initialization_graph is None)
+  }
+}
+
+///|
+test "callable publication preserves a reentrant change of initialization graph" {
+  let store = Store()
+  defer store.close()
+  store.set_module_types([registry_struct_type()])
+  let armed = Ref(false)
+  store.bind_native_callable_view(fn(_, _) {
+    if armed.val {
+      armed.val = false
+      store.set_module_types([
+        @types.SubType::simple(
+          Array({ element: { storage_type: Val(I64), mutable: true, }, }),
+        ),
+      ]) catch {
+        _ => abort("test graph replacement failed")
+      }
+    }
+  })
+  armed.val = true
+  let original = store.module_type_indices()
+  let current = store.module_type_indices()
+  assert_false(original[0] == current[0])
+}

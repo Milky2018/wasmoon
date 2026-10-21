@@ -321,6 +321,123 @@ static void WASMOON_GUEST_ABI data_drop_impl(
 
 // ============ Table Segment Libcalls ============
 
+// Table entries use Store callable identities, including growth initializers.
+int64_t table_type_for_value(jit_context_t *ctx, int64_t val) {
+    if (!ctx) return -1;
+    // Infer the type index for funcref values so call_indirect can type-check.
+    // For non-funcref values, keep type_idx = -1.
+    int64_t type_idx = callable_type_for_value(ctx, val);
+    if (
+        type_idx < 0 &&
+        val != 0 &&
+        (val & FUNCREF_TAG) != 0 &&
+        ctx_runtime(ctx)->gc_func_table &&
+        ctx_runtime(ctx)->gc_func_type_indices
+    ) {
+        void* raw_ptr = (void*)(uintptr_t)(val & ~FUNCREF_TAG);
+        for (int i = 0; i < ctx_runtime(ctx)->gc_func_table_size; i++) {
+            if (ctx_runtime(ctx)->gc_func_table[i] == (int64_t)(uintptr_t)raw_ptr) {
+                int32_t t = ctx_runtime(ctx)->gc_func_type_indices[i];
+                if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
+                    t = ctx_runtime(ctx)->gc_canonical_indices[t];
+                }
+                type_idx = (int64_t)t;
+                break;
+            }
+        }
+    } else if (type_idx < 0 && val < 0 && ctx_runtime(ctx)->gc_func_type_indices) {
+        // IR-encoded funcref index: -(func_idx + 1)
+        int32_t func_idx = (int32_t)(-(val + 1));
+        if (func_idx >= 0 && func_idx < ctx_runtime(ctx)->gc_num_funcs) {
+            int32_t t = ctx_runtime(ctx)->gc_func_type_indices[func_idx];
+            if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
+                t = ctx_runtime(ctx)->gc_canonical_indices[t];
+            }
+            type_idx = (int64_t)t;
+        }
+    }
+
+    return type_idx;
+}
+
+static void **table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
+    if (!ctx || !ctx_tables(ctx) || !ctx_table_sizes(ctx) || table_idx < 0 || table_idx >= ctx_table_count(ctx) || index < 0 ||
+        (uint64_t)index >= ctx_table_sizes(ctx)[table_idx]) {
+        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    return ctx_tables(ctx)[table_idx] + (size_t)index * 2;
+}
+
+static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t table_idx, int64_t index) {
+    void **entry = table_entry(ctx, table_idx, index);
+    if (!entry) return 0;
+    int64_t value = (int64_t)(intptr_t)entry[0];
+
+    return value;
+}
+
+// Reference identity may exist before executable code is registered. Resolve
+// only at a call boundary, never by reinterpreting a Store handle as a pointer.
+int64_t callable_entry(jit_context_t *ctx, int64_t value) {
+    int trap = 0;
+    if (!value) trap = WASMOON_TRAP_NULL_REFERENCE;
+    else {
+        value = callable_native_reference(ctx, value);
+        if (value < 0) {
+            int64_t index = -(value + 1);
+            value = ctx && index < ctx_func_count(ctx)
+                ? (int64_t)(intptr_t)ctx_func_table(ctx)[index] : 0;
+        } else if ((value & STORE_FUNCREF_TAG) == STORE_FUNCREF_TAG) {
+            value = 0; // No executable mapping yet; the reference remains live.
+        } else if (value & FUNCREF_TAG) value &= ~FUNCREF_TAG;
+        else value = 0;
+        if (!value) trap = WASMOON_TRAP_BACKEND;
+    }
+    if (trap) {
+        g_trap_code = trap;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    return value;
+}
+
+static int64_t WASMOON_GUEST_ABI funcref_call_target_impl(jit_context_t *ctx, int64_t value) {
+    return callable_entry(ctx, value);
+}
+
+static int64_t WASMOON_GUEST_ABI function_reference_impl(jit_context_t *ctx, int32_t index) {
+    if (!ctx || index < 0 || index >= ctx_func_count(ctx)) return 0;
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    if (index < state->callable_function_count) {
+        int32_t address = state->callable_functions[index];
+        if (address >= 0) return STORE_FUNCREF_TAG | ((int64_t)address + 1);
+    }
+    int64_t pointer = (int64_t)(intptr_t)ctx_func_table(ctx)[index];
+    return pointer ? pointer | FUNCREF_TAG : -(int64_t)(index + 1);
+}
+
+static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int32_t table_idx, int64_t index, int32_t expected) {
+    void **entry = table_entry(ctx, table_idx, index);
+    if (!entry) return 0;
+    int64_t value = (int64_t)(intptr_t)entry[0];
+    if (!value) {
+        g_trap_code = WASMOON_TRAP_UNINITIALIZED_ELEMENT;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    int32_t actual = callable_type_for_value(ctx, value);
+    if (actual < 0 && !ctx_runtime(ctx)->callable_registry)
+        actual = (int32_t)(intptr_t)entry[1];
+    if (!value || !callable_subtype(ctx, actual, expected)) {
+        g_trap_code = WASMOON_TRAP_INDIRECT_TYPE;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    return funcref_call_target_impl(ctx, value);
+}
+
 // table.fill - Fill table region with a value
 static void WASMOON_GUEST_ABI table_fill_impl(
     jit_context_t *ctx,
@@ -371,38 +488,11 @@ static void WASMOON_GUEST_ABI table_fill_impl(
         return;
     }
 
-    // Infer the type index for funcref values so call_indirect can type-check.
-    // For non-funcref values, keep type_idx = -1.
-    int64_t type_idx = callable_type_for_value(ctx, val);
-    if (
-        type_idx < 0 &&
-        val != 0 &&
-        (val & FUNCREF_TAG) != 0 &&
-        ctx_runtime(ctx)->gc_func_table &&
-        ctx_runtime(ctx)->gc_func_type_indices
-    ) {
-        void* raw_ptr = (void*)(uintptr_t)(val & ~FUNCREF_TAG);
-        for (int i = 0; i < ctx_runtime(ctx)->gc_func_table_size; i++) {
-            if (ctx_runtime(ctx)->gc_func_table[i] == (int64_t)(uintptr_t)raw_ptr) {
-                int32_t t = ctx_runtime(ctx)->gc_func_type_indices[i];
-                if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
-                    t = ctx_runtime(ctx)->gc_canonical_indices[t];
-                }
-                type_idx = (int64_t)t;
-                break;
-            }
-        }
-    } else if (type_idx < 0 && val < 0 && ctx_runtime(ctx)->gc_func_type_indices) {
-        // IR-encoded funcref index: -(func_idx + 1)
-        int32_t func_idx = (int32_t)(-(val + 1));
-        if (func_idx >= 0 && func_idx < ctx_runtime(ctx)->gc_num_funcs) {
-            int32_t t = ctx_runtime(ctx)->gc_func_type_indices[func_idx];
-            if (ctx_runtime(ctx)->gc_canonical_indices && t >= 0 && t < ctx_runtime(ctx)->gc_num_canonical) {
-                t = ctx_runtime(ctx)->gc_canonical_indices[t];
-            }
-            type_idx = (int64_t)t;
-        }
-    }
+    int64_t type_idx = table_type_for_value(ctx, val);
+
+    if (ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[table_idx].owner &&
+        ctx_runtime(ctx)->table_bindings[table_idx].owner->store_references)
+        val = callable_store_reference(ctx, val);
 
     // Fill (table entries are 2 slots: func_ptr and type_idx)
     for (int64_t i = 0; i < len; i++) {
@@ -410,6 +500,8 @@ static void WASMOON_GUEST_ABI table_fill_impl(
         table[idx] = (void *)(uintptr_t)val;               // value bits
         table[idx + 1] = (void *)(intptr_t)type_idx;       // type idx for funcref, -1 otherwise
     }
+
+    if (len > 0) table_mark_mutated(ctx, table_idx);
 
     if (table_debug_enabled() && table_idx == 0) {
         int64_t max_dump = table_size < 6 ? (int64_t)table_size : 6;
@@ -490,6 +582,7 @@ static void WASMOON_GUEST_ABI table_copy_impl(
     // Each entry is 2 slots
     if (len > 0) {
         memmove(dst_table + dst * 2, src_table + src * 2, (size_t)len * 2 * sizeof(void *));
+        table_mark_mutated(ctx, dst_table_idx);
     }
 }
 
@@ -559,9 +652,13 @@ static void WASMOON_GUEST_ABI table_init_impl(
         int64_t elem_val = seg_data[seg_off];
         int64_t elem_type = seg_data[seg_off + 1];
         int64_t tbl_off = (dst + i) * 2;
+        if (ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[table_idx].owner &&
+            ctx_runtime(ctx)->table_bindings[table_idx].owner->store_references)
+            elem_val = callable_store_reference(ctx, elem_val);
         table[tbl_off] = (void *)(uintptr_t)elem_val;
         table[tbl_off + 1] = (void *)(intptr_t)elem_type;
     }
+    if (len > 0) table_mark_mutated(ctx, table_idx);
 }
 
 // elem.drop - Mark element segment as dropped
@@ -589,6 +686,19 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_init_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_data_drop_ptr(void) {
     return WASMOON_GUEST_ADDRESS(data_drop_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_get_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(table_get_impl);
+}
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_funcref_call_target_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(funcref_call_target_impl);
+}
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_function_reference_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(function_reference_impl);
+}
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_call_target_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(table_call_target_impl);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_fill_ptr(void) {
@@ -961,5 +1071,9 @@ WASMOON_DEFINE_GUEST_TARGET(gc_array_new_elem_impl);
 WASMOON_DEFINE_GUEST_TARGET(memory_init_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_copy_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_fill_impl);
+WASMOON_DEFINE_GUEST_TARGET(table_get_impl);
+WASMOON_DEFINE_GUEST_TARGET(table_call_target_impl);
+WASMOON_DEFINE_GUEST_TARGET(funcref_call_target_impl);
+WASMOON_DEFINE_GUEST_TARGET(function_reference_impl);
 WASMOON_DEFINE_GUEST_TARGET(table_init_impl);
 #endif
