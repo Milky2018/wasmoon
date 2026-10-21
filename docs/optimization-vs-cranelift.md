@@ -736,7 +736,7 @@ To compare optimizers meaningfully, measure:
   - spills/reloads counts
   - final machine-code size
 - **Correctness gates**
-  - `python3 scripts/run_all_wast.py --dir spec --rec`
+  - `python3 scripts/run_all_wast.py --dir tests/upstream/core-spec --rec`
   - targeted “JIT vs interp” differential tests where JIT is enabled
 
 When reporting results, record:

@@ -237,7 +237,7 @@ struct PendingStreamWrite {
   event_enqueued : Bool
   // For sync (non-async) stream.write, defer completion by one cooperative yield once
   // the write becomes fully consumed. This gives the reader a chance to drop the
-  // readable end before the writer observes completion (component-spec/async/sync-streams).
+  // readable end before the writer observes completion (tests/upstream/component-model/upstream/async/sync-streams).
   defer_complete : Bool
 } derive(Debug)
 
@@ -1333,7 +1333,7 @@ fn alloc_shared_handle_with_source(
   }
   if free.length() > 0 {
     // Deterministic allocation: reuse the smallest available handle so suites
-    // relying on stable numbering (component-spec/async) behave consistently.
+    // relying on stable numbering (tests/upstream/component-model/upstream/async) behave consistently.
     let mut best_i = 0
     let mut best = free[0]
     for i in 1..<free.length() {

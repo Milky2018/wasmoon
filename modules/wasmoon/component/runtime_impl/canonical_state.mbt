@@ -3,7 +3,7 @@
 ///|
 /// During this phase we must not allow sync-lowered async calls to actually
 /// block/spin; otherwise the caller core code can deadlock before it has a
-/// chance to make progress (component-spec/async).
+/// chance to make progress (tests/upstream/component-model/upstream/async).
 let canon_in_prerun : Array[Bool] = [false]
 
 ///|

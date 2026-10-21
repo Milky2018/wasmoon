@@ -25,7 +25,7 @@ import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "wasi-tests/wasmtime"
+CORPUS = ROOT / "tests/upstream/wasmtime/wasi-p1"
 BUILD = ROOT / "target/wasmtime-p1-build"
 NOT_APPLICABLE = {
     "p1_cli_hostcall_fuel": "Wasmtime-specific hostcall fuel policy is outside Wasmoon's WASIp1 contract.",

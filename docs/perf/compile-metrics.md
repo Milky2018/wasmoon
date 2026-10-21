@@ -26,7 +26,7 @@ Metrics are opt-in via environment variables:
 Example:
 
 ```bash
-WASMOON_PERF_METRICS=1 ./wasmoon test spec/f32.wast
+WASMOON_PERF_METRICS=1 ./wasmoon test tests/upstream/core-spec/f32.wast
 ```
 
 ## Collected Data

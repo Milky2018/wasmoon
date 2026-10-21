@@ -89,7 +89,7 @@ def write_snapshot(
     upstream_path: str,
     wasm_tools_version: str,
 ) -> None:
-    upstream_root = repo_root / "component-spec" / "upstream"
+    upstream_root = repo_root / "tests/upstream/component-model" / "upstream"
     files = []
     for path in sorted(item for item in upstream_root.rglob("*") if item.is_file()):
         files.append(
@@ -107,7 +107,7 @@ def write_snapshot(
         "wasm_tools_version": wasm_tools_version,
         "files": files,
     }
-    snapshot_path = repo_root / "component-spec" / "SNAPSHOT.json"
+    snapshot_path = repo_root / "tests/upstream/component-model" / "SNAPSHOT.json"
     snapshot_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -156,7 +156,7 @@ def main() -> int:
             args.upstream_path,
             extract_root,
         )
-        destination = repo_root / "component-spec" / "upstream"
+        destination = repo_root / "tests/upstream/component-model" / "upstream"
         shutil.rmtree(destination, ignore_errors=True)
         shutil.copytree(extract_root / args.upstream_path, destination)
         write_snapshot(

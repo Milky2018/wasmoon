@@ -190,8 +190,8 @@ def main() -> None:
     parser.add_argument(
         "--dir",
         type=str,
-        default="spec",
-        help="Directory containing .wast files (default: spec)",
+        default="tests/upstream/core-spec",
+        help="Directory containing .wast files (default: tests/upstream/core-spec)",
     )
     parser.add_argument(
         "--rec",

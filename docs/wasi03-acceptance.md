@@ -2,7 +2,7 @@
 
 ## HTTP contract profile (2026-09-30)
 
-CI now uses `--http-contract-tests`, a documented two-guest source patch over the pinned suite. It requires every execution to pass; the old known-failure acknowledgement option has been removed. The upstream corpus remains immutable and checksum-verified. Omit the flag to run the unmodified original suite, whose casing/path assertions still differ. See [the patch, contract decisions and rebuild instructions](../tests/wasi03/http-contract/README.md). A successful profile run is not described as an unmodified upstream conformance pass.
+CI now uses `--http-contract-tests`, a documented two-guest source patch over the pinned suite. It requires every execution to pass; the old known-failure acknowledgement option has been removed. The upstream corpus remains immutable and checksum-verified. Omit the flag to run the unmodified original suite, whose casing/path assertions still differ. See [the patch, contract decisions and rebuild instructions](../tests/wasi/p3/http-contract/README.md). A successful profile run is not described as an unmodified upstream conformance pass.
 
 The authority setter now validates URI syntax separately from network destinations. `Host` and `HTTP2-Settings` are rejected as transport-controlled fields. The historical reports below describe earlier binaries and the previous regression gate.
 

@@ -125,7 +125,7 @@ test "inline module: with table" {
 
 ///|
 test "inline module: matches spec/inline-module.wast format" {
-  // Test the exact format from spec/inline-module.wast
+  // Test the exact format from tests/upstream/core-spec/inline-module.wast
   let wast = "(func) (memory 0) (func (export \"f\"))"
   let result = run_inline_module(wast, "f", [])
   // Function returns nothing, should be empty

@@ -87,7 +87,7 @@ This plan covers IR-level optimization architecture and execution order, not new
   - `moon check --target native`
   - `moon test --target native`
   - `./install.sh`
-  - `python3 scripts/run_all_wast.py --dir spec --rec`
+  - `python3 scripts/run_all_wast.py --dir tests/upstream/core-spec --rec`
 - Perf acceptance for phase close:
   - `aead_aegis128l.wasm` and `benchmark.wasm` median runtime deltas documented vs Wasmtime.
   - No correctness regressions.

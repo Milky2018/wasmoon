@@ -117,7 +117,7 @@ def _load_corrections(
 
 
 def validate_snapshot(repo_root: Path) -> ComponentSnapshot:
-    component_root = repo_root / "component-spec"
+    component_root = repo_root / "tests/upstream/component-model"
     snapshot_path = component_root / "SNAPSHOT.json"
     try:
         data = json.loads(snapshot_path.read_text(encoding="utf-8"))

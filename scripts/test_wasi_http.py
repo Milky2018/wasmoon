@@ -182,7 +182,7 @@ def mixed_command_case(binary: Path, jit: bool, output: Path = ROOT / "target/ht
             "import wasi:clocks/monotonic-clock@0.3.0; "
             "export wasi:cli/run@0.3.0; }\n"
         )
-        source = (ROOT / "tests/http/mixed-command.wat").read_text()
+        source = (ROOT / "tests/wasi/http/mixed-command.wat").read_text()
         source = source.replace("127.0.0.1:PORT", authority)
         source = source.replace("AUTHORITY_LENGTH", str(len(authority)))
         (work / "guest.wat").write_text(source)
@@ -323,7 +323,7 @@ def main() -> None:
     parser.add_argument("--fixtures", type=Path, default=ROOT / "target/http-fixtures")
     parser.add_argument("--output", type=Path, default=ROOT / "target/http-results")
     args = parser.parse_args()
-    subprocess.run([sys.executable, str(ROOT / "tests/http/build_fixtures.py"), "--output", str(args.fixtures)], check=True)
+    subprocess.run([sys.executable, str(ROOT / "tests/wasi/http/build_fixtures.py"), "--output", str(args.fixtures)], check=True)
     for jit in [False, True]:
         run_engine(args.wasmoon.resolve(), args.fixtures.resolve(), jit, args.output.resolve())
 

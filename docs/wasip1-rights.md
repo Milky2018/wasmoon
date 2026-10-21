@@ -21,7 +21,7 @@ Its original filesystem rights failures remain visible: the shared scratch
 helper requests zero rights and then attempts operations requiring rights.
 
 `--profile explicit-rights` applies the separately reviewed
-[adaptation patch](../wasi-tests/wasmtime/explicit-rights.patch) to a temporary
+[adaptation patch](../tests/upstream/wasmtime/wasi-p1/explicit-rights.patch) to a temporary
 source copy. It requests scratch rights bounded by the preopen and adds the
 operation capabilities used at file-opening callsites. Secondary directories
 receive the specific directory/inheriting rights needed by their tests.

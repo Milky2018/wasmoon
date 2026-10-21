@@ -100,7 +100,7 @@ fn create_script_host(
     ),
   )
 
-  // Host instance used by component-spec/wasmtime suites.
+  // Host instance used by Component Model and Wasmtime suites.
   let resource1_type = linker.new_host_resource_type()
   let resource2_type = linker.new_host_resource_type()
   guard resource1_type is Some(ResourceType(resource1_id, _, _, _)) else {

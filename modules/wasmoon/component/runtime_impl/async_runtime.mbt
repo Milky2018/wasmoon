@@ -705,7 +705,7 @@ pub fn progress_one_subtask_nonblocking(
     false
   }
 
-  // Deterministic ordering: Map iteration order is unspecified, but component-spec/async
+  // Deterministic ordering: Map iteration order is unspecified, but tests/upstream/component-model/upstream/async
   // tests assume a stable event-loop schedule.
   //
   // - "Synthetic" async task ids are allocated as -1, -2, ... (older = greater).
@@ -1083,7 +1083,7 @@ fn call_component_func_in_task_impl(
         )
       }
       // Sync-typed function lifted with async callback protocol.
-      // These are used by component-spec/async to test yield/wait behavior.
+      // These are used by tests/upstream/component-model/upstream/async to test yield/wait behavior.
       match cb_opt {
         Some(cb) => {
           if func_type_needs_memory(func_type, types) &&

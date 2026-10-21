@@ -1,6 +1,7 @@
 # Examples
 
-This directory contains example WebAssembly files for testing wasmoon.
+This directory contains runnable WebAssembly usage examples and benchmark workloads.
+Owned regression suites live under [`tests/`](../tests/README.md).
 
 ## Running Examples
 
@@ -24,16 +25,6 @@ These examples require the `--dir` flag to grant filesystem access:
 ```bash
 # Real file I/O test (creates test_output.txt)
 ./wasmoon run examples/wasi_file_io.wat --dir .
-
-# WASI function signature test
-./wasmoon run examples/wasi_file_test.wat
-```
-
-### Validation Examples
-
-```bash
-# Test invalid rights validation (should return EINVAL)
-./wasmoon run examples/wasi_invalid_rights.wat --dir .
 ```
 
 ### Benchmark
@@ -65,8 +56,6 @@ https://github.com/jedisct1/webassembly-benchmarks under the ISC License. See
 | `args_wasi.wat` | Print command line arguments |
 | `benchmark.wat` | CPU-intensive Fibonacci benchmark (~10 seconds) |
 | `wasi_file_io.wat` | Full file I/O test: create, write, read, close |
-| `wasi_file_test.wat` | Test WASI function signatures and error codes |
-| `wasi_invalid_rights.wat` | Test that invalid rights are rejected |
 
 ## Generated Files
 

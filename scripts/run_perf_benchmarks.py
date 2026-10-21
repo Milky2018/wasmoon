@@ -22,9 +22,9 @@ DEFAULT_RUN_WORKLOADS = [
 ]
 
 DEFAULT_TEST_WORKLOADS = [
-    "spec/const.wast",
-    "spec/int_exprs.wast",
-    "spec/float_exprs.wast",
+    "tests/upstream/core-spec/const.wast",
+    "tests/upstream/core-spec/int_exprs.wast",
+    "tests/upstream/core-spec/float_exprs.wast",
 ]
 
 

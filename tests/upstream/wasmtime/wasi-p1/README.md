@@ -87,7 +87,7 @@ the reference CLI cannot configure permissions for individual preopens.
 Its coverage therefore differs from the Wasmoon run. Host `chmod` is not a
 substitute for a read-only WASI preopen. The runner does not reproduce
 Wasmtime's host API or table-capacity limits. The runner targets Linux, macOS and Windows; the Windows host contract and
-its assertion guards are documented in the [support ledger](../../docs/wasip1-support.md#platform-specific-fixture-coverage).
+its assertion guards are documented in the [support ledger](../../../../docs/wasip1-support.md#platform-specific-fixture-coverage).
 
 ## Initial results and interpretation
 
@@ -113,7 +113,7 @@ It also checks that denied I/O leaves file contents, size, cursor and guest read
 buffers unchanged. The three read-only guests likewise require exactly
 `NOTCAPABLE` instead of upstream's `PERM`, retaining their content checks and
 adding host-side source/destination checks. The original snapshot is untouched. See the
-[rights decision](../../docs/wasip1-rights.md) for the complete adaptation policy.
+[rights decision](../../../../docs/wasip1-rights.md) for the complete adaptation policy.
 
 With read-only preopens integrated, on macOS ARM64 this profile has 58 passes,
 no failures, timeouts or unsupported scenarios, and one not-applicable scenario

@@ -16,7 +16,7 @@ from component_snapshot import SnapshotError, validate_snapshot
 
 class ComponentSnapshotTests(unittest.TestCase):
     def create_snapshot(self, root: Path) -> None:
-        component_root = root / "component-spec"
+        component_root = root / "tests/upstream/component-model"
         upstream = component_root / "upstream"
         suites = component_root / "suites"
         upstream.mkdir(parents=True)
@@ -76,7 +76,7 @@ class ComponentSnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_snapshot(root)
-            (root / "component-spec/upstream/stable.wast").write_text(
+            (root / "tests/upstream/component-model/upstream/stable.wast").write_text(
                 "(component (type))\n",
                 encoding="utf-8",
             )
@@ -88,7 +88,7 @@ class ComponentSnapshotTests(unittest.TestCase):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 self.create_snapshot(root)
-                component = root / "component-spec"
+                component = root / "tests/upstream/component-model"
                 corrected = component / "corrections/async.wast"
                 corrected.parent.mkdir()
                 corrected.write_text("(component)\n(assert_return (invoke \"g\"))\n")
@@ -121,7 +121,7 @@ class ComponentSnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_snapshot(root)
-            (root / "component-spec/suites/async-0.3.txt").write_text(
+            (root / "tests/upstream/component-model/suites/async-0.3.txt").write_text(
                 "stable.wast\n",
                 encoding="utf-8",
             )
@@ -132,7 +132,7 @@ class ComponentSnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_snapshot(root)
-            (root / "component-spec/suites/future-gated.txt").write_text(
+            (root / "tests/upstream/component-model/suites/future-gated.txt").write_text(
                 "# empty\n",
                 encoding="utf-8",
             )
@@ -143,7 +143,7 @@ class ComponentSnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_snapshot(root)
-            (root / "component-spec/suites/other.txt").write_text(
+            (root / "tests/upstream/component-model/suites/other.txt").write_text(
                 "stable.wast\n",
                 encoding="utf-8",
             )
