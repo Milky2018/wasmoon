@@ -915,6 +915,22 @@ static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
     activation->pc = pc;
     activation->fault_addr = fault;
     activation->fp = registers->Rbp;
+    // Windows grows fiber stacks below their initially committed limit. Use
+    // the readable region containing the faulting frame, before recovery can
+    // re-arm guard pages inside the abandoned guest stack.
+    MEMORY_BASIC_INFORMATION frame_region;
+    if (activation->guard_base != 0 &&
+        activation->fp >= activation->guard_base &&
+        activation->fp < activation->stack_top &&
+        VirtualQuery((void *)activation->fp, &frame_region, sizeof(frame_region)) &&
+        (uintptr_t)frame_region.AllocationBase == activation->guard_base &&
+        frame_region.State == MEM_COMMIT &&
+        !(frame_region.Protect & PAGE_GUARD) &&
+        (frame_region.Protect & 0xff) == PAGE_READWRITE) {
+        activation->stack_base = (uintptr_t)frame_region.BaseAddress;
+        uintptr_t region_top = activation->stack_base + frame_region.RegionSize;
+        if (region_top < activation->stack_top) activation->stack_top = region_top;
+    }
     activation->x0 = registers->Rax;
     activation->x1 = registers->Rcx;
     activation->x2 = registers->Rdx;

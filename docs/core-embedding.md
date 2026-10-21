@@ -154,7 +154,9 @@ retain their existing ABI policy. Tail calls intentionally remove their caller.
 
 A resumable native trap copies up to the existing 32 native frame records into
 its activation before the fiber is released. Walking is bounded by that fiber's
-usable stack, not by whichever DWARF owner was most recently registered. The
+usable stack, not by whichever DWARF owner was most recently registered. Windows
+samples the saved frame's committed readable region in the owned fiber allocation
+and copies its chain before restoring the overflow guard. The
 module's owned TrapReport resolves every captured guest PC it owns and preserves
 recursive repetitions. Caller return addresses resolve using their preceding
 byte so a range-end return cannot name the next function. Names and indices

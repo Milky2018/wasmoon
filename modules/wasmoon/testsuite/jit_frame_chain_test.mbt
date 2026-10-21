@@ -118,42 +118,62 @@ test "another active DWARF owner cannot truncate a module's guest callers" {
 
 ///|
 test "guard-page recursion keeps repeated guest frames and a reusable context" {
-  let module_ = @wat.parse(
-    (
-      #|(module
-      #| (func (export "recurse") (param i32) (result i32)
-      #|  local.get 0 i32.const 1 i32.add call 0 i32.const 1 i32.add)
-      #| (func (export "run") i32.const 0 call 0 drop)
-      #| (func (export "healthy") (result i32) i32.const 42))
-    ),
-  )
-  let store = @runtime.Store::with_c_heap()
-  defer store.close()
-  let instance = @executor.instantiate_module_with_imports(
-    store,
-    module_,
-    Imports(store),
-  )
-  let context = prepare_async_jit_context(
-    module_,
-    instance,
-    store,
-    cooperative=true,
-    opt_level=2,
-  )
-  defer context.close()
-  assert_true(context.jit_module.configure_native_fiber_stack_size(65536L))
-  let report = trigger_frame_chain(context, store, instance, 1)
-  assert_true(
-    report.trap_kind.contains("call stack exhausted"),
-    msg=report.trap_kind,
-  )
-  assert_true(report.wasm_frames.length() >= 8)
-  assert_true(report.wasm_frames.all(frame => frame.func_idx == 0))
-  debug_inspect(
-    context.call_core_func(store, instance, 2, []),
-    content="[I32(42)]",
-  )
+  // Wide frames also cross pages that Windows guard restoration can protect.
+  for extra_parameters in [0, 128] {
+    let parameters = Array::make(extra_parameters, " i64").join("")
+    let forwarded = Array::makei(extra_parameters, i => "local.get \{i + 1}").join(
+      " ",
+    )
+    let initial = Array::make(extra_parameters, "i64.const 0").join(" ")
+    let module_ = @wat.parse(
+      (
+        $|(module
+        $| (func (export "recurse") (param i32\{parameters}) (result i32)
+        $|  local.get 0 i32.const 1 i32.add \{forwarded} call 0 i32.const 1 i32.add)
+        $| (func (export "run") i32.const 0 \{initial} call 0 drop)
+        $| (func (export "healthy") (result i32) i32.const 42))
+      ),
+    )
+    let store = @runtime.Store::with_c_heap()
+    defer store.close()
+    let instance = @executor.instantiate_module_with_imports(
+      store,
+      module_,
+      Imports(store),
+    )
+    let context = prepare_async_jit_context(
+      module_,
+      instance,
+      store,
+      cooperative=true,
+      opt_level=2,
+    )
+    defer context.close()
+    assert_true(context.jit_module.configure_native_fiber_stack_size(65536L))
+    let report = trigger_frame_chain(context, store, instance, 1)
+    assert_true(
+      report.trap_kind.contains("call stack exhausted"),
+      msg=report.trap_kind,
+    )
+    assert_true(
+      report.wasm_frames.length() >= 8,
+      msg="parameters=\{extra_parameters}, frames=\{report.wasm_frames.length()}",
+    )
+    for index, frame in report.wasm_frames {
+      assert_true(
+        frame.func_idx == 0 ||
+        (
+          extra_parameters > 0 &&
+          index == report.wasm_frames.length() - 1 &&
+          frame.func_idx == 1
+        ),
+      )
+    }
+    debug_inspect(
+      context.call_core_func(store, instance, 2, []),
+      content="[I32(42)]",
+    )
+  }
 }
 
 ///|
