@@ -688,6 +688,7 @@ graph TD
   ISS_649["ISS-649: Relocate imported test corpora under tests/upstream"]
   ISS_650["ISS-650: Guard typed continuation resource-failure recovery"]
   ISS_651["ISS-651: Guard failed continuation publication ownership"]
+  ISS_652["ISS-652: Configure the cooperative interpreter instruction quantum"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

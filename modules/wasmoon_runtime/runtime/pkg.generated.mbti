@@ -178,6 +178,7 @@ pub struct ExecutionScope {
 pub fn ExecutionScope::check(Self) -> Unit raise RuntimeError
 pub fn ExecutionScope::failure(Self) -> RuntimeError?
 pub fn ExecutionScope::poll(Self) -> Bool
+pub fn ExecutionScope::preflight(Self) -> Unit raise RuntimeError
 pub fn ExecutionScope::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for ExecutionScope
 

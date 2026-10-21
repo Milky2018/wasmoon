@@ -19,7 +19,7 @@ pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int32, Array[
 
 pub async fn call_func_by_index_async(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
-pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], (@runtime.RuntimeError) -> Int64?, cooperative? : Bool) -> ResumableCallOutcome raise @runtime.RuntimeError
+pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], (@runtime.RuntimeError) -> Int64?, cooperative? : Bool, cooperative_quantum? : Int32) -> ResumableCallOutcome raise @runtime.RuntimeError
 
 pub fn call_func_by_index_resumable_async_with_exception(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], @runtime.AsyncHostCallDriver) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 
