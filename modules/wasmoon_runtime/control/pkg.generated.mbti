@@ -20,6 +20,7 @@ pub struct InvocationControl {
   // private fields
 }
 pub fn InvocationControl::expired(Self) -> Bool
+pub fn InvocationControl::interrupted(Self) -> Bool
 pub fn InvocationControl::new(Int32?, (() -> Bool)?, safepoints? : Int64?) -> Self?
 pub fn InvocationControl::poll(Self) -> Bool
 pub fn InvocationControl::preflight(Self) -> Bool
