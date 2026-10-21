@@ -38,6 +38,7 @@ priv struct SelectionFacts {
   folds_unsigned_index_into_memory : Bool
   uses : Array[Int32]
   consumers : Array[Int32]
+  branch_conditions : Array[Bool]
   shared_consumers : Array[Array[Int32]?]
   constants : Array[UInt64?]
   definitions : Array[@milkir.Inst?]
@@ -524,6 +525,7 @@ fn build_selection_facts(
 ) -> SelectionFacts {
   let uses = Array::make(function.next_value_id, 0)
   let consumers = Array::make(function.next_value_id, -2)
+  let branch_conditions = Array::make(function.next_value_id, false)
   let shared_consumers : Array[Array[Int32]?] = Array::make(
     function.next_value_id,
     None,
@@ -586,6 +588,14 @@ fn build_selection_facts(
       }
     }
     if block.terminator is Some(terminator) {
+      // Only these terminators absorb comparisons. Jump/return arguments and
+      // br_table selectors still require an ordinary materialized value.
+      match terminator {
+        Branch(condition, _, _, _, _)
+        | Brz(condition, _, _)
+        | Brnz(condition, _, _) => branch_conditions[condition.id] = true
+        _ => ()
+      }
       for value in terminator_values(terminator) {
         record_use(
           uses,
@@ -605,6 +615,7 @@ fn build_selection_facts(
     folds_unsigned_index_into_memory,
     uses,
     consumers,
+    branch_conditions,
     shared_consumers,
     constants,
     definitions,
@@ -925,7 +936,9 @@ fn select_branch_lowering(
   condition : @milkir.Value,
   facts : SelectionFacts,
 ) -> ComparisonSelection? {
-  guard facts.uses[condition.id] == 1 else { return None }
+  guard facts.uses[condition.id] == 1 && facts.branch_conditions[condition.id] else {
+    return None
+  }
   guard facts.definitions[condition.id] is Some(instruction) else {
     return None
   }
