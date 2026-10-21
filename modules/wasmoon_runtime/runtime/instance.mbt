@@ -434,7 +434,8 @@ pub fn Store::host_call_instance(
   address : Int32,
 ) -> ModuleInstance raise RuntimeError {
   self.ensure_open()
-  guard self.get_func_inst(address) is (HostFunc(_) | AsyncHostFunc(_)) else {
+  guard self.get_func_inst(address)
+    is (HostFunc(_) | ThrowingHostFunc(_) | AsyncHostFunc(_)) else {
     raise TypeMismatch
   }
   let signature = self.get_func_type(address)
@@ -466,7 +467,8 @@ pub fn Store::host_exports(
   for (name, value) in exports {
     let desc : @types.ExportDesc = match value {
       Func(address) => {
-        guard self.get_func_inst(address) is (HostFunc(_) | AsyncHostFunc(_)) else {
+        guard self.get_func_inst(address)
+          is (HostFunc(_) | ThrowingHostFunc(_) | AsyncHostFunc(_)) else {
           raise TypeMismatch
         }
         funcs.push(address)

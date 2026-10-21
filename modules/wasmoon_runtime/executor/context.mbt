@@ -125,6 +125,7 @@ struct ExecContext {
   mut suspension_roots : Array[@types.Value]
   mut capture_diagnostics : Bool
   mut diagnostic_frames : ReadOnlyArray[InterpreterFrame]?
+  mut host_exception_root : @runtime.GcRootLease?
 } derive(Debug)
 
 ///|
@@ -169,6 +170,7 @@ fn ExecContext::ExecContext(
     suspension_roots: [],
     capture_diagnostics,
     diagnostic_frames: None,
+    host_exception_root: None,
   }
 }
 
