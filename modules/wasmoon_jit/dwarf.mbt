@@ -39,9 +39,9 @@ pub fn DWARFBuilder::add_function(
   func_idx : Int32,
 ) -> Unit {
   // Convert string to null-terminated bytes
-  let name_bytes = Bytes::from_array(
-    name.to_array().map(fn(c) { c.to_int().to_byte() }),
-  )
+  let bytes = @utf8.encode(name).to_array()
+  bytes.push(0)
+  let name_bytes = Bytes::from_array(bytes)
   c_dwarf_add_function(self, name_bytes, addr, size, func_idx)
 }
 
@@ -95,30 +95,28 @@ pub fn DWARFBuilder::lookup_address(
   self : DWARFBuilder,
   addr : Int64,
 ) -> FunctionInfo? {
-  let name_buf = FixedArray::make(256, b'\x00')
   let func_idx_buf = FixedArray::make(1, 0)
   let offset_buf = FixedArray::make(1, 0L)
-  let found = c_dwarf_lookup_address(
-    self, addr, name_buf, 256, func_idx_buf, offset_buf,
+  // The native owner reports the complete UTF-8 size, including its terminator.
+  let required = c_dwarf_lookup_address(
+    self,
+    addr,
+    FixedArray::make(0, b'\x00'),
+    0,
+    func_idx_buf,
+    offset_buf,
   )
-  if found != 0 {
-    // Convert null-terminated bytes to string
-    let mut name_len = 0
-    for i in 0..<256 {
-      if name_buf[i] == b'\x00' {
-        name_len = i
-        break
-      }
-    }
-    let name = String::from_array(
-      FixedArray::makei(name_len, fn(i) {
-        name_buf[i].to_int().unsafe_to_char()
-      }),
-    )
-    Some({ name, func_idx: func_idx_buf[0], offset: offset_buf[0], })
-  } else {
-    None
+  guard required > 0 else { return None }
+  let name_buf = FixedArray::make(required, b'\x00')
+  guard c_dwarf_lookup_address(
+      self, addr, name_buf, required, func_idx_buf, offset_buf,
+    ) ==
+    required else {
+    return None
   }
+  let bytes = Bytes::from_array(Array::makei(required - 1, i => name_buf[i]))
+  let name = @utf8.decode_lossy(bytes[:])
+  Some({ name, func_idx: func_idx_buf[0], offset: offset_buf[0], })
 }
 
 ///|

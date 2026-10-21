@@ -1362,3 +1362,46 @@ test "exception layout cache observes tag definitions and alternating payload sh
   }
   assert_eq(arena.snapshot(unknown), Some((7, [7L])))
 }
+
+///|
+test "DWARF owns long UTF-8 names independently across registered builders" {
+  let first = @wasmoon_jit.DWARFBuilder()
+  defer first.destroy()
+  let second = @wasmoon_jit.DWARFBuilder()
+  defer second.destroy()
+  let name = String::from_array(Array::make(400, '叶')) + "😀"
+  first.add_function(name, 4096L, 64, 7)
+  assert_true(first.register())
+  second.add_function("other😀", 8192L, 64, 9)
+  assert_true(second.register())
+  guard first.lookup_address(4101L) is Some(info) else {
+    fail("lost first owner")
+  }
+  assert_eq(info.name, name)
+  assert_eq(info.func_idx, 7)
+  assert_eq(info.offset, 5L)
+  guard second.lookup_address(8199L) is Some(other) else {
+    fail("lost second owner")
+  }
+  assert_eq(other.name, "other😀")
+  first.destroy()
+  assert_true(first.lookup_address(4101L) is None)
+  assert_true(second.lookup_address(8199L) is Some(_))
+}
+
+///|
+test "DWARF name allocation failure keeps the previous registered owner intact" {
+  let active = @wasmoon_jit.DWARFBuilder()
+  defer active.destroy()
+  active.add_function("active", 4096L, 64, 1)
+  assert_true(active.register())
+  let rejected = @wasmoon_jit.DWARFBuilder()
+  defer rejected.destroy()
+  fail_native_allocation_for_tests(1)
+  rejected.add_function("allocation-denied", 8192L, 64, 2)
+  fail_native_allocation_for_tests(0)
+  assert_false(rejected.register())
+  assert_true(rejected.lookup_address(8193L) is None)
+  assert_eq(active_dwarf_low_pc(), 4096UL)
+  assert_true(active.lookup_address(4097L) is Some(_))
+}

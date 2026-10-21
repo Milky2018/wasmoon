@@ -496,8 +496,8 @@ extern "c" fn c_dwarf_set_active(dwarf : DWARFBuilder) -> Unit = "wasmoon_dwarf_
 
 ///|
 /// Lookup an address in the DWARF debug info
-/// Returns 1 if found, 0 if not found
-/// If found, writes results to the provided arrays
+/// Returns required UTF-8 name bytes including the terminator, or 0 if absent.
+/// If found, writes results to the provided arrays (a zero-sized name buffer probes size).
 #borrow(dwarf, name_out, func_idx_out, offset_out)
 extern "c" fn c_dwarf_lookup_address(
   dwarf : DWARFBuilder,

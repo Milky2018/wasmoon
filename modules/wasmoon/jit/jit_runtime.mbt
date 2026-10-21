@@ -1425,11 +1425,11 @@ pub fn JITModule::register_dwarf(
   verbose~ : Bool = false,
 ) -> @wasmoon_jit.DWARFBuilder raise @wasmoon_jit.NativeSetupError {
   let dwarf = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
-  for func_idx, func in self.functions {
-    let addr = self.get_func_ptr(func_idx)
-    dwarf.add_function(func.name, addr, func.code_size, func_idx)
+  for range in self.address_ranges {
+    let func = self.functions[range.func_idx]
+    dwarf.add_function(func.name, range.start, func.code_size, range.func_idx)
   }
-  if !self.functions.is_empty() && !dwarf.register(verbose~) {
+  if !self.address_ranges.is_empty() && !dwarf.register(verbose~) {
     raise DebugRegistrationFailed
   }
   dwarf
