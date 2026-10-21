@@ -40,6 +40,19 @@ pub fn ExecutionScope::check(self : ExecutionScope) -> Unit raise RuntimeError {
 }
 
 ///|
+/// Check interruption without charging another safepoint unit. Scheduling
+/// boundaries may be tuned independently of the invocation's total budget.
+pub fn ExecutionScope::preflight(
+  self : ExecutionScope,
+) -> Unit raise RuntimeError {
+  for control in self.controls {
+    if control.interrupted() && self.failure() is Some(error) {
+      raise error
+    }
+  }
+}
+
+///|
 pub fn Store::execution_scope(self : Store) -> ExecutionScope? {
   self.execution_scope
 }

@@ -36,7 +36,10 @@ fn guest_resumption_body(
         raise @runtime.RuntimeError::ContinuationAlreadyConsumed
       }
       captured.context.guest_input = Some(input)
-      guest_outcome_values(continuation.continue_unchecked())
+      let outcome = continuation.continue_unchecked() catch {
+        error => raise captured.context.guest_body_failure(error)
+      }
+      guest_outcome_values(outcome)
     },
     fn() { continuation.cancel() },
     leases~,
@@ -179,6 +182,8 @@ fn ExecContext::exec_guest_continuation(
       }
       let async_host_driver = self.async_host_driver
       let cooperative = self.cooperative
+      let cooperative_quantum = self.cooperative_quantum
+      let capture_diagnostics = self.capture_diagnostics
       let function = store.get_func_inst(address)
       let arity = store.get_func_type(address).results.length()
       let body = @runtime.GuestContinuationBody::new(
@@ -194,6 +199,8 @@ fn ExecContext::exec_guest_continuation(
             classify_suspension~,
             async_host_driver~,
             cooperative~,
+            cooperative_quantum~,
+            capture_diagnostics~,
           )
           let outcome = try
             context.call_func_inst_with_context(address, function, args, arity)
@@ -201,7 +208,7 @@ fn ExecContext::exec_guest_continuation(
             ExecutionSuspended => suspended_outcome(context, arity)
             error => {
               context.discard_captured_execution()
-              raise error
+              raise context.guest_body_failure(error)
             }
           } noraise {
             _ => {
@@ -327,6 +334,7 @@ fn ExecContext::discard_captured_execution(self : ExecContext) -> Unit {
   self.suspension_reason = None
   self.suspension_roots.clear()
   self.suspension_roots.shrink_to_fit()
+  self.release_host_exception_root()
   self.execution.clear()
   self.execution.shrink_to_fit()
   self.frames.clear()
@@ -335,6 +343,14 @@ fn ExecContext::discard_captured_execution(self : ExecContext) -> Unit {
   self.labels.clear()
   self.labels.shrink_to_fit()
   self.stack.clear()
+}
+
+///|
+fn ExecContext::release_host_exception_root(self : ExecContext) -> Unit {
+  if self.host_exception_root is Some(roots) {
+    roots.release()
+  }
+  self.host_exception_root = None
 }
 
 ///|
@@ -350,5 +366,11 @@ fn ExecContext::invoke_guest_body(
     self.store.enter_interpreter_boundary()
   }
   defer self.store.leave_interpreter_boundary()
-  (body.run)(input)
+  (body.run)(input) catch {
+    GuestBodyFailed(error, frames) => {
+      self.adopt_guest_failure(error, frames)
+      raise error
+    }
+    error => raise error
+  }
 }

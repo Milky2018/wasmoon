@@ -10,6 +10,7 @@ pub type AsyncHostFunction = async (Caller, Array[@types.Value]) -> Result[
 pub(all) enum AsyncHostPoll {
   AsyncHostPending
   AsyncHostReady(Array[@types.Value])
+  AsyncHostThrown(Int32, Array[@types.Value])
 } derive(Debug)
 
 ///|
@@ -25,6 +26,7 @@ priv enum AsyncHostCallState {
 /// executor has incorporated them into its own root set.
 priv enum AsyncHostCompletion {
   Completed(Array[@types.Value], GcRootLease)
+  Thrown(Int32, Array[@types.Value], GcRootLease)
   Failed(Error)
 }
 
@@ -85,7 +87,20 @@ pub fn AsyncHostCallDriver::poll(
             }
             Completed(values, root_lease)
           }
-          Err(error) => Failed(error)
+          Err(error) =>
+            if HostGuestException::from_error(error) is Some(exception) {
+              let (tag, values, roots) = caller
+                .store()
+                .take_guest_exception(exception) catch {
+                  error => return Failed(error)
+                }
+              if !owned.val {
+                roots.release()
+              }
+              Thrown(tag, values, roots)
+            } else {
+              Failed(error)
+            }
         }
       })
       self.state.val = Waiting(func_addr, task, owned)
@@ -102,6 +117,10 @@ pub fn AsyncHostCallDriver::poll(
         raise AsyncHostCallInProgress
       }
       match completion {
+        Thrown(tag, values, roots) => {
+          self.state.val = Delivered(roots)
+          AsyncHostThrown(tag, values)
+        }
         Completed(values, root_lease) => {
           self.state.val = Delivered(root_lease)
           AsyncHostReady(values)
@@ -152,13 +171,15 @@ pub fn AsyncHostCallDriver::cancel(self : AsyncHostCallDriver) -> Unit {
       owned.val = false
       let completion = task.try_wait() catch { _ => None }
       match completion {
-        Some(Completed(_, root_lease)) => root_lease.release()
+        Some(Completed(_, root_lease)) | Some(Thrown(_, _, root_lease)) =>
+          root_lease.release()
         Some(Failed(_)) | None => ()
       }
       task.cancel()
     }
-    Result(_, Completed(_, root_lease)) | Delivered(root_lease) =>
-      root_lease.release()
+    Result(_, Completed(_, root_lease))
+    | Result(_, Thrown(_, _, root_lease))
+    | Delivered(root_lease) => root_lease.release()
     Idle | Result(_, Failed(_)) => ()
   }
   self.state.val = Idle

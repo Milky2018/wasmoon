@@ -906,22 +906,30 @@ fn encode_exception_value_for_jit(
   store : @runtime.Store,
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
-) -> Int64? raise @runtime.RuntimeError {
+) -> Array[Int64]? raise @runtime.RuntimeError {
   match value {
-    ContRef(_) => Some(@wasmoon_jit.value_to_i64(value))
-    I32(n) => Some(@types.ToInt64::to_int64_bits(n))
-    I64(n) => Some(@types.ToInt64::to_int64_bits(n))
-    F32(n) => Some(@types.ToInt64::to_int64_bits(n))
-    F64(n) => Some(@types.ToInt64::to_int64_bits(n))
-    Null => Some(NULL_REF)
+    ContRef(_) => Some([@wasmoon_jit.value_to_i64(value)])
+    I32(n) => Some([@types.ToInt64::to_int64_bits(n)])
+    I64(n) => Some([@types.ToInt64::to_int64_bits(n)])
+    F32(n) => Some([@types.ToInt64::to_int64_bits(n)])
+    F64(n) => Some([@types.ToInt64::to_int64_bits(n)])
+    Null => Some([NULL_REF])
     FuncRef(_) =>
-      Some(encode_store_funcref_for_jit(value, store, jit_module, instance))
-    ExternRef(idx) => Some(encode_extern_value(idx, store))
-    StructRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
-    ArrayRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
-    I31(n) => Some(@wasmoon_jit.encode_i31(n))
-    ExnRef(idx) => Some(store.encode_native_exception(idx))
-    V128(_) => None
+      Some([encode_store_funcref_for_jit(value, store, jit_module, instance)])
+    ExternRef(idx) => Some([encode_extern_value(idx, store)])
+    StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+    ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+    I31(n) => Some([@wasmoon_jit.encode_i31(n)])
+    ExnRef(idx) => Some([store.encode_native_exception(idx)])
+    V128(bytes) =>
+      if bytes.length() == 16 {
+        Some([
+          @types.bytes_to_int64_le(bytes, 0),
+          @types.bytes_to_int64_le(bytes, 8),
+        ])
+      } else {
+        None
+      }
   }
 }
 
@@ -1190,6 +1198,7 @@ pub fn build_external_imports_for_jit(
 priv enum ImportedCallOutcome {
   ImportedReturned(Array[@types.Value])
   ImportedThrown(Int32, Array[@types.Value])
+  ImportedThrownOwned(Int32, Array[@types.Value], @runtime.GcRootLease)
   ImportedPending
   ImportedHostFailed(@runtime.RuntimeError)
 }
@@ -1217,10 +1226,13 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
   ) -> ImportedCallOutcome raise @runtime.RuntimeError {
     let inst = store.get_func_inst(func_addr)
     match inst {
-      HostFunc(f) => {
+      HostFunc(_) | ThrowingHostFunc(_) => {
         let caller = @runtime.Caller::Caller(store, caller_instance)
-        ImportedReturned(f(caller, args)) catch {
-          error => ImportedHostFailed(error)
+        match inst.invoke_sync_host(caller, args) {
+          HostCallReturned(values) => ImportedReturned(values)
+          HostCallThrown(tag, values, roots) =>
+            ImportedThrownOwned(tag, values, roots)
+          HostCallFailed(error) => ImportedHostFailed(error)
         }
       }
       AsyncHostFunc(f) => {
@@ -1236,6 +1248,7 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
         let caller = @runtime.Caller::Caller(store, caller_instance)
         let polled = driver.poll(func_addr, f, caller, args)
         match polled {
+          AsyncHostThrown(tag, values) => ImportedThrown(tag, values)
           AsyncHostReady(values) => ImportedReturned(values)
           AsyncHostPending => ImportedPending
         }
@@ -1356,6 +1369,9 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
           return host_error_outcome(e)
         }
       }
+      defer (if invoke_result is ImportedThrownOwned(_, _, roots) {
+        roots.release()
+      })
       after_dispatch()
       let results : Array[@types.Value] = match invoke_result {
         ImportedReturned(values) => values
@@ -1369,13 +1385,17 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
           }
           return host_error_outcome(error)
         }
-        ImportedThrown(tag_addr, values) => {
+        ImportedThrown(tag_addr, values)
+        | ImportedThrownOwned(tag_addr, values, _) => {
           // Return through MoonBit cleanup before native guest exception delivery.
           let encoded_values : Array[Int64] = []
           for v in values {
             match
               encode_exception_value_for_jit(v, store, jit_module, instance) {
-              Some(raw) => encoded_values.push(raw)
+              Some(words) =>
+                for word in words {
+                  encoded_values.push(word)
+                }
               None => return HostcallTrap(8)
             }
           }

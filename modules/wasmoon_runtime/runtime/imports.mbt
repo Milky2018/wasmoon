@@ -7,9 +7,16 @@ pub(all) enum FuncInst {
   HostFunc(
     (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError
   )
+  /// Opt-in synchronous callback with an explicit guest-exception channel.
+  ThrowingHostFunc(ThrowingHostFunction)
   /// Asynchronous host function provided by the embedder.
   AsyncHostFunc(AsyncHostFunction)
 }
+
+///|
+pub type ThrowingHostFunction = (Caller, Array[@types.Value]) -> Array[
+  @types.Value,
+] raise Error
 
 ///|
 /// Keep `Debug` support for `Store` while `FuncInst` contains non-debuggable
@@ -18,6 +25,8 @@ pub impl Debug for FuncInst with fn to_repr(self) {
   match self {
     WasmFunc(code) => Repr::ctor("WasmFunc", [(None, Repr(code))])
     HostFunc(_) => Repr::ctor("HostFunc", [(None, Repr::literal("<native>"))])
+    ThrowingHostFunc(_) =>
+      Repr::ctor("ThrowingHostFunc", [(None, Repr::literal("<native>"))])
     AsyncHostFunc(_) =>
       Repr::ctor("AsyncHostFunc", [(None, Repr::literal("<async-native>"))])
   }
@@ -28,6 +37,7 @@ pub impl Show for FuncInst with fn output(self, logger) {
   match self {
     WasmFunc(code) => logger.write_string("WasmFunc(\{code})")
     HostFunc(_) => logger.write_string("HostFunc(<native>)")
+    ThrowingHostFunc(_) => logger.write_string("ThrowingHostFunc(<native>)")
     AsyncHostFunc(_) => logger.write_string("AsyncHostFunc(<async-native>)")
   }
 }

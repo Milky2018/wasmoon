@@ -47,8 +47,8 @@ pub fn InvocationControl::expired(self : InvocationControl) -> Bool {
 }
 
 ///|
-/// Latch the first observed stop reason for stable result classification.
-pub fn InvocationControl::preflight(self : InvocationControl) -> Bool {
+/// Observe interruption without attempting to consume another safepoint.
+pub fn InvocationControl::interrupted(self : InvocationControl) -> Bool {
   if self.cancelled || self.exhausted.val || self.expired() {
     return true
   }
@@ -57,6 +57,15 @@ pub fn InvocationControl::preflight(self : InvocationControl) -> Bool {
     return true
   }
   if self.expired() {
+    return true
+  }
+  false
+}
+
+///|
+/// Latch stop reasons before entering work that requires a safepoint.
+pub fn InvocationControl::preflight(self : InvocationControl) -> Bool {
+  if self.interrupted() {
     return true
   }
   if self.remaining == Some(0L) {

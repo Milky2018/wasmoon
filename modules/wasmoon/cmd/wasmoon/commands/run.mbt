@@ -2277,7 +2277,7 @@ fn check_jit_import_support(
               continue
             }
           }
-          if !(inst is HostFunc(_)) {
+          if !(inst is (HostFunc(_) | ThrowingHostFunc(_))) {
             unsupported.push("\{imp.mod_name}.\{imp.name}")
           }
         }
