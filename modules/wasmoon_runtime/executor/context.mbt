@@ -123,6 +123,8 @@ struct ExecContext {
   mut guest_input : @runtime.GuestContinuationInput?
   mut guest_pending : @runtime.GuestContinuationBody?
   mut suspension_roots : Array[@types.Value]
+  mut capture_diagnostics : Bool
+  mut diagnostic_frames : ReadOnlyArray[InterpreterFrame]?
 } derive(Debug)
 
 ///|
@@ -134,6 +136,7 @@ fn ExecContext::ExecContext(
   async_host_driver~ : @runtime.AsyncHostCallDriver? = None,
   cooperative~ : Bool = false,
   cooperative_quantum~ : Int32 = 1024,
+  capture_diagnostics~ : Bool = false,
 ) -> ExecContext raise @runtime.RuntimeError {
   store.check_instance(instance)
   guard cooperative_quantum > 0 else { raise TypeMismatch }
@@ -164,6 +167,8 @@ fn ExecContext::ExecContext(
     guest_input: None,
     guest_pending: None,
     suspension_roots: [],
+    capture_diagnostics,
+    diagnostic_frames: None,
   }
 }
 

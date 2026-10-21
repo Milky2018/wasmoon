@@ -96,6 +96,37 @@ imports whose selected function takes one i32 iteration argument. Builds and
 generated sources are automatically removed from an OS temporary directory.
 Timings are diagnostic samples, not CI performance thresholds.
 
+## Owned failure diagnostics
+
+Use `call_func_by_index_resumable_with_diagnostics` and
+`ExecutionContinuation::continue_execution_with_diagnostics` to receive
+`InterpreterDiagnosticError::InterpreterFailed(failure)` on failure. The
+ordinary entry/resume methods keep their existing `RuntimeError` contract and
+do not capture frames. Capture can also be enabled only when resuming an
+ordinary continuation.
+
+`failure.error` preserves the runtime cause. `failure.kind` distinguishes a
+guest trap, a host failure and an execution/preflight failure. `failure.frames`
+is an owned, innermost-first snapshot captured before unwind. Each frame has
+the owning Store-local module index, module-local function index, optional
+function name and an instruction path. A path such as `[3, 1]` means instruction
+3 of the function body and instruction 1 of its nested structured body; it is
+not a binary byte offset, source line or native backtrace. Positions identify
+the last dispatched instruction. Names are copied from validated module debug
+metadata at instantiation; unnamed functions retain indices and positions.
+
+Snapshots contain only immutable names, numbers and paths. They retain no Store,
+guest values, GC root leases or executable context, and remain readable after
+the failed continuation is consumed or the Store is closed. Handled guest
+exceptions discard provisional diagnostics before execution continues.
+
+`instantiate_module_with_diagnostics(store, module_, imports)` also reports
+start-function frames. It preserves the existing Core publication and enclosing
+transaction policy: a Core start trap does not undo an instance that has already
+become publishable. Parsing, validation or admission failures before guest entry
+can have an empty frame list. Host/native reentry is a separate invocation;
+diagnostics describe the live guest call chain in the failed interpreter context.
+
 ## Acceptance
 
 ISS-537 records deep recursion, exact budget boundaries and recovery, tail calls,

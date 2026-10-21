@@ -687,6 +687,7 @@ graph TD
   ISS_649["ISS-649: Relocate imported test corpora under tests/upstream"]
   ISS_652["ISS-652: Configure the cooperative interpreter instruction quantum"]
   ISS_653["ISS-653: Bound interpreter execution state with a byte budget"]
+  ISS_654["ISS-654: Expose owned interpreter failure frames"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -1154,6 +1155,7 @@ graph TD
   ISS_636 --> ISS_637
   ISS_637 --> ISS_638
   ISS_652 --> ISS_653
+  ISS_653 --> ISS_654
 ```
 
 ## Warnings

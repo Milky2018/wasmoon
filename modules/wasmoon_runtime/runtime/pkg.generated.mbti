@@ -505,6 +505,7 @@ pub fn ModuleInstance::drop_element(Self, Int32) -> Unit raise RuntimeError
 pub fn ModuleInstance::element_dropped(Self, Int32) -> Bool
 pub fn ModuleInstance::element_value(Self, Int32, Int32) -> @types.Value raise RuntimeError
 pub fn ModuleInstance::element_values(Self, Int32) -> ReadOnlyArray[@types.Value] raise RuntimeError
+pub fn ModuleInstance::function_name(Self, Int32) -> String?
 pub fn ModuleInstance::output(Self, &Logger) -> Unit
 pub fn ModuleInstance::store_index(Self) -> Int32
 pub fn ModuleInstance::to_repr(Self) -> @debug.Repr
