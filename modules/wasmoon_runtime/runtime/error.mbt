@@ -4,6 +4,7 @@ pub(all) suberror RuntimeError {
   HostExit(Int32)
   StackUnderflow
   StackOverflow
+  InterpreterStackBytesExceeded
   TypeMismatch
   InvalidModule(String)
   ForeignStore
@@ -56,6 +57,7 @@ pub(all) suberror RuntimeError {
   AsyncHostCallInProgress
   AsyncHostCallCancelled
   AsyncHostError(String)
+  HostCallbackError(String)
 } derive(Debug, Eq)
 
 ///|
@@ -72,6 +74,7 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     HostExit(_) as error => Some(error)
     StackUnderflow => Some(StackUnderflow)
     StackOverflow => Some(StackOverflow)
+    InterpreterStackBytesExceeded => Some(InterpreterStackBytesExceeded)
     TypeMismatch => Some(TypeMismatch)
     InvalidModule(detail) => Some(InvalidModule(detail))
     ForeignStore => Some(ForeignStore)
@@ -117,6 +120,7 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     AsyncHostCallInProgress => Some(AsyncHostCallInProgress)
     AsyncHostCallCancelled => Some(AsyncHostCallCancelled)
     AsyncHostError(_) as runtime_error => Some(runtime_error)
+    HostCallbackError(_) as runtime_error => Some(runtime_error)
     _ => None
   }
 }
@@ -134,6 +138,8 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     HostExit(code) => "host requested exit: \{code}"
     StackUnderflow => "stack underflow"
     StackOverflow => "stack overflow"
+    InterpreterStackBytesExceeded =>
+      "interpreter execution stack byte limit exceeded"
     TypeMismatch => "type mismatch"
     InvalidModule(detail) => "invalid module: \{detail}"
     ForeignStore => "instance belongs to another store"
@@ -193,6 +199,7 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     AsyncHostCallInProgress => "another async host call is already pending"
     AsyncHostCallCancelled => "async wasm call was cancelled"
     AsyncHostError(message) => "async host function failed: \{message}"
+    HostCallbackError(message) => "host function failed: \{message}"
   }
   logger.write_string(msg)
 }

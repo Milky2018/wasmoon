@@ -259,9 +259,24 @@ pub fn parse_module(
           raise UnexpectedEnd
         }
         // Read and validate the custom section name as UTF-8
-        parser.read_string() |> ignore
-        // Skip any remaining custom section content
-        parser.pos = section_end
+        let name = parser.read_string()
+        guard parser.pos <= section_end else { raise SectionSizeMismatch }
+        if name == "name" {
+          let payload = parser.read_bytes(section_end - parser.pos)
+          let names = parser.read_function_names(payload) catch {
+            error => {
+              if error.is_resource_exhaustion() {
+                raise error
+              }
+              Map([])
+            }
+          }
+          for index, function_name in names {
+            mod.func_names.set(index, function_name)
+          }
+        } else {
+          parser.skip(section_end - parser.pos)
+        }
       }
       12 => {
         // Data count section (bulk memory)
@@ -301,6 +316,26 @@ pub fn parse_module(
   // Check for unexpected content after last section
   if !parser.is_eof() {
     raise UnexpectedContent
+  }
+  // Debug indices have no validation authority and may precede definitions.
+  let mut function_count = mod.funcs.length()
+  for import_ in mod.imports {
+    if import_.desc is Func(_) {
+      function_count += 1
+    }
+  }
+  let invalid = mod.func_names
+    .iter()
+    .filter_map(pair => {
+      if pair.0 < 0 || pair.0 >= function_count {
+        Some(pair.0)
+      } else {
+        None
+      }
+    })
+    .to_array()
+  for index in invalid {
+    mod.func_names.remove(index) |> ignore
   }
   mod
 }

@@ -198,6 +198,10 @@ pub fn ExecutionContinuation::cancel(self : ExecutionContinuation) -> Unit {
 
 ///|
 /// Enter a function using the explicit continuation interpreter seam.
+/// A positive quantum bounds guest instruction dispatches between cooperative
+/// yields (default 1024). Host suspension preserves the remaining count. A new
+/// host reentry starts its own invocation and counter; host execution time is
+/// not metered by this setting. Fuel, stack limits and cancellation are separate.
 pub fn call_func_by_index_resumable(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
@@ -205,22 +209,47 @@ pub fn call_func_by_index_resumable(
   args : Array[@types.Value],
   classify_suspension : (@runtime.RuntimeError) -> Int64?,
   cooperative~ : Bool = false,
+  cooperative_quantum~ : Int32 = 1024,
 ) -> ResumableCallOutcome raise @runtime.RuntimeError {
-  let context = ExecContext(store, instance, classify_suspension~, cooperative~)
-  let func_type = check_call_arguments(store, instance, func_idx, args)
-  let store_addr = instance.func_addrs[func_idx]
-  let func_inst = store.get_func_inst(store_addr)
-  let return_arity = func_type.results.length()
-  context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
-    ExecutionSuspended => return suspended_outcome(context, return_arity)
-    error => {
-      context.discard_captured_execution()
-      raise normalize_runtime_error(error)
-    }
+  let context = ExecContext(
+    store,
+    instance,
+    classify_suspension~,
+    cooperative~,
+    cooperative_quantum~,
+  )
+  start_resumable_unchecked(context, func_idx, args) catch {
+    error => raise normalize_runtime_error(error)
   }
-  let values = context.collect_call_results(return_arity)
-  context.discard_captured_execution()
-  Returned(values)
+}
+
+///|
+fn start_resumable_unchecked(
+  context : ExecContext,
+  func_idx : Int32,
+  args : Array[@types.Value],
+) -> ResumableCallOutcome raise {
+  errdefer context.discard_captured_execution()
+  try {
+    let func_type = check_call_arguments(
+      context.store,
+      context.instance,
+      func_idx,
+      args,
+    )
+    let address = context.instance.func_addrs[func_idx]
+    let function = context.store.get_func_inst(address)
+    let arity = func_type.results.length()
+    context.call_func_inst_with_context(address, function, args, arity) catch {
+      ExecutionSuspended => return suspended_outcome(context, arity)
+      error => raise error
+    }
+    let values = context.collect_call_results(arity)
+    context.discard_captured_execution()
+    Returned(values)
+  } catch {
+    error => raise context.capture_failure(error)
+  }
 }
 
 ///|

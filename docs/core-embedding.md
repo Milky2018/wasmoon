@@ -48,6 +48,7 @@ to its engine caller; use `*_with_init` for a standalone initialized instance.
 | `validator.ValidatedModule` | Protected validation evidence | Private accepted snapshot; returned containers do not alias it. |
 | Executor `instantiate_module*`, `instantiate_with_linker*`, `instantiate_validated_module*` | Checked instantiation | Validate or consume protected evidence, check imports and Store membership, publish coherent instances. |
 | `executor.Function` and `runtime.RootedValue` | Checked embedding calls | Bind a function to a live instance/Store; check argument/result types, reference provenance, and root lifetimes. Sync and async interpreter execution. |
+| `Store.guest_exception`, `GuestException.throw_into_guest` | Opt-in guest exception transport | Bind a Store-local tag and validated rooted payload to a one-shot owner; transfer it through an explicitly throwing callback or async completion. |
 | `Store`, `ModuleInstance`, `Imports`, `Linker`, `Caller` ownership | Checked ownership | Private Store tables, immutable instance maps, Store identity, rollback invalidation, checked registration and lookup. |
 | `Memory` loads/stores/copy/grow | Checked resource operations | Descriptor bounds/lifetime checks; Store adoption is exclusive except explicit shared-memory imports. Legacy non-raising read/write helpers preserve their documented fallback behavior. |
 | `Table`/`GlobalInstance` numeric operations | Checked shape and lifetime | Enforce bounds, mutability, value category and resource ownership. Raw reference values retain the Store-local preconditions below. |
@@ -142,3 +143,66 @@ memory, table, GC, instance, code and pending-work quotas. Use
 `component.ComponentRuntime` exposes the same budget and execution-scope policy.
 The [resource inventory](resource-budgets.md) defines units, admission/release,
 Core compilation integration and the limits that still need OS isolation.
+
+## Explicit exceptions from host callbacks
+
+Register a synchronous callback with `Store.alloc_throwing_host_func` or
+`alloc_throwing_host_func_with_caller` when its ABI explicitly permits guest
+exceptions. Existing `alloc_host_func` signatures and `RuntimeError` semantics
+are unchanged. Guest import signatures do not change.
+
+```mbt
+let tag = store.alloc_tag({ params: [I32], results: [] })
+let callback = store.alloc_throwing_host_func(fn(_) raise {
+  let exception = store.guest_exception(tag, [RootedValue::i32(42)])
+  defer exception.close()
+  exception.throw_into_guest()
+})
+```
+
+The tag address must come from this Store (`alloc_tag` or an instance's
+`tag_addrs`). Integers alone cannot establish their original Store. Creation
+checks the tag, payload arity/kinds, rooted reference provenance and concrete
+reference subtyping against the tag's owning module. Use module-owned tags for
+concrete reference types; a host-created tag without an owning type graph can
+use scalar or abstract-reference parameters. Foreign rooted payloads and foreign
+exception delivery fail with `ForeignStore`; invalid/rolled-back handles fail
+with `InvalidHandle`. Reusing a rolled-back tag address cannot revive an old
+prepared exception.
+
+`GuestException` owns a separate root lease, so its input `RootedValue` handles
+may be closed after creation. `throw_into_guest` never returns and moves the
+owner into the typed `HostGuestException` transport before host defers execute.
+The original handle and all its aliases are consumed; their deferred `close`
+is safe. Construct a fresh exception for each throw. Explicitly close discarded
+handles on wasm; native RC also releases their cleanup owner. Store close
+retires outstanding roots. Each prepared exception reserves one `PendingWork`
+unit through its root lease, including empty/scalar payloads.
+
+Prepared handles participate in instantiation rollback until handoff. Once an
+executor owns the lease, guest liveness and invocation cleanup govern it; an
+outer rollback must not revoke an already handed-off root lease.
+
+Guest `try_table` can catch the explicit exception by tag or with `catch_all`.
+Ordinary host errors, traps, cancellation and resource failures remain invocation
+failures. The runtime never converts all failures into catchable exceptions.
+The raw interpreter `*_with_exception` APIs report uncaught tag/payload values;
+ordinary interpreter calls report `UncaughtException`. Native calls keep their
+recoverable `JITCoreCallError::Trap("uncaught exception")` boundary. Neither
+channel aborts the process merely because the guest has no matching handler.
+
+Async registrations already accept typed errors through `Error`. Use the same
+`guest_exception(...).throw_into_guest()` operation there: an owned exception
+may span an await, and each invocation's async driver retains its completed
+payload until delivery/cleanup. Cancellation and late completion retire the
+owner. Concurrent calls have independent completions; no Store-global pending
+exception slot is used.
+
+`HostGuestException::from_error` lets a host interceptor recognize the transport.
+An interceptor that discards it must close the contained exception rather than
+silently dropping portable ownership. `FuncInst.invoke_sync_host`,
+`HostCallOutcome` and `Store.take_guest_exception` are low-level execution
+bridges: a direct caller owns any transferred `GcRootLease` and must release it
+after incorporating the payload into guest roots, or on failure. Interpreter
+and native adapters perform that handoff automatically, including mixed SIMD
+and reference payloads.

@@ -871,16 +871,19 @@ fn ExecContext::finish_try_table(
           Catch(handler_tag_idx, label_idx) => {
             let handler_tag_addr = self.instance.tag_addrs[handler_tag_idx]
             if handler_tag_addr == tag_addr {
+              self.diagnostic_frames = None
               self.restore_stack_to(stack_height)
               for value in values {
                 self.stack.push(value)
               }
+              self.release_host_exception_root()
               raise BranchWith(label_idx, values)
             }
           }
           CatchRef(handler_tag_idx, label_idx) => {
             let handler_tag_addr = self.instance.tag_addrs[handler_tag_idx]
             if handler_tag_addr == tag_addr {
+              self.diagnostic_frames = None
               let exn_addr = self.store.alloc_exn(tag_addr, values)
               self.restore_stack_to(stack_height)
               for value in values {
@@ -889,17 +892,22 @@ fn ExecContext::finish_try_table(
               self.stack.push(ExnRef(exn_addr))
               let branch_values = values.copy()
               branch_values.push(ExnRef(exn_addr))
+              self.release_host_exception_root()
               raise BranchWith(label_idx, branch_values)
             }
           }
           CatchAll(label_idx) => {
+            self.diagnostic_frames = None
             self.restore_stack_to(stack_height)
+            self.release_host_exception_root()
             raise BranchWith(label_idx, [])
           }
           CatchAllRef(label_idx) => {
+            self.diagnostic_frames = None
             let exn_addr = self.store.alloc_exn(tag_addr, values)
             self.restore_stack_to(stack_height)
             self.stack.push(ExnRef(exn_addr))
+            self.release_host_exception_root()
             raise BranchWith(label_idx, [ExnRef(exn_addr)])
           }
         }
