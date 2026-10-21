@@ -46,7 +46,7 @@ pub fn ExecutionScope::preflight(
   self : ExecutionScope,
 ) -> Unit raise RuntimeError {
   for control in self.controls {
-    if control.preflight() && self.failure() is Some(error) {
+    if control.interrupted() && self.failure() is Some(error) {
       raise error
     }
   }
