@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/encoding/utf8",
   "Milky2018/wasmoon_runtime/control",
   "Milky2018/wasmoon_runtime/runtime",
   "Milky2018/wasmoon_runtime/native/bridge" @runtime_bridge,

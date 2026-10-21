@@ -694,6 +694,7 @@ graph TD
   ISS_655["ISS-655: Add explicit catchable guest exceptions to host callbacks"]
   ISS_656["ISS-656: Preserve shared constant dominance during native selection"]
   ISS_657["ISS-657: Preserve binary function names in diagnostics"]
+  ISS_658["ISS-658: Register installed guest ranges with DWARF"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

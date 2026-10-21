@@ -113,7 +113,7 @@ void __jit_debug_register_code(void) {
 #define MAX_DWARF_FUNCTIONS 1024
 
 typedef struct {
-    char name[256];
+    char *name;
     uint64_t addr;
     uint32_t size;
     int func_idx;
@@ -789,9 +789,13 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_add_function(
         return;
     }
 
+    size_t length = strlen(name);
+    if (length >= INT32_MAX) { builder->capacity_exceeded = 1; return; }
+    char *owned_name = wasmoon_native_malloc(length + 1);
+    if (!owned_name) { builder->capacity_exceeded = 1; return; }
+    memcpy(owned_name, name, length + 1);
     dwarf_func_t *func = &builder->functions[builder->num_functions++];
-    strncpy(func->name, name, sizeof(func->name) - 1);
-    func->name[sizeof(func->name) - 1] = '\0';
+    func->name = owned_name;
     func->addr = (uint64_t)addr;
     func->size = (uint32_t)size;
     func->func_idx = func_idx;
@@ -911,6 +915,11 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_destroy(void *dwarf) {
     builder->closed = 1;
     if (g_active_dwarf == builder) g_active_dwarf = NULL;
     wasmoon_dwarf_unregister(builder);
+    for (int i = 0; i < builder->num_functions; i++) {
+        free(builder->functions[i].name);
+        builder->functions[i].name = NULL;
+    }
+    builder->num_functions = 0;
     // The MoonBit runtime frees the object itself after its finalizer returns.
 }
 
@@ -940,7 +949,7 @@ MOONBIT_FFI_EXPORT uint64_t wasmoon_dwarf_get_high_pc(void) {
 }
 
 // Lookup an address in the DWARF builder
-// Returns: 1 if found, 0 if not found
+// Returns required UTF-8 name bytes including NUL, or 0 if absent.
 // If found, fills in name (up to name_size bytes), func_idx, and offset
 MOONBIT_FFI_EXPORT int wasmoon_dwarf_lookup_address(
     void *dwarf,
@@ -973,7 +982,7 @@ MOONBIT_FFI_EXPORT int wasmoon_dwarf_lookup_address(
             if (offset_out) {
                 *offset_out = (int64_t)(addr - func->addr);
             }
-            return 1;
+            return (int)strlen(func->name) + 1;
         }
     }
     return 0;
