@@ -23,6 +23,8 @@ pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int
 
 pub fn call_func_by_index_resumable_async_with_exception(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], @runtime.AsyncHostCallDriver) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 
+pub fn call_func_by_index_resumable_with_diagnostics(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], (@runtime.RuntimeError) -> Int64?, cooperative? : Bool, cooperative_quantum? : Int32) -> ResumableCallOutcome raise InterpreterDiagnosticError
+
 pub fn call_func_by_index_with_exception(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> InvokeWithExceptionResult raise @runtime.RuntimeError
 
 pub fn eval_const_expr(ArrayView[@types.Instruction], func_addrs? : Array[Int32], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
@@ -30,6 +32,8 @@ pub fn eval_const_expr(ArrayView[@types.Instruction], func_addrs? : Array[Int32]
 pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
 
 pub fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+
+pub fn instantiate_module_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise InterpreterDiagnosticError
 
 pub fn instantiate_module_with_import_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> InstantiateWithImportDiagnosticsResult
 
@@ -56,6 +60,10 @@ pub fn validate_continuation_gc_storage(@types.Module) -> Unit raise @runtime.Ru
 pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError
 
 // Errors
+pub(all) suberror InterpreterDiagnosticError {
+  InterpreterFailed(InterpreterFailure)
+} derive(@debug.Debug)
+pub fn InterpreterDiagnosticError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub struct CallExportFailure {
@@ -102,6 +110,7 @@ pub fn ExecContext::to_repr(Self) -> @debug.Repr
 type ExecutionContinuation
 pub fn ExecutionContinuation::cancel(Self) -> Unit
 pub fn ExecutionContinuation::continue_execution(Self) -> ResumableCallOutcome raise @runtime.RuntimeError
+pub fn ExecutionContinuation::continue_execution_with_diagnostics(Self) -> ResumableCallOutcome raise InterpreterDiagnosticError
 pub fn ExecutionContinuation::continue_execution_with_exception(Self) -> ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 pub fn ExecutionContinuation::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for ExecutionContinuation
@@ -142,6 +151,32 @@ pub(all) enum InstantiateWithImportDiagnosticsResult {
   ImportError(ImportDiagnosticsResult)
   RuntimeFailure(@runtime.RuntimeError)
 }
+
+pub(all) struct InterpreterFailure {
+  kind : InterpreterFailureKind
+  error : @runtime.RuntimeError
+  frames : ReadOnlyArray[InterpreterFrame]
+} derive(@debug.Debug)
+pub fn InterpreterFailure::to_repr(Self) -> @debug.Repr
+
+pub(all) enum InterpreterFailureKind {
+  GuestTrap
+  HostFailure
+  ExecutionFailure
+} derive(Eq, @debug.Debug)
+pub fn InterpreterFailureKind::equal(Self, Self) -> Bool
+pub fn InterpreterFailureKind::not_equal(Self, Self) -> Bool
+pub fn InterpreterFailureKind::to_repr(Self) -> @debug.Repr
+
+pub(all) struct InterpreterFrame {
+  module_index : Int32
+  function_index : Int32
+  function_name : String?
+  instruction_path : ReadOnlyArray[Int32]
+} derive(Eq, @debug.Debug)
+pub fn InterpreterFrame::equal(Self, Self) -> Bool
+pub fn InterpreterFrame::not_equal(Self, Self) -> Bool
+pub fn InterpreterFrame::to_repr(Self) -> @debug.Repr
 
 pub(all) enum InvokeWithExceptionResult {
   Returned(Array[@types.Value])

@@ -3,7 +3,7 @@ priv enum ExecutionKind {
   BlockControl
   LoopControl
   TryControl(ReadOnlyArray[@types.CatchHandler])
-  FunctionControl(@runtime.ModuleInstance, Int32)
+  FunctionControl(@runtime.ModuleInstance, Int32, Int32)
 } derive(Debug)
 
 ///|
@@ -57,6 +57,7 @@ fn ExecContext::enter_function(
   code : @types.FunctionCode,
   args : Array[@types.Value],
   arity : Int32,
+  address : Int32,
 ) -> Unit raise {
   self.check_cancellation()
   self.check_control_capacity()
@@ -96,7 +97,7 @@ fn ExecContext::enter_function(
   self.execution.push({
     body: code.body,
     ip: 0,
-    kind: FunctionControl(saved, locals.length()),
+    kind: FunctionControl(saved, locals.length(), address),
     arity,
     height: self.stack.size(),
   })
@@ -118,7 +119,7 @@ fn ExecContext::finish_execution_frame(
         self.finish_result_stack(frame.height, frame.arity)
       }
     }
-    FunctionControl(saved, locals) => {
+    FunctionControl(saved, locals, _) => {
       let caller = self.instance
       self.pop_label()
       self.pop_frame()
@@ -138,7 +139,7 @@ fn ExecContext::finish_execution_frame(
           match function {
             WasmFunc(code) => {
               let owner = self.store.get_func_owner(address).unwrap_or(caller)
-              self.enter_function(owner, code, args, arity)
+              self.enter_function(owner, code, args, arity, address)
             }
             HostFunc(host) => self.invoke_host_func(address, host, caller, args)
             AsyncHostFunc(host) =>
@@ -165,6 +166,9 @@ fn ExecContext::run_execution(
     self.running = false
   }
   let mut pending = initial_error
+  if initial_error is Some(error) {
+    self.capture_failure(error) |> ignore
+  }
   while self.execution.length() > 0 {
     let frame = self.execution[self.execution.length() - 1]
     let result = try {
@@ -200,7 +204,7 @@ fn ExecContext::run_execution(
       }
     } catch {
       ExecutionSuspended => raise ExecutionSuspended
-      error => Some(error)
+      error => Some(self.capture_failure(error))
     } noraise {
       _ => None
     }

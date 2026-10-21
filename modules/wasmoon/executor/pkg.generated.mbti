@@ -22,6 +22,8 @@ pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int
 
 pub fn call_func_by_index_resumable_async_with_exception(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], @runtime.AsyncHostCallDriver) -> @Milky2018/wasmoon_runtime/executor.ResumableCallWithExceptionOutcome raise @runtime.RuntimeError
 
+pub fn call_func_by_index_resumable_with_diagnostics(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value], (@runtime.RuntimeError) -> Int64?, cooperative? : Bool, cooperative_quantum? : Int32) -> @Milky2018/wasmoon_runtime/executor.ResumableCallOutcome raise @Milky2018/wasmoon_runtime/executor.InterpreterDiagnosticError
+
 pub fn call_func_by_index_with_exception(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> @Milky2018/wasmoon_runtime/executor.InvokeWithExceptionResult raise @runtime.RuntimeError
 
 pub fn eval_const_expr(ArrayView[@types.Instruction], func_addrs? : Array[Int32], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
@@ -29,6 +31,8 @@ pub fn eval_const_expr(ArrayView[@types.Instruction], func_addrs? : Array[Int32]
 pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
 
 pub fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
+
+pub fn instantiate_module_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @Milky2018/wasmoon_runtime/executor.InterpreterDiagnosticError
 
 pub fn instantiate_module_with_import_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> @Milky2018/wasmoon_runtime/executor.InstantiateWithImportDiagnosticsResult
 
@@ -80,6 +84,14 @@ pub using @Milky2018/wasmoon_runtime/executor {type ImportDiagnosticKind}
 pub using @Milky2018/wasmoon_runtime/executor {type ImportDiagnosticsResult}
 
 pub using @Milky2018/wasmoon_runtime/executor {type InstantiateWithImportDiagnosticsResult}
+
+pub using @Milky2018/wasmoon_runtime/executor {type InterpreterDiagnosticError}
+
+pub using @Milky2018/wasmoon_runtime/executor {type InterpreterFailure}
+
+pub using @Milky2018/wasmoon_runtime/executor {type InterpreterFailureKind}
+
+pub using @Milky2018/wasmoon_runtime/executor {type InterpreterFrame}
 
 pub using @Milky2018/wasmoon_runtime/executor {type InvokeWithExceptionResult}
 

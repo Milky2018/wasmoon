@@ -214,11 +214,11 @@ fn ExecContext::call_func_inst_with_context(
       if owner is Some(owner_instance) {
         // Call with the owner's context
         self.call_wasm_func_with_instance(
-          owner_instance, code, args, num_results,
+          owner_instance, code, args, num_results, store_addr,
         )
       } else {
         // Imported host-created function instances may not have an owning module.
-        self.call_wasm_func(code, args, num_results)
+        self.call_wasm_func(code, args, num_results, store_addr)
       }
     }
     HostFunc(host_fn) =>
@@ -330,8 +330,9 @@ fn ExecContext::call_wasm_func_with_instance(
   func : @types.FunctionCode,
   args : Array[@types.Value],
   num_results : Int32,
+  address : Int32,
 ) -> Unit raise {
-  self.enter_function(target_instance, func, args, num_results)
+  self.enter_function(target_instance, func, args, num_results, address)
   if !self.running {
     self.run_execution()
   }
@@ -343,8 +344,15 @@ fn ExecContext::call_wasm_func(
   func : @types.FunctionCode,
   args : Array[@types.Value],
   num_results : Int32,
+  address : Int32,
 ) -> Unit raise {
-  self.call_wasm_func_with_instance(self.instance, func, args, num_results)
+  self.call_wasm_func_with_instance(
+    self.instance,
+    func,
+    args,
+    num_results,
+    address,
+  )
 }
 
 // ============ Tail Call Operations ============

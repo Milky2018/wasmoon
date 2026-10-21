@@ -218,20 +218,38 @@ pub fn call_func_by_index_resumable(
     cooperative~,
     cooperative_quantum~,
   )
-  let func_type = check_call_arguments(store, instance, func_idx, args)
-  let store_addr = instance.func_addrs[func_idx]
-  let func_inst = store.get_func_inst(store_addr)
-  let return_arity = func_type.results.length()
-  context.call_func_inst_with_context(store_addr, func_inst, args, return_arity) catch {
-    ExecutionSuspended => return suspended_outcome(context, return_arity)
-    error => {
-      context.discard_captured_execution()
-      raise normalize_runtime_error(error)
-    }
+  start_resumable_unchecked(context, func_idx, args) catch {
+    error => raise normalize_runtime_error(error)
   }
-  let values = context.collect_call_results(return_arity)
-  context.discard_captured_execution()
-  Returned(values)
+}
+
+///|
+fn start_resumable_unchecked(
+  context : ExecContext,
+  func_idx : Int32,
+  args : Array[@types.Value],
+) -> ResumableCallOutcome raise {
+  errdefer context.discard_captured_execution()
+  try {
+    let func_type = check_call_arguments(
+      context.store,
+      context.instance,
+      func_idx,
+      args,
+    )
+    let address = context.instance.func_addrs[func_idx]
+    let function = context.store.get_func_inst(address)
+    let arity = func_type.results.length()
+    context.call_func_inst_with_context(address, function, args, arity) catch {
+      ExecutionSuspended => return suspended_outcome(context, arity)
+      error => raise error
+    }
+    let values = context.collect_call_results(arity)
+    context.discard_captured_execution()
+    Returned(values)
+  } catch {
+    error => raise context.capture_failure(error)
+  }
 }
 
 ///|
