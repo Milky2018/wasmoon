@@ -149,7 +149,7 @@ wasmoon run examples/hello_wasi.wat \
 
 Use `--dir-ro HOST_DIR::GUEST_DIR` for a read-only WASIp1 preopen; it can be
 repeated and combined with `--dir`. Descendant descriptors cannot acquire
-filesystem mutation rights. See [the rights contract](https://github.com/Milky2018/wasmoon/blob/dev/docs/wasip1-rights.md)
+filesystem mutation rights. See [the rights contract](https://github.com/Milky2018/wasmoon/blob/main/docs/wasip1-rights.md)
 for the permission boundary and embedding APIs.
 
 For detailed flags, run:
@@ -295,7 +295,7 @@ The unchanged upstream profile reports rights/capability contract differences.
 Regular CI runs the `capabilities` profile with explicitly recorded adaptations;
 the agreed Wasmtime-specific hostcall-fuel case remains not applicable.
 
-The pinned [Wasmtime misc_testsuite](https://github.com/Milky2018/wasmoon/blob/dev/wasm-tests/wasmtime/README.md)
+The pinned [Wasmtime misc_testsuite](https://github.com/Milky2018/wasmoon/blob/main/wasm-tests/wasmtime/README.md)
 adds core Wasm and Component Model regression scripts:
 
 ```bash
@@ -306,7 +306,7 @@ python3 scripts/run_wasmtime_misc.py
 Regular CI runs the full misc suite, including high-memory cases. Assertion-bearing
 passes and successfully executed scripts without assertions are reported separately.
 The current reference is Wasmtime 49.0.1; see the
-[reference refresh and acceptance report](https://github.com/Milky2018/wasmoon/blob/dev/docs/upstream-wasmtime-49.md) for exact
+[reference refresh and acceptance report](https://github.com/Milky2018/wasmoon/blob/main/docs/upstream-wasmtime-49.md) for exact
 versions, coverage, remaining contract differences, and the new performance baseline.
 
 ## Library Usage
