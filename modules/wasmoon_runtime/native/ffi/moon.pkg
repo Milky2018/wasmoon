@@ -61,6 +61,7 @@ options(
     "exceptions_wbtest.mbt": [ "native" ],
     "table.mbt": [ "native" ],
     "continuations.mbt": [ "native" ],
+    "continuations_wbtest.mbt": [ "native" ],
     "memory.mbt": [ "native" ],
     "segments.mbt": [ "native" ],
     "exceptions.mbt": [ "native" ],

@@ -687,6 +687,7 @@ graph TD
   ISS_648["ISS-648: Group owned regression inputs by Core, Component and WASI"]
   ISS_649["ISS-649: Relocate imported test corpora under tests/upstream"]
   ISS_650["ISS-650: Guard typed continuation resource-failure recovery"]
+  ISS_651["ISS-651: Guard failed continuation publication ownership"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

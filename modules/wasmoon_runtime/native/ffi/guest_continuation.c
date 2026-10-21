@@ -600,3 +600,7 @@ WASMOON_DEFINE_GUEST_TARGET(continuation_resume);
 WASMOON_DEFINE_GUEST_TARGET(continuation_suspend);
 WASMOON_DEFINE_GUEST_TARGET(continuation_switch);
 #endif
+
+// Publication owns private native body/request layouts; keep its test seam in
+// this translation unit rather than duplicating those layouts in a fixture.
+#include "testing/continuation_test_support.h"
