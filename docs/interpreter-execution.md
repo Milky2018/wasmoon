@@ -24,6 +24,7 @@ Pass `interpreter_limits=InterpreterLimits::new(...)` to `Store::Store` or
 | `max_values` | 1,048,576 | `CallStackExhausted` allocating locals; `StackOverflow` pushing operands |
 | `max_controls` | 65,536 | `StackOverflow` |
 | `max_reentry_depth` | 64 | `CallStackExhausted` |
+| `max_stack_bytes` | `None` (unlimited) | `InterpreterStackBytesExceeded` |
 
 Frame, control and value limits apply to each interpreter context. Value slots
 include both live operands and function locals. They bound logical storage, not
@@ -31,6 +32,23 @@ exact allocator bytes or the guest GC heap. Controls include function, block,
 loop, if and try-table entries. Tail calls reuse the active-call budget.
 Configuration values must be positive. These settings also apply when a JIT
 import bridge explicitly executes an interpreted function.
+
+`max_stack_bytes=Some(1048576L)` optionally caps accounted live execution state
+in each interpreter context. The portable accounting charges 32 bytes for each
+operand/local slot (including room for a SIMD payload), 64 for each function
+frame, and 96 for each execution-control entry together with its branch label.
+Function entries also have a control entry. Admission checks precede the local,
+operand or control growth; ordinary return, branch, exception unwind and tail
+replacement return their charges. Suspending preserves the same stack and
+accounting; completion or cancellation discards it.
+
+This is an explicit logical byte model, not an exact allocator/RSS measurement.
+Array spare capacity, referenced guest objects, compiled code, temporary host
+arguments and root-lease copies are outside it. Count limits still apply
+independently. A new host reentry or guest-continuation body has its own context
+and byte budget, while the Store's existing native reentry-depth limit remains
+shared. Parked invocations retain their own budgets; this is not an aggregate
+Store memory limit. The optional limit must be positive when supplied.
 
 Native boundary depth counts host calls and guest-continuation body callbacks
 across nested interpreter contexts in the same Store.

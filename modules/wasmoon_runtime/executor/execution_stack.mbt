@@ -35,6 +35,7 @@ fn ExecContext::enter_control(
   let arity = self.block_arity(bt)
   let params = self.block_param_arity(bt)
   let height = self.stack.size() - params
+  self.stack.reserve_control()
   self.push_label(
     kind is LoopControl,
     if kind is LoopControl {
@@ -62,16 +63,19 @@ fn ExecContext::enter_function(
   if self.frames.length() >= self.store.interpreter_limits.max_frames {
     raise @runtime.RuntimeError::CallStackExhausted
   }
-  // Reserve before allocating locals, including SIMD values.
-  self.stack.reserve(args.length()) catch {
-    _ => raise @runtime.RuntimeError::CallStackExhausted
+  // Check combined counts before addition and reserve bytes before allocation.
+  if args.length() >
+    self.store.interpreter_limits.max_values - code.locals.length() {
+    raise @runtime.RuntimeError::CallStackExhausted
   }
-  {
-    errdefer self.stack.release(args.length())
-    self.stack.reserve(code.locals.length()) catch {
-      _ => raise @runtime.RuntimeError::CallStackExhausted
-    }
+  let count = args.length() + code.locals.length()
+  self.stack.reserve_frame(count) catch {
+    StackOverflow => raise @runtime.RuntimeError::CallStackExhausted
+    error => raise error
   }
+  errdefer self.stack.release_frame(count)
+  self.stack.reserve_control()
+  errdefer self.stack.release_control()
   let locals = args.copy()
   for typ in code.locals {
     locals.push(
@@ -104,6 +108,7 @@ fn ExecContext::finish_execution_frame(
   frame : ExecutionFrame,
   result : ExecBlockResult,
 ) -> Unit raise {
+  self.stack.release_control()
   match frame.kind {
     BlockControl | LoopControl =>
       self.finish_block_control(result, frame.arity, frame.height)
@@ -117,7 +122,7 @@ fn ExecContext::finish_execution_frame(
       let caller = self.instance
       self.pop_label()
       self.pop_frame()
-      self.stack.release(locals)
+      self.stack.release_frame(locals)
       self.instance = saved
       match result {
         ExecBlockCompleted | ExecBlockRaised(Return) =>

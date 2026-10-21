@@ -65,6 +65,7 @@ pub(all) suberror RuntimeError {
   HostExit(Int32)
   StackUnderflow
   StackOverflow
+  InterpreterStackBytesExceeded
   TypeMismatch
   InvalidModule(String)
   ForeignStore
@@ -322,9 +323,10 @@ pub struct InterpreterLimits {
   max_values : Int32
   max_controls : Int32
   max_reentry_depth : Int32
+  max_stack_bytes : Int64?
 } derive(@debug.Debug)
 pub fn InterpreterLimits::default() -> Self
-pub fn InterpreterLimits::new(max_frames? : Int32, max_values? : Int32, max_controls? : Int32, max_reentry_depth? : Int32) -> Self raise RuntimeError
+pub fn InterpreterLimits::new(max_frames? : Int32, max_values? : Int32, max_controls? : Int32, max_reentry_depth? : Int32, max_stack_bytes? : Int64?) -> Self raise RuntimeError
 pub fn InterpreterLimits::to_repr(Self) -> @debug.Repr
 
 type Linker
@@ -621,7 +623,7 @@ pub(all) enum RuntimeFeature {
 }
 
 type Stack derive(@debug.Debug)
-pub fn Stack::Stack(max_values? : Int32) -> Self
+pub fn Stack::Stack(max_values? : Int32, max_bytes? : Int64?) -> Self
 pub fn Stack::active_values(Self) -> Array[@types.Value]
 pub fn Stack::clear(Self) -> Unit
 pub fn Stack::peek(Self) -> @types.Value raise RuntimeError
@@ -635,7 +637,11 @@ pub fn Stack::pop_v128(Self) -> Bytes raise RuntimeError
 pub fn Stack::push(Self, @types.Value) -> Unit raise RuntimeError
 pub fn Stack::push_v128(Self, Bytes) -> Unit raise RuntimeError
 pub fn Stack::release(Self, Int32) -> Unit
+pub fn Stack::release_control(Self) -> Unit
+pub fn Stack::release_frame(Self, Int32) -> Unit
 pub fn Stack::reserve(Self, Int32) -> Unit raise RuntimeError
+pub fn Stack::reserve_control(Self) -> Unit raise RuntimeError
+pub fn Stack::reserve_frame(Self, Int32) -> Unit raise RuntimeError
 pub fn Stack::size(Self) -> Int32
 pub fn Stack::to_repr(Self) -> @debug.Repr
 
