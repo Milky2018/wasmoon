@@ -166,7 +166,7 @@ wasmoon run examples/add.wat --invoke add --arg 1 --arg 2
 wasmoon run --help
 
 # test
-wasmoon test spec/i32.wast
+wasmoon test tests/upstream/core-spec/i32.wast
 wasmoon test --help
 
 # explore
@@ -272,7 +272,7 @@ moon check --target native
 moon test --target native
 ./install.sh
 cargo install wasm-tools --version 1.254.0 --locked
-python3 scripts/run_all_wast.py --dir spec --rec
+python3 scripts/run_all_wast.py --dir tests/upstream/core-spec --rec
 python3 scripts/check_component_snapshot.py
 python3 scripts/run_component_wast.py --suite stable-0.2
 python3 scripts/run_component_wast.py --suite stable-0.2 --no-jit
@@ -283,7 +283,7 @@ python3 scripts/run_component_wast.py --suite future-gated --no-jit
 ```
 
 For additional runtime testing, the
-[upstream WASIp1 guest suite](../../wasi-tests/wasmtime/README.md) runs unchanged
+[upstream WASIp1 guest suite](../../tests/upstream/wasmtime/wasi-p1/README.md) runs unchanged
 Wasmtime P1 programs in interpreter and JIT modes:
 
 ```bash
@@ -295,7 +295,7 @@ The unchanged upstream profile reports rights/capability contract differences.
 Regular CI runs the `capabilities` profile with explicitly recorded adaptations;
 the agreed Wasmtime-specific hostcall-fuel case remains not applicable.
 
-The pinned [Wasmtime misc_testsuite](https://github.com/Milky2018/wasmoon/blob/main/wasm-tests/wasmtime/README.md)
+The pinned [Wasmtime misc_testsuite](https://github.com/Milky2018/wasmoon/blob/main/tests/upstream/wasmtime/misc/README.md)
 adds core Wasm and Component Model regression scripts:
 
 ```bash

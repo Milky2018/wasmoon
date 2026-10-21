@@ -1,10 +1,15 @@
-# Runtime ownership regressions
+# Core runtime regressions
 
 Run the local cross-instance corpus in both engines:
 
 ```sh
-python3 scripts/run_all_wast.py --dir tests/runtime --rec
+python3 scripts/run_all_wast.py --dir tests/core --rec
 ```
+
+The bulk-memory inputs formerly under `myspec/` retain their table initialization,
+copy/fill and memory initialization assertions. `fixtures/test_add.wat` and
+`fixtures/test_if_add.wat` are standalone arithmetic output probes moved out of
+`examples/`; they are CLI inputs, not additional WAST trials.
 
 `callable-context.wast` checks shared globals, callee GC context, cross-module
 type identity, bounded native tail calls, precise caller roots during

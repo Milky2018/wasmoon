@@ -683,6 +683,8 @@ graph TD
   ISS_645["ISS-645: Avoid reverse lookup in the upstream HTTP test fixture"]
   ISS_646["ISS-646: Share native interpreter and JIT table storage"]
   ISS_647["ISS-647: Clean up WASI03 fixture workspaces after each case"]
+  ISS_648["ISS-648: Group owned regression inputs by Core, Component and WASI"]
+  ISS_649["ISS-649: Relocate imported test corpora under tests/upstream"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

@@ -1221,7 +1221,7 @@ def main() -> int:
     parser.add_argument(
         "--dir",
         type=str,
-        help="Directory containing .wast files (default: component-spec/upstream)",
+        help="Directory containing .wast files (default: tests/upstream/component-model/upstream)",
     )
     parser.add_argument(
         "--suite",
@@ -1282,7 +1282,7 @@ def main() -> int:
             f"{snapshot.repository}@{snapshot.commit}"
         )
     else:
-        test_dir = repo_root / (args.dir or "component-spec/upstream")
+        test_dir = repo_root / (args.dir or "tests/upstream/component-model/upstream")
         required_wasm_tools_version = DEFAULT_WASM_TOOLS_VERSION
         if not test_dir.exists():
             print(f"Error: Directory '{test_dir}' does not exist")

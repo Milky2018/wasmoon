@@ -146,7 +146,7 @@ test "executor: normalize_runtime_error converts leaked control signals to unrea
 
 ///|
 test "executor: const expr supports extern.convert_any/any.convert_extern" {
-  // Mirrors spec/gc/extern.wast global initializers.
+  // Mirrors tests/upstream/core-spec/gc/extern.wast global initializers.
   let mod : @types.Module = {
     ..@types.Module::empty(),
     globals: [

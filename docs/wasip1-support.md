@@ -158,7 +158,7 @@ API references: [Apple fcntl](https://developer.apple.com/library/archive/docume
 The capabilities external profile changes only the upstream NOTSUP expectations
 for allocation and SYNC. The unchanged upstream and explicit-rights profiles
 remain available; their failures on those two programs are intentional behavior
-differences. See `wasi-tests/wasmtime/implemented-capabilities.patch`.
+differences. See `tests/upstream/wasmtime/wasi-p1/implemented-capabilities.patch`.
 
 ## Socket ownership and transfers
 

@@ -1,27 +1,27 @@
 *.mbti whitespace=-blank-at-eof
 modules/wasmoon/wasi_component/wit/** whitespace=-blank-at-eol
 # Preserve the pinned upstream license byte-for-byte.
-wasi-tests/wasmtime/upstream/LICENSE whitespace=-blank-at-eof
+tests/upstream/wasmtime/wasi-p1/upstream/LICENSE whitespace=-blank-at-eof
 
 # Unified diff context lines intentionally contain a single space.
-wasi-tests/wasmtime/explicit-rights.patch whitespace=-blank-at-eol
+tests/upstream/wasmtime/wasi-p1/explicit-rights.patch whitespace=-blank-at-eol
 
 # Preserve the pinned Wasmtime misc corpus, including original whitespace.
-wasm-tests/wasmtime/upstream/** whitespace=-blank-at-eol,-blank-at-eof
+tests/upstream/wasmtime/misc/upstream/** whitespace=-blank-at-eol,-blank-at-eof
 
 # Pinned conformance inputs must retain exact upstream bytes on every host.
 # In particular, core.autocrlf must not rewrite snapshot hashes or patch context.
-component-spec/upstream/** -text
-component-spec/corrections/** -text
-wasi-tests/wasmtime/** -text
-wasm-tests/wasmtime/upstream/** -text
-spec/** -text
+tests/upstream/component-model/upstream/** -text
+tests/upstream/component-model/corrections/** -text
+tests/upstream/wasmtime/wasi-p1/** -text
+tests/upstream/wasmtime/misc/upstream/** -text
+tests/upstream/core-spec/** -text
 modules/wasmoon/wasi_component/wit/** -text
 
 # Preserve the official HTTP WIT snapshot, including upstream whitespace.
 modules/wasmoon/wasi_http/wit/** -text whitespace=-blank-at-eol
 
 # Keep rebuilt HTTP contract guests and their patch hashes stable on Windows.
-tests/wasi03/http-contract/** -text
-tests/wasi03/http-contract/expectations.patch whitespace=-blank-at-eol
-tests/wasi03/http-contract/LICENSE whitespace=-blank-at-eof
+tests/wasi/p3/http-contract/** -text
+tests/wasi/p3/http-contract/expectations.patch whitespace=-blank-at-eol
+tests/wasi/p3/http-contract/LICENSE whitespace=-blank-at-eof

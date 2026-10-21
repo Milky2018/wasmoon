@@ -2,7 +2,7 @@
 /// Wasmoon runtime version for integration-time compatibility checks.
 ///
 /// Keep this value in sync with `moon.mod`.
-const WASMOON_RUNTIME_VERSION : String = "0.17.0"
+const WASMOON_RUNTIME_VERSION : String = "0.17.1"
 
 ///|
 /// Query runtime version.

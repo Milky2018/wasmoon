@@ -48,7 +48,7 @@ CLI/HTTP library modules needed by these two guests are compiled.
 
 ```sh
 rustup target add --toolchain 1.97.0 wasm32-wasip2
-python tests/wasi03/http-contract/rebuild.py \
+python tests/wasi/p3/http-contract/rebuild.py \
   --upstream /path/to/wasi-testsuite --output /tmp/http-contract-rebuilt
 ```
 

@@ -15,14 +15,14 @@ The reentry correction allows parent/child calls, including synchronous reentry
 and calls into a yielded parent callback. The recursive callback fixture now
 executes its deliberately unreachable callee. All three assertions pass the
 Wasmtime 50.0.0-dev oracle built from the misc corpus revision. Independent
-controls in `tests/component-runtime/callback-entry.wast` cover nested entry,
+controls in `tests/component/callback-entry.wast` cover nested entry,
 shared core-trap poisoning and non-poisoning result decoding errors.
 
 The synchronous-blocking correction updates eleven obsolete trap-precedence
 assertions in `async/trap-if-block-and-sync.wast`. Immediately trapping async
 callees execute, and malformed buffers or handles are validated before blocking.
 Independent controls cover malformed inputs, valid blocking operations and
-immediately completed operations in `tests/component-runtime/`. The complete
+immediately completed operations in `tests/component/`. The complete
 corrected script passes Wasmtime 50.0.0-dev, built from the exact misc corpus
 revision 668016926adfd1b8a79dbce894f1e203d8892599 (see ISS-488).
 

@@ -36,7 +36,7 @@ fn instantiate_canon_stream_new(
       readable_dropped: false,
       writable_dropped: false,
     })
-    // Handle numbering is observable by component-spec/async tests.
+    // Handle numbering is observable by tests/upstream/component-model/upstream/async tests.
     //
     // Allocate readable first, then writable. The shared allocator already
     // deterministically reuses the smallest freed handle (when available),

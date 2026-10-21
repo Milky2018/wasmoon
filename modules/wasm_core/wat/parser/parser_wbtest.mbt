@@ -861,7 +861,7 @@ test "parse WAST inline module: simple func" {
 
 ///|
 test "parse WAST inline module: func and memory" {
-  // Inline module matching spec/inline-module.wast
+  // Inline module matching tests/upstream/core-spec/inline-module.wast
   let wast = "(func) (memory 0) (func (export \"f\"))"
   let script = parse_wast(wast) catch { e => fail("Parse error: \{e}") }
   inspect(script.commands.length(), content="1")

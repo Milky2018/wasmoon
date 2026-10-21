@@ -434,7 +434,7 @@ def run_auto_reduce(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Differential GC bug finder")
-    parser.add_argument("--dir", default="spec/gc", help="Directory containing .wast files")
+    parser.add_argument("--dir", default="tests/upstream/core-spec/gc", help="Directory containing .wast files")
     parser.add_argument("--rec", action="store_true", help="Recursively search subdirectories")
     parser.add_argument(
         "--match",

@@ -305,7 +305,7 @@ class WorkflowGateTests(unittest.TestCase):
         )
         self.assertEqual(
             workflow.count(
-                "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
+                "python3 scripts/find_gc_bugs.py --dir tests/upstream/core-spec/gc --timeout 30"
             ),
             1,
         )

@@ -6,29 +6,29 @@ projects. Their original licenses are preserved below.
 
 ## WebAssembly Core Spec Tests
 
-- Path: `spec/`
+- Path: `tests/upstream/core-spec/`
 - Source: https://github.com/WebAssembly/spec
 - Upstream path: `test/`
 - License: Apache-2.0
-- Local license file: `spec/LICENSE`
+- Local license file: `tests/upstream/core-spec/LICENSE`
 
 ## WebAssembly Component Model Tests
 
-- Path: `component-spec/`
+- Path: `tests/upstream/component-model/`
 - Source: https://github.com/WebAssembly/component-model
 - Upstream commit: `e1fdcd10003c2570c77cbd9f6dbcb9db629ecb6a`
 - Upstream path: `test/`
 - License: Apache-2.0
-- Local license files: `component-spec/LICENSE`,
-  `component-spec/LICENSE-APACHE`
+- Local license files: `tests/upstream/component-model/LICENSE`,
+  `tests/upstream/component-model/LICENSE-APACHE`
 
 ## Wasmtime Component Tests
 
-- Path: `component-spec/wasmtime/`
+- Path: `tests/upstream/wasmtime/misc/upstream/tests/misc_testsuite/component-model/`
 - Source: https://github.com/bytecodealliance/wasmtime
 - License: Apache-2.0 WITH LLVM-exception
 - Local license file:
-  `component-spec/wasmtime/LICENSE-Apache-2.0_WITH_LLVM-exception`
+  `tests/upstream/wasmtime/misc/upstream/LICENSE`
 
 ## Libsodium WebAssembly Benchmarks
 
@@ -49,23 +49,23 @@ projects. Their original licenses are preserved below.
 
 ## Wasmtime WASIp1 Guest Programs
 
-- Path: `wasi-tests/wasmtime/upstream/`
+- Path: `tests/upstream/wasmtime/wasi-p1/upstream/`
 - Source: https://github.com/bytecodealliance/wasmtime
 - Upstream commit: `668016926adfd1b8a79dbce894f1e203d8892599`
 - License: Apache-2.0 WITH LLVM-exception
-- Local license file: `wasi-tests/wasmtime/upstream/LICENSE`
+- Local license file: `tests/upstream/wasmtime/wasi-p1/upstream/LICENSE`
 - Guest sources and host reference files are preserved unchanged; hashes are
-  recorded in `wasi-tests/wasmtime/SNAPSHOT.json`.
+  recorded in `tests/upstream/wasmtime/wasi-p1/SNAPSHOT.json`.
 
 ## Wasmtime Miscellaneous Regression Tests
 
-- Path: `wasm-tests/wasmtime/upstream/`
+- Path: `tests/upstream/wasmtime/misc/upstream/`
 - Source: https://github.com/bytecodealliance/wasmtime
 - Upstream commit: `668016926adfd1b8a79dbce894f1e203d8892599`
 - Upstream path: `tests/misc_testsuite/` and the host references in the snapshot
 - License: Apache-2.0 WITH LLVM-exception
-- Local license file: `wasm-tests/wasmtime/upstream/LICENSE`
-- Complete original inventory and hashes: `wasm-tests/wasmtime/SNAPSHOT.json`
+- Local license file: `tests/upstream/wasmtime/misc/upstream/LICENSE`
+- Complete original inventory and hashes: `tests/upstream/wasmtime/misc/SNAPSHOT.json`
 
 ## MoonBit Dependencies
 

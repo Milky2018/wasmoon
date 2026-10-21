@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--timeout", type=int, default=60)
     parser.add_argument("files", nargs="*", type=Path)
     args = parser.parse_args()
-    files = [ROOT / p for p in args.files] if args.files else sorted((ROOT / "spec").rglob("*.wast"))
+    files = [ROOT / p for p in args.files] if args.files else sorted((ROOT / "tests/upstream/core-spec").rglob("*.wast"))
     if not files:
         parser.error("no WAST files selected")
     targets = ["native", "wasm"] if args.target == "both" else [args.target]

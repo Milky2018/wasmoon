@@ -55,14 +55,14 @@ class GateTests(unittest.TestCase):
         self.assertNotEqual(runner.corpus_digest("case.json", lf), runner.corpus_digest("case.json", lf.replace(b"0", b"1")))
 
     def test_contract_guests_are_pinned_and_complete(self):
-        guests = runner.http_contract_guests(SCRIPTS.parent / "tests/wasi03/http-contract")
+        guests = runner.http_contract_guests(SCRIPTS.parent / "tests/wasi/p3/http-contract")
         self.assertEqual(set(guests), {"http-fields.wasm", "http-request.wasm"})
 
     def test_contract_guest_and_patch_corruption_are_rejected(self):
         import shutil
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "profile"
-            shutil.copytree(SCRIPTS.parent / "tests/wasi03/http-contract", root)
+            shutil.copytree(SCRIPTS.parent / "tests/wasi/p3/http-contract", root)
             guest = root / "http-fields.wasm"
             original = guest.read_bytes()
             guest.write_bytes(original + b"corrupt")

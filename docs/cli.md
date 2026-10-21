@@ -37,7 +37,7 @@ Options:
 
 Example:
 ```bash
-./wasmoon test spec/i32.wast
+./wasmoon test tests/upstream/core-spec/i32.wast
 ```
 
 ### Run a WASI Component Command
@@ -176,13 +176,13 @@ Disassemble a binary WebAssembly file to text format.
 
 ```bash
 # Run a single test file
-./wasmoon test spec/i32.wast
+./wasmoon test tests/upstream/core-spec/i32.wast
 
 # Run all tests
 python3 scripts/run_all_wast.py
 
 # Run without JIT (interpreter only)
-./wasmoon test --no-jit spec/i32.wast
+./wasmoon test --no-jit tests/upstream/core-spec/i32.wast
 ```
 
 ### Debugging JIT Output

@@ -9,4 +9,4 @@ Notes:
   parser, validator, interpreter, and JIT conformance testing.
 - The upstream repository root `LICENSE` delegates per-directory licensing; the
   upstream `test/` directory is licensed under Apache-2.0.
-- The Apache-2.0 license text is copied to `spec/LICENSE`.
+- The Apache-2.0 license text is copied to `tests/upstream/core-spec/LICENSE`.

@@ -98,13 +98,13 @@ moon test -p <package> -f <file> --update
 
 ```bash
 # Run single WAST file
-./wasmoon test spec/i32.wast
+./wasmoon test tests/upstream/core-spec/i32.wast
 
 # Run all WAST tests
 python3 scripts/run_all_wast.py
 
 # Run without JIT
-./wasmoon test --no-jit spec/i32.wast
+./wasmoon test --no-jit tests/upstream/core-spec/i32.wast
 ```
 
 ### Writing Tests

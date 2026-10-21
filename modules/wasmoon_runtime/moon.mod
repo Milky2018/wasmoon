@@ -1,11 +1,11 @@
 name = "Milky2018/wasmoon_runtime"
 
-version = "0.17.0"
+version = "0.17.1"
 
 import {
   "moonbitlang/x@0.5.5",
-  "Milky2018/wasm_core@0.17.0",
-  "Milky2018/wasm_milkir@0.17.0",
+  "Milky2018/wasm_core@0.17.1",
+  "Milky2018/wasm_milkir@0.17.1",
   "moonbitlang/async@0.22.4",
 }
 

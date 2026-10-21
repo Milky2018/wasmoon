@@ -20,7 +20,7 @@ from run_wasmtime_p1 import digest, execute
 from run_component_wast import iter_forms, first_symbol
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "wasm-tests/wasmtime"
+CORPUS = ROOT / "tests/upstream/wasmtime/misc"
 SUITE = "tests/misc_testsuite"
 WASM_TOOLS_VERSION = "1.254.0"
 

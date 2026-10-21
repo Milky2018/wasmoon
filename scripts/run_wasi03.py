@@ -77,7 +77,7 @@ def main():
             data = (suite / name).read_bytes()
         if corpus_digest(name, data) != digest:
             p.error(f"upstream checksum mismatch: {name}")
-    overrides = http_contract_guests(ROOT / "tests/wasi03/http-contract") if args.http_contract_tests else {}
+    overrides = http_contract_guests(ROOT / "tests/wasi/p3/http-contract") if args.http_contract_tests else {}
     binary_digest = hashlib.sha256(args.wasmoon.read_bytes()).hexdigest()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)

@@ -283,7 +283,7 @@ fn instantiate_canon_lower(
           // Some callback-style async functions publish their results early via `canon task.return`
           // and then continue running (e.g. stream producers). For async-lowering, return
           // RETURNED=2 immediately and keep the task alive as a detached background subtask so the
-          // event loop can continue driving it (component-spec/async/partial-stream-copies.wast).
+          // event loop can continue driving it (tests/upstream/component-model/upstream/async/partial-stream-copies.wast).
           if step != Done &&
             async_state.tasks.read_task_returned(tmp_task_id) is Some(true) {
             if retptr is Some(p) {
@@ -626,7 +626,7 @@ fn instantiate_canon_lower(
           None => {
             // Sync-lowering does not expose a guest-visible subtask handle, so do not
             // consume the shared handle space (which would perturb stream/future numbering
-            // observed by component-spec/async tests).
+            // observed by tests/upstream/component-model/upstream/async tests).
             let inner_task_id = alloc_canon_task_id(async_state)
             let task : CallbackTask = {
               func,
@@ -679,7 +679,7 @@ fn instantiate_canon_lower(
         // results via `canon task.return` and then continue running to drive the stream.
         // Sync-lowering must return the published result immediately and keep the task
         // alive as a detached background subtask, otherwise nested components can deadlock
-        // (component-spec/async/zero-length.wast).
+        // (tests/upstream/component-model/upstream/async/zero-length.wast).
         if is_callback_task &&
           step != Done &&
           async_state.tasks.read_task_returned(st.task_id) is Some(true) &&
