@@ -4,11 +4,15 @@
 /// Host calls and guest-continuation callbacks share a native nesting budget
 /// across interpreter contexts in the same Store.
 /// These limits do not configure JIT stacks or guest linear-memory stacks.
+/// `max_stack_bytes` optionally limits accounted live execution state per
+/// context: 32 bytes/value or local, 64/function frame, 96/control plus label.
+/// This portable accounting excludes allocator capacity and referenced objects.
 pub struct InterpreterLimits {
   max_frames : Int32
   max_values : Int32
   max_controls : Int32
   max_reentry_depth : Int32
+  max_stack_bytes : Int64?
 } derive(Debug)
 
 ///|
@@ -17,6 +21,7 @@ pub fn InterpreterLimits::new(
   max_values~ : Int32 = 1048576,
   max_controls~ : Int32 = 65536,
   max_reentry_depth~ : Int32 = 64,
+  max_stack_bytes~ : Int64? = None,
 ) -> InterpreterLimits raise RuntimeError {
   if max_frames <= 0 ||
     max_values <= 0 ||
@@ -24,7 +29,10 @@ pub fn InterpreterLimits::new(
     max_reentry_depth <= 0 {
     raise TypeMismatch
   }
-  { max_frames, max_values, max_controls, max_reentry_depth, }
+  if max_stack_bytes is Some(bytes) && bytes <= 0L {
+    raise TypeMismatch
+  }
+  { max_frames, max_values, max_controls, max_reentry_depth, max_stack_bytes, }
 }
 
 ///|
@@ -34,6 +42,7 @@ pub fn InterpreterLimits::default() -> InterpreterLimits {
     max_values: 1048576,
     max_controls: 65536,
     max_reentry_depth: 64,
+    max_stack_bytes: None,
   }
 }
 

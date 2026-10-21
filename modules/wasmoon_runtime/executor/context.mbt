@@ -138,7 +138,10 @@ fn ExecContext::ExecContext(
   store.check_instance(instance)
   guard cooperative_quantum > 0 else { raise TypeMismatch }
   {
-    stack: Stack(max_values=store.interpreter_limits.max_values),
+    stack: Stack(
+      max_values=store.interpreter_limits.max_values,
+      max_bytes=store.interpreter_limits.max_stack_bytes,
+    ),
     execution: [],
     running: false,
     store,

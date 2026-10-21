@@ -4,6 +4,7 @@ pub(all) suberror RuntimeError {
   HostExit(Int32)
   StackUnderflow
   StackOverflow
+  InterpreterStackBytesExceeded
   TypeMismatch
   InvalidModule(String)
   ForeignStore
@@ -72,6 +73,7 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     HostExit(_) as error => Some(error)
     StackUnderflow => Some(StackUnderflow)
     StackOverflow => Some(StackOverflow)
+    InterpreterStackBytesExceeded => Some(InterpreterStackBytesExceeded)
     TypeMismatch => Some(TypeMismatch)
     InvalidModule(detail) => Some(InvalidModule(detail))
     ForeignStore => Some(ForeignStore)
@@ -134,6 +136,8 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     HostExit(code) => "host requested exit: \{code}"
     StackUnderflow => "stack underflow"
     StackOverflow => "stack overflow"
+    InterpreterStackBytesExceeded =>
+      "interpreter execution stack byte limit exceeded"
     TypeMismatch => "type mismatch"
     InvalidModule(detail) => "invalid module: \{detail}"
     ForeignStore => "instance belongs to another store"
