@@ -695,6 +695,7 @@ graph TD
   ISS_656["ISS-656: Preserve shared constant dominance during native selection"]
   ISS_657["ISS-657: Preserve binary function names in diagnostics"]
   ISS_658["ISS-658: Register installed guest ranges with DWARF"]
+  ISS_659["ISS-659: Preserve native guest frame chains across resumable traps"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -1164,6 +1165,7 @@ graph TD
   ISS_652 --> ISS_653
   ISS_653 --> ISS_654
   ISS_654 --> ISS_655
+  ISS_658 --> ISS_659
 ```
 
 ## Warnings

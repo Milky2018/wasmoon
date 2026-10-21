@@ -4,13 +4,14 @@ fn prepare_async_jit_context(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   cooperative~ : Bool = false,
+  opt_level~ : Int32 = 0,
   local_compile_mask~ : Array[Bool]? = None,
 ) -> @wast.JITModuleContext raise {
   guard @commands.compile_module_to_jit(
       mod_,
       false,
       false,
-      0,
+      opt_level,
       false,
       local_compile_mask~,
       nan_canonicalization=store.nan_canonicalization,

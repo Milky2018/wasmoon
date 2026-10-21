@@ -125,6 +125,8 @@ pub fn get_import_trampoline(String, String) -> Int64?
 
 pub fn get_last_trap_details() -> TrapDetails
 
+pub fn get_last_trap_pcs() -> ReadOnlyArray[Int64]
+
 pub fn get_temperature(Int32, HotThreshold) -> FunctionTemperature
 
 pub fn host_native_target() -> NativeTarget raise JitPipelineError

@@ -151,7 +151,9 @@ pub fn DWARFBuilder::capture_backtrace(
   let result : Array[BacktraceFrame] = []
   for i in 0..<frame_count {
     let frame_pc = frames_buf[i * 2]
-    match self.lookup_address(frame_pc) {
+    // Caller records hold return addresses, possibly exactly at a range end.
+    let lookup_pc = if i == 0 { frame_pc } else { frame_pc - 1L }
+    match self.lookup_address(lookup_pc) {
       Some(info) =>
         result.push({
           pc: frame_pc,

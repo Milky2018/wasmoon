@@ -795,3 +795,9 @@ extern "c" fn c_jit_get_funcref_call_target_ptr() -> Int64 = "wasmoon_jit_get_fu
 
 ///|
 extern "c" fn c_jit_get_function_reference_ptr() -> Int64 = "wasmoon_jit_get_function_reference_ptr"
+
+///|
+extern "c" fn c_jit_get_trap_frame_count() -> Int32 = "wasmoon_jit_get_trap_frame_count"
+
+///|
+extern "c" fn c_jit_get_trap_frame_pc(index : Int32) -> Int64 = "wasmoon_jit_get_trap_frame_pc"

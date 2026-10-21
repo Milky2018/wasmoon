@@ -3421,3 +3421,35 @@ test "AArch64 constants choose shorter inverted and logical forms" {
     inspect(words == expected, content="true")
   }
 }
+
+///|
+test "aarch64_target internal leaf functions establish an unwindable frame record" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_protocol(
+    "leaf_frame",
+    Internal,
+    [Ptr64],
+    [],
+  )
+  builder.set_terminator(
+    builder.entry_block(),
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  verify_vcode(function)
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  assert_eq(frame.frame_size(), 16)
+  let object = emit(function, allocation, frame)
+  assert_true(
+    object
+    .unwind()
+    .any(directive => {
+      directive.operation is SetFramePointer(Int, 29, cfa_offset=16)
+    }),
+  )
+}

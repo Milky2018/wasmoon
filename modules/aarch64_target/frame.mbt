@@ -27,6 +27,7 @@ priv struct StackObjectRequirements {
 ///|
 pub struct AArch64Frame {
   priv layout : @vcode.FrameLayout
+  priv has_frame_record : Bool
   priv local_size : Int32
   priv incoming_args_size : Int32
   priv tail_args_size : Int32
@@ -131,7 +132,8 @@ fn used_callee_saved_registers(
   }
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
-    if function.instruction(instruction)
+    if function.protocol() != Internal &&
+      function.instruction(instruction)
       is Some(
         PlatformCall(_, _)
         | ReturnsTwicePlatformCall(_, _)
@@ -368,6 +370,11 @@ fn requires_emergency_move_area(
 
 ///|
 pub fn AArch64Frame::frame_size(self : AArch64Frame) -> Int32 {
+  self.layout.frame_size() + (if self.has_frame_record { 16 } else { 0 })
+}
+
+///|
+fn AArch64Frame::allocation_size(self : AArch64Frame) -> Int32 {
   self.layout.frame_size()
 }
 
@@ -527,7 +534,7 @@ fn verify_target_frame(
   )
   if frame.incoming_args_size != expected_incoming ||
     frame.tail_args_size != expected_tail ||
-    frame.local_size + expected_tail_area != frame.frame_size() {
+    frame.local_size + expected_tail_area != frame.allocation_size() {
     raise TailAreaMismatch(
       expected_incoming~,
       actual_incoming=frame.incoming_args_size,
@@ -710,6 +717,7 @@ fn plan_frame_verified(
   })
   let frame = {
     layout,
+    has_frame_record: function.protocol() == Internal,
     local_size,
     incoming_args_size,
     tail_args_size,

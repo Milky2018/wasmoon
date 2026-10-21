@@ -181,3 +181,12 @@ pub fn take_pending_trap_message() -> String? {
 pub fn is_wasi_exit_trap_code(code : Int32) -> Bool {
   code == 100
 }
+
+///|
+/// Owned PCs already captured on the trapped activation before its fiber closes.
+/// Frame zero is the fault PC; subsequent entries are caller return addresses.
+pub fn get_last_trap_pcs() -> ReadOnlyArray[Int64] {
+  ReadOnlyArray::from_array(
+    Array::makei(c_jit_get_trap_frame_count(), c_jit_get_trap_frame_pc),
+  )
+}

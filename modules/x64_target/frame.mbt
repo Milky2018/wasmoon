@@ -797,7 +797,9 @@ fn plan_frame_verified(
   })
   let frame = {
     layout,
-    has_setup_area: allocation_size > 0 || function_has_calls(function),
+    has_setup_area: function.protocol() == Internal ||
+    allocation_size > 0 ||
+    function_has_calls(function),
     local_size,
     incoming_args_size,
     tail_args_size,

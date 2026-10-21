@@ -939,7 +939,12 @@ static int invoke_trampoline_caught(
     if (sigsetjmp(activation->jmp_buf, 1) != 0) {
 #endif
 #ifdef _WIN32
-        if ((DWORD)activation->signal == EXCEPTION_STACK_OVERFLOW && !_resetstkoflw()) abort();
+        if ((DWORD)activation->signal == EXCEPTION_STACK_OVERFLOW) {
+            // Guard restoration may protect abandoned guest frames. Snapshot
+            // their chain first, while the recorded readable range is valid.
+            jit_trap_activation_finalize(activation);
+            if (!_resetstkoflw()) abort();
+        }
 #endif
         int trap_code = (int)activation->code;
         if (exception && trap_code == 12) *exception = exception_capture_current(ctx);
