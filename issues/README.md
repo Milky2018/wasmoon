@@ -693,6 +693,7 @@ graph TD
   ISS_654["ISS-654: Expose owned interpreter failure frames"]
   ISS_655["ISS-655: Add explicit catchable guest exceptions to host callbacks"]
   ISS_656["ISS-656: Preserve shared constant dominance during native selection"]
+  ISS_657["ISS-657: Preserve binary function names in diagnostics"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
