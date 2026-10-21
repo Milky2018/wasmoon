@@ -340,3 +340,83 @@ test "physical layout cache denial preserves canonical type identities" {
   assert_eq(denied.length(), instance.types.length())
   assert_eq(store.native_type_indices(instance), denied)
 }
+
+///|
+test "Linker rollback preserves escaped typed objects when root discovery fails" {
+  let module_ = @wat.parse(
+    "(module (type $node (struct (field (ref null $node)) (field i32))))",
+  )
+  defer runtime_fail_native_allocation(0)
+  for deny in [false, true] {
+    let budget = @runtime.ResourceBudget::new(gc_bytes=4096L)
+    let store = @runtime.Store::with_c_heap(resource_budget=Some(budget))
+    defer store.close()
+    store.set_module_types(module_.types, rec_groups=module_.type_rec_groups)
+    let linker = @runtime.Linker::with_store(store)
+    defer linker.close()
+    let global = @runtime.GlobalInstance::GlobalInstance(
+      { value_type: AnyRef, mutable: true, },
+      Null,
+    )
+    linker.add_global("host", "escaped", global)
+    let transaction = @runtime.InstantiationTransaction::new()
+    linker.register_rollback(transaction.registrar())
+    let child = store.alloc_struct(0, [Null, I32(42)])
+    let escaped = store.alloc_struct(0, [StructRef(child), I32(7)])
+    let unused = store.alloc_struct(0, [Null, I32(99)])
+    global.set(StructRef(escaped))
+    if deny {
+      runtime_fail_native_allocation(1)
+    }
+    transaction.rollback()
+    runtime_fail_native_allocation(0)
+    assert_eq(global.get(), StructRef(escaped))
+    assert_true(store.is_gc_valid(escaped))
+    assert_true(store.is_gc_valid(child))
+    assert_eq(store.struct_get(escaped, 0), StructRef(child))
+    assert_eq(store.struct_get(child, 1), I32(42))
+    // Failed discovery must defer reclamation, not treat its partial graph as
+    // complete. Successful discovery must still reclaim provisional garbage.
+    assert_eq(store.is_gc_valid(unused), deny)
+    let retry = @runtime.InstantiationTransaction::new()
+    linker.register_rollback(retry.registrar())
+    let next_unused = store.alloc_struct(0, [Null, I32(1)])
+    retry.rollback()
+    assert_false(store.is_gc_valid(next_unused))
+    assert_eq(store.struct_get(child, 1), I32(42))
+    global.set(Null)
+    assert_eq(store.collect_garbage(), if deny { 3 } else { 2 })
+    assert_eq(budget.used(GcBytes), 0L)
+    let replacement = store.alloc_struct(0, [Null, I32(43)])
+    assert_eq(store.struct_get(replacement, 1), I32(43))
+  }
+}
+
+///|
+test "public root collection rejects empty and partially discovered native graphs" {
+  let module_ = @wat.parse(
+    "(module (type $node (struct (field (ref null $node)))))",
+  )
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  store.set_module_types(module_.types, rec_groups=module_.type_rec_groups)
+  let mut root : @types.Value = Null
+  for _ in 0..<40 {
+    root = StructRef(store.alloc_struct(0, [root]))
+  }
+  defer runtime_fail_native_allocation(0)
+  // The second queue allocation fails after 32 objects were discovered.
+  for attempt in [1, 2] {
+    runtime_fail_native_allocation(attempt)
+    try store.collect_roots([root]) catch {
+      UndefinedElement => ()
+      error => fail(error.to_string())
+    } noraise {
+      _ => fail("incomplete discovery returned a root set")
+    }
+    runtime_fail_native_allocation(0)
+    assert_eq(store.collect_roots([root]).length(), 40)
+    assert_eq(store.collect_garbage(additional_roots=[root]), 0)
+  }
+  assert_eq(store.collect_garbage(), 40)
+}

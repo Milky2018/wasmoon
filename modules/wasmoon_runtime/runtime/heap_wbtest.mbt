@@ -332,3 +332,14 @@ test "GC rollback: rooted transaction object is not reclaimed or reused" {
     content="(0, 1, I32(7))",
   )
 }
+
+///|
+test "GC rollback: failed root discovery defers cleanup without corrupting marks" {
+  let heap = MarkSweepHeap::MarkSweepHeap()
+  let rollback = heap.make_allocation_rollback(() => raise UndefinedElement)
+  let escaped = heap.alloc_struct(0, [I32(42)])
+  rollback()
+  assert_eq(heap.struct_get(escaped, 0), I32(42))
+  assert_eq(heap.collect([StructRef(escaped)]), 0)
+  assert_eq(heap.collect([]), 1)
+}

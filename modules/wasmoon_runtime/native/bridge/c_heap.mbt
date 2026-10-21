@@ -63,14 +63,15 @@ pub fn CHeap::get_ptr(self : CHeap) -> GCHeapHandle {
 ///|
 /// Return an owner-bound action that reclaims later allocations unless they
 /// remain reachable when the action runs. Retained object-table indices are
-/// never reused.
+/// never reused. If root discovery raises, skip reclamation rather than use an
+/// incomplete root set.
 pub fn CHeap::make_allocation_rollback(
   self : CHeap,
-  roots : () -> Array[@types.Value],
+  roots : () -> Array[@types.Value] raise,
 ) -> () -> Unit {
   let object_count = self.get_object_count()
   fn() {
-    let current_roots = roots()
+    let current_roots = roots() catch { _ => return }
     let num_roots = current_roots.length()
     let raw_roots = FixedArray::makei(num_roots, fn(i) {
       value_to_i64(current_roots[i])

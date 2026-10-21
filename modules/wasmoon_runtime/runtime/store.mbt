@@ -88,11 +88,11 @@ fn Store::register_rollback(
   })
   // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
   registrar.on_rollback(
-    self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+    self.heap.make_allocation_rollback(() => self.collect_roots([])),
   )
   if self.references.native.c_heap is Some(heap) {
     registrar.on_rollback(
-      heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+      heap.make_allocation_rollback(() => self.collect_roots([])),
     )
   }
   self.register_native_exception_rollback(registrar)
@@ -1518,11 +1518,15 @@ pub fn Store::get_func_owner_idx(self : Store, func_addr : Int32) -> Int32 {
 
 ///|
 /// Collect the transitive object roots of this Store and explicit host roots.
+/// Raise UndefinedElement if discovery is incomplete; partial roots must not
+/// be used to authorize reclamation.
 pub fn Store::collect_roots(
   self : Store,
   additional_roots : Array[@types.Value],
-) -> Array[@types.Value] {
-  self.trace_objects(self.trace_gc_roots(additional_roots))
+) -> Array[@types.Value] raise RuntimeError {
+  let trace = self.trace_gc_roots(additional_roots)
+  guard !trace.failed else { raise UndefinedElement }
+  self.trace_objects(trace)
 }
 
 ///|

@@ -713,7 +713,7 @@ pub fn Store::check_instance(Self, ModuleInstance) -> Unit raise RuntimeError
 pub fn Store::check_instance_admission(Self, InstanceAdmission, validated? : @validator.ValidatedModule) -> Unit raise RuntimeError
 pub fn Store::close(Self) -> Unit
 pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int32
-pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
+pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError
 pub fn Store::counts(Self) -> StoreCounts
 pub fn Store::current_types(Self) -> Array[@types.SubType]
 pub fn Store::decode_module(Self, Bytes) -> @types.Module raise
