@@ -237,8 +237,8 @@ fn StoreReferences::encode_exception_snapshot(
   }
   self.native.native_exception_to_store.set(reference, index)
   self.native.store_exception_to_native.set(index, reference)
-  if self.native.snapshot_allocations is Some(created) {
-    created.push((index, reference))
+  if self.native.exception_allocations is Some(journal) {
+    journal.snapshots.push((index, reference))
   }
   reference
 }
@@ -293,19 +293,21 @@ fn StoreReferences::release_native_exception(
 }
 
 ///|
-/// Run after resource rollback and before heap rollback. Managed Values need no
-/// native snapshot; only surviving native consumers retain provisional tokens.
+/// Run after resource rollback and before heap rollback. Discover the complete
+/// live graph before releasing either payload records or native snapshots.
+/// Managed Values alone need no snapshot; native consumers retain both.
 fn Store::register_native_exception_rollback(
   self : Store,
   registrar : RollbackRegistrar,
 ) -> Unit {
-  let created : Array[(Int32, Int64)] = []
-  self.references.native.snapshot_allocations = Some(created)
+  let journal : ExceptionAllocationJournal = { instances: [], snapshots: [], }
+  self.references.native.exception_allocations = Some(journal)
   registrar.on_finish(fn() {
-    self.references.native.snapshot_allocations = None
+    self.references.native.exception_allocations = None
   })
   registrar.on_rollback(fn() {
-    if self.closed.val || created.is_empty() {
+    if self.closed.val ||
+      (journal.instances.is_empty() && journal.snapshots.is_empty()) {
       return
     }
     let native_roots = match self.references.native.c_heap {
@@ -322,20 +324,30 @@ fn Store::register_native_exception_rollback(
     }
     let pending = trace.native_exceptions.keys().to_array()
     while pending.pop() is Some(index) {
-      if self.references.exns.get(index) is Some(exception) {
-        for value in exception.values {
-          if value is ExnRef(child) && !trace.native_exceptions.contains(child) {
-            trace.native_exceptions.set(child, true)
-            pending.push(child)
-          }
+      guard self.references.exns.get(index) is Some(exception) else {
+        // A missing payload is incomplete discovery, not an empty payload.
+        return
+      }
+      for value in exception.values {
+        if value is ExnRef(child) && !trace.native_exceptions.contains(child) {
+          trace.native_exceptions.set(child, true)
+          pending.push(child)
         }
       }
     }
-    for (index, token) in created {
+    for (index, token) in journal.snapshots {
       if !trace.native_exceptions.contains(index) &&
         self.references.native.store_exception_to_native.get(index) ==
         Some(token) {
         self.references.release_native_exception(index)
+      }
+    }
+    // Payloads remain available through transitive discovery. Escaped handles
+    // keep their identity and quota; only unpublished instances are rolled back.
+    for index in journal.instances {
+      if !trace.exceptions.contains(index) {
+        self.references.exns.remove(index)
+        self.references.release_auxiliary_handle(1, index.to_int64())
       }
     }
   })

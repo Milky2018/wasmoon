@@ -120,10 +120,7 @@ fn StoreReferences::alloc_exn(
   let index = self.next_exception
   self.next_exception += 1
   self.exns.set(index, { tag_addr, values: values.copy(), })
-  self.on_instantiation_rollback(fn() {
-    self.exns.remove(index)
-    self.release_auxiliary_handle(1, index.to_int64())
-  })
+  self.record_exception_allocation(index)
   index
 }
 

@@ -191,7 +191,7 @@ pub fn Store::Store(
     {
       native_execution,
       c_heap: None,
-      snapshot_allocations: None,
+      exception_allocations: None,
       native_exception_to_store: Map([]),
       store_exception_to_native: Map([]),
     },
@@ -277,7 +277,7 @@ pub fn Store::with_c_heap(
     {
       native_execution,
       c_heap: Some(heap),
-      snapshot_allocations: None,
+      exception_allocations: None,
       native_exception_to_store: Map([]),
       store_exception_to_native: Map([]),
     },
