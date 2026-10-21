@@ -27,7 +27,7 @@ import {
 // Values
 pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
 
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-10"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-11"
 
 pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 
@@ -540,6 +540,7 @@ pub fn NativeJITContext::register_safepoints(Self, Int32, Array[@code_object.Saf
 pub fn NativeJITContext::set_callable_types(Self, Array[Int32], Array[Int32], Array[(Int64, Int32)], Array[Int32]) -> Unit
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
 pub fn NativeJITContext::set_continuation_arena(Self, @ffi.NativeContinuationArena) -> Unit
+pub fn NativeJITContext::set_cooperative_quantum(Self, Int32) -> Bool
 pub fn NativeJITContext::set_cooperative_scheduling(Self, Bool) -> Unit
 pub fn NativeJITContext::set_exception_arena(Self, @ffi.NativeExceptionArena) -> Unit
 pub fn NativeJITContext::set_func(Self, Int32, Int64) -> Unit

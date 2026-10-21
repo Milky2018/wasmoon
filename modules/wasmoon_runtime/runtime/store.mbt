@@ -561,6 +561,7 @@ pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
     }
     self.bind_gc_budget(heap)
     self.references.native.c_heap = Some(heap)
+    self.native_types.native_layout_count = 0
     self.native_execution.exceptions().enable_reclamation()
   }
 }
@@ -978,7 +979,8 @@ pub fn Store::alloc_struct(
   let reference = match self.references.native.c_heap {
     Some(heap) => {
       let encoded = fields.map(value => self.encode_heap_value(value))
-      heap.alloc_struct(type_idx, encoded) catch {
+      let runtime_type = self.allocation_type(instance, type_idx)
+      heap.alloc_struct(type_idx, encoded, runtime_type~) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise self.gc_allocation_error()
@@ -1006,7 +1008,8 @@ pub fn Store::alloc_array(
   let reference = match self.references.native.c_heap {
     Some(heap) => {
       let encoded = elements.map(value => self.encode_heap_value(value))
-      heap.alloc_array_from_values(type_idx, encoded) catch {
+      let runtime_type = self.allocation_type(instance, type_idx, array=true)
+      heap.alloc_array_from_values(type_idx, encoded, runtime_type~) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise self.gc_allocation_error()
@@ -1519,7 +1522,7 @@ pub fn Store::collect_roots(
   self : Store,
   additional_roots : Array[@types.Value],
 ) -> Array[@types.Value] {
-  self.trace_gc_roots(additional_roots).objects
+  self.trace_objects(self.trace_gc_roots(additional_roots))
 }
 
 ///|

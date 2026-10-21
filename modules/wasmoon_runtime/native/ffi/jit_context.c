@@ -473,20 +473,23 @@ int32_t ctx_gc_push_root_scope_internal(
     }
     jit_execution_state_t *state = ctx_execution(ctx);
     if (!state) return 0;
-    wasmoon_gc_root_scope_t *scope =
-        (wasmoon_gc_root_scope_t *)wasmoon_native_malloc(sizeof(wasmoon_gc_root_scope_t));
+    wasmoon_gc_root_scope_t *scope = state->gc_root_scope_free;
     if (!scope) {
-        return 0;
+        scope = wasmoon_native_calloc(1, sizeof(*scope));
+        if (!scope) return 0;
+        state->gc_root_scope_free = scope;
     }
+    if (root_count > scope->root_capacity) {
+        int64_t *roots_copy = wasmoon_native_realloc(scope->roots,
+            (size_t)root_count * sizeof(int64_t));
+        if (!roots_copy) return 0;
+        scope->roots = roots_copy;
+        scope->root_capacity = root_count;
+    }
+    state->gc_root_scope_free = scope->prev;
     scope->prev = state->gc_root_scope_head;
-    scope->roots = NULL;
     scope->root_count = root_count;
     if (root_count > 0) {
-        scope->roots = (int64_t *)wasmoon_native_malloc((size_t)root_count * sizeof(int64_t));
-        if (!scope->roots) {
-            free(scope);
-            return 0;
-        }
         memcpy(scope->roots, roots, (size_t)root_count * sizeof(int64_t));
     }
     state->gc_root_scope_head = scope;
@@ -500,8 +503,9 @@ void ctx_gc_pop_root_scope_internal(jit_context_t *ctx) {
     }
     wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
     state->gc_root_scope_head = scope->prev;
-    free(scope->roots);
-    free(scope);
+    scope->root_count = 0;
+    scope->prev = state->gc_root_scope_free;
+    state->gc_root_scope_free = scope;
 }
 
 void ctx_gc_restore_root_scopes_internal(
@@ -521,12 +525,22 @@ void ctx_gc_restore_root_scopes_internal(
 }
 
 void jit_execution_clear_root_scopes(jit_execution_state_t *state) {
-    while (state->gc_root_scope_head) {
-        wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
-        state->gc_root_scope_head = scope->prev;
-        free(scope->roots);
-        free(scope);
+    // Release both live and cached scopes at execution teardown. Cached copies
+    // are never traversed by the root enumerator.
+    wasmoon_gc_root_scope_t *lists[2] = {
+        state->gc_root_scope_head, state->gc_root_scope_free
+    };
+    for (int i = 0; i < 2; i++) {
+        wasmoon_gc_root_scope_t *scope = lists[i];
+        while (scope) {
+            wasmoon_gc_root_scope_t *next = scope->prev;
+            free(scope->roots);
+            free(scope);
+            scope = next;
+        }
     }
+    state->gc_root_scope_head = NULL;
+    state->gc_root_scope_free = NULL;
 }
 
 void ctx_gc_clear_root_scopes_internal(jit_context_t *ctx) {
@@ -944,4 +958,16 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_bind_gc_function_addresses(
     if (ctx_runtime(ctx)->gc_func_table) moonbit_decref(ctx_runtime(ctx)->gc_func_table);
     ctx_runtime(ctx)->gc_func_table = addresses;
     ctx_runtime(ctx)->gc_func_table_size = count;
+}
+
+// These offsets describe the embedding's private prefix without adding fields
+// to the module-shaped public VMContext. The codegen revision pins the protocol.
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_poll_layout_field(int32_t index) {
+    const int32_t offsets[] = {
+        (int32_t)offsetof(jit_runtime_state_t, execution) - (int32_t)sizeof(jit_runtime_state_t),
+        (int32_t)offsetof(jit_execution_state_t, poll_controls),
+        (int32_t)offsetof(jit_invocation_controls_t, cancellation_callback),
+        (int32_t)offsetof(jit_invocation_controls_t, scheduling_budget)
+    };
+    return index >= 0 && index < 4 ? offsets[index] : 0;
 }

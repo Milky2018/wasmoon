@@ -1,4 +1,7 @@
 ///|
+extern "c" fn poll_layout_field(index : Int32) -> Int32 = "wasmoon_jit_poll_layout_field"
+
+///|
 pub fn wasm_frontend_embedding_environment(
   runtime_symbol_prefix~ : String = "wasmoon",
   hidden_context_type~ : @milkir.Type? = Some(Ptr),
@@ -29,6 +32,12 @@ pub fn wasm_frontend_embedding_environment(
     memory_descriptor_layout=Some({
       base_offset: memory.base_offset,
       current_length_offset: memory.current_length_offset,
+    }),
+    safepoint_poll_layout=Some({
+      execution_offset: poll_layout_field(0),
+      controls_offset: poll_layout_field(1),
+      callback_offset: poll_layout_field(2),
+      budget_offset: poll_layout_field(3),
     }),
     cancellation_safepoints~,
   )

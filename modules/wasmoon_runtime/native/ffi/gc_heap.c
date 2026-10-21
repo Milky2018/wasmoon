@@ -20,6 +20,7 @@
 #define DEFAULT_HEAP_CAPACITY (1024 * 1024)  // 1MB
 #define DEFAULT_OBJECT_CAPACITY 1024
 #define DEFAULT_FREE_CAPACITY 256
+#define MIN_COLLECTION_BUDGET (64 * 1024 * 1024)
 
 // Alignment
 #define ALIGN_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
@@ -53,7 +54,7 @@ static int gc_verify_enabled(void) {
     return gc_verify_env_cached;
 }
 
-static void gc_heap_maybe_verify(GcHeap* heap, const char* op_name) {
+void gc_heap_maybe_verify(GcHeap* heap, const char* op_name) {
     if (!gc_verify_enabled()) {
         return;
     }
@@ -87,7 +88,7 @@ static int gc_fail_alloc_at_cached = -2;
 static int gc_fail_alloc_every_cached = -2;
 static int gc_alloc_attempt_count = 0;
 
-static int gc_should_fail_allocation(void) {
+int gc_should_fail_allocation(void) {
     gc_alloc_attempt_count++;
     int fail_at = gc_read_positive_env_cached("WASMOON_GC_FAIL_ALLOC_AT", &gc_fail_alloc_at_cached);
     if (fail_at > 0 && gc_alloc_attempt_count == fail_at) {
@@ -152,7 +153,7 @@ static int gc_try_decode_heap_ref_candidate(
 
 // ============ Internal Helpers ============
 
-static int ensure_heap_capacity(GcHeap* heap, size_t needed) {
+int gc_heap_ensure_payload_capacity(GcHeap* heap, size_t needed) {
     // Object offsets and header sizes are signed 32-bit values. Reject before
     // addition or capacity doubling can wrap or truncate those representations.
     if (needed > INT32_MAX || heap->size > (size_t)INT32_MAX - needed) {
@@ -179,34 +180,67 @@ static int ensure_heap_capacity(GcHeap* heap, size_t needed) {
 }
 
 int gc_heap_ensure_object_capacity(GcHeap* heap) {
-    if (heap->object_count < heap->object_capacity) {
-        return 1;  // Enough space
+    if (heap->object_count == INT32_MAX) return 0;
+    int32_t page_index = heap->object_count >> GC_ID_PAGE_BITS;
+    if (page_index >= heap->identity_page_capacity) {
+        int32_t capacity = heap->identity_page_capacity ? heap->identity_page_capacity * 2 : 4;
+        GcIdentityPage **pages = wasmoon_native_realloc(heap->identity_pages,
+            (size_t)capacity * sizeof(*pages));
+        if (!pages) return 0;
+        memset(pages + heap->identity_page_capacity, 0,
+            (size_t)(capacity - heap->identity_page_capacity) * sizeof(*pages));
+        heap->identity_pages = pages;
+        heap->identity_page_capacity = capacity;
     }
-
-    if (heap->object_capacity > INT32_MAX / 2) return 0;
-    int32_t new_capacity = heap->object_capacity * 2;
-    size_t bytes = (size_t)new_capacity * sizeof(int32_t);
-    int32_t *new_table = wasmoon_native_malloc(bytes);
-    int32_t *new_types = wasmoon_native_malloc(bytes);
-    if (!new_table || !new_types) {
-        free(new_table); free(new_types);
-        return 0;
+    if (!heap->identity_pages[page_index]) {
+        GcIdentityPage *page = wasmoon_native_malloc(sizeof(*page));
+        if (!page) return 0;
+        memset(page, 0xff, sizeof(*page));
+        page->live_count = 0;
+        memset(page->visit_epochs, 0, sizeof(page->visit_epochs));
+        heap->identity_pages[page_index] = page;
     }
-    memcpy(new_table, heap->object_table, (size_t)heap->object_count * sizeof(int32_t));
-    memcpy(new_types, heap->runtime_types, (size_t)heap->object_count * sizeof(int32_t));
-    free(heap->object_table);
-    free(heap->runtime_types);
-    heap->object_table = new_table;
-    heap->runtime_types = new_types;
-    heap->object_capacity = new_capacity;
+    if (heap->live_count == heap->live_capacity) {
+        if (heap->live_capacity > INT32_MAX / 2) return 0;
+        int32_t capacity = heap->live_capacity ? heap->live_capacity * 2 : DEFAULT_OBJECT_CAPACITY;
+        int32_t *live = wasmoon_native_realloc(heap->live_objects, (size_t)capacity * sizeof(*live));
+        if (!live) return 0;
+        heap->live_objects = live;
+        heap->live_capacity = capacity;
+    }
     return 1;
+}
+
+// Called only after capacity admission; no callbacks or allocations publish a
+// partially initialized object. Payload order and identity order agree.
+int32_t gc_heap_register_object(GcHeap *heap, int32_t offset) {
+    int32_t index = heap->object_count++;
+    GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
+    page->offsets[index & (GC_ID_PAGE_SIZE - 1)] = offset;
+    page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = -1;
+    page->live_count++;
+    int32_t ref = index + 1;
+    heap->live_objects[heap->live_count++] = ref;
+    heap->total_allocations++;
+    return ref;
+}
+
+static void retire_identity(GcHeap *heap, int32_t ref) {
+    int32_t index = ref - 1;
+    GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
+    page->offsets[index & (GC_ID_PAGE_SIZE - 1)] = -1;
+    page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = -1;
+    if (--page->live_count == 0) {
+        heap->identity_pages[index >> GC_ID_PAGE_BITS] = NULL;
+        free(page);
+    }
 }
 
 static GcHeader* get_object_header(GcHeap* heap, int32_t gc_ref) {
     if (gc_ref <= 0 || gc_ref > heap->object_count) {
         return NULL;
     }
-    int32_t offset = heap->object_table[gc_ref - 1];
+    int32_t offset = gc_heap_identity_offset(heap, gc_ref);
     if (offset < 0) {
         return NULL;  // Object was freed
     }
@@ -234,9 +268,12 @@ static void finalize_gc_heap(void *object) {
     // Each live registration owns a reference, so none can outlive the heap.
     if (heap->parked_jit_roots_head) abort();
     if (heap->collection_state) moonbit_decref(heap->collection_state);
+    for (int32_t i = 0; i < heap->layout_capacity; i++) free(heap->layouts[i]);
+    free(heap->layouts);
     free(heap->free_list);
-    free(heap->runtime_types);
-    free(heap->object_table);
+    for (int32_t i = 0; i < heap->identity_page_capacity; i++) free(heap->identity_pages[i]);
+    free(heap->identity_pages);
+    free(heap->live_objects);
     free(heap->data);
     if (heap->byte_reservation) moonbit_decref(heap->byte_reservation);
     if (heap->object_reservation) moonbit_decref(heap->object_reservation);
@@ -257,17 +294,15 @@ static GcHeap* gc_heap_new(size_t initial_capacity) {
     if (initial_capacity == 0) initial_capacity = DEFAULT_HEAP_CAPACITY;
     GcHeap *heap = wasmoon_gc_heap_empty();
     heap->data = wasmoon_native_malloc(initial_capacity);
-    heap->object_table = wasmoon_native_malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
-    heap->runtime_types = wasmoon_native_malloc(DEFAULT_OBJECT_CAPACITY * sizeof(int32_t));
     heap->free_list = wasmoon_native_malloc(DEFAULT_FREE_CAPACITY * sizeof(int32_t));
-    if (!heap->data || !heap->object_table || !heap->runtime_types || !heap->free_list) {
+    if (!heap->data || !heap->free_list) {
         finalize_gc_heap(heap);
         memset(heap, 0, sizeof(*heap));
         return heap;
     }
     atomic_fetch_add_explicit(&gc_heap_live_count, 1, memory_order_relaxed);
     heap->capacity = initial_capacity;
-    heap->object_capacity = DEFAULT_OBJECT_CAPACITY;
+    heap->collection_limit = MIN_COLLECTION_BUDGET;
     heap->free_capacity = DEFAULT_FREE_CAPACITY;
     return heap;
 }
@@ -428,8 +463,8 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
     int32_t execution_count = copy_execution_roots(heap, NULL);
     if (execution_count < 0) return moonbit_make_int64_array(1, -2);
     size += execution_count;
-    for (int32_t i = 0; i < heap->object_count; ++i) {
-        GcHeader *header = get_object_header(heap, i + 1);
+    for (int32_t i = 0; i < heap->live_count; ++i) {
+        GcHeader *header = get_object_header(heap, heap->live_objects[i]);
         if (header && (header->flags & GC_FLAG_MARKED)) ++size;
     }
     size += exception_arena_marked_count(heap->exception_arena);
@@ -448,14 +483,14 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
     at += execution_count;
     // No callbacks or buffer growth occur during this copy. Snapshot the scan
     // span so writes to the fresh output do not force descriptor reloads.
-    const int32_t object_count = heap->object_count;
-    const int32_t *object_table = heap->object_table;
+    const int32_t object_count = heap->live_count;
     const uint8_t *data = heap->data;
     for (int32_t i = 0; i < object_count; ++i) {
-        int32_t offset = object_table[i];
+        int32_t ref = heap->live_objects[i];
+        int32_t offset = gc_heap_identity_offset(heap, ref);
         if (offset < 0 || !data) continue;
         const GcHeader *header = (const GcHeader *)(data + offset);
-        if (header->flags & GC_FLAG_MARKED) input[at++] = (int64_t)(i + 1) << 1;
+        if (header->flags & GC_FLAG_MARKED) input[at++] = (int64_t)ref << 1;
     }
     exception_arena_copy_marked(heap->exception_arena, input + at);
     at += exception_arena_marked_count(heap->exception_arena);
@@ -481,8 +516,8 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_reset_auxiliary_marks(GcCollection
 
 MOONBIT_FFI_EXPORT void wasmoon_gc_collection_abort(GcCollectionRequest *request) {
     GcHeap *heap = request->heap;
-    for (int32_t i = 0; i < heap->object_count; ++i) {
-        GcHeader *header = get_object_header(heap, i + 1);
+    for (int32_t i = 0; i < heap->live_count; ++i) {
+        GcHeader *header = get_object_header(heap, heap->live_objects[i]);
         if (header) header->flags &= ~GC_FLAG_MARKED;
     }
     wasmoon_gc_collection_reset_auxiliary_marks(request);
@@ -522,6 +557,13 @@ static WASMOON_NO_FUNCTION_SANITIZE int32_t gc_run_collection(
 MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_heap_reference_candidates(GcHeap *heap, int32_t reference) {
     GcHeader *header = get_object_header(heap, reference);
     if (!header) return moonbit_make_int64_array(0, 0);
+    if (gc_object_layout(heap, header)) {
+        int32_t count = header->kind == GC_KIND_ARRAY ? gc_heap_array_len(heap, reference) : (int32_t)header->reserved;
+        int64_t *result = moonbit_make_int64_array(count, 0);
+        for (int32_t i = 0; i < count; i++) result[i] = header->kind == GC_KIND_ARRAY
+            ? gc_heap_array_get(heap, reference, i) : gc_heap_struct_get(heap, reference, i);
+        return result;
+    }
     uint8_t *data = (uint8_t *)header + GC_HEADER_SIZE;
     int32_t count = header->kind == GC_KIND_ARRAY
         ? *(int32_t *)data : (int32_t)header->reserved;
@@ -531,7 +573,7 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_heap_reference_candidates(GcHeap *heap, i
     return result;
 }
 
-static int gc_heap_admit(GcHeap *heap, size_t needed) {
+int gc_heap_admit(GcHeap *heap, size_t needed) {
     heap->quota_denied = 0;
     if (needed > INT32_MAX || heap->size > (size_t)INT32_MAX - needed || heap->object_count == INT32_MAX) return 0;
     if (heap->byte_reservation && !wasmoon_reservation_resize(heap->byte_reservation, (int64_t)(heap->size + needed))) {
@@ -546,7 +588,7 @@ static int gc_heap_admit(GcHeap *heap, size_t needed) {
     return 1;
 }
 
-static void gc_heap_undo_admission(GcHeap *heap) {
+void gc_heap_undo_admission(GcHeap *heap) {
     if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)heap->size);
     if (heap->object_reservation) wasmoon_reservation_resize(heap->object_reservation, heap->object_count);
 }
@@ -568,7 +610,7 @@ static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
     if (!gc_heap_admit(heap, total_size)) return 0;
-    if (!ensure_heap_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
+    if (!gc_heap_ensure_payload_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
         gc_heap_undo_admission(heap);
         return 0;
     }
@@ -594,11 +636,7 @@ static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
 
     // Update heap state
     heap->size += total_size;
-    int32_t gc_ref = heap->object_count + 1;  // 1-based
-    heap->object_table[heap->object_count] = offset;
-    heap->runtime_types[heap->object_count] = -1;
-    heap->object_count++;
-    heap->total_allocations++;
+    int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     gc_heap_maybe_verify(heap, "alloc_struct");
     return gc_ref;
@@ -640,6 +678,10 @@ GcSlot gc_heap_struct_get_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx) 
         return empty;  // Invalid reference
     }
 
+    GcHeader *header = (GcHeader *)(data - GC_HEADER_SIZE);
+    if (field_idx < 0 || (uint32_t)field_idx >= (uint32_t)header->reserved) return empty;
+    GcTypeLayout *layout = gc_object_layout(heap, header);
+    if (layout) return gc_layout_read(data, &layout->fields[field_idx]);
     GcSlot* fields = (GcSlot*)data;
     return fields[field_idx];
 }
@@ -656,9 +698,16 @@ void gc_heap_struct_set_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx,
         return;  // Invalid reference
     }
 
-    GcSlot* fields = (GcSlot*)data;
-    gc_heap_write_barrier(heap, gc_ref, value.lo);
-    fields[field_idx] = value;
+    GcHeader *header = (GcHeader *)(data - GC_HEADER_SIZE);
+    if (field_idx < 0 || (uint32_t)field_idx >= (uint32_t)header->reserved) return;
+    GcTypeLayout *layout = gc_object_layout(heap, header);
+    if (layout) {
+        if (layout->fields[field_idx].reference) gc_heap_write_barrier(heap, gc_ref, value.lo);
+        gc_layout_write(data, &layout->fields[field_idx], value);
+    } else {
+        gc_heap_write_barrier(heap, gc_ref, value.lo);
+        ((GcSlot *)data)[field_idx] = value;
+    }
     gc_heap_maybe_verify(heap, "struct_set");
 }
 
@@ -680,7 +729,7 @@ int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
     if (!gc_heap_admit(heap, total_size)) return 0;
-    if (!ensure_heap_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
+    if (!gc_heap_ensure_payload_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
         gc_heap_undo_admission(heap);
         return 0;
     }
@@ -711,11 +760,7 @@ int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
 
     // Update heap state
     heap->size += total_size;
-    int32_t gc_ref = heap->object_count + 1;  // 1-based
-    heap->object_table[heap->object_count] = offset;
-    heap->runtime_types[heap->object_count] = -1;
-    heap->object_count++;
-    heap->total_allocations++;
+    int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     gc_heap_maybe_verify(heap, "alloc_array");
     return gc_ref;
@@ -753,8 +798,9 @@ GcSlot gc_heap_array_get_wide(GcHeap* heap, int32_t gc_ref, int32_t idx) {
         return empty;  // Out of bounds
     }
 
-    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
-    return elements[idx];
+    GcTypeLayout *layout = gc_object_layout(heap, (GcHeader *)(data - GC_HEADER_SIZE));
+    if (layout) return gc_layout_read(data + GC_ARRAY_DATA_OFFSET + (size_t)idx * layout->size, &layout->fields[0]);
+    return ((GcSlot *)(data + GC_ARRAY_DATA_OFFSET))[idx];
 }
 
 void gc_heap_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx, int64_t value) {
@@ -774,9 +820,14 @@ void gc_heap_array_set_wide(GcHeap* heap, int32_t gc_ref, int32_t idx,
         return;  // Out of bounds
     }
 
-    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
-    gc_heap_write_barrier(heap, gc_ref, value.lo);
-    elements[idx] = value;
+    GcTypeLayout *layout = gc_object_layout(heap, (GcHeader *)(data - GC_HEADER_SIZE));
+    if (layout) {
+        if (layout->fields[0].reference) gc_heap_write_barrier(heap, gc_ref, value.lo);
+        gc_layout_write(data + GC_ARRAY_DATA_OFFSET + (size_t)idx * layout->size, &layout->fields[0], value);
+    } else {
+        gc_heap_write_barrier(heap, gc_ref, value.lo);
+        ((GcSlot *)(data + GC_ARRAY_DATA_OFFSET))[idx] = value;
+    }
     gc_heap_maybe_verify(heap, "array_set");
 }
 
@@ -794,11 +845,9 @@ void gc_heap_array_fill_wide(GcHeap* heap, int32_t gc_ref, int32_t offset,
     }
 
     int32_t len = ((int32_t*)data)[0];
-    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
-
-    for (int32_t i = 0; i < count && (offset + i) < len; i++) {
-        gc_heap_write_barrier(heap, gc_ref, value.lo);
-        elements[offset + i] = value;
+    if (offset < 0 || count < 0 || offset > len || count > len - offset) return;
+    for (int32_t i = 0; i < count; i++) {
+        gc_heap_array_set_wide(heap, gc_ref, offset + i, value);
     }
     gc_heap_maybe_verify(heap, "array_fill");
 }
@@ -813,22 +862,15 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
 
     int32_t dst_len = ((int32_t*)dst_data)[0];
     int32_t src_len = ((int32_t*)src_data)[0];
-    GcSlot* dst_elements = (GcSlot*)(dst_data + GC_ARRAY_DATA_OFFSET);
-    GcSlot* src_elements = (GcSlot*)(src_data + GC_ARRAY_DATA_OFFSET);
-
-    // Bounds check
-    if (dst_offset < 0 || src_offset < 0 ||
-        dst_offset + count > dst_len || src_offset + count > src_len) {
-        return;
+    if (dst_offset < 0 || src_offset < 0 || count < 0 ||
+        dst_offset > dst_len || count > dst_len - dst_offset ||
+        src_offset > src_len || count > src_len - src_offset) return;
+    int backwards = dst_ref == src_ref && dst_offset > src_offset;
+    for (int32_t n = 0; n < count; n++) {
+        int32_t i = backwards ? count - 1 - n : n;
+        GcSlot value = gc_heap_array_get_wide(heap, src_ref, src_offset + i);
+        gc_heap_array_set_wide(heap, dst_ref, dst_offset + i, value);
     }
-
-    // Use memmove to handle overlapping regions
-    for (int32_t i = 0; i < count; i++) {
-        gc_heap_write_barrier(heap, dst_ref, src_elements[src_offset + i].lo);
-    }
-    memmove(&dst_elements[dst_offset], &src_elements[src_offset],
-            (size_t)count * GC_VALUE_SLOT_SIZE);
-    gc_heap_maybe_verify(heap, "array_copy");
 }
 
 static void gc_heap_write_barrier_slow(
@@ -849,7 +891,7 @@ static void gc_heap_write_barrier_slow(
         );
         abort();
     }
-    if (heap->object_table[owner_gc_ref - 1] < 0) {
+    if (gc_heap_identity_offset(heap, owner_gc_ref) < 0) {
         fprintf(
             stderr,
             "[GC BARRIER] owner points to freed object: owner=%d\n",
@@ -857,7 +899,7 @@ static void gc_heap_write_barrier_slow(
         );
         abort();
     }
-    if (heap->object_table[target_gc_ref - 1] < 0) {
+    if (gc_heap_identity_offset(heap, target_gc_ref) < 0) {
         fprintf(
             stderr,
             "[GC BARRIER] written reference points to freed object: owner=%d target=%d\n",
@@ -894,7 +936,7 @@ int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
     size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
 
     if (!gc_heap_admit(heap, total_size)) return 0;
-    if (!ensure_heap_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
+    if (!gc_heap_ensure_payload_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
         gc_heap_undo_admission(heap);
         return 0;
     }
@@ -925,11 +967,7 @@ int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
 
     // Update heap state
     heap->size += total_size;
-    int32_t gc_ref = heap->object_count + 1;  // 1-based
-    heap->object_table[heap->object_count] = offset;
-    heap->runtime_types[heap->object_count] = -1;
-    heap->object_count++;
-    heap->total_allocations++;
+    int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     gc_heap_maybe_verify(heap, "alloc_array_from_values");
     return gc_ref;
@@ -974,7 +1012,7 @@ int32_t gc_heap_is_valid(GcHeap* heap, int32_t gc_ref) {
     if (!heap || gc_ref <= 0 || gc_ref > heap->object_count) {
         return 0;
     }
-    int32_t offset = heap->object_table[gc_ref - 1];
+    int32_t offset = gc_heap_identity_offset(heap, gc_ref);
     return offset >= 0 ? 1 : 0;
 }
 
@@ -991,39 +1029,14 @@ void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
     // marking records only seeds until the complete root graph is supplied.
     if (heap->precise_roots) return;
 
-    // Recursively mark referenced objects
-    uint8_t* data = ((uint8_t*)header) + GC_HEADER_SIZE;
-
-    // Only a slot's low word is scanned. Every reference is encoded there, so
-    // the high word can hold nothing but v128 payload bits, and reading it
-    // could only manufacture false positives. Marking is conservative either
-    // way -- an i64 field holding 4 is already indistinguishable from a
-    // reference to object 2 -- which is sound because sweeping never moves an
-    // object and the candidate decoder rejects anything outside the object
-    // table.
-    if (header->kind == GC_KIND_STRUCT) {
-        // Struct: scan all fields for references
-        // Use stored field count (in reserved) to avoid scanning padding bytes
-        int32_t num_fields = (int32_t)header->reserved;
-        GcSlot* fields = (GcSlot*)data;
-
-        for (int32_t i = 0; i < num_fields; i++) {
-            int32_t ref_gc_ref = 0;
-            if (gc_try_decode_heap_ref_candidate(heap, fields[i].lo, &ref_gc_ref)) {
-                gc_heap_mark(heap, ref_gc_ref);
-            }
-        }
-    } else if (header->kind == GC_KIND_ARRAY) {
-        // Array: scan all elements for references
-        int32_t len = ((int32_t*)data)[0];
-        GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
-
-        for (int32_t i = 0; i < len; i++) {
-            int32_t ref_gc_ref = 0;
-            if (gc_try_decode_heap_ref_candidate(heap, elements[i].lo, &ref_gc_ref)) {
-                gc_heap_mark(heap, ref_gc_ref);
-            }
-        }
+    GcTypeLayout *layout = gc_object_layout(heap, header);
+    int32_t count = header->kind == GC_KIND_ARRAY
+        ? gc_heap_array_len(heap, gc_ref) : (int32_t)header->reserved;
+    for (int32_t i = 0; i < count; i++) {
+        if (layout && !layout->fields[header->kind == GC_KIND_ARRAY ? 0 : i].reference) continue;
+        GcSlot slot = header->kind == GC_KIND_ARRAY
+            ? gc_heap_array_get_wide(heap, gc_ref, i) : gc_heap_struct_get_wide(heap, gc_ref, i);
+        gc_heap_mark_roots(heap, &slot.lo, 1);
     }
 }
 
@@ -1054,14 +1067,16 @@ int32_t gc_heap_sweep(GcHeap* heap) {
         return 0;
     }
 
-    // Sweeping has no callbacks or resizing; descriptor storage stays fixed.
-    const int32_t object_count = heap->object_count;
-    int32_t *object_table = heap->object_table;
+    // No callbacks or payload resizing. Empty identity pages can be released;
+    // retained identities and the live traversal order stay stable.
+    const int32_t object_count = heap->live_count;
     uint8_t *data = heap->data;
     int32_t collected = 0;
 
+    int32_t survivors = 0;
     for (int32_t i = 0; i < object_count; i++) {
-        int32_t offset = object_table[i];
+        int32_t ref = heap->live_objects[i];
+        int32_t offset = gc_heap_identity_offset(heap, ref);
         if (offset < 0) {
             continue;  // Already freed
         }
@@ -1070,19 +1085,21 @@ int32_t gc_heap_sweep(GcHeap* heap) {
         if (header->flags & GC_FLAG_MARKED) {
             // Object is reachable, clear mark for next cycle
             header->flags &= ~GC_FLAG_MARKED;
+            heap->live_objects[survivors++] = ref;
         } else {
             // Object is unreachable, mark as freed
             header->kind = GC_KIND_FREE;
-            object_table[i] = -1;  // Mark as freed in table
+            retire_identity(heap, ref);
             collected++;
 
             // Add to free list (for potential compaction later)
             if (heap->free_count < heap->free_capacity) {
-                heap->free_list[heap->free_count++] = i + 1;  // Store gc_ref
+                heap->free_list[heap->free_count++] = ref;  // Store gc_ref
             }
         }
     }
 
+    heap->live_count = survivors;
     return collected;
 }
 
@@ -1092,13 +1109,13 @@ void gc_heap_compact(GcHeap* heap) {
     }
 
     // Compaction moves payload bytes, not these backing allocations.
-    const int32_t object_count = heap->object_count;
-    int32_t *object_table = heap->object_table;
+    const int32_t object_count = heap->live_count;
     uint8_t *data = heap->data;
     size_t new_offset = 0;
 
     for (int32_t i = 0; i < object_count; i++) {
-        int32_t old_offset = object_table[i];
+        int32_t ref = heap->live_objects[i];
+        int32_t old_offset = gc_heap_identity_offset(heap, ref);
         if (old_offset < 0) {
             continue;  // Object was freed, skip
         }
@@ -1109,7 +1126,8 @@ void gc_heap_compact(GcHeap* heap) {
         // Move object to compact position if needed
         if ((size_t)old_offset != new_offset) {
             memmove(data + new_offset, data + old_offset, obj_size);
-            object_table[i] = (int32_t)new_offset;
+            GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+            page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = (int32_t)new_offset;
         }
 
         new_offset += ALIGN_UP(obj_size, 16);
@@ -1119,6 +1137,11 @@ void gc_heap_compact(GcHeap* heap) {
     heap->size = new_offset;
     if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)new_offset);
 
+    // Keep a live-set-sized allocation allowance, rather than waiting for a
+    // physical realloc failure. The minimum amortizes fixed tracing costs.
+    size_t allowance = heap->size > MIN_COLLECTION_BUDGET ? heap->size : MIN_COLLECTION_BUDGET;
+    heap->collection_limit = heap->size > (size_t)INT32_MAX - allowance
+        ? INT32_MAX : heap->size + allowance;
     // Clear free list (no more free slots after compaction)
     heap->free_count = 0;
 }
@@ -1145,13 +1168,13 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
     if (!heap) {
         return gc_verify_fail("heap is NULL", verbose);
     }
-    if (!heap->data || !heap->object_table || !heap->free_list) {
+    if (!heap->data || !heap->free_list) {
         return gc_verify_fail("heap buffers are NULL", verbose);
     }
     if (heap->size > heap->capacity) {
         return gc_verify_fail("heap size exceeds capacity", verbose);
     }
-    if (heap->object_count < 0 || heap->object_count > heap->object_capacity) {
+    if (heap->object_count < 0 || heap->live_count < 0 || heap->live_count > heap->live_capacity) {
         return gc_verify_fail("object_count out of bounds", verbose);
     }
     if (heap->free_count < 0 || heap->free_count > heap->free_capacity) {
@@ -1163,11 +1186,12 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
 
     size_t previous_end = 0;
     int32_t saw_active = 0;
-    for (int32_t i = 0; i < heap->object_count; i++) {
-        int32_t gc_ref = i + 1;
-        int32_t offset = heap->object_table[i];
-        if (offset < 0) {
-            continue;
+    for (int32_t i = 0; i < heap->live_count; i++) {
+        int32_t gc_ref = heap->live_objects[i];
+        int32_t offset = gc_heap_identity_offset(heap, gc_ref);
+        if (gc_ref <= 0 || gc_ref > heap->object_count || offset < 0 ||
+            (i > 0 && gc_ref <= heap->live_objects[i - 1])) {
+            return gc_verify_fail("invalid live identity ordering", verbose);
         }
 
         if ((size_t)offset + GC_HEADER_SIZE > heap->size) {
@@ -1224,8 +1248,10 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
         size_t payload_size = (size_t)header->size - GC_HEADER_SIZE;
 
         if (header->kind == GC_KIND_STRUCT) {
-            uint64_t num_fields_u64 = header->reserved;
-            if (num_fields_u64 > (payload_size / GC_VALUE_SLOT_SIZE)) {
+            uint64_t num_fields_u64 = (uint32_t)header->reserved;
+            GcTypeLayout *layout = gc_object_layout(heap, header);
+            if (layout ? layout->kind != GC_KIND_STRUCT || (uint64_t)layout->count != num_fields_u64 ||
+                    (size_t)layout->size > payload_size : num_fields_u64 > (payload_size / GC_VALUE_SLOT_SIZE)) {
                 if (verbose) {
                     fprintf(stderr, "[GC VERIFY] struct field count exceeds payload: gc_ref=%d fields=%llu payload=%zu\n",
                             gc_ref, (unsigned long long)num_fields_u64, payload_size);
@@ -1250,7 +1276,10 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
                 }
                 return 0;
             }
-            size_t need = GC_ARRAY_DATA_OFFSET + ((size_t)len * GC_VALUE_SLOT_SIZE);
+            GcTypeLayout *layout = gc_object_layout(heap, header);
+            size_t stride = layout ? (size_t)layout->size : GC_VALUE_SLOT_SIZE;
+            if (layout && layout->kind != GC_KIND_ARRAY) return gc_verify_fail("wrong array layout", verbose);
+            size_t need = GC_ARRAY_DATA_OFFSET + ((size_t)len * stride);
             if (need > payload_size) {
                 if (verbose) {
                     fprintf(stderr, "[GC VERIFY] array elements exceed payload: gc_ref=%d len=%d need=%zu payload=%zu\n",
@@ -1271,7 +1300,7 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             }
             return 0;
         }
-        if (heap->object_table[gc_ref - 1] >= 0) {
+        if (gc_heap_identity_offset(heap, gc_ref) >= 0) {
             if (verbose) {
                 fprintf(stderr, "[GC VERIFY] free list entry points to live object: index=%d gc_ref=%d\n", i, gc_ref);
             }
@@ -1292,7 +1321,7 @@ int32_t gc_heap_get_offset(GcHeap* heap, int32_t gc_ref) {
     if (!heap || gc_ref <= 0 || gc_ref > heap->object_count) {
         return -1;
     }
-    return heap->object_table[gc_ref - 1];
+    return gc_heap_identity_offset(heap, gc_ref);
 }
 
 size_t gc_heap_get_size(GcHeap* heap) {
@@ -1310,24 +1339,26 @@ int32_t gc_heap_get_object_count(GcHeap* heap) {
 MOONBIT_FFI_EXPORT void wasmoon_gc_collection_rollback(GcCollectionRequest *request) {
     GcHeap *heap = request->heap;
     int32_t object_count = request->rollback_boundary;
-    for (int32_t i = 0; i < heap->object_count; i++) {
-        int32_t offset = heap->object_table[i];
+    int32_t survivors = 0;
+    for (int32_t i = 0; i < heap->live_count; i++) {
+        int32_t ref = heap->live_objects[i];
+        int32_t offset = gc_heap_identity_offset(heap, ref);
         if (offset < 0) {
             continue;
         }
         GcHeader* header = (GcHeader*)(heap->data + offset);
-        if (i < object_count || (header->flags & GC_FLAG_MARKED)) {
+        if (ref <= object_count || (header->flags & GC_FLAG_MARKED)) {
             header->flags &= ~GC_FLAG_MARKED;
+            heap->live_objects[survivors++] = ref;
         } else {
             header->kind = GC_KIND_FREE;
-            heap->object_table[i] = -1;
+            retire_identity(heap, ref);
         }
     }
 
-    while (heap->object_count > object_count &&
-           heap->object_table[heap->object_count - 1] < 0) {
-        heap->object_count--;
-    }
+    heap->live_count = survivors;
+    int32_t last_live = survivors ? heap->live_objects[survivors - 1] : 0;
+    heap->object_count = last_live > object_count ? last_live : object_count;
     if (heap->object_count == 0) {
         heap->size = 0;
         heap->free_count = 0;
@@ -1596,15 +1627,15 @@ void wasmoon_gc_heap_debug_set_fail_alloc(int32_t fail_at, int32_t fail_every) {
 int32_t wasmoon_gc_heap_get_runtime_type(GcHeap *pointer, int32_t ref) {
     pointer = gc_heap_live(pointer);
     GcHeap *heap = pointer;
-    if (!heap || ref <= 0 || ref > heap->object_count || heap->object_table[ref - 1] < 0) return -1;
-    return heap->runtime_types[ref - 1];
+    if (!heap || ref <= 0 || ref > heap->object_count || gc_heap_identity_offset(heap, ref) < 0) return -1;
+    return gc_heap_runtime_type(heap, ref);
 }
 
 void wasmoon_gc_heap_set_runtime_type(GcHeap *pointer, int32_t ref, int32_t identity) {
     pointer = gc_heap_live(pointer);
     GcHeap *heap = pointer;
-    if (!heap || ref <= 0 || ref > heap->object_count || heap->object_table[ref - 1] < 0) return;
-    heap->runtime_types[ref - 1] = identity;
+    if (!heap || ref <= 0 || ref > heap->object_count || gc_heap_identity_offset(heap, ref) < 0) return;
+    gc_heap_set_runtime_type(heap, ref, identity);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_gc_heap_bind_reservations(GcHeap *heap, wasmoon_reservation_t *bytes, wasmoon_reservation_t *objects) {

@@ -11,7 +11,10 @@ pub extern "c" fn alloc_exec_managed(
 ) -> ExecCodeHandle = "wasmoon_jit_alloc_exec_managed"
 
 ///|
-pub extern "c" fn stage_exec_managed(size : Int32) -> ExecCodeHandle = "wasmoon_jit_stage_exec_managed"
+pub extern "c" fn stage_exec_managed(
+  size : Int32,
+  code_bytes~ : Int32 = -1,
+) -> ExecCodeHandle = "wasmoon_jit_stage_exec_managed"
 
 ///|
 #borrow(exec_code, code)

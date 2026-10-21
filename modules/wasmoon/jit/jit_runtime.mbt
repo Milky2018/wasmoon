@@ -1462,13 +1462,13 @@ pub fn JITModule::has_callable_metadata(self : JITModule) -> Bool {
 pub fn JITModule::set_cooperative_scheduling(
   self : JITModule,
   enabled : Bool,
+  quantum~ : Int32 = 1024,
 ) -> Bool {
   if enabled && !self.cancellation_safepoints {
     return false
   }
   guard self.context is Some(context) else { return false }
-  context.set_cooperative_scheduling(enabled)
-  true
+  context.set_cooperative_scheduling(enabled, quantum)
 }
 
 ///|

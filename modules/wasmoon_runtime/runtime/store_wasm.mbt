@@ -173,6 +173,7 @@ pub fn Store::close(self : Store) -> Unit {
     self.native_types.native_registry = None
   }
   self.native_types.heap_types.clear()
+  self.native_types.native_layout_count = 0
   for function in self.funcs {
     function.lifetime.active.val = false
   }

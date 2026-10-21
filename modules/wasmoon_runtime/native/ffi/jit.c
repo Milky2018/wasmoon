@@ -337,7 +337,7 @@ MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_cancel_poll(jit_context
     // A MoonBit cancellation callback has returned before the native stack is
     // parked. Only compiled guest/C frames are retained by this suspension.
     if (controls && controls->scheduling_budget > 0 && --controls->scheduling_budget == 0) {
-        controls->scheduling_budget = 1024;
+        controls->scheduling_budget = controls->scheduling_quantum > 0 ? controls->scheduling_quantum : 1024;
         if (wasmoon_native_fiber_yield(WASMOON_FIBER_EVENT_GUEST_YIELD) == INT64_MIN) {
             g_trap_code = 8;
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -349,7 +349,11 @@ MOONBIT_FFI_EXPORT int32_t WASMOON_GUEST_ABI wasmoon_jit_cancel_poll(jit_context
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_set_cooperative_scheduling(int64_t pointer, int32_t enabled) {
     jit_context_t *ctx = (void *)(uintptr_t)pointer;
-    if (ctx) ctx_runtime(ctx)->control_defaults.scheduling_budget = enabled ? 1024 : 0;
+    if (ctx) {
+        jit_invocation_controls_t *controls = &ctx_runtime(ctx)->control_defaults;
+        if (controls->scheduling_quantum <= 0) controls->scheduling_quantum = 1024;
+        controls->scheduling_budget = enabled ? controls->scheduling_quantum : 0;
+    }
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_cancel_poll_ptr(void) {
@@ -1283,6 +1287,7 @@ typedef struct {
     int64_t ptr;
     int32_t size;
     int32_t finalized;
+    int32_t code_bytes; // Logical code size, excluding inter-function alignment.
     wasmoon_reservation_t *reservation;
 } managed_exec_code_t;
 
@@ -1306,6 +1311,7 @@ static void *make_managed_exec_code(int64_t ptr, int size, int finalized) {
     }
     payload->ptr = ptr;
     payload->size = size;
+    payload->code_bytes = size;
     payload->finalized = finalized;
     payload->reservation = NULL;
     return payload;
@@ -1338,11 +1344,14 @@ MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_exec_managed(moonbit_bytes_t code, in
     return make_managed_exec_code(ptr, size, 1);
 }
 
-MOONBIT_FFI_EXPORT void *wasmoon_jit_stage_exec_managed(int size) {
-    if (size <= 0) return NULL;
+MOONBIT_FFI_EXPORT void *wasmoon_jit_stage_exec_managed(int size, int code_bytes) {
+    if (code_bytes == -1) code_bytes = size;
+    if (size <= 0 || code_bytes < 0 || code_bytes > size) return NULL;
     int64_t ptr = alloc_exec_internal(size);
     if (ptr == 0) return NULL;
-    return make_managed_exec_code(ptr, size, 0);
+    managed_exec_code_t *code = make_managed_exec_code(ptr, size, 0);
+    if (code) code->code_bytes = code_bytes;
+    return code;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_finalize_exec_managed(
@@ -2100,7 +2109,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_table_bind_reservation(wasmoon_table_t *table
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_exec_bind_reservation(void *object, wasmoon_reservation_t *reservation) {
     managed_exec_code_t *code = object;
-    if (!code || !code->ptr || code->reservation || !wasmoon_reservation_valid(reservation) || reservation->amount != code->size) return 0;
+    if (!code || !code->ptr || code->reservation || !wasmoon_reservation_valid(reservation) || reservation->amount != code->code_bytes) return 0;
     moonbit_incref(reservation);
     code->reservation = reservation;
     return 1;
@@ -2108,4 +2117,13 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_exec_bind_reservation(void *object, wasmoon_r
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_native_table_revision(wasmoon_table_t *table) {
     return table ? (int64_t)table->revision : 0;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_set_cooperative_quantum_managed(void *object, int32_t quantum) {
+    jit_context_t *ctx = (void *)(uintptr_t)wasmoon_jit_context_ptr(object);
+    if (!ctx || quantum <= 0) return 0;
+    jit_invocation_controls_t *controls = &ctx_runtime(ctx)->control_defaults;
+    controls->scheduling_quantum = quantum;
+    if (controls->scheduling_budget > 0) controls->scheduling_budget = quantum;
+    return 1;
 }

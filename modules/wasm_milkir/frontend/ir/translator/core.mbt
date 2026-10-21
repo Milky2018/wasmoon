@@ -1419,9 +1419,12 @@ fn Translator::translate_loop(
 
   // Switch to loop header
   self.builder.switch_to_block(loop_header)
-  self.func_env.emit_cancellation_safepoint(self.builder, self.vmctx)
   if outer_is_unreachable {
     self.builder.trap("unreachable loop header")
+  } else {
+    // Dead loops must not introduce a second, detached poll CFG. Their local
+    // values need not dominate new blocks because the region cannot execute.
+    self.func_env.emit_cancellation_safepoint(self.builder, self.vmctx)
   }
 
   // Push header params onto stack

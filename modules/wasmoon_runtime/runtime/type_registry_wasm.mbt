@@ -43,3 +43,8 @@ pub fn Store::gc_type_is_subtype(
   let target = self.native_types.register(instance)[expected]
   self.native_types.is_subtype(actual, target)
 }
+
+///|
+fn Store::prepare_native_gc_layouts(_self : Store) -> Bool {
+  true
+}

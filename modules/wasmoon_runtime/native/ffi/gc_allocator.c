@@ -6,7 +6,7 @@
 static void gc_record_runtime_type(jit_context_t *ctx, GcHeap *heap, int32_t ref, int32_t local_type) {
     if (!ctx || !heap || ref <= 0 || ref > heap->object_count) return;
     if (local_type >= 0 && local_type < ctx_runtime(ctx)->callable_local_type_count) {
-        heap->runtime_types[ref - 1] = ctx_runtime(ctx)->callable_local_types[local_type];
+        gc_heap_set_runtime_type(heap, ref, ctx_runtime(ctx)->callable_local_types[local_type]);
     }
 }
 
@@ -16,6 +16,15 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_attempt(void *raw_request) {
     int32_t type = request->type_idx;
     int32_t count = request->count;
     int32_t reference = 0;
+    int32_t identity = -1;
+    if (request->ctx && type >= 0 && type < ctx_runtime(request->ctx)->callable_local_type_count)
+        identity = ctx_runtime(request->ctx)->callable_local_types[type];
+    if (gc_heap_layout(heap, identity)) {
+        int repeated = request->layout == GC_ALLOC_ARRAY_WORD || request->layout == GC_ALLOC_ARRAY_SLOT;
+        reference = gc_heap_alloc_typed(heap, identity, type, count, request->values,
+            request->layout >= GC_ALLOC_STRUCT_SLOTS, repeated, request->init);
+        return reference;
+    }
     switch (request->layout) {
         case GC_ALLOC_STRUCT_WORDS:
             reference = gc_heap_alloc_struct(heap, type, request->values, count);
@@ -57,8 +66,14 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_denial(void *raw_request) {
 }
 
 int32_t gc_allocate(gc_allocation_request_t *request) {
-    // Successful physical allocation needs no policy callback. Only failure
-    // enters MoonBit to decide whether to collect, retry or report a trap.
+    // Only collect where the Store's precise visitor and the allocation's
+    // staged inputs are available. Low-level heaps retain their explicit-GC API.
+    if (request->heap->precise_roots &&
+        request->heap->size >= request->heap->collection_limit) {
+        if (wasmoon_gc_allocation_collect(request) < 0) return -10;
+    }
+    // The successful fast path remains native. Physical failure still enters
+    // the closed MoonBit retry policy with its distinct quota/trap outcomes.
     int32_t reference = wasmoon_gc_allocation_attempt(request);
     if (reference > 0) return reference;
     return request->heap->allocation_policy(request,

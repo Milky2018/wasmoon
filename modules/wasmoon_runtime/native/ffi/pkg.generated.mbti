@@ -19,7 +19,7 @@ pub fn is_windows() -> Bool
 
 pub fn release_exec_managed(ExecCodeHandle) -> Int32
 
-pub fn stage_exec_managed(Int32) -> ExecCodeHandle
+pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> ExecCodeHandle
 
 // Errors
 pub suberror GCMetadataError {
@@ -49,9 +49,12 @@ type ExecCodeHandle
 pub fn ExecCodeHandle::bind_reservation(Self, Reservation) -> Bool
 
 pub type GCHeapHandle
+pub fn GCHeapHandle::allocate_typed(Self, Int32, Int32, FixedArray[Int64], Int32, Bool) -> Int32
+pub fn GCHeapHandle::begin_trace(Self) -> NativeGcTraceHandle
 pub fn GCHeapHandle::bind_reservations(Self, Reservation, Reservation) -> Bool
 pub fn GCHeapHandle::bind_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
 pub fn GCHeapHandle::clear_root_visitor(Self) -> Unit
+pub fn GCHeapHandle::define_layout(Self, Int32, FixedArray[Int32], Bool) -> Bool
 pub fn GCHeapHandle::execution_roots(Self) -> FixedArray[Int64]
 pub fn GCHeapHandle::is_null(Self) -> Bool
 pub fn GCHeapHandle::new(Int64) -> Self
@@ -110,6 +113,11 @@ pub fn NativeExceptionArena::new() -> Self raise NativeAllocationError
 pub fn NativeExceptionArena::quota_denied(Self) -> Int32
 pub fn NativeExceptionArena::release_snapshot(Self, Int64) -> Unit
 pub fn NativeExceptionArena::snapshot(Self, Int64) -> (Int32, Array[Int64])?
+
+pub type NativeGcTraceHandle
+pub fn NativeGcTraceHandle::expand(Self, Int32) -> FixedArray[Int64]
+pub fn NativeGcTraceHandle::mark(Self) -> Unit
+pub fn NativeGcTraceHandle::objects(Self) -> FixedArray[Int64]
 
 pub type NativeTableHandle
 pub fn NativeTableHandle::bind_reservation(Self, Reservation) -> Bool

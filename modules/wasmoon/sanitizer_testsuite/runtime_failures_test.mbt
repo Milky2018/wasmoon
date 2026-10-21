@@ -344,7 +344,11 @@ extern "c" fn runtime_fail_native_allocation(attempt : Int32) -> Unit = "wasmoon
 
 ///|
 test "component runtime preparation denial is typed and releases partial owners" {
-  for attempt in 1..<=6 {
+  defer runtime_fail_native_allocation(0)
+  // Identity descriptors are now lazy; walk preparation allocations until
+  // the first successful construction instead of fixing their old count.
+  let mut denied_count = 0
+  for attempt in 1..<=64 {
     runtime_fail_native_allocation(attempt)
     let denied = try {
       let runtime = @component.ComponentRuntime::ComponentRuntime()
@@ -352,10 +356,13 @@ test "component runtime preparation denial is typed and releases partial owners"
       false
     } catch {
       ResourceExhausted(_) => true
-      _ => false
+      error => fail(error.to_string())
     }
     runtime_fail_native_allocation(0)
-    inspect(denied, content="true")
+    if !denied {
+      break
+    }
+    denied_count += 1
     let runtime = @component.ComponentRuntime::ComponentRuntime()
     defer runtime.close()
     let instance = runtime.instantiate(
@@ -367,6 +374,7 @@ test "component runtime preparation denial is typed and releases partial owners"
       content="[U32(42)]",
     )
   }
+  assert_true(denied_count > 0 && denied_count < 64)
 }
 
 ///|

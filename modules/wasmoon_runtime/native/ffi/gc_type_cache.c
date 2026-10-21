@@ -219,8 +219,8 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
         }
     }
 
-    if (gc_ref <= heap->object_count && heap->runtime_types[gc_ref - 1] >= 0) {
-        return callable_subtype(ctx, heap->runtime_types[gc_ref - 1], type_idx);
+    if (gc_ref <= heap->object_count && gc_heap_runtime_type(heap, gc_ref) >= 0) {
+        return callable_subtype(ctx, gc_heap_runtime_type(heap, gc_ref), type_idx);
     }
     return is_concrete_subtype(ctx, obj_type_idx, type_idx);
 }

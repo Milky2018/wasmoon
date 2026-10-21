@@ -114,9 +114,9 @@ pub struct CHeap {
   // private fields
 } derive(@debug.Debug)
 pub fn CHeap::CHeap(capacity? : Int32) -> Self raise CHeapError
-pub fn CHeap::alloc_array(Self, Int32, Int32, @types.Value) -> Int32 raise CHeapError
-pub fn CHeap::alloc_array_from_values(Self, Int32, Array[@types.Value]) -> Int32 raise CHeapError
-pub fn CHeap::alloc_struct(Self, Int32, Array[@types.Value]) -> Int32 raise CHeapError
+pub fn CHeap::alloc_array(Self, Int32, Int32, @types.Value, runtime_type? : Int32) -> Int32 raise CHeapError
+pub fn CHeap::alloc_array_from_values(Self, Int32, Array[@types.Value], runtime_type? : Int32) -> Int32 raise CHeapError
+pub fn CHeap::alloc_struct(Self, Int32, Array[@types.Value], runtime_type? : Int32) -> Int32 raise CHeapError
 pub fn CHeap::array_copy(Self, Int32, Int32, Int32, Int32, Int32) -> Unit raise CHeapError
 pub fn CHeap::array_fill(Self, Int32, Int32, @types.Value, Int32) -> Unit raise CHeapError
 pub fn CHeap::array_get(Self, Int32, Int32, @types.ValueType) -> @types.Value raise CHeapError

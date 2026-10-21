@@ -1,4 +1,9 @@
 ///|
+priv enum NativeGcTrace {
+  Disabled
+}
+
+///|
 fn Store::trace_native_continuation(
   _self : Store,
   handle : Int64,
@@ -57,4 +62,26 @@ fn Store::trace_table_roots(
       _ => trace.failed = true
     }
   }
+}
+
+///|
+fn Store::begin_native_gc_trace(_self : Store) -> NativeGcTrace {
+  Disabled
+}
+
+///|
+fn Store::trace_native_graph(
+  _self : Store,
+  _index : Int32,
+  _pending : Array[@types.Value],
+  trace : GcTrace,
+) -> Bool {
+  match trace.native {
+    Disabled => false
+  }
+}
+
+///|
+fn Store::trace_objects(_self : Store, trace : GcTrace) -> Array[@types.Value] {
+  trace.objects
 }

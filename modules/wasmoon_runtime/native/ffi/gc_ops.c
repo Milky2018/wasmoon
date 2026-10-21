@@ -610,11 +610,7 @@ int64_t WASMOON_GUEST_ABI gc_register_struct_inline(jit_context_t *ctx, uint8_t 
 
     // Calculate offset and register object
     int32_t offset = (int32_t)(obj_ptr - heap->data);
-    int32_t gc_ref = heap->object_count + 1;  // 1-based
-    heap->object_table[heap->object_count] = offset;
-    heap->runtime_types[heap->object_count] = -1;
-    heap->object_count++;
-    heap->total_allocations++;
+    int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     // Update heap size to match what JIT allocated
     heap->size = (size_t)(ctx_gc_heap_ptr(actual_ctx) - heap->data);

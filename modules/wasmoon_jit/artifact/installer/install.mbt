@@ -432,21 +432,37 @@ fn install_artifact_with_failure(
   let plans = prepare_links(loaded)
   let staged : Array[ExecCode] = []
   errdefer release_staged_code(staged)
-  for index, plan in plans {
-    let source = artifact.functions[index]
-    let reservation = installer.reserve_code(plan.code().length())
-    let code = match ExecCode::try_stage(plan.code().length(), reservation~) {
+  // Lay out the artifact before allocating any executable address. Padding is
+  // physical storage; code quota continues to charge the linked code bytes.
+  let offsets : Array[Int32] = []
+  let mut size = 0
+  let mut code_bytes = 0
+  for plan in plans {
+    let length = plan.code().length()
+    if size > 0x7fff_ffff - 63 || length > 0x7fff_ffff - ((size + 63) & -64) {
+      raise AllocationFailed(function_index~)
+    }
+    size = (size + 63) & -64
+    offsets.push(size)
+    size += length
+    code_bytes += length
+  }
+  if size > 0 {
+    let reservation = installer.reserve_code(code_bytes)
+    let code = match ExecCode::try_stage(size, code_bytes~, reservation~) {
       Some(code) => code
-      None =>
-        raise AllocationFailed(function_index=source.identity.function_index)
+      None => raise AllocationFailed(function_index~)
     }
     staged.push(code)
     if failure == Some(Allocation) {
-      raise AllocationFailed(function_index=source.identity.function_index)
+      raise AllocationFailed(function_index~)
     }
   }
+  let base = if staged.is_empty() { 0L } else { staged[0].ptr() }
   for index, source in artifact.functions {
-    let address = staged[index].ptr() + source.entry_offset.to_int64()
+    let address = base +
+      offsets[index].to_int64() +
+      source.entry_offset.to_int64()
     resolved.push((Code(source.identity.symbol), address))
   }
   if failure == Some(Relocation) {
@@ -455,7 +471,7 @@ fn install_artifact_with_failure(
   let linked_code : Array[Array[Byte]] = []
   for index, plan in plans {
     let current_index = artifact.functions[index].identity.function_index
-    let bytes = plan.link(staged[index].ptr(), fn(target) {
+    let bytes = plan.link(base + offsets[index].to_int64(), fn(target) {
       lookup_resolved_target(resolved, target)
     }) catch {
       RelocationFailed(function_index=_, message~) =>
@@ -470,18 +486,26 @@ fn install_artifact_with_failure(
   let functions : Array[InstalledFunction] = []
   for index, source in artifact.functions {
     functions.push(
-      build_installed_function(source, staged[index].ptr(), linked_code[index]),
+      build_installed_function(
+        source,
+        base + offsets[index].to_int64(),
+        linked_code[index],
+      ),
     )
   }
   let imports = build_installed_imports(artifact, resolved)
   if failure == Some(Protection) {
     raise ProtectionFailed(function_index~)
   }
-  for index, code in staged {
-    if !code.finalize(linked_code[index]) {
-      raise ProtectionFailed(
-        function_index=artifact.functions[index].identity.function_index,
-      )
+  if size > 0 {
+    let image = Array::make(size, b'\x00')
+    for index, bytes in linked_code {
+      for at, byte in bytes {
+        image[offsets[index] + at] = byte
+      }
+    }
+    if !staged[0].finalize(image) {
+      raise ProtectionFailed(function_index~)
     }
   }
   let installed = { executable_code: staged, imports, functions, }

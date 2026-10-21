@@ -17,6 +17,7 @@ priv struct FuncEnvironment {
   memory_descriptor_layout : @embedding.MemoryDescriptorLayout
   runtime_symbols : @wasm_milkir.RuntimeSymbols
   cancellation_symbol : @milkir.ExternalSymbol?
+  safepoint_poll_layout : @embedding.SafepointPollLayout?
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
   // Minimum guaranteed memory size in bytes for each memory index
@@ -64,6 +65,7 @@ fn FuncEnvironment::FuncEnvironment(
     runtime_layout,
     memory_descriptor_layout,
     runtime_symbols: embedding_env.wasm_runtime_symbols(),
+    safepoint_poll_layout: embedding_env.safepoint_poll_layout(),
     cancellation_symbol: if embedding_env.cancellation_safepoints() {
       Some(
         ExternalSymbol(
@@ -91,7 +93,70 @@ fn FuncEnvironment::emit_cancellation_safepoint(
   vmctx : Value,
 ) -> Unit {
   if self.cancellation_symbol is Some(symbol) {
-    builder.call_symbol(symbol, None, [vmctx]) |> ignore
+    match self.safepoint_poll_layout {
+      None => builder.call_symbol(symbol, None, [vmctx]) |> ignore
+      Some(layout) => {
+        let slow = builder.create_block()
+        let countdown = builder.create_block()
+        let decrement = builder.create_block()
+        let done = builder.create_block()
+        let has_execution = builder.create_block()
+        let has_controls = builder.create_block()
+        let zero = builder.iconst(I64, 0L)
+        let execution = builder.load_ptr(
+          Ptr,
+          vmctx,
+          builder.iconst(I64, layout.execution_offset.to_int64()),
+        )
+        let execution_bits = builder.bitcast(I64, execution)
+        builder.branch(
+          builder.icmp_ne(execution_bits, zero),
+          has_execution,
+          [],
+          slow,
+          [],
+        )
+        builder.switch_to_block(has_execution)
+        let controls = builder.load_ptr(
+          Ptr,
+          execution,
+          builder.iconst(I64, layout.controls_offset.to_int64()),
+        )
+        let controls_bits = builder.bitcast(I64, controls)
+        builder.branch(
+          builder.icmp_ne(controls_bits, zero),
+          has_controls,
+          [],
+          slow,
+          [],
+        )
+        builder.switch_to_block(has_controls)
+        let callback = builder.load_ptr(
+          I64,
+          controls,
+          builder.iconst(I64, layout.callback_offset.to_int64()),
+        )
+        let budget_offset = builder.iconst(I64, layout.budget_offset.to_int64())
+        let budget = builder.load_ptr(I32, controls, budget_offset)
+        let has_callback = builder.icmp_ne(callback, builder.iconst(I64, 0L))
+        builder.branch(has_callback, slow, [], countdown, [])
+        builder.switch_to_block(countdown)
+        let active = builder.icmp_sgt(budget, builder.iconst(I32, 0L))
+        let expired = builder.icmp_eq(budget, builder.iconst(I32, 1L))
+        let enabled = builder.create_block()
+        builder.branch(active, enabled, [], done, [])
+        builder.switch_to_block(enabled)
+        builder.branch(expired, slow, [], decrement, [])
+        builder.switch_to_block(decrement)
+        let remaining = builder.isub(budget, builder.iconst(I32, 1L))
+        builder.store_ptr(I32, controls, remaining, budget_offset)
+        builder.jump(done, [])
+        builder.switch_to_block(slow)
+        builder.call_symbol(symbol, None, [vmctx]) |> ignore
+        builder.jump(done, [])
+        builder.switch_to_block(done)
+      }
+    }
   }
 }
 

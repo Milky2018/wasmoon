@@ -310,3 +310,38 @@ test "executable quota admits before staging and preserves published code on den
   replacement.release()
   assert_eq(exact.used(), 0L)
 }
+
+///|
+test "artifact functions share one compact mapping and retain logical code quota" {
+  let original = loader_artifact()
+  let first = original.functions[0]
+  let second = {
+    ..first,
+    identity: {
+      ..first.identity,
+      function_index: 2,
+      symbol: @native.CodeSymbol::new("wasm.function.2"),
+    },
+  }
+  let artifact = { ..original, functions: [first, second], }
+  let loaded = verify_artifact(artifact, loader_compatibility(artifact))
+  let quota = @jit_ffi.Quota::new(40L)
+  let owner = JitCodeInstaller::new(
+    fn(_) { Some(0x0000000100000000L) },
+    code_quota=Some(quota),
+  )
+  let before = executable_mapping_count()
+  let installed = owner.install(loaded)
+  defer installed.release()
+  assert_eq(executable_mapping_count(), before + 1)
+  assert_eq(quota.used(), 40L)
+  let functions = installed.functions()
+  let distance = functions[1].entry_address() - functions[0].entry_address()
+  assert_true(
+    distance >= functions[0].code_size.to_int64() &&
+    distance <= functions[0].code_size.to_int64() + 63L,
+  )
+  installed.release()
+  assert_eq(quota.used(), 0L)
+  assert_eq(executable_mapping_count(), before)
+}

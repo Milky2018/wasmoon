@@ -108,15 +108,17 @@ pub fn CHeap::alloc_struct(
   self : CHeap,
   type_idx : Int32,
   fields : Array[@types.Value],
+  runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
   let num_fields = fields.length()
   let raw_fields = slots_to_words(fields)
-  let gc_ref = c_gc_heap_alloc_struct_wide(
-    self.ptr,
-    type_idx,
-    raw_fields,
-    num_fields,
-  )
+  let gc_ref = if runtime_type >= 0 {
+    self.ptr.allocate_typed(
+      runtime_type, type_idx, raw_fields, num_fields, false,
+    )
+  } else {
+    c_gc_heap_alloc_struct_wide(self.ptr, type_idx, raw_fields, num_fields)
+  }
   if gc_ref <= 0 {
     raise OutOfMemory
   }
@@ -164,15 +166,20 @@ pub fn CHeap::alloc_array(
   type_idx : Int32,
   len : Int32,
   init_value : @types.Value,
+  runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
   let slot = value_to_slot(init_value)
-  let gc_ref = c_gc_heap_alloc_array_wide(
-    self.ptr,
-    type_idx,
-    len,
-    slot.lo,
-    slot.hi,
-  )
+  let gc_ref = if runtime_type >= 0 {
+    self.ptr.allocate_typed(
+      runtime_type,
+      type_idx,
+      [slot.lo, slot.hi],
+      len,
+      true,
+    )
+  } else {
+    c_gc_heap_alloc_array_wide(self.ptr, type_idx, len, slot.lo, slot.hi)
+  }
   if gc_ref <= 0 {
     raise OutOfMemory
   }
@@ -186,15 +193,15 @@ pub fn CHeap::alloc_array_from_values(
   self : CHeap,
   type_idx : Int32,
   elements : Array[@types.Value],
+  runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
   let len = elements.length()
   let raw_values = slots_to_words(elements)
-  let gc_ref = c_gc_heap_alloc_array_from_slots(
-    self.ptr,
-    type_idx,
-    raw_values,
-    len,
-  )
+  let gc_ref = if runtime_type >= 0 {
+    self.ptr.allocate_typed(runtime_type, type_idx, raw_values, len, false)
+  } else {
+    c_gc_heap_alloc_array_from_slots(self.ptr, type_idx, raw_values, len)
+  }
   if gc_ref <= 0 {
     raise OutOfMemory
   }

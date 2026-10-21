@@ -7,8 +7,9 @@
  *
  * Value Encoding
  *
- * Every field and element occupies a 16-byte slot of two int64_t words, so
- * that a v128 fits. Only v128 uses the high word; every other value kind
+ * Untyped low-level allocations use a 16-byte slot of two int64_t words.
+ * Typed Store objects use GcTypeLayout offsets and widths instead.
+ * Only v128 uses the high word; every other value kind
  * lives entirely in the low word and stores zero in the high word:
  * - i32: sign-extended to i64
  * - i64: as-is
@@ -97,20 +98,47 @@ typedef struct GcSlot {
  *
  * The heap consists of:
  * 1. data: contiguous memory for objects
- * 2. object_table: mapping from gc_ref to object offset
+ * 2. identity_pages: sparse mapping from gc_ref to offset and runtime type
+ * 3. live_objects: ordered traversal independent of historical identities
  *
  * gc_ref values:
  * - 0 is reserved for null
  * - Actual objects start from gc_ref = 1
  */
+// Immutable, Store-canonical physical layouts. Reference words retain the
+// existing 64-bit encoding; narrow scalar fields do not inherit V128 width.
+typedef struct { int32_t offset, width, reference; } GcFieldLayout;
+typedef struct {
+    int32_t kind, count, size, reference_count;
+    GcFieldLayout fields[];
+} GcTypeLayout;
+
+// Identities are never recycled by collection. Empty descriptor pages can be
+// released without making an old identity designate a different object.
+#define GC_ID_PAGE_BITS 10
+#define GC_ID_PAGE_SIZE (1 << GC_ID_PAGE_BITS)
+typedef struct {
+    int32_t offsets[GC_ID_PAGE_SIZE];
+    int32_t runtime_types[GC_ID_PAGE_SIZE];
+    int32_t live_count;
+    uint32_t visit_epochs[GC_ID_PAGE_SIZE];
+} GcIdentityPage;
+
 typedef struct GcHeap {
     uint8_t* data;              // Heap memory
     size_t size;                // Current used size
     size_t capacity;            // Allocated capacity
+    size_t collection_limit;    // Allocation budget, independent of physical capacity
 
-    int32_t* object_table;      // gc_ref -> offset in data
-    int32_t object_count;       // Number of objects (next gc_ref = object_count + 1)
-    int32_t object_capacity;    // Capacity of object_table
+    GcTypeLayout **layouts;
+    int32_t layout_capacity;
+    uint32_t trace_epoch;
+    GcIdentityPage **identity_pages;
+    int32_t identity_page_capacity;
+    int32_t object_count;       // High-water identity; next gc_ref = count + 1
+    int32_t *live_objects;      // Ascending identities of currently live payloads
+    int32_t live_count;
+    int32_t live_capacity;
 
     // Free list for GC (indices of freed objects)
     int32_t* free_list;
@@ -125,7 +153,6 @@ typedef struct GcHeap {
     // Runtime-owned registrations for precise roots held by parked native JIT
     // continuations that share this Store heap.
     void *parked_jit_roots_head;
-    int32_t* runtime_types;     // Store type identity, -1 for unbound objects
     GcCollectionPolicy collection_policy;
     void *collection_state;    // RC-retained MoonBit coordinator, no heap back-reference
     struct native_continuation_arena *continuation_arena; // Borrowed through root registrations
@@ -139,9 +166,51 @@ typedef struct GcHeap {
     int32_t continuation_root_count; // Leases borrowing continuation_arena
 } GcHeap;
 
+static inline GcIdentityPage *gc_heap_identity_page(GcHeap *heap, int32_t ref) {
+    if (!heap || ref <= 0 || ref > heap->object_count) return NULL;
+    return heap->identity_pages[(ref - 1) >> GC_ID_PAGE_BITS];
+}
+
+static inline int32_t gc_heap_identity_offset(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    return page ? page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] : -1;
+}
+
+static inline int32_t gc_heap_runtime_type(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    return page ? page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] : -1;
+}
+
+static inline void gc_heap_set_runtime_type(GcHeap *heap, int32_t ref, int32_t type) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    if (page) page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = type;
+}
+
+int32_t gc_heap_register_object(GcHeap *heap, int32_t offset);
+
+static inline GcTypeLayout *gc_heap_layout(GcHeap *heap, int32_t identity) {
+    return heap && identity >= 0 && identity < heap->layout_capacity ? heap->layouts[identity] : NULL;
+}
+
+static inline GcTypeLayout *gc_object_layout(GcHeap *heap, const GcHeader *header) {
+    return gc_heap_layout(heap, (int32_t)(header->reserved >> 32) - 1);
+}
+
+GcSlot gc_layout_read(const uint8_t *data, const GcFieldLayout *field);
+void gc_layout_write(uint8_t *data, const GcFieldLayout *field, GcSlot value);
+int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
+    int32_t count, const void *values, int wide, int repeated, GcSlot init);
+void gc_heap_maybe_verify(GcHeap *heap, const char *op_name);
+int gc_should_fail_allocation(void);
+int gc_heap_admit(GcHeap *heap, size_t size);
+void gc_heap_undo_admission(GcHeap *heap);
+int gc_heap_ensure_payload_capacity(GcHeap *heap, size_t needed);
+
 // Budgeted heaps enter the common allocator before any guest payload write.
 static inline uint8_t *gc_heap_allocation_limit(GcHeap *heap) {
-    return heap->data + (heap->byte_reservation ? heap->size : heap->capacity);
+    size_t limit = heap->capacity;
+    if (heap->precise_roots && heap->collection_limit < limit) limit = heap->collection_limit;
+    return heap->data + (heap->byte_reservation ? heap->size : limit);
 }
 
 static inline GcHeap *gc_heap_live(GcHeap *heap) {

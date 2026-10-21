@@ -572,3 +572,25 @@ extern "c" fn c_gc_heap_alloc_struct_wide(
   fields : FixedArray[Int64],
   num_fields : Int32,
 ) -> Int32 = "wasmoon_gc_heap_alloc_struct_wide"
+
+///|
+#borrow(heap)
+extern "c" fn identity_bytes(heap : GCHeapHandle) -> Int64 = "wasmoon_test_gc_identity_bytes"
+
+///|
+test "gc: dead identity pages release storage without recycling stale references" {
+  let heap = CHeap::CHeap()
+  let first = heap.alloc_struct(0, [I32(42)])
+  for _ in 0..<2048 {
+    heap.alloc_struct(0, [I32(1)]) |> ignore
+  }
+  let before = identity_bytes(heap.get_ptr())
+  heap.collect([StructRef(first)]) |> ignore
+  assert_true(identity_bytes(heap.get_ptr()) < before)
+  let next = heap.alloc_struct(0, [I32(7)])
+  assert_true(next > first + 2048)
+  assert_false(heap.is_valid(first + 1024))
+  assert_eq(heap.struct_get(first, 0, I32), I32(42))
+  heap.collect([StructRef(next), StructRef(first)]) |> ignore
+  assert_eq(heap.struct_get(next, 0, I32), I32(7))
+}

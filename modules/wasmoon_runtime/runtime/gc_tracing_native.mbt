@@ -1,4 +1,10 @@
 ///|
+priv struct NativeGcTrace {
+  seeds : Array[Int64]
+  graph : @jit_ffi.NativeGcTraceHandle?
+}
+
+///|
 fn Store::trace_native_continuation(
   self : Store,
   handle : Int64,
@@ -126,4 +132,87 @@ fn Store::trace_table_roots(
       _ => trace.failed = true
     }
   }
+}
+
+///|
+// Typed ordinary reference fields may contain signed i31 words, but never a
+// continuation; callers distinguish that declared root kind before decoding.
+fn Store::trace_native_word(
+  self : Store,
+  word : Int64,
+  pending : Array[@types.Value],
+  trace : GcTrace,
+) -> Unit {
+  if @native_bridge.is_exception_ref(word) {
+    trace.push_native_root(self.decode_native_exception(word), pending) catch {
+      _ => trace.failed = true
+    }
+  } else if @native_bridge.decode_gc_heap_ref(word) is Some(child) {
+    pending.push(
+      if self.references.native.c_heap is Some(heap) && heap.is_array(child) {
+        ArrayRef(child)
+      } else {
+        StructRef(child)
+      },
+    )
+  }
+}
+
+///|
+fn Store::begin_native_gc_trace(self : Store) -> NativeGcTrace {
+  {
+    seeds: [],
+    graph: self.references.native.c_heap.map(heap => {
+      heap.get_ptr().begin_trace()
+    }),
+  }
+}
+
+///|
+fn Store::trace_native_graph(
+  self : Store,
+  index : Int32,
+  pending : Array[@types.Value],
+  trace : GcTrace,
+) -> Bool {
+  guard self.references.native.c_heap is Some(_) else { return false }
+  guard trace.native.graph is Some(graph) else { return false }
+  let words = graph.expand(index + 1)
+  if words.length() == 1 && words[0] == -1L {
+    return false
+  }
+  if words.length() == 1 && words[0] == -2L {
+    trace.failed = true
+    return true
+  }
+  trace.native.seeds.push((index.to_int64() + 1L) << 1)
+  let mut at = 1
+  while at < words.length() {
+    let word = words[at]
+    if words[at + 1] == 2L {
+      pending.push(ContRef(word >> 1))
+    } else {
+      self.trace_native_word(word, pending, trace)
+    }
+    at += 2
+  }
+  true
+}
+
+///|
+fn Store::trace_objects(self : Store, trace : GcTrace) -> Array[@types.Value] {
+  if self.references.native.c_heap is Some(heap) {
+    guard trace.native.graph is Some(graph) else { return trace.objects }
+    for word in graph.objects() {
+      let index = ((word >> 1) - 1L).to_int()
+      trace.objects.push(
+        if heap.is_array(index) {
+          ArrayRef(index)
+        } else {
+          StructRef(index)
+        },
+      )
+    }
+  }
+  trace.objects
 }

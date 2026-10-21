@@ -17,7 +17,7 @@ pub fn is_windows() -> Bool
 
 pub fn release_exec_managed(@ffi.ExecCodeHandle) -> Int32
 
-pub fn stage_exec_managed(Int32) -> @ffi.ExecCodeHandle
+pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> @ffi.ExecCodeHandle
 
 // Errors
 

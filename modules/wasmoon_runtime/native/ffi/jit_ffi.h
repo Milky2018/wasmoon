@@ -100,6 +100,7 @@ typedef struct wasmoon_gc_root_scope {
     struct wasmoon_gc_root_scope *prev;
     int64_t *roots;
     int32_t root_count;
+    int32_t root_capacity;
 } wasmoon_gc_root_scope_t;
 
 // Legacy VMContext layout. vmcontext_abi.mbt reads these offsets from C.
@@ -161,7 +162,7 @@ typedef struct {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_exec(int size);
 MOONBIT_FFI_EXPORT int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
-MOONBIT_FFI_EXPORT void *wasmoon_jit_stage_exec_managed(int size);
+MOONBIT_FFI_EXPORT void *wasmoon_jit_stage_exec_managed(int size, int code_bytes);
 MOONBIT_FFI_EXPORT int wasmoon_jit_finalize_exec_managed(void *exec_code, uint8_t *code, int size);
 MOONBIT_FFI_EXPORT int wasmoon_jit_release_exec_managed(void *exec_code);
 MOONBIT_FFI_EXPORT int wasmoon_jit_exec_mapping_count(void);
