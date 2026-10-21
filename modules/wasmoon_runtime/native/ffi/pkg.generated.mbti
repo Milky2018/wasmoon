@@ -52,6 +52,7 @@ pub type GCHeapHandle
 pub fn GCHeapHandle::bind_reservations(Self, Reservation, Reservation) -> Bool
 pub fn GCHeapHandle::bind_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
 pub fn GCHeapHandle::clear_root_visitor(Self) -> Unit
+pub fn GCHeapHandle::execution_roots(Self) -> FixedArray[Int64]
 pub fn GCHeapHandle::is_null(Self) -> Bool
 pub fn GCHeapHandle::new(Int64) -> Self
 pub fn GCHeapHandle::null() -> Self

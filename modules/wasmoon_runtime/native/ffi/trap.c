@@ -181,6 +181,23 @@ static int32_t copy_activation_roots(
     return at;
 }
 
+// Snapshot the same activation roots for GC and transaction liveness checks.
+// A null destination counts without allocating or mutating mark state.
+int32_t jit_copy_active_gc_roots(GcHeap *heap, int64_t *destination) {
+    int64_t total = 0;
+    for (jit_trap_activation_t *activation = current_activation;
+         activation; activation = activation->previous) {
+        if (!activation->active || !activation->context ||
+            ctx_gc_heap(activation->context) != heap) continue;
+        int32_t count = activation_root_count(activation);
+        if (count < 0 || total + count > INT32_MAX) return -1;
+        if (destination && copy_activation_roots(activation, destination + total) != count)
+            return -1;
+        total += count;
+    }
+    return (int32_t)total;
+}
+
 // Reentrant native calls may collect an outer Store, or share its heap while
 // its activation is detached from a reused context. Both remain live roots.
 void jit_mark_active_gc_roots(GcHeap *heap) {

@@ -93,3 +93,11 @@ pub fn GCHeapHandle::new(capacity : Int64) -> GCHeapHandle {
     fn(state, request, rollback) { state.collect(request, rollback) },
   )
 }
+
+///|
+/// Snapshot active and parked native execution roots without collecting.
+/// A single -2 word reports that a complete snapshot was unavailable.
+#borrow(self)
+pub extern "c" fn GCHeapHandle::execution_roots(
+  self : GCHeapHandle,
+) -> FixedArray[Int64] = "wasmoon_gc_heap_execution_roots"

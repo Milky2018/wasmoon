@@ -22,6 +22,7 @@ priv struct GcTrace {
 fn Store::trace_gc_roots(
   self : Store,
   additional : Array[@types.Value],
+  native_roots~ : Array[@types.Value] = [],
 ) -> GcTrace {
   let trace : GcTrace = {
     objects: [],
@@ -33,6 +34,9 @@ fn Store::trace_gc_roots(
     failed: false,
   }
   let pending = additional.copy()
+  for value in native_roots {
+    trace.push_native_root(value, pending)
+  }
   for global in self.globals {
     if global.native is Some(_) {
       trace.push_native_root(global.root(), pending)
@@ -168,6 +172,35 @@ fn Store::release_unreachable_handles(self : Store, trace : GcTrace) -> Unit {
 
 ///|
 #cfg(target="native")
+fn Store::decode_gc_root_words(
+  self : Store,
+  words : FixedArray[Int64],
+) -> Array[@types.Value] raise RuntimeError {
+  if words.length() == 1 && words[0] == -2L {
+    raise InvalidHandle
+  }
+  guard self.references.native.c_heap is Some(heap) else { return [] }
+  let roots : Array[@types.Value] = []
+  for word in words {
+    if word < 0L && (word & 1L) != 0L {
+      roots.push(ContRef(word >> 1))
+    } else if @native_bridge.is_exception_ref(word) {
+      roots.push(self.decode_native_exception(word))
+    } else if @native_bridge.decode_gc_heap_ref(word) is Some(index) {
+      roots.push(
+        if heap.is_array(index) {
+          ArrayRef(index)
+        } else {
+          StructRef(index)
+        },
+      )
+    }
+  }
+  roots
+}
+
+///|
+#cfg(target="native")
 fn Store::install_gc_tracing(self : Store) -> Unit {
   guard self.references.native.c_heap is Some(heap) else { return }
   self.native_execution.exceptions().enable_reclamation()
@@ -187,22 +220,7 @@ fn Store::install_gc_tracing(self : Store) -> Unit {
     }
     self.gc_in_collect = true
     try {
-      let roots : Array[@types.Value] = []
-      for word in words {
-        if word < 0L && (word & 1L) != 0L {
-          roots.push(ContRef(word >> 1))
-        } else if @native_bridge.is_exception_ref(word) {
-          roots.push(self.decode_native_exception(word))
-        } else if @native_bridge.decode_gc_heap_ref(word) is Some(index) {
-          roots.push(
-            if heap.is_array(index) {
-              ArrayRef(index)
-            } else {
-              StructRef(index)
-            },
-          )
-        }
-      }
+      let roots = self.decode_gc_root_words(words)
       // Explicit host roots were already expanded before entering native GC.
       if self.gc_trace is Some(trace) {
         for index in trace.wrappers.keys() {

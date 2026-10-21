@@ -391,13 +391,43 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_heap_set_precise_roots(GcHeap *heap, int32_t 
     heap->precise_roots = precise;
 }
 
+// Arena-owned payload registrations are edges, not independent roots. Include
+// only live activations and unowned (parked fiber/input) registrations here.
+static int32_t copy_execution_roots(GcHeap *heap, int64_t *destination) {
+    int32_t active = jit_copy_active_gc_roots(heap, destination);
+    if (active < 0) return -1;
+    int64_t total = active;
+    for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next) {
+        if (entry->owner_reference) continue;
+        if (total + entry->root_count > INT32_MAX) return -1;
+        if (destination && entry->root_count)
+            memcpy(destination + total, entry->roots, (size_t)entry->root_count * sizeof(int64_t));
+        total += entry->root_count;
+    }
+    return (int32_t)total;
+}
+
+MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_heap_execution_roots(GcHeap *heap) {
+    if (!heap) return moonbit_make_int64_array(0, 0);
+    int32_t count = copy_execution_roots(heap, NULL);
+    if (count < 0) return moonbit_make_int64_array(1, -2);
+    int64_t *roots = moonbit_make_int64_array(count, 0);
+    // No callbacks or fiber switches occur between the count and copy.
+    if (copy_execution_roots(heap, roots) != count) {
+        moonbit_decref(roots);
+        return moonbit_make_int64_array(1, -2);
+    }
+    return roots;
+}
+
 MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *request) {
     GcHeap *heap = request->heap;
     const int64_t *roots = request->roots;
     int32_t count = request->count;
     int64_t size = count > 0 ? count : 0;
-    for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next)
-        if (!entry->owner_reference) size += entry->root_count;
+    int32_t execution_count = copy_execution_roots(heap, NULL);
+    if (execution_count < 0) return moonbit_make_int64_array(1, -2);
+    size += execution_count;
     for (int32_t i = 0; i < heap->object_count; ++i) {
         GcHeader *header = get_object_header(heap, i + 1);
         if (header && (header->flags & GC_FLAG_MARKED)) ++size;
@@ -411,12 +441,11 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
         memcpy(input, roots, (size_t)count * sizeof(int64_t));
         at += count;
     }
-    for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next) {
-        if (!entry->owner_reference) {
-            memcpy(input + at, entry->roots, (size_t)entry->root_count * sizeof(int64_t));
-            at += entry->root_count;
-        }
+    if (copy_execution_roots(heap, input + at) != execution_count) {
+        moonbit_decref(input);
+        return moonbit_make_int64_array(1, -2);
     }
+    at += execution_count;
     // No callbacks or buffer growth occur during this copy. Snapshot the scan
     // span so writes to the fresh output do not force descriptor reloads.
     const int32_t object_count = heap->object_count;

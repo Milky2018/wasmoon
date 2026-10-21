@@ -308,7 +308,14 @@ fn Store::register_native_exception_rollback(
     if self.closed.val || created.is_empty() {
       return
     }
-    let trace = self.trace_gc_roots([])
+    let native_roots = match self.references.native.c_heap {
+      Some(heap) =>
+        self.decode_gc_root_words(heap.get_ptr().execution_roots()) catch {
+          _ => return
+        }
+      None => []
+    }
+    let trace = self.trace_gc_roots([], native_roots~)
     // Incomplete root discovery cannot justify reclaiming a live token.
     if trace.failed {
       return
