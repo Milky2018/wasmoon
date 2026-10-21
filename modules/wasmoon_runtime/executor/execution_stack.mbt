@@ -141,7 +141,8 @@ fn ExecContext::finish_execution_frame(
               let owner = self.store.get_func_owner(address).unwrap_or(caller)
               self.enter_function(owner, code, args, arity, address)
             }
-            HostFunc(host) => self.invoke_host_func(address, host, caller, args)
+            HostFunc(_) | ThrowingHostFunc(_) =>
+              self.invoke_host_func(address, function, caller, args)
             AsyncHostFunc(host) =>
               self.invoke_async_host_func(address, host, caller, args)
           }

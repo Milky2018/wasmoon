@@ -15,6 +15,7 @@ pub struct Store {
   priv tables : Array[Table]
   priv mems : Array[Memory]
   priv globals : Array[GlobalInstance]
+  priv tag_lifetimes : Array[Ref[Bool]]
   priv tags : Array[@types.FuncType] // Tag types (params only, no results)
   priv tag_type_indices : Array[Int32] // Original type index for each tag
   priv tag_owners : Array[FuncOwner] // Owner module for each tag
@@ -98,6 +99,7 @@ pub fn Store::Store(
     mems: [],
     globals: [],
     tags,
+    tag_lifetimes: [],
     tag_type_indices: [],
     tag_owners: [],
     heap: managed_heap,
@@ -204,6 +206,8 @@ pub fn Store::close(self : Store) -> Unit {
   }
   self.globals.clear()
   self.globals.shrink_to_fit()
+  self.tag_lifetimes.clear()
+  self.tag_lifetimes.shrink_to_fit()
   self.tags.clear()
   self.tags.shrink_to_fit()
   self.tag_type_indices.clear()

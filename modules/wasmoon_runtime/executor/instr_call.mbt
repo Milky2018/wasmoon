@@ -221,8 +221,8 @@ fn ExecContext::call_func_inst_with_context(
         self.call_wasm_func(code, args, num_results, store_addr)
       }
     }
-    HostFunc(host_fn) =>
-      self.invoke_host_func(store_addr, host_fn, self.instance, args)
+    HostFunc(_) | ThrowingHostFunc(_) =>
+      self.invoke_host_func(store_addr, func_inst, self.instance, args)
     AsyncHostFunc(host_fn) =>
       self.invoke_async_host_func(store_addr, host_fn, self.instance, args)
   }
@@ -232,7 +232,7 @@ fn ExecContext::call_func_inst_with_context(
 fn ExecContext::invoke_host_func(
   self : ExecContext,
   store_addr : Int32,
-  host_fn : (@runtime.Caller, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError,
+  host_fn : @runtime.FuncInst,
   caller_instance : @runtime.ModuleInstance,
   args : Array[@types.Value],
 ) -> Unit raise {
@@ -246,8 +246,13 @@ fn ExecContext::invoke_host_func(
   let lease = self.store.pin_gc_roots(roots)
   defer lease.release()
   let caller = @runtime.Caller::Caller(self.store, caller_instance)
-  let results = host_fn(caller, args) catch {
-    error => {
+  let results = match host_fn.invoke_sync_host(caller, args) {
+    HostCallReturned(values) => values
+    HostCallThrown(tag, values, roots) => {
+      self.host_exception_root = Some(roots)
+      raise ThrowException(tag, values)
+    }
+    HostCallFailed(error) => {
       self.suspend_host_call(
         error,
         fn(context) raise {
@@ -296,6 +301,7 @@ fn ExecContext::invoke_async_host_func(
     error => raise InvocationSignal::HostInvocation(error)
   }
   match poll {
+    AsyncHostThrown(tag, values) => raise ThrowException(tag, values)
     AsyncHostReady(results) => {
       check_call_values(
         self.store,

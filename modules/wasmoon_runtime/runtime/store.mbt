@@ -33,6 +33,7 @@ pub struct Store {
   priv tables : Array[Table]
   priv mems : Array[Memory]
   priv globals : Array[GlobalInstance]
+  priv tag_lifetimes : Array[Ref[Bool]]
   priv tags : Array[@types.FuncType] // Tag types (params only, no results)
   priv tag_type_indices : Array[Int32] // Original type index for each tag
   priv tag_owners : Array[FuncOwner] // Owner module for each tag
@@ -213,6 +214,7 @@ pub fn Store::Store(
     mems: [],
     globals: [],
     tags,
+    tag_lifetimes: [],
     tag_type_indices: [],
     tag_owners: [],
     heap: managed_heap,
@@ -299,6 +301,7 @@ pub fn Store::with_c_heap(
     mems: [],
     globals: [],
     tags,
+    tag_lifetimes: [],
     tag_type_indices: [],
     tag_owners: [],
     heap: managed_heap,
@@ -410,6 +413,8 @@ pub fn Store::close(self : Store) -> Unit {
   }
   self.globals.clear()
   self.globals.shrink_to_fit()
+  self.tag_lifetimes.clear()
+  self.tag_lifetimes.shrink_to_fit()
   self.tags.clear()
   self.tags.shrink_to_fit()
   self.tag_type_indices.clear()
@@ -471,6 +476,14 @@ pub struct GcRootLease {
   priv id : Int64
   priv active : Ref[Bool]
 }
+
+///|
+pub impl Debug for GcRootLease with fn to_repr(_self) {
+  Repr::literal("<gc-root-lease>")
+}
+
+///|
+pub extend GcRootLease with Debug::{to_repr}
 
 ///|
 pub fn Store::pin_gc_roots(
@@ -837,6 +850,9 @@ pub fn Store::alloc_tag(
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
   let idx = self.push_allocation(self.tags, tag_type)
+  let active = Ref(true)
+  self.push_allocation(self.tag_lifetimes, active) |> ignore
+  self.on_instantiation_rollback(fn() { active.val = false })
   self.push_allocation(self.tag_type_indices, type_idx) |> ignore
   self.push_allocation(self.tag_owners, Unowned) |> ignore
   idx
@@ -1288,7 +1304,7 @@ pub fn Store::get_func(
 ) -> @types.FunctionCode raise RuntimeError {
   match self.get_func_inst(idx) {
     WasmFunc(code) => code
-    HostFunc(_) | AsyncHostFunc(_) => raise TypeMismatch // Cannot get code from host function
+    HostFunc(_) | ThrowingHostFunc(_) | AsyncHostFunc(_) => raise TypeMismatch // Cannot get code from host function
   }
 }
 

@@ -126,6 +126,7 @@ struct ExecContext {
   // Share opt-in with parked guest bodies without retaining the parent context.
   capture_diagnostics : Ref[Bool]
   mut diagnostic_frames : ReadOnlyArray[InterpreterFrame]?
+  mut host_exception_root : @runtime.GcRootLease?
 } derive(Debug)
 
 ///|
@@ -170,6 +171,7 @@ fn ExecContext::ExecContext(
     suspension_roots: [],
     capture_diagnostics,
     diagnostic_frames: None,
+    host_exception_root: None,
   }
 }
 

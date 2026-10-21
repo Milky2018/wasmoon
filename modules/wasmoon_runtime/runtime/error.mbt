@@ -57,6 +57,7 @@ pub(all) suberror RuntimeError {
   AsyncHostCallInProgress
   AsyncHostCallCancelled
   AsyncHostError(String)
+  HostCallbackError(String)
 } derive(Debug, Eq)
 
 ///|
@@ -119,6 +120,7 @@ pub fn RuntimeError::from_error(error : Error) -> RuntimeError? {
     AsyncHostCallInProgress => Some(AsyncHostCallInProgress)
     AsyncHostCallCancelled => Some(AsyncHostCallCancelled)
     AsyncHostError(_) as runtime_error => Some(runtime_error)
+    HostCallbackError(_) as runtime_error => Some(runtime_error)
     _ => None
   }
 }
@@ -197,6 +199,7 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     AsyncHostCallInProgress => "another async host call is already pending"
     AsyncHostCallCancelled => "async wasm call was cancelled"
     AsyncHostError(message) => "async host function failed: \{message}"
+    HostCallbackError(message) => "host function failed: \{message}"
   }
   logger.write_string(msg)
 }

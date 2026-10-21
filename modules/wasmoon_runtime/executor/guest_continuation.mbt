@@ -334,6 +334,7 @@ fn ExecContext::discard_captured_execution(self : ExecContext) -> Unit {
   self.suspension_reason = None
   self.suspension_roots.clear()
   self.suspension_roots.shrink_to_fit()
+  self.release_host_exception_root()
   self.execution.clear()
   self.execution.shrink_to_fit()
   self.frames.clear()
@@ -342,6 +343,14 @@ fn ExecContext::discard_captured_execution(self : ExecContext) -> Unit {
   self.labels.clear()
   self.labels.shrink_to_fit()
   self.stack.clear()
+}
+
+///|
+fn ExecContext::release_host_exception_root(self : ExecContext) -> Unit {
+  if self.host_exception_root is Some(roots) {
+    roots.release()
+  }
+  self.host_exception_root = None
 }
 
 ///|
