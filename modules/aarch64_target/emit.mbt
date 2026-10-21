@@ -2350,7 +2350,23 @@ fn emit_prologue(
   frame : AArch64Frame,
   unwind : Array[@code_object.UnwindDirective],
 ) -> Unit raise AArch64EmitError {
-  emit_sp_adjust(buffer, true, frame.frame_size(), unwind~)
+  if frame.has_frame_record {
+    // Establish the chain before large-frame probes can hit the guard page.
+    emit_sp_adjust(buffer, true, 16, unwind~)
+    let fp = @vcode.PhysicalReg::new(29, Int)
+    let lr = @vcode.PhysicalReg::new(30, Int)
+    emit_register_pair_save_or_restore(buffer, false, fp, lr, 0)
+    record_saved_register_unwind(unwind, buffer.position(), 16, (fp, 0))
+    record_saved_register_unwind(unwind, buffer.position(), 16, (lr, 8))
+    buffer.emit_word(0x910003FDU) // MOV X29, SP
+    unwind.push(
+      @code_object.UnwindDirective::new(
+        buffer.position(),
+        SetFramePointer(Int, 29, cfa_offset=16),
+      ),
+    )
+  }
+  emit_sp_adjust(buffer, true, frame.allocation_size(), unwind~)
   let saved = frame.saved_registers()
   let mut index = 0
   while index < saved.length() {
@@ -2418,7 +2434,17 @@ fn emit_epilogue(
       remaining -= 1
     }
   }
-  emit_sp_adjust(buffer, false, frame.frame_size())
+  emit_sp_adjust(buffer, false, frame.allocation_size())
+  if frame.has_frame_record {
+    emit_register_pair_save_or_restore(
+      buffer,
+      true,
+      @vcode.PhysicalReg::new(29, Int),
+      @vcode.PhysicalReg::new(30, Int),
+      0,
+    )
+    emit_sp_adjust(buffer, false, 16)
+  }
 }
 
 ///|

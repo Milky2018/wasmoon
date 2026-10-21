@@ -142,3 +142,25 @@ memory, table, GC, instance, code and pending-work quotas. Use
 `component.ComponentRuntime` exposes the same budget and execution-scope policy.
 The [resource inventory](resource-budgets.md) defines units, admission/release,
 Core compilation integration and the limits that still need OS isolation.
+
+## Native guest trap frames
+
+Newly compiled internal guest functions maintain an unwindable frame-pointer
+chain on AArch64 and x64, including leaves. AArch64 establishes its 16-byte
+FP/LR record before probing the remaining frame allocation; x64 keeps the
+existing RBP setup even for otherwise empty internal frames. Platform functions
+retain their existing ABI policy. Tail calls intentionally remove their caller.
+
+A resumable native trap copies up to the existing 32 native frame records into
+its activation before the fiber is released. Walking is bounded by that fiber's
+usable stack, not by whichever DWARF owner was most recently registered. The
+module's owned TrapReport resolves every captured guest PC it owns and preserves
+recursive repetitions. Caller return addresses resolve using their preceding
+byte so a range-end return cannot name the next function. Names and indices
+remain readable after the context/Store closes; PCs are diagnostic integers,
+not permission to access released executable memory. Native offsets are not
+Wasm binary/source offsets. Missing frame records and the fixed capture limit
+remain bounds on diagnostic completeness.
+
+Retaining `JITModule.register_dwarf()` enables the same installed-range lookup
+for debugger/backtrace names. It does not establish or authorize stack bounds.

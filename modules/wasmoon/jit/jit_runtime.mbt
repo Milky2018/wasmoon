@@ -875,37 +875,24 @@ fn JITModule::build_trap_report(
       }
   }
 
-  let mut caller_func_idx : Int32? = None
-  if details.frame_lr != 0L {
-    let mut caller_pc = details.frame_lr
-    match self.find_func_by_pc(details.frame_lr) {
-      Some((func_idx, f, offset)) => {
-        caller_func_idx = Some(func_idx)
-        add_unique_frame(wasm_frames, {
-          pc: details.frame_lr,
-          func_idx,
-          func_name: f.name,
-          wasm_offset: offset.to_int64(),
-        })
-      }
-      None =>
-        if details.frame_lr >= 4L {
-          let lr_prev = details.frame_lr - 4L
-          match self.find_func_by_pc(lr_prev) {
-            Some((func_idx, f, offset)) => {
-              caller_pc = lr_prev
-              caller_func_idx = Some(func_idx)
-              add_unique_frame(wasm_frames, {
-                pc: caller_pc,
-                func_idx,
-                func_name: f.name,
-                wasm_offset: offset.to_int64(),
-              })
-            }
-            None => ()
-          }
-        }
+  let captured = @wasmoon_jit.get_last_trap_pcs()
+  for i in 1..<captured.length() {
+    // A return PC may equal a range's end. The preceding byte belongs to the
+    // call instruction on both supported targets. Preserve recursive repeats.
+    let pc = captured[i] - 1L
+    if self.find_func_by_pc(pc) is Some((func_idx, function_, offset)) {
+      wasm_frames.push({
+        pc,
+        func_idx,
+        func_name: function_.name,
+        wasm_offset: offset.to_int64(),
+      })
     }
+  }
+  let caller_func_idx = if wasm_frames.length() > 1 {
+    Some(wasm_frames[1].func_idx)
+  } else {
+    None
   }
 
   let mut dump_path : String? = None

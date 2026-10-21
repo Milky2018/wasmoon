@@ -60,9 +60,12 @@ test "native diagnostics stream MilkIR directly into both targets" {
     AArch64,
   )
   inspect(x64.target_vcode.contains("IntBinary(W64, Add)"), content="true")
-  inspect(x64.machine_code, content="48 89 f0 48 01 d0 c3")
+  inspect(x64.machine_code, content="55 48 89 e5 48 89 f0 48 01 d0 5d c3")
   inspect(aarch64.target_vcode.contains("IntBinary(W64, Add)"), content="true")
-  inspect(aarch64.machine_code, content="20 00 02 8b c0 03 5f d6")
+  inspect(
+    aarch64.machine_code,
+    content="ff 43 00 d1 fd 7b 00 a9 fd 03 00 91 20 00 02 8b fd 7b 40 a9 ff 43 00 91 c0 03 5f d6",
+  )
 }
 
 ///|
@@ -147,8 +150,8 @@ test "plan Wasm body MilkIR through reusable JIT pipeline" {
     plan.object,
     content=(
       #|{
-      #|  code: [72, 137, 240, 72, 1, 208, 195],
-      #|  frame_size: 0,
+      #|  code: [85, 72, 137, 229, 72, 137, 240, 72, 1, 208, 93, 195],
+      #|  frame_size: 8,
       #|  func_addr_fixups: [],
       #|  call_fixups: [],
       #|  gc_safepoints: [],

@@ -527,19 +527,11 @@ static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
 
 #endif // !_WIN32
 
-// External functions to get JIT code range (from dwarf.c)
-extern uint64_t wasmoon_dwarf_get_low_pc(void);
-extern uint64_t wasmoon_dwarf_get_high_pc(void);
-
 // Walk the retained frame pointer chain after the signal handler has returned
 // to the trap activation on the same native fiber.
 static void capture_frame_chain(uintptr_t initial_pc, uintptr_t initial_fp,
                                  uintptr_t stack_base, uintptr_t stack_top) {
     g_trap_frame_count = 0;
-
-    // Get JIT code range for boundary detection
-    uint64_t jit_low_pc = wasmoon_dwarf_get_low_pc();
-    uint64_t jit_high_pc = wasmoon_dwarf_get_high_pc();
 
     // Capture first frame (trap location)
     if (g_trap_frame_count < MAX_TRAP_FRAMES) {
@@ -550,12 +542,14 @@ static void capture_frame_chain(uintptr_t initial_pc, uintptr_t initial_fp,
 
     // Walk the frame pointer chain
     uintptr_t fp = initial_fp;
-    uintptr_t guard_size = 16 * 1024;  // Skip guard page region
-    uintptr_t valid_low = stack_base + guard_size;
+    // stack_base already excludes the guard. Never consult a process-global
+    // debugger owner's range while walking another activation's owned stack.
+    uintptr_t valid_low = stack_base;
 
     while (fp != 0 && g_trap_frame_count < MAX_TRAP_FRAMES) {
         // Validate FP is within WASM stack bounds
-        if (fp < valid_low || fp >= stack_top || (fp & 0xF) != 0) {
+        if (fp < valid_low || fp >= stack_top ||
+            stack_top - fp < 2 * sizeof(uintptr_t) || (fp & 0xF) != 0) {
             break;
         }
 
@@ -566,14 +560,6 @@ static void capture_frame_chain(uintptr_t initial_pc, uintptr_t initial_fp,
 
         if (return_addr == 0) {
             break;  // End of chain
-        }
-
-        // Stop if return address is outside JIT code range
-        // This means we've reached the runtime boundary (trampoline)
-        if (jit_low_pc != 0 && jit_high_pc != 0) {
-            if (return_addr < jit_low_pc || return_addr >= jit_high_pc) {
-                break;  // Left JIT code region
-            }
         }
 
         // Add this frame

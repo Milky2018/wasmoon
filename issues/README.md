@@ -686,6 +686,7 @@ graph TD
   ISS_648["ISS-648: Group owned regression inputs by Core, Component and WASI"]
   ISS_649["ISS-649: Relocate imported test corpora under tests/upstream"]
   ISS_658["ISS-658: Register installed guest ranges with DWARF"]
+  ISS_659["ISS-659: Preserve native guest frame chains across resumable traps"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -1152,6 +1153,7 @@ graph TD
   ISS_595 --> ISS_596
   ISS_636 --> ISS_637
   ISS_637 --> ISS_638
+  ISS_658 --> ISS_659
 ```
 
 ## Warnings
