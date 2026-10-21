@@ -182,7 +182,8 @@ fn ExecContext::run_execution(
       } else {
         if self.cooperative {
           if self.instructions_left == 0 {
-            self.instructions_left = 1024
+            self.check_cancellation(charge=false)
+            self.instructions_left = self.cooperative_quantum
             self.set_base_resume_action(CooperativeYield, fn(_) { () })
             raise ExecutionSuspended
           }

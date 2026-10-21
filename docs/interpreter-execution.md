@@ -48,6 +48,36 @@ WebAssembly permits implementation limits on frames and other execution
 resources; it does not require a configurable depth API or an explicit-stack
 implementation. This refactor addresses practical interpreter capacity.
 
+## Cooperative instruction quantum
+
+`call_func_by_index_resumable(..., cooperative=true,
+cooperative_quantum=16384)` dispatches at most that many guest instructions
+between `CooperativeYield` results. The quantum must be positive even when
+cooperation is disabled. Omitting it preserves the 1024-instruction default.
+It is independent of fuel, execution scopes and stack limits.
+
+The counter belongs to the invocation. Ordinary guest calls share it, and host
+or guest-effect suspension preserves its remainder. A newly started guest
+continuation body inherits the configured quantum with a fresh counter. An
+explicit host reentry creates a separate invocation and uses its own supplied
+configuration; it does not reset the caller's counter. Host callback execution
+time is not measured by this instruction counter.
+
+Each quantum boundary checks the captured execution scope before yielding,
+without charging another safepoint unit.
+Cancellation, deadlines and total budgets remain attached across suspension;
+completion or cancellation releases parked roots. The embedding chooses when
+to resume and whether to yield to its scheduler. Larger quanta trade scheduler
+overhead for less frequent scheduling opportunities, not more total fuel.
+
+`python3 scripts/benchmark_interpreter_quantum.py` measures synchronous calls,
+immediate resumptions and `async.sleep(0)` integration separately, serially,
+with loop-, call- and memory-heavy workloads. Every mode checks its result.
+`--wasm FILE --function-index N` adds a compiler-produced module without host
+imports whose selected function takes one i32 iteration argument. Builds and
+generated sources are automatically removed from an OS temporary directory.
+Timings are diagnostic samples, not CI performance thresholds.
+
 ## Acceptance
 
 ISS-537 records deep recursion, exact budget boundaries and recovery, tail calls,

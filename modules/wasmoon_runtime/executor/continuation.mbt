@@ -198,6 +198,10 @@ pub fn ExecutionContinuation::cancel(self : ExecutionContinuation) -> Unit {
 
 ///|
 /// Enter a function using the explicit continuation interpreter seam.
+/// A positive quantum bounds guest instruction dispatches between cooperative
+/// yields (default 1024). Host suspension preserves the remaining count. A new
+/// host reentry starts its own invocation and counter; host execution time is
+/// not metered by this setting. Fuel, stack limits and cancellation are separate.
 pub fn call_func_by_index_resumable(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
@@ -205,8 +209,15 @@ pub fn call_func_by_index_resumable(
   args : Array[@types.Value],
   classify_suspension : (@runtime.RuntimeError) -> Int64?,
   cooperative~ : Bool = false,
+  cooperative_quantum~ : Int32 = 1024,
 ) -> ResumableCallOutcome raise @runtime.RuntimeError {
-  let context = ExecContext(store, instance, classify_suspension~, cooperative~)
+  let context = ExecContext(
+    store,
+    instance,
+    classify_suspension~,
+    cooperative~,
+    cooperative_quantum~,
+  )
   let func_type = check_call_arguments(store, instance, func_idx, args)
   let store_addr = instance.func_addrs[func_idx]
   let func_inst = store.get_func_inst(store_addr)

@@ -179,6 +179,7 @@ fn ExecContext::exec_guest_continuation(
       }
       let async_host_driver = self.async_host_driver
       let cooperative = self.cooperative
+      let cooperative_quantum = self.cooperative_quantum
       let function = store.get_func_inst(address)
       let arity = store.get_func_type(address).results.length()
       let body = @runtime.GuestContinuationBody::new(
@@ -194,6 +195,7 @@ fn ExecContext::exec_guest_continuation(
             classify_suspension~,
             async_host_driver~,
             cooperative~,
+            cooperative_quantum~,
           )
           let outcome = try
             context.call_func_inst_with_context(address, function, args, arity)
