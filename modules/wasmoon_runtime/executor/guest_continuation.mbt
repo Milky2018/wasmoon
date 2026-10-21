@@ -36,7 +36,10 @@ fn guest_resumption_body(
         raise @runtime.RuntimeError::ContinuationAlreadyConsumed
       }
       captured.context.guest_input = Some(input)
-      guest_outcome_values(continuation.continue_unchecked())
+      let outcome = continuation.continue_unchecked() catch {
+        error => raise captured.context.guest_body_failure(error)
+      }
+      guest_outcome_values(outcome)
     },
     fn() { continuation.cancel() },
     leases~,
@@ -205,7 +208,7 @@ fn ExecContext::exec_guest_continuation(
             ExecutionSuspended => suspended_outcome(context, arity)
             error => {
               context.discard_captured_execution()
-              raise error
+              raise context.guest_body_failure(error)
             }
           } noraise {
             _ => {
@@ -354,5 +357,11 @@ fn ExecContext::invoke_guest_body(
     self.store.enter_interpreter_boundary()
   }
   defer self.store.leave_interpreter_boundary()
-  (body.run)(input)
+  (body.run)(input) catch {
+    GuestBodyFailed(error, frames) => {
+      self.adopt_guest_failure(error, frames)
+      raise error
+    }
+    error => raise error
+  }
 }
