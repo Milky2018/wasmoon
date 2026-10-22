@@ -20,6 +20,11 @@ fn wasmoon_native_environment(
   field_paths.set(function_table_field.name, [layout.func_table_offset])
   use_subtype_indirect_check |> ignore
   canonical_type_indices |> ignore
+  let gc_heap_field = @native.EnvironmentField::new(
+    "wasmoon.vmctx.gc_heap",
+    Ptr64,
+  )
+  field_paths.set(gc_heap_field.name, [layout.gc_heap_offset])
   let wasm = @wasm_native.Environment::new(
     fn(index) {
       let name = "wasm.func.\{index}"
@@ -67,6 +72,11 @@ fn wasmoon_native_environment(
     },
     fn(helper) {
       @native.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
+    },
+    gc_heap_field=if layout.gc_heap_offset >= 0 && layout.gc_heap_offset != 255 {
+      Some(gc_heap_field)
+    } else {
+      None
     },
   )
   { wasm, field_paths, runtime_symbols, }

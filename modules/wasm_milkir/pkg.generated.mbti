@@ -283,6 +283,11 @@ pub(all) enum WasmRuntimeHelper {
   AtomicNotify
   GcRefTest
   GcRefCast
+  GcStructGetHeap
+  GcStructSetHeap
+  GcArrayGetHeap
+  GcArraySetHeap
+  GcArrayLenHeap
   GcStructGet
   GcStructSet
   GcArrayGet

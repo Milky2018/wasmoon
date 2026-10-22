@@ -1,5 +1,20 @@
 #include "../jit_internal.h"
 
+// Enter the guest helper through its declared calling convention without
+// requiring an active TLS context.
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_gc_word_access(
+    GcHeap *heap, int32_t operation, int64_t reference, int32_t index,
+    int64_t value) {
+    switch (operation) {
+    case 0: return gc_struct_get_heap_impl(heap, reference, index);
+    case 1: gc_struct_set_heap_impl(heap, reference, index, value); return 0;
+    case 2: return gc_array_get_heap_impl(heap, reference, index);
+    case 3: gc_array_set_heap_impl(heap, reference, index, value); return 0;
+    case 4: return gc_array_len_heap_impl(heap, reference);
+    default: return -1;
+    }
+}
+
 extern void wasmoon_jit_ctx_init_data_segments(int64_t ctx, int count);
 extern void wasmoon_jit_ctx_init_elem_segments(int64_t ctx, int count);
 

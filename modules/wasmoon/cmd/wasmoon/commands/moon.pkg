@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasm_milkir/optimize" @wasm_optimize,
   "Milky2018/wasmoon/cmd/wasmoon/commands/component" @component_commands,
   "Milky2018/wasmoon/cmd/wasmoon/commands/options",
   "Milky2018/milkir/optimize",

@@ -331,6 +331,20 @@ gc_array_fill_v128_impl_msvc_guest PROC
     add rsp, 40
     ret
 gc_array_fill_v128_impl_msvc_guest ENDP
+EXTERN gc_array_get_heap_impl_msvc_target:QWORD
+PUBLIC gc_array_get_heap_impl_msvc_guest
+gc_array_get_heap_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_array_get_heap_impl_msvc_target]
+    add rsp, 40
+    ret
+gc_array_get_heap_impl_msvc_guest ENDP
 EXTERN gc_array_get_impl_msvc_target:QWORD
 PUBLIC gc_array_get_impl_msvc_guest
 gc_array_get_impl_msvc_guest PROC
@@ -395,6 +409,20 @@ gc_array_init_elem_impl_msvc_guest PROC
     add rsp, 56
     ret
 gc_array_init_elem_impl_msvc_guest ENDP
+EXTERN gc_array_len_heap_impl_msvc_target:QWORD
+PUBLIC gc_array_len_heap_impl_msvc_guest
+gc_array_len_heap_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_array_len_heap_impl_msvc_target]
+    add rsp, 40
+    ret
+gc_array_len_heap_impl_msvc_guest ENDP
 EXTERN gc_array_len_impl_msvc_target:QWORD
 PUBLIC gc_array_len_impl_msvc_guest
 gc_array_len_impl_msvc_guest PROC
@@ -453,6 +481,20 @@ gc_array_new_impl_msvc_guest PROC
     add rsp, 40
     ret
 gc_array_new_impl_msvc_guest ENDP
+EXTERN gc_array_set_heap_impl_msvc_target:QWORD
+PUBLIC gc_array_set_heap_impl_msvc_guest
+gc_array_set_heap_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_array_set_heap_impl_msvc_target]
+    add rsp, 40
+    ret
+gc_array_set_heap_impl_msvc_guest ENDP
 EXTERN gc_array_set_impl_msvc_target:QWORD
 PUBLIC gc_array_set_impl_msvc_guest
 gc_array_set_impl_msvc_guest PROC
@@ -537,6 +579,20 @@ gc_register_struct_inline_msvc_guest PROC
     add rsp, 40
     ret
 gc_register_struct_inline_msvc_guest ENDP
+EXTERN gc_struct_get_heap_impl_msvc_target:QWORD
+PUBLIC gc_struct_get_heap_impl_msvc_guest
+gc_struct_get_heap_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_struct_get_heap_impl_msvc_target]
+    add rsp, 40
+    ret
+gc_struct_get_heap_impl_msvc_guest ENDP
 EXTERN gc_struct_get_impl_msvc_target:QWORD
 PUBLIC gc_struct_get_impl_msvc_guest
 gc_struct_get_impl_msvc_guest PROC
@@ -579,6 +635,20 @@ gc_struct_new_impl_msvc_guest PROC
     add rsp, 40
     ret
 gc_struct_new_impl_msvc_guest ENDP
+EXTERN gc_struct_set_heap_impl_msvc_target:QWORD
+PUBLIC gc_struct_set_heap_impl_msvc_guest
+gc_struct_set_heap_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_struct_set_heap_impl_msvc_target]
+    add rsp, 40
+    ret
+gc_struct_set_heap_impl_msvc_guest ENDP
 EXTERN gc_struct_set_impl_msvc_target:QWORD
 PUBLIC gc_struct_set_impl_msvc_guest
 gc_struct_set_impl_msvc_guest PROC

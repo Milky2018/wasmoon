@@ -1,10 +1,12 @@
 // Physical GC layouts are immutable and shared by allocation, access and tracing.
 #include "gc_heap.h"
+#include "gc_access.h"
 #include "native_alloc.h"
 #include <moonbit.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+
 
 int32_t wasmoon_gc_heap_define_layout(GcHeap *heap, int32_t identity,
                                     const int32_t *codes, int32_t array) {
@@ -50,13 +52,11 @@ int32_t wasmoon_gc_heap_define_layout(GcHeap *heap, int32_t identity,
 }
 
 GcSlot gc_layout_read(const uint8_t *data, const GcFieldLayout *field) {
-    GcSlot slot = {0, 0};
-    memcpy(&slot, data + field->offset, (size_t)field->width);
-    return slot;
+    return gc_access_layout_read(data, field);
 }
 
 void gc_layout_write(uint8_t *data, const GcFieldLayout *field, GcSlot value) {
-    memcpy(data + field->offset, &value, (size_t)field->width);
+    gc_access_layout_write(data, field, value);
 }
 
 int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,

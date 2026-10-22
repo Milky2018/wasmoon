@@ -4,12 +4,13 @@ fn build_gc_root_context(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   enable_cancellation~ : Bool = false,
+  opt_level~ : Int32 = 0,
 ) -> @wast.JITModuleContext raise {
   guard @commands.compile_module_to_jit(
       mod_,
       false,
       false,
-      0,
+      opt_level,
       false,
       nan_canonicalization=store.nan_canonicalization,
       enable_cancellation~,

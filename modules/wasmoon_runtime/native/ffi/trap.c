@@ -59,13 +59,16 @@
 
 // ============ Trap Activations (Thread-Local) ============
 
-static _Thread_local jit_trap_activation_t fallback_activation;
+_Thread_local jit_activation_slot_t wasmoon_jit_activation_slot;
+#define fallback_activation wasmoon_jit_activation_slot.fallback
+#define current_activation wasmoon_jit_activation_slot.current
 static _Thread_local jit_trap_activation_t observed_activation;
-static _Thread_local jit_trap_activation_t *current_activation = NULL;
+
 static _Thread_local int observed_activation_valid = 0;
 
+
 jit_trap_activation_t *jit_current_trap_activation(void) {
-    return current_activation ? current_activation : &fallback_activation;
+    return jit_current_trap_activation_fast();
 }
 
 jit_trap_activation_t *jit_observed_trap_activation(void) {

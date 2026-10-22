@@ -28,6 +28,22 @@ test "builder rejects a value owned by another function" {
 }
 
 ///|
+test "appending an SSA parameter rejects a foreign block" {
+  let first = Function::new_empty("first")
+  let foreign = first.new_block0()
+  let second = Function::new_empty("second")
+  let entry = second.new_block0()
+  second.append_block_param(foreign, I32) |> ignore
+  assert_eq(foreign.params.length(), 0)
+  entry.set_terminator(Return([]))
+  try second.verify() catch {
+    err => inspect(err, content="ForeignBlock(block_id=0)")
+  } noraise {
+    _ => fail("expected a foreign block error")
+  }
+}
+
+///|
 test "function rejects foreign block parameters before mutation" {
   let first = Function::new_empty("first")
   let foreign = first.add_param(I32)

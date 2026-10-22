@@ -278,6 +278,7 @@ pub struct Function {
 }
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
+pub fn Function::append_block_param(Self, Block, Type) -> Value
 pub fn Function::block_instruction_at(Self, Block, Int32) -> Inst?
 pub fn Function::block_instruction_ids(Self, Block) -> ArrayView[Int32]
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol

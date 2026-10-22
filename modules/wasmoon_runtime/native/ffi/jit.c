@@ -913,9 +913,9 @@ extern int wasmoon_call_entry_trampoline(
 );
 #endif
 
+
 jit_context_t *get_current_jit_context(void) {
-    jit_trap_activation_t *activation = jit_current_trap_activation();
-    return activation->active ? activation->context : NULL;
+    return get_current_jit_context_fast();
 }
 
 // Keep mutable activation storage in the caller of setjmp. Its contents remain
@@ -1527,7 +1527,7 @@ static void WASMOON_GUEST_ABI wasmoon_jit_gc_push_root_scope_or_trap(
     const int64_t *roots,
     int32_t root_count
 ) {
-    jit_context_t *activation = get_current_jit_context();
+    jit_context_t *activation = get_current_jit_context_fast();
     if (activation) ctx = activation;
     if (ctx_gc_push_root_scope_internal(ctx, roots, root_count) == 1) {
         return;
@@ -1537,7 +1537,7 @@ static void WASMOON_GUEST_ABI wasmoon_jit_gc_push_root_scope_or_trap(
 }
 
 static void WASMOON_GUEST_ABI wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
-    jit_context_t *activation = get_current_jit_context();
+    jit_context_t *activation = get_current_jit_context_fast();
     if (activation) ctx = activation;
     if (ctx && ctx_runtime(ctx)->execution && ctx_runtime(ctx)->execution->gc_root_scope_head) {
         ctx_gc_pop_root_scope_internal(ctx);
@@ -1663,7 +1663,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_collect_heap(
     int32_t root_count
 ) {
     GcHeap *heap = gc_heap_live(heap_ptr);
-    jit_context_t *active = get_current_jit_context();
+    jit_context_t *active = get_current_jit_context_fast();
     if (active && ctx_gc_heap(active) == heap) {
         return gc_collect_for_alloc_internal(active, roots, root_count);
     }
@@ -2126,4 +2126,24 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_set_cooperative_quantum_managed(void *obj
     controls->scheduling_quantum = quantum;
     if (controls->scheduling_budget > 0) controls->scheduling_budget = quantum;
     return 1;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_get_heap_ptr(void) {
+ return WASMOON_GUEST_ADDRESS(gc_struct_get_heap_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_set_heap_ptr(void) {
+ return WASMOON_GUEST_ADDRESS(gc_struct_set_heap_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_get_heap_ptr(void) {
+ return WASMOON_GUEST_ADDRESS(gc_array_get_heap_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_set_heap_ptr(void) {
+ return WASMOON_GUEST_ADDRESS(gc_array_set_heap_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_len_heap_ptr(void) {
+ return WASMOON_GUEST_ADDRESS(gc_array_len_heap_impl);
 }

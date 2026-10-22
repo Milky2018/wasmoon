@@ -4,6 +4,7 @@
 
 #include "jit_internal.h"
 #include "gc_allocator.h"
+#include "gc_access.h"
 
 // ============ Value Decoding Helpers ============
 
@@ -13,7 +14,7 @@ static inline int32_t decode_heap_ref(int64_t val) {
 
 static inline jit_context_t *resolve_ctx(jit_context_t *ctx) {
     if (ctx) return ctx;
-    return get_current_jit_context();
+    return get_current_jit_context_fast();
 }
 
 static inline GcHeap *resolve_heap(jit_context_t *ctx) {
@@ -311,7 +312,7 @@ static int32_t gc_select_alloc_roots(
 // ============ Struct Operations ============
 
 int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields) {
-    jit_context_t *ctx = get_current_jit_context();
+    jit_context_t *ctx = get_current_jit_context_fast();
     GcHeap *heap = resolve_heap(ctx);
     if (!heap) {
         return trap_unreachable_i64();
@@ -371,41 +372,13 @@ int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, 
 }
 
 int64_t WASMOON_GUEST_ABI gc_struct_get_impl(int64_t ref, int32_t type_idx, int32_t field_idx) {
-    (void)type_idx;  // type_idx not needed for access, only for type checking
-
-    GcHeap *heap = resolve_heap(NULL);
-    if (!heap) {
-        return trap_unreachable_i64();
-    }
-
-    // Check for null reference (encoded as 0)
-    if (ref == 0) {
-        return trap_null_reference();
-    }
-
-    // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
-    int32_t gc_ref = decode_heap_ref(ref);
-    return gc_heap_struct_get(heap, gc_ref, field_idx);
+    (void)type_idx;
+    return gc_struct_get_heap_impl(resolve_heap(NULL), ref, field_idx);
 }
 
 void WASMOON_GUEST_ABI gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_t value) {
     (void)type_idx;
-
-    GcHeap *heap = resolve_heap(NULL);
-    if (!heap) {
-        trap_unreachable_void();
-        return;
-    }
-
-    // Check for null reference (encoded as 0)
-    if (ref == 0) {
-        trap_null_reference();
-        return;
-    }
-
-    // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
-    int32_t gc_ref = decode_heap_ref(ref);
-    gc_heap_struct_set(heap, gc_ref, field_idx, value);
+    gc_struct_set_heap_impl(resolve_heap(NULL), ref, field_idx, value);
 }
 
 // ============ Array Operations ============
@@ -442,79 +415,16 @@ int64_t WASMOON_GUEST_ABI gc_array_new_impl(int32_t type_idx, int32_t len, int64
 
 int64_t WASMOON_GUEST_ABI gc_array_get_impl(int64_t ref, int32_t type_idx, int32_t idx) {
     (void)type_idx;
-
-    GcHeap *heap = resolve_heap(NULL);
-    if (!heap) {
-        return trap_unreachable_i64();
-    }
-
-    // Check for null reference (encoded as 0)
-    if (ref == 0) {
-        return trap_null_reference();
-    }
-
-    // Decode: gc_ref = ref >> 1 (1-based)
-    int32_t gc_ref = decode_heap_ref(ref);
-
-    // Check bounds
-    int32_t len = gc_heap_array_len(heap, gc_ref);
-    if (idx < 0 || idx >= len) {
-        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
-        if (g_trap_active) {
-            siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return 0;
-    }
-
-    return gc_heap_array_get(heap, gc_ref, idx);
+    return gc_array_get_heap_impl(resolve_heap(NULL), ref, idx);
 }
 
 void WASMOON_GUEST_ABI gc_array_set_impl(int64_t ref, int32_t type_idx, int32_t idx, int64_t value) {
     (void)type_idx;
-
-    GcHeap *heap = resolve_heap(NULL);
-    if (!heap) {
-        trap_unreachable_void();
-        return;
-    }
-
-    // Check for null reference (encoded as 0)
-    if (ref == 0) {
-        trap_null_reference();
-        return;
-    }
-
-    // Decode: gc_ref = ref >> 1 (1-based)
-    int32_t gc_ref = decode_heap_ref(ref);
-
-    // Check bounds
-    int32_t len = gc_heap_array_len(heap, gc_ref);
-    if (idx < 0 || idx >= len) {
-        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
-        if (g_trap_active) {
-            siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return;
-    }
-
-    gc_heap_array_set(heap, gc_ref, idx, value);
+    gc_array_set_heap_impl(resolve_heap(NULL), ref, idx, value);
 }
 
 int32_t WASMOON_GUEST_ABI gc_array_len_impl(int64_t ref) {
-    GcHeap *heap = resolve_heap(NULL);
-    if (!heap) {
-        return trap_unreachable_i32();
-    }
-
-    // Check for null reference (encoded as 0)
-    if (ref == 0) {
-        trap_null_reference();
-        return 0;
-    }
-
-    // Decode: gc_ref = ref >> 1 (1-based)
-    int32_t gc_ref = decode_heap_ref(ref);
-    return gc_heap_array_len(heap, gc_ref);
+    return gc_array_len_heap_impl(resolve_heap(NULL), ref);
 }
 
 void WASMOON_GUEST_ABI gc_array_fill_impl(int64_t ref, int32_t offset, int64_t value, int32_t count) {
@@ -537,7 +447,7 @@ void WASMOON_GUEST_ABI gc_array_fill_impl(int64_t ref, int32_t offset, int64_t v
     int32_t gc_ref = decode_heap_ref(ref);
 
     // Bounds check
-    int32_t len = gc_heap_array_len(heap, gc_ref);
+    int32_t len = gc_access_array_len(heap, gc_ref);
     if (offset < 0 || count < 0 || (int64_t)offset + count > len) {
         g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
@@ -913,7 +823,7 @@ void WASMOON_GUEST_ABI gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int
     }
 
     int32_t gc_ref = decode_heap_ref(ref);
-    int32_t len = gc_heap_array_len(heap, gc_ref);
+    int32_t len = gc_access_array_len(heap, gc_ref);
     if (idx < 0 || idx >= len) {
         g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
@@ -937,7 +847,7 @@ void WASMOON_GUEST_ABI gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int
     }
 
     int32_t gc_ref = decode_heap_ref(ref);
-    int32_t len = gc_heap_array_len(heap, gc_ref);
+    int32_t len = gc_access_array_len(heap, gc_ref);
     if (idx < 0 || idx >= len) {
         g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
@@ -966,7 +876,7 @@ void WASMOON_GUEST_ABI gc_array_fill_v128_impl(int64_t ref, int32_t offset, int6
     }
 
     int32_t gc_ref = decode_heap_ref(ref);
-    int32_t len = gc_heap_array_len(heap, gc_ref);
+    int32_t len = gc_access_array_len(heap, gc_ref);
     if (offset < 0 || count < 0 || (int64_t)offset + count > len) {
         g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) {
@@ -1085,4 +995,103 @@ WASMOON_DEFINE_GUEST_TARGET(gc_struct_get_v128_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_struct_new_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_struct_set_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_struct_set_v128_impl);
+#endif
+
+int64_t WASMOON_GUEST_ABI gc_struct_get_heap_impl(GcHeap *heap, int64_t ref, int32_t field_idx) {
+
+    if (!heap) {
+        return trap_unreachable_i64();
+    }
+
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        return trap_null_reference();
+    }
+
+    // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
+    int32_t gc_ref = decode_heap_ref(ref);
+    return gc_access_struct_get(heap, gc_ref, field_idx).lo;
+}
+
+void WASMOON_GUEST_ABI gc_struct_set_heap_impl(GcHeap *heap, int64_t ref, int32_t field_idx, int64_t value) {
+
+    if (!heap) {
+        trap_unreachable_void();
+        return;
+    }
+
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        trap_null_reference();
+        return;
+    }
+
+    // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
+    int32_t gc_ref = decode_heap_ref(ref);
+    gc_access_struct_set(heap, gc_ref, field_idx, (GcSlot){value, 0});
+}
+
+int64_t WASMOON_GUEST_ABI gc_array_get_heap_impl(GcHeap *heap, int64_t ref, int32_t idx) {
+    if (!heap) { return trap_unreachable_i64(); }
+    if (!ref) { return trap_null_reference(); }
+    int32_t gc_ref = decode_heap_ref(ref);
+    GcHeader *header = gc_access_object_header(heap, gc_ref);
+    uint8_t *data = header ? (uint8_t *)(header + 1) : NULL;
+    int32_t length = data ? *(int32_t *)data : 0;
+    if (idx < 0 || idx >= length) {
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 0;
+    }
+    GcTypeLayout *layout = gc_object_layout(heap, header);
+    GcFieldLayout access = layout ? layout->fields[0] : (GcFieldLayout){0, 16, 1};
+    uint8_t *element = data + GC_ARRAY_DATA_OFFSET +
+        (size_t)idx * (layout ? layout->size : 16);
+    return gc_access_layout_read(element, &access).lo;
+}
+
+void WASMOON_GUEST_ABI gc_array_set_heap_impl(GcHeap *heap, int64_t ref, int32_t idx, int64_t value) {
+    if (!heap) { trap_unreachable_void(); return; }
+    if (!ref) { trap_null_reference(); return; }
+    int32_t gc_ref = decode_heap_ref(ref);
+    GcHeader *header = gc_access_object_header(heap, gc_ref);
+    uint8_t *data = header ? (uint8_t *)(header + 1) : NULL;
+    int32_t length = data ? *(int32_t *)data : 0;
+    if (idx < 0 || idx >= length) {
+        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+    GcTypeLayout *layout = gc_object_layout(heap, header);
+    GcFieldLayout access = layout ? layout->fields[0] : (GcFieldLayout){0, 16, 1};
+    uint8_t *element = data + GC_ARRAY_DATA_OFFSET +
+        (size_t)idx * (layout ? layout->size : 16);
+    GcSlot slot = {value, 0};
+    if (access.reference) gc_heap_write_barrier(heap, gc_ref, value);
+    gc_access_layout_write(element, &access, slot);
+    gc_access_verify(heap, "array_set");
+}
+
+int32_t WASMOON_GUEST_ABI gc_array_len_heap_impl(GcHeap *heap, int64_t ref) {
+    if (!heap) {
+        return trap_unreachable_i32();
+    }
+
+    // Check for null reference (encoded as 0)
+    if (ref == 0) {
+        trap_null_reference();
+        return 0;
+    }
+
+    // Decode: gc_ref = ref >> 1 (1-based)
+    int32_t gc_ref = decode_heap_ref(ref);
+    return gc_access_array_len(heap, gc_ref);
+}
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(gc_array_get_heap_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_len_heap_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_array_set_heap_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_get_heap_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_struct_set_heap_impl);
 #endif

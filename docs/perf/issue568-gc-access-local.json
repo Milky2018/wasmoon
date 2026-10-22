@@ -1,0 +1,768 @@
+{
+  "schema_version": 1,
+  "issue": 568,
+  "date": "2026-10-22",
+  "source_base_revision": "55657fb24dfd61937e8d6f1f482df4d23c824631",
+  "source_dirty": true,
+  "platform": "macOS ARM64 26.7, Apple M3 Max",
+  "moon": "moon 0.1.20261020 (2284bd2 2026-10-20) ~/.moon/bin/moon\nmoonc v0.10.16+b1a0e846e (2026-10-16) ~/.moon/bin/moonc\nmoonrun 0.1.20261020 (2284bd2 2026-10-20) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+  "final_functional_source_manifest": {
+    "sha256": "66f6dc0c6d8b1db2f9c72727d32cb4d77e27e5c7805a12cc2094e18185edc61e",
+    "files": 807,
+    "scope": "module .mbt/.c/.h/.S/.asm/.pkg/.mod/.schema/.py files, excluding *_test.mbt and *_wbtest.mbt and build/cache directories; copied sources checked byte-for-byte"
+  },
+  "changed_source_sha256": {
+    "modules/wasm_milkir/optimize/gc_reads.mbt": "eabb8da8dc5f8ce56a983c477366748bc119e552c34efabd6580be739a711d26",
+    "modules/wasm_milkir/optimize/gc_reads_test.mbt": "a6eec678b0f294557840cf0c72a55d0d3694cc2451441e71aaa341333caa909d",
+    "modules/wasm_milkir/optimize/moon.pkg": "b5a722ef261233d304274870c5adf3487b4eae828f9c102113dc0c289aaa2759",
+    "modules/wasm_milkir/optimize/optimize.mbt": "55a8f1ef45194ef5dcdcdcb8a3303a3ca79493938923f36104cac1b9262cfcc0",
+    "modules/wasm_milkir/optimize/pkg.generated.mbti": "b60b17110418a063bb7a333386e290d3964598fce622dca67b1acc5d47bd2367",
+    "modules/wasmoon/cmd/wasmoon/commands/explore.mbt": "c2b1aef96fbec3060b0971a7b457205199f6e20ff5c784e90846303b14c92457",
+    "modules/wasmoon/cmd/wasmoon/commands/moon.pkg": "392ee520e7721451bdb92267045fcd617ce6e77747be746b7114e90a118f1437",
+    "modules/wasmoon/cmd/wasmoon/commands/run.mbt": "b1396a957df14be4e5afeaeca90fdc73545ac2fd28cf721ac7eff357573573e3",
+    "modules/wasmoon/cmd/wasmoon/commands/run_wbtest.mbt": "09d9e79b075c3a5ee7385742b3e8677e45d8eeb4901ca3e62daa4675ae3eaa6c",
+    "modules/wasmoon/component_native/compiler.mbt": "e377ad78604750aec1f9d4902d572a4f8408185371900c6a3af78a83841bda18",
+    "modules/wasmoon/component_native/moon.pkg": "c4073264e65b7033d1e951d2df12a6179c0bba8dc28d06e80eec732e1e82d672",
+    "modules/wasmoon/preflight/moon.pkg": "5276264c2c608c6de25665b630c9f884a3347f6a4d0e247d42916f8cc877630d",
+    "modules/wasmoon/preflight/preflight.mbt": "91bcf377ba3bec1e0fd986211b3a48d6c5e2b8a731b8178fcbb10daac0ba4759",
+    "modules/wasmoon/testsuite/gc_read_forwarding_test.mbt": "447c004c7c014d037061b370f2636423648e1c08a73537594a3384353bd3d2e1",
+    "modules/wasmoon_jit/artifact_producer.mbt": "cf6d0e31eafa4d331dece2f5450909be478104a591f8e6a710b4719f860e5334",
+    "modules/wasmoon_jit/artifact_producer_test.mbt": "8cf6914088c2a727f8b3dd59fdac871b1d9971474eb81b7759de857c6480cee6",
+    "modules/wasmoon_jit/artifact_producer_wbtest.mbt": "92c3b16dad5cedad7ffeb4e1e75ff742d9827761e82bb9083a060ba64ba17340",
+    "modules/wasmoon_jit/pkg.generated.mbti": "48817539cabd5503e4e31b4cbc66af01fec37aa87efa8220ea5de1414f59e5c4",
+    "modules/wasmoon_runtime/native/ffi/gc_access.h": "5a5166df24d4e5fca40a400a1bc8c5b94802260b545e72c217114dc849d5773e",
+    "modules/wasmoon_runtime/native/ffi/gc_heap.c": "c2b46497793a4ad255de070d7b880d8e26abc8a0097bfe31050176fd34ab116d",
+    "modules/wasmoon_runtime/native/ffi/gc_layout.c": "3bc1af1f345249a82b384d1d10d90d5c9b685ae9f3da96ce6e05331d7f79cb53",
+    "modules/wasmoon_runtime/native/ffi/gc_ops.c": "080928066e1b890ec370c9275d0eac14ed1ce4ba5a608d0cb0ce7dede25c24fd",
+    "modules/wasmoon_runtime/native/ffi/jit.c": "619eaa7b2b9a0150acffd24bee0464130311785112c127961b45ce04d9e2f08b",
+    "modules/wasmoon_runtime/native/ffi/jit_internal.h": "629968bdaed55a106bda10288d8f85b8e32ff03c6f458e766eac49a3102ade39",
+    "modules/wasmoon_runtime/native/ffi/trap.c": "3d0ade835940fe3d42796ebffb7a72ad3eb8118db1ee8d554ca0605d190b4f44",
+    "scripts/benchmark_parse_double_gc.py": "a12ff5ce12b00b45b4f8470c7576052f57f2d09892957fcafda126a599bce8be",
+    "scripts/tests/test_benchmark_parse_double_gc.py": "2a8db17b4e26899e3dfcb3629ae52f49959a8f06ee9fcfad2b3c58566df647f6"
+  },
+  "verified_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+  "core_checkout_dirty": false,
+  "final_binary_sha256": "f24a6e50490910cb9f054cc13f57584b73ec17cb675279df5e17e757a2471b9a",
+  "baseline_binary_sha256": "939ec93507081cba02e0001f3675be0fb01a0118631cf588f844267bc433d7dc",
+  "baseline_functional_revision": "55657fb24dfd61937e8d6f1f482df4d23c824631",
+  "final_benchmark": {
+    "1000": {
+      "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+      "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+      "wasm_tools_version": "wasm-tools 1.254.0",
+      "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+      "count": 1000,
+      "samples": [
+        {
+          "engine": "wasmtime",
+          "sample": 0,
+          "wall_seconds": 0.37139737501274794,
+          "user_cpu_seconds": 0.364318,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 0,
+          "wall_seconds": 2.099836667010095,
+          "user_cpu_seconds": 2.07496,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 0,
+          "wall_seconds": 3.714374458009843,
+          "user_cpu_seconds": 3.6802399999999995,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 1,
+          "wall_seconds": 3.6926225420320407,
+          "user_cpu_seconds": 3.6624250000000007,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 1,
+          "wall_seconds": 2.100374292000197,
+          "user_cpu_seconds": 2.074584999999999,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 1,
+          "wall_seconds": 0.37193379196105525,
+          "user_cpu_seconds": 0.36435800000000107,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 2,
+          "wall_seconds": 0.3717974579776637,
+          "user_cpu_seconds": 0.3644280000000002,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 2,
+          "wall_seconds": 2.1019027499714866,
+          "user_cpu_seconds": 2.0738829999999986,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 2,
+          "wall_seconds": 3.705629709002096,
+          "user_cpu_seconds": 3.672733000000001,
+          "result": 1
+        }
+      ],
+      "wasmoon_binary_sha256": {
+        "wasmoon": "f24a6e50490910cb9f054cc13f57584b73ec17cb675279df5e17e757a2471b9a",
+        "baseline": "939ec93507081cba02e0001f3675be0fb01a0118631cf588f844267bc433d7dc"
+      },
+      "probe_sha256": "e6a39b49b7751dfdb2b9130db555a239018d6e2daebd6fabc5913672ca3dc8b8",
+      "median": {
+        "wasmtime": {
+          "wall_seconds": 0.3717974579776637,
+          "user_cpu_seconds": 0.36435800000000107,
+          "wall_ratio": 1.0,
+          "user_cpu_ratio": 1.0
+        },
+        "wasmoon": {
+          "wall_seconds": 2.100374292000197,
+          "user_cpu_seconds": 2.074584999999999,
+          "wall_ratio": 5.6492432826864025,
+          "user_cpu_ratio": 5.6938093852749025
+        },
+        "baseline": {
+          "wall_seconds": 3.705629709002096,
+          "user_cpu_seconds": 3.672733000000001,
+          "wall_ratio": 9.966796785428041,
+          "user_cpu_ratio": 10.080011966252943
+        }
+      }
+    },
+    "20000": {
+      "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+      "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+      "wasm_tools_version": "wasm-tools 1.254.0",
+      "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+      "count": 20000,
+      "samples": [
+        {
+          "engine": "wasmtime",
+          "sample": 0,
+          "wall_seconds": 2.3858348749927245,
+          "user_cpu_seconds": 2.375232,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 0,
+          "wall_seconds": 29.56135470798472,
+          "user_cpu_seconds": 29.466067,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 0,
+          "wall_seconds": 63.92013358301483,
+          "user_cpu_seconds": 63.640435000000004,
+          "result": 1
+        }
+      ],
+      "wasmoon_binary_sha256": {
+        "wasmoon": "f24a6e50490910cb9f054cc13f57584b73ec17cb675279df5e17e757a2471b9a",
+        "baseline": "939ec93507081cba02e0001f3675be0fb01a0118631cf588f844267bc433d7dc"
+      },
+      "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1",
+      "median": {
+        "wasmtime": {
+          "wall_seconds": 2.3858348749927245,
+          "user_cpu_seconds": 2.375232,
+          "wall_ratio": 1.0,
+          "user_cpu_ratio": 1.0
+        },
+        "wasmoon": {
+          "wall_seconds": 29.56135470798472,
+          "user_cpu_seconds": 29.466067,
+          "wall_ratio": 12.39036071516679,
+          "user_cpu_ratio": 12.405553225958558
+        },
+        "baseline": {
+          "wall_seconds": 63.92013358301483,
+          "user_cpu_seconds": 63.640435000000004,
+          "wall_ratio": 26.79151614933525,
+          "user_cpu_ratio": 26.793355343814838
+        }
+      }
+    }
+  },
+  "pre_analysis_budget_benchmark": {
+    "purpose": "three complete cold repeats before conservative analysis-work bounds; not relabeled as the final binary",
+    "results": {
+      "1000": {
+        "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+        "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+        "machine": "arm64",
+        "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+        "wasm_tools_version": "wasm-tools 1.254.0",
+        "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+        "count": 1000,
+        "samples": [
+          {
+            "engine": "wasmtime",
+            "sample": 0,
+            "wall_seconds": 0.36876716697588563,
+            "user_cpu_seconds": 0.361615,
+            "result": 1
+          },
+          {
+            "engine": "wasmoon",
+            "sample": 0,
+            "wall_seconds": 2.11144929099828,
+            "user_cpu_seconds": 2.0825319999999996,
+            "result": 1
+          },
+          {
+            "engine": "baseline",
+            "sample": 0,
+            "wall_seconds": 3.6562785420101136,
+            "user_cpu_seconds": 3.628414,
+            "result": 1
+          },
+          {
+            "engine": "baseline",
+            "sample": 1,
+            "wall_seconds": 3.674884041014593,
+            "user_cpu_seconds": 3.645593,
+            "result": 1
+          },
+          {
+            "engine": "wasmoon",
+            "sample": 1,
+            "wall_seconds": 2.1416630419553258,
+            "user_cpu_seconds": 2.1082660000000004,
+            "result": 1
+          },
+          {
+            "engine": "wasmtime",
+            "sample": 1,
+            "wall_seconds": 0.36976991599658504,
+            "user_cpu_seconds": 0.36070899999999995,
+            "result": 1
+          },
+          {
+            "engine": "wasmtime",
+            "sample": 2,
+            "wall_seconds": 0.3741748330066912,
+            "user_cpu_seconds": 0.3663620000000005,
+            "result": 1
+          },
+          {
+            "engine": "wasmoon",
+            "sample": 2,
+            "wall_seconds": 2.523758083989378,
+            "user_cpu_seconds": 2.342169,
+            "result": 1
+          },
+          {
+            "engine": "baseline",
+            "sample": 2,
+            "wall_seconds": 4.002100499987137,
+            "user_cpu_seconds": 3.965612,
+            "result": 1
+          }
+        ],
+        "wasmoon_binary_sha256": {
+          "wasmoon": "873fd6cad70301d60134881dac029b202a3dd20d9122e7f98f2fe5f3b2ed528b",
+          "baseline": "939ec93507081cba02e0001f3675be0fb01a0118631cf588f844267bc433d7dc"
+        },
+        "probe_sha256": "e6a39b49b7751dfdb2b9130db555a239018d6e2daebd6fabc5913672ca3dc8b8"
+      },
+      "20000": {
+        "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+        "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+        "machine": "arm64",
+        "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+        "wasm_tools_version": "wasm-tools 1.254.0",
+        "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+        "count": 20000,
+        "samples": [
+          {
+            "engine": "wasmtime",
+            "sample": 0,
+            "wall_seconds": 2.3640347920008935,
+            "user_cpu_seconds": 2.3544530000000004,
+            "result": 1
+          },
+          {
+            "engine": "wasmoon",
+            "sample": 0,
+            "wall_seconds": 30.182678917015437,
+            "user_cpu_seconds": 30.094895,
+            "result": 1
+          },
+          {
+            "engine": "baseline",
+            "sample": 0,
+            "wall_seconds": 64.9989361250191,
+            "user_cpu_seconds": 64.703872,
+            "result": 1
+          },
+          {
+            "engine": "baseline",
+            "sample": 1,
+            "wall_seconds": 64.21830075001344,
+            "user_cpu_seconds": 64.07531499999999,
+            "result": 1
+          },
+          {
+            "engine": "wasmoon",
+            "sample": 1,
+            "wall_seconds": 30.099273999978323,
+            "user_cpu_seconds": 29.956558,
+            "result": 1
+          },
+          {
+            "engine": "wasmtime",
+            "sample": 1,
+            "wall_seconds": 2.350932291999925,
+            "user_cpu_seconds": 2.3419750000000192,
+            "result": 1
+          },
+          {
+            "engine": "wasmtime",
+            "sample": 2,
+            "wall_seconds": 2.3673175839940086,
+            "user_cpu_seconds": 2.351832999999999,
+            "result": 1
+          },
+          {
+            "engine": "wasmoon",
+            "sample": 2,
+            "wall_seconds": 30.003451749973465,
+            "user_cpu_seconds": 29.906184999999994,
+            "result": 1
+          },
+          {
+            "engine": "baseline",
+            "sample": 2,
+            "wall_seconds": 63.713224708044436,
+            "user_cpu_seconds": 63.56904099999997,
+            "result": 1
+          }
+        ],
+        "wasmoon_binary_sha256": {
+          "wasmoon": "873fd6cad70301d60134881dac029b202a3dd20d9122e7f98f2fe5f3b2ed528b",
+          "baseline": "939ec93507081cba02e0001f3675be0fb01a0118631cf588f844267bc433d7dc"
+        },
+        "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1"
+      }
+    }
+  },
+  "guest_artifact_comparison_1000": {
+    "identical": true,
+    "sha256": [
+      "fb3318a5ad28d97e60c795352391d0338a4d366a7fe17e9f38ceadfdac3fc9ea"
+    ]
+  },
+  "diagnostic_controls": {
+    "fixed-width": [
+      {
+        "engine": "fixed-width",
+        "count": 1000,
+        "wall": 3.7174037499935366,
+        "user_cpu": 3.6776450000000125,
+        "system_cpu": 0.028954999999999842,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "fixed-width",
+        "count": 1000,
+        "wall": 3.758860750007443,
+        "user_cpu": 3.716184999999996,
+        "system_cpu": 0.02833000000000041,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "fixed-width",
+        "count": 1000,
+        "wall": 3.6784444579971023,
+        "user_cpu": 3.634545000000003,
+        "system_cpu": 0.029007000000000005,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    ],
+    "tls-slot": [
+      {
+        "engine": "tls-slot",
+        "count": 1000,
+        "wall": 3.727936999988742,
+        "user_cpu": 3.6946330000000103,
+        "system_cpu": 0.02450300000000105,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "tls-slot",
+        "count": 1000,
+        "wall": 3.742907917010598,
+        "user_cpu": 3.70989000000003,
+        "system_cpu": 0.023861999999999384,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "tls-slot",
+        "count": 1000,
+        "wall": 3.8659781249589287,
+        "user_cpu": 3.832617999999968,
+        "system_cpu": 0.024209000000000813,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    ],
+    "inline-access": [
+      {
+        "engine": "inline-access",
+        "count": 1000,
+        "wall": 2.660262541961856,
+        "user_cpu": 2.6228830000000016,
+        "system_cpu": 0.028466999999999132,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "inline-access",
+        "count": 1000,
+        "wall": 2.631201540993061,
+        "user_cpu": 2.5974180000000047,
+        "system_cpu": 0.025952000000000197,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "inline-access",
+        "count": 1000,
+        "wall": 2.6033916249871254,
+        "user_cpu": 2.5676169999999843,
+        "system_cpu": 0.02758400000000094,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    ],
+    "gc-cse": [
+      {
+        "engine": "gc-cse",
+        "count": 1000,
+        "wall": 3.3851464170147665,
+        "user_cpu": 3.341588999999999,
+        "system_cpu": 0.027485000000002202,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "gc-cse",
+        "count": 1000,
+        "wall": 3.466231875005178,
+        "user_cpu": 3.41537900000003,
+        "system_cpu": 0.02905799999999914,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "gc-cse",
+        "count": 1000,
+        "wall": 3.316751957987435,
+        "user_cpu": 3.288346000000047,
+        "system_cpu": 0.02288899999999927,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    ],
+    "combined": [
+      {
+        "engine": "combined",
+        "count": 1000,
+        "wall": 2.2164237079559825,
+        "user_cpu": 2.1891910000000507,
+        "system_cpu": 0.021650999999998533,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "combined",
+        "count": 1000,
+        "wall": 2.164005083963275,
+        "user_cpu": 2.136702000000014,
+        "system_cpu": 0.0206799999999987,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "combined",
+        "count": 1000,
+        "wall": 2.1499222090351395,
+        "user_cpu": 2.123256999999967,
+        "system_cpu": 0.020373999999996784,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    ],
+    "combined-inline": [
+      {
+        "engine": "combined-inline-2",
+        "count": 1000,
+        "wall": 2.4684760000091046,
+        "user_cpu": 2.437866999999869,
+        "system_cpu": 0.024463000000004342,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "combined-inline-2",
+        "count": 1000,
+        "wall": 2.4641669589909725,
+        "user_cpu": 2.4357860000000073,
+        "system_cpu": 0.023378999999998484,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "combined-inline-2",
+        "count": 1000,
+        "wall": 2.47356920898892,
+        "user_cpu": 2.445899000000054,
+        "system_cpu": 0.022618999999998834,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    ]
+  },
+  "rejected_direct_jit_load_full": {
+    "engine": "combined-inline-2",
+    "count": 20000,
+    "wall": 27.37899150000885,
+    "user_cpu": 27.286910000000034,
+    "system_cpu": 0.06698400000000504,
+    "stdout": "1\n",
+    "stderr": ""
+  },
+  "diagnostic_phase_metrics": {
+    "baseline": {
+      "schema_version": 1,
+      "command_us": "4259331",
+      "phases_us": {
+        "host_setup_and_preloads": "3691",
+        "read_and_parse": "3758",
+        "validate": "7255",
+        "instantiate_including_start": "11868",
+        "jit_plan_and_cache_lookup": "2562",
+        "compile": "543465",
+        "artifact_verify": "16950",
+        "cache_write_and_report": "5816",
+        "jit_load_and_prepare": "335431",
+        "invoke_including_hostcalls": "3327338",
+        "finish_or_early_return": "1197"
+      }
+    },
+    "inline-access": {
+      "schema_version": 1,
+      "command_us": "2654153",
+      "phases_us": {
+        "host_setup_and_preloads": "144",
+        "read_and_parse": "3684",
+        "validate": "10221",
+        "instantiate_including_start": "11656",
+        "jit_plan_and_cache_lookup": "1927",
+        "compile": "541733",
+        "artifact_verify": "17024",
+        "cache_write_and_report": "5115",
+        "jit_load_and_prepare": "334921",
+        "invoke_including_hostcalls": "1726663",
+        "finish_or_early_return": "1065"
+      }
+    },
+    "leaf-struct": {
+      "schema_version": 1,
+      "command_us": "3544472",
+      "phases_us": {
+        "host_setup_and_preloads": "140",
+        "read_and_parse": "3570",
+        "validate": "7333",
+        "instantiate_including_start": "10740",
+        "jit_plan_and_cache_lookup": "1928",
+        "compile": "1243651",
+        "artifact_verify": "20648",
+        "cache_write_and_report": "10339",
+        "jit_load_and_prepare": "367483",
+        "invoke_including_hostcalls": "1877519",
+        "finish_or_early_return": "1121"
+      }
+    },
+    "repair": {
+      "schema_version": 1,
+      "command_us": "2185513",
+      "phases_us": {
+        "host_setup_and_preloads": "207",
+        "read_and_parse": "6416",
+        "validate": "10945",
+        "instantiate_including_start": "13486",
+        "jit_plan_and_cache_lookup": "2292",
+        "compile": "471625",
+        "artifact_verify": "15313",
+        "cache_write_and_report": "4914",
+        "jit_load_and_prepare": "249182",
+        "invoke_including_hostcalls": "1410194",
+        "finish_or_early_return": "939"
+      }
+    },
+    "combined-inline-2": {
+      "schema_version": 1,
+      "command_us": "2432992",
+      "phases_us": {
+        "host_setup_and_preloads": "85",
+        "read_and_parse": "3070",
+        "validate": "6725",
+        "instantiate_including_start": "9395",
+        "jit_plan_and_cache_lookup": "1744",
+        "compile": "893947",
+        "artifact_verify": "14089",
+        "cache_write_and_report": "7461",
+        "jit_load_and_prepare": "237316",
+        "invoke_including_hostcalls": "1258177",
+        "finish_or_early_return": "983"
+      }
+    }
+  },
+  "profile": {
+    "method": "Apple sample, 1ms interval; separate profiled runs excluded from benchmark timings; flat counts are not hardware counters",
+    "baseline_duration_seconds": 5,
+    "repair_duration_seconds": 3,
+    "baseline_top": "__sigwait  (in libsystem_kernel.dylib)        4224\n        _platform_memmove  (in libsystem_platform.dylib)        821\n        jit_current_trap_activation  (in wasmoon-baseline)        683\n        gc_heap_struct_get  (in wasmoon-baseline)        498\n        _tlv_get_addr  (in libdyld.dylib)        319\n        gc_heap_struct_set_wide  (in wasmoon-baseline)        316\n        gc_struct_get_impl  (in wasmoon-baseline)        316\n        get_current_jit_context  (in wasmoon-baseline)        197\n        gc_layout_read  (in wasmoon-baseline)        148\n        gc_struct_set_impl  (in wasmoon-baseline)        123\n        ctx_gc_push_root_scope_internal  (in wasmoon-baseline)        86\n        DYLD-STUB$$__memcpy_chk  (in wasmoon-baseline)        83\n        __memcpy_chk  (in libsystem_c.dylib)        71\n        gc_heap_array_len  (in wasmoon-baseline)        59\n        gc_heap_array_set_wide  (in wasmoon-baseline)        55\n        gc_layout_write  (in wasmoon-baseline)        46\n        gc_array_set_impl  (in wasmoon-baseline)        36\n        gc_heap_array_get  (in wasmoon-baseline)        34\n        DYLD-STUB$$memcpy  (in wasmoon-baseline)        33\n        DYLD-STUB$$mkdtempat_np  (in libsystem_c.dylib)        31\n        wasmoon_jit_gc_pop_root_scope_or_trap  (in wasmoon-baseline)        30\n        ctx_gc_pop_root_scope_internal  (in wasmoon-baseline)        26\n        gc_array_get_impl  (in wasmoon-baseline)        25\n        wasmoon_jit_gc_push_root_scope_or_trap  (in wasmoon-baseline)        21\n        gc_array_len_impl  (in wasmoon-baseline)        15\n        gc_heap_alloc_typed  (in wasmoon-baseline)        12\n        _xzm_free  (in libsystem_malloc.dylib)        11\n        gc_select_alloc_roots  (in wasmoon-baseline)        9\n        mach_absolute_time  (in libsystem_kernel.dylib)        8\n        ???  (in <unknown binary>)  [0x10350f390]        7\n        _platform_memset  (in libsystem_platform.dylib)        7\n        gc_alloc_struct_slow  (in wasmoon-baseline)        7\n        ???  (in <unknown binary>)  [0x10353b1d0]        5\n        gc_heap_admit  (in wasmoon-baseline)        5\n        wasmoon_gc_allocation_attempt  (in wasmoon-baseline)        5",
+    "repair_top": "__sigwait  (in libsystem_kernel.dylib)        2292\n        gc_struct_get_impl  (in wasmoon-repair)        769\n        gc_struct_set_impl  (in wasmoon-repair)        447\n        _platform_memmove  (in libsystem_platform.dylib)        276\n        _tlv_get_addr  (in libdyld.dylib)        162\n        gc_array_get_impl  (in wasmoon-repair)        110\n        gc_array_set_impl  (in wasmoon-repair)        92\n        ctx_gc_push_root_scope_internal  (in wasmoon-repair)        69\n        wasmoon_jit_gc_pop_root_scope_or_trap  (in wasmoon-repair)        59\n        DYLD-STUB$$memcpy  (in wasmoon-repair)        43\n        gc_array_len_impl  (in wasmoon-repair)        33\n        wasmoon_jit_gc_push_root_scope_or_trap  (in wasmoon-repair)        31\n        gc_heap_alloc_typed  (in wasmoon-repair)        30\n        ctx_gc_pop_root_scope_internal  (in wasmoon-repair)        28\n        gc_heap_sweep  (in wasmoon-repair)        16\n        mach_absolute_time  (in libsystem_kernel.dylib)        16\n        wasmoon_gc_collection_seeds  (in wasmoon-repair)        12\n        _platform_memset  (in libsystem_platform.dylib)        9\n        gc_alloc_struct_slow  (in wasmoon-repair)        8\n        ???  (in <unknown binary>)  [0x107889a10]        6\n        ???  (in <unknown binary>)  [0x1078c2454]        6\n        gc_select_alloc_roots  (in wasmoon-repair)        6\n        _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib)        5"
+  },
+  "validation": {
+    "native": {
+      "tests": 2974,
+      "passed": 2974,
+      "failed": 0,
+      "flags": [
+        "VCODE_REGALLOC_VALIDATION=1",
+        "WASMOON_GC_VERIFY=1",
+        "WASMOON_GC_ASSERT_BARRIER=1"
+      ]
+    },
+    "wasm": {
+      "tests": 1402,
+      "passed": 1402,
+      "failed": 0
+    },
+    "python": {
+      "tests": 178,
+      "existing_platform_skips": 54
+    },
+    "strict_native": true,
+    "strict_wasm": true,
+    "info_fmt": true,
+    "module_boundaries": true,
+    "generated_msvc_bridges": true,
+    "fresh_sanitizer": {
+      "version": "0.17.1",
+      "source_revision": "55657fb24dfd61937e8d6f1f482df4d23c824631",
+      "source_dirty": true,
+      "build_reuse": "fresh",
+      "binary_sha256": "77e3c0a0e8b30ea28cab46eb65557e1cae276289f4f2a485fa5a069087246572",
+      "tests": "passed",
+      "event_loop": "passed",
+      "asan_probe": "detected",
+      "native_asan_probe": "detected",
+      "lsan_probe": "not_applicable",
+      "leak_detection": false,
+      "instrumentation": [
+        "address",
+        "undefined"
+      ],
+      "allocator": "system",
+      "exclusions": [
+        "MoonBit runtime objects",
+        "JIT machine code"
+      ]
+    },
+    "core_native_final": {
+      "interp": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "skipped": 0
+      },
+      "jit": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "core_actual_wasm": {
+      "files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "unsupported": 0
+    },
+    "component_interpreter": {
+      "stable-0.2": {
+        "files": 23,
+        "commands": 845,
+        "failed": 0
+      },
+      "async-0.3": {
+        "files": 24,
+        "commands": 153,
+        "failed": 0
+      },
+      "future-gated": {
+        "files": 12,
+        "commands": 387,
+        "failed": 0
+      }
+    },
+    "component_jit_final": {
+      "stable-0.2": {
+        "files": 23,
+        "commands": 845,
+        "failed": 0,
+        "skipped": 0
+      },
+      "async-0.3": {
+        "files": 24,
+        "commands": 153,
+        "failed": 0,
+        "skipped": 0
+      },
+      "future-gated": {
+        "files": 12,
+        "commands": 387,
+        "failed": 0,
+        "skipped": 0
+      }
+    }
+  },
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "pr": null,
+    "linux_windows_ci": "not_run",
+    "linux_lsan": "not_run"
+  },
+  "remaining_issue": "Final full-case ratio is about 12.4x Wasmtime. Runtime access, layout lookup, TLS and root-copy costs remain; this is a measured partial throughput repair, not engine parity.",
+  "scratch_policy": "Owned OS TemporaryDirectory workspaces; no scratch sources/logs/reports/caches under _build or target. Cleanup verified at handoff."
+}

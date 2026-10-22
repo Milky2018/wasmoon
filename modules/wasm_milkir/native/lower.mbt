@@ -11,12 +11,17 @@ const GC_SLOT_BYTES : Int32 = 16
 /// Symbols remain unresolved and target-neutral. Address resolution belongs to
 /// the embedding product after target emission.
 struct Environment {
+  gc_heap_field : @native_types.EnvironmentField?
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
 }
 
 ///|
+/// An explicit heap field selects the word-sized explicit-heap helper ABI.
+/// It is mutable: each access must observe changes made by host callbacks.
+/// Helpers resolve the actual object layout once. Omitting the heap field
+/// retains the original helper ABI.
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
@@ -24,8 +29,9 @@ pub fn Environment::new(
   _table_base_field : (Int32) -> @native_types.EnvironmentField,
   _table_size_field : (Int32) -> @native_types.EnvironmentField,
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
+  gc_heap_field~ : @native_types.EnvironmentField? = None,
 ) -> Environment {
-  { function_symbol, memory_base_field, runtime_symbol, }
+  { function_symbol, memory_base_field, runtime_symbol, gc_heap_field, }
 }
 
 ///|
@@ -289,6 +295,9 @@ fn finish_runtime_call(
   parameter_types : Array[@native_types.ValueType],
   behavior : @native_types.CallBehavior,
 ) -> Unit {
+  let helper = explicit_heap_helper(
+    context, environment, helper, operands, parameter_types,
+  )
   context.finish_call_without_roots(
     @native_types.NativeCall::new(
       External((environment.runtime_symbol)(helper)),
@@ -459,6 +468,9 @@ fn emit_runtime_word_call(
   parameter_types : Array[@native_types.ValueType],
   memory : @native_types.MemoryEffect,
 ) -> @lowering.Value {
+  let helper = explicit_heap_helper(
+    context, environment, helper, operands, parameter_types,
+  )
   context.emit_call_without_roots(
     @native_types.NativeCall::new(
       External((environment.runtime_symbol)(helper)),
@@ -1592,4 +1604,41 @@ pub fn lower_to_sink(
     verify_input~,
     on_event~,
   )
+}
+
+///|
+fn explicit_heap_helper(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  helper : @wasm_milkir.WasmRuntimeHelper,
+  operands : Array[@lowering.Value],
+  parameter_types : Array[@native_types.ValueType],
+) -> @wasm_milkir.WasmRuntimeHelper {
+  let field = match environment.gc_heap_field {
+    Some(field) => field
+    None => return helper
+  }
+  let next : @wasm_milkir.WasmRuntimeHelper = match helper {
+    GcStructGet => GcStructGetHeap
+    GcStructSet => GcStructSetHeap
+    GcArrayGet => GcArrayGetHeap
+    GcArraySet => GcArraySetHeap
+    GcArrayLen => GcArrayLenHeap
+    _ => return helper
+  }
+  let heap = context.emit(
+      EnvironmentField(field, Mutable),
+      context.environment(),
+      [Ptr64],
+    )[0]
+  let reference = operands[0]
+  if helper is GcArrayLen {
+    operands.push(reference)
+    parameter_types.push(GcRef64)
+  }
+  operands[0] = heap
+  operands[1] = reference
+  parameter_types[0] = Ptr64
+  parameter_types[1] = GcRef64
+  next
 }

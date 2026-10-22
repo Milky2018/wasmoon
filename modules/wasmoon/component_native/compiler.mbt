@@ -256,6 +256,11 @@ fn compile_component_artifact(
   let validation_context = @wasm_frontend.wasm_validation_context(
     translation_context,
   )
+  let scalar_callees = if opt_level >= 2 {
+    @wasm_frontend.scalar_callees(translation_context, module_)
+  } else {
+    Map([])
+  }
   let imports : Array[@artifact.ImportIdentity] = []
   let mut imported_function_index = 0
   for import_ in module_.imports {
@@ -289,11 +294,17 @@ fn compile_component_artifact(
       code.locals,
       code.body,
     )
-    @optimize.optimize_with_level(
+    let _ = @wasm_optimize.optimize_with_level(
       milkir,
+      validation_context,
       @optimize.OptLevel::from_int(opt_level),
-    )
-    |> ignore
+      scalar_callees~,
+    ) catch {
+      error =>
+        raise NativeCompilationFailed(
+          "core function \{function_index} optimization failed: \{error}",
+        )
+    }
     let compiled = native_compiler.compile_wasm_body_artifact_function(
       milkir,
       validation_context,

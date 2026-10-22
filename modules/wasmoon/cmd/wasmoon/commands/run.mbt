@@ -1879,6 +1879,11 @@ fn compile_validated_module_to_jit(
   let wasm_validation_context = @wasm_frontend.wasm_validation_context(
     translation_ctx,
   )
+  let scalar_callees = if normalize_opt_level(opt_level) >= 2 {
+    @wasm_frontend.scalar_callees(translation_ctx, mod_)
+  } else {
+    Map([])
+  }
   let mut compiled_count = 0
   let manifest = build_jit_artifact_manifest(
     mod_,
@@ -2007,11 +2012,29 @@ fn compile_validated_module_to_jit(
       }
       @perf.install_milkir_metrics_sink()
     }
-    @optimize.optimize_with_level(
+    let _ = @wasm_optimize.optimize_with_level(
       ir_func,
+      wasm_validation_context,
       @optimize.OptLevel::from_int(normalized_opt_level),
-    )
-    |> ignore
+      scalar_callees~,
+    ) catch {
+      err => {
+        if perf_on {
+          @perf.clear_milkir_metrics_sink()
+        }
+        emit_compile_progress(
+          on_progress,
+          Failed,
+          progress_start,
+          total_compile_funcs,
+          compiled_count,
+          func_idx=Some(func_idx),
+          func_name=Some(func_name),
+          message=Some(err.to_string()),
+        )
+        return None
+      }
+    }
     if perf_on {
       @perf.clear_milkir_metrics_sink()
     }

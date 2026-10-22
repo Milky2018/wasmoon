@@ -7,6 +7,7 @@
  */
 
 #include "gc_heap.h"
+#include "gc_access.h"
 #include "native_alloc.h"
 #include "ffi_callbacks.h"
 #include <moonbit.h>
@@ -26,7 +27,7 @@
 #define ALIGN_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
 
 // Optional runtime verification mode. Set WASMOON_GC_VERIFY=1 to enable.
-static int gc_verify_env_cached = -1;
+int gc_verify_env_cached = -1;
 
 // Keep these in sync with types/types.mbt.
 #define GC_EXTERNREF_TAG 0x4000000000000000LL
@@ -672,18 +673,7 @@ int64_t gc_heap_struct_get(GcHeap* heap, int32_t gc_ref, int32_t field_idx) {
 }
 
 GcSlot gc_heap_struct_get_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx) {
-    GcSlot empty = {0, 0};
-    uint8_t* data = get_object_data(heap, gc_ref);
-    if (!data) {
-        return empty;  // Invalid reference
-    }
-
-    GcHeader *header = (GcHeader *)(data - GC_HEADER_SIZE);
-    if (field_idx < 0 || (uint32_t)field_idx >= (uint32_t)header->reserved) return empty;
-    GcTypeLayout *layout = gc_object_layout(heap, header);
-    if (layout) return gc_layout_read(data, &layout->fields[field_idx]);
-    GcSlot* fields = (GcSlot*)data;
-    return fields[field_idx];
+    return gc_access_struct_get(heap, gc_ref, field_idx);
 }
 
 void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t value) {
@@ -693,22 +683,7 @@ void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t
 
 void gc_heap_struct_set_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx,
                              GcSlot value) {
-    uint8_t* data = get_object_data(heap, gc_ref);
-    if (!data) {
-        return;  // Invalid reference
-    }
-
-    GcHeader *header = (GcHeader *)(data - GC_HEADER_SIZE);
-    if (field_idx < 0 || (uint32_t)field_idx >= (uint32_t)header->reserved) return;
-    GcTypeLayout *layout = gc_object_layout(heap, header);
-    if (layout) {
-        if (layout->fields[field_idx].reference) gc_heap_write_barrier(heap, gc_ref, value.lo);
-        gc_layout_write(data, &layout->fields[field_idx], value);
-    } else {
-        gc_heap_write_barrier(heap, gc_ref, value.lo);
-        ((GcSlot *)data)[field_idx] = value;
-    }
-    gc_heap_maybe_verify(heap, "struct_set");
+    gc_access_struct_set(heap, gc_ref, field_idx, value);
 }
 
 // ============ Array Operations ============
@@ -773,13 +748,7 @@ int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
 }
 
 int32_t gc_heap_array_len(GcHeap* heap, int32_t gc_ref) {
-    uint8_t* data = get_object_data(heap, gc_ref);
-    if (!data) {
-        return 0;  // Invalid reference
-    }
-
-    int32_t* len_ptr = (int32_t*)data;
-    return len_ptr[0];
+    return gc_access_array_len(heap, gc_ref);
 }
 
 int64_t gc_heap_array_get(GcHeap* heap, int32_t gc_ref, int32_t idx) {
@@ -787,20 +756,7 @@ int64_t gc_heap_array_get(GcHeap* heap, int32_t gc_ref, int32_t idx) {
 }
 
 GcSlot gc_heap_array_get_wide(GcHeap* heap, int32_t gc_ref, int32_t idx) {
-    GcSlot empty = {0, 0};
-    uint8_t* data = get_object_data(heap, gc_ref);
-    if (!data) {
-        return empty;  // Invalid reference
-    }
-
-    int32_t len = ((int32_t*)data)[0];
-    if (idx < 0 || idx >= len) {
-        return empty;  // Out of bounds
-    }
-
-    GcTypeLayout *layout = gc_object_layout(heap, (GcHeader *)(data - GC_HEADER_SIZE));
-    if (layout) return gc_layout_read(data + GC_ARRAY_DATA_OFFSET + (size_t)idx * layout->size, &layout->fields[0]);
-    return ((GcSlot *)(data + GC_ARRAY_DATA_OFFSET))[idx];
+    return gc_access_array_get(heap, gc_ref, idx);
 }
 
 void gc_heap_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx, int64_t value) {
@@ -810,25 +766,7 @@ void gc_heap_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx, int64_t value)
 
 void gc_heap_array_set_wide(GcHeap* heap, int32_t gc_ref, int32_t idx,
                             GcSlot value) {
-    uint8_t* data = get_object_data(heap, gc_ref);
-    if (!data) {
-        return;  // Invalid reference
-    }
-
-    int32_t len = ((int32_t*)data)[0];
-    if (idx < 0 || idx >= len) {
-        return;  // Out of bounds
-    }
-
-    GcTypeLayout *layout = gc_object_layout(heap, (GcHeader *)(data - GC_HEADER_SIZE));
-    if (layout) {
-        if (layout->fields[0].reference) gc_heap_write_barrier(heap, gc_ref, value.lo);
-        gc_layout_write(data + GC_ARRAY_DATA_OFFSET + (size_t)idx * layout->size, &layout->fields[0], value);
-    } else {
-        gc_heap_write_barrier(heap, gc_ref, value.lo);
-        ((GcSlot *)(data + GC_ARRAY_DATA_OFFSET))[idx] = value;
-    }
-    gc_heap_maybe_verify(heap, "array_set");
+    gc_access_array_set(heap, gc_ref, idx, value);
 }
 
 void gc_heap_array_fill(GcHeap* heap, int32_t gc_ref, int32_t offset,

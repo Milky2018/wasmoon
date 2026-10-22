@@ -32,6 +32,11 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     "wasmoon.runtime.gc.struct_new",
     c_jit_get_gc_struct_new_ptr(),
   )
+  add(GcStructGetHeap, c_jit_get_gc_struct_get_heap_ptr())
+  add(GcStructSetHeap, c_jit_get_gc_struct_set_heap_ptr())
+  add(GcArrayGetHeap, c_jit_get_gc_array_get_heap_ptr())
+  add(GcArraySetHeap, c_jit_get_gc_array_set_heap_ptr())
+  add(GcArrayLenHeap, c_jit_get_gc_array_len_heap_ptr())
   add(GcStructGet, c_jit_get_gc_struct_get_ptr())
   add(GcStructSet, c_jit_get_gc_struct_set_ptr())
   add(GcStructGetV128, c_jit_get_gc_struct_get_v128_ptr())

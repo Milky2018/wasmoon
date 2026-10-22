@@ -49,6 +49,16 @@ pub fn wasm_validation_context(
 }
 
 ///|
+/// Integer callee bodies for bounded O2/O3 inlining. Call only after module
+/// validation, with the context constructed from this exact module.
+pub fn scalar_callees(
+  ctx : TranslationContext,
+  module_ : @types.Module,
+) -> Map[Int32, @milkir.Function] {
+  ctx.scalar_callees(module_)
+}
+
+///|
 /// Translate one decoded function body through the production Wasm frontend.
 pub fn translate_function_body(
   ctx : TranslationContext,

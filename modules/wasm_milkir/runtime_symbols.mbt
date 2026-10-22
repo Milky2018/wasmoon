@@ -26,6 +26,13 @@ pub(all) enum WasmRuntimeHelper {
   AtomicNotify
   GcRefTest
   GcRefCast
+  // Explicit heap, reference, field/index and optional value.
+  // Array length takes only the heap and reference.
+  GcStructGetHeap
+  GcStructSetHeap
+  GcArrayGetHeap
+  GcArraySetHeap
+  GcArrayLenHeap
   GcStructGet
   GcStructSet
   GcArrayGet
@@ -95,6 +102,11 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     AtomicNotify => "atomic_notify"
     GcRefTest => "gc.ref_test"
     GcRefCast => "gc.ref_cast"
+    GcStructGetHeap => "gc.struct_get_heap"
+    GcStructSetHeap => "gc.struct_set_heap"
+    GcArrayGetHeap => "gc.array_get_heap"
+    GcArraySetHeap => "gc.array_set_heap"
+    GcArrayLenHeap => "gc.array_len_heap"
     GcStructGet => "gc.struct_get"
     GcStructSet => "gc.struct_set"
     GcArrayGet => "gc.array_get"

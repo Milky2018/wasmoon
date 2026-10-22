@@ -133,6 +133,11 @@ fn run_explore_with_compiler(
   let wasm_validation_context = @wasm_frontend.wasm_validation_context(
     translation_context,
   )
+  let scalar_callees = if normalize_opt_level(opt_level) >= 2 {
+    @wasm_frontend.scalar_callees(translation_context, mod_)
+  } else {
+    Map([])
+  }
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
@@ -195,11 +200,17 @@ fn run_explore_with_compiler(
       code.body,
     )
     let ir_text = milk_result.print()
-    @optimize.optimize_with_level(
+    let _ = @wasm_optimize.optimize_with_level(
       milk_result,
+      wasm_validation_context,
       @optimize.OptLevel::from_int(normalize_opt_level(opt_level)),
-    )
-    |> ignore
+      scalar_callees~,
+    ) catch {
+      error => {
+        @logger.error("optimizing Wasm function: \{error}")
+        return 1
+      }
+    }
     let ir_optimized = milk_result.print()
     let diagnostics = compile(fn() raise {
       compiler.diagnose_wasm_body(

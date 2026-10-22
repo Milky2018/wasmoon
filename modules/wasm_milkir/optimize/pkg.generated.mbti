@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_milkir/optimize"
+
+import {
+  "Milky2018/milkir",
+  "Milky2018/wasm_milkir",
+}
+
+// Values
+pub fn optimize_with_level(@milkir.Function, @wasm_milkir.WasmValidationContext, @Milky2018/milkir/optimize.OptLevel, scalar_callees? : Map[Int32, @milkir.Function]) -> Bool raise @milkir.VerifyError
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

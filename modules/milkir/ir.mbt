@@ -1274,6 +1274,19 @@ fn Function::add_block_param(
 }
 
 ///|
+/// Append a fresh SSA block parameter. The transformation must also append
+/// its arguments on every incoming edge before verifying the function.
+pub fn Function::append_block_param(
+  self : Function,
+  block : Block,
+  ty : Type,
+) -> Value {
+  let value = self.new_value(ty)
+  self.add_block_param(block, value, ty)
+  value
+}
+
+///|
 /// Keep and reorder a block's existing parameters while updating their DFG
 /// definitions atomically with the layout mutation.
 pub fn Function::retain_block_params(

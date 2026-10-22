@@ -801,3 +801,18 @@ extern "c" fn c_jit_get_trap_frame_count() -> Int32 = "wasmoon_jit_get_trap_fram
 
 ///|
 extern "c" fn c_jit_get_trap_frame_pc(index : Int32) -> Int64 = "wasmoon_jit_get_trap_frame_pc"
+
+///|
+extern "c" fn c_jit_get_gc_struct_get_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_get_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_struct_set_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_set_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_get_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_get_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_set_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_set_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_len_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_len_heap_ptr"

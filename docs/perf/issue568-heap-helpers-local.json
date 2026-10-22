@@ -1,0 +1,741 @@
+{
+  "issue": "https://github.com/Milky2018/wasmoon/issues/568",
+  "stage": "explicit heap word helpers with one checked object resolution; actual layouts retained",
+  "source": {
+    "revision": "55657fb24dfd61937e8d6f1f482df4d23c824631",
+    "dirty": true,
+    "branch": "milky/fix-parse-double-gc-access",
+    "functional_manifest": {
+      "files": 810,
+      "sha256": "5a54694de4a7675491e6a36c74450494269bc4785f9bbbd02c7db91b2812cac5"
+    },
+    "manifest_scope": "Sorted compact JSON map of module-relative SHA256 values for .mbt/.c/.h/.S/.asm/.pkg/.mod/.schema/.py, excluding tests, build outputs and dependencies. The isolated build sources match every file.",
+    "codegen_revision": "direct-vcode-14"
+  },
+  "environment": {
+    "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "Apple M3 Max",
+    "moon": "moon 0.1.20261020 (2284bd2 2026-10-20)\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+    "wasmtime": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+    "wasm_tools": "wasm-tools 1.254.0"
+  },
+  "scope": "Local macOS ARM64 evidence from an uncommitted source tree, not publication or CI acceptance; no x64 runtime or Linux LSan execution.",
+  "fixture": {
+    "core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+    "original_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+    "probe_sha256": {
+      "1000": "e6a39b49b7751dfdb2b9130db555a239018d6e2daebd6fabc5913672ca3dc8b8",
+      "20000": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1"
+    },
+    "expected_result": 1,
+    "full_count": 20000,
+    "assertions": "Original seed, workload, start and property checks remain enabled; imports become same-signature traps."
+  },
+  "baseline": "Fresh current-toolchain build of the preceding local-scalar repair, rebuilt at the start of this turn; prior source receipt: issue568-local-scalars-local.json.",
+  "selected_source_cold_short": {
+    "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+    "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+    "wasm_tools_version": "wasm-tools 1.254.0",
+    "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+    "count": 1000,
+    "samples": [
+      {
+        "engine": "wasmtime",
+        "sample": 0,
+        "wall_seconds": 0.37790675001451746,
+        "user_cpu_seconds": 0.370359,
+        "result": 1
+      },
+      {
+        "engine": "wasmoon",
+        "sample": 0,
+        "wall_seconds": 1.1411052499897778,
+        "user_cpu_seconds": 1.116585,
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 0,
+        "wall_seconds": 1.1893227500258945,
+        "user_cpu_seconds": 1.1651129999999998,
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 1,
+        "wall_seconds": 1.1966998749994673,
+        "user_cpu_seconds": 1.1701650000000003,
+        "result": 1
+      },
+      {
+        "engine": "wasmoon",
+        "sample": 1,
+        "wall_seconds": 1.1201549579855055,
+        "user_cpu_seconds": 1.0960100000000002,
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 1,
+        "wall_seconds": 0.38437466602772474,
+        "user_cpu_seconds": 0.3742749999999999,
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 2,
+        "wall_seconds": 0.3769467080128379,
+        "user_cpu_seconds": 0.3693489999999997,
+        "result": 1
+      },
+      {
+        "engine": "wasmoon",
+        "sample": 2,
+        "wall_seconds": 1.1144972500042059,
+        "user_cpu_seconds": 1.0913279999999999,
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 2,
+        "wall_seconds": 1.2114500000025146,
+        "user_cpu_seconds": 1.184610000000001,
+        "result": 1
+      }
+    ],
+    "wasmoon_binary_sha256": {
+      "wasmoon": "9ac607ba1501a3f3f1b98e53256c8666f35ab6d9a3c1581dcc202f0d177afb3c",
+      "baseline": "57dc0b192d1ccc1f65a32694cd667c27d64e199f9847c1e9d98157dcdea17ef9"
+    },
+    "probe_sha256": "e6a39b49b7751dfdb2b9130db555a239018d6e2daebd6fabc5913672ca3dc8b8",
+    "median": {
+      "wasmtime": {
+        "wall_seconds": 0.37790675001451746,
+        "user_cpu_seconds": 0.370359,
+        "wall_ratio": 1.0,
+        "user_cpu_ratio": 1.0
+      },
+      "wasmoon": {
+        "wall_seconds": 1.1201549579855055,
+        "user_cpu_seconds": 1.0960100000000002,
+        "wall_ratio": 2.964104128710255,
+        "user_cpu_ratio": 2.959317851058028
+      },
+      "baseline": {
+        "wall_seconds": 1.1966998749994673,
+        "user_cpu_seconds": 1.1701650000000003,
+        "wall_ratio": 3.166653876792345,
+        "user_cpu_ratio": 3.1595424979546882
+      }
+    }
+  },
+  "selected_source_cold_full": {
+    "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+    "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+    "wasm_tools_version": "wasm-tools 1.254.0",
+    "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+    "count": 20000,
+    "samples": [
+      {
+        "engine": "wasmtime",
+        "sample": 0,
+        "wall_seconds": 2.4042055000318214,
+        "user_cpu_seconds": 2.394363,
+        "result": 1
+      },
+      {
+        "engine": "wasmoon",
+        "sample": 0,
+        "wall_seconds": 7.348416791006457,
+        "user_cpu_seconds": 7.2988990000000005,
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 0,
+        "wall_seconds": 9.545084208017215,
+        "user_cpu_seconds": 9.489322999999999,
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 1,
+        "wall_seconds": 9.530019792029634,
+        "user_cpu_seconds": 9.475649,
+        "result": 1
+      },
+      {
+        "engine": "wasmoon",
+        "sample": 1,
+        "wall_seconds": 7.402778165997006,
+        "user_cpu_seconds": 7.345532000000002,
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 1,
+        "wall_seconds": 2.4268638340290636,
+        "user_cpu_seconds": 2.4162259999999947,
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 2,
+        "wall_seconds": 2.3935254589887336,
+        "user_cpu_seconds": 2.383508000000006,
+        "result": 1
+      },
+      {
+        "engine": "wasmoon",
+        "sample": 2,
+        "wall_seconds": 7.400235084001906,
+        "user_cpu_seconds": 7.350259999999999,
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 2,
+        "wall_seconds": 9.563091290998273,
+        "user_cpu_seconds": 9.508229,
+        "result": 1
+      }
+    ],
+    "wasmoon_binary_sha256": {
+      "wasmoon": "9ac607ba1501a3f3f1b98e53256c8666f35ab6d9a3c1581dcc202f0d177afb3c",
+      "baseline": "57dc0b192d1ccc1f65a32694cd667c27d64e199f9847c1e9d98157dcdea17ef9"
+    },
+    "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1",
+    "median": {
+      "wasmtime": {
+        "wall_seconds": 2.4042055000318214,
+        "user_cpu_seconds": 2.394363,
+        "wall_ratio": 1.0,
+        "user_cpu_ratio": 1.0
+      },
+      "wasmoon": {
+        "wall_seconds": 7.400235084001906,
+        "user_cpu_seconds": 7.345532000000002,
+        "wall_ratio": 3.07803766520955,
+        "user_cpu_ratio": 3.0678439317680746
+      },
+      "baseline": {
+        "wall_seconds": 9.545084208017215,
+        "user_cpu_seconds": 9.489322999999999,
+        "wall_ratio": 3.9701615389744673,
+        "user_cpu_ratio": 3.9631931332049484
+      }
+    }
+  },
+  "selected_source_kernel_counters": [
+    {
+      "engine": "wasmtime",
+      "count": 20000,
+      "stderr": "warning: using `--invoke` with a function that returns values is experimental and may break in the future\n        2.39 real         2.38 user         0.00 sys\n            71352320  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                4693  page reclaims\n                   0  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                 111  involuntary context switches\n         60853898855  instructions retired\n          9027242907  cycles elapsed\n            61800952  peak memory footprint\n",
+      "instructions_retired": 60853898855,
+      "cycles_elapsed": 9027242907,
+      "maximum_resident_set_size": 71352320,
+      "peak_memory_footprint": 61800952
+    },
+    {
+      "engine": "accepted",
+      "count": 20000,
+      "stderr": "        7.39 real         7.34 user         0.04 sys\n           351715328  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               28040  page reclaims\n                   6  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   1  voluntary context switches\n                 142  involuntary context switches\n        163432511201  instructions retired\n         27952046936  cycles elapsed\n           347275912  peak memory footprint\n",
+      "instructions_retired": 163432511201,
+      "cycles_elapsed": 27952046936,
+      "maximum_resident_set_size": 351715328,
+      "peak_memory_footprint": 347275912
+    },
+    {
+      "engine": "baseline",
+      "count": 20000,
+      "stderr": "        9.56 real         9.50 user         0.04 sys\n           351535104  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               28029  page reclaims\n                   6  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   1  voluntary context switches\n                  53  involuntary context switches\n        219256245281  instructions retired\n         36073295028  cycles elapsed\n           347046536  peak memory footprint\n",
+      "instructions_retired": 219256245281,
+      "cycles_elapsed": 36073295028,
+      "maximum_resident_set_size": 351535104,
+      "peak_memory_footprint": 347046536
+    }
+  ],
+  "selected_source_profile": {
+    "method": "sample PID 3 1, separate full-property process, started 2 seconds after launch; not a throughput sample",
+    "flat_leaves": "__sigwait  (in libsystem_kernel.dylib)        2292\n        gc_struct_get_heap_impl  (in wasmoon-accepted)        608\n        gc_array_set_heap_impl  (in wasmoon-accepted)        352\n        gc_array_get_heap_impl  (in wasmoon-accepted)        350\n        gc_array_len_heap_impl  (in wasmoon-accepted)        107\n        gc_heap_alloc_typed  (in wasmoon-accepted)        95\n        gc_select_alloc_roots  (in wasmoon-accepted)        54\n        _platform_memmove  (in libsystem_platform.dylib)        46\n        ctx_gc_push_root_scope_internal  (in wasmoon-accepted)        43\n        gc_alloc_struct_slow  (in wasmoon-accepted)        41\n        _xzm_free  (in libsystem_malloc.dylib)        39\n        _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib)        39\n        mach_absolute_time  (in libsystem_kernel.dylib)        38\n        wasmoon_jit_gc_pop_root_scope_or_trap  (in wasmoon-accepted)        36\n        _platform_memset  (in libsystem_platform.dylib)        31\n        gc_struct_set_heap_impl  (in wasmoon-accepted)        25\n        wasmoon_gc_collection_seeds  (in wasmoon-accepted)        22\n        gc_heap_admit  (in wasmoon-accepted)        21\n        _free  (in libsystem_malloc.dylib)        18\n        gc_heap_sweep  (in wasmoon-accepted)        18\n        wasmoon_gc_allocation_attempt  (in wasmoon-accepted)        16\n        wasmoon_jit_gc_push_root_scope_or_trap  (in wasmoon-accepted)        16\n        gc_heap_register_object  (in wasmoon-accepted)        15\n        ???  (in <unknown binary>)  [0x1030fc188]        14\n        gc_should_fail_allocation  (in wasmoon-accepted)        14\n        gc_heap_ensure_object_capacity  (in wasmoon-accepted)        13\n        <deduplicated_symbol>  (in libsystem_malloc.dylib)        12\n        ctx_gc_pop_root_scope_internal  (in wasmoon-accepted)        12\n        ???  (in <unknown binary>)  [0x1030fc1bc]        11\n        _malloc_zone_malloc  (in libsystem_malloc.dylib)        11\n        callable_native_reference  (in wasmoon-accepted)        11\n        ???  (in <unknown binary>)  [0x1030fbf74]        9\n        DYLD-STUB$$free  (in wasmoon-accepted)        9\n        _tlv_get_addr  (in libdyld.dylib)        9\n        gc_allocate  (in wasmoon-accepted)        9\n        ???  (in <unknown binary>)  [0x1030fc16c]        8\n        gc_heap_ensure_payload_capacity  (in wasmoon-accepted)        8\n        gc_heap_maybe_verify  (in wasmoon-accepted)        8\n        _xzm_xzone_malloc  (in libsystem_malloc.dylib)        7\n        ???  (in <unknown binary>)  [0x1030e2b74]        6",
+    "interpretation": "Idle sigwait is not active execution. GC word helpers remain the largest leaves; TLS lookup is now small. Sample counts from different sampling windows are not a speedup ratio."
+  },
+  "improvement": {
+    "wall_reduction_fraction": 0.22470719768127168,
+    "wall_speedup": 1.2898352687000607,
+    "remaining_wall_ratio": 3.07803766520955,
+    "instruction_reduction_fraction": 0.2546049897390882,
+    "remaining_instruction_ratio": 2.6856539067516416
+  },
+  "validation": {
+    "native": {
+      "passed": 2991,
+      "failed": 0,
+      "flags": [
+        "VCODE_REGALLOC_VALIDATION=1",
+        "WASMOON_GC_VERIFY=1",
+        "WASMOON_GC_ASSERT_BARRIER=1"
+      ]
+    },
+    "wasm": {
+      "passed": 1412,
+      "failed": 0
+    },
+    "python": {
+      "tests": 178,
+      "existing_platform_skips": 54
+    },
+    "core": {
+      "interp": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "skipped": 0
+      },
+      "jit": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "skipped": 0
+      },
+      "actual_wasm": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      }
+    },
+    "component": {
+      "interp": {
+        "stable-0.2": {
+          "files": 23,
+          "commands": 845,
+          "failed": 0,
+          "skipped": 0
+        },
+        "async-0.3": {
+          "files": 24,
+          "commands": 153,
+          "failed": 0,
+          "skipped": 0
+        },
+        "future-gated": {
+          "files": 12,
+          "commands": 387,
+          "failed": 0,
+          "skipped": 0
+        }
+      },
+      "jit": {
+        "stable-0.2": {
+          "files": 23,
+          "commands": 845,
+          "failed": 0,
+          "skipped": 0
+        },
+        "async-0.3": {
+          "files": 24,
+          "commands": 153,
+          "failed": 0,
+          "skipped": 0
+        },
+        "future-gated": {
+          "files": 12,
+          "commands": 387,
+          "failed": 0,
+          "skipped": 0
+        }
+      }
+    },
+    "strict_native_and_wasm": true,
+    "info_and_fmt": true,
+    "module_boundaries": true,
+    "generated_msvc_bridges": true,
+    "diff_whitespace": true,
+    "both_targets_lowering": "Public diagnostic regression selects the explicit-heap scalar helper contracts for x64 and AArch64. Only AArch64 was executed here.",
+    "regressions": [
+      "packed and floating scalar arrays at O0/O2/O3 with null and bounds traps",
+      "inherited fields, reference writes, adjacent V128 and post-GC reads",
+      "two explicit heaps without active TLS, legacy wide layouts and collected identities",
+      "raw JIT entry with a different actual compact array stride retains dynamic read/write behavior"
+    ]
+  },
+  "sanitizer": {
+    "revision": "55657fb24dfd61937e8d6f1f482df4d23c824631",
+    "source_dirty": true,
+    "build_reuse": "fresh",
+    "functional_manifest": {
+      "files": 810,
+      "sha256": "5a54694de4a7675491e6a36c74450494269bc4785f9bbbd02c7db91b2812cac5"
+    },
+    "binary_sha256": "b24fd2000b92e33634f89274bdafa05a4f537c2f45814ed04656c51fee08b229",
+    "passed": 273,
+    "failed": 0,
+    "asan_probe": "detected",
+    "native_asan_probe": "detected",
+    "leak_detection": false,
+    "lsan_probe": "not_applicable on macOS",
+    "allocator": "system",
+    "event_loop": "passed",
+    "exclusions": [
+      "MoonBit runtime objects",
+      "JIT machine code"
+    ],
+    "workspace": "Owned OS TemporaryDirectory; removed after inspection."
+  },
+  "rejected_static_layout_candidate": {
+    "source": {
+      "files": 810,
+      "sha256": "f2b370aa27a906cbd58e735b202e8102327e15693e06897ed761e6b0bfeda797"
+    },
+    "short": {
+      "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+      "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+      "wasm_tools_version": "wasm-tools 1.254.0",
+      "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+      "count": 1000,
+      "samples": [
+        {
+          "engine": "wasmtime",
+          "sample": 0,
+          "wall_seconds": 0.41574875003425404,
+          "user_cpu_seconds": 0.36763500000000005,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 0,
+          "wall_seconds": 1.1173339159577154,
+          "user_cpu_seconds": 1.092827,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 0,
+          "wall_seconds": 1.226732999959495,
+          "user_cpu_seconds": 1.198198,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 1,
+          "wall_seconds": 1.2215071250102483,
+          "user_cpu_seconds": 1.196211,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 1,
+          "wall_seconds": 1.109271167020779,
+          "user_cpu_seconds": 1.0838700000000001,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 1,
+          "wall_seconds": 0.3832180830067955,
+          "user_cpu_seconds": 0.37539299999999987,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 2,
+          "wall_seconds": 0.3864103340310976,
+          "user_cpu_seconds": 0.37866399999999967,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 2,
+          "wall_seconds": 1.1155915829585865,
+          "user_cpu_seconds": 1.090026,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 2,
+          "wall_seconds": 1.21173420897685,
+          "user_cpu_seconds": 1.1883590000000002,
+          "result": 1
+        }
+      ],
+      "wasmoon_binary_sha256": {
+        "wasmoon": "96b6da27bf6ccc6d1b40147898b3ba048de4b0c3082128b7552fabc359388a8a",
+        "baseline": "57dc0b192d1ccc1f65a32694cd667c27d64e199f9847c1e9d98157dcdea17ef9"
+      },
+      "probe_sha256": "e6a39b49b7751dfdb2b9130db555a239018d6e2daebd6fabc5913672ca3dc8b8",
+      "median": {
+        "wasmtime": {
+          "wall_seconds": 0.3864103340310976,
+          "user_cpu_seconds": 0.37539299999999987,
+          "wall_ratio": 1.0,
+          "user_cpu_ratio": 1.0
+        },
+        "wasmoon": {
+          "wall_seconds": 1.1155915829585865,
+          "user_cpu_seconds": 1.090026,
+          "wall_ratio": 2.8870645650714035,
+          "user_cpu_ratio": 2.9036929298095604
+        },
+        "baseline": {
+          "wall_seconds": 1.2215071250102483,
+          "user_cpu_seconds": 1.196211,
+          "wall_ratio": 3.161165780084814,
+          "user_cpu_ratio": 3.186556488799739
+        }
+      }
+    },
+    "full": {
+      "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+      "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+      "wasm_tools_version": "wasm-tools 1.254.0",
+      "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+      "count": 20000,
+      "samples": [
+        {
+          "engine": "wasmtime",
+          "sample": 0,
+          "wall_seconds": 2.3742437079781666,
+          "user_cpu_seconds": 2.363274,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 0,
+          "wall_seconds": 6.785801583027933,
+          "user_cpu_seconds": 6.730906999999999,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 0,
+          "wall_seconds": 9.62941754196072,
+          "user_cpu_seconds": 9.569980000000001,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 1,
+          "wall_seconds": 9.612106541986577,
+          "user_cpu_seconds": 9.558747,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 1,
+          "wall_seconds": 6.78384345798986,
+          "user_cpu_seconds": 6.7340639999999965,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 1,
+          "wall_seconds": 2.4232814999995753,
+          "user_cpu_seconds": 2.4132080000000045,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 2,
+          "wall_seconds": 2.3965797090204433,
+          "user_cpu_seconds": 2.385807,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 2,
+          "wall_seconds": 6.805935165961273,
+          "user_cpu_seconds": 6.757688999999999,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 2,
+          "wall_seconds": 9.575154791004024,
+          "user_cpu_seconds": 9.519790999999998,
+          "result": 1
+        }
+      ],
+      "wasmoon_binary_sha256": {
+        "wasmoon": "96b6da27bf6ccc6d1b40147898b3ba048de4b0c3082128b7552fabc359388a8a",
+        "baseline": "57dc0b192d1ccc1f65a32694cd667c27d64e199f9847c1e9d98157dcdea17ef9"
+      },
+      "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1",
+      "median": {
+        "wasmtime": {
+          "wall_seconds": 2.3965797090204433,
+          "user_cpu_seconds": 2.385807,
+          "wall_ratio": 1.0,
+          "user_cpu_ratio": 1.0
+        },
+        "wasmoon": {
+          "wall_seconds": 6.785801583027933,
+          "user_cpu_seconds": 6.7340639999999965,
+          "wall_ratio": 2.831452489348456,
+          "user_cpu_ratio": 2.8225518660981366
+        },
+        "baseline": {
+          "wall_seconds": 9.612106541986577,
+          "user_cpu_seconds": 9.558747,
+          "wall_ratio": 4.010760212067114,
+          "user_cpu_ratio": 4.006504717271766
+        }
+      }
+    },
+    "hardware": [
+      {
+        "engine": "wasmtime",
+        "count": 20000,
+        "stderr": "warning: using `--invoke` with a function that returns values is experimental and may break in the future\n        2.49 real         2.48 user         0.00 sys\n            71483392  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                4679  page reclaims\n                  22  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   3  voluntary context switches\n                 107  involuntary context switches\n         60859643328  instructions retired\n          9378841534  cycles elapsed\n            61948432  peak memory footprint\n",
+        "instructions_retired": 60859643328,
+        "cycles_elapsed": 9378841534,
+        "maximum_resident_set_size": 71483392,
+        "peak_memory_footprint": 61948432
+      },
+      {
+        "engine": "accepted",
+        "count": 20000,
+        "stderr": "        6.81 real         6.76 user         0.03 sys\n           351977472  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               28056  page reclaims\n                   6  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   2  voluntary context switches\n                  50  involuntary context switches\n        157245688838  instructions retired\n         25702697030  cycles elapsed\n           347456136  peak memory footprint\n",
+        "instructions_retired": 157245688838,
+        "cycles_elapsed": 25702697030,
+        "maximum_resident_set_size": 351977472,
+        "peak_memory_footprint": 347456136
+      },
+      {
+        "engine": "baseline",
+        "count": 20000,
+        "stderr": "        9.64 real         9.59 user         0.04 sys\n           351879168  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               28050  page reclaims\n                   6  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   1  voluntary context switches\n                  80  involuntary context switches\n        219258667077  instructions retired\n         36286218479  cycles elapsed\n           347407008  peak memory footprint\n",
+        "instructions_retired": 219258667077,
+        "cycles_elapsed": 36286218479,
+        "maximum_resident_set_size": 351879168,
+        "peak_memory_footprint": 347407008
+      }
+    ],
+    "profile_top": "__sigwait  (in libsystem_kernel.dylib)        2526\n        gc_struct_get_heap_impl  (in wasmoon-accepted)        682\n        gc_array_set_heap_impl  (in wasmoon-accepted)        348\n        gc_array_get_heap_impl  (in wasmoon-accepted)        329\n        gc_heap_alloc_typed  (in wasmoon-accepted)        145\n        gc_array_len_heap_impl  (in wasmoon-accepted)        141\n        mach_absolute_time  (in libsystem_kernel.dylib)        90\n        _platform_memmove  (in libsystem_platform.dylib)        71\n        gc_select_alloc_roots  (in wasmoon-accepted)        65\n        ctx_gc_push_root_scope_internal  (in wasmoon-accepted)        62\n        _xzm_free  (in libsystem_malloc.dylib)        40\n        _platform_memset  (in libsystem_platform.dylib)        38\n        _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib)        37\n        wasmoon_jit_gc_pop_root_scope_or_trap  (in wasmoon-accepted)        31\n        wasmoon_jit_gc_push_root_scope_or_trap  (in wasmoon-accepted)        26\n        gc_alloc_struct_slow  (in wasmoon-accepted)        25\n        gc_heap_register_object  (in wasmoon-accepted)        25\n        wasmoon_gc_allocation_attempt  (in wasmoon-accepted)        22\n        wasmoon_gc_collection_seeds  (in wasmoon-accepted)        22\n        gc_heap_sweep  (in wasmoon-accepted)        20\n        gc_heap_ensure_object_capacity  (in wasmoon-accepted)        18\n        gc_heap_admit  (in wasmoon-accepted)        17\n        ???  (in <unknown binary>)  [0x1099d649c]        15\n        ctx_gc_pop_root_scope_internal  (in wasmoon-accepted)        15\n        gc_struct_set_heap_impl  (in wasmoon-accepted)        15\n        ???  (in <unknown binary>)  [0x1099d5e0c]        13\n        _tlv_get_addr  (in libdyld.dylib)        13\n        gc_should_fail_allocation  (in wasmoon-accepted)        13\n        ???  (in <unknown binary>)  [0x1099d6244]        12\n        gc_allocate  (in wasmoon-accepted)        12\n        _free  (in libsystem_malloc.dylib)        11\n        _malloc_zone_malloc  (in libsystem_malloc.dylib)        9\n        callable_native_reference  (in wasmoon-accepted)        8\n        <deduplicated_symbol>  (in libsystem_malloc.dylib)        7\n        DYLD-STUB$$free  (in wasmoon-accepted)        7\n        __bzero  (in libsystem_platform.dylib)        7\n        _xzm_xzone_malloc  (in libsystem_malloc.dylib)        7\n        gc_heap_ensure_payload_capacity  (in wasmoon-accepted)        7\n        gc_alloc_debug_enabled  (in wasmoon-accepted)        6\n        gc_heap_maybe_verify  (in wasmoon-accepted)        6",
+    "reason": "Raw JIT entry accepts an object with a different concrete physical layout. Its previously dynamic byte-array access returned 7, whereas unguarded static word-stride read returned 0. This candidate is rejected, not acceptance."
+  },
+  "other_experiments": {
+    "rows": [
+      {
+        "engine": "baseline",
+        "count": 20000,
+        "wall": 9.761971416010056,
+        "user_cpu": 9.699426000000017,
+        "system_cpu": 0.04201699999999775,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "heap",
+        "count": 20000,
+        "wall": 8.163322374981362,
+        "user_cpu": 8.114681000000019,
+        "system_cpu": 0.040931000000000495,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "plan",
+        "count": 20000,
+        "wall": 7.8845742080011405,
+        "user_cpu": 7.420119,
+        "system_cpu": 0.053056000000001546,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "wasmtime",
+        "count": 20000,
+        "wall": 2.5734227080247365,
+        "user_cpu": 2.4836779999999976,
+        "system_cpu": 0.023702000000000112,
+        "stdout": "1\n",
+        "stderr": "warning: using `--invoke` with a function that returns values is experimental and may break in the future\n"
+      },
+      {
+        "engine": "inline",
+        "count": 1000,
+        "wall": 1.6465133749879897,
+        "user_cpu": 1.6069200000000023,
+        "system_cpu": 0.029292999999999125,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "inline",
+        "count": 20000,
+        "wall": 7.70686554198619,
+        "user_cpu": 6.995434999999986,
+        "system_cpu": 0.06635200000000196,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "inline-write",
+        "count": 1000,
+        "wall": 1.6933885419857688,
+        "user_cpu": 1.660412000000008,
+        "system_cpu": 0.026409000000001015,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "inline-write",
+        "count": 20000,
+        "wall": 6.652365457965061,
+        "user_cpu": 6.600719000000026,
+        "system_cpu": 0.040644000000000347,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "fused",
+        "count": 1000,
+        "wall": 1.2040426669991575,
+        "user_cpu": 1.1709730000000036,
+        "system_cpu": 0.02413100000000057,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "fused",
+        "count": 20000,
+        "wall": 6.959589292004239,
+        "user_cpu": 6.885082000000011,
+        "system_cpu": 0.050345000000000084,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "selected",
+        "count": 1000,
+        "wall": 1.155193791957572,
+        "user_cpu": 1.128172999999947,
+        "system_cpu": 0.021705999999998227,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      {
+        "engine": "selected",
+        "count": 20000,
+        "wall": 6.88222233299166,
+        "user_cpu": 6.827399000000014,
+        "system_cpu": 0.04426899999999989,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    ],
+    "status": "Intermediate diagnostic sources, not final acceptance. heap/plan/fused/inline/inline-write/selected labels precede the raw-entry layout regression. Plan, fused and inline variants using static layout hints were rejected. Fully inlined reads/writes also increased cold 1000-case cost to about 1.7 seconds.",
+    "cache_correction": "An initial exploratory plan invocation accidentally reused an older experimental helper ABI cache and failed. It was excluded. Subsequent measurements and every accepted invocation use independent cold caches."
+  },
+  "cleanup": "All scratch sources, binaries, caches, profiles and build directories are owned by OS TemporaryDirectory contexts. The main owner is removed immediately after this report is written; no scratch output is stored in target/_build."
+}
