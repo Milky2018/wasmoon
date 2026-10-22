@@ -239,22 +239,20 @@ pub fn Store::alloc_array_repeated(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
+  let identity = self.allocation_type(instance, type_idx)
   let encoded = self.encode_heap_value(value)
-  let runtime_type = if self.references.native.c_heap is Some(_) {
-    self.allocation_type(instance, type_idx, array=true)
-  } else {
-    -1
-  }
   let reference = match self.references.native.c_heap {
-    Some(heap) =>
+    Some(heap) => {
+      let runtime_type = self.allocation_layout(identity, array=true)
       heap.alloc_array(type_idx, length, encoded, runtime_type~) catch {
         OutOfMemory => raise self.gc_allocation_error()
         NullReference => raise NullReference
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
       }
+    }
     None => self.heap.alloc_array_repeated(type_idx, length, value)
   }
-  self.record_gc_type(reference, instance, type_idx)
+  self.record_gc_type(reference, identity)
   reference
 }
 

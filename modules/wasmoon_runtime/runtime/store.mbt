@@ -976,10 +976,11 @@ pub fn Store::alloc_struct(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
+  let identity = self.allocation_type(instance, type_idx)
   let reference = match self.references.native.c_heap {
     Some(heap) => {
+      let runtime_type = self.allocation_layout(identity)
       let encoded = fields.map(value => self.encode_heap_value(value))
-      let runtime_type = self.allocation_type(instance, type_idx)
       heap.alloc_struct(type_idx, encoded, runtime_type~) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
@@ -988,7 +989,7 @@ pub fn Store::alloc_struct(
     }
     None => self.heap.alloc_struct(type_idx, fields)
   }
-  self.record_gc_type(reference, instance, type_idx)
+  self.record_gc_type(reference, identity)
   reference
 }
 
@@ -1005,10 +1006,11 @@ pub fn Store::alloc_array(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
+  let identity = self.allocation_type(instance, type_idx)
   let reference = match self.references.native.c_heap {
     Some(heap) => {
+      let runtime_type = self.allocation_layout(identity, array=true)
       let encoded = elements.map(value => self.encode_heap_value(value))
-      let runtime_type = self.allocation_type(instance, type_idx, array=true)
       heap.alloc_array_from_values(type_idx, encoded, runtime_type~) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
@@ -1017,7 +1019,7 @@ pub fn Store::alloc_array(
     }
     None => self.heap.alloc_array(type_idx, elements)
   }
-  self.record_gc_type(reference, instance, type_idx)
+  self.record_gc_type(reference, identity)
   reference
 }
 

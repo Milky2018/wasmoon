@@ -234,21 +234,7 @@ pub fn Store::native_callable_registry(
 
 ///|
 #cfg(target="native")
-fn Store::record_gc_type(
-  self : Store,
-  index : Int32,
-  instance : ModuleInstance?,
-  type_index : Int32,
-) -> Unit {
-  let identity = match instance {
-    Some(instance) => self.native_types.register(instance)[type_index]
-    None =>
-      if type_index >= 0 && type_index < self.module_types.length() {
-        self.module_type_indices()[type_index]
-      } else {
-        -1
-      }
-  }
+fn Store::record_gc_type(self : Store, index : Int32, identity : Int32) -> Unit {
   match self.references.native.c_heap {
     Some(heap) => heap.set_runtime_type(index, identity)
     None => self.native_types.heap_types[index] = identity
