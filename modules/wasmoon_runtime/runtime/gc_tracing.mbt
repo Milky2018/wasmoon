@@ -10,6 +10,7 @@ fn gc_reference_type(ty : @types.ValueType) -> Bool {
 ///|
 priv struct GcTrace {
   objects : Array[@types.Value]
+  native : NativeGcTrace
   wrappers : Map[Int32, Bool]
   continuations : Map[Int64, Bool]
   native_continuations : Map[Int64, Bool]
@@ -26,6 +27,7 @@ fn Store::trace_gc_roots(
 ) -> GcTrace {
   let trace : GcTrace = {
     objects: [],
+    native: self.begin_native_gc_trace(),
     wrappers: Map([]),
     exceptions: Map([]),
     native_exceptions: Map([]),
@@ -97,6 +99,9 @@ fn Store::trace_gc_roots(
           }
         }
       StructRef(index) | ArrayRef(index) => {
+        if self.trace_native_graph(index, pending, trace) {
+          continue
+        }
         if visited.contains(index) || !self.is_gc_valid(index) {
           continue
         }
@@ -119,7 +124,8 @@ fn Store::native_trace_roots(
   if trace.failed {
     raise UndefinedElement
   }
-  let roots = trace.objects.map(@native_bridge.value_to_i64)
+  let roots = trace.native.seeds.copy()
+  roots.append(trace.objects.map(@native_bridge.value_to_i64))
   for index in trace.exceptions.keys() {
     roots.push(self.encode_native_exception(index))
   }
@@ -236,6 +242,9 @@ fn Store::install_gc_tracing(self : Store) -> Unit {
       let trace = self.trace_gc_roots(roots)
       self.gc_trace = Some(trace)
       let raw = self.native_trace_roots(trace)
+      if trace.native.graph is Some(graph) {
+        graph.mark()
+      }
       FixedArray::makei(raw.length(), i => raw[i])
     } catch {
       _ => {

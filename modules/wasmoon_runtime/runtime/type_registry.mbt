@@ -25,6 +25,7 @@ priv struct StoreTypeRegistry {
   mut native_registry : @native_bridge.NativeCallableRegistry?
   entries : Map[Int64, Int32]
   heap_types : Map[Int32, Int32]
+  mut native_layout_count : Int32
 } derive(Debug)
 
 ///|
@@ -40,6 +41,7 @@ fn StoreTypeRegistry::new() -> StoreTypeRegistry {
     native_registry: None,
     entries: Map([]),
     heap_types: Map([]),
+    native_layout_count: 0,
   }
 }
 
@@ -149,7 +151,11 @@ pub fn Store::native_type_indices(
   self.check_instance(instance) catch {
     _ => return []
   }
-  self.native_types.register(instance).copy()
+  let indices = self.native_types.register(instance)
+  // Physical layouts are an optional cache. A denied cache allocation must
+  // not erase the Store's already established canonical type identities.
+  self.prepare_native_gc_layouts() |> ignore
+  indices.copy()
 }
 
 ///|
@@ -228,21 +234,7 @@ pub fn Store::native_callable_registry(
 
 ///|
 #cfg(target="native")
-fn Store::record_gc_type(
-  self : Store,
-  index : Int32,
-  instance : ModuleInstance?,
-  type_index : Int32,
-) -> Unit {
-  let identity = match instance {
-    Some(instance) => self.native_types.register(instance)[type_index]
-    None =>
-      if type_index >= 0 && type_index < self.module_types.length() {
-        self.module_type_indices()[type_index]
-      } else {
-        -1
-      }
-  }
+fn Store::record_gc_type(self : Store, index : Int32, identity : Int32) -> Unit {
   match self.references.native.c_heap {
     Some(heap) => heap.set_runtime_type(index, identity)
     None => self.native_types.heap_types[index] = identity

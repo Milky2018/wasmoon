@@ -133,7 +133,7 @@ pub fn MarkSweepHeap::stats(self : MarkSweepHeap) -> GCStats {
 ///|
 fn MarkSweepHeap::make_allocation_rollback(
   self : MarkSweepHeap,
-  roots : () -> Array[@types.Value],
+  roots : () -> Array[@types.Value] raise,
 ) -> () -> Unit {
   let occupied = []
   for object in self.objects {
@@ -141,7 +141,8 @@ fn MarkSweepHeap::make_allocation_rollback(
   }
   let free_list = self.free_list.copy()
   fn() {
-    self.mark_roots(roots())
+    let current_roots = roots() catch { _ => return }
+    self.mark_roots(current_roots)
     for i in 0..<self.objects.length() {
       let existed = i < occupied.length() && occupied[i]
       if !existed && self.objects[i] is Some(object) && !self.marks[i] {

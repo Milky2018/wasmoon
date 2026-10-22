@@ -88,11 +88,11 @@ fn Store::register_rollback(
   })
   // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
   registrar.on_rollback(
-    self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+    self.heap.make_allocation_rollback(() => self.collect_roots([])),
   )
   if self.references.native.c_heap is Some(heap) {
     registrar.on_rollback(
-      heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+      heap.make_allocation_rollback(() => self.collect_roots([])),
     )
   }
   self.register_native_exception_rollback(registrar)
@@ -561,6 +561,7 @@ pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
     }
     self.bind_gc_budget(heap)
     self.references.native.c_heap = Some(heap)
+    self.native_types.native_layout_count = 0
     self.native_execution.exceptions().enable_reclamation()
   }
 }
@@ -975,10 +976,12 @@ pub fn Store::alloc_struct(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
+  let identity = self.allocation_type(instance, type_idx)
   let reference = match self.references.native.c_heap {
     Some(heap) => {
+      let runtime_type = self.allocation_layout(identity)
       let encoded = fields.map(value => self.encode_heap_value(value))
-      heap.alloc_struct(type_idx, encoded) catch {
+      heap.alloc_struct(type_idx, encoded, runtime_type~) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise self.gc_allocation_error()
@@ -986,7 +989,7 @@ pub fn Store::alloc_struct(
     }
     None => self.heap.alloc_struct(type_idx, fields)
   }
-  self.record_gc_type(reference, instance, type_idx)
+  self.record_gc_type(reference, identity)
   reference
 }
 
@@ -1003,10 +1006,12 @@ pub fn Store::alloc_array(
   if instance is Some(instance) {
     self.check_instance(instance)
   }
+  let identity = self.allocation_type(instance, type_idx)
   let reference = match self.references.native.c_heap {
     Some(heap) => {
+      let runtime_type = self.allocation_layout(identity, array=true)
       let encoded = elements.map(value => self.encode_heap_value(value))
-      heap.alloc_array_from_values(type_idx, encoded) catch {
+      heap.alloc_array_from_values(type_idx, encoded, runtime_type~) catch {
         OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         NullReference => raise NullReference
         OutOfMemory => raise self.gc_allocation_error()
@@ -1014,7 +1019,7 @@ pub fn Store::alloc_array(
     }
     None => self.heap.alloc_array(type_idx, elements)
   }
-  self.record_gc_type(reference, instance, type_idx)
+  self.record_gc_type(reference, identity)
   reference
 }
 
@@ -1515,11 +1520,15 @@ pub fn Store::get_func_owner_idx(self : Store, func_addr : Int32) -> Int32 {
 
 ///|
 /// Collect the transitive object roots of this Store and explicit host roots.
+/// Raise UndefinedElement if discovery is incomplete; partial roots must not
+/// be used to authorize reclamation.
 pub fn Store::collect_roots(
   self : Store,
   additional_roots : Array[@types.Value],
-) -> Array[@types.Value] {
-  self.trace_gc_roots(additional_roots).objects
+) -> Array[@types.Value] raise RuntimeError {
+  let trace = self.trace_gc_roots(additional_roots)
+  guard !trace.failed else { raise UndefinedElement }
+  self.trace_objects(trace)
 }
 
 ///|

@@ -23,6 +23,16 @@ pub(all) struct MemoryDescriptorLayout {
 } derive(Debug, Eq)
 
 ///|
+/// Optional embedding protocol for an allocation-free safepoint countdown.
+/// A non-null callback always takes the runtime slow path.
+pub(all) struct SafepointPollLayout {
+  execution_offset : Int32
+  controls_offset : Int32
+  callback_offset : Int32
+  budget_offset : Int32
+} derive(Debug, Eq)
+
+///|
 pub(all) struct EmbeddingEnvironment {
   runtime_symbol_prefix : String
   hidden_context_type : @milkir.Type?
@@ -30,6 +40,7 @@ pub(all) struct EmbeddingEnvironment {
   memory_descriptor_layout : MemoryDescriptorLayout?
   wasm_runtime_symbols : @wasm_milkir.RuntimeSymbols
   cancellation_safepoints : Bool
+  safepoint_poll_layout : SafepointPollLayout?
 } derive(Debug)
 
 ///|
@@ -40,6 +51,7 @@ pub fn EmbeddingEnvironment::EmbeddingEnvironment(
   memory_descriptor_layout~ : MemoryDescriptorLayout? = None,
   wasm_runtime_symbols~ : @wasm_milkir.RuntimeSymbols? = None,
   cancellation_safepoints~ : Bool = false,
+  safepoint_poll_layout~ : SafepointPollLayout? = None,
 ) -> EmbeddingEnvironment {
   let wasm_runtime_symbols = wasm_runtime_symbols.unwrap_or(
     @wasm_milkir.RuntimeSymbols::with_runtime_prefix(
@@ -53,6 +65,7 @@ pub fn EmbeddingEnvironment::EmbeddingEnvironment(
     memory_descriptor_layout,
     wasm_runtime_symbols,
     cancellation_safepoints,
+    safepoint_poll_layout,
   }
 }
 
@@ -89,4 +102,11 @@ pub fn EmbeddingEnvironment::memory_descriptor_layout(
   self : EmbeddingEnvironment,
 ) -> MemoryDescriptorLayout? {
   self.memory_descriptor_layout
+}
+
+///|
+pub fn EmbeddingEnvironment::safepoint_poll_layout(
+  self : EmbeddingEnvironment,
+) -> SafepointPollLayout? {
+  self.safepoint_poll_layout
 }

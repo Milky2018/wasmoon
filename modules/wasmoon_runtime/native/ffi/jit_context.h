@@ -1,4 +1,5 @@
-// Private per-instance state. Generated code only sees jit_context_t.
+// Embedding-owned state. Generated polling reads only the queried control
+// offsets; other generated accesses use the VMContext layout descriptor.
 #ifndef WASMOON_JIT_CONTEXT_H
 #define WASMOON_JIT_CONTEXT_H
 
@@ -26,6 +27,7 @@ typedef struct {
     int32_t exception_value_count; // Number of exception values
     int64_t *spilled_locals;      // Saved local values
     int32_t spilled_locals_count; // Number of saved locals
+    void *poll_controls; // Borrowed activation controls for generated safepoints.
     int gc_collect_requested;
     int gc_in_collect;
     int64_t *gc_root_scratch;
@@ -33,6 +35,8 @@ typedef struct {
     int32_t gc_root_scratch_cap;
     wasmoon_gc_frame_t *gc_frame_chain_head;
     wasmoon_gc_root_scope_t *gc_root_scope_head;
+    // Popped storage belongs to this invocation, including while parked.
+    wasmoon_gc_root_scope_t *gc_root_scope_free;
 } jit_execution_state_t;
 
 void jit_execution_state_clear(jit_execution_state_t *state);
@@ -44,6 +48,7 @@ typedef struct {
     void *cancellation_callback;
     void *cancellation_callback_data;
     int32_t scheduling_budget;
+    int32_t scheduling_quantum;
 } jit_invocation_controls_t;
 
 typedef struct jit_runtime_state {
@@ -101,6 +106,7 @@ typedef struct jit_runtime_state {
 
 // Private state precedes the address passed to generated code. Its size is
 // independent of the module; the trailing ABI storage follows the layout.
+// The queried polling prefix is pinned by the artifact codegen revision.
 typedef struct {
     jit_runtime_state_t runtime;
     jit_context_t abi;

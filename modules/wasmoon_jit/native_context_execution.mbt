@@ -354,3 +354,20 @@ pub fn NativeJITContext::bind_segment_drop_flags(
 ) -> Unit {
   self.handle.bind_segment_drop_flags(data, elements)
 }
+
+///|
+#borrow(context)
+extern "c" fn configure_cooperative_quantum(
+  context : JITContext,
+  quantum : Int32,
+) -> Bool = "wasmoon_jit_set_cooperative_quantum_managed"
+
+///|
+/// Set the safepoint quantum for subsequent invocations; active and parked
+/// invocations retain their existing control snapshot. Non-positive values fail.
+pub fn NativeJITContext::set_cooperative_quantum(
+  self : NativeJITContext,
+  quantum : Int32,
+) -> Bool {
+  configure_cooperative_quantum(self.handle, quantum)
+}

@@ -121,7 +121,7 @@ pub fn JITModule::refresh_table_layout(Self, Int32) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
 pub fn JITModule::set_callable_types(Self, Array[Int32], Array[Int32], Array[(Int64, Int32)], Array[Int32]) -> Unit
-pub fn JITModule::set_cooperative_scheduling(Self, Bool) -> Bool
+pub fn JITModule::set_cooperative_scheduling(Self, Bool, quantum? : Int32) -> Bool
 pub fn JITModule::set_exception_arena(Self, @ffi.NativeExceptionArena) -> Unit
 pub fn JITModule::set_execution_scope(Self, @runtime.ExecutionScope?) -> Bool
 pub fn JITModule::set_gc_heap(Self, @ffi.GCHeapHandle) -> Unit

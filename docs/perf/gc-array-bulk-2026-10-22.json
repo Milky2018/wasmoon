@@ -1,0 +1,576 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-22",
+  "platform": "macOS ARM64",
+  "before_revision": "2f6268bf3774332f9b528e275ad8c9a21bea24cd",
+  "after": {
+    "base_revision": "2f6268bf3774332f9b528e275ad8c9a21bea24cd",
+    "source_dirty": true,
+    "sha256": {
+      "modules/wasmoon_runtime/native/ffi/gc_heap.c": "e6e8bf3aaf0500296cadc77bb875f96e0b0e8efe77e81ffe9ebba3483ece049e",
+      "modules/wasmoon_runtime/native/bridge/c_heap.mbt": "9ee1f16314cdc9397b1a73d15e04ef05e25af2ad0693db4b10cab1ce0bb10302",
+      "modules/wasmoon/sanitizer_testsuite/native_gc_bulk_test.mbt": "37020d2e7f8471214a008aee202ce1d5b65350ff8d48baab146bf9a5780831cf",
+      "modules/wasmoon/testsuite/gc_bulk_test.mbt": "43dd957d673c41087061d47140b6d0826209904a0bf8d057b4cba88b7a75b025"
+    }
+  },
+  "wasmtime": "49.0.1 (46c23a87d 2026-09-24)",
+  "wasm_tools": "1.254.0",
+  "measurement": "CLI wall seconds including process startup, module loading, compilation, allocation and execution; three independent processes per engine/case; median",
+  "isolation": "Separate auto-cleaned OS TemporaryDirectory source workspace/build for CLI pair; separate empty Wasmoon cache per process; Wasmtime -C parallel-compilation=n -C cache=n",
+  "workload": "8-element arrays x 500000 operations, or 65536-element arrays x 128 operations; loop adds the destination's last element (42, or lane 3/struct field 0) to a checksum; same binary Wasm fixture for all engines; exact result iterations*42 required",
+  "verification": "No GC/regalloc verification environment flags in timed processes; compiler/CLI defaults otherwise unchanged",
+  "results": {
+    "i8-8-copy": {
+      "median_wall_seconds": {
+        "before": 0.046162875019945204,
+        "wasmtime": 0.007611666980665177,
+        "after": 0.01626966701587662
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 2.137464376358571,
+      "before_over_after": 2.837358316854152,
+      "raw_wall_seconds": {
+        "before": [
+          0.04683508299058303,
+          0.046162875019945204,
+          0.04331541602732614
+        ],
+        "wasmtime": [
+          0.05532254098216072,
+          0.007565541018266231,
+          0.007611666980665177
+        ],
+        "after": [
+          0.016837499977555126,
+          0.01626966701587662,
+          0.016239958989899606
+        ]
+      }
+    },
+    "i8-8-fill": {
+      "median_wall_seconds": {
+        "before": 0.044302458001766354,
+        "wasmtime": 0.00865233299555257,
+        "after": 0.016243582998868078
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 1.8773645220563664,
+      "before_over_after": 2.727382130214346,
+      "raw_wall_seconds": {
+        "before": [
+          0.044302458001766354,
+          0.04598049999913201,
+          0.04003445798298344
+        ],
+        "wasmtime": [
+          0.008712042006663978,
+          0.008450457942672074,
+          0.00865233299555257
+        ],
+        "after": [
+          0.016243582998868078,
+          0.016036875022109598,
+          0.01708858401980251
+        ]
+      }
+    },
+    "i8-65536-copy": {
+      "median_wall_seconds": {
+        "before": 0.0660512910108082,
+        "wasmtime": 0.007166958996094763,
+        "after": 0.004689041001256555
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 0.6542581035850196,
+      "before_over_after": 14.086311250660417,
+      "raw_wall_seconds": {
+        "before": [
+          0.06604562501888722,
+          0.0684963749954477,
+          0.0660512910108082
+        ],
+        "wasmtime": [
+          0.007166958996094763,
+          0.006741208955645561,
+          0.007574958959594369
+        ],
+        "after": [
+          0.005406124982982874,
+          0.0045824170229025185,
+          0.004689041001256555
+        ]
+      }
+    },
+    "i8-65536-fill": {
+      "median_wall_seconds": {
+        "before": 0.0474381250096485,
+        "wasmtime": 0.007604875019751489,
+        "after": 0.0047770419623702765
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 0.6281552227963346,
+      "before_over_after": 9.930439251597157,
+      "raw_wall_seconds": {
+        "before": [
+          0.041938957991078496,
+          0.0474381250096485,
+          0.06065883400151506
+        ],
+        "wasmtime": [
+          0.007604875019751489,
+          0.007695541949942708,
+          0.006880291970446706
+        ],
+        "after": [
+          0.004742582968901843,
+          0.0047770419623702765,
+          0.004843292001169175
+        ]
+      }
+    },
+    "i32-8-copy": {
+      "median_wall_seconds": {
+        "before": 0.05806691700126976,
+        "wasmtime": 0.007738125044852495,
+        "after": 0.016351292026229203
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 2.113081906980335,
+      "before_over_after": 3.5512127670476605,
+      "raw_wall_seconds": {
+        "before": [
+          0.05859179102117196,
+          0.05806691700126976,
+          0.05793683300726116
+        ],
+        "wasmtime": [
+          0.008129708003252745,
+          0.00769529101671651,
+          0.007738125044852495
+        ],
+        "after": [
+          0.016312625026330352,
+          0.018620666989590973,
+          0.016351292026229203
+        ]
+      }
+    },
+    "i32-8-fill": {
+      "median_wall_seconds": {
+        "before": 0.04085054196184501,
+        "wasmtime": 0.008588958997279406,
+        "after": 0.01875012501841411
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 2.183049776387721,
+      "before_over_after": 2.1786810446184512,
+      "raw_wall_seconds": {
+        "before": [
+          0.041070332983508706,
+          0.04085054196184501,
+          0.04084754199720919
+        ],
+        "wasmtime": [
+          0.009275958000216633,
+          0.008588958997279406,
+          0.008406166976783425
+        ],
+        "after": [
+          0.020741541986353695,
+          0.01875012501841411,
+          0.018515250005293638
+        ]
+      }
+    },
+    "i32-65536-copy": {
+      "median_wall_seconds": {
+        "before": 0.09697695798240602,
+        "wasmtime": 0.007252292009070516,
+        "after": 0.004619124985765666
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 0.6369193325349392,
+      "before_over_after": 20.99465987199979,
+      "raw_wall_seconds": {
+        "before": [
+          0.09697695798240602,
+          0.09650491696083918,
+          0.0971435839892365
+        ],
+        "wasmtime": [
+          0.007364042045082897,
+          0.006959999969694763,
+          0.007252292009070516
+        ],
+        "after": [
+          0.004949290945660323,
+          0.004619124985765666,
+          0.004482915974222124
+        ]
+      }
+    },
+    "i32-65536-fill": {
+      "median_wall_seconds": {
+        "before": 0.055956916010472924,
+        "wasmtime": 0.009140249982010573,
+        "after": 0.006532625004183501
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 0.7147096651667862,
+      "before_over_after": 8.56576276376465,
+      "raw_wall_seconds": {
+        "before": [
+          0.057395084004383534,
+          0.0558360000140965,
+          0.055956916010472924
+        ],
+        "wasmtime": [
+          0.009281000006012619,
+          0.008839250018354505,
+          0.009140249982010573
+        ],
+        "after": [
+          0.0065929999691434205,
+          0.006532625004183501,
+          0.006429124972783029
+        ]
+      }
+    },
+    "i64-8-copy": {
+      "median_wall_seconds": {
+        "before": 0.04831258300691843,
+        "wasmtime": 0.007571499969344586,
+        "after": 0.013343958009500057
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 1.7623929292117733,
+      "before_over_after": 3.62055868075446,
+      "raw_wall_seconds": {
+        "before": [
+          0.04840595799032599,
+          0.04831258300691843,
+          0.047847584006376565
+        ],
+        "wasmtime": [
+          0.00801775004947558,
+          0.007571499969344586,
+          0.007451082987245172
+        ],
+        "after": [
+          0.013594791002105922,
+          0.01312700001290068,
+          0.013343958009500057
+        ]
+      }
+    },
+    "i64-8-fill": {
+      "median_wall_seconds": {
+        "before": 0.03499895799905062,
+        "wasmtime": 0.008778707997407764,
+        "after": 0.01661145902471617
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 1.8922441696000496,
+      "before_over_after": 2.106916553625766,
+      "raw_wall_seconds": {
+        "before": [
+          0.03499895799905062,
+          0.03489445900777355,
+          0.03572120901662856
+        ],
+        "wasmtime": [
+          0.008846165961585939,
+          0.008682832994963974,
+          0.008778707997407764
+        ],
+        "after": [
+          0.01661145902471617,
+          0.016304375021718442,
+          0.016749417001847178
+        ]
+      }
+    },
+    "i64-65536-copy": {
+      "median_wall_seconds": {
+        "before": 0.07538020797073841,
+        "wasmtime": 0.007542000035755336,
+        "after": 0.005608792009297758
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 0.7436743546416642,
+      "before_over_after": 13.4396511487286,
+      "raw_wall_seconds": {
+        "before": [
+          0.07555087498622015,
+          0.07538020797073841,
+          0.07514804200036451
+        ],
+        "wasmtime": [
+          0.007936499954666942,
+          0.007542000035755336,
+          0.007391707971692085
+        ],
+        "after": [
+          0.007110542035661638,
+          0.005608792009297758,
+          0.005547165987081826
+        ]
+      }
+    },
+    "i64-65536-fill": {
+      "median_wall_seconds": {
+        "before": 0.04505470802541822,
+        "wasmtime": 0.008826042001601309,
+        "after": 0.006556874956004322
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 0.7429009464055017,
+      "before_over_after": 6.871369109176058,
+      "raw_wall_seconds": {
+        "before": [
+          0.04533175000688061,
+          0.04505470802541822,
+          0.04475383402314037
+        ],
+        "wasmtime": [
+          0.009437749977223575,
+          0.008826042001601309,
+          0.008822041971143335
+        ],
+        "after": [
+          0.006594583042897284,
+          0.006432499969378114,
+          0.006556874956004322
+        ]
+      }
+    },
+    "v128-8-copy": {
+      "median_wall_seconds": {
+        "before": 0.05748020898317918,
+        "wasmtime": 0.007930000021588057,
+        "after": 0.014148832997307181
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 1.7842160099356146,
+      "before_over_after": 4.062540634561088,
+      "raw_wall_seconds": {
+        "before": [
+          0.05640200001653284,
+          0.05767883302178234,
+          0.05748020898317918
+        ],
+        "wasmtime": [
+          0.008446874970104545,
+          0.007930000021588057,
+          0.007751166995149106
+        ],
+        "after": [
+          0.014181332953739911,
+          0.014128084003459662,
+          0.014148832997307181
+        ]
+      }
+    },
+    "v128-8-fill": {
+      "median_wall_seconds": {
+        "before": 0.03932433295994997,
+        "wasmtime": 0.00842954101972282,
+        "after": 0.019680333032738417
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 2.334686193078819,
+      "before_over_after": 1.9981538368549747,
+      "raw_wall_seconds": {
+        "before": [
+          0.04017395799746737,
+          0.03932433295994997,
+          0.03914108296157792
+        ],
+        "wasmtime": [
+          0.009166459029074758,
+          0.008243624994065613,
+          0.00842954101972282
+        ],
+        "after": [
+          0.019684416998643428,
+          0.019680333032738417,
+          0.018393750011455268
+        ]
+      }
+    },
+    "v128-65536-copy": {
+      "median_wall_seconds": {
+        "before": 0.08993145899148658,
+        "wasmtime": 0.0093460000352934,
+        "after": 0.006355167017318308
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 0.6799879085511688,
+      "before_over_after": 14.150919833643488,
+      "raw_wall_seconds": {
+        "before": [
+          0.09020404098555446,
+          0.08942425000714138,
+          0.08993145899148658
+        ],
+        "wasmtime": [
+          0.009847166016697884,
+          0.0093460000352934,
+          0.009194083977490664
+        ],
+        "after": [
+          0.007004583021625876,
+          0.006355167017318308,
+          0.006260249996557832
+        ]
+      }
+    },
+    "v128-65536-fill": {
+      "median_wall_seconds": {
+        "before": 0.055063042032998055,
+        "wasmtime": 0.010088292008731514,
+        "after": 0.006816375011112541
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 0.6756718585478,
+      "before_over_after": 8.07805350251862,
+      "raw_wall_seconds": {
+        "before": [
+          0.055063042032998055,
+          0.05533179099438712,
+          0.05378279200522229
+        ],
+        "wasmtime": [
+          0.010088292008731514,
+          0.010114500008057803,
+          0.009668916987720877
+        ],
+        "after": [
+          0.006904583948198706,
+          0.006816375011112541,
+          0.006521000002976507
+        ]
+      }
+    },
+    "ref-8-copy": {
+      "median_wall_seconds": {
+        "before": 0.0565334580023773,
+        "wasmtime": 0.00907658296637237,
+        "after": 0.024283625010866672
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 2.6754148671184446,
+      "before_over_after": 2.3280485502917774,
+      "raw_wall_seconds": {
+        "before": [
+          0.05649291700683534,
+          0.05729187501128763,
+          0.0565334580023773
+        ],
+        "wasmtime": [
+          0.010599792003631592,
+          0.00907658296637237,
+          0.008874499995727092
+        ],
+        "after": [
+          0.023268791032023728,
+          0.025461999990511686,
+          0.024283625010866672
+        ]
+      }
+    },
+    "ref-8-fill": {
+      "median_wall_seconds": {
+        "before": 0.04595420800615102,
+        "wasmtime": 0.009106916026212275,
+        "after": 0.02807641599792987
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 3.0829773676531134,
+      "before_over_after": 1.6367547770178115,
+      "raw_wall_seconds": {
+        "before": [
+          0.045772540965117514,
+          0.04595420800615102,
+          0.045957374968566
+        ],
+        "wasmtime": [
+          0.009670583007391542,
+          0.009106916026212275,
+          0.009024041006341577
+        ],
+        "after": [
+          0.026840624981559813,
+          0.02807641599792987,
+          0.029782290977891535
+        ]
+      }
+    },
+    "ref-65536-copy": {
+      "median_wall_seconds": {
+        "before": 0.08282520796637982,
+        "wasmtime": 0.01008858298882842,
+        "after": 0.020749874995090067
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 2.056768033535276,
+      "before_over_after": 3.9916003342660287,
+      "raw_wall_seconds": {
+        "before": [
+          0.0845167079824023,
+          0.08282520796637982,
+          0.08265041699633002
+        ],
+        "wasmtime": [
+          0.01008858298882842,
+          0.010158249991945922,
+          0.009530958021059632
+        ],
+        "after": [
+          0.01647550001507625,
+          0.020818500022869557,
+          0.020749874995090067
+        ]
+      }
+    },
+    "ref-65536-fill": {
+      "median_wall_seconds": {
+        "before": 0.05308983399299905,
+        "wasmtime": 0.009981125011108816,
+        "after": 0.017553209036123008
+      },
+      "value_ratio": 1,
+      "after_wall_ratio_vs_wasmtime": 1.7586403352915223,
+      "before_over_after": 3.024508731351897,
+      "raw_wall_seconds": {
+        "before": [
+          0.05253416596679017,
+          0.05344166699796915,
+          0.05308983399299905
+        ],
+        "wasmtime": [
+          0.010492416971828789,
+          0.009981125011108816,
+          0.00966370798414573
+        ],
+        "after": [
+          0.02222845802316442,
+          0.017553209036123008,
+          0.017495666979812086
+        ]
+      }
+    }
+  },
+  "local_validation": {
+    "native": "2957/2957, VCODE_REGALLOC_VALIDATION=1 WASMOON_GC_VERIFY=1 WASMOON_GC_ASSERT_BARRIER=1",
+    "wasm": "1390/1390",
+    "sanitizer": "266/266, fresh dirty-source macOS ASan/UBSan; both ASan controls detected; local LSan unavailable",
+    "strict_native_and_wasm": true,
+    "c_stubs_with_warnings_denied": 44
+  },
+  "limitations": [
+    "Sequential local samples, not a randomized performance study or confidence interval.",
+    "Very short post-fix cases are sensitive to startup/compiler overhead; not steady-state throughput and not evidence of general parity with Wasmtime.",
+    "No Windows/x64 execution or Linux LSan acceptance in this local receipt."
+  ]
+}

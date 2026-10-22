@@ -40,12 +40,13 @@ fn ExecCode::try_alloc(
 ///|
 fn ExecCode::try_stage(
   size : Int32,
+  code_bytes~ : Int32 = size,
   reservation~ : @jit_ffi.Reservation? = None,
 ) -> ExecCode? {
   if size <= 0 {
     return None
   }
-  let code = stage_exec_managed(size)
+  let code = stage_exec_managed(size, code_bytes~)
   if exec_code_pointer(code) == 0L {
     None
   } else {

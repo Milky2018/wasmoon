@@ -476,3 +476,45 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_allocation_bounds(void) {
         gc_safepoint_owner_size(max_count + 1) == 0 &&
         gc_safepoint_owner_size(INT32_MAX) == 0;
 }
+
+// A warmed execution must register the same nesting without another allocator
+// call. A larger failed registration must preserve its caller's precise roots.
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_root_scope_reuse(void) {
+    jit_context_t *ctx = alloc_context_internal(0);
+    if (!ctx) return 0;
+    int64_t roots[4] = {2, 4, 6, 8};
+    int passed = ctx_gc_push_root_scope_internal(ctx, roots, 2);
+    wasmoon_gc_root_scope_t *outer = ctx_execution(ctx)->gc_root_scope_head;
+    passed &= ctx_gc_push_root_scope_internal(ctx, roots, 1);
+    ctx_gc_pop_root_scope_internal(ctx);
+    wasmoon_native_fail_allocation_for_tests(1);
+    int reused = ctx_gc_push_root_scope_internal(ctx, roots + 1, 1);
+    passed &= reused;
+    wasmoon_native_fail_allocation_for_tests(0);
+    if (reused) {
+        passed &= ctx_execution(ctx)->gc_root_scope_head->roots[0] == 4;
+        ctx_gc_restore_root_scopes_internal(ctx, outer);
+    }
+    wasmoon_native_fail_allocation_for_tests(1);
+    passed &= !ctx_gc_push_root_scope_internal(ctx, roots, 4);
+    wasmoon_native_fail_allocation_for_tests(0);
+    passed &= ctx_execution(ctx)->gc_root_scope_head == outer &&
+        outer->root_count == 2 && outer->roots[0] == 2 && outer->roots[1] == 4;
+    ctx_gc_pop_root_scope_internal(ctx);
+    passed &= ctx_execution(ctx)->gc_root_scope_head == NULL;
+    free_context_internal(ctx);
+    return passed;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_gc_identity_bytes(GcHeap *heap) {
+    size_t bytes = (size_t)heap->identity_page_capacity * sizeof(GcIdentityPage *) +
+        (size_t)heap->live_capacity * sizeof(int32_t);
+    for (int32_t i = 0; i < heap->identity_page_capacity; i++) {
+        if (heap->identity_pages[i]) bytes += sizeof(GcIdentityPage);
+    }
+    return (int64_t)bytes;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_test_gc_allocation_budget(GcHeap *heap, int64_t bytes) {
+    heap->collection_limit = heap->size + (size_t)bytes;
+}

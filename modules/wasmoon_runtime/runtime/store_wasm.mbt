@@ -62,7 +62,7 @@ fn Store::register_rollback(
   })
   // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
   registrar.on_rollback(
-    self.heap.make_allocation_rollback(fn() { self.collect_roots([]) }),
+    self.heap.make_allocation_rollback(() => self.collect_roots([])),
   )
 }
 
@@ -173,6 +173,7 @@ pub fn Store::close(self : Store) -> Unit {
     self.native_types.native_registry = None
   }
   self.native_types.heap_types.clear()
+  self.native_types.native_layout_count = 0
   for function in self.funcs {
     function.lifetime.active.val = false
   }

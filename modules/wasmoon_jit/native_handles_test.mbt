@@ -1405,3 +1405,11 @@ test "DWARF name allocation failure keeps the previous registered owner intact" 
   assert_eq(active_dwarf_low_pc(), 4096UL)
   assert_true(active.lookup_address(4097L) is Some(_))
 }
+
+///|
+extern "c" fn root_scope_reuse() -> Int32 = "wasmoon_test_root_scope_reuse"
+
+///|
+test "root scope reuse preserves nested roots and failed growth" {
+  inspect(root_scope_reuse(), content="1")
+}

@@ -421,6 +421,11 @@ fn JITContextContinuation::cancel(
 fn JITContext::set_cooperative_scheduling(
   self : JITContext,
   enabled : Bool,
-) -> Unit {
+  quantum : Int32,
+) -> Bool {
+  if !self.ctx.set_cooperative_quantum(quantum) {
+    return false
+  }
   self.ctx.set_cooperative_scheduling(enabled)
+  true
 }

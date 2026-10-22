@@ -63,14 +63,15 @@ pub fn CHeap::get_ptr(self : CHeap) -> GCHeapHandle {
 ///|
 /// Return an owner-bound action that reclaims later allocations unless they
 /// remain reachable when the action runs. Retained object-table indices are
-/// never reused.
+/// never reused. If root discovery raises, skip reclamation rather than use an
+/// incomplete root set.
 pub fn CHeap::make_allocation_rollback(
   self : CHeap,
-  roots : () -> Array[@types.Value],
+  roots : () -> Array[@types.Value] raise,
 ) -> () -> Unit {
   let object_count = self.get_object_count()
   fn() {
-    let current_roots = roots()
+    let current_roots = roots() catch { _ => return }
     let num_roots = current_roots.length()
     let raw_roots = FixedArray::makei(num_roots, fn(i) {
       value_to_i64(current_roots[i])
@@ -108,15 +109,17 @@ pub fn CHeap::alloc_struct(
   self : CHeap,
   type_idx : Int32,
   fields : Array[@types.Value],
+  runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
   let num_fields = fields.length()
   let raw_fields = slots_to_words(fields)
-  let gc_ref = c_gc_heap_alloc_struct_wide(
-    self.ptr,
-    type_idx,
-    raw_fields,
-    num_fields,
-  )
+  let gc_ref = if runtime_type >= 0 {
+    self.ptr.allocate_typed(
+      runtime_type, type_idx, raw_fields, num_fields, false,
+    )
+  } else {
+    c_gc_heap_alloc_struct_wide(self.ptr, type_idx, raw_fields, num_fields)
+  }
   if gc_ref <= 0 {
     raise OutOfMemory
   }
@@ -164,15 +167,20 @@ pub fn CHeap::alloc_array(
   type_idx : Int32,
   len : Int32,
   init_value : @types.Value,
+  runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
   let slot = value_to_slot(init_value)
-  let gc_ref = c_gc_heap_alloc_array_wide(
-    self.ptr,
-    type_idx,
-    len,
-    slot.lo,
-    slot.hi,
-  )
+  let gc_ref = if runtime_type >= 0 {
+    self.ptr.allocate_typed(
+      runtime_type,
+      type_idx,
+      [slot.lo, slot.hi],
+      len,
+      true,
+    )
+  } else {
+    c_gc_heap_alloc_array_wide(self.ptr, type_idx, len, slot.lo, slot.hi)
+  }
   if gc_ref <= 0 {
     raise OutOfMemory
   }
@@ -186,15 +194,15 @@ pub fn CHeap::alloc_array_from_values(
   self : CHeap,
   type_idx : Int32,
   elements : Array[@types.Value],
+  runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
   let len = elements.length()
   let raw_values = slots_to_words(elements)
-  let gc_ref = c_gc_heap_alloc_array_from_slots(
-    self.ptr,
-    type_idx,
-    raw_values,
-    len,
-  )
+  let gc_ref = if runtime_type >= 0 {
+    self.ptr.allocate_typed(runtime_type, type_idx, raw_values, len, false)
+  } else {
+    c_gc_heap_alloc_array_from_slots(self.ptr, type_idx, raw_values, len)
+  }
   if gc_ref <= 0 {
     raise OutOfMemory
   }
@@ -257,7 +265,7 @@ pub fn CHeap::array_fill(
   let gc_ref = array_idx + 1
   // Check bounds before filling
   let len = c_gc_heap_array_len(self.ptr, gc_ref)
-  if offset < 0 || count < 0 || offset + count > len {
+  if offset < 0 || count < 0 || offset > len || count > len - offset {
     raise OutOfBoundsArrayAccess
   }
   let slot = value_to_slot(value)
@@ -282,8 +290,10 @@ pub fn CHeap::array_copy(
   if dst_offset < 0 ||
     src_offset < 0 ||
     count < 0 ||
-    dst_offset + count > dst_len ||
-    src_offset + count > src_len {
+    dst_offset > dst_len ||
+    count > dst_len - dst_offset ||
+    src_offset > src_len ||
+    count > src_len - src_offset {
     raise OutOfBoundsArrayAccess
   }
   c_gc_heap_array_copy(

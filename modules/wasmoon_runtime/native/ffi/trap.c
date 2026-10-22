@@ -269,6 +269,7 @@ int jit_trap_activation_push(jit_trap_activation_t *activation) {
     if (activation->inherit_controls && current_activation) {
         activation->controls = current_activation->controls;
     }
+    activation->execution.poll_controls = activation->controls;
     if (activation->context) {
         jit_execution_state_t *previous = ctx_runtime(activation->context)->execution;
         int standalone = !matching_context_activation(activation->context);
@@ -290,6 +291,8 @@ int jit_trap_activation_push(jit_trap_activation_t *activation) {
         }
         if (standalone && previous) exception_reset_execution_state(previous);
     }
+    if (current_activation) current_activation->execution.poll_controls = NULL;
+    activation->execution.poll_controls = activation->controls;
     current_activation = activation;
     return 1;
 }
@@ -342,6 +345,7 @@ void jit_trap_activation_pop(jit_trap_activation_t *activation) {
     if (current_activation != activation) abort();
     save_activation_context(activation);
     current_activation = activation->previous;
+    if (current_activation) current_activation->execution.poll_controls = current_activation->controls;
     jit_execution_state_clear(&activation->execution);
     release_activation_controls(activation);
     activation->active = 0;
@@ -351,18 +355,22 @@ jit_trap_activation_t *jit_trap_activation_detach(void) {
     jit_trap_activation_t *activation = current_activation;
     if (!activation) return NULL;
     save_activation_context(activation);
+    activation->execution.poll_controls = NULL;
     current_activation = activation->previous;
+    if (current_activation) current_activation->execution.poll_controls = current_activation->controls;
     return activation;
 }
 
 void jit_trap_activation_attach(jit_trap_activation_t *activation) {
     if (!activation) return;
     activation->previous = current_activation;
+    if (current_activation) current_activation->execution.poll_controls = NULL;
     restore_activation_context(activation);
     activation->controls = &activation->owned_controls;
     if (activation->inherit_controls && current_activation) {
         activation->controls = current_activation->controls;
     }
+    activation->execution.poll_controls = activation->controls;
     current_activation = activation;
 }
 
@@ -371,6 +379,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
     if (current_activation == activation) {
         save_activation_context(activation);
         current_activation = activation->previous;
+        if (current_activation) current_activation->execution.poll_controls = current_activation->controls;
     }
     jit_execution_state_clear(&activation->execution);
     release_activation_controls(activation);
