@@ -28,12 +28,31 @@ pub fn optimize_with_level(
   } else {
     false
   }
-  if local_changed {
+  let loop_changed = if level is (O2 | O3) {
+    hoist_checked_gc_reads(function)
+  } else {
+    false
+  }
+  if local_changed || loop_changed {
     // Private writes used to invalidate potentially aliasing field facts.
     // Once those writes become SSA, revisit the surviving real heap reads.
     forward_gc_reads(function) |> ignore
     @wasm_milkir.verify_function_with_context(function, context)
     @generic.optimize_with_level(function, level) |> ignore
   }
-  inline_changed || gc_changed || generic_result.changed || local_changed
+  let cached_changed = if level is (O2 | O3) {
+    cache_loop_gc_reads(function)
+  } else {
+    false
+  }
+  if cached_changed {
+    @wasm_milkir.verify_function_with_context(function, context)
+    @generic.optimize_with_level(function, level) |> ignore
+  }
+  cached_changed ||
+  inline_changed ||
+  gc_changed ||
+  generic_result.changed ||
+  local_changed ||
+  loop_changed
 }

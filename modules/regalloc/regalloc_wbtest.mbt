@@ -975,3 +975,73 @@ test "natural program points preserve signed ordering and inclusive bounds" {
     content="1",
   )
 }
+
+///|
+test "parallel phi arguments retain equivalent names in a shared home" {
+  for used in [1, 2] {
+    let value : VirtualReg = { id: 0, class: Int, }
+    let left : VirtualReg = { id: 1, class: Int, }
+    let right : VirtualReg = { id: 2, class: Int, }
+    let r0 : PhysicalReg = { id: 0, class: Int, }
+    let function : VerifierCfgView = {
+      value_count: 3,
+      blocks: [[], [0]],
+      operands: [[Operand::use_reg(if used == 1 { left } else { right })]],
+      successors: [[1], []],
+      entry_values: [value],
+      parameters: [[], [left, right]],
+      edge_arguments: [[[value, value]], []],
+      successor_queries: Ref(0),
+      block_visits: Ref(0),
+    }
+    let plan = AllocationPlan::new(3)
+    for v in [value, left, right] {
+      plan.assign_value(v, reg_location(r0))
+    }
+    plan.assign_operand(0, 0, reg_location(r0))
+    verify_function_allocation(function, MachineEnv::new([r0], []), plan)
+  }
+}
+
+///|
+test "parallel phi alias verification rejects different bits and overwritten aliases" {
+  for overwritten in [false, true] {
+    let source : VirtualReg = { id: 0, class: Int, }
+    let other : VirtualReg = { id: 1, class: Int, }
+    let left : VirtualReg = { id: 2, class: Int, }
+    let right : VirtualReg = { id: 3, class: Int, }
+    let r0 : PhysicalReg = { id: 0, class: Int, }
+    let r1 : PhysicalReg = { id: 1, class: Int, }
+    let function : VerifierCfgView = {
+      value_count: 4,
+      blocks: [[], if overwritten { [0, 1] } else { [0] }],
+      operands: if overwritten {
+        [[Operand::def(left)], [Operand::use_reg(right)]]
+      } else {
+        [[Operand::use_reg(right)]]
+      },
+      successors: [[1], []],
+      entry_values: [source, other],
+      parameters: [[], [left, right]],
+      edge_arguments: [[[source, if overwritten { source } else { other }]], []],
+      successor_queries: Ref(0),
+      block_visits: Ref(0),
+    }
+    let plan = AllocationPlan::new(4)
+    for value in [source, left, right] {
+      plan.assign_value(value, reg_location(r0))
+    }
+    plan.assign_value(other, reg_location(r1))
+    plan.assign_operand(0, 0, reg_location(r0))
+    if overwritten {
+      plan.assign_operand(1, 0, reg_location(r0))
+    }
+    let rejected = try {
+      verify_function_allocation(function, MachineEnv::new([r0, r1], []), plan)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+}

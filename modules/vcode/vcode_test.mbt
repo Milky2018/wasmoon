@@ -985,3 +985,47 @@ test "selected allocation output rejects incomplete and invalid assignments" {
   assert_true(output.assign_operand(0, 0, location))
   assert_true(output.finish_selected() is Some(_))
 }
+
+///|
+test "allocation verification preserves aliases of parallel block parameters" {
+  for used in [0, 1] {
+    let builder : @vcode.Builder[TestInst] = @vcode.Builder::new(
+      "phi_aliases",
+      [I64],
+    )
+    let entry = builder.entry_block()
+    let source = builder.parameter(0)
+    let exit = builder.create_block([I64, I64])
+    builder.set_terminator(
+      entry,
+      Jump,
+      [],
+      [@vcode.Edge::new(exit, [source, source])],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    let parameter = builder.block_parameter(exit, used)
+    let ret = builder.set_terminator(
+      exit,
+      Return,
+      [@vcode.Input::any(parameter)],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    let function = builder.finish()
+    let allocation = @vcode.Allocation::for_function(function)
+    let register = @vcode.PhysicalReg::new(0, Int)
+    for
+      value in [
+        source,
+        builder.block_parameter(exit, 0),
+        builder.block_parameter(exit, 1),
+      ] {
+      allocation.assign_value(value, Register(register)) |> ignore
+    }
+    allocation.assign_operand(ret, 0, register) |> ignore
+    @vcode.verify_allocated(function, allocation)
+  }
+}

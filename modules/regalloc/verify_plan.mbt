@@ -1,6 +1,6 @@
 ///|
 priv struct PlanState {
-  values : Map[(Int32, Int32), VirtualReg]
+  values : Map[(Int32, Int32), Array[VirtualReg]]
 }
 
 ///|
@@ -10,52 +10,54 @@ fn PlanState::new() -> PlanState {
 
 ///|
 fn PlanState::copy(self : PlanState) -> PlanState {
-  let values : Map[(Int32, Int32), VirtualReg] = Map([])
+  let values : Map[(Int32, Int32), Array[VirtualReg]] = Map([])
   for key, value in self.values {
-    values[key] = value
+    values[key] = value.copy()
   }
   { values, }
 }
 
 ///|
 fn PlanState::equals(self : PlanState, other : PlanState) -> Bool {
-  let mut count = 0
-  for key, value in self.values {
-    count = count + 1
-    if other.values.get(key) != Some(value) {
+  if self.values.length() != other.values.length() {
+    return false
+  }
+  for key, values in self.values {
+    guard other.values.get(key) is Some(other_values) else { return false }
+    if values.length() != other_values.length() ||
+      !values.all(value => other_values.contains(value)) {
       return false
     }
   }
-  let mut other_count = 0
-  for _ in other.values {
-    other_count = other_count + 1
-  }
-  count == other_count
+  true
 }
 
 ///|
 fn PlanState::meet_with(self : PlanState, other : PlanState) -> Unit {
-  let removed : Array[(Int32, Int32)] = []
-  for key, value in self.values {
-    if other.values.get(key) != Some(value) {
-      removed.push(key)
+  for key in self.values.keys().to_array() {
+    match other.values.get(key) {
+      None => self.values.remove(key)
+      Some(other_values) => {
+        let retained = self.values[key].filter(value => {
+          other_values.contains(value)
+        })
+        if retained.is_empty() {
+          self.values.remove(key)
+        } else {
+          self.values[key] = retained
+        }
+      }
     }
-  }
-  for key in removed {
-    self.values.remove(key)
   }
 }
 
 ///|
 fn PlanState::remove_value(self : PlanState, value : VirtualReg) -> Unit {
-  let removed : Array[(Int32, Int32)] = []
-  for key, existing in self.values {
-    if existing == value {
-      removed.push(key)
+  for key in self.values.keys().to_array() {
+    self.values[key].retain(other => other != value)
+    if self.values[key].is_empty() {
+      self.values.remove(key)
     }
-  }
-  for key in removed {
-    self.values.remove(key)
   }
 }
 
@@ -146,7 +148,10 @@ fn require_value_at(
   value : VirtualReg,
   location : Location,
 ) -> Unit raise VerifyError {
-  if state.values.get(location_key(location)) != Some(value) {
+  if !state.values
+    .get(location_key(location))
+    .map(values => values.contains(value))
+    .unwrap_or(false) {
     raise IncorrectValue(vreg=value, location~)
   }
 }
@@ -160,7 +165,7 @@ fn apply_plan_edit(
   if edit.from.is_spill() && edit.to.is_spill() {
     raise InvalidPlan(message="stack-to-stack allocation edit")
   }
-  state.values[location_key(edit.to)] = edit.value
+  state.values[location_key(edit.to)] = state.values[location_key(edit.from)].copy()
 }
 
 ///|
@@ -235,7 +240,7 @@ fn[F : FunctionView, S : AllocationSink] process_operand_phase(
     }
     if operand.role is Def || operand.role is UseDef {
       state.remove_value(operand.vreg)
-      state.values[location_key(location)] = operand.vreg
+      state.values[location_key(location)] = [operand.vreg]
     }
   }
 }
@@ -290,7 +295,7 @@ fn[F : FunctionView, S : AllocationSink] initialize_block_parameters(
       raise Unassigned(vreg=parameter)
     }
     state.remove_value(parameter)
-    state.values[location_key(location)] = parameter
+    state.values[location_key(location)] = [parameter]
   }
 }
 
@@ -311,7 +316,9 @@ fn[F : FunctionView, S : AllocationSink] prepare_successor_state(
     let original = state.copy()
     for edit in bucket {
       require_value_at(original, edit.value, edit.from)
-      state.values[location_key(edit.to)] = edit.value
+      state.values[location_key(edit.to)] = original.values[location_key(
+        edit.from,
+      )].copy()
     }
   }
   let argument_count = function.edge_argument_count(block, successor)
@@ -327,9 +334,23 @@ fn[F : FunctionView, S : AllocationSink] prepare_successor_state(
     guard plan.value_location(parameter.id) is Some(parameter_home) else {
       raise Unassigned(vreg=parameter)
     }
+    // Edge arguments are parallel assignments. Check all source identities
+    // before removing prior-iteration parameter names or adding new aliases.
     require_value_at(state, argument, parameter_home)
-    state.remove_value(parameter)
-    state.values[location_key(parameter_home)] = parameter
+  }
+  for index in 0..<parameter_count {
+    state.remove_value(function.block_parameter_at(target, index))
+  }
+  for index in 0..<parameter_count {
+    let parameter = function.block_parameter_at(target, index)
+    let home = location_key(plan.value_location(parameter.id).unwrap())
+    match state.values.get(home) {
+      Some(aliases) =>
+        if !aliases.contains(parameter) {
+          aliases.push(parameter)
+        }
+      None => state.values[home] = [parameter]
+    }
   }
   state
 }
@@ -401,7 +422,7 @@ fn[F : FunctionView, S : AllocationSink] verify_function_allocation(
           guard plan.value_location(parameter.id) is Some(location) else {
             raise Unassigned(vreg=parameter)
           }
-          state.values[location_key(location)] = parameter
+          state.values[location_key(location)] = [parameter]
         }
       }
       initialize_block_parameters(state, function, plan, block)

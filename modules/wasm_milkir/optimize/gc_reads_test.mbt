@@ -198,7 +198,7 @@ test "unknown calls invalidate GC read facts" {
 }
 
 ///|
-test "loop headers discard facts from the preheader and backedge" {
+test "prechecked stable loop reads reuse the preheader value" {
   let b = @milkir.FunctionBuilder::FunctionBuilder("loop")
   let object = b.add_param(Ref)
   let condition = b.add_param(I32)
@@ -214,7 +214,7 @@ test "loop headers discard facts from the preheader and backedge" {
   b.return_([])
   let function = b.get_function()
   @optimize.optimize_with_level(function, test_context(), O2) |> ignore
-  inspect(gc_read_count(function), content="2")
+  inspect(gc_read_count(function), content="1")
 }
 
 ///|
