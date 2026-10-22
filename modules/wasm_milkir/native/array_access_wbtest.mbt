@@ -156,3 +156,47 @@ test "a loop view requires an executed preheader check and a complete cycle proo
     assert_eq(verify_array_accesses(function, context, plan), mode == "checked")
   }
 }
+
+///|
+test "loop array views may be prepared from a produced nullable reference" {
+  for mode in ["none", "call", "allocation", "raw_write"] {
+    let barrier = mode != "none"
+    let b = @milkir.FunctionBuilder::FunctionBuilder("produced_array_view")
+    let holder = b.add_param(Ref)
+    let address = b.add_param(Ptr)
+    let n = b.add_param(I32)
+    let a = @wasm_milkir.struct_get(b, 1, 0, holder, Ref)
+    let origin = b.get_function().defining_inst(a).unwrap().id
+    if mode == "call" {
+      let symbol = b.get_function().declare_external_symbol("reenter")
+      b.call_symbol(symbol, None, []) |> ignore
+    } else if mode == "allocation" {
+      @wasm_milkir.array_new_default(b, 0, n) |> ignore
+    } else if mode == "raw_write" {
+      b.store_ptr(I64, address, b.iconst_i64(0L), b.iconst_i64(0L))
+    }
+    let header = b.create_block()
+    let i = b.add_block_param(header, I32)
+    let body = b.create_block()
+    let exit = b.create_block()
+    b.jump(header, [b.iconst_i32(0)])
+    b.switch_to_block(header)
+    b.branch(b.icmp_ult(i, n), body, [], exit, [])
+    b.switch_to_block(body)
+    let value = @wasm_milkir.array_get(b, 0, a, i, I64)
+    @wasm_milkir.array_set(b, 0, a, i, b.iadd(value, b.iconst_i64(1L)))
+    b.jump(header, [b.iadd(i, b.iconst_i32(1))])
+    b.switch_to_block(exit)
+    b.return_([])
+    let function = b.get_function()
+    let context = array_access_context()
+    let plan = plan_array_accesses(function, context)
+    assert_true(verify_array_accesses(function, context, plan))
+    assert_eq(plan.values().any(a => a.first == origin), !barrier)
+    for id in plan.keys().to_array() {
+      let access = plan[id]
+      plan[id] = { ..access, first: origin, loop_header: Some(header.id), }
+    }
+    assert_eq(verify_array_accesses(function, context, plan), !barrier)
+  }
+}

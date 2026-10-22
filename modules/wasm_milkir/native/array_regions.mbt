@@ -6,7 +6,7 @@ fn array_view_origins(
   let origins : Map[Int32, (Int32, Int32)] = Map([])
   for _, access in plan {
     guard function.instruction_by_id(access.first) is Some(first) &&
-      first.args.get(0) is Some(reference) else {
+      array_view_reference(first) is Some(reference) else {
       return None
     }
     let identity = (reference.id, access.width)
@@ -19,17 +19,34 @@ fn array_view_origins(
 }
 
 ///|
-/// A successful array operation already checks null at this exact point.
-/// Preparation cannot add a null trap to an untaken/zero-trip loop.
-fn array_view_check(
+fn array_view_reference(inst : @milkir.Inst) -> @milkir.Value? {
+  if @wasm_milkir.decode_opcode(inst.opcode) is Some(StructGet(_, _)) &&
+    inst.results is [value] &&
+    value.ty is Ref {
+    Some(value)
+  } else {
+    inst.args.get(0)
+  }
+}
+
+///|
+/// A successful array operation or newly produced reference supplies a view.
+/// Projection is total and nontrapping, including a nullable struct field, so
+/// preparation cannot add a trap to an untaken/zero-trip loop.
+fn array_view_origin_matches(
   inst : @milkir.Inst,
   context : @wasm_milkir.WasmValidationContext,
   reference : Int32,
   width : Int32,
 ) -> Bool {
-  if inst.args.get(0).map(v => v.id) != Some(reference) {
+  if array_view_reference(inst).map(v => v.id) != Some(reference) {
     return false
   }
+  (
+    @wasm_milkir.decode_opcode(inst.opcode) is Some(StructGet(_, _)) &&
+    inst.results is [value] &&
+    value.ty is Ref
+  ) ||
   @wasm_milkir.decode_opcode(inst.opcode) is Some(ArrayLen) ||
   scalar_array_access(inst, context).map(v => v.0) == Some(width)
 }
@@ -85,7 +102,7 @@ fn plan_loop_array_accesses(
         if !array_region_local(first) {
           break
         }
-        if array_view_check(first, context, inst.args[0].id, width) {
+        if array_view_origin_matches(first, context, inst.args[0].id, width) {
           plan[id] = {
             first: first.id,
             width,
@@ -101,7 +118,7 @@ fn plan_loop_array_accesses(
 
 ///|
 /// Recheck a loop borrow independently of the planner. The preheader's
-/// successful array check dominates every use, and no route around the loop
+/// array check or reference producer dominates every use. No route around the loop
 /// may collect, reenter or rebind the heap. Array writes cannot resize it.
 fn verify_loop_array_access(
   function : @milkir.Function,
@@ -153,7 +170,7 @@ fn verify_loop_array_access(
       checked = false
     }
     if id == first {
-      checked = array_view_check(inst, context, reference, width)
+      checked = array_view_origin_matches(inst, context, reference, width)
     }
   }
   checked
@@ -162,7 +179,7 @@ fn verify_loop_array_access(
 ///|
 /// Every physical use needs a checked origin and a no-safepoint path. Ordinary
 /// regions follow forward single-predecessor edges. A loop additionally needs
-/// a dominating executed preheader check and a proof for its entire cycle.
+/// a dominating preheader origin and a proof for its entire cycle.
 /// Verification is mandatory even when callers disable generic IR validation.
 fn verify_array_accesses(
   function : @milkir.Function,
@@ -195,7 +212,7 @@ fn verify_array_accesses(
         live.clear()
       }
       if origins.get(id) is Some((reference, width)) {
-        if !array_view_check(inst, context, reference, width) ||
+        if !array_view_origin_matches(inst, context, reference, width) ||
           live.length() >= 256 {
           return false
         }

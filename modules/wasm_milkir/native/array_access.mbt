@@ -65,7 +65,15 @@ fn plan_array_accesses(
   context : @wasm_milkir.WasmValidationContext,
 ) -> Map[Int32, ArrayAccess] {
   let result : Map[Int32, ArrayAccess] = Map([])
-  if function.blocks.length() > 4096 {
+  if function.blocks.length() > 4096 ||
+    !function.blocks.any(block => {
+      function
+      .block_instruction_ids(block)
+      .any(id => {
+        scalar_array_access(function.instruction_by_id(id).unwrap(), context)
+        is Some(_)
+      })
+    }) {
     return result
   }
   let cfg = @milkir.CFG::build(function)
@@ -115,6 +123,7 @@ fn prepare_array_view(
   context : @adapter.InstructionContext,
   environment : Environment,
   width : Int32,
+  reference~ : @lowering.Value? = None,
 ) -> (@lowering.Value, @lowering.Value) {
   let heap = context.emit(
       EnvironmentField(environment.gc_heap_field.unwrap(), Mutable),
@@ -126,9 +135,13 @@ fn prepare_array_view(
         External((environment.runtime_symbol)(GcArrayDataHeap)),
         @native_types.Signature::new([Ptr64, GcRef64, I32], [Ptr64]),
         Platform,
-        @native_types.CallBehavior::new(Read, true, false, false, false),
+        @native_types.CallBehavior::new(Read, false, false, false, false),
       ),
-      [heap, context.operands()[0], i32_immediate(context, width)],
+      [
+        heap,
+        reference.unwrap_or(context.operands()[0]),
+        i32_immediate(context, width),
+      ],
       [Ptr64],
     )[0]
   let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [pointer], [I64])[0]

@@ -14,7 +14,7 @@ struct InstructionContext {
   environment : Array[@lowering.Value]
   source : @native.SourceLocation?
   live_gc_roots : Array[@lowering.Value]
-  completed : Ref[Bool]
+  mut completed_results : Array[@lowering.Value]?
   terminates_block : Ref[Bool]
   error : Ref[String?]
   complete : (Array[@lowering.Value]) -> Unit
@@ -43,7 +43,7 @@ pub fn InstructionContext::new(
     environment: environment.copy(),
     source,
     live_gc_roots: live_gc_roots.copy(),
-    completed: Ref(false),
+    completed_results: None,
     terminates_block: Ref(false),
     error: Ref(None),
     complete,
@@ -79,7 +79,7 @@ fn InstructionContext::complete_once(
   self : InstructionContext,
   results : Array[@lowering.Value],
 ) -> Unit {
-  if self.completed.val {
+  if self.completed_results is Some(_) {
     self.record_error("dialect instruction completed more than once")
     return
   }
@@ -89,7 +89,7 @@ fn InstructionContext::complete_once(
     )
     return
   }
-  self.completed.val = true
+  self.completed_results = Some(results)
   (self.complete)(results)
 }
 
@@ -426,7 +426,7 @@ pub fn InstructionContext::status(self : InstructionContext) -> String? {
   match self.error.val {
     Some(message) => Some(message)
     None =>
-      if self.completed.val {
+      if self.completed_results is Some(_) {
         None
       } else {
         Some("dialect instruction did not complete its result contract")
@@ -438,4 +438,12 @@ pub fn InstructionContext::status(self : InstructionContext) -> String? {
 /// Source SSA instruction identity for compiler-owned access plans.
 pub fn InstructionContext::instruction_id(self : InstructionContext) -> Int32 {
   self.instruction_id
+}
+
+///|
+/// Results are available only after this instruction has completed.
+pub fn InstructionContext::results(
+  self : InstructionContext,
+) -> Array[@lowering.Value] {
+  self.completed_results.map(values => values.copy()).unwrap_or([])
 }

@@ -199,3 +199,62 @@ test "native entry validates nullability object kind and concrete array subtypin
     }
   }
 }
+
+///|
+test "array views from nullable fields preserve zero trip and first access traps" {
+  let module_ = @wat.parse(
+    (
+      #|(module (type $a (array (mut i64)))
+      #| (type $holder (struct (field (ref null $a))))
+      #| (func (export "test") (param $present i32) (param $n i32) (result i64)
+      #|  (local $a (ref null $a)) (local $i i32) (local $sum i64)
+      #|  local.get $present if (result (ref null $a))
+      #|   i64.const 7 i32.const 4 array.new $a else ref.null $a end
+      #|  struct.new $holder struct.get $holder 0 local.set $a
+      #|  block $done loop $again
+      #|   local.get $i local.get $n i32.ge_u br_if $done
+      #|   local.get $a local.get $i array.get $a local.get $sum i64.add local.set $sum
+      #|   local.get $a local.get $i i64.const 3 array.set $a
+      #|   local.get $i i32.const 1 i32.add local.set $i br $again
+      #|  end end local.get $sum))
+    ),
+  )
+  @validator.validate_module(module_)
+  for (opt_level, enable_cancellation) in [(0, false), (2, false), (2, true)] {
+    let store = @runtime.Store::with_c_heap()
+    defer store.close()
+    let instance = @executor.instantiate_module_with_imports(
+      store,
+      module_,
+      Imports(store),
+    )
+    let context = build_gc_root_context(
+      module_,
+      instance,
+      store,
+      opt_level~,
+      enable_cancellation~,
+    )
+    defer context.close()
+    for (present, count, expected) in [(0, 0, 0L), (1, 0, 0L), (1, 4, 28L)] {
+      assert_eq(
+        context.call_core_func(store, instance, 0, [I32(present), I32(count)]),
+        [I64(expected)],
+      )
+    }
+    for
+      (present, count, message) in [
+        (0, 1, "null reference"),
+        (1, 5, "out of bounds array access"),
+      ] {
+      try
+        context.call_core_func(store, instance, 0, [I32(present), I32(count)])
+      catch {
+        Trap(actual) => assert_eq(actual, message)
+        error => fail(error.to_string())
+      } noraise {
+        _ => fail("missing first-access trap")
+      }
+    }
+  }
+}

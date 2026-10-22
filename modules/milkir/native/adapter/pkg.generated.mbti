@@ -33,6 +33,7 @@ pub fn InstructionContext::noreturn_call(Self, @native_types.NativeCall, Array[@
 pub fn InstructionContext::operand_types(Self) -> Array[@native_types.ValueType]
 pub fn InstructionContext::operands(Self) -> Array[@native_lowering.Value]
 pub fn InstructionContext::result_types(Self) -> Array[@native_types.ValueType]
+pub fn InstructionContext::results(Self) -> Array[@native_lowering.Value]
 pub fn InstructionContext::set_trap_terminator(Self, @native_types.TrapReason) -> Unit
 pub fn InstructionContext::source(Self) -> @native_types.SourceLocation?
 pub fn InstructionContext::status(Self) -> String?

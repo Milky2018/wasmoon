@@ -1033,14 +1033,16 @@ void WASMOON_GUEST_ABI gc_struct_set_heap_impl(GcHeap *heap, int64_t ref, int32_
 
 _Static_assert(GC_ARRAY_DATA_OFFSET == 16, "numeric array view ABI");
 
-// Borrowed numeric-array payload. The compiler must not retain this pointer
+// Nontrapping numeric-array projection, including null heaps/references.
+// The compiler may prepare it before an array operation actually executes.
+// Actual operations keep their checked fallback and null/bounds traps.
+// The compiler must not retain this pointer
 // across allocation, polling, calls or reentry. Every CFG path (including
 // loop backedges) must belong to a compiler-verified no-safepoint region. The
 // payload contains i32 length at offset zero and elements at offset 16.
 // A zero result selects the existing checked accessor (including verification).
 void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32_t width) {
-    if (!heap) { trap_unreachable_void(); return NULL; }
-    if (!ref) { trap_null_reference(); return NULL; }
+    if (!heap || !ref) return NULL;
     if (gc_verify_env_cached != 0) return NULL;
     GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
     if (!header || header->kind != GC_KIND_ARRAY) return NULL;

@@ -1,0 +1,573 @@
+{
+  "issue": "https://github.com/Milky2018/wasmoon/issues/568",
+  "date": "2026-10-22",
+  "scope": "Local macOS ARM64; no CI, Windows, x64 execution, merge or publication acceptance",
+  "baseline_commit": "5fa50157e13e00b1b41a3cc830427958e04689c2",
+  "candidate": {
+    "source_revision": "5fa50157e13e00b1b41a3cc830427958e04689c2",
+    "source_dirty": true,
+    "functional_manifest_sha256": "25764edf64108066ca9bf3cbb4e1ccd1169e25a41bcf5c9fe67c039002aeadcc",
+    "functional_files": 815,
+    "codegen_revision": 17
+  },
+  "functional_manifest_method": "Sorted compact JSON map of module-relative SHA256 for .mbt/.c/.h/.S/.asm/.pkg/.mod/.schema/.py excluding *_test.mbt/*_wbtest.mbt and _build/target/.mooncakes/.git/__pycache__; independent candidate equals working tree before and after performance/corpora.",
+  "tools": {
+    "moon": "moon 0.1.20261021 (a4f8933 2026-10-21) ~/.moon/bin/moon\nmoonc v0.10.17+093cb8f9c (2026-10-21) ~/.moon/bin/moonc\nmoonrun 0.1.20261021 (a4f8933 2026-10-21) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.7\nBuildVersion:\t\t25G229\n",
+    "machine": "arm64"
+  },
+  "performance": {
+    "short_three_samples": {
+      "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+      "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+      "wasm_tools_version": "wasm-tools 1.254.0",
+      "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+      "count": 1000,
+      "samples": [
+        {
+          "engine": "wasmtime",
+          "sample": 0,
+          "wall_seconds": 0.4012519160169177,
+          "user_cpu_seconds": 0.391025,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 0,
+          "wall_seconds": 1.0918430829769932,
+          "user_cpu_seconds": 1.060746,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 0,
+          "wall_seconds": 1.2291364159900695,
+          "user_cpu_seconds": 1.192847,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 1,
+          "wall_seconds": 1.1955925839720294,
+          "user_cpu_seconds": 1.1667489999999998,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 1,
+          "wall_seconds": 1.0876177500467747,
+          "user_cpu_seconds": 1.0599910000000001,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 1,
+          "wall_seconds": 0.4005779580329545,
+          "user_cpu_seconds": 0.3907620000000005,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 2,
+          "wall_seconds": 0.3971707089804113,
+          "user_cpu_seconds": 0.38599099999999975,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 2,
+          "wall_seconds": 1.10503283404978,
+          "user_cpu_seconds": 1.0737379999999996,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 2,
+          "wall_seconds": 1.1731264590052888,
+          "user_cpu_seconds": 1.1436989999999998,
+          "result": 1
+        }
+      ],
+      "wasmoon_binary_sha256": {
+        "wasmoon": "a8ebde3b400b07193ab93dba4bdbe213201380c4d88f5c9553334293cebe6d2c",
+        "baseline": "391ace5b33ef0c123e4ab47128a7398ad18a37e15ab58424ccbce964a10b6a46"
+      },
+      "probe_sha256": "e6a39b49b7751dfdb2b9130db555a239018d6e2daebd6fabc5913672ca3dc8b8",
+      "median": {
+        "wasmtime": {
+          "wall_seconds": 0.4005779580329545,
+          "user_cpu_seconds": 0.3907620000000005,
+          "wall_ratio": 1.0,
+          "user_cpu_ratio": 1.0
+        },
+        "wasmoon": {
+          "wall_seconds": 1.0918430829769932,
+          "user_cpu_seconds": 1.060746,
+          "wall_ratio": 2.725669401128582,
+          "user_cpu_ratio": 2.7145577103198333
+        },
+        "baseline": {
+          "wall_seconds": 1.1955925839720294,
+          "user_cpu_seconds": 1.1667489999999998,
+          "wall_ratio": 2.984668926475658,
+          "user_cpu_ratio": 2.985830249614851
+        }
+      }
+    },
+    "full_three_samples_with_scheduling_waits": {
+      "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+      "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+      "wasm_tools_version": "wasm-tools 1.254.0",
+      "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+      "count": 20000,
+      "samples": [
+        {
+          "engine": "wasmtime",
+          "sample": 0,
+          "wall_seconds": 2.4528144579962827,
+          "user_cpu_seconds": 2.429764,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 0,
+          "wall_seconds": 4.986750125011895,
+          "user_cpu_seconds": 4.913348,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 0,
+          "wall_seconds": 5.875382540980354,
+          "user_cpu_seconds": 5.810984,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 1,
+          "wall_seconds": 5.870678333041724,
+          "user_cpu_seconds": 5.812472,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 1,
+          "wall_seconds": 6.659547167015262,
+          "user_cpu_seconds": 4.923117000000001,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 1,
+          "wall_seconds": 2.6924054169794545,
+          "user_cpu_seconds": 2.5989439999999995,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 2,
+          "wall_seconds": 2.476103042019531,
+          "user_cpu_seconds": 2.454528,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 2,
+          "wall_seconds": 5.441616833966691,
+          "user_cpu_seconds": 4.964438000000001,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 2,
+          "wall_seconds": 5.875155833957251,
+          "user_cpu_seconds": 5.814364999999995,
+          "result": 1
+        }
+      ],
+      "wasmoon_binary_sha256": {
+        "wasmoon": "a8ebde3b400b07193ab93dba4bdbe213201380c4d88f5c9553334293cebe6d2c",
+        "baseline": "391ace5b33ef0c123e4ab47128a7398ad18a37e15ab58424ccbce964a10b6a46"
+      },
+      "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1",
+      "median": {
+        "wasmtime": {
+          "wall_seconds": 2.476103042019531,
+          "user_cpu_seconds": 2.454528,
+          "wall_ratio": 1.0,
+          "user_cpu_ratio": 1.0
+        },
+        "wasmoon": {
+          "wall_seconds": 5.441616833966691,
+          "user_cpu_seconds": 4.923117000000001,
+          "wall_ratio": 2.1976536281496837,
+          "user_cpu_ratio": 2.005728596292241
+        },
+        "baseline": {
+          "wall_seconds": 5.875155833957251,
+          "user_cpu_seconds": 5.812472,
+          "wall_ratio": 2.372742868231131,
+          "user_cpu_ratio": 2.3680609876929495
+        }
+      }
+    },
+    "full_seven_sample_confirmation": {
+      "expected_core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+      "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "wasmtime_version": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+      "wasm_tools_version": "wasm-tools 1.254.0",
+      "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+      "count": 20000,
+      "samples": [
+        {
+          "engine": "wasmtime",
+          "sample": 0,
+          "wall_seconds": 2.42476224998245,
+          "user_cpu_seconds": 2.410238,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 0,
+          "wall_seconds": 6.118198874988593,
+          "user_cpu_seconds": 4.955233,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 0,
+          "wall_seconds": 7.6739311660057865,
+          "user_cpu_seconds": 6.262391999999999,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 1,
+          "wall_seconds": 6.12651570799062,
+          "user_cpu_seconds": 5.995241000000002,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 1,
+          "wall_seconds": 5.085215208004229,
+          "user_cpu_seconds": 4.972472,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 1,
+          "wall_seconds": 2.5246517499908805,
+          "user_cpu_seconds": 2.4956899999999997,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 2,
+          "wall_seconds": 2.4750709169893526,
+          "user_cpu_seconds": 2.4445179999999986,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 2,
+          "wall_seconds": 4.859371458995156,
+          "user_cpu_seconds": 4.773952999999999,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 2,
+          "wall_seconds": 5.99548879195936,
+          "user_cpu_seconds": 5.883717000000004,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 3,
+          "wall_seconds": 5.807038749975618,
+          "user_cpu_seconds": 5.756191000000001,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 3,
+          "wall_seconds": 4.761607374995947,
+          "user_cpu_seconds": 4.715380999999994,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 3,
+          "wall_seconds": 2.430100333003793,
+          "user_cpu_seconds": 2.4194870000000037,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 4,
+          "wall_seconds": 2.434528208046686,
+          "user_cpu_seconds": 2.4229879999999966,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 4,
+          "wall_seconds": 4.812913624977227,
+          "user_cpu_seconds": 4.740812000000005,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 4,
+          "wall_seconds": 6.164255458978005,
+          "user_cpu_seconds": 6.048346000000002,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 5,
+          "wall_seconds": 6.089075165975373,
+          "user_cpu_seconds": 6.018769999999989,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 5,
+          "wall_seconds": 4.965894541004673,
+          "user_cpu_seconds": 4.901342,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 5,
+          "wall_seconds": 2.4274467499926686,
+          "user_cpu_seconds": 2.414916000000005,
+          "result": 1
+        },
+        {
+          "engine": "wasmtime",
+          "sample": 6,
+          "wall_seconds": 2.443747417011764,
+          "user_cpu_seconds": 2.4309650000000005,
+          "result": 1
+        },
+        {
+          "engine": "wasmoon",
+          "sample": 6,
+          "wall_seconds": 4.931318375049159,
+          "user_cpu_seconds": 4.873108000000002,
+          "result": 1
+        },
+        {
+          "engine": "baseline",
+          "sample": 6,
+          "wall_seconds": 5.996598208032083,
+          "user_cpu_seconds": 5.929518000000002,
+          "result": 1
+        }
+      ],
+      "wasmoon_binary_sha256": {
+        "wasmoon": "a8ebde3b400b07193ab93dba4bdbe213201380c4d88f5c9553334293cebe6d2c",
+        "baseline": "391ace5b33ef0c123e4ab47128a7398ad18a37e15ab58424ccbce964a10b6a46"
+      },
+      "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1",
+      "median": {
+        "wasmtime": {
+          "wall_seconds": 2.434528208046686,
+          "user_cpu_seconds": 2.4229879999999966,
+          "wall_ratio": 1.0,
+          "user_cpu_ratio": 1.0
+        },
+        "wasmoon": {
+          "wall_seconds": 4.931318375049159,
+          "user_cpu_seconds": 4.873108000000002,
+          "wall_ratio": 2.0255745481814493,
+          "user_cpu_ratio": 2.0111977442727778
+        },
+        "baseline": {
+          "wall_seconds": 6.089075165975373,
+          "user_cpu_seconds": 5.995241000000002,
+          "wall_ratio": 2.5011314906311433,
+          "user_cpu_ratio": 2.474317247959961
+        }
+      }
+    },
+    "counters_single_trial": {
+      "baseline": {
+        "stderr": "        5.97 real         5.90 user         0.05 sys\n           351961088  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               28055  page reclaims\n                   6  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   3  voluntary context switches\n                 719  involuntary context switches\n        121424051555  instructions retired\n         22000604322  cycles elapsed\n           347407008  peak memory footprint\n",
+        "result": 1
+      },
+      "wasmoon": {
+        "stderr": "        4.82 real         4.76 user         0.04 sys\n           352157696  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               28067  page reclaims\n                   6  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   1  voluntary context switches\n                 371  involuntary context switches\n         89892569960  instructions retired\n         17967818998  cycles elapsed\n           347603592  peak memory footprint\n",
+        "result": 1
+      },
+      "wasmtime": {
+        "stderr": "warning: using `--invoke` with a function that returns values is experimental and may break in the future\n        2.44 real         2.42 user         0.01 sys\n            73498624  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                4827  page reclaims\n                   0  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                   0  voluntary context switches\n                 585  involuntary context switches\n         60858773129  instructions retired\n          8956502707  cycles elapsed\n            63963664  peak memory footprint\n",
+        "result": 1
+      }
+    },
+    "phase_metrics_single_trial": {
+      "baseline": {
+        "schema_version": 1,
+        "command_us": "5864783",
+        "phases_us": {
+          "host_setup_and_preloads": "98",
+          "read_and_parse": "3409",
+          "validate": "7130",
+          "instantiate_including_start": "10203",
+          "jit_plan_and_cache_lookup": "1885",
+          "compile": "611921",
+          "artifact_verify": "16590",
+          "cache_write_and_report": "6517",
+          "jit_load_and_prepare": "312561",
+          "invoke_including_hostcalls": "4893379",
+          "finish_or_early_return": "1090"
+        }
+      },
+      "wasmoon": {
+        "schema_version": 1,
+        "command_us": "4752772",
+        "phases_us": {
+          "host_setup_and_preloads": "89",
+          "read_and_parse": "3125",
+          "validate": "6982",
+          "instantiate_including_start": "9970",
+          "jit_plan_and_cache_lookup": "1829",
+          "compile": "571161",
+          "artifact_verify": "15524",
+          "cache_write_and_report": "5126",
+          "jit_load_and_prepare": "274524",
+          "invoke_including_hostcalls": "3863434",
+          "finish_or_early_return": "1008"
+        }
+      }
+    }
+  },
+  "profiling": {
+    "baseline_active_leaves": " (when >= 5):\n        __sigwait  (in libsystem_kernel.dylib)        2534\n        gc_array_set_heap_impl  (in baseline.exe)        362\n        gc_array_get_heap_impl  (in baseline.exe)        331\n        gc_struct_get_heap_impl  (in baseline.exe)        227\n        gc_heap_alloc_typed  (in baseline.exe)        199\n        gc_array_data_heap_impl  (in baseline.exe)        197\n        gc_select_alloc_roots  (in baseline.exe)        101\n        ctx_gc_push_root_scope_internal  (in baseline.exe)        70\n        mach_absolute_time  (in libsystem_kernel.dylib)        67\n        _xzm_free  (in libsystem_malloc.dylib)        57\n        _platform_memmove  (in libsystem_platform.dylib)        55\n        _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib)        50\n        gc_alloc_struct_slow  (in baseline.exe)        47\n        _platform_memset  (in libsystem_platform.dylib)        44\n        wasmoon_jit_gc_pop_root_scope_or_trap  (in baseline.exe)        42\n        ???  (in <unknown binary>)  [0x102ad46a0]        35\n        wasmoon_gc_allocation_attempt  (in baseline.exe)        32\n        ctx_gc_pop_root_scope_internal  (in baseline.exe)        31\n        gc_heap_sweep  (in baseline.exe)        31\n        wasmoon_gc_collection_seeds  (in baseline.exe)        31\n        wasmoon_jit_gc_push_root_scope_or_trap  (in baseline.exe)        29\n        gc_array_len_heap_impl  (in baseline.exe)        25\n        gc_struct_set_heap_impl  (in baseline.exe)        25\n        ???  (in <unknown binary>)  [0x102ad422c]        24\n        ???  (in <unknown binary>)  [0x102ad48c8]        20\n        ???  (in <unknown binary>)  [0x102ad4904]        20\n        ???  (in <unknown binary>)  [0x102ad43ac]        19\n        _free  (in libsystem_malloc.dylib)        19\n        callable_native_reference  (in baseline.exe)        19\n        gc_heap_admit  (in baseline.exe)        18\n        gc_heap_ensure_object_capacity  (in baseline.exe)        16\n        ???  (in <unknown binary>)  [0x102ad436c]        14\n        gc_heap_register_object  (in baseline.exe)        14\n        gc_should_fail_allocation  (in baseline.exe)        14\n        _malloc_zone_malloc  (in libsystem_malloc.dylib)        13\n        _tlv_get_addr  (in libdyld.dylib)        13\n        gc_allocate  (in baseline.exe)        13\n        _xzm_xzone_malloc  (in libsystem_malloc.dylib)        11\n        gc_heap_ensure_payload_capacity  (in baseline.exe)        11\n        <deduplicated_symbol>  (in libsystem_malloc.dylib)        10\n        gc_heap_maybe_verify  (in baseline.exe)        9\n        ???  (in <unknown binary>)  [0x102ababb4]        8\n        ???  (in <unknown binary>)  [0x102ad4184]        8\n        gc_alloc_debug_enabled  (in baseline.exe)        7\n        ???  (in <unknown binary>)  [0x102ad42cc]        6\n        ???  (in <unknown binary>)  [0x102ad4350]        6\n        ???  (in <unknown binary>)  [0x102ad4230]        5\n        ???  (in <unknown binary>)  [0x102ad42b0]        5\n        DYLD-STUB$$free  (in baseline.exe)        5\n        DYLD-STUB$$memcpy  (in baseline.exe)        5\n\n",
+    "candidate_active_leaves": " (when >= 5):\n        __sigwait  (in libsystem_kernel.dylib)        2549\n        gc_struct_get_heap_impl  (in candidate.exe)        274\n        gc_heap_alloc_typed  (in candidate.exe)        212\n        _platform_memmove  (in libsystem_platform.dylib)        100\n        gc_select_alloc_roots  (in candidate.exe)        100\n        gc_array_set_heap_impl  (in candidate.exe)        96\n        ctx_gc_push_root_scope_internal  (in candidate.exe)        95\n        gc_array_get_heap_impl  (in candidate.exe)        86\n        mach_absolute_time  (in libsystem_kernel.dylib)        85\n        ???  (in <unknown binary>)  [0x104a34a18]        82\n        _platform_memset  (in libsystem_platform.dylib)        75\n        _xzm_free  (in libsystem_malloc.dylib)        68\n        ???  (in <unknown binary>)  [0x104a34cd0]        62\n        _xzm_xzone_malloc_tiny  (in libsystem_malloc.dylib)        59\n        gc_alloc_struct_slow  (in candidate.exe)        56\n        wasmoon_jit_gc_pop_root_scope_or_trap  (in candidate.exe)        54\n        ???  (in <unknown binary>)  [0x104a34c4c]        52\n        wasmoon_gc_collection_seeds  (in candidate.exe)        42\n        ???  (in <unknown binary>)  [0x104a34698]        41\n        ???  (in <unknown binary>)  [0x104a34594]        40\n        wasmoon_jit_gc_push_root_scope_or_trap  (in candidate.exe)        36\n        ???  (in <unknown binary>)  [0x104a34c68]        33\n        gc_heap_sweep  (in candidate.exe)        33\n        _tlv_get_addr  (in libdyld.dylib)        31\n        callable_native_reference  (in candidate.exe)        31\n        gc_should_fail_allocation  (in candidate.exe)        31\n        wasmoon_gc_allocation_attempt  (in candidate.exe)        31\n        ???  (in <unknown binary>)  [0x104a346dc]        30\n        ???  (in <unknown binary>)  [0x104a34c04]        30\n        gc_heap_ensure_object_capacity  (in candidate.exe)        28\n        ???  (in <unknown binary>)  [0x104a1ac34]        27\n        gc_heap_admit  (in candidate.exe)        27\n        ctx_gc_pop_root_scope_internal  (in candidate.exe)        26\n        gc_array_len_heap_impl  (in candidate.exe)        26\n        _xzm_xzone_malloc  (in libsystem_malloc.dylib)        25\n        gc_struct_set_heap_impl  (in candidate.exe)        24\n        ???  (in <unknown binary>)  [0x104a34570]        23\n        ???  (in <unknown binary>)  [0x104a34c78]        22\n        gc_heap_ensure_payload_capacity  (in candidate.exe)        21\n        <deduplicated_symbol>  (in libsystem_malloc.dylib)        20\n        gc_heap_register_object  (in candidate.exe)        20\n        _malloc_zone_malloc  (in libsystem_malloc.dylib)        19\n        ???  (in <unknown binary>)  [0x104a34ca4]        17\n        _free  (in libsystem_malloc.dylib)        17\n        gc_heap_maybe_verify  (in candidate.exe)        14\n        ???  (in <unknown binary>)  [0x104a34a10]        12\n        DYLD-STUB$$memcpy  (in candidate.exe)        12\n        gc_allocate  (in candidate.exe)        12\n        ???  (in <unknown binary>)  [0x104a346f0]        8\n        callable_entry  (in candidate.exe)        7\n        gc_array_data_heap_impl  (in candidate.exe)        7\n        ???  (in <unknown binary>)  [0x1049ddea8]        6\n        ???  (in <unknown binary>)  [0x104a34634]        6\n        DYLD-STUB$$bzero  (in candidate.exe)        6\n        DYLD-STUB$$malloc  (in candidate.exe)        6\n        ???  (in <unknown binary>)  [0x104a34a38]        5\n        function_reference_impl  (in candidate.exe)        5\n        gc_heap_array_copy  (in candidate.exe)        5\n        gc_ref_test_impl  (in candidate.exe)        5\n\n",
+    "method": "sample, 3 seconds at 1 ms. Baseline attached after 1.25 s; candidate after 1.15 s. Exclude signal-wait thread. Leaf counts are sampling evidence, not exact event counts.",
+    "guest_mapping": "Temporary isolated DWARF address logging identifies Decimal.left_shift/right_shift; metadata registration bypassed only in this mapping probe. Neither instrumented mapping binary nor its times is acceptance/performance evidence; diagnostic removed before final candidate rebuild."
+  },
+  "validation": {
+    "native_verified": {
+      "tests": 3007,
+      "passed": 3007,
+      "flags": {
+        "VCODE_REGALLOC_VALIDATION": 1,
+        "WASMOON_GC_VERIFY": 1,
+        "WASMOON_GC_ASSERT_BARRIER": 1
+      }
+    },
+    "native_physical": {
+      "tests": 3007,
+      "passed": 3007,
+      "flags": {
+        "VCODE_REGALLOC_VALIDATION": 1,
+        "WASMOON_GC_VERIFY": 0,
+        "WASMOON_GC_ASSERT_BARRIER": 1
+      }
+    },
+    "wasm": {
+      "tests": 1420,
+      "passed": 1420
+    },
+    "sanitizer": {
+      "source_revision": "5fa50157e13e00b1b41a3cc830427958e04689c2",
+      "source_dirty": true,
+      "build_reuse": "fresh",
+      "binary_sha256": "90330bf8351cb26da1d112709c001c71fa029b3dedb713474cbdf6a613d73b81",
+      "tests": 278,
+      "passed": 278,
+      "event_loop": "passed",
+      "asan_probe": "detected",
+      "native_asan_probe": "detected",
+      "lsan_probe": "not_applicable",
+      "leak_detection": false,
+      "ordinary_diagnostics": [],
+      "flags": {
+        "VCODE_REGALLOC_VALIDATION": 1,
+        "WASMOON_GC_VERIFY": 0,
+        "WASMOON_GC_ASSERT_BARRIER": 1
+      },
+      "exclusions": [
+        "MoonBit runtime objects",
+        "JIT machine code"
+      ],
+      "workspace_removed": true
+    },
+    "core": {
+      "interpreter": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "actual_wasm_unsupported": null,
+        "result_inventory_sha256": "02e834d17d098aed3747d742865932a354f9173bf5bd42c3e48f0c7a43f5360e"
+      },
+      "jit": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "actual_wasm_unsupported": null,
+        "result_inventory_sha256": "02e834d17d098aed3747d742865932a354f9173bf5bd42c3e48f0c7a43f5360e"
+      },
+      "wasm": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "actual_wasm_unsupported": 0,
+        "result_inventory_sha256": "1ef5e3e611157e42d519603e61fca6bd16726bea0a509fb43476f83662887259"
+      }
+    },
+    "component": [
+      {
+        "jit": false,
+        "suite": "stable-0.2",
+        "summary": "Summary:\n  Files passed:  23/23\n  Files failed:  0\n  Commands passed:  845\n  Commands failed:  0\n  Commands skipped: 0\n"
+      },
+      {
+        "jit": false,
+        "suite": "async-0.3",
+        "summary": "Summary:\n  Files passed:  24/24\n  Files failed:  0\n  Commands passed:  153\n  Commands failed:  0\n  Commands skipped: 0\n"
+      },
+      {
+        "jit": false,
+        "suite": "future-gated",
+        "summary": "Summary:\n  Files passed:  12/12\n  Files failed:  0\n  Commands passed:  387\n  Commands failed:  0\n  Commands skipped: 0\n"
+      },
+      {
+        "jit": true,
+        "suite": "stable-0.2",
+        "summary": "Summary:\n  Files passed:  23/23\n  Files failed:  0\n  Commands passed:  845\n  Commands failed:  0\n  Commands skipped: 0\n"
+      },
+      {
+        "jit": true,
+        "suite": "async-0.3",
+        "summary": "Summary:\n  Files passed:  24/24\n  Files failed:  0\n  Commands passed:  153\n  Commands failed:  0\n  Commands skipped: 0\n"
+      },
+      {
+        "jit": true,
+        "suite": "future-gated",
+        "summary": "Summary:\n  Files passed:  12/12\n  Files failed:  0\n  Commands passed:  387\n  Commands failed:  0\n  Commands skipped: 0\n"
+      }
+    ],
+    "strict_native_and_wasm": "passed",
+    "module_boundaries": "passed",
+    "generated_msvc_bridges": "passed",
+    "python": {
+      "tests": 178,
+      "passed_or_existing_skips": 178,
+      "existing_platform_skips": 54
+    },
+    "both_target_selectors": "passed for checked and nullable-produced preheader origins; not x64 execution"
+  },
+  "regression_before_fix": "New produced-nullable-reference plan test failed false != true; passes after the repair. Public runtime cases preserve zero-trip/null/bounds behavior, plus forged calls/allocations/raw stores rejected.",
+  "delivery": "Local evidence captured before committing and pushing this followup, based on 5fa50157 with source_dirty=true. Commit/push do not relabel it as clean CI. No PR, merge or publication.",
+  "temporary_workspaces_removed": true
+}
