@@ -265,7 +265,7 @@ pub fn CHeap::array_fill(
   let gc_ref = array_idx + 1
   // Check bounds before filling
   let len = c_gc_heap_array_len(self.ptr, gc_ref)
-  if offset < 0 || count < 0 || offset + count > len {
+  if offset < 0 || count < 0 || offset > len || count > len - offset {
     raise OutOfBoundsArrayAccess
   }
   let slot = value_to_slot(value)
@@ -290,8 +290,10 @@ pub fn CHeap::array_copy(
   if dst_offset < 0 ||
     src_offset < 0 ||
     count < 0 ||
-    dst_offset + count > dst_len ||
-    src_offset + count > src_len {
+    dst_offset > dst_len ||
+    count > dst_len - dst_offset ||
+    src_offset > src_len ||
+    count > src_len - src_offset {
     raise OutOfBoundsArrayAccess
   }
   c_gc_heap_array_copy(

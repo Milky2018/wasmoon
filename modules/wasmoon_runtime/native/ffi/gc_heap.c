@@ -837,6 +837,38 @@ void gc_heap_array_fill(GcHeap* heap, int32_t gc_ref, int32_t offset,
     gc_heap_array_fill_wide(heap, gc_ref, offset, slot, count);
 }
 
+// Legacy arrays retain full slots and conservative low-word barriers. Typed
+// arrays have one immutable field at offset zero with a natural-width stride.
+static const GcFieldLayout wide_array_element = {0, GC_VALUE_SLOT_SIZE, 1};
+
+static void fill_array_elements(uint8_t *data, int32_t width, GcSlot value, int32_t count) {
+    const uint8_t *pattern = (const uint8_t *)&value;
+    int repeated_byte = 1;
+    for (int32_t i = 1; i < width; i++) {
+        if (pattern[i] != pattern[0]) { repeated_byte = 0; break; }
+    }
+    if (repeated_byte) {
+        memset(data, pattern[0], (size_t)count * width);
+        return;
+    }
+    // Constant copy widths let the C compiler vectorize without unaligned
+    // typed loads/stores or a variable-size memcpy for every element.
+    switch (width) {
+    case 2:
+        for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 2, &value, 2);
+        break;
+    case 4:
+        for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 4, &value, 4);
+        break;
+    case 8:
+        for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 8, &value, 8);
+        break;
+    case 16:
+        for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 16, &value, 16);
+        break;
+    }
+}
+
 void gc_heap_array_fill_wide(GcHeap* heap, int32_t gc_ref, int32_t offset,
                              GcSlot value, int32_t count) {
     uint8_t* data = get_object_data(heap, gc_ref);
@@ -846,9 +878,16 @@ void gc_heap_array_fill_wide(GcHeap* heap, int32_t gc_ref, int32_t offset,
 
     int32_t len = ((int32_t*)data)[0];
     if (offset < 0 || count < 0 || offset > len || count > len - offset) return;
-    for (int32_t i = 0; i < count; i++) {
-        gc_heap_array_set_wide(heap, gc_ref, offset + i, value);
+    if (!count) return;
+    GcTypeLayout *layout = gc_object_layout(heap, (GcHeader *)(data - GC_HEADER_SIZE));
+    const GcFieldLayout *element = layout ? &layout->fields[0] : &wide_array_element;
+    if (element->reference && value.lo) {
+        for (int32_t i = 0; i < count; i++) gc_heap_write_barrier(heap, gc_ref, value.lo);
     }
+    // Barriers only validate/count references; no allocation, collection or
+    // host callback can invalidate these addresses during this bulk operation.
+    fill_array_elements(data + GC_ARRAY_DATA_OFFSET + (size_t)offset * element->width,
+                        element->width, value, count);
     gc_heap_maybe_verify(heap, "array_fill");
 }
 
@@ -865,12 +904,38 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
     if (dst_offset < 0 || src_offset < 0 || count < 0 ||
         dst_offset > dst_len || count > dst_len - dst_offset ||
         src_offset > src_len || count > src_len - src_offset) return;
-    int backwards = dst_ref == src_ref && dst_offset > src_offset;
-    for (int32_t n = 0; n < count; n++) {
-        int32_t i = backwards ? count - 1 - n : n;
-        GcSlot value = gc_heap_array_get_wide(heap, src_ref, src_offset + i);
-        gc_heap_array_set_wide(heap, dst_ref, dst_offset + i, value);
+    if (!count) return;
+    GcTypeLayout *dst_layout = gc_object_layout(heap, (GcHeader *)(dst_data - GC_HEADER_SIZE));
+    GcTypeLayout *src_layout = gc_object_layout(heap, (GcHeader *)(src_data - GC_HEADER_SIZE));
+    const GcFieldLayout *dst_element = dst_layout ? &dst_layout->fields[0] : &wide_array_element;
+    const GcFieldLayout *src_element = src_layout ? &src_layout->fields[0] : &wide_array_element;
+    const int32_t dst_width = dst_element->width, src_width = src_element->width;
+    const int dst_reference = dst_element->reference;
+    uint8_t *dst = dst_data + GC_ARRAY_DATA_OFFSET + (size_t)dst_offset * dst_width;
+    const uint8_t *src = src_data + GC_ARRAY_DATA_OFFSET + (size_t)src_offset * src_width;
+    if (dst_width == src_width && dst_reference == src_element->reference) {
+        if (dst_reference) {
+            // Scan before moving, so overlapping copies see the original
+            // source references. Preserve one barrier per written reference.
+            for (int32_t i = 0; i < count; i++) {
+                int64_t word;
+                memcpy(&word, src + (size_t)i * src_width, sizeof(word));
+                gc_heap_write_barrier(heap, dst_ref, word);
+            }
+        }
+        memmove(dst, src, (size_t)count * dst_width);
+    } else {
+        // Compact and legacy slots need widening/truncation, not a byte copy.
+        int backwards = dst_ref == src_ref && dst_offset > src_offset;
+        for (int32_t n = 0; n < count; n++) {
+            int32_t i = backwards ? count - 1 - n : n;
+            GcSlot value = {0, 0};
+            memcpy(&value, src + (size_t)i * src_width, (size_t)src_width);
+            if (dst_reference) gc_heap_write_barrier(heap, dst_ref, value.lo);
+            memcpy(dst + (size_t)i * dst_width, &value, (size_t)dst_width);
+        }
     }
+    gc_heap_maybe_verify(heap, "array_copy");
 }
 
 static void gc_heap_write_barrier_slow(
