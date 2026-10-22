@@ -21,6 +21,7 @@ extern void gc_alloc_array_wide_slow_impl_msvc_guest(void);
 extern void gc_alloc_struct_slow_msvc_guest(void);
 extern void gc_alloc_struct_wide_slow_impl_msvc_guest(void);
 extern void gc_array_copy_impl_msvc_guest(void);
+extern void gc_array_data_heap_impl_msvc_guest(void);
 extern void gc_array_fill_impl_msvc_guest(void);
 extern void gc_array_fill_v128_impl_msvc_guest(void);
 extern void gc_array_get_heap_impl_msvc_guest(void);

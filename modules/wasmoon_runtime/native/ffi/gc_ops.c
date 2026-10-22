@@ -1031,6 +1031,26 @@ void WASMOON_GUEST_ABI gc_struct_set_heap_impl(GcHeap *heap, int64_t ref, int32_
     gc_access_struct_set(heap, gc_ref, field_idx, (GcSlot){value, 0});
 }
 
+_Static_assert(GC_ARRAY_DATA_OFFSET == 16, "numeric array view ABI");
+
+// Borrowed numeric-array payload. The compiler must not retain this pointer
+// across allocation, polling, calls or reentry. Every CFG path (including
+// loop backedges) must belong to a compiler-verified no-safepoint region. The
+// payload contains i32 length at offset zero and elements at offset 16.
+// A zero result selects the existing checked accessor (including verification).
+void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32_t width) {
+    if (!heap) { trap_unreachable_void(); return NULL; }
+    if (!ref) { trap_null_reference(); return NULL; }
+    if (gc_verify_env_cached != 0) return NULL;
+    GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
+    if (!header || header->kind != GC_KIND_ARRAY) return NULL;
+    GcTypeLayout *layout = gc_object_layout(heap, header);
+    if (!layout || layout->count != 1 || layout->size != width ||
+        layout->fields[0].offset != 0 || layout->fields[0].width != width ||
+        layout->fields[0].reference) return NULL;
+    return header + 1;
+}
+
 int64_t WASMOON_GUEST_ABI gc_array_get_heap_impl(GcHeap *heap, int64_t ref, int32_t idx) {
     if (!heap) { return trap_unreachable_i64(); }
     if (!ref) { return trap_null_reference(); }
@@ -1089,6 +1109,7 @@ int32_t WASMOON_GUEST_ABI gc_array_len_heap_impl(GcHeap *heap, int64_t ref) {
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(gc_array_data_heap_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_array_get_heap_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_array_len_heap_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_array_set_heap_impl);

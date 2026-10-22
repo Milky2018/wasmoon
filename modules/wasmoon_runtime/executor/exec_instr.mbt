@@ -938,7 +938,7 @@ pub fn ExecContext::call_func(
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise {
   errdefer self.discard_captured_execution()
-  let func_type = check_call_arguments(
+  let func_type = validate_call_arguments(
     self.store,
     self.instance,
     func_idx,

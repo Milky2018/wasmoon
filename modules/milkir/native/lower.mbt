@@ -1035,6 +1035,7 @@ fn lower_dialect_instruction(
     instruction_source(instruction),
     mapped_gc_roots(values, root_ids),
     complete,
+    instruction_id=instruction.id,
   )
   match (lowering.lower)(context, ext) {
     Some(message) =>

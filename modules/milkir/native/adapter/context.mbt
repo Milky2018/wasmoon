@@ -6,6 +6,7 @@
 /// does not expose mutable native lowering storage, target instructions, or ABI details.
 struct InstructionContext {
   builder : @lowering.DirectBuilder
+  instruction_id : Int32
   operands : Array[@lowering.Value]
   operand_types : Array[@native.ValueType]
   result_types : Array[@native.ValueType]
@@ -30,9 +31,11 @@ pub fn InstructionContext::new(
   source : @native.SourceLocation?,
   live_gc_roots : Array[@lowering.Value],
   complete : (Array[@lowering.Value]) -> Unit,
+  instruction_id~ : Int32 = -1,
 ) -> InstructionContext {
   {
     builder,
+    instruction_id,
     operands: operands.copy(),
     operand_types: operand_types.copy(),
     result_types: result_types.copy(),
@@ -429,4 +432,10 @@ pub fn InstructionContext::status(self : InstructionContext) -> String? {
         Some("dialect instruction did not complete its result contract")
       }
   }
+}
+
+///|
+/// Source SSA instruction identity for compiler-owned access plans.
+pub fn InstructionContext::instruction_id(self : InstructionContext) -> Int32 {
+  self.instruction_id
 }

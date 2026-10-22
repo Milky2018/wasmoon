@@ -816,3 +816,6 @@ extern "c" fn c_jit_get_gc_array_set_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_a
 
 ///|
 extern "c" fn c_jit_get_gc_array_len_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_len_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_data_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_data_heap_ptr"

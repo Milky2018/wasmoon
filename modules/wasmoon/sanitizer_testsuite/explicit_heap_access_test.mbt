@@ -1,8 +1,6 @@
 ///|
-test "GC access hints preserve actual layout at the raw JIT entry boundary" {
-  // The low-level entry bridge currently accepts raw heap identities rather
-  // than enforcing the concrete parameter subtype. A hint must not turn that
-  // pre-existing dynamic access into an out-of-object read or write.
+test "raw JIT entry rejects incompatible concrete GC argument types" {
+  // Reject the incompatible identity before native code can use its layout.
   let module_ = @wat.parse(
     (
       #|(module
@@ -25,13 +23,16 @@ test "GC access hints preserve actual layout at the raw JIT entry boundary" {
   let array = store.alloc_array(0, [I32(7), I32(7)], instance~)
   let context = build_gc_root_context(module_, instance, store)
   defer context.close()
-  assert_eq(context.call_core_func(store, instance, 0, [ArrayRef(array)]), [
-    I64(7L),
-  ])
-  context.call_core_func(store, instance, 1, [ArrayRef(array)]) |> ignore
-  assert_eq(context.call_core_func(store, instance, 0, [ArrayRef(array)]), [
-    I64(255L),
-  ])
+  for index in [0, 1] {
+    try
+      context.call_core_func(store, instance, index, [ArrayRef(array)])
+    catch {
+      HostInvocation(TypeMismatch) => ()
+      error => fail(error.to_string())
+    } noraise {
+      _ => fail("incompatible concrete array entered native code")
+    }
+  }
 }
 
 ///|

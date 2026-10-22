@@ -26,8 +26,9 @@ pub fn InstructionContext::finish_operation(Self, @native_lowering.Operation, Ar
 pub fn InstructionContext::finish_void(Self) -> Unit
 pub fn InstructionContext::forward_results(Self, Array[@native_lowering.Value]) -> Unit
 pub fn InstructionContext::function_result_types(Self) -> Array[@native_types.ValueType]
+pub fn InstructionContext::instruction_id(Self) -> Int32
 pub fn InstructionContext::jump(Self, @native_lowering.Block, Array[@native_lowering.Value]) -> Unit
-pub fn InstructionContext::new(@native_lowering.DirectBuilder, Array[@native_lowering.Value], Array[@native_types.ValueType], Array[@native_types.ValueType], Array[@native_types.ValueType], Array[@native_lowering.Value], @native_types.SourceLocation?, Array[@native_lowering.Value], (Array[@native_lowering.Value]) -> Unit) -> Self
+pub fn InstructionContext::new(@native_lowering.DirectBuilder, Array[@native_lowering.Value], Array[@native_types.ValueType], Array[@native_types.ValueType], Array[@native_types.ValueType], Array[@native_lowering.Value], @native_types.SourceLocation?, Array[@native_lowering.Value], (Array[@native_lowering.Value]) -> Unit, instruction_id? : Int32) -> Self
 pub fn InstructionContext::noreturn_call(Self, @native_types.NativeCall, Array[@native_lowering.Value]) -> Unit
 pub fn InstructionContext::operand_types(Self) -> Array[@native_types.ValueType]
 pub fn InstructionContext::operands(Self) -> Array[@native_lowering.Value]

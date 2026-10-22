@@ -231,7 +231,7 @@ fn start_resumable_unchecked(
 ) -> ResumableCallOutcome raise {
   errdefer context.discard_captured_execution()
   try {
-    let func_type = check_call_arguments(
+    let func_type = validate_call_arguments(
       context.store,
       context.instance,
       func_idx,
@@ -261,7 +261,7 @@ fn start_async_host_call_unchecked(
   driver : @runtime.AsyncHostCallDriver,
 ) -> ResumableCallOutcome raise {
   let context = ExecContext(store, instance, async_host_driver=Some(driver))
-  let func_type = check_call_arguments(store, instance, func_idx, args)
+  let func_type = validate_call_arguments(store, instance, func_idx, args)
   let store_addr = instance.func_addrs[func_idx]
   let func_inst = store.get_func_inst(store_addr)
   let return_arity = func_type.results.length()

@@ -73,6 +73,7 @@ fn wasmoon_native_environment(
     fn(helper) {
       @native.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
+    gc_array_regions=true,
     gc_heap_field=if layout.gc_heap_offset >= 0 && layout.gc_heap_offset != 255 {
       Some(gc_heap_field)
     } else {

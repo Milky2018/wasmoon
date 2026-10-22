@@ -286,6 +286,7 @@ pub(all) enum WasmRuntimeHelper {
   GcStructGetHeap
   GcStructSetHeap
   GcArrayGetHeap
+  GcArrayDataHeap
   GcArraySetHeap
   GcArrayLenHeap
   GcStructGet
@@ -354,6 +355,7 @@ pub fn WasmTableContract::not_equal(Self, Self) -> Bool
 pub fn WasmTableContract::to_repr(Self) -> @debug.Repr
 
 type WasmValidationContext
+pub fn WasmValidationContext::array_element(Self, Int32) -> WasmFieldContract?
 pub fn WasmValidationContext::empty() -> Self
 pub fn WasmValidationContext::new(WasmValidationResolvers) -> Self
 pub fn WasmValidationContext::validate_extension(Self, @milkir.ExtensionInstView, Array[@milkir.Type]) -> String?

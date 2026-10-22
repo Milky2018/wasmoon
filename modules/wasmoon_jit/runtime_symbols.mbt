@@ -34,6 +34,7 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
   )
   add(GcStructGetHeap, c_jit_get_gc_struct_get_heap_ptr())
   add(GcStructSetHeap, c_jit_get_gc_struct_set_heap_ptr())
+  add(GcArrayDataHeap, c_jit_get_gc_array_data_heap_ptr())
   add(GcArrayGetHeap, c_jit_get_gc_array_get_heap_ptr())
   add(GcArraySetHeap, c_jit_get_gc_array_set_heap_ptr())
   add(GcArrayLenHeap, c_jit_get_gc_array_len_heap_ptr())

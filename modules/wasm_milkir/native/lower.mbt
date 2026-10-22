@@ -12,6 +12,7 @@ const GC_SLOT_BYTES : Int32 = 16
 /// the embedding product after target emission.
 struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
+  gc_array_regions : Bool
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
@@ -22,6 +23,14 @@ struct Environment {
 /// It is mutable: each access must observe changes made by host callbacks.
 /// Helpers resolve the actual object layout once. Omitting the heap field
 /// retains the original helper ABI.
+///
+/// `gc_array_regions` additionally opts into GcArrayDataHeap: it returns a
+/// checked borrowed numeric-array payload, or null to select checked helpers.
+/// Length is i32 at offset 0; elements begin at 16 with the requested stride.
+/// The compiler independently verifies that views cannot cross CFG
+/// joins/backedges without a loop proof, allocation, polling, reentry, unknown
+/// calls, or raw memory writes. Loop views require an already executed array
+/// check in the preheader and a no-safepoint proof covering the whole cycle.
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
@@ -30,8 +39,15 @@ pub fn Environment::new(
   _table_size_field : (Int32) -> @native_types.EnvironmentField,
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
   gc_heap_field~ : @native_types.EnvironmentField? = None,
+  gc_array_regions~ : Bool = false,
 ) -> Environment {
-  { function_symbol, memory_base_field, runtime_symbol, gc_heap_field, }
+  {
+    function_symbol,
+    memory_base_field,
+    runtime_symbol,
+    gc_heap_field,
+    gc_array_regions,
+  }
 }
 
 ///|
@@ -1574,11 +1590,33 @@ pub fn lower_to_sink(
   fn validate(view : @milkir.ExtensionInstView) -> String? {
     validation_context.validate_extension(view, function.results)
   }
+  let accesses = plan_array_accesses(function, validation_context)
+  if !verify_array_accesses(function, validation_context, accesses) {
+    accesses.clear() // A failed proof permits only the checked helper path.
+  }
+  let origins = array_view_origins(function, accesses).unwrap()
+  let views : Map[Int32, (@lowering.Value, @lowering.Value)] = Map([])
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
   ) -> String? {
-    lower_extension(context, extension, environment)
+    let result = if environment.gc_array_regions &&
+      environment.gc_heap_field is Some(_) &&
+      accesses.get(context.instruction_id()) is Some(access) {
+      lower_array_access(context, environment, access, views)
+    } else {
+      lower_extension(context, extension, environment)
+    }
+    if result is None &&
+      environment.gc_array_regions &&
+      environment.gc_heap_field is Some(_) &&
+      origins.get(context.instruction_id()) is Some((_, width)) &&
+      !views.contains(context.instruction_id()) {
+      views[context.instruction_id()] = prepare_array_view(
+        context, environment, width,
+      )
+    }
+    result
   }
   fn validate_global(data : @milkir.GlobalValueData) -> String? {
     validation_context.validate_global_value(data)

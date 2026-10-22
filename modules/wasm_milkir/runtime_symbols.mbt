@@ -31,6 +31,7 @@ pub(all) enum WasmRuntimeHelper {
   GcStructGetHeap
   GcStructSetHeap
   GcArrayGetHeap
+  GcArrayDataHeap
   GcArraySetHeap
   GcArrayLenHeap
   GcStructGet
@@ -104,6 +105,7 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     GcRefCast => "gc.ref_cast"
     GcStructGetHeap => "gc.struct_get_heap"
     GcStructSetHeap => "gc.struct_set_heap"
+    GcArrayDataHeap => "gc.array_data_heap"
     GcArrayGetHeap => "gc.array_get_heap"
     GcArraySetHeap => "gc.array_set_heap"
     GcArrayLenHeap => "gc.array_len_heap"

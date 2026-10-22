@@ -134,7 +134,8 @@ fn root_function_results(
 }
 
 ///|
-fn check_call_arguments(
+/// Validate raw embedding arguments before interpreter or native execution.
+pub fn validate_call_arguments(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
   index : Int32,
@@ -173,13 +174,13 @@ fn check_call_values(
         target != NullContRef &&
         target != RefNoCont
       (StructRef(reference), target) =>
-        store.is_gc_valid(reference) &&
+        store.is_struct_reference(reference) &&
         (match target {
           StructRef | RefStructAbs | AnyRef | RefAny | RefEq | RefNullEq => true
           _ => value_matches_type(value, target, store, instance)
         })
       (ArrayRef(reference), target) =>
-        store.is_gc_valid(reference) &&
+        store.is_array_reference(reference) &&
         (match target {
           ArrayRef | RefArrayAbs | AnyRef | RefAny | RefEq | RefNullEq => true
           _ => value_matches_type(value, target, store, instance)

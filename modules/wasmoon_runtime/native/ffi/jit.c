@@ -2147,3 +2147,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_set_heap_ptr(void) {
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_len_heap_ptr(void) {
  return WASMOON_GUEST_ADDRESS(gc_array_len_heap_impl);
 }
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_data_heap_ptr(void) {
+ return WASMOON_GUEST_ADDRESS(gc_array_data_heap_impl);
+}

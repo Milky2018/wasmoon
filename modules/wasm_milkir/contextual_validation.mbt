@@ -879,3 +879,15 @@ pub fn verify_function_with_context(
   }
   func.verify_with_dialect_validator(WASM_DIALECT, validate, validate_global)
 }
+
+///|
+/// Resolve an array storage contract after contextual instruction validation.
+pub fn WasmValidationContext::array_element(
+  self : WasmValidationContext,
+  index : Int32,
+) -> WasmFieldContract? {
+  match (self.defined_type_contract)(index) {
+    Some(Array(field)) => Some(field)
+    _ => None
+  }
+}
