@@ -17,6 +17,12 @@ def main():
     from wasi_test_runner import test_suite_runner
     from wasi_test_runner.__main__ import main as upstream_main
 
+    original_wait = test_suite_runner.TestCaseRunner._wait
+    def traced_wait(self, timeout):
+        result = original_wait(self, timeout)
+        print("[DIAG-pr577 guest stderr] " + result[2], flush=True)
+        return result
+    test_suite_runner.TestCaseRunner._wait = traced_wait
     test_suite_runner._EndpointServer.server_bind = bind_endpoint
     return upstream_main()
 

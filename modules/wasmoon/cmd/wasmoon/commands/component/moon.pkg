@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/async",
   "Milky2018/wasmoon/cmd/wasmoon/commands/options",
   "Milky2018/wasmoon/wasi_http",
   "Milky2018/wasmoon/component_native",
