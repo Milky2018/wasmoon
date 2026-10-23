@@ -28,6 +28,7 @@ pub async fn serve_http(
     server.run_forever(
       async fn(socket, _) {
         defer socket.close()
+        @logger.plain_error("[DIAG-pr577] accept")
         let linker = if use_jit {
           @runtime_impl.ComponentLinker::with_core_execution_engine(
             @component_native.open_native_component_session(opt_level=0),
@@ -58,7 +59,9 @@ pub async fn serve_http(
           )
         })
         host.run(async fn() {
+          @logger.plain_error("[DIAG-pr577] instantiate begin")
           let mut instance = linker.instantiate("http-service", component)
+          @logger.plain_error("[DIAG-pr577] instantiate end")
           for index = layers.length() - 1; index >= 0; index = index - 1 {
             host.add_downstream(instance)
             instance = linker.instantiate(

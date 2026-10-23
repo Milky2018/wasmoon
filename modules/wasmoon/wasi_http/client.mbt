@@ -140,13 +140,18 @@ pub fn HttpHost::add_network_client(
         let socket = @async.with_timeout(
           request_timeout(message, 0),
           async fn() {
+            @logger.plain_error("[DIAG-pr577] resolve begin \{host}:\{port}")
             let address = @socket.Addr::resolve(host, port~)
+            @logger.plain_error("[DIAG-pr577] resolve end \{host}:\{port}")
             if !allow_address(address) {
               raise HttpTransportError(
                 4, "destination address is not permitted",
               )
             }
-            @socket.Tcp::connect(address)
+            @logger.plain_error("[DIAG-pr577] connect begin \{host}:\{port}")
+            let connected = @socket.Tcp::connect(address)
+            @logger.plain_error("[DIAG-pr577] connect end \{host}:\{port}")
+            connected
           },
           error=HttpTransportError(8, "connection timeout"),
         )
@@ -167,6 +172,7 @@ pub fn HttpHost::add_network_client(
         }
       } catch {
         error => {
+          @logger.plain_error("[DIAG-pr577] client error during \{phase}: \{Repr(error)}")
           @logger.debug(
             "HTTP client.send failed during \{phase}: \{Repr(error)}",
           )

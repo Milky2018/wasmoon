@@ -1,0 +1,35 @@
+name: PR577 HTTP diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trace:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      MOON_CC: clang-cl.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: install MoonBit
+        shell: pwsh
+        run: |
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$HOME/.moon/bin" >> $env:GITHUB_PATH
+      - name: build traced CLI
+        run: |
+          moon update
+          moon build modules/wasmoon/cmd/wasmoon --target native --release --jobs 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item _build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
+      - uses: actions/checkout@v4
+        with:
+          repository: WebAssembly/wasi-testsuite
+          ref: 609c446139956ff30239f87cb18af1dc6128bed2
+          path: upstream
+      - name: trace unchanged send-errors guest
+        run: python scripts/diag_pr577_http.py
