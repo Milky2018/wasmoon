@@ -715,6 +715,7 @@ pub fn Store::close(Self) -> Unit
 pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int32
 pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError
 pub fn Store::counts(Self) -> StoreCounts
+pub fn Store::current_type_graph(Self) -> (Array[@types.SubType], Array[Int32])
 pub fn Store::current_types(Self) -> Array[@types.SubType]
 pub fn Store::decode_module(Self, Bytes) -> @types.Module raise
 pub fn Store::decode_native_exception(Self, Int64) -> @types.Value raise RuntimeError

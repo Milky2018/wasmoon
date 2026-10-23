@@ -10,7 +10,7 @@ pub fn optimize_with_level(
 ) -> Bool raise @milkir.VerifyError {
   @wasm_milkir.verify_function_with_context(function, context)
   let inline_changed = if level is (O2 | O3) {
-    inline_leaf_calls(function, scalar_callees)
+    inline_leaf_calls(function, scalar_callees, context)
   } else {
     false
   }

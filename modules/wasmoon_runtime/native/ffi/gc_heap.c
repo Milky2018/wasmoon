@@ -28,6 +28,8 @@
 
 // Optional runtime verification mode. Set WASMOON_GC_VERIFY=1 to enable.
 int gc_verify_env_cached = -1;
+static GcAllocationControl gc_allocation_control;
+static void refresh_allocation_control(void);
 
 // Keep these in sync with types/types.mbt.
 #define GC_EXTERNREF_TAG 0x4000000000000000LL
@@ -52,6 +54,7 @@ static int gc_verify_enabled(void) {
         const char* value = getenv("WASMOON_GC_VERIFY");
         gc_verify_env_cached = gc_is_truthy_env(value) ? 1 : 0;
     }
+    refresh_allocation_control();
     return gc_verify_env_cached;
 }
 
@@ -87,16 +90,21 @@ static int gc_read_positive_env_cached(const char* name, int* cache_slot) {
 
 static int gc_fail_alloc_at_cached = -2;
 static int gc_fail_alloc_every_cached = -2;
-static int gc_alloc_attempt_count = 0;
+static void refresh_allocation_control(void) {
+    gc_allocation_control.enabled = gc_verify_env_cached == 0 &&
+        gc_fail_alloc_at_cached == 0 && gc_fail_alloc_every_cached == 0;
+}
 
 int gc_should_fail_allocation(void) {
-    gc_alloc_attempt_count++;
+    gc_allocation_control.attempts++;
     int fail_at = gc_read_positive_env_cached("WASMOON_GC_FAIL_ALLOC_AT", &gc_fail_alloc_at_cached);
-    if (fail_at > 0 && gc_alloc_attempt_count == fail_at) {
+    refresh_allocation_control();
+    if (fail_at > 0 && gc_allocation_control.attempts == (uint32_t)fail_at) {
         return 1;
     }
     int fail_every = gc_read_positive_env_cached("WASMOON_GC_FAIL_ALLOC_EVERY", &gc_fail_alloc_every_cached);
-    if (fail_every > 0 && (gc_alloc_attempt_count % fail_every) == 0) {
+    refresh_allocation_control();
+    if (fail_every > 0 && (gc_allocation_control.attempts % (uint32_t)fail_every) == 0) {
         return 1;
     }
     return 0;
@@ -111,7 +119,8 @@ int gc_heap_fast_allocation_enabled(void) {
 static void gc_set_fail_alloc_config(int fail_at, int fail_every) {
     gc_fail_alloc_at_cached = fail_at > 0 ? fail_at : 0;
     gc_fail_alloc_every_cached = fail_every > 0 ? fail_every : 0;
-    gc_alloc_attempt_count = 0;
+    gc_allocation_control.attempts = 0;
+    refresh_allocation_control();
 }
 
 static int gc_barrier_assert_env_cached = -1;
@@ -181,6 +190,7 @@ int gc_heap_ensure_payload_capacity(GcHeap* heap, size_t needed) {
         return 0;  // Allocation failed
     }
 
+    gc_heap_forget_struct_view(heap);
     heap->data = new_data;
     heap->capacity = new_capacity;
     return 1;
@@ -218,6 +228,30 @@ int gc_heap_ensure_object_capacity(GcHeap* heap) {
     return 1;
 }
 
+// Cache only metadata capacity, never an allocation or a resource admission.
+// Every successful allocation advances object_count and live_count together.
+// A window therefore ends at the earlier identity-page or live-list boundary.
+static void prepare_identity_window(GcHeap *heap) {
+    int32_t next = heap->object_count;
+    if (next < heap->identity_window_limit) return;
+    heap->identity_window_limit = 0;
+    heap->identity_window_page = NULL;
+    if (next == INT32_MAX || heap->live_count >= heap->live_capacity) return;
+    int32_t page_index = next >> GC_ID_PAGE_BITS;
+    if (page_index >= heap->identity_page_capacity || !heap->identity_pages[page_index]) return;
+    int64_t end = ((int64_t)page_index + 1) << GC_ID_PAGE_BITS;
+    int64_t live_end = (int64_t)next + heap->live_capacity - heap->live_count;
+    if (end > live_end) end = live_end;
+    if (end > INT32_MAX) end = INT32_MAX;
+    heap->identity_window_page = heap->identity_pages[page_index];
+    heap->identity_window_limit = (int32_t)end;
+}
+
+static void forget_identity_window(GcHeap *heap) {
+    heap->identity_window_limit = 0;
+    heap->identity_window_page = NULL;
+}
+
 // Called only after capacity admission; no callbacks or allocations publish a
 // partially initialized object. Payload order and identity order agree.
 int32_t gc_heap_register_object(GcHeap *heap, int32_t offset) {
@@ -229,10 +263,12 @@ int32_t gc_heap_register_object(GcHeap *heap, int32_t offset) {
     int32_t ref = index + 1;
     heap->live_objects[heap->live_count++] = ref;
     heap->total_allocations++;
+    prepare_identity_window(heap);
     return ref;
 }
 
 static void retire_identity(GcHeap *heap, int32_t ref) {
+    if (heap->struct_view.reference == (int64_t)ref * 2) gc_heap_forget_struct_view(heap);
     int32_t index = ref - 1;
     GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
     page->offsets[index & (GC_ID_PAGE_SIZE - 1)] = -1;
@@ -308,6 +344,7 @@ static GcHeap* gc_heap_new(size_t initial_capacity) {
         return heap;
     }
     atomic_fetch_add_explicit(&gc_heap_live_count, 1, memory_order_relaxed);
+    heap->allocation_control = &gc_allocation_control;
     heap->capacity = initial_capacity;
     heap->collection_limit = MIN_COLLECTION_BUDGET;
     heap->free_capacity = DEFAULT_FREE_CAPACITY;
@@ -1076,6 +1113,7 @@ int32_t gc_heap_sweep(GcHeap* heap) {
         return 0;
     }
 
+    forget_identity_window(heap);
     // No callbacks or payload resizing. Empty identity pages can be released;
     // retained identities and the live traversal order stay stable.
     const int32_t object_count = heap->live_count;
@@ -1117,6 +1155,8 @@ void gc_heap_compact(GcHeap* heap) {
         return;
     }
 
+    forget_identity_window(heap);
+    gc_heap_forget_struct_view(heap);
     // Compaction moves payload bytes, not these backing allocations.
     const int32_t object_count = heap->live_count;
     uint8_t *data = heap->data;
@@ -1191,6 +1231,29 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
     }
     if (heap->total_allocations < 0 || heap->total_collections < 0) {
         return gc_verify_fail("negative GC statistics", verbose);
+    }
+
+    if (heap->object_count < heap->identity_window_limit) {
+        int32_t page_index = heap->object_count >> GC_ID_PAGE_BITS;
+        int64_t end = heap->identity_window_limit;
+        if (!heap->identity_window_page || page_index >= heap->identity_page_capacity ||
+            heap->identity_window_page != heap->identity_pages[page_index] ||
+            end > ((int64_t)page_index + 1) * GC_ID_PAGE_SIZE ||
+            end - heap->object_count > heap->live_capacity - heap->live_count) {
+            return gc_verify_fail("invalid prepared identity capacity", verbose);
+        }
+    }
+    if (heap->struct_view.reference) {
+        int64_t word = heap->struct_view.reference;
+        int32_t offset = word > 0 && !(word & 1) && word <= (int64_t)INT32_MAX * 2
+            ? gc_heap_identity_offset(heap, (int32_t)(word >> 1)) : -1;
+        GcHeader *header = offset >= 0 && (size_t)offset + GC_HEADER_SIZE <= heap->size
+            ? (GcHeader *)(heap->data + offset) : NULL;
+        if (!header || header->kind != GC_KIND_STRUCT ||
+            heap->struct_view.payload != header + 1 ||
+            heap->struct_view.identity != (int32_t)(header->reserved >> 32) - 1) {
+            return gc_verify_fail("invalid cached struct view", verbose);
+        }
     }
 
     size_t previous_end = 0;
@@ -1347,6 +1410,7 @@ int32_t gc_heap_get_object_count(GcHeap* heap) {
 
 MOONBIT_FFI_EXPORT void wasmoon_gc_collection_rollback(GcCollectionRequest *request) {
     GcHeap *heap = request->heap;
+    forget_identity_window(heap);
     int32_t object_count = request->rollback_boundary;
     int32_t survivors = 0;
     for (int32_t i = 0; i < heap->live_count; i++) {

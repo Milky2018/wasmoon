@@ -11,6 +11,7 @@ fn trace_lowering(
   function : @milkir.Function,
   folds_unsigned_index_into_memory~ : Bool = false,
   compare_immediates~ : Bool = false,
+  on_event~ : (NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> LoweringTrace raise {
   let operands : Array[Array[Int32]] = []
   let operations : Array[@lowering.Operation] = []
@@ -48,7 +49,7 @@ fn trace_lowering(
       compare_immediates && bits == 42UL
     },
   )
-  lower_core_to_sink(function, sink, verify_input=false)
+  lower_core_to_sink(function, sink, verify_input=false, on_event~)
   { operations, operands, operation_blocks, terminators, }
 }
 

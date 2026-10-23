@@ -17,6 +17,20 @@ fn leaf_cost(function : @milkir.Function) -> Int32? {
       Scalar(IntBinary(SignedDiv | UnsignedDiv | SignedRem | UnsignedRem)) => 12
       Scalar(_) => 1
       Vector(_) => 4
+      Ext(_, _) =>
+        match @wasm_milkir.decode_opcode(inst.opcode) {
+          Some(
+            StructNew(_)
+            | StructGet(_, _)
+            | StructGetS(_, _, _)
+            | StructGetU(_, _, _)
+            | ArrayGet(_)
+            | ArrayGetS(_, _)
+            | ArrayGetU(_, _)
+            | ArrayLen
+          ) => 2
+          _ => return None
+        }
       _ => return None
     }
     if !(inst.results is [_]) || inst.args.any(value => value == environment) {
@@ -36,6 +50,7 @@ fn leaf_cost(function : @milkir.Function) -> Int32? {
 fn inline_leaf_calls(
   function : @milkir.Function,
   callees : Map[Int32, @milkir.Function],
+  context : @wasm_milkir.WasmValidationContext,
 ) -> Bool raise @milkir.VerifyError {
   let templates : Map[Int32, @milkir.Function] = Map([])
   // Inspect only callees used by this function, rather than scanning every
@@ -50,6 +65,7 @@ fn inline_leaf_calls(
         if callees.get(index) is Some(callee) {
           callee.verify()
           if leaf_cost(callee) is Some(_) {
+            @wasm_milkir.verify_function_with_context(callee, context)
             templates[index] = callee
           }
         }

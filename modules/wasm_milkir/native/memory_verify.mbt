@@ -1,15 +1,19 @@
 ///|
-fn copy_borrows(source : Map[Int32, Bool]) -> Map[Int32, Bool] {
-  let copy : Map[Int32, Bool] = Map([])
-  for id, value in source {
-    copy[id] = value
+fn same_borrows(a : Array[UInt64], b : Array[UInt64]) -> Bool {
+  if a.length() != b.length() {
+    return false
   }
-  copy
+  for index in 0..<a.length() {
+    if a[index] != b[index] {
+      return false
+    }
+  }
+  true
 }
 
 ///|
-fn same_borrows(a : Map[Int32, Bool], b : Map[Int32, Bool]) -> Bool {
-  a.length() == b.length() && a.keys().all(id => b.contains(id))
+fn borrow_present(words : Array[UInt64], bit : Int32) -> Bool {
+  (words[bit / 64] & (1UL << (bit % 64))) != 0UL
 }
 
 ///|
@@ -33,7 +37,7 @@ fn invalidates_borrows(
 /// including backedges and side entries, rather than trusting planner labels.
 /// A missing or incomplete proof fails closed before selection.
 fn gc_borrow_error(function : @milkir.Function) -> String? {
-  let origins : Map[Int32, Bool] = Map([])
+  let origins : Map[Int32, Int32] = Map([])
   let shapes : Map[Int32, Projection] = Map([])
   let aliases : Map[Int32, Int32] = Map([])
   for block in function.blocks {
@@ -48,7 +52,7 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
           | FieldData(_, _, _, _, _)
         ) &&
         inst.results is [value] {
-        origins[value.id] = true
+        origins[value.id] = origins.length()
         aliases[value.id] = value.id
         if inst.opcode is Ext(extension, _) {
           shapes[value.id] = decode_projection(extension).unwrap()
@@ -109,56 +113,76 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
     return None
   }
   let cfg = @milkir.CFG::build(function)
-  let outputs : Map[Int32, Map[Int32, Bool]] = Map([])
+  // Number only actual projections; sparse SSA IDs do not enlarge the lattice.
+  let all = Array::make((origins.length() + 63) / 64, 0xFFFFFFFFFFFFFFFFUL)
+  if origins.length() % 64 != 0 {
+    all[all.length() - 1] = (1UL << (origins.length() % 64)) - 1UL
+  }
+  let outputs : Map[Int32, Array[UInt64]] = Map([])
+  let blocks : Map[Int32, @milkir.Block] = Map([])
   for block in function.blocks {
+    blocks[block.id] = block
     outputs[block.id] = if block.id == 0 {
-      Map([])
+      Array::make(all.length(), 0UL)
     } else {
-      copy_borrows(origins)
+      all.copy()
     }
   }
-  fn incoming(block : @milkir.Block) -> Map[Int32, Bool] {
+  fn incoming(block : @milkir.Block) -> Array[UInt64] {
     if block.id == 0 {
-      return Map([])
+      return Array::make(all.length(), 0UL)
     }
     let predecessors = cfg.get_predecessors(block.id)
     if predecessors.is_empty() {
-      return Map([])
+      return Array::make(all.length(), 0UL)
     }
-    let live = copy_borrows(outputs[predecessors[0]])
-    for predecessor in predecessors {
-      for origin in live.keys().to_array() {
-        if !outputs[predecessor].contains(origin) {
-          live.remove(origin)
-        }
+    let live = outputs[predecessors[0]].copy()
+    for index in 1..<predecessors.length() {
+      let predecessor = outputs[predecessors[index]]
+      for word in 0..<live.length() {
+        live[word] = live[word] & predecessor[word]
       }
     }
     live
   }
-  changed = true
+  // Revisit only successors whose predecessor output changed. The transfer
+  // and final use checks stay independent, including backedges and side entries.
+  let queue = function.blocks.copy()
+  let queued : Map[Int32, Bool] = Map([])
+  for block in queue {
+    queued[block.id] = true
+  }
   let mut work = 0
-  while changed {
-    changed = false
-    for block in function.blocks {
-      let live = incoming(block)
-      for id in function.block_instruction_ids(block) {
-        work += 1
-        if work > 1000000 {
-          return Some("physical borrow analysis budget exhausted")
-        }
-        let inst = function.instruction_by_id(id).unwrap()
-        if invalidates_borrows(inst, aliases) {
-          live.clear()
-        }
-        for value in inst.results {
-          if origins.contains(value.id) {
-            live[value.id] = true
-          }
+  let mut cursor = 0
+  while cursor < queue.length() {
+    let block = queue[cursor]
+    cursor += 1
+    queued[block.id] = false
+    let live = incoming(block)
+    for id in function.block_instruction_ids(block) {
+      work += 1
+      if work > 1000000 {
+        return Some("physical borrow analysis budget exhausted")
+      }
+      let inst = function.instruction_by_id(id).unwrap()
+      if invalidates_borrows(inst, aliases) {
+        for word in 0..<live.length() {
+          live[word] = 0UL
         }
       }
-      if !same_borrows(live, outputs[block.id]) {
-        outputs[block.id] = live
-        changed = true
+      for value in inst.results {
+        if origins.get(value.id) is Some(bit) {
+          live[bit / 64] = live[bit / 64] | (1UL << (bit % 64))
+        }
+      }
+    }
+    if !same_borrows(live, outputs[block.id]) {
+      outputs[block.id] = live
+      for successor in cfg.get_successors(block.id) {
+        if !queued[successor] {
+          queue.push(blocks[successor])
+          queued[successor] = true
+        }
       }
     }
   }
@@ -168,7 +192,7 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
       let inst = function.instruction_by_id(id).unwrap()
       for index, argument in inst.args {
         if aliases.get(argument.id) is Some(origin) {
-          if !live.contains(origin) {
+          if !borrow_present(live, origins[origin]) {
             return Some(
               "instruction \{id}: value \{argument.id} outlived projection \{origin}",
             )
@@ -195,11 +219,13 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
         }
       }
       if invalidates_borrows(inst, aliases) {
-        live.clear()
+        for word in 0..<live.length() {
+          live[word] = 0UL
+        }
       }
       for value in inst.results {
-        if origins.contains(value.id) {
-          live[value.id] = true
+        if origins.get(value.id) is Some(bit) {
+          live[bit / 64] = live[bit / 64] | (1UL << (bit % 64))
         }
       }
     }

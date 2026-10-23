@@ -1,7 +1,8 @@
 ///|
 /// Bounded leaf candidates from the validated module, using the ordinary
 /// embedding/linker environment. The optimizer admits scalar/vector IR by cost
-/// and rejects all calls, polls, memory and other effects. Imports are excluded.
+/// plus small GC reads and constructors. Calls, polls and mutations are excluded.
+/// Imports are excluded.
 pub fn TranslationContext::scalar_callees(
   self : TranslationContext,
   module_ : @types.Module,

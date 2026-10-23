@@ -1,4 +1,67 @@
 ///|
+test "generated struct reads preserve compact affine and legacy field offsets" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #| (type $wide (struct (field i64) (field i64) (field i64)))
+      #| (type $mixed (struct (field i32) (field i32) (field i64)))
+      #| (func (param (ref $wide)) (result i64 i64 i64)
+      #|   local.get 0 struct.get $wide 0
+      #|   local.get 0 struct.get $wide 1
+      #|   local.get 0 struct.get $wide 2)
+      #| (func (param (ref $mixed)) (result i32 i32 i64)
+      #|   local.get 0 struct.get $mixed 0
+      #|   local.get 0 struct.get $mixed 1
+      #|   local.get 0 struct.get $mixed 2))
+    ),
+  )
+  @validator.validate_module(module_)
+  let canonical = @types.compute_canonical_type_indices(
+    module_.types,
+    type_rec_groups=module_.type_rec_groups,
+  )
+  for level in [0, 2, 3] {
+    guard @commands.compile_module_to_jit(module_, false, false, level, false)
+      is Some((artifact, _)) else {
+      fail("struct read compilation failed")
+    }
+    let jm = @jit.JITModule::load_artifact(
+      @commands.verify_compiled_jit_artifact(artifact),
+      @wast.build_func_signatures(module_),
+    )
+    defer jm.close()
+    let heap = @wasmoon_jit.CHeap()
+    defer heap.free()
+    jm.setup_gc(heap, module_.types, canonical, [2, 3])
+    assert_true(heap.get_ptr().define_layout(canonical[0], [8, 8, 8], false))
+    assert_true(heap.get_ptr().define_layout(canonical[1], [4, 4, 8], false))
+    for compact in [false, true] {
+      let allocate = fn(type_, values) raise {
+        if compact {
+          heap.alloc_struct(type_, values, runtime_type=canonical[type_])
+        } else {
+          heap.alloc_struct(type_, values)
+        }
+      }
+      let wide = allocate(0, [I64(-1L), I64(4294967297L), I64(-4294967297L)])
+      let mixed = allocate(1, [I32(-17), I32(65539), I64(4294967299L)])
+      assert_eq(
+        jm.call_with_context(jm.get_func(0).unwrap(), [
+          (wide + 1).to_int64() << 1,
+        ]),
+        [-1L, 4294967297L, -4294967297L],
+      )
+      assert_eq(
+        jm.call_with_context(jm.get_func(1).unwrap(), [
+          (mixed + 1).to_int64() << 1,
+        ]),
+        [4294967279L, 65539L, 4294967299L],
+      )
+    }
+  }
+}
+
+///|
 test "raw JIT entry rejects incompatible concrete GC argument types" {
   // Reject the incompatible identity before native code can use its layout.
   let module_ = @wat.parse(

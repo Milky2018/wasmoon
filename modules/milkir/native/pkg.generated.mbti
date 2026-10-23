@@ -34,6 +34,7 @@ pub impl Show for NativeLowerError
 
 // Types and methods
 pub(all) enum NativeLowerEvent {
+  PreparationStarted(name~ : String)
   InputValidationStarted
   TargetConstructionStarted
   NativeLoweringFinished

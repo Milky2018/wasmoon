@@ -126,6 +126,22 @@ typedef struct {
     uint32_t visit_epochs[GC_ID_PAGE_SIZE];
 } GcIdentityPage;
 
+// Shared mutable controls are read on every generated allocation.
+// Debug changes affect already compiled functions without invalidating code.
+typedef struct { int32_t enabled; uint32_t attempts; } GcAllocationControl;
+
+// A heap-owned hint, never a GC root or an independently owned pointer. Only
+// exact canonical typed structs in ordinary mode are cached. Runtime type
+// changes, identity retirement, payload growth and compaction invalidate it.
+// Closing clears the complete heap; replacing a context's heap selects a
+// different hint. These are the heap's existing exclusive-mutator boundaries.
+typedef struct {
+    int64_t reference;
+    int32_t identity, fields;
+    uint64_t shape;
+    void *payload;
+} GcStructViewCache;
+
 typedef struct GcHeap {
     uint8_t* data;              // Heap memory
     size_t size;                // Current used size
@@ -163,10 +179,22 @@ typedef struct GcHeap {
     wasmoon_reservation_t *object_reservation;
     int quota_denied; // 1: payload bytes, 2: retained identity slots
     int32_t precise_roots; // Native marking view; MoonBit updates it outside a collection
+    GcAllocationControl *allocation_control; // Borrowed process-wide debug gate
     GcAllocationPolicy allocation_policy; // Closed MoonBit function; no retained closure
     int32_t exception_root_count; // Leases borrowing exception_arena
     int32_t continuation_root_count; // Leases borrowing continuation_arena
+    GcStructViewCache struct_view; // Non-root hint, cleared on payload lifetime changes
+    // Prepared capacity only: no identities, payload bytes or quota are charged.
+    // For object_count < identity_window_limit, this page and the live-list
+    // slot are already allocated. Collection/rollback invalidates the window.
+    int32_t identity_window_limit;
+    GcIdentityPage *identity_window_page;
 } GcHeap;
+
+static inline void gc_heap_forget_struct_view(GcHeap *heap) {
+    heap->struct_view.reference = 0;
+    heap->struct_view.payload = NULL;
+}
 
 static inline GcIdentityPage *gc_heap_identity_page(GcHeap *heap, int32_t ref) {
     if (!heap || ref <= 0 || ref > heap->object_count) return NULL;
@@ -184,6 +212,7 @@ static inline int32_t gc_heap_runtime_type(GcHeap *heap, int32_t ref) {
 }
 
 static inline void gc_heap_set_runtime_type(GcHeap *heap, int32_t ref, int32_t type) {
+    if (heap->struct_view.reference == (int64_t)ref * 2) gc_heap_forget_struct_view(heap);
     GcIdentityPage *page = gc_heap_identity_page(heap, ref);
     if (page) page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = type;
 }

@@ -128,3 +128,101 @@ test "invalid callee IR is rejected before rewriting the caller" {
   assert_true(rejected)
   assert_eq(function.print(), before)
 }
+
+///|
+test "small GC read and constructor callees inline while retaining allocation effects" {
+  for construct in [false, true] {
+    let callee = @milkir.FunctionBuilder::FunctionBuilder("gc_leaf")
+    callee.add_param(I64) |> ignore
+    let argument = callee.add_param(if construct { I32 } else { Ref })
+    callee.add_result(if construct { Ref } else { I32 })
+    callee.return_([
+      if construct {
+        @wasm_milkir.struct_new(callee, 0, [argument])
+      } else {
+        @wasm_milkir.struct_get(callee, 0, 0, argument, I32)
+      },
+    ])
+    let b = @milkir.FunctionBuilder::FunctionBuilder("gc_leaf_caller")
+    let input = b.add_param(if construct { I32 } else { Ref })
+    b.add_result(if construct { Ref } else { I32 })
+    b.return_([
+      @wasm_milkir.call_multi(b, 0, [if construct { Ref } else { I32 }], [input])[0],
+    ])
+    let context = @wasm_milkir.WasmValidationContext::new({
+      function_contract: fn(_) {
+        Some({
+          params: [if construct { I32 } else { Ref }],
+          results: [if construct { Ref } else { I32 }],
+        })
+      },
+      defined_type_contract: fn(_) {
+        Some(
+          Struct([{ storage: Value(I32), mutable_: false, defaultable: true, }]),
+        )
+      },
+      table_contract: fn(_) { None },
+      tag_contract: fn(_) { None },
+      memory_exists: fn(_) { false },
+      data_segment_exists: fn(_) { false },
+      element_segment_type: fn(_) { None },
+    })
+    let function = b.get_function()
+    @optimize.optimize_with_level(
+      function,
+      context,
+      O2,
+      scalar_callees=Map([(0, callee.get_function())]),
+    )
+    |> ignore
+    assert_false(function.print().contains("ext.wasm.call"))
+    assert_true(
+      function
+      .print()
+      .contains(if construct { "struct_new" } else { "struct_get" }),
+    )
+    @wasm_milkir.verify_function_with_context(function, context)
+  }
+}
+
+///|
+test "invalid GC leaf contract is rejected before rewriting its caller" {
+  let callee = @milkir.FunctionBuilder::FunctionBuilder("invalid_gc_leaf")
+  callee.add_param(I64) |> ignore
+  let reference = callee.add_param(Ref)
+  callee.add_result(I32)
+  callee.return_([@wasm_milkir.struct_get(callee, 0, 1, reference, I32)])
+  let caller = @milkir.FunctionBuilder::FunctionBuilder("gc_contract_caller")
+  let argument = caller.add_param(Ref)
+  caller.add_result(I32)
+  caller.return_([@wasm_milkir.call_multi(caller, 0, [I32], [argument])[0]])
+  let context = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { Some({ params: [Ref], results: [I32], }) },
+    defined_type_contract: fn(_) {
+      Some(
+        Struct([{ storage: Value(I32), mutable_: false, defaultable: true, }]),
+      )
+    },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  let function = caller.get_function()
+  let before = function.print()
+  let rejected = try {
+    @optimize.optimize_with_level(
+      function,
+      context,
+      O2,
+      scalar_callees=Map([(0, callee.get_function())]),
+    )
+    |> ignore
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(rejected)
+  assert_eq(function.print(), before)
+}

@@ -6,6 +6,7 @@ fn build_gc_root_context(
   enable_cancellation~ : Bool = false,
   opt_level~ : Int32 = 0,
 ) -> @wast.JITModuleContext raise {
+  let failure : Ref[String?] = Ref(None)
   guard @commands.compile_module_to_jit(
       mod_,
       false,
@@ -15,9 +16,15 @@ fn build_gc_root_context(
       nan_canonicalization=store.nan_canonicalization,
       enable_cancellation~,
       stack_switching=true,
+      on_progress=fn(event) {
+        if event.message is Some(message) {
+          failure.val = Some(message)
+        }
+        None
+      },
     )
     is Some((artifact, debug_db)) else {
-    fail("JIT compilation failed")
+    fail("JIT compilation failed: \{failure.val.unwrap_or("no diagnostic")}")
   }
   let loaded = @commands.verify_compiled_jit_artifact(artifact)
   let jit_module = @jit.JITModule::load_artifact_with_imports(

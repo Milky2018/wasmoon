@@ -116,7 +116,9 @@ test "loop allocations keep their separate dynamic field state" {
   b.return_([value])
   let function = b.get_function()
   @optimize.optimize_with_level(function, local_struct_context(), O2) |> ignore
-  assert_eq(remaining_struct_accesses(function), 1)
+  assert_eq(remaining_struct_accesses(function), 0)
+  assert_true(function.print().contains("struct_new"))
+  @wasm_milkir.verify_function_with_context(function, local_struct_context())
 }
 
 ///|
@@ -153,5 +155,54 @@ test "private integer struct fields become loop-carried SSA without removing all
   }
   assert_eq(accesses, 0)
   assert_eq(allocations, 1)
+  @wasm_milkir.verify_function_with_context(function, local_struct_context())
+}
+
+///|
+test "conditional loop boxes promote with initialization at each allocation" {
+  let b = @milkir.FunctionBuilder("conditional_private_box")
+  let limit = b.add_param(I32)
+  b.add_result(I32)
+  let header = b.create_block()
+  let i = b.add_block_param(header, I32)
+  let sum = b.add_block_param(header, I32)
+  let choose = b.create_block()
+  let allocate = b.create_block()
+  let skip = b.create_block()
+  let join = b.create_block()
+  let value = b.add_block_param(join, I32)
+  let exit = b.create_block()
+  let result = b.add_block_param(exit, I32)
+  b.jump(header, [b.iconst_i32(0), b.iconst_i32(0)])
+  b.switch_to_block(header)
+  b.branch(b.icmp_slt(i, limit), choose, [], exit, [sum])
+  b.switch_to_block(choose)
+  b.branch(
+    b.icmp_eq(b.band(i, b.iconst_i32(1)), b.iconst_i32(0)),
+    allocate,
+    [],
+    skip,
+    [],
+  )
+  b.switch_to_block(allocate)
+  let box = @wasm_milkir.struct_new(b, 0, [i])
+  @wasm_milkir.struct_set(
+    b,
+    0,
+    0,
+    box,
+    b.iadd(@wasm_milkir.struct_get(b, 0, 0, box, I32), b.iconst_i32(3)),
+  )
+  b.jump(join, [@wasm_milkir.struct_get(b, 0, 0, box, I32)])
+  b.switch_to_block(skip)
+  b.jump(join, [i])
+  b.switch_to_block(join)
+  b.jump(header, [b.iadd(i, b.iconst_i32(1)), b.iadd(sum, value)])
+  b.switch_to_block(exit)
+  b.return_([result])
+  let function = b.get_function()
+  @optimize.optimize_with_level(function, local_struct_context(), O2) |> ignore
+  assert_eq(remaining_struct_accesses(function), 0)
+  assert_true(function.print().contains("struct_new"))
   @wasm_milkir.verify_function_with_context(function, local_struct_context())
 }

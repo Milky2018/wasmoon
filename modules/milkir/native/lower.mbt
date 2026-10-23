@@ -776,6 +776,19 @@ fn terminator_values(terminator : @milkir.Terminator) -> Array[@milkir.Value] {
 }
 
 ///|
+fn instruction_needs_gc_roots(instruction : @milkir.Inst) -> Bool {
+  match instruction.opcode {
+    Call(_) => true
+    Ext(extension, _) =>
+      match extension.effects {
+        None => true
+        Some(effects) => effects.observable
+      }
+    _ => false
+  }
+}
+
+///|
 fn compute_gc_roots(
   function : @milkir.Function,
   cfg : @milkir.CFG,
@@ -894,15 +907,7 @@ fn compute_gc_roots(
           live.add(operand.id)
         }
       }
-      let needs_roots = match instruction.opcode {
-        Call(_) => true
-        Ext(extension, _) =>
-          match extension.effects {
-            None => true
-            Some(effects) => effects.observable
-          }
-        _ => false
-      }
+      let needs_roots = instruction_needs_gc_roots(instruction)
       if needs_roots {
         let instruction_roots : Array[Int32] = []
         for value in live {
@@ -1702,6 +1707,7 @@ fn lower_verified_construction(
     None,
   )
   let mut has_gc_references = false
+  let mut has_gc_points = false
   for index, parameter in function.params {
     value_types[parameter.0.id] = Some(parameter_types[index])
     has_gc_references = has_gc_references || is_gc_reference_type(parameter.1)
@@ -1713,6 +1719,7 @@ fn lower_verified_construction(
     }
     for instruction_id in function.block_instruction_ids(block) {
       let instruction = function.instruction_by_id(instruction_id).unwrap()
+      has_gc_points = has_gc_points || instruction_needs_gc_roots(instruction)
       for result in instruction.results {
         value_types[result.id] = Some(lower_type(result.ty))
         has_gc_references = has_gc_references || is_gc_reference_type(result.ty)
@@ -1725,8 +1732,11 @@ fn lower_verified_construction(
     sink.folds_unsigned_index_into_memory(),
     fn(ty, bits) { sink.supports_int_compare_immediate(ty, bits) },
   )
-  let gc_roots = if has_gc_references {
-    Some(compute_gc_roots(function, cfg))
+  let gc_roots = if has_gc_references && has_gc_points {
+    on_event(PreparationStarted(name="native_gc_liveness"))
+    let roots = compute_gc_roots(function, cfg)
+    on_event(TargetConstructionStarted)
+    Some(roots)
   } else {
     None
   }

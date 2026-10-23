@@ -1,0 +1,1021 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-23",
+  "base_revision": "7cf4fe9895a38e6315813eec9f28c2379aaab057",
+  "platform": "darwin",
+  "machine": "arm64",
+  "scope": "Local macOS ARM64 single-variable experiment; unpublished working-tree implementation, not CI acceptance",
+  "core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+  "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+  "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1",
+  "count": 20000,
+  "assertions": "Original self-checking property retained; each probe returns 1",
+  "configuration": {
+    "cold_cache": true,
+    "cancellation": false,
+    "cooperation": false,
+    "verification_environment": "WASMOON_* and VCODE_REGALLOC_VALIDATION removed except phase metrics and isolated cache",
+    "no_compilation_overlap": true
+  },
+  "candidate": "Allow Value(Ref) in existing no-GC typed-struct reservation; encode reference shape bit; retain canonical layout/count/size/shape checks and collecting fallback",
+  "binaries": {
+    "baseline": "d2151d85cc9f008b257a464ec1bcb190c33e8966e4224e84ecffd6a73ab67ad4",
+    "candidate": "e78602811626b9555e43ba330542fc706fa7adcb8304de22c603dc74cac80715"
+  },
+  "samples": [
+    {
+      "engine": "baseline",
+      "index": 0,
+      "wall": 3.676561624975875,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3665693",
+        "phases_us": {
+          "host_setup_and_preloads": "403",
+          "read_and_parse": "3429",
+          "validate": "7190",
+          "instantiate_including_start": "10370",
+          "jit_plan_and_cache_lookup": "1988",
+          "compile": "761602",
+          "artifact_verify": "14198",
+          "cache_write_and_report": "5120",
+          "jit_load_and_prepare": "285183",
+          "invoke_including_hostcalls": "2575159",
+          "finish_or_early_return": "1051"
+        }
+      }
+    },
+    {
+      "engine": "candidate",
+      "index": 0,
+      "wall": 3.456906541949138,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3445735",
+        "phases_us": {
+          "host_setup_and_preloads": "394",
+          "read_and_parse": "3322",
+          "validate": "6991",
+          "instantiate_including_start": "10012",
+          "jit_plan_and_cache_lookup": "1941",
+          "compile": "792025",
+          "artifact_verify": "13529",
+          "cache_write_and_report": "4532",
+          "jit_load_and_prepare": "269161",
+          "invoke_including_hostcalls": "2342703",
+          "finish_or_early_return": "1125"
+        }
+      }
+    },
+    {
+      "engine": "candidate",
+      "index": 1,
+      "wall": 3.4277327500167303,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3417423",
+        "phases_us": {
+          "host_setup_and_preloads": "95",
+          "read_and_parse": "3441",
+          "validate": "6897",
+          "instantiate_including_start": "9857",
+          "jit_plan_and_cache_lookup": "1814",
+          "compile": "781011",
+          "artifact_verify": "13705",
+          "cache_write_and_report": "4344",
+          "jit_load_and_prepare": "263442",
+          "invoke_including_hostcalls": "2331784",
+          "finish_or_early_return": "1033"
+        }
+      }
+    },
+    {
+      "engine": "baseline",
+      "index": 1,
+      "wall": 3.601864917029161,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3592043",
+        "phases_us": {
+          "host_setup_and_preloads": "93",
+          "read_and_parse": "3391",
+          "validate": "7136",
+          "instantiate_including_start": "10202",
+          "jit_plan_and_cache_lookup": "1876",
+          "compile": "752362",
+          "artifact_verify": "13722",
+          "cache_write_and_report": "5312",
+          "jit_load_and_prepare": "262640",
+          "invoke_including_hostcalls": "2534273",
+          "finish_or_early_return": "1036"
+        }
+      }
+    },
+    {
+      "engine": "baseline",
+      "index": 2,
+      "wall": 3.6049347080406733,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3595004",
+        "phases_us": {
+          "host_setup_and_preloads": "87",
+          "read_and_parse": "3369",
+          "validate": "6928",
+          "instantiate_including_start": "9862",
+          "jit_plan_and_cache_lookup": "1831",
+          "compile": "738627",
+          "artifact_verify": "13676",
+          "cache_write_and_report": "5326",
+          "jit_load_and_prepare": "283904",
+          "invoke_including_hostcalls": "2530355",
+          "finish_or_early_return": "1039"
+        }
+      }
+    },
+    {
+      "engine": "candidate",
+      "index": 2,
+      "wall": 3.445651124988217,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3435155",
+        "phases_us": {
+          "host_setup_and_preloads": "90",
+          "read_and_parse": "3398",
+          "validate": "7090",
+          "instantiate_including_start": "10059",
+          "jit_plan_and_cache_lookup": "1892",
+          "compile": "784828",
+          "artifact_verify": "13967",
+          "cache_write_and_report": "5651",
+          "jit_load_and_prepare": "259894",
+          "invoke_including_hostcalls": "2347170",
+          "finish_or_early_return": "1116"
+        }
+      }
+    },
+    {
+      "engine": "candidate",
+      "index": 3,
+      "wall": 3.508310207980685,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3493032",
+        "phases_us": {
+          "host_setup_and_preloads": "3239",
+          "read_and_parse": "3623",
+          "validate": "7192",
+          "instantiate_including_start": "11345",
+          "jit_plan_and_cache_lookup": "2564",
+          "compile": "809781",
+          "artifact_verify": "15765",
+          "cache_write_and_report": "6023",
+          "jit_load_and_prepare": "286649",
+          "invoke_including_hostcalls": "2344985",
+          "finish_or_early_return": "1866"
+        }
+      }
+    },
+    {
+      "engine": "baseline",
+      "index": 3,
+      "wall": 3.623183375049848,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3609100",
+        "phases_us": {
+          "host_setup_and_preloads": "3267",
+          "read_and_parse": "4110",
+          "validate": "7677",
+          "instantiate_including_start": "12069",
+          "jit_plan_and_cache_lookup": "2892",
+          "compile": "747584",
+          "artifact_verify": "13836",
+          "cache_write_and_report": "5167",
+          "jit_load_and_prepare": "276996",
+          "invoke_including_hostcalls": "2532651",
+          "finish_or_early_return": "2851"
+        }
+      }
+    },
+    {
+      "engine": "baseline",
+      "index": 4,
+      "wall": 3.625168374972418,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3614914",
+        "phases_us": {
+          "host_setup_and_preloads": "92",
+          "read_and_parse": "3231",
+          "validate": "6980",
+          "instantiate_including_start": "10049",
+          "jit_plan_and_cache_lookup": "1873",
+          "compile": "775272",
+          "artifact_verify": "13941",
+          "cache_write_and_report": "5334",
+          "jit_load_and_prepare": "262100",
+          "invoke_including_hostcalls": "2534939",
+          "finish_or_early_return": "1103"
+        }
+      }
+    },
+    {
+      "engine": "candidate",
+      "index": 4,
+      "wall": 3.4421565419761464,
+      "metrics": {
+        "schema_version": 1,
+        "command_us": "3432185",
+        "phases_us": {
+          "host_setup_and_preloads": "94",
+          "read_and_parse": "3433",
+          "validate": "7108",
+          "instantiate_including_start": "10082",
+          "jit_plan_and_cache_lookup": "1881",
+          "compile": "789557",
+          "artifact_verify": "13962",
+          "cache_write_and_report": "4432",
+          "jit_load_and_prepare": "252689",
+          "invoke_including_hostcalls": "2347889",
+          "finish_or_early_return": "1058"
+        }
+      }
+    }
+  ],
+  "v8": {
+    "node_version": "v25.2.1",
+    "v8_version": "14.1.146.11-node.14",
+    "flags": [
+      "--no-liftoff",
+      "--no-wasm-lazy-compilation",
+      "--wasm-num-compilation-tasks=1"
+    ],
+    "samples": [
+      {
+        "value": 1,
+        "compile": 0.464111709,
+        "invoke": 0.784722334
+      },
+      {
+        "value": 1,
+        "compile": 0.452057375,
+        "invoke": 0.790387292
+      },
+      {
+        "value": 1,
+        "compile": 0.456144334,
+        "invoke": 0.783567833
+      },
+      {
+        "value": 1,
+        "compile": 0.453531334,
+        "invoke": 0.789456125
+      },
+      {
+        "value": 1,
+        "compile": 0.456695125,
+        "invoke": 0.786453083
+      }
+    ],
+    "median": {
+      "compile": 0.456144334,
+      "invoke": 0.786453083
+    }
+  },
+  "diagnostic_struct_allocations": {
+    "scope": "Separate instrumented processes, never timed; word-layout fast reservations and gc_alloc_struct_slow only, excludes arrays and wide-payload allocators",
+    "by_type": {
+      "baseline": [
+        {
+          "type": 15,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 16,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 21,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 27,
+          "slow": 118,
+          "fast": 118266
+        },
+        {
+          "type": 28,
+          "slow": 12,
+          "fast": 19988
+        },
+        {
+          "type": 33,
+          "slow": 35,
+          "fast": 39313
+        },
+        {
+          "type": 38,
+          "slow": 519,
+          "fast": 500209
+        },
+        {
+          "type": 43,
+          "slow": 11803567,
+          "fast": 0
+        },
+        {
+          "type": 44,
+          "slow": 140000,
+          "fast": 0
+        },
+        {
+          "type": 46,
+          "slow": 280000,
+          "fast": 0
+        },
+        {
+          "type": 54,
+          "slow": 1,
+          "fast": 0
+        },
+        {
+          "type": 57,
+          "slow": 1,
+          "fast": 0
+        },
+        {
+          "type": 58,
+          "slow": 1,
+          "fast": 0
+        },
+        {
+          "type": 75,
+          "slow": 101,
+          "fast": 119900
+        },
+        {
+          "type": 78,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 79,
+          "slow": 23,
+          "fast": 19977
+        },
+        {
+          "type": 90,
+          "slow": 40000,
+          "fast": 0
+        },
+        {
+          "type": 128,
+          "slow": 56384,
+          "fast": 0
+        },
+        {
+          "type": 135,
+          "slow": 19,
+          "fast": 19981
+        },
+        {
+          "type": 231,
+          "slow": 240000,
+          "fast": 0
+        },
+        {
+          "type": 232,
+          "slow": 540000,
+          "fast": 0
+        },
+        {
+          "type": 244,
+          "slow": 104686,
+          "fast": 0
+        },
+        {
+          "type": 268,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 270,
+          "slow": 1,
+          "fast": 0
+        },
+        {
+          "type": 303,
+          "slow": 6158,
+          "fast": 6350158
+        },
+        {
+          "type": 305,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 327,
+          "slow": 100000,
+          "fast": 0
+        },
+        {
+          "type": 346,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 366,
+          "slow": 21616,
+          "fast": 0
+        },
+        {
+          "type": 395,
+          "slow": 1201,
+          "fast": 1239845
+        },
+        {
+          "type": 402,
+          "slow": 104686,
+          "fast": 0
+        },
+        {
+          "type": 462,
+          "slow": 1514,
+          "fast": 1602265
+        },
+        {
+          "type": 468,
+          "slow": 100000,
+          "fast": 0
+        },
+        {
+          "type": 483,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 503,
+          "slow": 1,
+          "fast": 0
+        },
+        {
+          "type": 523,
+          "slow": 21616,
+          "fast": 0
+        },
+        {
+          "type": 531,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 536,
+          "slow": 340000,
+          "fast": 0
+        },
+        {
+          "type": 554,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 556,
+          "slow": 140000,
+          "fast": 0
+        },
+        {
+          "type": 568,
+          "slow": 1,
+          "fast": 0
+        },
+        {
+          "type": 601,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 608,
+          "slow": 56384,
+          "fast": 0
+        },
+        {
+          "type": 628,
+          "slow": 1,
+          "fast": 0
+        },
+        {
+          "type": 651,
+          "slow": 21,
+          "fast": 19979
+        },
+        {
+          "type": 672,
+          "slow": 147,
+          "fast": 139853
+        },
+        {
+          "type": 680,
+          "slow": 0,
+          "fast": 1
+        },
+        {
+          "type": 681,
+          "slow": 1208,
+          "fast": 1175536
+        },
+        {
+          "type": 684,
+          "slow": 0,
+          "fast": 1755
+        },
+        {
+          "type": 686,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 693,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 696,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 706,
+          "slow": 2,
+          "fast": 0
+        },
+        {
+          "type": 711,
+          "slow": 56384,
+          "fast": 0
+        },
+        {
+          "type": 735,
+          "slow": 121,
+          "fast": 120018
+        },
+        {
+          "type": 745,
+          "slow": 347612,
+          "fast": 0
+        },
+        {
+          "type": 761,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 791,
+          "slow": 140000,
+          "fast": 0
+        }
+      ],
+      "candidate": [
+        {
+          "type": 15,
+          "slow": 16,
+          "fast": 19984
+        },
+        {
+          "type": 16,
+          "slow": 12,
+          "fast": 19988
+        },
+        {
+          "type": 21,
+          "slow": 12,
+          "fast": 19988
+        },
+        {
+          "type": 27,
+          "slow": 118,
+          "fast": 118266
+        },
+        {
+          "type": 28,
+          "slow": 12,
+          "fast": 19988
+        },
+        {
+          "type": 33,
+          "slow": 35,
+          "fast": 39313
+        },
+        {
+          "type": 38,
+          "slow": 519,
+          "fast": 500209
+        },
+        {
+          "type": 43,
+          "slow": 11616,
+          "fast": 11791951
+        },
+        {
+          "type": 44,
+          "slow": 151,
+          "fast": 139849
+        },
+        {
+          "type": 46,
+          "slow": 256,
+          "fast": 279744
+        },
+        {
+          "type": 54,
+          "slow": 0,
+          "fast": 1
+        },
+        {
+          "type": 57,
+          "slow": 0,
+          "fast": 1
+        },
+        {
+          "type": 58,
+          "slow": 0,
+          "fast": 1
+        },
+        {
+          "type": 75,
+          "slow": 101,
+          "fast": 119900
+        },
+        {
+          "type": 78,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 79,
+          "slow": 23,
+          "fast": 19977
+        },
+        {
+          "type": 90,
+          "slow": 45,
+          "fast": 39955
+        },
+        {
+          "type": 128,
+          "slow": 64,
+          "fast": 56320
+        },
+        {
+          "type": 135,
+          "slow": 19,
+          "fast": 19981
+        },
+        {
+          "type": 231,
+          "slow": 240,
+          "fast": 239760
+        },
+        {
+          "type": 232,
+          "slow": 540000,
+          "fast": 0
+        },
+        {
+          "type": 244,
+          "slow": 90,
+          "fast": 104596
+        },
+        {
+          "type": 268,
+          "slow": 23,
+          "fast": 19977
+        },
+        {
+          "type": 270,
+          "slow": 1,
+          "fast": 0
+        },
+        {
+          "type": 303,
+          "slow": 6158,
+          "fast": 6350158
+        },
+        {
+          "type": 305,
+          "slow": 16,
+          "fast": 19984
+        },
+        {
+          "type": 327,
+          "slow": 93,
+          "fast": 99907
+        },
+        {
+          "type": 346,
+          "slow": 19,
+          "fast": 19981
+        },
+        {
+          "type": 366,
+          "slow": 18,
+          "fast": 21598
+        },
+        {
+          "type": 395,
+          "slow": 1201,
+          "fast": 1239845
+        },
+        {
+          "type": 402,
+          "slow": 103,
+          "fast": 104583
+        },
+        {
+          "type": 462,
+          "slow": 1514,
+          "fast": 1602265
+        },
+        {
+          "type": 468,
+          "slow": 101,
+          "fast": 99899
+        },
+        {
+          "type": 483,
+          "slow": 15,
+          "fast": 19985
+        },
+        {
+          "type": 503,
+          "slow": 0,
+          "fast": 1
+        },
+        {
+          "type": 523,
+          "slow": 16,
+          "fast": 21600
+        },
+        {
+          "type": 531,
+          "slow": 24,
+          "fast": 19976
+        },
+        {
+          "type": 536,
+          "slow": 340000,
+          "fast": 0
+        },
+        {
+          "type": 554,
+          "slow": 19,
+          "fast": 19981
+        },
+        {
+          "type": 556,
+          "slow": 116,
+          "fast": 139884
+        },
+        {
+          "type": 568,
+          "slow": 0,
+          "fast": 1
+        },
+        {
+          "type": 601,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 608,
+          "slow": 56384,
+          "fast": 0
+        },
+        {
+          "type": 628,
+          "slow": 0,
+          "fast": 1
+        },
+        {
+          "type": 651,
+          "slow": 21,
+          "fast": 19979
+        },
+        {
+          "type": 672,
+          "slow": 147,
+          "fast": 139853
+        },
+        {
+          "type": 680,
+          "slow": 0,
+          "fast": 1
+        },
+        {
+          "type": 681,
+          "slow": 1208,
+          "fast": 1175536
+        },
+        {
+          "type": 684,
+          "slow": 0,
+          "fast": 1755
+        },
+        {
+          "type": 686,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 693,
+          "slow": 22,
+          "fast": 19978
+        },
+        {
+          "type": 696,
+          "slow": 18,
+          "fast": 19982
+        },
+        {
+          "type": 706,
+          "slow": 2,
+          "fast": 0
+        },
+        {
+          "type": 711,
+          "slow": 56384,
+          "fast": 0
+        },
+        {
+          "type": 735,
+          "slow": 121,
+          "fast": 120018
+        },
+        {
+          "type": 745,
+          "slow": 342,
+          "fast": 347270
+        },
+        {
+          "type": 761,
+          "slow": 20000,
+          "fast": 0
+        },
+        {
+          "type": 791,
+          "slow": 133,
+          "fast": 139867
+        }
+      ]
+    },
+    "totals": {
+      "baseline": {
+        "slow": 14944141,
+        "fast": 11487044
+      },
+      "candidate": {
+        "slow": 1097548,
+        "fast": 25333637
+      }
+    }
+  },
+  "validation": {
+    "status": "passed_local",
+    "component": {
+      "interpreter": {
+        "files": 59,
+        "commands": 1385,
+        "failed": 0,
+        "skipped": 0
+      },
+      "jit": {
+        "files": 59,
+        "commands": 1385,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "native": {
+      "ordinary": 3046,
+      "all_three_verification_flags": 3046,
+      "failed": 0
+    },
+    "wasm": {
+      "tests": 1445,
+      "failed": 0
+    },
+    "strict": [
+      "native",
+      "wasm"
+    ],
+    "moon_info": "passed",
+    "moon_fmt": "passed",
+    "module_boundaries": "passed",
+    "generated_msvc_bridges": "passed",
+    "python": {
+      "tests": 178,
+      "existing_platform_skips": 54,
+      "status": "passed"
+    },
+    "core": {
+      "interpreter": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "skipped": 0
+      },
+      "jit": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "portable": {
+      "native": {
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "wasm": {
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0
+      }
+    },
+    "sanitizer": {
+      "tests": 286,
+      "summary": {
+        "version": "0.17.2",
+        "source_revision": "7cf4fe9895a38e6315813eec9f28c2379aaab057",
+        "source_dirty": true,
+        "build_reuse": "fresh",
+        "binary_sha256": "bb278ddf8634d803181758573d956e00f5aa176849e8441be55fb3730f3fc51d",
+        "tests": "passed",
+        "event_loop": "passed",
+        "asan_probe": "detected",
+        "native_asan_probe": "detected",
+        "lsan_probe": "not_applicable",
+        "leak_detection": false,
+        "instrumentation": [
+          "address",
+          "undefined"
+        ],
+        "allocator": "system",
+        "exclusions": [
+          "MoonBit runtime objects",
+          "JIT machine code"
+        ]
+      },
+      "ordinary_diagnostics": false
+    },
+    "target_regression": {
+      "before": "0 != 1 fast-reservation relocations at released baseline",
+      "after": "AArch64 and x64 ordinary/default constructors include reservation and collecting fallback"
+    },
+    "final_release_binary_sha256": "987e4510332213157ddbdfee9772a2aeb224556d4891f4869911e0e951b98e6e",
+    "final_release_probe": 1,
+    "execution_platform_limit": "macOS ARM64 only; no x64 execution or Linux LSan claimed"
+  },
+  "median": {
+    "baseline": {
+      "compile": 0.752362,
+      "invoke_including_hostcalls": 2.534273,
+      "cold_wall": 3.623183375049848
+    },
+    "candidate": {
+      "compile": 0.789557,
+      "invoke_including_hostcalls": 2.344985,
+      "cold_wall": 3.445651124988217
+    }
+  },
+  "functional_source_sha256": {
+    "modules/wasm_milkir/native/allocation.mbt": "f04b03e431594d0106795f9158d1130e0979af272f8cd40db9a975a00ab8a2e6",
+    "modules/wasmoon_runtime/native/ffi/gc_ops.c": "97aaa119861e7d0ffbc572db622d9b09ca4ae6846aa6c8842cf828111b49e7ef",
+    "modules/wasmoon_jit/artifact_producer.mbt": "a226fc449847377fed6da2308a38579950a3ae1bb9cf1a4c1db010e7d3ad84ce",
+    "modules/wasmoon/sanitizer_testsuite/reference_allocation_test.mbt": "bac44a279085e327559806351ddea184a5e8e14617556f980e65e7e518488401",
+    "modules/wasmoon_jit/gc_access_lowering_test.mbt": "88181ff2e601d2405c2387b27999836e3711362f9bbdf3aad8beec4b6ac5594c"
+  },
+  "host_cpu": "Apple M3 Max",
+  "moon": "moon 0.1.20261021 (a4f8933 2026-10-21) ~/.moon/bin/moon\nmoonc v0.10.17+093cb8f9c (2026-10-21) ~/.moon/bin/moonc\nmoonrun 0.1.20261021 (a4f8933 2026-10-21) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+  "wasm_tools": "wasm-tools 1.254.0",
+  "cleanup": {
+    "scratch_policy": "Owned OS TemporaryDirectory; all child processes completed",
+    "removed": true
+  },
+  "source_dirty": true,
+  "provenance": {
+    "baseline": "Fresh release build from git archive 7cf4fe98, no source edits",
+    "candidate": "Same archive, three reference-allocation decisions changed; codegen manifest remains 18 for the single-variable control",
+    "final": "Uncommitted working tree based on 7cf4fe98, with codegen revision 19 and permanent regressions; separate fresh binary and full gates verified",
+    "historical_receipts": "Unchanged"
+  }
+}

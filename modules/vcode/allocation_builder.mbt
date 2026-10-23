@@ -290,7 +290,7 @@ pub fn[Inst] AllocationBuilder::add_safepoint_root(
     self.allocation.value_locations[value] is None {
     return false
   }
-  self.allocation.safepoint_roots.push({
+  self.allocation.record_safepoint_root({
     instruction: Instruction::new(self.function.owner, instruction),
     value: Value::new(self.function.owner, value),
     location: self.allocation.value_locations[value].unwrap(),
@@ -315,7 +315,7 @@ pub fn[Inst] AllocationBuilder::add_function_safepoint_roots(
       guard self.allocation.value_locations[root.id] is Some(location) else {
         return false
       }
-      self.allocation.safepoint_roots.push({
+      self.allocation.record_safepoint_root({
         instruction: Instruction::new(self.function.owner, instruction),
         value: root,
         location,

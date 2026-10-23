@@ -150,6 +150,7 @@ pub struct Allocation {
   priv after_edits : Array[Array[Edit]?]
   priv edge_edits : Map[(Int32, Int32), Array[Edit]]
   priv safepoint_roots : Array[SafepointRootLocation]
+  priv safepoint_roots_by_instruction : Map[Int32, Array[Int32]]
 }
 
 ///|
@@ -188,6 +189,7 @@ fn[Inst] Allocation::for_function_with_storage(
     after_edits: Array::make(function.instruction_count(), None),
     edge_edits: Map([]),
     safepoint_roots: [],
+    safepoint_roots_by_instruction: Map([]),
   }
 }
 
@@ -576,6 +578,24 @@ pub fn Allocation::edge_edits_at(
 }
 
 ///|
+fn Allocation::record_safepoint_root(
+  self : Allocation,
+  root : SafepointRootLocation,
+) -> Unit {
+  let indices = match
+    self.safepoint_roots_by_instruction.get(root.instruction.id) {
+    Some(indices) => indices
+    None => {
+      let indices = []
+      self.safepoint_roots_by_instruction[root.instruction.id] = indices
+      indices
+    }
+  }
+  indices.push(self.safepoint_roots.length())
+  self.safepoint_roots.push(root)
+}
+
+///|
 pub fn Allocation::add_safepoint_root(
   self : Allocation,
   instruction : Instruction,
@@ -589,7 +609,7 @@ pub fn Allocation::add_safepoint_root(
   if !self.dense_location_matches(dense, self.value_types[value.id]) {
     return false
   }
-  self.safepoint_roots.push({ instruction, value, location: dense, })
+  self.record_safepoint_root({ instruction, value, location: dense, })
   true
 }
 
@@ -641,8 +661,9 @@ pub fn Allocation::safepoint_roots(
     return []
   }
   let roots : Array[(Value, Location)] = []
-  for root in self.safepoint_roots {
-    if root.instruction == instruction {
+  if self.safepoint_roots_by_instruction.get(instruction.id) is Some(indices) {
+    for index in indices {
+      let root = self.safepoint_roots[index]
       roots.push((root.value, self.export_location(root.location).unwrap()))
     }
   }

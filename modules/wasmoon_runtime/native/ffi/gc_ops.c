@@ -403,10 +403,12 @@ void WASMOON_GUEST_ABI gc_array_copy_impl(
 
 // ============ Inline Allocation Support ============
 
-// Reserve an already available scalar struct without collecting, growing or
+// Reserve an already available typed struct without collecting, growing or
 // invoking managed code. Atomic quotas and identity publication stay in the
 // shared allocator. The compiler immediately initializes the admitted bytes;
-// no call/safepoint may occur in that initialization interval.
+// no call/safepoint may occur in that initialization interval. Reference fields
+// use the canonical layout's tracing metadata. Like gc_heap_alloc_typed, fresh
+// initialization needs no mutation barrier in this stop-the-world collector.
 int64_t WASMOON_GUEST_ABI gc_reserve_struct_fast_impl(jit_context_t *ctx,
     int32_t local_type, int32_t count, uint64_t shape, int32_t total_size, int64_t *ticket) {
     ctx = resolve_ctx(ctx);
@@ -416,7 +418,7 @@ int64_t WASMOON_GUEST_ABI gc_reserve_struct_fast_impl(jit_context_t *ctx,
         local_type >= ctx_runtime(ctx)->callable_local_type_count) return 0;
     int32_t identity = ctx_runtime(ctx)->callable_local_types[local_type];
     GcTypeLayout *layout = gc_heap_layout(heap, identity);
-    if (!layout || layout->kind != GC_KIND_STRUCT || layout->count != count || layout->reference_count ||
+    if (!layout || layout->kind != GC_KIND_STRUCT || layout->count != count ||
         total_size != ((GC_HEADER_SIZE + layout->size + 15) & -16)) return 0;
     if (layout->prefix_shape != shape) return 0;
     if (heap->size >= heap->collection_limit || total_size < 16 ||
@@ -993,14 +995,19 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
     if (!heap || ref < 0 || ref > (int64_t)INT32_MAX * 2 || (ref & 1) || fields < 0 || fields > 16) {
         trap_unreachable_i64(); return NULL;
     }
+    int32_t target = ctx && ctx_runtime(ctx)->callable_local_types && type_idx >= 0 &&
+        type_idx < ctx_runtime(ctx)->callable_local_type_count
+        ? ctx_runtime(ctx)->callable_local_types[type_idx] : -1;
+    GcStructViewCache *cached = &heap->struct_view;
+    if (gc_verify_env_cached == 0 && target >= 0 &&
+        cached->reference == ref && cached->identity == target &&
+        cached->shape == shape && cached->fields == fields) return cached->payload;
     GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
     if (!header || header->kind != GC_KIND_STRUCT || (uint32_t)header->reserved < (uint32_t)fields) {
         trap_unreachable_i64(); return NULL;
     }
     int32_t identity = (int32_t)(header->reserved >> 32) - 1;
-    int exact = identity >= 0 && ctx && ctx_runtime(ctx)->callable_local_types && type_idx >= 0 &&
-        type_idx < ctx_runtime(ctx)->callable_local_type_count &&
-        identity == ctx_runtime(ctx)->callable_local_types[type_idx];
+    int exact = identity >= 0 && identity == target;
     if (!exact && !gc_ref_test_impl(ctx, ref, type_idx, 0)) { trap_unreachable_i64(); return NULL; }
     GcTypeLayout *layout = gc_object_layout(heap, header);
     uint64_t mask = fields == 16 ? UINT64_MAX : (UINT64_C(1) << (fields * 4)) - 1;
@@ -1011,7 +1018,11 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
     // select the explicit legacy slot adapter and verification write fallback.
     uintptr_t flags = layout ? 0 : 1;
     if (!layout || gc_verify_env_cached != 0) flags |= 2;
-    return (void *)((uintptr_t)(header + 1) | flags);
+    void *view = (void *)((uintptr_t)(header + 1) | flags);
+    if (exact && layout && gc_verify_env_cached == 0) {
+        *cached = (GcStructViewCache){ref, identity, fields, shape, view};
+    }
+    return view;
 }
 
 int64_t WASMOON_GUEST_ABI gc_array_get_heap_impl(GcHeap *heap, int64_t ref, int32_t idx) {

@@ -18,7 +18,7 @@ fn terminator_values(term : @milkir.Terminator) -> Array[@milkir.Value] {
 
 ///|
 /// Scalarize private integer boxes, keeping their effectful allocation.
-/// Only entry allocations with direct field-zero uses are admitted. Passing
+/// Only allocations with direct field-zero uses are admitted. Passing
 /// the reference through a call, copy, phi, return or any other operation
 /// rejects the candidate; no alias or interprocedural assumptions are needed.
 fn promote_local_structs(function : @milkir.Function) -> Bool {
@@ -36,15 +36,15 @@ fn promote_local_structs(function : @milkir.Function) -> Bool {
     }
   }
   let candidates : Array[LocalStruct] = []
-  for id in function.block_instruction_ids(entry) {
-    let inst = function.instruction_by_id(id).unwrap()
-    if @wasm_milkir.decode_opcode(inst.opcode) is Some(StructNew(type_index)) &&
-      inst.args is [initial] &&
-      initial.ty is (I32 | I64) &&
-      inst.results is [object] {
-      candidates.push({ object, type_index, initial, })
-      if candidates.length() == 16 {
-        break
+  for block in function.blocks {
+    for id in function.block_instruction_ids(block) {
+      let inst = function.instruction_by_id(id).unwrap()
+      if candidates.length() < 16 &&
+        @wasm_milkir.decode_opcode(inst.opcode) is Some(StructNew(type_index)) &&
+        inst.args is [initial] &&
+        initial.ty is (I32 | I64) &&
+        inst.results is [object] {
+        candidates.push({ object, type_index, initial, })
       }
     }
   }
@@ -105,6 +105,21 @@ fn promote_local_structs(function : @milkir.Function) -> Bool {
   if locals.is_empty() {
     return false
   }
+  // Incoming state before a box's allocation is unobservable: the verified
+  // reference definition dominates every admitted use. Reset at the allocation
+  // itself, so conditional allocations and repeated loop executions never
+  // inherit another dynamic object's state. Keep the allocation and its traps.
+  let seeds : Array[@milkir.Value] = []
+  let prefix : Array[@milkir.Inst] = []
+  for candidate in locals {
+    let value = function.new_value(candidate.initial.ty)
+    prefix.push(function.new_inst(Scalar(IntConst(0L)), [], [value]))
+    seeds.push(value)
+  }
+  let entry_instructions = function
+    .block_instruction_ids(entry)
+    .map(id => function.instruction_by_id(id).unwrap())
+  entry.set_instructions(prefix + entry_instructions)
   let parameters : Map[Int32, Array[@milkir.Value]] = Map([])
   for block in function.blocks {
     if block.id != entry.id {
@@ -115,13 +130,18 @@ fn promote_local_structs(function : @milkir.Function) -> Bool {
   }
   for block in function.blocks {
     let current = if block.id == entry.id {
-      locals.map(candidate => candidate.initial)
+      seeds.copy()
     } else {
       parameters[block.id].copy()
     }
     let removed : Map[Int32, Bool] = Map([])
     for id in function.block_instruction_ids(block) {
       let inst = function.instruction_by_id(id).unwrap()
+      if @wasm_milkir.decode_opcode(inst.opcode) is Some(StructNew(_)) &&
+        inst.results is [object] &&
+        indexes.get(object.id) is Some(index) {
+        current[index] = locals[index].initial
+      }
       if inst.args.get(0) is Some(object) &&
         indexes.get(object.id) is Some(index) {
         match @wasm_milkir.decode_opcode(inst.opcode) {

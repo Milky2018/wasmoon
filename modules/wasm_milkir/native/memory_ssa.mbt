@@ -266,6 +266,7 @@ fn expand_memory_access(
 pub fn prepare_gc_memory(
   function : @milkir.Function,
   context : @wasm_milkir.WasmValidationContext,
+  on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir.VerifyError {
   fn validate(view : @milkir.ExtensionInstView) -> String? {
     validate_memory_extension(view, context, function.results)
@@ -273,11 +274,13 @@ pub fn prepare_gc_memory(
   fn validate_global(value : @milkir.GlobalValueData) -> String? {
     context.validate_global_value(value)
   }
+  on_event(PreparationStarted(name="gc_memory_input_validation"))
   function.verify_with_dialect_validator(
     @wasm_milkir.WASM_DIALECT,
     validate,
     validate_global,
   )
+  on_event(PreparationStarted(name="gc_memory_scan"))
   let old_blocks = function.blocks.copy()
   let has_access = old_blocks.any(block => {
     function
@@ -294,13 +297,17 @@ pub fn prepare_gc_memory(
       extension.effects is Some(_)
     })
   })
-  if has_access &&
+  let expand = has_access &&
     !already_prepared &&
     // Bound the expansion graph, not just individual rewrite work. Large
     // generated initializers keep checked helpers; expanding thousands of
     // stores would dominate cold compilation without helping a hot loop.
-    function.next_inst_id <= 1200 &&
-    old_blocks.length() <= 2048 {
+    old_blocks.fold(init=0, fn(total, block) {
+      total + block.instruction_count()
+    }) <=
+    1200 &&
+    old_blocks.length() <= 2048
+  if expand {
     // Logical reads use the same effect/versioned GVN before their checked
     // physical expansion, including compatibility edges and immutable length.
     for block in old_blocks {
@@ -313,7 +320,9 @@ pub fn prepare_gc_memory(
         }
       }
     }
+    on_event(PreparationStarted(name="gc_memory_logical_optimization"))
     @generic.optimize_with_level(function, O3) |> ignore
+    on_event(PreparationStarted(name="gc_memory_expansion"))
     for block in function.blocks.copy() {
       let ids = function.block_instruction_ids(block).to_owned()
       let term = block.terminator
@@ -348,6 +357,7 @@ pub fn prepare_gc_memory(
     }
     // New split blocks dominate some original blocks. Keep SSA producers in
     // reverse postorder for streaming selectors while retaining stable IDs.
+    on_event(PreparationStarted(name="gc_memory_schedule"))
     let cfg = @milkir.CFG::build(function)
     let blocks : Map[Int32, @milkir.Block] = Map([])
     for block in function.blocks {
@@ -362,17 +372,24 @@ pub fn prepare_gc_memory(
     for _, block in blocks {
       function.blocks.push(block)
     }
+    on_event(PreparationStarted(name="gc_memory_physical_optimization"))
     @generic.optimize_with_level(function, O3) |> ignore
+    on_event(PreparationStarted(name="gc_memory_placement"))
     if @generic.hoist_loop_invariants(function, guard_entries=true).changed {
       // Finish scalar cleanup once, after CFG-aware placement converges.
+      on_event(PreparationStarted(name="gc_memory_cleanup"))
       @generic.optimize_with_level(function, O2) |> ignore
     }
   }
-  function.verify_with_dialect_validator(
-    @wasm_milkir.WASM_DIALECT,
-    validate,
-    validate_global,
-  )
+  if expand {
+    on_event(PreparationStarted(name="gc_memory_output_validation"))
+    function.verify_with_dialect_validator(
+      @wasm_milkir.WASM_DIALECT,
+      validate,
+      validate_global,
+    )
+  }
+  on_event(PreparationStarted(name="gc_memory_borrow_validation"))
   if gc_borrow_error(function) is Some(error) {
     raise @milkir.VerifyError::unverifiable_instruction(
       "GC memory in \{function.name}: \{error}",

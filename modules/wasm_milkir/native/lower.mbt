@@ -11,6 +11,7 @@ const GC_SLOT_BYTES : Int32 = 16
 /// the embedding product after target emission.
 struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
+  inline_heap : InlineHeapLayout?
   gc_array_regions : Bool
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
@@ -35,6 +36,7 @@ pub fn Environment::new(
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
   gc_heap_field~ : @native_types.EnvironmentField? = None,
   gc_array_regions~ : Bool = false,
+  inline_heap~ : InlineHeapLayout? = None,
 ) -> Environment {
   {
     function_symbol,
@@ -42,6 +44,7 @@ pub fn Environment::new(
     runtime_symbol,
     gc_heap_field,
     gc_array_regions,
+    inline_heap,
   }
 }
 
@@ -1616,10 +1619,16 @@ pub fn lower_to_sink(
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
   if environment.gc_array_regions && environment.gc_heap_field is Some(_) {
-    prepare_gc_memory(function, validation_context) catch {
+    prepare_gc_memory(function, validation_context, on_event~) catch {
       error =>
         raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
     }
+  }
+  let environment = if environment.inline_heap is Some(_) &&
+    !inline_allocation_fits(function, validation_context) {
+    { ..environment, inline_heap: None, }
+  } else {
+    environment
   }
   fn validate(view : @milkir.ExtensionInstView) -> String? {
     validate_memory_extension(view, validation_context, function.results)

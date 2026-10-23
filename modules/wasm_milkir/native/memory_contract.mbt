@@ -231,6 +231,43 @@ fn lower_projection(
         [view],
         [I64],
       )[0]
+    // Equal offsets need neither the compatibility flag nor a select. In
+    // particular field zero always starts at the admitted payload address.
+    if read && offset == field * 16 {
+      let address = if offset == 0 {
+        raw
+      } else {
+        context.emit(IntBinaryImmediate(Add, offset.to_uint64()), [raw], [I64])[0]
+      }
+      let pointer = context.emit(Convert(Bitcast(I64, Ptr64)), [address], [
+          Ptr64,
+        ])[0]
+      context.forward_results([pointer])
+      return None
+    }
+    let delta = field * 16 - offset
+    if read && delta > 0 && delta.popcnt() == 1 {
+      // The legacy flag is exactly zero or one. Scaling it by the layout
+      // difference avoids materializing two offsets and a boolean select.
+      let legacy = context.emit(IntBinaryImmediate(And, 1UL), [view], [I64])[0]
+      let address = context.emit(
+          IntAddShiftedLeft(delta.ctz()),
+          [raw, legacy],
+          [I64],
+        )[0]
+      let address = if offset == 0 {
+        address
+      } else {
+        context.emit(IntBinaryImmediate(Add, offset.to_uint64()), [address], [
+          I64,
+        ])[0]
+      }
+      let pointer = context.emit(Convert(Bitcast(I64, Ptr64)), [address], [
+          Ptr64,
+        ])[0]
+      context.forward_results([pointer])
+      return None
+    }
     let flag = context.emit(
         IntBinaryImmediate(And, if read { 1UL } else { 2UL }),
         [view],

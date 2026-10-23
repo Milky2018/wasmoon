@@ -1,0 +1,2016 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-23",
+  "issue": "ISS-671 / GitHub #568",
+  "source_revision": "7cf4fe9895a38e6315813eec9f28c2379aaab057",
+  "source_dirty": true,
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "release": "25.6.0"
+  },
+  "changed_source_sha256": {
+    "modules/milkir/native/lower.mbt": "776850f0404b15641d4af2de09bb455d347c292cdae3acbfbd225b34fb8ba8f8",
+    "modules/milkir/native/lower_event.mbt": "2f67e68c287f6f70a1ac77053c32783ce8cb857460d86961a007087ba4f396b5",
+    "modules/milkir/native/lower_wbtest.mbt": "4f372df08d30ae5d7fa68e66a21c5040287bf1392ba400ba24f0de1dfdafa1b1",
+    "modules/milkir/native/pkg.generated.mbti": "4dbfda80359bf79ff71376d17c97a8f27d343c644106ad75b9a31687044f3870",
+    "modules/milkir/native/selection_wbtest.mbt": "d4163f87412ce740a7913cd27b5faf16914fba32dd3accc285b6815037884691",
+    "modules/vcode/allocation.mbt": "c1aefb06ee5169ba41ae33b8eb486a5f6e6c2493870f365d47be12b80458648b",
+    "modules/vcode/allocation_builder.mbt": "3de1122a09284adac47e48f4e4046b4060654d254282152af6dde3bb04f27328",
+    "modules/vcode/vcode_test.mbt": "4b59be5fec5b66acbf72de77f1c285be70d021c22aae7a1d976ab9975d5e25d6",
+    "modules/wasm_milkir/frontend/ir/translator/scalar_callees.mbt": "259760978a87bbf586fa333490718090fe668097da438db2f2adb70f639455bf",
+    "modules/wasm_milkir/frontend/production.mbt": "62758517490d40a89a8ac220d0e248962e14dfc1ebcd86b273f0aabd6ffe9df9",
+    "modules/wasm_milkir/native/allocation.mbt": "18c51e89b30900940444b9ffe904f40f839730e5631dd3e44689447808041980",
+    "modules/wasm_milkir/native/inline_heap.mbt": "85db05d352c09ef5e1197007626a758218770d18b362c23310eb9b632d6db236",
+    "modules/wasm_milkir/native/lower.mbt": "722d17bd38d454b3b1fad61d7d20934f6bfcd3d846abd18d4fc5df47cdb5f77d",
+    "modules/wasm_milkir/native/memory_context_wbtest.mbt": "93034c2eb24f9ac14e79f7b545484f424eb7f686a99848749744fc9326323e2e",
+    "modules/wasm_milkir/native/memory_contract.mbt": "9cdbd1e29aa17e6057bc0f95016abfa6ffe6dd03e6909fd662bb1b484a495ad9",
+    "modules/wasm_milkir/native/memory_ssa.mbt": "40339b9c527fa3d5c75ac0de723dea93e58bb7ed0be446437d8b15734af33170",
+    "modules/wasm_milkir/native/memory_verify.mbt": "67e23eed4a126d64a151594989cb7e4a0c298d3742a8d3a51c8f2e922746b819",
+    "modules/wasm_milkir/native/memory_verify_wbtest.mbt": "50ade6237dd149237b4f058eb0eef20c06ace994f13948b821e0f3e8ecb704f7",
+    "modules/wasm_milkir/native/pkg.generated.mbti": "145d3bf1083c2dbb3064d1c75cd122520180637b8d20ece627df3237f37f3f59",
+    "modules/wasm_milkir/optimize/local_structs.mbt": "db9ff23636d16a18ac2024717394533982a970e182da12f392cec5c5d82f40dd",
+    "modules/wasm_milkir/optimize/local_structs_test.mbt": "bb6d4b9ab0647803a91e9c016557824c7b8f9b2e70a0068fc559e629e1326ace",
+    "modules/wasm_milkir/optimize/optimize.mbt": "04c7632c4c886571620015f0bfafa555fe05efb643c8b2ed225e8a3fb39aa558",
+    "modules/wasm_milkir/optimize/scalar_calls.mbt": "1f15e07af8dad9072a2797561a04c51fe64a8c0d702d404e2346343aebfd7950",
+    "modules/wasm_milkir/optimize/scalar_calls_test.mbt": "ccc844ec0a89dd74a395f62c4d390778a960f8d9a071eb9f73356ae98bcb72f3",
+    "modules/wasmoon/cmd/wasmoon/commands/run.mbt": "72ba11857b5af5624ff6e45333a91566cd8e9fbdcd8a47f320a58c4973f865ef",
+    "modules/wasmoon/cmd/wasmoon/commands/run_wbtest.mbt": "a1cc2a066bc77342ac2702c76926634334c30a95175f860d8e10148c891b7da6",
+    "modules/wasmoon/sanitizer_testsuite/explicit_heap_access_test.mbt": "e3d283f958c5fe0f4ee6809e66a8f9975ca0779e199241d2c43085fd3b86f150",
+    "modules/wasmoon/sanitizer_testsuite/gc_leaf_inlining_test.mbt": "5cd51d0a4b8dab56a658aa7d95c8612c6ea2b74aaff7baca66df5afb89ce9667",
+    "modules/wasmoon/sanitizer_testsuite/loop_scalarization_test.mbt": "f653e98dbd4b869fa762b7d04ce524707c30232eea4d2038ef5a9dce529b532e",
+    "modules/wasmoon/sanitizer_testsuite/native_gc_roots_test.mbt": "880b6c300cc34297ac272a4e196ac5dcc3fbaa7e79ccf684273a975dfd10adc2",
+    "modules/wasmoon/sanitizer_testsuite/reference_allocation_test.mbt": "e5af1543673a0e754e417ac4984ed24524ed13c1efb3af2bd50d309b959bd205",
+    "modules/wasmoon/sanitizer_testsuite/struct_view_lifetime_test.mbt": "7293473a85401f7baab64402a3d881e30827b1cd9b0683752f0592a28002cc9b",
+    "modules/wasmoon_jit/artifact_producer.mbt": "80730dda8d82686c6aeabb357a9ddb054153bee583961236f7258ab27dbee80f",
+    "modules/wasmoon_jit/artifact_producer_test.mbt": "54ded78df841da79456184da2da6174278cc60fc8a44e1e1de0f8decb39f9d62",
+    "modules/wasmoon_jit/artifact_producer_wbtest.mbt": "3fcec53558fc3d358a275fa52703920670fa162f9f713b1c3ecf7cbdabd106a6",
+    "modules/wasmoon_jit/gc_access_lowering_test.mbt": "75be3e83c11f7b7fcd5b934ff45f91bea3e396d3d5ae3bfc9694c77e1aaca5c5",
+    "modules/wasmoon_jit/native_wasm_lower.mbt": "981666bf80ab87de15d406d7b8a6bdc866416a910b4e39d5cb8b1fb1fb5699bf",
+    "modules/wasmoon_jit/pkg.generated.mbti": "6437eb4f60e2d2ce9fe112b17a44b92faec0f0cc2177f1eff62501030259645f",
+    "modules/wasmoon_jit/target_metrics.mbt": "5101bf8e93d62698a3e68ded78c31476a6d017c14674ca1bd81fec3ccfcc86a0",
+    "modules/wasmoon_runtime/native/ffi/gc_heap.c": "470848f89bd41e2ffe19f290218e2b13cecb4c0a7d6548441303aa7707bc2503",
+    "modules/wasmoon_runtime/native/ffi/gc_heap.h": "e01753674ee0b8df7cd23ba1318db7bc91dd95c5a3861bc557ed957879e3b4ba",
+    "modules/wasmoon_runtime/native/ffi/gc_ops.c": "ab35ce027596e4c5f5fed47aa3dabbef74da8afa99a62711e539d930f275ef45",
+    "modules/wasmoon_runtime/native/ffi/jit_context.c": "2686f5da3c10d23c2fb34489ec831f821a64cce0e5df8fc65ce4a345f4808e72",
+    "modules/wasmoon_runtime/runtime/pkg.generated.mbti": "4d40b02bfb8ae6426373881631c699299e60cf0b382d4caaa19a7884750057d1",
+    "modules/wasmoon_runtime/runtime/store_inspection.mbt": "17c28da819b8e65a3fb50597e93894b8899080850234188f708b9a1f71015e3b",
+    "modules/wasmoon_runtime/runtime/type_registry_wbtest.mbt": "54248496ecf2e4fbe4d3b910f97452788bdb061b4f5ec54fc923529ef61f86fa"
+  },
+  "codegen_revision": 20,
+  "jit_abi": 8,
+  "input": {
+    "core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+    "iterations": 20000,
+    "original_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+    "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1",
+    "expected_result": 1
+  },
+  "timing_contract": {
+    "serial": true,
+    "owned_work_overlaps_final_timing": false,
+    "fresh_caches": true,
+    "wasmoon_cache_variable": "WASMOON_JIT_CACHE_DIR",
+    "verification_flags_removed": true,
+    "node_version": "25.2.1",
+    "v8_version": "14.1.146.11-node.14",
+    "v8_flags": [
+      "--no-liftoff",
+      "--no-wasm-lazy-compilation",
+      "--wasm-num-compilation-tasks=1"
+    ],
+    "wasmtime_version": "49.0.1",
+    "wasmtime_flags": [
+      "-C",
+      "parallel-compilation=n",
+      "-C",
+      "cache=n"
+    ],
+    "wasmtime_scope": "Cold whole process only; NOT isolated invocation.",
+    "background_activity": "Unrelated host activity was not stopped; noisy samples retained."
+  },
+  "variants": {
+    "before": {
+      "description": "Initial pending source with generated allocation disabled; no exact-object cache or constructor-view prototype. Private debug-control refactoring retained.",
+      "binary_sha256": "62d0ec29ecbb0644344c84a10c9aaa967d98105dafd46754ef60f4b85dc8cbaa"
+    },
+    "allocation": {
+      "description": "Unbounded generated allocation, no constructor-view prototype, no exact-object cache.",
+      "binary_sha256": "235d2826343188325334a31a6a3a9d306c67f440d05c6152e26d5cf1ffebc136"
+    },
+    "both": {
+      "description": "Unbounded allocation and rejected constructor-result view prototype, no exact-object cache.",
+      "binary_sha256": "5a02b06fa3b00c5b5ba530999dfe493703885fcb1b80544714206474d335bc7f"
+    },
+    "budget": {
+      "description": "Allocation expansion cap 1200 plus constructor-view prototype, no exact-object cache.",
+      "binary_sha256": "acbc2a99efdddec9052762d5074251e2e09e14d8a625599f5089f76678d30aa5"
+    },
+    "compact": {
+      "description": "Allocation expansion cap 512 plus constructor-view prototype, no exact-object cache.",
+      "binary_sha256": "96cb3f855a7667c1270f886dc009b25c537cb0a73f944ad2e5ad72b23ee593bc"
+    },
+    "cached": {
+      "description": "Cap 512, constructor-view prototype, heap-owned exact-object cache, no prepared identity window.",
+      "binary_sha256": "9e9dec14c93197d818ebbc0aaf7ca3649e2f24d012913c1f7e189a8d6ae4e8ca"
+    },
+    "pre-window": {
+      "description": "Cap 512, heap-owned exact-object cache, prototype removed, no prepared identity window.",
+      "binary_sha256": "6f68e77d603d122e0e83bc88382a2d314f727cfd3b2f8b1a02ac3dcee7f8e2ab"
+    },
+    "window": {
+      "description": "Final source: cap 512, prepared identity capacity window, exact-object cache, no constructor-view prototype.",
+      "binary_sha256": "87e914f493b1b77d1323ad26eeb1f9a4e9df6cdfc3cf4352ccd425d5ec2178e8"
+    }
+  },
+  "primary_cohort": "window-final",
+  "primary_medians": {
+    "before": {
+      "samples": 5,
+      "process_wall_seconds": 3.1257704170420766,
+      "whole_process_user_cpu_seconds": 3.0604309999998804,
+      "compile_seconds": 0.806084,
+      "invoke_seconds": 2.230239
+    },
+    "window": {
+      "samples": 5,
+      "process_wall_seconds": 3.0449453329783864,
+      "whole_process_user_cpu_seconds": 2.9782319999999345,
+      "compile_seconds": 0.885581,
+      "invoke_seconds": 2.062075
+    },
+    "v8": {
+      "samples": 5,
+      "process_wall_seconds": 1.288898583035916,
+      "whole_process_user_cpu_seconds": 1.2771710000001804,
+      "compile_seconds": 0.454163292,
+      "invoke_seconds": 0.782377792
+    },
+    "wasmtime": {
+      "samples": 5,
+      "process_wall_seconds": 2.4941113750101067,
+      "whole_process_user_cpu_seconds": 2.4738760000000184
+    }
+  },
+  "ratios_to_v8": {
+    "invocation": 2.6356512430250576,
+    "compilation": 1.9499176080483405
+  },
+  "numerical_targets_met": false,
+  "all_raw_samples": [
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3070551",
+      "phases_us": {
+        "host_setup_and_preloads": "759",
+        "read_and_parse": "5931",
+        "validate": "10610",
+        "instantiate_including_start": "13935",
+        "jit_plan_and_cache_lookup": "2592",
+        "compile": "777294",
+        "artifact_verify": "13583",
+        "cache_write_and_report": "4618",
+        "jit_load_and_prepare": "28542",
+        "invoke_including_hostcalls": "2211705",
+        "finish_or_early_return": "982"
+      },
+      "engine": "before",
+      "wall": 3.085858709004242
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3227802",
+      "phases_us": {
+        "host_setup_and_preloads": "360",
+        "read_and_parse": "3159",
+        "validate": "6925",
+        "instantiate_including_start": "10194",
+        "jit_plan_and_cache_lookup": "2016",
+        "compile": "1092177",
+        "artifact_verify": "14428",
+        "cache_write_and_report": "6763",
+        "jit_load_and_prepare": "28998",
+        "invoke_including_hostcalls": "2061784",
+        "finish_or_early_return": "998"
+      },
+      "engine": "allocation",
+      "wall": 3.237244958989322
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3230248",
+      "phases_us": {
+        "host_setup_and_preloads": "384",
+        "read_and_parse": "3412",
+        "validate": "7233",
+        "instantiate_including_start": "10486",
+        "jit_plan_and_cache_lookup": "2114",
+        "compile": "1111018",
+        "artifact_verify": "14207",
+        "cache_write_and_report": "5938",
+        "jit_load_and_prepare": "32074",
+        "invoke_including_hostcalls": "2042348",
+        "finish_or_early_return": "1034"
+      },
+      "engine": "both",
+      "wall": 3.2413401670055464
+    },
+    {
+      "compile": 0.465567666,
+      "invoke": 0.786621125,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.307552917045541
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.4943657079711556
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.501822042046115
+    },
+    {
+      "compile": 0.469329042,
+      "invoke": 0.808366,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.3326990000205114
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3326589",
+      "phases_us": {
+        "host_setup_and_preloads": "103",
+        "read_and_parse": "3576",
+        "validate": "7128",
+        "instantiate_including_start": "11102",
+        "jit_plan_and_cache_lookup": "2099",
+        "compile": "1162848",
+        "artifact_verify": "13849",
+        "cache_write_and_report": "5015",
+        "jit_load_and_prepare": "26593",
+        "invoke_including_hostcalls": "2093047",
+        "finish_or_early_return": "1229"
+      },
+      "engine": "both",
+      "wall": 3.33798991702497
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3299097",
+      "phases_us": {
+        "host_setup_and_preloads": "94",
+        "read_and_parse": "3285",
+        "validate": "7438",
+        "instantiate_including_start": "10264",
+        "jit_plan_and_cache_lookup": "2116",
+        "compile": "1140845",
+        "artifact_verify": "14496",
+        "cache_write_and_report": "7637",
+        "jit_load_and_prepare": "28019",
+        "invoke_including_hostcalls": "2083868",
+        "finish_or_early_return": "1035"
+      },
+      "engine": "allocation",
+      "wall": 3.309276084008161
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3924022",
+      "phases_us": {
+        "host_setup_and_preloads": "100",
+        "read_and_parse": "3365",
+        "validate": "6875",
+        "instantiate_including_start": "9806",
+        "jit_plan_and_cache_lookup": "1865",
+        "compile": "780084",
+        "artifact_verify": "14258",
+        "cache_write_and_report": "5202",
+        "jit_load_and_prepare": "29026",
+        "invoke_including_hostcalls": "3072407",
+        "finish_or_early_return": "1034"
+      },
+      "engine": "before",
+      "wall": 3.934797667025123
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "4008504",
+      "phases_us": {
+        "host_setup_and_preloads": "95",
+        "read_and_parse": "3467",
+        "validate": "7307",
+        "instantiate_including_start": "10670",
+        "jit_plan_and_cache_lookup": "1948",
+        "compile": "1140655",
+        "artifact_verify": "15998",
+        "cache_write_and_report": "5219",
+        "jit_load_and_prepare": "31656",
+        "invoke_including_hostcalls": "2790348",
+        "finish_or_early_return": "1141"
+      },
+      "engine": "before",
+      "wall": 4.0210979169933125
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3808844",
+      "phases_us": {
+        "host_setup_and_preloads": "94",
+        "read_and_parse": "3683",
+        "validate": "7465",
+        "instantiate_including_start": "13568",
+        "jit_plan_and_cache_lookup": "2050",
+        "compile": "1397433",
+        "artifact_verify": "16290",
+        "cache_write_and_report": "6170",
+        "jit_load_and_prepare": "28981",
+        "invoke_including_hostcalls": "2331635",
+        "finish_or_early_return": "1475"
+      },
+      "engine": "allocation",
+      "wall": 3.8223231669981033
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "4077598",
+      "phases_us": {
+        "host_setup_and_preloads": "330",
+        "read_and_parse": "4785",
+        "validate": "11982",
+        "instantiate_including_start": "19667",
+        "jit_plan_and_cache_lookup": "3280",
+        "compile": "1675727",
+        "artifact_verify": "16244",
+        "cache_write_and_report": "8136",
+        "jit_load_and_prepare": "31241",
+        "invoke_including_hostcalls": "2304685",
+        "finish_or_early_return": "1521"
+      },
+      "engine": "both",
+      "wall": 4.093722749967128
+    },
+    {
+      "compile": 0.6105075,
+      "invoke": 0.834152333,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.518962999980431
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.6442567089688964
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.6960287499823608
+    },
+    {
+      "compile": 0.491929916,
+      "invoke": 0.82057725,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.3753164160298184
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3947465",
+      "phases_us": {
+        "host_setup_and_preloads": "98",
+        "read_and_parse": "3491",
+        "validate": "8087",
+        "instantiate_including_start": "11164",
+        "jit_plan_and_cache_lookup": "1922",
+        "compile": "1714889",
+        "artifact_verify": "15156",
+        "cache_write_and_report": "9080",
+        "jit_load_and_prepare": "30974",
+        "invoke_including_hostcalls": "2150983",
+        "finish_or_early_return": "1621"
+      },
+      "engine": "both",
+      "wall": 3.9619643749902025
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3836529",
+      "phases_us": {
+        "host_setup_and_preloads": "94",
+        "read_and_parse": "3508",
+        "validate": "7172",
+        "instantiate_including_start": "11563",
+        "jit_plan_and_cache_lookup": "3125",
+        "compile": "1290351",
+        "artifact_verify": "17163",
+        "cache_write_and_report": "7567",
+        "jit_load_and_prepare": "31635",
+        "invoke_including_hostcalls": "2463157",
+        "finish_or_early_return": "1194"
+      },
+      "engine": "allocation",
+      "wall": 3.8502405409817584
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "5614875",
+      "phases_us": {
+        "host_setup_and_preloads": "116",
+        "read_and_parse": "3502",
+        "validate": "7738",
+        "instantiate_including_start": "10791",
+        "jit_plan_and_cache_lookup": "2058",
+        "compile": "3133873",
+        "artifact_verify": "17885",
+        "cache_write_and_report": "6047",
+        "jit_load_and_prepare": "31823",
+        "invoke_including_hostcalls": "2399615",
+        "finish_or_early_return": "1427"
+      },
+      "engine": "before",
+      "wall": 5.633549749967642
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3295295",
+      "phases_us": {
+        "host_setup_and_preloads": "130",
+        "read_and_parse": "3718",
+        "validate": "7512",
+        "instantiate_including_start": "10350",
+        "jit_plan_and_cache_lookup": "2031",
+        "compile": "895054",
+        "artifact_verify": "14111",
+        "cache_write_and_report": "5734",
+        "jit_load_and_prepare": "29694",
+        "invoke_including_hostcalls": "2325884",
+        "finish_or_early_return": "1077"
+      },
+      "engine": "before",
+      "wall": 3.3079964159987867
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "4190269",
+      "phases_us": {
+        "host_setup_and_preloads": "112",
+        "read_and_parse": "3547",
+        "validate": "8407",
+        "instantiate_including_start": "16394",
+        "jit_plan_and_cache_lookup": "2597",
+        "compile": "1782350",
+        "artifact_verify": "26815",
+        "cache_write_and_report": "17189",
+        "jit_load_and_prepare": "38904",
+        "invoke_including_hostcalls": "2292743",
+        "finish_or_early_return": "1211"
+      },
+      "engine": "allocation",
+      "wall": 4.20347262499854
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "4189725",
+      "phases_us": {
+        "host_setup_and_preloads": "119",
+        "read_and_parse": "3600",
+        "validate": "7115",
+        "instantiate_including_start": "10422",
+        "jit_plan_and_cache_lookup": "1961",
+        "compile": "1247566",
+        "artifact_verify": "17250",
+        "cache_write_and_report": "8304",
+        "jit_load_and_prepare": "33306",
+        "invoke_including_hostcalls": "2858772",
+        "finish_or_early_return": "1310"
+      },
+      "engine": "both",
+      "wall": 4.204058958974201
+    },
+    {
+      "compile": 0.5588705,
+      "invoke": 1.505750667,
+      "result": 1,
+      "engine": "v8",
+      "wall": 2.1224452910246328
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.724362791981548
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3096209",
+      "phases_us": {
+        "host_setup_and_preloads": "3937",
+        "read_and_parse": "5252",
+        "validate": "9381",
+        "instantiate_including_start": "13747",
+        "jit_plan_and_cache_lookup": "3318",
+        "compile": "782833",
+        "artifact_verify": "14817",
+        "cache_write_and_report": "4000",
+        "jit_load_and_prepare": "27515",
+        "invoke_including_hostcalls": "2230414",
+        "finish_or_early_return": "995"
+      },
+      "engine": "before",
+      "wall": 3.1126311250263825,
+      "user_cpu": 3.0349579999999605,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3167070",
+      "phases_us": {
+        "host_setup_and_preloads": "417",
+        "read_and_parse": "3520",
+        "validate": "6955",
+        "instantiate_including_start": "10032",
+        "jit_plan_and_cache_lookup": "1974",
+        "compile": "974604",
+        "artifact_verify": "13250",
+        "cache_write_and_report": "6426",
+        "jit_load_and_prepare": "27428",
+        "invoke_including_hostcalls": "2121436",
+        "finish_or_early_return": "1028"
+      },
+      "engine": "budget",
+      "wall": 3.176974708971102,
+      "user_cpu": 3.1266770000000292,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "compile": 0.47075925,
+      "invoke": 0.792169292,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.4060862500336953,
+      "user_cpu": 1.2963479999999663,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.5240266660111956,
+      "user_cpu": 2.4479670000000056,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.449437041010242,
+      "user_cpu": 2.4360640000000444,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "compile": 0.486179,
+      "invoke": 0.809632541,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.3521748749772087,
+      "user_cpu": 1.3316199999999867,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3433944",
+      "phases_us": {
+        "host_setup_and_preloads": "98",
+        "read_and_parse": "3424",
+        "validate": "7144",
+        "instantiate_including_start": "10388",
+        "jit_plan_and_cache_lookup": "2014",
+        "compile": "1198985",
+        "artifact_verify": "13171",
+        "cache_write_and_report": "6301",
+        "jit_load_and_prepare": "30526",
+        "invoke_including_hostcalls": "2160743",
+        "finish_or_early_return": "1150"
+      },
+      "engine": "budget",
+      "wall": 3.4441531249904074,
+      "user_cpu": 3.2477369999999723,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3102231",
+      "phases_us": {
+        "host_setup_and_preloads": "93",
+        "read_and_parse": "3433",
+        "validate": "7493",
+        "instantiate_including_start": "10899",
+        "jit_plan_and_cache_lookup": "1966",
+        "compile": "798445",
+        "artifact_verify": "14398",
+        "cache_write_and_report": "4664",
+        "jit_load_and_prepare": "29267",
+        "invoke_including_hostcalls": "2230548",
+        "finish_or_early_return": "1025"
+      },
+      "engine": "before",
+      "wall": 3.111943166994024,
+      "user_cpu": 3.0693540000000326,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3107758",
+      "phases_us": {
+        "host_setup_and_preloads": "90",
+        "read_and_parse": "5167",
+        "validate": "8801",
+        "instantiate_including_start": "11780",
+        "jit_plan_and_cache_lookup": "2718",
+        "compile": "802384",
+        "artifact_verify": "12858",
+        "cache_write_and_report": "5049",
+        "jit_load_and_prepare": "26285",
+        "invoke_including_hostcalls": "2231597",
+        "finish_or_early_return": "1029"
+      },
+      "engine": "before",
+      "wall": 3.1229635839699768,
+      "user_cpu": 3.0578649999999925,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3119059",
+      "phases_us": {
+        "host_setup_and_preloads": "89",
+        "read_and_parse": "3357",
+        "validate": "7009",
+        "instantiate_including_start": "10424",
+        "jit_plan_and_cache_lookup": "2067",
+        "compile": "959748",
+        "artifact_verify": "12611",
+        "cache_write_and_report": "5716",
+        "jit_load_and_prepare": "23987",
+        "invoke_including_hostcalls": "2093018",
+        "finish_or_early_return": "1033"
+      },
+      "engine": "budget",
+      "wall": 3.1277254999731667,
+      "user_cpu": 3.082943,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "compile": 0.460891833,
+      "invoke": 0.7820265,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.2971764170215465,
+      "user_cpu": 1.28316099999995,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.4867478749947622,
+      "user_cpu": 2.4654930000000377,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.424049915978685,
+      "user_cpu": 2.4087859999999637,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "compile": 0.469038166,
+      "invoke": 0.79593825,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.317867917008698,
+      "user_cpu": 1.3030750000000353,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3163310",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3346",
+        "validate": "7110",
+        "instantiate_including_start": "10609",
+        "jit_plan_and_cache_lookup": "2061",
+        "compile": "989172",
+        "artifact_verify": "14095",
+        "cache_write_and_report": "6361",
+        "jit_load_and_prepare": "26650",
+        "invoke_including_hostcalls": "2102696",
+        "finish_or_early_return": "1127"
+      },
+      "engine": "budget",
+      "wall": 3.1726646670140326,
+      "user_cpu": 3.1238950000000614,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3032999",
+      "phases_us": {
+        "host_setup_and_preloads": "86",
+        "read_and_parse": "3150",
+        "validate": "6855",
+        "instantiate_including_start": "10014",
+        "jit_plan_and_cache_lookup": "1915",
+        "compile": "759200",
+        "artifact_verify": "12676",
+        "cache_write_and_report": "5076",
+        "jit_load_and_prepare": "28048",
+        "invoke_including_hostcalls": "2204951",
+        "finish_or_early_return": "1028"
+      },
+      "engine": "before",
+      "wall": 3.0418526669964194,
+      "user_cpu": 3.0002889999999525,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3013168",
+      "phases_us": {
+        "host_setup_and_preloads": "89",
+        "read_and_parse": "3209",
+        "validate": "6945",
+        "instantiate_including_start": "10331",
+        "jit_plan_and_cache_lookup": "1940",
+        "compile": "754902",
+        "artifact_verify": "12526",
+        "cache_write_and_report": "4525",
+        "jit_load_and_prepare": "25877",
+        "invoke_including_hostcalls": "2191841",
+        "finish_or_early_return": "983"
+      },
+      "engine": "before",
+      "wall": 3.021895374986343,
+      "user_cpu": 2.980619000000047,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3101405",
+      "phases_us": {
+        "host_setup_and_preloads": "86",
+        "read_and_parse": "3260",
+        "validate": "6427",
+        "instantiate_including_start": "9627",
+        "jit_plan_and_cache_lookup": "1869",
+        "compile": "956622",
+        "artifact_verify": "12550",
+        "cache_write_and_report": "5070",
+        "jit_load_and_prepare": "24511",
+        "invoke_including_hostcalls": "2080337",
+        "finish_or_early_return": "1046"
+      },
+      "engine": "budget",
+      "wall": 3.110264290997293,
+      "user_cpu": 3.0686489999999367,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "compile": 0.484274792,
+      "invoke": 0.785450667,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.3234248330118135,
+      "user_cpu": 1.3068700000000035,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.4517703750170767,
+      "user_cpu": 2.4345449999999573,
+      "cohort": "bounded-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3044509",
+      "phases_us": {
+        "host_setup_and_preloads": "401",
+        "read_and_parse": "3391",
+        "validate": "7023",
+        "instantiate_including_start": "10246",
+        "jit_plan_and_cache_lookup": "2046",
+        "compile": "766838",
+        "artifact_verify": "15202",
+        "cache_write_and_report": "5230",
+        "jit_load_and_prepare": "28860",
+        "invoke_including_hostcalls": "2204255",
+        "finish_or_early_return": "1017"
+      },
+      "engine": "before",
+      "wall": 3.054809083987493,
+      "user_cpu": 3.007517000000007,
+      "cohort": "compact-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3085670",
+      "phases_us": {
+        "host_setup_and_preloads": "413",
+        "read_and_parse": "3444",
+        "validate": "7327",
+        "instantiate_including_start": "10470",
+        "jit_plan_and_cache_lookup": "2115",
+        "compile": "902879",
+        "artifact_verify": "12825",
+        "cache_write_and_report": "6085",
+        "jit_load_and_prepare": "31258",
+        "invoke_including_hostcalls": "2107727",
+        "finish_or_early_return": "1127"
+      },
+      "engine": "compact",
+      "wall": 3.0965441250009462,
+      "user_cpu": 3.047635000000014,
+      "cohort": "compact-allocation"
+    },
+    {
+      "compile": 0.454042833,
+      "invoke": 0.785615875,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.290412332979031,
+      "user_cpu": 1.2799749999999221,
+      "cohort": "compact-allocation"
+    },
+    {
+      "compile": 0.452719334,
+      "invoke": 0.787484625,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.2916955840191804,
+      "user_cpu": 1.2809090000000651,
+      "cohort": "compact-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3072927",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3079",
+        "validate": "6577",
+        "instantiate_including_start": "9636",
+        "jit_plan_and_cache_lookup": "1837",
+        "compile": "893575",
+        "artifact_verify": "12740",
+        "cache_write_and_report": "5701",
+        "jit_load_and_prepare": "24585",
+        "invoke_including_hostcalls": "2114069",
+        "finish_or_early_return": "1045"
+      },
+      "engine": "compact",
+      "wall": 3.0824553340207785,
+      "user_cpu": 3.0397970000000214,
+      "cohort": "compact-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3022614",
+      "phases_us": {
+        "host_setup_and_preloads": "86",
+        "read_and_parse": "3243",
+        "validate": "6980",
+        "instantiate_including_start": "10207",
+        "jit_plan_and_cache_lookup": "1924",
+        "compile": "765307",
+        "artifact_verify": "12864",
+        "cache_write_and_report": "5231",
+        "jit_load_and_prepare": "26507",
+        "invoke_including_hostcalls": "2189268",
+        "finish_or_early_return": "997"
+      },
+      "engine": "before",
+      "wall": 3.0317447910201736,
+      "user_cpu": 2.986440000000016,
+      "cohort": "compact-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3012171",
+      "phases_us": {
+        "host_setup_and_preloads": "87",
+        "read_and_parse": "3082",
+        "validate": "6939",
+        "instantiate_including_start": "9890",
+        "jit_plan_and_cache_lookup": "1947",
+        "compile": "751609",
+        "artifact_verify": "13573",
+        "cache_write_and_report": "4178",
+        "jit_load_and_prepare": "23779",
+        "invoke_including_hostcalls": "2195924",
+        "finish_or_early_return": "1163"
+      },
+      "engine": "before",
+      "wall": 3.020986540999729,
+      "user_cpu": 2.9819909999999936,
+      "cohort": "compact-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3072438",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3092",
+        "validate": "6770",
+        "instantiate_including_start": "9998",
+        "jit_plan_and_cache_lookup": "1960",
+        "compile": "895567",
+        "artifact_verify": "12488",
+        "cache_write_and_report": "5889",
+        "jit_load_and_prepare": "26982",
+        "invoke_including_hostcalls": "2108487",
+        "finish_or_early_return": "1122"
+      },
+      "engine": "compact",
+      "wall": 3.0810394160216674,
+      "user_cpu": 3.0355839999999716,
+      "cohort": "compact-allocation"
+    },
+    {
+      "compile": 0.44858425,
+      "invoke": 0.785635834,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.285091832978651,
+      "user_cpu": 1.27350899999999,
+      "cohort": "compact-allocation"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3119440",
+      "phases_us": {
+        "host_setup_and_preloads": "180",
+        "read_and_parse": "4774",
+        "validate": "9419",
+        "instantiate_including_start": "12050",
+        "jit_plan_and_cache_lookup": "2201",
+        "compile": "919467",
+        "artifact_verify": "13985",
+        "cache_write_and_report": "5101",
+        "jit_load_and_prepare": "25642",
+        "invoke_including_hostcalls": "2125540",
+        "finish_or_early_return": "1081"
+      },
+      "engine": "compact",
+      "wall": 3.131965374981519,
+      "user_cpu": 3.0797380000000203,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3034392",
+      "phases_us": {
+        "host_setup_and_preloads": "376",
+        "read_and_parse": "3142",
+        "validate": "6731",
+        "instantiate_including_start": "9873",
+        "jit_plan_and_cache_lookup": "1934",
+        "compile": "893376",
+        "artifact_verify": "12254",
+        "cache_write_and_report": "4472",
+        "jit_load_and_prepare": "23499",
+        "invoke_including_hostcalls": "2077652",
+        "finish_or_early_return": "1083"
+      },
+      "engine": "cached",
+      "wall": 3.0436327919596806,
+      "user_cpu": 2.9948349999999664,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "2996839",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3042",
+        "validate": "6887",
+        "instantiate_including_start": "9857",
+        "jit_plan_and_cache_lookup": "1925",
+        "compile": "870607",
+        "artifact_verify": "12663",
+        "cache_write_and_report": "5552",
+        "jit_load_and_prepare": "24507",
+        "invoke_including_hostcalls": "2060732",
+        "finish_or_early_return": "984"
+      },
+      "engine": "cached",
+      "wall": 3.0060242090257816,
+      "user_cpu": 2.9701740000000427,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3045245",
+      "phases_us": {
+        "host_setup_and_preloads": "81",
+        "read_and_parse": "3050",
+        "validate": "6736",
+        "instantiate_including_start": "9739",
+        "jit_plan_and_cache_lookup": "1857",
+        "compile": "890365",
+        "artifact_verify": "12422",
+        "cache_write_and_report": "5583",
+        "jit_load_and_prepare": "23470",
+        "invoke_including_hostcalls": "2090925",
+        "finish_or_early_return": "1017"
+      },
+      "engine": "compact",
+      "wall": 3.0535585830220953,
+      "user_cpu": 3.016719999999964,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3093086",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3102",
+        "validate": "6870",
+        "instantiate_including_start": "9925",
+        "jit_plan_and_cache_lookup": "1915",
+        "compile": "882870",
+        "artifact_verify": "12896",
+        "cache_write_and_report": "5775",
+        "jit_load_and_prepare": "23438",
+        "invoke_including_hostcalls": "2145251",
+        "finish_or_early_return": "961"
+      },
+      "engine": "compact",
+      "wall": 3.1027140830410644,
+      "user_cpu": 3.050510000000031,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3115069",
+      "phases_us": {
+        "host_setup_and_preloads": "86",
+        "read_and_parse": "3221",
+        "validate": "6942",
+        "instantiate_including_start": "9928",
+        "jit_plan_and_cache_lookup": "1954",
+        "compile": "974063",
+        "artifact_verify": "13106",
+        "cache_write_and_report": "5658",
+        "jit_load_and_prepare": "26147",
+        "invoke_including_hostcalls": "2072962",
+        "finish_or_early_return": "1002"
+      },
+      "engine": "cached",
+      "wall": 3.123755957989488,
+      "user_cpu": 3.068153000000052,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3127687",
+      "phases_us": {
+        "host_setup_and_preloads": "189",
+        "read_and_parse": "5471",
+        "validate": "9976",
+        "instantiate_including_start": "12703",
+        "jit_plan_and_cache_lookup": "2295",
+        "compile": "939054",
+        "artifact_verify": "14219",
+        "cache_write_and_report": "5935",
+        "jit_load_and_prepare": "25437",
+        "invoke_including_hostcalls": "2111339",
+        "finish_or_early_return": "1069"
+      },
+      "engine": "cached",
+      "wall": 3.1417706250213087,
+      "user_cpu": 3.0862109999999348,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3581555",
+      "phases_us": {
+        "host_setup_and_preloads": "94",
+        "read_and_parse": "3448",
+        "validate": "7171",
+        "instantiate_including_start": "10012",
+        "jit_plan_and_cache_lookup": "1881",
+        "compile": "989435",
+        "artifact_verify": "17903",
+        "cache_write_and_report": "6946",
+        "jit_load_and_prepare": "31561",
+        "invoke_including_hostcalls": "2511843",
+        "finish_or_early_return": "1261"
+      },
+      "engine": "compact",
+      "wall": 3.593221709015779,
+      "user_cpu": 3.31217300000003,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "4056242",
+      "phases_us": {
+        "host_setup_and_preloads": "98",
+        "read_and_parse": "3713",
+        "validate": "7268",
+        "instantiate_including_start": "11027",
+        "jit_plan_and_cache_lookup": "2337",
+        "compile": "1279826",
+        "artifact_verify": "14092",
+        "cache_write_and_report": "7038",
+        "jit_load_and_prepare": "30815",
+        "invoke_including_hostcalls": "2698711",
+        "finish_or_early_return": "1317"
+      },
+      "engine": "compact",
+      "wall": 4.069965958013199,
+      "user_cpu": 3.521972000000005,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3498650",
+      "phases_us": {
+        "host_setup_and_preloads": "89",
+        "read_and_parse": "3376",
+        "validate": "7115",
+        "instantiate_including_start": "10412",
+        "jit_plan_and_cache_lookup": "1962",
+        "compile": "1076992",
+        "artifact_verify": "16004",
+        "cache_write_and_report": "5004",
+        "jit_load_and_prepare": "28295",
+        "invoke_including_hostcalls": "2345999",
+        "finish_or_early_return": "3402"
+      },
+      "engine": "cached",
+      "wall": 3.5122604580246843,
+      "user_cpu": 3.305396999999971,
+      "cohort": "view-cache-control"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3106075",
+      "phases_us": {
+        "host_setup_and_preloads": "3489",
+        "read_and_parse": "3781",
+        "validate": "7520",
+        "instantiate_including_start": "10904",
+        "jit_plan_and_cache_lookup": "2694",
+        "compile": "769231",
+        "artifact_verify": "14658",
+        "cache_write_and_report": "5683",
+        "jit_load_and_prepare": "30121",
+        "invoke_including_hostcalls": "2256954",
+        "finish_or_early_return": "1040"
+      },
+      "engine": "before",
+      "wall": 3.120459167053923,
+      "user_cpu": 3.048080000000027,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "4533026",
+      "phases_us": {
+        "host_setup_and_preloads": "454",
+        "read_and_parse": "3516",
+        "validate": "7253",
+        "instantiate_including_start": "10466",
+        "jit_plan_and_cache_lookup": "2028",
+        "compile": "2160146",
+        "artifact_verify": "18361",
+        "cache_write_and_report": "6062",
+        "jit_load_and_prepare": "29774",
+        "invoke_including_hostcalls": "2293922",
+        "finish_or_early_return": "1044"
+      },
+      "engine": "pre-window",
+      "wall": 4.542588000011165,
+      "user_cpu": 3.259469000000081,
+      "cohort": "final-comparison"
+    },
+    {
+      "compile": 0.460715042,
+      "invoke": 0.804348042,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.3180256669875234,
+      "user_cpu": 1.297700999999961,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.567090708995238,
+      "user_cpu": 2.471418000000085,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.454139999987092,
+      "user_cpu": 2.4341179999998985,
+      "cohort": "final-comparison"
+    },
+    {
+      "compile": 0.4660275,
+      "invoke": 0.797202709,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.3190552919986658,
+      "user_cpu": 1.3050690000000031,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3126163",
+      "phases_us": {
+        "host_setup_and_preloads": "87",
+        "read_and_parse": "3317",
+        "validate": "7332",
+        "instantiate_including_start": "10282",
+        "jit_plan_and_cache_lookup": "1904",
+        "compile": "910630",
+        "artifact_verify": "13459",
+        "cache_write_and_report": "6262",
+        "jit_load_and_prepare": "26065",
+        "invoke_including_hostcalls": "2144472",
+        "finish_or_early_return": "2353"
+      },
+      "engine": "pre-window",
+      "wall": 3.139202958031092,
+      "user_cpu": 3.0832279999999628,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3360475",
+      "phases_us": {
+        "host_setup_and_preloads": "98",
+        "read_and_parse": "5281",
+        "validate": "15730",
+        "instantiate_including_start": "21686",
+        "jit_plan_and_cache_lookup": "2033",
+        "compile": "996586",
+        "artifact_verify": "16856",
+        "cache_write_and_report": "5117",
+        "jit_load_and_prepare": "30498",
+        "invoke_including_hostcalls": "2265443",
+        "finish_or_early_return": "1147"
+      },
+      "engine": "before",
+      "wall": 3.376753958000336,
+      "user_cpu": 3.261649000000034,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3050625",
+      "phases_us": {
+        "host_setup_and_preloads": "89",
+        "read_and_parse": "3374",
+        "validate": "6992",
+        "instantiate_including_start": "10058",
+        "jit_plan_and_cache_lookup": "1996",
+        "compile": "759606",
+        "artifact_verify": "13570",
+        "cache_write_and_report": "5366",
+        "jit_load_and_prepare": "27669",
+        "invoke_including_hostcalls": "2220866",
+        "finish_or_early_return": "1039"
+      },
+      "engine": "before",
+      "wall": 3.059491416963283,
+      "user_cpu": 3.0161800000000767,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3184653",
+      "phases_us": {
+        "host_setup_and_preloads": "90",
+        "read_and_parse": "3318",
+        "validate": "7308",
+        "instantiate_including_start": "10525",
+        "jit_plan_and_cache_lookup": "1890",
+        "compile": "958349",
+        "artifact_verify": "14799",
+        "cache_write_and_report": "5033",
+        "jit_load_and_prepare": "27053",
+        "invoke_including_hostcalls": "2155181",
+        "finish_or_early_return": "1107"
+      },
+      "engine": "pre-window",
+      "wall": 3.1946575000183657,
+      "user_cpu": 3.136932999999999,
+      "cohort": "final-comparison"
+    },
+    {
+      "compile": 0.497981708,
+      "invoke": 0.814932292,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.370677541999612,
+      "user_cpu": 1.3541539999998804,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.5135775840026326,
+      "user_cpu": 2.4991489999999885,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.4722395420540124,
+      "user_cpu": 2.458176999999978,
+      "cohort": "final-comparison"
+    },
+    {
+      "compile": 0.453028875,
+      "invoke": 0.7967235,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.3032545000314713,
+      "user_cpu": 1.2920269999999618,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3129322",
+      "phases_us": {
+        "host_setup_and_preloads": "86",
+        "read_and_parse": "3396",
+        "validate": "7009",
+        "instantiate_including_start": "10208",
+        "jit_plan_and_cache_lookup": "1944",
+        "compile": "940816",
+        "artifact_verify": "13931",
+        "cache_write_and_report": "4788",
+        "jit_load_and_prepare": "27635",
+        "invoke_including_hostcalls": "2118453",
+        "finish_or_early_return": "1056"
+      },
+      "engine": "pre-window",
+      "wall": 3.138097665971145,
+      "user_cpu": 3.0935680000000048,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3114995",
+      "phases_us": {
+        "host_setup_and_preloads": "89",
+        "read_and_parse": "3288",
+        "validate": "7064",
+        "instantiate_including_start": "10323",
+        "jit_plan_and_cache_lookup": "2022",
+        "compile": "790492",
+        "artifact_verify": "13829",
+        "cache_write_and_report": "4984",
+        "jit_load_and_prepare": "27911",
+        "invoke_including_hostcalls": "2253950",
+        "finish_or_early_return": "1043"
+      },
+      "engine": "before",
+      "wall": 3.1240322499652393,
+      "user_cpu": 3.0709300000000894,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3100138",
+      "phases_us": {
+        "host_setup_and_preloads": "81",
+        "read_and_parse": "3352",
+        "validate": "7136",
+        "instantiate_including_start": "10487",
+        "jit_plan_and_cache_lookup": "2017",
+        "compile": "782007",
+        "artifact_verify": "13251",
+        "cache_write_and_report": "5649",
+        "jit_load_and_prepare": "26625",
+        "invoke_including_hostcalls": "2248499",
+        "finish_or_early_return": "1034"
+      },
+      "engine": "before",
+      "wall": 3.109199041966349,
+      "user_cpu": 3.0649160000000393,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3144139",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3402",
+        "validate": "7202",
+        "instantiate_including_start": "10456",
+        "jit_plan_and_cache_lookup": "1980",
+        "compile": "940373",
+        "artifact_verify": "14509",
+        "cache_write_and_report": "6578",
+        "jit_load_and_prepare": "29697",
+        "invoke_including_hostcalls": "2128763",
+        "finish_or_early_return": "1096"
+      },
+      "engine": "pre-window",
+      "wall": 3.153355625050608,
+      "user_cpu": 3.096164999999928,
+      "cohort": "final-comparison"
+    },
+    {
+      "compile": 0.450694792,
+      "invoke": 0.790330458,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.2917820409638807,
+      "user_cpu": 1.2800790000001143,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.453875709034037,
+      "user_cpu": 2.4369990000000143,
+      "cohort": "final-comparison"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "2973551",
+      "phases_us": {
+        "host_setup_and_preloads": "2647",
+        "read_and_parse": "3725",
+        "validate": "6999",
+        "instantiate_including_start": "10225",
+        "jit_plan_and_cache_lookup": "2640",
+        "compile": "730244",
+        "artifact_verify": "14458",
+        "cache_write_and_report": "5543",
+        "jit_load_and_prepare": "26736",
+        "invoke_including_hostcalls": "2169353",
+        "finish_or_early_return": "981"
+      },
+      "engine": "before",
+      "wall": 2.9863602920086123,
+      "user_cpu": 2.9362659999999323,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "2982934",
+      "phases_us": {
+        "host_setup_and_preloads": "85",
+        "read_and_parse": "3147",
+        "validate": "6680",
+        "instantiate_including_start": "9602",
+        "jit_plan_and_cache_lookup": "1795",
+        "compile": "865452",
+        "artifact_verify": "13627",
+        "cache_write_and_report": "5226",
+        "jit_load_and_prepare": "23623",
+        "invoke_including_hostcalls": "2052650",
+        "finish_or_early_return": "1047"
+      },
+      "engine": "window",
+      "wall": 2.9913380829966627,
+      "user_cpu": 2.954011000000037,
+      "cohort": "window-final"
+    },
+    {
+      "compile": 0.434107833,
+      "invoke": 0.758097333,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.2492063750396483,
+      "user_cpu": 1.2306169999999383,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.4324532090104185,
+      "user_cpu": 2.3686760000000504,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.3993480000062846,
+      "user_cpu": 2.3898269999999684,
+      "cohort": "window-final"
+    },
+    {
+      "compile": 0.440757542,
+      "invoke": 0.766025792,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.2579930840292946,
+      "user_cpu": 1.2477010000000064,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3035418",
+      "phases_us": {
+        "host_setup_and_preloads": "88",
+        "read_and_parse": "3305",
+        "validate": "6975",
+        "instantiate_including_start": "10056",
+        "jit_plan_and_cache_lookup": "1915",
+        "compile": "871306",
+        "artifact_verify": "12493",
+        "cache_write_and_report": "7319",
+        "jit_load_and_prepare": "22927",
+        "invoke_including_hostcalls": "2097986",
+        "finish_or_early_return": "1048"
+      },
+      "engine": "window",
+      "wall": 3.0449453329783864,
+      "user_cpu": 2.9782319999999345,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3229441",
+      "phases_us": {
+        "host_setup_and_preloads": "96",
+        "read_and_parse": "3589",
+        "validate": "6949",
+        "instantiate_including_start": "10847",
+        "jit_plan_and_cache_lookup": "2009",
+        "compile": "917093",
+        "artifact_verify": "16666",
+        "cache_write_and_report": "6574",
+        "jit_load_and_prepare": "34414",
+        "invoke_including_hostcalls": "2230239",
+        "finish_or_early_return": "965"
+      },
+      "engine": "before",
+      "wall": 3.239346791000571,
+      "user_cpu": 3.156703000000107,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3115726",
+      "phases_us": {
+        "host_setup_and_preloads": "104",
+        "read_and_parse": "3148",
+        "validate": "6634",
+        "instantiate_including_start": "11009",
+        "jit_plan_and_cache_lookup": "1815",
+        "compile": "806084",
+        "artifact_verify": "13617",
+        "cache_write_and_report": "4571",
+        "jit_load_and_prepare": "26750",
+        "invoke_including_hostcalls": "2240896",
+        "finish_or_early_return": "1098"
+      },
+      "engine": "before",
+      "wall": 3.1257704170420766,
+      "user_cpu": 3.0604309999998804,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3215746",
+      "phases_us": {
+        "host_setup_and_preloads": "89",
+        "read_and_parse": "3390",
+        "validate": "7244",
+        "instantiate_including_start": "10416",
+        "jit_plan_and_cache_lookup": "1903",
+        "compile": "981549",
+        "artifact_verify": "15082",
+        "cache_write_and_report": "4616",
+        "jit_load_and_prepare": "27979",
+        "invoke_including_hostcalls": "2162329",
+        "finish_or_early_return": "1149"
+      },
+      "engine": "window",
+      "wall": 3.2258917500148527,
+      "user_cpu": 3.163772999999992,
+      "cohort": "window-final"
+    },
+    {
+      "compile": 0.478701209,
+      "invoke": 0.787916333,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.321390875033103,
+      "user_cpu": 1.3073340000000826,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.4941113750101067,
+      "user_cpu": 2.4770829999999933,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 3.811837250017561,
+      "user_cpu": 2.5136979999999767,
+      "cohort": "window-final"
+    },
+    {
+      "compile": 0.460172375,
+      "invoke": 0.795427625,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.3100724999676459,
+      "user_cpu": 1.2977860000000874,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3063601",
+      "phases_us": {
+        "host_setup_and_preloads": "101",
+        "read_and_parse": "3189",
+        "validate": "7191",
+        "instantiate_including_start": "10276",
+        "jit_plan_and_cache_lookup": "1883",
+        "compile": "934518",
+        "artifact_verify": "13767",
+        "cache_write_and_report": "5032",
+        "jit_load_and_prepare": "24349",
+        "invoke_including_hostcalls": "2062075",
+        "finish_or_early_return": "1220"
+      },
+      "engine": "window",
+      "wall": 3.07336145802401,
+      "user_cpu": 3.0271919999997863,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3031521",
+      "phases_us": {
+        "host_setup_and_preloads": "81",
+        "read_and_parse": "3158",
+        "validate": "7097",
+        "instantiate_including_start": "10102",
+        "jit_plan_and_cache_lookup": "1964",
+        "compile": "758134",
+        "artifact_verify": "12755",
+        "cache_write_and_report": "4262",
+        "jit_load_and_prepare": "27679",
+        "invoke_including_hostcalls": "2205266",
+        "finish_or_early_return": "1023"
+      },
+      "engine": "before",
+      "wall": 3.041493666009046,
+      "user_cpu": 2.994521000000077,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3130545",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3053",
+        "validate": "6876",
+        "instantiate_including_start": "9883",
+        "jit_plan_and_cache_lookup": "1884",
+        "compile": "816942",
+        "artifact_verify": "15345",
+        "cache_write_and_report": "5524",
+        "jit_load_and_prepare": "31590",
+        "invoke_including_hostcalls": "2238361",
+        "finish_or_early_return": "1004"
+      },
+      "engine": "before",
+      "wall": 3.1406733749900013,
+      "user_cpu": 3.0801580000002104,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "schema_version": 1,
+      "command_us": "3013608",
+      "phases_us": {
+        "host_setup_and_preloads": "88",
+        "read_and_parse": "3209",
+        "validate": "7165",
+        "instantiate_including_start": "10067",
+        "jit_plan_and_cache_lookup": "1863",
+        "compile": "885581",
+        "artifact_verify": "12967",
+        "cache_write_and_report": "5868",
+        "jit_load_and_prepare": "25235",
+        "invoke_including_hostcalls": "2060491",
+        "finish_or_early_return": "1074"
+      },
+      "engine": "window",
+      "wall": 3.022105709009338,
+      "user_cpu": 2.9764649999997346,
+      "cohort": "window-final"
+    },
+    {
+      "compile": 0.454163292,
+      "invoke": 0.782377792,
+      "result": 1,
+      "engine": "v8",
+      "wall": 1.288898583035916,
+      "user_cpu": 1.2771710000001804,
+      "cohort": "window-final"
+    },
+    {
+      "result": 1,
+      "engine": "wasmtime",
+      "wall": 2.5186116250115447,
+      "user_cpu": 2.4738760000000184,
+      "cohort": "window-final"
+    }
+  ],
+  "pre_window_counter_controls": {
+    "counts": {
+      "before": {
+        "views": 84061688,
+        "reservation_calls": 25358414,
+        "slow_calls": 1097548
+      },
+      "compact": {
+        "views": 84061688,
+        "reservation_calls": 11247619,
+        "slow_calls": 1097548
+      }
+    },
+    "cache_hits": 49653990,
+    "cache_view_requests": 84061688,
+    "cache_reservation_requests": 11247619,
+    "cache_slow_requests": 1097548,
+    "instrumentation_in_production": false,
+    "note": "Private untimed controls. Helper calls and avoided full admissions are different metrics; not exact final-window counters."
+  },
+  "unbounded_compiler_diagnostic": {
+    "before": {
+      "module_compile_us": "788196",
+      "function_totals": {
+        "optimize_us": 76062,
+        "lower_us": 288221,
+        "regalloc_us": 239230,
+        "frame_plan_us": 55752,
+        "emit_us": 57632,
+        "code_size": 1007828,
+        "spills": 872,
+        "reloads": 11787
+      }
+    },
+    "both": {
+      "module_compile_us": "1198405",
+      "function_totals": {
+        "optimize_us": 81542,
+        "lower_us": 368789,
+        "regalloc_us": 484681,
+        "frame_plan_us": 87012,
+        "emit_us": 75771,
+        "code_size": 1642220,
+        "spills": 830,
+        "reloads": 13794
+      }
+    }
+  },
+  "negative_control": {
+    "omitted": "Only compaction cache invalidation in isolated source copy.",
+    "failure": "[99] != [17]",
+    "exit_code": 2,
+    "restored_tests_passed": 2,
+    "restored_exit_code": 0
+  },
+  "validation": {
+    "native": {
+      "passed": 3064,
+      "failed": 0,
+      "flags": [
+        "VCODE_REGALLOC_VALIDATION=1",
+        "WASMOON_GC_VERIFY=1",
+        "WASMOON_GC_ASSERT_BARRIER=1"
+      ]
+    },
+    "ordinary_runtime_package": {
+      "passed": 192,
+      "failed": 0
+    },
+    "wasm": {
+      "passed": 1456,
+      "failed": 0
+    },
+    "sanitizer": {
+      "meaningful_tests": 292,
+      "version": "0.17.2",
+      "source_revision": "7cf4fe9895a38e6315813eec9f28c2379aaab057",
+      "source_dirty": true,
+      "build_reuse": "fresh",
+      "binary_sha256": "661d3a796436314688483093d2a0046bc41aeb29d03a706a01652b9df1f42608",
+      "tests": "passed",
+      "event_loop": "passed",
+      "asan_probe": "detected",
+      "native_asan_probe": "detected",
+      "lsan_probe": "not_applicable",
+      "leak_detection": false,
+      "instrumentation": [
+        "address",
+        "undefined"
+      ],
+      "allocator": "system",
+      "exclusions": [
+        "MoonBit runtime objects",
+        "JIT machine code"
+      ]
+    },
+    "core": {
+      "native": {
+        "files": 258,
+        "accepted": 258,
+        "passed": 62563
+      },
+      "wasm": {
+        "files": 258,
+        "accepted": 258,
+        "passed": 62563
+      },
+      "jit": {
+        "files": 258,
+        "accepted": 258,
+        "passed": 62563
+      },
+      "jit-verified": {
+        "files": 258,
+        "accepted": 258,
+        "passed": 62563
+      }
+    },
+    "component": {
+      "interpreter": {
+        "suites": {
+          "stable-0.2": {
+            "files": 23,
+            "file_failures": 0,
+            "commands": 845,
+            "command_failures": 0,
+            "skipped": 0
+          },
+          "async-0.3": {
+            "files": 24,
+            "file_failures": 0,
+            "commands": 153,
+            "command_failures": 0,
+            "skipped": 0
+          },
+          "future-gated": {
+            "files": 12,
+            "file_failures": 0,
+            "commands": 387,
+            "command_failures": 0,
+            "skipped": 0
+          }
+        },
+        "files": 59,
+        "commands": 1385
+      },
+      "jit": {
+        "suites": {
+          "stable-0.2": {
+            "files": 23,
+            "file_failures": 0,
+            "commands": 845,
+            "command_failures": 0,
+            "skipped": 0
+          },
+          "async-0.3": {
+            "files": 24,
+            "file_failures": 0,
+            "commands": 153,
+            "command_failures": 0,
+            "skipped": 0
+          },
+          "future-gated": {
+            "files": 12,
+            "file_failures": 0,
+            "commands": 387,
+            "command_failures": 0,
+            "skipped": 0
+          }
+        },
+        "files": 59,
+        "commands": 1385
+      }
+    },
+    "strict_targets": [
+      "native",
+      "wasm"
+    ],
+    "info_fmt": "passed",
+    "module_boundaries": "passed",
+    "generated_msvc_bridges": "passed",
+    "python": {
+      "tests": 178,
+      "existing_platform_skips": 54,
+      "status": "passed"
+    },
+    "limitations": [
+      "Local dirty macOS ARM64; not CI.",
+      "No actual x64 or Windows execution.",
+      "No Linux LSan acceptance.",
+      "ASan excludes JIT machine code and MoonBit runtime objects."
+    ],
+    "log_sha256": {
+      "window-native-final.log": "18fa3f89edda3fbe6f9fdb3c42ae0b1747ff0d64244f95bbd48e7f3ed73dd4ae",
+      "fast-native-final.log": "189ef117b4354ed4cebc3c178eb157437745a534109f893f665375efd1ed1cd5",
+      "tests.log": "df2528ea5744a928e9058bab42538f99fe45d4835e3bfb15e06a1fc5d7ed6491",
+      "missing-invalidation.log": "79f465a99a7f6ecb969554314f8cfaaa10b207a08f5295fe61d7f61f33213fb0",
+      "correct-invalidation.log": "7393d658788c11d30aac876be5401045dafd4aa1c51962a71827c0a4d3d68ff2",
+      "component-driver.log": "67fc1d7361b00e73a83c6c9048239febf20a73dde30d7fd108ae3fa4d6d5a88c",
+      "component-interpreter-async-0.3.log": "f0864fecc2aa1ef26a88c200f473b7e819c3df75c02e2514488ac5788eb47804",
+      "component-interpreter-future-gated.log": "86b32a7047a88bec45d401e87a597f4445f7f07eca3ef8476f36d569ca9910f4",
+      "component-interpreter-stable-0.2.log": "d8a0e97402fd5a522f278abb2b56415ffadd4c4e63b5d942d29a0f5c511daa5e",
+      "component-jit-async-0.3.log": "0e0d06e9f8f5ae68c0266ca5c7faa6fe5bfd2059c63c66c0b4a8b1b2538af183",
+      "component-jit-future-gated.log": "e0f4f2619cbf5fbde0efa9c7268522e52c0b19aa5810b6170f96b342b69ef119",
+      "component-jit-stable-0.2.log": "b5ebe9ba762d95926290065a1813e4785474cb9c0f1c9b4ca49818e7dc3d78a6"
+    },
+    "core_all_file_outcomes_verified": true
+  },
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "merged": false,
+    "published": false
+  },
+  "owned_scratch_cleanup_verified": true
+}

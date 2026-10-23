@@ -18,11 +18,7 @@ fn lower_fast_struct(
   let mut size = 0
   let mut index = 0
   while validation.struct_field(type_index, index) is Some(field) {
-    guard field_width(field) is Some(width) &&
-      !(field.storage is Value(Ref)) &&
-      index < 16 else {
-      return false
-    }
+    guard field_width(field) is Some(width) && index < 16 else { return false }
     size = (size + width - 1) / width * width
     offsets.push(size + 16)
     size += width
@@ -33,6 +29,7 @@ fn lower_fast_struct(
       4 => 3UL
       _ => 4UL
     }
+    let code = if field.storage is Value(Ref) { code | 8UL } else { code }
     shape = shape | (code << (index * 4))
     index += 1
   }
@@ -40,42 +37,51 @@ fn lower_fast_struct(
     return false
   }
   let total = (size + 31) / 16 * 16
-  let ticket = context.create_stack_object(16, 8)
-  let address = context.emit(StackAddress(ticket), [], [Ptr64])[0]
   let environment_value = context.environment()[0]
-  let word = context.emit_call_without_roots(
-      @native_types.NativeCall::new(
-        External((environment.runtime_symbol)(GcReserveStructFast)),
-        @native_types.Signature::new([Ptr64, I32, I32, I64, I32, Ptr64], [I64]),
-        Platform,
-        @native_types.CallBehavior::new(ReadWrite, false, false, false, false),
-      ),
-      [
-        environment_value,
-        i32_immediate(context, type_index),
-        i32_immediate(context, widths.length()),
-        context.emit(I64Const(shape), [], [I64])[0],
-        i32_immediate(context, total),
-        address,
-      ],
-      [I64],
-    )[0]
-  let available = context.emit(IntCompareImmediate(NotEqual, 0UL), [word], [I32])[0]
-  let fast = context.create_block([])
   let slow = context.create_block([])
   let join = context.create_block([GcRef64])
-  context.branch(available, fast, [], slow, [])
-  context.switch_to_block(fast)
-  let object = context.emit(
-      Load(@lowering.LoadSpec::new(W64, None, Ptr64, 0UL, Little, None)),
-      [address],
-      [Ptr64],
-    )[0]
-  let reserved = context.emit(
-      Load(@lowering.LoadSpec::new(W64, None, I64, 8UL, Little, None)),
-      [address],
-      [I64],
-    )[0]
+  let (object, reserved, word) = if environment.inline_heap is Some(layout) {
+    inline_struct_reservation(
+      context,
+      environment,
+      layout,
+      type_index,
+      widths.length(),
+      shape,
+      total,
+      slow,
+    )
+  } else {
+    let ticket = context.create_stack_object(16, 8)
+    let address = context.emit(StackAddress(ticket), [], [Ptr64])[0]
+    let word = context.emit_call_without_roots(
+        @native_types.NativeCall::new(
+          External((environment.runtime_symbol)(GcReserveStructFast)),
+          @native_types.Signature::new([Ptr64, I32, I32, I64, I32, Ptr64], [I64]),
+          Platform,
+          @native_types.CallBehavior::new(ReadWrite, false, false, false, false),
+        ),
+        [
+          environment_value,
+          i32_immediate(context, type_index),
+          i32_immediate(context, widths.length()),
+          context.emit(I64Const(shape), [], [I64])[0],
+          i32_immediate(context, total),
+          address,
+        ],
+        [I64],
+      )[0]
+    heap_guard(
+      context,
+      context.emit(IntCompareImmediate(NotEqual, 0UL), [word], [I32])[0],
+      slow,
+    )
+    (
+      heap_load(context, address, 0, Ptr64),
+      heap_load(context, address, 8, I64),
+      word,
+    )
+  }
   let zero = context.emit(I64Const(0UL), [], [I64])[0]
   for offset in 0..<(total / 8) {
     context.emit(
@@ -162,5 +168,36 @@ fn lower_fast_struct(
   context.jump(join, [slow_reference])
   context.switch_to_block(join)
   context.forward_results(context.block_parameters(join))
+  true
+}
+
+///|
+/// Stable-identity publication is larger than a plain bump-pointer allocation.
+/// Bound per-function expansion just as memory SSA bounds physical accesses;
+/// large generated initializers retain the shared no-GC reservation instead of
+/// multiplying target blocks, live ranges and register-allocation work.
+fn inline_allocation_fits(
+  function : @milkir.Function,
+  validation : @wasm_milkir.WasmValidationContext,
+) -> Bool {
+  let mut cost = 0
+  for block in function.blocks {
+    for id in function.block_instruction_ids(block) {
+      // Count only allocations: preparation adds projection instructions, but
+      // repeating target compilation must make the same expansion decision.
+      let inst = function.instruction_by_id(id).unwrap()
+      let type_ = match @wasm_milkir.decode_opcode(inst.opcode) {
+        Some(StructNew(type_) | StructNewDefault(type_)) => Some(type_)
+        _ => None
+      }
+      if type_ is Some(type_) &&
+        struct_view_shape(validation, type_) is Some((_, fields)) {
+        cost += 128 + fields * 4
+      }
+      if cost > 512 {
+        return false
+      }
+    }
+  }
   true
 }

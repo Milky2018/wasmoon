@@ -4,6 +4,40 @@ fn verify_gc_borrows(function : @milkir.Function) -> Bool {
 }
 
 ///|
+test "borrow intersections retain every word and reject a partial invalidation" {
+  for count in [63, 64, 65, 129] {
+    for invalidated in [false, true] {
+      let b = @milkir.FunctionBuilder("many_borrows")
+      let object = b.add_param(Ref)
+      let condition = b.add_param(I32)
+      let pointers = Array::makei(count, _ => {
+        b.emit_ext_inst(Ptr, projection_opcode(ArrayData(8)), [object])
+      })
+      let left = b.create_block()
+      let right = b.create_block()
+      let join = b.create_block()
+      b.branch(condition, left, [], right, [])
+      b.switch_to_block(left)
+      if invalidated {
+        let symbol = b.get_function().declare_external_symbol("reentry")
+        b.call_symbol(symbol, None, []) |> ignore
+      }
+      b.jump(join, [])
+      b.switch_to_block(right)
+      b.jump(join, [])
+      b.switch_to_block(join)
+      for pointer in pointers {
+        b.load_ptr(I64, pointer, b.iconst_i64(16L)) |> ignore
+      }
+      b.return_([])
+      let function = b.finalize()
+      function.verify()
+      assert_eq(verify_gc_borrows(function), !invalidated)
+    }
+  }
+}
+
+///|
 test "memory SSA rejects physical borrows across every moving or reentrant route" {
   for
     barrier in [
@@ -112,5 +146,42 @@ test "native memory contracts cannot be smuggled into semantic Wasm optimization
     _ => ()
   } noraise {
     _ => fail("semantic verifier accepted unchecked optimizer effects")
+  }
+}
+
+///|
+test "borrow analysis completes a reverse-layout chain before validating uses" {
+  for readmit in [false, true] {
+    let b = @milkir.FunctionBuilder("reverse_borrow_chain")
+    let object = b.add_param(Ref)
+    let pointer = b.emit_ext_inst(Ptr, projection_opcode(ArrayData(8)), [object])
+    let symbol = b.get_function().declare_external_symbol("invalidate")
+    b.call_symbol(symbol, None, []) |> ignore
+    let blocks = Array::makei(600, _ => b.create_block())
+    b.jump(blocks[blocks.length() - 1], [])
+    for index in 0..<blocks.length() {
+      b.switch_to_block(blocks[index])
+      for value in 0..<6 {
+        b.iconst_i32(value) |> ignore
+      }
+      if index > 0 {
+        b.jump(blocks[index - 1], [])
+      } else {
+        let source = if readmit {
+          b.emit_ext_inst(Ptr, projection_opcode(ArrayData(8)), [object])
+        } else {
+          pointer
+        }
+        b.load_ptr(I64, source, b.iconst_i64(16L)) |> ignore
+        b.return_([])
+      }
+    }
+    let function = b.finalize()
+    function.verify()
+    if readmit {
+      assert_eq(gc_borrow_error(function), None)
+    } else {
+      assert_true(gc_borrow_error(function).unwrap().contains("outlived"))
+    }
   }
 }

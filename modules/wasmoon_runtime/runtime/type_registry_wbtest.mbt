@@ -190,3 +190,38 @@ test "callable publication preserves a reentrant change of initialization graph"
   let current = store.module_type_indices()
   assert_false(original[0] == current[0])
 }
+
+///|
+test "current type graph snapshots preserve recursive partition and rollback" {
+  let store = Store()
+  defer store.close()
+  let types = [registry_struct_type(), registry_struct_type()]
+  store.set_module_types(types, rec_groups=[0, 0])
+  let (snapshot, partition) = store.current_type_graph()
+  assert_eq(partition, [0, 0])
+  assert_eq(
+    @types.compute_canonical_type_indices(snapshot, type_rec_groups=partition),
+    [0, 1],
+  )
+  assert_eq(@types.compute_canonical_type_indices(snapshot), [0, 0])
+  snapshot.clear()
+  partition.clear()
+  let (fresh, groups) = store.current_type_graph()
+  assert_eq(fresh.length(), 2)
+  assert_eq(groups, [0, 0])
+  let observed = Ref([])
+  try
+    store.with_instantiation(fn() -> Unit raise RuntimeError {
+      store.set_module_types(types, rec_groups=[0, 1])
+      observed.val = store.current_type_graph().1
+      raise Unreachable
+    })
+  catch {
+    Unreachable => ()
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("expected rollback")
+  }
+  assert_eq(observed.val, [0, 1])
+  assert_eq(store.current_type_graph().1, [0, 0])
+}

@@ -49,7 +49,7 @@ pub fn wasm_validation_context(
 }
 
 ///|
-/// Integer callee bodies for bounded O2/O3 inlining. Call only after module
+/// Small leaf callee bodies for bounded O2/O3 inlining. Call only after module
 /// validation, with the context constructed from this exact module.
 pub fn scalar_callees(
   ctx : TranslationContext,

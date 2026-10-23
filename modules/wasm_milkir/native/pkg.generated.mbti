@@ -11,13 +11,45 @@ import {
 // Values
 pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, verify_input? : Bool, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @Milky2018/milkir/native.NativeLowerError
 
-pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext) -> Unit raise @milkir.VerifyError
+pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @milkir.VerifyError
 
 // Errors
 
 // Types and methods
 type Environment
-pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool) -> Self
+pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, inline_heap? : InlineHeapLayout?) -> Self
+
+pub(all) struct InlineHeapLayout {
+  type_ids_offset : Int32
+  type_count_offset : Int32
+  bump_offset : Int32
+  data : Int32
+  size : Int32
+  capacity : Int32
+  collection_limit : Int32
+  layouts : Int32
+  layout_capacity : Int32
+  object_count : Int32
+  live_objects : Int32
+  live_count : Int32
+  total_allocations : Int32
+  quota_denied : Int32
+  byte_reservation : Int32
+  object_reservation : Int32
+  allocation_control : Int32
+  control_enabled : Int32
+  control_attempts : Int32
+  page_offsets : Int32
+  page_types : Int32
+  page_live_count : Int32
+  layout_kind : Int32
+  layout_count : Int32
+  layout_size : Int32
+  layout_shape : Int32
+  identity_window_limit : Int32
+  identity_window_page : Int32
+  identity_page_bits : Int32
+}
 
 // Type aliases
 

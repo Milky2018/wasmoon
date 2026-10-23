@@ -1029,3 +1029,64 @@ test "allocation verification preserves aliases of parallel block parameters" {
     @vcode.verify_allocated(function, allocation)
   }
 }
+
+///|
+test "safepoint lookup indexes interleaved roots without losing ownership or order" {
+  let b : @vcode.Builder[TestInst] = @vcode.Builder::new("root_lookup", [
+    GcRef64,
+    GcRef64,
+  ])
+  let a = b.parameter(0)
+  let z = b.parameter(1)
+  let entry = b.entry_block()
+  let (first, _) = b.append_body(
+    entry,
+    Call,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  let (second, _) = b.append_body(
+    entry,
+    Call,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  let empty = b.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  let function = b.finish()
+  let allocation = @vcode.Allocation::for_function(function)
+  let slot = allocation.create_stack_slot(GcRef64, 8, 8)
+  let location = @vcode.Location::Stack(slot)
+  assert_true(allocation.add_safepoint_root(first, a, location))
+  assert_true(allocation.add_safepoint_root(second, z, location))
+  assert_eq(allocation.safepoint_roots(first).map(root => root.0), [a])
+  assert_true(allocation.add_safepoint_root(first, z, location))
+  assert_eq(allocation.safepoint_roots(first).map(root => root.0), [a, z])
+  assert_eq(allocation.safepoint_roots(second).map(root => root.0), [z])
+  assert_eq(allocation.safepoint_roots(empty), [])
+  let foreign_builder : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "foreign",
+    [],
+  )
+  let foreign = foreign_builder.set_terminator(
+    foreign_builder.entry_block(),
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  assert_eq(allocation.safepoint_roots(foreign), [])
+  assert_false(allocation.add_safepoint_root(foreign, a, location))
+  assert_eq(allocation.safepoint_roots(first).map(root => root.0), [a, z])
+}
