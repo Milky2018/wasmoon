@@ -20,6 +20,11 @@ jobs:
         run: |
           irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
           "$HOME/.moon/bin" >> $env:GITHUB_PATH
+      - name: configure Clang like acceptance CI
+        shell: pwsh
+        run: |
+          $compiler = (Get-Command clang-cl.exe -ErrorAction Stop).Source
+          "MOON_CC=$compiler" >> $env:GITHUB_ENV
       - name: build traced CLI
         run: |
           moon update
