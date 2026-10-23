@@ -1,0 +1,340 @@
+{
+  "schema_version": 1,
+  "issue": "https://github.com/Milky2018/wasmoon/issues/575",
+  "date": "2026-10-23",
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "source_revision": "45611d6c20a34fa83d5db3eb466eabffe6ba8f92",
+  "source_dirty": true,
+  "evidence_scope": "Local uncommitted repair, not clean CI or release acceptance",
+  "moon": "moon 0.1.20261021 (a4f8933 2026-10-21) ~/.moon/bin/moon\nmoonc v0.10.17+093cb8f9c (2026-10-21) ~/.moon/bin/moonc\nmoonrun 0.1.20261021 (a4f8933 2026-10-21) ~/.moon/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+  "input": {
+    "core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+    "build_command": [
+      "moon",
+      "test",
+      "builtin",
+      "--target",
+      "wasm-gc",
+      "--debug",
+      "--build-only",
+      "--include-skipped",
+      "--target-dir",
+      "<owned-temp>/input-build"
+    ],
+    "MOON_WORK": "off",
+    "sha256": "932992a2ea94328f723cace528eaaf9311d12e20d3be87fedc5d98a3f6c84305",
+    "bytes": 4568719,
+    "defined_functions": 9612,
+    "function_imports": 5,
+    "matches_issue_sha256": true
+  },
+  "probe": {
+    "api": "compile_module",
+    "optimization_level": 2,
+    "enable_cancellation": true,
+    "store_created": false,
+    "guest_executed": false,
+    "release_binary": true,
+    "progress_flushed": true,
+    "rss_sample_interval_seconds": 0.25,
+    "diagnostic_rss_ceiling_bytes": 6442450944,
+    "diagnostic_deadline_seconds": 45,
+    "ceiling_results_are_incomplete_lower_bounds": true,
+    "published_family_versions": {
+      "aarch64_target": "0.17.2",
+      "milkir": "0.17.2",
+      "regalloc": "0.17.2",
+      "vcode": "0.17.2",
+      "vcode_regalloc": "0.17.2",
+      "wasm_component": "0.17.2",
+      "wasm_core": "0.17.2",
+      "wasm_milkir": "0.17.2",
+      "wasmoon": "0.17.2",
+      "wasmoon_jit": "0.17.2",
+      "wasmoon_runtime": "0.17.2",
+      "x64_target": "0.17.2"
+    }
+  },
+  "before": [
+    {
+      "variant": "published",
+      "exit": -15,
+      "reason": "6-GiB diagnostic RSS ceiling",
+      "wall_seconds": 9.183225708955433,
+      "peak_sampled_rss_bytes": 6877560832,
+      "sample_exit": null
+    },
+    {
+      "variant": "current",
+      "exit": -15,
+      "reason": "6-GiB diagnostic RSS ceiling",
+      "wall_seconds": 10.486273041984532,
+      "peak_sampled_rss_bytes": 6633947136,
+      "sample_exit": null
+    }
+  ],
+  "before_repeat": [
+    {
+      "variant": "current",
+      "exit": -15,
+      "reason": "6-GiB diagnostic RSS ceiling",
+      "wall_seconds": 10.156798458017875,
+      "peak_sampled_rss_bytes": 7029276672,
+      "sample_exit": 0
+    }
+  ],
+  "counter_probe": {
+    "isolated_only": true,
+    "outcome": [
+      {
+        "variant": "current",
+        "exit": -15,
+        "reason": "6-GiB diagnostic RSS ceiling",
+        "wall_seconds": 10.123420249961782,
+        "peak_sampled_rss_bytes": 6649298944,
+        "sample_exit": 0
+      }
+    ],
+    "function_index": 9615,
+    "function_name": "____moonbit_init",
+    "observations": [
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 1,
+        "live_roots": 0,
+        "native_values": 4
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 1024,
+        "live_roots": 1,
+        "native_values": 295637
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 2048,
+        "live_roots": 1,
+        "native_values": 591573
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 3072,
+        "live_roots": 16,
+        "native_values": 888067
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 4096,
+        "live_roots": 5,
+        "native_values": 1185727
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 5120,
+        "live_roots": 29,
+        "native_values": 1484150
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 6144,
+        "live_roots": 6,
+        "native_values": 1783831
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 7168,
+        "live_roots": 6,
+        "native_values": 2081815
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 8192,
+        "live_roots": 6,
+        "native_values": 2379799
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 9216,
+        "live_roots": 6,
+        "native_values": 2677783
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 10240,
+        "live_roots": 41,
+        "native_values": 2976243
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 11264,
+        "live_roots": 11,
+        "native_values": 3275344
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 12288,
+        "live_roots": 5,
+        "native_values": 3573423
+      },
+      {
+        "capacity": 17459,
+        "mask_words": 273,
+        "updates": 13312,
+        "live_roots": 5,
+        "native_values": 3872443
+      }
+    ]
+  },
+  "after_compile_only": [
+    {
+      "variant": "current",
+      "exit": 0,
+      "reason": "completed",
+      "wall_seconds": 11.143488125002477,
+      "peak_sampled_rss_bytes": 1430192128,
+      "sample_exit": 0
+    }
+  ],
+  "after_compile_and_verify": [
+    {
+      "variant": "current",
+      "exit": 0,
+      "reason": "completed",
+      "wall_seconds": 12.139400624961127,
+      "peak_sampled_rss_bytes": 1429209088,
+      "sample_exit": 0
+    }
+  ],
+  "final_formatted_source_compile_and_verify": [
+    {
+      "variant": "current",
+      "exit": 0,
+      "reason": "completed",
+      "wall_seconds": 13.053117708011996,
+      "peak_sampled_rss_bytes": 1428733952,
+      "sample_exit": 0
+    }
+  ],
+  "artifact": {
+    "functions": 9612,
+    "total_code_bytes": 14419864,
+    "initializer_code_bytes": 5164956,
+    "initializer_frame_bytes": 442048
+  },
+  "source_sha256": {
+    "modules/vcode/native_lowering/protocol.mbt": "ba67879b8a9062ec008fc81ccfc19b2e8f7f8125fc93a2bcbbc3eb7916613793",
+    "modules/vcode/native_lowering/direct_builder_wbtest.mbt": "1a67263795e3b004d2d296f2b05a006c9bca913e151567efae3d562d043a7dd6",
+    "modules/x64_target/x64_target_test.mbt": "ff7c1a2f356b70c060e88e82558a54129352d24f25e511f409885c48a418d6b6",
+    "modules/wasmoon/sanitizer_testsuite/large_root_mask_test.mbt": "883906656be759ac80a9184209084d08479eba9ea0fbb8970f87a67035b21a64"
+  },
+  "validation": {
+    "flags": {
+      "VCODE_REGALLOC_VALIDATION": "1",
+      "WASMOON_GC_VERIFY": "1",
+      "WASMOON_GC_ASSERT_BARRIER": "1"
+    },
+    "native": {
+      "passed": 3068,
+      "failed": 0
+    },
+    "wasm": {
+      "passed": 1458,
+      "failed": 0
+    },
+    "lowering_package": {
+      "passed": 9,
+      "failed": 0,
+      "bounded_work_test_failed_before_repair": true
+    },
+    "x64_package": {
+      "passed": 43,
+      "failed": 0,
+      "execution_on_x64": false,
+      "selection_and_register_allocation_verified": true
+    },
+    "real_gc_tests": {
+      "passed": 2,
+      "optimization_levels": [
+        0,
+        2,
+        3
+      ],
+      "sparse_sibling_paths": true,
+      "dense_tail_called_callee_five_words": true
+    },
+    "core_cli": {
+      "interpreter": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "errors": 0
+      },
+      "jit": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "errors": 0
+      }
+    },
+    "sanitizer": {
+      "meaningful_tests": 294,
+      "source_revision": "45611d6c20a34fa83d5db3eb466eabffe6ba8f92",
+      "source_dirty": true,
+      "build_reuse": "fresh",
+      "tests": "passed",
+      "asan_probe": "detected",
+      "native_asan_probe": "detected",
+      "lsan_probe": "not_applicable",
+      "leak_detection": false,
+      "event_loop": "passed",
+      "instrumentation": [
+        "address",
+        "undefined"
+      ],
+      "exclusions": [
+        "MoonBit runtime objects",
+        "JIT machine code"
+      ],
+      "ordinary_errors": 0,
+      "protocol_sha256": "ba67879b8a9062ec008fc81ccfc19b2e8f7f8125fc93a2bcbbc3eb7916613793",
+      "fixture_sha256": "4e221e92ad4b5cea0949918aaacec6fb9e4f4bca6b376b79d82902f8d3deaed1",
+      "fixture_formatting_note": "The snapshot predates only moon fmt wrapping one parts.push call; WAT payload and test statements are unchanged. Final formatted fixtures passed full native tests."
+    },
+    "info": true,
+    "fmt": true,
+    "strict_native": true,
+    "strict_wasm": true,
+    "module_boundaries": true,
+    "python": {
+      "tests": 178,
+      "skipped": 54,
+      "failed": 0
+    },
+    "not_claimed": [
+      "clean CI",
+      "Windows execution",
+      "x64 execution",
+      "Linux LSan",
+      "execution of original 2808-test builtin driver",
+      "independent 0.17.1 rerun"
+    ]
+  },
+  "cleanup": {
+    "policy": "Owned OS TemporaryDirectory for copies, dependencies, logs, builds, caches and samples; remove after extraction",
+    "completed": true
+  }
+}
