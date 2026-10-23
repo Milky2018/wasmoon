@@ -656,7 +656,7 @@ fn Translator::extract_type_idx(
     RefI31 | RefNullI31 => -3
     FuncRef | RefFunc => -6
     ExternRef | RefExtern => -7
-    NullRef => -8
+    NullRef | RefNone => -8
     NullFuncRef => -9
     NullExternRef => -10
     // For value types or unsupported ref types, return -100 as error marker

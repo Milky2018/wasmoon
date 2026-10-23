@@ -246,3 +246,15 @@ test "contextual Wasm validation accepts built-in abstract heap types" {
     @wasm_milkir.WasmValidationContext::empty(),
   )
 }
+
+///|
+test "contextual Wasm validation still rejects the invalid heap type marker" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("invalid_heap_marker")
+  let reference = builder.add_param(Ref)
+  @wasm_milkir.ref_test(builder, -100, false, reference) |> ignore
+  builder.return_([])
+  debug_inspect(
+    contextual_error_for(builder),
+    content="UnverifiableInstruction(message=\"malformed contextual Wasm MilkIR extension 'ref_test': unknown heap type id -100\")",
+  )
+}
