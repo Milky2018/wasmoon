@@ -1,19 +1,19 @@
 name = "Milky2018/wasmoon"
 
-version = "0.17.1"
+version = "0.17.2"
 
 import {
-  "Milky2018/wasmoon_runtime@0.17.1",
+  "Milky2018/wasmoon_runtime@0.17.2",
   "moonbitlang/x@0.5.5",
-  "Milky2018/wasm_core@0.17.1",
-  "Milky2018/wasm_component@0.17.1",
-  "Milky2018/wasm_milkir@0.17.1",
-  "Milky2018/milkir@0.17.1",
-  "Milky2018/vcode@0.17.1",
-  "Milky2018/vcode_regalloc@0.17.1",
-  "Milky2018/x64_target@0.17.1",
-  "Milky2018/aarch64_target@0.17.1",
-  "Milky2018/wasmoon_jit@0.17.1",
+  "Milky2018/wasm_core@0.17.2",
+  "Milky2018/wasm_component@0.17.2",
+  "Milky2018/wasm_milkir@0.17.2",
+  "Milky2018/milkir@0.17.2",
+  "Milky2018/vcode@0.17.2",
+  "Milky2018/vcode_regalloc@0.17.2",
+  "Milky2018/x64_target@0.17.2",
+  "Milky2018/aarch64_target@0.17.2",
+  "Milky2018/wasmoon_jit@0.17.2",
   "moonbitlang/async@0.22.4",
   "marianoguerra/uri@0.1.2",
 }

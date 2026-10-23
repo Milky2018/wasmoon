@@ -1,6 +1,6 @@
 name = "Milky2018/vcode"
 
-version = "0.17.1"
+version = "0.17.2"
 
 readme = "README.mbt.md"
 
