@@ -102,6 +102,12 @@ int gc_should_fail_allocation(void) {
     return 0;
 }
 
+// Unknown settings, verification and injected failures select the complete
+// allocator. Changing failure controls is therefore observed by compiled code.
+int gc_heap_fast_allocation_enabled(void) {
+    return gc_verify_env_cached == 0 && gc_fail_alloc_at_cached == 0 && gc_fail_alloc_every_cached == 0;
+}
+
 static void gc_set_fail_alloc_config(int fail_at, int fail_every) {
     gc_fail_alloc_at_cached = fail_at > 0 ? fail_at : 0;
     gc_fail_alloc_every_cached = fail_every > 0 ? fail_every : 0;

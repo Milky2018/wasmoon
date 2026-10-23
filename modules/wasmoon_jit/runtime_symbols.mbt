@@ -26,6 +26,7 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
   fn add(helper : @wasm_milkir.WasmRuntimeHelper, address : Int64) {
     resolver.add_symbol(names.symbol_name(helper), address)
   }
+  add(GcReserveStructFast, c_jit_get_gc_reserve_struct_fast_ptr())
   add(GcRefTest, c_jit_get_gc_ref_test_ptr())
   add(GcRefCast, c_jit_get_gc_ref_cast_ptr())
   resolver.add_symbol(
@@ -35,6 +36,7 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
   add(GcStructGetHeap, c_jit_get_gc_struct_get_heap_ptr())
   add(GcStructSetHeap, c_jit_get_gc_struct_set_heap_ptr())
   add(GcArrayDataHeap, c_jit_get_gc_array_data_heap_ptr())
+  add(GcStructData, c_jit_get_gc_struct_data_ptr())
   add(GcArrayGetHeap, c_jit_get_gc_array_get_heap_ptr())
   add(GcArraySetHeap, c_jit_get_gc_array_set_heap_ptr())
   add(GcArrayLenHeap, c_jit_get_gc_array_len_heap_ptr())
@@ -71,12 +73,12 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     c_jit_get_gc_alloc_array_from_values_slow_ptr(),
   )
   resolver.add_symbol(
-    gc_push_root_scope_symbol(),
-    c_jit_get_gc_push_root_scope_ptr(),
+    gc_function_frame_enter_symbol(),
+    c_jit_get_gc_function_frame_enter_ptr(),
   )
   resolver.add_symbol(
-    gc_pop_root_scope_symbol(),
-    c_jit_get_gc_pop_root_scope_ptr(),
+    gc_function_frame_leave_symbol(),
+    c_jit_get_gc_function_frame_leave_ptr(),
   )
   add(MemoryGrow, c_jit_get_memory_grow_ptr())
   add(MemorySize, c_jit_get_memory_size_ptr())

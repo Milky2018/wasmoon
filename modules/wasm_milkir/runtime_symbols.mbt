@@ -32,6 +32,7 @@ pub(all) enum WasmRuntimeHelper {
   GcStructSetHeap
   GcArrayGetHeap
   GcArrayDataHeap
+  GcStructData
   GcArraySetHeap
   GcArrayLenHeap
   GcStructGet
@@ -47,6 +48,7 @@ pub(all) enum WasmRuntimeHelper {
   GcArrayInitElem
   GcTypeCheckSubtype
   GcRegisterStructInline
+  GcReserveStructFast
   GcRegisterArrayInline
   GcAllocStructSlow
   GcAllocArrayFromValuesSlow
@@ -106,6 +108,7 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     GcStructGetHeap => "gc.struct_get_heap"
     GcStructSetHeap => "gc.struct_set_heap"
     GcArrayDataHeap => "gc.array_data_heap"
+    GcStructData => "gc.struct_data"
     GcArrayGetHeap => "gc.array_get_heap"
     GcArraySetHeap => "gc.array_set_heap"
     GcArrayLenHeap => "gc.array_len_heap"
@@ -121,6 +124,7 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     GcArrayInitData => "gc.array_init_data"
     GcArrayInitElem => "gc.array_init_elem"
     GcTypeCheckSubtype => "gc.type_check_subtype"
+    GcReserveStructFast => "gc.reserve_struct_fast"
     GcRegisterStructInline => "gc.register_struct_inline"
     GcRegisterArrayInline => "gc.register_array_inline"
     GcAllocStructSlow => "gc.alloc_struct_slow"

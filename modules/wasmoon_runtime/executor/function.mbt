@@ -148,6 +148,19 @@ pub fn validate_call_arguments(
 }
 
 ///|
+/// Admit host results before an interpreter or native guest can consume them.
+/// A tagged word's shape does not establish nullability, object kind or the
+/// canonical subtype required by the importing instance.
+pub fn validate_call_results(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  expected : ArrayView[@types.ValueType],
+  values : Array[@types.Value],
+) -> Unit raise @runtime.RuntimeError {
+  check_call_values(store, instance, values, expected)
+}
+
+///|
 fn check_call_values(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,

@@ -1,0 +1,1318 @@
+{
+  "schema_version": 1,
+  "base_revision": "c7e407d5686a21dde271a240ca6f5b9a8f20352e",
+  "source_dirty": true,
+  "host": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "probe_sha256": "fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1",
+  "method": {
+    "samples": 5,
+    "serial": true,
+    "cold_cache": true,
+    "wasmtime_parallel_compilation": false,
+    "wasmtime_aot": "Includes process/load/instantiate/invoke; upper bound on invocation, not exact phase timing.",
+    "verification_flags": false,
+    "counters": "macOS /usr/bin/time -l process counters; includes compile/startup"
+  },
+  "versions": {
+    "wasmtime": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+    "node": "v25.2.1",
+    "v8": "14.1.146.11-node.14"
+  },
+  "binaries": {
+    "baseline": "4213af5bf14c6917658267e02adad6087c19ee1a9ebd654640d423b5d556b23f",
+    "candidate": "4642a9c6a2dfa04eb89a2443d5f8ede8f7f367fbe45bd9160017040143eaae2a"
+  },
+  "samples": [
+    {
+      "engine": "baseline",
+      "sample": 0,
+      "wall_seconds": 4.811048834002577,
+      "user_seconds": 4.75813,
+      "counters": {
+        "maximum resident set size": 351797248,
+        "instructions retired": 89900943810,
+        "cycles elapsed": 17886881670,
+        "peak memory footprint": 347243144
+      },
+      "result": 1
+    },
+    {
+      "engine": "candidate",
+      "sample": 0,
+      "wall_seconds": 4.046761042030994,
+      "user_seconds": 3.996072,
+      "counters": {
+        "maximum resident set size": 351895552,
+        "instructions retired": 73957100532,
+        "cycles elapsed": 15086488242,
+        "peak memory footprint": 347226784
+      },
+      "result": 1
+    },
+    {
+      "engine": "wasmtime",
+      "sample": 0,
+      "wall_seconds": 2.4102478330023587,
+      "user_seconds": 2.397195,
+      "counters": {
+        "maximum resident set size": 71647232,
+        "instructions retired": 60866725864,
+        "cycles elapsed": 8984148993,
+        "peak memory footprint": 62112272
+      },
+      "result": 1
+    },
+    {
+      "engine": "wasmtime_aot",
+      "sample": 0,
+      "wall_seconds": 2.150195583002642,
+      "user_seconds": 2.14048,
+      "counters": {
+        "maximum resident set size": 12288000,
+        "instructions retired": 56762929300,
+        "cycles elapsed": 7936455732,
+        "peak memory footprint": 5538224
+      },
+      "result": 1
+    },
+    {
+      "engine": "v8",
+      "sample": 0,
+      "wall_seconds": 1.2922904579900205,
+      "user_seconds": 1.2782780000000002,
+      "counters": {
+        "maximum resident set size": 72630272,
+        "instructions retired": 19106790668,
+        "cycles elapsed": 4792290035,
+        "peak memory footprint": 38340816
+      },
+      "result": 1,
+      "compile_seconds": 0.454852875,
+      "instantiate_seconds": 0.000147791,
+      "invoke_seconds": 0.785568125,
+      "invoke_user_seconds": 0.783825
+    },
+    {
+      "engine": "v8",
+      "sample": 1,
+      "wall_seconds": 1.281019499991089,
+      "user_seconds": 1.2698229999999988,
+      "counters": {
+        "maximum resident set size": 72253440,
+        "instructions retired": 19112125486,
+        "cycles elapsed": 4777124957,
+        "peak memory footprint": 37996800
+      },
+      "result": 1,
+      "compile_seconds": 0.448703916,
+      "instantiate_seconds": 0.000138875,
+      "invoke_seconds": 0.777242584,
+      "invoke_user_seconds": 0.777191
+    },
+    {
+      "engine": "wasmtime_aot",
+      "sample": 1,
+      "wall_seconds": 2.112488291983027,
+      "user_seconds": 2.105516999999999,
+      "counters": {
+        "maximum resident set size": 12435456,
+        "instructions retired": 56765902500,
+        "cycles elapsed": 7864651181,
+        "peak memory footprint": 5669296
+      },
+      "result": 1
+    },
+    {
+      "engine": "wasmtime",
+      "sample": 1,
+      "wall_seconds": 2.4250984999816865,
+      "user_seconds": 2.412021000000003,
+      "counters": {
+        "maximum resident set size": 71614464,
+        "instructions retired": 60863786159,
+        "cycles elapsed": 9013858887,
+        "peak memory footprint": 62063096
+      },
+      "result": 1
+    },
+    {
+      "engine": "candidate",
+      "sample": 1,
+      "wall_seconds": 4.259068333019968,
+      "user_seconds": 4.089876999999998,
+      "counters": {
+        "maximum resident set size": 352305152,
+        "instructions retired": 74013867401,
+        "cycles elapsed": 15308892946,
+        "peak memory footprint": 347636360
+      },
+      "result": 1
+    },
+    {
+      "engine": "baseline",
+      "sample": 1,
+      "wall_seconds": 4.697770792001393,
+      "user_seconds": 4.642744,
+      "counters": {
+        "maximum resident set size": 352075776,
+        "instructions retired": 89876229576,
+        "cycles elapsed": 17625040774,
+        "peak memory footprint": 347521696
+      },
+      "result": 1
+    },
+    {
+      "engine": "baseline",
+      "sample": 2,
+      "wall_seconds": 4.665119708981365,
+      "user_seconds": 4.618828000000004,
+      "counters": {
+        "maximum resident set size": 351911936,
+        "instructions retired": 89875588222,
+        "cycles elapsed": 17542886813,
+        "peak memory footprint": 347357832
+      },
+      "result": 1
+    },
+    {
+      "engine": "candidate",
+      "sample": 2,
+      "wall_seconds": 3.953087834001053,
+      "user_seconds": 3.9095299999999966,
+      "counters": {
+        "maximum resident set size": 352206848,
+        "instructions retired": 73959151027,
+        "cycles elapsed": 14881891180,
+        "peak memory footprint": 347538080
+      },
+      "result": 1
+    },
+    {
+      "engine": "wasmtime",
+      "sample": 2,
+      "wall_seconds": 2.37348083400866,
+      "user_seconds": 2.363363999999997,
+      "counters": {
+        "maximum resident set size": 71680000,
+        "instructions retired": 60852524600,
+        "cycles elapsed": 8911986886,
+        "peak memory footprint": 62145040
+      },
+      "result": 1
+    },
+    {
+      "engine": "wasmtime_aot",
+      "sample": 2,
+      "wall_seconds": 2.108189416001551,
+      "user_seconds": 2.1008880000000048,
+      "counters": {
+        "maximum resident set size": 12288000,
+        "instructions retired": 56790970403,
+        "cycles elapsed": 7879907087,
+        "peak memory footprint": 5521840
+      },
+      "result": 1
+    },
+    {
+      "engine": "v8",
+      "sample": 2,
+      "wall_seconds": 1.279591124970466,
+      "user_seconds": 1.2679319999999947,
+      "counters": {
+        "maximum resident set size": 72957952,
+        "instructions retired": 19110263848,
+        "cycles elapsed": 4793263920,
+        "peak memory footprint": 38701312
+      },
+      "result": 1,
+      "compile_seconds": 0.450323542,
+      "instantiate_seconds": 0.000164958,
+      "invoke_seconds": 0.780875625,
+      "invoke_user_seconds": 0.780474
+    },
+    {
+      "engine": "v8",
+      "sample": 3,
+      "wall_seconds": 1.258078792016022,
+      "user_seconds": 1.2456810000000047,
+      "counters": {
+        "maximum resident set size": 72138752,
+        "instructions retired": 19111506849,
+        "cycles elapsed": 4774005083,
+        "peak memory footprint": 37898520
+      },
+      "result": 1,
+      "compile_seconds": 0.436487833,
+      "instantiate_seconds": 0.000133708,
+      "invoke_seconds": 0.771739417,
+      "invoke_user_seconds": 0.769192
+    },
+    {
+      "engine": "wasmtime_aot",
+      "sample": 3,
+      "wall_seconds": 2.116838290996384,
+      "user_seconds": 2.109684999999999,
+      "counters": {
+        "maximum resident set size": 12238848,
+        "instructions retired": 56761166058,
+        "cycles elapsed": 7864250535,
+        "peak memory footprint": 5489072
+      },
+      "result": 1
+    },
+    {
+      "engine": "wasmtime",
+      "sample": 3,
+      "wall_seconds": 2.448485790984705,
+      "user_seconds": 2.4379009999999965,
+      "counters": {
+        "maximum resident set size": 71204864,
+        "instructions retired": 60851677816,
+        "cycles elapsed": 9187167987,
+        "peak memory footprint": 61669904
+      },
+      "result": 1
+    },
+    {
+      "engine": "candidate",
+      "sample": 3,
+      "wall_seconds": 3.9474261670256965,
+      "user_seconds": 3.8989680000000035,
+      "counters": {
+        "maximum resident set size": 352321536,
+        "instructions retired": 73983300074,
+        "cycles elapsed": 14884808048,
+        "peak memory footprint": 347652768
+      },
+      "result": 1
+    },
+    {
+      "engine": "baseline",
+      "sample": 3,
+      "wall_seconds": 4.7162135419785045,
+      "user_seconds": 4.667273000000002,
+      "counters": {
+        "maximum resident set size": 351993856,
+        "instructions retired": 89874546299,
+        "cycles elapsed": 17593699060,
+        "peak memory footprint": 347456160
+      },
+      "result": 1
+    },
+    {
+      "engine": "baseline",
+      "sample": 4,
+      "wall_seconds": 4.628495375043713,
+      "user_seconds": 4.584353,
+      "counters": {
+        "maximum resident set size": 351797248,
+        "instructions retired": 89871181304,
+        "cycles elapsed": 17520434144,
+        "peak memory footprint": 347243144
+      },
+      "result": 1
+    },
+    {
+      "engine": "candidate",
+      "sample": 4,
+      "wall_seconds": 3.914222333987709,
+      "user_seconds": 3.8706129999999987,
+      "counters": {
+        "maximum resident set size": 351830016,
+        "instructions retired": 73975288082,
+        "cycles elapsed": 14853694978,
+        "peak memory footprint": 347161224
+      },
+      "result": 1
+    },
+    {
+      "engine": "wasmtime",
+      "sample": 4,
+      "wall_seconds": 2.3727657080162317,
+      "user_seconds": 2.363677999999993,
+      "counters": {
+        "maximum resident set size": 71352320,
+        "instructions retired": 60851321635,
+        "cycles elapsed": 8915148258,
+        "peak memory footprint": 61817360
+      },
+      "result": 1
+    },
+    {
+      "engine": "wasmtime_aot",
+      "sample": 4,
+      "wall_seconds": 2.0873639159835875,
+      "user_seconds": 2.078640000000007,
+      "counters": {
+        "maximum resident set size": 12435456,
+        "instructions retired": 56759595049,
+        "cycles elapsed": 7845669691,
+        "peak memory footprint": 5669296
+      },
+      "result": 1
+    },
+    {
+      "engine": "v8",
+      "sample": 4,
+      "wall_seconds": 1.2446010829880834,
+      "user_seconds": 1.2322829999999954,
+      "counters": {
+        "maximum resident set size": 72302592,
+        "instructions retired": 19117815568,
+        "cycles elapsed": 4786799999,
+        "peak memory footprint": 38045952
+      },
+      "result": 1,
+      "compile_seconds": 0.438571958,
+      "instantiate_seconds": 0.00013175,
+      "invoke_seconds": 0.751055917,
+      "invoke_user_seconds": 0.750713
+    }
+  ],
+  "phase_samples": [
+    {
+      "engine": "baseline",
+      "sample": 0,
+      "schema_version": 1,
+      "command_us": "4626845",
+      "phases_us": {
+        "host_setup_and_preloads": "82",
+        "read_and_parse": "3081",
+        "validate": "6297",
+        "instantiate_including_start": "9486",
+        "jit_plan_and_cache_lookup": "1797",
+        "compile": "548134",
+        "artifact_verify": "14482",
+        "cache_write_and_report": "6070",
+        "jit_load_and_prepare": "256822",
+        "invoke_including_hostcalls": "3779580",
+        "finish_or_early_return": "1014"
+      }
+    },
+    {
+      "engine": "baseline",
+      "sample": 1,
+      "schema_version": 1,
+      "command_us": "4590386",
+      "phases_us": {
+        "host_setup_and_preloads": "77",
+        "read_and_parse": "3085",
+        "validate": "6337",
+        "instantiate_including_start": "9395",
+        "jit_plan_and_cache_lookup": "1776",
+        "compile": "552024",
+        "artifact_verify": "14395",
+        "cache_write_and_report": "5742",
+        "jit_load_and_prepare": "238268",
+        "invoke_including_hostcalls": "3758336",
+        "finish_or_early_return": "951"
+      }
+    },
+    {
+      "engine": "baseline",
+      "sample": 2,
+      "schema_version": 1,
+      "command_us": "4647863",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3271",
+        "validate": "6808",
+        "instantiate_including_start": "9750",
+        "jit_plan_and_cache_lookup": "1770",
+        "compile": "545989",
+        "artifact_verify": "14336",
+        "cache_write_and_report": "5816",
+        "jit_load_and_prepare": "242017",
+        "invoke_including_hostcalls": "3816950",
+        "finish_or_early_return": "1073"
+      }
+    },
+    {
+      "engine": "baseline",
+      "sample": 3,
+      "schema_version": 1,
+      "command_us": "4698988",
+      "phases_us": {
+        "host_setup_and_preloads": "89",
+        "read_and_parse": "3231",
+        "validate": "6608",
+        "instantiate_including_start": "9730",
+        "jit_plan_and_cache_lookup": "1866",
+        "compile": "574861",
+        "artifact_verify": "15847",
+        "cache_write_and_report": "4946",
+        "jit_load_and_prepare": "270001",
+        "invoke_including_hostcalls": "3810785",
+        "finish_or_early_return": "1024"
+      }
+    },
+    {
+      "engine": "baseline",
+      "sample": 4,
+      "schema_version": 1,
+      "command_us": "4618106",
+      "phases_us": {
+        "host_setup_and_preloads": "78",
+        "read_and_parse": "3106",
+        "validate": "6331",
+        "instantiate_including_start": "9418",
+        "jit_plan_and_cache_lookup": "1754",
+        "compile": "553642",
+        "artifact_verify": "14698",
+        "cache_write_and_report": "5855",
+        "jit_load_and_prepare": "254047",
+        "invoke_including_hostcalls": "3768205",
+        "finish_or_early_return": "972"
+      }
+    },
+    {
+      "engine": "candidate",
+      "sample": 0,
+      "schema_version": 1,
+      "command_us": "3900267",
+      "phases_us": {
+        "host_setup_and_preloads": "83",
+        "read_and_parse": "3045",
+        "validate": "6370",
+        "instantiate_including_start": "9155",
+        "jit_plan_and_cache_lookup": "1729",
+        "compile": "1078514",
+        "artifact_verify": "12800",
+        "cache_write_and_report": "4955",
+        "jit_load_and_prepare": "247130",
+        "invoke_including_hostcalls": "2535526",
+        "finish_or_early_return": "960"
+      }
+    },
+    {
+      "engine": "candidate",
+      "sample": 1,
+      "schema_version": 1,
+      "command_us": "3924299",
+      "phases_us": {
+        "host_setup_and_preloads": "80",
+        "read_and_parse": "3035",
+        "validate": "6326",
+        "instantiate_including_start": "9327",
+        "jit_plan_and_cache_lookup": "1750",
+        "compile": "1091405",
+        "artifact_verify": "13028",
+        "cache_write_and_report": "5035",
+        "jit_load_and_prepare": "237714",
+        "invoke_including_hostcalls": "2555636",
+        "finish_or_early_return": "963"
+      }
+    },
+    {
+      "engine": "candidate",
+      "sample": 2,
+      "schema_version": 1,
+      "command_us": "3907444",
+      "phases_us": {
+        "host_setup_and_preloads": "81",
+        "read_and_parse": "3048",
+        "validate": "6341",
+        "instantiate_including_start": "9385",
+        "jit_plan_and_cache_lookup": "1798",
+        "compile": "1093955",
+        "artifact_verify": "12938",
+        "cache_write_and_report": "4944",
+        "jit_load_and_prepare": "238508",
+        "invoke_including_hostcalls": "2535169",
+        "finish_or_early_return": "1277"
+      }
+    },
+    {
+      "engine": "candidate",
+      "sample": 3,
+      "schema_version": 1,
+      "command_us": "3967187",
+      "phases_us": {
+        "host_setup_and_preloads": "86",
+        "read_and_parse": "3265",
+        "validate": "6911",
+        "instantiate_including_start": "9797",
+        "jit_plan_and_cache_lookup": "1816",
+        "compile": "1082978",
+        "artifact_verify": "13029",
+        "cache_write_and_report": "5788",
+        "jit_load_and_prepare": "242973",
+        "invoke_including_hostcalls": "2599539",
+        "finish_or_early_return": "1005"
+      }
+    },
+    {
+      "engine": "candidate",
+      "sample": 4,
+      "schema_version": 1,
+      "command_us": "3903369",
+      "phases_us": {
+        "host_setup_and_preloads": "81",
+        "read_and_parse": "3031",
+        "validate": "6315",
+        "instantiate_including_start": "9307",
+        "jit_plan_and_cache_lookup": "1788",
+        "compile": "1088151",
+        "artifact_verify": "14082",
+        "cache_write_and_report": "5737",
+        "jit_load_and_prepare": "246273",
+        "invoke_including_hostcalls": "2527620",
+        "finish_or_early_return": "984"
+      }
+    }
+  ],
+  "wasmtime_aot_compile_seconds": 0.2886301669641398,
+  "medians": {
+    "baseline": {
+      "wall_seconds": 4.697770792001393,
+      "user_seconds": 4.642744,
+      "counters": {
+        "maximum resident set size": 351911936,
+        "instructions retired": 89875588222,
+        "cycles elapsed": 17593699060,
+        "peak memory footprint": 347357832
+      },
+      "phases_seconds": {
+        "host_setup_and_preloads": 8.2e-05,
+        "read_and_parse": 0.003106,
+        "validate": 0.006337,
+        "instantiate_including_start": 0.009486,
+        "jit_plan_and_cache_lookup": 0.001776,
+        "compile": 0.552024,
+        "artifact_verify": 0.014482,
+        "cache_write_and_report": 0.005816,
+        "jit_load_and_prepare": 0.254047,
+        "invoke_including_hostcalls": 3.77958,
+        "finish_or_early_return": 0.001014
+      }
+    },
+    "candidate": {
+      "wall_seconds": 3.953087834001053,
+      "user_seconds": 3.9095299999999966,
+      "counters": {
+        "maximum resident set size": 352206848,
+        "instructions retired": 73975288082,
+        "cycles elapsed": 14884808048,
+        "peak memory footprint": 347538080
+      },
+      "phases_seconds": {
+        "host_setup_and_preloads": 8.1e-05,
+        "read_and_parse": 0.003045,
+        "validate": 0.006341,
+        "instantiate_including_start": 0.009327,
+        "jit_plan_and_cache_lookup": 0.001788,
+        "compile": 1.088151,
+        "artifact_verify": 0.013028,
+        "cache_write_and_report": 0.005035,
+        "jit_load_and_prepare": 0.242973,
+        "invoke_including_hostcalls": 2.535526,
+        "finish_or_early_return": 0.000984
+      }
+    },
+    "wasmtime": {
+      "wall_seconds": 2.4102478330023587,
+      "user_seconds": 2.397195,
+      "counters": {
+        "maximum resident set size": 71614464,
+        "instructions retired": 60852524600,
+        "cycles elapsed": 8984148993,
+        "peak memory footprint": 62063096
+      }
+    },
+    "wasmtime_aot": {
+      "wall_seconds": 2.112488291983027,
+      "user_seconds": 2.105516999999999,
+      "counters": {
+        "maximum resident set size": 12288000,
+        "instructions retired": 56762929300,
+        "cycles elapsed": 7864651181,
+        "peak memory footprint": 5538224
+      }
+    },
+    "v8": {
+      "wall_seconds": 1.279591124970466,
+      "user_seconds": 1.2679319999999947,
+      "counters": {
+        "maximum resident set size": 72302592,
+        "instructions retired": 19111506849,
+        "cycles elapsed": 4786799999,
+        "peak memory footprint": 38045952
+      },
+      "compile_seconds": 0.448703916,
+      "invoke_seconds": 0.777242584,
+      "invoke_user_seconds": 0.777191
+    }
+  },
+  "code_summary": {
+    "baseline": {
+      "functions": 1365,
+      "code_bytes": 930020,
+      "allocated_spill_slots": 763,
+      "hot_functions": [
+        {
+          "func_idx": 453,
+          "func_name": "_M0MPC28internal7strconv7Decimal12right__shift",
+          "code_size": 1168,
+          "spill_slots": 4
+        },
+        {
+          "func_idx": 454,
+          "func_name": "_M0MPC28internal7strconv7Decimal11left__shift",
+          "code_size": 1316,
+          "spill_slots": 6
+        },
+        {
+          "func_idx": 455,
+          "func_name": "_M0MPC28internal7strconv7Decimal11new__digits",
+          "code_size": 652,
+          "spill_slots": 3
+        },
+        {
+          "func_idx": 1386,
+          "func_name": "_M0FP017____moonbit__init",
+          "code_size": 194532,
+          "spill_slots": 92
+        }
+      ],
+      "ir_instructions_at_compile_completion": 33518
+    },
+    "candidate": {
+      "functions": 1365,
+      "code_bytes": 954980,
+      "allocated_spill_slots": 975,
+      "hot_functions": [
+        {
+          "func_idx": 453,
+          "func_name": "_M0MPC28internal7strconv7Decimal12right__shift",
+          "code_size": 1872,
+          "spill_slots": 15
+        },
+        {
+          "func_idx": 454,
+          "func_name": "_M0MPC28internal7strconv7Decimal11left__shift",
+          "code_size": 2232,
+          "spill_slots": 9
+        },
+        {
+          "func_idx": 455,
+          "func_name": "_M0MPC28internal7strconv7Decimal11new__digits",
+          "code_size": 920,
+          "spill_slots": 1
+        },
+        {
+          "func_idx": 1386,
+          "func_name": "_M0FP017____moonbit__init",
+          "code_size": 112220,
+          "spill_slots": 80
+        }
+      ],
+      "ir_instructions_at_compile_completion": 48197
+    }
+  },
+  "guest": {
+    "core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1",
+    "artifact_sha256": "16bcf1f9c694573d1fb5f80ed0d44686a130f9f91d501eeeb2697544eca79dc4",
+    "count": 20000,
+    "assertions_retained": true,
+    "result": 1
+  },
+  "validation": {
+    "native_verification": {
+      "tests": 3040,
+      "passed": 3040,
+      "flags": [
+        "VCODE_REGALLOC_VALIDATION=1",
+        "WASMOON_GC_VERIFY=1",
+        "WASMOON_GC_ASSERT_BARRIER=1"
+      ]
+    },
+    "native_ordinary": {
+      "tests": 3040,
+      "passed": 3040
+    },
+    "wasm": {
+      "tests": 1443,
+      "passed": 1443
+    },
+    "strict_native_wasm": "passed",
+    "info_fmt": "passed",
+    "boundaries": "passed",
+    "msvc_bridge_generation": "passed",
+    "python": {
+      "tests": 178,
+      "skipped_existing_platform": 54,
+      "failed": 0
+    },
+    "platform_limits": [
+      "macOS ARM64 only",
+      "x64 selection/regalloc verified; execution unverified",
+      "Linux LSan and Windows execution unverified",
+      "No CI, commit, push, merge or publication in this implementation turn"
+    ],
+    "portable_core": {
+      "native": {
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0,
+        "artifact_sha256": "d2abcb5d9b65925a30b26fb22947f132b80db08f56b9df7064c6df65a6d1198e"
+      },
+      "wasm": {
+        "files": 258,
+        "accepted_files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "unsupported": 0,
+        "artifact_sha256": "347489f2de97836234100e5a941e705cc4d4ee7ed9c89427f3744045835a768e"
+      }
+    },
+    "cli_core": {
+      "interpreter": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "skipped": 0
+      },
+      "jit": {
+        "files": 258,
+        "passed": 62563,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "component": {
+      "interpreter": {
+        "files": 59,
+        "passed": 1385,
+        "failed": 0,
+        "skipped": 0
+      },
+      "jit": {
+        "files": 59,
+        "passed": 1385,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "sanitizer_receipt": "issue568-unified-sanitizer-local-2026-10-22.json"
+  },
+  "source_files": {
+    "modules/milkir/ir.mbt": "d3a5a23d035664e7384ed483e25f937f36cf142cf3e955a3598da36928b427f6",
+    "modules/milkir/native/lower.mbt": "d9e0a73c2aa110dac079f8f9fe9a7824fea7c6b9451f2d13cfa27f4a6dd52ca9",
+    "modules/milkir/native/pkg.generated.mbti": "955fc6115639955150e06ef4329f447c28ca9190de1ea5c57d117a88dc09ad29",
+    "modules/milkir/optimize/driver.mbt": "7b269d84efb9289e6cd8ec7045ba9945fcd5f8572f98657a755b31314cc65d32",
+    "modules/milkir/optimize/extension_memory_wbtest.mbt": "fdb232961eb5f21367c995c19ec55e82ab5356c4210c59bdb6633dd9a8d235e7",
+    "modules/milkir/optimize/internal/acyclic/division.mbt": "b4a3d4a05d309a70a6a53a59bf862b40140f4162f42673740ad2ddc0334e32e1",
+    "modules/milkir/optimize/internal/acyclic/division_wbtest.mbt": "c0a86b031b5aa7d2c0e1210365fdc814da6c29af24b0eadfdd9bb4dbf269d7a8",
+    "modules/milkir/optimize/internal/acyclic/gvn.mbt": "7a01006e536604f38d329996d210867ed4a290408a7ee197901f7361443a61f4",
+    "modules/milkir/optimize/internal/acyclic/ptr_base_worklist_wbtest.mbt": "03b29a1e73513b3483f51277238a709b67efb1745f46953d057e759d2a1f3e14",
+    "modules/milkir/optimize/internal/acyclic/rewrite.mbt": "713e00cfe0d4beef5373047a9bc36df8d8903c81676af45e191debfc6e71a6dd",
+    "modules/milkir/optimize/internal/analysis/effects.mbt": "9f30878296f77d472820939af391a78c9d35407ffd274ba3e60c52bd090deb71",
+    "modules/milkir/optimize/internal/analysis/pkg.generated.mbti": "dc36a111b99b0d97fb9b8529e198220f96d92401ad53cf7388cb29e032759251",
+    "modules/milkir/optimize/internal/analysis/pointers.mbt": "d35f082d7ae2b103d0bc02b9cd14e88d1f96e66644d0d3ea1f5ab568a3358265",
+    "modules/milkir/optimize/load_cse_wbtest.mbt": "73b80cdf6db9ee92b2ec544cdd90442a94d47a0f2e2526f1c0c504fd2c9f03ed",
+    "modules/milkir/optimize/loop_guard.mbt": "a6ba5d6f3866753db2490251c99c68b393de5aebe90876dac090d23aa1f524df",
+    "modules/milkir/optimize/loops.mbt": "d89e9eeb83d354cbda87541cd39fc9480ef4da09d139ae592d9fdbf92b98c380",
+    "modules/milkir/optimize/pipeline_wbtest.mbt": "909ea5589a0b8429eae0230f30f58c6910afd226cb282e465b2355f3bbe52756",
+    "modules/milkir/optimize/pkg.generated.mbti": "b7eb1584684f8dc53fc5494e78c7bb75b99e02e72561e610304d3388572e8871",
+    "modules/milkir/pkg.generated.mbti": "166b978312046b88f3a805310b0b610b5e10cf37f6272feb2920b122dbe091d9",
+    "modules/vcode/native_lowering/call_abi.mbt": "0938b064d1e1630d05182f2302f343909fc29d9a63c71e76171947ae675614cd",
+    "modules/vcode/native_lowering/direct_builder_wbtest.mbt": "afd105c538df52f72b3b92cdd0030b9baf54935ebdc872bda2f7b531a6559d2a",
+    "modules/vcode/native_lowering/pkg.generated.mbti": "bef4ed82be4cdf64387210af62321a45704095b2a99b391031b25c31d0ea5ade",
+    "modules/vcode/native_lowering/protocol.mbt": "086327051dbe1afde7d66f163e88f7cdb45376484f2a3ada36ee7b27410b77ce",
+    "modules/wasm_milkir/contextual_validation.mbt": "a34d756cf4840058b1ed4f797da2cdddb724aa465a557ed7cfba6462b7f30fb7",
+    "modules/wasm_milkir/dialect.mbt": "d6020b9da076c8dbd284e6eb767219cd47619d755b565f61aba5097b27f00f2f",
+    "modules/wasm_milkir/effects/effects.mbt": "d8b840f486df22c48dcc110eb1396841115131e8c98fd60398805dc7f7e88bbc",
+    "modules/wasm_milkir/effects/effects_test.mbt": "112f9db1f252fcfae9c0451268b2640cbda29864e89af430a8386957c153a1e6",
+    "modules/wasm_milkir/effects/moon.pkg": "4e65977117054c6721eac4871ff844809db5ca454574c0e6e1c824fa5521109a",
+    "modules/wasm_milkir/effects/pkg.generated.mbti": "4a15f0322cc5bbf6f513e84cb106421ca718b7e3d4f66830eeb50dc0b401abe4",
+    "modules/wasm_milkir/frontend/ir/translator/scalar_callees.mbt": "9ecae2ef03e35efd9e8018b39fc8a77b0d5f3d56a4fca1741be8d2ca33428ae9",
+    "modules/wasm_milkir/native/allocation.mbt": "d0a8bf883c262bb27e9e60a64a062d2b7700c60166f161f846dfe00234cc51a4",
+    "modules/wasm_milkir/native/array_access.mbt": null,
+    "modules/wasm_milkir/native/array_access_wbtest.mbt": null,
+    "modules/wasm_milkir/native/array_regions.mbt": null,
+    "modules/wasm_milkir/native/lower.mbt": "32d71aa490fe670d8cf9227e58864553187011fd93530c86f43316aba68ff895",
+    "modules/wasm_milkir/native/memory_context_wbtest.mbt": "30c0b0170a2e5ec77e2f0be8cdc2cb227126ff145045b51031cd4f1ecbef6841",
+    "modules/wasm_milkir/native/memory_contract.mbt": "c0ca63abf5fbbe1eb945aa7b0a9dce7f2fd0a88f2c0833b3576c550607105449",
+    "modules/wasm_milkir/native/memory_loops_wbtest.mbt": "c58e84f0aea42617c8e68d87e3569610d42660a14a0bbd90d4b5ac0fa6113579",
+    "modules/wasm_milkir/native/memory_optimizer_wbtest.mbt": "4fab7a7df9c54defab0e1116adfbda70bb011970d078812801df90555477a74c",
+    "modules/wasm_milkir/native/memory_reads_wbtest.mbt": "d5a437b46309ca809cfe0e5012ad25408c10946eda359e3a36180caae383ef71",
+    "modules/wasm_milkir/native/memory_ssa.mbt": "5238f34f89f19ad60721eb2e4de4df2ab7e2d42d1e548e128dfcf855e4971d22",
+    "modules/wasm_milkir/native/memory_ssa_wbtest.mbt": "b99791399d829b3c3a21cc71c4423721b311e4872cd425d9b50e293ac55cdbff",
+    "modules/wasm_milkir/native/memory_verify.mbt": "4fc0f9fb7e6bc123a840633e874fac5a2adfa12f78a5ceb73b5e560254745fb3",
+    "modules/wasm_milkir/native/memory_verify_wbtest.mbt": "2ba444916d0f81a118cf2511dcf9545c622a0fe106947e082daadd0c5f4d2d42",
+    "modules/wasm_milkir/native/moon.pkg": "33b1d5edc63037af1bb6764fb0dd4737118d4a8b449eb542838208a51428a5d6",
+    "modules/wasm_milkir/native/pkg.generated.mbti": "c2dceb9801b2e197b0afd455fadc7d7c91c8164c6d78d21bced5c24702ff6028",
+    "modules/wasm_milkir/optimize/gc_reads.mbt": null,
+    "modules/wasm_milkir/optimize/gc_reads_test.mbt": null,
+    "modules/wasm_milkir/optimize/loop_reads.mbt": null,
+    "modules/wasm_milkir/optimize/loop_reads_test.mbt": null,
+    "modules/wasm_milkir/optimize/loop_values.mbt": null,
+    "modules/wasm_milkir/optimize/optimize.mbt": "f08cc9ab616f149525da1df6b376ad81235e6324e3b8ea8c02ffd54d23967758",
+    "modules/wasm_milkir/optimize/scalar_calls.mbt": "263c3bfdae1fb2727cb20fe93521d07f08c2439026d6a9f7f72fa3d374190abc",
+    "modules/wasm_milkir/pkg.generated.mbti": "b28e4e3655243d99fc10f3ea6a47dd8846170f89363bc39ff1a22845c810f25c",
+    "modules/wasm_milkir/runtime_symbols.mbt": "acb612682e536152e0f36a4c1c223c96ba41d4784f7b9ff52e7929926cab4a1b",
+    "modules/wasmoon/cmd/wasmoon/commands/run_wbtest.mbt": "5877880cceb84dad973ff1831c8789b58681334b26401629ca2a4e982d12acf8",
+    "modules/wasmoon/executor/compat.mbt": "d09543fb805d4fc32f170f1d559454f3b23083ba90db6cdc26a2e91b43ac6aca",
+    "modules/wasmoon/executor/pkg.generated.mbti": "2bf4908f34d3d68d009dd81a218b56415c995799aebbed812180444a21ac45d8",
+    "modules/wasmoon/sanitizer_testsuite/function_root_frame_test.mbt": "9f2fec468c4f1b803a9b3928764d54a87b3df1c35652b303bb5d45c4f136d735",
+    "modules/wasmoon/sanitizer_testsuite/native_host_result_contract_test.mbt": "8b907a40c51839f214a3aae642166398d3cb85054799eb2f5c694505a1aeb81b",
+    "modules/wasmoon/sanitizer_testsuite/scalar_allocation_test.mbt": "9348de16d99df1c52759309e2f2bcc82c1b73d8bcb99b0b9de99a54c00126556",
+    "modules/wasmoon/testsuite/gc_read_forwarding_test.mbt": "d39df7744e5e5e272e99a57d35ba760fdbe91571c24c064fb509764977d6e092",
+    "modules/wasmoon/testsuite/integer_division_test.mbt": "dacdbf199aa84d744f7d23418b867139f71b10f972bb3bfa3ae84042bac3495d",
+    "modules/wasmoon/testsuite/loop_gc_reads_test.mbt": "c846b77686ae1d7e53a3391d5e4f48d700eedbc9dc9fdeb144ca4947490022cf",
+    "modules/wasmoon/wast/jit/support.mbt": "c134ad0daae4432b3669c62273dd038c067340280bfdc058072187dd81edaba5",
+    "modules/wasmoon_jit/artifact_producer.mbt": "20e91c87b686f072927e5ce23e84f35ac092314e369f8e31f3234973ff9e4368",
+    "modules/wasmoon_jit/artifact_producer_test.mbt": "507d6d519a9cf1d6d642078973a56511bb010ddd186dddfa453a94ccfe69f5fa",
+    "modules/wasmoon_jit/artifact_producer_wbtest.mbt": "bd6357a613e78a1a2fcfb8d887a0d018167630f72fd6c05a7130bc16d4974786",
+    "modules/wasmoon_jit/gc_access_lowering_test.mbt": "b5c199f69c6d0ac05ec100a592fa44147b91502dfe99f87b89e365784f5de466",
+    "modules/wasmoon_jit/gc_helpers.mbt": "46e53dc62f9ade3a26e27f1c3d92a003066cb0e2a46196f19705d7c0f26734fc",
+    "modules/wasmoon_jit/native_ffi.mbt": "bc76aa77db121b7329bd4d3c53b0d126996110c51c4dc130610a0154effdedbb",
+    "modules/wasmoon_jit/native_handles_test.mbt": "4c97b5eecf1858ebb634f82cacf0bbc373494bf2497b69b3f5efe06e7162f41e",
+    "modules/wasmoon_jit/native_wasm_lower.mbt": "e662f76aecf97965d36753749d073c4d2371a8dafc46340afab8e96230a9aba3",
+    "modules/wasmoon_jit/pkg.generated.mbti": "3004adae78bc1e60b4463961a3dcb513616d6669636df18e966ac7b3efc52d93",
+    "modules/wasmoon_jit/runtime_symbols.mbt": "219fbccde2aecc6559b1adea2f584e7fad455b13ef021626531662b17a3dece7",
+    "modules/wasmoon_jit/safepoint_admission_test.mbt": "ce998b6c071037cc80ad89683629d7b2e7cd557f2e93a1d3b8bae1d8caaa5b83",
+    "modules/wasmoon_runtime/executor/function.mbt": "928b7d6a4e4b60d85c91aabd4c6b629728c3024d9af5c0a80a0eca06e1491002",
+    "modules/wasmoon_runtime/executor/pkg.generated.mbti": "997e8f0fb6a019605e5f68db63b0222374bee2d60215558c104ded1e4b15f15e",
+    "modules/wasmoon_runtime/native/ffi/exception.c": "c8ebab00bec8132cb664e43eb05fd444b90f78dbff0d53c56a3b9437e7538c27",
+    "modules/wasmoon_runtime/native/ffi/gc_allocator.c": "e835811c74b59cbe4f2e986fa3e417410ed24545670f165a3453ed943490d810",
+    "modules/wasmoon_runtime/native/ffi/gc_allocator.h": "0686940a976b847007dd62c5230a0423b4752f300736023f5c473c5452123968",
+    "modules/wasmoon_runtime/native/ffi/gc_heap.c": "5a4dd8217ad0786cc42e154438ce29f96178d3a36892ccf522fcc663a2d96153",
+    "modules/wasmoon_runtime/native/ffi/gc_heap.h": "7cdaac0c42df71ab62273e95d61a60eec4af824d2e20dd38122138874b0e84ec",
+    "modules/wasmoon_runtime/native/ffi/gc_layout.c": "b8e86ed6010935c60fece78cbda313745bba37662c77bdb6b71eb520f769d3c3",
+    "modules/wasmoon_runtime/native/ffi/gc_metadata.mbt": "b11c7530735d2cce86153431a25c2c843196ca83df44a5abca4bbec7aff8dc54",
+    "modules/wasmoon_runtime/native/ffi/gc_ops.c": "094612c07850222074617670bcaffe8b9ce03242f20160ba8aec3f06cdf8e296",
+    "modules/wasmoon_runtime/native/ffi/jit.c": "12c2b47bede562d945ff30eec0514b845b3a8b005107733172cea33f1bfca0e2",
+    "modules/wasmoon_runtime/native/ffi/jit_context.c": "ba102c37307b230d58619bb7428f175178f740670719b19998072a05bfd2ae02",
+    "modules/wasmoon_runtime/native/ffi/jit_context.h": "6c2c34e306e3b460295c0c6178a3231e5865d16a4e4d6b06d10553dddd34c552",
+    "modules/wasmoon_runtime/native/ffi/jit_ffi.h": "a2e55c58bccef1d926ed8c66c3caa46a800d7e97546e27d2644940cc5f80021c",
+    "modules/wasmoon_runtime/native/ffi/jit_internal.h": "032e76c61c7f8b897a1e72a473daea433e9988bdeae13e5096cefb79d66d60e4",
+    "modules/wasmoon_runtime/native/ffi/msvc_guest_bridges.asm": "3e9cec37e3db58fca2160c625c089f3b672bbdd9f559165888808e776e21a7fb",
+    "modules/wasmoon_runtime/native/ffi/msvc_guest_bridges.h": "21feae4643e87d07834a505ebac6213cbffdbf64e52bf169d3550c941ac3c66a",
+    "modules/wasmoon_runtime/native/ffi/pkg.generated.mbti": "b8777e4eb9c6495723c009d91893c9bd8e929165e9a38e65141e0c22c9945fac",
+    "modules/wasmoon_runtime/native/ffi/testing/context_test_support.c": "7928c2f1d59bfef99f370165df04e113d3fba72292ad19605989506749c42925",
+    "modules/wasmoon_runtime/native/ffi/trap.c": "8f892cbe5c2980fd332ec4d19c6d0efcefc1ef453c66c7ab62b015173489450e",
+    "modules/x64_target/x64_target_test.mbt": "34eba1afc456ee12cea620bf898d8ab1b9aef14ebff6969cc14e3abadcabe648",
+    "scripts/run_sanitizers.py": "6b64a7623dc59b419d7a36771285a7881a7a6ac0deddece08de188ff19b7ec49"
+  },
+  "source_manifest_sha256": "d3b54147665a666baecca218f08cd172da906dee8a35ebc75fa6a87ab309ffea",
+  "diagnostic_expansion_budget": {
+    "before_limit_instructions": 20000,
+    "after_limit_instructions": 1200,
+    "single_variable_phase_samples": [
+      {
+        "schema_version": 1,
+        "command_us": "4056427",
+        "phases_us": {
+          "host_setup_and_preloads": "753",
+          "read_and_parse": "5818",
+          "validate": "11404",
+          "instantiate_including_start": "14404",
+          "jit_plan_and_cache_lookup": "2561",
+          "compile": "1148298",
+          "artifact_verify": "13432",
+          "cache_write_and_report": "4437",
+          "jit_load_and_prepare": "297259",
+          "invoke_including_hostcalls": "2556974",
+          "finish_or_early_return": "1087"
+        }
+      },
+      {
+        "schema_version": 1,
+        "command_us": "4099999",
+        "phases_us": {
+          "host_setup_and_preloads": "87",
+          "read_and_parse": "3079",
+          "validate": "6449",
+          "instantiate_including_start": "11119",
+          "jit_plan_and_cache_lookup": "1961",
+          "compile": "1148501",
+          "artifact_verify": "13244",
+          "cache_write_and_report": "5022",
+          "jit_load_and_prepare": "341439",
+          "invoke_including_hostcalls": "2568066",
+          "finish_or_early_return": "1032"
+        }
+      },
+      {
+        "schema_version": 1,
+        "command_us": "4063215",
+        "phases_us": {
+          "host_setup_and_preloads": "101",
+          "read_and_parse": "3460",
+          "validate": "7093",
+          "instantiate_including_start": "10715",
+          "jit_plan_and_cache_lookup": "1912",
+          "compile": "1121067",
+          "artifact_verify": "13299",
+          "cache_write_and_report": "5321",
+          "jit_load_and_prepare": "263451",
+          "invoke_including_hostcalls": "2635650",
+          "finish_or_early_return": "1146"
+        }
+      }
+    ],
+    "pre_budget_five_sample_cold": [
+      {
+        "engine": "baseline",
+        "sample": 0,
+        "wall_seconds": 4.82431091601029,
+        "user_seconds": 4.749366,
+        "counters": {
+          "maximum resident set size": 352813056,
+          "instructions retired": 89916131024,
+          "cycles elapsed": 18091287780,
+          "peak memory footprint": 348275360
+        },
+        "result": 1
+      },
+      {
+        "engine": "candidate",
+        "sample": 0,
+        "wall_seconds": 5.883217833004892,
+        "user_seconds": 5.755541999999999,
+        "counters": {
+          "maximum resident set size": 1011728384,
+          "instructions retired": 102454964336,
+          "cycles elapsed": 21951035088,
+          "peak memory footprint": 1007404160
+        },
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 0,
+        "wall_seconds": 2.449290833028499,
+        "user_seconds": 2.431088000000001,
+        "counters": {
+          "maximum resident set size": 71401472,
+          "instructions retired": 60879625441,
+          "cycles elapsed": 8989435096,
+          "peak memory footprint": 61850104
+        },
+        "result": 1
+      },
+      {
+        "engine": "wasmtime_aot",
+        "sample": 0,
+        "wall_seconds": 2.1599490420194343,
+        "user_seconds": 2.144354999999999,
+        "counters": {
+          "maximum resident set size": 12288000,
+          "instructions retired": 56771238563,
+          "cycles elapsed": 7911045436,
+          "peak memory footprint": 5521840
+        },
+        "result": 1
+      },
+      {
+        "engine": "v8",
+        "sample": 0,
+        "wall_seconds": 1.3029092919896357,
+        "user_seconds": 1.2850590000000004,
+        "counters": {
+          "maximum resident set size": 72581120,
+          "instructions retired": 19121881883,
+          "cycles elapsed": 4888605412,
+          "peak memory footprint": 38324480
+        },
+        "result": 1,
+        "compile_seconds": 0.474216375,
+        "instantiate_seconds": 0.0001605,
+        "invoke_seconds": 0.769463708,
+        "invoke_user_seconds": 0.768153
+      },
+      {
+        "engine": "v8",
+        "sample": 1,
+        "wall_seconds": 1.315711083007045,
+        "user_seconds": 1.2945600000000006,
+        "counters": {
+          "maximum resident set size": 73318400,
+          "instructions retired": 19121823069,
+          "cycles elapsed": 4887929407,
+          "peak memory footprint": 39078168
+        },
+        "result": 1,
+        "compile_seconds": 0.4709985,
+        "instantiate_seconds": 0.000252542,
+        "invoke_seconds": 0.790066375,
+        "invoke_user_seconds": 0.784433
+      },
+      {
+        "engine": "wasmtime_aot",
+        "sample": 1,
+        "wall_seconds": 2.1428177499910817,
+        "user_seconds": 2.1288750000000007,
+        "counters": {
+          "maximum resident set size": 12369920,
+          "instructions retired": 56779571626,
+          "cycles elapsed": 7892110822,
+          "peak memory footprint": 5603760
+        },
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 1,
+        "wall_seconds": 2.44755687500583,
+        "user_seconds": 2.422273999999998,
+        "counters": {
+          "maximum resident set size": 71122944,
+          "instructions retired": 60885071499,
+          "cycles elapsed": 8978733063,
+          "peak memory footprint": 61604368
+        },
+        "result": 1
+      },
+      {
+        "engine": "candidate",
+        "sample": 1,
+        "wall_seconds": 5.9755020829616114,
+        "user_seconds": 5.8357930000000025,
+        "counters": {
+          "maximum resident set size": 1012072448,
+          "instructions retired": 102433794328,
+          "cycles elapsed": 22280508148,
+          "peak memory footprint": 1007731816
+        },
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 1,
+        "wall_seconds": 4.772724291018676,
+        "user_seconds": 4.711211999999996,
+        "counters": {
+          "maximum resident set size": 352223232,
+          "instructions retired": 89912538388,
+          "cycles elapsed": 17954163046,
+          "peak memory footprint": 347669128
+        },
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 2,
+        "wall_seconds": 4.869438333029393,
+        "user_seconds": 4.790791000000006,
+        "counters": {
+          "maximum resident set size": 352305152,
+          "instructions retired": 89903366607,
+          "cycles elapsed": 18014981683,
+          "peak memory footprint": 347751048
+        },
+        "result": 1
+      },
+      {
+        "engine": "candidate",
+        "sample": 2,
+        "wall_seconds": 5.917482917022426,
+        "user_seconds": 5.782407999999997,
+        "counters": {
+          "maximum resident set size": 1014202368,
+          "instructions retired": 102540735223,
+          "cycles elapsed": 21976192902,
+          "peak memory footprint": 1009861760
+        },
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 2,
+        "wall_seconds": 2.4330207079765387,
+        "user_seconds": 2.414883000000003,
+        "counters": {
+          "maximum resident set size": 75382784,
+          "instructions retired": 60858832729,
+          "cycles elapsed": 8963705766,
+          "peak memory footprint": 65847824
+        },
+        "result": 1
+      },
+      {
+        "engine": "wasmtime_aot",
+        "sample": 2,
+        "wall_seconds": 2.1312460839981213,
+        "user_seconds": 2.1209659999999957,
+        "counters": {
+          "maximum resident set size": 12173312,
+          "instructions retired": 56770416455,
+          "cycles elapsed": 7870733270,
+          "peak memory footprint": 5423536
+        },
+        "result": 1
+      },
+      {
+        "engine": "v8",
+        "sample": 2,
+        "wall_seconds": 1.2943927919841371,
+        "user_seconds": 1.2782699999999991,
+        "counters": {
+          "maximum resident set size": 72728576,
+          "instructions retired": 19110969657,
+          "cycles elapsed": 4818358932,
+          "peak memory footprint": 38471936
+        },
+        "result": 1,
+        "compile_seconds": 0.45550325,
+        "instantiate_seconds": 0.000152125,
+        "invoke_seconds": 0.783000584,
+        "invoke_user_seconds": 0.779233
+      },
+      {
+        "engine": "v8",
+        "sample": 3,
+        "wall_seconds": 1.2543606669642031,
+        "user_seconds": 1.244211,
+        "counters": {
+          "maximum resident set size": 72122368,
+          "instructions retired": 19109720357,
+          "cycles elapsed": 4779914764,
+          "peak memory footprint": 37849320
+        },
+        "result": 1,
+        "compile_seconds": 0.435811375,
+        "instantiate_seconds": 0.000181583,
+        "invoke_seconds": 0.7686215,
+        "invoke_user_seconds": 0.768103
+      },
+      {
+        "engine": "wasmtime_aot",
+        "sample": 3,
+        "wall_seconds": 2.1483967500389554,
+        "user_seconds": 2.137992000000004,
+        "counters": {
+          "maximum resident set size": 12255232,
+          "instructions retired": 56765974475,
+          "cycles elapsed": 7909831716,
+          "peak memory footprint": 5505480
+        },
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 3,
+        "wall_seconds": 2.473229082999751,
+        "user_seconds": 2.4421239999999997,
+        "counters": {
+          "maximum resident set size": 73089024,
+          "instructions retired": 60867845993,
+          "cycles elapsed": 9032144209,
+          "peak memory footprint": 63554040
+        },
+        "result": 1
+      },
+      {
+        "engine": "candidate",
+        "sample": 3,
+        "wall_seconds": 6.081064375001006,
+        "user_seconds": 5.912148999999999,
+        "counters": {
+          "maximum resident set size": 1012154368,
+          "instructions retired": 102300910547,
+          "cycles elapsed": 22327080087,
+          "peak memory footprint": 1007813736
+        },
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 3,
+        "wall_seconds": 4.942766749998555,
+        "user_seconds": 4.833326,
+        "counters": {
+          "maximum resident set size": 352731136,
+          "instructions retired": 89952483151,
+          "cycles elapsed": 18252099504,
+          "peak memory footprint": 348177032
+        },
+        "result": 1
+      },
+      {
+        "engine": "baseline",
+        "sample": 4,
+        "wall_seconds": 4.840516374970321,
+        "user_seconds": 4.766829000000001,
+        "counters": {
+          "maximum resident set size": 351748096,
+          "instructions retired": 89917726614,
+          "cycles elapsed": 17898218800,
+          "peak memory footprint": 347194016
+        },
+        "result": 1
+      },
+      {
+        "engine": "candidate",
+        "sample": 4,
+        "wall_seconds": 6.0368592090089805,
+        "user_seconds": 5.8765439999999955,
+        "counters": {
+          "maximum resident set size": 1012350976,
+          "instructions retired": 102699781835,
+          "cycles elapsed": 22235541995,
+          "peak memory footprint": 1008010368
+        },
+        "result": 1
+      },
+      {
+        "engine": "wasmtime",
+        "sample": 4,
+        "wall_seconds": 2.465854291978758,
+        "user_seconds": 2.4421350000000075,
+        "counters": {
+          "maximum resident set size": 77873152,
+          "instructions retired": 60882625222,
+          "cycles elapsed": 9011508216,
+          "peak memory footprint": 68354576
+        },
+        "result": 1
+      },
+      {
+        "engine": "wasmtime_aot",
+        "sample": 4,
+        "wall_seconds": 2.1976912920363247,
+        "user_seconds": 2.1751589999999936,
+        "counters": {
+          "maximum resident set size": 12156928,
+          "instructions retired": 56774958352,
+          "cycles elapsed": 7983337848,
+          "peak memory footprint": 5407152
+        },
+        "result": 1
+      },
+      {
+        "engine": "v8",
+        "sample": 4,
+        "wall_seconds": 1.3089487500255927,
+        "user_seconds": 1.293178999999995,
+        "counters": {
+          "maximum resident set size": 73646080,
+          "instructions retired": 19116608008,
+          "cycles elapsed": 4838818711,
+          "peak memory footprint": 39340216
+        },
+        "result": 1,
+        "compile_seconds": 0.461631708,
+        "instantiate_seconds": 0.000170833,
+        "invoke_seconds": 0.790274834,
+        "invoke_user_seconds": 0.7875
+      }
+    ],
+    "profile_before": {
+      "native_lowering_us": 2209842,
+      "initializer_native_lowering_us": 1532426,
+      "initializer_ir_instructions": 14152
+    },
+    "attribution": "Budget counterfactual changes only expansion admission. Other final improvements are measured as a combined dependent design, not additive isolated speedups."
+  },
+  "cleanup": {
+    "owned_temporary_workspaces_removed": true,
+    "owned_generated_html_reports_removed": true,
+    "temporary_child_processes_completed": true,
+    "preexisting_historical_receipts_preserved": true
+  }
+}

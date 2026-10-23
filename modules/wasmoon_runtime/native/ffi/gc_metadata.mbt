@@ -4,6 +4,7 @@ pub suberror GCMetadataError {
   InvalidTypeStride
   PayloadCountMismatch
   PayloadTooLarge
+  InvalidSafepointMap
 } derive(Debug)
 
 ///|
@@ -100,6 +101,10 @@ extern "c" fn prepare_safepoints(
 ) -> PreparedSafepoints = "wasmoon_jit_prepare_safepoints"
 
 ///|
+#borrow(prepared)
+extern "c" fn prepared_safepoints_valid(prepared : PreparedSafepoints) -> Bool = "wasmoon_jit_prepared_safepoints_valid"
+
+///|
 /// Bind outside execution. The context retains the owner independently of callers.
 #borrow(self, prepared)
 pub extern "c" fn JITContext::bind_prepared_safepoints(
@@ -125,5 +130,7 @@ pub fn PreparedSafepoints::new(
       }
     },
   )
-  prepare_safepoints(blobs, snapshot)
+  let prepared = prepare_safepoints(blobs, snapshot)
+  guard prepared_safepoints_valid(prepared) else { raise InvalidSafepointMap }
+  prepared
 }

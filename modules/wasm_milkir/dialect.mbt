@@ -87,6 +87,11 @@ pub fn decode_error(ext : @milkir.ExtOp) -> String? {
 ///|
 /// Validate one read-only Wasm extension instruction at an adapter seam.
 pub fn validate_extension(view : @milkir.ExtensionInstView) -> String? {
+  if view.op.effects is Some(_) {
+    return Some(
+      "semantic Wasm operations cannot carry unchecked optimizer effects",
+    )
+  }
   let opcode = match decode_result(view.op) {
     Ok(opcode) => opcode
     Err(message) => return Some(message)

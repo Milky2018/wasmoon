@@ -86,6 +86,10 @@ typedef struct wasmoon_gc_safepoint_table {
     uint32_t stackmap_blob_size;
     const uint32_t *code_offsets;
     uint32_t safepoint_count;
+    // RC-owned immutable triples: selected count, prefix-max offset, byte
+    // offset of the index list; followed by operand-index prefix maxima.
+    // Decoded once before publication.
+    const uint32_t *allocation_roots;
 } wasmoon_gc_safepoint_table_t;
 
 // Per-call frame node for GC bookkeeping.
@@ -94,6 +98,16 @@ typedef struct wasmoon_gc_frame {
     uintptr_t frame_id;
     const wasmoon_gc_safepoint_table_t *table;
 } wasmoon_gc_frame_t;
+
+// Stack-owned function frame. Precise masks select live SSA slots at calls.
+// Generated code owns all storage; unwinding only restores the linked head.
+typedef struct wasmoon_gc_function_frame {
+    struct wasmoon_gc_function_frame *prev;
+    const int64_t *roots;
+    const uint64_t *mask;
+    int32_t slot_count;
+    int32_t reserved;
+} wasmoon_gc_function_frame_t;
 
 // Heap-owned copy of caller roots that must survive a nested JIT/runtime call.
 typedef struct wasmoon_gc_root_scope {

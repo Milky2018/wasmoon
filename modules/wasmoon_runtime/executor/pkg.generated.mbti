@@ -57,6 +57,8 @@ pub async fn instantiate_with_linker_async(@runtime.Linker, String, @types.Modul
 
 pub fn validate_call_arguments(@runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> @types.FuncType raise @runtime.RuntimeError
 
+pub fn validate_call_results(@runtime.Store, @runtime.ModuleInstance, ArrayView[@types.ValueType], Array[@types.Value]) -> Unit raise @runtime.RuntimeError
+
 pub fn validate_continuation_gc_storage(@types.Module) -> Unit raise @runtime.RuntimeError
 
 pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError

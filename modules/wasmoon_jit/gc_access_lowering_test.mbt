@@ -44,7 +44,7 @@ test "both targets select explicit heap GC word helper contracts" {
     assert_true(diagnostics.code_object.contains("gc.array_data_heap"))
     for
       suffix in [
-        "gc.struct_get_heap", "gc.struct_set_heap", "gc.array_get_heap", "gc.array_set_heap",
+        "gc.struct_data", "gc.struct_set_heap", "gc.array_get_heap", "gc.array_set_heap",
         "gc.array_len_heap",
       ] {
       assert_true(diagnostics.code_object.contains(suffix))

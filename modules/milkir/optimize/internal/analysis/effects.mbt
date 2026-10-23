@@ -176,7 +176,22 @@ pub fn opcode_semantics(opcode : @milkir.Opcode) -> OpcodeSemantics {
     Call(op) => op.semantics()
     Memory(op) => op.semantics()
     GlobalValue(_) => pure_opcode_semantics()
-    Ext(_, _) => unknown_opcode_semantics()
+    Ext(extension, _) =>
+      match extension.effects {
+        None => unknown_opcode_semantics()
+        Some(effects) =>
+          {
+            memory: if effects.write is Some(_) {
+              Write
+            } else if effects.read is Some(_) {
+              Read
+            } else {
+              None
+            },
+            may_trap: effects.may_trap,
+            other_observable_effect: effects.observable,
+          }
+      }
     Vector(op) => op.semantics()
   }
 }

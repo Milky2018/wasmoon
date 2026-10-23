@@ -537,6 +537,35 @@ gc_array_set_v128_impl_msvc_guest PROC
     add rsp, 40
     ret
 gc_array_set_v128_impl_msvc_guest ENDP
+EXTERN gc_function_frame_enter_impl_msvc_target:QWORD
+PUBLIC gc_function_frame_enter_impl_msvc_guest
+gc_function_frame_enter_impl_msvc_guest PROC
+    sub rsp, 40
+    mov QWORD PTR [rsp+32], r8
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_function_frame_enter_impl_msvc_target]
+    add rsp, 40
+    ret
+gc_function_frame_enter_impl_msvc_guest ENDP
+EXTERN gc_function_frame_leave_impl_msvc_target:QWORD
+PUBLIC gc_function_frame_leave_impl_msvc_guest
+gc_function_frame_leave_impl_msvc_guest PROC
+    sub rsp, 40
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_function_frame_leave_impl_msvc_target]
+    add rsp, 40
+    ret
+gc_function_frame_leave_impl_msvc_guest ENDP
 EXTERN gc_ref_cast_impl_msvc_target:QWORD
 PUBLIC gc_ref_cast_impl_msvc_guest
 gc_ref_cast_impl_msvc_guest PROC
@@ -593,6 +622,37 @@ gc_register_struct_inline_msvc_guest PROC
     add rsp, 40
     ret
 gc_register_struct_inline_msvc_guest ENDP
+EXTERN gc_reserve_struct_fast_impl_msvc_target:QWORD
+PUBLIC gc_reserve_struct_fast_impl_msvc_guest
+gc_reserve_struct_fast_impl_msvc_guest PROC
+    sub rsp, 56
+    mov QWORD PTR [rsp+32], r8
+    mov QWORD PTR [rsp+40], r9
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_reserve_struct_fast_impl_msvc_target]
+    add rsp, 56
+    ret
+gc_reserve_struct_fast_impl_msvc_guest ENDP
+EXTERN gc_struct_data_impl_msvc_target:QWORD
+PUBLIC gc_struct_data_impl_msvc_guest
+gc_struct_data_impl_msvc_guest PROC
+    sub rsp, 40
+    mov QWORD PTR [rsp+32], r8
+    mov r10, rdx
+    mov r11, rcx
+    mov rcx, rdi
+    mov rdx, rsi
+    mov r8, r10
+    mov r9, r11
+    call QWORD PTR [gc_struct_data_impl_msvc_target]
+    add rsp, 40
+    ret
+gc_struct_data_impl_msvc_guest ENDP
 EXTERN gc_struct_get_heap_impl_msvc_target:QWORD
 PUBLIC gc_struct_get_heap_impl_msvc_guest
 gc_struct_get_heap_impl_msvc_guest PROC

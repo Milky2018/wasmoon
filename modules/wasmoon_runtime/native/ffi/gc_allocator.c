@@ -51,8 +51,8 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_attempt(void *raw_request) {
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_collect(void *raw_request) {
     gc_allocation_request_t *request = raw_request;
-    int32_t collected = gc_collect_for_alloc_internal(
-        request->ctx, request->roots, request->root_count);
+    int32_t collected = gc_collect_for_alloc_indexed_internal(
+        request->ctx, request->roots, request->root_count, request->root_indices);
     if (collected >= 0) {
         request->result.retry_count++;
         request->result.collected_objects += collected;

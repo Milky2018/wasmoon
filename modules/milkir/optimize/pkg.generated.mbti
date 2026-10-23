@@ -10,6 +10,8 @@ pub fn canonicalize_nans(@milkir.Function) -> Unit
 
 pub fn clear_optimization_metrics_sink() -> Unit
 
+pub fn hoist_loop_invariants(@milkir.Function, guard_entries? : Bool) -> OptResult
+
 pub fn install_optimization_metrics_sink(OptimizationMetricsSink) -> Unit
 
 pub fn instruction_count(@milkir.Function) -> Int32

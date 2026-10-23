@@ -1,8 +1,7 @@
 ///|
-/// Bytes per GC field or array element, matching `GcSlot` in gc_heap.h.
-///
-/// Two words, so that a v128 fits. Everything else uses the low word and
-/// leaves the high one zero.
+/// Slot size for the legacy/wide adapter, matching `GcSlot` in gc_heap.h.
+/// Typed Store layouts use compact field widths instead. V128 occupies both
+/// words; legacy scalar values occupy the low word and clear the high word.
 const GC_SLOT_BYTES : Int32 = 16
 
 ///|
@@ -24,15 +23,9 @@ struct Environment {
 /// Helpers resolve the actual object layout once. Omitting the heap field
 /// retains the original helper ABI.
 ///
-/// `gc_array_regions` additionally opts into GcArrayDataHeap: it returns a
-/// nontrapping borrowed numeric-array query, or null to select checked helpers.
-/// Length is i32 at offset 0; elements begin at 16 with the requested stride.
-/// The compiler independently verifies that views cannot cross CFG
-/// joins/backedges without a loop proof, allocation, polling, reentry, unknown
-/// calls, or raw memory writes. Loop views require an array check or reference
-/// producer in the preheader and a no-safepoint proof for the whole cycle.
-/// The query must return null without trapping for absent heaps/references;
-/// actual array operations retain their checked fallback and first-access trap.
+/// `gc_array_regions` is the compatibility spelling of the native memory-SSA
+/// opt-in. It expands checked GC operations before generic optimization and
+/// independently verifies every physical borrow across the final CFG.
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
@@ -1023,12 +1016,12 @@ fn emit_runtime_word_buffer(
 }
 
 ///|
-fn lower_fixed_allocation(
+fn emit_fixed_allocation(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int32,
-) -> String? {
+) -> @lowering.Value {
   let types = context.operand_types()
   let mut has_vector = false
   for ty in types {
@@ -1060,7 +1053,20 @@ fn lower_fixed_allocation(
     operands,
     [Ptr64, I32, Ptr64, I32],
   )
-  finish_runtime_word(context, word)
+  word
+}
+
+///|
+fn lower_fixed_allocation(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  helper : @wasm_milkir.WasmRuntimeHelper,
+  type_index : Int32,
+) -> String? {
+  finish_runtime_word(
+    context,
+    emit_fixed_allocation(context, environment, helper, type_index),
+  )
   None
 }
 
@@ -1293,7 +1299,16 @@ fn lower_extension(
   context : @adapter.InstructionContext,
   extension : @milkir.ExtOp,
   environment : Environment,
+  validation_context : @wasm_milkir.WasmValidationContext,
 ) -> String? {
+  if decode_projection(extension) is Some(projection) {
+    if environment.gc_heap_field is None {
+      return Some("GC projection requires an explicit heap environment")
+    }
+    return lower_projection(
+      context, environment, projection, validation_context,
+    )
+  }
   let opcode = match @wasm_milkir.decode(extension) {
     Some(opcode) => opcode
     None => return Some("Wasm extension changed after successful validation")
@@ -1437,16 +1452,27 @@ fn lower_extension(
     ArrayNewDefault(type_index) =>
       lower_array_new(context, environment, type_index, true)
     StructNewDefault(type_index) => {
+      if lower_fast_struct(
+          context, environment, validation_context, type_index, true,
+        ) {
+        return None
+      }
       lower_struct_new_default(context, environment, type_index)
       None
     }
-    StructNew(type_index) =>
+    StructNew(type_index) => {
+      if lower_fast_struct(
+          context, environment, validation_context, type_index, false,
+        ) {
+        return None
+      }
       lower_fixed_allocation(
         context,
         environment,
         GcAllocStructSlow,
         type_index,
       )
+    }
     ArrayNewFixed(type_index, _) =>
       lower_fixed_allocation(
         context,
@@ -1589,49 +1615,20 @@ pub fn lower_to_sink(
   verify_input~ : Bool = true,
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
+  if environment.gc_array_regions && environment.gc_heap_field is Some(_) {
+    prepare_gc_memory(function, validation_context) catch {
+      error =>
+        raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
+    }
+  }
   fn validate(view : @milkir.ExtensionInstView) -> String? {
-    validation_context.validate_extension(view, function.results)
+    validate_memory_extension(view, validation_context, function.results)
   }
-  let accesses = if environment.gc_array_regions &&
-    environment.gc_heap_field is Some(_) {
-    plan_array_accesses(function, validation_context)
-  } else {
-    Map([])
-  }
-  if !accesses.is_empty() &&
-    !verify_array_accesses(function, validation_context, accesses) {
-    accesses.clear() // A failed proof permits only the checked helper path.
-  }
-  let origins = array_view_origins(function, accesses).unwrap()
-  let views : Map[Int32, (@lowering.Value, @lowering.Value)] = Map([])
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
   ) -> String? {
-    let result = if environment.gc_array_regions &&
-      environment.gc_heap_field is Some(_) &&
-      accesses.get(context.instruction_id()) is Some(access) {
-      lower_array_access(context, environment, access, views)
-    } else {
-      lower_extension(context, extension, environment)
-    }
-    if result is None &&
-      environment.gc_array_regions &&
-      environment.gc_heap_field is Some(_) &&
-      origins.get(context.instruction_id()) is Some((_, width)) &&
-      !views.contains(context.instruction_id()) {
-      views[context.instruction_id()] = prepare_array_view(
-        context,
-        environment,
-        width,
-        reference=if context.result_types() is [GcRef64] {
-          context.results().get(0)
-        } else {
-          None
-        },
-      )
-    }
-    result
+    lower_extension(context, extension, environment, validation_context)
   }
   fn validate_global(data : @milkir.GlobalValueData) -> String? {
     validation_context.validate_global_value(data)

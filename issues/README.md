@@ -699,6 +699,14 @@ graph TD
   ISS_659["ISS-659: Preserve native guest frame chains across resumable traps"]
   ISS_660["ISS-660: Reduce native regex execution and GC overhead"]
   ISS_661["ISS-661: Reduce native parse_double GC access overhead"]
+  ISS_662["ISS-662: Replace fragmented WasmGC lowering and root transport"]
+  ISS_663["ISS-663: Centralize WasmGC effects and representation admission"]
+  ISS_664["ISS-664: Lower GC accesses into optimizable memory SSA"]
+  ISS_665["ISS-665: Remove allocation-time root map parsing and temporary arrays"]
+  ISS_666["ISS-666: Replace guest-call root copying with allocated frame maps"]
+  ISS_667["ISS-667: Expose allocation fast paths and improve generic scalar lowering"]
+  ISS_668["ISS-668: Validate the unified GC compiler and remove superseded mechanisms"]
+  ISS_669["ISS-669: Profile and reduce residual parse_double compile and execution cost"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -1169,6 +1177,18 @@ graph TD
   ISS_653 --> ISS_654
   ISS_654 --> ISS_655
   ISS_658 --> ISS_659
+  ISS_663 --> ISS_664
+  ISS_663 --> ISS_665
+  ISS_664 --> ISS_666
+  ISS_665 --> ISS_666
+  ISS_664 --> ISS_667
+  ISS_665 --> ISS_667
+  ISS_663 --> ISS_668
+  ISS_664 --> ISS_668
+  ISS_665 --> ISS_668
+  ISS_666 --> ISS_668
+  ISS_667 --> ISS_668
+  ISS_662 --> ISS_669
 ```
 
 ## Warnings

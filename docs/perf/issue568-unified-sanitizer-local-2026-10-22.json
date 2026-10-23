@@ -1,0 +1,31 @@
+{
+  "version": "0.17.1",
+  "source_revision": "c7e407d5686a21dde271a240ca6f5b9a8f20352e",
+  "source_dirty": true,
+  "build_reuse": "fresh",
+  "binary_sha256": "6b8eb7c2c7302282bf574c65ebfa3eb96dd14a7a7eb6a0880a460d5a4dada28c",
+  "tests": "passed",
+  "event_loop": "passed",
+  "asan_probe": "detected",
+  "native_asan_probe": "detected",
+  "lsan_probe": "not_applicable",
+  "leak_detection": false,
+  "binary": "temporary instrumented executable; workspace removed after inspection",
+  "instrumentation": [
+    "address",
+    "undefined"
+  ],
+  "allocator": "system",
+  "exclusions": [
+    "MoonBit runtime objects",
+    "JIT machine code"
+  ],
+  "test_totals": [
+    {
+      "total": 284,
+      "passed": 284,
+      "failed": 0
+    }
+  ],
+  "ordinary_log_diagnostics": []
+}

@@ -37,17 +37,36 @@ pub fn CallerRootScopeAbi::new(
 }
 
 ///|
+pub struct FunctionRootFrameAbi {
+  priv enter_symbol : @native.ExternalSymbol
+  priv leave_symbol : @native.ExternalSymbol
+  priv environment_parameter : Int32
+}
+
+///|
+/// Stack-owned ABI: 32-byte opaque header, root words and precise mask words.
+pub fn FunctionRootFrameAbi::new(
+  enter_symbol : @native.ExternalSymbol,
+  leave_symbol : @native.ExternalSymbol,
+  environment_parameter~ : Int32 = 0,
+) -> FunctionRootFrameAbi {
+  { enter_symbol, leave_symbol, environment_parameter, }
+}
+
+///|
 pub struct CallAbiElaboration {
   priv root_scope : CallerRootScopeAbi?
+  priv function_frame : FunctionRootFrameAbi?
   priv hidden_safepoints : Array[HiddenSafepointAbi]
 }
 
 ///|
 pub fn CallAbiElaboration::new(
   root_scope? : CallerRootScopeAbi,
+  function_frame? : FunctionRootFrameAbi,
   hidden_safepoints~ : Array[HiddenSafepointAbi] = [],
 ) -> CallAbiElaboration {
-  { root_scope, hidden_safepoints: hidden_safepoints.copy(), }
+  { root_scope, function_frame, hidden_safepoints: hidden_safepoints.copy(), }
 }
 
 ///|

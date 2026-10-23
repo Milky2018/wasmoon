@@ -1,10 +1,7 @@
 ///|
-/// Validate Wasm contracts before eliminating any extension, then optimize.
-/// At O2/O3, promote private integer fields and forward checked GC reads.
-/// Optional scalar callees must be bodies from this exact module, keyed by
-/// linked function index, with the frontend's hidden environment parameter.
-/// Only short integer bodies without calls, polls or memory effects inline.
-/// GC read forwarding never crosses loop headers, merges or unknown effects.
+/// Verify semantic Wasm before inlining and private-field promotion. Native
+/// checked memory lowering and its general GVN/LICM run at the native seam;
+/// there are no independent GC read/loop caches here.
 pub fn optimize_with_level(
   function : @milkir.Function,
   context : @wasm_milkir.WasmValidationContext,
@@ -13,12 +10,7 @@ pub fn optimize_with_level(
 ) -> Bool raise @milkir.VerifyError {
   @wasm_milkir.verify_function_with_context(function, context)
   let inline_changed = if level is (O2 | O3) {
-    inline_scalar_calls(function, scalar_callees)
-  } else {
-    false
-  }
-  let gc_changed = if level is (O2 | O3) {
-    forward_gc_reads(function) > 0
+    inline_leaf_calls(function, scalar_callees)
   } else {
     false
   }
@@ -28,31 +20,9 @@ pub fn optimize_with_level(
   } else {
     false
   }
-  let loop_changed = if level is (O2 | O3) {
-    hoist_checked_gc_reads(function)
-  } else {
-    false
-  }
-  if local_changed || loop_changed {
-    // Private writes used to invalidate potentially aliasing field facts.
-    // Once those writes become SSA, revisit the surviving real heap reads.
-    forward_gc_reads(function) |> ignore
+  if local_changed {
     @wasm_milkir.verify_function_with_context(function, context)
     @generic.optimize_with_level(function, level) |> ignore
   }
-  let cached_changed = if level is (O2 | O3) {
-    cache_loop_gc_reads(function)
-  } else {
-    false
-  }
-  if cached_changed {
-    @wasm_milkir.verify_function_with_context(function, context)
-    @generic.optimize_with_level(function, level) |> ignore
-  }
-  cached_changed ||
-  inline_changed ||
-  gc_changed ||
-  generic_result.changed ||
-  local_changed ||
-  loop_changed
+  inline_changed || generic_result.changed || local_changed
 }

@@ -26,6 +26,7 @@ pub suberror GCMetadataError {
   InvalidTypeStride
   PayloadCountMismatch
   PayloadTooLarge
+  InvalidSafepointMap
 } derive(@debug.Debug)
 pub fn GCMetadataError::output(Self, &Logger) -> Unit
 pub fn GCMetadataError::to_repr(Self) -> @debug.Repr

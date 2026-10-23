@@ -1,0 +1,4678 @@
+{
+  "base_head": "c7e407d5686a21dde271a240ca6f5b9a8f20352e",
+  "source_dirty": true,
+  "platform": "macOS ARM64",
+  "binary_sha256": "47e3111cfceede34e1199ec159002c99c87a81ff50c759d4a85406600aaf8882",
+  "targets": [
+    {
+      "engine": "interpreter",
+      "files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "errors": 0,
+      "entries": [
+        {
+          "file": "tests/upstream/core-spec/address.wast",
+          "passed": 256,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/align.wast",
+          "passed": 140,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/annotations.wast",
+          "passed": 64,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/binary-leb128.wast",
+          "passed": 58,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/binary.wast",
+          "passed": 107,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/block.wast",
+          "passed": 222,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br.wast",
+          "passed": 96,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br_if.wast",
+          "passed": 118,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br_on_non_null.wast",
+          "passed": 9,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br_on_null.wast",
+          "passed": 7,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br_table.wast",
+          "passed": 185,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/bulk.wast",
+          "passed": 66,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/memory_copy.wast",
+          "passed": 4402,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/memory_fill.wast",
+          "passed": 84,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/memory_init.wast",
+          "passed": 207,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/table-sub.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/table_copy.wast",
+          "passed": 1649,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/table_fill.wast",
+          "passed": 44,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/table_init.wast",
+          "passed": 729,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/call.wast",
+          "passed": 90,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/call_indirect.wast",
+          "passed": 169,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/call_ref.wast",
+          "passed": 31,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/comments.wast",
+          "passed": 3,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/const.wast",
+          "passed": 376,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/conversions.wast",
+          "passed": 618,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/custom.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/data.wast",
+          "passed": 34,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/elem.wast",
+          "passed": 72,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/endianness.wast",
+          "passed": 68,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exceptions/tag.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exceptions/throw.wast",
+          "passed": 12,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exceptions/throw_ref.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exceptions/try_table.wast",
+          "passed": 58,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exports.wast",
+          "passed": 41,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f32.wast",
+          "passed": 2513,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f32_bitwise.wast",
+          "passed": 363,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f32_cmp.wast",
+          "passed": 2406,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f64.wast",
+          "passed": 2513,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f64_bitwise.wast",
+          "passed": 363,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f64_cmp.wast",
+          "passed": 2406,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/fac.wast",
+          "passed": 7,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/float_exprs.wast",
+          "passed": 819,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/float_literals.wast",
+          "passed": 177,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/float_memory.wast",
+          "passed": 60,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/float_misc.wast",
+          "passed": 470,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/forward.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/func.wast",
+          "passed": 171,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/func_ptrs.wast",
+          "passed": 32,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array.wast",
+          "passed": 47,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_copy.wast",
+          "passed": 34,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_fill.wast",
+          "passed": 29,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_init_data.wast",
+          "passed": 44,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_init_elem.wast",
+          "passed": 22,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_new_data.wast",
+          "passed": 23,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_new_elem.wast",
+          "passed": 18,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/binary-gc.wast",
+          "passed": 1,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/br_on_cast.wast",
+          "passed": 31,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/br_on_cast_fail.wast",
+          "passed": 31,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/extern.wast",
+          "passed": 16,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/i31.wast",
+          "passed": 57,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/ref_cast.wast",
+          "passed": 40,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/ref_eq.wast",
+          "passed": 87,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/ref_test.wast",
+          "passed": 68,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/struct.wast",
+          "passed": 24,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/type-subtyping.wast",
+          "passed": 61,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/global.wast",
+          "passed": 114,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/i32.wast",
+          "passed": 459,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/i64.wast",
+          "passed": 415,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/id.wast",
+          "passed": 6,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/if.wast",
+          "passed": 240,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/imports.wast",
+          "passed": 144,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/inline-module.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/instance.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/int_exprs.wast",
+          "passed": 89,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/int_literals.wast",
+          "passed": 50,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/labels.wast",
+          "passed": 28,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/left-to-right.wast",
+          "passed": 95,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/linking.wast",
+          "passed": 133,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/load.wast",
+          "passed": 96,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/local_get.wast",
+          "passed": 35,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/local_init.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/local_set.wast",
+          "passed": 52,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/local_tee.wast",
+          "passed": 97,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/loop.wast",
+          "passed": 119,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory.wast",
+          "passed": 79,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/address64.wast",
+          "passed": 238,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/align64.wast",
+          "passed": 131,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/binary_leb128_64.wast",
+          "passed": 1,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/bulk64.wast",
+          "passed": 45,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/call_indirect64.wast",
+          "passed": 1,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/endianness64.wast",
+          "passed": 68,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/float_memory64.wast",
+          "passed": 60,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/load64.wast",
+          "passed": 96,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory64-imports.wast",
+          "passed": 30,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory64.wast",
+          "passed": 60,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_copy64.wast",
+          "passed": 4402,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_fill64.wast",
+          "passed": 84,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_grow64.wast",
+          "passed": 45,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_init64.wast",
+          "passed": 207,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_redundancy64.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_trap64.wast",
+          "passed": 170,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table64.wast",
+          "passed": 3,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_copy64.wast",
+          "passed": 1649,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_copy_mixed.wast",
+          "passed": 3,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_fill64.wast",
+          "passed": 79,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_get64.wast",
+          "passed": 9,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_grow64.wast",
+          "passed": 21,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_init64.wast",
+          "passed": 819,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_set64.wast",
+          "passed": 18,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_size64.wast",
+          "passed": 36,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory_grow.wast",
+          "passed": 96,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory_redundancy.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory_size.wast",
+          "passed": 38,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory_trap.wast",
+          "passed": 180,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/address0.wast",
+          "passed": 91,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/address1.wast",
+          "passed": 126,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/align0.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/binary0.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/data0.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/data1.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/data_drop0.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/exports0.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/float_exprs0.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/float_exprs1.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/float_memory0.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports0.wast",
+          "passed": 6,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports1.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports2.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports3.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports4.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/linking0.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/linking1.wast",
+          "passed": 9,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/linking2.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/linking3.wast",
+          "passed": 10,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/load0.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/load1.wast",
+          "passed": 15,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/load2.wast",
+          "passed": 37,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory-multi.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_copy0.wast",
+          "passed": 21,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_copy1.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_fill0.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_grow.wast",
+          "passed": 47,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_init0.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size0.wast",
+          "passed": 7,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size1.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size2.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size3.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size_import.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_trap0.wast",
+          "passed": 13,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_trap1.wast",
+          "passed": 167,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/start0.wast",
+          "passed": 6,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/store0.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/store1.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/store2.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/traps0.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/names.wast",
+          "passed": 482,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/nop.wast",
+          "passed": 87,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/obsolete-keywords.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref.wast",
+          "passed": 12,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref_as_non_null.wast",
+          "passed": 5,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref_func.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref_is_null.wast",
+          "passed": 18,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref_null.wast",
+          "passed": 32,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/i32x4_relaxed_trunc.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/i8x16_relaxed_swizzle.wast",
+          "passed": 5,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/relaxed_dot_product.wast",
+          "passed": 10,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/relaxed_laneselect.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/relaxed_madd_nmadd.wast",
+          "passed": 17,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/relaxed_min_max.wast",
+          "passed": 24,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/return.wast",
+          "passed": 83,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/return_call.wast",
+          "passed": 44,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/return_call_indirect.wast",
+          "passed": 76,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/return_call_ref.wast",
+          "passed": 46,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/select.wast",
+          "passed": 154,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_address.wast",
+          "passed": 46,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_align.wast",
+          "passed": 54,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_bit_shift.wast",
+          "passed": 250,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_bitwise.wast",
+          "passed": 167,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_boolean.wast",
+          "passed": 275,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_const.wast",
+          "passed": 446,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_conversions.wast",
+          "passed": 280,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4.wast",
+          "passed": 788,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4_arith.wast",
+          "passed": 1819,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4_cmp.wast",
+          "passed": 2605,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4_pmin_pmax.wast",
+          "passed": 3886,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4_rounding.wast",
+          "passed": 200,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2.wast",
+          "passed": 801,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2_arith.wast",
+          "passed": 1822,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2_cmp.wast",
+          "passed": 2683,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2_pmin_pmax.wast",
+          "passed": 3886,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2_rounding.wast",
+          "passed": 200,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_arith.wast",
+          "passed": 192,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_arith2.wast",
+          "passed": 170,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_cmp.wast",
+          "passed": 463,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_extadd_pairwise_i8x16.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_extmul_i8x16.wast",
+          "passed": 116,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_q15mulr_sat_s.wast",
+          "passed": 29,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_sat_arith.wast",
+          "passed": 220,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_arith.wast",
+          "passed": 192,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_arith2.wast",
+          "passed": 147,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_cmp.wast",
+          "passed": 473,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_dot_i16x8.wast",
+          "passed": 31,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_extadd_pairwise_i16x8.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_extmul_i16x8.wast",
+          "passed": 116,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_trunc_sat_f32x4.wast",
+          "passed": 106,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_trunc_sat_f64x2.wast",
+          "passed": 106,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i64x2_arith.wast",
+          "passed": 198,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i64x2_arith2.wast",
+          "passed": 23,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i64x2_cmp.wast",
+          "passed": 112,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i64x2_extmul_i32x4.wast",
+          "passed": 116,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i8x16_arith.wast",
+          "passed": 129,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i8x16_arith2.wast",
+          "passed": 209,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i8x16_cmp.wast",
+          "passed": 443,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i8x16_sat_arith.wast",
+          "passed": 212,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_int_to_int_extend.wast",
+          "passed": 252,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_lane.wast",
+          "passed": 463,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_linking.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load.wast",
+          "passed": 25,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load16_lane.wast",
+          "passed": 35,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load32_lane.wast",
+          "passed": 23,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load64_lane.wast",
+          "passed": 15,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load8_lane.wast",
+          "passed": 51,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load_extend.wast",
+          "passed": 102,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load_splat.wast",
+          "passed": 124,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load_zero.wast",
+          "passed": 37,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_memory-multi.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_select.wast",
+          "passed": 6,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_splat.wast",
+          "passed": 181,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store.wast",
+          "passed": 26,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store16_lane.wast",
+          "passed": 35,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store32_lane.wast",
+          "passed": 23,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store64_lane.wast",
+          "passed": 15,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store8_lane.wast",
+          "passed": 51,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/skip-stack-guard-page.wast",
+          "passed": 10,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/stack.wast",
+          "passed": 5,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/start.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/store.wast",
+          "passed": 67,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/switch.wast",
+          "passed": 27,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table.wast",
+          "passed": 28,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table_get.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table_grow.wast",
+          "passed": 48,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table_set.wast",
+          "passed": 25,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table_size.wast",
+          "passed": 38,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/token.wast",
+          "passed": 26,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/traps.wast",
+          "passed": 32,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/type-canon.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/type-equivalence.wast",
+          "passed": 5,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/type-rec.wast",
+          "passed": 15,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/type.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/unreachable.wast",
+          "passed": 63,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/unreached-invalid.wast",
+          "passed": 121,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/unreached-valid.wast",
+          "passed": 10,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/unwind.wast",
+          "passed": 49,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/utf8-custom-section-id.wast",
+          "passed": 176,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/utf8-import-field.wast",
+          "passed": 176,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/utf8-import-module.wast",
+          "passed": 176,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/utf8-invalid-encoding.wast",
+          "passed": 176,
+          "failed": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "engine": "jit",
+      "files": 258,
+      "passed": 62563,
+      "failed": 0,
+      "errors": 0,
+      "entries": [
+        {
+          "file": "tests/upstream/core-spec/address.wast",
+          "passed": 256,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/align.wast",
+          "passed": 140,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/annotations.wast",
+          "passed": 64,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/binary-leb128.wast",
+          "passed": 58,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/binary.wast",
+          "passed": 107,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/block.wast",
+          "passed": 222,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br.wast",
+          "passed": 96,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br_if.wast",
+          "passed": 118,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br_on_non_null.wast",
+          "passed": 9,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br_on_null.wast",
+          "passed": 7,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/br_table.wast",
+          "passed": 185,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/bulk.wast",
+          "passed": 66,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/memory_copy.wast",
+          "passed": 4402,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/memory_fill.wast",
+          "passed": 84,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/memory_init.wast",
+          "passed": 207,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/table-sub.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/table_copy.wast",
+          "passed": 1649,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/table_fill.wast",
+          "passed": 44,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/bulk-memory/table_init.wast",
+          "passed": 729,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/call.wast",
+          "passed": 90,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/call_indirect.wast",
+          "passed": 169,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/call_ref.wast",
+          "passed": 31,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/comments.wast",
+          "passed": 3,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/const.wast",
+          "passed": 376,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/conversions.wast",
+          "passed": 618,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/custom.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/data.wast",
+          "passed": 34,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/elem.wast",
+          "passed": 72,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/endianness.wast",
+          "passed": 68,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exceptions/tag.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exceptions/throw.wast",
+          "passed": 12,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exceptions/throw_ref.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exceptions/try_table.wast",
+          "passed": 58,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/exports.wast",
+          "passed": 41,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f32.wast",
+          "passed": 2513,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f32_bitwise.wast",
+          "passed": 363,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f32_cmp.wast",
+          "passed": 2406,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f64.wast",
+          "passed": 2513,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f64_bitwise.wast",
+          "passed": 363,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/f64_cmp.wast",
+          "passed": 2406,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/fac.wast",
+          "passed": 7,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/float_exprs.wast",
+          "passed": 819,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/float_literals.wast",
+          "passed": 177,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/float_memory.wast",
+          "passed": 60,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/float_misc.wast",
+          "passed": 470,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/forward.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/func.wast",
+          "passed": 171,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/func_ptrs.wast",
+          "passed": 32,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array.wast",
+          "passed": 47,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_copy.wast",
+          "passed": 34,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_fill.wast",
+          "passed": 29,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_init_data.wast",
+          "passed": 44,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_init_elem.wast",
+          "passed": 22,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_new_data.wast",
+          "passed": 23,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/array_new_elem.wast",
+          "passed": 18,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/binary-gc.wast",
+          "passed": 1,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/br_on_cast.wast",
+          "passed": 31,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/br_on_cast_fail.wast",
+          "passed": 31,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/extern.wast",
+          "passed": 16,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/i31.wast",
+          "passed": 57,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/ref_cast.wast",
+          "passed": 40,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/ref_eq.wast",
+          "passed": 87,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/ref_test.wast",
+          "passed": 68,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/struct.wast",
+          "passed": 24,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/gc/type-subtyping.wast",
+          "passed": 61,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/global.wast",
+          "passed": 114,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/i32.wast",
+          "passed": 459,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/i64.wast",
+          "passed": 415,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/id.wast",
+          "passed": 6,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/if.wast",
+          "passed": 240,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/imports.wast",
+          "passed": 144,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/inline-module.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/instance.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/int_exprs.wast",
+          "passed": 89,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/int_literals.wast",
+          "passed": 50,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/labels.wast",
+          "passed": 28,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/left-to-right.wast",
+          "passed": 95,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/linking.wast",
+          "passed": 133,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/load.wast",
+          "passed": 96,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/local_get.wast",
+          "passed": 35,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/local_init.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/local_set.wast",
+          "passed": 52,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/local_tee.wast",
+          "passed": 97,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/loop.wast",
+          "passed": 119,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory.wast",
+          "passed": 79,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/address64.wast",
+          "passed": 238,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/align64.wast",
+          "passed": 131,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/binary_leb128_64.wast",
+          "passed": 1,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/bulk64.wast",
+          "passed": 45,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/call_indirect64.wast",
+          "passed": 1,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/endianness64.wast",
+          "passed": 68,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/float_memory64.wast",
+          "passed": 60,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/load64.wast",
+          "passed": 96,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory64-imports.wast",
+          "passed": 30,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory64.wast",
+          "passed": 60,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_copy64.wast",
+          "passed": 4402,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_fill64.wast",
+          "passed": 84,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_grow64.wast",
+          "passed": 45,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_init64.wast",
+          "passed": 207,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_redundancy64.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/memory_trap64.wast",
+          "passed": 170,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table64.wast",
+          "passed": 3,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_copy64.wast",
+          "passed": 1649,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_copy_mixed.wast",
+          "passed": 3,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_fill64.wast",
+          "passed": 79,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_get64.wast",
+          "passed": 9,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_grow64.wast",
+          "passed": 21,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_init64.wast",
+          "passed": 819,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_set64.wast",
+          "passed": 18,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory64/table_size64.wast",
+          "passed": 36,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory_grow.wast",
+          "passed": 96,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory_redundancy.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory_size.wast",
+          "passed": 38,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/memory_trap.wast",
+          "passed": 180,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/address0.wast",
+          "passed": 91,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/address1.wast",
+          "passed": 126,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/align0.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/binary0.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/data0.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/data1.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/data_drop0.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/exports0.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/float_exprs0.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/float_exprs1.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/float_memory0.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports0.wast",
+          "passed": 6,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports1.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports2.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports3.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/imports4.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/linking0.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/linking1.wast",
+          "passed": 9,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/linking2.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/linking3.wast",
+          "passed": 10,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/load0.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/load1.wast",
+          "passed": 15,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/load2.wast",
+          "passed": 37,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory-multi.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_copy0.wast",
+          "passed": 21,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_copy1.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_fill0.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_grow.wast",
+          "passed": 47,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_init0.wast",
+          "passed": 8,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size0.wast",
+          "passed": 7,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size1.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size2.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size3.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_size_import.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_trap0.wast",
+          "passed": 13,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/memory_trap1.wast",
+          "passed": 167,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/start0.wast",
+          "passed": 6,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/store0.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/store1.wast",
+          "passed": 4,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/store2.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/multi-memory/traps0.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/names.wast",
+          "passed": 482,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/nop.wast",
+          "passed": 87,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/obsolete-keywords.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref.wast",
+          "passed": 12,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref_as_non_null.wast",
+          "passed": 5,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref_func.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref_is_null.wast",
+          "passed": 18,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/ref_null.wast",
+          "passed": 32,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/i32x4_relaxed_trunc.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/i8x16_relaxed_swizzle.wast",
+          "passed": 5,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/relaxed_dot_product.wast",
+          "passed": 10,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/relaxed_laneselect.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/relaxed_madd_nmadd.wast",
+          "passed": 17,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/relaxed-simd/relaxed_min_max.wast",
+          "passed": 24,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/return.wast",
+          "passed": 83,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/return_call.wast",
+          "passed": 44,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/return_call_indirect.wast",
+          "passed": 76,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/return_call_ref.wast",
+          "passed": 46,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/select.wast",
+          "passed": 154,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_address.wast",
+          "passed": 46,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_align.wast",
+          "passed": 54,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_bit_shift.wast",
+          "passed": 250,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_bitwise.wast",
+          "passed": 167,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_boolean.wast",
+          "passed": 275,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_const.wast",
+          "passed": 446,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_conversions.wast",
+          "passed": 280,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4.wast",
+          "passed": 788,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4_arith.wast",
+          "passed": 1819,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4_cmp.wast",
+          "passed": 2605,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4_pmin_pmax.wast",
+          "passed": 3886,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f32x4_rounding.wast",
+          "passed": 200,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2.wast",
+          "passed": 801,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2_arith.wast",
+          "passed": 1822,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2_cmp.wast",
+          "passed": 2683,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2_pmin_pmax.wast",
+          "passed": 3886,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_f64x2_rounding.wast",
+          "passed": 200,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_arith.wast",
+          "passed": 192,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_arith2.wast",
+          "passed": 170,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_cmp.wast",
+          "passed": 463,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_extadd_pairwise_i8x16.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_extmul_i8x16.wast",
+          "passed": 116,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_q15mulr_sat_s.wast",
+          "passed": 29,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i16x8_sat_arith.wast",
+          "passed": 220,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_arith.wast",
+          "passed": 192,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_arith2.wast",
+          "passed": 147,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_cmp.wast",
+          "passed": 473,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_dot_i16x8.wast",
+          "passed": 31,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_extadd_pairwise_i16x8.wast",
+          "passed": 20,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_extmul_i16x8.wast",
+          "passed": 116,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_trunc_sat_f32x4.wast",
+          "passed": 106,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i32x4_trunc_sat_f64x2.wast",
+          "passed": 106,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i64x2_arith.wast",
+          "passed": 198,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i64x2_arith2.wast",
+          "passed": 23,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i64x2_cmp.wast",
+          "passed": 112,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i64x2_extmul_i32x4.wast",
+          "passed": 116,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i8x16_arith.wast",
+          "passed": 129,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i8x16_arith2.wast",
+          "passed": 209,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i8x16_cmp.wast",
+          "passed": 443,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_i8x16_sat_arith.wast",
+          "passed": 212,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_int_to_int_extend.wast",
+          "passed": 252,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_lane.wast",
+          "passed": 463,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_linking.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load.wast",
+          "passed": 25,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load16_lane.wast",
+          "passed": 35,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load32_lane.wast",
+          "passed": 23,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load64_lane.wast",
+          "passed": 15,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load8_lane.wast",
+          "passed": 51,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load_extend.wast",
+          "passed": 102,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load_splat.wast",
+          "passed": 124,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_load_zero.wast",
+          "passed": 37,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_memory-multi.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_select.wast",
+          "passed": 6,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_splat.wast",
+          "passed": 181,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store.wast",
+          "passed": 26,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store16_lane.wast",
+          "passed": 35,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store32_lane.wast",
+          "passed": 23,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store64_lane.wast",
+          "passed": 15,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/simd/simd_store8_lane.wast",
+          "passed": 51,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/skip-stack-guard-page.wast",
+          "passed": 10,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/stack.wast",
+          "passed": 5,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/start.wast",
+          "passed": 11,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/store.wast",
+          "passed": 67,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/switch.wast",
+          "passed": 27,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table.wast",
+          "passed": 28,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table_get.wast",
+          "passed": 14,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table_grow.wast",
+          "passed": 48,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table_set.wast",
+          "passed": 25,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/table_size.wast",
+          "passed": 38,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/token.wast",
+          "passed": 26,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/traps.wast",
+          "passed": 32,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/type-canon.wast",
+          "passed": 0,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/type-equivalence.wast",
+          "passed": 5,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/type-rec.wast",
+          "passed": 15,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/type.wast",
+          "passed": 2,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/unreachable.wast",
+          "passed": 63,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/unreached-invalid.wast",
+          "passed": 121,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/unreached-valid.wast",
+          "passed": 10,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/unwind.wast",
+          "passed": 49,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/utf8-custom-section-id.wast",
+          "passed": 176,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/utf8-import-field.wast",
+          "passed": 176,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/utf8-import-module.wast",
+          "passed": 176,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "file": "tests/upstream/core-spec/utf8-invalid-encoding.wast",
+          "passed": 176,
+          "failed": 0,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "portable_actual_wasm": {
+    "files": 258,
+    "passed": 62563,
+    "failed": 0,
+    "unsupported": 0,
+    "entries": [
+      {
+        "file": "tests/upstream/core-spec/address.wast",
+        "passed": 256,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/align.wast",
+        "passed": 140,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/annotations.wast",
+        "passed": 64,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/binary-leb128.wast",
+        "passed": 58,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/binary.wast",
+        "passed": 107,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/block.wast",
+        "passed": 222,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/br.wast",
+        "passed": 96,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/br_if.wast",
+        "passed": 118,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/br_on_non_null.wast",
+        "passed": 9,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/br_on_null.wast",
+        "passed": 7,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/br_table.wast",
+        "passed": 185,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/bulk-memory/bulk.wast",
+        "passed": 66,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/bulk-memory/memory_copy.wast",
+        "passed": 4402,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/bulk-memory/memory_fill.wast",
+        "passed": 84,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/bulk-memory/memory_init.wast",
+        "passed": 207,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/bulk-memory/table-sub.wast",
+        "passed": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/bulk-memory/table_copy.wast",
+        "passed": 1649,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/bulk-memory/table_fill.wast",
+        "passed": 44,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/bulk-memory/table_init.wast",
+        "passed": 729,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/call.wast",
+        "passed": 90,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/call_indirect.wast",
+        "passed": 169,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/call_ref.wast",
+        "passed": 31,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/comments.wast",
+        "passed": 3,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/const.wast",
+        "passed": 376,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/conversions.wast",
+        "passed": 618,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/custom.wast",
+        "passed": 8,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/data.wast",
+        "passed": 34,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/elem.wast",
+        "passed": 72,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/endianness.wast",
+        "passed": 68,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/exceptions/tag.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/exceptions/throw.wast",
+        "passed": 12,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/exceptions/throw_ref.wast",
+        "passed": 14,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/exceptions/try_table.wast",
+        "passed": 58,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/exports.wast",
+        "passed": 41,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/f32.wast",
+        "passed": 2513,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/f32_bitwise.wast",
+        "passed": 363,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/f32_cmp.wast",
+        "passed": 2406,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/f64.wast",
+        "passed": 2513,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/f64_bitwise.wast",
+        "passed": 363,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/f64_cmp.wast",
+        "passed": 2406,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/fac.wast",
+        "passed": 7,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/float_exprs.wast",
+        "passed": 819,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/float_literals.wast",
+        "passed": 177,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/float_memory.wast",
+        "passed": 60,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/float_misc.wast",
+        "passed": 470,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/forward.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/func.wast",
+        "passed": 171,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/func_ptrs.wast",
+        "passed": 32,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/array.wast",
+        "passed": 47,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/array_copy.wast",
+        "passed": 34,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/array_fill.wast",
+        "passed": 29,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/array_init_data.wast",
+        "passed": 44,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/array_init_elem.wast",
+        "passed": 22,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/array_new_data.wast",
+        "passed": 23,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/array_new_elem.wast",
+        "passed": 18,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/binary-gc.wast",
+        "passed": 1,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/br_on_cast.wast",
+        "passed": 31,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/br_on_cast_fail.wast",
+        "passed": 31,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/extern.wast",
+        "passed": 16,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/i31.wast",
+        "passed": 57,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/ref_cast.wast",
+        "passed": 40,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/ref_eq.wast",
+        "passed": 87,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/ref_test.wast",
+        "passed": 68,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/struct.wast",
+        "passed": 24,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/gc/type-subtyping.wast",
+        "passed": 61,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/global.wast",
+        "passed": 114,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/i32.wast",
+        "passed": 459,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/i64.wast",
+        "passed": 415,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/id.wast",
+        "passed": 6,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/if.wast",
+        "passed": 240,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/imports.wast",
+        "passed": 144,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/inline-module.wast",
+        "passed": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/instance.wast",
+        "passed": 14,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/int_exprs.wast",
+        "passed": 89,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/int_literals.wast",
+        "passed": 50,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/labels.wast",
+        "passed": 28,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/left-to-right.wast",
+        "passed": 95,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/linking.wast",
+        "passed": 133,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/load.wast",
+        "passed": 96,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/local_get.wast",
+        "passed": 35,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/local_init.wast",
+        "passed": 8,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/local_set.wast",
+        "passed": 52,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/local_tee.wast",
+        "passed": 97,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/loop.wast",
+        "passed": 119,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory.wast",
+        "passed": 79,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/address64.wast",
+        "passed": 238,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/align64.wast",
+        "passed": 131,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/binary_leb128_64.wast",
+        "passed": 1,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/bulk64.wast",
+        "passed": 45,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/call_indirect64.wast",
+        "passed": 1,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/endianness64.wast",
+        "passed": 68,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/float_memory64.wast",
+        "passed": 60,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/load64.wast",
+        "passed": 96,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/memory64-imports.wast",
+        "passed": 30,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/memory64.wast",
+        "passed": 60,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/memory_copy64.wast",
+        "passed": 4402,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/memory_fill64.wast",
+        "passed": 84,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/memory_grow64.wast",
+        "passed": 45,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/memory_init64.wast",
+        "passed": 207,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/memory_redundancy64.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/memory_trap64.wast",
+        "passed": 170,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table64.wast",
+        "passed": 3,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table_copy64.wast",
+        "passed": 1649,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table_copy_mixed.wast",
+        "passed": 3,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table_fill64.wast",
+        "passed": 79,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table_get64.wast",
+        "passed": 9,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table_grow64.wast",
+        "passed": 21,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table_init64.wast",
+        "passed": 819,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table_set64.wast",
+        "passed": 18,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory64/table_size64.wast",
+        "passed": 36,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory_grow.wast",
+        "passed": 96,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory_redundancy.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory_size.wast",
+        "passed": 38,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/memory_trap.wast",
+        "passed": 180,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/address0.wast",
+        "passed": 91,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/address1.wast",
+        "passed": 126,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/align0.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/binary0.wast",
+        "passed": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/data0.wast",
+        "passed": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/data1.wast",
+        "passed": 14,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/data_drop0.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/exports0.wast",
+        "passed": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/float_exprs0.wast",
+        "passed": 8,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/float_exprs1.wast",
+        "passed": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/float_memory0.wast",
+        "passed": 20,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/imports0.wast",
+        "passed": 6,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/imports1.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/imports2.wast",
+        "passed": 14,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/imports3.wast",
+        "passed": 8,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/imports4.wast",
+        "passed": 8,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/linking0.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/linking1.wast",
+        "passed": 9,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/linking2.wast",
+        "passed": 8,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/linking3.wast",
+        "passed": 10,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/load0.wast",
+        "passed": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/load1.wast",
+        "passed": 15,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/load2.wast",
+        "passed": 37,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory-multi.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_copy0.wast",
+        "passed": 21,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_copy1.wast",
+        "passed": 8,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_fill0.wast",
+        "passed": 11,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_grow.wast",
+        "passed": 47,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_init0.wast",
+        "passed": 8,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_size0.wast",
+        "passed": 7,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_size1.wast",
+        "passed": 14,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_size2.wast",
+        "passed": 20,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_size3.wast",
+        "passed": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_size_import.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_trap0.wast",
+        "passed": 13,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/memory_trap1.wast",
+        "passed": 167,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/start0.wast",
+        "passed": 6,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/store0.wast",
+        "passed": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/store1.wast",
+        "passed": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/store2.wast",
+        "passed": 20,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/multi-memory/traps0.wast",
+        "passed": 14,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/names.wast",
+        "passed": 482,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/nop.wast",
+        "passed": 87,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/obsolete-keywords.wast",
+        "passed": 11,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/ref.wast",
+        "passed": 12,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/ref_as_non_null.wast",
+        "passed": 5,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/ref_func.wast",
+        "passed": 11,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/ref_is_null.wast",
+        "passed": 18,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/ref_null.wast",
+        "passed": 32,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
+        "passed": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/relaxed-simd/i32x4_relaxed_trunc.wast",
+        "passed": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/relaxed-simd/i8x16_relaxed_swizzle.wast",
+        "passed": 5,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/relaxed-simd/relaxed_dot_product.wast",
+        "passed": 10,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/relaxed-simd/relaxed_laneselect.wast",
+        "passed": 11,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/relaxed-simd/relaxed_madd_nmadd.wast",
+        "passed": 17,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/relaxed-simd/relaxed_min_max.wast",
+        "passed": 24,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/return.wast",
+        "passed": 83,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/return_call.wast",
+        "passed": 44,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/return_call_indirect.wast",
+        "passed": 76,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/return_call_ref.wast",
+        "passed": 46,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/select.wast",
+        "passed": 154,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_address.wast",
+        "passed": 46,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_align.wast",
+        "passed": 54,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_bit_shift.wast",
+        "passed": 250,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_bitwise.wast",
+        "passed": 167,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_boolean.wast",
+        "passed": 275,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_const.wast",
+        "passed": 446,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_conversions.wast",
+        "passed": 280,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f32x4.wast",
+        "passed": 788,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f32x4_arith.wast",
+        "passed": 1819,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f32x4_cmp.wast",
+        "passed": 2605,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f32x4_pmin_pmax.wast",
+        "passed": 3886,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f32x4_rounding.wast",
+        "passed": 200,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f64x2.wast",
+        "passed": 801,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f64x2_arith.wast",
+        "passed": 1822,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f64x2_cmp.wast",
+        "passed": 2683,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f64x2_pmin_pmax.wast",
+        "passed": 3886,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_f64x2_rounding.wast",
+        "passed": 200,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i16x8_arith.wast",
+        "passed": 192,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i16x8_arith2.wast",
+        "passed": 170,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i16x8_cmp.wast",
+        "passed": 463,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i16x8_extadd_pairwise_i8x16.wast",
+        "passed": 20,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i16x8_extmul_i8x16.wast",
+        "passed": 116,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i16x8_q15mulr_sat_s.wast",
+        "passed": 29,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i16x8_sat_arith.wast",
+        "passed": 220,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i32x4_arith.wast",
+        "passed": 192,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i32x4_arith2.wast",
+        "passed": 147,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i32x4_cmp.wast",
+        "passed": 473,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i32x4_dot_i16x8.wast",
+        "passed": 31,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i32x4_extadd_pairwise_i16x8.wast",
+        "passed": 20,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i32x4_extmul_i16x8.wast",
+        "passed": 116,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i32x4_trunc_sat_f32x4.wast",
+        "passed": 106,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i32x4_trunc_sat_f64x2.wast",
+        "passed": 106,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i64x2_arith.wast",
+        "passed": 198,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i64x2_arith2.wast",
+        "passed": 23,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i64x2_cmp.wast",
+        "passed": 112,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i64x2_extmul_i32x4.wast",
+        "passed": 116,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i8x16_arith.wast",
+        "passed": 129,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i8x16_arith2.wast",
+        "passed": 209,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i8x16_cmp.wast",
+        "passed": 443,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_i8x16_sat_arith.wast",
+        "passed": 212,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_int_to_int_extend.wast",
+        "passed": 252,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_lane.wast",
+        "passed": 463,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_linking.wast",
+        "passed": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_load.wast",
+        "passed": 25,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_load16_lane.wast",
+        "passed": 35,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_load32_lane.wast",
+        "passed": 23,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_load64_lane.wast",
+        "passed": 15,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_load8_lane.wast",
+        "passed": 51,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_load_extend.wast",
+        "passed": 102,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_load_splat.wast",
+        "passed": 124,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_load_zero.wast",
+        "passed": 37,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_memory-multi.wast",
+        "passed": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_select.wast",
+        "passed": 6,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_splat.wast",
+        "passed": 181,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_store.wast",
+        "passed": 26,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_store16_lane.wast",
+        "passed": 35,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_store32_lane.wast",
+        "passed": 23,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_store64_lane.wast",
+        "passed": 15,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/simd/simd_store8_lane.wast",
+        "passed": 51,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/skip-stack-guard-page.wast",
+        "passed": 10,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/stack.wast",
+        "passed": 5,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/start.wast",
+        "passed": 11,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/store.wast",
+        "passed": 67,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/switch.wast",
+        "passed": 27,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/table.wast",
+        "passed": 28,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/table_get.wast",
+        "passed": 14,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/table_grow.wast",
+        "passed": 48,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/table_set.wast",
+        "passed": 25,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/table_size.wast",
+        "passed": 38,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/token.wast",
+        "passed": 26,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/traps.wast",
+        "passed": 32,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/type-canon.wast",
+        "passed": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/type-equivalence.wast",
+        "passed": 5,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/type-rec.wast",
+        "passed": 15,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/type.wast",
+        "passed": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/unreachable.wast",
+        "passed": 63,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/unreached-invalid.wast",
+        "passed": 121,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/unreached-valid.wast",
+        "passed": 10,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/unwind.wast",
+        "passed": 49,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/utf8-custom-section-id.wast",
+        "passed": 176,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/utf8-import-field.wast",
+        "passed": 176,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/utf8-import-module.wast",
+        "passed": 176,
+        "failed": 0,
+        "unsupported": 0
+      },
+      {
+        "file": "tests/upstream/core-spec/utf8-invalid-encoding.wast",
+        "passed": 176,
+        "failed": 0,
+        "unsupported": 0
+      }
+    ]
+  }
+}

@@ -27,7 +27,7 @@ import {
 // Values
 pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
 
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-17"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-18"
 
 pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 

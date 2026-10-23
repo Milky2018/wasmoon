@@ -1555,6 +1555,18 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_pop_root_scope_ptr(void) {
     return WASMOON_GUEST_ADDRESS(wasmoon_jit_gc_pop_root_scope_or_trap);
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_function_frame_enter_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(gc_function_frame_enter_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_function_frame_leave_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(gc_function_frame_leave_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_reserve_struct_fast_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(gc_reserve_struct_fast_impl);
+}
+
 // ============ Type Cache Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(
@@ -2150,4 +2162,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_len_heap_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_array_data_heap_ptr(void) {
  return WASMOON_GUEST_ADDRESS(gc_array_data_heap_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_struct_data_ptr(void) {
+ return WASMOON_GUEST_ADDRESS(gc_struct_data_impl);
 }

@@ -325,6 +325,10 @@ int32_t ctx_gc_set_root_scratch_internal(
     const int64_t *roots,
     int32_t root_count
 );
+int32_t gc_collect_for_alloc_indexed_internal(
+    jit_context_t *ctx, const int64_t *roots, int32_t root_count,
+    const uint8_t *indices
+);
 int32_t gc_collect_for_alloc_internal(
     jit_context_t *ctx,
     const int64_t *roots,
@@ -387,6 +391,7 @@ typedef struct exception_handler {
     struct exception_handler *prev;    // Outer handler (linked list)
     int32_t handler_id;                // Unique ID for this handler
     wasmoon_gc_root_scope_t *gc_root_scope_marker;
+    wasmoon_gc_function_frame_t *gc_function_frame_marker;
 } exception_handler_t;
 
 // Managed callbacks stage exceptions; only native guest frames may unwind.
@@ -421,13 +426,22 @@ static inline jit_context_t *get_current_jit_context_fast(void) {
     return activation->active ? activation->context : NULL;
 }
 
+// Enumerate stack-owned precise function roots for GC, parking and rollback.
+int32_t jit_copy_function_frame_roots(const jit_execution_state_t *state, int64_t *destination);
+void WASMOON_GUEST_ABI gc_function_frame_enter_impl(jit_context_t *ctx, wasmoon_gc_function_frame_t *frame,
+    const int64_t *roots, const uint64_t *mask, int32_t slot_count);
+void WASMOON_GUEST_ABI gc_function_frame_leave_impl(jit_context_t *ctx, wasmoon_gc_function_frame_t *frame);
+
 // ============ GC Operations (gc_ops.c) ============
+int64_t WASMOON_GUEST_ABI gc_reserve_struct_fast_impl(jit_context_t *ctx, int32_t local_type,
+    int32_t count, uint64_t shape, int32_t total_size, int64_t *ticket);
 
 // GC operation implementations
 int64_t WASMOON_GUEST_ABI gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields);
 int64_t WASMOON_GUEST_ABI gc_struct_get_heap_impl(GcHeap *heap, int64_t ref, int32_t field_idx);
 void WASMOON_GUEST_ABI gc_struct_set_heap_impl(GcHeap *heap, int64_t ref, int32_t field_idx, int64_t value);
 void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32_t width);
+void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int32_t type_idx, uint64_t shape, int32_t fields);
 int64_t WASMOON_GUEST_ABI gc_array_get_heap_impl(GcHeap *heap, int64_t ref, int32_t idx);
 void WASMOON_GUEST_ABI gc_array_set_heap_impl(GcHeap *heap, int64_t ref, int32_t idx, int64_t value);
 int32_t WASMOON_GUEST_ABI gc_array_len_heap_impl(GcHeap *heap, int64_t ref);

@@ -116,9 +116,9 @@ fn wasmoon_call_abi(
     )
   }
   @native_lowering.CallAbiElaboration::new(
-    root_scope=@native_lowering.CallerRootScopeAbi::new(
-      @native.ExternalSymbol::new(gc_push_root_scope_symbol()),
-      @native.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+    function_frame=@native_lowering.FunctionRootFrameAbi::new(
+      @native.ExternalSymbol::new(gc_function_frame_enter_symbol()),
+      @native.ExternalSymbol::new(gc_function_frame_leave_symbol()),
     ),
     hidden_safepoints~,
   )

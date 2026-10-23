@@ -44,6 +44,11 @@ int32_t wasmoon_gc_heap_define_layout(GcHeap *heap, int32_t identity,
         if (size + width > INT32_MAX) { free(layout); return 0; }
         layout->fields[i] = (GcFieldLayout){(int32_t)size, width, codes[i] == -9 ? 2 : codes[i] < 0};
         layout->reference_count += codes[i] < 0;
+        if (i < 16) {
+            uint64_t code = width == 1 ? 1 : width == 2 ? 2 : width == 4 ? 3 : width == 8 ? 4 : 5;
+            if (codes[i] < 0) code |= 8;
+            layout->prefix_shape |= code << (i * 4);
+        }
         size += width;
     }
     layout->size = (int32_t)size;

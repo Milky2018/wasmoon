@@ -31,6 +31,9 @@ typedef struct gc_allocation_request_t {
     GcSlot init;
     const int64_t *roots;
     int32_t root_count;
+    // Optional borrowed little-endian indices into roots. Only collection
+    // materializes these operands; successful allocation does not copy them.
+    const uint8_t *root_indices;
     gc_alloc_result_t result;
 } gc_allocation_request_t;
 

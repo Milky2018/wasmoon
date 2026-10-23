@@ -1,44 +1,39 @@
 ///|
-fn scalar_template(function : @milkir.Function) -> Bool {
+fn leaf_cost(function : @milkir.Function) -> Int32? {
   if function.blocks.length() != 1 ||
     function.params.is_empty() ||
-    function.results.length() != 1 ||
-    !(function.results[0] is (I32 | I64)) {
-    return false
+    function.results.length() != 1 {
+    return None
   }
   let block = function.blocks[0]
-  if !block.params.is_empty() ||
-    block.instruction_count() > 8 ||
-    !(block.terminator is Some(Return([_]))) {
-    return false
-  }
-  for (_, ty) in function.params[1:] {
-    if !(ty is (I32 | I64)) {
-      return false
-    }
+  if !block.params.is_empty() || !(block.terminator is Some(Return([_]))) {
+    return None
   }
   let environment = function.params[0].0
+  let mut cost = 0
   for id in function.block_instruction_ids(block) {
     let inst = function.instruction_by_id(id).unwrap()
-    // Integer-only scalar operations neither allocate nor call the host.
-    // Polls, memory, globals, references and dialect extensions are excluded.
-    if !(inst.opcode is Scalar(_)) || !(inst.results is [_]) {
-      return false
+    cost += match inst.opcode {
+      Scalar(IntBinary(SignedDiv | UnsignedDiv | SignedRem | UnsignedRem)) => 12
+      Scalar(_) => 1
+      Vector(_) => 4
+      _ => return None
     }
-    for value in inst.args + inst.results {
-      if !(value.ty is (I32 | I64)) || value == environment {
-        return false
-      }
+    if !(inst.results is [_]) || inst.args.any(value => value == environment) {
+      return None
+    }
+    if cost > 24 {
+      return None
     }
   }
   if block.terminator is Some(Return([result])) && result == environment {
-    return false
+    return None
   }
-  true
+  Some(cost.max(1))
 }
 
 ///|
-fn inline_scalar_calls(
+fn inline_leaf_calls(
   function : @milkir.Function,
   callees : Map[Int32, @milkir.Function],
 ) -> Bool raise @milkir.VerifyError {
@@ -54,7 +49,7 @@ fn inline_scalar_calls(
         seen[index] = true
         if callees.get(index) is Some(callee) {
           callee.verify()
-          if scalar_template(callee) {
+          if leaf_cost(callee) is Some(_) {
             templates[index] = callee
           }
         }
@@ -72,6 +67,8 @@ fn inline_scalar_calls(
       if expanded < 256 &&
         @wasm_milkir.decode_opcode(inst.opcode) is Some(WasmCall(index)) &&
         templates.get(index) is Some(callee) &&
+        leaf_cost(callee) is Some(cost) &&
+        expanded + cost <= 256 &&
         inst.results is [result] &&
         result.ty == callee.results[0] &&
         inst.args.length() + 1 == callee.params.length() {
@@ -106,7 +103,7 @@ fn inline_scalar_calls(
             inst.args.clear()
             inst.args.push(values[returned.id])
             inst.set_opcode(Scalar(Copy))
-            expanded += 1
+            expanded += cost
           }
         }
       }

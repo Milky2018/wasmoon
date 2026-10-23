@@ -1,55 +1,35 @@
 ///|
-/// Small integer bodies from this validated module, using the same embedding
-/// and linker environment as ordinary translation. Imported callees are never
-/// supplied. The optimizer separately rejects any emitted poll or other effect.
+/// Bounded leaf candidates from the validated module, using the ordinary
+/// embedding/linker environment. The optimizer admits scalar/vector IR by cost
+/// and rejects all calls, polls, memory and other effects. Imports are excluded.
 pub fn TranslationContext::scalar_callees(
   self : TranslationContext,
   module_ : @types.Module,
 ) -> Map[Int32, @milkir.Function] {
   let result : Map[Int32, @milkir.Function] = Map([])
   for index, code in module_.codes {
-    if !code.locals.is_empty() || code.body.length() > 8 {
+    // Bound translation work structurally, then let the IR cost/effect model
+    // decide eligibility. Do not maintain an opcode or integer-only whitelist.
+    if code.locals.length() > 8 ||
+      code.body.length() > 24 ||
+      code.body.any(instruction => {
+        instruction
+        is (Block(_, _) | Loop(_, _) | If(_, _, _) | TryTable(_, _, _))
+      }) {
       continue
     }
     let ty = module_.validated_func_type_at(module_.funcs[index])
-    if ty.results.length() != 1 || !(ty.results[0] is (I32 | I64)) {
+    if ty.results.length() != 1 {
       continue
     }
-    let mut eligible = true
-    for parameter in ty.params {
-      if !(parameter is (I32 | I64)) {
-        eligible = false
-      }
-    }
-    for instruction in code.body {
-      match instruction {
-        LocalGet(_)
-        | I32Const(_)
-        | I64Const(_)
-        | I32WrapI64
-        | I64ExtendI32S
-        | I64ExtendI32U
-        | I32And
-        | I64And
-        | I32Add
-        | I64Add
-        | I32Sub
-        | I64Sub
-        | I32Mul
-        | I64Mul => ()
-        _ => eligible = false
-      }
-    }
-    if eligible {
-      let linked_index = self.func_base + self.num_imports + index
-      result[linked_index] = translate_function_body(
-        self,
-        "scalar_callee_\{linked_index}",
-        ty,
-        code.locals,
-        code.body,
-      )
-    }
+    let linked_index = self.func_base + self.num_imports + index
+    result[linked_index] = translate_function_body(
+      self,
+      "scalar_callee_\{linked_index}",
+      ty,
+      code.locals,
+      code.body,
+    )
   }
   result
 }

@@ -287,6 +287,7 @@ pub(all) enum WasmRuntimeHelper {
   GcStructSetHeap
   GcArrayGetHeap
   GcArrayDataHeap
+  GcStructData
   GcArraySetHeap
   GcArrayLenHeap
   GcStructGet
@@ -302,6 +303,7 @@ pub(all) enum WasmRuntimeHelper {
   GcArrayInitElem
   GcTypeCheckSubtype
   GcRegisterStructInline
+  GcReserveStructFast
   GcRegisterArrayInline
   GcAllocStructSlow
   GcAllocArrayFromValuesSlow
@@ -358,6 +360,7 @@ type WasmValidationContext
 pub fn WasmValidationContext::array_element(Self, Int32) -> WasmFieldContract?
 pub fn WasmValidationContext::empty() -> Self
 pub fn WasmValidationContext::new(WasmValidationResolvers) -> Self
+pub fn WasmValidationContext::struct_field(Self, Int32, Int32) -> WasmFieldContract?
 pub fn WasmValidationContext::validate_extension(Self, @milkir.ExtensionInstView, Array[@milkir.Type]) -> String?
 pub fn WasmValidationContext::validate_global_value(Self, @milkir.GlobalValueData) -> String?
 

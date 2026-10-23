@@ -54,26 +54,26 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_optional_state(void) {
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_ownership(void) {
     jit_context_t *ctx = alloc_context_internal(3);
     if (!ctx) return 0;
-    uint8_t blob[] = {1, 2, 3};
+    uint8_t blob[24] = {2, 0, 0, 0, 2};
+    uint8_t single[16] = {2, 0, 0, 0, 1};
     int32_t offsets[] = {4, 12};
     int passed = !ctx_runtime(ctx)->gc_func_safepoint_tables;
-    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, blob, 3, offsets, 2);
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, blob, sizeof(blob), offsets, 2);
     wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[1];
-    blob[0] = 9;
+    blob[8] = 1;
     offsets[0] = 20;
-    passed &= table->stackmap_blob[0] == 1 && table->code_offsets[0] == 4;
+    passed &= table->stackmap_blob[8] == 0 && table->code_offsets[0] == 4;
     ctx_gc_use_func_safepoints_internal(ctx, 1);
     passed &= ctx_runtime(ctx)->gc_safepoint_table == table;
-    // Replacing one slot must release its previous copies and preserve peers.
-    passed &= ctx_gc_set_func_safepoints_internal(ctx, 2, blob, 3, offsets, 2);
-    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, blob, 1, offsets, 1);
-    passed &= table->stackmap_blob_size == 1 && table->code_offsets[0] == 20;
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 2, blob, sizeof(blob), offsets, 2);
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, single, sizeof(single), offsets, 1);
+    passed &= table->stackmap_blob_size == sizeof(single) && table->code_offsets[0] == 20;
     passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, NULL, 0, NULL, 0);
-    passed &= !table->stackmap_blob && !table->code_offsets;
+    passed &= !table->stackmap_blob && !table->code_offsets && !table->allocation_roots;
     ctx_gc_use_func_safepoints_internal(ctx, 1);
     passed &= !ctx_runtime(ctx)->gc_safepoint_table;
-    passed &= ctx_runtime(ctx)->gc_func_safepoint_tables[2].stackmap_blob[0] == 9;
-    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, blob, 3, offsets, 2);
+    passed &= ctx_runtime(ctx)->gc_func_safepoint_tables[2].stackmap_blob[8] == 1;
+    passed &= ctx_gc_set_func_safepoints_internal(ctx, 1, blob, sizeof(blob), offsets, 2);
     free_context_internal(ctx);
     return passed;
 }
@@ -250,7 +250,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_valid(void *context) 
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
     jit_runtime_state_t *state = ctx_runtime(ctx);
     wasmoon_gc_safepoint_table_t *table = &state->gc_func_safepoint_tables[0];
-    return table->stackmap_blob_size == 3 && table->stackmap_blob[2] == 3 &&
+    return table->stackmap_blob_size == 24 && table->stackmap_blob[0] == 2 && table->stackmap_blob[8] == 0 &&
         table->safepoint_count == 2 && table->code_offsets[1] == 12 &&
         state->gc_func_table_size == 2 && state->gc_func_table[1] == 32;
 }
@@ -259,12 +259,12 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_legacy(void *context)
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
     jit_runtime_state_t *state = ctx_runtime(ctx);
     wasmoon_gc_safepoint_table_t *table = &state->gc_func_safepoint_tables[0];
-    uint8_t blob[] = {1, 2, 3};
+    uint8_t blob[24] = {2, 0, 0, 0, 2};
     int32_t offsets[] = {4, 12};
     void *addresses[] = {(void *)(uintptr_t)16, (void *)(uintptr_t)32};
-    int passed = ctx_gc_set_func_safepoints_internal(ctx, 0, blob, 3, offsets, 2);
+    int passed = ctx_gc_set_func_safepoints_internal(ctx, 0, blob, sizeof(blob), offsets, 2);
     set_func_table_internal(ctx, addresses, 2);
-    blob[2] = 99;
+    blob[8] = 99;
     offsets[1] = 99;
     addresses[1] = NULL;
     return passed && table == &state->gc_func_safepoint_tables[0] &&
@@ -463,18 +463,18 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_parked_sharing(void *first, vo
     ctx_gc_use_func_safepoints_internal(b, 0);
     ctx_gc_begin_frame_internal(b, 123);
     const wasmoon_gc_frame_t *frame = ctx_execution(b)->gc_frame_chain_head;
-    int passed = frame && frame->table && frame->table->stackmap_blob[0] == 1 && frame->table->code_offsets[0] == 4;
+    int passed = frame && frame->table && frame->table->stackmap_blob[8] == 0 && frame->table->code_offsets[0] == 4;
     jit_trap_activation_detach();
-    uint8_t blob = 9;
+    uint8_t blob[16] = {2, 0, 0, 0, 1, 0, 0, 0, 1};
     int32_t offset = 7;
-    passed &= ctx_gc_set_func_safepoints_internal(a, 0, &blob, 1, &offset, 1);
+    passed &= ctx_gc_set_func_safepoints_internal(a, 0, blob, sizeof(blob), &offset, 1);
     passed &= ctx_runtime(a)->gc_func_safepoint_tables != ctx_runtime(b)->gc_func_safepoint_tables;
-    passed &= frame->table->stackmap_blob[0] == 1;
+    passed &= frame->table->stackmap_blob[8] == 0;
     jit_trap_activation_attach(&parked);
     passed &= ctx_execution(b)->gc_frame_chain_head == frame;
     ctx_gc_end_frame_internal(b);
     jit_trap_activation_pop(&parked);
-    passed &= ctx_runtime(a)->gc_func_safepoint_tables[0].stackmap_blob[0] == 9;
+    passed &= ctx_runtime(a)->gc_func_safepoint_tables[0].stackmap_blob[8] == 1;
     return passed;
 }
 

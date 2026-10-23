@@ -29,18 +29,27 @@ fn test_context() -> @wasm_milkir.WasmValidationContext {
 }
 
 ///|
-fn gc_read_count(function : @milkir.Function) -> Int32 {
+fn gc_read_count(
+  function : @milkir.Function,
+  include_lengths~ : Bool = false,
+) -> Int32 {
   let mut count = 0
   for block in function.blocks {
     for id in function.block_instruction_ids(block) {
       let opcode = function.instruction_by_id(id).unwrap().opcode
+      if opcode is Memory(Load(_) | LoadNarrow(_, _, _)) {
+        count += 1
+        continue
+      }
+      if include_lengths &&
+        opcode is Ext(extension, _) &&
+        extension.opcode == "native_array_length" {
+        count += 1
+        continue
+      }
       match @wasm_milkir.decode_opcode(opcode) {
-        Some(
-          StructGet(_, _)
-          | StructGetS(_, _, _)
-          | StructGetU(_, _, _)
-          | ArrayLen
-        ) => count += 1
+        Some(StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _)) =>
+          count += 1
         _ => ()
       }
     }
@@ -61,12 +70,12 @@ test "GC reads forward through distinct field writes and array mutation" {
   b.add_result(I32)
   b.return_([b.iadd(first, second)])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
+  optimize_memory_test(function, test_context(), O2) |> ignore
   inspect(gc_read_count(function), content="1")
 }
 
 ///|
-test "GC writes invalidate aliases but forward the exact stored value" {
+test "GC writes invalidate aliases while preserving each checked read" {
   let b = @milkir.FunctionBuilder::FunctionBuilder("aliases")
   let left = b.add_param(Ref)
   let right = b.add_param(Ref)
@@ -77,8 +86,8 @@ test "GC writes invalidate aliases but forward the exact stored value" {
   @wasm_milkir.struct_get(b, 0, 0, left, I32) |> ignore
   b.return_([])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
-  inspect(gc_read_count(function), content="2")
+  optimize_memory_test(function, test_context(), O2) |> ignore
+  inspect(gc_read_count(function), content="3")
 }
 
 ///|
@@ -94,7 +103,7 @@ test "packed reads keep signedness and truncate intervening writes" {
   @wasm_milkir.struct_get_s(b, 0, 2, object, 1) |> ignore
   b.return_([])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
+  optimize_memory_test(function, test_context(), O2) |> ignore
   inspect(gc_read_count(function), content="3")
 }
 
@@ -107,8 +116,8 @@ test "array length forwarding survives element writes" {
   @wasm_milkir.array_len(b, array) |> ignore
   b.return_([])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
-  inspect(gc_read_count(function), content="1")
+  optimize_memory_test(function, test_context(), O2) |> ignore
+  inspect(gc_read_count(function, include_lengths=true), content="1")
 }
 
 ///|
@@ -120,12 +129,12 @@ test "allocation barriers discard cached GC reads" {
   @wasm_milkir.struct_get(b, 0, 0, object, I32) |> ignore
   b.return_([])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
+  optimize_memory_test(function, test_context(), O2) |> ignore
   inspect(gc_read_count(function), content="2")
 }
 
 ///|
-test "read facts do not cross control flow merges" {
+test "dominating reads survive unmodified control flow merges" {
   let b = @milkir.FunctionBuilder::FunctionBuilder("merge")
   let object = b.add_param(Ref)
   let condition = b.add_param(I32)
@@ -144,8 +153,8 @@ test "read facts do not cross control flow merges" {
   @wasm_milkir.struct_get(b, 0, 0, object, I32) |> ignore
   b.return_([])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
-  inspect(gc_read_count(function), content="2")
+  optimize_memory_test(function, test_context(), O2) |> ignore
+  inspect(gc_read_count(function), content="1")
 }
 
 ///|
@@ -157,7 +166,7 @@ test "GC forwarding leaves O0 and O1 reads unchanged" {
     @wasm_milkir.struct_get(b, 0, 0, object, I32) |> ignore
     b.return_([])
     let function = b.get_function()
-    @optimize.optimize_with_level(function, test_context(), level) |> ignore
+    optimize_memory_test(function, test_context(), level) |> ignore
     inspect(gc_read_count(function), content="2")
   }
 }
@@ -174,7 +183,7 @@ test "context validation precedes removal of redundant malformed reads" {
   let function = b.get_function()
   let before = function.print()
   let rejected = try {
-    @optimize.optimize_with_level(function, test_context(), O2) |> ignore
+    optimize_memory_test(function, test_context(), O2) |> ignore
     false
   } catch {
     _ => true
@@ -193,7 +202,7 @@ test "unknown calls invalidate GC read facts" {
   @wasm_milkir.struct_get(b, 0, 0, object, I32) |> ignore
   b.return_([])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
+  optimize_memory_test(function, test_context(), O2) |> ignore
   inspect(gc_read_count(function), content="2")
 }
 
@@ -213,7 +222,7 @@ test "prechecked stable loop reads reuse the preheader value" {
   b.switch_to_block(exit)
   b.return_([])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
+  optimize_memory_test(function, test_context(), O2) |> ignore
   inspect(gc_read_count(function), content="1")
 }
 
@@ -227,8 +236,8 @@ test "forwarded references preserve their GC carrier" {
   b.add_result(Ref)
   b.return_([first, second])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
-  @wasm_milkir.verify_function_with_context(function, test_context())
+  optimize_memory_test(function, test_context(), O2) |> ignore
+  prepare_gc_memory(function, test_context())
   inspect(gc_read_count(function), content="1")
   assert_eq(function.results, [Ref, Ref])
 }
@@ -254,8 +263,8 @@ test "large extended regions and long copy chains remain well formed" {
   b.add_result(I32)
   b.return_([sum])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, test_context(), O2) |> ignore
-  @wasm_milkir.verify_function_with_context(function, test_context())
+  optimize_memory_test(function, test_context(), O2) |> ignore
+  prepare_gc_memory(function, test_context())
   // Forgetting available reads must not discard any of these distinct reads.
   inspect(gc_read_count(function), content="192")
 }

@@ -8,11 +8,6 @@ priv struct PtrAccess {
 }
 
 ///|
-priv struct PtrBaseInfo {
-  region : @milkir.AliasRegion
-}
-
-///|
 priv struct PtrLocationKey {
   base_id : Int32
   offset_id : Int32
@@ -119,8 +114,10 @@ fn meet_last_store_token(
 ) -> StoreVersion? {
   match (a, b) {
     (None, None) => None
-    (Some(lhs), None) => Some(lhs)
-    (None, Some(rhs)) => Some(rhs)
+    // None is the initial memory version, not an unvisited predecessor.
+    // In a loop, treating it as bottom equates a call from the previous
+    // iteration with the same static call executed again in this iteration.
+    (Some(_), None) | (None, Some(_)) => Some(join_token)
     (Some(lhs), Some(rhs)) =>
       if lhs == rhs {
         Some(lhs)
@@ -241,6 +238,8 @@ fn LastStoreState::set_region_token(
   region : @milkir.AliasRegion,
   token : StoreVersion,
 ) -> Unit {
+  // Unknown readers can alias every concrete region.
+  self.other = Some(token)
   match region {
     Heap(index) => self.heap.set(index, token)
     Table(index) => self.table.set(index, token)
@@ -265,7 +264,7 @@ fn LastStoreState::set_all_tokens(
 ///|
 fn instruction_memory_write_scope(
   inst : @milkir.Inst,
-  ptr_base_infos : Array[PtrBaseInfo?],
+  ptr_base_infos : Array[@milkir.AliasRegion?],
 ) -> MemoryWriteScope {
   let is_store = match inst.opcode {
     Memory(Store(_) | StoreNarrow(_) | Vector(StoreLane(_, _))) => true
@@ -276,6 +275,13 @@ fn instruction_memory_write_scope(
       WriteAll
     } else {
       WriteRegion(access.region)
+    }
+  }
+  if inst.opcode is Ext(extension, _) && extension.effects is Some(effects) {
+    return match effects.write {
+      Some(Other) => WriteAll
+      Some(region) => WriteRegion(region)
+      None => NoWrite
     }
   }
   if opcode_semantics(inst.opcode).memory.may_write_memory() {
@@ -290,7 +296,7 @@ fn update_last_store_state(
   state : LastStoreState,
   inst : @milkir.Inst,
   inst_version : StoreVersion,
-  ptr_base_infos : Array[PtrBaseInfo?],
+  ptr_base_infos : Array[@milkir.AliasRegion?],
 ) -> Unit {
   match instruction_memory_write_scope(inst, ptr_base_infos) {
     NoWrite => ()
@@ -304,13 +310,14 @@ fn compute_block_input_last_store_states(
   func : @milkir.Function,
   cfg : @milkir.CFG,
   block_idx : Array[Int32],
-  ptr_base_infos : Array[PtrBaseInfo?],
+  ptr_base_infos : Array[@milkir.AliasRegion?],
   block_instructions : (Int32) -> ArrayView[@milkir.InstId],
 ) -> @hashmap.HashMap[Int32, LastStoreState] {
   let block_input : @hashmap.HashMap[Int32, LastStoreState] = HashMap([])
   if !cfg.is_valid(0) {
     return block_input
   }
+  block_input.set(0, LastStoreState())
   let queue : Array[Int32] = [0]
   let queue_set : @hashset.HashSet[Int32] = HashSet([])
   queue_set.add(0)
@@ -355,167 +362,6 @@ fn compute_block_input_last_store_states(
 }
 
 ///|
-fn collect_iconst_values(
-  func : @milkir.Function,
-  instructions? : Array[@milkir.Inst],
-) -> Array[Int64?] {
-  let result : Array[Int64?] = Array::make(func.next_value_id, None)
-  let record = fn(inst : @milkir.Inst) {
-    if inst.first_result() is Some(v) {
-      match inst.opcode {
-        Scalar(IntConst(value)) => result[v.id] = Some(value)
-        Scalar(Copy) =>
-          if inst.operands.length() > 0 &&
-            result[inst.operands[0].id] is Some(copied) {
-            result[v.id] = Some(copied)
-          }
-        _ => ()
-      }
-    }
-  }
-  match instructions {
-    Some(prefix) =>
-      for inst in prefix {
-        record(inst)
-      }
-    None =>
-      for block in func.blocks {
-        for inst_id in block.instruction_ids() {
-          record(func.instruction_by_id(inst_id).unwrap())
-        }
-      }
-  }
-  result
-}
-
-///|
-fn collect_ptr_base_infos(
-  func : @milkir.Function,
-  iconst_values : Array[Int64?],
-  instructions? : Array[@milkir.Inst],
-) -> Array[PtrBaseInfo?] {
-  let result : Array[PtrBaseInfo?] = Array::make(func.next_value_id, None)
-  for param in func.params {
-    if param.1 is (Ptr | Ref | CallableRef | OpaqueRef) {
-      result[param.0.id] = Some({ region: Other, })
-    }
-  }
-  if func.blocks.length() > 0 {
-    for param in func.blocks[0].params {
-      if param.1 is (Ptr | Ref | CallableRef | OpaqueRef) {
-        result[param.0.id] = Some({ region: Other, })
-      }
-    }
-  }
-  let dependents : Array[Array[@milkir.Inst]] = Array::makei(
-    func.next_value_id,
-    _ => [],
-  )
-  let worklist : Array[@milkir.Inst] = []
-  let queued = Array::make(func.next_inst_id, false)
-  let enqueue = fn(inst : @milkir.Inst) {
-    worklist.push(inst)
-    queued[inst.id] = true
-    for operand in inst.operands {
-      dependents[operand.id].push(inst)
-    }
-  }
-  match instructions {
-    Some(prefix) =>
-      for inst in prefix {
-        enqueue(inst)
-      }
-    None =>
-      for block in func.blocks {
-        for inst_id in block.instruction_ids() {
-          enqueue(func.instruction_by_id(inst_id).unwrap())
-        }
-      }
-  }
-  let mut cursor = 0
-  while cursor < worklist.length() {
-    let inst = worklist[cursor]
-    cursor = cursor + 1
-    queued[inst.id] = false
-    if inst.first_result() is Some(v) && result[v.id] is None {
-      let inferred : PtrBaseInfo? = match inst.opcode {
-        GlobalValue(global_value) =>
-          match func.global_value_data(global_value) {
-            Some(ContextField(_, _, region)) => Some({ region, })
-            None => None
-          }
-        Ext(_, _) => None
-        Scalar(Copy)
-        | Scalar(Convert(Bitcast))
-        | Scalar(Convert(UnsignedExtend))
-        | Scalar(Convert(SignedExtend))
-        | Scalar(Convert(IntReduce)) =>
-          if inst.operands.length() > 0 {
-            result[inst.operands[0].id]
-          } else {
-            None
-          }
-        Scalar(IntBinary(Add)) =>
-          if inst.operands.length() >= 2 {
-            let lhs = inst.operands[0]
-            let rhs = inst.operands[1]
-            match (result[lhs.id], result[rhs.id]) {
-              (Some(base), None) | (None, Some(base)) => Some(base)
-              (Some(lhs_base), Some(rhs_base)) if lhs_base.region ==
-                rhs_base.region => Some(lhs_base)
-              _ =>
-                if result[lhs.id] is Some(base) &&
-                  is_known_iconst(rhs.id, iconst_values) {
-                  Some(base)
-                } else if result[rhs.id] is Some(base) &&
-                  is_known_iconst(lhs.id, iconst_values) {
-                  Some(base)
-                } else {
-                  None
-                }
-            }
-          } else {
-            None
-          }
-        Scalar(IntBinary(Sub)) =>
-          if inst.operands.length() >= 2 {
-            let lhs = inst.operands[0]
-            let rhs = inst.operands[1]
-            if result[lhs.id] is Some(base) &&
-              is_known_iconst(rhs.id, iconst_values) {
-              Some(base)
-            } else {
-              None
-            }
-          } else {
-            None
-          }
-        Scalar(Select) =>
-          if inst.operands.length() >= 3 &&
-            result[inst.operands[1].id] is Some(lhs_base) &&
-            result[inst.operands[2].id] is Some(rhs_base) &&
-            lhs_base.region == rhs_base.region {
-            Some(lhs_base)
-          } else {
-            None
-          }
-        _ => None
-      }
-      if inferred is Some(base) {
-        result[v.id] = Some(base)
-        for dependent in dependents[v.id] {
-          if !queued[dependent.id] {
-            worklist.push(dependent)
-            queued[dependent.id] = true
-          }
-        }
-      }
-    }
-  }
-  result
-}
-
-///|
 fn gvn_instruction_prefix(
   func : @milkir.Function,
   work_budget : Int32,
@@ -542,20 +388,13 @@ fn gvn_instruction_prefix(
 }
 
 ///|
-fn is_known_iconst(value_id : Int32, iconst_values : Array[Int64?]) -> Bool {
-  value_id >= 0 &&
-  value_id < iconst_values.length() &&
-  iconst_values[value_id] is Some(_)
-}
-
-///|
 fn ptr_base_region(
   value_id : Int32,
-  ptr_base_infos : Array[PtrBaseInfo?],
+  ptr_base_infos : Array[@milkir.AliasRegion?],
 ) -> @milkir.AliasRegion {
   if value_id >= 0 && value_id < ptr_base_infos.length() {
     match ptr_base_infos[value_id] {
-      Some(base_info) => base_info.region
+      Some(region) => region
       None => Other
     }
   } else {
@@ -568,7 +407,7 @@ fn ptr_base_region(
 ///|
 fn ptr_access_from_inst(
   inst : @milkir.Inst,
-  ptr_base_infos : Array[PtrBaseInfo?],
+  ptr_base_infos : Array[@milkir.AliasRegion?],
 ) -> PtrAccess? {
   match inst.opcode {
     Memory(Load(_)) =>
@@ -639,23 +478,29 @@ fn inst_dominates(
 /// Trapping instructions and memory operations remain excluded. Load CSE is a
 /// separate correctness change even though this pass tracks memory versions.
 fn is_gvn_candidate(inst : @milkir.Inst) -> Bool {
-  if inst.results.length() != 1 ||
-    !opcode_semantics(inst.opcode).can_stage_as_pure_candidate() {
+  if inst.results.length() != 1 || is_cheap_rematerializable_constant(inst) {
     return false
   }
-  if is_cheap_rematerializable_constant(inst) {
-    return false
+  if inst.opcode is Ext(extension, _) &&
+    extension.effects is Some(effects) &&
+    effects.read is Some(_) &&
+    effects.write is None &&
+    !effects.observable {
+    // As with load CSE, the first dominating read performs its trap. Its
+    // metadata version must remain unchanged before reusing its result.
+    return true
   }
-  !opcode_semantics(inst.opcode).must_preserve_if_unused()
+  opcode_semantics(inst.opcode).can_stage_as_pure_candidate()
 }
 
 ///|
 fn gvn_memory_dependency(
   func : @milkir.Function,
   inst : @milkir.Inst,
-  ptr_base_infos : Array[PtrBaseInfo?],
+  ptr_base_infos : Array[@milkir.AliasRegion?],
 ) -> @milkir.AliasRegion? {
   match inst.opcode {
+    Ext(extension, _) if extension.effects is Some(effects) => effects.read
     GlobalValue(global_value) =>
       match func.global_value_data(global_value) {
         Some(ContextField(_, Mutable, _)) => Some(Context)
@@ -711,7 +556,7 @@ priv struct AcyclicOptimizer {
   analysis : FunctionAnalysis
   session : OptimizerSession
   memory_work_budget : Int32
-  ptr_base_infos : Array[PtrBaseInfo?]
+  ptr_base_infos : Array[@milkir.AliasRegion?]
   block_input_state : @hashmap.HashMap[Int32, LastStoreState]
   value_table : @hashmap.HashMap[@milkir.Inst, Array[AvailableExpression]]
   value_table_changes : Array[ValueTableChange]
@@ -768,11 +613,7 @@ fn AcyclicOptimizer::new(
       func, memory_work_budget, analysis, source_block_instructions,
     )
   }
-  let ptr_base_infos = collect_ptr_base_infos(
-    func,
-    collect_iconst_values(func, instructions=source),
-    instructions=source,
-  )
+  let ptr_base_infos = @analysis.pointer_regions(func, instructions=source)
   let block_input_state = if complete_memory_analysis {
     compute_block_input_last_store_states(
       func,
@@ -846,7 +687,13 @@ fn AcyclicOptimizer::process_block(
 ) -> Array[@milkir.Inst] {
   let last_store_state = match self.block_input_state.get(block_id) {
     Some(state) => state.clone()
-    None => LastStoreState()
+    None => {
+      // A missing predecessor analysis is an unknown entry version, not
+      // evidence that predecessors preserved memory (including backedges).
+      let state = LastStoreState()
+      state.set_all_tokens({ block_id, inst_id: -1, })
+      state
+    }
   }
   let rewritten : Array[@milkir.Inst] = []
   for inst_id in instructions {
@@ -930,6 +777,14 @@ fn AcyclicOptimizer::process_inst(
       }
       self.changed = true
       replaced_by_memory = true
+    } else if inst.first_result() is Some(value) {
+      // The dominating read already performed its trap. Reuse only while the
+      // same alias-region version survives, never by speculating a first read.
+      self.memory_values.set(key, {
+        def_block_id: block_id,
+        def_inst_index: inst_index,
+        value,
+      })
     }
   }
   if within_memory_budget &&

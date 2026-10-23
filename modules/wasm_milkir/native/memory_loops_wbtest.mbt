@@ -40,18 +40,16 @@ test "a checked object read leaves the loop without speculating its null check" 
   b.switch_to_block(exit)
   b.return_([result])
   let function = b.get_function()
-  @optimize.optimize_with_level(function, loop_read_context(), O2) |> ignore
-  @wasm_milkir.verify_function_with_context(function, loop_read_context())
+  optimize_memory_test(function, loop_read_context(), O2) |> ignore
+  prepare_gc_memory(function, loop_read_context())
   let cfg = @milkir.CFG::build(function)
   let mut reads = 0
   for loop_ in cfg.find_loops() {
     for block in function.blocks {
       if loop_.contains(block.id) {
         for id in function.block_instruction_ids(block) {
-          if @wasm_milkir.decode_opcode(
-              function.instruction_by_id(id).unwrap().opcode,
-            )
-            is Some(StructGet(_, _)) {
+          if function.instruction_by_id(id).unwrap().opcode is Ext(extension, _) &&
+            decode_projection(extension) is Some(_) {
             reads += 1
           }
         }
@@ -62,7 +60,7 @@ test "a checked object read leaves the loop without speculating its null check" 
 }
 
 ///|
-test "loop read motion rejects aliases unknown calls allocation and missing checks" {
+test "loop read motion respects barriers and guards an initially unchecked read" {
   for mode in ["alias", "call", "allocate", "unchecked", "intervening_call"] {
     let b = @milkir.FunctionBuilder::FunctionBuilder("loop_barrier_\{mode}")
     let object = b.add_param(Ref)
@@ -95,23 +93,28 @@ test "loop read motion rejects aliases unknown calls allocation and missing chec
     b.switch_to_block(exit)
     b.return_([])
     let function = b.get_function()
-    @optimize.optimize_with_level(function, loop_read_context(), O2) |> ignore
+    optimize_memory_test(function, loop_read_context(), O2) |> ignore
     let cfg = @milkir.CFG::build(function)
     let mut reads = 0
     for loop_ in cfg.find_loops() {
       for block in function.blocks {
         if loop_.contains(block.id) {
           for id in function.block_instruction_ids(block) {
-            if @wasm_milkir.decode_opcode(
-                function.instruction_by_id(id).unwrap().opcode,
-              )
-              is Some(StructGet(_, _)) {
+            if function.instruction_by_id(id).unwrap().opcode is Memory(Load(_)) {
               reads += 1
             }
           }
         }
       }
     }
-    assert_eq(reads, 1, msg=mode)
+    assert_eq(
+      reads,
+      if mode == "unchecked" || mode == "intervening_call" {
+        0
+      } else {
+        1
+      },
+      msg=mode,
+    )
   }
 }

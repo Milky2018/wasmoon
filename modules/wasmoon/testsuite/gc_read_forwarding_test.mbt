@@ -62,3 +62,19 @@ test "optimized unused GC reads retain null and array bounds traps" {
     assert_true(@testsuite.compare_result_errors_contain(result, trap))
   }
 }
+
+///|
+test "large struct declarations keep checked access beyond the exact view prefix" {
+  let fields = Array::make(17, "(field (mut i32))").join(" ")
+  let source =
+    $|(module (type $large (struct \{fields}))
+    $| (func (export "test") (result i32) (local $p (ref $large))
+    $|  struct.new_default $large local.set $p
+    $|  local.get $p i32.const 42 struct.set $large 16
+    $|  local.get $p struct.get $large 16))
+  for level in [0, 2, 3] {
+    assert_true(
+      @testsuite.compare_jit_interp_with_opt_level(source, "test", [], level).matched(),
+    )
+  }
+}

@@ -12,6 +12,12 @@ pub suberror NativeLowerError {
 } derive(Debug, Eq)
 
 ///|
+/// Report a dialect's failed pre-selection verification through this seam.
+pub fn NativeLowerError::invalid_milkir(message : String) -> NativeLowerError {
+  InvalidMilkIR(message~)
+}
+
+///|
 pub impl Show for NativeLowerError with fn output(self, logger) {
   logger.write_string(Repr(self).to_string())
 }
@@ -888,12 +894,23 @@ fn compute_gc_roots(
           live.add(operand.id)
         }
       }
-      let instruction_roots : Array[Int32] = []
-      for value in live {
-        instruction_roots.push(value)
+      let needs_roots = match instruction.opcode {
+        Call(_) => true
+        Ext(extension, _) =>
+          match extension.effects {
+            None => true
+            Some(effects) => effects.observable
+          }
+        _ => false
       }
-      instruction_roots.sort()
-      roots[instruction.id] = instruction_roots
+      if needs_roots {
+        let instruction_roots : Array[Int32] = []
+        for value in live {
+          instruction_roots.push(value)
+        }
+        instruction_roots.sort()
+        roots[instruction.id] = instruction_roots
+      }
       position -= 1
     }
   }
@@ -1714,8 +1731,12 @@ fn lower_verified_construction(
     None
   }
   let mut root_scope_capacity = 0
+  let function_root_values : Map[Int32, Bool] = Map([])
   if gc_roots is Some(roots) {
     for instruction_roots in roots {
+      for id in instruction_roots {
+        function_root_values[id] = true
+      }
       if instruction_roots.length() > root_scope_capacity {
         root_scope_capacity = instruction_roots.length()
       }
@@ -1728,6 +1749,7 @@ fn lower_verified_construction(
     root_scope_capacity~,
   )
   let lowered_params = builder.parameters()
+  builder.begin_function_roots(function_root_values.length())
   let environment : Array[@lowering.Value] = []
   if dialect is Some(lowering) {
     for environment_parameter in lowering.environment_parameters {
@@ -1742,6 +1764,9 @@ fn lower_verified_construction(
   }
   for index, parameter in function.params {
     values[parameter.0.id] = Some(lowered_params[index])
+    if function_root_values.contains(parameter.0.id) {
+      builder.define_function_root(lowered_params[index])
+    }
   }
   let blocks : Array[@lowering.Block?] = Array::make(
     function.next_block_id,
@@ -1785,6 +1810,11 @@ fn lower_verified_construction(
   for block_id in block_order {
     let block = source_blocks[block_id].unwrap()
     builder.switch_to_block(mapped_block(blocks, block.id))
+    for parameter in block.params {
+      if function_root_values.contains(parameter.0.id) {
+        builder.define_function_root(values[parameter.0.id].unwrap())
+      }
+    }
     let mut terminator_replaced = false
     for instruction_id in function.block_instruction_ids(block) {
       let instruction = function.instruction_by_id(instruction_id).unwrap()
@@ -1802,6 +1832,12 @@ fn lower_verified_construction(
           environment,
           dialect,
         )
+        for result in instruction.results {
+          if function_root_values.contains(result.id) &&
+            values[result.id] is Some(value) {
+            builder.define_function_root(value)
+          }
+        }
       }
     }
     if !terminator_replaced {

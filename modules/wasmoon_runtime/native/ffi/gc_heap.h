@@ -110,6 +110,8 @@ typedef struct GcSlot {
 typedef struct { int32_t offset, width, reference; } GcFieldLayout;
 typedef struct {
     int32_t kind, count, size, reference_count;
+    // Exact four-bit width/reference codes for the first sixteen fields.
+    uint64_t prefix_shape;
     GcFieldLayout fields[];
 } GcTypeLayout;
 
@@ -187,6 +189,7 @@ static inline void gc_heap_set_runtime_type(GcHeap *heap, int32_t ref, int32_t t
 }
 
 int32_t gc_heap_register_object(GcHeap *heap, int32_t offset);
+int gc_heap_fast_allocation_enabled(void);
 
 static inline GcTypeLayout *gc_heap_layout(GcHeap *heap, int32_t identity) {
     return heap && identity >= 0 && identity < heap->layout_capacity ? heap->layouts[identity] : NULL;

@@ -63,7 +63,7 @@ pub fn Block::to_repr(Self) -> @debug.Repr
 pub struct CallAbiElaboration {
   // private fields
 }
-pub fn CallAbiElaboration::new(root_scope? : CallerRootScopeAbi, hidden_safepoints? : Array[HiddenSafepointAbi]) -> Self
+pub fn CallAbiElaboration::new(root_scope? : CallerRootScopeAbi, function_frame? : FunctionRootFrameAbi, hidden_safepoints? : Array[HiddenSafepointAbi]) -> Self
 
 pub struct CallerRootScopeAbi {
   // private fields
@@ -89,12 +89,14 @@ pub fn ConversionOp::to_repr(Self) -> @debug.Repr
 pub struct DirectBuilder {
   // private fields
 }
+pub fn DirectBuilder::begin_function_roots(Self, Int32) -> Unit
 pub fn DirectBuilder::block_parameters(Self, Block) -> Array[Value]
 pub fn DirectBuilder::branch(Self, Value, Block, Array[Value], Block, Array[Value]) -> Unit
 pub fn DirectBuilder::branch_int_compare(Self, IntComparison, Value, Value, Block, Array[Value], Block, Array[Value]) -> Unit
 pub fn DirectBuilder::branch_int_compare_immediate(Self, IntComparison, Value, UInt64, Block, Array[Value], Block, Array[Value]) -> Unit
 pub fn DirectBuilder::create_block(Self, Array[@native_types.ValueType]) -> Block
 pub fn DirectBuilder::create_stack_object(Self, Int32, Int32) -> @native_types.StackObject
+pub fn DirectBuilder::define_function_root(Self, Value) -> Unit
 pub fn DirectBuilder::emit_with_metadata(Self, Operation, Array[Value], Array[@native_types.ValueType], InstructionMetadata) -> Array[Value]
 pub fn DirectBuilder::entry_block(Self) -> Block
 pub fn DirectBuilder::finish(Self) -> Unit raise DirectLoweringError
@@ -167,6 +169,11 @@ pub fn FloatUnaryOp::hash(Self) -> Int32
 pub fn FloatUnaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn FloatUnaryOp::not_equal(Self, Self) -> Bool
 pub fn FloatUnaryOp::to_repr(Self) -> @debug.Repr
+
+pub struct FunctionRootFrameAbi {
+  // private fields
+}
+pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32) -> Self
 
 pub struct HiddenSafepointAbi {
   // private fields
