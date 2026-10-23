@@ -714,6 +714,7 @@ graph TD
   ISS_671["ISS-671: Meet explicit parse_double execution and compilation budgets"]
   ISS_672["ISS-672: Preserve recursive groups when preparing the CLI GC context"]
   ISS_673["ISS-673: Minimize a validated inlining diagnostic rejected by the frontend"]
+  ISS_675["ISS-675: Encode the non-null bottom heap type before contextual validation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
