@@ -91,3 +91,13 @@ pub fn StoreIdentity::matches(self : StoreIdentity, store : Store) -> Bool {
 pub fn Store::is_closed(self : Store) -> Bool {
   self.closed.val
 }
+
+///|
+/// Snapshot the current module's type definitions and recursive partition
+/// together. Canonicalization must not interpret recursive members as separate
+/// singleton groups; returned arrays cannot mutate the Store's metadata.
+pub fn Store::current_type_graph(
+  self : Store,
+) -> (Array[@types.SubType], Array[Int32]) {
+  (self.module_types.copy(), self.module_rec_groups.copy())
+}

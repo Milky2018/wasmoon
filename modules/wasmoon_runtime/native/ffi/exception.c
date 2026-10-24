@@ -386,6 +386,7 @@ sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
     handler->prev = (exception_handler_t *)state->exception_handler;
     handler->handler_id = handler_id;
     handler->gc_root_scope_marker = state->gc_root_scope_head;
+    handler->gc_function_frame_marker = state->gc_function_frame_head;
     state->exception_handler = handler;
 
     // Return pointer to jmp_buf for caller to call setjmp
@@ -466,6 +467,7 @@ static void exception_raise_current(jit_context_t *ctx) {
     exception_handler_t *handler = (exception_handler_t *)ctx_execution(ctx)->exception_handler;
     if (handler) {
         ctx_gc_restore_root_scopes_internal(ctx, handler->gc_root_scope_marker);
+        ctx_execution(ctx)->gc_function_frame_head = handler->gc_function_frame_marker;
         siglongjmp(handler->jmp_buf, handler->handler_id);
     }
     g_trap_code = 12;
@@ -552,6 +554,7 @@ void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
 
     if (target) {
         // longjmp to target handler
+        state->gc_function_frame_head = target->gc_function_frame_marker;
         ctx_gc_restore_root_scopes_internal(
             ctx,
             target->gc_root_scope_marker

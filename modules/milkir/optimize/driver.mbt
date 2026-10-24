@@ -295,7 +295,9 @@ fn optimize_o3(func : @milkir.Function) -> OptResult {
   if normalization.changed {
     result.mark_changed()
   }
-  let licm_result = run_opt_pass(func, "loop_licm", hoist_loop_invariants)
+  let licm_result = run_opt_pass(func, "loop_licm", fn(function) {
+    hoist_loop_invariants(function)
+  })
   if licm_result.changed {
     result.mark_changed()
   }

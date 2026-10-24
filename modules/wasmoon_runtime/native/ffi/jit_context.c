@@ -41,13 +41,61 @@ static int32_t gc_frame_chain_depth(const jit_context_t *ctx) {
     return depth;
 }
 
+// Function frame storage is part of the allocated native stack, never malloc'd.
+_Static_assert(sizeof(wasmoon_gc_function_frame_t) == 32, "function root frame ABI");
+
+int32_t jit_copy_function_frame_roots(const jit_execution_state_t *state, int64_t *destination) {
+    int64_t total = 0;
+    for (const wasmoon_gc_function_frame_t *frame = state ? state->gc_function_frame_head : NULL;
+         frame; frame = frame->prev) {
+        if (frame->slot_count < 0 || !frame->roots || !frame->mask) return -1;
+        for (int32_t slot = 0; slot < frame->slot_count; ++slot) {
+            if ((frame->mask[(uint32_t)slot / 64] >> ((uint32_t)slot % 64)) & 1) {
+                if (total == INT32_MAX) return -1;
+                if (destination) destination[total] = frame->roots[slot];
+                ++total;
+            }
+        }
+    }
+    return (int32_t)total;
+}
+
+void WASMOON_GUEST_ABI gc_function_frame_enter_impl(jit_context_t *ctx, wasmoon_gc_function_frame_t *frame,
+    const int64_t *roots, const uint64_t *mask, int32_t slot_count) {
+    jit_context_t *active = get_current_jit_context_fast();
+    if (active) ctx = active;
+    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
+    if (!state || !frame || !roots || !mask || slot_count <= 0) {
+        g_trap_code = 99;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    frame->prev = state->gc_function_frame_head;
+    frame->roots = roots;
+    frame->mask = mask;
+    frame->slot_count = slot_count;
+    frame->reserved = 0;
+    state->gc_function_frame_head = frame;
+}
+
+void WASMOON_GUEST_ABI gc_function_frame_leave_impl(jit_context_t *ctx, wasmoon_gc_function_frame_t *frame) {
+    jit_context_t *active = get_current_jit_context_fast();
+    if (active) ctx = active;
+    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
+    if (!state || state->gc_function_frame_head != frame) {
+        g_trap_code = 99;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    state->gc_function_frame_head = frame->prev;
+}
+
 static int32_t gc_root_scope_count(const jit_context_t *ctx) {
     jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
     if (!state) return 0;
     if (!ctx) {
         return 0;
     }
-    int64_t total = 0;
+    int64_t total = jit_copy_function_frame_roots(state, NULL);
+    if (total < 0) return -1;
     const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
     while (scope) {
         if (scope->root_count > 0) {
@@ -70,7 +118,8 @@ static int32_t gc_copy_root_scopes(
     if (!ctx || !dst) {
         return 0;
     }
-    int32_t at = 0;
+    int32_t at = jit_copy_function_frame_roots(state, dst);
+    if (at < 0) return -1;
     const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
     while (scope) {
         if (scope->root_count > 0 && scope->roots) {
@@ -208,7 +257,61 @@ static jit_safepoint_owner_t *safepoint_owner(wasmoon_gc_safepoint_table_t *entr
 static void gc_release_safepoint_table(wasmoon_gc_safepoint_table_t *table) {
     if (table->stackmap_blob) moonbit_decref((void *)table->stackmap_blob);
     if (table->code_offsets) moonbit_decref((void *)table->code_offsets);
+    if (table->allocation_roots) moonbit_decref((void *)table->allocation_roots);
     memset(table, 0, sizeof(*table));
+}
+
+static uint32_t safepoint_u32(const uint8_t *p) {
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
+        (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+// Decode only the allocation operand descriptors. Return-PC frame maps have
+// their own locations; a record without operand indices cannot select inputs.
+static int decode_allocation_roots(wasmoon_gc_safepoint_table_t *table) {
+    const uint8_t *blob = table->stackmap_blob;
+    size_t size = table->stackmap_blob_size;
+    uint32_t count = table->safepoint_count;
+    if (!size) return count == 0;
+    if (!blob || size < 8 || safepoint_u32(blob) != 2 ||
+        safepoint_u32(blob + 4) != count || count > (size - 8) / 8 ||
+        count > ((UINT32_C(1) << 30) - 1) / (3 * sizeof(uint32_t))) return 0;
+    // Prefix maxima preserve the operand-prefix contract: a safepoint can
+    // describe more live roots than this allocation's staged input buffer.
+    size_t slots = (size_t)count * 3 + (size - 8 - (size_t)count * 8) / 4;
+    if (slots > ((UINT32_C(1) << 30) - 1) / sizeof(uint32_t)) return 0;
+    uint32_t *decoded = slots ?
+        (uint32_t *)moonbit_make_int32_array((int32_t)slots, 0) : NULL;
+    size_t prefix = (size_t)count * 3;
+    size_t at = 8;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (size - at < 8) goto invalid;
+        uint32_t roots = safepoint_u32(blob + at);
+        uint32_t indices = safepoint_u32(blob + at + 4);
+        at += 8;
+        size_t remaining_headers = (size_t)(count - i - 1) * 8;
+        if (size - at < remaining_headers || roots > INT32_MAX ||
+            indices > (size - at - remaining_headers) / 4 ||
+            (indices && roots > indices)) goto invalid;
+        uint32_t max_index = 0;
+        for (uint32_t j = 0; j < indices; ++j) {
+            uint32_t index = safepoint_u32(blob + at + (size_t)j * 4);
+            if (index > INT32_MAX) goto invalid;
+            if (index > max_index) max_index = index;
+            decoded[prefix + j] = max_index;
+        }
+        decoded[i * 3] = roots;
+        decoded[i * 3 + 1] = roots && !indices ? UINT32_MAX : (uint32_t)prefix;
+        decoded[i * 3 + 2] = (uint32_t)at;
+        at += (size_t)indices * 4;
+        prefix += indices;
+    }
+    if (at != size) goto invalid;
+    table->allocation_roots = decoded;
+    return 1;
+invalid:
+    if (decoded) moonbit_decref(decoded);
+    return 0;
 }
 
 static void finalize_safepoints(void *payload) {
@@ -251,15 +354,23 @@ MOONBIT_FFI_EXPORT void *wasmoon_jit_prepare_safepoints(uint8_t **blobs, int32_t
         table->safepoint_count = Moonbit_array_length(offsets[i]);
         if (table->stackmap_blob_size) { table->stackmap_blob = blobs[i]; moonbit_incref(blobs[i]); }
         if (table->safepoint_count) { table->code_offsets = (uint32_t *)offsets[i]; moonbit_incref(offsets[i]); }
+        if (!decode_allocation_roots(table)) {
+            moonbit_decref(owner);
+            return NULL;
+        }
     }
     return owner;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_prepared_safepoints_valid(void *payload) {
+    return payload != NULL;
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_bind_prepared_safepoints(void *context, void *payload) {
     extern int64_t wasmoon_jit_context_ptr(void *context);
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
     jit_safepoint_owner_t *owner = payload;
-    if (!ctx || owner->count > ctx_func_count(ctx)) return 0;
+    if (!ctx || !owner || owner->count > ctx_func_count(ctx)) return 0;
     moonbit_incref(owner);
     if (ctx_runtime(ctx)->gc_func_safepoint_tables)
         moonbit_decref(safepoint_owner(ctx_runtime(ctx)->gc_func_safepoint_tables));
@@ -539,6 +650,7 @@ void jit_execution_clear_root_scopes(jit_execution_state_t *state) {
             scope = next;
         }
     }
+    state->gc_function_frame_head = NULL;
     state->gc_root_scope_head = NULL;
     state->gc_root_scope_free = NULL;
 }
@@ -591,6 +703,7 @@ static int32_t gc_alloc_func_safepoint_tables(jit_context_t *ctx) {
             owner->entries[i] = old[i];
             if (old[i].stackmap_blob) moonbit_incref((void *)old[i].stackmap_blob);
             if (old[i].code_offsets) moonbit_incref((void *)old[i].code_offsets);
+            if (old[i].allocation_roots) moonbit_incref((void *)old[i].allocation_roots);
             if (ctx_runtime(ctx)->gc_safepoint_table == &old[i])
                 ctx_runtime(ctx)->gc_safepoint_table = &owner->entries[i];
         }
@@ -607,18 +720,22 @@ static int32_t bind_func_safepoints(
 ) {
     if (!ctx || func_idx < 0 || func_idx >= ctx_func_count(ctx)) return 0;
     if (!blob_size && !count && !ctx_runtime(ctx)->gc_func_safepoint_tables) return 1;
-    if (!gc_alloc_func_safepoint_tables(ctx)) return 0;
     blob = blob_size ? blob : NULL;
     offsets = count ? offsets : NULL;
     // A caller may rebind exactly the currently retained payloads.
     if (blob) moonbit_incref(blob);
     if (offsets) moonbit_incref(offsets);
+    wasmoon_gc_safepoint_table_t candidate = {
+        .stackmap_blob = blob, .stackmap_blob_size = (uint32_t)blob_size,
+        .code_offsets = (uint32_t *)offsets, .safepoint_count = (uint32_t)count
+    };
+    if (!decode_allocation_roots(&candidate) || !gc_alloc_func_safepoint_tables(ctx)) {
+        gc_release_safepoint_table(&candidate);
+        return 0;
+    }
     wasmoon_gc_safepoint_table_t *table = &ctx_runtime(ctx)->gc_func_safepoint_tables[func_idx];
     gc_release_safepoint_table(table);
-    table->stackmap_blob = blob;
-    table->stackmap_blob_size = (uint32_t)blob_size;
-    table->code_offsets = (uint32_t *)offsets;
-    table->safepoint_count = (uint32_t)count;
+    *table = candidate;
     return 1;
 }
 
@@ -698,9 +815,14 @@ int32_t ctx_gc_set_root_scratch_internal(
 }
 
 int32_t gc_collect_for_alloc_internal(
-    jit_context_t *ctx,
-    const int64_t *roots,
-    int32_t root_count
+    jit_context_t *ctx, const int64_t *roots, int32_t root_count
+) {
+    return gc_collect_for_alloc_indexed_internal(ctx, roots, root_count, NULL);
+}
+
+int32_t gc_collect_for_alloc_indexed_internal(
+    jit_context_t *ctx, const int64_t *roots, int32_t root_count,
+    const uint8_t *indices
 ) {
     jit_context_t *activation = get_current_jit_context();
     if (activation && ctx && ctx_gc_heap(activation) == ctx_gc_heap(ctx)) ctx = activation;
@@ -716,6 +838,7 @@ int32_t gc_collect_for_alloc_internal(
     int32_t safe_root_count = root_count > 0 ? root_count : 0;
     int32_t scratch_count = state->gc_root_scratch_len > 0 ? state->gc_root_scratch_len : 0;
     int32_t caller_root_count = gc_root_scope_count(ctx);
+    if (caller_root_count < 0) return -1;
     int32_t exception_root_count = exception_copy_activation_roots(ctx, state, NULL);
     int32_t spilled_root_count = state->spilled_locals_count > 0 ? state->spilled_locals_count : 0;
     int32_t table_root_count = gc_count_table_roots(ctx);
@@ -756,8 +879,13 @@ int32_t gc_collect_for_alloc_internal(
         }
         int32_t at = 0;
         if (safe_root_count > 0 && roots) {
-            memcpy(&merged[at], roots, (size_t)safe_root_count * sizeof(int64_t));
-            at += safe_root_count;
+            if (indices) {
+                for (int32_t i = 0; i < safe_root_count; ++i)
+                    merged[at++] = roots[safepoint_u32(indices + (size_t)i * 4)];
+            } else {
+                memcpy(&merged[at], roots, (size_t)safe_root_count * sizeof(int64_t));
+                at += safe_root_count;
+            }
         }
         if (scratch_count > 0 && state->gc_root_scratch) {
             memcpy(&merged[at], state->gc_root_scratch, (size_t)scratch_count * sizeof(int64_t));
@@ -873,6 +1001,38 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_layout_field(int32_t index) {
         sizeof(void *),
         offsetof(wasmoon_memory_t, base),
         offsetof(wasmoon_memory_t, current_length),
+        (int32_t)offsetof(jit_runtime_state_t, callable_local_types) - (int32_t)offsetof(jit_context_owner_t, abi),
+        (int32_t)offsetof(jit_runtime_state_t, callable_local_type_count) - (int32_t)offsetof(jit_context_owner_t, abi),
+        offsetof(GcHeap, data),
+        offsetof(GcHeap, size),
+        offsetof(GcHeap, capacity),
+        offsetof(GcHeap, collection_limit),
+        offsetof(GcHeap, layouts),
+        offsetof(GcHeap, layout_capacity),
+        offsetof(GcHeap, identity_pages),
+        offsetof(GcHeap, identity_page_capacity),
+        offsetof(GcHeap, object_count),
+        offsetof(GcHeap, live_objects),
+        offsetof(GcHeap, live_count),
+        offsetof(GcHeap, live_capacity),
+        offsetof(GcHeap, total_allocations),
+        offsetof(GcHeap, quota_denied),
+        offsetof(GcHeap, byte_reservation),
+        offsetof(GcHeap, object_reservation),
+        offsetof(GcHeap, allocation_control),
+        offsetof(GcAllocationControl, enabled),
+        offsetof(GcAllocationControl, attempts),
+        offsetof(GcIdentityPage, offsets),
+        offsetof(GcIdentityPage, runtime_types),
+        offsetof(GcIdentityPage, live_count),
+        offsetof(GcTypeLayout, kind),
+        offsetof(GcTypeLayout, count),
+        offsetof(GcTypeLayout, size),
+        offsetof(GcTypeLayout, prefix_shape),
+        GC_ID_PAGE_BITS,
+        offsetof(GcHeap, identity_window_limit),
+        offsetof(GcHeap, identity_window_page),
+
     };
     assert(index >= 0 && (size_t)index < sizeof(fields) / sizeof(fields[0]));
     return fields[index];
@@ -971,3 +1131,8 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_poll_layout_field(int32_t index) {
     };
     return index >= 0 && index < 4 ? offsets[index] : 0;
 }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(gc_function_frame_enter_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_function_frame_leave_impl);
+#endif

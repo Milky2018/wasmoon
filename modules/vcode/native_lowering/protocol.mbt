@@ -221,6 +221,8 @@ pub struct DirectBuilder {
   priv call_abi : CallAbiElaboration?
   priv root_scope_capacity : Int32
   priv mut root_scope_object : @native.StackObject?
+  priv mut function_root_frame : (Value, Value, Value, Value, Int32)?
+  priv function_root_slots : Map[Int32, Int32]
   priv mut next_stack_map_id : Int32
   priv error : Ref[String?]
   priv mut current_block : Block
@@ -259,6 +261,8 @@ pub fn DirectBuilder::new(
     call_abi,
     root_scope_capacity,
     root_scope_object: None,
+    function_root_frame: None,
+    function_root_slots: Map([]),
     next_stack_map_id: 0,
     error: Ref(None),
     current_block: { id: (sink.entry_block)(), },
@@ -276,6 +280,160 @@ pub fn DirectBuilder::new(
   builder.target_blocks.push(builder.current_block.id)
   builder.current_block = { id: 0, }
   builder
+}
+
+///|
+/// Reserve one precise shadow frame for the function. Slots are filled once
+/// where SSA values are defined; only liveness mask words change at safepoints.
+pub fn DirectBuilder::begin_function_roots(
+  self : DirectBuilder,
+  capacity : Int32,
+) -> Unit {
+  guard capacity > 0 &&
+    self.call_abi is Some(abi) &&
+    abi.function_frame is Some(frame) else {
+    return
+  }
+  if self.function_root_frame is Some(_) {
+    self.record_error("function root frame was already entered")
+    return
+  }
+  guard self.parameter_values.get(frame.environment_parameter)
+    is Some(environment) &&
+    self.value_type(environment) == Some(Ptr64) else {
+    self.record_error(
+      "function root frame requires an execution environment parameter",
+    )
+    return
+  }
+  let header = self.create_stack_object(32, 16)
+  let roots = self.create_stack_object(capacity * 8, 16)
+  let mask = self.create_stack_object((capacity + 63) / 64 * 8, 8)
+  let header_address = self.emit_raw(
+      StackAddress(header),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  let roots_address = self.emit_raw(
+      StackAddress(roots),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  let mask_address = self.emit_raw(
+      StackAddress(mask),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  self.function_root_frame = Some(
+    (environment, header_address, roots_address, mask_address, capacity),
+  )
+  self.update_function_roots([])
+  let count = self.emit_raw(
+      I32Const(capacity.reinterpret_as_uint()),
+      [],
+      [I32],
+      InstructionMetadata::empty(),
+    )[0]
+  let call = @native.NativeCall::new(
+    External(frame.enter_symbol),
+    @native.Signature::new([Ptr64, Ptr64, Ptr64, Ptr64, I32], []),
+    Platform,
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  self.emit_raw(
+    Call(call),
+    [environment, header_address, roots_address, mask_address, count],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+}
+
+///|
+pub fn DirectBuilder::define_function_root(
+  self : DirectBuilder,
+  value : Value,
+) -> Unit {
+  guard self.function_root_frame is Some((_, _, roots, _, capacity)) else {
+    return
+  }
+  // Different SSA copies may share this native handle. Publish at every
+  // binding site: a store on one sibling path does not dominate another.
+  let slot = self.function_root_slots
+    .get(value.id)
+    .unwrap_or(self.function_root_slots.length())
+  if slot >= capacity || self.value_type(value) != Some(GcRef64) {
+    self.record_error("function root definition exceeds its admitted slot plan")
+    return
+  }
+  self.function_root_slots[value.id] = slot
+  self.emit_raw(
+    Store(StoreSpec::new(W64, GcRef64, (slot * 8).to_uint64(), Little, None)),
+    [roots, value],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+}
+
+///|
+fn DirectBuilder::update_function_roots(
+  self : DirectBuilder,
+  live : Array[Value],
+) -> Unit {
+  guard self.function_root_frame is Some((_, _, _, address, capacity)) else {
+    return
+  }
+  let masks : Array[UInt64] = Array::make((capacity + 63) / 64, 0UL)
+  for root in live {
+    guard self.function_root_slots.get(root.id) is Some(slot) else {
+      self.record_error(
+        "safepoint root has no dominating function slot definition",
+      )
+      continue
+    }
+    masks[slot / 64] = masks[slot / 64] | (1UL << (slot % 64))
+  }
+  for index, bits in masks {
+    let value = self.emit_raw(
+        I64Const(bits),
+        [],
+        [I64],
+        InstructionMetadata::empty(),
+      )[0]
+    self.emit_raw(
+      Store(StoreSpec::new(W64, I64, (index * 8).to_uint64(), Little, None)),
+      [address, value],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  }
+}
+
+///|
+fn DirectBuilder::leave_function_roots(self : DirectBuilder) -> Unit {
+  guard self.function_root_frame is Some((environment, header, _, _, _)) &&
+    self.call_abi is Some(abi) &&
+    abi.function_frame is Some(frame) else {
+    return
+  }
+  let call = @native.NativeCall::new(
+    External(frame.leave_symbol),
+    @native.Signature::new([Ptr64, Ptr64], []),
+    Platform,
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  self.emit_raw(
+    Call(call),
+    [environment, header],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
 }
 
 ///|
@@ -569,7 +727,16 @@ fn DirectBuilder::emit_call_with_abi(
     }
   }
   let mut context : Value? = None
-  if !metadata.live_gc_roots.is_empty() {
+  if self.function_root_frame is Some(_) {
+    if call.behavior.returns_twice && !metadata.live_gc_roots.is_empty() {
+      self.record_error("returns-twice calls cannot transport live SSA roots")
+    }
+    if call.behavior.gc_safepoint ||
+      call.behavior.cancellation_safepoint ||
+      !metadata.live_gc_roots.is_empty() {
+      self.update_function_roots(metadata.live_gc_roots)
+    }
+  } else if !metadata.live_gc_roots.is_empty() {
     if call.behavior.returns_twice {
       self.record_error("returns-twice calls cannot use a caller root scope")
     } else if elaboration.root_scope is Some(scope) &&
@@ -811,6 +978,7 @@ pub fn DirectBuilder::return_(
   self : DirectBuilder,
   values : Array[Value],
 ) -> Unit {
+  self.leave_function_roots()
   self.set_terminator(Return(values.copy()), TerminatorMetadata::new(None, []))
 }
 
@@ -841,6 +1009,7 @@ pub fn DirectBuilder::tail_call_with_metadata(
   operands : Array[Value],
   metadata : TerminatorMetadata,
 ) -> Unit {
+  self.leave_function_roots()
   self.set_terminator(TailCall(call, operands.copy()), metadata)
 }
 
@@ -851,6 +1020,7 @@ pub fn DirectBuilder::noreturn_call_with_metadata(
   operands : Array[Value],
   metadata : TerminatorMetadata,
 ) -> Unit {
+  self.update_function_roots(metadata.live_gc_roots)
   self.set_terminator(NoReturnCall(call, operands.copy()), metadata)
 }
 

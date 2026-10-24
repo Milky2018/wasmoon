@@ -300,6 +300,9 @@ fn JITModuleContext::start_core_func_resumable(
   guard self.jit_module.get_func(func_idx) is Some(func) else {
     raise FunctionUnavailable(func_idx)
   }
+  let _ = @executor.validate_call_arguments(store, instance, func_idx, args) catch {
+    error => raise HostInvocation(error)
+  }
   let encoded_args = encode_jit_entry_args(
     args,
     func.param_types,
@@ -390,7 +393,9 @@ pub fn JITModuleContext::call_core_func_resumable(
 ///
 /// This is the shared entry-call seam used by WAST and component adapters. It
 /// keeps globals and tables coherent with interpreter-visible store state and
-/// scopes the C-heap registration to the native invocation.
+/// scopes the C-heap registration to the native invocation. Raw reference
+/// indices must originate in the supplied Store; kind, liveness, nullability
+/// and concrete subtyping are checked before native execution.
 pub fn JITModuleContext::call_core_func(
   self : JITModuleContext,
   store : @runtime.Store,
@@ -403,6 +408,9 @@ pub fn JITModuleContext::call_core_func(
   }
   guard self.jit_module.get_func(func_idx) is Some(func) else {
     raise FunctionUnavailable(func_idx)
+  }
+  let _ = @executor.validate_call_arguments(store, instance, func_idx, args) catch {
+    error => raise HostInvocation(error)
   }
   let encoded_args = encode_jit_entry_args(
     args,

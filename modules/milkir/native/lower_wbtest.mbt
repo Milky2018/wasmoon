@@ -36,3 +36,25 @@ test "trusted core lowering skips redundant input validation" {
     content="[TargetConstructionStarted, NativeLoweringFinished]",
   )
 }
+
+///|
+test "GC-free functions skip reference liveness while unknown calls retain it" {
+  for call in [false, true] {
+    let b = @milkir.FunctionBuilder::FunctionBuilder("reference_liveness")
+    let reference = b.add_param(Ref)
+    b.add_result(Ref)
+    if call {
+      let symbol = b.get_function().declare_external_symbol("unknown_host")
+      b.call_symbol(symbol, None, []) |> ignore
+    }
+    b.return_([reference])
+    let analyses = Ref(0)
+    trace_lowering(b.finalize(), on_event=fn(event) {
+      if event is PreparationStarted(name="native_gc_liveness") {
+        analyses.val += 1
+      }
+    })
+    |> ignore
+    assert_eq(analyses.val, if call { 1 } else { 0 })
+  }
+}

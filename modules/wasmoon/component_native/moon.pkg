@@ -1,6 +1,8 @@
 import {
+  "Milky2018/wasm_milkir/optimize" @wasm_optimize,
   "Milky2018/milkir/optimize",
   "Milky2018/wasm_core/encoder",
+  "Milky2018/wasm_core/parser",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon",
   "Milky2018/wasmoon/component/runtime_impl",
@@ -11,11 +13,11 @@ import {
   "Milky2018/wasmoon/wast/jit" @core_jit,
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/wasm_component" @component,
+  "Milky2018/wasm_component/validator" @component_validator,
 }
 
 import {
   "moonbitlang/async",
-  "Milky2018/wasm_component" @component,
   "Milky2018/wasm_component/text" @component_text,
-  "Milky2018/wasm_component/validator" @component_validator,
 } for "wbtest"

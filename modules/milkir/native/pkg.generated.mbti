@@ -25,6 +25,7 @@ pub suberror NativeLowerError {
   InvalidTargetLowering(message~ : String)
 } derive(Eq, @debug.Debug)
 pub fn NativeLowerError::equal(Self, Self) -> Bool
+pub fn NativeLowerError::invalid_milkir(String) -> Self
 pub fn NativeLowerError::not_equal(Self, Self) -> Bool
 pub fn NativeLowerError::output(Self, &Logger) -> Unit
 pub fn NativeLowerError::to_repr(Self) -> @debug.Repr
@@ -33,6 +34,7 @@ pub impl Show for NativeLowerError
 
 // Types and methods
 pub(all) enum NativeLowerEvent {
+  PreparationStarted(name~ : String)
   InputValidationStarted
   TargetConstructionStarted
   NativeLoweringFinished

@@ -34,6 +34,7 @@ typedef struct {
     int32_t gc_root_scratch_len;
     int32_t gc_root_scratch_cap;
     wasmoon_gc_frame_t *gc_frame_chain_head;
+    wasmoon_gc_function_frame_t *gc_function_frame_head;
     wasmoon_gc_root_scope_t *gc_root_scope_head;
     // Popped storage belongs to this invocation, including while parked.
     wasmoon_gc_root_scope_t *gc_root_scope_free;

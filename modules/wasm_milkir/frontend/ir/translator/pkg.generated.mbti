@@ -18,6 +18,7 @@ pub fn translate_function_body(TranslationContext, String, @types.FuncType, Arra
 // Types and methods
 type TranslationContext
 pub fn TranslationContext::from_module(@types.Module, @embedding.EmbeddingEnvironment, memory_max_override? : Int32?, func_base? : Int32, import_remap? : Array[Int32]) -> Self
+pub fn TranslationContext::scalar_callees(Self, @types.Module) -> Map[Int32, @milkir.Function]
 pub fn TranslationContext::wasm_validation_context(Self) -> @wasm_milkir.WasmValidationContext
 
 // Type aliases

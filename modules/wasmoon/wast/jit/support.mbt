@@ -1094,14 +1094,12 @@ fn encode_value(
       match value {
         Null => Some([NULL_REF])
         StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
-        ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)]) // best-effort
         _ => None
       }
     ArrayRef | RefArray(_) | RefNullArray(_) | RefArrayAbs =>
       match value {
         Null => Some([NULL_REF])
         ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
-        StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)]) // best-effort
         _ => None
       }
     AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
@@ -1372,6 +1370,34 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
       defer (if invoke_result is ImportedThrownOwned(_, _, roots) {
         roots.release()
       })
+      // Completion hooks can collect or reenter before these values are encoded.
+      let returned_roots = if invoke_result is ImportedReturned(values) {
+        let roots = values.filter(value => {
+          match value {
+            StructRef(_)
+            | ArrayRef(_)
+            | ExnRef(_)
+            | ContRef(_)
+            | ExternRef(_) => true
+            I32(_)
+            | I64(_)
+            | F32(_)
+            | F64(_)
+            | V128(_)
+            | FuncRef(_)
+            | I31(_)
+            | Null => false
+          }
+        })
+        if roots.is_empty() {
+          None
+        } else {
+          Some(store.pin_gc_roots(roots))
+        }
+      } else {
+        None
+      }
+      defer (if returned_roots is Some(roots) { roots.release() })
       after_dispatch()
       let results : Array[@types.Value] = match invoke_result {
         ImportedReturned(values) => values
@@ -1406,8 +1432,13 @@ pub fn JITModuleContext::install_hostcall_dispatcher(
           return HostcallTrap(8)
         }
       }
-      if results.length() != ft.results.length() {
-        return HostcallTrap(3)
+      @executor.validate_call_results(store, instance, ft.results, results) catch {
+        error => {
+          if store.native_execution_state().current_invocation() is Some(id) {
+            self.async_host_errors.set(id, error)
+          }
+          return host_error_outcome(error)
+        }
       }
 
       // Encode results right after the arg slots region.

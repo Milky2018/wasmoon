@@ -221,12 +221,9 @@ fn OptimizerSession::rewrite_int_binary(
       }
       self.rewrite_rotation(inst, op, prefix)
     }
-    UnsignedMulHigh
-    | SignedMulHigh
-    | SignedDiv
-    | UnsignedDiv
-    | SignedRem
-    | UnsignedRem => false
+    SignedDiv | UnsignedDiv | SignedRem | UnsignedRem =>
+      self.divide_by_constant(inst, op, prefix)
+    UnsignedMulHigh | SignedMulHigh => false
   }
 }
 

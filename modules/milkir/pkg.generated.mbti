@@ -176,8 +176,9 @@ pub struct ExtOp {
   dialect : String
   opcode : String
   immediates : FixedArray[Int32]
-} derive(@debug.Debug)
-pub fn ExtOp::ExtOp(String, String, FixedArray[Int32]) -> Self
+  effects : ExtensionEffects?
+}
+pub fn ExtOp::ExtOp(String, String, FixedArray[Int32], effects? : ExtensionEffects?) -> Self
 pub fn ExtOp::equal(Self, Self) -> Bool
 pub fn ExtOp::hash(Self) -> Int32
 pub fn ExtOp::hash_combine(Self, Hasher) -> Unit
@@ -186,6 +187,7 @@ pub fn ExtOp::not_equal(Self, Self) -> Bool
 pub fn ExtOp::to_repr(Self) -> @debug.Repr
 pub impl Eq for ExtOp
 pub impl Hash for ExtOp
+pub impl @debug.Debug for ExtOp
 
 pub(all) struct ExtOpDescriptor {
   dialect : String
@@ -203,12 +205,27 @@ pub fn ExtOpDescriptor::not_equal(Self, Self) -> Bool
 pub fn ExtOpDescriptor::to_repr(Self) -> @debug.Repr
 pub fn ExtOpDescriptor::with_immediate_range(String, String, Int32, Int32) -> Self
 
+pub(all) struct ExtensionEffects {
+  read : AliasRegion?
+  write : AliasRegion?
+  may_trap : Bool
+  observable : Bool
+  pointer_region : AliasRegion?
+  pointer_bytes : Int32
+} derive(Eq, Hash, @debug.Debug)
+pub fn ExtensionEffects::equal(Self, Self) -> Bool
+pub fn ExtensionEffects::hash(Self) -> Int32
+pub fn ExtensionEffects::hash_combine(Self, Hasher) -> Unit
+pub fn ExtensionEffects::not_equal(Self, Self) -> Bool
+pub fn ExtensionEffects::to_repr(Self) -> @debug.Repr
+
 pub struct ExtensionInstView {
   op : ExtOp
   operand_types : ReadOnlyArray[Type]
   result_types : ReadOnlyArray[Type]
 } derive(@debug.Debug)
 pub fn ExtensionInstView::to_repr(Self) -> @debug.Repr
+pub fn ExtensionInstView::with_op(Self, ExtOp) -> Self
 
 pub struct ExternalSymbol {
   name : String
@@ -278,6 +295,7 @@ pub struct Function {
 }
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
+pub fn Function::append_block_param(Self, Block, Type) -> Value
 pub fn Function::block_instruction_at(Self, Block, Int32) -> Inst?
 pub fn Function::block_instruction_ids(Self, Block) -> ArrayView[Int32]
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol

@@ -365,13 +365,13 @@ extern "c" fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64 = "wasmoo
 /// Get the copied caller-root scope push helper.
 /// Signature: void push(jit_context_t *ctx, int64_t *roots, int32_t root_count)
 /// Traps if the runtime cannot copy the roots.
-extern "c" fn c_jit_get_gc_push_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_push_root_scope_ptr"
+extern "c" fn c_jit_get_gc_function_frame_enter_ptr() -> Int64 = "wasmoon_jit_get_gc_function_frame_enter_ptr"
 
 ///|
 /// Get the copied caller-root scope pop helper.
 /// Signature: void pop(jit_context_t *ctx)
 /// Traps if no matching scope exists.
-extern "c" fn c_jit_get_gc_pop_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_pop_root_scope_ptr"
+extern "c" fn c_jit_get_gc_function_frame_leave_ptr() -> Int64 = "wasmoon_jit_get_gc_function_frame_leave_ptr"
 
 ///|
 /// Clear the GC heap while keeping the managed context alive for the C call.
@@ -801,3 +801,27 @@ extern "c" fn c_jit_get_trap_frame_count() -> Int32 = "wasmoon_jit_get_trap_fram
 
 ///|
 extern "c" fn c_jit_get_trap_frame_pc(index : Int32) -> Int64 = "wasmoon_jit_get_trap_frame_pc"
+
+///|
+extern "c" fn c_jit_get_gc_struct_get_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_get_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_struct_set_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_set_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_get_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_get_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_set_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_set_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_len_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_len_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_array_data_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_array_data_heap_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_struct_data_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_data_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_reserve_struct_fast_ptr() -> Int64 = "wasmoon_jit_get_gc_reserve_struct_fast_ptr"

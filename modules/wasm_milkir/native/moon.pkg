@@ -1,4 +1,6 @@
 import {
+  "Milky2018/milkir/optimize" @generic,
+  "Milky2018/wasm_milkir/effects",
   "Milky2018/wasm_milkir",
   "Milky2018/milkir",
   "Milky2018/vcode/native_types",
@@ -6,3 +8,7 @@ import {
   "Milky2018/milkir/native" @milkir_native,
   "Milky2018/milkir/native/adapter",
 }
+
+import {
+  "Milky2018/wasm_milkir/optimize" @wasm_opt,
+} for "wbtest"

@@ -228,13 +228,13 @@ fn gc_end_frame(context : JITContext) -> Unit {
 }
 
 ///|
-fn gc_push_root_scope_symbol() -> String {
-  "wasmoon.runtime.gc.push_root_scope"
+fn gc_function_frame_enter_symbol() -> String {
+  "wasmoon.runtime.gc.function_frame_enter"
 }
 
 ///|
-fn gc_pop_root_scope_symbol() -> String {
-  "wasmoon.runtime.gc.pop_root_scope"
+fn gc_function_frame_leave_symbol() -> String {
+  "wasmoon.runtime.gc.function_frame_leave"
 }
 
 ///|

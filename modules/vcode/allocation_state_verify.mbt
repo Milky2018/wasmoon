@@ -1,6 +1,6 @@
 ///|
 priv struct AllocationState {
-  values : Map[(Int32, Int32), Value]
+  values : Map[(Int32, Int32), Array[Value]]
 }
 
 ///|
@@ -25,9 +25,9 @@ fn AllocationState::new() -> AllocationState {
 
 ///|
 fn AllocationState::copy(self : AllocationState) -> AllocationState {
-  let values : Map[(Int32, Int32), Value] = Map([])
+  let values : Map[(Int32, Int32), Array[Value]] = Map([])
   for key, value in self.values {
-    values[key] = value
+    values[key] = value.copy()
   }
   { values, }
 }
@@ -37,18 +37,17 @@ fn AllocationState::equals(
   self : AllocationState,
   other : AllocationState,
 ) -> Bool {
-  let mut count = 0
-  for key, value in self.values {
-    count = count + 1
-    if other.values.get(key) != Some(value) {
+  if self.values.length() != other.values.length() {
+    return false
+  }
+  for key, values in self.values {
+    guard other.values.get(key) is Some(other_values) else { return false }
+    if values.length() != other_values.length() ||
+      !values.all(value => other_values.contains(value)) {
       return false
     }
   }
-  let mut other_count = 0
-  for _ in other.values {
-    other_count = other_count + 1
-  }
-  count == other_count
+  true
 }
 
 ///|
@@ -56,27 +55,30 @@ fn AllocationState::meet_with(
   self : AllocationState,
   other : AllocationState,
 ) -> Unit {
-  let removed : Array[(Int32, Int32)] = []
-  for key, value in self.values {
-    if other.values.get(key) != Some(value) {
-      removed.push(key)
+  for key in self.values.keys().to_array() {
+    match other.values.get(key) {
+      None => self.values.remove(key)
+      Some(other_values) => {
+        let retained = self.values[key].filter(value => {
+          other_values.contains(value)
+        })
+        if retained.is_empty() {
+          self.values.remove(key)
+        } else {
+          self.values[key] = retained
+        }
+      }
     }
-  }
-  for key in removed {
-    self.values.remove(key)
   }
 }
 
 ///|
 fn AllocationState::remove_value(self : AllocationState, value : Value) -> Unit {
-  let removed : Array[(Int32, Int32)] = []
-  for key, current in self.values {
-    if current == value {
-      removed.push(key)
+  for key in self.values.keys().to_array() {
+    self.values[key].retain(other => other != value)
+    if self.values[key].is_empty() {
+      self.values.remove(key)
     }
-  }
-  for key in removed {
-    self.values.remove(key)
   }
 }
 
@@ -94,7 +96,10 @@ fn AllocationState::contains(
   value : Value,
   location : AllocationLocation,
 ) -> Bool {
-  self.values.get(allocation_location_key(location)) == Some(value)
+  self.values
+  .get(allocation_location_key(location))
+  .map(values => values.contains(value))
+  .unwrap_or(false)
 }
 
 ///|
@@ -103,7 +108,7 @@ fn AllocationState::set(
   value : Value,
   location : AllocationLocation,
 ) -> Unit {
-  self.values[allocation_location_key(location)] = value
+  self.values[allocation_location_key(location)] = [value]
 }
 
 ///|
@@ -140,7 +145,9 @@ fn apply_state_edit(
   if !state.contains(value, from) {
     raise InvalidEdit(index=allocation.edit_index(edit))
   }
-  state.set(value, to)
+  state.values[allocation_location_key(to)] = state.values[allocation_location_key(
+    from,
+  )].copy()
 }
 
 ///|
@@ -248,7 +255,11 @@ fn[Inst] prepare_allocation_successor_state(
         if !original.contains(value, allocation.import_location(from).unwrap()) {
           raise InvalidEdit(index=allocation.edit_index(edit))
         }
-        state.set(value, allocation.import_location(to).unwrap())
+        state.values[allocation_location_key(
+          allocation.import_location(to).unwrap(),
+        )] = original.values[allocation_location_key(
+          allocation.import_location(from).unwrap(),
+        )].copy()
       }
     None => ()
   }
@@ -259,8 +270,22 @@ fn[Inst] prepare_allocation_successor_state(
     if !state.contains(argument, home) {
       raise InvalidEdgeMove(index=-1)
     }
+  }
+  // Phi arguments are checked in the incoming state, before parallel rename.
+  for parameter in parameters {
     state.remove_value(parameter)
-    state.set(parameter, home)
+  }
+  for parameter in parameters {
+    let key = allocation_location_key(
+      allocation.value_locations[parameter.id].unwrap(),
+    )
+    match state.values.get(key) {
+      Some(aliases) =>
+        if !aliases.contains(parameter) {
+          aliases.push(parameter)
+        }
+      None => state.values[key] = [parameter]
+    }
   }
   state
 }

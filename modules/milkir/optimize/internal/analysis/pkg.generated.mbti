@@ -10,7 +10,13 @@ pub fn compute_use_counts(@milkir.Function) -> Array[Int32]
 
 pub fn is_cheap_rematerializable_constant(@milkir.Inst) -> Bool
 
+pub fn may_write_region(@milkir.Inst, Array[@milkir.AliasRegion?], @milkir.AliasRegion) -> Bool
+
+pub fn nontrapping_loads(@milkir.Function) -> Array[Bool]
+
 pub fn opcode_semantics(@milkir.Opcode) -> OpcodeSemantics
+
+pub fn pointer_regions(@milkir.Function, instructions? : Array[@milkir.Inst]) -> Array[@milkir.AliasRegion?]
 
 // Errors
 

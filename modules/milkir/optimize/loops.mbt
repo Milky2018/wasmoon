@@ -3,7 +3,31 @@
 ///|
 /// Loop Invariant Code Motion
 /// Moves loop-invariant computations out of loops to the preheader
-fn hoist_loop_invariants(func : @milkir.Function) -> OptResult {
+pub fn hoist_loop_invariants(
+  func : @milkir.Function,
+  guard_entries~ : Bool = false,
+) -> OptResult {
+  let result = OptResult::OptResult()
+  // Rebuild only when an entry guard changes the CFG. Re-running a complete
+  // scalar pipeline between placements can sink the same cheap constants
+  // back into the loop and make instruction motion oscillate indefinitely.
+  for _ in 0..<(if guard_entries { 16 } else { 1 }) {
+    let (placement, rebuild) = hoist_loop_invariants_once(func, guard_entries~)
+    if placement.changed {
+      result.mark_changed()
+    }
+    if !rebuild {
+      break
+    }
+  }
+  result
+}
+
+///|
+fn hoist_loop_invariants_once(
+  func : @milkir.Function,
+  guard_entries~ : Bool,
+) -> (OptResult, Bool) {
   let result = OptResult::OptResult()
   let cfg = @milkir.CFG::build(func)
   let loops = cfg.find_loops()
@@ -24,14 +48,23 @@ fn hoist_loop_invariants(func : @milkir.Function) -> OptResult {
     // Instruction results
     for inst_id in block.instruction_ids() {
       let inst = func.instruction_by_id(inst_id).unwrap()
-      if inst.first_result() is Some(v) {
-        value_to_block.set(v.id, block.id)
+      for value in inst.results {
+        value_to_block.set(value.id, block.id)
       }
     }
   }
 
   // Process each loop
   for loop_ in loops {
+    let first = if guard_entries {
+      first_iteration_invariants(func, loop_, value_to_block)
+    } else {
+      Map([])
+    }
+    if !first.is_empty() && merge_loop_entries(func, cfg, loop_) {
+      result.mark_changed()
+      return (result, true)
+    }
     // Find preheader - the unique predecessor outside the loop
     if cfg.get_loop_preheader(loop_) is Some(preheader_id) {
       // Find preheader block
@@ -44,14 +77,34 @@ fn hoist_loop_invariants(func : @milkir.Function) -> OptResult {
       }
       if preheader_block is Some(preheader) {
         // Find loop-invariant instructions and move them
-        let hoisted = hoist_from_loop(func, loop_, preheader, value_to_block)
-        if hoisted {
+        let guarded = if !first.is_empty() {
+          guard_loop_entry(func, loop_, preheader, value_to_block)
+        } else {
+          None
+        }
+        let hoisted = hoist_from_loop(
+          func,
+          loop_,
+          guarded.unwrap_or(preheader),
+          value_to_block,
+          if guarded is Some(_) {
+            first
+          } else {
+            Map([])
+          },
+        )
+        if hoisted || guarded is Some(_) {
           result.mark_changed()
+        }
+        // A new guard changes nesting/preheaders. Rebuild CFG and definition
+        // facts before processing another loop, rather than trusting stale sets.
+        if guarded is Some(_) {
+          return (result, true)
         }
       }
     }
   }
-  result
+  (result, false)
 }
 
 ///|
@@ -77,13 +130,58 @@ fn is_loop_invariant(
   loop_ : @milkir.Loop,
   value_to_block : @hashmap.HashMap[Int32, Int32],
   invariant_values : @hashmap.HashMap[Int32, Bool],
+  pointers : Array[@milkir.AliasRegion?],
+  readable : Array[Bool],
+  func : @milkir.Function,
+  first_iteration~ : Bool = false,
 ) -> Bool {
   // Instructions with observable effects or traps cannot be hoisted.
-  if opcode_semantics(inst.opcode).must_preserve_if_unused() {
+  let admitted_load = readable[inst.id]
+  let semantics = opcode_semantics(inst.opcode)
+  let first_read = first_iteration &&
+    semantics.memory is Read &&
+    !semantics.other_observable_effect
+  if semantics.must_preserve_if_unused() && !admitted_load && !first_read {
     return false
   }
   if inst.opcode is GlobalValue(_) {
     return false
+  }
+
+  let read_region = if admitted_load {
+    match inst.args.get(0) {
+      Some(base) => pointers[base.id]
+      None => None
+    }
+  } else {
+    match inst.opcode {
+      Ext(extension, _) =>
+        match extension.effects {
+          Some(effects) => effects.read
+          None => None
+        }
+      Memory(Load(_) | LoadNarrow(_, _, _)) =>
+        inst.args.get(0).map(base => pointers[base.id].unwrap_or(Other))
+      _ => None
+    }
+  }
+  if admitted_load && read_region is None {
+    return false
+  }
+  if read_region is Some(region) {
+    for block in func.blocks {
+      if loop_.contains(block.id) {
+        for id in func.block_instruction_ids(block) {
+          if @analysis.may_write_region(
+              func.instruction_by_id(id).unwrap(),
+              pointers,
+              region,
+            ) {
+            return false
+          }
+        }
+      }
+    }
   }
 
   // Check all operands
@@ -105,8 +203,11 @@ fn hoist_from_loop(
   loop_ : @milkir.Loop,
   preheader : @milkir.Block,
   value_to_block : @hashmap.HashMap[Int32, Int32],
+  first_iteration : Map[Int32, Bool],
 ) -> Bool {
   let mut any_hoisted = false
+  let pointers = @analysis.pointer_regions(func)
+  let readable = @analysis.nontrapping_loads(func)
   let invariant_values : @hashmap.HashMap[Int32, Bool] = HashMap([])
 
   // Iterate until no more invariants found
@@ -132,7 +233,16 @@ fn hoist_from_loop(
               None => true
             }
             if !already_invariant &&
-              is_loop_invariant(inst, loop_, value_to_block, invariant_values) {
+              is_loop_invariant(
+                inst,
+                loop_,
+                value_to_block,
+                invariant_values,
+                pointers,
+                readable,
+                func,
+                first_iteration=first_iteration.contains(inst.id),
+              ) {
               // Mark result as invariant
               if inst.first_result() is Some(v) {
                 invariant_values.set(v.id, true)

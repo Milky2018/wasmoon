@@ -715,6 +715,7 @@ pub fn Store::close(Self) -> Unit
 pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int32
 pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError
 pub fn Store::counts(Self) -> StoreCounts
+pub fn Store::current_type_graph(Self) -> (Array[@types.SubType], Array[Int32])
 pub fn Store::current_types(Self) -> Array[@types.SubType]
 pub fn Store::decode_module(Self, Bytes) -> @types.Module raise
 pub fn Store::decode_native_exception(Self, Int64) -> @types.Value raise RuntimeError
@@ -757,8 +758,10 @@ pub fn Store::host_call_instance(Self, Int32) -> ModuleInstance raise RuntimeErr
 pub fn Store::host_exports(Self, ArrayView[(String, ExternVal)]) -> ModuleInstance raise RuntimeError
 pub fn Store::identity(Self) -> StoreIdentity
 pub fn[T, E : Error] Store::in_execution_scope(Self, ExecutionScope?, () -> T raise E) -> T raise E
+pub fn Store::is_array_reference(Self, Int32) -> Bool
 pub fn Store::is_closed(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int32) -> Bool
+pub fn Store::is_struct_reference(Self, Int32) -> Bool
 pub fn Store::jit_funcref_entries(Self) -> Array[StoreFuncrefEntry]
 pub fn Store::leave_interpreter_boundary(Self) -> Unit
 pub fn Store::lookup_jit_funcref_ptr(Self, Int32) -> Int64?

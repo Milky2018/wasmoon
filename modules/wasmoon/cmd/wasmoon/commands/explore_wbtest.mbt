@@ -105,6 +105,7 @@ test "explore matches production artifacts with compact context and imported fun
           @wasmoon.wasm_frontend_embedding_environment(context_shape=shape),
         )
         let validation = @wasm_frontend.wasm_validation_context(context)
+        let scalar_callees = @wasm_frontend.scalar_callees(context, mod_)
         let functions : Array[@artifact.FunctionCode] = []
         for i, code in mod_.codes {
           let index = i + count_func_imports(mod_.imports)
@@ -116,9 +117,11 @@ test "explore matches production artifacts with compact context and imported fun
             code.locals,
             code.body,
           )
-          @optimize.optimize_with_level(
+          @wasm_optimize.optimize_with_level(
             function,
+            validation,
             @optimize.OptLevel::from_int(level),
+            scalar_callees~,
           )
           |> ignore
           functions.push(

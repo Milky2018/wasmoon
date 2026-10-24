@@ -134,7 +134,8 @@ fn root_function_results(
 }
 
 ///|
-fn check_call_arguments(
+/// Validate raw embedding arguments before interpreter or native execution.
+pub fn validate_call_arguments(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
   index : Int32,
@@ -144,6 +145,19 @@ fn check_call_arguments(
   let signature = function_signature(store, instance, index)
   check_call_values(store, instance, args, signature.params)
   signature
+}
+
+///|
+/// Admit host results before an interpreter or native guest can consume them.
+/// A tagged word's shape does not establish nullability, object kind or the
+/// canonical subtype required by the importing instance.
+pub fn validate_call_results(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  expected : ArrayView[@types.ValueType],
+  values : Array[@types.Value],
+) -> Unit raise @runtime.RuntimeError {
+  check_call_values(store, instance, values, expected)
 }
 
 ///|
@@ -173,13 +187,13 @@ fn check_call_values(
         target != NullContRef &&
         target != RefNoCont
       (StructRef(reference), target) =>
-        store.is_gc_valid(reference) &&
+        store.is_struct_reference(reference) &&
         (match target {
           StructRef | RefStructAbs | AnyRef | RefAny | RefEq | RefNullEq => true
           _ => value_matches_type(value, target, store, instance)
         })
       (ArrayRef(reference), target) =>
-        store.is_gc_valid(reference) &&
+        store.is_array_reference(reference) &&
         (match target {
           ArrayRef | RefArrayAbs | AnyRef | RefAny | RefEq | RefNullEq => true
           _ => value_matches_type(value, target, store, instance)

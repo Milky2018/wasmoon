@@ -785,7 +785,7 @@ test "GC metadata survives MoonBit owners and supports replacement and clearing"
 ///|
 fn context_with_owned_gc_payloads() -> @jit_ffi.JITContext {
   let context = @jit_ffi.JITContext::new(2)
-  let blob = Bytes::from_array([1, 2, 3])
+  let blob = empty_safepoint_blob(2)
   let offsets : FixedArray[Int32] = [4, 12]
   let addresses : FixedArray[Int64] = [16L, 32L]
   for _ in 0..<2 {
@@ -818,9 +818,7 @@ test "GC payloads retain MoonBit owners through replacement and legacy bindings"
   assert_true(first.bind_gc_safepoints(0, b"", []))
   first.bind_gc_function_addresses([])
   inspect(@native_test_support.context_gc_payload_valid(second), content="1")
-  assert_true(
-    first.bind_gc_safepoints(0, Bytes::from_array([1, 2, 3]), [4, 12]),
-  )
+  assert_true(first.bind_gc_safepoints(0, empty_safepoint_blob(2), [4, 12]))
   first.bind_gc_function_addresses([16L, 32L])
   inspect(@native_test_support.context_gc_payload_valid(first), content="1")
 }
@@ -905,7 +903,9 @@ fn contexts_with_shared_safepoints() -> (
   @jit_ffi.JITContext,
 ) raise {
   let offsets : FixedArray[Int32] = [4]
-  let owner = @jit_ffi.PreparedSafepoints::new([b"\x01"], [offsets])
+  let owner = @jit_ffi.PreparedSafepoints::new([empty_safepoint_blob(1)], [
+    offsets,
+  ])
   offsets[0] = 99
   let a = @jit_ffi.JITContext::new(2)
   let b = @jit_ffi.JITContext::new(2)
@@ -923,7 +923,7 @@ test "empty safepoints allocate no table and clearing still releases an entry" {
       assert_true(context.bind_gc_safepoints(i, b"", []))
     }
     inspect(@native_test_support.safepoint_slots(context), content="0")
-    assert_true(context.bind_gc_safepoints(0, b"\x01", [4]))
+    assert_true(context.bind_gc_safepoints(0, empty_safepoint_blob(1), [4]))
     assert_eq(@native_test_support.safepoint_slots(context), count)
     assert_true(context.bind_gc_safepoints(0, b"", []))
   }
@@ -1412,4 +1412,13 @@ extern "c" fn root_scope_reuse() -> Int32 = "wasmoon_test_root_scope_reuse"
 ///|
 test "root scope reuse preserves nested roots and failed growth" {
   inspect(root_scope_reuse(), content="1")
+}
+
+///|
+fn empty_safepoint_blob(count : Int32) -> Bytes {
+  let bytes : Array[Byte] = [2, 0, 0, 0, count.to_byte(), 0, 0, 0]
+  for _ in 0..<count {
+    bytes.append([0, 0, 0, 0, 0, 0, 0, 0])
+  }
+  Bytes::from_array(bytes)
 }

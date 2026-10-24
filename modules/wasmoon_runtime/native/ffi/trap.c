@@ -59,13 +59,16 @@
 
 // ============ Trap Activations (Thread-Local) ============
 
-static _Thread_local jit_trap_activation_t fallback_activation;
+_Thread_local jit_activation_slot_t wasmoon_jit_activation_slot;
+#define fallback_activation wasmoon_jit_activation_slot.fallback
+#define current_activation wasmoon_jit_activation_slot.current
 static _Thread_local jit_trap_activation_t observed_activation;
-static _Thread_local jit_trap_activation_t *current_activation = NULL;
+
 static _Thread_local int observed_activation_valid = 0;
 
+
 jit_trap_activation_t *jit_current_trap_activation(void) {
-    return current_activation ? current_activation : &fallback_activation;
+    return jit_current_trap_activation_fast();
 }
 
 jit_trap_activation_t *jit_observed_trap_activation(void) {
@@ -125,7 +128,8 @@ static int32_t activation_root_count(
     const jit_trap_activation_t *activation
 ) {
     if (!activation) return 0;
-    int64_t total = 0;
+    int64_t total = jit_copy_function_frame_roots(&activation->execution, NULL);
+    if (total < 0) return -1;
     const wasmoon_gc_root_scope_t *scope =
         activation->execution.gc_root_scope_head;
     while (scope) {
@@ -149,7 +153,8 @@ static int32_t copy_activation_roots(
     int64_t *destination
 ) {
     if (!activation || !destination) return 0;
-    int32_t at = 0;
+    int32_t at = jit_copy_function_frame_roots(&activation->execution, destination);
+    if (at < 0) return -1;
     const wasmoon_gc_root_scope_t *scope =
         activation->execution.gc_root_scope_head;
     while (scope) {
@@ -206,6 +211,13 @@ void jit_mark_active_gc_roots(GcHeap *heap) {
         jit_context_t *context = activation->context;
         if (!activation->active || !context || ctx_gc_heap(context) != heap) continue;
         const jit_execution_state_t *state = &activation->execution;
+        for (const wasmoon_gc_function_frame_t *frame = state->gc_function_frame_head;
+             frame; frame = frame->prev) {
+            for (int32_t slot = 0; slot < frame->slot_count; ++slot) {
+                if ((frame->mask[(uint32_t)slot / 64] >> ((uint32_t)slot % 64)) & 1)
+                    gc_heap_mark_roots(heap, frame->roots + slot, 1);
+            }
+        }
         for (const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
              scope; scope = scope->prev) {
             gc_heap_mark_roots(heap, scope->roots, scope->root_count);

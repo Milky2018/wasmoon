@@ -133,8 +133,16 @@ test "x64 tail calls validate hidden result-area clobbers with live roots" {
     let builder = @lowering.DirectBuilder::new(
       [Ptr64, Ptr64, GcRef64],
       session.sink(),
+      call_abi=@lowering.CallAbiElaboration::new(
+        function_frame=@lowering.FunctionRootFrameAbi::new(
+          @native.ExternalSymbol::new("frame.enter"),
+          @native.ExternalSymbol::new("frame.leave"),
+        ),
+      ),
     )
+    builder.begin_function_roots(1)
     let params = builder.parameters()
+    builder.define_function_root(params[2])
     let call = @native.NativeCall::new(
       if indirect {
         Indirect

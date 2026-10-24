@@ -19,6 +19,16 @@ pub async fn serve_http(
     })
     let component = load_http_service(file)
     let layers = middleware.map(path => load_http_service(path))
+    let prepared_code = if use_jit {
+      Some(
+        @component_native.prepare_native_component_code(
+          [component, ..layers],
+          opt_level=0,
+        ),
+      )
+    } else {
+      None
+    }
     let server = @socket.TcpServer(
       @socket.Addr::parse(address),
       reuse_addr=true,
@@ -28,9 +38,9 @@ pub async fn serve_http(
     server.run_forever(
       async fn(socket, _) {
         defer socket.close()
-        let linker = if use_jit {
+        let linker = if prepared_code is Some(code) {
           @runtime_impl.ComponentLinker::with_core_execution_engine(
-            @component_native.open_native_component_session(opt_level=0),
+            code.open_session(),
           )
         } else {
           ComponentLinker()

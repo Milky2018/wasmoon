@@ -24,6 +24,8 @@ pub using @implementation {
   instantiate_validated_module_with_init,
   instantiate_with_linker,
   instantiate_with_linker_async,
+  validate_call_arguments,
+  validate_call_results,
   validate_continuation_gc_storage,
   validate_imports_with_diagnostics,
   type CallExportFailure,

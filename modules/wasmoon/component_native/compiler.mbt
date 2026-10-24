@@ -223,19 +223,12 @@ fn encoded_component_module(module_ : @types.Module) -> Bytes {
 
 ///|
 fn compile_component_artifact(
-  store : @runtime.Store,
   module_ : @types.Module,
   target : @wasmoon_jit.NativeTarget,
   actual_memory_max : Int32?,
   opt_level : Int32,
+  checkpoint~ : () -> Unit raise @runtime_impl.ComponentRuntimeError,
 ) -> @artifact.Artifact raise @runtime_impl.ComponentRuntimeError {
-  fn checkpoint() -> Unit raise @runtime_impl.ComponentRuntimeError {
-    if store.execution_scope() is Some(scope) {
-      scope.check() catch {
-        error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
-      }
-    }
-  }
   checkpoint()
   @validator.validate_module(module_) catch {
     error =>
@@ -256,6 +249,11 @@ fn compile_component_artifact(
   let validation_context = @wasm_frontend.wasm_validation_context(
     translation_context,
   )
+  let scalar_callees = if opt_level >= 2 {
+    @wasm_frontend.scalar_callees(translation_context, module_)
+  } else {
+    Map([])
+  }
   let imports : Array[@artifact.ImportIdentity] = []
   let mut imported_function_index = 0
   for import_ in module_.imports {
@@ -289,11 +287,17 @@ fn compile_component_artifact(
       code.locals,
       code.body,
     )
-    @optimize.optimize_with_level(
+    let _ = @wasm_optimize.optimize_with_level(
       milkir,
+      validation_context,
       @optimize.OptLevel::from_int(opt_level),
-    )
-    |> ignore
+      scalar_callees~,
+    ) catch {
+      error =>
+        raise NativeCompilationFailed(
+          "core function \{function_index} optimization failed: \{error}",
+        )
+    }
     let compiled = native_compiler.compile_wasm_body_artifact_function(
       milkir,
       validation_context,
@@ -340,6 +344,8 @@ fn load_component_jit_context(
   target : @wasmoon_jit.NativeTarget,
   opt_level : Int32,
   classify_suspension : (@runtime.RuntimeError) -> Bool,
+  prepared_code~ : NativeComponentCode? = None,
+  on_compile~ : () -> Unit = fn() { () },
 ) -> (@core_jit.JITModuleContext, @core_jit.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
   store.check_instance(instance) catch {
     error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
@@ -356,9 +362,34 @@ fn load_component_jit_context(
   } else {
     None
   }
-  let artifact = compile_component_artifact(
-    store, lowered_module, target, actual_memory_max, opt_level,
-  )
+  fn checkpoint() -> Unit raise @runtime_impl.ComponentRuntimeError {
+    if store.execution_scope() is Some(scope) {
+      scope.check() catch {
+        error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+      }
+    }
+  }
+  checkpoint()
+  let prepared = match prepared_code {
+    Some(code) if code.target == target && code.opt_level == opt_level =>
+      code.artifacts.get(
+        (encoded_component_module(lowered_module), actual_memory_max),
+      )
+    _ => None
+  }
+  let artifact = match prepared {
+    Some(artifact) => artifact
+    None => {
+      on_compile()
+      compile_component_artifact(
+        lowered_module,
+        target,
+        actual_memory_max,
+        opt_level,
+        checkpoint~,
+      )
+    }
+  }
   let compatibility = @wasmoon_jit.artifact_compatibility(
     artifact.manifest,
     available_cpu_features=[],

@@ -20,6 +20,11 @@ fn wasmoon_native_environment(
   field_paths.set(function_table_field.name, [layout.func_table_offset])
   use_subtype_indirect_check |> ignore
   canonical_type_indices |> ignore
+  let gc_heap_field = @native.EnvironmentField::new(
+    "wasmoon.vmctx.gc_heap",
+    Ptr64,
+  )
+  field_paths.set(gc_heap_field.name, [layout.gc_heap_offset])
   let wasm = @wasm_native.Environment::new(
     fn(index) {
       let name = "wasm.func.\{index}"
@@ -68,6 +73,43 @@ fn wasmoon_native_environment(
     fn(helper) {
       @native.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
+    inline_heap=Some({
+      type_ids_offset: native_layout_field(25),
+      type_count_offset: native_layout_field(26),
+      bump_offset: layout.gc_heap_ptr_offset,
+      data: native_layout_field(27),
+      size: native_layout_field(28),
+      capacity: native_layout_field(29),
+      collection_limit: native_layout_field(30),
+      layouts: native_layout_field(31),
+      layout_capacity: native_layout_field(32),
+      object_count: native_layout_field(35),
+      live_objects: native_layout_field(36),
+      live_count: native_layout_field(37),
+      total_allocations: native_layout_field(39),
+      quota_denied: native_layout_field(40),
+      byte_reservation: native_layout_field(41),
+      object_reservation: native_layout_field(42),
+      allocation_control: native_layout_field(43),
+      control_enabled: native_layout_field(44),
+      control_attempts: native_layout_field(45),
+      page_offsets: native_layout_field(46),
+      page_types: native_layout_field(47),
+      page_live_count: native_layout_field(48),
+      layout_kind: native_layout_field(49),
+      layout_count: native_layout_field(50),
+      layout_size: native_layout_field(51),
+      layout_shape: native_layout_field(52),
+      identity_page_bits: native_layout_field(53),
+      identity_window_limit: native_layout_field(54),
+      identity_window_page: native_layout_field(55),
+    }),
+    gc_array_regions=true,
+    gc_heap_field=if layout.gc_heap_offset >= 0 && layout.gc_heap_offset != 255 {
+      Some(gc_heap_field)
+    } else {
+      None
+    },
   )
   { wasm, field_paths, runtime_symbols, }
 }
@@ -105,9 +147,9 @@ fn wasmoon_call_abi(
     )
   }
   @native_lowering.CallAbiElaboration::new(
-    root_scope=@native_lowering.CallerRootScopeAbi::new(
-      @native.ExternalSymbol::new(gc_push_root_scope_symbol()),
-      @native.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+    function_frame=@native_lowering.FunctionRootFrameAbi::new(
+      @native.ExternalSymbol::new(gc_function_frame_enter_symbol()),
+      @native.ExternalSymbol::new(gc_function_frame_leave_symbol()),
     ),
     hidden_safepoints~,
   )

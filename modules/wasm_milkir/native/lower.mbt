@@ -1,8 +1,7 @@
 ///|
-/// Bytes per GC field or array element, matching `GcSlot` in gc_heap.h.
-///
-/// Two words, so that a v128 fits. Everything else uses the low word and
-/// leaves the high one zero.
+/// Slot size for the legacy/wide adapter, matching `GcSlot` in gc_heap.h.
+/// Typed Store layouts use compact field widths instead. V128 occupies both
+/// words; legacy scalar values occupy the low word and clear the high word.
 const GC_SLOT_BYTES : Int32 = 16
 
 ///|
@@ -11,12 +10,23 @@ const GC_SLOT_BYTES : Int32 = 16
 /// Symbols remain unresolved and target-neutral. Address resolution belongs to
 /// the embedding product after target emission.
 struct Environment {
+  gc_heap_field : @native_types.EnvironmentField?
+  inline_heap : InlineHeapLayout?
+  gc_array_regions : Bool
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
 }
 
 ///|
+/// An explicit heap field selects the word-sized explicit-heap helper ABI.
+/// It is mutable: each access must observe changes made by host callbacks.
+/// Helpers resolve the actual object layout once. Omitting the heap field
+/// retains the original helper ABI.
+///
+/// `gc_array_regions` is the compatibility spelling of the native memory-SSA
+/// opt-in. It expands checked GC operations before generic optimization and
+/// independently verifies every physical borrow across the final CFG.
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
@@ -24,8 +34,18 @@ pub fn Environment::new(
   _table_base_field : (Int32) -> @native_types.EnvironmentField,
   _table_size_field : (Int32) -> @native_types.EnvironmentField,
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
+  gc_heap_field~ : @native_types.EnvironmentField? = None,
+  gc_array_regions~ : Bool = false,
+  inline_heap~ : InlineHeapLayout? = None,
 ) -> Environment {
-  { function_symbol, memory_base_field, runtime_symbol, }
+  {
+    function_symbol,
+    memory_base_field,
+    runtime_symbol,
+    gc_heap_field,
+    gc_array_regions,
+    inline_heap,
+  }
 }
 
 ///|
@@ -289,6 +309,9 @@ fn finish_runtime_call(
   parameter_types : Array[@native_types.ValueType],
   behavior : @native_types.CallBehavior,
 ) -> Unit {
+  let helper = explicit_heap_helper(
+    context, environment, helper, operands, parameter_types,
+  )
   context.finish_call_without_roots(
     @native_types.NativeCall::new(
       External((environment.runtime_symbol)(helper)),
@@ -459,6 +482,9 @@ fn emit_runtime_word_call(
   parameter_types : Array[@native_types.ValueType],
   memory : @native_types.MemoryEffect,
 ) -> @lowering.Value {
+  let helper = explicit_heap_helper(
+    context, environment, helper, operands, parameter_types,
+  )
   context.emit_call_without_roots(
     @native_types.NativeCall::new(
       External((environment.runtime_symbol)(helper)),
@@ -993,12 +1019,12 @@ fn emit_runtime_word_buffer(
 }
 
 ///|
-fn lower_fixed_allocation(
+fn emit_fixed_allocation(
   context : @adapter.InstructionContext,
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int32,
-) -> String? {
+) -> @lowering.Value {
   let types = context.operand_types()
   let mut has_vector = false
   for ty in types {
@@ -1030,7 +1056,20 @@ fn lower_fixed_allocation(
     operands,
     [Ptr64, I32, Ptr64, I32],
   )
-  finish_runtime_word(context, word)
+  word
+}
+
+///|
+fn lower_fixed_allocation(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  helper : @wasm_milkir.WasmRuntimeHelper,
+  type_index : Int32,
+) -> String? {
+  finish_runtime_word(
+    context,
+    emit_fixed_allocation(context, environment, helper, type_index),
+  )
   None
 }
 
@@ -1263,7 +1302,16 @@ fn lower_extension(
   context : @adapter.InstructionContext,
   extension : @milkir.ExtOp,
   environment : Environment,
+  validation_context : @wasm_milkir.WasmValidationContext,
 ) -> String? {
+  if decode_projection(extension) is Some(projection) {
+    if environment.gc_heap_field is None {
+      return Some("GC projection requires an explicit heap environment")
+    }
+    return lower_projection(
+      context, environment, projection, validation_context,
+    )
+  }
   let opcode = match @wasm_milkir.decode(extension) {
     Some(opcode) => opcode
     None => return Some("Wasm extension changed after successful validation")
@@ -1407,16 +1455,27 @@ fn lower_extension(
     ArrayNewDefault(type_index) =>
       lower_array_new(context, environment, type_index, true)
     StructNewDefault(type_index) => {
+      if lower_fast_struct(
+          context, environment, validation_context, type_index, true,
+        ) {
+        return None
+      }
       lower_struct_new_default(context, environment, type_index)
       None
     }
-    StructNew(type_index) =>
+    StructNew(type_index) => {
+      if lower_fast_struct(
+          context, environment, validation_context, type_index, false,
+        ) {
+        return None
+      }
       lower_fixed_allocation(
         context,
         environment,
         GcAllocStructSlow,
         type_index,
       )
+    }
     ArrayNewFixed(type_index, _) =>
       lower_fixed_allocation(
         context,
@@ -1559,14 +1618,26 @@ pub fn lower_to_sink(
   verify_input~ : Bool = true,
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
+  if environment.gc_array_regions && environment.gc_heap_field is Some(_) {
+    prepare_gc_memory(function, validation_context, on_event~) catch {
+      error =>
+        raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
+    }
+  }
+  let environment = if environment.inline_heap is Some(_) &&
+    !inline_allocation_fits(function, validation_context) {
+    { ..environment, inline_heap: None, }
+  } else {
+    environment
+  }
   fn validate(view : @milkir.ExtensionInstView) -> String? {
-    validation_context.validate_extension(view, function.results)
+    validate_memory_extension(view, validation_context, function.results)
   }
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
   ) -> String? {
-    lower_extension(context, extension, environment)
+    lower_extension(context, extension, environment, validation_context)
   }
   fn validate_global(data : @milkir.GlobalValueData) -> String? {
     validation_context.validate_global_value(data)
@@ -1592,4 +1663,41 @@ pub fn lower_to_sink(
     verify_input~,
     on_event~,
   )
+}
+
+///|
+fn explicit_heap_helper(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  helper : @wasm_milkir.WasmRuntimeHelper,
+  operands : Array[@lowering.Value],
+  parameter_types : Array[@native_types.ValueType],
+) -> @wasm_milkir.WasmRuntimeHelper {
+  let field = match environment.gc_heap_field {
+    Some(field) => field
+    None => return helper
+  }
+  let next : @wasm_milkir.WasmRuntimeHelper = match helper {
+    GcStructGet => GcStructGetHeap
+    GcStructSet => GcStructSetHeap
+    GcArrayGet => GcArrayGetHeap
+    GcArraySet => GcArraySetHeap
+    GcArrayLen => GcArrayLenHeap
+    _ => return helper
+  }
+  let heap = context.emit(
+      EnvironmentField(field, Mutable),
+      context.environment(),
+      [Ptr64],
+    )[0]
+  let reference = operands[0]
+  if helper is GcArrayLen {
+    operands.push(reference)
+    parameter_types.push(GcRef64)
+  }
+  operands[0] = heap
+  operands[1] = reference
+  parameter_types[0] = Ptr64
+  parameter_types[1] = GcRef64
+  next
 }

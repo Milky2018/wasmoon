@@ -118,3 +118,17 @@ interoperability with a broad corpus of independently compiled language-SDK
 guests. The negative startup check validates the declared handler export;
 full linking and initialization still occur per connection. Transport limits
 remain documented in `modules/wasmoon/wasi_http/README.md`.
+
+## Native preparation before listening
+
+The native HTTP path prepares unlinked Core artifacts for the service and its
+middleware before binding or reporting `Serving`. Each connection still creates
+a fresh Store, installs its own executable code, binds imports and runs guest
+initializers. No request or guest start is used as a warmup. The retained owner
+has a fixed, private map, released with its last owner/session reference.
+
+Reuse requires identical actual lowered bytes, memory maximum, target and
+optimization policy. Instance-dependent global/tag alias rewrites or narrower
+imported-memory maxima can miss this snapshot and compile during instantiation;
+the fallback preserves existing semantics and does not grow the shared map.
+ISS-629 tracks measurements and platform acceptance for this bounded first step.

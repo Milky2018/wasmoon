@@ -266,3 +266,147 @@ test "immediate comparison contract requires one integer and boolean result" {
     )
   }
 }
+
+///|
+test "function roots store definitions once and change precise masks at calls" {
+  let (sink, trace) = traced_sink([11, 22], 0)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64],
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+      ),
+    ),
+  )
+  builder.begin_function_roots(1)
+  let parameters = builder.parameters()
+  builder.define_function_root(parameters[1])
+  for live in [[parameters[1]], []] {
+    builder.emit_with_metadata(
+      Call(platform_call("guest", [Ptr64], [], gc_safepoint=true)),
+      [parameters[0]],
+      [],
+      InstructionMetadata::new(None, live),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  let calls = trace.operations.filter_map(operation => {
+    match operation {
+      Call(call) =>
+        match call.callee {
+          External(symbol) => Some(symbol.name)
+          _ => None
+        }
+      _ => None
+    }
+  })
+  debug_inspect(
+    calls,
+    content="[\"frame.enter\", \"guest\", \"guest\", \"frame.leave\"]",
+  )
+  assert_eq(
+    trace.operations
+    .filter(operation => operation is Store(spec) && spec.value_type == GcRef64)
+    .length(),
+    1,
+  )
+  debug_inspect(
+    trace.operations.filter_map(operation => {
+      match operation {
+        I64Const(bits) => Some(bits)
+        _ => None
+      }
+    }),
+    content="[0, 1, 0]",
+  )
+}
+
+///|
+test "function root masks cross word boundaries without retaining dead slots" {
+  let (sink, trace) = traced_sink(Array::makei(66, index => 100 + index), 0)
+  let builder = DirectBuilder::new(
+    [Ptr64] + Array::make(65, GcRef64),
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+      ),
+    ),
+  )
+  builder.begin_function_roots(65)
+  let parameters = builder.parameters()
+  for value in parameters[1:] {
+    builder.define_function_root(value)
+  }
+  builder.emit_with_metadata(
+    Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[1], parameters[65]]),
+  )
+  |> ignore
+  builder.emit_with_metadata(
+    Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+    [parameters[0]],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.return_([])
+  builder.finish()
+  debug_inspect(
+    trace.operations.filter_map(operation => {
+      match operation {
+        I64Const(bits) => Some(bits)
+        _ => None
+      }
+    }),
+    content="[0, 0, 1, 1, 0, 0]",
+  )
+}
+
+///|
+test "root aliases defined on sibling paths publish their slot on both paths" {
+  let (sink, trace) = traced_sink([11, 22, 33], 0)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64, I32],
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+      ),
+    ),
+  )
+  builder.begin_function_roots(2)
+  let parameters = builder.parameters()
+  let left = builder.create_block([])
+  let right = builder.create_block([])
+  builder.branch(parameters[2], left, [], right, [])
+  for block in [left, right] {
+    builder.switch_to_block(block)
+    // MilkIR copies can forward the same native handle from two distinct SSA
+    // binding sites. Neither sibling's store dominates the other sibling.
+    builder.define_function_root(parameters[1])
+    builder.emit_with_metadata(
+      Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+      [parameters[0]],
+      [],
+      InstructionMetadata::new(None, [parameters[1]]),
+    )
+    |> ignore
+    builder.return_([])
+  }
+  builder.finish()
+  assert_eq(
+    trace.operations
+    .filter(operation => operation is Store(spec) && spec.value_type == GcRef64)
+    .length(),
+    2,
+  )
+}

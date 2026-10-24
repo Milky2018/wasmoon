@@ -51,7 +51,8 @@ def main():
     resolver = ROOT / "modules/wasmoon_runtime/native/host_io/wasi/resolver_test.mbt"
     (PACKAGE / "resolver_test.mbt").write_text(
         resolver.read_text().replace("@wasi.", "@native_host."))
-    shutil.copy2(ROOT / "modules/wasmoon_jit/native_handles_test.mbt", PACKAGE)
+    for name in ("native_handles_test.mbt", "safepoint_admission_test.mbt"):
+        shutil.copy2(ROOT / "modules/wasmoon_jit" / name, PACKAGE)
     fixture_dir = PACKAGE / "testsuite" / "fixtures"
     fixture_dir.mkdir(parents=True)
     shutil.copy2(ROOT / "modules/wasmoon/testsuite/fixtures/wasi-command-async-stdin.component.wat",

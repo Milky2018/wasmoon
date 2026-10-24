@@ -196,6 +196,11 @@ pub fn validate_jit(
   let validation_context = @wasm_frontend.wasm_validation_context(
     translation_context,
   )
+  let scalar_callees = if normalized_opt_level >= 2 {
+    @wasm_frontend.scalar_callees(translation_context, wasm_module)
+  } else {
+    Map([])
+  }
   for i, _ in wasm_module.codes {
     let func_idx = num_imports + i
     let func_name = get_func_name(wasm_module, func_idx)
@@ -206,9 +211,11 @@ pub fn validate_jit(
         i,
         name=func_name,
       )
-      @optimize.optimize_with_level(
+      @wasm_optimize.optimize_with_level(
         milk,
+        validation_context,
         @optimize.OptLevel::from_int(normalized_opt_level),
+        scalar_callees~,
       )
       |> ignore
       @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(

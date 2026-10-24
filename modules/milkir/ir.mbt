@@ -338,11 +338,50 @@ pub fn ExternalSymbol::ExternalSymbol(name : String) -> ExternalSymbol {
 }
 
 ///|
+/// The dialect validator owns these claims. Missing contracts are unknown,
+/// including memory writes and traps. `Other` writes invalidate every region.
+/// Pointer provenance describes the projected payload, not the metadata read
+/// needed to produce its address.
+pub(all) struct ExtensionEffects {
+  read : AliasRegion?
+  write : AliasRegion?
+  may_trap : Bool
+  observable : Bool
+  pointer_region : AliasRegion?
+  // A dialect-validated readable bound, valid only in the current memory
+  // epoch. Zero provides no nontrapping-load guarantee.
+  pointer_bytes : Int32
+} derive(Eq, Hash, Debug)
+
+///|
+pub extend ExtensionEffects with Eq::{equal, not_equal}
+
+///|
+pub extend ExtensionEffects with Hash::{hash, hash_combine}
+
+///|
+pub extend ExtensionEffects with Debug::{to_repr}
+
+///|
 pub struct ExtOp {
   dialect : String
   opcode : String
   immediates : FixedArray[Int32]
-} derive(Debug)
+  effects : ExtensionEffects?
+}
+
+///|
+pub impl Debug for ExtOp with fn to_repr(self) {
+  let fields = {
+    "dialect": Repr(self.dialect),
+    "opcode": Repr(self.opcode),
+    "immediates": Repr(self.immediates),
+  }
+  if self.effects is Some(effects) {
+    fields["effects"] = Repr(effects)
+  }
+  Repr::record(fields)
+}
 
 ///|
 pub(all) struct ExtOpDescriptor {
@@ -400,8 +439,9 @@ pub fn ExtOp::ExtOp(
   dialect : String,
   opcode : String,
   immediates : FixedArray[Int32],
+  effects~ : ExtensionEffects? = None,
 ) -> ExtOp {
-  { dialect, opcode, immediates, }
+  { dialect, opcode, immediates, effects, }
 }
 
 ///|
@@ -411,6 +451,16 @@ pub struct ExtensionInstView {
   operand_types : ReadOnlyArray[Type]
   result_types : ReadOnlyArray[Type]
 } derive(Debug)
+
+///|
+/// Preserve the operand/result shape when a layered dialect validates a
+/// compiler-owned refinement through its semantic parent.
+pub fn ExtensionInstView::with_op(
+  self : ExtensionInstView,
+  op : ExtOp,
+) -> ExtensionInstView {
+  { op, operand_types: self.operand_types, result_types: self.result_types, }
+}
 
 ///|
 pub fn ExtOp::matches_descriptor(
@@ -424,7 +474,9 @@ pub fn ExtOp::matches_descriptor(
 
 ///|
 pub impl Eq for ExtOp with fn equal(self, other) {
-  if self.dialect != other.dialect || self.opcode != other.opcode {
+  if self.dialect != other.dialect ||
+    self.opcode != other.opcode ||
+    self.effects != other.effects {
     return false
   }
   if self.immediates.length() != other.immediates.length() {
@@ -441,6 +493,7 @@ pub impl Eq for ExtOp with fn equal(self, other) {
 ///|
 pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
   hasher.combine(self.dialect)
+  hasher.combine(self.effects)
   hasher.combine(self.opcode)
   hasher.combine(self.immediates.length())
   for imm in self.immediates {
@@ -1271,6 +1324,19 @@ fn Function::add_block_param(
   let param_index = block.params.length()
   block.add_param(value, ty)
   self.define_value(value, BlockParameter(block.id, param_index))
+}
+
+///|
+/// Append a fresh SSA block parameter. The transformation must also append
+/// its arguments on every incoming edge before verifying the function.
+pub fn Function::append_block_param(
+  self : Function,
+  block : Block,
+  ty : Type,
+) -> Value {
+  let value = self.new_value(ty)
+  self.add_block_param(block, value, ty)
+  value
 }
 
 ///|

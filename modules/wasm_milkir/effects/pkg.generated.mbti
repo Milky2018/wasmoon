@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_milkir/effects"
+
+import {
+  "Milky2018/milkir",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn analyze(@milkir.Opcode) -> Effects
+
+// Errors
+
+// Types and methods
+pub struct Effects {
+  read : Location?
+  write : Location?
+  may_trap : Bool
+  may_collect : Bool
+  may_reenter : Bool
+  may_suspend : Bool
+  may_replace_heap : Bool
+  invalidates_address : Bool
+  allocation : Bool
+  checked_reference : Int32?
+}
+pub fn Effects::preserves_checked_references(Self) -> Bool
+pub fn Effects::preserves_physical_addresses(Self) -> Bool
+pub fn Effects::preserves_struct_values(Self) -> Bool
+
+pub(all) enum Location {
+  StructField(Int32, Int32)
+  ArrayLength
+  ArrayElements
+  Unknown
+} derive(Eq, @debug.Debug)
+pub fn Location::equal(Self, Self) -> Bool
+pub fn Location::not_equal(Self, Self) -> Bool
+pub fn Location::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

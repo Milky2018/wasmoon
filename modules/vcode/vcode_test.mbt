@@ -985,3 +985,108 @@ test "selected allocation output rejects incomplete and invalid assignments" {
   assert_true(output.assign_operand(0, 0, location))
   assert_true(output.finish_selected() is Some(_))
 }
+
+///|
+test "allocation verification preserves aliases of parallel block parameters" {
+  for used in [0, 1] {
+    let builder : @vcode.Builder[TestInst] = @vcode.Builder::new(
+      "phi_aliases",
+      [I64],
+    )
+    let entry = builder.entry_block()
+    let source = builder.parameter(0)
+    let exit = builder.create_block([I64, I64])
+    builder.set_terminator(
+      entry,
+      Jump,
+      [],
+      [@vcode.Edge::new(exit, [source, source])],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    let parameter = builder.block_parameter(exit, used)
+    let ret = builder.set_terminator(
+      exit,
+      Return,
+      [@vcode.Input::any(parameter)],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    let function = builder.finish()
+    let allocation = @vcode.Allocation::for_function(function)
+    let register = @vcode.PhysicalReg::new(0, Int)
+    for
+      value in [
+        source,
+        builder.block_parameter(exit, 0),
+        builder.block_parameter(exit, 1),
+      ] {
+      allocation.assign_value(value, Register(register)) |> ignore
+    }
+    allocation.assign_operand(ret, 0, register) |> ignore
+    @vcode.verify_allocated(function, allocation)
+  }
+}
+
+///|
+test "safepoint lookup indexes interleaved roots without losing ownership or order" {
+  let b : @vcode.Builder[TestInst] = @vcode.Builder::new("root_lookup", [
+    GcRef64,
+    GcRef64,
+  ])
+  let a = b.parameter(0)
+  let z = b.parameter(1)
+  let entry = b.entry_block()
+  let (first, _) = b.append_body(
+    entry,
+    Call,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  let (second, _) = b.append_body(
+    entry,
+    Call,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  let empty = b.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  let function = b.finish()
+  let allocation = @vcode.Allocation::for_function(function)
+  let slot = allocation.create_stack_slot(GcRef64, 8, 8)
+  let location = @vcode.Location::Stack(slot)
+  assert_true(allocation.add_safepoint_root(first, a, location))
+  assert_true(allocation.add_safepoint_root(second, z, location))
+  assert_eq(allocation.safepoint_roots(first).map(root => root.0), [a])
+  assert_true(allocation.add_safepoint_root(first, z, location))
+  assert_eq(allocation.safepoint_roots(first).map(root => root.0), [a, z])
+  assert_eq(allocation.safepoint_roots(second).map(root => root.0), [z])
+  assert_eq(allocation.safepoint_roots(empty), [])
+  let foreign_builder : @vcode.Builder[TestInst] = @vcode.Builder::new(
+    "foreign",
+    [],
+  )
+  let foreign = foreign_builder.set_terminator(
+    foreign_builder.entry_block(),
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  assert_eq(allocation.safepoint_roots(foreign), [])
+  assert_false(allocation.add_safepoint_root(foreign, a, location))
+  assert_eq(allocation.safepoint_roots(first).map(root => root.0), [a, z])
+}

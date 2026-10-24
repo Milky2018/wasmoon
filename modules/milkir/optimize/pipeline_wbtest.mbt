@@ -1017,8 +1017,8 @@ test "optimizer does not merge block with params" {
 }
 
 ///|
-test "CSE keeps duplicate loads without alias metadata" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder("no_load_cse")
+test "CSE reuses an identical dominating load without speculating its first trap" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("dominating_load_cse")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let offset = builder.iconst_i64(0L)
@@ -1031,15 +1031,15 @@ test "CSE keeps duplicate loads without alias metadata" {
     instruction_count(func),
     FunctionAnalysis::build(func),
   )
-  inspect(stats.changed, content="false")
+  inspect(stats.changed, content="true")
   inspect(
     func.print(),
     content=(
-      #|function no_load_cse(v0:ptr) -> i32 {
+      #|function dominating_load_cse(v0:ptr) -> i32 {
       #|block0:
       #|    v1:i64 = iconst 0
       #|    v2:i32 = load.i32 v0, v1
-      #|    v3:i32 = load.i32 v0, v1
+      #|    v3:i32 = copy v2
       #|    return v3
       #|}
       #|

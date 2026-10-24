@@ -71,6 +71,10 @@ fn native_lower_metrics_observer() -> (@milkir_native.NativeLowerEvent) -> Unit 
 
   fn(event) {
     match event {
+      PreparationStarted(name~) => {
+        close_phase()
+        phase.val = Some((name, @perf.tick_now()))
+      }
       InputValidationStarted => {
         close_phase()
         phase.val = Some(("native_input_validation", @perf.tick_now()))
