@@ -39,6 +39,13 @@ pub extern "c" fn context_callable_lookup(
 
 ///|
 #borrow(context)
+pub extern "c" fn context_callable_native_reference(
+  context : @jit_ffi.JITContext,
+  value : Int64,
+) -> Int64 = "wasmoon_test_context_callable_native_reference"
+
+///|
+#borrow(context)
 pub extern "c" fn context_callable_subtype(
   context : @jit_ffi.JITContext,
   value : Int64,

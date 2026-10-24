@@ -273,6 +273,12 @@ int64_t callable_native_reference(jit_context_t *ctx, int64_t value) {
     if (!registry) return value;
     uint64_t address = (uint64_t)value & ~(uint64_t)STORE_FUNCREF_TAG;
     if (!address || address - 1 > INT32_MAX) return 0;
+    uint64_t index = address - 1 - (uint32_t)registry->function_origin;
+    if (registry->function_positions &&
+        index < (uint32_t)Moonbit_array_length(registry->function_positions)) {
+        int32_t position = registry->function_positions[index];
+        return position ? registry->function_pointers[position - 1] | FUNCREF_TAG : value;
+    }
     int32_t low = 0, high = registry->function_count;
     while (low < high) {
         int32_t mid = low + (high - low) / 2;
@@ -324,6 +330,14 @@ int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
     }
     const jit_callable_registry_t *registry = ctx_runtime(ctx)->callable_registry;
     if (!registry) return -1;
+    if (value >= 0 && (value & STORE_FUNCREF_TAG) == STORE_FUNCREF_TAG && registry->store_positions) {
+        uint64_t index = ((uint64_t)value & ~(uint64_t)STORE_FUNCREF_TAG) - 1 -
+            (uint32_t)registry->store_origin;
+        if (index < (uint32_t)Moonbit_array_length(registry->store_positions)) {
+            int32_t position = registry->store_positions[index];
+            return position ? registry->identities[position - 1] : -1;
+        }
+    }
     int32_t low = 0, high = registry->entry_count;
     while (low < high) {
         int32_t middle = low + (high - low) / 2;

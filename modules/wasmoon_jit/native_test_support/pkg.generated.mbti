@@ -31,6 +31,8 @@ pub fn callback_capture_release_count() -> Int32
 
 pub fn context_callable_lookup(@ffi.JITContext, Int64) -> Int32
 
+pub fn context_callable_native_reference(@ffi.JITContext, Int64) -> Int64
+
 pub fn context_callable_subtype(@ffi.JITContext, Int64, Int32) -> Int32
 
 pub fn context_callable_tag(@ffi.JITContext) -> Int32

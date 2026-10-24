@@ -669,9 +669,15 @@ test "Store callable registry updates are shared and preserve instance isolation
 ///|
 fn context_outliving_registry() -> @jit_ffi.JITContext {
   let registry = @wasmoon_jit.NativeCallableRegistry::new()
-  assert_true(registry.replace([-1], [(16L, 0)])) catch {
+  assert_true(
+    registry.replace([-1], [
+      (16L, 0),
+      (@wasmoon_jit.encode_store_funcref(54), 0),
+    ]),
+  ) catch {
     _ => abort("registry setup failed")
   }
+  registry.replace_functions([(54, 16L)], [])
   let context = @jit_ffi.JITContext::new(1)
   context.bind_callable_registry(registry, [0], [7])
   context
@@ -689,6 +695,12 @@ test "context retains MoonBit array storage after registry owner leaves scope" {
     content="1",
   )
   inspect(@native_test_support.context_callable_tag(context), content="7")
+  let reference = @wasmoon_jit.encode_store_funcref(54)
+  assert_eq(@native_test_support.context_callable_lookup(context, reference), 0)
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, reference),
+    0x2000000000000010L,
+  )
 }
 
 ///|
@@ -719,6 +731,78 @@ test "callable lookup sorts privately and preserves the first duplicate" {
   }
   registry.clear()
   inspect(@native_test_support.callable_lookup(registry, 16L), content="-1")
+}
+
+///|
+test "Store callable ordinal index preserves holes duplicates and replacement" {
+  let registry = @wasmoon_jit.NativeCallableRegistry::new()
+  let a = @wasmoon_jit.encode_store_funcref(54)
+  let hole = @wasmoon_jit.encode_store_funcref(55)
+  let b = @wasmoon_jit.encode_store_funcref(56)
+  let entries = [(16L, 2), (a, 1), (b, 2), (b, 0)]
+  assert_true(registry.replace([-1, -1, -1], entries))
+  assert_eq(@native_test_support.callable_lookup(registry, a), 1)
+  assert_eq(@native_test_support.callable_lookup(registry, hole), -1)
+  assert_eq(@native_test_support.callable_lookup(registry, b), 2)
+  // Same addresses update the identity array without republishing its storage.
+  entries[2] = (b, 0)
+  assert_true(registry.replace([-1, -1, -1], entries))
+  assert_eq(@native_test_support.callable_lookup(registry, b), 0)
+  let maximum = @wasmoon_jit.encode_store_funcref(2147483647)
+  // A huge span must use the bounded-memory fallback, including unsigned keys.
+  assert_true(registry.replace([-1, -1], [(maximum, 1), (a, 0), (-1L, 1)]))
+  assert_eq(@native_test_support.callable_lookup(registry, a), 0)
+  assert_eq(@native_test_support.callable_lookup(registry, maximum), 1)
+  assert_eq(@native_test_support.callable_lookup(registry, b), -1)
+  assert_true(registry.replace([-1], [(b, 0), (hole, 0)]))
+  assert_eq(@native_test_support.callable_lookup(registry, hole), 0)
+  assert_eq(@native_test_support.callable_lookup(registry, a), -1)
+  registry.clear()
+  assert_eq(@native_test_support.callable_lookup(registry, hole), -1)
+}
+
+///|
+test "Store executable ordinal index follows replacement sparse fallback and clearing" {
+  let registry = @wasmoon_jit.NativeCallableRegistry::new()
+  let context = @jit_ffi.JITContext::new(0)
+  context.bind_callable_registry(registry, [], [])
+  let a = @wasmoon_jit.encode_store_funcref(54)
+  let hole = @wasmoon_jit.encode_store_funcref(55)
+  let b = @wasmoon_jit.encode_store_funcref(56)
+  let functions = [(54, 16L), (56, 32L), (56, 48L)]
+  registry.replace_functions(functions, [])
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, a),
+    0x2000000000000010L,
+  )
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, hole),
+    hole,
+  )
+  // The existing function view is sorted in place; retain its first duplicate.
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, b),
+    functions[1].1 | 0x2000000000000000L,
+  )
+  let maximum = @wasmoon_jit.encode_store_funcref(2147483647)
+  registry.replace_functions([(2147483647, 64L), (54, 80L)], [])
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, maximum),
+    0x2000000000000040L,
+  )
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, a),
+    0x2000000000000050L,
+  )
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, b),
+    b,
+  )
+  registry.clear()
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, a),
+    a,
+  )
 }
 
 ///|

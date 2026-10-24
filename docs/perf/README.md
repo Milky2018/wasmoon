@@ -18,6 +18,7 @@ Useful maintained entry points:
 - [GC array bulk operations](gc-array-bulk-2026-10-22.md)
 - [Typed allocation throughput](runtime-throughput.md)
 - [Unsigned wide multiplication](wide-multiply.md)
+- [Store callable lookup](callable-lookup.md)
 - [Runtime repair for #567](issue567-runtime-repair-2026-10-21.md)
 - [Compiler metrics](compile-metrics.md)
 - [Historical baseline summaries](baselines/README.md)

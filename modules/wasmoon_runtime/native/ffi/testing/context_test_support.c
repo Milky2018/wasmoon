@@ -108,6 +108,11 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_callable_lookup(void *context, i
     return callable_type_for_value(ctx, value);
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_context_callable_native_reference(void *context, int64_t value) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return callable_native_reference(ctx, value);
+}
+
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_callable_subtype(void *context, int64_t value, int32_t expected) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
     return gc_ref_test_impl(ctx, FUNCREF_TAG | value, expected, 0);
