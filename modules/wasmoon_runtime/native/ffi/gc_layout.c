@@ -199,7 +199,10 @@ void wasmoon_gc_trace_mark(NativeTrace *trace) {
     if (trace->failed) return;
     for (int32_t i = 0; i < trace->objects.size; i++) {
         int32_t offset = gc_heap_identity_offset(trace->heap, trace->objects.data[i]);
-        if (offset >= 0) ((GcHeader *)(trace->heap->data + offset))->flags |= GC_FLAG_MARKED;
+        if (offset >= 0) {
+            ((GcHeader *)(trace->heap->data + offset))->flags |= GC_FLAG_MARKED;
+            trace->heap->has_marked_objects = 1;
+        }
     }
 }
 

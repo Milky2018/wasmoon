@@ -500,9 +500,11 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
     int32_t execution_count = copy_execution_roots(heap, NULL);
     if (execution_count < 0) return moonbit_make_int64_array(1, -2);
     size += execution_count;
-    for (int32_t i = 0; i < heap->live_count; ++i) {
-        GcHeader *header = get_object_header(heap, heap->live_objects[i]);
-        if (header && (header->flags & GC_FLAG_MARKED)) ++size;
+    if (heap->has_marked_objects) {
+        for (int32_t i = 0; i < heap->live_count; ++i) {
+            GcHeader *header = get_object_header(heap, heap->live_objects[i]);
+            if (header && (header->flags & GC_FLAG_MARKED)) ++size;
+        }
     }
     size += exception_arena_marked_count(heap->exception_arena);
     size += continuation_arena_marked_count(heap->continuation_arena);
@@ -522,12 +524,14 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
     // span so writes to the fresh output do not force descriptor reloads.
     const int32_t object_count = heap->live_count;
     const uint8_t *data = heap->data;
-    for (int32_t i = 0; i < object_count; ++i) {
-        int32_t ref = heap->live_objects[i];
-        int32_t offset = gc_heap_identity_offset(heap, ref);
-        if (offset < 0 || !data) continue;
-        const GcHeader *header = (const GcHeader *)(data + offset);
-        if (header->flags & GC_FLAG_MARKED) input[at++] = (int64_t)ref << 1;
+    if (heap->has_marked_objects) {
+        for (int32_t i = 0; i < object_count; ++i) {
+            int32_t ref = heap->live_objects[i];
+            int32_t offset = gc_heap_identity_offset(heap, ref);
+            if (offset < 0 || !data) continue;
+            const GcHeader *header = (const GcHeader *)(data + offset);
+            if (header->flags & GC_FLAG_MARKED) input[at++] = (int64_t)ref << 1;
+        }
     }
     exception_arena_copy_marked(heap->exception_arena, input + at);
     at += exception_arena_marked_count(heap->exception_arena);
@@ -557,6 +561,7 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_abort(GcCollectionRequest *request
         GcHeader *header = get_object_header(heap, heap->live_objects[i]);
         if (header) header->flags &= ~GC_FLAG_MARKED;
     }
+    heap->has_marked_objects = 0;
     wasmoon_gc_collection_reset_auxiliary_marks(request);
 }
 
@@ -1037,6 +1042,7 @@ void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
     }
 
     header->flags |= GC_FLAG_MARKED;
+    heap->has_marked_objects = 1;
     // A Store visitor expands typed edges in MoonBit. Explicit native stack
     // marking records only seeds until the complete root graph is supplied.
     if (heap->precise_roots) return;
@@ -1113,6 +1119,7 @@ int32_t gc_heap_sweep(GcHeap* heap) {
     }
 
     heap->live_count = survivors;
+    heap->has_marked_objects = 0;
     return collected;
 }
 
@@ -1246,6 +1253,8 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
         }
 
         GcHeader* header = (GcHeader*)(heap->data + offset);
+        if ((header->flags & GC_FLAG_MARKED) && !heap->has_marked_objects)
+            return gc_verify_fail("untracked object mark", verbose);
         if (header->size < GC_HEADER_SIZE) {
             if (verbose) {
                 fprintf(stderr, "[GC VERIFY] invalid object size: gc_ref=%d size=%u\n", gc_ref, header->size);
@@ -1396,6 +1405,7 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_rollback(GcCollectionRequest *requ
     }
 
     heap->live_count = survivors;
+    heap->has_marked_objects = 0;
     int32_t last_live = survivors ? heap->live_objects[survivors - 1] : 0;
     heap->object_count = last_live > object_count ? last_live : object_count;
     if (heap->object_count == 0) {

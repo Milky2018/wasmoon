@@ -594,3 +594,37 @@ test "gc: dead identity pages release storage without recycling stale references
   heap.collect([StructRef(next), StructRef(first)]) |> ignore
   assert_eq(heap.struct_get(next, 0, I32), I32(7))
 }
+
+///|
+#borrow(heap)
+extern "c" fn mark_heap_object_for_collection_test(
+  heap : @jit_ffi.GCHeapHandle,
+  reference : Int32,
+) -> Unit = "wasmoon_gc_heap_mark"
+
+///|
+test "gc: explicit native marks remain precise collection seeds" {
+  let heap = CHeap::CHeap()
+  defer heap.free()
+  defer heap.clear_root_visitor()
+  let child = heap.alloc_struct(0, [I32(42)])
+  let object = heap.alloc_struct(0, [StructRef(child)])
+  let parent_word = encode_heap_ref(object)
+  let child_word = encode_heap_ref(child)
+  heap.bind_root_visitor(fn(_, roots) {
+    for word in roots {
+      if word == parent_word {
+        return [child_word]
+      }
+    }
+    roots
+  })
+  mark_heap_object_for_collection_test(heap.get_ptr(), object + 1)
+  assert_eq(heap.collect([]), 0)
+  assert_true(heap.is_valid(object))
+  assert_true(heap.is_valid(child))
+  assert_eq(heap.collect([]), 2)
+  assert_false(heap.is_valid(object))
+  assert_false(heap.is_valid(child))
+  assert_true(heap.verify())
+}

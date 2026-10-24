@@ -902,11 +902,13 @@ int32_t gc_collect_for_alloc_indexed_internal(
         if (table_root_count > 0) {
             at += gc_copy_table_roots(ctx, &merged[at]);
         }
-        jit_mark_active_gc_roots(heap);
+        // The precise coordinator copies active roots before tracing. Premarking
+        // them here would require a second discovery pass over the whole heap.
+        if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
         collected = gc_heap_collect(heap, merged, total_roots);
         free(merged);
     } else {
-        jit_mark_active_gc_roots(heap);
+        if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
         collected = gc_heap_collect(heap, NULL, 0);
     }
 

@@ -1713,7 +1713,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_collect_heap(
     if (active && ctx_gc_heap(active) == heap) {
         return gc_collect_for_alloc_internal(active, roots, root_count);
     }
-    jit_mark_active_gc_roots(heap);
+    if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
     return gc_heap_collect(heap, roots, root_count);
 }
 

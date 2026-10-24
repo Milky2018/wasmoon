@@ -189,6 +189,9 @@ typedef struct GcHeap {
     // slot are already allocated. Collection/rollback invalidates the window.
     int32_t identity_window_limit;
     GcIdentityPage *identity_window_page;
+    // False proves there are no pre-marked payload roots to discover. Marking
+    // sets this hint; complete mark clearing resets it before visitor callbacks.
+    int32_t has_marked_objects;
 } GcHeap;
 
 static inline void gc_heap_forget_struct_view(GcHeap *heap) {
