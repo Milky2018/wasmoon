@@ -107,6 +107,8 @@ fn component_native_outcome(
 fn native_component_session_with_contexts(
   opt_level : Int32,
   on_execution : (NativeComponentExecutionEvent) -> Unit,
+  prepared_code~ : NativeComponentCode? = None,
+  on_compile~ : () -> Unit = fn() { () },
 ) -> (@runtime_impl.CoreExecutionEngine, Map[Int32, ComponentJITContext]) {
   let contexts : Map[Int32, ComponentJITContext] = Map([])
   let rollback_registrar : Ref[@runtime.RollbackRegistrar?] = Ref(None)
@@ -164,6 +166,8 @@ fn native_component_session_with_contexts(
             None => false
           }
         },
+        prepared_code~,
+        on_compile~,
       )
       let instance_idx = instance.store_index()
       let context = { core, funcrefs, pending_suspension, suspension_enabled, }
