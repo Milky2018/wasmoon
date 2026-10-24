@@ -19,7 +19,7 @@ pub async fn serve_http(
     })
     let component = load_http_service(file)
     let layers = middleware.map(path => load_http_service(path))
-    println("[DIAG-pr577] prepare begin t=\{@async.now()}")
+    @logger.plain_error("[DIAG-pr577] prepare begin t=\{@async.now()}")
     let prepared_code = if use_jit {
       Some(
         @component_native.prepare_native_component_code(
@@ -30,7 +30,7 @@ pub async fn serve_http(
     } else {
       None
     }
-    println("[DIAG-pr577] prepare end t=\{@async.now()}")
+    @logger.plain_error("[DIAG-pr577] prepare end t=\{@async.now()}")
     let server = @socket.TcpServer(
       @socket.Addr::parse(address),
       reuse_addr=true,
@@ -40,10 +40,10 @@ pub async fn serve_http(
     server.run_forever(
       async fn(socket, _) {
         defer socket.close()
-        println("[DIAG-pr577] accept t=\{@async.now()}")
+        @logger.plain_error("[DIAG-pr577] accept t=\{@async.now()}")
         let linker = if prepared_code is Some(code) {
           @runtime_impl.ComponentLinker::with_core_execution_engine(
-            code.open_session(),
+            code.open_session(on_compile=fn() { @logger.plain_error("[DIAG-pr577] COMPILATION MISS") }),
           )
         } else {
           ComponentLinker()
@@ -71,7 +71,9 @@ pub async fn serve_http(
           )
         })
         host.run(async fn() {
+          @logger.plain_error("[DIAG-pr577] instantiate begin t=\{@async.now()}")
           let mut instance = linker.instantiate("http-service", component)
+          @logger.plain_error("[DIAG-pr577] instantiate end t=\{@async.now()}")
           for index = layers.length() - 1; index >= 0; index = index - 1 {
             host.add_downstream(instance)
             instance = linker.instantiate(

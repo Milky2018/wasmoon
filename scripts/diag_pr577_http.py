@@ -1,7 +1,7 @@
 import json, pathlib, subprocess, sys, tempfile
 root=pathlib.Path.cwd()
 with tempfile.TemporaryDirectory(prefix="pr577-control-") as work:
-    for index,jobs in enumerate([2,1,2,1]):
+    for index,jobs in enumerate([2,1]):
         output=pathlib.Path(work)/str(index)
         cmd=[sys.executable,"scripts/run_wasi03.py","--upstream","upstream", "--wasmoon",str(root/"wasmoon.exe"),"--output",str(output),"--timeout","120","--http-contract-tests","--filter","http-client-*","--jobs",str(jobs)]
         result=subprocess.run(cmd,timeout=240)

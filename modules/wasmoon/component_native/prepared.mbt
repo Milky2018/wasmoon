@@ -87,12 +87,14 @@ pub fn prepare_native_component_code(
 /// path without growing the shared snapshot.
 pub fn NativeComponentCode::open_session(
   self : NativeComponentCode,
+  on_compile~ : () -> Unit = fn() { () },
   on_execution~ : (NativeComponentExecutionEvent) -> Unit = fn(_event) { () },
 ) -> @runtime_impl.CoreExecutionEngine {
   let (engine, _) = native_component_session_with_contexts(
     self.opt_level,
     on_execution,
     prepared_code=Some(self),
+    on_compile~,
   )
   engine
 }

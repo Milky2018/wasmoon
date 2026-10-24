@@ -380,7 +380,6 @@ fn load_component_jit_context(
   let artifact = match prepared {
     Some(artifact) => artifact
     None => {
-      println("[DIAG-pr577] COMPILATION MISS")
       on_compile()
       compile_component_artifact(
         lowered_module,
