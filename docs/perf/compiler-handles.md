@@ -23,7 +23,7 @@ Fifteen alternating serial cold pairs on macOS ARM64 use the existing public
 cache. Every compared artifact is byte-identical. Parent is `7173217`, binary
 `1671b46e74a9`; candidate binary is `08f1cd6d1a35`. Compilation excludes artifact
 encoding and file I/O. Use `scripts/benchmark_compiler_memory.py` to repeat this
-boundary; Wasmtime comparisons require serial compilation as documented there.
+boundary.
 
 | Input | Parent median | Candidate median | Median paired change |
 | --- | ---: | ---: | ---: |
@@ -34,7 +34,7 @@ boundary; Wasmtime comparisons require serial compilation as documented there.
 
 All paired bootstrap 95% intervals are below zero. Peak RSS stays within about
 one percent; the extra dense reference vector is a real storage cost. The parse
-input is extracted from Core `7547b846`, current compiler output SHA-256
+guest is built from Core `7547b846` with the current MoonBit toolchain, SHA-256
 `d256b1ab6b9a310e8240fca61bf9972e73978cc3cf0506ed886f183c4962bb31`;
 it must not be mixed with the historical October16 guest or its timing table.
 
@@ -42,3 +42,21 @@ Public lifetime/foreign-owner controls pass on native and wasm, including handle
 kept after their creating Function is released. Full native3123, wasm1465 and
 strict checks pass; verified and ordinary JIT Core/Component executions pass.
 Clean current-head sanitizer and actual Windows/x64 execution are CI gates.
+
+## Scan frame requirements together
+
+The same sample attributes most flat instruction queries to repeated frame
+walks: incoming/outgoing/tail/result areas, stack objects and call presence.
+Both target frame planners now compute these related facts in one private
+scan. Verification independently repeats the scan on its supplied function;
+allocation, ABI, object descriptor and saved-register checks remain intact.
+There is no cached verified state or persistent analysis result.
+
+Fifteen further serial pairs against `8813545` (binary `08f1cd6d1a35`) improve
+complete auth3/Argon2i/ed25519/parse compilation by0.82/1.29/1.25/1.96%; all
+paired95% intervals are below zero, RSS is unchanged and every compared artifact
+is byte-identical. Candidate compiler binary is `020d663e0aeb`. The source change
+removes more code than it adds. A combined public execution regression keeps a
+GC root live across calls whose largest outgoing, return and tail areas arise
+from different instructions, with collection callbacks and both interpreter/JIT
+execution at optimization levels0/2. Platform x64 execution remains a CI gate.

@@ -41,3 +41,64 @@ test "precise function frames survive collection and hidden-result direct and in
     assert_eq(collections.val, 2)
   }
 }
+
+///|
+test "frame areas preserve independent maxima across calls results objects and tails" {
+  let args17 = Array::makei(17, index => "i64.const \{index + 1}").join(" ")
+  let args25 = Array::makei(25, index => "i64.const \{index + 1}").join(" ")
+  let params17 = "i64 ".repeat(17)
+  let params25 = "i64 ".repeat(25)
+  let adds = "i64.add ".repeat(16)
+  let source =
+    $|(module (type $keep (array (mut i64)))
+    $| (import "h" "collect" (func $collect))
+    $| (func $arguments (param \{params17}) (result i64)
+    $|  call $collect local.get 0 local.get 16 i64.add)
+    $| (func $results (result \{params17}) call $collect \{args17})
+    $| (func $tail (param \{params25}) (result i64)
+    $|  call $collect local.get 0 local.get 24 i64.add)
+    $| (func $caller (param $tail_path i32) (result i64)
+    $|  (local $root (ref null $keep)) (local $sum i64)
+    $|  i64.const 7 i32.const 1 array.new $keep local.set $root
+    $|  local.get $tail_path (if (then \{args25} return_call $tail))
+    $|  \{args17} call $arguments local.set $sum
+    $|  call $results \{adds} local.get $sum i64.add
+    $|  local.get $root i32.const 0 array.get $keep i64.add)
+    $| (func (export "probe") (result i32)
+    $|  i32.const 0 call $caller i64.const 178 i64.eq
+    $|  i32.const 1 call $caller i64.const 26 i64.eq i32.and))
+  let module_ = @wat.parse(source)
+  @validator.validate_module(module_)
+  for opt_level in [0, 2] {
+    for native in [false, true] {
+      let store = @runtime.Store::with_c_heap()
+      defer store.close()
+      let collections = Ref(0)
+      let collect = store.alloc_host_func(fn(_) {
+        collections.val += 1
+        store.collect_garbage() |> ignore
+        []
+      })
+      let imports = @runtime.Imports::Imports(store)
+      imports.add_func("h", "collect", collect)
+      let instance = @executor.instantiate_module_with_imports(
+        store, module_, imports,
+      )
+      let result = if native {
+        let context = build_gc_root_context(
+          module_,
+          instance,
+          store,
+          opt_level~,
+        )
+        defer context.close()
+        context.install_hostcall_dispatcher(store, instance)
+        context.call_core_func(store, instance, 5, [])
+      } else {
+        @executor.call_exported_func(store, instance, "probe", [])
+      }
+      assert_eq(result, [I32(1)], msg="native=\{native}, level=\{opt_level}")
+      assert_eq(collections.val, 3)
+    }
+  }
+}

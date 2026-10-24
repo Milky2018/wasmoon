@@ -497,21 +497,6 @@ fn require_instruction_shape(
 }
 
 ///|
-fn incoming_stack_capacity(function : @vcode.Function[AArch64Inst]) -> Int32 {
-  let mut size = 0
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    if function.instruction(instruction) is Some(IncomingStack(ty, offset)) {
-      let end = offset + call_stack_size(ty)
-      if end > size {
-        size = end
-      }
-    }
-  }
-  call_align_up(size, 16)
-}
-
-///|
 fn valid_result_plan(
   types : Array[@native.ValueType],
   plan : InternalCallPlan,
