@@ -411,7 +411,11 @@ fn FuncEnvironment::get_or_create_memory_trap_block(
       let trap_block = builder.create_block()
       let current = builder.current_block() // save current position
       builder.switch_to_block(trap_block)
+      // A shared failure block has multiple source origins. Do not attribute
+      // every failing access to whichever one first created this cold block.
+      let source = builder.set_source_byte_offset(None)
       builder.trap("memory out of bounds")
+      builder.set_source_byte_offset(source) |> ignore
       builder.switch_to_block(current) // restore position
       self.memory_trap_block = Some(trap_block)
       trap_block
@@ -431,7 +435,9 @@ fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
       let trap_block = builder.create_block()
       let current = builder.current_block()
       builder.switch_to_block(trap_block)
+      let source = builder.set_source_byte_offset(None)
       builder.trap("unaligned atomic")
+      builder.set_source_byte_offset(source) |> ignore
       builder.switch_to_block(current)
       self.atomic_unaligned_trap_block = Some(trap_block)
       trap_block

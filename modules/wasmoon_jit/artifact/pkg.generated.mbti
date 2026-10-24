@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub const FORMAT_VERSION : Int32 = 11
+pub const FORMAT_VERSION : Int32 = 12
 
 pub fn decode(Bytes, limits? : DecodeLimits) -> Artifact raise ArtifactDecodeError
 

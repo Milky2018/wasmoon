@@ -314,7 +314,10 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
             target, arguments, block_idx, params_to_keep,
           )
           is Some(retained) {
-          block.set_terminator(Jump(target, retained))
+          block.set_terminator(
+            Jump(target, retained),
+            metadata=block.terminator_metadata(),
+          )
           result.mark_changed()
         }
       Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
@@ -333,6 +336,7 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
               false_target,
               retained_false.unwrap_or(false_args),
             ),
+            metadata=block.terminator_metadata(),
           )
           result.mark_changed()
         }
@@ -382,7 +386,10 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
             }
           }
           if new_args is Some(updated_args) {
-            block.set_terminator(Jump(target, updated_args))
+            block.set_terminator(
+              Jump(target, updated_args),
+              metadata=block.terminator_metadata(),
+            )
             result.mark_changed()
           }
         }
@@ -390,7 +397,10 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
           if cond.id >= 0 && cond.id < value_count {
             if replace_values[cond.id] is Some(resolved) &&
               resolved.id != cond.id {
-              block.set_terminator(Brz(resolved, then_target, else_target))
+              block.set_terminator(
+                Brz(resolved, then_target, else_target),
+                metadata=block.terminator_metadata(),
+              )
               result.mark_changed()
             }
           }
@@ -398,7 +408,10 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
           if cond.id >= 0 && cond.id < value_count {
             if replace_values[cond.id] is Some(resolved) &&
               resolved.id != cond.id {
-              block.set_terminator(Brnz(resolved, then_target, else_target))
+              block.set_terminator(
+                Brnz(resolved, then_target, else_target),
+                metadata=block.terminator_metadata(),
+              )
               result.mark_changed()
             }
           }
@@ -437,6 +450,7 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
               Branch(
                 new_cond, true_target, new_true_args, false_target, new_false_args,
               ),
+              metadata=block.terminator_metadata(),
             )
             result.mark_changed()
           }
@@ -445,7 +459,10 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
           if index.id >= 0 && index.id < value_count {
             if replace_values[index.id] is Some(resolved) &&
               resolved.id != index.id {
-              block.set_terminator(BrTable(resolved, targets, default_target))
+              block.set_terminator(
+                BrTable(resolved, targets, default_target),
+                metadata=block.terminator_metadata(),
+              )
               result.mark_changed()
             }
           }
@@ -465,7 +482,10 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
             }
           }
           if new_values is Some(updated_values) {
-            block.set_terminator(Return(updated_values))
+            block.set_terminator(
+              Return(updated_values),
+              metadata=block.terminator_metadata(),
+            )
             result.mark_changed()
           }
         }
@@ -549,7 +569,10 @@ fn eliminate_dead_block_params(func : @milkir.Function) -> OptResult {
             target, arguments, block_idx, params_to_keep,
           )
           is Some(retained) {
-          block.set_terminator(Jump(target, retained))
+          block.set_terminator(
+            Jump(target, retained),
+            metadata=block.terminator_metadata(),
+          )
           result.mark_changed()
         }
       Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
@@ -568,6 +591,7 @@ fn eliminate_dead_block_params(func : @milkir.Function) -> OptResult {
               false_target,
               retained_false.unwrap_or(false_args),
             ),
+            metadata=block.terminator_metadata(),
           )
           result.mark_changed()
         }
@@ -703,22 +727,34 @@ fn simplify_branches(func : @milkir.Function) -> OptResult {
       if constants.get(cond.id) is Some(I32(v)) {
         // brz: branch if zero
         let target = if v == 0 { then_target } else { else_target }
-        block.set_terminator(Jump(target, []))
+        block.set_terminator(
+          Jump(target, []),
+          metadata=block.terminator_metadata(),
+        )
         result.mark_changed()
       } else if constants.get(cond.id) is Some(I64(v)) {
         let target = if v == 0L { then_target } else { else_target }
-        block.set_terminator(Jump(target, []))
+        block.set_terminator(
+          Jump(target, []),
+          metadata=block.terminator_metadata(),
+        )
         result.mark_changed()
       }
     } else if block.terminator is Some(Brnz(cond, then_target, else_target)) {
       if constants.get(cond.id) is Some(I32(v)) {
         // brnz: branch if not zero
         let target = if v != 0 { then_target } else { else_target }
-        block.set_terminator(Jump(target, []))
+        block.set_terminator(
+          Jump(target, []),
+          metadata=block.terminator_metadata(),
+        )
         result.mark_changed()
       } else if constants.get(cond.id) is Some(I64(v)) {
         let target = if v != 0L { then_target } else { else_target }
-        block.set_terminator(Jump(target, []))
+        block.set_terminator(
+          Jump(target, []),
+          metadata=block.terminator_metadata(),
+        )
         result.mark_changed()
       }
     } else if block.terminator
@@ -730,6 +766,7 @@ fn simplify_branches(func : @milkir.Function) -> OptResult {
           } else {
             Jump(false_target, false_args)
           },
+          metadata=block.terminator_metadata(),
         )
         result.mark_changed()
       } else if constants.get(cond.id) is Some(I64(value)) {
@@ -739,6 +776,7 @@ fn simplify_branches(func : @milkir.Function) -> OptResult {
           } else {
             Jump(false_target, false_args)
           },
+          metadata=block.terminator_metadata(),
         )
         result.mark_changed()
       }
@@ -750,7 +788,10 @@ fn simplify_branches(func : @milkir.Function) -> OptResult {
         } else {
           default_target
         }
-        block.set_terminator(Jump(target, []))
+        block.set_terminator(
+          Jump(target, []),
+          metadata=block.terminator_metadata(),
+        )
         result.mark_changed()
       }
     }
@@ -851,7 +892,10 @@ fn merge_blocks(func : @milkir.Function) -> OptResult {
             block.append_inst(func.instruction_by_id(inst_id).unwrap())
           }
           successor.clear_instructions_for_move()
-          block.set_terminator(successor.terminator.unwrap())
+          block.set_terminator(
+            successor.terminator.unwrap(),
+            metadata=successor.terminator_metadata(),
+          )
           removed[target] = true
           result.mark_changed()
         }
@@ -1025,7 +1069,10 @@ fn thread_jumps(func : @milkir.Function) -> OptResult {
           target, args, func, block_idx, empty_jump_targets, forward_only_params,
         )
         if final_target != target || !block_arg_arrays_equal(final_args, args) {
-          block.set_terminator(Jump(final_target, final_args))
+          block.set_terminator(
+            Jump(final_target, final_args),
+            metadata=block.terminator_metadata(),
+          )
           result.mark_changed()
         }
       }
@@ -1057,7 +1104,10 @@ fn thread_jumps(func : @milkir.Function) -> OptResult {
           else_target
         }
         if new_then != then_target || new_else != else_target {
-          block.set_terminator(Brz(cond, new_then, new_else))
+          block.set_terminator(
+            Brz(cond, new_then, new_else),
+            metadata=block.terminator_metadata(),
+          )
           result.mark_changed()
         }
       }
@@ -1089,7 +1139,10 @@ fn thread_jumps(func : @milkir.Function) -> OptResult {
           else_target
         }
         if new_then != then_target || new_else != else_target {
-          block.set_terminator(Brnz(cond, new_then, new_else))
+          block.set_terminator(
+            Brnz(cond, new_then, new_else),
+            metadata=block.terminator_metadata(),
+          )
           result.mark_changed()
         }
       }
@@ -1108,6 +1161,7 @@ fn thread_jumps(func : @milkir.Function) -> OptResult {
             Branch(
               cond, resolved_true, resolved_true_args, resolved_false, resolved_false_args,
             ),
+            metadata=block.terminator_metadata(),
           )
           result.mark_changed()
         }
@@ -1147,7 +1201,10 @@ fn thread_jumps(func : @milkir.Function) -> OptResult {
           any_changed = true
         }
         if any_changed {
-          block.set_terminator(BrTable(index, new_targets, new_default))
+          block.set_terminator(
+            BrTable(index, new_targets, new_default),
+            metadata=block.terminator_metadata(),
+          )
           result.mark_changed()
         }
       }

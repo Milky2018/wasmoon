@@ -257,6 +257,7 @@ fn Parser::read_rec_group(
   let scan : Parser = {
     data: self.data,
     pos: self.pos,
+    instruction_sources: None,
     has_data_count: self.has_data_count,
     types: [],
     max_depth: self.max_depth,

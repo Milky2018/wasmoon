@@ -329,6 +329,7 @@ pub(all) struct SourceLocation {
   file : String
   line : Int32
   column : Int32
+  byte_offset : Int64?
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -336,11 +337,18 @@ pub fn SourceLocation::new(
   file : String,
   line : Int32,
   column : Int32,
+  byte_offset~ : Int64? = None,
 ) -> SourceLocation {
-  { file, line, column, }
+  { file, line, column, byte_offset, }
 }
 
 ///|
 pub fn SourceLocation::is_valid(self : SourceLocation) -> Bool {
-  !self.file.is_empty() && self.line >= 0 && self.column >= 0
+  !self.file.is_empty() &&
+  self.line >= 0 &&
+  self.column >= 0 &&
+  (match self.byte_offset {
+    Some(offset) => offset >= 0L
+    None => true
+  })
 }

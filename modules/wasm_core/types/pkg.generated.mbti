@@ -70,6 +70,8 @@ pub fn to_hex_byte(Int32) -> String
 
 pub fn to_hex_u16(Int32) -> String
 
+pub fn validate_instruction_sources(ArrayView[Instruction], ArrayView[InstructionSource]) -> Bool
+
 // Errors
 
 // Types and methods
@@ -748,6 +750,14 @@ pub fn Instruction::output(Self, &Logger) -> Unit
 pub fn Instruction::to_repr(Self) -> @debug.Repr
 pub fn Instruction::to_string(Self) -> String
 pub impl Show for Instruction
+
+pub(all) struct InstructionSource {
+  byte_offset : Int32
+  subtree_end : Int32
+} derive(Eq, @debug.Debug)
+pub fn InstructionSource::equal(Self, Self) -> Bool
+pub fn InstructionSource::not_equal(Self, Self) -> Bool
+pub fn InstructionSource::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Limits {
   min : Int64

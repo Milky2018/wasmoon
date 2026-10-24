@@ -948,7 +948,7 @@ test "VCode preserves typed source trap safepoint and symbol metadata" {
     content=(
       #|vcode metadata(v0:gcref64)
       #|block0:
-      #|  i0 Call uses=[v0:any@early] source={ file: "fixture.wat", line: 7, column: 11 } trap=MemoryOutOfBounds safepoint=GcAndCancellation roots=[v0] symbol=External({ name: "runtime.grow" })
+      #|  i0 Call uses=[v0:any@early] source={ file: "fixture.wat", line: 7, column: 11, byte_offset: None } trap=MemoryOutOfBounds safepoint=GcAndCancellation roots=[v0] symbol=External({ name: "runtime.grow" })
       #|  i1 Return
       #|
     ),

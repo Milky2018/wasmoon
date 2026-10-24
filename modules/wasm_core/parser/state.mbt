@@ -6,6 +6,7 @@
 struct Parser {
   data : Bytes
   mut pos : Int32
+  mut instruction_sources : Array[@types.InstructionSource]?
   mut has_data_count : Bool // true if data count section was seen
   types : Array[@types.SubType]
   max_depth : Int32
@@ -27,6 +28,7 @@ pub fn Parser::Parser(data : Bytes) -> Parser {
   {
     data,
     pos: 0,
+    instruction_sources: None,
     has_data_count: false,
     types: [],
     max_depth: 0x7FFF_FFFF,

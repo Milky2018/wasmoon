@@ -3,7 +3,8 @@
 /// Returns parsed module and optional original wasm bytes for binary inputs.
 fn load_module_with_binary_from_path(
   path : String,
-) -> (@types.Module, Bytes?) raise CliError {
+  collect_sources~ : Bool = false,
+) -> (@types.Module, Bytes?, Array[Array[@types.InstructionSource]]) raise CliError {
   let is_wat = path.has_suffix(".wat") || path.has_suffix(".wast")
   if is_wat {
     let content = @fs.read_file_to_string(path) catch {
@@ -12,7 +13,7 @@ fn load_module_with_binary_from_path(
     let mod_ = @core_wat.parse(content) catch {
       e => raise ParseWatError(e.to_string())
     }
-    (mod_, None)
+    (mod_, None, [])
   } else {
     let bytes = @fs.read_file_to_bytes(path) catch {
       IOError(_e) => raise FileNotFound(path)
@@ -20,17 +21,23 @@ fn load_module_with_binary_from_path(
     if @component_types.sniff_binary_kind(bytes) is Some(Component) {
       raise ComponentModelNotSupported
     }
-    let mod_ = @parser.parse_module(bytes) catch {
+    let (mod_, sources) = try {
+      if collect_sources {
+        @parser.parse_module_with_sources(bytes)
+      } else {
+        (@parser.parse_module(bytes), [])
+      }
+    } catch {
       e => raise ParseModuleError(e.to_string())
     }
-    (mod_, Some(bytes))
+    (mod_, Some(bytes), sources)
   }
 }
 
 ///|
 /// Load a module from file path (supports both .wasm and .wat)
 fn load_module_from_path(path : String) -> @types.Module raise CliError {
-  let (mod_, _) = load_module_with_binary_from_path(path)
+  let (mod_, _, _) = load_module_with_binary_from_path(path)
   mod_
 }
 

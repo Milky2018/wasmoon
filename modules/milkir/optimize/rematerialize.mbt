@@ -87,6 +87,7 @@ fn sink_single_use_materializations(func : @milkir.Function) -> OptResult {
           Return(values) => Return(values.map(value => sink(value)))
           Trap(_) | TrapExit(_) => term
         },
+        metadata=block.terminator_metadata(),
       )
     }
     block.set_instructions(rewritten)

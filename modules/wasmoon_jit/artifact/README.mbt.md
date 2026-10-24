@@ -18,3 +18,10 @@ function and import counts, strings, signatures, code, relocations, metadata,
 and safepoint roots before allocation. Malformed input, incompatible versions,
 invalid UTF-8, unknown tags, truncation, and limit violations are reported as
 structured `ArtifactDecodeError` values.
+
+Format 12 retains optional original source-byte offsets and bounded native
+source ranges. A range covers `[offset, offset + length)`; gaps and zero-length
+legacy point metadata establish no instruction extent. Source offsets are
+independent of native instruction offsets. Invalid, overlapping or out-of-code
+ranges are rejected during code-object verification before installation. Older
+artifact versions are rejected rather than interpreted with the new schema.

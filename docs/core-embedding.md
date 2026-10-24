@@ -230,3 +230,19 @@ bridges: a direct caller owns any transferred `GcRootLease` and must release it
 after incorporating the payload into guest roots, or on failure. Interpreter
 and native adapters perform that handoff automatically, including mixed SIMD
 and reference payloads.
+
+## Native trap source positions
+
+`TrapReport.wasm_offset` and each `WasmTrapFrame.wasm_offset` are optional
+absolute byte offsets into the original input Wasm module. Native compilation
+from bytes preserves parser positions through optimization, target emission and
+artifact serialization, including custom sections and non-canonical LEBs.
+Function-relative machine-code displacements are reported separately as
+`native_offset`; `find_func_by_pc` also continues to return native displacements.
+
+Decoded AST/WAT input without a binary position table, synthetic prologues and
+ambiguous shared failure blocks have no Wasm offset. They return `None`, never a
+native displacement or a guessed zero. Native source ranges have explicit ends,
+so a missing location cannot inherit the preceding instruction's source. Caller
+frames resolve the call instruction preceding the saved return PC; resumed trap
+reports use the same owned mappings. Positions remain usable after module close.

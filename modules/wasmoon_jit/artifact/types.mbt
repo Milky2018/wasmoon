@@ -1,6 +1,6 @@
 ///|
 /// Cwasm format with an explicit arithmetic NaN compilation policy.
-pub const FORMAT_VERSION : Int32 = 11
+pub const FORMAT_VERSION : Int32 = 12
 
 ///|
 /// Operating-system ABI assumed by generated code and unwind metadata.

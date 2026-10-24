@@ -9,6 +9,7 @@ pub struct JITFunction {
   name : String
   priv func_ptr : Int64
   priv code_size : Int32
+  priv source_ranges : Array[(Int32, Int32, Int64)]
   param_types : ReadOnlyArray[@types.ValueType] // Parameter types for proper register allocation
   result_types : ReadOnlyArray[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
 }
@@ -54,8 +55,43 @@ fn JITFunction::JITFunction(
   code_size : Int32,
   param_types : ReadOnlyArray[@types.ValueType],
   result_types : ReadOnlyArray[@types.ValueType],
+  source_ranges : Array[(Int32, Int32, Int64)],
 ) -> JITFunction {
-  { func_idx, name, func_ptr, code_size, param_types, result_types, }
+  {
+    func_idx,
+    name,
+    func_ptr,
+    code_size,
+    param_types,
+    result_types,
+    source_ranges,
+  }
+}
+
+///|
+fn JITFunction::wasm_offset(
+  self : JITFunction,
+  native_offset : Int32,
+) -> Int64? {
+  let mut lo = 0
+  let mut hi = self.source_ranges.length()
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    if self.source_ranges[mid].0 <= native_offset {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  if lo == 0 {
+    return None
+  }
+  let (_, end, offset) = self.source_ranges[lo - 1]
+  if native_offset < end {
+    Some(offset)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -333,6 +369,15 @@ fn load_artifact_with_imports_using_registrar(
         function.code_size(),
         ReadOnlyArray::from_array(param_types),
         ReadOnlyArray::from_array(result_types),
+        function
+        .sources()
+        .filter_map(site => {
+          if site.length > 0 && site.source.byte_offset is Some(offset) {
+            Some((site.offset, site.offset + site.length, offset))
+          } else {
+            None
+          }
+        }),
       ),
     )
     jit_module.by_name.set(name, function_index)
@@ -474,7 +519,8 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int32) -> Int64 {
 
 ///|
 /// Find the compiled wasm function that contains `pc` (best-effort), returning:
-/// (func_idx, function, offset_in_function_bytes)
+/// (func_idx, function, native_offset_in_function_bytes). The displacement is
+/// never an original input-module byte offset.
 /// Uses binary search on sorted address_ranges for O(log n) lookup.
 pub fn JITModule::find_func_by_pc(
   self : JITModule,
@@ -822,6 +868,7 @@ fn JITModule::build_trap_report(
   let mut wasm_func_idx : Int32? = None
   let mut wasm_func_name : String? = None
   let mut wasm_offset : Int64? = None
+  let mut native_offset : Int64? = None
   let wasm_frames : Array[@wasmoon_jit.WasmTrapFrame] = []
   let signal_name = if details.signal != 0 {
     @wasmoon_jit.format_signal_name(details.signal)
@@ -847,12 +894,14 @@ fn JITModule::build_trap_report(
     Some((func_idx, f, offset)) => {
       wasm_func_idx = Some(func_idx)
       wasm_func_name = Some(f.name)
-      wasm_offset = Some(offset.to_int64())
+      wasm_offset = f.wasm_offset(offset)
+      native_offset = Some(offset.to_int64())
       add_unique_frame(wasm_frames, {
         pc: details.pc,
         func_idx,
         func_name: f.name,
-        wasm_offset: offset.to_int64(),
+        wasm_offset,
+        native_offset,
       })
     }
     None =>
@@ -863,13 +912,14 @@ fn JITModule::build_trap_report(
           None => "func_\{details.func_idx}"
         }
         wasm_func_name = Some(name)
-        wasm_offset = Some(0L)
+        wasm_offset = None
         if details.pc != 0L {
           add_unique_frame(wasm_frames, {
             pc: details.pc,
             func_idx: details.func_idx,
             func_name: name,
-            wasm_offset: 0L,
+            wasm_offset: None,
+            native_offset: None,
           })
         }
       }
@@ -885,7 +935,8 @@ fn JITModule::build_trap_report(
         pc,
         func_idx,
         func_name: function_.name,
-        wasm_offset: offset.to_int64(),
+        wasm_offset: function_.wasm_offset(offset),
+        native_offset: Some(offset.to_int64()),
       })
     }
   }
@@ -1001,6 +1052,7 @@ fn JITModule::build_trap_report(
     wasm_func_idx,
     wasm_func_name,
     wasm_offset,
+    native_offset,
     wasm_frames,
     host_frames: [],
     dump_path,

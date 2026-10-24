@@ -149,3 +149,18 @@ test "public low-level construction retains instruction metadata" {
     ),
   )
 }
+
+///|
+test "terminator replacement requires explicit provenance preservation" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("source")
+  builder.set_source_byte_offset(Some(42L)) |> ignore
+  builder.trap("original")
+  let block = builder.current_block()
+  assert_eq(block.terminator_metadata(), [SourceByteOffset(42L)])
+  block.set_terminator(Trap("replacement"))
+  assert_eq(block.terminator_metadata(), [])
+  block.set_terminator(Trap("explicit"), metadata=[SourceByteOffset(99L)])
+  assert_eq(block.terminator_metadata(), [SourceByteOffset(99L)])
+  block.set_terminator(Trap("synthetic"))
+  assert_eq(block.terminator_metadata(), [])
+}

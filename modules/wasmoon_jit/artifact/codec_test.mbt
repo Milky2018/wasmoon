@@ -268,7 +268,7 @@ test "decoder enforces every variable-length resource class" {
     ],
     content=(
       #|[
-      #|  ArtifactTooLarge(size=427, limit=426),
+      #|  ArtifactTooLarge(size=434, limit=433),
       #|  LimitExceeded(
       #|    field="manifest.required_cpu_features.length",
       #|    count=1,
@@ -340,4 +340,36 @@ test "encoder rejects a non-SHA-256 digest width" {
       #|)
     ),
   )
+}
+
+///|
+test "artifact roundtrip keeps bounded native ranges and original byte provenance" {
+  let original = sample_artifact()
+  let function_ = original.functions[0]
+  let source = @native.SourceLocation::new(
+    "input.wasm",
+    0,
+    0,
+    byte_offset=Some(0x1234L),
+  )
+  let updated = {
+    ..original,
+    functions: [
+      {
+        ..function_,
+        sources: [@code_object.SourceSite::new(0, source, length=4)],
+        traps: [@code_object.TrapSite::new(0, User(7), source~)],
+        safepoints: [
+          @code_object.SafepointSite::new(
+            function_.safepoints[0].offset,
+            function_.safepoints[0].kind,
+            function_.safepoints[0].roots,
+            source~,
+            stack_map?=function_.safepoints[0].stack_map,
+          ),
+        ],
+      },
+    ],
+  }
+  assert_eq(@artifact.decode(@artifact.encode(updated)), updated)
 }

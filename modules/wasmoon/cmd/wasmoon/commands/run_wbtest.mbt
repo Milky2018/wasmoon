@@ -94,7 +94,7 @@ test "compile api: parse failure emits failed stage" {
 
 ///|
 test "run JIT cache version tracks the artifact format" {
-  inspect(run_jit_cache_version, content="v11")
+  inspect(run_jit_cache_version, content="v12")
 }
 
 ///|
@@ -177,7 +177,7 @@ test "run JIT cache override is authoritative and missing user dirs disable cach
 
 ///|
 fn cache_test_file(label : String) -> String {
-  @test_fs.temp_dir() + "/wasmoon-v11-cache-\{label}.cwasm"
+  @test_fs.temp_dir() + "/wasmoon-v12-cache-\{label}.cwasm"
 }
 
 ///|
@@ -191,7 +191,7 @@ fn write_cache_test_bytes(path : String, bytes : Bytes) -> Unit {
 }
 
 ///|
-test "run JIT cache accepts an exactly compatible v11 artifact" {
+test "run JIT cache accepts an exactly compatible v12 artifact" {
   guard compile_module(minimal_i32_const_module_bytes()) is Some(artifact) else {
     fail("compile returned unsupported")
   }
