@@ -255,14 +255,7 @@ static void forget_identity_window(GcHeap *heap) {
 // Called only after capacity admission; no callbacks or allocations publish a
 // partially initialized object. Payload order and identity order agree.
 int32_t gc_heap_register_object(GcHeap *heap, int32_t offset) {
-    int32_t index = heap->object_count++;
-    GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
-    page->offsets[index & (GC_ID_PAGE_SIZE - 1)] = offset;
-    page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = -1;
-    page->live_count++;
-    int32_t ref = index + 1;
-    heap->live_objects[heap->live_count++] = ref;
-    heap->total_allocations++;
+    int32_t ref = gc_heap_publish_object(heap, offset, -1);
     prepare_identity_window(heap);
     return ref;
 }

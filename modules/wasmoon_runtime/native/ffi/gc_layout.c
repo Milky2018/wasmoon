@@ -69,14 +69,27 @@ int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
     GcTypeLayout *layout = gc_heap_layout(heap, identity);
     if (!layout || count < 0 || (layout->kind == GC_KIND_STRUCT && count != layout->count)) return 0;
     heap->quota_denied = 0;
-    if (gc_should_fail_allocation()) return 0;
     int array = layout->kind == GC_KIND_ARRAY;
     int64_t bytes = GC_HEADER_SIZE + (array ? GC_ARRAY_DATA_OFFSET + (int64_t)count * layout->size : layout->size);
     bytes = (bytes + 15) & -INT64_C(16);
-    if (bytes > INT32_MAX || !gc_heap_admit(heap, (size_t)bytes)) return 0;
-    if (!gc_heap_ensure_payload_capacity(heap, (size_t)bytes) || !gc_heap_ensure_object_capacity(heap)) {
-        gc_heap_undo_admission(heap);
-        return 0;
+    // The prepared window owns capacity, not identities. Ordinary allocations
+    // can consume it without repeated capacity/debug/quota calls. Every other
+    // case retains the complete allocator and its failure ordering.
+    int prepared = heap->allocation_control && heap->allocation_control->enabled &&
+        !heap->byte_reservation && !heap->object_reservation && bytes <= INT32_MAX &&
+        heap->size <= (size_t)(INT32_MAX - bytes) &&
+        (size_t)bytes <= heap->capacity - heap->size &&
+        (!heap->precise_roots || heap->size < heap->collection_limit) &&
+        heap->object_count < heap->identity_window_limit;
+    if (prepared) {
+        heap->allocation_control->attempts++;
+    } else {
+        if (gc_should_fail_allocation()) return 0;
+        if (bytes > INT32_MAX || !gc_heap_admit(heap, (size_t)bytes)) return 0;
+        if (!gc_heap_ensure_payload_capacity(heap, (size_t)bytes) || !gc_heap_ensure_object_capacity(heap)) {
+            gc_heap_undo_admission(heap);
+            return 0;
+        }
     }
     int32_t offset = (int32_t)heap->size;
     GcHeader *header = (GcHeader *)(heap->data + offset);
@@ -116,6 +129,7 @@ int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
         }
     }
     heap->size += (size_t)bytes;
+    if (prepared) return gc_heap_publish_object(heap, offset, identity);
     int32_t ref = gc_heap_register_object(heap, offset);
     gc_heap_set_runtime_type(heap, ref, identity);
     gc_heap_maybe_verify(heap, "alloc_typed");

@@ -147,3 +147,46 @@ archive installation, WASI execution on both engines, packaged native/wasm
 embedding and 17 packaged native diagnostic regressions pass. Owned temporary
 sources, builds, caches, profiles and reports were removed; no raw receipts are
 committed. Linux/Windows execution and leak acceptance remain CI work.
+
+## Prepared typed allocation follow-up
+
+A 3-second CPU sample of 300 million four-element i32 allocations on e4ff2f70
+put approximately 86% of main-thread samples in the allocation chain, including
+about 12% in collection; array projection accounted for another 9%. The sample
+is attribution, not a timing run. Optimized V8 machine code still allocates
+these arrays through its bump-pointer path, but forwards some subsequent
+fresh-array reads. Allocation cost alone therefore does not explain the gap.
+
+Typed allocation now consumes the existing prepared identity/live-list window
+when debug controls are known disabled, no quotas are bound, and payload,
+identity and collection capacity suffice. It increments the same attempt
+counter and uses one shared publication primitive. Otherwise the original
+fault-injection, quota admission, capacity growth and verifier path runs.
+Payloads are initialized before publication; no new root, layout, collector
+policy or public API is introduced. Collection and rollback already invalidate
+prepared capacity. A public regression retains more than two identity pages,
+rolls back a newer page, allocates again, collects and checks every payload.
+
+Three alternating serial samples of 100 million allocations per case
+(`--samples 3 --scale 1000` with the three small-array cases), invocation seconds:
+
+| Elements | e4ff2f70 | Prepared | V8 | Reduction |
+| --- | ---: | ---: | ---: | ---: |
+| 4 | 3.066 | 2.301 | 0.385 | 24.9% |
+| 1 | 3.284 | 2.531 | 0.342 | 23.0% |
+| 17 | 3.899 | 2.980 | 1.750 | 23.6% |
+
+The baseline is independently built from e4ff2f70 in a temporary checkout;
+binary SHA256 prefixes are e88a6c2ba269 / 51ca4ce12597. All controls return 1.
+Five samples of the full parse_double property give 1.899 / 1.878 seconds
+invocation and 0.818 / 0.823 seconds compilation: only a small real-workload
+change, not a solution to its remaining execution gap. The seven-case shorter
+screen leaves large-array and graph throughput essentially unchanged. No RSS
+improvement is claimed: long small-array controls still reach 156–175 MB.
+
+Follow-up validation: full native3103 with register-allocation, GC and barrier
+verification; ordinary sanitizer package214; wasm1462; Core interpreter/JIT
+each258/62563; strict checks on both targets; 44 C stubs and module/bridge audits.
+Fresh isolated local ASan/UBSan314, event loop and both ASan positive controls
+pass on the dirty e4ff2f70-based tree. macOS does not provide LSan acceptance;
+this follow-up requires its own Linux/Windows CI after commit.

@@ -217,6 +217,20 @@ static inline void gc_heap_set_runtime_type(GcHeap *heap, int32_t ref, int32_t t
     if (page) page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = type;
 }
 
+// Capacity and resource admission precede publication. No allocation, callback
+// or safepoint may intervene between initializing the payload and this update.
+static inline int32_t gc_heap_publish_object(GcHeap *heap, int32_t offset, int32_t type) {
+    int32_t index = heap->object_count++;
+    GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
+    page->offsets[index & (GC_ID_PAGE_SIZE - 1)] = offset;
+    page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = type;
+    page->live_count++;
+    int32_t ref = index + 1;
+    heap->live_objects[heap->live_count++] = ref;
+    heap->total_allocations++;
+    return ref;
+}
+
 int32_t gc_heap_register_object(GcHeap *heap, int32_t offset);
 int gc_heap_fast_allocation_enabled(void);
 
