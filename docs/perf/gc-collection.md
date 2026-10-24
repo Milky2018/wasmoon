@@ -1,4 +1,4 @@
-# Native GC root discovery
+# Native GC discovery and identity retirement
 
 Tracking: [ISS-684](../../issues/ISS-684.md). Local macOS ARM64 release
 measurements compare frozen `fef3fa05` binary `1d31661547fb` with explicitly
@@ -72,3 +72,50 @@ passes 59 files/1385 commands without skips, with all three verification flags.
 Fresh isolated macOS ASan/UBSan passes 322 tests, event-loop execution and both
 ASan positive controls. That sanitizer build is explicitly dirty fef3fa05-based
 local evidence; macOS cannot establish Linux LSan or Windows/x64 acceptance.
+
+## Batched retirement of dead identity pages
+
+The follow-up to 4ab8e41d adds a conservative mark hint to each identity page.
+The two header-marking paths share one private setter. Sorted live identities
+and verified exact page populations identify each page's traversal group.
+Wholly unmarked pages retire their identity metadata once; marked pages retain
+individual header checks and retirement. Allocation windows and payload-view
+hints are cleared before page release. Stable identities, quota accounting,
+bounded free-list bookkeeping, manual marks and rollback remain unchanged.
+This adds four private bytes per identity page, with no public API or artifact
+layout change. It is not a generational collector.
+
+Dead payload headers still become FREE before their page is released. Omitting
+these writes initially regressed large zero arrays 5–17%. Matching allocator
+alignment did not remove the regression. A runtime toggle in the SAME binary
+isolated the missing writes: one-million zero-array invocation 316.237->290.200ms
+when header cleanup was restored. Specific cache/TLB contributions are unproven.
+All diagnostic toggles and alignment annotations were removed. Header cleanup
+still visits dead objects; only identity metadata retirement is batched.
+
+Five serial AB/BA pairs freeze parent b2fdd81c11eb and final 276e7c91450f. Median
+invocation milliseconds:
+
+| Workload | Parent | Batched metadata |
+| --- | ---: | ---: |
+| Ten million 1-element arrays | 254.870 | 236.191 |
+| Ten million 4-element arrays | 229.792 | 213.129 |
+| Ten million 17-element arrays | 282.889 | 272.519 |
+| Current Core parse_double | 1694.613 | 1653.034 |
+| Retained graph | 39.652 | 39.053 |
+
+The final 100000-array zero/nonzero/vector controls are approximately unchanged.
+A separate five-pair 10x allocation-length run gives 282.246->290.053ms for zero
+arrays and 390.251->399.820ms for vectors (2.5–2.8% slower); nonzero arrays are
+395.358->394.442ms. This is retained as a small-object/real-property throughput
+trade-off, not a universal win. RSS and compilation do not materially improve.
+No sample or rejected variant is silently removed from these comparisons.
+
+The public page-boundary regression preserves sparse survivors across three
+rounds of 4097 allocations in both root modes, checks old survivor death, stable
+identity numbering and subsequent allocation. Omitting page marking fails both
+this test and the native-parent/untyped-child test. Ordinary/verified native 3119,
+wasm 1464, strict checks/info/fmt/C44/audits, Core 258/62563 and Component 59/1385
+per engine pass. Fresh isolated ASan/UBSan 323 plus event loop and both positive
+controls pass on explicitly dirty 4ab8e41d sources; Linux LSan/Windows acceptance
+require the next exact-head CI run.

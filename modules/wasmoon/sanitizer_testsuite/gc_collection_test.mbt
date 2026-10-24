@@ -239,3 +239,57 @@ test "completion and abort callbacks preserve marks for the next collection" {
     }
   }
 }
+
+///|
+test "collection preserves sparse page survivors without recycling identities" {
+  for precise in [false, true] {
+    let heap = @wasmoon_jit.CHeap()
+    defer heap.free()
+    defer heap.clear_root_visitor()
+    if precise {
+      heap.bind_root_visitor(fn(_, roots) { roots })
+    }
+    let selected = [0, 1023, 1024, 2048, 4096]
+    let previous : Array[Int32] = []
+    for round in 0..<3 {
+      let objects : Array[Int32] = []
+      for index in 0..<4097 {
+        let identity = round * 4097 + index
+        // Odd scalar words cannot resemble conservative heap roots.
+        let object = heap.alloc_struct(0, [I32(identity * 2 + 1)])
+        assert_eq(object, identity)
+        objects.push(object)
+      }
+      let roots : Array[@types.Value] = []
+      for index in selected {
+        roots.push(StructRef(objects[index]))
+      }
+      assert_eq(
+        heap.collect(roots),
+        4097 + previous.length() - selected.length(),
+      )
+      assert_eq(heap.get_object_count(), (round + 1) * 4097)
+      for object in previous {
+        assert_false(heap.is_valid(object))
+      }
+      previous.clear()
+      for index in 0..<objects.length() {
+        let object = objects[index]
+        assert_eq(heap.is_valid(object), selected.contains(index))
+        if selected.contains(index) {
+          assert_eq(heap.struct_get(object, 0, I32), I32(object * 2 + 1))
+          previous.push(object)
+        }
+      }
+      assert_true(heap.verify())
+    }
+    assert_eq(heap.collect([]), selected.length())
+    for object in previous {
+      assert_false(heap.is_valid(object))
+    }
+    let fresh = heap.alloc_struct(0, [I32(42)])
+    assert_eq(fresh, 3 * 4097)
+    assert_eq(heap.struct_get(fresh, 0, I32), I32(42))
+    assert_true(heap.verify())
+  }
+}

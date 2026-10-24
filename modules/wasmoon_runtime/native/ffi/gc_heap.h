@@ -124,6 +124,7 @@ typedef struct {
     int32_t runtime_types[GC_ID_PAGE_SIZE];
     int32_t live_count;
     uint32_t visit_epochs[GC_ID_PAGE_SIZE];
+    int32_t has_marked_objects; // Conservative hint for whole-page retirement
 } GcIdentityPage;
 
 // Shared mutable controls are read on every generated allocation.
@@ -207,6 +208,14 @@ static inline GcIdentityPage *gc_heap_identity_page(GcHeap *heap, int32_t ref) {
 static inline int32_t gc_heap_identity_offset(GcHeap *heap, int32_t ref) {
     GcIdentityPage *page = gc_heap_identity_page(heap, ref);
     return page ? page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] : -1;
+}
+
+// The caller has resolved a valid payload for this identity. Keep every mark
+// writer on this path so empty-heap and empty-page proofs agree with headers.
+static inline void gc_heap_mark_header(GcHeap *heap, int32_t ref, GcHeader *header) {
+    header->flags |= GC_FLAG_MARKED;
+    heap->has_marked_objects = 1;
+    gc_heap_identity_page(heap, ref)->has_marked_objects = 1;
 }
 
 static inline int32_t gc_heap_runtime_type(GcHeap *heap, int32_t ref) {
