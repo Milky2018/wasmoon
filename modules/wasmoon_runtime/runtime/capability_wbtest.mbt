@@ -1,6 +1,6 @@
 ///|
 test "runtime_version is exposed" {
-  inspect(runtime_version(), content="0.17.2")
+  inspect(runtime_version(), content="0.18.0")
 }
 
 ///|
@@ -24,7 +24,7 @@ test "supports_feature basic matrix" {
 ///|
 test "runtime_capabilities snapshot is coherent" {
   let caps = runtime_capabilities()
-  inspect(caps.version, content="0.17.2")
+  inspect(caps.version, content="0.18.0")
   inspect(caps.interpreter, content="true")
   assert_eq(caps.jit, expected_native_capabilities())
   inspect(caps.simd, content="true")

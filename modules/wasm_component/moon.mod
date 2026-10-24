@@ -1,6 +1,6 @@
 name = "Milky2018/wasm_component"
 
-version = "0.17.2"
+version = "0.18.0"
 
 readme = "README.mbt.md"
 
@@ -13,7 +13,7 @@ keywords = [ "wasm", "webassembly", "component-model", "wit" ]
 description = "Portable WebAssembly Component Model syntax and validation"
 
 import {
-  "Milky2018/wasm_core@0.17.2",
+  "Milky2018/wasm_core@0.18.0",
 }
 
 preferred_target = "wasm-gc"

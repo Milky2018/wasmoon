@@ -3,7 +3,7 @@
 JIT integration and native runtime support for Wasmoon.
 
 `wasmoon_jit` connects the compiler pipeline to Wasmoon's runtime. It provides
-VMContext layouts, native runtime helpers, v11 artifacts, trampolines, WASI
+VMContext layouts, native runtime helpers, v12 artifacts, trampolines, WASI
 bridge glue, and integration planning for loading generated code.
 
 ## Packages
@@ -17,16 +17,16 @@ bridge glue, and integration planning for loading generated code.
 ## When to use it
 
 Use `wasmoon_jit` when integrating generated code with the Wasmoon runtime,
-including VMContext layout, runtime helper symbols, trampolines, v11
+including VMContext layout, runtime helper symbols, trampolines, v12
 artifacts, and installed-code lifecycle management.
 
-### API changes for the next minor release
+### Migration from legacy planning APIs
 
 The unused `CompilationMode`, `CompilationRequest`, `CompilationQueue`,
 `TieredConfig`, `CompilationDecision`, and `CompilationStrategy` APIs have
-been removed on main. They were published in earlier 0.x releases, so this is
-a source-breaking change reserved for the next minor release, not a 0.16.x
-patch. Repository consumer inspection cannot rule out external callers.
+been removed. Callers migrating from older releases must replace these
+source-level APIs. Repository consumer inspection cannot rule out external
+callers.
 
 These APIs maintained standalone decisions and queues; the runtime never
 consumed them to implement lazy or tiered compilation. Use `NativeCompiler`
@@ -63,11 +63,13 @@ test "plan a small MilkIR function for x64 JIT integration" {
 
 ## Persisted artifacts
 
-`Milky2018/wasmoon_jit/artifact` defines the v11 ordinary-data format. The live
+`Milky2018/wasmoon_jit/artifact` defines the v12 ordinary-data format. The live
 compiler produces symbolic, unlinked function code; `load_artifact` performs
 bounded decoding and exact compatibility verification; and `JitCodeInstaller`
 owns relocation, executable-memory mutation, and publication. There is no
-compatibility decoder for the removed v8 format.
+compatibility decoder for older artifact formats; recompile the original Wasm.
+See the [0.18.0 migration notes](https://github.com/Milky2018/wasmoon/blob/main/docs/releases/0.18.0.md)
+for original source-byte positions, cache compatibility and exception delivery.
 
 The root package's `LoadedArtifact` also retains immutable prepared native
 safepoints, shared by contexts bound from that artifact. Modules with no
