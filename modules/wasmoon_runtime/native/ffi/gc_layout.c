@@ -70,8 +70,7 @@ int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
     if (!layout || count < 0 || (layout->kind == GC_KIND_STRUCT && count != layout->count)) return 0;
     heap->quota_denied = 0;
     int array = layout->kind == GC_KIND_ARRAY;
-    int64_t bytes = GC_HEADER_SIZE + (array ? GC_ARRAY_DATA_OFFSET + (int64_t)count * layout->size : layout->size);
-    bytes = (bytes + 15) & -INT64_C(16);
+    int64_t bytes = gc_layout_allocation_size(layout, count);
     // The prepared window owns capacity, not identities. Ordinary allocations
     // can consume it without repeated capacity/debug/quota calls. Every other
     // case retains the complete allocator and its failure ordering.

@@ -1,10 +1,11 @@
-# Typed initialization throughput
+# Typed allocation throughput
 
 Local macOS ARM64 measurements against main `21c702b5` (0.18.0).
 Tracking: [ISS-679](../../issues/ISS-679.md). These are release binaries built
 from the stated base and an explicitly dirty implementation tree, not CI
-acceptance or a general engine ranking. No compiler, GC policy, object layout,
-root protocol or public API changes are retained.
+acceptance or a general engine ranking. No compiler, object layout, root protocol or public API changes are retained.
+The later pressure follow-up changes collection admission timing, not the
+collector implementation.
 Measured baseline/candidate binary SHA256 prefixes are `3185b22dca61` /
 `0c522f45ed12`; the runners record complete binary and guest hashes.
 
@@ -190,3 +191,29 @@ each258/62563; strict checks on both targets; 44 C stubs and module/bridge audit
 Fresh isolated local ASan/UBSan314, event loop and both ASan positive controls
 pass on the dirty e4ff2f70-based tree. macOS does not provide LSan acceptance;
 this follow-up requires its own Linux/Windows CI after commit.
+
+## Collect before unnecessary growth
+
+The next allocation could cross the collection threshold before the existing
+used-size check noticed pressure. Two arrays each half the physical capacity
+plus 16 bytes reproduced a 1 MiB to 2 MiB growth with no collection, even with
+the first array dead. The retained-live control already returned the right
+values and legitimately needed growth.
+
+The common collecting allocator now estimates a conservative slot-size bound;
+only near physical exhaustion does it resolve the exact typed size. If the
+allocation would need growth and cross the collection threshold, the existing
+precise-root collection runs first. Surviving objects can still require normal
+growth. Impossible allocations, explicit-GC low-level heaps, quotas and failure
+policy retain their existing paths. Typed sizing is shared with allocation.
+No lower threshold or new configuration is introduced.
+
+Five serial samples against f866185a (binary prefixes 51ca4ce12597 /
+b74e4bee5ef1) reduce the 17-element control from 41.873 to 31.069 ms invocation
+and peak RSS from 155.96 to 88.82 MB. Other controls have no clear improvement;
+this is a boundary-specific result, not a general RSS claim. Full native3105
+passes in ordinary and all-three-verifiers modes. Fresh isolated macOS
+ASan/UBSan316, event loop and both positive controls pass on the dirty
+f866185a-based tree; Linux LSan still requires CI for this new change.
+Core258/62563 and Component59/1385 also pass in each engine with verification
+enabled; wasm1462, strict checks, C44 and boundary/bridge audits pass.

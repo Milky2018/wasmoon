@@ -238,6 +238,12 @@ static inline GcTypeLayout *gc_heap_layout(GcHeap *heap, int32_t identity) {
     return heap && identity >= 0 && identity < heap->layout_capacity ? heap->layouts[identity] : NULL;
 }
 
+static inline int64_t gc_layout_allocation_size(const GcTypeLayout *layout, int32_t count) {
+    int64_t bytes = GC_HEADER_SIZE + (layout->kind == GC_KIND_ARRAY
+        ? GC_ARRAY_DATA_OFFSET + (int64_t)count * layout->size : layout->size);
+    return (bytes + 15) & -INT64_C(16);
+}
+
 static inline GcTypeLayout *gc_object_layout(GcHeap *heap, const GcHeader *header) {
     return gc_heap_layout(heap, (int32_t)(header->reserved >> 32) - 1);
 }

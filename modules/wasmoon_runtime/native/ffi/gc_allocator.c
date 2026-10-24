@@ -65,11 +65,35 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_denial(void *raw_request) {
     return request->heap->quota_denied;
 }
 
+static int allocation_needs_collection(const gc_allocation_request_t *request) {
+    GcHeap *heap = request->heap;
+    if (!heap->precise_roots) return 0;
+    if (heap->size >= heap->collection_limit) return 1;
+    if (!heap->size || request->count < 0) return 0;
+    // A field occupies at most one 16-byte slot. Usually there is ample room;
+    // resolve the exact compact layout only near a possible growth boundary.
+    int64_t upper = GC_HEADER_SIZE + GC_ARRAY_DATA_OFFSET +
+        (int64_t)request->count * GC_VALUE_SLOT_SIZE;
+    if ((uint64_t)upper <= heap->capacity - heap->size) return 0;
+    int32_t type = request->type_idx;
+    int32_t identity = -1;
+    if (request->ctx && type >= 0 && type < ctx_runtime(request->ctx)->callable_local_type_count)
+        identity = ctx_runtime(request->ctx)->callable_local_types[type];
+    GcTypeLayout *layout = gc_heap_layout(heap, identity);
+    int array = request->layout != GC_ALLOC_STRUCT_WORDS && request->layout != GC_ALLOC_STRUCT_SLOTS;
+    int64_t needed = layout ? gc_layout_allocation_size(layout, request->count)
+        : upper - (array ? 0 : GC_ARRAY_DATA_OFFSET);
+    // An impossible object retains its existing allocation/trap path. A large
+    // first object has nothing to reclaim. Collection may retain everything;
+    // the normal allocator still decides whether growth is necessary afterward.
+    return needed <= INT32_MAX && (uint64_t)needed > heap->capacity - heap->size &&
+        (uint64_t)needed > heap->collection_limit - heap->size;
+}
+
 int32_t gc_allocate(gc_allocation_request_t *request) {
     // Only collect where the Store's precise visitor and the allocation's
     // staged inputs are available. Low-level heaps retain their explicit-GC API.
-    if (request->heap->precise_roots &&
-        request->heap->size >= request->heap->collection_limit) {
+    if (allocation_needs_collection(request)) {
         if (wasmoon_gc_allocation_collect(request) < 0) return -10;
     }
     // The successful fast path remains native. Physical failure still enters
