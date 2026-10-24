@@ -32,6 +32,7 @@ pub impl Show for JITModuleLoadError
 
 pub suberror JITTrap {
   JITTrap(String)
+  JITUncaughtException(@wasmoon_jit.NativeUncaughtException)
   JITNativeFiberFailure(String)
   JITExit(Int32)
   JITCancelled
@@ -86,7 +87,7 @@ pub fn JITModule::alloc_guarded_memory(Self, Int32, Int32?) -> @ffi.MemoryDescri
 pub fn JITModule::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int32], Array[Int32], functions? : Array[Int32]) -> Unit
 pub fn JITModule::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITModule::bind_segment_drop_flags(Self, @runtime.ModuleInstance) -> Unit
-pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
+pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64], capture_exceptions? : Bool) -> Array[Int64] raise JITTrap
 pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?, timeout_ms? : Int32?) -> JITCallResult
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::clear_hostcall_callback(Self) -> Unit
@@ -133,7 +134,7 @@ pub fn JITModule::set_memory_pointers(Self, Array[@bridge.MemoryInfo]) -> Unit r
 pub fn JITModule::setup_gc(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32]) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_gc_with_func_table(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32], Int64, Int32) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit raise @wasmoon_jit.NativeSetupError
-pub fn JITModule::start_continuation_call(Self, JITFunction, Array[Int64]) -> JITContinuationOutcome raise JITTrap
+pub fn JITModule::start_continuation_call(Self, JITFunction, Array[Int64], capture_exceptions? : Bool) -> JITContinuationOutcome raise JITTrap
 pub fn JITModule::teardown_gc(Self) -> Unit
 pub fn JITModule::throw_exception_tag(Self, Int32) -> Unit raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::throw_exception_values(Self, Int32, Array[Int64]) -> Unit raise @wasmoon_jit.NativeSetupError

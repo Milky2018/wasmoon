@@ -8,6 +8,7 @@
 /// Terminal failure reported by a JIT invocation.
 pub suberror JITTrap {
   JITTrap(String)
+  JITUncaughtException(@wasmoon_jit.NativeUncaughtException)
   JITNativeFiberFailure(String)
   JITExit(Int32)
   JITCancelled
@@ -260,6 +261,7 @@ fn JITContext::call_multi_return(
   param_types : ArrayView[@types.ValueType],
   results : Array[Int64],
   result_types : ArrayView[@types.ValueType],
+  capture_exceptions~ : Bool = false,
 ) -> Unit raise JITTrap {
   let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
   let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
@@ -278,10 +280,45 @@ fn JITContext::call_multi_return(
   // Call via trampoline (Standard: all ABI complexity in JIT code)
   // All production JIT calls use the native-fiber trap transport. The
   // configured stack size overrides its default budget when present.
-  let trap_code = self.ctx.call_trampoline(
-    trampoline_ptr, func_ptr, values_vec, values_len, true,
-  ) catch {
-    error => raise JITNativeFiberFailure(error.to_string())
+  let trap_code = if capture_exceptions {
+    let call = self.ctx.start_continuation(
+      trampoline_ptr,
+      func_ptr,
+      values_vec,
+      values_len,
+      capture_exceptions=true,
+    ) catch {
+      error => raise JITNativeFiberFailure(error.to_string())
+    }
+    let event = call.continue_with() catch {
+      error => {
+        call.cancel() catch {
+          _ => ()
+        }
+        raise JITNativeFiberFailure(error.to_string())
+      }
+    }
+    match event {
+      NativeJITCompleted => 0
+      NativeJITTrapped(code) => {
+        if code == 12 && call.uncaught_exception() is Some(exception) {
+          raise JITUncaughtException(exception)
+        }
+        code
+      }
+      NativeSuspended(_) => {
+        call.cancel() catch {
+          _ => ()
+        }
+        raise JITNativeFiberFailure("synchronous native entry suspended")
+      }
+    }
+  } else {
+    self.ctx.call_trampoline(
+      trampoline_ptr, func_ptr, values_vec, values_len, true,
+    ) catch {
+      error => raise JITNativeFiberFailure(error.to_string())
+    }
   }
   if trap_code != 0 {
     if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
@@ -332,6 +369,7 @@ fn JITContext::start_continuation(
   args : Array[Int64],
   param_types : ArrayView[@types.ValueType],
   result_types : ArrayView[@types.ValueType],
+  capture_exceptions~ : Bool = false,
 ) -> JITContextContinuation raise JITTrap {
   let num_arg_slots = args.length()
   let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
@@ -345,6 +383,7 @@ fn JITContext::start_continuation(
     func_ptr,
     values,
     values_len,
+    capture_exceptions~,
   ) catch {
     error => raise JITNativeFiberFailure(error.to_string())
   }
@@ -376,6 +415,9 @@ fn JITContextContinuation::advance(
     NativeSuspended(reason) => Suspended(reason)
     NativeJITTrapped(trap_code) => {
       self.active[0] = false
+      if trap_code == 12 && self.raw.uncaught_exception() is Some(exception) {
+        raise JITUncaughtException(exception)
+      }
       if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
         raise JITExit(self.context.take_wasi_exit_code())
       }

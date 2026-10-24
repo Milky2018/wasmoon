@@ -79,9 +79,21 @@ pub(all) enum JITCoreCallOutcome {
   NativeCoreSuspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
 }
 
+pub(all) enum JITCoreCallWithExceptionOutcome {
+  Returned(Array[@types.Value])
+  Suspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
+  Thrown(@runtime.RootedValue)
+}
+
+pub(all) enum JITCoreCallWithExceptionResult {
+  Returned(Array[@types.Value])
+  Thrown(@runtime.RootedValue)
+}
+
 type JITCoreContinuation
 pub fn JITCoreContinuation::cancel(Self) -> Unit
 pub fn JITCoreContinuation::continue_execution(Self) -> JITCoreCallOutcome raise JITCoreCallError
+pub fn JITCoreContinuation::continue_execution_with_exception(Self) -> JITCoreCallWithExceptionOutcome raise JITCoreCallError
 
 pub struct JITModuleContext {
   jit_module : @Milky2018/wasmoon/jit.JITModule
@@ -100,7 +112,10 @@ pub fn JITModuleContext::JITModuleContext(@Milky2018/wasmoon/jit.JITModule, Int6
 pub fn JITModuleContext::bind_instance(Self, @runtime.Store, @runtime.ModuleInstance) -> Unit raise @runtime.RuntimeError
 pub fn JITModuleContext::call_core_func(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
 pub async fn JITModuleContext::call_core_func_async(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
+pub async fn JITModuleContext::call_core_func_async_with_exception(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallWithExceptionResult raise JITCoreCallError
 pub fn JITModuleContext::call_core_func_resumable(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallOutcome raise JITCoreCallError
+pub fn JITModuleContext::call_core_func_resumable_with_exception(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallWithExceptionOutcome raise JITCoreCallError
+pub fn JITModuleContext::call_core_func_with_exception(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallWithExceptionResult raise JITCoreCallError
 pub fn JITModuleContext::close(Self) -> Unit
 pub fn JITModuleContext::install_hostcall_dispatcher(Self, @runtime.Store, @runtime.ModuleInstance, before_dispatch? : () -> Unit raise @runtime.RuntimeError, after_dispatch? : () -> Unit raise @runtime.RuntimeError, classify_suspension? : (@runtime.RuntimeError) -> Bool) -> Unit raise @runtime.RuntimeError
 
