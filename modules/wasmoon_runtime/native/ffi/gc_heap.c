@@ -822,33 +822,6 @@ void gc_heap_array_fill(GcHeap* heap, int32_t gc_ref, int32_t offset,
 // arrays have one immutable field at offset zero with a natural-width stride.
 static const GcFieldLayout wide_array_element = {0, GC_VALUE_SLOT_SIZE, 1};
 
-static void fill_array_elements(uint8_t *data, int32_t width, GcSlot value, int32_t count) {
-    const uint8_t *pattern = (const uint8_t *)&value;
-    int repeated_byte = 1;
-    for (int32_t i = 1; i < width; i++) {
-        if (pattern[i] != pattern[0]) { repeated_byte = 0; break; }
-    }
-    if (repeated_byte) {
-        memset(data, pattern[0], (size_t)count * width);
-        return;
-    }
-    // Constant copy widths let the C compiler vectorize without unaligned
-    // typed loads/stores or a variable-size memcpy for every element.
-    switch (width) {
-    case 2:
-        for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 2, &value, 2);
-        break;
-    case 4:
-        for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 4, &value, 4);
-        break;
-    case 8:
-        for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 8, &value, 8);
-        break;
-    case 16:
-        for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 16, &value, 16);
-        break;
-    }
-}
 
 void gc_heap_array_fill_wide(GcHeap* heap, int32_t gc_ref, int32_t offset,
                              GcSlot value, int32_t count) {
@@ -867,7 +840,7 @@ void gc_heap_array_fill_wide(GcHeap* heap, int32_t gc_ref, int32_t offset,
     }
     // Barriers only validate/count references; no allocation, collection or
     // host callback can invalidate these addresses during this bulk operation.
-    fill_array_elements(data + GC_ARRAY_DATA_OFFSET + (size_t)offset * element->width,
+    gc_access_fill_elements(data + GC_ARRAY_DATA_OFFSET + (size_t)offset * element->width,
                         element->width, value, count);
     gc_heap_maybe_verify(heap, "array_fill");
 }

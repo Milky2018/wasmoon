@@ -55,6 +55,53 @@ static inline void gc_access_verify(GcHeap *heap, const char *name) {
     if (gc_verify_env_cached != 0) gc_heap_maybe_verify(heap, name);
 }
 
+static inline void gc_access_fill_elements(uint8_t *data, int32_t width, GcSlot value, int32_t count) {
+    if (!count) return;
+    const uint8_t *pattern = (const uint8_t *)&value;
+    int repeated_byte = 1;
+    for (int32_t i = 1; i < width; i++) {
+        if (pattern[i] != pattern[0]) { repeated_byte = 0; break; }
+    }
+    if (repeated_byte) {
+        memset(data, pattern[0], (size_t)count * width);
+        return;
+    }
+    size_t bytes = (size_t)count * width;
+    if (bytes < 16) {
+        // Sub-vector fills do not amortize building a complete block.
+        switch (width) {
+        case 2:
+            for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 2, &value, 2);
+            break;
+        case 4:
+            for (int32_t i = 0; i < count; i++) memcpy(data + (size_t)i * 4, &value, 4);
+            break;
+        case 8:
+            memcpy(data, &value, 8);
+            break;
+        }
+        return;
+    }
+    // Widths divide 16. Build one complete pattern and copy fixed-size blocks;
+    // this exposes vector stores without alignment assumptions or target SIMD.
+    uint8_t block[16];
+    memcpy(block, pattern, 16);
+    switch (width) {
+    case 2:
+        memcpy(block + 2, block, 2);
+        /* fall through */
+    case 4:
+        memcpy(block + 4, block, 4);
+        /* fall through */
+    case 8:
+        memcpy(block + 8, block, 8);
+    }
+    size_t offset = 0;
+    for (; bytes - offset >= 16; offset += 16)
+        memcpy(data + offset, block, 16);
+    if (offset != bytes) memcpy(data + offset, block, bytes - offset);
+}
+
 static inline GcSlot gc_access_struct_get(GcHeap* heap, int32_t gc_ref, int32_t field_idx) {
     GcSlot empty = {0, 0};
     uint8_t* data = gc_access_object_data(heap, gc_ref);

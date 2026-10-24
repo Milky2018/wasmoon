@@ -80,20 +80,40 @@ int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
     }
     int32_t offset = (int32_t)heap->size;
     GcHeader *header = (GcHeader *)(heap->data + offset);
-    memset(header, 0, (size_t)bytes);
+    int repeated_array = array && (repeated || !values);
+    size_t body_bytes = array ? (size_t)count * layout->size : 0;
+    int fill_array = array && body_bytes >= 16 && (!repeated_array || init.lo || init.hi);
+    if (fill_array) {
+        // Every element is written below before publication. Only metadata and
+        // alignment padding need zeroing; do not write the array body twice.
+        size_t end = GC_HEADER_SIZE + GC_ARRAY_DATA_OFFSET + (size_t)count * layout->size;
+        memset(header, 0, GC_HEADER_SIZE + GC_ARRAY_DATA_OFFSET);
+        if ((size_t)bytes != end)
+            memset((uint8_t *)header + end, 0, (size_t)bytes - end);
+    } else {
+        memset(header, 0, (size_t)bytes);
+    }
     header->kind = (uint8_t)layout->kind;
     header->type_idx = (uint16_t)local_type;
     header->size = (uint32_t)bytes;
     header->reserved = ((uint64_t)(identity + 1) << 32) | (array ? 0 : (uint32_t)count);
     uint8_t *data = (uint8_t *)header + GC_HEADER_SIZE;
     if (array) *(int32_t *)data = count;
-    for (int32_t i = 0; i < count; i++) {
-        GcSlot value = init;
-        if (!repeated && values) {
-            value = wide ? ((const GcSlot *)values)[i] : (GcSlot){((const int64_t *)values)[i], 0};
+    // Default zero arrays already have initialized bodies. A v128 with only a
+    // nonzero high word still needs the full-width fill.
+    if (repeated_array && body_bytes >= 16) {
+        if (init.lo || init.hi) {
+            gc_access_fill_elements(data + GC_ARRAY_DATA_OFFSET, layout->size, init, count);
         }
-        gc_layout_write(array ? data + GC_ARRAY_DATA_OFFSET + (size_t)i * layout->size : data,
-            &layout->fields[array ? 0 : i], value);
+    } else if ((!repeated_array && values) || init.lo || init.hi) {
+        for (int32_t i = 0; i < count; i++) {
+            GcSlot value = init;
+            if (!repeated && values) {
+                value = wide ? ((const GcSlot *)values)[i] : (GcSlot){((const int64_t *)values)[i], 0};
+            }
+            gc_layout_write(array ? data + GC_ARRAY_DATA_OFFSET + (size_t)i * layout->size : data,
+                &layout->fields[array ? 0 : i], value);
+        }
     }
     heap->size += (size_t)bytes;
     int32_t ref = gc_heap_register_object(heap, offset);
