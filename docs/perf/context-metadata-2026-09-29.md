@@ -97,4 +97,4 @@ Every interval crosses zero. These controls do not establish a stable version pe
 - Core WAST: both engines passed 258/258 files, 62,563 assertions each.
 - Async 0.3 component WAST: 24/24 files, 153 commands, none skipped.
 
-Raw samples, source probes, rejected candidates, binary/source hashes, allocation counts and validation logs are retained in [the evidence archive](context-metadata-2026-09-29.json.gz). The archive identifies the exact baseline and measured after-source hashes. Linux CI confirmation of the archive-link fix remains a separate delivery check.
+Raw samples, source probes, rejected candidates, binary/source hashes, allocation counts and validation logs are retained in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/context-metadata-2026-09-29.json.gz). The archive identifies the exact baseline and measured after-source hashes. Linux CI confirmation of the archive-link fix remains a separate delivery check.

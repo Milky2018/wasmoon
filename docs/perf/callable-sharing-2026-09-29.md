@@ -54,7 +54,7 @@ The first shared-registry implementation regressed indirect calls by 8.03%. Snap
 
 Regression probes cover shared updates, distinct Store identities, local mappings/tags, rebinding, peer teardown, repeated clearing, rejected replacement preserving old data, invalid type indices, and terminal Store closure. Native allocation/free counters balance in the allocation probe. Local validation does not substitute for Windows/Linux CI.
 
-Raw samples, probe source, benchmark scripts, allocation counts, selected assembly, binary/source hashes and validation logs are in [the evidence archive](callable-sharing-2026-09-29.json.gz). The baseline is the pinned commit above; the after source hashes identify the uncommitted source used for measurement. Temporary probe programs are evidence, not a new project audit framework.
+Raw samples, probe source, benchmark scripts, allocation counts, selected assembly, binary/source hashes and validation logs are in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/callable-sharing-2026-09-29.json.gz). The baseline is the pinned commit above; the after source hashes identify the uncommitted source used for measurement. Temporary probe programs are evidence, not a new project audit framework.
 
 ## Scope remaining
 

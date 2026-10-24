@@ -1,6 +1,6 @@
 # Core interpreter on the wasm target
 
-The unreleased workspace provides `Milky2018/wasmoon_runtime/runtime` and
+The `wasmoon_runtime` module provides `Milky2018/wasmoon_runtime/runtime` and
 `Milky2018/wasmoon_runtime/executor` on `native` and linear-memory `wasm`.
 The interpreter executes guest WebAssembly instructions in MoonBit on both
 backends. It does not compile the guest to host WebAssembly or call a native JIT.
@@ -20,8 +20,9 @@ The guest stores and loads its argument, invokes the callback, and returns 43.
 The example also verifies the callback argument, stored memory and budget
 restoration. It uses `defer` for resource cleanup.
 
-This new module is not part of the published 0.17.0 registry release yet. These
-commands use workspace sources; they do not establish registry availability.
+The module is included in the lockstep release group. The command above uses
+workspace sources; use the matching module version when embedding from the
+registry. See the [0.18.0 release notes](releases/0.18.0.md) for migration details.
 
 ## Dependency and implementation boundaries
 

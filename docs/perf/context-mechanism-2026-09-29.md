@@ -97,7 +97,7 @@ Do not fix this by selecting a lucky context alignment: the preferred placement 
 
 The investigation establishes instruction/address-level causality and leaves the exact microarchitectural mechanism unconfirmed. No production correctness defect was found or fixed.
 
-Evidence: [sources, replay fixture, raw samples and summaries](context-mechanism-2026-09-29.json.gz).
+Evidence: [sources, replay fixture, raw samples and summaries](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/context-mechanism-2026-09-29.json.gz).
 
 ## Delivery validation
 

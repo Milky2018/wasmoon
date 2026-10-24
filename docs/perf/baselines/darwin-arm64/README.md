@@ -1,7 +1,5 @@
-# Darwin arm64 Baseline
+# Historical darwin-arm64 baselines
 
-Store local Apple Silicon baseline snapshots here when needed:
-
-```bash
-cp target/perf-benchmarks/latest/summary.json docs/perf/baselines/darwin-arm64/perf-summary.json
-```
+These dated summaries describe their recorded source revisions and hosts.
+Keep future raw measurements in auto-cleaned OS temporary directories.
+See the [baseline policy](../README.md) and each summary's comparability limits.

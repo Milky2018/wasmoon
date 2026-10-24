@@ -1,6 +1,6 @@
 name = "Milky2018/regalloc"
 
-version = "0.17.2"
+version = "0.18.0"
 
 readme = "README.mbt.md"
 
@@ -13,7 +13,7 @@ keywords = [ "compiler", "register-allocation", "algorithm" ]
 description = "Target-independent register allocation algorithm"
 
 import {
-  "Milky2018/vcode@0.17.2",
+  "Milky2018/vcode@0.18.0",
 }
 
 preferred_target = "wasm-gc"

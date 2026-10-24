@@ -1,19 +1,19 @@
 name = "Milky2018/wasmoon"
 
-version = "0.17.2"
+version = "0.18.0"
 
 import {
-  "Milky2018/wasmoon_runtime@0.17.2",
+  "Milky2018/wasmoon_runtime@0.18.0",
   "moonbitlang/x@0.5.5",
-  "Milky2018/wasm_core@0.17.2",
-  "Milky2018/wasm_component@0.17.2",
-  "Milky2018/wasm_milkir@0.17.2",
-  "Milky2018/milkir@0.17.2",
-  "Milky2018/vcode@0.17.2",
-  "Milky2018/vcode_regalloc@0.17.2",
-  "Milky2018/x64_target@0.17.2",
-  "Milky2018/aarch64_target@0.17.2",
-  "Milky2018/wasmoon_jit@0.17.2",
+  "Milky2018/wasm_core@0.18.0",
+  "Milky2018/wasm_component@0.18.0",
+  "Milky2018/wasm_milkir@0.18.0",
+  "Milky2018/milkir@0.18.0",
+  "Milky2018/vcode@0.18.0",
+  "Milky2018/vcode_regalloc@0.18.0",
+  "Milky2018/x64_target@0.18.0",
+  "Milky2018/aarch64_target@0.18.0",
+  "Milky2018/wasmoon_jit@0.18.0",
   "moonbitlang/async@0.22.4",
   "marianoguerra/uri@0.1.2",
 }
@@ -26,7 +26,7 @@ license = "Apache-2.0"
 
 keywords = [ "wasm", "webassembly", "runtime", "jit" ]
 
-description = "A slow and insecure runtime for WebAssembly"
+description = "WebAssembly runtime with native JIT, interpreter, WASI and Component Model support"
 
 preferred_target = "native"
 

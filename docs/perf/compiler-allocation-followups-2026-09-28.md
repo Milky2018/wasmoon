@@ -13,7 +13,7 @@ the second round reversed workload order. The fixture times the complete public
 Encoding and writing the complete artifact happen outside the timed region.
 No builds, tests, or allocation captures ran concurrently with timing rounds.
 
-The [measurement data](compiler-allocation-followups-2026-09-28.json) preserves
+The [measurement data](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/compiler-allocation-followups-2026-09-28.json) preserves
 all individual samples, binary/input/artifact hashes, confidence intervals, and
 all four candidate patches, including the two not applied to production.
 Intervals are fixed-seed bootstrap intervals of within-pair percentage changes;

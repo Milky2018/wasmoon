@@ -49,4 +49,4 @@ Local macOS ARM64, JIT enabled. The memory workload performs five million 256-by
 | memory.init | 54.638 ms | 55.139 ms | +0.73% [-0.92%, +1.90%] |
 | table.init | 20.583 ms | 20.246 ms | -2.25% [-3.05%, -0.76%] |
 
-These are targeted end-to-end observations, not isolated setup timing or evidence of general runtime performance. They do not resolve the earlier ISS-610 measurements. Raw timings, fixtures, validation logs, layout probe and source/binary hashes are retained in [the evidence archive](segment-ownership-2026-09-29.json.gz).
+These are targeted end-to-end observations, not isolated setup timing or evidence of general runtime performance. They do not resolve the earlier ISS-610 measurements. Raw timings, fixtures, validation logs, layout probe and source/binary hashes are retained in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/segment-ownership-2026-09-29.json.gz).

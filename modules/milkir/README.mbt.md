@@ -355,8 +355,8 @@ or saturation loop. Staged rewrites require a strictly cheaper expression and
 must not rebuild shared definitions. Integer widths, vector lanes, floating
 NaNs/signed zero and trapping operations remain semantic constraints, not
 optional profitability hints. See the repository's
-[optimizer design](../../docs/milkir-optimizer.md) and
-[rule migration ledger](../../docs/milkir-rewrite-inventory.md).
+[optimizer design](https://github.com/Milky2018/wasmoon/blob/main/docs/milkir-optimizer.md) and
+[rule migration ledger](https://github.com/Milky2018/wasmoon/blob/main/docs/milkir-rewrite-inventory.md).
 
 ### Counted-loop unrolling at O3
 

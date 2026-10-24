@@ -1,6 +1,6 @@
 name = "Milky2018/aarch64_target"
 
-version = "0.17.2"
+version = "0.18.0"
 
 readme = "README.mbt.md"
 
@@ -13,9 +13,9 @@ keywords = [ "aarch64", "compiler", "codegen", "jit" ]
 description = "AArch64 direct MilkIR target pipeline to native code"
 
 import {
-  "Milky2018/milkir@0.17.2",
-  "Milky2018/vcode@0.17.2",
-  "Milky2018/vcode_regalloc@0.17.2",
+  "Milky2018/milkir@0.18.0",
+  "Milky2018/vcode@0.18.0",
+  "Milky2018/vcode_regalloc@0.18.0",
 }
 
 preferred_target = "wasm-gc"

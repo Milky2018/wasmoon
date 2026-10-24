@@ -45,4 +45,4 @@ These broad regression measurements do not isolate metadata setup or establish a
 - New regression verifies payload pointer identity, owner release, same-array rebinding, invalid index preservation, replacement, repeated clearing, context isolation and mixed legacy raw bindings.
 - Existing raw safepoint regression verifies descriptor address stability, peer-slot isolation and copied inputs.
 
-Cross-platform CI for the new commit is tracked separately. Raw timings, fixtures, probes, validation logs and hashes are retained in [the evidence archive](safepoint-metadata-2026-09-29.json.gz).
+Cross-platform CI for the new commit is tracked separately. Raw timings, fixtures, probes, validation logs and hashes are retained in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/safepoint-metadata-2026-09-29.json.gz).

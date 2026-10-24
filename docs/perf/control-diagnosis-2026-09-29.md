@@ -83,4 +83,4 @@ The first table-migration GC comparison was +0.61% with an interval above zero. 
 - New regression checks zero/negative counts, initialized slots, typed/raw allocation, and teardown with deliberately non-RC address values.
 - Existing invocation isolation, parked cancellation-capture lifetime, continuation inheritance and blocked atomic-wait cancellation tests remain passing.
 
-Cross-platform CI for this commit is tracked separately. Timing scripts, raw samples, phases, fixtures, assembly, isolated diff, validation logs and executable/source hashes are in [the evidence archive](control-diagnosis-2026-09-29.json.gz).
+Cross-platform CI for this commit is tracked separately. Timing scripts, raw samples, phases, fixtures, assembly, isolated diff, validation logs and executable/source hashes are in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/control-diagnosis-2026-09-29.json.gz).

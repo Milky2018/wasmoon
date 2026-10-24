@@ -54,4 +54,4 @@ A separate 21-pair reevaluation of the old conditional-use-count candidate, usin
 
 Keep ordinary end-to-end CLI measurements alongside artifact identity checks. If a compiler-only change shifts guest timing, use placement controls to explain the discrepancy; do not silently normalize it away or tune binary layout until a benchmark improves. No production memory-base or register-reservation policy changes were made.
 
-Evidence: [compressed raw data and diagnostic sources](runtime-context-placement-2026-09-29.json.gz).
+Evidence: [compressed raw data and diagnostic sources](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/runtime-context-placement-2026-09-29.json.gz).

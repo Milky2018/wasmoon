@@ -164,7 +164,7 @@ The loop workload's median CLI wall time changed from 22.53 ms to 23.31 ms
 Outputs matched. These short measurements include startup and WAT loading;
 they are microbenchmarks, not evidence of a general performance improvement.
 The baseline is identified by executable hash, not claimed as a freshly rebuilt
-Git revision. [Raw samples, guest programs and binary hashes](perf/interpreter-explicit-stack-2026-09-16.json)
+Git revision. [Raw samples, guest programs and binary hashes](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/interpreter-explicit-stack-2026-09-16.json)
 permit the measurement inputs and interpretation to be audited.
 
 An initial implementation regressed the call workload by about 15% because

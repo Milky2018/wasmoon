@@ -101,7 +101,7 @@ retained warmup pair each. No build, test, or profiler from this task overlapped
 timing. Other desktop tasks were not controlled, so these are diagnostic
 samples, not an isolated-machine performance acceptance. No sample was removed.
 The inputs and executable hashes, all 48 runs, runner source, code exploration,
-and candidate production patch are retained in the [compressed evidence](aarch64-negative-immediates-2026-09-29.json.gz).
+and candidate production patch are retained in the [compressed evidence](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/aarch64-negative-immediates-2026-09-29.json.gz).
 
 Positive paired change means slower. Intervals are fixed-seed paired bootstrap
 intervals and do not remove host-load confounding or multiple-comparison risk.

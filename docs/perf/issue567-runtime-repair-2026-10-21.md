@@ -5,7 +5,7 @@ This is local implementation and measurement evidence on macOS ARM64, based on
 explicitly dirty working tree before the repair commit.
 It is not Linux/Windows acceptance, a release, or a claim of general Wasmtime
 performance parity. See the [source research](issue567-wasmtime-v8-research.md)
-and [local receipt](issue567-runtime-repair-local.json).
+and [local receipt](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/issue567-runtime-repair-local.json).
 
 ## Changes and retained contracts
 

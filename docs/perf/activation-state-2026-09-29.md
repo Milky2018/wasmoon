@@ -62,4 +62,4 @@ The first candidate showed roughly +4% paired time on the exception-heavy fixtur
 - Async 0.3 component WAST: 24 files, 153 commands, no skips.
 - Bidirectional cross-version artifact cache hits verified.
 
-The new commit's cross-platform CI status is separate from local validation. See ISS-606. Raw samples, fixture/probe sources, validation logs, binary hashes and source diff are retained in [the evidence archive](activation-state-2026-09-29.json.gz).
+The new commit's cross-platform CI status is separate from local validation. See ISS-606. Raw samples, fixture/probe sources, validation logs, binary hashes and source diff are retained in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/activation-state-2026-09-29.json.gz).

@@ -93,7 +93,7 @@ comparison matching are the grounds for retaining this change.
 - All 64 workload executions (including warmups and phase samples) succeed and
   verify fresh compilation.
 
-[aarch64-constant-width-2026-09-29.json.gz](aarch64-constant-width-2026-09-29.json.gz)
+[aarch64-constant-width-2026-09-29.json.gz](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/aarch64-constant-width-2026-09-29.json.gz)
 contains all samples, input/binary hashes, exact commands, process snapshots,
 phase measurements, the source patch, runners, assembly fixture and complete
 before/after code-object and allocated-VCode output. Executables remain in
