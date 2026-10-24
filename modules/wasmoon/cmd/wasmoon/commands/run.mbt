@@ -1523,6 +1523,12 @@ fn run_with_jit(
 
                   raise CommandFailure(code)
                 }
+                JITUncaughtException(exception) => {
+                  exception.close()
+                  jm.teardown_gc()
+                  @logger.error("JIT Trap: uncaught exception")
+                  raise CommandFailure(1)
+                }
                 JITTrap(msg) => {
                   jm.teardown_gc()
                   // Sync globals back to interpreter store even on trap.

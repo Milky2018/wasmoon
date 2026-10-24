@@ -134,6 +134,10 @@ fn JITModuleContext::map_jit_call_error(
   scope : @runtime.ExecutionScope?,
 ) -> JITCoreCallError {
   match error {
+    JITUncaughtException(exception) => {
+      exception.close()
+      Trap("uncaught exception")
+    }
     JITTrap(message) =>
       match self.async_host_errors.get(invocation_id) {
         Some(host_error) => {
@@ -175,6 +179,78 @@ fn JITModuleContext::clear_async_host_state(
 pub(all) enum JITCoreCallOutcome {
   NativeCoreReturned(Array[@types.Value])
   NativeCoreSuspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
+}
+
+///|
+/// Exception-aware synchronous result. A thrown value is a Store-local ExnRef
+/// with an owned root: inspect it through Store::borrow_rooted_value/get_exn,
+/// and close it when discarded. Payload references remain live with the root.
+pub(all) enum JITCoreCallWithExceptionResult {
+  Returned(Array[@types.Value])
+  Thrown(@runtime.RootedValue)
+}
+
+///|
+/// Invoke while preserving an uncaught guest exception separately from traps,
+/// host failures, cancellation and resource exhaustion.
+pub fn JITModuleContext::call_core_func_with_exception(
+  self : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int32,
+  args : Array[@types.Value],
+) -> JITCoreCallWithExceptionResult raise JITCoreCallError {
+  self.call_core_func_impl(store, instance, func_idx, args, true)
+}
+
+///|
+/// A rooted escaping exception or the ordinary resumable call outcome.
+pub(all) enum JITCoreCallWithExceptionOutcome {
+  Returned(Array[@types.Value])
+  Suspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
+  Thrown(@runtime.RootedValue)
+}
+
+///|
+fn exception_outcome(
+  outcome : JITCoreCallOutcome,
+) -> JITCoreCallWithExceptionOutcome {
+  match outcome {
+    NativeCoreReturned(values) => Returned(values)
+    NativeCoreSuspended(reason, continuation) => Suspended(reason, continuation)
+  }
+}
+
+///|
+fn legacy_outcome(
+  outcome : JITCoreCallWithExceptionOutcome,
+) -> JITCoreCallOutcome raise JITCoreCallError {
+  match outcome {
+    Returned(values) => NativeCoreReturned(values)
+    Suspended(reason, continuation) => NativeCoreSuspended(reason, continuation)
+    Thrown(exception) => {
+      exception.close()
+      raise Trap("uncaught exception")
+    }
+  }
+}
+
+///|
+fn root_uncaught_exception(
+  store : @runtime.Store,
+  exception : @wasmoon_jit.NativeUncaughtException,
+) -> @runtime.RootedValue raise JITCoreCallError {
+  defer exception.close()
+  guard !store.is_closed() else { raise HostInvocation(StoreClosed) }
+  guard exception.reference() is Some(reference) else {
+    raise HostInvocation(InvalidHandle)
+  }
+  let value = store.decode_native_exception(reference) catch {
+    error => raise HostInvocation(error)
+  }
+  store.root_raw_value(value) catch {
+    error => raise HostInvocation(error)
+  }
 }
 
 ///|
@@ -233,6 +309,14 @@ fn JITCoreContinuation::finish(
 pub fn JITCoreContinuation::continue_execution(
   self : JITCoreContinuation,
 ) -> JITCoreCallOutcome raise JITCoreCallError {
+  legacy_outcome(self.continue_execution_with_exception())
+}
+
+///|
+/// Resume an exception-aware call. The capture mode is fixed at entry.
+pub fn JITCoreContinuation::continue_execution_with_exception(
+  self : JITCoreContinuation,
+) -> JITCoreCallWithExceptionOutcome raise JITCoreCallError {
   if !self.active[0] {
     raise Trap("native core continuation is no longer active")
   }
@@ -253,6 +337,15 @@ pub fn JITCoreContinuation::continue_execution(
     )
   }
   let outcome = self.call.continue_execution() catch {
+    JITUncaughtException(exception) => {
+      defer {
+        finish_jit_core_environment(self.context, self.store, gc_active)
+        self.context.clear_async_host_state(self.invocation.id())
+        self.invocation.release_if_live()
+        self.active[0] = false
+      }
+      return Thrown(root_uncaught_exception(self.store, exception))
+    }
     error => {
       finish_jit_core_environment(self.context, self.store, gc_active)
       self.invocation.release_if_live()
@@ -267,7 +360,7 @@ pub fn JITCoreContinuation::continue_execution(
     }
   }
   finish_jit_core_environment(self.context, self.store, gc_active)
-  self.finish(outcome)
+  exception_outcome(self.finish(outcome))
 }
 
 ///|
@@ -292,8 +385,9 @@ fn JITModuleContext::start_core_func_resumable(
   instance : @runtime.ModuleInstance,
   func_idx : Int32,
   args : Array[@types.Value],
+  capture_exceptions~ : Bool = false,
   async_host_driver~ : @runtime.AsyncHostCallDriver? = None,
-) -> JITCoreCallOutcome raise JITCoreCallError {
+) -> JITCoreCallWithExceptionOutcome raise JITCoreCallError {
   self.bind_instance(store, instance) catch {
     error => raise HostInvocation(error)
   }
@@ -332,7 +426,19 @@ fn JITModuleContext::start_core_func_resumable(
     }
     prepare_jit_core_environment(self, store, instance, scope)
   }
-  let outcome = self.jit_module.start_continuation_call(func, encoded_args) catch {
+  let outcome = self.jit_module.start_continuation_call(
+    func,
+    encoded_args,
+    capture_exceptions~,
+  ) catch {
+    JITUncaughtException(exception) => {
+      defer {
+        finish_jit_core_environment(self, store, gc_active)
+        self.clear_async_host_state(invocation_id)
+        invocation.release_if_live()
+      }
+      return Thrown(root_uncaught_exception(store, exception))
+    }
     error => {
       finish_jit_core_environment(self, store, gc_active)
       invocation.release_if_live()
@@ -354,7 +460,7 @@ fn JITModuleContext::start_core_func_resumable(
         active: [true],
         scope,
       }
-      continuation.finish(outcome)
+      exception_outcome(continuation.finish(outcome))
     }
     JITReturned(raw_results) => {
       self.clear_async_host_state(invocation_id)
@@ -364,7 +470,7 @@ fn JITModuleContext::start_core_func_resumable(
           raise ExecutionStateFailure(error)
         }
       }
-      NativeCoreReturned(
+      Returned(
         decode_jit_entry_results(
           raw_results,
           func.result_types,
@@ -385,7 +491,27 @@ pub fn JITModuleContext::call_core_func_resumable(
   func_idx : Int32,
   args : Array[@types.Value],
 ) -> JITCoreCallOutcome raise JITCoreCallError {
-  self.start_core_func_resumable(store, instance, func_idx, args)
+  legacy_outcome(
+    self.start_core_func_resumable(store, instance, func_idx, args),
+  )
+}
+
+///|
+/// Enter on a native fiber, retaining an uncaught exception and its references.
+pub fn JITModuleContext::call_core_func_resumable_with_exception(
+  self : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int32,
+  args : Array[@types.Value],
+) -> JITCoreCallWithExceptionOutcome raise JITCoreCallError {
+  self.start_core_func_resumable(
+    store,
+    instance,
+    func_idx,
+    args,
+    capture_exceptions=true,
+  )
 }
 
 ///|
@@ -403,6 +529,24 @@ pub fn JITModuleContext::call_core_func(
   func_idx : Int32,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise JITCoreCallError {
+  match self.call_core_func_impl(store, instance, func_idx, args, false) {
+    Returned(values) => values
+    Thrown(exception) => {
+      exception.close()
+      raise Trap("uncaught exception")
+    }
+  }
+}
+
+///|
+fn JITModuleContext::call_core_func_impl(
+  self : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int32,
+  args : Array[@types.Value],
+  capture_exceptions : Bool,
+) -> JITCoreCallWithExceptionResult raise JITCoreCallError {
   self.bind_instance(store, instance) catch {
     error => raise HostInvocation(error)
   }
@@ -435,18 +579,26 @@ pub fn JITModuleContext::call_core_func(
   let invocation_id = invocation.id()
   defer self.clear_async_host_state(invocation_id)
   defer invocation.release_if_live()
-  let raw_results = self.jit_module.call_with_context(func, encoded_args) catch {
+  let raw_results = self.jit_module.call_with_context(
+    func,
+    encoded_args,
+    capture_exceptions~,
+  ) catch {
+    JITUncaughtException(exception) =>
+      return Thrown(root_uncaught_exception(store, exception))
     error => raise self.map_jit_call_error(error, invocation_id, scope)
   }
   invocation.complete() catch {
     error => raise ExecutionStateFailure(error)
   }
-  decode_jit_entry_results(
-    raw_results,
-    func.result_types,
-    store,
-    self.jit_module,
-    instance,
+  Returned(
+    decode_jit_entry_results(
+      raw_results,
+      func.result_types,
+      store,
+      self.jit_module,
+      instance,
+    ),
   )
 }
 
@@ -478,6 +630,36 @@ pub async fn JITModuleContext::call_core_func_async(
   func_idx : Int32,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise JITCoreCallError {
+  match self.call_core_func_async_impl(store, instance, func_idx, args, false) {
+    Returned(values) => values
+    Thrown(exception) => {
+      exception.close()
+      raise Trap("uncaught exception")
+    }
+  }
+}
+
+///|
+/// Invoke through asynchronous host imports with a rooted exception result.
+pub async fn JITModuleContext::call_core_func_async_with_exception(
+  self : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int32,
+  args : Array[@types.Value],
+) -> JITCoreCallWithExceptionResult raise JITCoreCallError {
+  self.call_core_func_async_impl(store, instance, func_idx, args, true)
+}
+
+///|
+async fn JITModuleContext::call_core_func_async_impl(
+  self : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int32,
+  args : Array[@types.Value],
+  capture_exceptions : Bool,
+) -> JITCoreCallWithExceptionResult raise JITCoreCallError {
   @runtime.with_async_host_call_driver(async fn(driver) raise Error {
     let mut outcome = self.start_core_func_resumable(
       store,
@@ -485,18 +667,20 @@ pub async fn JITModuleContext::call_core_func_async(
       func_idx,
       args,
       async_host_driver=Some(driver),
+      capture_exceptions~,
     )
     for ;; {
       match outcome {
-        NativeCoreReturned(values) => return values
-        NativeCoreSuspended(reason, continuation) => {
+        Returned(values) => return Returned(values)
+        Thrown(exception) => return Thrown(exception)
+        Suspended(reason, continuation) => {
           errdefer continuation.cancel()
           match reason {
             HostCall => driver.wait_pending()
             CooperativeYield => @async.sleep(0)
             AtomicWait => @async.sleep(1)
           }
-          outcome = continuation.continue_execution()
+          outcome = continuation.continue_execution_with_exception()
         }
       }
     }

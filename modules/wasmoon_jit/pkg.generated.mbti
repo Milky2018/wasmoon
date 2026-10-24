@@ -555,7 +555,7 @@ pub fn NativeJITContext::set_table_pointers(Self, Array[@bridge.JITTable?]) -> U
 pub fn NativeJITContext::setup_gc(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32]) -> Unit raise GCSetupError
 pub fn NativeJITContext::setup_gc_with_func_table(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32], Int64, Int32) -> Unit raise GCSetupError
 pub fn NativeJITContext::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit raise NativeSetupError
-pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int32, stack_size? : Int64) -> NativeJITContinuation raise NativeFiberError
+pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int32, stack_size? : Int64, capture_exceptions? : Bool) -> NativeJITContinuation raise NativeFiberError
 pub fn NativeJITContext::take_wasi_exit_code(Self) -> Int32
 pub fn NativeJITContext::teardown_gc(Self) -> Unit
 pub fn NativeJITContext::throw_exception_tag(Self, Int32) -> Unit raise NativeSetupError
@@ -569,6 +569,7 @@ pub fn NativeJITContinuation::cancel(Self) -> Unit raise NativeFiberError
 pub fn NativeJITContinuation::continue_after_hostcall(Self, retry~ : Bool) -> NativeJITContinuationEvent raise NativeFiberError
 pub fn NativeJITContinuation::continue_with(Self, value? : Int64) -> NativeJITContinuationEvent raise NativeFiberError
 pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
+pub fn NativeJITContinuation::uncaught_exception(Self) -> NativeUncaughtException?
 
 pub(all) enum NativeJITContinuationEvent {
   NativeSuspended(NativeSuspensionReason)
@@ -595,6 +596,14 @@ pub(all) enum NativeTarget {
 pub fn NativeTarget::equal(Self, Self) -> Bool
 pub fn NativeTarget::not_equal(Self, Self) -> Bool
 pub fn NativeTarget::to_repr(Self) -> @debug.Repr
+
+pub struct NativeUncaughtException {
+  // private fields
+}
+pub fn NativeUncaughtException::close(Self) -> Unit
+pub fn NativeUncaughtException::reference(Self) -> Int64?
+pub fn NativeUncaughtException::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for NativeUncaughtException
 
 pub(all) struct Profiler {
   counter : CallCounter

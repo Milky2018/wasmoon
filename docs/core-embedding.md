@@ -211,9 +211,30 @@ Guest `try_table` can catch the explicit exception by tag or with `catch_all`.
 Ordinary host errors, traps, cancellation and resource failures remain invocation
 failures. The runtime never converts all failures into catchable exceptions.
 The raw interpreter `*_with_exception` APIs report uncaught tag/payload values;
-ordinary interpreter calls report `UncaughtException`. Native calls keep their
-recoverable `JITCoreCallError::Trap("uncaught exception")` boundary. Neither
-channel aborts the process merely because the guest has no matching handler.
+ordinary interpreter calls report `UncaughtException`. Native trap-only calls retain their recoverable
+`JITCoreCallError::Trap("uncaught exception")` boundary. Neither channel aborts
+the process merely because the guest has no matching handler.
+
+Prepared native contexts also provide `call_core_func_with_exception`,
+`call_core_func_resumable_with_exception` and
+`call_core_func_async_with_exception`. Their `Thrown(RootedValue)` result owns a
+Store-local `ExnRef`, including all references reachable from its payload. Use
+`Store.borrow_rooted_value` followed by `Store.get_exn` to inspect the tag address
+and values; close the root when discarded. Each result reserves one
+`PendingWork` unit until closed (native RC also releases it). Resumable calls
+return `Suspended(reason, continuation)`; resume with
+`continue_execution_with_exception`. The capture mode is fixed at initial
+entry. A foreign Store rejects the root, and closing the root or its Store
+invalidates it. Traps, host errors, cancellation and resource failures still
+raise `JITCoreCallError`; failure to admit the delivery root is a resource
+failure, never a partially rooted exception result.
+
+The native entry captures the actual escaping exception before activation
+cleanup and holds an invocation-local native root until Store-root admission.
+A guest can catch a host exception and throw a different one; the result then
+contains the replacement. Nested entries and resumed fibers have independent
+deliveries; this API does not infer a guest exception from a last-host-error
+slot.
 
 Async registrations already accept typed errors through `Error`. Use the same
 `guest_exception(...).throw_into_guest()` operation there: an owned exception

@@ -100,6 +100,9 @@ typedef struct {
     int64_t func_ptr;
     int64_t *values;
     int values_len;
+    int capture_exceptions;
+    int64_t exception_ref;
+    void *exception_roots;
 } native_jit_continuation_t;
 
 #ifndef _WIN32
@@ -405,6 +408,13 @@ static native_fiber_t *managed_fiber_ptr(void *managed) {
 static int64_t native_jit_continuation_entry(void *closure) {
     native_jit_continuation_t *continuation =
         (native_jit_continuation_t *)closure;
+    if (continuation->capture_exceptions) {
+        return wasmoon_jit_call_trampoline_captured(
+            continuation->trampoline_ptr,
+            wasmoon_jit_context_ptr(continuation->jit_context),
+            continuation->func_ptr, continuation->values, continuation->values_len,
+            &continuation->exception_ref, &continuation->exception_roots);
+    }
     return wasmoon_jit_call_trampoline(
         continuation->trampoline_ptr,
         wasmoon_jit_context_ptr(continuation->jit_context),
@@ -419,6 +429,9 @@ static void finalize_native_jit_continuation(void *self) {
         (native_jit_continuation_t *)self;
     destroy_fiber(continuation->fiber);
     continuation->fiber = NULL;
+    gc_heap_unregister_parked_roots(continuation->exception_roots);
+    continuation->exception_roots = NULL;
+    continuation->exception_ref = 0;
     if (continuation->jit_context) {
         moonbit_decref(continuation->jit_context);
         continuation->jit_context = NULL;
@@ -457,7 +470,8 @@ MOONBIT_FFI_EXPORT void *wasmoon_native_jit_continuation_alloc(
     int64_t func_ptr,
     int64_t *values,
     int values_len,
-    int64_t stack_size
+    int64_t stack_size,
+    int32_t capture_exceptions
 ) {
     native_jit_continuation_t *continuation =
         (native_jit_continuation_t *)moonbit_make_external_object(
@@ -475,6 +489,7 @@ MOONBIT_FFI_EXPORT void *wasmoon_native_jit_continuation_alloc(
     continuation->func_ptr = func_ptr;
     continuation->values = values;
     continuation->values_len = values_len;
+    continuation->capture_exceptions = capture_exceptions;
     continuation->fiber = allocate_fiber(
         native_jit_continuation_entry,
         continuation,
@@ -486,6 +501,19 @@ MOONBIT_FFI_EXPORT void *wasmoon_native_jit_continuation_alloc(
         return NULL;
     }
     return continuation;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_jit_exception_reference(void *managed) {
+    native_jit_continuation_t *call = (native_jit_continuation_t *)managed;
+    return call ? call->exception_ref : 0;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_native_jit_exception_close(void *managed) {
+    native_jit_continuation_t *call = (native_jit_continuation_t *)managed;
+    if (!call) return;
+    gc_heap_unregister_parked_roots(call->exception_roots);
+    call->exception_roots = NULL;
+    call->exception_ref = 0;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
