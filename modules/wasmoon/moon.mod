@@ -26,7 +26,7 @@ license = "Apache-2.0"
 
 keywords = [ "wasm", "webassembly", "runtime", "jit" ]
 
-description = "A slow and insecure runtime for WebAssembly"
+description = "WebAssembly runtime with native JIT, interpreter, WASI and Component Model support"
 
 preferred_target = "native"
 

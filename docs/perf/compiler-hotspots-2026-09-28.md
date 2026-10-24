@@ -59,7 +59,7 @@ self samples by ancestors. Selected inclusive subtrees may overlap and must not
 be added. The raw sample reports, build/capture/derivation recipes, original and
 modified generated-C hashes, machine-code excerpt, executable/input/artifact
 hashes and extracted diagnostic data are retained in the
-[compressed evidence](compiler-hotspots-2026-09-28.json.gz). No sampling helper is
+[compressed evidence](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/compiler-hotspots-2026-09-28.json.gz). No sampling helper is
 installed as a project-style audit or CI acceptance gate.
 
 ## Concentration and work counts

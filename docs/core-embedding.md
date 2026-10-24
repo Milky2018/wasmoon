@@ -116,9 +116,10 @@ native sessions additionally reject reuse with a different Store or after close.
 
 ## Compatibility and release notes
 
-This is a source-breaking Core embedding change and belongs in the next minor
-release with the workspace's lockstep version policy. It does not change the
-Wasm binary format. This work does not publish a release or change versions.
+The 0.18.0 minor release groups these source-breaking Core embedding contracts
+with the workspace's lockstep version policy. It does not change the Wasm
+binary format. See the [0.18.0 migration notes](releases/0.18.0.md), including
+optional original-byte source positions and owned uncaught JIT exceptions.
 
 Migrate editable nested syntax builders with `ReadOnlyArray::from_array(builder)`;
 replace section elements instead of mutating accepted instruction arrays. Use
@@ -130,7 +131,7 @@ Use `Function`/`RootedValue` rather than moving raw references between calls or
 Stores. Adopt ordinary resources in one Store; use `alloc_shared_mem` explicitly
 for shared memory. Create one native Component session per Store.
 
-The [executable embedding example](../modules/wasmoon/executor/README.mbt.md)
+The [executable embedding example](../modules/wasmoon_runtime/executor/README.mbt.md)
 and [boundary evidence](evidence/core-boundaries-2026-10-15/README.md) record the
 supported path and current verification scope.
 

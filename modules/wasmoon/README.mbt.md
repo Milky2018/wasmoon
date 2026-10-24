@@ -6,22 +6,21 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 
 > **Note**: JIT optimization is actively improving. Performance depends on workload and platform; benchmark your target programs for an accurate comparison.
 
+See the [0.18.0 migration and release notes](https://github.com/Milky2018/wasmoon/blob/main/docs/releases/0.18.0.md) for embedding API and JIT-cache changes.
+
 ## Features
 
 - **JIT Compiler**: AArch64 and amd64 native code generation with SSA-based IR
-- **Interpreter**: Core execution via `--no-jit`; the unreleased `wasmoon_runtime` module also supports the MoonBit `wasm` target under `moonrun`
+- **Interpreter**: Core execution via `--no-jit`; the `wasmoon_runtime` module also supports the MoonBit `wasm` target under `moonrun`
 - **Async host functions**: Suspend interpreter continuations or JIT native fibers without blocking the host thread
 - **WAT/WASM Parser**: Parse both text and binary formats
 - **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
 - **GC Proposal Support**: i31/struct/array/ref operations in interpreter and JIT
 - **Component Model**: Component parser, validator, runtime, and stable WIT-shaped facade
 - **WASI HTTP 0.3**: Streaming HTTP/HTTPS client, service and middleware worlds; `wasmoon serve` with interpreter or JIT
-- **WASI HTTP 0.3**: Streaming HTTP/HTTPS client, service and middleware worlds; `wasmoon serve` with interpreter or JIT
 - **WASI Components**: Preview 2 and WASI 0.3 hosts with native Component Async JIT on macOS AArch64 and Linux AMD64
 
-See the [portable interpreter guide](docs/portable-interpreter.md) for wasm embedding and host requirements.
-
-See the [portable interpreter guide](../../docs/portable-interpreter.md) for wasm embedding and host requirements.
+See the [portable interpreter guide](https://github.com/Milky2018/wasmoon/blob/main/docs/portable-interpreter.md) for wasm embedding and host requirements.
 
 ## Requirements
 
@@ -68,8 +67,8 @@ cd wasmoon
 ```
 
 `./install.sh` uses `moon build --target native --release` to build local binaries
-into `target/moon-install-build/`, copies them to `target/moon-install-bin/`, and
-then refreshes two repo-root executables:
+into `target/moon-install-build/`, then copies the resulting binaries to two
+repo-root executables:
 
 - `./wasmoon`
 - `./wasmoon-tools`
@@ -213,13 +212,13 @@ Use these options when diagnosing JIT failures:
 Example:
 
 ```bash
-wasmoon run examples/core_ed25519.wasm -D --dump-on-trap -W
+wasmoon run examples/add.wat --invoke add --arg 5 --arg 3 -D --dump-on-trap -W
 ```
 
 LLDB quick recipe:
 
 ```bash
-lldb -- ./wasmoon run examples/core_ed25519.wasm
+lldb -- ./wasmoon run examples/add.wat --invoke add --arg 5 --arg 3
 (lldb) run
 (lldb) bt
 ```
@@ -283,7 +282,7 @@ python3 scripts/run_component_wast.py --suite future-gated --no-jit
 ```
 
 For additional runtime testing, the
-[upstream WASIp1 guest suite](../../tests/upstream/wasmtime/wasi-p1/README.md) runs unchanged
+[upstream WASIp1 guest suite](https://github.com/Milky2018/wasmoon/blob/main/tests/upstream/wasmtime/wasi-p1/README.md) runs unchanged
 Wasmtime P1 programs in interpreter and JIT modes:
 
 ```bash
@@ -320,7 +319,7 @@ Version 0.17.0 removes the migration-era `RuntimeAssembly`, `RuntimeComponent`,
 releases; the removal is a source-breaking change in 0.17.0. External callers
 must migrate before upgrading from 0.16.x.
 
-Use the [architecture documentation](../../docs/architecture.md) and package
+Use the [architecture documentation](https://github.com/Milky2018/wasmoon/blob/main/docs/architecture.md) and package
 imports for ownership information. For compilation, create a translation
 context through `wasm_milkir/frontend` with
 `wasmoon.wasm_frontend_embedding_environment`, then use

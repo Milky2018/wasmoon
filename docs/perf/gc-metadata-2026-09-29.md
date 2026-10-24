@@ -45,4 +45,4 @@ These are broad end-to-end regression measurements, not a benchmark of metadata 
 - Async component WAST: 24 files, 153 commands, no skips.
 - Ownership coverage: identical payload pointers, alias-safe rebinding, owner release, empty replacement, repeated clear, independent contexts, and legacy C copy semantics mixed with typed bindings.
 
-Cross-platform CI for the new commit is tracked separately. Raw samples, fixtures, probe sources, validation logs and source/binary hashes are retained in [the evidence archive](gc-metadata-2026-09-29.json.gz).
+Cross-platform CI for the new commit is tracked separately. Raw samples, fixtures, probe sources, validation logs and source/binary hashes are retained in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/gc-metadata-2026-09-29.json.gz).

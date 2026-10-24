@@ -106,7 +106,7 @@ allocated bytes.
 
 ## Reproduction and evidence
 
-[Raw samples, medians, binary/input hashes, and toolchain](compiler-temporary-memory-2026-09-28-first-attempt.json)
+[Raw samples, medians, binary/input hashes, and toolchain](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/compiler-temporary-memory-2026-09-28-first-attempt.json)
 are checked in. Build and save a baseline binary before changing sources, then
 build and save the optimized binary. Use new output directories:
 

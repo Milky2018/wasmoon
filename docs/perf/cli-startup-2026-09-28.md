@@ -151,7 +151,7 @@ python3 scripts/benchmark_startup.py --before /path/to/wasmoon-before \
   --wasmoon ./wasmoon --repetitions 21 --output target/startup-candidate
 ```
 
-[Compressed raw evidence](cli-startup-2026-09-28.json.gz) retains every reference
+[Compressed raw evidence](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/cli-startup-2026-09-28.json.gz) retains every reference
 and CLI sample, complete detailed captures, both compiler rounds, executable and
 input hashes, and the candidate patch. Local raw logs/artifacts remain under
 `target/startup-589`. After formatting, a final rebuild has a different executable hash; all six

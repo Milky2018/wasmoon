@@ -50,7 +50,7 @@ The raw summary retains the rule's resulting totals and representative stacks.
    out-of-range IDs, and register classes retain their original behavior.
 
 The clobber-only ablation and the final combined experiment are both retained in
-[the data](compiler-temporary-memory-2026-09-28.json). The final production diff
+[the data](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/compiler-temporary-memory-2026-09-28.json). The final production diff
 is small; diagnostics and reproducible measurements are separate from production.
 
 ## Uninstrumented complete compilation time

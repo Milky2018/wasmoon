@@ -34,7 +34,7 @@ There is no repeatable benefit across rounds. Some intervals favor a small regre
 
 The next justified investigation is algorithmic work inside bundle allocation (probe/scan/conflict costs), or acyclic optimization, using the distinct input shapes above. This report does not pre-approve an implementation or claim a reduction in the overall performance gap. There is no new production optimization in this change.
 
-Evidence: [raw profiles, both rounds, validation logs and rejected patch](compiler-priorities-2026-09-29.json.gz).
+Evidence: [raw profiles, both rounds, validation logs and rejected patch](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/compiler-priorities-2026-09-29.json.gz).
 
 ## Final baseline validation
 

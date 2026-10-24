@@ -30,7 +30,7 @@ length threshold was inferred from these samples.
 
 ## Fixed-Wasm CLI comparison
 
-The [local receipt](gc-array-bulk-2026-10-22.json) preserves all three samples,
+The [local receipt](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/gc-array-bulk-2026-10-22.json) preserves all three samples,
 source hashes, result checks and limits. Sources/builds/caches were isolated in
 auto-cleaned OS temporary directories. The baseline copied current module
 sources and restored both functional files to the baseline revision; the repaired

@@ -25,6 +25,7 @@ def main() -> None:
         package_build = stage / 'package-build'
         members = []
         command = None
+        product = None
         embedding = None
         for index, member in enumerate(workspace['members']):
             source = ROOT / member
@@ -42,6 +43,7 @@ def main() -> None:
             if source.name == 'wasmoon_runtime':
                 embedding = destination / 'examples/embedding'
             if source.name == 'wasmoon':
+                product = destination
                 command = destination / 'cmd/wasmoon'
         if command is None:
             raise RuntimeError('Wasmoon module is missing from the workspace')
@@ -85,13 +87,24 @@ def main() -> None:
         print('Packaged installation and WASI execution passed on both engines.', flush=True)
         if embedding is None:
             raise RuntimeError('Portable runtime module is missing from the workspace')
-        result = subprocess.run(['moon', 'run', str(embedding), '--target', 'wasm',
-                                 '--target-dir', str(build), '--warn-list', '+73',
-                                 '--deny-warn'], cwd=stage, capture_output=True,
-                                text=True, check=True)
-        if result.stdout.strip() != 'portable interpreter: result=43, host observed=21, memory=21, budget released':
-            raise RuntimeError(f'Unexpected portable output: {result.stdout!r}; {result.stderr}')
-        print('Packaged wasm interpreter embedding passed.', flush=True)
+        for target in ['native', 'wasm']:
+            result = subprocess.run(['moon', 'run', str(embedding), '--target', target,
+                                     '--target-dir', str(build), '--warn-list', '+73',
+                                     '--deny-warn'], cwd=stage, capture_output=True,
+                                    text=True, check=True)
+            if result.stdout.strip() != 'portable interpreter: result=43, host observed=21, memory=21, budget released':
+                raise RuntimeError(f'Unexpected {target} embedding output: {result.stdout!r}; {result.stderr}')
+            print(f'Packaged {target} interpreter embedding passed.', flush=True)
+        if product is None:
+            raise RuntimeError('Native product module is missing from the workspace')
+        # Exercise the shipped public native diagnostics from the real archive,
+        # not repository-relative fixtures or an independently invented smoke API.
+        run(['moon', 'test',
+             str(product / 'sanitizer_testsuite/uncaught_exception_native_test.mbt'),
+             str(product / 'sanitizer_testsuite/trap_source_offset_native_test.mbt'),
+             '--target', 'native', '--no-parallelize', '--target-dir', str(build),
+             '--warn-list', '+73', '--deny-warn'], stage)
+        print('Packaged native exceptions and original source positions passed.', flush=True)
 
 
 if __name__ == '__main__':

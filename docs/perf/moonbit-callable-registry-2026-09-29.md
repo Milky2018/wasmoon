@@ -75,4 +75,4 @@ The 796 initial allocations expose standard-sort temporary allocations, despite 
 - Async 0.3 component WAST: 24/24 files, 153 commands, no skips.
 - Tests cover shared updates, independent registries, subtype/tag maps, rebinding, repeated clear and native contexts outliving MoonBit owners.
 
-Cross-platform CI is recorded separately in ISS-605. Raw measurements, probe sources, source/binary hashes and validation logs are in [the evidence archive](moonbit-callable-registry-2026-09-29.json.gz).
+Cross-platform CI is recorded separately in ISS-605. Raw measurements, probe sources, source/binary hashes and validation logs are in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/moonbit-callable-registry-2026-09-29.json.gz).

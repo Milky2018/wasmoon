@@ -32,6 +32,6 @@ changed together, consistent with run-to-run noise. The production implementatio
 is unchanged. The next larger experiment should address the plan/result boundary
 or retained compilation storage and must again demonstrate end-to-end benefit.
 
-[Raw paired samples, phase totals, invariants, program/binary hashes and measurement script](allocation-snapshots-2026-09-16.json)
+[Raw paired samples, phase totals, invariants, program/binary hashes and measurement script](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/allocation-snapshots-2026-09-16.json)
 record the complete bounded experiment. This closes ISS-539's measurement task;
 ISS-450 and ISS-451 remain open/deferred according to their separate criteria.

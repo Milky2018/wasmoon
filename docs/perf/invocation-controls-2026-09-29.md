@@ -47,6 +47,6 @@ Same fixtures as the preceding reports. Each workload has 31 retained paired sam
 | exceptions | 112.514 ms | 115.436 ms | +1.04% [+0.13%, +3.39%] |
 | aegis | 730.918 ms | 732.980 ms | +0.24% [-0.01%, +0.75%] |
 
-These measurements do not isolate invocation-entry overhead or cooperative polling cost and do not establish a cache/allocator cause. They must not be generalized into a speedup claim. Raw samples, validation logs, probe source and source/binary hashes are archived in [the evidence archive](invocation-controls-2026-09-29.json.gz).
+These measurements do not isolate invocation-entry overhead or cooperative polling cost and do not establish a cache/allocator cause. They must not be generalized into a speedup claim. Raw samples, validation logs, probe source and source/binary hashes are archived in [the evidence archive](https://github.com/Milky2018/wasmoon/blob/f31c1166d42da776e30841e08e6824f004585c7e/docs/perf/invocation-controls-2026-09-29.json.gz).
 
 The indirect, GC and exception paired intervals are above zero in this run. Their small observed regressions remain unresolved and are tracked in ISS-610; they are not dismissed as noise.
