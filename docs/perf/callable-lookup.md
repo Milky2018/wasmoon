@@ -68,3 +68,38 @@ sources. Linux LSan and actual Windows/x64 execution remain separate CI gates.
 The final release CLI has the same measured binary hash. Core passes258 files /
 62563 assertions and Component59 files /1385 commands per engine, zero skips,
 with register-allocation, GC and barrier verification enabled.
+
+## Remove adapter crossings at the checked boundary
+
+Follow-up [ISS-683](../../issues/ISS-683.md) samples the packed, asserted
+indirect-call loop. About2026/2284 main-thread self samples lie in table/type/
+subtype/entry resolution; the signal-wait thread is excluded. Release ARM64
+machine code calls separate table_entry, type lookup, subtype and entry
+adapters. This is attribution rather than a timing result.
+
+Mechanically move read-only registry lookup implementations into one private
+header shared by their existing public C adapters and the call boundary. The
+ordinary compiler can now optimize the complete registered path. There is no
+forced inlining, new registry representation, target cache, machine ABI, codegen
+revision or removal of a check. Legacy lookup and subtype fallback remain.
+The ordinary registered success path no longer calls another C function; cold
+trap/TLS paths still do. The resolver incorporates existing leaves, growing
+59 ->187 instructions globally, without expanding each guest call site.
+
+Five alternating serial cold pairs compare frozen48039708 binary0f0595811dc5
+with candidate7be3c8b49908. For100million asserted1/2/64-target calls,
+invocation improves692.188 ->582.499 /691.012 ->583.308 /714.611 ->598.409 ms
+(15.6–16.3%). Original randombytes improves449.286 ->412.908 ms (8.1%);
+metamorphic2543.538 ->2531.585 ms (0.5%); stream5453.931 ->5453.293 ms is
+unchanged. Compiler/installation/RSS have no material gain. All generated
+controls and original corpus processes succeed. Builds/profilers do not overlap
+these timing samples; temporary sources, profiles, frozen binaries and caches
+are removed. This remains a scoped local gain with substantial indirect-call
+cost left versus optimized V8 and Wasmtime.
+
+Follow-up validation: ordinary and all-three-verifiers native3115, wasm1464,
+strict checks/info/fmt, Core258/62563 and Component59/1385 per engine pass,
+zero skips. Fresh isolated macOS ASan/UBSan320, event loop and both ASan controls
+pass on explicitly dirty48039708-based sources. Boundary/MSVC bridge/C44 pass;
+Linux LSan and actual x64 execution require the next exact CI head. The final
+release CLI retains the measured7be3c8b49908 hash.

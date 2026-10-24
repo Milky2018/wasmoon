@@ -2,6 +2,7 @@
 // Segment operations for bulk memory/table instructions
 
 #include "jit_internal.h"
+#include "callable_lookup.h"
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -360,7 +361,7 @@ int64_t table_type_for_value(jit_context_t *ctx, int64_t val) {
     return type_idx;
 }
 
-static void **table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
+static inline void **table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
     if (!ctx || !ctx_tables(ctx) || !ctx_table_sizes(ctx) || table_idx < 0 || table_idx >= ctx_table_count(ctx) || index < 0 ||
         (uint64_t)index >= ctx_table_sizes(ctx)[table_idx]) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
@@ -380,11 +381,11 @@ static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t tabl
 
 // Reference identity may exist before executable code is registered. Resolve
 // only at a call boundary, never by reinterpreting a Store handle as a pointer.
-int64_t callable_entry(jit_context_t *ctx, int64_t value) {
+static inline int64_t callable_entry_inline(jit_context_t *ctx, int64_t value) {
     int trap = 0;
     if (!value) trap = WASMOON_TRAP_NULL_REFERENCE;
     else {
-        value = callable_native_reference(ctx, value);
+        value = callable_native_reference_inline(ctx, value);
         if (value < 0) {
             int64_t index = -(value + 1);
             value = ctx && index < ctx_func_count(ctx)
@@ -401,6 +402,10 @@ int64_t callable_entry(jit_context_t *ctx, int64_t value) {
         return 0;
     }
     return value;
+}
+
+int64_t callable_entry(jit_context_t *ctx, int64_t value) {
+    return callable_entry_inline(ctx, value);
 }
 
 static int64_t WASMOON_GUEST_ABI funcref_call_target_impl(jit_context_t *ctx, int64_t value) {
@@ -427,15 +432,17 @@ static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int3
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
-    int32_t actual = callable_type_for_value(ctx, value);
+    int32_t actual = callable_type_for_value_inline(ctx, value);
     if (actual < 0 && !ctx_runtime(ctx)->callable_registry)
         actual = (int32_t)(intptr_t)entry[1];
-    if (!value || !callable_subtype(ctx, actual, expected)) {
+    if (!value || !(ctx_runtime(ctx)->callable_local_types
+            ? callable_subtype_registered(ctx_runtime(ctx), actual, expected)
+            : callable_subtype(ctx, actual, expected))) {
         g_trap_code = WASMOON_TRAP_INDIRECT_TYPE;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
-    return funcref_call_target_impl(ctx, value);
+    return callable_entry_inline(ctx, value);
 }
 
 // table.fill - Fill table region with a value
