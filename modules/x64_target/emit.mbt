@@ -4295,6 +4295,7 @@ fn emit_instruction(
     }
     Return => {
       emit_epilogue(buffer, frame)
+      metadata_offset = buffer.position()
       buffer.encoder.x86_emit_ret()
     }
   }

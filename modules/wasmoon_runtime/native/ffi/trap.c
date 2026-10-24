@@ -548,8 +548,8 @@ static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
 
 #endif // !_WIN32
 
-// Walk the retained frame pointer chain after the signal handler has returned
-// to the trap activation on the same native fiber.
+// Copy bounded frame records while the guest stack is still intact. Recovery
+// on that stack (especially instrumented C frames) may overwrite abandoned frames.
 static void capture_frame_chain(uintptr_t initial_pc, uintptr_t initial_fp,
                                  uintptr_t stack_base, uintptr_t stack_top) {
     g_trap_frame_count = 0;
@@ -600,8 +600,8 @@ void jit_trap_activation_finalize(jit_trap_activation_t *activation) {
     if (!activation || activation->frame_count != 0) return;
     if (activation->stack_base != 0 && activation->stack_top != 0) {
         uintptr_t fp = activation->fp;
-        if (fp >= activation->stack_base &&
-            fp + sizeof(uintptr_t) < activation->stack_top &&
+        if (fp >= activation->stack_base && fp < activation->stack_top &&
+            activation->stack_top - fp >= 2 * sizeof(uintptr_t) &&
             (fp & 0xF) == 0) {
             activation->frame_lr =
                 *(uintptr_t *)(fp + sizeof(uintptr_t));
@@ -629,6 +629,9 @@ _Noreturn static void darwin_trap_landing(void) {
 #endif
 
 static void finish_trap_signal(void *ucontext) {
+    // POSIX handlers run on the alternate signal stack. Snapshot before
+    // restoring the activation SP and entering recovery C code on the fiber.
+    jit_trap_activation_finalize(jit_current_trap_activation());
 #ifdef __APPLE__
     jit_trap_activation_t *activation = jit_current_trap_activation();
     ucontext_t *uc = ucontext;
@@ -963,6 +966,7 @@ static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
     activation->x10 = registers->R10;
     activation->x11 = registers->R11;
     activation->x15 = registers->R15;
+    jit_trap_activation_finalize(activation);
     siglongjmp(activation->jmp_buf, 1);
 }
 

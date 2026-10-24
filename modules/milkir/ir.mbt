@@ -504,6 +504,7 @@ pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
 ///|
 pub(all) enum Metadata {
   SourceLoc(String)
+  SourceByteOffset(Int64)
   Comment(String)
 } derive(Eq, Debug)
 
@@ -523,6 +524,7 @@ pub struct Block {
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
   priv mut instructions : Array[InstId] // Stable instruction arena IDs
   mut terminator : Terminator? // How this block ends
+  priv mut source_metadata : Array[Metadata]
 }
 
 ///|
@@ -537,7 +539,14 @@ pub impl Debug for Block with fn to_repr(self) {
 
 ///|
 fn Block::Block(owner : Ref[FunctionOwnerContext], id : Int32) -> Block {
-  { owner, id, params: [], instructions: [], terminator: None, }
+  {
+    owner,
+    id,
+    params: [],
+    instructions: [],
+    terminator: None,
+    source_metadata: [],
+  }
 }
 
 ///|
@@ -645,11 +654,23 @@ pub fn Block::instruction_ids(self : Block) -> ArrayView[InstId] {
 
 ///|
 /// Set the terminator for this block
-pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
+pub fn Block::set_terminator(
+  self : Block,
+  term : Terminator,
+  metadata~ : Array[Metadata] = [],
+) -> Unit {
   if reject_foreign_terminator_values(self.owner, term) {
     return
   }
   self.terminator = Some(term)
+  self.source_metadata = metadata.copy()
+}
+
+///|
+/// Provenance is replaced explicitly with the terminator. Synthesized
+/// replacements default to unknown; transformations must preserve it explicitly.
+pub fn Block::terminator_metadata(self : Block) -> Array[Metadata] {
+  self.source_metadata.copy()
 }
 
 ///|

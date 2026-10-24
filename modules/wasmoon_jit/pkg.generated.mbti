@@ -679,6 +679,7 @@ pub(all) struct TrapReport {
   wasm_func_idx : Int32?
   wasm_func_name : String?
   wasm_offset : Int64?
+  native_offset : Int64?
   wasm_frames : Array[WasmTrapFrame]
   host_frames : Array[String]
   dump_path : String?
@@ -714,7 +715,8 @@ pub(all) struct WasmTrapFrame {
   pc : Int64
   func_idx : Int32
   func_name : String
-  wasm_offset : Int64
+  wasm_offset : Int64?
+  native_offset : Int64?
 }
 
 // Type aliases

@@ -547,7 +547,7 @@ fn canonicalize_aliases_with_analysis(
     // Canonicalize terminator operands as well.
     if block.terminator is Some(term) {
       let new_term = propagate_copies_in_terminator(term, aliases, result)
-      block.set_terminator(new_term)
+      block.set_terminator(new_term, metadata=block.terminator_metadata())
     }
     (local_aliases, true)
   }

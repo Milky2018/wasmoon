@@ -242,18 +242,37 @@ fn mapped_block(
 }
 
 ///|
+fn metadata_source(
+  metadata : Array[@milkir.Metadata],
+) -> @native_types.SourceLocation? {
+  let mut label = "<binary>"
+  let mut offset : Int64? = None
+  let mut known = false
+  for entry in metadata {
+    match entry {
+      SourceLoc(source) => {
+        label = source
+        known = true
+      }
+      SourceByteOffset(value) => {
+        offset = Some(value)
+        known = true
+      }
+      _ => ()
+    }
+  }
+  if known {
+    Some(@native_types.SourceLocation::new(label, 0, 0, byte_offset=offset))
+  } else {
+    None
+  }
+}
+
+///|
 fn instruction_source(
   instruction : @milkir.Inst,
 ) -> @native_types.SourceLocation? {
-  for metadata in instruction.metadata {
-    if metadata is SourceLoc(source) {
-      // MilkIR stores an opaque source label rather than structured
-      // coordinates. Preserve that label verbatim and mark coordinates as
-      // unknown until the producer carries a structured location.
-      return Some(@native_types.SourceLocation::new(source, 0, 0))
-    }
-  }
-  None
+  metadata_source(instruction.metadata)
 }
 
 ///|
@@ -1536,6 +1555,7 @@ fn lower_terminator(
   block_id : Int32,
   terminator : @milkir.Terminator,
   facts : SelectionFacts,
+  source : @native_types.SourceLocation?,
 ) -> Unit raise NativeLowerError {
   match terminator {
     Jump(target, arguments) =>
@@ -1674,6 +1694,9 @@ fn lower_terminator(
         instruction_id=-1,
         message="product-specific trap_exit '\{reason}' is not core native target selector",
       )
+  }
+  if source is Some(source) {
+    builder.set_terminator_source(source)
   }
 }
 
@@ -1861,6 +1884,7 @@ fn lower_verified_construction(
             block.id,
             terminator,
             facts,
+            metadata_source(block.terminator_metadata()),
           )
         None =>
           raise InvalidMilkIR(

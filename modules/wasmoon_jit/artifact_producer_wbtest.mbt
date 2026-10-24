@@ -86,12 +86,18 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|      addend: 0,
       #|    },
       #|  ],
-      #|  sources: [{ offset: 0, source: { file: "calls.wat", line: 9, column: 4 } }],
+      #|  sources: [
+      #|    {
+      #|      offset: 0,
+      #|      length: 0,
+      #|      source: { file: "calls.wat", line: 9, column: 4, byte_offset: None },
+      #|    },
+      #|  ],
       #|  traps: [
       #|    {
       #|      offset: 5,
       #|      reason: User(7),
-      #|      source: Some({ file: "calls.wat", line: 9, column: 4 }),
+      #|      source: Some({ file: "calls.wat", line: 9, column: 4, byte_offset: None }),
       #|    },
       #|  ],
       #|  safepoints: [
@@ -99,7 +105,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|      offset: 5,
       #|      kind: GcAndCancellation,
       #|      roots: [Stack(offset=8, ty=GcRef64)],
-      #|      source: Some({ file: "calls.wat", line: 9, column: 4 }),
+      #|      source: Some({ file: "calls.wat", line: 9, column: 4, byte_offset: None }),
       #|      stack_map: Some({ id: 0, argument_root_count: 1 }),
       #|    },
       #|  ],
@@ -135,7 +141,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
     content=(
       #|{
       #|  manifest: {
-      #|    format_version: 11,
+      #|    format_version: 12,
       #|    target: {
       #|      architecture: X64,
       #|      operating_system_abi: MacOS,
@@ -193,12 +199,18 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|          addend: 0,
       #|        },
       #|      ],
-      #|      sources: [{ offset: 0, source: { file: "calls.wat", line: 9, column: 4 } }],
+      #|      sources: [
+      #|        {
+      #|          offset: 0,
+      #|          length: 0,
+      #|          source: { file: "calls.wat", line: 9, column: 4, byte_offset: None },
+      #|        },
+      #|      ],
       #|      traps: [
       #|        {
       #|          offset: 5,
       #|          reason: User(7),
-      #|          source: Some({ file: "calls.wat", line: 9, column: 4 }),
+      #|          source: Some({ file: "calls.wat", line: 9, column: 4, byte_offset: None }),
       #|        },
       #|      ],
       #|      safepoints: [
@@ -206,7 +218,7 @@ test "artifact producer preserves symbolic imported and internal code targets" {
       #|          offset: 5,
       #|          kind: GcAndCancellation,
       #|          roots: [Stack(offset=8, ty=GcRef64)],
-      #|          source: Some({ file: "calls.wat", line: 9, column: 4 }),
+      #|          source: Some({ file: "calls.wat", line: 9, column: 4, byte_offset: None }),
       #|          stack_map: Some({ id: 0, argument_root_count: 1 }),
       #|        },
       #|      ],

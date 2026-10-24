@@ -534,6 +534,13 @@ fn write_source(
   writer.write_string(source.file, field + ".file")
   writer.write_u32(source.line, field + ".line")
   writer.write_u32(source.column, field + ".column")
+  match source.byte_offset {
+    Some(offset) => {
+      writer.write_bool(true)
+      writer.write_i64(offset)
+    }
+    None => writer.write_bool(false)
+  }
 }
 
 ///|
@@ -541,11 +548,15 @@ fn read_source(
   reader : ByteReader,
   field : String,
 ) -> @native.SourceLocation raise ArtifactDecodeError {
-  @native.SourceLocation::new(
-    reader.read_string(field + ".file"),
-    reader.read_u32(field + ".line"),
-    reader.read_u32(field + ".column"),
-  )
+  let file = reader.read_string(field + ".file")
+  let line = reader.read_u32(field + ".line")
+  let column = reader.read_u32(field + ".column")
+  let byte_offset = if reader.read_bool(field + ".byte_offset.present") {
+    Some(reader.read_i64(field + ".byte_offset"))
+  } else {
+    None
+  }
+  @native.SourceLocation::new(file, line, column, byte_offset~)
 }
 
 ///|
@@ -1038,6 +1049,7 @@ fn write_function(
   writer.write_u32(function.sources.length(), "function.sources.length")
   for site in function.sources {
     writer.write_u32(site.offset, "function.source.offset")
+    writer.write_u32(site.length, "function.source.length")
     write_source(writer, site.source, "function.source")
   }
   writer.write_u32(function.traps.length(), "function.traps.length")
@@ -1130,10 +1142,13 @@ fn read_function(
   )
   let sources : Array[@code_object.SourceSite] = []
   for _ in 0..<source_count {
+    let offset = reader.read_u32("function.source.offset")
+    let length = reader.read_u32("function.source.length")
     sources.push(
       @code_object.SourceSite::new(
-        reader.read_u32("function.source.offset"),
+        offset,
         read_source(reader, "function.source"),
+        length~,
       ),
     )
   }
@@ -1211,7 +1226,7 @@ fn read_function(
 }
 
 ///|
-/// Encode one v11 Cwasm artifact without resolving symbolic relocations.
+/// Encode one v12 Cwasm artifact without resolving symbolic relocations.
 pub fn encode(artifact : Artifact) -> Bytes raise ArtifactEncodeError {
   let writer = ByteWriter::new()
   writer.write_byte_array([b'c', b'w', b'a', b's'])
@@ -1228,7 +1243,7 @@ pub fn encode(artifact : Artifact) -> Bytes raise ArtifactEncodeError {
 }
 
 ///|
-/// Decode untrusted v11 Cwasm bytes into ordinary artifact data.
+/// Decode untrusted v12 Cwasm bytes into ordinary artifact data.
 ///
 /// This function performs bounded structural decoding only. The native
 /// `wasmoon_jit` facade performs compatibility and code-object verification

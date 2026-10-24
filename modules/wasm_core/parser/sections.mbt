@@ -9,6 +9,29 @@ pub fn parse_module(
   limits? : ParseLimits,
   admit_work~ : ((Int64) -> Bool)? = None,
 ) -> @types.Module raise ParserError {
+  parse_module_impl(data, limits?, admit_work~, capture_sources=false).0
+}
+
+///|
+/// Parse a binary and retain original instruction positions for each defined
+/// function. Neither re-encoding an AST nor native code offsets can recover
+/// these positions, including non-canonical LEBs and custom sections.
+pub fn parse_module_with_sources(
+  data : Bytes,
+  limits? : ParseLimits,
+  admit_work~ : ((Int64) -> Bool)? = None,
+) -> (@types.Module, Array[Array[@types.InstructionSource]]) raise ParserError {
+  parse_module_impl(data, limits?, admit_work~, capture_sources=true)
+}
+
+///|
+fn parse_module_impl(
+  data : Bytes,
+  limits? : ParseLimits,
+  admit_work~ : ((Int64) -> Bool)?,
+  capture_sources~ : Bool,
+) -> (@types.Module, Array[Array[@types.InstructionSource]]) raise ParserError {
+  let function_sources : Array[Array[@types.InstructionSource]] = []
   let limits = limits.unwrap_or({
     max_input_bytes: 0x7FFF_FFFF_FFFF_FFFFL,
     max_work: 0x7FFF_FFFF_FFFF_FFFFL,
@@ -25,6 +48,7 @@ pub fn parse_module(
   let parser : Parser = {
     data,
     pos: 0,
+    instruction_sources: None,
     has_data_count: false,
     types: [],
     remaining_work: Ref(limits.max_work),
@@ -213,7 +237,14 @@ pub fn parse_module(
               locals.push(vt)
             }
           }
+          if capture_sources {
+            parser.instruction_sources = Some([])
+          }
           let body = parser.read_expr()
+          if parser.instruction_sources is Some(sources) {
+            function_sources.push(sources)
+            parser.instruction_sources = None
+          }
           mod.codes.push({
             locals: ReadOnlyArray::from_array(locals),
             body: ReadOnlyArray::from_array(body),
@@ -337,5 +368,5 @@ pub fn parse_module(
   for index in invalid {
     mod.func_names.remove(index) |> ignore
   }
-  mod
+  (mod, function_sources)
 }

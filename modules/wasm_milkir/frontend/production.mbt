@@ -66,6 +66,14 @@ pub fn translate_function_body(
   func_type : @types.FuncType,
   locals : ArrayView[@types.ValueType],
   body : ArrayView[@types.Instruction],
+  instruction_sources~ : Array[@types.InstructionSource] = [],
 ) -> @milkir.Function {
-  @ir.translate_function_body(ctx, name, func_type, locals, body)
+  @ir.translate_function_body(
+    ctx,
+    name,
+    func_type,
+    locals,
+    body,
+    instruction_sources~,
+  )
 }

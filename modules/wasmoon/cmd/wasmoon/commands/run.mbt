@@ -509,7 +509,10 @@ pub fn run_wasm(
   }
   record_run_phase(run_metrics, "host_setup_and_preloads")
   // Load main module
-  let (mod_, wasm_binary) = load_module_with_binary_from_path(wasm_path) catch {
+  let (mod_, wasm_binary, instruction_sources) = load_module_with_binary_from_path(
+    wasm_path,
+    collect_sources=use_jit,
+  ) catch {
     e => {
       @logger.error("loading main module: \{e}")
       return 1
@@ -603,7 +606,7 @@ pub fn run_wasm(
       // JIT execution path
       let jit_results = run_with_jit(
         mod_, instance, store, func_name, args, debug, dump_on_trap, wasm_binary,
-        opt_level, enable_dwarf, run_metrics,
+        opt_level, enable_dwarf, run_metrics, instruction_sources,
       ) catch {
         CommandFailure(status) => return status
       }
@@ -869,7 +872,7 @@ fn run_jit_cache_location() -> RunJitCacheLocation? {
 }
 
 ///|
-let run_jit_cache_version = "v11"
+let run_jit_cache_version = "v12"
 
 ///|
 fn artifact_optimization_level(level : Int32) -> @artifact.OptimizationLevel {
@@ -980,7 +983,7 @@ fn jit_artifact_compatibility(
 }
 
 ///|
-/// Verify a freshly compiled v11 artifact before executable installation.
+/// Verify a freshly compiled v12 artifact before executable installation.
 pub fn verify_compiled_jit_artifact(
   artifact : @artifact.Artifact,
 ) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError {
@@ -1241,6 +1244,7 @@ fn run_with_jit(
   opt_level : Int32,
   enable_dwarf : Bool,
   run_metrics : RunMetrics?,
+  instruction_sources : Array[Array[@types.InstructionSource]],
 ) -> Array[@types.Value] raise CommandFailure {
   @logger.debug("JIT: Compiling module...")
   // Get actual memory max from the store (for imported memories)
@@ -1294,7 +1298,7 @@ fn run_with_jit(
     }
   }
   record_run_phase(run_metrics, "jit_plan_and_cache_lookup")
-  // Compile and verify the same v11 artifact shape used by persisted cache hits.
+  // Compile and verify the same v12 artifact shape used by persisted cache hits.
   let compiled = match cached_artifact {
     Some(loaded) => Some((loaded, None, None))
     None => {
@@ -1312,6 +1316,7 @@ fn run_with_jit(
         enable_dwarf,
         local_compile_mask~,
         source_module=wasm_binary,
+        instruction_sources~,
         on_progress=fn(event) {
           if event.stage is Failed && event.message is Some(message) {
             failure.val = Some(message)
@@ -1627,7 +1632,7 @@ fn module_indirect_subtype_check_reason(mod_ : @types.Module) -> String? {
 }
 
 ///|
-/// Compile module bytes into a v11 JIT artifact and emit structured progress.
+/// Compile module bytes into a v12 JIT artifact and emit structured progress.
 pub fn compile_module(
   module_bytes : Bytes,
   opt_level~ : Int32 = 2,
@@ -1638,7 +1643,9 @@ pub fn compile_module(
 ) -> @artifact.Artifact? {
   let compile_start = @perf.tick_now()
   emit_compile_progress(on_progress, Parse, compile_start, 0, 0)
-  let wasm_module = @parser.parse_module(module_bytes) catch {
+  let (wasm_module, instruction_sources) = @parser.parse_module_with_sources(
+    module_bytes,
+  ) catch {
     e => {
       let message = e.to_string()
       emit_compile_progress(
@@ -1684,6 +1691,7 @@ pub fn compile_module(
     opt_level,
     enable_dwarf,
     source_module=Some(module_bytes),
+    instruction_sources~,
     on_progress~,
     compile_start=Some(compile_start),
     enable_cancellation~,
@@ -1717,7 +1725,7 @@ fn normalize_opt_level(opt_level : Int32) -> Int32 {
 }
 
 ///|
-/// Compile a WASM module to a v11 JIT artifact in memory.
+/// Compile a WASM module to a v12 JIT artifact in memory.
 ///
 /// Decoded modules are untrusted at this public seam and are fully validated
 /// before frontend translation. `actual_memory_max` overrides the memory limit
@@ -1790,6 +1798,7 @@ fn compile_validated_module_to_jit(
   enable_cancellation~ : Bool = false,
   nan_canonicalization~ : Bool = false,
   source_module~ : Bytes? = None,
+  instruction_sources~ : Array[Array[@types.InstructionSource]] = [],
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   use_reusable_pipeline |> ignore
   // DWARF registration consumes the completed artifact when the JIT module is
@@ -1990,6 +1999,11 @@ fn compile_validated_module_to_jit(
       func_type,
       code.locals,
       code.body,
+      instruction_sources=if i < instruction_sources.length() {
+        instruction_sources[i]
+      } else {
+        []
+      },
     )
     if nan_canonicalization {
       @optimize.canonicalize_nans(ir_func)

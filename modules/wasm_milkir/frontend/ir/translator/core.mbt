@@ -5,6 +5,8 @@
 /// Translator state for converting a single WASM function to IR
 priv struct Translator {
   builder : FunctionBuilder
+  mut source_cursor : Int32
+  mut instruction_sources : Array[@types.InstructionSource]
   // Value stack - simulates WASM's operand stack
   value_stack : Array[Value]
   // Local variables - mutable in WASM, need SSA tracking
@@ -307,6 +309,8 @@ fn Translator::Translator(
   }
   {
     builder,
+    source_cursor: 0,
+    instruction_sources: [],
     value_stack: [],
     locals: local_values,
     block_stack: [],
@@ -364,6 +368,7 @@ pub fn translate_function_body(
   func_type : @types.FuncType,
   locals : ArrayView[@types.ValueType],
   body : ArrayView[@types.Instruction],
+  instruction_sources~ : Array[@types.InstructionSource] = [],
 ) -> Function {
   let translator = Translator::Translator(
     name,
@@ -387,6 +392,10 @@ pub fn translate_function_body(
     tags=ctx.tags,
     memory_mins=ctx.memory_mins,
   )
+  if !instruction_sources.is_empty() &&
+    @types.validate_instruction_sources(body, instruction_sources) {
+    translator.instruction_sources = instruction_sources
+  }
   translator.translate(body)
 }
 
