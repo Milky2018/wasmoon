@@ -806,6 +806,32 @@ test "Store executable ordinal index follows replacement sparse fallback and cle
 }
 
 ///|
+test "callable batches preserve empty slots and release only their own installation" {
+  let context = @wasmoon_jit.NativeJITContext::try_alloc(0).unwrap()
+  for targets in [[], [0L, 0L]] {
+    let empty = context.bind_callables(targets)
+    assert_eq(empty.entry_address(-1), 0L)
+    assert_eq(empty.entry_address(0), 0L)
+    empty.release()
+    empty.release()
+  }
+  let standalone = context.bind_callable(16L)
+  defer standalone.release()
+  let batch = context.bind_callables([16L, 0L, 32L])
+  defer batch.release()
+  assert_true(batch.entry_address(0) != 0L)
+  assert_eq(batch.entry_address(1), 0L)
+  assert_true(batch.entry_address(2) > batch.entry_address(0))
+  assert_true(batch.entry_address(2) - batch.entry_address(0) <= 64L)
+  assert_eq(batch.entry_address(3), 0L)
+  batch.release()
+  batch.release()
+  assert_eq(batch.entry_address(0), 0L)
+  assert_eq(batch.entry_address(2), 0L)
+  assert_true(standalone.entry_address() != 0L)
+}
+
+///|
 test "activation scratch roots survive reentry and isolate parked abandonment" {
   inspect(@native_test_support.activation_scratch_isolation(), content="1")
 }
