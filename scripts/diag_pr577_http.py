@@ -11,3 +11,6 @@ with tempfile.TemporaryDirectory(prefix="pr577-control-") as work:
             case=output/engine/"http-client-send-errors"
             print("[DIAG-pr577 CONTROL]",index,jobs,engine,(case/"upstream.json").read_text(),flush=True)
             print((case/"log.txt").read_text(),flush=True)
+
+        if result.returncode != 0:
+            raise SystemExit(result.returncode)

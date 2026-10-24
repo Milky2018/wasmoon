@@ -19,7 +19,7 @@ pub async fn serve_http(
     })
     let component = load_http_service(file)
     let layers = middleware.map(path => load_http_service(path))
-    @logger.plain_error("[DIAG-pr577] prepare begin t=\{@async.now()}")
+    let preparation_begin = @async.now()
     let prepared_code = if use_jit {
       Some(
         @component_native.prepare_native_component_code(
@@ -30,13 +30,14 @@ pub async fn serve_http(
     } else {
       None
     }
-    @logger.plain_error("[DIAG-pr577] prepare end t=\{@async.now()}")
+    let preparation_end = @async.now()
     let server = @socket.TcpServer(
       @socket.Addr::parse(address),
       reuse_addr=true,
     )
     defer server.close()
     @logger.plain_error("Serving \{file} on http://\{server.addr}")
+    @logger.plain_error("[DIAG-pr577] prepare begin t=\{preparation_begin} end t=\{preparation_end} serving t=\{@async.now()}")
     server.run_forever(
       async fn(socket, _) {
         defer socket.close()
