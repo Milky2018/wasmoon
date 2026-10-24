@@ -3,7 +3,9 @@
 Local macOS ARM64 measurements against main `21c702b5` (0.18.0).
 Tracking: [ISS-679](../../issues/ISS-679.md). These are release binaries built
 from the stated base and an explicitly dirty implementation tree, not CI
-acceptance or a general engine ranking. No compiler, object layout, root protocol or public API changes are retained.
+acceptance or a general engine ranking. The allocation changes do not alter
+object layout, the root protocol or public APIs. A separate
+[integer compiler follow-up](wide-multiply.md) recognizes wide multiplication.
 The later pressure follow-up changes collection admission timing, not the
 collector implementation.
 Measured baseline/candidate binary SHA256 prefixes are `3185b22dca61` /
