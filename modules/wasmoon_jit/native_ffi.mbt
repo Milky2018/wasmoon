@@ -185,7 +185,18 @@ extern "c" fn c_native_jit_continuation_alloc(
   values : FixedArray[Int64],
   values_len : Int32,
   stack_size : Int64,
+  capture_exceptions : Bool,
 ) -> NativeFiberObject = "wasmoon_native_jit_continuation_alloc"
+
+///|
+#borrow(call)
+extern "c" fn c_native_jit_exception_reference(
+  call : NativeFiberObject,
+) -> Int64 = "wasmoon_native_jit_exception_reference"
+
+///|
+#borrow(call)
+extern "c" fn c_native_jit_exception_close(call : NativeFiberObject) -> Unit = "wasmoon_native_jit_exception_close"
 
 ///|
 #borrow(fiber)

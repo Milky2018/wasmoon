@@ -69,6 +69,52 @@ struct NativeJITContinuation {
 }
 
 ///|
+/// An invocation-local exception snapshot retained across activation cleanup.
+/// Its native root registration protects the payload until it is rooted in a
+/// Store or discarded. Closing invalidates all aliases; native RC also closes it.
+pub struct NativeUncaughtException {
+  priv call : NativeJITContinuation
+}
+
+///|
+pub impl Debug for NativeUncaughtException with fn to_repr(_self) {
+  Repr::literal("<native-uncaught-exception>")
+}
+
+///|
+pub extend NativeUncaughtException with Debug::{to_repr}
+
+///|
+pub fn NativeUncaughtException::reference(
+  self : NativeUncaughtException,
+) -> Int64? {
+  let reference = c_native_jit_exception_reference(self.call.raw)
+  if reference == 0L {
+    None
+  } else {
+    Some(reference)
+  }
+}
+
+///|
+pub fn NativeUncaughtException::close(self : NativeUncaughtException) -> Unit {
+  c_native_jit_exception_close(self.call.raw)
+}
+
+///|
+/// Available only after an opted-in invocation escapes with a guest exception.
+/// The returned aliases share one root lifetime, independently of later calls.
+pub fn NativeJITContinuation::uncaught_exception(
+  self : NativeJITContinuation,
+) -> NativeUncaughtException? {
+  if c_native_jit_exception_reference(self.raw) == 0L {
+    None
+  } else {
+    Some({ call: self, })
+  }
+}
+
+///|
 pub fn NativeFiber::new(
   entry : () -> Int64,
   stack_size~ : Int64 = 1024L * 1024L,
@@ -90,6 +136,7 @@ pub fn NativeJITContext::start_continuation(
   values : FixedArray[Int64],
   values_len : Int32,
   stack_size~ : Int64 = 1024L * 1024L,
+  capture_exceptions~ : Bool = false,
 ) -> NativeJITContinuation raise NativeFiberError {
   let effective_stack_size = if self.configured_native_fiber_stack_size > 0L {
     self.configured_native_fiber_stack_size
@@ -103,6 +150,7 @@ pub fn NativeJITContext::start_continuation(
     values,
     values_len,
     effective_stack_size,
+    capture_exceptions,
   )
   let continuation = NativeJITContinuation::{ raw, }
   if !native_fiber_is_allocated(raw) {

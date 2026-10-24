@@ -926,7 +926,8 @@ static int invoke_trampoline_caught(
     jit_context_t *ctx,
     int64_t func_ptr,
     int64_t *values_vec,
-    int64_t *exception
+    int64_t *exception,
+    void **exception_roots
 ) {
 #ifdef __APPLE__
     // Darwin siglongjmp with savemask=1 changes every thread's mask.
@@ -951,7 +952,19 @@ static int invoke_trampoline_caught(
         }
 #endif
         int trap_code = (int)activation->code;
-        if (exception && trap_code == 12) *exception = exception_capture_current(ctx);
+        if (exception && trap_code == 12) {
+            *exception = exception_capture_current(ctx);
+            GcHeap *heap = ctx_gc_heap(ctx);
+            if (exception_roots && heap) {
+                int64_t *roots = NULL;
+                if (!gc_heap_register_parked_roots(heap, 1, exception_roots, &roots)) {
+                    *exception = 0;
+                    activation->code = trap_code = 9;
+                } else {
+                    roots[0] = *exception;
+                }
+            }
+        }
         jit_trap_activation_finalize(activation);
         jit_trap_activation_publish(activation);
         return trap_code;
@@ -981,13 +994,15 @@ static int invoke_trampoline_caught(
     return result;
 }
 
-int wasmoon_jit_call_trampoline_caught(
+static int call_trampoline_with_activation(
     int64_t trampoline_ptr,
     int64_t ctx_ptr,
     int64_t func_ptr,
     int64_t *values_vec,
     int values_len,
-    int64_t *exception
+    int64_t *exception,
+    void **exception_roots,
+    int inherit_controls
 ) {
     (void)values_len;
 
@@ -1000,7 +1015,7 @@ int wasmoon_jit_call_trampoline_caught(
     jit_trap_activation_init(&activation, ctx);
     // Guest continuations retain their defining module, but scheduling and
     // cancellation belong to the invocation that is currently resuming them.
-    activation.inherit_controls = exception != NULL;
+    activation.inherit_controls = inherit_controls;
     if (!jit_trap_activation_push(&activation)) {
         activation.code = 9;
         jit_trap_activation_publish(&activation);
@@ -1008,9 +1023,28 @@ int wasmoon_jit_call_trampoline_caught(
     }
 
     int result = invoke_trampoline_caught(
-        &activation, trampoline_ptr, ctx, func_ptr, values_vec, exception);
+        &activation, trampoline_ptr, ctx, func_ptr, values_vec, exception,
+        exception_roots);
     jit_trap_activation_pop(&activation);
     return result;
+}
+
+int wasmoon_jit_call_trampoline_caught(
+    int64_t trampoline_ptr, int64_t ctx_ptr, int64_t func_ptr,
+    int64_t *values_vec, int values_len, int64_t *exception
+) {
+    return call_trampoline_with_activation(trampoline_ptr, ctx_ptr, func_ptr,
+        values_vec, values_len, exception, NULL, exception != NULL);
+}
+
+// A host entry owns its controls and its completed exception delivery. Guest
+// continuation catchers above still inherit the enclosing guest invocation.
+int wasmoon_jit_call_trampoline_captured(
+    int64_t trampoline_ptr, int64_t ctx_ptr, int64_t func_ptr,
+    int64_t *values_vec, int values_len, int64_t *exception, void **roots
+) {
+    return call_trampoline_with_activation(trampoline_ptr, ctx_ptr, func_ptr,
+        values_vec, values_len, exception, roots, 0);
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(int64_t trampoline_ptr,

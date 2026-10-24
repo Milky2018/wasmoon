@@ -556,6 +556,7 @@ pub fn JITModule::call_with_context(
   self : JITModule,
   func : JITFunction,
   args : Array[Int64],
+  capture_exceptions~ : Bool = false,
 ) -> Array[Int64] raise JITTrap {
   match self.context {
     Some(ctx) => {
@@ -582,6 +583,7 @@ pub fn JITModule::call_with_context(
         func.param_types,
         results,
         func.result_types,
+        capture_exceptions~,
       ) catch {
         e => call_error = Some(e)
       }
@@ -589,6 +591,8 @@ pub fn JITModule::call_with_context(
       self.gc_use_func_safepoints(-1)
       self.gc_set_root_scratch([]) |> ignore
       match call_error {
+        Some(JITUncaughtException(exception)) =>
+          raise JITUncaughtException(exception)
         Some(JITTrap(msg)) => {
           let report = self.build_trap_report(msg)
           self.last_trap_report = Some(report)
@@ -660,6 +664,7 @@ fn JITCallContinuation::finish_error(
 ) -> Unit raise JITTrap {
   self.finish(AttachedFrame)
   match error {
+    JITUncaughtException(exception) => raise JITUncaughtException(exception)
     JITTrap(msg) => {
       let report = self.jit_module.build_trap_report(msg)
       self.jit_module.last_trap_report = Some(report)
@@ -722,6 +727,7 @@ pub fn JITModule::start_continuation_call(
   self : JITModule,
   func : JITFunction,
   args : Array[Int64],
+  capture_exceptions~ : Bool = false,
 ) -> JITContinuationOutcome raise JITTrap {
   guard self.context is Some(ctx) else { return JITReturned([]) }
   self.last_trap_report = None
@@ -730,6 +736,7 @@ pub fn JITModule::start_continuation_call(
     args,
     func.param_types,
     func.result_types,
+    capture_exceptions~,
   )
   let continuation : JITCallContinuation = {
     jit_module: self,

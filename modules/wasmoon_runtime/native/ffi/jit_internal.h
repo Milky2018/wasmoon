@@ -508,6 +508,8 @@ int64_t exception_try_capture_payload(jit_context_t *ctx, int32_t tag, const int
 int64_t exception_capture_current(jit_context_t *ctx);
 int wasmoon_jit_call_trampoline_caught(int64_t trampoline_ptr, int64_t ctx_ptr,
     int64_t func_ptr, int64_t *values, int values_len, int64_t *exception);
+int wasmoon_jit_call_trampoline_captured(int64_t trampoline_ptr, int64_t ctx_ptr,
+    int64_t func_ptr, int64_t *values, int values_len, int64_t *exception, void **roots);
 
 void *native_fiber_own_resource(void *resource, void (*release)(void *));
 void native_fiber_replace_resource(void *scope, void *resource);
