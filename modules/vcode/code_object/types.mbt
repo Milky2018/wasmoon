@@ -91,6 +91,7 @@ pub fn TrapSite::new(
 ///|
 pub struct SourceSite {
   offset : Int32
+  length : Int32
   source : @native.SourceLocation
 } derive(Eq, Debug)
 
@@ -98,8 +99,9 @@ pub struct SourceSite {
 pub fn SourceSite::new(
   offset : Int32,
   source : @native.SourceLocation,
+  length~ : Int32 = 0,
 ) -> SourceSite {
-  { offset, source, }
+  { offset, length, source, }
 }
 
 ///|

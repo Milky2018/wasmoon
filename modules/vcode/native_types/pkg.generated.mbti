@@ -241,12 +241,13 @@ pub(all) struct SourceLocation {
   file : String
   line : Int32
   column : Int32
+  byte_offset : Int64?
 } derive(Eq, Hash, @debug.Debug)
 pub fn SourceLocation::equal(Self, Self) -> Bool
 pub fn SourceLocation::hash(Self) -> Int32
 pub fn SourceLocation::hash_combine(Self, Hasher) -> Unit
 pub fn SourceLocation::is_valid(Self) -> Bool
-pub fn SourceLocation::new(String, Int32, Int32) -> Self
+pub fn SourceLocation::new(String, Int32, Int32, byte_offset? : Int64?) -> Self
 pub fn SourceLocation::not_equal(Self, Self) -> Bool
 pub fn SourceLocation::to_repr(Self) -> @debug.Repr
 

@@ -6,7 +6,8 @@ pub(all) struct WasmTrapFrame {
   pc : Int64
   func_idx : Int32
   func_name : String
-  wasm_offset : Int64
+  wasm_offset : Int64?
+  native_offset : Int64?
 }
 
 ///|
@@ -25,6 +26,7 @@ pub(all) struct TrapReport {
   wasm_func_idx : Int32?
   wasm_func_name : String?
   wasm_offset : Int64?
+  native_offset : Int64?
   wasm_frames : Array[WasmTrapFrame]
   host_frames : Array[String]
   dump_path : String?
@@ -143,19 +145,24 @@ pub fn format_trap_report_message(report : TrapReport) -> String {
     match (report.wasm_func_name, report.wasm_offset) {
       (Some(name), Some(offset)) =>
         fields.push(
-          "wasm=\{func_idx} '\{name}'+0x\{@types.int_to_hex(offset.to_int())}",
+          "wasm=\{func_idx} '\{name}' @0x\{@types.int_to_hex(offset.to_int())}",
         )
       (Some(name), None) => fields.push("wasm=\{func_idx} '\{name}'")
       (None, Some(offset)) =>
-        fields.push("wasm=\{func_idx} +0x\{@types.int_to_hex(offset.to_int())}")
+        fields.push("wasm=\{func_idx} @0x\{@types.int_to_hex(offset.to_int())}")
       (None, None) => fields.push("wasm=\{func_idx}")
     }
   }
+  if report.native_offset is Some(offset) {
+    fields.push("native=+0x\{@types.int_to_hex(offset.to_int())}")
+  }
   if report.wasm_frames.length() > 1 {
     let caller = report.wasm_frames[1]
-    fields.push(
-      "caller=\{caller.func_idx} '\{caller.func_name}'+0x\{@types.int_to_hex(caller.wasm_offset.to_int())}",
-    )
+    let location = match caller.wasm_offset {
+      Some(offset) => " @0x\{@types.int_to_hex(offset.to_int())}"
+      None => ""
+    }
+    fields.push("caller=\{caller.func_idx} '\{caller.func_name}'\{location}")
   }
   if report.dump_path is Some(path) {
     fields.push("dump=\{path}")

@@ -39,7 +39,20 @@ fn record_instruction_metadata(
     buffer.emit_word(0xD503201FU)
   }
   if metadata.source is Some(source) {
-    sources.push(@code_object.SourceSite::new(offset, source))
+    let length = buffer.position() - offset
+    if length > 0 {
+      if sources.last() is Some(previous) &&
+        previous.source == source &&
+        previous.offset + previous.length == offset {
+        sources[sources.length() - 1] = @code_object.SourceSite::new(
+          previous.offset,
+          source,
+          length=previous.length + length,
+        )
+      } else {
+        sources.push(@code_object.SourceSite::new(offset, source, length~))
+      }
+    }
   }
   if metadata.trap is Some(reason) {
     traps.push(

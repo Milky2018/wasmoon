@@ -3771,6 +3771,7 @@ fn emit_instruction(
     }
     Return => {
       emit_epilogue(buffer, frame)
+      metadata_offset = buffer.position()
       buffer.emit_word(0xD65F03C0U)
     }
   }

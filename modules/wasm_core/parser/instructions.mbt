@@ -33,9 +33,20 @@ fn Parser::read_expr(
   self : Parser,
 ) -> Array[@types.Instruction] raise ParserError {
   let frames : Array[ExpressionFrame] = []
+  let source_frames : Array[Int32] = []
   let mut instructions : Array[@types.Instruction] = []
   while true {
+    let byte_offset = self.pos
     let opcode = self.read_byte()
+    if self.instruction_sources is Some(sources) &&
+      opcode != 0x05 &&
+      opcode != 0x0b {
+      let index = sources.length()
+      sources.push({ byte_offset, subtree_end: index + 1, })
+      if opcode == 0x02 || opcode == 0x03 || opcode == 0x04 || opcode == 0x1f {
+        source_frames.push(index)
+      }
+    }
     if (opcode == 0x02 || opcode == 0x03 || opcode == 0x04 || opcode == 0x1f) &&
       frames.length() >= self.max_depth {
       raise NestingLimitExceeded
@@ -67,6 +78,13 @@ fn Parser::read_expr(
       }
       0x0b => {
         guard frames.pop() is Some(frame) else { break }
+        if self.instruction_sources is Some(sources) {
+          let index = source_frames.pop().unwrap()
+          sources[index] = {
+            byte_offset: sources[index].byte_offset,
+            subtree_end: sources.length(),
+          }
+        }
         let (instruction, parent) = match frame {
           Block(bt, parent) =>
             (

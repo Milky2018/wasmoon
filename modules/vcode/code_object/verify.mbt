@@ -199,18 +199,26 @@ pub fn UnlinkedCodeObject::verify(
     }
     relocation_offsets.push(relocation.offset)
   }
+  let mut source_end = 0L
   for index, source in self.sources {
-    if !valid_code_offset(self.architecture, code_size, source.offset) {
+    if !valid_code_offset(self.architecture, code_size, source.offset) ||
+      source.length < 0 ||
+      source.offset.to_int64() + source.length.to_int64() > code_size.to_int64() ||
+      !source.source.is_valid() ||
+      source.offset.to_int64() < source_end {
       raise InvalidSourceSite(index~, offset=source.offset)
     }
+    source_end = source.offset.to_int64() + source.length.to_int64()
   }
   for index, trap in self.traps {
-    if !valid_code_offset(self.architecture, code_size, trap.offset) {
+    if !valid_code_offset(self.architecture, code_size, trap.offset) ||
+      (trap.source is Some(source) && !source.is_valid()) {
       raise InvalidTrapSite(index~, offset=trap.offset)
     }
   }
   for index, safepoint in self.safepoints {
-    if !valid_code_offset(self.architecture, code_size, safepoint.offset) {
+    if !valid_code_offset(self.architecture, code_size, safepoint.offset) ||
+      (safepoint.source is Some(source) && !source.is_valid()) {
       raise InvalidSafepointSite(index~, offset=safepoint.offset)
     }
     for root_index, root in safepoint.roots {

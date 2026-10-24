@@ -7,6 +7,27 @@ fn Translator::translate_instruction(
   self : Translator,
   instr : @types.Instruction,
 ) -> Unit {
+  if self.instruction_sources.is_empty() {
+    self.translate_instruction_impl(instr)
+    return
+  }
+  let source = self.instruction_sources[self.source_cursor]
+  self.source_cursor += 1
+  let previous = self.builder.set_source_byte_offset(
+    Some(source.byte_offset.to_int64()),
+  )
+  defer {
+    self.source_cursor = source.subtree_end
+    self.builder.set_source_byte_offset(previous) |> ignore
+  }
+  self.translate_instruction_impl(instr)
+}
+
+///|
+fn Translator::translate_instruction_impl(
+  self : Translator,
+  instr : @types.Instruction,
+) -> Unit {
   // If we're in unreachable code, only process control flow instructions
   // that may create new reachable regions
   if self.is_unreachable {

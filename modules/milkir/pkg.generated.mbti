@@ -92,8 +92,9 @@ pub fn Block::instruction_count(Self) -> Int32
 pub fn Block::instruction_ids(Self) -> ArrayView[Int32]
 pub fn Block::retain_instruction_ids(Self, (Int32) -> Bool) -> Unit
 pub fn Block::set_instructions(Self, Array[Inst]) -> Unit
-pub fn Block::set_terminator(Self, Terminator) -> Unit
+pub fn Block::set_terminator(Self, Terminator, metadata? : Array[Metadata]) -> Unit
 pub fn Block::take_inst_at(Self, Int32) -> Int32?
+pub fn Block::terminator_metadata(Self) -> Array[Metadata]
 pub fn Block::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Block
 
@@ -412,6 +413,7 @@ pub fn FunctionBuilder::rotl(Self, Value, Value) -> Value
 pub fn FunctionBuilder::rotr(Self, Value, Value) -> Value
 pub fn FunctionBuilder::sdiv(Self, Value, Value) -> Value
 pub fn FunctionBuilder::select(Self, Value, Value, Value) -> Value
+pub fn FunctionBuilder::set_source_byte_offset(Self, Int64?) -> Int64?
 pub fn FunctionBuilder::sextend(Self, Type, Value) -> Value
 pub fn FunctionBuilder::sextend16(Self, Type, Value) -> Value
 pub fn FunctionBuilder::sextend32(Self, Value) -> Value
@@ -598,6 +600,7 @@ pub fn MemoryOp::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Metadata {
   SourceLoc(String)
+  SourceByteOffset(Int64)
   Comment(String)
 } derive(Eq, @debug.Debug)
 pub fn Metadata::equal(Self, Self) -> Bool

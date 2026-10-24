@@ -175,7 +175,7 @@ test "live artifact and encoded artifact share verification" {
     content=(
       #|{
       #|  manifest: {
-      #|    format_version: 11,
+      #|    format_version: 12,
       #|    target: {
       #|      architecture: X64,
       #|      operating_system_abi: MacOS,

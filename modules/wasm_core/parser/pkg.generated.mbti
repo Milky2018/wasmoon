@@ -9,6 +9,8 @@ import {
 // Values
 pub fn parse_module(Bytes, limits? : ParseLimits, admit_work? : ((Int64) -> Bool)?) -> @types.Module raise ParserError
 
+pub fn parse_module_with_sources(Bytes, limits? : ParseLimits, admit_work? : ((Int64) -> Bool)?) -> (@types.Module, Array[Array[@types.InstructionSource]]) raise ParserError
+
 // Errors
 type ParserError
 pub fn ParserError::is_resource_exhaustion(Self) -> Bool

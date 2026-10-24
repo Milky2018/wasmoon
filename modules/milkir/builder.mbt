@@ -7,13 +7,34 @@
 struct FunctionBuilder {
   func : Function
   mut current_block : Block
+  mut source_byte_offset : Int64?
 }
 
 ///|
 pub fn FunctionBuilder::FunctionBuilder(name : String) -> FunctionBuilder {
   let func = Function::new_empty(name)
   let entry = func.new_block0()
-  { func, current_block: entry, }
+  { func, current_block: entry, source_byte_offset: None, }
+}
+
+///|
+/// Set the origin for subsequently emitted instructions, returning the previous
+/// origin for lexical restoration. Synthetic instructions default to unknown.
+pub fn FunctionBuilder::set_source_byte_offset(
+  self : FunctionBuilder,
+  offset : Int64?,
+) -> Int64? {
+  let previous = self.source_byte_offset
+  self.source_byte_offset = offset
+  previous
+}
+
+///|
+fn FunctionBuilder::source_metadata(self : FunctionBuilder) -> Array[Metadata] {
+  match self.source_byte_offset {
+    Some(offset) => [SourceByteOffset(offset)]
+    None => []
+  }
 }
 
 ///|
@@ -169,6 +190,9 @@ pub fn FunctionBuilder::emit_inst(
   }
   let block = self.current_block
   let inst = self.func.new_inst(opcode, operands, [result])
+  if self.source_byte_offset is Some(offset) {
+    inst.add_metadata(SourceByteOffset(offset))
+  }
   block.add_inst(inst)
   result
 }
@@ -185,6 +209,9 @@ pub fn FunctionBuilder::emit_void_inst(
   }
   let block = self.current_block
   let inst = self.func.new_inst(opcode, operands, [])
+  if self.source_byte_offset is Some(offset) {
+    inst.add_metadata(SourceByteOffset(offset))
+  }
   block.add_inst(inst)
 }
 
@@ -209,6 +236,9 @@ pub fn FunctionBuilder::emit_multi_inst(
   }
   let block = self.current_block
   let inst = self.func.new_inst(opcode, operands, results)
+  if self.source_byte_offset is Some(offset) {
+    inst.add_metadata(SourceByteOffset(offset))
+  }
   block.add_inst(inst)
   results
 }
@@ -990,7 +1020,7 @@ pub fn FunctionBuilder::jump(
     return
   }
   let block = self.current_block
-  block.set_terminator(Jump(target.id, args))
+  block.set_terminator(Jump(target.id, args), metadata=self.source_metadata())
 }
 
 ///|
@@ -1012,6 +1042,7 @@ pub fn FunctionBuilder::branch(
   }
   self.current_block.set_terminator(
     Branch(cond, then_block.id, then_args, else_block.id, else_args),
+    metadata=self.source_metadata(),
   )
 }
 
@@ -1029,7 +1060,10 @@ pub fn FunctionBuilder::brz(
     return
   }
   let block = self.current_block
-  block.set_terminator(Brz(cond, then_block.id, else_block.id))
+  block.set_terminator(
+    Brz(cond, then_block.id, else_block.id),
+    metadata=self.source_metadata(),
+  )
 }
 
 ///|
@@ -1046,7 +1080,10 @@ pub fn FunctionBuilder::brnz(
     return
   }
   let block = self.current_block
-  block.set_terminator(Brnz(cond, then_block.id, else_block.id))
+  block.set_terminator(
+    Brnz(cond, then_block.id, else_block.id),
+    metadata=self.source_metadata(),
+  )
 }
 
 ///|
@@ -1070,7 +1107,10 @@ pub fn FunctionBuilder::br_table(
   }
   let target_ids = targets.map(fn(b) { b.id })
   let block = self.current_block
-  block.set_terminator(BrTable(index, target_ids, default_target.id))
+  block.set_terminator(
+    BrTable(index, target_ids, default_target.id),
+    metadata=self.source_metadata(),
+  )
 }
 
 ///|
@@ -1083,14 +1123,14 @@ pub fn FunctionBuilder::return_(
     return
   }
   let block = self.current_block
-  block.set_terminator(Return(values))
+  block.set_terminator(Return(values), metadata=self.source_metadata())
 }
 
 ///|
 /// Trap/unreachable
 pub fn FunctionBuilder::trap(self : FunctionBuilder, reason : String) -> Unit {
   let block = self.current_block
-  block.set_terminator(Trap(reason))
+  block.set_terminator(Trap(reason), metadata=self.source_metadata())
 }
 
 // ============ Raw Pointer Operations (for trampolines) ============

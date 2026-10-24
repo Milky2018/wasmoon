@@ -41,7 +41,13 @@ test "verified code object snapshots complete typed metadata" {
       #|      addend: 0,
       #|    },
       #|  ],
-      #|  sources: [{ offset: 0, source: { file: "fixture.wat", line: 8, column: 3 } }],
+      #|  sources: [
+      #|    {
+      #|      offset: 0,
+      #|      length: 0,
+      #|      source: { file: "fixture.wat", line: 8, column: 3, byte_offset: None },
+      #|    },
+      #|  ],
       #|  traps: [{ offset: 0, reason: MemoryOutOfBounds, source: None }],
       #|  safepoints: [
       #|    {
@@ -247,4 +253,44 @@ test "code object rejects an inconsistent frame pointer" {
   } noraise {
     _ => fail("expected an inconsistent frame pointer to fail verification")
   }
+}
+
+///|
+test "source provenance rejects overlapping overflowing and negative ranges" {
+  let source = @native.SourceLocation::new(
+    "input.wasm",
+    0,
+    0,
+    byte_offset=Some(42L),
+  )
+  let code = [
+    b'\x1f', b'\x20', b'\x03', b'\xd5', b'\x1f', b'\x20', b'\x03', b'\xd5',
+  ]
+  let invalid = [
+    [@code_object.SourceSite::new(0, source, length=9)],
+    [@code_object.SourceSite::new(0, source, length=-1)],
+    [
+      @code_object.SourceSite::new(0, source, length=8),
+      @code_object.SourceSite::new(4, source, length=4),
+    ],
+    [
+      @code_object.SourceSite::new(
+        0,
+        @native.SourceLocation::new("input.wasm", 0, 0, byte_offset=Some(-1L)),
+        length=4,
+      ),
+    ],
+  ]
+  for sources in invalid {
+    try @code_object.build(AArch64, code, sources~) catch {
+      InvalidSourceSite(..) => ()
+      error => fail(error.to_string())
+    } noraise {
+      _ => fail("invalid source range accepted")
+    }
+  }
+  let object = @code_object.build(AArch64, code, sources=[
+    @code_object.SourceSite::new(0, source, length=4),
+  ])
+  assert_eq(object.sources()[0].length, 4)
 }

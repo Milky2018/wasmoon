@@ -72,12 +72,18 @@ test "artifact loader returns verified code objects without linking" {
       #|      addend: 0,
       #|    },
       #|  ],
-      #|  sources: [{ offset: 0, source: { file: "answer.wasm", line: 12, column: 4 } }],
+      #|  sources: [
+      #|    {
+      #|      offset: 0,
+      #|      length: 0,
+      #|      source: { file: "answer.wasm", line: 12, column: 4, byte_offset: None },
+      #|    },
+      #|  ],
       #|  traps: [
       #|    {
       #|      offset: 0,
       #|      reason: User(7),
-      #|      source: Some({ file: "answer.wasm", line: 12, column: 4 }),
+      #|      source: Some({ file: "answer.wasm", line: 12, column: 4, byte_offset: None }),
       #|    },
       #|  ],
       #|  safepoints: [
@@ -85,7 +91,7 @@ test "artifact loader returns verified code objects without linking" {
       #|      offset: 0,
       #|      kind: GcAndCancellation,
       #|      roots: [Stack(offset=8, ty=GcRef64)],
-      #|      source: Some({ file: "answer.wasm", line: 12, column: 4 }),
+      #|      source: Some({ file: "answer.wasm", line: 12, column: 4, byte_offset: None }),
       #|      stack_map: Some({ id: 0, argument_root_count: 1 }),
       #|    },
       #|  ],
