@@ -108,7 +108,7 @@ fn inline_leaf_calls(
               [value],
             )
             for metadata in inst.metadata {
-              if metadata is SourceLoc(_) {
+              if metadata is (SourceLoc(_) | SourceByteOffset(_)) {
                 cloned.add_metadata(metadata)
               }
             }

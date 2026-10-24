@@ -24,6 +24,7 @@ test "tiny integer callees inline without retaining a call or root boundary" {
     .instruction_by_id(id)
     .unwrap()
     .add_metadata(SourceLoc("caller.wasm:17"))
+    function.instruction_by_id(id).unwrap().add_metadata(SourceByteOffset(71L))
   }
   @optimize.optimize_with_level(
     function,
@@ -34,6 +35,7 @@ test "tiny integer callees inline without retaining a call or root boundary" {
   |> ignore
   let mut calls = 0
   let mut has_source = false
+  let mut has_byte_offset = false
   for block in function.blocks {
     for id in function.block_instruction_ids(block) {
       if @wasm_milkir.decode_opcode(
@@ -46,11 +48,15 @@ test "tiny integer callees inline without retaining a call or root boundary" {
         if metadata is SourceLoc("caller.wasm:17") {
           has_source = true
         }
+        if metadata is SourceByteOffset(71L) {
+          has_byte_offset = true
+        }
       }
     }
   }
   assert_eq(calls, 0)
   assert_true(has_source)
+  assert_true(has_byte_offset)
 }
 
 ///|
