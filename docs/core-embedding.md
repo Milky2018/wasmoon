@@ -239,6 +239,8 @@ from bytes preserves parser positions through optimization, target emission and
 artifact serialization, including custom sections and non-canonical LEBs.
 Function-relative machine-code displacements are reported separately as
 `native_offset`; `find_func_by_pc` also continues to return native displacements.
+Use the returned function's `wasm_offset(displacement)` to resolve a native PC
+without first trapping.
 
 Decoded AST/WAT input without a binary position table, synthetic prologues and
 ambiguous shared failure blocks have no Wasm offset. They return `None`, never a

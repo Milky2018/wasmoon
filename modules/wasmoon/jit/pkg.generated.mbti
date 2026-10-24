@@ -78,6 +78,7 @@ pub struct JITFunction {
   result_types : ReadOnlyArray[@types.ValueType]
   // private fields
 }
+pub fn JITFunction::wasm_offset(Self, Int32) -> Int64?
 
 type JITModule
 pub fn JITModule::JITModule() -> Self

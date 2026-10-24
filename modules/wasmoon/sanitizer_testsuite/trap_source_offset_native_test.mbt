@@ -166,7 +166,7 @@ test "unreachable nested bodies do not shift the next branch source position" {
 }
 
 ///|
-test "native stack guard remains explicitly unmapped rather than borrowing a call offset" {
+test "native prologue stays unmapped and stack exhaustion follows the actual fault range" {
   let binary = b"\x00asm\x01\x00\x00\x00\x00\x06\x01x\x00\x00\x00\x00\x01\x04\x01\x60\x00\x00\x03\x02\x01\x00\x07\x07\x01\x03run\x00\x00\x0a\x06\x01\x04\x00\x10\x00\x0b"
   let artifact = @commands.compile_module(binary, opt_level=0).unwrap()
   let module_ = @jit.JITModule::load_artifact(
@@ -174,6 +174,9 @@ test "native stack guard remains explicitly unmapped rather than borrowing a cal
     [([], [])],
   )
   defer module_.close()
+  let function_ = module_.get_func(0).unwrap()
+  // Deterministic on both targets: the actual prologue has no Wasm origin.
+  assert_eq(function_.wasm_offset(0), None)
   assert_true(module_.configure_native_fiber_stack_size(65536L))
   try module_.call_with_context(module_.get_func(0).unwrap(), []) catch {
     JITTrap(message) =>
@@ -183,7 +186,19 @@ test "native stack guard remains explicitly unmapped rather than borrowing a cal
     _ => fail("unbounded recursion returned")
   }
   let report = module_.get_last_trap_report().unwrap()
-  assert_eq(report.wasm_offset, None)
+  let native_offset = report.native_offset.unwrap().to_int()
+  let mut expected : Int64? = None
+  for site in artifact.functions[0].sources {
+    if site.offset <= native_offset && native_offset < site.offset + site.length {
+      expected = site.source.byte_offset
+    }
+  }
+  // Exhaustion can occur in the prologue or at the original call (including
+  // x64's return-address push). A known call site must retain its real origin.
+  assert_eq(report.wasm_offset, expected)
+  if report.wasm_offset is Some(offset) {
+    assert_eq(offset, 40L)
+  }
   assert_true(report.wasm_frames.length() > 1)
   for frame in report.wasm_frames[1:] {
     assert_eq(frame.wasm_offset, Some(40L))

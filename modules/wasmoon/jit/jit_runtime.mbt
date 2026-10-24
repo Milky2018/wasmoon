@@ -69,7 +69,10 @@ fn JITFunction::JITFunction(
 }
 
 ///|
-fn JITFunction::wasm_offset(
+/// Resolve a function-relative native byte displacement (as returned by
+/// find_func_by_pc) to an original module-byte position. Synthetic/gap bytes
+/// return None; retaining this function keeps its source positions owned.
+pub fn JITFunction::wasm_offset(
   self : JITFunction,
   native_offset : Int32,
 ) -> Int64? {
