@@ -50,6 +50,9 @@ pub struct Function[Inst] {
   priv values : Array[ValueData]
   priv blocks : Array[BlockData]
   priv instructions : Array[InstructionData[Inst]]
+  // Dense immutable handles avoid allocating wrappers for repeated flat scans.
+  // Both builder insertion paths append the same handle published to the block.
+  priv instruction_handles : Array[Instruction]
   priv operands : Array[AllocationOperand]
   priv clobbers : Array[PhysicalReg]
   priv mut layout : Array[Block]
@@ -71,6 +74,7 @@ fn[Inst] Function::new(
     values: [],
     blocks: [],
     instructions: [],
+    instruction_handles: [],
     operands: [],
     clobbers: [],
     layout: [],
@@ -341,7 +345,7 @@ pub fn[Inst] Function::instruction_at(
   index : Int32,
 ) -> Instruction? {
   if index >= 0 && index < self.instructions.length() {
-    Some(Instruction::new(self.owner, index))
+    Some(self.instruction_handles[index])
   } else {
     None
   }

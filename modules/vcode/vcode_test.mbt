@@ -1090,3 +1090,27 @@ test "safepoint lookup indexes interleaved roots without losing ownership or ord
   assert_false(allocation.add_safepoint_root(foreign, a, location))
   assert_eq(allocation.safepoint_roots(first).map(root => root.0), [a, z])
 }
+
+///|
+fn detached_instruction() -> @vcode.Instruction raise @vcode.VCodeBuildError {
+  build_test_function().instruction_at(0).unwrap()
+}
+
+///|
+test "instruction handles retain ownership after function release and container transport" {
+  let original = [detached_instruction()]
+  let copied = original.copy()
+  original.clear()
+  let captured = detached_instruction()
+  let retained = fn() { captured }
+  // Each creating function is gone; no value or block handle keeps its owner
+  // alive. New functions reuse index zero but must still reject these handles.
+  for _ in 0..<128 {
+    let function = build_test_function()
+    for instruction in [copied[0], retained()] {
+      assert_false(instruction == function.instruction_at(0).unwrap())
+      assert_true(function.instruction_index(instruction) is None)
+      assert_true(function.instruction(instruction) is None)
+    }
+  }
+}
