@@ -169,3 +169,58 @@ test "x64 tail calls validate hidden result-area clobbers with live roots" {
     @x64_target.compile_selected(selected, verify_allocation=true) |> ignore
   }
 }
+
+///|
+test "x64 compact function masks verify and allocate loop block parameters" {
+  let abi = @x64_target.InternalAbi::new(
+    7,
+    12,
+    [6, 2, 1, 8, 9],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 2, 1, 8, 9, 6, 7, 10],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  )
+  let session = @x64_target.DirectLoweringSession::new(
+    "compact_root_masks",
+    Internal,
+    [Ptr64, GcRef64],
+    [],
+    @x64_target.LoweringContext::new(abi),
+  )
+  let builder = @lowering.DirectBuilder::new(
+    [Ptr64, GcRef64],
+    session.sink(),
+    call_abi=@lowering.CallAbiElaboration::new(
+      function_frame=@lowering.FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+      ),
+    ),
+  )
+  builder.begin_function_roots(512)
+  let params = builder.parameters()
+  builder.define_function_root(params[1])
+  for live in [[params[1]], []] {
+    builder.emit_with_metadata(
+      Call(
+        @native.NativeCall::new(
+          External(@native.ExternalSymbol::new("collect")),
+          @native.Signature::new([Ptr64], []),
+          Platform,
+          @native.CallBehavior::conservative(),
+        ),
+      ),
+      [params[0]],
+      [],
+      @lowering.InstructionMetadata::new(None, live),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  @x64_target.compile_selected(
+    session.finish_selected(),
+    verify_allocation=true,
+  )
+  |> ignore
+}

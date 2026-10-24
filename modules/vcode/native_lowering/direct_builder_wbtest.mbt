@@ -7,6 +7,7 @@ priv struct SinkTrace {
   stack_objects : Array[(Int32, Int32)]
   terminated_blocks : Array[Int32]
   terminators : Array[TargetTerminator]
+  mut next_block : Int32
   mut next_value : Int32
   mut finished : Bool
 }
@@ -24,6 +25,7 @@ fn traced_sink(
     stack_objects: [],
     terminated_blocks: [],
     terminators: [],
+    next_block: 701,
     next_value: 1001,
     finished: false,
   }
@@ -31,7 +33,8 @@ fn traced_sink(
     fn() { parameters.copy() },
     fn() { entry_block },
     fn(parameter_types) {
-      let block = 701 + trace.terminated_blocks.length() * 13
+      let block = trace.next_block
+      trace.next_block += 13
       let values = parameter_types.map(_ => {
         let value = trace.next_value
         trace.next_value += 17
@@ -368,6 +371,55 @@ test "function root masks cross word boundaries without retaining dead slots" {
     }),
     content="[0, 0, 1, 1, 0, 0]",
   )
+}
+
+///|
+test "sparse function roots bound mask code growth across safepoints" {
+  let capacity = 8192
+  let points = 64
+  let (sink, trace) = traced_sink([100, 101], 0)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64],
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+      ),
+    ),
+  )
+  builder.begin_function_roots(capacity)
+  let parameters = builder.parameters()
+  builder.define_function_root(parameters[1])
+  for index in 0..<points {
+    builder.emit_with_metadata(
+      Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+      [parameters[0]],
+      [],
+      InstructionMetadata::new(
+        None,
+        if index % 2 == 0 {
+          [parameters[1]]
+        } else {
+          []
+        },
+      ),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  let mask_stores = trace.operations
+    .filter(operation => {
+      match operation {
+        Store(spec) | StoreIndexed(spec, _) => spec.value_type == I64
+        _ => false
+      }
+    })
+    .length()
+  // Initial zeroing may scale with frame capacity. Repeated sparse safepoints
+  // must not emit a complete dense bitmap's worth of stores at every call.
+  assert_true(mask_stores <= capacity / 64 + points * 8)
 }
 
 ///|

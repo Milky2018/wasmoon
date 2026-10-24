@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-23",
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "wasmtime": "wasmtime 49.0.1 (46c23a87d 2026-09-24)",
+  "measurement": "Fresh compiler process, cache disabled, serial Cranelift O2; includes CLI loading and artifact serialization, no instantiation or guest execution",
+  "rss_measurement": "macOS /usr/bin/time -l maximum resident set size in bytes",
+  "source_revision": "45611d6c20a34fa83d5db3eb466eabffe6ba8f92",
+  "configurations": {
+    "drc": {
+      "compiler": "cranelift",
+      "parallel_compilation": false,
+      "cache": false,
+      "optimization_level": 2,
+      "gc": true,
+      "exceptions": true,
+      "function_references": true,
+      "epoch_interruption": true,
+      "samples": [
+        {
+          "process_wall_seconds": 4.207015541032888,
+          "time_wall_seconds": 4.2,
+          "user_seconds": 4.06,
+          "system_seconds": 0.11,
+          "max_rss_bytes": 716439552,
+          "compiled_artifact_bytes": 19237856,
+          "compiled_artifact_sha256": "4f8d3438e1dde1cbcfbca54a20a0be0939f8d96554efa9684d94dab17d08cb6d",
+          "exit": 0
+        },
+        {
+          "process_wall_seconds": 4.23919637495419,
+          "time_wall_seconds": 4.23,
+          "user_seconds": 4.11,
+          "system_seconds": 0.1,
+          "max_rss_bytes": 722075648,
+          "compiled_artifact_bytes": 19237856,
+          "compiled_artifact_sha256": "4f8d3438e1dde1cbcfbca54a20a0be0939f8d96554efa9684d94dab17d08cb6d",
+          "exit": 0
+        },
+        {
+          "process_wall_seconds": 4.286132666980848,
+          "time_wall_seconds": 4.28,
+          "user_seconds": 4.16,
+          "system_seconds": 0.1,
+          "max_rss_bytes": 715849728,
+          "compiled_artifact_bytes": 19237856,
+          "compiled_artifact_sha256": "4f8d3438e1dde1cbcfbca54a20a0be0939f8d96554efa9684d94dab17d08cb6d",
+          "exit": 0
+        }
+      ],
+      "median": {
+        "process_wall_seconds": 4.23919637495419,
+        "time_wall_seconds": 4.23,
+        "user_seconds": 4.11,
+        "system_seconds": 0.1,
+        "max_rss_bytes": 716439552
+      }
+    },
+    "copying": {
+      "compiler": "cranelift",
+      "parallel_compilation": false,
+      "cache": false,
+      "optimization_level": 2,
+      "gc": true,
+      "exceptions": true,
+      "function_references": true,
+      "epoch_interruption": true,
+      "samples": [
+        {
+          "process_wall_seconds": 4.42025162500795,
+          "time_wall_seconds": 4.41,
+          "user_seconds": 4.29,
+          "system_seconds": 0.1,
+          "max_rss_bytes": 638533632,
+          "compiled_artifact_bytes": 20433840,
+          "compiled_artifact_sha256": "376467fbd8b38cdcffbad71064d79deb298cc7acc614b4233738f12c5b1cb9b3",
+          "exit": 0
+        },
+        {
+          "process_wall_seconds": 4.506456375005655,
+          "time_wall_seconds": 4.5,
+          "user_seconds": 4.29,
+          "system_seconds": 0.13,
+          "max_rss_bytes": 642547712,
+          "compiled_artifact_bytes": 20433840,
+          "compiled_artifact_sha256": "376467fbd8b38cdcffbad71064d79deb298cc7acc614b4233738f12c5b1cb9b3",
+          "exit": 0
+        },
+        {
+          "process_wall_seconds": 4.531957416038495,
+          "time_wall_seconds": 4.52,
+          "user_seconds": 4.4,
+          "system_seconds": 0.11,
+          "max_rss_bytes": 642351104,
+          "compiled_artifact_bytes": 20433840,
+          "compiled_artifact_sha256": "376467fbd8b38cdcffbad71064d79deb298cc7acc614b4233738f12c5b1cb9b3",
+          "exit": 0
+        }
+      ],
+      "median": {
+        "process_wall_seconds": 4.506456375005655,
+        "time_wall_seconds": 4.5,
+        "user_seconds": 4.29,
+        "system_seconds": 0.11,
+        "max_rss_bytes": 642351104
+      }
+    }
+  },
+  "input": {
+    "sha256": "932992a2ea94328f723cace528eaaf9311d12e20d3be87fedc5d98a3f6c84305",
+    "bytes": 4568719,
+    "core_revision": "7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1"
+  },
+  "comparison_limit": "Earlier Wasmoon RSS was sampled about every 250 ms, whereas these Wasmtime RSS figures use OS maximum RSS. CLI compilation also serializes its output; this is not an isolated compiler-API time comparison.",
+  "temporary_workspace_removed": true
+}
