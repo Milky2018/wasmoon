@@ -13,6 +13,7 @@ struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
   inline_heap : InlineHeapLayout?
   gc_array_regions : Bool
+  prepared_arrays : Bool
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
@@ -27,6 +28,8 @@ struct Environment {
 /// `gc_array_regions` is the compatibility spelling of the native memory-SSA
 /// opt-in. It expands checked GC operations before generic optimization and
 /// independently verifies every physical borrow across the final CFG.
+/// `prepared_arrays` opts an embedding into the non-collecting try-array
+/// helper ABI. Existing providers keep the collecting allocation ABI by default.
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
@@ -36,6 +39,7 @@ pub fn Environment::new(
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
   gc_heap_field~ : @native_types.EnvironmentField? = None,
   gc_array_regions~ : Bool = false,
+  prepared_arrays~ : Bool = false,
   inline_heap~ : InlineHeapLayout? = None,
 ) -> Environment {
   {
@@ -44,6 +48,7 @@ pub fn Environment::new(
     runtime_symbol,
     gc_heap_field,
     gc_array_regions,
+    prepared_arrays,
     inline_heap,
   }
 }
@@ -745,7 +750,60 @@ fn lower_array_new(
   operands.push(i32_immediate(context, type_index))
   operands.push(length)
   operands.push(initial)
-  let word = emit_gc_allocation(
+  let parameter_types : Array[@native_types.ValueType] = [
+    Ptr64,
+    I32,
+    I32,
+    if is_vector {
+      Ptr64
+    } else {
+      I64
+    },
+  ]
+  if !environment.prepared_arrays {
+    let word = emit_gc_allocation(
+      context,
+      environment,
+      if is_vector {
+        GcAllocArrayWideSlow
+      } else {
+        GcAllocArraySlow
+      },
+      operands,
+      parameter_types,
+    )
+    finish_runtime_word(context, word)
+    return None
+  }
+  let slow = context.create_block([])
+  let join = context.create_block([I64])
+  let fast = context.emit_call_without_roots(
+      @native_types.NativeCall::new(
+        External(
+          (environment.runtime_symbol)(
+            if is_vector {
+              GcTryArrayWide
+            } else {
+              GcTryArray
+            },
+          ),
+        ),
+        @native_types.Signature::new(parameter_types, [I64]),
+        Platform,
+        @native_types.CallBehavior::new(ReadWrite, false, false, false, false),
+      ),
+      operands,
+      [I64],
+    )[0]
+  context.branch(
+    context.emit(IntCompareImmediate(NotEqual, 0UL), [fast], [I32])[0],
+    join,
+    [fast],
+    slow,
+    [],
+  )
+  context.switch_to_block(slow)
+  let fallback = emit_gc_allocation(
     context,
     environment,
     if is_vector {
@@ -754,8 +812,11 @@ fn lower_array_new(
       GcAllocArraySlow
     },
     operands,
-    [Ptr64, I32, I32, if is_vector { Ptr64 } else { I64 }],
+    parameter_types,
   )
+  context.jump(join, [fallback])
+  context.switch_to_block(join)
+  let word = context.block_parameters(join)[0]
   finish_runtime_word(context, word)
   None
 }
@@ -1624,9 +1685,22 @@ pub fn lower_to_sink(
         raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
     }
   }
-  let environment = if environment.inline_heap is Some(_) &&
-    !inline_allocation_fits(function, validation_context) {
-    { ..environment, inline_heap: None, }
+  let environment = if environment.inline_heap is Some(_) ||
+    environment.prepared_arrays {
+    let (structs, arrays) = allocation_expansion_limits(
+      function, validation_context,
+    )
+    {
+      ..environment,
+      inline_heap: if structs {
+        environment.inline_heap
+      } else {
+        None
+      },
+      prepared_arrays: environment.prepared_arrays &&
+      environment.gc_heap_field is Some(_) &&
+      arrays,
+    }
   } else {
     environment
   }

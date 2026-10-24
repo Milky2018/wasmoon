@@ -304,6 +304,8 @@ pub(all) enum WasmRuntimeHelper {
   GcTypeCheckSubtype
   GcRegisterStructInline
   GcReserveStructFast
+  GcTryArray
+  GcTryArrayWide
   GcRegisterArrayInline
   GcAllocStructSlow
   GcAllocArrayFromValuesSlow

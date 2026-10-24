@@ -433,6 +433,8 @@ void WASMOON_GUEST_ABI gc_function_frame_enter_impl(jit_context_t *ctx, wasmoon_
 void WASMOON_GUEST_ABI gc_function_frame_leave_impl(jit_context_t *ctx, wasmoon_gc_function_frame_t *frame);
 
 // ============ GC Operations (gc_ops.c) ============
+int64_t WASMOON_GUEST_ABI gc_try_array_impl(jit_context_t *ctx, int32_t type, int32_t len, int64_t init);
+int64_t WASMOON_GUEST_ABI gc_try_array_wide_impl(jit_context_t *ctx, int32_t type, int32_t len, const GcSlot *init);
 int64_t WASMOON_GUEST_ABI gc_reserve_struct_fast_impl(jit_context_t *ctx, int32_t local_type,
     int32_t count, uint64_t shape, int32_t total_size, int64_t *ticket);
 

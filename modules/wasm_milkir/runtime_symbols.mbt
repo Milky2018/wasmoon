@@ -49,6 +49,8 @@ pub(all) enum WasmRuntimeHelper {
   GcTypeCheckSubtype
   GcRegisterStructInline
   GcReserveStructFast
+  GcTryArray
+  GcTryArrayWide
   GcRegisterArrayInline
   GcAllocStructSlow
   GcAllocArrayFromValuesSlow
@@ -125,6 +127,8 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
     GcArrayInitElem => "gc.array_init_elem"
     GcTypeCheckSubtype => "gc.type_check_subtype"
     GcReserveStructFast => "gc.reserve_struct_fast"
+    GcTryArray => "gc.try_array"
+    GcTryArrayWide => "gc.try_array_wide"
     GcRegisterStructInline => "gc.register_struct_inline"
     GcRegisterArrayInline => "gc.register_array_inline"
     GcAllocStructSlow => "gc.alloc_struct_slow"

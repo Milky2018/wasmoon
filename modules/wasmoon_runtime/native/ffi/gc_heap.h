@@ -264,6 +264,8 @@ GcSlot gc_layout_read(const uint8_t *data, const GcFieldLayout *field);
 void gc_layout_write(uint8_t *data, const GcFieldLayout *field, GcSlot value);
 int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
     int32_t count, const void *values, int wide, int repeated, GcSlot init);
+int32_t gc_heap_try_array(GcHeap *heap, int32_t identity, int32_t local_type,
+    int32_t count, GcSlot init);
 void gc_heap_maybe_verify(GcHeap *heap, const char *op_name);
 int gc_should_fail_allocation(void);
 int gc_heap_admit(GcHeap *heap, size_t size);

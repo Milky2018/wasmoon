@@ -17,7 +17,7 @@ pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext, o
 
 // Types and methods
 type Environment
-pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, inline_heap? : InlineHeapLayout?) -> Self
+pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, prepared_arrays? : Bool, inline_heap? : InlineHeapLayout?) -> Self
 
 pub(all) struct InlineHeapLayout {
   type_ids_offset : Int32

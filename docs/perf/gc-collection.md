@@ -117,5 +117,56 @@ identity numbering and subsequent allocation. Omitting page marking fails both
 this test and the native-parent/untyped-child test. Ordinary/verified native 3119,
 wasm 1464, strict checks/info/fmt/C44/audits, Core 258/62563 and Component 59/1385
 per engine pass. Fresh isolated ASan/UBSan 323 plus event loop and both positive
-controls pass on explicitly dirty 4ab8e41d sources; Linux LSan/Windows acceptance
-require the next exact-head CI run.
+controls pass on explicitly dirty 4ab8e41d sources. Subsequent clean086be748
+run40127134073 establishes Linux LSan and Windows acceptance; see ISS-685.
+
+
+## Prepared array constructors
+
+[ISS-686](../../issues/ISS-686.md) reuses the canonical typed initializer through
+non-collecting scalar/vector constructors. Admission uses the existing prepared
+payload/identity window and excludes quotas, unknown/debug/failure controls,
+growth and collection. Refusal returns zero without allocator mutation; the
+original collecting call then stages its roots and preserves trap ordering.
+Successful initialization completes before publication. No new tracing policy,
+field layout or duplicate allocator is introduced.
+
+Wasmoon explicitly opts into the new helper ABI. Other compiler embedders retain
+the existing allocation contract by default. A private sixteen-site function
+budget bounds the added CFG; large straight-line initializers retain the original
+path. Struct/array expansion limits share one inspection pass. Successful calls
+jump straight to the result join, without an empty success block.
+
+Five serial AB/BA pairs compare frozen `086be748` binary `276e7c91450f` with dirty
+candidate `3c37876afdc2`, using the same self-checking inputs and toolchain as above.
+Median invocation milliseconds:
+
+| Workload | Parent | Prepared constructor |
+| --- | ---: | ---: |
+| Ten million 1-element arrays | 236.875 | 178.024 |
+| Ten million 4-element arrays | 213.584 | 155.023 |
+| Ten million 17-element arrays | 273.298 | 208.739 |
+| Million 4096-element zero arrays | 287.852 | 283.237 |
+| Million 4096-element nonzero arrays | 390.981 | 382.922 |
+| Million 1024-element high-word vectors | 385.437 | 372.943 |
+
+Current Core property 1653.104->1640.416ms, graph 38.951->39.489ms and retained
+reference-array 15.885->15.684ms do not establish improvements. RSS is unchanged.
+Small modules pay roughly 20–60us extra compilation. Nine complete cold compile
+pairs give auth3 42.019->42.495ms, Argon2i 74.354->73.471ms and the current
+property 851.900->848.708ms; no material compiler gain is claimed.
+
+The initial unbounded form expanded 100 straight-line allocations from 24.4KB to
+37.5KB and compilation 2.1->3.8ms. After the budget, 100/500/1000-site artifacts
+are byte-identical to the parent and compile in 2.114/13.584/36.390ms versus
+2.129/13.780/36.588ms. Public regressions cover both targets at 16/17/100 sites,
+exactly one collecting safepoint, and reference fills across identity pages,
+collection, injected failure and subsequent reuse. Removing the split lowering
+fails the new code-generation regression. All raw data stays in temporary storage.
+
+Ordinary/all-three-verifier native3122 and wasm1464 pass, as do strict checks,
+info/fmt, C44 and module/MSVC audits. Core258/62563 and Component59/1385 per native
+engine pass with verification and again with the prepared path enabled. Fresh
+isolated ASan/UBSan324, event loop and both ASan controls pass on explicitly dirty
+086be748 sources (binary2deb04c11bcc); Mac LSan is unavailable. Both-target
+selection is not a substitute for actual x64 execution; exact-head CI is pending.

@@ -52,6 +52,8 @@ extern void gc_struct_new_impl_msvc_guest(void);
 extern void gc_struct_set_heap_impl_msvc_guest(void);
 extern void gc_struct_set_impl_msvc_guest(void);
 extern void gc_struct_set_v128_impl_msvc_guest(void);
+extern void gc_try_array_impl_msvc_guest(void);
+extern void gc_try_array_wide_impl_msvc_guest(void);
 extern void gc_type_check_subtype_impl_msvc_guest(void);
 extern void memory_copy_indexed_internal_msvc_guest(void);
 extern void memory_fill_indexed_internal_msvc_guest(void);

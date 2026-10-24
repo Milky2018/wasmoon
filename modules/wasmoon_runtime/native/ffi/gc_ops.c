@@ -563,6 +563,32 @@ int64_t WASMOON_GUEST_ABI gc_register_array_inline(jit_context_t *ctx, uint8_t *
     return gc_register_struct_inline(ctx, obj_ptr, total_size);
 }
 
+// These entry points do not collect or register roots. Refusal must leave the
+// complete allocation to the checked slow path, including its trap ordering.
+static int64_t try_array(jit_context_t *ctx, int32_t type, int32_t len, GcSlot init) {
+    if (array_length_exceeds_layout(len)) return 0;
+    ctx = resolve_ctx(ctx);
+    GcHeap *heap = resolve_heap(ctx);
+    if (!heap || !ctx || !ctx_runtime(ctx)->callable_local_types || type < 0 ||
+        type >= ctx_runtime(ctx)->callable_local_type_count) return 0;
+    int32_t identity = ctx_runtime(ctx)->callable_local_types[type];
+    int32_t ref = gc_heap_try_array(heap, identity, type, len, init);
+    if (!ref) return 0;
+    ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+    ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
+    return (int64_t)ref << 1;
+}
+
+int64_t WASMOON_GUEST_ABI gc_try_array_impl(jit_context_t *ctx, int32_t type,
+    int32_t len, int64_t init) {
+    return try_array(ctx, type, len, (GcSlot){init, 0});
+}
+
+int64_t WASMOON_GUEST_ABI gc_try_array_wide_impl(jit_context_t *ctx, int32_t type,
+    int32_t len, const GcSlot *init) {
+    return try_array(ctx, type, len, *init);
+}
+
 // Slow path for array allocation
 int64_t WASMOON_GUEST_ABI gc_alloc_array_slow(
     jit_context_t *ctx,
@@ -1084,6 +1110,8 @@ int32_t WASMOON_GUEST_ABI gc_array_len_heap_impl(GcHeap *heap, int64_t ref) {
 
 #if defined(_MSC_VER) && !defined(__clang__)
 WASMOON_DEFINE_GUEST_TARGET(gc_reserve_struct_fast_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_try_array_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_try_array_wide_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_array_data_heap_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_struct_data_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_array_get_heap_impl);

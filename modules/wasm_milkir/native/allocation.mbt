@@ -172,32 +172,32 @@ fn lower_fast_struct(
 }
 
 ///|
-/// Stable-identity publication is larger than a plain bump-pointer allocation.
-/// Bound per-function expansion just as memory SSA bounds physical accesses;
-/// large generated initializers retain the shared no-GC reservation instead of
-/// multiplying target blocks, live ranges and register-allocation work.
-fn inline_allocation_fits(
+/// Stable-identity publication expands beyond a plain bump allocation. Inspect
+/// the static allocation sites once for both policies: inline struct stores
+/// have a bounded instruction budget; shared prepared arrays add two CFG blocks
+/// per site. Large generated initializers keep the existing shared paths.
+fn allocation_expansion_limits(
   function : @milkir.Function,
   validation : @wasm_milkir.WasmValidationContext,
-) -> Bool {
-  let mut cost = 0
+) -> (Bool, Bool) {
+  let mut struct_cost = 0
+  let mut arrays = 0
   for block in function.blocks {
     for id in function.block_instruction_ids(block) {
-      // Count only allocations: preparation adds projection instructions, but
-      // repeating target compilation must make the same expansion decision.
+      // Count only allocations: memory preparation also adds projections.
       let inst = function.instruction_by_id(id).unwrap()
-      let type_ = match @wasm_milkir.decode_opcode(inst.opcode) {
-        Some(StructNew(type_) | StructNewDefault(type_)) => Some(type_)
-        _ => None
+      match @wasm_milkir.decode_opcode(inst.opcode) {
+        Some(StructNew(type_) | StructNewDefault(type_)) if struct_cost <= 512 =>
+          if struct_view_shape(validation, type_) is Some((_, fields)) {
+            struct_cost += 128 + fields * 4
+          }
+        Some(ArrayNew(_) | ArrayNewDefault(_)) => arrays += 1
+        _ => ()
       }
-      if type_ is Some(type_) &&
-        struct_view_shape(validation, type_) is Some((_, fields)) {
-        cost += 128 + fields * 4
-      }
-      if cost > 512 {
-        return false
+      if struct_cost > 512 && arrays > 16 {
+        return (false, false)
       }
     }
   }
-  true
+  (struct_cost <= 512, arrays <= 16)
 }

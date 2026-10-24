@@ -104,6 +104,7 @@ fn wasmoon_native_environment(
       identity_window_limit: native_layout_field(54),
       identity_window_page: native_layout_field(55),
     }),
+    prepared_arrays=true,
     gc_array_regions=true,
     gc_heap_field=if layout.gc_heap_offset >= 0 && layout.gc_heap_offset != 255 {
       Some(gc_heap_field)

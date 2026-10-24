@@ -1601,6 +1601,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_reserve_struct_fast_ptr(void) {
     return WASMOON_GUEST_ADDRESS(gc_reserve_struct_fast_impl);
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_try_array_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(gc_try_array_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_try_array_wide_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(gc_try_array_wide_impl);
+}
+
 // ============ Type Cache Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(

@@ -98,6 +98,10 @@ test "generated initialization bounds allocation code growth without removing al
   b.return_([])
   let function = b.get_function()
   let before = function.print()
-  assert_false(inline_allocation_fits(function, allocation_contract_context()))
+  let (structs, _) = allocation_expansion_limits(
+    function,
+    allocation_contract_context(),
+  )
+  assert_false(structs)
   assert_eq(function.print(), before)
 }
