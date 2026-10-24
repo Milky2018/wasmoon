@@ -223,19 +223,12 @@ fn encoded_component_module(module_ : @types.Module) -> Bytes {
 
 ///|
 fn compile_component_artifact(
-  store : @runtime.Store,
   module_ : @types.Module,
   target : @wasmoon_jit.NativeTarget,
   actual_memory_max : Int32?,
   opt_level : Int32,
+  checkpoint~ : () -> Unit raise @runtime_impl.ComponentRuntimeError,
 ) -> @artifact.Artifact raise @runtime_impl.ComponentRuntimeError {
-  fn checkpoint() -> Unit raise @runtime_impl.ComponentRuntimeError {
-    if store.execution_scope() is Some(scope) {
-      scope.check() catch {
-        error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
-      }
-    }
-  }
   checkpoint()
   @validator.validate_module(module_) catch {
     error =>
@@ -351,6 +344,8 @@ fn load_component_jit_context(
   target : @wasmoon_jit.NativeTarget,
   opt_level : Int32,
   classify_suspension : (@runtime.RuntimeError) -> Bool,
+  prepared_code~ : NativeComponentCode? = None,
+  on_compile~ : () -> Unit = fn() { () },
 ) -> (@core_jit.JITModuleContext, @core_jit.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
   store.check_instance(instance) catch {
     error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
@@ -367,9 +362,35 @@ fn load_component_jit_context(
   } else {
     None
   }
-  let artifact = compile_component_artifact(
-    store, lowered_module, target, actual_memory_max, opt_level,
-  )
+  fn checkpoint() -> Unit raise @runtime_impl.ComponentRuntimeError {
+    if store.execution_scope() is Some(scope) {
+      scope.check() catch {
+        error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
+      }
+    }
+  }
+  checkpoint()
+  let prepared = match prepared_code {
+    Some(code) if code.target == target && code.opt_level == opt_level =>
+      code.artifacts.get(
+        (encoded_component_module(lowered_module), actual_memory_max),
+      )
+    _ => None
+  }
+  let artifact = match prepared {
+    Some(artifact) => artifact
+    None => {
+      println("[DIAG-pr577] COMPILATION MISS")
+      on_compile()
+      compile_component_artifact(
+        lowered_module,
+        target,
+        actual_memory_max,
+        opt_level,
+        checkpoint~,
+      )
+    }
+  }
   let compatibility = @wasmoon_jit.artifact_compatibility(
     artifact.manifest,
     available_cpu_features=[],

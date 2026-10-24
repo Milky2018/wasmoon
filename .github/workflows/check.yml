@@ -1,4 +1,4 @@
-name: PR577 HTTP baseline diagnostic
+name: PR577 prepared HTTP diagnostic
 on:
   workflow_dispatch:
 permissions:
@@ -7,12 +7,8 @@ jobs:
   trace:
     runs-on: windows-latest
     timeout-minutes: 30
-    env:
-      MOON_CC: clang-cl.exe
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: 55657fb24dfd61937e8d6f1f482df4d23c824631
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: actions/setup-python@v5
         with:
@@ -27,24 +23,13 @@ jobs:
         run: |
           $compiler = (Get-Command clang-cl.exe -ErrorAction Stop).Source
           "MOON_CC=$compiler" >> $env:GITHUB_ENV
-      - name: build main and candidate with identical HTTP-only tracing
+      - name: build prepared HTTP candidate
         shell: pwsh
         run: |
-          git fetch origin 55657fb24dfd61937e8d6f1f482df4d23c824631 0a2f078da2c93d2d69d23c8eae3752c0ea89104e 5d6c5fc0e3b541ffc4695ffe0383ecf017a7b598
-          $variants = @(
-            @{name="baseline"; sha="55657fb24dfd61937e8d6f1f482df4d23c824631"},
-            @{name="candidate"; sha="0a2f078da2c93d2d69d23c8eae3752c0ea89104e"}
-          )
-          foreach ($variant in $variants) {
-            git reset --hard $variant.sha
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            python -c "import pathlib,subprocess; paths=['modules/wasmoon/cmd/wasmoon/commands/component/serve.mbt','modules/wasmoon/cmd/wasmoon/commands/component/moon.pkg','modules/wasmoon/wasi_http/client.mbt','scripts/wasi03_upstream_runner.py','scripts/diag_pr577_http.py']; [(pathlib.Path(p).write_bytes(subprocess.check_output(['git','show','5d6c5fc0e3b541ffc4695ffe0383ecf017a7b598:'+p]))) for p in paths]"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            moon update
-            moon build modules/wasmoon/cmd/wasmoon --target native --release --jobs 2
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            Copy-Item _build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe "$env:RUNNER_TEMP/pr577-$($variant.name).exe"
-          }
+          moon update
+          moon build modules/wasmoon/cmd/wasmoon --target native --release --jobs 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item _build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe wasmoon.exe
       - uses: actions/checkout@v4
         with:
           repository: WebAssembly/wasi-testsuite
@@ -52,17 +37,5 @@ jobs:
           path: upstream
       - name: install pinned upstream runner dependencies
         run: python -m pip install -r upstream/test-runner/requirements.txt
-      - name: compare baseline and candidate serially after both builds
-        shell: pwsh
-        run: |
-          foreach ($variant in @("baseline","candidate","baseline","candidate")) {
-            Copy-Item "$env:RUNNER_TEMP/pr577-$variant.exe" wasmoon.exe
-            Write-Host "DIAG VARIANT $variant"
-            python scripts/diag_pr577_http.py
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-      - name: clean owned diagnostic binaries
-        if: always()
-        shell: pwsh
-        run: |
-          Remove-Item "$env:RUNNER_TEMP/pr577-baseline.exe","$env:RUNNER_TEMP/pr577-candidate.exe" -Force -ErrorAction SilentlyContinue
+      - name: verify unchanged HTTP client requests after preparation
+        run: python scripts/diag_pr577_http.py

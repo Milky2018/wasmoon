@@ -19,6 +19,18 @@ pub async fn serve_http(
     })
     let component = load_http_service(file)
     let layers = middleware.map(path => load_http_service(path))
+    println("[DIAG-pr577] prepare begin t=\{@async.now()}")
+    let prepared_code = if use_jit {
+      Some(
+        @component_native.prepare_native_component_code(
+          [component, ..layers],
+          opt_level=0,
+        ),
+      )
+    } else {
+      None
+    }
+    println("[DIAG-pr577] prepare end t=\{@async.now()}")
     let server = @socket.TcpServer(
       @socket.Addr::parse(address),
       reuse_addr=true,
@@ -28,10 +40,10 @@ pub async fn serve_http(
     server.run_forever(
       async fn(socket, _) {
         defer socket.close()
-        @logger.plain_error("[DIAG-pr577] \{@async.now()} accept")
-        let linker = if use_jit {
+        println("[DIAG-pr577] accept t=\{@async.now()}")
+        let linker = if prepared_code is Some(code) {
           @runtime_impl.ComponentLinker::with_core_execution_engine(
-            @component_native.open_native_component_session(opt_level=0),
+            code.open_session(),
           )
         } else {
           ComponentLinker()
@@ -59,9 +71,7 @@ pub async fn serve_http(
           )
         })
         host.run(async fn() {
-          @logger.plain_error("[DIAG-pr577] \{@async.now()} instantiate begin")
           let mut instance = linker.instantiate("http-service", component)
-          @logger.plain_error("[DIAG-pr577] \{@async.now()} instantiate end")
           for index = layers.length() - 1; index >= 0; index = index - 1 {
             host.add_downstream(instance)
             instance = linker.instantiate(
