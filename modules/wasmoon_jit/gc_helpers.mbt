@@ -137,7 +137,7 @@ fn gc_type_data(types : Array[@types.SubType]) -> FixedArray[Int32] {
     types_data[base + 0] = super_idx
 
     // kind: 0=func, 1=struct, 2=array, 3=continuation
-    // array_elem_tag: 0=none/unknown, 1=i8, 2=i16, 3=i32, 4=i64, 5=f32, 6=f64, 7=ref/other
+    // array_elem_tag: 0=none/unknown, 1=i8, 2=i16, 3=i32, 4=i64, 5=f32, 6=f64, 7=ref/other, 8=v128
     // array_elem_bytes: byte width of element data in segments (0 for ref/unknown)
     // array_elem_flags: reserved for future (0 for now)
     match subtype.composite {
@@ -172,6 +172,7 @@ fn gc_type_data(types : Array[@types.SubType]) -> FixedArray[Int32] {
           Val(I64) => (4, 8)
           Val(F32) => (5, 4)
           Val(F64) => (6, 8)
+          Val(V128) => (8, 16)
           _ => (7, 0)
         }
         types_data[base + 3] = tag

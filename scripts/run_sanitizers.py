@@ -43,6 +43,8 @@ def main():
         shutil.copy2(ROOT / "modules/wasmoon_runtime/runtime" / name, PACKAGE)
     shutil.copy2(ROOT / "modules/wasmoon_runtime/executor/gc_type_registration_test.mbt",
                  PACKAGE)
+    shutil.copy2(ROOT / "modules/wasmoon_runtime/executor/array_segment_test.mbt",
+                 PACKAGE)
     shutil.copy2(ROOT / "modules/wasmoon_runtime/executor/host_guest_exception_test.mbt",
                  PACKAGE / "host_guest_exception_portable_test.mbt")
     bounds = ROOT / "modules/wasmoon_runtime/native/host_io/wasi/bounds_test.mbt"

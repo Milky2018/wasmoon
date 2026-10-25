@@ -770,25 +770,31 @@ static inline uint64_t read_u64_le(const uint8_t *p) {
     return (uint64_t)read_u32_le(p) | ((uint64_t)read_u32_le(p + 4) << 32);
 }
 
-static int64_t decode_array_elem_from_bytes(const uint8_t *p, int tag) {
+static GcSlot decode_array_elem_from_bytes(const uint8_t *p, int tag) {
+    GcSlot value = {0, 0};
     switch (tag) {
         case 1: // i8 (packed)
-            return (int64_t)(uint8_t)p[0];
+            value.lo = (uint8_t)p[0];
+            break;
         case 2: // i16 (packed)
-            return (int64_t)read_u16_le(p);
+            value.lo = read_u16_le(p);
+            break;
         case 3: // i32
-        case 5: { // f32
-            int32_t v = (int32_t)read_u32_le(p);
-            return (int64_t)v;
-        }
+        case 5: // f32
+            value.lo = (int32_t)read_u32_le(p);
+            break;
         case 4: // i64
-        case 6: { // f64
-            int64_t v = (int64_t)read_u64_le(p);
-            return v;
-        }
+        case 6: // f64
+            value.lo = (int64_t)read_u64_le(p);
+            break;
+        case 8: // v128
+            value.lo = (int64_t)read_u64_le(p);
+            value.hi = (int64_t)read_u64_le(p + 8);
+            break;
         default:
-            return 0;
+            break;
     }
+    return value;
 }
 
 // Segment constructors share the ordinary Store-canonical physical layout.
@@ -870,8 +876,8 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
 
     const uint8_t *p = seg_data ? seg_data + (size_t)off_u32 : NULL;
     for (uint32_t i = 0; i < len_u32; i++) {
-        int64_t v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-        gc_heap_array_set(heap, gc_ref, (int32_t)i, v);
+        GcSlot v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
+        gc_heap_array_set_wide(heap, gc_ref, (int32_t)i, v);
     }
 
     return ((int64_t)gc_ref) << 1;
@@ -999,8 +1005,8 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
 
     const uint8_t *p = seg_data ? seg_data + (size_t)data_off_u32 : NULL;
     for (uint32_t i = 0; i < len_u32; i++) {
-        int64_t v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-        gc_heap_array_set(heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
+        GcSlot v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
+        gc_heap_array_set_wide(heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
     }
 }
 
