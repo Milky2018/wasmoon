@@ -266,3 +266,55 @@ semantic regressions pass before and after; deterministic diagnostic work counts
 and repeated original-input timings provide the performance feedback loop.
 No timing threshold or test-only production counter is added. Local ARM64
 execution does not establish actual x64 execution or fresh cross-platform CI.
+
+## Cooperative execution: immutable GC environment preparation
+
+The new #568 controls use the archived downstream embedding at ed848ac5,
+unchanged except for resolving Wasmoon dependencies to the compared local
+workspaces. Compilation stays O2 with cancellation=true, cooperation=true and
+the default quantum of 1024. The exact zero/one/ten-call Wasm inputs retain every
+probe assertion. The new reference is installed official moonrun 0.1.20261021,
+not the older standalone Wasmtime control. Tracking: [ISS-705](../../issues/ISS-705.md).
+
+After startup, approximately 59% of main-thread samples are in repeated GC
+preparation, metadata array copying and temporary releases on cooperative resume.
+A separate single-variable diagnostic that avoids repeated preparation reduces
+ten-call wall time 10.145 -> 4.849 s without changing scheduling or guest code.
+That diagnostic does not satisfy intervening-binding semantics and is discarded.
+
+The retained design freezes module type/canonical/function maps and native
+function addresses in a context-bound `PreparedGCEnvironment`. High-level module
+addresses and `JITModuleContext`'s read-only maps are immutable after installation,
+so preparation happens once. Each entry/resume still checks the live instance,
+module and native owner, then rebinds the same immutable arrays and **current**
+heap. Dynamic roots, execution scopes, callbacks, cancellation, scheduling,
+quotas and rollback remain live state and are never captured by this snapshot.
+Close releases the cached environment. Legacy dynamic setup keeps its existing
+fresh-snapshot semantics. Native users who change their function table must
+explicitly prepare a new environment; the prepared addresses do not own code.
+
+Five alternating ordinary fresh-process pairs on macOS ARM64, immediately before
+versus the c873e8b0-based dirty functional tree, after all builds/profiles stop:
+
+| Calls | Whole process before | After | Peak RSS before / after |
+| --- | ---: | ---: | ---: |
+| 0 | 1.040 s | 1.049 s | 65.1 / 65.1 MB |
+| 1 | 1.946 s | 1.412 s | 142.9 / 142.9 MB |
+| 10 | 10.124 s | 4.888 s | 266.9 / 266.6 MB |
+
+The ten-call reduction is 51.7%. `(T10-T1)/9` changes approximately 0.909 -> 0.386 s
+per extra probe. This includes GC, polling, switching and process-state effects;
+it is not an isolated in-guest timer. The same archived official runner's earlier
+three-sample medians are 0.058 s for one call and 0.415 s for ten: the current ten
+call path remains approximately 11.8x slower end-to-end, and its rough incremental
+estimate remains approximately 9.7x slower. No remaining-gap closure is claimed.
+
+Prepared payloads add stable O(module metadata) retained storage, without a
+measured peak-RSS improvement. Regressions protect input snapshots, alias-safe
+reuse of the exact payload arrays, clearing/rebinding, explicit address refresh,
+foreign-context rejection, and cooperative resume after an unrelated heap/map
+was installed. Full native 3187 passes ordinarily and with all three verification
+flags, wasm 1481 and both strict targets pass. Fresh isolated macOS ASan/UBSan 370,
+the event loop and both positive controls pass on the dirty c873e8b0 tree. This
+does not establish Linux LSan or actual x64/platform acceptance. Full distributed
+library and cross-platform results are tracked in PR582; raw logs stay temporary.

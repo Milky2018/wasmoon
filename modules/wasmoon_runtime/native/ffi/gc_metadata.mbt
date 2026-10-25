@@ -73,7 +73,8 @@ pub extern "c" fn JITContext::bind_gc_function_addresses(
 ) -> Unit = "wasmoon_jit_bind_gc_function_addresses"
 
 ///|
-extern "c" fn snapshot_function_addresses(
+/// Copy count readable native function pointers; the snapshot does not own code.
+pub extern "c" fn snapshot_function_addresses(
   table : Int64,
   count : Int32,
 ) -> FixedArray[Int64] = "wasmoon_jit_snapshot_gc_function_addresses"

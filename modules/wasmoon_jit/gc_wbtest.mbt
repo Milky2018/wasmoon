@@ -628,3 +628,65 @@ test "gc: explicit native marks remain precise collection seeds" {
   assert_false(heap.is_valid(child))
   assert_true(heap.verify())
 }
+
+///|
+test "prepared GC environment freezes mappings and rebinds the same payloads" {
+  let context = NativeJITContext::try_alloc(1).unwrap()
+  context.set_func(0, 111L)
+  let types = [@types.SubType::func([], [])]
+  let canonical = [7]
+  let functions = [0]
+  let environment = context.prepare_gc_environment(
+    types[:],
+    canonical[:],
+    functions[:],
+  )
+  canonical[0] = 99
+  functions[0] = 17
+  context.set_func(0, 222L)
+  assert_eq(environment.canonical[0], 7)
+  assert_eq(environment.functions[0], 0)
+  assert_eq(environment.addresses[0], 111L)
+  let heap = CHeap()
+  defer heap.free()
+  for _ in 0..<3 {
+    context.setup_gc_environment(heap, environment)
+    assert_eq(
+      @native_test_support.context_gc_metadata_shares(
+        context.handle,
+        environment.types,
+        environment.canonical,
+        environment.functions,
+      ),
+      1,
+    )
+    context.teardown_gc()
+    assert_true(context.gc_environment_is_clear())
+  }
+  // Changing a native function table requires explicit new preparation.
+  let replacement = context.prepare_gc_environment(
+    types[:],
+    canonical[:],
+    functions[:],
+  )
+  assert_eq(replacement.addresses[0], 222L)
+  assert_eq(replacement.canonical[0], 99)
+}
+
+///|
+test "prepared GC environment rejects a different native context before binding" {
+  let first = NativeJITContext::try_alloc(0).unwrap()
+  let second = NativeJITContext::try_alloc(0).unwrap()
+  let environment = first.prepare_gc_environment([], [], [])
+  let heap = CHeap()
+  defer heap.free()
+  try second.setup_gc_environment(heap, environment) catch {
+    InvalidMetadata => ()
+    error => fail("unexpected setup error: \{error}")
+  } noraise {
+    _ => fail("foreign prepared context was accepted")
+  }
+  assert_true(second.gc_environment_is_clear())
+  first.setup_gc_environment(heap, environment)
+  first.teardown_gc()
+}

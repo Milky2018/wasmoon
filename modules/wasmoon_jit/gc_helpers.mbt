@@ -119,7 +119,7 @@ pub fn encode_heap_ref(heap_idx : Int32) -> Int64 {
 
 ///|
 /// Encode module types for native subtype and allocation helpers.
-fn gc_type_data(types : Array[@types.SubType]) -> FixedArray[Int32] {
+fn gc_type_data(types : ArrayView[@types.SubType]) -> FixedArray[Int32] {
   let num_types = types.length()
   // Extended format (stride = 6, keep in sync with `jit_ffi/jit_internal.h`):
   //   [super_idx, kind, struct_num_fields, array_elem_tag, array_elem_bytes, array_elem_flags]
@@ -334,24 +334,15 @@ fn gc_setup(
   func_table_ptr~ : Int64,
   num_funcs~ : Int32,
 ) -> Unit raise GCSetupError {
-  if c_jit_context_is_valid(context) == 0 {
-    raise MissingJITContext
-  }
-  if num_funcs < 0 {
-    raise InvalidFuncCount(num_funcs~)
-  }
-  if func_type_indices.length() != num_funcs {
-    raise FuncTypeIndicesLengthMismatch(
-      func_type_indices_len=func_type_indices.length(),
-      num_funcs~,
-    )
-  }
-  if num_funcs > 0 && func_table_ptr == 0L {
-    raise MissingFunctionTableContext(num_funcs~)
-  }
+  validate_gc_setup(
+    context,
+    func_type_indices.length(),
+    func_table_ptr,
+    num_funcs,
+  )
   gc_set_heap(context, heap)
   context.bind_gc_metadata(
-    gc_type_data(types),
+    gc_type_data(types[:]),
     FixedArray::from_array(canonical_indices),
     FixedArray::from_array(func_type_indices),
   ) catch {

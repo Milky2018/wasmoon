@@ -1267,6 +1267,31 @@ pub fn JITModule::setup_gc_with_func_table(
 }
 
 ///|
+/// Prepare immutable metadata after this module's function addresses are installed.
+pub fn JITModule::prepare_gc_environment(
+  self : JITModule,
+  types : ArrayView[@types.SubType],
+  canonical_indices : ArrayView[Int32],
+  func_type_indices : ArrayView[Int32],
+) -> @wasmoon_jit.PreparedGCEnvironment raise @wasmoon_jit.GCSetupError {
+  guard self.context is Some(context) else { raise MissingJITContext }
+  context.ctx.prepare_gc_environment(
+    types, canonical_indices, func_type_indices,
+  )
+}
+
+///|
+/// Rebind a prepared environment while retaining live-module/context checks.
+pub fn JITModule::setup_gc_environment(
+  self : JITModule,
+  heap : @wasmoon_jit.CHeap,
+  environment : @wasmoon_jit.PreparedGCEnvironment,
+) -> Unit raise @wasmoon_jit.GCSetupError {
+  guard self.context is Some(context) else { raise MissingJITContext }
+  context.ctx.setup_gc_environment(heap, environment)
+}
+
+///|
 pub fn JITModule::teardown_gc(self : JITModule) -> Unit {
   if self.context is Some(context) {
     context.ctx.teardown_gc()
