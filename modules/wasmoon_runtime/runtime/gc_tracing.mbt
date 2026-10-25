@@ -24,10 +24,11 @@ fn Store::trace_gc_roots(
   self : Store,
   additional : Array[@types.Value],
   native_roots~ : Array[@types.Value] = [],
+  young~ : Bool = false,
 ) -> GcTrace {
   let trace : GcTrace = {
     objects: [],
-    native: self.begin_native_gc_trace(),
+    native: self.begin_native_gc_trace(young~),
     wrappers: Map([]),
     exceptions: Map([]),
     native_exceptions: Map([]),
@@ -210,49 +211,100 @@ fn Store::decode_gc_root_words(
 fn Store::install_gc_tracing(self : Store) -> Unit {
   guard self.references.native.c_heap is Some(heap) else { return }
   self.native_execution.exceptions().enable_reclamation()
-  heap.bind_root_visitor(fn(phase, words) {
-    if phase == 2 {
-      self.gc_trace = None
-      self.gc_in_collect = false
-      return []
-    }
-    if phase == 1 {
-      if self.gc_trace is Some(trace) {
-        self.release_unreachable_handles(trace)
-      }
-      self.gc_trace = None
-      self.gc_in_collect = false
-      return []
-    }
-    self.gc_in_collect = true
-    try {
-      let roots = self.decode_gc_root_words(words)
-      // Explicit host roots were already expanded before entering native GC.
-      if self.gc_trace is Some(trace) {
-        for index in trace.wrappers.keys() {
-          roots.push(ExternRef(-1 - index))
-        }
-        for index in trace.exceptions.keys() {
-          roots.push(ExnRef(index))
-        }
-        for handle in trace.continuations.keys() {
-          roots.push(ContRef(handle))
-        }
-      }
-      let trace = self.trace_gc_roots(roots)
-      self.gc_trace = Some(trace)
-      let raw = self.native_trace_roots(trace)
-      if trace.native.graph is Some(graph) {
-        graph.mark()
-      }
-      FixedArray::makei(raw.length(), i => raw[i])
-    } catch {
-      _ => {
+  heap.bind_generational_root_visitor(
+    fn(phase, words) {
+      if phase == 2 {
         self.gc_trace = None
-        [-2L]
+        self.gc_in_collect = false
+        return []
       }
+      if phase == 1 {
+        if self.gc_trace is Some(trace) {
+          self.release_unreachable_handles(trace)
+        }
+        self.gc_trace = None
+        self.gc_in_collect = false
+        return []
+      }
+      self.gc_in_collect = true
+      try {
+        let roots = self.decode_gc_root_words(words)
+        // Explicit host roots were already expanded before entering native GC.
+        if self.gc_trace is Some(trace) {
+          for index in trace.wrappers.keys() {
+            roots.push(ExternRef(-1 - index))
+          }
+          for index in trace.exceptions.keys() {
+            roots.push(ExnRef(index))
+          }
+          for handle in trace.continuations.keys() {
+            roots.push(ContRef(handle))
+          }
+        }
+        let trace = self.trace_gc_roots(roots)
+        self.gc_trace = Some(trace)
+        let raw = self.native_trace_roots(trace)
+        if trace.native.graph is Some(graph) {
+          graph.mark()
+        }
+        FixedArray::makei(raw.length(), i => raw[i])
+      } catch {
+        _ => {
+          self.gc_trace = None
+          [-2L]
+        }
+      }
+    },
+    fn(words) { self.trace_young_collection(words) },
+  )
+}
+
+///|
+#cfg(target="native")
+fn Store::young_auxiliary_empty(self : Store) -> Bool {
+  self.references.wrapped_externs.is_empty() &&
+  self.references.exns.is_empty() &&
+  self.guest_continuations.is_empty() &&
+  !self.native_execution.exceptions().has_entries() &&
+  !self.native_execution.continuations().has_entries()
+}
+
+///|
+#cfg(target="native")
+fn Store::trace_young_collection(
+  self : Store,
+  words : FixedArray[Int64],
+) -> FixedArray[Int64]? {
+  // Full discovery owns auxiliary lifetimes and explicit pre-expanded traces.
+  // Declining here does not mutate marks or the guest heap.
+  guard self.gc_trace is None && self.young_auxiliary_empty() else {
+    return None
+  }
+  self.gc_in_collect = true
+  try {
+    let roots = self.decode_gc_root_words(words)
+    let trace = self.trace_gc_roots(roots, young=true)
+    // Decoding a previously unseen boundary may establish auxiliary metadata.
+    if !self.young_auxiliary_empty() ||
+      !trace.wrappers.is_empty() ||
+      !trace.exceptions.is_empty() ||
+      !trace.continuations.is_empty() ||
+      !trace.native_continuations.is_empty() {
+      self.gc_in_collect = false
+      return None
     }
-  })
+    let raw = self.native_trace_roots(trace)
+    self.gc_trace = Some(trace)
+    if trace.native.graph is Some(graph) {
+      graph.mark()
+    }
+    Some(FixedArray::makei(raw.length(), i => raw[i]))
+  } catch {
+    _ => {
+      self.gc_trace = None
+      Some([-2L])
+    }
+  }
 }
 
 ///|

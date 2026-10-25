@@ -159,11 +159,18 @@ fn Store::trace_native_word(
 }
 
 ///|
-fn Store::begin_native_gc_trace(self : Store) -> NativeGcTrace {
+fn Store::begin_native_gc_trace(
+  self : Store,
+  young~ : Bool = false,
+) -> NativeGcTrace {
   {
     seeds: [],
     graph: self.references.native.c_heap.map(heap => {
-      heap.get_ptr().begin_trace()
+      if young {
+        heap.get_ptr().begin_young_trace()
+      } else {
+        heap.get_ptr().begin_trace()
+      }
     }),
   }
 }

@@ -458,6 +458,8 @@ int64_t WASMOON_GUEST_ABI gc_register_struct_inline(jit_context_t *ctx, uint8_t 
 
     // Calculate offset and register object
     int32_t offset = (int32_t)(obj_ptr - heap->data);
+    if (!gc_object_layout(heap, (GcHeader *)obj_ptr))
+        heap->generation.has_untyped_allocations = 1;
     int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     // Update heap size to match what JIT allocated
@@ -1087,7 +1089,7 @@ void WASMOON_GUEST_ABI gc_array_set_heap_impl(GcHeap *heap, int64_t ref, int32_t
     uint8_t *element = data + GC_ARRAY_DATA_OFFSET +
         (size_t)idx * (layout ? layout->size : 16);
     GcSlot slot = {value, 0};
-    if (access.reference) gc_heap_write_barrier(heap, gc_ref, value);
+    if (access.reference) gc_heap_write_barrier_at(heap, gc_ref, value, idx);
     gc_access_layout_write(element, &access, slot);
     gc_access_verify(heap, "array_set");
 }

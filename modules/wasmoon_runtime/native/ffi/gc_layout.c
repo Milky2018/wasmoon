@@ -187,20 +187,46 @@ static int trace_push(TraceWords *words, int64_t word) {
 }
 
 typedef struct { int32_t *data; int32_t size, capacity; } TraceRefs;
-typedef struct { GcHeap *heap; uint32_t epoch; TraceRefs objects; int failed; } NativeTrace;
+typedef struct {
+    GcHeap *heap;
+    uint32_t epoch;
+    TraceRefs objects;
+    int failed;
+    int32_t young_boundary;
+    uint64_t young_epoch;
+} NativeTrace;
 static void free_native_trace(void *opaque) {
     NativeTrace *trace = opaque;
     free(trace->objects.data);
     moonbit_decref(trace->heap);
 }
 
-void *wasmoon_gc_heap_begin_trace(GcHeap *heap) {
+static void *begin_trace(GcHeap *heap, int young) {
     NativeTrace *trace = moonbit_make_external_object(free_native_trace, sizeof(*trace));
     memset(trace, 0, sizeof(*trace));
     moonbit_incref(heap);
     trace->heap = heap;
     trace->epoch = next_trace_epoch(heap);
+    if (young) {
+        trace->young_boundary = heap->generation.old_boundary;
+        trace->young_epoch = heap->generation.young_epoch;
+        if (!heap->generation.tracing_young) trace->failed = 1;
+    }
     return trace;
+}
+
+void *wasmoon_gc_heap_begin_trace(GcHeap *heap) {
+    return begin_trace(heap, 0);
+}
+
+void *wasmoon_gc_heap_begin_young_trace(GcHeap *heap) {
+    return begin_trace(heap, 1);
+}
+
+static int remembered_owner(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
+    return page && ((page->remembered[slot >> 6] >> (slot & 63)) & 1);
 }
 
 int64_t *wasmoon_gc_trace_objects(NativeTrace *trace) {
@@ -209,9 +235,17 @@ int64_t *wasmoon_gc_trace_objects(NativeTrace *trace) {
     return result;
 }
 
+static int trace_scope_valid(NativeTrace *trace) {
+    return !trace->young_boundary ||
+        (trace->heap->generation.tracing_young &&
+         trace->young_epoch == trace->heap->generation.young_epoch &&
+         trace->young_boundary == trace->heap->generation.old_boundary);
+}
+
 void wasmoon_gc_trace_mark(NativeTrace *trace) {
-    if (trace->failed) return;
+    if (trace->failed || !trace_scope_valid(trace)) return;
     for (int32_t i = 0; i < trace->objects.size; i++) {
+        if (trace->objects.data[i] <= trace->young_boundary) continue;
         int32_t offset = gc_heap_identity_offset(trace->heap, trace->objects.data[i]);
         if (offset >= 0) {
             gc_heap_mark_header(trace->heap, trace->objects.data[i],
@@ -241,11 +275,13 @@ static int trace_object(GcHeap *heap, int32_t ref, uint32_t epoch, TraceRefs *ob
 // owner, without per-object managed allocation. Untyped edges remain Store work.
 // -1 denotes an untyped seed; -2 means the graph could not be completed.
 int64_t *wasmoon_gc_heap_trace_graph(NativeTrace *trace, int32_t ref) {
-    if (trace->failed) return moonbit_make_int64_array(1, -2);
+    if (trace->failed || !trace_scope_valid(trace)) return moonbit_make_int64_array(1, -2);
     GcHeap *heap = trace->heap;
     int32_t offset = gc_heap_identity_offset(heap, ref);
     if (offset < 0 || !gc_object_layout(heap, (GcHeader *)(heap->data + offset)))
         return moonbit_make_int64_array(1, -1);
+    if (ref <= trace->young_boundary && !remembered_owner(heap, ref))
+        return moonbit_make_int64_array(1, 0);
     TraceRefs *objects = &trace->objects;
     TraceWords boundary = {0};
     int32_t start = objects->size;
@@ -258,26 +294,41 @@ int64_t *wasmoon_gc_heap_trace_graph(NativeTrace *trace, int32_t ref) {
         const uint8_t *data = (uint8_t *)header + GC_HEADER_SIZE;
         int32_t count = array ? *(const int32_t *)data : layout->count;
         if (layout->reference_count == 0) continue;
-        for (int32_t i = 0; complete && i < count; i++) {
-            GcFieldLayout *field = &layout->fields[array ? 0 : i];
-            if (!field->reference) continue;
-            int64_t word = gc_layout_read(array ? data + GC_ARRAY_DATA_OFFSET + (size_t)i * layout->size : data, field).lo;
-            if (!word) continue;
-            if (field->reference != 2) {
-                // i31 is odd, including negative i31. It is not a continuation.
-                if ((word & 1) && !(word > 0 && ((uint64_t)word & UINT64_C(0x7000000000000000)) == UINT64_C(0x1000000000000000))) continue;
-                const uint64_t tags = UINT64_C(0x7000000000000000);
-                uint64_t child64 = (uint64_t)word >> 1;
-                if (word > 0 && !((uint64_t)word & tags) && child64 <= INT32_MAX) {
-                    int32_t child = (int32_t)child64;
-                    int32_t child_offset = gc_heap_identity_offset(heap, child);
-                    if (child_offset >= 0 && gc_object_layout(heap, (GcHeader *)(heap->data + child_offset))) {
-                        complete = trace_object(heap, child, trace->epoch, objects);
-                        continue;
+        GcCardSet *cards = current <= trace->young_boundary
+            ? gc_generation_dirty_cards(heap, current) : NULL;
+        int32_t next = 0;
+        while (complete && next < count) {
+            int32_t begin = next, end = count;
+            if (cards) {
+                int32_t card = gc_generation_next_card(cards, next >> GC_CARD_SHIFT);
+                if (card < 0) break;
+                begin = card * GC_CARD_SIZE;
+                end = count - begin < GC_CARD_SIZE ? count : begin + GC_CARD_SIZE;
+            }
+            for (int32_t i = begin; complete && i < end; i++) {
+                GcFieldLayout *field = &layout->fields[array ? 0 : i];
+                if (!field->reference) continue;
+                int64_t word = gc_layout_read(array ? data + GC_ARRAY_DATA_OFFSET + (size_t)i * layout->size : data, field).lo;
+                if (!word) continue;
+                if (field->reference != 2) {
+                    // i31 is odd, including negative i31. It is not a continuation.
+                    if ((word & 1) && !(word > 0 && ((uint64_t)word & UINT64_C(0x7000000000000000)) == UINT64_C(0x1000000000000000))) continue;
+                    const uint64_t tags = UINT64_C(0x7000000000000000);
+                    uint64_t child64 = (uint64_t)word >> 1;
+                    if (word > 0 && !((uint64_t)word & tags) && child64 <= INT32_MAX) {
+                        int32_t child = (int32_t)child64;
+                        if (child <= trace->young_boundary && !remembered_owner(heap, child)) continue;
+                        int32_t child_offset = gc_heap_identity_offset(heap, child);
+                        if (child_offset >= 0 && gc_object_layout(heap, (GcHeader *)(heap->data + child_offset))) {
+                            complete = trace_object(heap, child, trace->epoch, objects);
+                            continue;
+                        }
                     }
                 }
+                complete = trace_push(&boundary, word) && trace_push(&boundary, field->reference);
             }
-            complete = trace_push(&boundary, word) && trace_push(&boundary, field->reference);
+            if (!cards) break;
+            next = end;
         }
     }
     int64_t *result;

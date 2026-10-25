@@ -530,11 +530,46 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_gc_identity_bytes(GcHeap *heap) {
     size_t bytes = (size_t)heap->identity_page_capacity * sizeof(GcIdentityPage *) +
         (size_t)heap->live_capacity * sizeof(int32_t);
     for (int32_t i = 0; i < heap->identity_page_capacity; i++) {
-        if (heap->identity_pages[i]) bytes += sizeof(GcIdentityPage);
+        if (heap->identity_pages[i]) bytes += sizeof(GcIdentityPage) + gc_generation_page_metadata_bytes(heap->identity_pages[i]);
     }
     return (int64_t)bytes;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_test_gc_allocation_budget(GcHeap *heap, int64_t bytes) {
     heap->collection_limit = heap->size + (size_t)bytes;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_allocation_collection(GcHeap *heap, const int64_t *roots) {
+    return gc_heap_collect_for_allocation(heap, roots, Moonbit_array_length(roots));
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_minor_collections(GcHeap *heap) {
+    return heap->generation.minor_collections;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_heap_collection_allowance(GcHeap *heap) {
+    return (int64_t)heap->collection_limit - (int64_t)heap->size;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_dirty_cards(GcHeap *heap, int32_t ref) {
+    return gc_generation_card_count(heap, ref);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_unknown_reference_write(
+    GcHeap *heap, int32_t ref, int32_t field, int64_t value
+) {
+    if (!gc_heap_is_valid(heap, ref)) return 0;
+    GcHeader *header = (GcHeader *)(heap->data + gc_heap_identity_offset(heap, ref));
+    GcTypeLayout *layout = gc_object_layout(heap, header);
+    int array = header->kind == GC_KIND_ARRAY;
+    uint8_t *data = (uint8_t *)(header + 1);
+    int32_t count = array ? *(int32_t *)data : (int32_t)header->reserved;
+    if (!layout || field < 0 || field >= count) return 0;
+    GcFieldLayout *descriptor = &layout->fields[array ? 0 : field];
+    if (!descriptor->reference) return 0;
+    gc_heap_write_barrier(heap, ref, value);
+    gc_layout_write(array ? data + GC_ARRAY_DATA_OFFSET + (size_t)field * layout->size : data,
+        descriptor, (GcSlot){value, 0});
+    gc_heap_maybe_verify(heap, "unknown reference write");
+    return 1;
 }

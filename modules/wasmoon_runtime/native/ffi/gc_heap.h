@@ -37,6 +37,11 @@
 extern "C" {
 #endif
 
+// Keep these in sync with types/types.mbt.
+#define GC_EXTERNREF_TAG 0x4000000000000000LL
+#define GC_FUNCREF_TAG   0x2000000000000000LL
+#define GC_REF_TAGS_MASK (GC_EXTERNREF_TAG | GC_FUNCREF_TAG | GC_EXCEPTION_REF_TAG)
+
 // Object kinds
 #define GC_KIND_FREE   0
 #define GC_KIND_STRUCT 1
@@ -119,12 +124,24 @@ typedef struct {
 // released without making an old identity designate a different object.
 #define GC_ID_PAGE_BITS 10
 #define GC_ID_PAGE_SIZE (1 << GC_ID_PAGE_BITS)
-typedef struct {
+typedef struct GcCardSet GcCardSet;
+#define GC_CARD_SHIFT 8
+#define GC_CARD_SIZE (1 << GC_CARD_SHIFT)
+#define GC_CARD_MIN_FIELDS 8192
+typedef struct GcIdentityPage {
     int32_t offsets[GC_ID_PAGE_SIZE];
     int32_t runtime_types[GC_ID_PAGE_SIZE];
     int32_t live_count;
     uint32_t visit_epochs[GC_ID_PAGE_SIZE];
     int32_t has_marked_objects; // Conservative hint for whole-page retirement
+    // Appended metadata preserves the offsets consumed by generated code.
+    int32_t old_live_count;
+    uint64_t remembered[GC_ID_PAGE_SIZE / 64];
+    struct GcIdentityPage *remembered_next;
+    int32_t remembered_linked;
+    int32_t page_index;
+    GcCardSet **cards;
+    int32_t card_objects;
 } GcIdentityPage;
 
 // Shared mutable controls are read on every generated allocation.
@@ -142,6 +159,15 @@ typedef struct {
     uint64_t shape;
     void *payload;
 } GcStructViewCache;
+
+typedef struct {
+    int32_t tracking_enabled, has_untyped_allocations, tracing_young;
+    uint64_t young_epoch;
+    int32_t old_count, old_boundary, minor_collections, minors_since_major;
+    size_t old_size, last_major_size;
+    GcIdentityPage *remembered_pages;
+    int32_t remembered_count;
+} GcGeneration;
 
 typedef struct GcHeap {
     uint8_t* data;              // Heap memory
@@ -193,6 +219,7 @@ typedef struct GcHeap {
     // False proves there are no pre-marked payload roots to discover. Marking
     // sets this hint; complete mark clearing resets it before visitor callbacks.
     int32_t has_marked_objects;
+    GcGeneration generation;
 } GcHeap;
 
 static inline void gc_heap_forget_struct_view(GcHeap *heap) {
@@ -208,6 +235,28 @@ static inline GcIdentityPage *gc_heap_identity_page(GcHeap *heap, int32_t ref) {
 static inline int32_t gc_heap_identity_offset(GcHeap *heap, int32_t ref) {
     GcIdentityPage *page = gc_heap_identity_page(heap, ref);
     return page ? page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] : -1;
+}
+
+static inline int gc_try_decode_heap_ref_candidate(
+    GcHeap* heap,
+    int64_t value,
+    int32_t* out_target_gc_ref
+) {
+    if (!heap || value <= 0) {
+        return 0;
+    }
+    // i31 and tagged refs are not GC heap references.
+    if ((value & 1L) != 0L || (value & GC_REF_TAGS_MASK) != 0L) {
+        return 0;
+    }
+    int64_t target64 = value >> 1;
+    if (target64 <= 0 || target64 > heap->object_count) {
+        return 0;
+    }
+    if (out_target_gc_ref) {
+        *out_target_gc_ref = (int32_t)target64;
+    }
+    return 1;
 }
 
 // The caller has resolved a valid payload for this identity. Keep every mark
@@ -282,6 +331,25 @@ static inline uint8_t *gc_heap_allocation_limit(GcHeap *heap) {
 static inline GcHeap *gc_heap_live(GcHeap *heap) {
     return heap && heap->data ? heap : NULL;
 }
+
+// Private generational primitives; MoonBit chooses collection policy and roots.
+void gc_generation_enable(GcHeap *heap);
+int gc_generation_can_collect_young(GcHeap *heap);
+void gc_generation_prepare_major(GcHeap *heap);
+void gc_generation_prepare_young(GcHeap *heap);
+void gc_generation_remember(GcHeap *heap, int32_t owner, int32_t child, int32_t field);
+void gc_generation_prepare_object(GcHeap *heap, int32_t ref);
+void gc_generation_retire_object(GcIdentityPage *page, int32_t ref);
+void gc_generation_free_page(GcIdentityPage *page);
+size_t gc_generation_page_metadata_bytes(const GcIdentityPage *page);
+GcCardSet *gc_generation_dirty_cards(GcHeap *heap, int32_t ref);
+int32_t gc_generation_next_card(const GcCardSet *cards, int32_t start);
+int32_t gc_generation_card_count(GcHeap *heap, int32_t ref);
+int32_t gc_generation_copy_remembered_roots(GcHeap *heap, int64_t *roots);
+void gc_generation_promote(GcHeap *heap, int young);
+int gc_generation_verify(GcHeap *heap, int verbose);
+int gc_heap_allocation_faults_disabled(void);
+int32_t gc_heap_collect_for_allocation(GcHeap *heap, const int64_t *roots, int32_t count);
 
 // ============ Heap Lifecycle ============
 
@@ -466,9 +534,11 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
 
 /**
  * Write barrier hook for reference stores.
- * Current collector is non-generational; this is a debug hook/assertion point.
+ * Records mature-to-young edges and preserves debug counters/assertions.
  */
 void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_value);
+// Logical field/element index; -1 conservatively dirties the entire owner.
+void gc_heap_write_barrier_at(GcHeap *heap, int32_t owner_gc_ref, int64_t written_value, int32_t field);
 
 // ============ Type Information ============
 

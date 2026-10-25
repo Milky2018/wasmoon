@@ -49,8 +49,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_attempt(void *raw_request) {
     return reference;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_collect(void *raw_request) {
-    gc_allocation_request_t *request = raw_request;
+static int32_t collect_for_allocation(gc_allocation_request_t *request, int prefer_young) {
     int array = request->layout != GC_ALLOC_STRUCT_WORDS && request->layout != GC_ALLOC_STRUCT_SLOTS;
     GcTypeLayout *layout = NULL;
     if (request->ctx && request->type_idx >= 0 &&
@@ -61,12 +60,17 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_collect(void *raw_request) {
     }
     int32_t collected = gc_collect_for_alloc_indexed_internal(
         request->ctx, request->roots, request->root_count, request->root_indices,
-        layout, array);
+        prefer_young, layout, array);
     if (collected >= 0) {
         request->result.retry_count++;
         request->result.collected_objects += collected;
     }
     return collected;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_collect(void *raw_request) {
+    // After physical failure, a full collection can reclaim dead mature nodes.
+    return collect_for_allocation(raw_request, 0);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_denial(void *raw_request) {
@@ -103,7 +107,7 @@ int32_t gc_allocate(gc_allocation_request_t *request) {
     // Only collect where the Store's precise visitor and the allocation's
     // staged inputs are available. Low-level heaps retain their explicit-GC API.
     if (allocation_needs_collection(request)) {
-        if (wasmoon_gc_allocation_collect(request) < 0) return -10;
+        if (collect_for_allocation(request, 1) < 0) return -10;
     }
     // The successful fast path remains native. Physical failure still enters
     // the closed MoonBit retry policy with its distinct quota/trap outcomes.

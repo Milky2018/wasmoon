@@ -128,10 +128,10 @@ static inline void gc_access_struct_set(GcHeap* heap, int32_t gc_ref, int32_t fi
     if (field_idx < 0 || (uint32_t)field_idx >= (uint32_t)header->reserved) return;
     GcTypeLayout *layout = gc_object_layout(heap, header);
     if (layout) {
-        if (layout->fields[field_idx].reference) gc_heap_write_barrier(heap, gc_ref, value.lo);
+        if (layout->fields[field_idx].reference) gc_heap_write_barrier_at(heap, gc_ref, value.lo, field_idx);
         gc_access_layout_write(data, &layout->fields[field_idx], value);
     } else {
-        gc_heap_write_barrier(heap, gc_ref, value.lo);
+        gc_heap_write_barrier_at(heap, gc_ref, value.lo, field_idx);
         ((GcSlot *)data)[field_idx] = value;
     }
     gc_access_verify(heap, "struct_set");
@@ -178,10 +178,10 @@ static inline void gc_access_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx
 
     GcTypeLayout *layout = gc_object_layout(heap, (GcHeader *)(data - GC_HEADER_SIZE));
     if (layout) {
-        if (layout->fields[0].reference) gc_heap_write_barrier(heap, gc_ref, value.lo);
+        if (layout->fields[0].reference) gc_heap_write_barrier_at(heap, gc_ref, value.lo, idx);
         gc_access_layout_write(data + GC_ARRAY_DATA_OFFSET + (size_t)idx * layout->size, &layout->fields[0], value);
     } else {
-        gc_heap_write_barrier(heap, gc_ref, value.lo);
+        gc_heap_write_barrier_at(heap, gc_ref, value.lo, idx);
         ((GcSlot *)(data + GC_ARRAY_DATA_OFFSET))[idx] = value;
     }
     gc_access_verify(heap, "array_set");

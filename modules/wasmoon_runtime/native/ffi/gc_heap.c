@@ -31,11 +31,6 @@ int gc_verify_env_cached = -1;
 static GcAllocationControl gc_allocation_control;
 static void refresh_allocation_control(void);
 
-// Keep these in sync with types/types.mbt.
-#define GC_EXTERNREF_TAG 0x4000000000000000LL
-#define GC_FUNCREF_TAG   0x2000000000000000LL
-#define GC_REF_TAGS_MASK (GC_EXTERNREF_TAG | GC_FUNCREF_TAG | GC_EXCEPTION_REF_TAG)
-
 static int gc_is_truthy_env(const char* value) {
     if (!value) {
         return 0;
@@ -123,6 +118,10 @@ static void gc_set_fail_alloc_config(int fail_at, int fail_every) {
     refresh_allocation_control();
 }
 
+int gc_heap_allocation_faults_disabled(void) {
+    return gc_fail_alloc_at_cached == 0 && gc_fail_alloc_every_cached == 0;
+}
+
 static int gc_barrier_assert_env_cached = -1;
 
 typedef enum { GC_ROOT_UNBOUND, GC_ROOT_EXCEPTION, GC_ROOT_CONTINUATION } GcRootOwnerKind;
@@ -143,28 +142,6 @@ static int gc_barrier_assert_enabled(void) {
         gc_barrier_assert_env_cached = gc_is_truthy_env(value) ? 1 : 0;
     }
     return gc_barrier_assert_env_cached;
-}
-
-static int gc_try_decode_heap_ref_candidate(
-    GcHeap* heap,
-    int64_t value,
-    int32_t* out_target_gc_ref
-) {
-    if (!heap || value <= 0) {
-        return 0;
-    }
-    // i31 and tagged refs are not GC heap references.
-    if ((value & 1L) != 0L || (value & GC_REF_TAGS_MASK) != 0L) {
-        return 0;
-    }
-    int64_t target64 = value >> 1;
-    if (target64 <= 0 || target64 > heap->object_count) {
-        return 0;
-    }
-    if (out_target_gc_ref) {
-        *out_target_gc_ref = (int32_t)target64;
-    }
-    return 1;
 }
 
 // ============ Internal Helpers ============
@@ -215,6 +192,13 @@ int gc_heap_ensure_object_capacity(GcHeap* heap) {
         memset(page, 0xff, sizeof(*page));
         page->live_count = 0;
         page->has_marked_objects = 0;
+        page->old_live_count = 0;
+        memset(page->remembered, 0, sizeof(page->remembered));
+        page->remembered_next = NULL;
+        page->remembered_linked = 0;
+        page->page_index = page_index;
+        page->cards = NULL;
+        page->card_objects = 0;
         memset(page->visit_epochs, 0, sizeof(page->visit_epochs));
         heap->identity_pages[page_index] = page;
     }
@@ -256,6 +240,8 @@ static void forget_identity_window(GcHeap *heap) {
 // Called only after capacity admission; no callbacks or allocations publish a
 // partially initialized object. Payload order and identity order agree.
 int32_t gc_heap_register_object(GcHeap *heap, int32_t offset) {
+    // Typed prepared constructors register before initializing their header.
+    // Allocation sites, not publication of a reserved identity, classify layout.
     int32_t ref = gc_heap_publish_object(heap, offset, -1);
     prepare_identity_window(heap);
     return ref;
@@ -265,11 +251,12 @@ static void retire_identity(GcHeap *heap, int32_t ref) {
     if (heap->struct_view.reference == (int64_t)ref * 2) gc_heap_forget_struct_view(heap);
     int32_t index = ref - 1;
     GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
+    gc_generation_retire_object(page, ref);
     page->offsets[index & (GC_ID_PAGE_SIZE - 1)] = -1;
     page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = -1;
     if (--page->live_count == 0) {
         heap->identity_pages[index >> GC_ID_PAGE_BITS] = NULL;
-        free(page);
+        gc_generation_free_page(page);
     }
 }
 
@@ -308,7 +295,7 @@ static void finalize_gc_heap(void *object) {
     for (int32_t i = 0; i < heap->layout_capacity; i++) free(heap->layouts[i]);
     free(heap->layouts);
     free(heap->free_list);
-    for (int32_t i = 0; i < heap->identity_page_capacity; i++) free(heap->identity_pages[i]);
+    for (int32_t i = 0; i < heap->identity_page_capacity; i++) gc_generation_free_page(heap->identity_pages[i]);
     free(heap->identity_pages);
     free(heap->live_objects);
     free(heap->data);
@@ -453,6 +440,9 @@ typedef struct {
     const int64_t *roots;
     int32_t count;
     int32_t rollback_boundary;
+    int32_t allocation_collection;
+    int32_t young;
+    size_t allocation_budget;
 } GcCollectionRequest;
 
 MOONBIT_FFI_EXPORT void *wasmoon_gc_heap_collection_state(GcHeap *heap) {
@@ -501,6 +491,7 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
     int32_t execution_count = copy_execution_roots(heap, NULL);
     if (execution_count < 0) return moonbit_make_int64_array(1, -2);
     size += execution_count;
+    if (request->young) size += heap->generation.remembered_count;
     if (heap->has_marked_objects) {
         for (int32_t i = 0; i < heap->live_count; ++i) {
             GcHeader *header = get_object_header(heap, heap->live_objects[i]);
@@ -521,6 +512,7 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
         return moonbit_make_int64_array(1, -2);
     }
     at += execution_count;
+    if (request->young) at += gc_generation_copy_remembered_roots(heap, input + at);
     // No callbacks or buffer growth occur during this copy. Snapshot the scan
     // span so writes to the fresh output do not force descriptor reloads.
     const int32_t object_count = heap->live_count;
@@ -540,6 +532,32 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
     return input;
 }
 
+MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_generation(GcCollectionRequest *request) {
+    int64_t *state = moonbit_make_int64_array(5, 0);
+    state[0] = request->allocation_collection;
+    state[1] = gc_generation_can_collect_young(request->heap);
+    state[2] = (int64_t)request->heap->generation.old_size;
+    state[3] = (int64_t)request->heap->generation.last_major_size;
+    state[4] = request->heap->generation.minors_since_major;
+    return state;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_gc_heap_enable_generations(GcHeap *heap) {
+    gc_generation_enable(heap);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_gc_collection_prepare(
+    GcCollectionRequest *request, int32_t young, int64_t budget
+) {
+    request->young = young;
+    request->allocation_budget = (size_t)budget;
+    if (young) {
+        gc_heap_maybe_verify(request->heap, "young collection admission");
+        gc_generation_prepare_young(request->heap);
+    }
+    else gc_generation_prepare_major(request->heap);
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_gc_collection_mark(GcCollectionRequest *request, const int64_t *roots) {
     gc_heap_mark_roots(request->heap, roots, Moonbit_array_length(roots));
 }
@@ -557,6 +575,7 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_reset_auxiliary_marks(GcCollection
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_gc_collection_abort(GcCollectionRequest *request) {
+    request->heap->generation.tracing_young = 0;
     GcHeap *heap = request->heap;
     for (int32_t i = 0; i < heap->live_count; ++i) {
         GcHeader *header = get_object_header(heap, heap->live_objects[i]);
@@ -582,20 +601,26 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_set_precise_roots(GcCollectionRequ
 }
 
 static WASMOON_NO_FUNCTION_SANITIZE int32_t gc_run_collection(
-    GcHeap *heap, const int64_t *roots, int32_t count, int32_t rollback_boundary
+    GcHeap *heap, const int64_t *roots, int32_t count, int32_t rollback_boundary,
+    int32_t allocation_collection
 ) {
     if (!heap || !heap->data) return 0;
     // The callback may close its embedding owner. The stack request borrows the
     // heap and root span only until the synchronous coordinator returns.
     moonbit_incref(heap);
-    GcCollectionRequest request = {heap, roots, count, rollback_boundary};
+    int previous_young_trace = heap->generation.tracing_young;
+    GcCollectionRequest request = {heap, roots, count, rollback_boundary, allocation_collection, 0, 0};
     int32_t result = heap->collection_policy(heap->collection_state, &request, rollback_boundary >= 0);
     if (rollback_boundary < 0 && result >= 0) {
         heap->total_collections++;
+        if (request.young) heap->generation.minor_collections++;
         gc_heap_maybe_verify(heap, "collect");
     } else if (rollback_boundary >= 0 && result == 1) {
         gc_heap_maybe_verify(heap, "rollback_allocations");
     }
+    // Same-heap reentry is rejected by the coordinator before preparation.
+    // Such an inner request must leave the enclosing trace scope untouched.
+    heap->generation.tracing_young = previous_young_trace;
     moonbit_decref(heap);
     return result;
 }
@@ -682,6 +707,7 @@ static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
 
     // Update heap state
     heap->size += total_size;
+    heap->generation.has_untyped_allocations = 1;
     int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     gc_heap_maybe_verify(heap, "alloc_struct");
@@ -780,6 +806,7 @@ int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
 
     // Update heap state
     heap->size += total_size;
+    heap->generation.has_untyped_allocations = 1;
     int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     gc_heap_maybe_verify(heap, "alloc_array");
@@ -838,7 +865,7 @@ void gc_heap_array_fill_wide(GcHeap* heap, int32_t gc_ref, int32_t offset,
     GcTypeLayout *layout = gc_object_layout(heap, (GcHeader *)(data - GC_HEADER_SIZE));
     const GcFieldLayout *element = layout ? &layout->fields[0] : &wide_array_element;
     if (element->reference && value.lo) {
-        for (int32_t i = 0; i < count; i++) gc_heap_write_barrier(heap, gc_ref, value.lo);
+        for (int32_t i = 0; i < count; i++) gc_heap_write_barrier_at(heap, gc_ref, value.lo, offset + i);
     }
     // Barriers only validate/count references; no allocation, collection or
     // host callback can invalidate these addresses during this bulk operation.
@@ -876,7 +903,7 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
             for (int32_t i = 0; i < count; i++) {
                 int64_t word;
                 memcpy(&word, src + (size_t)i * src_width, sizeof(word));
-                gc_heap_write_barrier(heap, dst_ref, word);
+                gc_heap_write_barrier_at(heap, dst_ref, word, dst_offset + i);
             }
         }
         memmove(dst, src, (size_t)count * dst_width);
@@ -887,7 +914,7 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
             int32_t i = backwards ? count - 1 - n : n;
             GcSlot value = {0, 0};
             memcpy(&value, src + (size_t)i * src_width, (size_t)src_width);
-            if (dst_reference) gc_heap_write_barrier(heap, dst_ref, value.lo);
+            if (dst_reference) gc_heap_write_barrier_at(heap, dst_ref, value.lo, dst_offset + i);
             memcpy(dst + (size_t)i * dst_width, &value, (size_t)dst_width);
         }
     }
@@ -931,7 +958,7 @@ static void gc_heap_write_barrier_slow(
     }
 }
 
-void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_value) {
+void gc_heap_write_barrier_at(GcHeap* heap, int32_t owner_gc_ref, int64_t written_value, int32_t field) {
     if (!heap) {
         return;
     }
@@ -939,7 +966,14 @@ void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_v
     if (!gc_try_decode_heap_ref_candidate(heap, written_value, &target_gc_ref)) {
         return;
     }
+    if (heap->generation.tracking_enabled &&
+        owner_gc_ref <= heap->generation.old_boundary && target_gc_ref > heap->generation.old_boundary)
+        gc_generation_remember(heap, owner_gc_ref, target_gc_ref, field);
     gc_heap_write_barrier_slow(heap, owner_gc_ref, target_gc_ref);
+}
+
+void gc_heap_write_barrier(GcHeap *heap, int32_t owner, int64_t value) {
+    gc_heap_write_barrier_at(heap, owner, value, -1);
 }
 
 int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
@@ -988,6 +1022,7 @@ int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
 
     // Update heap state
     heap->size += total_size;
+    heap->generation.has_untyped_allocations = 1;
     int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     gc_heap_maybe_verify(heap, "alloc_array_from_values");
@@ -1040,6 +1075,7 @@ int32_t gc_heap_is_valid(GcHeap* heap, int32_t gc_ref) {
 // ============ GC Operations ============
 
 void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
+    if (heap && heap->generation.tracing_young && gc_ref <= heap->generation.old_boundary) return;
     GcHeader* header = get_object_header(heap, gc_ref);
     if (!header || (header->flags & GC_FLAG_MARKED)) {
         return;  // Already marked or invalid
@@ -1083,8 +1119,9 @@ void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
     }
 }
 
-int32_t gc_heap_sweep(GcHeap* heap) {
+static int32_t gc_heap_sweep_mode(GcHeap *heap, int young) {
     if (!heap) return 0;
+    if (!young) gc_generation_prepare_major(heap);
 
     forget_identity_window(heap);
     gc_heap_forget_struct_view(heap);
@@ -1092,12 +1129,13 @@ int32_t gc_heap_sweep(GcHeap* heap) {
     // No allocations, callbacks or payload resizing occur during this sweep.
     const int32_t object_count = heap->live_count;
     uint8_t *data = heap->data;
-    int32_t collected = 0, survivors = 0;
-    for (int32_t i = 0; i < object_count;) {
+    int32_t collected = 0;
+    int32_t survivors = young ? heap->generation.old_count : 0;
+    for (int32_t i = survivors; i < object_count;) {
         int32_t page_index = (heap->live_objects[i] - 1) >> GC_ID_PAGE_BITS;
         GcIdentityPage *page = heap->identity_pages[page_index];
-        int32_t end = i + page->live_count;
-        if (!page->has_marked_objects) {
+        int32_t end = i + page->live_count - (young ? page->old_live_count : 0);
+        if (!page->has_marked_objects && (!young || page->old_live_count == 0)) {
             // Keep the existing dead-header state before retiring the page.
             // Omitting these writes regresses large zero-filled allocation;
             // only identity metadata retirement is batched here.
@@ -1114,7 +1152,7 @@ int32_t gc_heap_sweep(GcHeap* heap) {
             heap->free_count += keep;
             collected += count;
             heap->identity_pages[page_index] = NULL;
-            free(page);
+            gc_generation_free_page(page);
             i = end;
             continue;
         }
@@ -1140,8 +1178,14 @@ int32_t gc_heap_sweep(GcHeap* heap) {
     return collected;
 }
 
-void gc_heap_compact(GcHeap* heap) {
-    if (!heap || heap->object_count == 0) {
+int32_t gc_heap_sweep(GcHeap *heap) {
+    return gc_heap_sweep_mode(heap, 0);
+}
+
+static void gc_heap_compact_mode(GcHeap *heap, int young, size_t allocation_budget) {
+    if (!heap) return;
+    if (heap->object_count == 0) {
+        gc_generation_promote(heap, young);
         return;
     }
 
@@ -1150,9 +1194,10 @@ void gc_heap_compact(GcHeap* heap) {
     // Compaction moves payload bytes, not these backing allocations.
     const int32_t object_count = heap->live_count;
     uint8_t *data = heap->data;
-    size_t new_offset = 0;
+    size_t new_offset = young ? heap->generation.old_size : 0;
+    int32_t first = young ? heap->generation.old_count : 0;
 
-    for (int32_t i = 0; i < object_count; i++) {
+    for (int32_t i = first; i < object_count; i++) {
         int32_t ref = heap->live_objects[i];
         int32_t old_offset = gc_heap_identity_offset(heap, ref);
         if (old_offset < 0) {
@@ -1169,6 +1214,10 @@ void gc_heap_compact(GcHeap* heap) {
             page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = (int32_t)new_offset;
         }
 
+        GcHeader *current = (GcHeader *)(data + new_offset);
+        int32_t fields = current->kind == GC_KIND_ARRAY
+            ? *(int32_t *)(current + 1) : (int32_t)current->reserved;
+        if (fields >= GC_CARD_MIN_FIELDS) gc_generation_prepare_object(heap, ref);
         new_offset += ALIGN_UP(obj_size, 16);
     }
 
@@ -1178,22 +1227,34 @@ void gc_heap_compact(GcHeap* heap) {
 
     // Keep a live-set-sized allocation allowance, rather than waiting for a
     // physical realloc failure. The minimum amortizes fixed tracing costs.
-    size_t allowance = heap->size > MIN_COLLECTION_BUDGET ? heap->size : MIN_COLLECTION_BUDGET;
+    size_t allowance = allocation_budget ? allocation_budget
+        : heap->size > MIN_COLLECTION_BUDGET ? heap->size : MIN_COLLECTION_BUDGET;
     heap->collection_limit = heap->size > (size_t)INT32_MAX - allowance
         ? INT32_MAX : heap->size + allowance;
     // Clear free list (no more free slots after compaction)
     heap->free_count = 0;
+    gc_generation_promote(heap, young);
+}
+
+void gc_heap_compact(GcHeap *heap) {
+    gc_heap_compact_mode(heap, 0, 0);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_gc_collection_sweep(GcCollectionRequest *request) {
     GcHeap *heap = request->heap;
-    int32_t collected = gc_heap_sweep(heap);
-    gc_heap_compact(heap);
+    // Completion callbacks may publish full read-only graphs for the next GC.
+    heap->generation.tracing_young = 0;
+    int32_t collected = gc_heap_sweep_mode(heap, request->young);
+    gc_heap_compact_mode(heap, request->young, request->allocation_budget);
     return collected;
 }
 
 int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
-    return gc_run_collection(heap, roots, num_roots, -1);
+    return gc_run_collection(heap, roots, num_roots, -1, 0);
+}
+
+int32_t gc_heap_collect_for_allocation(GcHeap *heap, const int64_t *roots, int32_t count) {
+    return gc_run_collection(heap, roots, count, -1, 1);
 }
 
 static int gc_verify_fail(const char* message, int32_t verbose) {
@@ -1383,7 +1444,7 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
         }
     }
 
-    return 1;
+    return gc_generation_verify(heap, verbose);
 }
 
 // ============ Utilities ============
@@ -1450,7 +1511,7 @@ int32_t gc_heap_rollback_allocations(
     GcHeap* heap, int32_t object_count, const int64_t* roots, int32_t num_roots
 ) {
     if (!heap || object_count < 0 || object_count > heap->object_count) return 0;
-    return gc_run_collection(heap, roots, num_roots, object_count);
+    return gc_run_collection(heap, roots, num_roots, object_count, 0);
 }
 
 int32_t gc_heap_get_barrier_writes(GcHeap* heap) {

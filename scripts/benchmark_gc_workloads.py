@@ -31,11 +31,10 @@ def array_workload(count: int, *, vector: bool, nonzero: bool, size: int | None 
         i32.const 1))"""
 
 
-def graph_workload(count: int) -> str:
+def graph_workload(count: int, *, nodes: int = 32768) -> str:
     # A long-lived chain survives several full collections while a reference
     # ring mutates and short-lived arrays provide allocation pressure. The chain
     # is checked after churn, rather than merely checking that allocation works.
-    nodes = 32768
     return f"""(module
       (type $node (struct (field (ref null $node)) (field i32)))
       (type $bytes (array (mut i32)))
@@ -65,9 +64,42 @@ def graph_workload(count: int) -> str:
           local.get $cursor ref.is_null br_if $done
           local.get $sum local.get $cursor struct.get $node 1 i32.add local.set $sum
           local.get $cursor struct.get $node 0 local.set $cursor br $walk))
-        local.get $sum i32.const {nodes * (nodes - 1) // 2} i32.eq
+        local.get $sum i32.const {(nodes * (nodes - 1) // 2) & 0xffffffff} i32.eq
         global.get $ring i32.const {(count - 1) & 255} array.get $ring
         struct.get $node 1 i32.const {count - 1} i32.eq i32.and))"""
+
+
+def reference_array_workload(count: int, *, length: int, mutate: bool) -> str:
+    # Keep a large reference container alive while a small working set mutates.
+    # Independent short-lived arrays supply pressure; final values and the
+    # distant null tail are asserted.
+    updates = (
+        'global.get $roots local.get $i i32.const 1023 i32.and '
+        'local.get $i struct.new $node array.set $refs' if mutate else ''
+    )
+    expected = sum(range(count - 1024, count)) if mutate else sum(range(1024))
+    return f"""(module
+ (type $node (struct (field i32))) (type $refs (array (mut (ref null $node))))
+ (type $bytes (array (mut i32)))
+ (global $roots (mut (ref null $refs)) (ref.null $refs))
+ (global $last (mut (ref null $bytes)) (ref.null $bytes))
+ (func (export "probe") (result i32) (local $i i32) (local $sum i32)
+ i32.const {length} array.new_default $refs global.set $roots
+ loop $init
+ global.get $roots local.get $i local.get $i struct.new $node array.set $refs
+ local.get $i i32.const 1 i32.add local.tee $i i32.const 1024 i32.lt_u br_if $init end
+ i32.const 0 local.set $i
+ loop $churn {updates}
+ i32.const 4096 array.new_default $bytes global.set $last
+ global.get $last i32.const 4095 array.get $bytes if unreachable end
+ local.get $i i32.const 1 i32.add local.tee $i i32.const {count} i32.lt_u br_if $churn end
+ i32.const 0 local.set $i
+ loop $check local.get $sum global.get $roots local.get $i array.get $refs
+ struct.get $node 0 i32.add local.set $sum
+ local.get $i i32.const 1 i32.add local.tee $i i32.const 1024 i32.lt_u br_if $check end
+ local.get $sum i32.const {expected} i32.ne if unreachable end
+ global.get $roots i32.const {length-1} array.get $refs ref.is_null i32.eqz if unreachable end
+ i32.const 1))"""
 
 
 def workloads(scale: int) -> dict[str, str]:
@@ -80,6 +112,11 @@ def workloads(scale: int) -> dict[str, str]:
         'i32-tail-nonzero': array_workload(count * 10, vector=False, nonzero=True, size=17),
         'v128-high-word': array_workload(count, vector=True, nonzero=True),
         'survivors-and-mutation': graph_workload(count),
+        'large-survivors-and-mutation': graph_workload(100000 * scale, nodes=2097152),
+        'static-large-reference-array': reference_array_workload(
+            65536 * scale, length=16777212, mutate=False),
+        'mutated-large-reference-array': reference_array_workload(
+            65536 * scale, length=16777212, mutate=True),
     }
 
 
