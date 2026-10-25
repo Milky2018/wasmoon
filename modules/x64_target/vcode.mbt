@@ -268,6 +268,7 @@ pub(all) enum X64Inst {
   TailCallIndirect(@native.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
+  BranchCompare(GprWidth, X64Condition)
   Switch(GprWidth, Array[UInt64])
   Trap(@native.TrapReason)
   Return
@@ -1965,6 +1966,10 @@ fn verify_target_vcode(
       Jump => require_instruction_shape(function, instruction, [], [], true, 1)
       BranchNonZero32 =>
         require_instruction_shape(function, instruction, [I32], [], true, 2)
+      BranchCompare(width, _) => {
+        let ty = integer_type(width)
+        require_instruction_shape(function, instruction, [ty, ty], [], true, 2)
+      }
       Switch(width, cases) => {
         let expected_type = integer_type(width)
         if function.instruction_successor_count(instruction) !=

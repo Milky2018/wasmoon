@@ -1521,22 +1521,14 @@ fn DirectLoweringSession::terminate(
         false_arguments
       ) => {
         let width = if self.value_types[left] == I32 { W32 } else { W64 }
-        let condition = append_body(
-            self.builder,
-            block,
-            CompareSet(width, lower_condition(comparison)),
-            [
-              @vcode.Input::any(self.target_value(left)),
-              @vcode.Input::any(self.target_value(right)),
-            ],
-            [@vcode.Output::any(I32)],
-            @vcode.InstructionMetadata::empty(),
-          )[0]
         set_terminator(
           self.builder,
           block,
-          BranchNonZero32,
-          [@vcode.Input::any(condition)],
+          BranchCompare(width, lower_condition(comparison)),
+          [
+            @vcode.Input::any(self.target_value(left)),
+            @vcode.Input::any(self.target_value(right)),
+          ],
           [
             @vcode.Edge::new(
               self.blocks[true_target],
@@ -1568,22 +1560,14 @@ fn DirectLoweringSession::terminate(
             [@vcode.Output::any(self.value_types[input])],
             @vcode.InstructionMetadata::empty(),
           )[0]
-        let condition = append_body(
-            self.builder,
-            block,
-            CompareSet(width, lower_condition(comparison)),
-            [
-              @vcode.Input::any(self.target_value(input)),
-              @vcode.Input::any(constant),
-            ],
-            [@vcode.Output::any(I32)],
-            @vcode.InstructionMetadata::empty(),
-          )[0]
         set_terminator(
           self.builder,
           block,
-          BranchNonZero32,
-          [@vcode.Input::any(condition)],
+          BranchCompare(width, lower_condition(comparison)),
+          [
+            @vcode.Input::any(self.target_value(input)),
+            @vcode.Input::any(constant),
+          ],
           [
             @vcode.Edge::new(
               self.blocks[true_target],

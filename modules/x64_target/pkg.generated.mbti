@@ -407,6 +407,7 @@ pub(all) enum X64Inst {
   TailCallIndirect(@native_types.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
+  BranchCompare(GprWidth, X64Condition)
   Switch(GprWidth, Array[UInt64])
   Trap(@native_types.TrapReason)
   Return

@@ -424,3 +424,21 @@ and is discarded. The retained change adds no cache or runtime allocation.
 The public production diagnostics control fails before and passes after; public
 poll/callback/fuel/cancellation/root tests and full platform gates remain required.
 Acceptance belongs to the eventual committed head, tracked in ISS-707 and PR582.
+
+## x64 direct comparison branches
+
+The follow-up to revision27 removes the x64 backend's CompareSet, zero-extension
+and TEST sequence for native comparison terminators. A typed BranchCompare emits
+CMP/Jcc using the existing conditional-edge mover and inverse condition, preserving
+fallthrough and branch threading. Immediate comparisons still materialize their
+constant. There is no cross-instruction flags state or runtime policy change.
+Revision28 invalidates prior generated-code caches.
+
+Actual generated x64 code under Rosetta passes4840 signed/unsigned32/64-bit
+boundary and swapped-edge checks through the production guest trampoline. The
+41 relocation-free probe functions shrink2524 ->2188 bytes; the integer branch
+loop shrinks174 ->158 bytes. Seven alternating200M-iteration pairs give medians
+0.290700 ->0.291706s, establishing no execution gain. These timings do not predict
+native Intel/Windows performance. Public production diagnostics, typed verifier
+negatives and interpreter/JIT loop controls protect the lowering and edge logic.
+Exact-head platform acceptance is tracked separately in ISS-708 and PR582.

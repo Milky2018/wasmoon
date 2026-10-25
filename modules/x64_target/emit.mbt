@@ -495,6 +495,22 @@ fn raw_condition(condition : X64Condition) -> RawCondition {
 }
 
 ///|
+fn inverse_condition(condition : X64Condition) -> X64Condition {
+  match condition {
+    Eq => Ne
+    Ne => Eq
+    Hs => Lo
+    Lo => Hs
+    Hi => Ls
+    Ls => Hi
+    Ge => Lt
+    Lt => Ge
+    Gt => Le
+    Le => Gt
+  }
+}
+
+///|
 fn CodeBuffer::emit_local_jcc(
   self : CodeBuffer,
   condition : RawCondition,
@@ -4256,7 +4272,8 @@ fn emit_instruction(
         buffer.x86_emit_jmp_rel32(function.block_index(target).unwrap())
       }
     }
-    BranchNonZero32 =>
+    BranchNonZero32 => {
+      buffer.encoder.x86_emit_test_rr32(reg(0).id, reg(0).id)
       emit_conditional_edges(
         buffer,
         function,
@@ -4264,9 +4281,20 @@ fn emit_instruction(
         frame,
         block,
         instruction,
-        reg(0),
+        Ne,
         next_block,
       )
+    }
+    BranchCompare(width, condition) => {
+      if width == W32 {
+        buffer.encoder.x86_emit_cmp_rr32(reg(0).id, reg(1).id)
+      } else {
+        buffer.encoder.x86_emit_cmp_rr(reg(0).id, reg(1).id)
+      }
+      emit_conditional_edges(
+        buffer, function, allocation, frame, block, instruction, condition, next_block,
+      )
+    }
     Switch(width, cases) =>
       emit_switch_edges(
         buffer,
