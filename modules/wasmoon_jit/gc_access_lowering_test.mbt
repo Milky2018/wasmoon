@@ -470,3 +470,47 @@ test "both targets select bounded repeated word stores for long precise masks" {
     assert_true(diagnostics.code_object.contains("gc.function_frame_enter"))
   }
 }
+
+///|
+test "both targets bound shared struct reservation expansion" {
+  let validation = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { None },
+    defined_type_contract: fn(index) {
+      match index {
+        0 =>
+          Some(
+            Struct([
+              { storage: Value(I32), mutable_: false, defaultable: true, },
+            ]),
+          )
+        1 =>
+          Some(
+            Array({ storage: Value(Ref), mutable_: false, defaultable: true, }),
+          )
+        _ => None
+      }
+    },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  let b = @milkir.FunctionBuilder("bounded_shared_structs")
+  b.add_param(Ptr) |> ignore
+  let input = b.add_param(I32)
+  b.add_result(Ref)
+  let members = Array::makei(64, index => {
+    @wasm_milkir.struct_new(b, 0, [b.iadd(input, b.iconst_i32(index))])
+  })
+  b.return_([@wasm_milkir.array_new_fixed(b, 1, members.length(), members)])
+  for target in [@wasmoon_jit.NativeTarget::X64, AArch64] {
+    let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
+      b.get_function(),
+      validation,
+      target,
+    )
+    assert_false(diagnostics.code_object.contains("gc.reserve_struct_fast"))
+    assert_true(diagnostics.code_object.contains("gc.alloc_struct_slow"))
+  }
+}

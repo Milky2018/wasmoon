@@ -9,7 +9,7 @@ fn lower_fast_struct(
   type_index : Int32,
   default_ : Bool,
 ) -> Bool {
-  if environment.gc_heap_field is None {
+  if !environment.expand_structs || environment.gc_heap_field is None {
     return false
   }
   let widths : Array[Int32] = []
@@ -179,25 +179,32 @@ fn lower_fast_struct(
 fn allocation_expansion_limits(
   function : @milkir.Function,
   validation : @wasm_milkir.WasmValidationContext,
-) -> (Bool, Bool) {
+) -> (Bool, Bool, Bool) {
   let mut struct_cost = 0
+  let mut shared_cost = 0
   let mut arrays = 0
   for block in function.blocks {
     for id in function.block_instruction_ids(block) {
       // Count only allocations: memory preparation also adds projections.
       let inst = function.instruction_by_id(id).unwrap()
       match @wasm_milkir.decode_opcode(inst.opcode) {
-        Some(StructNew(type_) | StructNewDefault(type_)) if struct_cost <= 512 =>
+        Some(StructNew(type_) | StructNewDefault(type_)) if struct_cost <= 512 ||
+          shared_cost <= 1200 =>
           if struct_view_shape(validation, type_) is Some((_, fields)) {
             struct_cost += 128 + fields * 4
+            // Shared reservation still expands guards, header/payload stores
+            // and a slow/join diamond. Bound that work independently of the
+            // larger direct-heap expansion; large functions keep the complete
+            // collecting allocator instead of multiplying target CFG state.
+            shared_cost += 32 + fields * 4
           }
         Some(ArrayNew(_) | ArrayNewDefault(_)) => arrays += 1
         _ => ()
       }
-      if struct_cost > 512 && arrays > 16 {
-        return (false, false)
+      if struct_cost > 512 && shared_cost > 1200 && arrays > 16 {
+        return (false, false, false)
       }
     }
   }
-  (struct_cost <= 512, arrays <= 16)
+  (struct_cost <= 512, arrays <= 16, shared_cost <= 1200)
 }

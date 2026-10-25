@@ -14,6 +14,7 @@ struct Environment {
   inline_heap : InlineHeapLayout?
   gc_array_regions : Bool
   prepared_arrays : Bool
+  expand_structs : Bool
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
@@ -49,6 +50,7 @@ pub fn Environment::new(
     gc_heap_field,
     gc_array_regions,
     prepared_arrays,
+    expand_structs: true,
     inline_heap,
   }
 }
@@ -1686,12 +1688,14 @@ pub fn lower_to_sink(
     }
   }
   let environment = if environment.inline_heap is Some(_) ||
-    environment.prepared_arrays {
-    let (structs, arrays) = allocation_expansion_limits(
+    environment.prepared_arrays ||
+    environment.gc_heap_field is Some(_) {
+    let (structs, arrays, shared_structs) = allocation_expansion_limits(
       function, validation_context,
     )
     {
       ..environment,
+      expand_structs: shared_structs,
       inline_heap: if structs {
         environment.inline_heap
       } else {
