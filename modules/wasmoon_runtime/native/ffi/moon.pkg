@@ -62,6 +62,7 @@ options(
     "gc_heap.mbt": [ "native" ],
     "gc_layout.mbt": [ "native" ],
     "exceptions_wbtest.mbt": [ "native" ],
+    "trap_result_wbtest.mbt": [ "native" ],
     "table.mbt": [ "native" ],
     "continuations.mbt": [ "native" ],
     "continuations_wbtest.mbt": [ "native" ],

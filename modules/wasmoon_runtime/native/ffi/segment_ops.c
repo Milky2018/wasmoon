@@ -362,7 +362,8 @@ int64_t table_type_for_value(jit_context_t *ctx, int64_t val) {
     return type_idx;
 }
 
-static inline void **table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
+// Lookup is nontrapping; callers report bounds failure before reading entries.
+static inline void **find_table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
     if (ctx && table_idx >= 0 && table_idx < ctx_table_count(ctx) && index >= 0) {
         wasmoon_table_binding_t *bindings = ctx_runtime(ctx)->table_bindings;
         if (bindings) {
@@ -378,14 +379,12 @@ static inline void **table_entry(jit_context_t *ctx, int32_t table_idx, int64_t 
                 return tables[table_idx] + (size_t)index * 2;
         }
     }
-    g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-    if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-    return 0;
+    return NULL;
 }
 
 static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t table_idx, int64_t index) {
-    void **entry = table_entry(ctx, table_idx, index);
-    if (!entry) return 0;
+    void **entry = find_table_entry(ctx, table_idx, index);
+    if (!entry) return jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
     int64_t value = (int64_t)(intptr_t)entry[0];
 
     return value;
@@ -393,7 +392,13 @@ static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t tabl
 
 // Reference identity may exist before executable code is registered. Resolve
 // only at a call boundary, never by reinterpreting a Store handle as a pointer.
-static inline int64_t callable_entry_inline(jit_context_t *ctx, int64_t value) {
+// Optimize the read-only type/entry queries together at the call boundary.
+#if defined(_MSC_VER)
+static __forceinline
+#else
+static inline __attribute__((always_inline))
+#endif
+int64_t callable_entry_inline(jit_context_t *ctx, int64_t value) {
     int trap = 0;
     if (!value) trap = WASMOON_TRAP_NULL_REFERENCE;
     else {
@@ -408,11 +413,7 @@ static inline int64_t callable_entry_inline(jit_context_t *ctx, int64_t value) {
         else value = 0;
         if (!value) trap = WASMOON_TRAP_BACKEND;
     }
-    if (trap) {
-        g_trap_code = trap;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
-    }
+    if (trap) return jit_trap_result(trap);
     return value;
 }
 
@@ -435,25 +436,30 @@ static int64_t WASMOON_GUEST_ABI function_reference_impl(jit_context_t *ctx, int
     return pointer ? pointer | FUNCREF_TAG : -(int64_t)(index + 1);
 }
 
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+static int64_t WASMOON_GUEST_ABI table_call_target_legacy(jit_context_t *ctx,
+    int64_t value, int32_t actual, int32_t expected) {
+    if (!callable_subtype(ctx, actual, expected))
+        return jit_trap_result(WASMOON_TRAP_INDIRECT_TYPE);
+    return callable_entry_inline(ctx, value);
+}
+
 static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int32_t table_idx, int64_t index, int32_t expected) {
-    void **entry = table_entry(ctx, table_idx, index);
-    if (!entry) return 0;
+    void **entry = find_table_entry(ctx, table_idx, index);
+    if (!entry) return jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
     int64_t value = (int64_t)(intptr_t)entry[0];
-    if (!value) {
-        g_trap_code = WASMOON_TRAP_UNINITIALIZED_ELEMENT;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
-    }
+    if (!value) return jit_trap_result(WASMOON_TRAP_UNINITIALIZED_ELEMENT);
     int32_t actual = callable_type_for_value_inline(ctx, value);
     if (actual < 0 && !ctx_runtime(ctx)->callable_registry)
         actual = (int32_t)(intptr_t)entry[1];
-    if (!value || !(ctx_runtime(ctx)->callable_local_types
-            ? callable_subtype_registered(ctx_runtime(ctx), actual, expected)
-            : callable_subtype(ctx, actual, expected))) {
-        g_trap_code = WASMOON_TRAP_INDIRECT_TYPE;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
-    }
+    if (!ctx_runtime(ctx)->callable_local_types)
+        return table_call_target_legacy(ctx, value, actual, expected);
+    if (!callable_subtype_registered(ctx_runtime(ctx), actual, expected))
+        return jit_trap_result(WASMOON_TRAP_INDIRECT_TYPE);
     return callable_entry_inline(ctx, value);
 }
 

@@ -528,3 +528,20 @@ exact artifacts, with enabled API flat and plain paired median+0.44%/overlapping
 RSS; these are separate measurements, not a compile-time or memory gain.
 Evidence is local ARM64, not x64 timing or a new engine ranking.
 Tracking: [ISS-712](../../issues/ISS-712.md).
+
+## Checked callable resolution
+
+Current native samples still implicate type/entry resolution in randombytes.
+Frame-only prototypes offer no stable cross-case gain and are rejected. Inline
+the existing private resolver at its call boundaries, keep legacy subtype work
+private, and share the unchanged trap/zero-result behavior through trap.c.
+This lets C optimize related read-only queries together without a new cache,
+layout, public helper ABI, artifact revision or runtime-policy change.
+
+Five rotating100M-call controls improve about8-11% across1/2/64 targets. Nine
+additional original randombytes pairs all improve, paired value median-3.98%,
+process medians0.4412 ->0.4276s. Auth7 is flat. Short-control noise and outliers
+are retained; further hash/auth/generichash paired medians differ by about
++0.25/+0.63/+0.20%, not a broad throughput win. All guest artifacts match
+exactly and native host text grows456 bytes. These are ARM64 controls, not
+x64 timings or compile/RSS improvements. Tracking: [ISS-713](../../issues/ISS-713.md).

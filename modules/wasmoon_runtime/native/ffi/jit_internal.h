@@ -87,6 +87,9 @@ static inline int wasmoon_address_sanitizer_active(void) { return 0; }
 
 // ============ Trap Handling (trap.c) ============
 
+// Returns zero only when no native trap activation is active.
+int64_t jit_trap_result(int32_t code);
+
 // Trap codes (matching WebAssembly trap types):
 // 0 = no trap
 // 1 = out of bounds memory access

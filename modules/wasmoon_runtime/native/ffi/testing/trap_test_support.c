@@ -95,3 +95,26 @@ MOONBIT_FFI_EXPORT int wasmoon_test_trap_signal_masks(void) {
     return 1;
 #endif
 }
+
+// This low-level inactive contract has no public MoonBit entry point. Active
+// bounds/type failures are exercised through public JIT/interpreter controls.
+MOONBIT_FFI_EXPORT int wasmoon_test_inactive_trap_result(void) {
+    if (g_trap_active) return 0;
+    int saved_code = g_trap_code;
+    const int codes[] = {
+        WASMOON_TRAP_TABLE_BOUNDS, WASMOON_TRAP_UNINITIALIZED_ELEMENT,
+        WASMOON_TRAP_INDIRECT_TYPE, WASMOON_TRAP_NULL_REFERENCE,
+        WASMOON_TRAP_BACKEND
+    };
+    int passed = 1;
+    for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); ++i) {
+        int64_t result = jit_trap_result(codes[i]);
+        if (result != 0 || g_trap_code != codes[i] || g_trap_active) {
+            passed = 0;
+            break;
+        }
+    }
+    g_trap_code = saved_code;
+    g_trap_active = 0;
+    return passed;
+}

@@ -57,6 +57,14 @@
 #endif
 #endif
 
+// Shared checked-helper failure: jump only through an active native trap
+// activation; low-level callers without one retain the zero-result contract.
+int64_t jit_trap_result(int32_t code) {
+    g_trap_code = code;
+    if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    return 0;
+}
+
 // ============ Trap Activations (Thread-Local) ============
 
 _Thread_local jit_activation_slot_t wasmoon_jit_activation_slot;
