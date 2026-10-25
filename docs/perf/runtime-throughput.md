@@ -489,3 +489,16 @@ outlier: enabled API medians 6.253 -> 6.236s, plain 5.709 -> 5.691s, with no
 meaningful RSS improvement and byte-identical artifacts in both modes. Independent
 assembler controls, actual Rosetta x64 execution and public semantic/negative
 regressions cover the new rule. Tracking: [ISS-710](../../issues/ISS-710.md).
+
+## Adapter construction thunks
+
+Fresh compiler samples and generated C reveal an obsolete generic error wrapper
+around non-raising DirectBuilder operations. It eagerly allocates a closure and
+fallback Array even when emission succeeds. Call the builder directly and keep
+its deferred finish validation, adapter completion checks and call/root metadata.
+This removes the wrapper without introducing another interface or changing guest
+code. Twenty alternating large-module compiler runs preserve exact artifacts:
+API medians 6.268 -> 6.254s enabled, 5.722 -> 5.702s plain; paired changes are
+about -0.27% and RSS overlaps. This is a small simplification, not a material
+compile-time improvement or a solution to #583. Public tests retain completion
+once and final hidden-safepoint ABI rejection. Tracking: [ISS-711](../../issues/ISS-711.md).
