@@ -985,10 +985,7 @@ fn split_bundle_at_conflict(
   if point.compare_with_order(bundle_start, ranges.block_order) <= 0 {
     point = ProgramPoint(bundle_start.block, bundle_start.inst + 1)
   }
-  let boundary_cost = use_weight(
-    UsePosition(point, LiveDef, AnyReg),
-    loop_depths,
-  )
+  let boundary_cost = use_weight(point, LiveDef, AnyReg, loop_depths)
   let before : Array[Int32] = []
   let after : Array[Int32] = []
   let spill : Array[Int32] = []
@@ -1371,10 +1368,7 @@ fn[F : FunctionView] allocate_bundles(
       }
       if probe.has_first_conflict && !context.minimals[bundle] {
         let conflict_point = probe.first_conflict
-        let move_cost = use_weight(
-          UsePosition(conflict_point, LiveDef, AnyReg),
-          loop_depths,
-        )
+        let move_cost = use_weight(conflict_point, LiveDef, AnyReg, loop_depths)
         let candidate_cost = (probe.conflict_cost.to_int64() +
           move_cost.to_int64())
           .min(2_147_483_647L)

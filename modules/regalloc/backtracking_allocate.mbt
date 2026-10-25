@@ -25,10 +25,14 @@ priv struct SegmentMetadata {
 }
 
 ///|
-fn use_weight(use_position : UsePosition, loop_depths : Array[Int32]) -> Int32 {
-  let mut depth = if use_position.point.block >= 0 &&
-    use_position.point.block < loop_depths.length() {
-    loop_depths[use_position.point.block]
+fn use_weight(
+  point : ProgramPoint,
+  kind : UseKind,
+  constraint : OperandConstraint,
+  loop_depths : Array[Int32],
+) -> Int32 {
+  let mut depth = if point.block >= 0 && point.block < loop_depths.length() {
+    loop_depths[point.block]
   } else {
     0
   }
@@ -42,11 +46,11 @@ fn use_weight(use_position : UsePosition, loop_depths : Array[Int32]) -> Int32 {
   for _ in 0..<depth {
     hot_bonus = hot_bonus * 4
   }
-  let def_bonus = match use_position.kind {
+  let def_bonus = match kind {
     LiveDef | LiveUseDef => 2000
     LiveUse => 0
   }
-  let constraint_weight = match use_position.constraint {
+  let constraint_weight = match constraint {
     AnyLocation | PreservedHome => 0
     AnyReg => 1000
     FixedReg(_) => 2000
@@ -75,7 +79,13 @@ fn segment_metadata(
   for use_index in use_start..<end {
     let use_position = range.uses[use_index]
     if fragment.contains(use_position.point, ranges.block_order) {
-      use_cost = use_cost + use_weight(use_position, loop_depths)
+      use_cost = use_cost +
+        use_weight(
+          use_position.point,
+          use_position.kind,
+          use_position.constraint,
+          loop_depths,
+        )
       if use_position.constraint is FixedReg(_) {
         has_fixed_constraint = true
       }

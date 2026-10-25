@@ -568,3 +568,19 @@ All 70 original algorithm inputs also retain exact artifacts in both modes
 under all three verifiers (140 correctness comparisons, no timings retained).
 Full validation and platform acceptance are tracked in
 [ISS-714](../../issues/ISS-714.md).
+
+### Weight queries without temporary use positions
+
+Two bundle-cost queries need only a program point, use kind and constraint.
+Pass these fields to the existing private weight function directly, preserving
+its complete arithmetic and all allocator decisions. Original-module counters
+remove4.93/4.69 million temporary records with/without cancellation (197/188MB
+cumulative requested payload, not peak RSS). All10463 per-function allocation
+decisions and both original artifacts remain exact.
+
+The first five paired runs per mode including encoding show mixed API changes:
+6.137 ->6.076s enabled,5.609 ->5.616s plain. Five further pairs per mode use an
+identical harness without encoding/writing: every pair improves0.8-2.9%, with
+medians6.201 ->6.145s and5.673 ->5.608s. Compiler-process RSS is effectively flat.
+These are local ARM64 allocation-churn controls, not universal CPU, peak-memory
+or guest-execution gains. Tracking: [ISS-715](../../issues/ISS-715.md).
