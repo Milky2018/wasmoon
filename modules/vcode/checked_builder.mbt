@@ -78,6 +78,15 @@ pub fn[Inst] CheckedBuilder::block_parameter(
 }
 
 ///|
+/// Inspect an owned value without exposing mutable builder storage.
+pub fn[Inst] CheckedBuilder::value_type(
+  self : CheckedBuilder[Inst],
+  value : Value,
+) -> ValueType? {
+  self.builder.function.value_type(value)
+}
+
+///|
 fn[Inst] CheckedBuilder::validate_local_facts(
   self : CheckedBuilder[Inst],
   successors : Array[Edge],

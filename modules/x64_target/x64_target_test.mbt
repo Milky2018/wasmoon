@@ -224,3 +224,107 @@ test "x64 compact function masks verify and allocate loop block parameters" {
   )
   |> ignore
 }
+
+///|
+test "x64 pointer carrier aliases keep semantic types on every CFG edge" {
+  let abi = @x64_target.InternalAbi::new(
+    7,
+    12,
+    [6, 2, 1, 8, 9],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 2, 1, 8, 9, 6, 7, 10],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  )
+  let exercise = fn(pointer_result : Bool, form : Int32, cast : Bool) raise {
+    let session = @x64_target.DirectLoweringSession::new(
+      "typed_carrier_edges",
+      Internal,
+      [Ptr64, I64, I32],
+      [I64],
+      @x64_target.LoweringContext::new(abi),
+    )
+    let builder = @lowering.DirectBuilder::new(
+      [Ptr64, I64, I32],
+      session.sink(),
+    )
+    let params = builder.parameters()
+    let from = if pointer_result { @native.ValueType::I64 } else { Ptr64 }
+    let to = if pointer_result { @native.ValueType::Ptr64 } else { I64 }
+    let input = if pointer_result { params[1] } else { params[0] }
+    let converted = if cast {
+      builder.emit_with_metadata(
+        Convert(Bitcast(from, to)),
+        [input],
+        [to],
+        @lowering.InstructionMetadata::empty(),
+      )[0]
+    } else {
+      input
+    }
+    let target = builder.create_block([to])
+    match form {
+      0 => builder.jump(target, [converted])
+      1 => builder.branch(params[2], target, [converted], target, [converted])
+      2 =>
+        builder.branch_int_compare(
+          Equal,
+          params[1],
+          params[1],
+          target,
+          [converted],
+          target,
+          [converted],
+        )
+      3 =>
+        builder.branch_int_compare_immediate(
+          Equal,
+          params[1],
+          0UL,
+          target,
+          [converted],
+          target,
+          [converted],
+        )
+      _ =>
+        builder.switch(
+          params[2],
+          [(0UL, target, [converted]), (1UL, target, [converted])],
+          target,
+          [converted],
+        )
+    }
+    builder.switch_to_block(target)
+    let argument = builder.block_parameters(target)[0]
+    let bits = if pointer_result {
+      builder.emit_with_metadata(
+        Convert(Bitcast(Ptr64, I64)),
+        [argument],
+        [I64],
+        @lowering.InstructionMetadata::empty(),
+      )[0]
+    } else {
+      argument
+    }
+    builder.return_([bits])
+    builder.finish()
+    if cast {
+      @x64_target.compile_selected(
+        session.finish_selected(),
+        verify_allocation=true,
+      )
+      |> ignore
+    } else {
+      try session.finish_selected() |> ignore catch {
+        error => assert_true(error.to_string().contains("EdgeClassMismatch"))
+      } noraise {
+        _ => fail("a missing semantic conversion was accepted")
+      }
+    }
+  }
+  for pointer_result in [true, false] {
+    for form in 0..<5 {
+      exercise(pointer_result, form, true)
+    }
+  }
+  exercise(true, 0, false)
+}

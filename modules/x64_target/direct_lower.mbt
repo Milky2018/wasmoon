@@ -1427,6 +1427,42 @@ fn DirectLoweringSession::lower_return_values(
 }
 
 ///|
+/// Local raw-word aliases need a typed definition at a CFG boundary. Keep
+/// body aliases free, materialize only mismatches, and leave GC references and
+/// invalid semantic edge types to the ordinary strict verifier.
+fn DirectLoweringSession::edge_values(
+  self : DirectLoweringSession,
+  block : @vcode.Block,
+  ids : Array[Int32],
+) -> Array[@vcode.Value] raise X64LowerError {
+  let values : Array[@vcode.Value] = []
+  for id in ids {
+    let value = self.target_value(id)
+    let expected = self.value_types[id]
+    let needs_move = match expected {
+      Ptr64 => self.builder.value_type(value) == Some(I64)
+      I64 => self.builder.value_type(value) == Some(Ptr64)
+      _ => false
+    }
+    if needs_move {
+      values.push(
+        append_body(
+          self.builder,
+          block,
+          Move(expected),
+          [@vcode.Input::any(value)],
+          [@vcode.Output::any(expected)],
+          @vcode.InstructionMetadata::empty(),
+        )[0],
+      )
+    } else {
+      values.push(value)
+    }
+  }
+  values
+}
+
+///|
 fn DirectLoweringSession::terminate(
   self : DirectLoweringSession,
   block_id : Int32,
@@ -1443,7 +1479,12 @@ fn DirectLoweringSession::terminate(
           block,
           Jump,
           [],
-          [@vcode.Edge::new(self.blocks[target], self.target_values(arguments))],
+          [
+            @vcode.Edge::new(
+              self.blocks[target],
+              self.edge_values(block, arguments),
+            ),
+          ],
           ordinary_metadata,
         )
       Branch(
@@ -1461,11 +1502,11 @@ fn DirectLoweringSession::terminate(
           [
             @vcode.Edge::new(
               self.blocks[true_target],
-              self.target_values(true_arguments),
+              self.edge_values(block, true_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[false_target],
-              self.target_values(false_arguments),
+              self.edge_values(block, false_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1499,11 +1540,11 @@ fn DirectLoweringSession::terminate(
           [
             @vcode.Edge::new(
               self.blocks[true_target],
-              self.target_values(true_arguments),
+              self.edge_values(block, true_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[false_target],
-              self.target_values(false_arguments),
+              self.edge_values(block, false_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1546,11 +1587,11 @@ fn DirectLoweringSession::terminate(
           [
             @vcode.Edge::new(
               self.blocks[true_target],
-              self.target_values(true_arguments),
+              self.edge_values(block, true_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[false_target],
-              self.target_values(false_arguments),
+              self.edge_values(block, false_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1561,13 +1602,13 @@ fn DirectLoweringSession::terminate(
         let successors = cases.map(case => {
           @vcode.Edge::new(
             self.blocks[case.target],
-            self.target_values(case.arguments),
+            self.edge_values(block, case.arguments),
           )
         })
         successors.push(
           @vcode.Edge::new(
             self.blocks[default_target],
-            self.target_values(default_arguments),
+            self.edge_values(block, default_arguments),
           ),
         )
         set_terminator(

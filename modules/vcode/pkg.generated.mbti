@@ -276,6 +276,7 @@ pub fn[Inst] CheckedBuilder::new_with_protocol(String, @native_types.CallProtoco
 pub fn[Inst] CheckedBuilder::new_with_results(String, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::parameter(Self[Inst], Int32) -> Value raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::value_type(Self[Inst], Value) -> @native_types.ValueType?
 
 pub struct Edge {
   target : Block
