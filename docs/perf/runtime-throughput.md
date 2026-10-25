@@ -584,3 +584,24 @@ identical harness without encoding/writing: every pair improves0.8-2.9%, with
 medians6.201 ->6.145s and5.673 ->5.608s. Compiler-process RSS is effectively flat.
 These are local ARM64 allocation-churn controls, not universal CPU, peak-memory
 or guest-execution gains. Tracking: [ISS-715](../../issues/ISS-715.md).
+
+### Read-only instruction annotations
+
+Emitters and target validators need immutable source, trap, safepoint and
+stack-map annotations. An opaque owned view avoids copying full metadata and
+GC-root arrays. Full metadata snapshots remain independent; the view retains
+its annotations after the Function is released. Generated C represents the view
+and its Option as a nullable metadata pointer, with ownership/bounds checks and
+reference retention but no new allocation. No existing ABI or codegen revision
+changes.
+
+Normal compilation of the original module removes 2.537/2.251 million metadata
+snapshots with/without cancellation: 121.8/108.0 MB cumulative record payload,
+excluding copied root arrays and runtime headers, not peak RSS. Five alternating
+API pairs per mode give medians 6.154 -> 6.090 s and 5.645 -> 5.569 s, with exact
+artifacts. Five independent pairs per mode skip encoding/writing: 6.191 -> 6.108 s
+and 5.636 -> 5.556 s, paired median gains 1.39%/1.41%, nine of ten pairs faster.
+Both a 7.10% favorable outlier and a 0.25% slower pair are retained. Compiler-process
+RSS is effectively flat. All 10,463 per-function decisions remain exact. These
+are local ARM64 compiler controls, not guest execution or universal CPU/memory
+claims. Tracking: [ISS-716](../../issues/ISS-716.md).

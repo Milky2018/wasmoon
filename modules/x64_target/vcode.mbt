@@ -1423,7 +1423,7 @@ fn verify_target_vcode(
       }
       TrapIfZero(width) => {
         let ty = integer_type(width)
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(IntegerDivisionByZero) {
           raise InvalidInstruction(
             instruction~,
@@ -1434,7 +1434,7 @@ fn verify_target_vcode(
       }
       TrapIfSignedDivOverflow(width) => {
         let ty = integer_type(width)
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(IntegerOverflow) {
           raise InvalidInstruction(
             instruction~,
@@ -1534,7 +1534,7 @@ fn verify_target_vcode(
           IntegerOverflow
         }
         if (ty != F32 && ty != F64) ||
-          function.instruction_metadata(instruction).unwrap().trap !=
+          function.instruction_annotations(instruction).unwrap().trap() !=
           Some(reason) {
           raise InvalidInstruction(
             instruction~,
@@ -1810,7 +1810,8 @@ fn verify_target_vcode(
       AtomicFence =>
         require_instruction_shape(function, instruction, [], [], false, 0)
       SafepointMarker => {
-        if function.instruction_metadata(instruction).unwrap().safepoint is None {
+        if function.instruction_annotations(instruction).unwrap().safepoint()
+          is None {
           raise InvalidInstruction(
             instruction~,
             message="safepoint marker requires safepoint metadata",
@@ -2003,7 +2004,7 @@ fn verify_target_vcode(
         )
       }
       Trap(reason) => {
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(reason) {
           raise InvalidInstruction(
             instruction~,

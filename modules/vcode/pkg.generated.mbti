@@ -346,6 +346,7 @@ pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
 pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Function::instruction(Self[Inst], Instruction) -> Inst?
 pub fn[Inst] Function::instruction_allocation_operand_at(Self[Inst], Instruction, Int32) -> @allocation_types.AllocationOperand?
+pub fn[Inst] Function::instruction_annotations(Self[Inst], Instruction) -> InstructionAnnotations?
 pub fn[Inst] Function::instruction_at(Self[Inst], Int32) -> Instruction?
 pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int32) -> @allocation_types.PhysicalReg?
 pub fn[Inst] Function::instruction_clobber_count(Self[Inst], Instruction) -> Int32
@@ -402,6 +403,14 @@ pub fn Instruction::to_string(Self) -> String
 pub impl Eq for Instruction
 pub impl Show for Instruction
 pub impl @debug.Debug for Instruction
+
+pub struct InstructionAnnotations {
+  // private fields
+}
+pub fn InstructionAnnotations::safepoint(Self) -> @native_types.SafepointKind?
+pub fn InstructionAnnotations::source(Self) -> @native_types.SourceLocation?
+pub fn InstructionAnnotations::stack_map(Self) -> @native_types.StackMapMetadata?
+pub fn InstructionAnnotations::trap(Self) -> @native_types.TrapReason?
 
 pub struct InstructionMetadata {
   source : @native_types.SourceLocation?

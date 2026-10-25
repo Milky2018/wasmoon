@@ -614,6 +614,19 @@ pub fn[Inst] Function::instruction_metadata(
 }
 
 ///|
+/// Return a read-only annotation view, or None for an unowned instruction.
+pub fn[Inst] Function::instruction_annotations(
+  self : Function[Inst],
+  instruction : Instruction,
+) -> InstructionAnnotations? {
+  if self.owns_instruction(instruction) {
+    Some({ metadata: self.instructions[instruction.id].metadata, })
+  } else {
+    None
+  }
+}
+
+///|
 pub fn[Inst] Function::layout(self : Function[Inst]) -> Array[Block] {
   self.layout.copy()
 }

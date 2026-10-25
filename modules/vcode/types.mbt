@@ -430,3 +430,39 @@ pub suberror VCodeVerifyError {
 pub impl Show for VCodeVerifyError with fn output(self, logger) {
   logger.write_string(Repr(self).to_string())
 }
+
+///|
+/// A read-only view of source, trap and safepoint annotations.
+/// The view retains its metadata without exposing mutable GC-root storage.
+#valtype
+pub struct InstructionAnnotations {
+  priv metadata : InstructionMetadata
+}
+
+///|
+pub fn InstructionAnnotations::source(
+  self : InstructionAnnotations,
+) -> @native.SourceLocation? {
+  self.metadata.source
+}
+
+///|
+pub fn InstructionAnnotations::trap(
+  self : InstructionAnnotations,
+) -> @native.TrapReason? {
+  self.metadata.trap
+}
+
+///|
+pub fn InstructionAnnotations::safepoint(
+  self : InstructionAnnotations,
+) -> SafepointKind? {
+  self.metadata.safepoint
+}
+
+///|
+pub fn InstructionAnnotations::stack_map(
+  self : InstructionAnnotations,
+) -> @native.StackMapMetadata? {
+  self.metadata.stack_map
+}

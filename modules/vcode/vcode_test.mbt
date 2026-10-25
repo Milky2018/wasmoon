@@ -1114,3 +1114,86 @@ test "instruction handles retain ownership after function release and container 
     }
   }
 }
+
+///|
+test "read-only emission annotations preserve ownership and snapshot isolation" {
+  let builder : @vcode.Builder[TestInst] = @vcode.Builder::new("queries", [
+    GcRef64,
+  ])
+  let root = builder.parameter(0)
+  let source = @native.SourceLocation::new("queries.wat", 3, 9)
+  let stack_map = @native.StackMapMetadata::new(0, argument_root_count=1)
+  let (call, _) = builder.append_body(
+    builder.entry_block(),
+    Call,
+    [@vcode.Input::any(root)],
+    [],
+    [],
+    @vcode.InstructionMetadata::new(
+      source~,
+      trap=MemoryOutOfBounds,
+      safepoint=GcAndCancellation,
+      live_gc_roots=[root],
+      stack_map~,
+    ),
+  )
+  let ret = builder.set_terminator(
+    builder.entry_block(),
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  let function = builder.finish()
+  let foreign : @vcode.Builder[TestInst] = @vcode.Builder::new("foreign", [])
+  let foreign_ret = foreign.set_terminator(
+    foreign.entry_block(),
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  let annotations = function.instruction_annotations(call).unwrap()
+  assert_true(annotations.source() == Some(source))
+  assert_true(annotations.trap() == Some(MemoryOutOfBounds))
+  assert_true(annotations.safepoint() == Some(GcAndCancellation))
+  assert_true(annotations.stack_map() == Some(stack_map))
+  let empty = function.instruction_annotations(ret).unwrap()
+  assert_true(empty.source() is None)
+  assert_true(empty.trap() is None)
+  assert_true(empty.safepoint() is None)
+  assert_true(empty.stack_map() is None)
+  assert_true(function.instruction_annotations(foreign_ret) is None)
+  let snapshot = function.instruction_metadata(call).unwrap()
+  snapshot.live_gc_roots.clear()
+  assert_eq(
+    function.instruction_metadata(call).unwrap().live_gc_roots.length(),
+    1,
+  )
+  assert_true(
+    function.instruction_metadata(call).unwrap().live_gc_roots[0] == root,
+  )
+  let detached = {
+    let temporary : @vcode.Builder[TestInst] = @vcode.Builder::new("detached", [])
+    let instruction = temporary.set_terminator(
+      temporary.entry_block(),
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::new(
+        source=@native.SourceLocation::new("detached.wat", 5, 2),
+      ),
+    )
+    temporary.finish().instruction_annotations(instruction).unwrap()
+  }
+  assert_true(
+    detached.source() == Some(@native.SourceLocation::new("detached.wat", 5, 2)),
+  )
+  assert_true(detached.trap() is None)
+  assert_true(detached.safepoint() is None)
+  assert_true(detached.stack_map() is None)
+  @vcode.verify_selected(function)
+}
