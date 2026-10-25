@@ -1380,6 +1380,12 @@ fn lower_extension(
     None => return Some("Wasm extension changed after successful validation")
   }
   match opcode {
+    SafepointPoll(execution, controls, callback, budget) => {
+      lower_safepoint_poll(
+        context, environment, execution, controls, callback, budget,
+      )
+      None
+    }
     GetFuncRef(function_index) => {
       lower_get_function_reference(context, function_index, environment)
       None

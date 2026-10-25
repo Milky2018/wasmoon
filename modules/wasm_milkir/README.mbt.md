@@ -7,6 +7,15 @@ builder helpers used with MilkIR. Frontends encode Wasm operations through
 typed `WasmOpcode` constructors, then a lowering adapter checks and decodes
 those extensions before machine lowering.
 
+`SafepointPoll` is an embedding operation, not a guest Wasm instruction. Its four
+signed byte offsets describe execution, controls, callback and countdown fields
+relative to the implicit execution environment. It stays effectful through
+semantic optimization and bounded leaf inlining; native lowering then expands
+the null checks, callback path and countdown. Inlining copies each poll rather
+than removing or combining it. Embeddings without the countdown layout retain
+their ordinary runtime call. Neither form permits a physical GC borrow to cross
+the safepoint.
+
 Typed Wasm builders only emit IR data; they do not attach validator closures to the MilkIR function. Generic MilkIR finalization checks the extension envelope and its explicit signature, while `verify_function` applies context-free schema contracts. Operations whose contracts depend on module or linker metadata must use an explicit `WasmValidationContext` and `verify_function_with_context`. Wasm lowering requires the same context and validates it immediately before instruction selection.
 
 Typed constructors, serialized opcode names, and immediate layouts are defined once in `wasm_opcodes.schema`. During development, `dev_build` runs the deterministic `tools/generate_wasm_opcodes.py` generator to refresh the committed `dialect_generated.mbt` source. Published packages include that generated MoonBit source, so downstream builds neither load the schema at runtime nor execute development build rules.

@@ -163,6 +163,7 @@ fn wasm_effects(operation : @wasm_milkir.WasmOpcode) -> Effects {
     // These operations remain conservative until their embedding contracts
     // describe all root, heap, exception and continuation state transitions.
     WasmCall(_)
+    | SafepointPoll(_, _, _, _)
     | WasmCallIndirect(_, _)
     | CallRef(_)
     | ReturnCall(_)

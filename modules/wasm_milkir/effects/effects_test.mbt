@@ -53,6 +53,7 @@ test "calls and suspension end every borrowed lifetime" {
     WasmCall(0),
     ReturnCallRef(0),
     ContSuspend(0),
+    SafepointPoll(-8, 0, 16, 24),
   ]
   for operation in operations {
     let effects = @effects.analyze(wasm(operation))

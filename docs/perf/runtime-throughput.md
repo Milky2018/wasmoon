@@ -337,7 +337,7 @@ SQLite 46. Medians include process startup, JIT, host work and waits; these are
 whole-PR comparisons against release 0.18.0, not isolated guest execution or
 attribution to one change.
 
-| Suite | Official moonrun | Released Wasmoon | Current functional tree |
+| Suite | Official moonrun | Released Wasmoon | b6e1cb10 functional tree |
 | --- | ---: | ---: | ---: |
 | Core wasm | 6.061 s | 41.461 s | 29.349 s |
 | Core GC | 3.147 s | 78.727 s | 46.887 s |
@@ -364,3 +364,51 @@ inlining is disabled. Therefore the cancellation gap cannot be attributed to
 poll instruction cost alone. These diagnostic switches are not production
 settings; preserving every entry/loop poll and its roots is required for any
 follow-up inlining change.
+
+
+## Poll-preserving bounded leaf inlining
+
+The countdown protocol now remains one effectful `SafepointPoll` in Wasm
+MilkIR until native lowering. This keeps scalar/GC leaf templates single-block
+without deleting entry polls, combining checks or changing quantum. Inlining
+clones each poll, including for unused call results. Each poll costs eight units
+in the existing leaf/per-caller budgets to account for its seven late CFG blocks.
+Other effectful calls remain ineligible. The native slow call uses the ordinary
+conservative call contract and precise live roots. Unknown embeddings retain
+their original runtime call. Signed layout offsets, including Wasmoon's private
+prefix, are preserved. Codegen revision26 rejects older cached artifacts.
+
+Five final alternating fresh-process pairs compare the prepared-metadata
+implementation with the a4021683-based dirty final functional sources on the
+same exact inputs, after all builds and profiling stop:
+
+| Control | Before | After | RSS before / after |
+| --- | ---: | ---: | ---: |
+| #568 zero calls, whole wall | 1.033 s | 0.949 s | 64.5 / 59.5 MB |
+| #568 one call, whole wall | 1.414 s | 1.301 s | 142.7 / 137.7 MB |
+| #568 ten calls, whole wall | 4.873 s | 4.558 s | 266.3 / 261.2 MB |
+| #583 cancellation enabled, API | 7.128 s | 6.797 s | 718.3 / 658.3 MB |
+| #583 cancellation disabled, API | 6.259 s | 6.274 s | 646.7 / 647.0 MB |
+
+The extra ten-call improvement is6.5%, compile improvement4.6%, and compiler
+RSS reduction8.4%. The disabled control is effectively flat, not a claimed gain.
+An initial small plain-compiler regression was investigated with15 pairs and
+separate CPU sampling; duplicate decoding and general array mapping introduced
+by the new cloner were removed before the final measurements. The complete
+plain artifact remains identical after codegen-revision normalization.
+
+Preserving polls recovers much less than disabling them. The earlier no-poll
+inlining ablation therefore cannot be treated as an additive speedup budget for
+normal cancellable execution. Polls still end checked-reference/physical-borrow
+lifetimes; GC access and root-handling costs remain, and #568 is not closed.
+
+Public regressions compare O0/O2 callback counts, exact fuel outcomes, callback
+cancellation/reuse, quantum-one yield counts, GC during callbacks/parked work,
+and resumed array reads. Compiler tests protect retained unused-result polls,
+both native targets and precise safepoint metadata. Native3192 passes normally
+and with all three verification flags; wasm1483, strict native/wasm, info/fmt,
+boundaries and generated MSVC bridges pass. Fresh isolated macOS ASan/UBSan373,
+the event loop and both positive controls pass on the dirty a4021683 tree with
+these exact functional sources and tests. This is not Linux LSan or final-head
+CI acceptance; those receipts belong in PR582. The preceding distributed-suite
+and70-workload tables are explicitly the b6e1cb10 stage, before this last change.

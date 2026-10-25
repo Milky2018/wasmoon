@@ -19,6 +19,9 @@ fn leaf_cost(function : @milkir.Function) -> Int32? {
       Vector(_) => 4
       Ext(_, _) =>
         match @wasm_milkir.decode_opcode(inst.opcode) {
+          // The late expansion has seven side/continuation blocks. Charge it
+          // against both the leaf and per-caller budgets despite its compact IR.
+          Some(SafepointPoll(_, _, _, _)) => 8
           Some(
             StructNew(_)
             | StructGet(_, _)
@@ -33,7 +36,10 @@ fn leaf_cost(function : @milkir.Function) -> Int32? {
         }
       _ => return None
     }
-    if !(inst.results is [_]) || inst.args.any(value => value == environment) {
+    let poll = inst.results.is_empty() &&
+      @wasm_milkir.decode_opcode(inst.opcode) is Some(SafepointPoll(_, _, _, _))
+    if (!(inst.results is [_]) && !poll) ||
+      inst.args.any(value => value == environment) {
       return None
     }
     if cost > 24 {
@@ -101,11 +107,15 @@ fn inline_leaf_calls(
           let body = callee.blocks[0]
           for callee_id in callee.block_instruction_ids(body) {
             let original = callee.instruction_by_id(callee_id).unwrap()
-            let value = function.new_value(original.results[0].ty)
+            let results = if original.results is [result] {
+              [function.new_value(result.ty)]
+            } else {
+              []
+            }
             let cloned = function.new_inst(
               original.opcode,
               original.args.map(argument => values[argument.id]),
-              [value],
+              results,
             )
             for metadata in inst.metadata {
               if metadata is (SourceLoc(_) | SourceByteOffset(_)) {
@@ -113,7 +123,9 @@ fn inline_leaf_calls(
               }
             }
             instructions.push(cloned)
-            values[original.results[0].id] = value
+            if original.results is [result] {
+              values[result.id] = results[0]
+            }
           }
           if body.terminator is Some(Return([returned])) {
             inst.args.clear()

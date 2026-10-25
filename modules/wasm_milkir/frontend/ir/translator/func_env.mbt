@@ -95,67 +95,20 @@ fn FuncEnvironment::emit_cancellation_safepoint(
   if self.cancellation_symbol is Some(symbol) {
     match self.safepoint_poll_layout {
       None => builder.call_symbol(symbol, None, [vmctx]) |> ignore
-      Some(layout) => {
-        let slow = builder.create_block()
-        let countdown = builder.create_block()
-        let decrement = builder.create_block()
-        let done = builder.create_block()
-        let has_execution = builder.create_block()
-        let has_controls = builder.create_block()
-        let zero = builder.iconst(I64, 0L)
-        let execution = builder.load_ptr(
-          Ptr,
-          vmctx,
-          builder.iconst(I64, layout.execution_offset.to_int64()),
-        )
-        let execution_bits = builder.bitcast(I64, execution)
-        builder.branch(
-          builder.icmp_ne(execution_bits, zero),
-          has_execution,
-          [],
-          slow,
+      // Keep the poll semantic until native lowering, so its fast-path CFG
+      // does not prevent leaf inlining. Every cloned poll remains effectful.
+      Some(layout) =>
+        builder.emit_void_ext_inst(
+          @wasm_milkir.encode(
+            SafepointPoll(
+              layout.execution_offset,
+              layout.controls_offset,
+              layout.callback_offset,
+              layout.budget_offset,
+            ),
+          ),
           [],
         )
-        builder.switch_to_block(has_execution)
-        let controls = builder.load_ptr(
-          Ptr,
-          execution,
-          builder.iconst(I64, layout.controls_offset.to_int64()),
-        )
-        let controls_bits = builder.bitcast(I64, controls)
-        builder.branch(
-          builder.icmp_ne(controls_bits, zero),
-          has_controls,
-          [],
-          slow,
-          [],
-        )
-        builder.switch_to_block(has_controls)
-        let callback = builder.load_ptr(
-          I64,
-          controls,
-          builder.iconst(I64, layout.callback_offset.to_int64()),
-        )
-        let budget_offset = builder.iconst(I64, layout.budget_offset.to_int64())
-        let budget = builder.load_ptr(I32, controls, budget_offset)
-        let has_callback = builder.icmp_ne(callback, builder.iconst(I64, 0L))
-        builder.branch(has_callback, slow, [], countdown, [])
-        builder.switch_to_block(countdown)
-        let active = builder.icmp_sgt(budget, builder.iconst(I32, 0L))
-        let expired = builder.icmp_eq(budget, builder.iconst(I32, 1L))
-        let enabled = builder.create_block()
-        builder.branch(active, enabled, [], done, [])
-        builder.switch_to_block(enabled)
-        builder.branch(expired, slow, [], decrement, [])
-        builder.switch_to_block(decrement)
-        let remaining = builder.isub(budget, builder.iconst(I32, 1L))
-        builder.store_ptr(I32, controls, remaining, budget_offset)
-        builder.jump(done, [])
-        builder.switch_to_block(slow)
-        builder.call_symbol(symbol, None, [vmctx]) |> ignore
-        builder.jump(done, [])
-        builder.switch_to_block(done)
-      }
     }
   }
 }

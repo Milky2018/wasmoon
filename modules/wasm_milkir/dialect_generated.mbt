@@ -54,6 +54,7 @@ pub(all) enum WasmOpcode {
   ContSuspend(Int)
   ContResume(Int, Int, Int, Int)
   ContSwitch(Int, Int)
+  SafepointPoll(Int, Int, Int, Int)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -568,6 +569,16 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_operands: true,
     variadic_results: true,
   },
+  {
+    id: 51,
+    typed_constructor: "SafepointPoll",
+    wire_name: "safepoint_poll",
+    immediate_kinds: [IntegerImmediate, IntegerImmediate, IntegerImmediate, IntegerImmediate],
+    operand_types: [],
+    result_types: [],
+    variadic_operands: false,
+    variadic_results: false,
+  },
 ]
 
 ///|
@@ -624,6 +635,7 @@ fn opcode_payload(opcode : WasmOpcode) -> (Int, FixedArray[Int]) {
     ContSuspend(imm0) => (48, imm([imm0]))
     ContResume(imm0, imm1, imm2, imm3) => (49, imm([imm0, imm1, imm2, imm3]))
     ContSwitch(imm0, imm1) => (50, imm([imm0, imm1]))
+    SafepointPoll(imm0, imm1, imm2, imm3) => (51, imm([imm0, imm1, imm2, imm3]))
   }
 }
 
@@ -684,6 +696,7 @@ fn opcode_from_payload(
     48 => Some(ContSuspend(imms[0]))
     49 => Some(ContResume(imms[0], imms[1], imms[2], imms[3]))
     50 => Some(ContSwitch(imms[0], imms[1]))
+    51 => Some(SafepointPoll(imms[0], imms[1], imms[2], imms[3]))
     _ => None
   }
 }

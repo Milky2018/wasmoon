@@ -232,3 +232,50 @@ test "invalid GC leaf contract is rejected before rewriting its caller" {
   assert_true(rejected)
   assert_eq(function.print(), before)
 }
+
+///|
+test "leaf inlining retains entry polls even when its result is unused" {
+  let callee = @milkir.FunctionBuilder("polled_leaf")
+  callee.add_param(I64) |> ignore
+  let input = callee.add_param(I32)
+  callee.add_result(I64)
+  let poll = @wasm_milkir.encode(SafepointPoll(-8, 0, 16, 24))
+  callee.emit_void_ext_inst(poll, [])
+  callee.return_([callee.sextend(I64, input)])
+  let caller = @milkir.FunctionBuilder("polled_caller")
+  caller.add_param(I64) |> ignore
+  let value = caller.add_param(I32)
+  caller.add_result(I64)
+  caller.emit_void_ext_inst(poll, [])
+  @wasm_milkir.call_multi(caller, 0, [I64], [value]) |> ignore
+  caller.return_([@wasm_milkir.call_multi(caller, 0, [I64], [value])[0]])
+  let context = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { Some({ params: [I32], results: [I64], }) },
+    defined_type_contract: fn(_) { None },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  let function = caller.get_function()
+  @optimize.optimize_with_level(
+    function,
+    context,
+    O2,
+    scalar_callees=Map([(0, callee.get_function())]),
+  )
+  |> ignore
+  @wasm_milkir.verify_function_with_context(function, context)
+  let mut polls = 0
+  for block in function.blocks {
+    for id in function.block_instruction_ids(block) {
+      let opcode = function.instruction_by_id(id).unwrap().opcode
+      assert_false(@wasm_milkir.decode_opcode(opcode) is Some(WasmCall(_)))
+      if @wasm_milkir.decode_opcode(opcode) is Some(SafepointPoll(_, _, _, _)) {
+        polls += 1
+      }
+    }
+  }
+  assert_eq(polls, 3)
+}
