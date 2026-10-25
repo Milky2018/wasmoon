@@ -87,3 +87,22 @@ This is 240 fresh measured processes across eight inputs, with deterministic
 artifacts within each variant. The earlier loop-only ablation gives similar
 results; using the same instruction for entry zeroing avoids a separate linear
 prologue. These compiler measurements alone do not establish invocation gains.
+
+## Invocation and engine controls
+
+Five alternating samples across twelve asserted cases compare the numeric-segment
+parent, frame transport and repeated-word commits in 180 fresh processes. The
+2048-object initializer repeated 64 times changes 4.243→3.238→3.282ms invocation:
+about 23% combined improvement, primarily from frame transport. Parse is flat;
+regex700/2100 improves about 1.3/1.0% combined. Other array/graph controls do not
+establish broad invocation gains. A 40ms static-reference-array control costs
+about 1.2% more, with a wide interval; retain that small cost explicitly.
+
+Three fresh samples of each public 128/512/2048-object fixture pass on Wasmoon,
+Wasmtime49.0.1 copying/serial compilation, and V814.1.146.11 eager/single-worker.
+For 2048 objects, whole-process wall is 1.132s Wasmoon, 0.717s Wasmtime and 0.376s
+Node/V8; whole-process peak RSS is 603/321/183MB. Wasmoon compiler time is 1.108s
+and V8 WebAssembly.Module time 0.327s; those boundaries differ in validation.
+Wasmtime CLI supplies no isolated invocation phase in this experiment. These
+are cold compiler-heavy controls, not collector-only RSS or Node startup gains.
+[Unused live-set materialization](compiler-liveness.md) is optimized separately.
