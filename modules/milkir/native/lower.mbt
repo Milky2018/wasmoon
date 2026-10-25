@@ -1260,6 +1260,16 @@ fn lower_scalar_instruction(
       assign_instruction_results(values, instruction, lowered_results)
       return
     }
+    Some(LowBitsShiftedLeft(input, field_bits, amount)) => {
+      let results = builder.emit_with_metadata(
+        IntLowBitsShiftLeft(field_bits, amount),
+        [demand_value(builder, values, value_types, facts, input)],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, results)
+      return
+    }
     Some(AddShiftedLeft(accumulator, input, amount)) => {
       let lowered_results = builder.emit_with_metadata(
         IntAddShiftedLeft(amount),

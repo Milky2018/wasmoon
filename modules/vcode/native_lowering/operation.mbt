@@ -412,6 +412,8 @@ pub(all) enum Operation {
   IntShiftImmediate(IntBinaryOp, Int32)
   IntMultiplyAdd
   IntAddShiftedLeft(Int32)
+  /// Keep the low field bits, then shift left; other result bits are zero.
+  IntLowBitsShiftLeft(Int32, Int32)
   IntHighMultiply(@native.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
@@ -494,6 +496,7 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | IntShiftImmediate(_, _)
     | IntMultiplyAdd
     | IntAddShiftedLeft(_)
+    | IntLowBitsShiftLeft(_, _)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
@@ -1276,6 +1279,24 @@ pub fn verify_operation_contract(
       }
       None
     }
+    IntLowBitsShiftLeft(field_bits, amount) => {
+      if operands.length() != 1 ||
+        results.length() != 1 ||
+        !is_integer_type(operands[0]) ||
+        operands[0] != results[0] {
+        return operation_error(
+          "low-bit shift expects one matching i32 or i64 result",
+        )
+      }
+      let width = value_type_bits(operands[0])
+      if field_bits <= 0 ||
+        field_bits > width ||
+        amount < 0 ||
+        amount > width - field_bits {
+        return operation_error("low-bit shift field or amount is out of range")
+      }
+      None
+    }
     IntAddShiftedLeft(amount) => {
       if operands.length() != 2 ||
         results.length() != 1 ||
@@ -1668,6 +1689,7 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
     | IntShiftImmediate(_, _)
     | IntMultiplyAdd
     | IntAddShiftedLeft(_)
+    | IntLowBitsShiftLeft(_, _)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)

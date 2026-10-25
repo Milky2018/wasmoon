@@ -955,6 +955,23 @@ fn encode_shift_immediate(
 }
 
 ///|
+fn encode_low_bits_shift_left(
+  width : GprWidth,
+  field_bits : Int32,
+  amount : Int32,
+  destination : @vcode.PhysicalReg,
+  source : @vcode.PhysicalReg,
+) -> UInt32 {
+  let bits = if width == W32 { 32 } else { 64 }
+  let base = if width == W32 { 0x53000000U } else { 0xD3400000U }
+  base |
+  (((bits - amount) % bits).reinterpret_as_uint() << 16) |
+  ((field_bits - 1).reinterpret_as_uint() << 10) |
+  (reg_bits(source) << 5) |
+  reg_bits(destination)
+}
+
+///|
 fn encode_add_shifted_left(
   width : GprWidth,
   amount : Int32,
@@ -3192,6 +3209,10 @@ fn emit_instruction(
     IntShiftImmediate(width, operation, amount) =>
       buffer.emit_word(
         encode_shift_immediate(width, operation, amount, reg(1), reg(0)),
+      )
+    IntLowBitsShiftLeft(width, field_bits, amount) =>
+      buffer.emit_word(
+        encode_low_bits_shift_left(width, field_bits, amount, reg(1), reg(0)),
       )
     IntAddShiftedLeft(width, amount) =>
       buffer.emit_word(

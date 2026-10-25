@@ -228,6 +228,7 @@ pub(all) enum AArch64Inst {
   IntShiftRegister(GprWidth, AArch64Shift)
   IntShiftImmediate(GprWidth, AArch64Shift, Int32)
   IntAddShiftedLeft(GprWidth, Int32)
+  IntLowBitsShiftLeft(GprWidth, Int32, Int32)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native.Signedness)
   IntWithOverflow(GprWidth, @lowering.IntOverflowOp)
@@ -1364,6 +1365,20 @@ fn verify_target_vcode(
           raise InvalidInstruction(
             instruction~,
             message="integer shift amount is out of range",
+          )
+        }
+        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+      }
+      IntLowBitsShiftLeft(width, field_bits, amount) => {
+        let ty = integer_type(width)
+        let bits = if width == W32 { 32 } else { 64 }
+        if field_bits <= 0 ||
+          field_bits > bits ||
+          amount < 0 ||
+          amount > bits - field_bits {
+          raise InvalidInstruction(
+            instruction~,
+            message="low-bit shift field or amount is out of range",
           )
         }
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)

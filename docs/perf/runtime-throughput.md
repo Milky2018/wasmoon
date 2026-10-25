@@ -470,3 +470,22 @@ A distinct register-allocator optional-wrapper experiment leaves 20 artifacts
 identical but changes compile API medians by less than 1%, without a demonstrated
 RSS reduction. It is not retained. Raw profiles and experiment outputs stay in
 the temporary workspace.
+
+## Low-field shift selection
+
+Separate profiling of the original Argon2id workload maps the hot native code to
+functions 40/41. Function 41 contains 64 standalone shifts followed by masks.
+Select a single-use constant shift and contiguous field mask as one typed native
+operation: AArch64 emits UBFIZ, while x64 retains shift/mask lowering. Shared uses
+and sparse masks keep their existing paths; field bounds and operand widths are
+checked independently at both compiler boundaries. Codegen revision is 29.
+
+Three alternating cold baseline/candidate pairs reduce whole-process median
+43.585 -> 41.811s; paired guest-value changes are -2.88%, -3.60%, -4.08%. Ten other
+original workloads, five pairs each, show predominantly +/-1% changes. This is a
+local macOS ARM64 result, not an x64 speed claim or a new whole-engine ranking.
+Matched original-builtin compilation retains 40 samples, including one 11.7%
+outlier: enabled API medians 6.253 -> 6.236s, plain 5.709 -> 5.691s, with no
+meaningful RSS improvement and byte-identical artifacts in both modes. Independent
+assembler controls, actual Rosetta x64 execution and public semantic/negative
+regressions cover the new rule. Tracking: [ISS-710](../../issues/ISS-710.md).

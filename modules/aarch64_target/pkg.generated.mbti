@@ -308,6 +308,7 @@ pub(all) enum AArch64Inst {
   IntShiftRegister(GprWidth, AArch64Shift)
   IntShiftImmediate(GprWidth, AArch64Shift, Int32)
   IntAddShiftedLeft(GprWidth, Int32)
+  IntLowBitsShiftLeft(GprWidth, Int32, Int32)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native_types.Signedness)
   IntWithOverflow(GprWidth, @native_lowering.IntOverflowOp)

@@ -296,6 +296,7 @@ pub(all) enum Operation {
   IntShiftImmediate(IntBinaryOp, Int32)
   IntMultiplyAdd
   IntAddShiftedLeft(Int32)
+  IntLowBitsShiftLeft(Int32, Int32)
   IntHighMultiply(@native_types.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)

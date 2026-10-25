@@ -102,6 +102,24 @@ fn lower_direct_operation(
       ),
     )
   }
+  if operation is IntLowBitsShiftLeft(field_bits, amount) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    return append_unconstrained_body(
+      builder,
+      block,
+      IntLowBitsShiftLeft(width, field_bits, amount),
+      operands,
+      result_types,
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
   if operation is IntAddShiftedLeft(amount) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)

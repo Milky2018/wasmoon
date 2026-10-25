@@ -137,6 +137,46 @@ fn lower_direct_operation(
       ),
     )
   }
+  if operation is IntLowBitsShiftLeft(field_bits, amount) {
+    // Preserve the ordinary shift-and-mask sequence on targets without UBFIZ.
+    let shifted = lower_direct_operation(
+        context,
+        builder,
+        block,
+        block_index,
+        instruction_index,
+        IntShiftImmediate(ShiftLeft, amount),
+        operands,
+        operand_types,
+        result_types,
+        [],
+        None,
+        None,
+        stack_object,
+        scratch,
+      )[0]
+    let low_mask = if field_bits == 64 {
+      0xFFFFFFFFFFFFFFFFUL
+    } else {
+      (1UL << field_bits) - 1UL
+    }
+    return lower_direct_operation(
+      context,
+      builder,
+      block,
+      block_index,
+      instruction_index,
+      IntBinaryImmediate(And, low_mask << amount),
+      [shifted],
+      result_types,
+      result_types,
+      roots,
+      source_location,
+      stack_map,
+      stack_object,
+      scratch,
+    )
+  }
   if operation is IntAddShiftedLeft(amount) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
