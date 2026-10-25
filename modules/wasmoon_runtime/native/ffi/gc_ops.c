@@ -1018,10 +1018,15 @@ __declspec(noinline)
 __attribute__((noinline))
 #endif
 static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t ref, int32_t type_idx,
-    uint64_t shape, int32_t fields) {
+    uint64_t shape, int32_t fields, GcHeap *resolved_heap) {
     if (!ref) { trap_null_reference(); return NULL; }
-    ctx = resolve_ctx(ctx);
-    GcHeap *heap = resolve_heap(ctx);
+    // The explicit-context entry already located the heap and rejected its
+    // hint without a call or mutation. TLS/verification entries resolve here.
+    GcHeap *heap = resolved_heap;
+    if (!heap) {
+        ctx = resolve_ctx(ctx);
+        heap = resolve_heap(ctx);
+    }
     if (!heap || ref < 0 || ref > (int64_t)INT32_MAX * 2 || (ref & 1) || fields < 0 || fields > 16) {
         trap_unreachable_i64(); return NULL;
     }
@@ -1029,7 +1034,7 @@ static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t r
         type_idx < ctx_runtime(ctx)->callable_local_type_count
         ? ctx_runtime(ctx)->callable_local_types[type_idx] : -1;
     GcStructViewCache *cached = &heap->struct_view;
-    if (gc_verify_env_cached == 0 && target >= 0 &&
+    if (!resolved_heap && gc_verify_env_cached == 0 && target >= 0 &&
         cached->reference == ref && cached->identity == target &&
         cached->shape == shape && cached->fields == fields) return cached->payload;
     GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
@@ -1066,22 +1071,27 @@ static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t r
 
 // A matching non-root hint has already admitted the reference, nominal type
 // and field span; malformed keys cannot hit an admitted entry.
-// Misses retain the complete checked path, including TLS and
-// legacy contexts. Keep cold calls out of the common leaf's register frame.
+// Misses pass the located heap to the complete checked path without repeating
+// its hint probe. TLS, verification and legacy contexts keep their fallback.
+// Keep cold calls out of the common leaf's register frame.
 void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int32_t type_idx,
     uint64_t shape, int32_t fields) {
+    GcHeap *heap = NULL;
     if (ctx && ref && gc_verify_env_cached == 0) {
-        GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
-        jit_runtime_state_t *runtime = ctx_runtime(ctx);
-        if (heap && runtime->callable_local_types && type_idx >= 0 &&
-            type_idx < runtime->callable_local_type_count) {
-            int32_t target = runtime->callable_local_types[type_idx];
+        heap = (GcHeap *)ctx_gc_heap(ctx);
+        if (heap) {
             GcStructViewCache *cached = &heap->struct_view;
-            if (target >= 0 && cached->reference == ref && cached->identity == target &&
-                cached->shape == shape && cached->fields == fields) return cached->payload;
+            if (cached->reference == ref && cached->shape == shape && cached->fields == fields) {
+                jit_runtime_state_t *runtime = ctx_runtime(ctx);
+                if (runtime->callable_local_types && type_idx >= 0 &&
+                    type_idx < runtime->callable_local_type_count) {
+                    int32_t target = runtime->callable_local_types[type_idx];
+                    if (target >= 0 && cached->identity == target) return cached->payload;
+                }
+            }
         }
     }
-    return gc_struct_data_slow(ctx, ref, type_idx, shape, fields);
+    return gc_struct_data_slow(ctx, ref, type_idx, shape, fields, heap);
 }
 
 int64_t WASMOON_GUEST_ABI gc_array_get_heap_impl(GcHeap *heap, int64_t ref, int32_t idx) {

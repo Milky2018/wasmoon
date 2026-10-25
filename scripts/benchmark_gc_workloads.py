@@ -31,6 +31,30 @@ def array_workload(count: int, *, vector: bool, nonzero: bool, size: int | None 
         i32.const 1))"""
 
 
+def struct_view_workload(count: int, *, same_object: bool) -> str:
+    # Allocate before the measured invocation. Mutable exported globals and
+    # fields preserve real projections for both repeated hits and alternating
+    # misses; the final sum checks every load.
+    second = 'global.get $a' if same_object else 'i32.const 42 struct.new $s'
+    expected = (46 if same_object else 65) * count
+    return f"""(module
+      (type $s (struct (field (mut i32))))
+      (global $a (export "a") (mut (ref null $s)) (ref.null $s))
+      (global $b (export "b") (mut (ref null $s)) (ref.null $s))
+      (func $init
+        i32.const 23 struct.new $s global.set $a
+        {second} global.set $b)
+      (start $init)
+      (func (export "probe") (result i32) (local $i i32) (local $sum i64)
+        (loop $again
+          local.get $sum
+          global.get $a struct.get $s 0 i64.extend_i32_u i64.add
+          global.get $b struct.get $s 0 i64.extend_i32_u i64.add local.set $sum
+          local.get $i i32.const 1 i32.add local.tee $i
+          i32.const {count} i32.lt_u br_if $again)
+        local.get $sum i64.const {expected} i64.eq))"""
+
+
 def graph_workload(count: int, *, nodes: int = 32768) -> str:
     # A long-lived chain survives several full collections while a reference
     # ring mutates and short-lived arrays provide allocation pressure. The chain
@@ -125,6 +149,8 @@ def live_initializer_workload(count: int) -> str:
 def workloads(scale: int) -> dict[str, str]:
     count = 10000 * scale
     return {
+        'reused-struct-view': struct_view_workload(count * 2000, same_object=True),
+        'alternating-struct-views': struct_view_workload(count * 2000, same_object=False),
         'live-initializer-128': live_initializer_workload(128 * scale),
         'live-initializer-512': live_initializer_workload(512 * scale),
         'live-initializer-2048': live_initializer_workload(2048 * scale),

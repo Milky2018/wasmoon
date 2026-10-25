@@ -505,17 +505,26 @@ once and final hidden-safepoint ABI rejection. Tracking: [ISS-711](../../issues/
 
 ## Struct-view leaf hits
 
-Fresh current-head execution sampling attributes about41% of main-thread leaf
-samples to struct-view projection. Separate atomic counters on the original
-ten-call input report392.5 million struct queries and95.6% hits (array96.3%).
-The cache exists and hits; native code still saves/restores an80-byte register
-frame on each hit. Split the complete checked body into a private non-inlined
-function and retain a small admitted-key leaf entry. No hint capacity, lifetime
-invalidation, root/GC policy, helper signature or artifact revision changes.
+Fresh execution samples attribute about41% of main-thread leaf samples to
+struct projection. Isolated counters on the original ten-call input report
+392.5 million struct queries and95.6% hits (array96.3%). The existing hint hits,
+but the old helper saves/restores an80-byte frame each time. Keep the admitted
+hit entry small and the complete checked body private. No hint capacity,
+lifetime invalidation, GC/root policy, public helper ABI or artifact changes.
 
-Five alternating fresh-process pairs reduce the original ten-call median
-3.438 ->3.227s; all pairs improve5.87-9.64%. Zero/one-call controls offer no stable
-gain. Three enabled/six plain large-module compiler pairs preserve exact
-artifacts: enabled API6.228 ->6.221s is flat, plain paired median+0.44%; RSS
-overlaps. This is local ARM64 evidence, not an x64 speed claim or a new
-engine comparison. Tracking: [ISS-712](../../issues/ISS-712.md).
+The first split improved the original workload but regressed alternating-object
+access by about23%. Independent controls identify premature type-map reads,
+duplicate hint checks and repeated dynamic heap lookup. Check the cheap hint
+key first and pass the located heap to the checked miss path; implicit TLS and
+verification calls keep their original fallback. Seven rotating fresh-process
+controls give hot invocation103.1 ->79.1ms and alternating191.3 ->189.7ms against
+the unsplit baseline. The latter is effectively flat, not another speed claim.
+The asserted hot/cold controls live in scripts/benchmark_gc_workloads.py.
+
+Five original zero/one/ten-call pairs give process medians0.842/1.117/3.466s
+before and0.848/1.094/3.238s after; all ten-call pairs improve6.36-7.15%.
+Zero-call changes are noise. Earlier split-only compiler controls preserved
+exact artifacts, with enabled API flat and plain paired median+0.44%/overlapping
+RSS; these are separate measurements, not a compile-time or memory gain.
+Evidence is local ARM64, not x64 timing or a new engine ranking.
+Tracking: [ISS-712](../../issues/ISS-712.md).
