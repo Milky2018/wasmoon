@@ -102,3 +102,55 @@ test "frame areas preserve independent maxima across calls results objects and t
     }
   }
 }
+
+///|
+test "dense initializer roots survive every nested collecting call through their frame" {
+  let count = 96
+  let members = Array::makei(count, index => "i32.const \{index} call $make").join(
+    "\n",
+  )
+  let source =
+    $|(module
+    $| (type $node (struct (field i32)))
+    $| (type $refs (array (ref $node)))
+    $| (import "h" "collect" (func $collect))
+    $| (func $make (param i32) (result (ref $node))
+    $|  (local $object (ref null $node))
+    $|  local.get 0 struct.new $node local.set $object
+    $|  call $collect local.get $object ref.as_non_null)
+    $| (func (export "probe") (result i32)
+    $|  (local $all (ref null $refs)) (local $i i32) (local $sum i32)
+    $|  \{members} array.new_fixed $refs \{count} local.set $all
+    $|  call $collect
+    $|  loop $check
+    $|   local.get $sum local.get $all local.get $i array.get $refs
+    $|   struct.get $node 0 i32.add local.set $sum
+    $|   local.get $i i32.const 1 i32.add local.tee $i
+    $|   i32.const \{count} i32.lt_u br_if $check
+    $|  end
+    $|  local.get $sum i32.const \{count * (count - 1) / 2} i32.eq))
+  let module_ = @wat.parse(source)
+  @validator.validate_module(module_)
+  for opt_level in [0, 2, 3] {
+    let store = @runtime.Store::with_c_heap()
+    defer store.close()
+    let collections = Ref(0)
+    let collect = store.alloc_host_func(fn(_) {
+      collections.val += 1
+      store.collect_garbage() |> ignore
+      []
+    })
+    let imports = @runtime.Imports::Imports(store)
+    imports.add_func("h", "collect", collect)
+    let instance = @executor.instantiate_module_with_imports(
+      store, module_, imports,
+    )
+    let context = build_gc_root_context(module_, instance, store, opt_level~)
+    defer context.close()
+    context.install_hostcall_dispatcher(store, instance)
+    assert_eq(context.call_core_func(store, instance, 2, []), [I32(1)])
+    assert_eq(collections.val, count + 1)
+    assert_eq(store.collect_garbage(), count + 1)
+    assert_true(store.native_heap().unwrap().verify())
+  }
+}

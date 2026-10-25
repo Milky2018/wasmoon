@@ -462,3 +462,56 @@ test "root aliases defined on sibling paths publish their slot on both paths" {
     2,
   )
 }
+
+///|
+test "registered function frames own roots without duplicate SSA call transport" {
+  let (sink, trace) = traced_sink([11, 22], 0)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64],
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+      ),
+    ),
+  )
+  builder.begin_function_roots(1)
+  let parameters = builder.parameters()
+  builder.define_function_root(parameters[1])
+  builder.emit_with_metadata(
+    Call(platform_call("guest", [Ptr64], [], gc_safepoint=true)),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(
+      None,
+      [parameters[1]],
+      stack_map=@native.StackMapMetadata::new(9, argument_root_count=0),
+    ),
+  )
+  |> ignore
+  builder.return_([])
+  builder.finish()
+  let mut observed = false
+  for index, operation in trace.operations {
+    if operation is Call(call) &&
+      call.callee is External(symbol) &&
+      symbol.name == "guest" {
+      observed = true
+      assert_eq(trace.roots[index], [])
+      guard trace.stack_maps[index] is Some(site) else {
+        fail("function-root admission lost call-site metadata")
+      }
+      assert_eq(site.id, 9)
+      assert_eq(site.argument_root_count, 0)
+      assert_true(call.behavior.gc_safepoint)
+    }
+  }
+  assert_true(observed)
+  assert_eq(
+    trace.operations
+    .filter(operation => operation is Store(spec) && spec.value_type == GcRef64)
+    .length(),
+    1,
+  )
+}

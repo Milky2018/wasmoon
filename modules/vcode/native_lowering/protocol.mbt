@@ -807,6 +807,10 @@ fn DirectBuilder::emit_call_with_abi(
       !metadata.live_gc_roots.is_empty() {
       self.update_function_roots(metadata.live_gc_roots)
     }
+    // The registered shadow frame owns these roots. Transporting them again
+    // as SSA call operands forces redundant preservation and reloads. Keep
+    // call-site/argument metadata; ordinary users still determine SSA liveness.
+    lowered_metadata = { ..lowered_metadata, live_gc_roots: [], }
   } else if !metadata.live_gc_roots.is_empty() {
     if call.behavior.returns_twice {
       self.record_error("returns-twice calls cannot use a caller root scope")

@@ -365,7 +365,20 @@ test "both targets retain collecting array fallback beside the no-GC constructor
           1,
         )
         if type_index == 1 && !default_ {
-          assert_true(code.safepoints.any(site => site.roots.length() > 0))
+          // Registered function slots own the reference initializer. The
+          // collecting site keeps its identity without duplicating SSA roots.
+          assert_true(code.safepoints.all(site => site.roots.is_empty()))
+          for
+            name in [
+              "wasmoon.runtime.gc.function_frame_enter", "wasmoon.runtime.gc.function_frame_leave",
+            ] {
+            assert_eq(
+              code.relocations
+              .filter(r => r.target is External(symbol) && symbol.name == name)
+              .length(),
+              1,
+            )
+          }
         }
       }
     }
