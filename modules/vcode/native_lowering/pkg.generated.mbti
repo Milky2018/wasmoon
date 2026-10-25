@@ -173,7 +173,7 @@ pub fn FloatUnaryOp::to_repr(Self) -> @debug.Repr
 pub struct FunctionRootFrameAbi {
   // private fields
 }
-pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32) -> Self
+pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32, preserves_mask? : Bool) -> Self
 
 pub struct HiddenSafepointAbi {
   // private fields

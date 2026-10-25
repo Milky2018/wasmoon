@@ -547,3 +547,184 @@ test "repeated word stores enforce typed positive ranges without safepoints" {
   assert_false(semantics.cancellation_safepoint)
   assert_false(semantics.may_trap)
 }
+
+///|
+fn framed_trace(
+  types : Array[@native.ValueType],
+  capacity : Int32,
+  preserves_mask~ : Bool = true,
+) -> (DirectBuilder, SinkTrace) {
+  let (sink, trace) = traced_sink(Array::makei(types.length(), i => 100 + i), 0)
+  let builder = DirectBuilder::new(
+    types,
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+        preserves_mask~,
+      ),
+    ),
+  )
+  builder.begin_function_roots(capacity)
+  (builder, trace)
+}
+
+///|
+test "straight-line masks publish changed boundary words without repeated stores" {
+  let (builder, trace) = framed_trace([Ptr64] + Array::make(65, GcRef64), 65)
+  let parameters = builder.parameters()
+  for root in parameters[1:] {
+    builder.define_function_root(root)
+  }
+  for
+    live in [[parameters[1]], [parameters[1]], [parameters[1], parameters[65]]] {
+    builder.emit_with_metadata(
+      Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+      [parameters[0]],
+      [],
+      InstructionMetadata::new(None, live),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  debug_inspect(
+    trace.operations.filter_map(operation => {
+      match operation {
+        I64Const(bits) => Some(bits)
+        _ => None
+      }
+    }),
+    content="[0, 0, 1, 1]",
+  )
+}
+
+///|
+test "unknown loop predecessors restore every function mask word" {
+  let (builder, trace) = framed_trace(
+    [Ptr64] + Array::make(65, GcRef64) + [I32],
+    65,
+  )
+  let parameters = builder.parameters()
+  for root in parameters[1:66] {
+    builder.define_function_root(root)
+  }
+  let collect = platform_call("collect", [Ptr64], [], gc_safepoint=true)
+  builder.emit_with_metadata(
+    Call(collect),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[1]]),
+  )
+  |> ignore
+  let left = builder.create_block([])
+  let right = builder.create_block([])
+  let done = builder.create_block([])
+  builder.branch(parameters[66], left, [], right, [])
+  builder.switch_to_block(left)
+  builder.emit_with_metadata(
+    Call(collect),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[1]]),
+  )
+  |> ignore
+  builder.branch(parameters[66], done, [], right, [])
+  builder.switch_to_block(right)
+  builder.emit_with_metadata(
+    Call(collect),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[65]]),
+  )
+  |> ignore
+  builder.jump(left, [])
+  builder.switch_to_block(done)
+  builder.return_([])
+  builder.finish()
+  let writes : Array[Array[UInt64]] = []
+  let pending : Array[UInt64] = []
+  for operation in trace.operations {
+    match operation {
+      I64Const(bits) => pending.push(bits)
+      Call(call) => {
+        if call.callee is External(symbol) && symbol.name == "collect" {
+          writes.push(pending.copy())
+        }
+        pending.clear()
+      }
+      _ => ()
+    }
+  }
+  // Ignore entry-block elision: both unknown predecessors must overwrite
+  // every word, including clearing a bit set on the loop's other path.
+  debug_inspect(writes[1:].to_owned(), content="[[1, 0], [0, 1]]")
+}
+
+///|
+test "returns-twice calls discard known masks before resuming ordinary code" {
+  let (builder, trace) = framed_trace([Ptr64], 65)
+  let checkpoint = @native.NativeCall::new(
+    External(@native.ExternalSymbol::new("checkpoint")),
+    @native.Signature::new([Ptr64], []),
+    Platform,
+    @native.CallBehavior::new(
+      ReadWrite,
+      true,
+      false,
+      false,
+      false,
+      returns_twice=true,
+    ),
+  )
+  for
+    call in [
+      checkpoint,
+      platform_call("collect", [Ptr64], [], gc_safepoint=true),
+    ] {
+    builder.emit_with_metadata(
+      Call(call),
+      [builder.parameters()[0]],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  debug_inspect(
+    trace.operations.filter_map(operation => {
+      match operation {
+        I64Const(bits) => Some(bits)
+        _ => None
+      }
+    }),
+    content="[0, 0, 0, 0]",
+  )
+}
+
+///|
+test "unknown frame providers retain complete mask writes" {
+  let (builder, trace) = framed_trace([Ptr64], 65, preserves_mask=false)
+  for _ in 0..<2 {
+    builder.emit_with_metadata(
+      Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+      [builder.parameters()[0]],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  debug_inspect(
+    trace.operations.filter_map(operation => {
+      match operation {
+        I64Const(bits) => Some(bits)
+        _ => None
+      }
+    }),
+    content="[0, 0, 0, 0, 0, 0]",
+  )
+}

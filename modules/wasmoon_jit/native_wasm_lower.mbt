@@ -151,6 +151,7 @@ fn wasmoon_call_abi(
     function_frame=@native_lowering.FunctionRootFrameAbi::new(
       @native.ExternalSymbol::new(gc_function_frame_enter_symbol()),
       @native.ExternalSymbol::new(gc_function_frame_leave_symbol()),
+      preserves_mask=true,
     ),
     hidden_safepoints~,
   )

@@ -223,6 +223,7 @@ pub struct DirectBuilder {
   priv mut root_scope_object : @native.StackObject?
   priv mut function_root_frame : (Value, Value, Value, Value, Int32)?
   priv function_root_slots : Map[Int32, Int32]
+  priv mut function_root_masks : Array[UInt64]?
   priv mut next_stack_map_id : Int32
   priv error : Ref[String?]
   priv mut current_block : Block
@@ -263,6 +264,7 @@ pub fn DirectBuilder::new(
     root_scope_object: None,
     function_root_frame: None,
     function_root_slots: Map([]),
+    function_root_masks: None,
     next_stack_map_id: 0,
     error: Ref(None),
     current_block: { id: (sink.entry_block)(), },
@@ -399,15 +401,28 @@ fn DirectBuilder::update_function_roots(
     }
     masks[slot / 64] = masks[slot / 64] | (1UL << (slot % 64))
   }
+  let preserve_mask = self.call_abi is Some(abi) &&
+    abi.function_frame is Some(frame) &&
+    frame.preserves_mask
+  let previous = if preserve_mask { self.function_root_masks } else { None }
   let mut start = 0
   while start < masks.length() {
     let bits = masks[start]
+    if previous is Some(words) && words[start] == bits {
+      start += 1
+      continue
+    }
     let mut end = start + 1
-    while end < masks.length() && masks[end] == bits {
+    while end < masks.length() &&
+          masks[end] == bits &&
+          !(previous is Some(words) && words[end] == bits) {
       end += 1
     }
     self.write_root_mask_run(address, start, end, bits)
     start = end
+  }
+  if preserve_mask {
+    self.function_root_masks = Some(masks)
   }
 }
 
@@ -609,6 +624,7 @@ pub fn DirectBuilder::switch_to_block(
   block : Block,
 ) -> Unit {
   if block != self.current_block {
+    self.function_root_masks = None
     self.flush_terminator()
     self.current_block = block
     (self.sink.switch_to_block)(self.target_blocks[block.id])
@@ -855,6 +871,10 @@ fn DirectBuilder::emit_call_with_abi(
     result_types,
     lowered_metadata,
   )
+  if call.behavior.returns_twice {
+    // A rewind can resume after later code changed this same stack mask.
+    self.function_root_masks = None
+  }
   if context is Some(environment) && elaboration.root_scope is Some(scope) {
     self.emit_raw(
       Call(root_scope_pop_call(scope.pop_symbol)),
