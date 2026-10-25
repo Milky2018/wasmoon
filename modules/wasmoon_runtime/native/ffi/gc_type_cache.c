@@ -199,31 +199,30 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
     }
 
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
+    if (type_idx >= 0) {
+        // Concrete checks need the canonical identity, not the object's kind.
+        // Legacy allocations still use their module-local type cache.
+        int32_t actual = gc_heap_runtime_type(heap, gc_ref);
+        if (actual >= 0) return callable_subtype(ctx, actual, type_idx);
+        return is_concrete_subtype(ctx, gc_heap_get_type_idx(heap, gc_ref), type_idx);
+    }
+
+    // Abstract checks need the kind but never the local type index.
     int32_t obj_kind = gc_heap_get_kind(heap, gc_ref);
-    int32_t obj_type_idx = gc_heap_get_type_idx(heap, gc_ref);
-
-    // Handle abstract types
-    if (type_idx < 0) {
-        switch (type_idx) {
-            case ABSTRACT_TYPE_ANY:
-                return 1;
-            case ABSTRACT_TYPE_EQ:
-                return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
-            case ABSTRACT_TYPE_STRUCT:
-                return (obj_kind == 1) ? 1 : 0;
-            case ABSTRACT_TYPE_ARRAY:
-                return (obj_kind == 2) ? 1 : 0;
-            case ABSTRACT_TYPE_EXTERN:
-                return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
-            default:
-                return 0;
-        }
+    switch (type_idx) {
+        case ABSTRACT_TYPE_ANY:
+            return 1;
+        case ABSTRACT_TYPE_EQ:
+            return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
+        case ABSTRACT_TYPE_STRUCT:
+            return (obj_kind == 1) ? 1 : 0;
+        case ABSTRACT_TYPE_ARRAY:
+            return (obj_kind == 2) ? 1 : 0;
+        case ABSTRACT_TYPE_EXTERN:
+            return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
+        default:
+            return 0;
     }
-
-    if (gc_ref <= heap->object_count && gc_heap_runtime_type(heap, gc_ref) >= 0) {
-        return callable_subtype(ctx, gc_heap_runtime_type(heap, gc_ref), type_idx);
-    }
-    return is_concrete_subtype(ctx, obj_type_idx, type_idx);
 }
 
 // ============ ref.cast Implementation ============
