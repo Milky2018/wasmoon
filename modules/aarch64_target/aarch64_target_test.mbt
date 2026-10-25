@@ -331,3 +331,60 @@ test "AArch64 pointer carrier aliases keep semantic types on every CFG edge" {
   }
   exercise(true, 0, false)
 }
+
+///|
+test "aarch64 emits repeated mixed ABI groups at block-local positions" {
+  let abi = @aarch64_target.InternalAbi::new(
+    0,
+    8,
+    [1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  )
+  let values : Array[@native.ValueType] = Array::make(9, I64)
+  for _ in 0..<9 {
+    values.push(F64)
+  }
+  values.push(V128)
+  let parameters = [@native.ValueType::Ptr64]
+  parameters.append(values)
+  let session = @aarch64_target.DirectLoweringSession::new(
+    "repeated_abi_groups",
+    Internal,
+    parameters,
+    values,
+    @aarch64_target.LoweringContext::new(abi),
+  )
+  let builder = @lowering.DirectBuilder::new(parameters, session.sink())
+  let context = builder.parameters()[0]
+  let block = builder.create_block(values)
+  builder.jump(block, builder.parameters()[1:].to_owned())
+  builder.switch_to_block(block)
+  let mut arguments = builder.block_parameters(block)
+  for _ in 0..<32 {
+    let operands = [context]
+    operands.append(arguments)
+    arguments = builder.emit_with_metadata(
+      Call(
+        @native.NativeCall::new(
+          Internal(@native.CodeSymbol::new("callee")),
+          @native.Signature::new(parameters, values),
+          Internal,
+          @native.CallBehavior::conservative(),
+        ),
+      ),
+      operands,
+      values,
+      @lowering.InstructionMetadata::empty(),
+    )
+  }
+  builder.return_(arguments)
+  builder.finish()
+  let (object, _) = @aarch64_target.compile_selected(
+    session.finish_selected(),
+    verify_allocation=true,
+  )
+  // Every call needs its own transfer group, including stack/vector results.
+  assert_eq(object.relocations().length(), 32)
+}

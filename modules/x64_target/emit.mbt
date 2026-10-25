@@ -3254,20 +3254,9 @@ fn emit_function_inputs(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise X64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
     return
@@ -3353,20 +3342,9 @@ fn emit_incoming_call_results(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise X64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_incoming_call_result(
       function.instruction(body[current_index - 1]).unwrap(),
@@ -3458,20 +3436,9 @@ fn emit_function_outputs(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise X64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_function_output(function.instruction(body[current_index - 1]).unwrap()) {
     return
@@ -3554,6 +3521,8 @@ fn emit_instruction(
   allocation : @vcode.Allocation,
   frame : X64Frame,
   block : @vcode.Block,
+  body : ArrayView[@vcode.Instruction],
+  body_index : Int32,
   instruction : @vcode.Instruction,
   next_block : @vcode.Block?,
 ) -> Int32 raise X64EmitError {
@@ -3572,15 +3541,15 @@ fn emit_instruction(
   match function.instruction(instruction).unwrap() {
     IncomingReg(_, _) | IncomingStack(_, _) | IncomingResultArea(_) =>
       emit_function_inputs(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     IncomingCallResult(_, _) | IncomingCallAreaResult(_, _) =>
       emit_incoming_call_results(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     OutgoingReg(_, _) | OutgoingAreaResult(_, _) =>
       emit_function_outputs(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
@@ -4379,7 +4348,10 @@ fn emit_verified(
   let layout = function.layout()
   for block_index, block in layout {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
-    for instruction in function.block_body(block) {
+    // ABI transfer groups borrow this one snapshot; never copy/search the block
+    // again for each materialized argument or result.
+    let body = function.block_body(block)[:]
+    for body_index, instruction in body {
       let abi_materialization = is_abi_materialization(
         function.instruction(instruction).unwrap(),
       )
@@ -4392,6 +4364,8 @@ fn emit_verified(
         allocation,
         frame,
         block,
+        body,
+        body_index,
         instruction,
         None,
       )
@@ -4407,7 +4381,15 @@ fn emit_verified(
     let next_block = layout.get(block_index + 1)
     emit_edits_at(buffer, function, allocation, frame, terminator, Before)
     let terminator_offset = emit_instruction(
-      buffer, function, allocation, frame, block, terminator, next_block,
+      buffer,
+      function,
+      allocation,
+      frame,
+      block,
+      body,
+      body.length(),
+      terminator,
+      next_block,
     )
     record_instruction_metadata(
       buffer, function, allocation, frame, terminator, terminator_offset, sources,

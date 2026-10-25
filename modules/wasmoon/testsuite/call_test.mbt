@@ -275,3 +275,27 @@ test "call: return-from-long-argument-list" {
   )
   inspect(result, content="matched")
 }
+
+///|
+test "call: repeated mixed register and area transfers in one block" {
+  let types = Array::make(9, "i64").join(" ") +
+    " " +
+    Array::make(9, "f64").join(" ")
+  let forwarded = Array::makei(18, i => "local.get \{i}").join(" ")
+  let calls = Array::make(32, "call $identity").join(" ")
+  let source = "(module (func $identity (param \{types}) (result \{types}) \{forwarded}) (func (export \"run\") (param \{types}) (result \{types}) \{forwarded} \{calls}))"
+  let arguments : Array[@types.Value] = Array::makei(9, i => {
+    I64(i.to_int64() + 17L)
+  })
+  for i in 0..<9 {
+    arguments.push(F64(i.to_double() + 0.5))
+  }
+  for level in [0, 2] {
+    inspect(
+      @testsuite.compare_jit_interp_with_opt_level(
+        source, "run", arguments, level,
+      ),
+      content="matched",
+    )
+  }
+}

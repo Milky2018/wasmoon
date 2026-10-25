@@ -219,3 +219,50 @@ ASan/UBSan316, event loop and both positive controls pass on the dirty
 f866185a-based tree; Linux LSan still requires CI for this new change.
 Core258/62563 and Component59/1385 also pass in each engine with verification
 enabled; wasm1462, strict checks, C44 and boundary/bridge audits pass.
+
+
+## Distributed Core compiler: block-local ABI emission
+
+The new #583 control uses the 4,938,531-byte distributed Core builtin GC module,
+SHA256 `00002138ac7db01edc9217916b8c7b3c96a8e093f47f765faa465ac3eca792a6`.
+The public compile_module API parses, validates and eagerly compiles at O2;
+there is no Store, import linking or guest execution. Cancellation remains
+**enabled** in the acceptance configuration. Tracking: [ISS-704](../../issues/ISS-704.md).
+
+Fresh 0.18.0 controls reproduce 10.617 seconds API time and 1,530.6 MB peak RSS
+(three serial samples). PR582 at 7b40e8ca already reduces memory substantially;
+those release observations must not be attributed to the following single fix.
+
+Sampling the current compiler's final initializer emission identified repeated
+block snapshots and linear instruction-position searches. A diagnostic counter
+on the unmodified algorithm records 17,460 snapshots, 350,542,399 copied handles
+and 173,302,982 position comparisons in that function's emission attempt. Its
+long-branch fallback repeats the work. The largest initializer has 73,107 IR
+instructions after optimization. CPU samples directly attribute the time to
+Array.copy, reference blits and reference-count release inside ABI emission.
+
+Both target emitters now borrow the emission loop's one block snapshot and
+known block-local position. Input/result/output transfer grouping and parallel
+moves are unchanged. The public Function.block_body snapshot contract is also
+unchanged. No global cache, public API, artifact version or codegen revision
+changes. The private ArrayView parameter prevents helper-side mutation.
+
+Five alternating fresh-process pairs on macOS ARM64, before 7b40e8ca versus its
+dirty tree with only this functional emitter change, without concurrent builds
+or profiling (decimal MB; API timing excludes input reading and encoding):
+
+| O2 mode | API before | API after | Change | RSS before / after |
+| --- | ---: | ---: | ---: | ---: |
+| cancellation enabled | 8.807 s | 7.136 s | -19.0% | 718.3 / 718.3 MB |
+| cancellation disabled control | 7.742 s | 6.041 s | -22.0% | 646.9 / 646.9 MB |
+
+Separately encoded complete artifacts are byte-identical before/after in both
+modes (SHA256 prefixes `1fb5e1dce158` / `523a2fbe6952`, respectively). This is a
+compiler-work reduction, not an RSS or guest-throughput improvement. Public
+regressions compile repeated mixed integer/FP/vector transfer groups in a
+non-entry block on both targets; actual JIT/interpreter comparisons exercise
+32 repeated mixed register/stack/result-area transfers at O0 and O2. These
+semantic regressions pass before and after; deterministic diagnostic work counts
+and repeated original-input timings provide the performance feedback loop.
+No timing threshold or test-only production counter is added. Local ARM64
+execution does not establish actual x64 execution or fresh cross-platform CI.
