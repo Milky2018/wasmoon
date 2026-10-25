@@ -26,6 +26,17 @@ static inline uint8_t* gc_access_object_data(GcHeap* heap, int32_t gc_ref) {
     return ((uint8_t*)header) + GC_HEADER_SIZE;
 }
 
+static inline int32_t gc_access_compact_array_width(const GcTypeLayout *layout) {
+    return layout && layout->count == 1 && layout->fields[0].offset == 0 &&
+        layout->fields[0].width == layout->size && !layout->fields[0].reference
+        ? layout->size : 0;
+}
+
+static inline uintptr_t gc_access_array_view(const void *payload, int32_t width) {
+    uintptr_t code = width == 1 ? 1 : width == 2 ? 2 : width == 4 ? 3 : width == 8 ? 4 : 0;
+    return (uintptr_t)payload | code;
+}
+
 static inline GcSlot gc_access_layout_read(const uint8_t *data, const GcFieldLayout *field) {
     GcSlot slot = {0, 0};
     switch (field->width) {

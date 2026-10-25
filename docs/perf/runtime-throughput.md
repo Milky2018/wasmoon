@@ -340,3 +340,52 @@ concurrent executables; guests are prepared outside measurement and their hashes
 are checked. Updated library/corpus results belong in PR582. Wasmtime corpus
 controls retain `-C parallel-compilation=n`. No raw report or receipt-only commit
 is required.
+
+## October26 follow-up: array metadata reuse
+
+The user extended work through October26 10:00 Shanghai. This independent
+change starts from accepted `00c44af6`, with the same private October23 SDK and
+unchanged zero/one/ten-call inputs. No global toolchain, quantum or guest
+assertion changes. An execution-only sample puts 62% of main-thread top samples
+in the two metadata projection helpers. Separate counters observe 395,997,591
+array projections, 96.3% repeating the preceding object; the existing struct hint
+already hits 95.6%. Samples and counters are not an additive speedup budget.
+
+The retained native change adds one heap-owned array metadata hint, costing
+24 bytes. It contains a reference, encoded view and compact width, never a root
+or cached element value. Growth, collection, compaction, retirement, rollback and
+runtime type updates invalidate it through the shared view lifecycle. Opaque,
+reference and legacy arrays, positive-width compatibility including V128,
+verification refusal, null/bounds traps, barriers, faults and quotas keep their
+previous contracts. Collection strategy and generated safepoints are unchanged.
+
+Five alternating fresh-process pairs reduce ten-call wall from 4.625 to 3.860s
+(-16.5%), with zero-call startup 0.992 -> 0.992s. One-call wall changes from
+1.326 to 1.273s. These are process boundaries, not isolated machine-code timers.
+Enabled and plain #583 artifacts remain byte-identical, respectively 42,339,695
+and 37,934,283 bytes. Three API-timed pairs are 6.516 -> 6.473s enabled and
+6.071 -> 6.185s plain; this runtime change is not a compiler-speedup claim.
+RSS from that encoder harness includes encoding after the API timer and is not
+substituted for the earlier compiler-only process boundary.
+
+Six asserted controls across Wasmoon before/after, Wasmtime and V8 pass 72 fresh
+processes. Nine additional native pairs per large graph/static-reference-array/
+mutated-reference-array give median paired invocation changes -0.48/+0.24/+0.56%,
+with bootstrap 95% intervals [-4.52,+1.28]/[-4.97,+1.61]/[+0.02,+2.65]%. This
+documents small residual costs and uncertainty rather than claiming every
+workload improves. The hint adds a miss-path update.
+
+A discarded full-check compiler expansion removes the C calls but only moves
+their work: three pairs increase #583 process wall 6.699 -> 8.092s and ten-call
+wall 4.534 -> 4.818s, with startup 0.919 -> 1.210s and incremental work flat.
+No such compiler expansion or new artifact revision is retained.
+
+Two public lifetime tests and a low-level ABI control pass before/after. They
+cover writes, growth, compaction, non-rooting, rollback, Store close, compact and
+opaque widths. Omitting retirement invalidation makes explicit heap verification
+fail after rollback; the temporary mutation is restored. Native 3195 passes
+ordinarily and with all three verifiers, wasm 1483, strict both targets/C45,
+boundaries, bridges and Python 180/54 existing skips pass. Both engines pass
+Core 258/62563 and Component 59 files/1385 commands without skips. Clean sanitizer
+and platform acceptance belong to this change's own committed head; see PR582
+and ISS-706.

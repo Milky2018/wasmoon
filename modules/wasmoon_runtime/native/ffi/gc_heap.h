@@ -158,6 +158,14 @@ typedef struct {
     void *payload;
 } GcStructViewCache;
 
+// A non-root array metadata hint. Payload lifetime changes invalidate it with
+// struct views; an encoded view keeps compact width and opaque-array behavior.
+typedef struct {
+    int64_t reference;
+    uintptr_t view;
+    int32_t width;
+} GcArrayViewCache;
+
 typedef struct {
     int32_t tracking_enabled, has_untyped_allocations, tracing_young;
     uint64_t young_epoch;
@@ -218,11 +226,20 @@ typedef struct GcHeap {
     int32_t has_marked_objects;
     GcGeneration generation;
     uint64_t structural_epoch; // Invalidates trace shortcuts before identity retirement.
+    GcArrayViewCache array_view;
 } GcHeap;
 
-static inline void gc_heap_forget_struct_view(GcHeap *heap) {
+static inline void gc_heap_forget_views(GcHeap *heap) {
     heap->struct_view.reference = 0;
     heap->struct_view.payload = NULL;
+    heap->array_view.reference = 0;
+    heap->array_view.view = 0;
+}
+
+static inline void gc_heap_forget_reference_views(GcHeap *heap, int32_t ref) {
+    int64_t word = (int64_t)ref * 2;
+    if (heap->struct_view.reference == word || heap->array_view.reference == word)
+        gc_heap_forget_views(heap);
 }
 
 static inline GcIdentityPage *gc_heap_identity_page(GcHeap *heap, int32_t ref) {
@@ -285,7 +302,7 @@ static inline int32_t gc_heap_runtime_type(GcHeap *heap, int32_t ref) {
 }
 
 static inline void gc_heap_set_runtime_type(GcHeap *heap, int32_t ref, int32_t type) {
-    if (heap->struct_view.reference == (int64_t)ref * 2) gc_heap_forget_struct_view(heap);
+    gc_heap_forget_reference_views(heap, ref);
     GcIdentityPage *page = gc_heap_identity_page(heap, ref);
     if (page) page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = type;
 }

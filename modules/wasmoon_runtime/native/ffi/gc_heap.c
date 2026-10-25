@@ -167,7 +167,7 @@ int gc_heap_ensure_payload_capacity(GcHeap* heap, size_t needed) {
         return 0;  // Allocation failed
     }
 
-    gc_heap_forget_struct_view(heap);
+    gc_heap_forget_views(heap);
     heap->data = new_data;
     heap->capacity = new_capacity;
     return 1;
@@ -249,7 +249,7 @@ int32_t gc_heap_register_object(GcHeap *heap, int32_t offset) {
 }
 
 static void retire_identity(GcHeap *heap, int32_t ref) {
-    if (heap->struct_view.reference == (int64_t)ref * 2) gc_heap_forget_struct_view(heap);
+    gc_heap_forget_reference_views(heap, ref);
     int32_t index = ref - 1;
     GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
     gc_generation_retire_object(page, ref);
@@ -1127,7 +1127,7 @@ static int32_t gc_heap_sweep_mode(GcHeap *heap, int young) {
     ++heap->structural_epoch;
 
     forget_identity_window(heap);
-    gc_heap_forget_struct_view(heap);
+    gc_heap_forget_views(heap);
     // Each page's exact population occupies one contiguous live-list group.
     // No allocations, callbacks or payload resizing occur during this sweep.
     const int32_t object_count = heap->live_count;
@@ -1193,7 +1193,7 @@ static void gc_heap_compact_mode(GcHeap *heap, int young, size_t allocation_budg
     }
 
     forget_identity_window(heap);
-    gc_heap_forget_struct_view(heap);
+    gc_heap_forget_views(heap);
     // Compaction moves payload bytes, not these backing allocations.
     const int32_t object_count = heap->live_count;
     uint8_t *data = heap->data;
@@ -1308,6 +1308,18 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             heap->struct_view.identity != (int32_t)(header->reserved >> 32) - 1) {
             return gc_verify_fail("invalid cached struct view", verbose);
         }
+    }
+
+    if (heap->array_view.reference) {
+        int64_t word = heap->array_view.reference;
+        int32_t offset = word > 0 && !(word & 1) && word <= (int64_t)INT32_MAX * 2
+            ? gc_heap_identity_offset(heap, (int32_t)(word >> 1)) : -1;
+        GcHeader *header = offset >= 0 && (size_t)offset + GC_HEADER_SIZE <= heap->size
+            ? (GcHeader *)(heap->data + offset) : NULL;
+        int32_t width = header ? gc_access_compact_array_width(gc_object_layout(heap, header)) : 0;
+        if (!header || header->kind != GC_KIND_ARRAY || heap->array_view.width != width ||
+            heap->array_view.view != gc_access_array_view(header + 1, width))
+            return gc_verify_fail("invalid cached array view", verbose);
     }
 
     size_t previous_end = 0;

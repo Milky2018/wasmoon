@@ -11,6 +11,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_gc_word_access(
     case 2: return gc_array_get_heap_impl(heap, reference, index);
     case 3: gc_array_set_heap_impl(heap, reference, index, value); return 0;
     case 4: return gc_array_len_heap_impl(heap, reference);
+    case 5: return (int64_t)(uintptr_t)gc_array_data_heap_impl(heap, reference, index);
     default: return -1;
     }
 }

@@ -998,20 +998,16 @@ _Static_assert(GC_ARRAY_DATA_OFFSET == 16, "numeric array view ABI");
 void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32_t width) {
     if (!heap || !ref || ref < 0 || ref > (int64_t)INT32_MAX * 2 || (ref & 1)) return NULL;
     if (gc_verify_env_cached != 0) return NULL;
-    GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
-    if (!header || header->kind != GC_KIND_ARRAY) return NULL;
-    GcTypeLayout *layout = gc_object_layout(heap, header);
-    int compact = layout && layout->count == 1 && layout->fields[0].offset == 0 &&
-        layout->fields[0].width == layout->size && !layout->fields[0].reference;
-    if (width == 0) {
-        uintptr_t code = !compact ? 0 : layout->size == 1 ? 1 : layout->size == 2 ? 2 :
-            layout->size == 4 ? 3 : layout->size == 8 ? 4 : 0;
-        // Opaque metadata view: length remains available even for legacy or
-        // reference arrays. Element refinement checks the exact width tag.
-        return (void *)((uintptr_t)(header + 1) | code);
+    GcArrayViewCache *cached = &heap->array_view;
+    if (cached->reference != ref) {
+        GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
+        if (!header || header->kind != GC_KIND_ARRAY) return NULL;
+        int32_t compact_width = gc_access_compact_array_width(gc_object_layout(heap, header));
+        *cached = (GcArrayViewCache){ref, gc_access_array_view(header + 1, compact_width), compact_width};
     }
-    if (!compact || layout->size != width) return NULL;
-    return header + 1;
+    if (width == 0) return (void *)cached->view;
+    if (width != cached->width) return NULL;
+    return (void *)(cached->view & ~(uintptr_t)15);
 }
 
 // Checked once per object/type and heap epoch. Subsequent field projections
