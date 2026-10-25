@@ -5,6 +5,7 @@
 #include "jit_internal.h"
 #include "gc_allocator.h"
 #include "gc_access.h"
+#include "callable_lookup.h"
 
 // ============ Value Decoding Helpers ============
 
@@ -1036,7 +1037,16 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
     }
     int32_t identity = (int32_t)(header->reserved >> 32) - 1;
     int exact = identity >= 0 && identity == target;
-    if (!exact && !gc_ref_test_impl(ctx, ref, type_idx, 0)) { trap_unreachable_i64(); return NULL; }
+    if (!exact) {
+        // The live struct and concrete target are already checked above. Use
+        // its canonical runtime identity without repeating ref.test's object
+        // decoding/kind queries; legacy identities retain that complete path.
+        int32_t actual = gc_heap_runtime_type(heap, decode_heap_ref(ref));
+        int compatible = actual >= 0 && target >= 0
+            ? callable_subtype_registered(ctx_runtime(ctx), actual, type_idx)
+            : gc_ref_test_impl(ctx, ref, type_idx, 0);
+        if (!compatible) { trap_unreachable_i64(); return NULL; }
+    }
     GcTypeLayout *layout = gc_object_layout(heap, header);
     uint64_t mask = fields == 16 ? UINT64_MAX : (UINT64_C(1) << (fields * 4)) - 1;
     if (layout && (layout->kind != GC_KIND_STRUCT || layout->count < fields || (layout->prefix_shape & mask) != shape)) {
