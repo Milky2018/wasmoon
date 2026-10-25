@@ -502,3 +502,20 @@ API medians 6.268 -> 6.254s enabled, 5.722 -> 5.702s plain; paired changes are
 about -0.27% and RSS overlaps. This is a small simplification, not a material
 compile-time improvement or a solution to #583. Public tests retain completion
 once and final hidden-safepoint ABI rejection. Tracking: [ISS-711](../../issues/ISS-711.md).
+
+## Struct-view leaf hits
+
+Fresh current-head execution sampling attributes about41% of main-thread leaf
+samples to struct-view projection. Separate atomic counters on the original
+ten-call input report392.5 million struct queries and95.6% hits (array96.3%).
+The cache exists and hits; native code still saves/restores an80-byte register
+frame on each hit. Split the complete checked body into a private non-inlined
+function and retain a small admitted-key leaf entry. No hint capacity, lifetime
+invalidation, root/GC policy, helper signature or artifact revision changes.
+
+Five alternating fresh-process pairs reduce the original ten-call median
+3.438 ->3.227s; all pairs improve5.87-9.64%. Zero/one-call controls offer no stable
+gain. Three enabled/six plain large-module compiler pairs preserve exact
+artifacts: enabled API6.228 ->6.221s is flat, plain paired median+0.44%; RSS
+overlaps. This is local ARM64 evidence, not an x64 speed claim or a new
+engine comparison. Tracking: [ISS-712](../../issues/ISS-712.md).

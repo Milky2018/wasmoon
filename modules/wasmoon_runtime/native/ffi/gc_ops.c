@@ -1012,7 +1012,12 @@ void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32
 
 // Checked once per object/type and heap epoch. Subsequent field projections
 // are nontrapping metadata reads from this admitted, live struct payload.
-void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int32_t type_idx,
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t ref, int32_t type_idx,
     uint64_t shape, int32_t fields) {
     if (!ref) { trap_null_reference(); return NULL; }
     ctx = resolve_ctx(ctx);
@@ -1057,6 +1062,26 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
         *cached = (GcStructViewCache){ref, identity, fields, shape, view};
     }
     return view;
+}
+
+// A matching non-root hint has already admitted the reference, nominal type
+// and field span; malformed keys cannot hit an admitted entry.
+// Misses retain the complete checked path, including TLS and
+// legacy contexts. Keep cold calls out of the common leaf's register frame.
+void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int32_t type_idx,
+    uint64_t shape, int32_t fields) {
+    if (ctx && ref && gc_verify_env_cached == 0) {
+        GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
+        jit_runtime_state_t *runtime = ctx_runtime(ctx);
+        if (heap && runtime->callable_local_types && type_idx >= 0 &&
+            type_idx < runtime->callable_local_type_count) {
+            int32_t target = runtime->callable_local_types[type_idx];
+            GcStructViewCache *cached = &heap->struct_view;
+            if (target >= 0 && cached->reference == ref && cached->identity == target &&
+                cached->shape == shape && cached->fields == fields) return cached->payload;
+        }
+    }
+    return gc_struct_data_slow(ctx, ref, type_idx, shape, fields);
 }
 
 int64_t WASMOON_GUEST_ABI gc_array_get_heap_impl(GcHeap *heap, int64_t ref, int32_t idx) {
