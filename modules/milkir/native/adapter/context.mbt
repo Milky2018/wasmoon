@@ -351,6 +351,50 @@ pub fn InstructionContext::branch(
 }
 
 ///|
+/// Select an integer comparison directly as a control-flow condition.
+pub fn InstructionContext::branch_int_compare_immediate(
+  self : InstructionContext,
+  comparison : @lowering.IntComparison,
+  input : @lowering.Value,
+  bits : UInt64,
+  true_target : @lowering.Block,
+  true_arguments : Array[@lowering.Value],
+  false_target : @lowering.Block,
+  false_arguments : Array[@lowering.Value],
+) -> Unit {
+  self.attempt(
+    fn() {
+      self.builder.branch_int_compare_immediate(
+        comparison, input, bits, true_target, true_arguments, false_target, false_arguments,
+      )
+    },
+    (),
+  )
+}
+
+///|
+/// Branch on two integer operands without materializing a boolean result.
+pub fn InstructionContext::branch_int_compare(
+  self : InstructionContext,
+  comparison : @lowering.IntComparison,
+  left : @lowering.Value,
+  right : @lowering.Value,
+  true_target : @lowering.Block,
+  true_arguments : Array[@lowering.Value],
+  false_target : @lowering.Block,
+  false_arguments : Array[@lowering.Value],
+) -> Unit {
+  self.attempt(
+    fn() {
+      self.builder.branch_int_compare(
+        comparison, left, right, true_target, true_arguments, false_target, false_arguments,
+      )
+    },
+    (),
+  )
+}
+
+///|
 pub fn InstructionContext::trap(
   self : InstructionContext,
   reason : @native.TrapReason,

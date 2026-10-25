@@ -389,3 +389,38 @@ boundaries, bridges and Python 180/54 existing skips pass. Both engines pass
 Core 258/62563 and Component 59 files/1385 commands without skips. Clean sanitizer
 and platform acceptance belong to this change's own committed head; see PR582
 and ISS-706.
+
+## Direct comparisons for expanded polls
+
+Starting from accepted59ece7b1, machine code shows five native poll conditions
+materialized as booleans before branching. The original MilkIR branch selector
+already avoids this, but semantic adapters lacked the native builder's existing
+comparison-branch interface. Two small forwarding methods expose it. Poll CFG,
+callback priority, signed budget checks, decrement, precise roots and slow-call
+reentry remain unchanged; quantum stays1024. AArch64 removes comparison-result
+materialization. The current x64 backend retains its condition materialization,
+so no x64 execution gain is claimed from ARM measurements. Codegen revision27
+invalidates previous generated-code caches.
+
+Five final alternating pairs on the unchanged original inputs give process
+medians zero/one/ten0.892/1.183/3.699s before and0.867/1.137/3.524s after. The
+10,000-assertion ten-call input improves4.7%. These include startup, GC and
+cooperative work rather than isolating guest machine-code time.
+
+Three pairs use byte-identical encoder harnesses. Enabled byte-to-artifact API
+medians6.439 -> 6.306s include parse/validation and exclude input reading and
+artifact encoding; serialized output shrinks42,339,695 -> 41,545,706 bytes
+(-1.9%). Plain API5.792 -> 5.802s offers no improvement claim; its37,934,283-byte
+artifact remains byte-identical before the manifest revision. Whole encoder
+RSS ranges overlap (enabled741-752MB; plain689-719MB) and do not establish a
+memory improvement. A separate compiler-only process boundary remains distinct
+from the encoder's post-timer allocations. Thirteen representative inputs pass
+130 asserted processes; short-input changes are not treated as universal gains.
+
+A separate cache-hit codegen prototype reduces ten-call wall4.8% but increases
+startup/compilation and slows several allocation controls3-5%; it is not retained.
+Prepopulating array hints during allocation is also flat on the original control
+and is discarded. The retained change adds no cache or runtime allocation.
+The public production diagnostics control fails before and passes after; public
+poll/callback/fuel/cancellation/root tests and full platform gates remain required.
+Acceptance belongs to the eventual committed head, tracked in ISS-707 and PR582.
