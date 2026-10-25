@@ -363,13 +363,24 @@ int64_t table_type_for_value(jit_context_t *ctx, int64_t val) {
 }
 
 static inline void **table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
-    if (!ctx || !ctx_tables(ctx) || !ctx_table_sizes(ctx) || table_idx < 0 || table_idx >= ctx_table_count(ctx) || index < 0 ||
-        (uint64_t)index >= ctx_table_sizes(ctx)[table_idx]) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+    if (ctx && table_idx >= 0 && table_idx < ctx_table_count(ctx) && index >= 0) {
+        wasmoon_table_binding_t *bindings = ctx_runtime(ctx)->table_bindings;
+        if (bindings) {
+            // Context bindings retain the stable owner; growth and close update
+            // its live layout. Avoid decoding the VMContext array fields again.
+            const wasmoon_table_t *table = bindings[table_idx].owner;
+            if ((uint64_t)index < table->size)
+                return table->entries + (size_t)index * 2;
+        } else {
+            void ***tables = ctx_tables(ctx);
+            const size_t *sizes = ctx_table_sizes(ctx);
+            if (tables && sizes && (uint64_t)index < sizes[table_idx])
+                return tables[table_idx] + (size_t)index * 2;
+        }
     }
-    return ctx_tables(ctx)[table_idx] + (size_t)index * 2;
+    g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
+    if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    return 0;
 }
 
 static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t table_idx, int64_t index) {

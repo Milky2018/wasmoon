@@ -442,3 +442,31 @@ loop shrinks174 ->158 bytes. Seven alternating200M-iteration pairs give medians
 native Intel/Windows performance. Public production diagnostics, typed verifier
 negatives and interpreter/JIT loop controls protect the lowering and edge logic.
 Exact-head platform acceptance is tracked separately in ISS-708 and PR582.
+
+## Bound table descriptor reads
+
+A fresh 70-algorithm cold-cache screen at db0198ea completes without failure or
+timeout. Single-pair geometric means are value 1.028 and wall 1.365 against
+Wasmtime 49.0.1 with parallel compilation disabled; 22 original-threshold gaps
+remain. This is screening evidence, not a before/after improvement estimate.
+
+Five independent pairs reproduce randombytes value ratio 1.262. Samples repeatedly
+land in indirect-call target resolution rather than WASI entropy copying. Native
+machine code decodes dynamic VMContext table-array fields before every lookup.
+Bound contexts already retain stable table owners; reading their current entries
+and size avoids that repeated decoding. Standalone unbound contexts retain the
+ABI-array path. Bounds, null/subtype checks, reentry, growth/close publication and
+reference identities are unchanged. No cache or artifact revision is added.
+
+Nine alternating cold pairs give randombytes paired median -1.35% with bootstrap
+95% interval [-2.09,-0.21]%; whole-process medians 0.4493 -> 0.4431s. Five pairs each
+of five shorter authentication/hash/cipher controls do not establish a systematic regression.
+An asserted loop of 100 million indirect calls gives process medians 0.5736 -> 0.5539s against
+Wasmtime 0.1674s; this residual gap remains. All generated artifacts in the paired
+corpus controls are byte-identical. These are ARM64 measurements. Safety/platform
+acceptance remains separate, tracked in ISS-709.
+
+A distinct register-allocator optional-wrapper experiment leaves 20 artifacts
+identical but changes compile API medians by less than 1%, without a demonstrated
+RSS reduction. It is not retained. Raw profiles and experiment outputs stay in
+the temporary workspace.
