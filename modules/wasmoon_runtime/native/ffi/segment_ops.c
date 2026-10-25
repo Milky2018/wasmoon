@@ -791,6 +791,21 @@ static int64_t decode_array_elem_from_bytes(const uint8_t *p, int tag) {
     }
 }
 
+// Segment constructors share the ordinary Store-canonical physical layout.
+// This remains a single non-collecting attempt: segment admission and trap
+// ordering stay with the caller, and legacy embeddings retain wide slots.
+static int32_t allocate_segment_array(jit_context_t *ctx, int32_t type, int32_t count) {
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
+    int32_t identity = -1;
+    if (ctx_runtime(ctx)->callable_local_types && type >= 0 &&
+        type < ctx_runtime(ctx)->callable_local_type_count)
+        identity = ctx_runtime(ctx)->callable_local_types[type];
+    GcTypeLayout *layout = gc_heap_layout(heap, identity);
+    return layout && layout->kind == GC_KIND_ARRAY
+        ? gc_heap_alloc_typed(heap, identity, type, count, NULL, 1, 1, (GcSlot){0, 0})
+        : gc_heap_alloc_array(heap, type, count, 0);
+}
+
 // array.new_data - Create array from data segment
 // Returns: encoded GC reference (gc_ref << 1)
 static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
@@ -846,7 +861,7 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
         return 0;
     }
 
-    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
+    int32_t gc_ref = allocate_segment_array(ctx, type_idx, (int32_t)len_u32);
     if (gc_ref == 0) {
         g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -871,7 +886,6 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     int64_t offset,
     int64_t length
 ) {
-    (void)type_idx;
     if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -906,7 +920,7 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
         return 0;
     }
 
-    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
+    int32_t gc_ref = allocate_segment_array(ctx, type_idx, (int32_t)len_u32);
     if (gc_ref == 0) {
         g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
