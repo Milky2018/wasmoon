@@ -277,25 +277,35 @@ test "call: return-from-long-argument-list" {
 }
 
 ///|
-test "call: repeated mixed register and area transfers in one block" {
+test "call: repeated mixed ABI transfers after a control-flow join" {
   let types = Array::make(9, "i64").join(" ") +
     " " +
-    Array::make(9, "f64").join(" ")
-  let forwarded = Array::makei(18, i => "local.get \{i}").join(" ")
+    Array::make(9, "f64").join(" ") +
+    " v128"
+  let forwarded = Array::makei(19, i => "local.get \{i}").join(" ")
+  let reversed = Array::makei(19, i => {
+    let index = if i < 9 { 8 - i } else if i < 18 { 26 - i } else { i }
+    "local.get \{index}"
+  }).join(" ")
+  let selected = "(if (result \{types}) (i64.eqz (local.get 0)) (then \{reversed}) (else \{forwarded}))"
   let calls = Array::make(32, "call $identity").join(" ")
-  let source = "(module (func $identity (param \{types}) (result \{types}) \{forwarded}) (func (export \"run\") (param \{types}) (result \{types}) \{forwarded} \{calls}))"
+  let source = "(module (func $identity (param \{types}) (result \{types}) \{forwarded}) (func (export \"run\") (param \{types}) (result \{types}) \{selected} \{calls}))"
   let arguments : Array[@types.Value] = Array::makei(9, i => {
     I64(i.to_int64() + 17L)
   })
   for i in 0..<9 {
     arguments.push(F64(i.to_double() + 0.5))
   }
-  for level in [0, 2] {
-    inspect(
-      @testsuite.compare_jit_interp_with_opt_level(
-        source, "run", arguments, level,
-      ),
-      content="matched",
-    )
+  arguments.push(V128(@types.int64_pair_to_v128_le(2L, 3L)))
+  for first in [17L, 0L] {
+    arguments[0] = I64(first)
+    for level in [0, 2] {
+      inspect(
+        @testsuite.compare_jit_interp_with_opt_level(
+          source, "run", arguments, level,
+        ),
+        content="matched",
+      )
+    }
   }
 }

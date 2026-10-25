@@ -318,3 +318,49 @@ flags, wasm 1481 and both strict targets pass. Fresh isolated macOS ASan/UBSan 3
 the event loop and both positive controls pass on the dirty c873e8b0 tree. This
 does not establish Linux LSan or actual x64/platform acceptance. Full distributed
 library and cross-platform results are tracked in PR582; raw logs stay temporary.
+
+The final public regression places the repeated mixed ABI transfers after a CFG
+join, exercising both arms. A deliberate global-instruction-index substitution
+fails with an out-of-range block view; the correct block cursor passes. The
+foreign-context prepared-environment test now uses only the public API. Native
+3187 (ordinary and all verification flags), wasm 1481 and strict checks pass;
+fresh isolated macOS ASan/UBSan now executes 371 tests plus both positive
+controls. This last run uses b6e1cb10 with test-only working changes, not a clean
+platform acceptance receipt.
+
+### Distributed library and corpus controls
+
+Three rounds retain the original four concurrent test executables, cfgs,
+expected panics and snapshots. All 36 runner/suite/round combinations pass, with
+unchanged Wasm hashes and counts: Core wasm 7950, Core GC 7971, async 586 and
+SQLite 46. Medians include process startup, JIT, host work and waits; these are
+whole-PR comparisons against release 0.18.0, not isolated guest execution or
+attribution to one change.
+
+| Suite | Official moonrun | Released Wasmoon | Current functional tree |
+| --- | ---: | ---: | ---: |
+| Core wasm | 6.061 s | 41.461 s | 29.349 s |
+| Core GC | 3.147 s | 78.727 s | 46.887 s |
+| async | 15.689 s | 23.135 s | 22.764 s |
+| SQLite | 0.579 s | 1.375 s | 1.340 s |
+
+A fresh serial cold screen of all 70 algorithm workloads completes with zero
+engine failures. Wasmtime 49.0.1 has parallel compilation disabled; Wasmoon
+reports a fresh compile for every workload. Geometric mean ratios are 1.029 for
+69 positive finite guest values and 1.369 for all 70 cold process wall times.
+Twenty-four cases exceed the runner's performance-warning thresholds. These
+single-screen aggregates are essentially unchanged from the earlier screen;
+no corpus-wide improvement is claimed from the new cooperative metadata fix.
+
+### Remaining cancellation/inlining interaction
+
+Single-variable controls retain all guest checks. Three fresh rounds give
+ten-call medians of 4.939 s with normal cancellation/cooperation, 4.522 s with
+only cooperation disabled, and 1.694 s with both disabled. Cancellation also
+changes compiler eligibility: its eagerly expanded entry CFG prevents the
+single-block leaf inliner from running. A separate three-pair control with both
+features disabled increases ten-call time from 1.638 to 3.967 s when only leaf
+inlining is disabled. Therefore the cancellation gap cannot be attributed to
+poll instruction cost alone. These diagnostic switches are not production
+settings; preserving every entry/loop poll and its roots is required for any
+follow-up inlining change.

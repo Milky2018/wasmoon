@@ -672,21 +672,3 @@ test "prepared GC environment freezes mappings and rebinds the same payloads" {
   assert_eq(replacement.addresses[0], 222L)
   assert_eq(replacement.canonical[0], 99)
 }
-
-///|
-test "prepared GC environment rejects a different native context before binding" {
-  let first = NativeJITContext::try_alloc(0).unwrap()
-  let second = NativeJITContext::try_alloc(0).unwrap()
-  let environment = first.prepare_gc_environment([], [], [])
-  let heap = CHeap()
-  defer heap.free()
-  try second.setup_gc_environment(heap, environment) catch {
-    InvalidMetadata => ()
-    error => fail("unexpected setup error: \{error}")
-  } noraise {
-    _ => fail("foreign prepared context was accepted")
-  }
-  assert_true(second.gc_environment_is_clear())
-  first.setup_gc_environment(heap, environment)
-  first.teardown_gc()
-}

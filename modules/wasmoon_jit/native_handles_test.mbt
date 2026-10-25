@@ -1532,3 +1532,21 @@ fn empty_safepoint_blob(count : Int32) -> Bytes {
   }
   Bytes::from_array(bytes)
 }
+
+///|
+test "prepared GC environment rejects a different native context before binding" {
+  let first = @wasmoon_jit.NativeJITContext::try_alloc(0).unwrap()
+  let second = @wasmoon_jit.NativeJITContext::try_alloc(0).unwrap()
+  let environment = first.prepare_gc_environment([], [], [])
+  let heap = @wasmoon_jit.CHeap()
+  defer heap.free()
+  try second.setup_gc_environment(heap, environment) catch {
+    InvalidMetadata => ()
+    error => fail("unexpected setup error: \{error}")
+  } noraise {
+    _ => fail("foreign prepared context was accepted")
+  }
+  assert_true(second.gc_environment_is_clear())
+  first.setup_gc_environment(heap, environment)
+  first.teardown_gc()
+}
