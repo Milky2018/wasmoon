@@ -3901,6 +3901,29 @@ fn emit_instruction(
         reg(1),
       )
     }
+    StoreRepeated64(offset, count, bits) => {
+      let address = reg(1)
+      let remaining = reg(2)
+      let pattern = reg(3)
+      if offset <= 0x7FFFFFFFUL {
+        emit_move(buffer, Ptr64, address, reg(0))
+        if offset != 0UL {
+          buffer.encoder.x86_emit_add_r_imm32(address.id, offset.to_int())
+        }
+      } else {
+        emit_constant(buffer, W64, address, offset)
+        buffer.encoder.x86_emit_add_rr(address.id, reg(0).id)
+      }
+      emit_constant(buffer, W64, remaining, count.to_uint64())
+      emit_constant(buffer, W64, pattern, bits)
+      let loop_offset = buffer.position()
+      metadata_offset = loop_offset
+      buffer.encoder.x86_emit_mov_m64_r64(address.id, 0, pattern.id)
+      buffer.encoder.x86_emit_add_r_imm8(address.id, 8)
+      buffer.encoder.x86_emit_add_r_imm8(remaining.id, -1)
+      let retry = buffer.emit_local_jcc(RawNe)
+      buffer.patch_local_rel32(retry, loop_offset)
+    }
     ScalarStore(width, value_type, offset) => {
       let (address, immediate) = scalar_memory_address(
         buffer,

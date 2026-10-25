@@ -329,6 +329,7 @@ pub(all) enum AArch64Inst {
   ScalarLoad(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, UInt64)
   ScalarLoadUxtw(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, Int32)
   ScalarStore(@native_types.AccessWidth, @native_types.ValueType, UInt64)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   ScalarStoreUxtw(@native_types.AccessWidth, @native_types.ValueType, Int32)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)

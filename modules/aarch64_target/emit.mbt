@@ -3423,6 +3423,37 @@ fn emit_instruction(
         encode_scalar_uxtw_address(base, width, shift, reg(2), reg(0), reg(1)),
       )
     }
+    StoreRepeated64(offset, count, bits) => {
+      let address = reg(1)
+      let remaining = reg(2)
+      let pattern = reg(3)
+      if add_sub_immediate_shift(offset) is Some(_) {
+        buffer.emit_word(
+          encode_int_binary_immediate(W64, Add, offset, address, reg(0)),
+        )
+      } else {
+        emit_constant(buffer, W64, address, offset)
+        buffer.emit_word(
+          encode_three_register(0x8B000000U, address, reg(0), address),
+        )
+      }
+      emit_constant(buffer, W64, remaining, count.to_uint64())
+      emit_constant(buffer, W64, pattern, bits)
+      let loop_offset = buffer.position()
+      metadata_offset = loop_offset
+      buffer.emit_word(
+        0xF9000000U | (reg_bits(address) << 5) | reg_bits(pattern),
+      )
+      buffer.emit_word(
+        encode_int_binary_immediate(W64, Add, 8UL, address, address),
+      )
+      buffer.emit_word(
+        encode_int_binary_immediate(W64, Sub, 1UL, remaining, remaining),
+      )
+      let retry = buffer.position()
+      buffer.emit_word(0xB5000000U | reg_bits(remaining))
+      patch_fixed_span_branch(buffer, retry, loop_offset, 19)
+    }
     ScalarStore(width, value_type, offset) => {
       guard scalar_store_base(width, value_type) is Some(base) else {
         raise InvalidScalarMemoryAccess

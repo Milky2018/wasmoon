@@ -1,6 +1,6 @@
 # Function roots and compiler expansion
 
-Tracking: [ISS-697](../../issues/ISS-697.md).
+Tracking: [ISS-697](../../issues/ISS-697.md), [ISS-698](../../issues/ISS-698.md).
 
 A valid2048-object initializer on306daad has4098 MilkIR instructions but produces
 25.580MB of machine code,47.360MB of serialized artifact and2,089,994 reloads.
@@ -43,7 +43,47 @@ fresh compiler fixture. These measurements do not establish invocation speedups.
 
 A separate single-annotation UsePosition value-type experiment is rejected after
 15pairs/six inputs: mostly flat compilation with higher RSS in several controls.
-The remaining large-initializer profile is dominated by live-range calculation
-through mask-writer CFG loops. Any later mask optimization must preserve complete
-unknown-predecessor writes and invalidate knowledge on returns-twice control flow;
-it is independent work, not included in these results.
+The next independent profile attributes the remaining large-initializer cost to
+live-range calculation through mask-writer CFG loops.
+
+## Repeated word stores
+
+A sparse-mask builder emits 129 terminated blocks for one logical source block.
+Each run of equal mask words used a generic CFG loop, making unrelated live roots
+participate in artificial cycles. A block-local known-mask cache was rejected:
+allocation diamonds invalidate its facts and the real artifact stayed unchanged.
+
+The product-neutral `StoreRepeated64` operation instead selects one target VCode
+instruction. Both emitters generate a bounded local machine-code loop using three
+independent early register definitions and a late address input. There are no
+hidden scratch registers, calls or safepoints. Positive, nonwrapping constant
+ranges and operand contracts are verified independently; callers own the range
+and lifetime, as with ordinary stores. Entry zeroing uses the same operation.
+Complete masks are still written at every safepoint, including zeros from unknown
+predecessors. Codegen 23 rejects 22 caches; the native ABI and artifact format stay
+unchanged.
+
+A public test keeps 320 opaque references through full GC, clears alternating
+references and checks all remaining payloads at O0/2/3. Collections reclaim zero,
+then 160, then 160 after return. Omitting the final word retains 16 unwanted roots
+and fails. Unsafe x64 input timing is rejected before emission. These controls
+are restored exactly. Both-target selection tests complement actual native
+execution; local ARM execution alone does not establish x64 execution.
+
+Fifteen alternating cold pairs per input, against the preceding frame-transport
+commit, give the following compiler-only medians (microseconds):
+
+| Live objects | Before | After | Paired change, 95% interval |
+| --- | --- | --- | --- |
+| 512 | 121949 | 96979 | −21.81% to −20.39% |
+| 1024 | 491105 | 300102 | −39.17% to −38.09% |
+| 2048 | 2116963 | 1109544 | −48.07% to −47.53% |
+
+Whole-fixture 2048-object RSS falls from 1.206 to 0.600 GB. Its serialized artifact
+grows from 1.384 to 1.398 MB, about 1%, because allocated machine loops materialize
+explicit temporaries. Parse/regex and three crypto controls show no stable compile
+change; crypto artifacts are byte-identical after normalizing only codegen 22/23.
+This is 240 fresh measured processes across eight inputs, with deterministic
+artifacts within each variant. The earlier loop-only ablation gives similar
+results; using the same instruction for entry zeroing avoids a separate linear
+prologue. These compiler measurements alone do not establish invocation gains.

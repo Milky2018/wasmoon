@@ -385,6 +385,7 @@ pub(all) enum X64Inst {
   AddAddress
   ScalarLoad(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, UInt64)
   ScalarStore(@native_types.AccessWidth, @native_types.ValueType, UInt64)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
   VectorLoadSplat(@native_lowering.VectorLane, UInt64)

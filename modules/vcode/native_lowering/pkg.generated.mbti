@@ -309,6 +309,7 @@ pub(all) enum Operation {
   LoadIndexed(LoadSpec, Int32)
   Store(StoreSpec)
   StoreIndexed(StoreSpec, Int32)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   AtomicLoad(AtomicSpec)
   AtomicStore(AtomicSpec)
   AtomicRmw(AtomicSpec, AtomicRmwOp)

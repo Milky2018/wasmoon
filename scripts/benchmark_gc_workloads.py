@@ -102,9 +102,32 @@ def reference_array_workload(count: int, *, length: int, mutate: bool) -> str:
  i32.const 1))"""
 
 
+def live_initializer_workload(count: int) -> str:
+    # Keep all references live through one large initializer. Publishing the
+    # array prevents treating its elements as nonescaping local aggregates.
+    members = ' '.join(f'i32.const {i} struct.new $node' for i in range(count))
+    expected = count * (count - 1) // 2 & 0xffffffff
+    return f"""(module
+      (type $node (struct (field i32)))
+      (type $refs (array (ref $node)))
+      (global $last (export "last") (mut (ref null $refs)) (ref.null $refs))
+      (func (export "probe") (result i32) (local $i i32) (local $sum i32)
+        {members} array.new_fixed $refs {count} global.set $last
+        loop $check
+          local.get $sum global.get $last local.get $i array.get $refs
+          struct.get $node 0 i32.add local.set $sum
+          local.get $i i32.const 1 i32.add local.tee $i
+          i32.const {count} i32.lt_u br_if $check
+        end
+        local.get $sum i32.const {expected} i32.eq))"""
+
+
 def workloads(scale: int) -> dict[str, str]:
     count = 10000 * scale
     return {
+        'live-initializer-128': live_initializer_workload(128 * scale),
+        'live-initializer-512': live_initializer_workload(512 * scale),
+        'live-initializer-2048': live_initializer_workload(2048 * scale),
         'i32-zero': array_workload(count, vector=False, nonzero=False),
         'i32-nonzero': array_workload(count, vector=False, nonzero=True),
         'i32-small-nonzero': array_workload(count * 10, vector=False, nonzero=True, size=4),

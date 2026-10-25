@@ -63,6 +63,27 @@ fn lower_direct_operation(
   stack_map : @native.StackMapMetadata?,
   stack_object : (@native.StackObject) -> AArch64StackObject,
 ) -> Array[@vcode.Value] raise AArch64LowerError {
+  if operation is StoreRepeated64(offset, count, bits) {
+    append_body(
+      builder,
+      block,
+      StoreRepeated64(offset, count, bits),
+      [@vcode.Input::any(operands[0]).with_timing(Late)],
+      [
+        @vcode.Output::any(Ptr64).with_timing(Early),
+        @vcode.Output::any(I64).with_timing(Early),
+        @vcode.Output::any(I64).with_timing(Early),
+      ],
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+    |> ignore
+    return []
+  }
   if operation is IntMultiplyAdd {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)

@@ -417,9 +417,21 @@ test "sparse function roots bound mask code growth across safepoints" {
       }
     })
     .length()
-  // Initial zeroing may scale with frame capacity. Repeated sparse safepoints
-  // must not emit a complete dense bitmap's worth of stores at every call.
-  assert_true(mask_stores <= capacity / 64 + points * 8)
+  // Entry zeroing and repeated sparse safepoints both keep bounded VCode.
+  assert_true(mask_stores <= (points + 1) * 8)
+  let mut initial_fill = None
+  for operation in trace.operations {
+    if operation is StoreRepeated64(offset, count, bits) {
+      initial_fill = Some((offset, count, bits))
+      break
+    }
+  }
+  assert_eq(
+    initial_fill,
+    Some((0UL, (capacity / 64).reinterpret_as_uint(), 0UL)),
+  )
+  // Repeated mask writes must not multiply CFG cycles and liveness sets.
+  assert_eq(trace.terminated_blocks.length(), 1)
 }
 
 ///|
@@ -514,4 +526,24 @@ test "registered function frames own roots without duplicate SSA call transport"
     .length(),
     1,
   )
+}
+
+///|
+test "repeated word stores enforce typed positive ranges without safepoints" {
+  let operation = StoreRepeated64(24UL, 65U, 0xFEDCBA9876543210UL)
+  assert_true(verify_operation_contract(operation, [Ptr64], []) is None)
+  for
+    invalid in [
+      StoreRepeated64(0UL, 0U, 0UL),
+      StoreRepeated64(0xFFFFFFFFFFFFFFF8UL, 2U, 0UL),
+    ] {
+    assert_true(verify_operation_contract(invalid, [Ptr64], []) is Some(_))
+  }
+  assert_true(verify_operation_contract(operation, [I64], []) is Some(_))
+  assert_true(verify_operation_contract(operation, [Ptr64], [I64]) is Some(_))
+  let semantics = operation.semantics()
+  assert_eq(semantics.memory, Write)
+  assert_false(semantics.gc_safepoint)
+  assert_false(semantics.cancellation_safepoint)
+  assert_false(semantics.may_trap)
 }

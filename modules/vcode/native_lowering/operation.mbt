@@ -425,6 +425,9 @@ pub(all) enum Operation {
   LoadIndexed(LoadSpec, Int32)
   Store(StoreSpec)
   StoreIndexed(StoreSpec, Int32)
+  /// Write a positive constant count of little-endian 64-bit words. The caller
+  /// owns the complete destination range; this has no call or safepoint.
+  StoreRepeated64(UInt64, UInt32, UInt64)
   AtomicLoad(AtomicSpec)
   AtomicStore(AtomicSpec)
   AtomicRmw(AtomicSpec, AtomicRmwOp)
@@ -504,6 +507,7 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | LoadIndexed(_, _)
     | Store(_)
     | StoreIndexed(_, _)
+    | StoreRepeated64(_, _, _)
     | AtomicLoad(_)
     | AtomicStore(_)
     | AtomicRmw(_, _)
@@ -1446,6 +1450,14 @@ pub fn verify_operation_contract(
             "store",
           )
       }
+    StoreRepeated64(offset, count, _) =>
+      if count == 0U || offset > 0xFFFFFFFFFFFFFFFFUL - count.to_uint64() * 8UL {
+        operation_error(
+          "repeated word store requires a positive nonwrapping range",
+        )
+      } else {
+        require_shape(operands, results, [Ptr64], [], "repeated word store")
+      }
     StoreIndexed(spec, shift) =>
       match verify_store_spec(spec) {
         Some(error) => Some(error)
@@ -1586,6 +1598,8 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
         memory: Write,
         may_trap: spec.trap is Some(_),
       }
+    StoreRepeated64(_, _, _) =>
+      { ..@native.OperationSemantics::pure(), memory: Write, }
     AtomicLoad(spec) =>
       {
         ..@native.OperationSemantics::pure(),

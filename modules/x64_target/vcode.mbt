@@ -246,6 +246,7 @@ pub(all) enum X64Inst {
     UInt64
   )
   ScalarStore(@native.AccessWidth, @native.ValueType, UInt64)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
   VectorLoadSplat(@lowering.VectorLane, UInt64)
@@ -1588,6 +1589,33 @@ fn verify_target_vcode(
           false,
           0,
         )
+      }
+      StoreRepeated64(offset, count, _) => {
+        if count == 0U ||
+          offset > 0xFFFFFFFFFFFFFFFFUL - count.to_uint64() * 8UL {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid repeated word range",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [Ptr64, I64, I64],
+          false,
+          0,
+        )
+        for index, operand in function.instruction_operands(instruction) {
+          if operand.timing != (if index == 0 { Late } else { Early }) ||
+            operand.tie_id >= 0 ||
+            !(operand.constraint is AnyReg || operand.constraint is FixedReg(_)) {
+            raise InvalidInstruction(
+              instruction~,
+              message="word fill requires a late address and three independent early register temporaries",
+            )
+          }
+        }
       }
       ScalarStore(width, value_type, _) => {
         if !valid_scalar_store(width, value_type) {

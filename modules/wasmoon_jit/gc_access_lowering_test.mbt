@@ -436,3 +436,37 @@ test "large straight-line array initializers keep the original shared allocation
     }
   }
 }
+
+///|
+test "both targets select bounded repeated word stores for long precise masks" {
+  let validation = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { Some({ params: [], results: [], }) },
+    defined_type_contract: fn(_) { None },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  let b = @milkir.FunctionBuilder("repeated_function_masks")
+  b.add_param(Ptr) |> ignore
+  let roots = Array::makei(320, _ => b.add_param(Ref))
+  b.add_result(I32)
+  @wasm_milkir.call_multi(b, 0, [], []) |> ignore
+  let null = b.iconst(Ref, 0L)
+  let mut sum = b.iconst_i32(0)
+  for root in roots {
+    sum = b.iadd(sum, b.icmp_eq(root, null))
+  }
+  b.return_([sum])
+  for target in [@wasmoon_jit.NativeTarget::X64, AArch64] {
+    let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
+      b.get_function(),
+      validation,
+      target,
+    )
+    assert_true(diagnostics.target_vcode.contains("StoreRepeated64("))
+    assert_true(diagnostics.allocated_vcode.contains("StoreRepeated64("))
+    assert_true(diagnostics.code_object.contains("gc.function_frame_enter"))
+  }
+}

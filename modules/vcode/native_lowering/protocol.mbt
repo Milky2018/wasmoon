@@ -331,8 +331,8 @@ pub fn DirectBuilder::begin_function_roots(
     (environment, header_address, roots_address, mask_address, capacity),
   )
   // Keep the prologue in the original entry block: source lowering binds that
-  // block after the frame is entered. This one-time zeroing is linear in slots.
-  self.update_function_roots([], initialize=true)
+  // block after the frame is entered. Repeated zero words stay in that block.
+  self.update_function_roots([])
   let count = self.emit_raw(
       I32Const(capacity.reinterpret_as_uint()),
       [],
@@ -385,7 +385,6 @@ pub fn DirectBuilder::define_function_root(
 fn DirectBuilder::update_function_roots(
   self : DirectBuilder,
   live : Array[Value],
-  initialize~ : Bool = false,
 ) -> Unit {
   guard self.function_root_frame is Some((_, _, _, address, capacity)) else {
     return
@@ -407,7 +406,7 @@ fn DirectBuilder::update_function_roots(
     while end < masks.length() && masks[end] == bits {
       end += 1
     }
-    self.write_root_mask_run(address, start, end, bits, initialize~)
+    self.write_root_mask_run(address, start, end, bits)
     start = end
   }
 }
@@ -415,17 +414,16 @@ fn DirectBuilder::update_function_roots(
 ///|
 /// Preserve every mask word, including clearing roots from unknown predecessor
 /// paths. Repeated words use a bounded loop instead of multiplying target
-/// instructions by frame capacity at each safepoint. No call or safepoint can
-/// observe the partially written mask. Short runs retain straight-line stores.
+/// instructions or allocator CFG cycles by frame capacity. No call or safepoint
+/// can observe the partially written mask. Short runs retain straight-line stores.
 fn DirectBuilder::write_root_mask_run(
   self : DirectBuilder,
   address : Value,
   start : Int32,
   end : Int32,
   bits : UInt64,
-  initialize~ : Bool,
 ) -> Unit {
-  if initialize || end - start <= 4 {
+  if end - start <= 4 {
     for index in start..<end {
       let value = self.emit_raw(
           I64Const(bits),
@@ -443,46 +441,17 @@ fn DirectBuilder::write_root_mask_run(
     }
     return
   }
-  let value = self.emit_raw(
-      I64Const(bits),
-      [],
-      [I64],
-      InstructionMetadata::empty(),
-    )[0]
-  let first = self.emit_raw(
-      I32Const(start.reinterpret_as_uint()),
-      [],
-      [I32],
-      InstructionMetadata::empty(),
-    )[0]
-  let body = self.create_block([I32])
-  let done = self.create_block([])
-  self.jump(body, [first])
-  self.switch_to_block(body)
-  let index = self.block_parameters(body)[0]
   self.emit_raw(
-    StoreIndexed(StoreSpec::new(W64, I64, 0UL, Little, None), 3),
-    [address, index, value],
+    StoreRepeated64(
+      (start * 8).to_uint64(),
+      (end - start).reinterpret_as_uint(),
+      bits,
+    ),
+    [address],
     [],
     InstructionMetadata::empty(),
   )
   |> ignore
-  let next = self.emit_raw(
-      IntBinaryImmediate(Add, 1UL),
-      [index],
-      [I32],
-      InstructionMetadata::empty(),
-    )[0]
-  self.branch_int_compare_immediate(
-    UnsignedLessThan,
-    next,
-    end.to_uint64(),
-    body,
-    [next],
-    done,
-    [],
-  )
-  self.switch_to_block(done)
 }
 
 ///|
