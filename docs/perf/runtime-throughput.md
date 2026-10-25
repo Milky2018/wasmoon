@@ -221,194 +221,122 @@ Core258/62563 and Component59/1385 also pass in each engine with verification
 enabled; wasm1462, strict checks, C44 and boundary/bridge audits pass.
 
 
-## Distributed Core compiler: block-local ABI emission
+## New #568/#583 controls: frozen toolchain recheck
 
-The new #583 control uses the 4,938,531-byte distributed Core builtin GC module,
-SHA256 `00002138ac7db01edc9217916b8c7b3c96a8e093f47f765faa465ac3eca792a6`.
-The public compile_module API parses, validates and eagerly compiles at O2;
-there is no Store, import linking or guest execution. Cancellation remains
-**enabled** in the acceptance configuration. Tracking: [ISS-704](../../issues/ISS-704.md).
+An installed runner changed during the long session: the initial recorded
+SHA256 was `683cfa35312c832f0a59b66ad2b46033cfd8d0936e16e65bc32a3403d65040e4`,
+whereas the later October23 installation was
+`f0b2caf575622a8134507779e17256e90a29b9632e93ed8a91bd77b3d6876915`.
+The unpinned final-poll comparisons and interrupted library round are not
+accepted attribution. The results below supersede those provisional numbers.
 
-Fresh 0.18.0 controls reproduce 10.617 seconds API time and 1,530.6 MB peak RSS
-(three serial samples). PR582 at 7b40e8ca already reduces memory substantially;
-those release observations must not be attributed to the following single fix.
+All five source stages were freshly rebuilt against one private frozen SDK:
+Moon/moonrun 0.1.20261023, moonc 0.10.17+d971670cd, including the same standard-library
+bundles and native headers. The global installation was not changed. Each stage
+has only the identical API-timer harness as a source modification. The downstream
+embedding remains ed848ac5, O2, cancellation=true, cooperation=true, quantum 1024.
+The current reference is official **October23 moonrun**, not Wasmtime or the
+October21 runner reported by the issue. No source/guest assertion is weakened.
 
-Sampling the current compiler's final initializer emission identified repeated
-block snapshots and linear instruction-position searches. A diagnostic counter
-on the unmodified algorithm records 17,460 snapshots, 350,542,399 copied handles
-and 173,302,982 position comparisons in that function's emission attempt. Its
-long-branch fallback repeats the work. The largest initializer has 73,107 IR
-instructions after optimization. CPU samples directly attribute the time to
-Array.copy, reference blits and reference-count release inside ABI emission.
+Each table contains five fresh-process samples per stage with cyclic order to
+balance positions. One small host-image preparation run precedes recording;
+every recorded process compiles fresh without an artifact cache. Builds and
+profilers stop before timing. RSS is decimal MB. Raw logs stay temporary.
 
-Both target emitters now borrow the emission loop's one block snapshot and
-known block-local position. Input/result/output transfer grouping and parallel
-moves are unchanged. The public Function.block_body snapshot contract is also
-unchanged. No global cache, public API, artifact version or codegen revision
-changes. The private ArrayView parameter prevents helper-side mutation.
+### Compiler-only public API (#583)
 
-Five alternating fresh-process pairs on macOS ARM64, before 7b40e8ca versus its
-dirty tree with only this functional emitter change, without concurrent builds
-or profiling (decimal MB; API timing excludes input reading and encoding):
+Exact input: 4,938,531 bytes, SHA256
+`00002138ac7db01edc9217916b8c7b3c96a8e093f47f765faa465ac3eca792a6`.
+The O2 API includes parsing, validation and eager compilation, excludes input
+reading and encoding, and creates no Store, links no imports and runs no guest.
+Cancellation remains enabled; the disabled control is reported separately.
 
-| O2 mode | API before | API after | Change | RSS before / after |
+| Source stage | Enabled API | Peak RSS |
+| --- | ---: | ---: |
+| 0.18.0 release (21c702b5) | 10.590 s | 1531.1 MB |
+| Before resumed changes (7b40e8ca) | 8.957 s | 718.4 MB |
+| ABI block cursor faea6beb | 7.130 s | 717.0 MB |
+| Prepared metadata b6e1cb10 | 7.069 s | 717.1 MB |
+| Poll-preserving inlining cc23d6f2 | 6.788 s | 658.3 MB |
+
+The ABI change improves enabled compilation by 20.4%, with unchanged memory. The
+plain control improves 7.692 -> 6.016 s (21.8%); final plain compilation at 5.983 s
+is effectively flat against that stage. Complete ABI-change artifacts are
+byte-identical in both modes. Final plain artifacts are unchanged after
+revision 25/26 normalization. The later poll change improves enabled compilation
+another 4.0% versus its immediate prepared-metadata predecessor and reduces
+compiler RSS by 8.2%. Whole-PR release/final improvement is 35.9% time and 57.0% RSS;
+that total includes the earlier changes and is not attributed to the new emitter.
+
+Both emitters now borrow one read-only block snapshot and its known local
+position for input/result/output ABI groups. The public snapshot API, parallel
+moves, metadata offsets and long-branch fallback are unchanged. A diagnostic on
+the original largest initializer records 17,460 snapshots, 350,542,399 copied
+handles and 173,302,982 position comparisons per emission attempt, repeated on
+fallback. CPU samples directly show copying/reference-release work. The
+regression exercises 32 mixed I64/F64/V128 transfers after a CFG join at O0/O2,
+both branch arms, plus production cross-compilation for both native targets.
+
+### Same-instance repeated work (#568)
+
+The archived zero/one/ten-call inputs keep their original SHA256 values and
+all 1,000-case checks. Every probe must return one; ten calls perform 10,000 checks
+after one startup. The stages below use the exact same binaries/SDK as above.
+
+| Stage | Zero calls | One call | Ten calls | Ten-call RSS |
 | --- | ---: | ---: | ---: | ---: |
-| cancellation enabled | 8.807 s | 7.136 s | -19.0% | 718.3 / 718.3 MB |
-| cancellation disabled control | 7.742 s | 6.041 s | -22.0% | 646.9 / 646.9 MB |
+| Official October23 moonrun | 0.010 s | 0.057 s | 0.408 s | 26.2 MB |
+| Released Wasmoon | 1.133 s | 2.060 s | 10.398 s | 307.4 MB |
+| ABI-emitter stage | 1.027 s | 1.940 s | 10.121 s | 266.3 MB |
+| Prepared metadata | 1.025 s | 1.408 s | 4.852 s | 266.8 MB |
+| Final poll-preserving stage | 0.932 s | 1.297 s | 4.534 s | 261.3 MB |
 
-Separately encoded complete artifacts are byte-identical before/after in both
-modes (SHA256 prefixes `1fb5e1dce158` / `523a2fbe6952`, respectively). This is a
-compiler-work reduction, not an RSS or guest-throughput improvement. Public
-regressions compile repeated mixed integer/FP/vector transfer groups in a
-non-entry block on both targets; actual JIT/interpreter comparisons exercise
-32 repeated mixed register/stack/result-area transfers at O0 and O2. These
-semantic regressions pass before and after; deterministic diagnostic work counts
-and repeated original-input timings provide the performance feedback loop.
-No timing threshold or test-only production counter is added. Local ARM64
-execution does not establish actual x64 execution or fresh cross-platform CI.
+Sampling identifies repeated metadata copying/release on cooperative resume.
+The retained `PreparedGCEnvironment` freezes type/canonical/function/address
+payloads once, bound to their native owner. Every entry/resume still checks the
+live instance/module/owner and rebinds metadata plus the **current** heap. Roots,
+scopes, callbacks, quotas, rollback and scheduling remain dynamic. Close releases
+the snapshot. Legacy setup stays fresh; low-level function-table changes require
+explicit preparation. The discarded skip-setup diagnostic could not restore an
+intervening binding. Preparation improves ten-call wall by 52.1%; peak RSS is flat.
 
-## Cooperative execution: immutable GC environment preparation
+Eager entry-poll expansion also made every cancellable leaf multi-block and
+therefore ineligible for leaf inlining. `SafepointPoll` now stays effectful in
+Wasm MilkIR until native lowering. Inlining clones every poll, even for unused
+results, and charges eight units against existing budgets for its seven late
+CFG blocks. The slow call keeps precise roots and the conservative call contract;
+signed offsets and unknown-provider runtime calls are preserved. Codegen revision 26 rejects
+stale caches. The enabled serialized artifact grows39.88 -> 42.34 MB (6.2%);
+that includes metadata, not just machine code. The cloner avoids duplicate
+decoding and general array mapping for its zero/one-result contract. This adds
+6.5% ten-call improvement. Disabling polls
+is not an accepted optimization or an additive speedup budget: preserved polls
+still end checked-reference/physical-borrow lifetimes.
 
-The new #568 controls use the archived downstream embedding at ed848ac5,
-unchanged except for resolving Wasmoon dependencies to the compared local
-workspaces. Compilation stays O2 with cancellation=true, cooperation=true and
-the default quantum of 1024. The exact zero/one/ten-call Wasm inputs retain every
-probe assertion. The new reference is installed official moonrun 0.1.20261021,
-not the older standalone Wasmtime control. Tracking: [ISS-705](../../issues/ISS-705.md).
+Whole-PR ten-call wall improves 56.4% against release, but remains 11.1x the new
+official reference. `(T10-T1)/9` is approximately 0.360 versus0.039 s (9.2x).
+These are process/incremental estimates including GC, polling, switching, tiering
+and startup, not isolated generated-code timers. Startup and GC/root/access
+costs remain open; #568 is not closed.
 
-After startup, approximately 59% of main-thread samples are in repeated GC
-preparation, metadata array copying and temporary releases on cooperative resume.
-A separate single-variable diagnostic that avoids repeated preparation reduces
-ten-call wall time 10.145 -> 4.849 s without changing scheduling or guest code.
-That diagnostic does not satisfy intervening-binding semantics and is discarded.
+### Validation and broader inputs
 
-The retained design freezes module type/canonical/function maps and native
-function addresses in a context-bound `PreparedGCEnvironment`. High-level module
-addresses and `JITModuleContext`'s read-only maps are immutable after installation,
-so preparation happens once. Each entry/resume still checks the live instance,
-module and native owner, then rebinds the same immutable arrays and **current**
-heap. Dynamic roots, execution scopes, callbacks, cancellation, scheduling,
-quotas and rollback remain live state and are never captured by this snapshot.
-Close releases the cached environment. Legacy dynamic setup keeps its existing
-fresh-snapshot semantics. Native users who change their function table must
-explicitly prepare a new environment; the prepared addresses do not own code.
+Native 3192 passes ordinarily and with register/GC/barrier verification, wasm 1483
+and strict checks on both targets pass. Public tests compare callback counts,
+exact fuel outcomes, callback cancellation/reuse, quantum-one yields, GC during
+callbacks/parked work and resumed array reads between O0/O2. Compiler tests retain
+unused-result polls and precise metadata on both targets. Prepared environments
+have public owner/rebinding tests and private payload-reuse invariants.
+Fresh isolated Mac ASan/UBSan 373, the event loop and both controls pass on the
+dirty a4021683 tree with the exact final functional sources/tests; local LSan is
+unavailable. Clean source/platform receipts are tracked in PR582, independently
+of these local timings.
 
-Five alternating ordinary fresh-process pairs on macOS ARM64, immediately before
-versus the c873e8b0-based dirty functional tree, after all builds/profiles stop:
-
-| Calls | Whole process before | After | Peak RSS before / after |
-| --- | ---: | ---: | ---: |
-| 0 | 1.040 s | 1.049 s | 65.1 / 65.1 MB |
-| 1 | 1.946 s | 1.412 s | 142.9 / 142.9 MB |
-| 10 | 10.124 s | 4.888 s | 266.9 / 266.6 MB |
-
-The ten-call reduction is 51.7%. `(T10-T1)/9` changes approximately 0.909 -> 0.386 s
-per extra probe. This includes GC, polling, switching and process-state effects;
-it is not an isolated in-guest timer. The same archived official runner's earlier
-three-sample medians are 0.058 s for one call and 0.415 s for ten: the current ten
-call path remains approximately 11.8x slower end-to-end, and its rough incremental
-estimate remains approximately 9.7x slower. No remaining-gap closure is claimed.
-
-Prepared payloads add stable O(module metadata) retained storage, without a
-measured peak-RSS improvement. Regressions protect input snapshots, alias-safe
-reuse of the exact payload arrays, clearing/rebinding, explicit address refresh,
-foreign-context rejection, and cooperative resume after an unrelated heap/map
-was installed. Full native 3187 passes ordinarily and with all three verification
-flags, wasm 1481 and both strict targets pass. Fresh isolated macOS ASan/UBSan 370,
-the event loop and both positive controls pass on the dirty c873e8b0 tree. This
-does not establish Linux LSan or actual x64/platform acceptance. Full distributed
-library and cross-platform results are tracked in PR582; raw logs stay temporary.
-
-The final public regression places the repeated mixed ABI transfers after a CFG
-join, exercising both arms. A deliberate global-instruction-index substitution
-fails with an out-of-range block view; the correct block cursor passes. The
-foreign-context prepared-environment test now uses only the public API. Native
-3187 (ordinary and all verification flags), wasm 1481 and strict checks pass;
-fresh isolated macOS ASan/UBSan now executes 371 tests plus both positive
-controls. This last run uses b6e1cb10 with test-only working changes, not a clean
-platform acceptance receipt.
-
-### Distributed library and corpus controls
-
-Three rounds retain the original four concurrent test executables, cfgs,
-expected panics and snapshots. All 36 runner/suite/round combinations pass, with
-unchanged Wasm hashes and counts: Core wasm 7950, Core GC 7971, async 586 and
-SQLite 46. Medians include process startup, JIT, host work and waits; these are
-whole-PR comparisons against release 0.18.0, not isolated guest execution or
-attribution to one change.
-
-| Suite | Official moonrun | Released Wasmoon | b6e1cb10 functional tree |
-| --- | ---: | ---: | ---: |
-| Core wasm | 6.061 s | 41.461 s | 29.349 s |
-| Core GC | 3.147 s | 78.727 s | 46.887 s |
-| async | 15.689 s | 23.135 s | 22.764 s |
-| SQLite | 0.579 s | 1.375 s | 1.340 s |
-
-A fresh serial cold screen of all 70 algorithm workloads completes with zero
-engine failures. Wasmtime 49.0.1 has parallel compilation disabled; Wasmoon
-reports a fresh compile for every workload. Geometric mean ratios are 1.029 for
-69 positive finite guest values and 1.369 for all 70 cold process wall times.
-Twenty-four cases exceed the runner's performance-warning thresholds. These
-single-screen aggregates are essentially unchanged from the earlier screen;
-no corpus-wide improvement is claimed from the new cooperative metadata fix.
-
-### Remaining cancellation/inlining interaction
-
-Single-variable controls retain all guest checks. Three fresh rounds give
-ten-call medians of 4.939 s with normal cancellation/cooperation, 4.522 s with
-only cooperation disabled, and 1.694 s with both disabled. Cancellation also
-changes compiler eligibility: its eagerly expanded entry CFG prevents the
-single-block leaf inliner from running. A separate three-pair control with both
-features disabled increases ten-call time from 1.638 to 3.967 s when only leaf
-inlining is disabled. Therefore the cancellation gap cannot be attributed to
-poll instruction cost alone. These diagnostic switches are not production
-settings; preserving every entry/loop poll and its roots is required for any
-follow-up inlining change.
-
-
-## Poll-preserving bounded leaf inlining
-
-The countdown protocol now remains one effectful `SafepointPoll` in Wasm
-MilkIR until native lowering. This keeps scalar/GC leaf templates single-block
-without deleting entry polls, combining checks or changing quantum. Inlining
-clones each poll, including for unused call results. Each poll costs eight units
-in the existing leaf/per-caller budgets to account for its seven late CFG blocks.
-Other effectful calls remain ineligible. The native slow call uses the ordinary
-conservative call contract and precise live roots. Unknown embeddings retain
-their original runtime call. Signed layout offsets, including Wasmoon's private
-prefix, are preserved. Codegen revision26 rejects older cached artifacts.
-
-Five final alternating fresh-process pairs compare the prepared-metadata
-implementation with the a4021683-based dirty final functional sources on the
-same exact inputs, after all builds and profiling stop:
-
-| Control | Before | After | RSS before / after |
-| --- | ---: | ---: | ---: |
-| #568 zero calls, whole wall | 1.033 s | 0.949 s | 64.5 / 59.5 MB |
-| #568 one call, whole wall | 1.414 s | 1.301 s | 142.7 / 137.7 MB |
-| #568 ten calls, whole wall | 4.873 s | 4.558 s | 266.3 / 261.2 MB |
-| #583 cancellation enabled, API | 7.128 s | 6.797 s | 718.3 / 658.3 MB |
-| #583 cancellation disabled, API | 6.259 s | 6.274 s | 646.7 / 647.0 MB |
-
-The extra ten-call improvement is6.5%, compile improvement4.6%, and compiler
-RSS reduction8.4%. The disabled control is effectively flat, not a claimed gain.
-An initial small plain-compiler regression was investigated with15 pairs and
-separate CPU sampling; duplicate decoding and general array mapping introduced
-by the new cloner were removed before the final measurements. The complete
-plain artifact remains identical after codegen-revision normalization.
-
-Preserving polls recovers much less than disabling them. The earlier no-poll
-inlining ablation therefore cannot be treated as an additive speedup budget for
-normal cancellable execution. Polls still end checked-reference/physical-borrow
-lifetimes; GC access and root-handling costs remain, and #568 is not closed.
-
-Public regressions compare O0/O2 callback counts, exact fuel outcomes, callback
-cancellation/reuse, quantum-one yield counts, GC during callbacks/parked work,
-and resumed array reads. Compiler tests protect retained unused-result polls,
-both native targets and precise safepoint metadata. Native3192 passes normally
-and with all three verification flags; wasm1483, strict native/wasm, info/fmt,
-boundaries and generated MSVC bridges pass. Fresh isolated macOS ASan/UBSan373,
-the event loop and both positive controls pass on the dirty a4021683 tree with
-these exact functional sources and tests. This is not Linux LSan or final-head
-CI acceptance; those receipts belong in PR582. The preceding distributed-suite
-and70-workload tables are explicitly the b6e1cb10 stage, before this last change.
+The earlier b6e1cb10 library screen passed 36/36 runner/suite/round combinations
+and the 70-workload cold screen had zero engine failures. Those are historical
+stages, not current-head acceptance. The frozen-SDK final library runs retain
+all original Core/async/SQLite counts, cfgs, panics, snapshots, FD checks and four
+concurrent executables; guests are prepared outside measurement and their hashes
+are checked. Updated library/corpus results belong in PR582. Wasmtime corpus
+controls retain `-C parallel-compilation=n`. No raw report or receipt-only commit
+is required.
