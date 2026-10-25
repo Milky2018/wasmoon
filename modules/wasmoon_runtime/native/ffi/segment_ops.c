@@ -2,6 +2,7 @@
 // Segment operations for bulk memory/table instructions
 
 #include "jit_internal.h"
+#include "gc_access.h"
 #include "callable_lookup.h"
 #include <string.h>
 #include <stdlib.h>
@@ -797,6 +798,26 @@ static GcSlot decode_array_elem_from_bytes(const uint8_t *p, int tag) {
     return value;
 }
 
+// Callers have checked the complete source and destination ranges. Segment
+// Bytes are owned separately from heap payloads. Known numeric layouts have
+// no reference barriers; legacy slots keep their checked per-element adapter.
+static inline int try_initialize_array_data(GcHeap *heap, int32_t ref, int32_t offset,
+    const uint8_t *source, int32_t count, size_t width, int tag) {
+    static const uint8_t widths[] = {0, 1, 2, 4, 8, 4, 8, 0, 16};
+    const uint16_t endian = 1;
+    GcHeader *header = gc_access_object_header(heap, ref);
+    GcTypeLayout *layout = header ? gc_object_layout(heap, header) : NULL;
+    if (*(const uint8_t *)&endian == 1 && tag > 0 && tag < 9 &&
+        widths[tag] == width && layout && layout->kind == GC_KIND_ARRAY &&
+        !layout->fields[0].reference && layout->size == (int32_t)width) {
+        memcpy((uint8_t *)(header + 1) + GC_ARRAY_DATA_OFFSET + (size_t)offset * width,
+            source, (size_t)count * width);
+        gc_access_verify(heap, "array_data_init");
+        return 1;
+    }
+    return 0;
+}
+
 // Segment constructors share the ordinary Store-canonical physical layout.
 // This remains a single non-collecting attempt: segment admission and trap
 // ordering stay with the caller, and legacy embeddings retain wide slots.
@@ -875,9 +896,11 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     }
 
     const uint8_t *p = seg_data ? seg_data + (size_t)off_u32 : NULL;
-    for (uint32_t i = 0; i < len_u32; i++) {
-        GcSlot v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-        gc_heap_array_set_wide(heap, gc_ref, (int32_t)i, v);
+    if (len_u32 < 4 || !try_initialize_array_data(heap, gc_ref, 0, p, (int32_t)len_u32, elem_size, elem_tag)) {
+        for (uint32_t i = 0; i < len_u32; i++) {
+            GcSlot value = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
+            gc_heap_array_set_wide(heap, gc_ref, (int32_t)i, value);
+        }
     }
 
     return ((int64_t)gc_ref) << 1;
@@ -1004,9 +1027,11 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     }
 
     const uint8_t *p = seg_data ? seg_data + (size_t)data_off_u32 : NULL;
-    for (uint32_t i = 0; i < len_u32; i++) {
-        GcSlot v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-        gc_heap_array_set_wide(heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
+    if (len_u32 < 4 || !try_initialize_array_data(heap, gc_ref, (int32_t)arr_off_u32, p, (int32_t)len_u32, elem_size, elem_tag)) {
+        for (uint32_t i = 0; i < len_u32; i++) {
+            GcSlot value = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
+            gc_heap_array_set_wide(heap, gc_ref, (int32_t)(arr_off_u32 + i), value);
+        }
     }
 }
 

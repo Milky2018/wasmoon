@@ -159,3 +159,148 @@ test "vector data initialization preserves high words bounds and surrounding ele
     }
   }
 }
+
+///|
+test "numeric segment init keeps legacy wide strides and conservative barriers" {
+  for packed in [false, true] {
+    let element = if packed { "i8" } else { "i64" }
+    let bytes = if packed {
+      "\\2a\\2b\\2c\\2d"
+    } else {
+      "\\02\\00\\00\\00\\00\\00\\00\\00".repeat(4)
+    }
+    let offset = if packed { 1 } else { 0 }
+    let count = 4
+    let source = "(module (type $a (array (mut \{element}))) (data $d \"\{bytes}\") (func (param (ref $a)) local.get 0 i32.const \{offset} i32.const 0 i32.const \{count} array.init_data $a $d))"
+    let module_ = @wat.parse(source)
+    @validator.validate_module(module_)
+    for opt_level in [0, 2, 3] {
+      let store = @runtime.Store::with_c_heap()
+      defer store.close()
+      let instance = @executor.instantiate_module_with_imports(
+        store,
+        module_,
+        Imports(store),
+      )
+      let context = build_gc_root_context(module_, instance, store, opt_level~)
+      defer context.close()
+      let heap = store.native_heap().unwrap()
+      let child = heap.alloc_struct(9, [I32(42)])
+      assert_eq(child, 0)
+      let legacy = heap.alloc_array(0, 6, if packed { I32(9) } else { I64(9L) })
+      assert_eq(heap.runtime_type(legacy), -1)
+      let barriers = heap.get_barrier_writes()
+      assert_eq(
+        context.jit_module.call_with_context(
+          context.jit_module.get_func(0).unwrap(),
+          [@wasmoon_jit.encode_heap_ref(legacy)],
+        ),
+        [],
+      )
+      if packed {
+        for i, expected in [9, 42, 43, 44, 45, 9] {
+          assert_eq(heap.array_get(legacy, i, I32), I32(expected))
+        }
+      } else {
+        assert_eq(heap.get_barrier_writes() - barriers, 4)
+        for i in 0..<4 {
+          assert_eq(heap.array_get(legacy, i, I64), I64(2L))
+        }
+        assert_eq(heap.array_get(legacy, 4, I64), I64(9L))
+        assert_eq(heap.array_get(legacy, 5, I64), I64(9L))
+        // The wide embedding's low word really names its first object. The
+        // existing conservative barrier is observable even for numeric Wasm.
+      }
+      assert_true(heap.verify())
+    }
+  }
+}
+
+///|
+fn assert_segment_bits(
+  element : String,
+  value : @types.Value,
+  lo : Int64,
+  hi : Int64,
+) -> Unit raise {
+  match (element, value) {
+    ("i8", I32(word)) | ("i16", I32(word)) | ("i32", I32(word)) =>
+      assert_eq(word, lo.to_int())
+    ("i64", I64(word)) => assert_eq(word, lo)
+    ("f32", F32(word)) => assert_eq(word.reinterpret_as_int(), lo.to_int())
+    ("f64", F64(word)) => assert_eq(word.reinterpret_as_int64(), lo)
+    ("v128", V128(bytes)) =>
+      assert_eq(bytes, @types.int64_pair_to_v128_le(lo, hi))
+    _ => fail("segment element has the wrong value type")
+  }
+}
+
+///|
+test "numeric segment ranges preserve all widths bits sentinels and nonreference barriers" {
+  let cases : Array[(String, String, Int64, Int64)] = [
+    ("i8", "\\2a", 42L, 0L),
+    ("i16", "\\81\\fe", 0xfe81L, 0L),
+    ("i32", "\\21\\43\\65\\87", 0x87654321L, 0L),
+    ("i64", "\\80\\70\\60\\50\\40\\30\\20\\10", 0x1020304050607080L, 0L),
+    ("f32", "\\45\\23\\a1\\7f", 0x7fa12345L, 0L),
+    ("f64", "\\bc\\9a\\78\\56\\34\\12\\f0\\7f", 0x7ff0123456789abcL, 0L),
+    (
+      "v128", "\\88\\77\\66\\55\\44\\33\\22\\11\\00\\11\\22\\33\\44\\55\\66\\77",
+      0x1122334455667788L, 0x7766554433221100L,
+    ),
+  ]
+  for (element, pattern, lo, hi) in cases {
+    let data = "\\ff" + pattern.repeat(17)
+    let source = "(module (type $a (array (mut \{element}))) (data $d \"\{data}\") (global $out (ref $a) (array.new_default $a (i32.const 19))) (func (export \"new\") (result (ref $a)) i32.const 1 i32.const 17 array.new_data $a $d) (func (export \"init\") (result (ref $a)) global.get $out i32.const 1 i32.const 1 i32.const 17 array.init_data $a $d global.get $out))"
+    let module_ = @wat.parse(source)
+    @validator.validate_module(module_)
+    for opt_level in [0, 2, 3] {
+      for native in [false, true] {
+        let store = @runtime.Store::with_c_heap()
+        defer store.close()
+        let instance = @executor.instantiate_module_with_imports(
+          store,
+          module_,
+          Imports(store),
+        )
+        let context = if native {
+          Some(build_gc_root_context(module_, instance, store, opt_level~))
+        } else {
+          None
+        }
+        defer (if context is Some(context) { context.close() })
+        let heap = store.native_heap().unwrap()
+        let barriers = heap.get_barrier_writes()
+        for index, name in ["new", "init"] {
+          let result = if context is Some(context) {
+            context.call_core_func(store, instance, index, [])
+          } else {
+            @executor.call_exported_func(store, instance, name, [])
+          }
+          guard result is [ArrayRef(array)] else {
+            fail("missing numeric segment array")
+          }
+          let roots = store.pin_gc_roots(result)
+          defer roots.release()
+          store.collect_garbage() |> ignore
+          let start = if index == 0 { 0 } else { 1 }
+          for i in 0..<17 {
+            assert_segment_bits(
+              element,
+              store.array_get(array, start + i),
+              lo,
+              hi,
+            )
+          }
+          if index == 1 {
+            assert_segment_bits(element, store.array_get(array, 0), 0L, 0L)
+            assert_segment_bits(element, store.array_get(array, 18), 0L, 0L)
+          }
+          assert_eq(heap.get_barrier_writes(), barriers)
+          assert_true(heap.verify())
+          roots.release()
+        }
+      }
+    }
+  }
+}
