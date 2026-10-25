@@ -51,8 +51,17 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_attempt(void *raw_request) {
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_gc_allocation_collect(void *raw_request) {
     gc_allocation_request_t *request = raw_request;
+    int array = request->layout != GC_ALLOC_STRUCT_WORDS && request->layout != GC_ALLOC_STRUCT_SLOTS;
+    GcTypeLayout *layout = NULL;
+    if (request->ctx && request->type_idx >= 0 &&
+        request->type_idx < ctx_runtime(request->ctx)->callable_local_type_count) {
+        layout = gc_heap_layout(request->heap,
+            ctx_runtime(request->ctx)->callable_local_types[request->type_idx]);
+        if (layout && layout->kind != (array ? GC_KIND_ARRAY : GC_KIND_STRUCT)) layout = NULL;
+    }
     int32_t collected = gc_collect_for_alloc_indexed_internal(
-        request->ctx, request->roots, request->root_count, request->root_indices);
+        request->ctx, request->roots, request->root_count, request->root_indices,
+        layout, array);
     if (collected >= 0) {
         request->result.retry_count++;
         request->result.collected_objects += collected;

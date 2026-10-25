@@ -817,12 +817,12 @@ int32_t ctx_gc_set_root_scratch_internal(
 int32_t gc_collect_for_alloc_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count
 ) {
-    return gc_collect_for_alloc_indexed_internal(ctx, roots, root_count, NULL);
+    return gc_collect_for_alloc_indexed_internal(ctx, roots, root_count, NULL, NULL, 0);
 }
 
 int32_t gc_collect_for_alloc_indexed_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count,
-    const uint8_t *indices
+    const uint8_t *indices, const GcTypeLayout *operand_layout, int operand_array
 ) {
     jit_context_t *activation = get_current_jit_context();
     if (activation && ctx && ctx_gc_heap(activation) == ctx_gc_heap(ctx)) ctx = activation;
@@ -879,7 +879,19 @@ int32_t gc_collect_for_alloc_indexed_internal(
         }
         int32_t at = 0;
         if (safe_root_count > 0 && roots) {
-            if (indices) {
+            if (operand_layout) {
+                // Allocation descriptors address staged payload words. Numeric
+                // fields are not roots even when their bits resemble a native
+                // handle. Keep the borrowed span and null only known scalars;
+                // unknown embedding layouts retain their conservative contract.
+                for (int32_t i = 0; i < safe_root_count; ++i) {
+                    uint32_t index = indices ? safepoint_u32(indices + (size_t)i * 4) : (uint32_t)i;
+                    uint32_t field = operand_array ? 0 : index;
+                    int numeric = field < (uint32_t)operand_layout->count &&
+                        !operand_layout->fields[field].reference;
+                    merged[at++] = numeric ? 0 : roots[index];
+                }
+            } else if (indices) {
                 for (int32_t i = 0; i < safe_root_count; ++i)
                     merged[at++] = roots[safepoint_u32(indices + (size_t)i * 4)];
             } else {
