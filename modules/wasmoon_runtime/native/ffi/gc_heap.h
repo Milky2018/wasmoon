@@ -47,9 +47,6 @@ extern "C" {
 #define GC_KIND_STRUCT 1
 #define GC_KIND_ARRAY  2
 
-// GC flags
-#define GC_FLAG_MARKED 0x01
-
 // Exception snapshots are outside the object table and have a distinct word tag.
 #define GC_EXCEPTION_REF_TAG INT64_C(0x1000000000000000)
 
@@ -68,7 +65,7 @@ typedef int32_t (*GcCollectionPolicy)(void *, void *, int32_t);
  */
 typedef struct GcHeader {
     uint8_t kind;       // GC_KIND_STRUCT or GC_KIND_ARRAY
-    uint8_t flags;      // GC_FLAG_MARKED, etc.
+    uint8_t flags;      // Reserved; collector marks live in identity pages.
     uint16_t type_idx;  // Type index in module
     uint32_t size;      // Total object size (including header)
     uint64_t reserved;  // For structs: field count; for arrays: unused
@@ -132,7 +129,8 @@ typedef struct GcIdentityPage {
     int32_t offsets[GC_ID_PAGE_SIZE];
     int32_t runtime_types[GC_ID_PAGE_SIZE];
     int32_t live_count;
-    uint32_t visit_epochs[GC_ID_PAGE_SIZE];
+    uint64_t mark_bits[GC_ID_PAGE_SIZE / 64];
+    uint64_t incarnation;
     int32_t has_marked_objects; // Conservative hint for whole-page retirement
     // Appended metadata preserves the offsets consumed by generated code.
     int32_t old_live_count;
@@ -177,7 +175,6 @@ typedef struct GcHeap {
 
     GcTypeLayout **layouts;
     int32_t layout_capacity;
-    uint32_t trace_epoch;
     GcIdentityPage **identity_pages;
     int32_t identity_page_capacity;
     int32_t object_count;       // High-water identity; next gc_ref = count + 1
@@ -220,6 +217,7 @@ typedef struct GcHeap {
     // sets this hint; complete mark clearing resets it before visitor callbacks.
     int32_t has_marked_objects;
     GcGeneration generation;
+    uint64_t structural_epoch; // Invalidates trace shortcuts before identity retirement.
 } GcHeap;
 
 static inline void gc_heap_forget_struct_view(GcHeap *heap) {
@@ -259,12 +257,26 @@ static inline int gc_try_decode_heap_ref_candidate(
     return 1;
 }
 
-// The caller has resolved a valid payload for this identity. Keep every mark
-// writer on this path so empty-heap and empty-page proofs agree with headers.
-static inline void gc_heap_mark_header(GcHeap *heap, int32_t ref, GcHeader *header) {
-    header->flags |= GC_FLAG_MARKED;
+// All mark writers share the identity bitmap; read-only discovery owns separate
+// bits. Callers marking an identity have already resolved its live payload.
+static inline int gc_heap_is_marked(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
+    return page && ((page->mark_bits[slot >> 6] >> (slot & 63)) & 1);
+}
+
+static inline void gc_heap_clear_mark(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
+    page->mark_bits[slot >> 6] &= ~(UINT64_C(1) << (slot & 63));
+}
+
+static inline void gc_heap_mark_identity(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
+    page->mark_bits[slot >> 6] |= UINT64_C(1) << (slot & 63);
     heap->has_marked_objects = 1;
-    gc_heap_identity_page(heap, ref)->has_marked_objects = 1;
+    page->has_marked_objects = 1;
 }
 
 static inline int32_t gc_heap_runtime_type(GcHeap *heap, int32_t ref) {

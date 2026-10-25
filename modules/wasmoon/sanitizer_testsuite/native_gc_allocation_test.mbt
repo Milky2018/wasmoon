@@ -405,8 +405,9 @@ test "public root collection rejects empty and partially discovered native graph
     root = StructRef(store.alloc_struct(0, [root]))
   }
   defer runtime_fail_native_allocation(0)
-  // The second queue allocation fails after 32 objects were discovered.
-  for attempt in [1, 2] {
+  // Directory, chunk, visited page and both queue allocations may fail.
+  // The final attempt still fails after 32 objects have been discovered.
+  for attempt in [1, 2, 3, 4, 5] {
     runtime_fail_native_allocation(attempt)
     try store.collect_roots([root]) catch {
       UndefinedElement => ()

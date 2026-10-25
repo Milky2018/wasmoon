@@ -573,3 +573,22 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_unknown_reference_write(
     gc_heap_maybe_verify(heap, "unknown reference write");
     return 1;
 }
+
+// Model a collected identity history without allocating a million live objects in
+// verifier-enabled tests. Keep the existing payload and all skipped pages empty.
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_gc_sparse_trace_history(GcHeap *heap) {
+    const int32_t capacity = 2048;
+    if (!heap || heap->object_count != 1 || heap->live_count != 1 ||
+        heap->identity_page_capacity > capacity) return 0;
+    GcIdentityPage **pages = wasmoon_native_realloc(heap->identity_pages,
+        (size_t)capacity * sizeof(*pages));
+    if (!pages) return 0;
+    memset(pages + heap->identity_page_capacity, 0,
+        (size_t)(capacity - heap->identity_page_capacity) * sizeof(*pages));
+    heap->identity_pages = pages;
+    heap->identity_page_capacity = capacity;
+    heap->object_count = 1024 * GC_ID_PAGE_SIZE;
+    heap->identity_window_limit = 0;
+    heap->identity_window_page = NULL;
+    return gc_heap_verify(heap, 0);
+}

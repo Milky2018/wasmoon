@@ -158,20 +158,6 @@ int32_t wasmoon_gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t loca
 }
 
 
-// Trace epochs are separate from collector marks. Rollback liveness queries
-// therefore cannot collect, clear marks, or turn arena payload edges into roots.
-static uint32_t next_trace_epoch(GcHeap *heap) {
-    if (!heap || !heap->data) return 0;
-    if (++heap->trace_epoch == 0) {
-        for (int32_t i = 0; i < heap->identity_page_capacity; i++) {
-            if (heap->identity_pages[i]) memset(heap->identity_pages[i]->visit_epochs, 0,
-                sizeof(heap->identity_pages[i]->visit_epochs));
-        }
-        heap->trace_epoch = 1;
-    }
-    return (int32_t)heap->trace_epoch;
-}
-
 typedef struct { int64_t *data; int32_t size, capacity; } TraceWords;
 static int trace_push(TraceWords *words, int64_t word) {
     if (words->size == words->capacity) {
@@ -187,9 +173,25 @@ static int trace_push(TraceWords *words, int64_t word) {
 }
 
 typedef struct { int32_t *data; int32_t size, capacity; } TraceRefs;
+#define TRACE_CHUNK_BITS 8
+#define TRACE_CHUNK_SIZE (1 << TRACE_CHUNK_BITS)
+typedef struct TracePage {
+    uint64_t bits[GC_ID_PAGE_SIZE / 64];
+    uint64_t incarnation;
+    int32_t index;
+    struct TracePage *next;
+} TracePage;
+typedef struct TraceChunk {
+    TracePage *pages[TRACE_CHUNK_SIZE];
+    struct TraceChunk *next;
+} TraceChunk;
 typedef struct {
     GcHeap *heap;
-    uint32_t epoch;
+    uint64_t structural_epoch;
+    TraceChunk **directory;
+    int32_t directory_capacity;
+    TraceChunk *chunks;
+    TracePage *pages;
     TraceRefs objects;
     int failed;
     int32_t young_boundary;
@@ -198,6 +200,17 @@ typedef struct {
 static void free_native_trace(void *opaque) {
     NativeTrace *trace = opaque;
     free(trace->objects.data);
+    while (trace->pages) {
+        TracePage *page = trace->pages;
+        trace->pages = page->next;
+        free(page);
+    }
+    while (trace->chunks) {
+        TraceChunk *chunk = trace->chunks;
+        trace->chunks = chunk->next;
+        free(chunk);
+    }
+    free(trace->directory);
     moonbit_decref(trace->heap);
 }
 
@@ -206,7 +219,7 @@ static void *begin_trace(GcHeap *heap, int young) {
     memset(trace, 0, sizeof(*trace));
     moonbit_incref(heap);
     trace->heap = heap;
-    trace->epoch = next_trace_epoch(heap);
+    trace->structural_epoch = heap->structural_epoch;
     if (young) {
         trace->young_boundary = heap->generation.old_boundary;
         trace->young_epoch = heap->generation.young_epoch;
@@ -242,22 +255,98 @@ static int trace_scope_valid(NativeTrace *trace) {
          trace->young_boundary == trace->heap->generation.old_boundary);
 }
 
+// Sparse two-level directory: allocate only pages actually reached by this
+// trace. Ownership lists keep destruction and marking independent of old IDs.
+static TracePage *trace_page(NativeTrace *trace, int32_t index, int create) {
+    int32_t chunk_index = index >> TRACE_CHUNK_BITS;
+    if (chunk_index >= trace->directory_capacity) {
+        if (!create) return NULL;
+        int32_t capacity = trace->directory_capacity ? trace->directory_capacity : 4;
+        while (capacity <= chunk_index) capacity *= 2;
+        TraceChunk **directory = wasmoon_native_realloc(trace->directory,
+            (size_t)capacity * sizeof(*directory));
+        if (!directory) return NULL;
+        memset(directory + trace->directory_capacity, 0,
+            (size_t)(capacity - trace->directory_capacity) * sizeof(*directory));
+        trace->directory = directory;
+        trace->directory_capacity = capacity;
+    }
+    TraceChunk *chunk = trace->directory[chunk_index];
+    if (!chunk) {
+        if (!create) return NULL;
+        chunk = wasmoon_native_calloc(1, sizeof(*chunk));
+        if (!chunk) return NULL;
+        chunk->next = trace->chunks;
+        trace->chunks = chunk;
+        trace->directory[chunk_index] = chunk;
+    }
+    TracePage **entry = &chunk->pages[index & (TRACE_CHUNK_SIZE - 1)];
+    if (!*entry) {
+        if (!create) return NULL;
+        TracePage *page = wasmoon_native_calloc(1, sizeof(*page));
+        if (!page) return NULL;
+        page->index = index;
+        page->next = trace->pages;
+        trace->pages = page;
+        *entry = page;
+        page->incarnation = trace->heap->identity_pages[index]->incarnation;
+    }
+    TracePage *page = *entry;
+    GcIdentityPage *identity = trace->heap->identity_pages[index];
+    if (page->incarnation != identity->incarnation) {
+        if (!create) return NULL;
+        memset(page->bits, 0, sizeof(page->bits));
+        page->incarnation = identity->incarnation;
+    }
+    return page;
+}
+
+static int trace_seen(NativeTrace *trace, int32_t ref) {
+    if (trace->structural_epoch != trace->heap->structural_epoch) return 0;
+    int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
+    TracePage *page = trace_page(trace, (ref - 1) >> GC_ID_PAGE_BITS, 0);
+    return page && ((page->bits[slot >> 6] >> (slot & 63)) & 1);
+}
+
 void wasmoon_gc_trace_mark(NativeTrace *trace) {
     if (trace->failed || !trace_scope_valid(trace)) return;
-    for (int32_t i = 0; i < trace->objects.size; i++) {
-        if (trace->objects.data[i] <= trace->young_boundary) continue;
-        int32_t offset = gc_heap_identity_offset(trace->heap, trace->objects.data[i]);
-        if (offset >= 0) {
-            gc_heap_mark_header(trace->heap, trace->objects.data[i],
-                (GcHeader *)(trace->heap->data + offset));
+    GcHeap *heap = trace->heap;
+    int current = trace->structural_epoch == heap->structural_epoch;
+    for (TracePage *page = trace->pages; current && page; page = page->next) {
+        GcIdentityPage *identity = heap->identity_pages[page->index];
+        current = identity && identity->incarnation == page->incarnation;
+    }
+    if (current) {
+        for (TracePage *page = trace->pages; page; page = page->next) {
+            GcIdentityPage *identity = heap->identity_pages[page->index];
+            for (int i = 0; i < GC_ID_PAGE_SIZE / 64; i++) {
+                uint64_t bits = page->bits[i];
+                int64_t first = (int64_t)page->index * GC_ID_PAGE_SIZE + i * 64 + 1;
+                int64_t skip = (int64_t)trace->young_boundary - first + 1;
+                if (skip >= 64) continue;
+                if (skip > 0) bits &= UINT64_MAX << skip;
+                identity->mark_bits[i] |= bits;
+                if (bits) identity->has_marked_objects = heap->has_marked_objects = 1;
+            }
         }
+        return;
+    }
+    // An older graph remains a snapshot, not a physical borrow. Structural
+    // changes require resolving each current identity before marking it.
+    for (int32_t i = 0; i < trace->objects.size; i++) {
+        int32_t ref = trace->objects.data[i];
+        if (ref > trace->young_boundary && gc_heap_identity_offset(heap, ref) >= 0)
+            gc_heap_mark_identity(heap, ref);
     }
 }
 
-static int trace_object(GcHeap *heap, int32_t ref, uint32_t epoch, TraceRefs *objects) {
-    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+static int trace_object(NativeTrace *trace, int32_t ref) {
+    TracePage *page = trace_page(trace, (ref - 1) >> GC_ID_PAGE_BITS, 1);
+    if (!page) return 0;
     int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
-    if (page->visit_epochs[slot] == epoch) return 1;
+    uint64_t bit = UINT64_C(1) << (slot & 63);
+    if (page->bits[slot >> 6] & bit) return 1;
+    TraceRefs *objects = &trace->objects;
     if (objects->size == objects->capacity) {
         if (objects->capacity > INT32_MAX / 2) return 0;
         int32_t capacity = objects->capacity ? objects->capacity * 2 : 32;
@@ -267,7 +356,7 @@ static int trace_object(GcHeap *heap, int32_t ref, uint32_t epoch, TraceRefs *ob
         objects->capacity = capacity;
     }
     objects->data[objects->size++] = ref;
-    page->visit_epochs[slot] = epoch;
+    page->bits[slot >> 6] |= bit;
     return 1;
 }
 
@@ -285,7 +374,7 @@ int64_t *wasmoon_gc_heap_trace_graph(NativeTrace *trace, int32_t ref) {
     TraceRefs *objects = &trace->objects;
     TraceWords boundary = {0};
     int32_t start = objects->size;
-    int complete = trace_object(heap, ref, trace->epoch, objects);
+    int complete = trace_object(trace, ref);
     for (int32_t cursor = start; complete && cursor < objects->size; cursor++) {
         int32_t current = objects->data[cursor];
         GcHeader *header = (GcHeader *)(heap->data + gc_heap_identity_offset(heap, current));
@@ -318,9 +407,10 @@ int64_t *wasmoon_gc_heap_trace_graph(NativeTrace *trace, int32_t ref) {
                     if (word > 0 && !((uint64_t)word & tags) && child64 <= INT32_MAX) {
                         int32_t child = (int32_t)child64;
                         if (child <= trace->young_boundary && !remembered_owner(heap, child)) continue;
+                        if (trace_seen(trace, child)) continue;
                         int32_t child_offset = gc_heap_identity_offset(heap, child);
                         if (child_offset >= 0 && gc_object_layout(heap, (GcHeader *)(heap->data + child_offset))) {
-                            complete = trace_object(heap, child, trace->epoch, objects);
+                            complete = trace_object(trace, child);
                             continue;
                         }
                     }

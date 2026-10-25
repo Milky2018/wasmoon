@@ -199,7 +199,8 @@ int gc_heap_ensure_object_capacity(GcHeap* heap) {
         page->page_index = page_index;
         page->cards = NULL;
         page->card_objects = 0;
-        memset(page->visit_epochs, 0, sizeof(page->visit_epochs));
+        memset(page->mark_bits, 0, sizeof(page->mark_bits));
+        page->incarnation = heap->structural_epoch;
         heap->identity_pages[page_index] = page;
     }
     if (heap->live_count == heap->live_capacity) {
@@ -252,6 +253,8 @@ static void retire_identity(GcHeap *heap, int32_t ref) {
     int32_t index = ref - 1;
     GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
     gc_generation_retire_object(page, ref);
+    gc_heap_clear_mark(heap, ref);
+    page->incarnation = heap->structural_epoch;
     page->offsets[index & (GC_ID_PAGE_SIZE - 1)] = -1;
     page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = -1;
     if (--page->live_count == 0) {
@@ -495,7 +498,7 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
     if (heap->has_marked_objects) {
         for (int32_t i = 0; i < heap->live_count; ++i) {
             GcHeader *header = get_object_header(heap, heap->live_objects[i]);
-            if (header && (header->flags & GC_FLAG_MARKED)) ++size;
+            if (header && gc_heap_is_marked(heap, heap->live_objects[i])) ++size;
         }
     }
     size += exception_arena_marked_count(heap->exception_arena);
@@ -522,8 +525,7 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_collection_seeds(GcCollectionRequest *req
             int32_t ref = heap->live_objects[i];
             int32_t offset = gc_heap_identity_offset(heap, ref);
             if (offset < 0 || !data) continue;
-            const GcHeader *header = (const GcHeader *)(data + offset);
-            if (header->flags & GC_FLAG_MARKED) input[at++] = (int64_t)ref << 1;
+            if (gc_heap_is_marked(heap, ref)) input[at++] = (int64_t)ref << 1;
         }
     }
     exception_arena_copy_marked(heap->exception_arena, input + at);
@@ -580,7 +582,7 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_abort(GcCollectionRequest *request
     for (int32_t i = 0; i < heap->live_count; ++i) {
         GcHeader *header = get_object_header(heap, heap->live_objects[i]);
         if (header) {
-            header->flags &= ~GC_FLAG_MARKED;
+            gc_heap_clear_mark(heap, heap->live_objects[i]);
             gc_heap_identity_page(heap, heap->live_objects[i])->has_marked_objects = 0;
         }
     }
@@ -1077,11 +1079,11 @@ int32_t gc_heap_is_valid(GcHeap* heap, int32_t gc_ref) {
 void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
     if (heap && heap->generation.tracing_young && gc_ref <= heap->generation.old_boundary) return;
     GcHeader* header = get_object_header(heap, gc_ref);
-    if (!header || (header->flags & GC_FLAG_MARKED)) {
+    if (!header || gc_heap_is_marked(heap, gc_ref)) {
         return;  // Already marked or invalid
     }
 
-    gc_heap_mark_header(heap, gc_ref, header);
+    gc_heap_mark_identity(heap, gc_ref);
     // A Store visitor expands typed edges in MoonBit. Explicit native stack
     // marking records only seeds until the complete root graph is supplied.
     if (heap->precise_roots) return;
@@ -1122,6 +1124,7 @@ void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
 static int32_t gc_heap_sweep_mode(GcHeap *heap, int young) {
     if (!heap) return 0;
     if (!young) gc_generation_prepare_major(heap);
+    ++heap->structural_epoch;
 
     forget_identity_window(heap);
     gc_heap_forget_struct_view(heap);
@@ -1161,8 +1164,8 @@ static int32_t gc_heap_sweep_mode(GcHeap *heap, int young) {
             int32_t ref = heap->live_objects[i];
             int32_t offset = page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)];
             GcHeader *header = (GcHeader *)(data + offset);
-            if (header->flags & GC_FLAG_MARKED) {
-                header->flags &= ~GC_FLAG_MARKED;
+            if (gc_heap_is_marked(heap, ref)) {
+                gc_heap_clear_mark(heap, ref);
                 heap->live_objects[survivors++] = ref;
             } else {
                 header->kind = GC_KIND_FREE;
@@ -1340,10 +1343,15 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
                 (i + count < heap->live_count &&
                  ((int64_t)heap->live_objects[i + count] - 1) >> GC_ID_PAGE_BITS == page_index))
                 return gc_verify_fail("invalid identity page population", verbose);
+            for (int32_t word = 0; word < GC_ID_PAGE_SIZE / 64; ++word) {
+                uint64_t bits = page->mark_bits[word];
+                if (bits && (!heap->has_marked_objects || !page->has_marked_objects))
+                    return gc_verify_fail("untracked object mark", verbose);
+                for (int32_t bit = 0; bits; ++bit, bits >>= 1)
+                    if ((bits & 1) && page->offsets[word * 64 + bit] < 0)
+                        return gc_verify_fail("marked retired identity", verbose);
+            }
         }
-        if ((header->flags & GC_FLAG_MARKED) &&
-            (!heap->has_marked_objects || !page->has_marked_objects))
-            return gc_verify_fail("untracked object mark", verbose);
         if (header->size < GC_HEADER_SIZE) {
             if (verbose) {
                 fprintf(stderr, "[GC VERIFY] invalid object size: gc_ref=%d size=%u\n", gc_ref, header->size);
@@ -1475,6 +1483,7 @@ int32_t gc_heap_get_object_count(GcHeap* heap) {
 MOONBIT_FFI_EXPORT void wasmoon_gc_collection_rollback(GcCollectionRequest *request) {
     GcHeap *heap = request->heap;
     forget_identity_window(heap);
+    ++heap->structural_epoch;
     int32_t object_count = request->rollback_boundary;
     int32_t survivors = 0;
     for (int32_t i = 0; i < heap->live_count; i++) {
@@ -1485,8 +1494,8 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_rollback(GcCollectionRequest *requ
         }
         GcHeader* header = (GcHeader*)(heap->data + offset);
         gc_heap_identity_page(heap, ref)->has_marked_objects = 0;
-        if (ref <= object_count || (header->flags & GC_FLAG_MARKED)) {
-            header->flags &= ~GC_FLAG_MARKED;
+        if (ref <= object_count || gc_heap_is_marked(heap, ref)) {
+            gc_heap_clear_mark(heap, ref);
             heap->live_objects[survivors++] = ref;
         } else {
             header->kind = GC_KIND_FREE;
