@@ -1140,3 +1140,66 @@ test "packed program points preserve signed instruction and block order" {
   inspect(second < third, content="true")
   inspect(third < fourth, content="true")
 }
+
+///|
+test "bundle queue preserves ordering hints and membership through repeated sifting" {
+  let count = 97
+  let segments : Array[AllocationSegment] = Array::makei(count, id => {
+    id,
+    value: { id, class: Int, },
+    range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, id * 13 % 11)),
+    weight: 1 + id * 17 % 7,
+    has_fixed_constraint: false,
+    fixed_hint: None,
+    preference_hint: None,
+    location: None,
+  })
+  let context = test_allocation_context(
+    Array::makei(count, id => [id]),
+    segments,
+    [0],
+  )
+  let session = AllocationSession::new()
+  let queue = BundleQueue::for_session(session, count)
+  for prioritize_weight in [false, true] {
+    queue.reset(count, prioritize_weight)
+    let expected = Array::makei(count, id => id)
+    // The bounded fields fit in a unique scalar rank, independently of the
+    // heap's representation and sifting algorithm.
+    let rank = fn(bundle : Int32) {
+      let weight_rank = if prioritize_weight {
+        context.weights[bundle] * 32 * count
+      } else {
+        0
+      }
+      weight_rank + context.priorities[bundle] * count + count - 1 - bundle
+    }
+    expected.sort_by((left, right) => rank(right) - rank(left))
+    for index in 0..<count {
+      let bundle = index * 37 % count
+      queue.push(bundle, context, 1000 + bundle)
+      queue.push(bundle, context, -1)
+    }
+    for index in 0..<31 {
+      let (bundle, hint) = queue.pop().unwrap()
+      assert_eq(bundle, expected[index])
+      assert_eq(hint, 1000 + bundle)
+    }
+    for index in 0..<31 {
+      let bundle = expected[index]
+      queue.push(bundle, context, 2000 + bundle)
+      queue.push(bundle, context, -1)
+    }
+    for index, bundle in expected {
+      let (actual, hint) = queue.pop().unwrap()
+      assert_eq(actual, bundle)
+      assert_eq(hint, (if index < 31 { 2000 } else { 1000 }) + bundle)
+    }
+    inspect(queue.pop() is None, content="true")
+    queue.push(0, context, -1)
+  }
+  let reused = BundleQueue::for_session(session, count)
+  inspect(reused.pop() is None, content="true")
+  reused.push(0, context, 7)
+  debug_inspect(reused.pop(), content="Some((0, 7))")
+}

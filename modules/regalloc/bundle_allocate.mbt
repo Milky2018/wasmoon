@@ -30,12 +30,19 @@ priv struct AllocationContext {
 }
 
 ///|
+// Keep the priority snapshot and hint together in the reusable scalar heap.
+#valtype
+priv struct BundleQueueEntry {
+  bundle : Int32
+  priority : Int32
+  weight : Int32
+  hint : Int32
+}
+
+///|
 priv struct BundleQueue {
-  items : Array[Int32]
-  priorities : Array[Int32]
-  weights : Array[Int32]
+  items : Array[BundleQueueEntry]
   in_queue : Array[Bool]
-  hints : Array[Int32]
   mut prioritize_weight : Bool
 }
 
@@ -69,10 +76,7 @@ pub fn AllocationSession::new() -> AllocationSession {
     register_order_marks: [],
     physical_register_indexes: [],
     queue_items: [],
-    queue_priorities: [],
-    queue_weights: [],
     queue_in_queue: [],
-    queue_hints: [],
   }
 }
 
@@ -83,15 +87,9 @@ fn BundleQueue::for_session(
 ) -> BundleQueue {
   reset_dense_array(session.queue_in_queue, bundle_count, false)
   session.queue_items.clear()
-  session.queue_priorities.clear()
-  session.queue_weights.clear()
-  session.queue_hints.clear()
   {
     items: session.queue_items,
-    priorities: session.queue_priorities,
-    weights: session.queue_weights,
     in_queue: session.queue_in_queue,
-    hints: session.queue_hints,
     prioritize_weight: false,
   }
 }
@@ -110,10 +108,7 @@ fn BundleQueue::reset(
   prioritize_weight : Bool,
 ) -> Unit {
   self.items.clear()
-  self.priorities.clear()
-  self.weights.clear()
   self.in_queue.clear()
-  self.hints.clear()
   for _ in 0..<bundle_count {
     self.in_queue.push(false)
   }
@@ -121,13 +116,17 @@ fn BundleQueue::reset(
 }
 
 ///|
-fn BundleQueue::higher(self : BundleQueue, lhs : Int32, rhs : Int32) -> Bool {
-  if self.prioritize_weight && self.weights[lhs] != self.weights[rhs] {
-    self.weights[lhs] > self.weights[rhs]
-  } else if self.priorities[lhs] != self.priorities[rhs] {
-    self.priorities[lhs] > self.priorities[rhs]
+fn BundleQueue::higher(
+  self : BundleQueue,
+  left : BundleQueueEntry,
+  right : BundleQueueEntry,
+) -> Bool {
+  if self.prioritize_weight && left.weight != right.weight {
+    left.weight > right.weight
+  } else if left.priority != right.priority {
+    left.priority > right.priority
   } else {
-    self.items[lhs] < self.items[rhs]
+    left.bundle < right.bundle
   }
 }
 
@@ -143,30 +142,24 @@ fn BundleQueue::push(
     return
   }
   self.in_queue[bundle] = true
-  self.items.push(bundle)
-  self.priorities.push(context.priorities[bundle])
-  self.weights.push(context.weights[bundle])
-  self.hints.push(hint)
+  let entry : BundleQueueEntry = {
+    bundle,
+    priority: context.priorities[bundle],
+    weight: context.weights[bundle],
+    hint,
+  }
+  self.items.push(entry)
   let mut index = self.items.length() - 1
   while index > 0 {
     let parent = (index - 1) / 2
-    if !self.higher(index, parent) {
+    let parent_entry = self.items[parent]
+    if !self.higher(entry, parent_entry) {
       break
     }
-    let temporary = self.items[index]
-    self.items[index] = self.items[parent]
-    self.items[parent] = temporary
-    let priority = self.priorities[index]
-    self.priorities[index] = self.priorities[parent]
-    self.priorities[parent] = priority
-    let weight = self.weights[index]
-    self.weights[index] = self.weights[parent]
-    self.weights[parent] = weight
-    let hint = self.hints[index]
-    self.hints[index] = self.hints[parent]
-    self.hints[parent] = hint
+    self.items[index] = parent_entry
     index = parent
   }
+  self.items[index] = entry
 }
 
 ///|
@@ -175,17 +168,11 @@ fn BundleQueue::pop(self : BundleQueue) -> (Int32, Int32)? {
     return None
   }
   let first = self.items[0]
-  self.in_queue[first] = false
-  let hint = self.hints[0]
-  let last = self.items.pop().unwrap()
-  let last_priority = self.priorities.pop().unwrap()
-  let last_weight = self.weights.pop().unwrap()
-  let last_hint = self.hints.pop().unwrap()
+  self.in_queue[first.bundle] = false
+  let last_index = self.items.length() - 1
+  let last = self.items[last_index]
+  self.items.truncate(last_index)
   if !self.items.is_empty() {
-    self.items[0] = last
-    self.priorities[0] = last_priority
-    self.weights[0] = last_weight
-    self.hints[0] = last_hint
     let mut index = 0
     while true {
       let left = index * 2 + 1
@@ -194,28 +181,20 @@ fn BundleQueue::pop(self : BundleQueue) -> (Int32, Int32)? {
       }
       let right = left + 1
       let mut higher = left
-      if right < self.items.length() && self.higher(right, left) {
+      if right < self.items.length() &&
+        self.higher(self.items[right], self.items[left]) {
         higher = right
       }
-      if !self.higher(higher, index) {
+      let child = self.items[higher]
+      if !self.higher(child, last) {
         break
       }
-      let temporary = self.items[index]
-      self.items[index] = self.items[higher]
-      self.items[higher] = temporary
-      let priority = self.priorities[index]
-      self.priorities[index] = self.priorities[higher]
-      self.priorities[higher] = priority
-      let weight = self.weights[index]
-      self.weights[index] = self.weights[higher]
-      self.weights[higher] = weight
-      let hint = self.hints[index]
-      self.hints[index] = self.hints[higher]
-      self.hints[higher] = hint
+      self.items[index] = child
       index = higher
     }
+    self.items[index] = last
   }
-  Some((first, hint))
+  Some((first.bundle, first.hint))
 }
 
 ///|

@@ -163,11 +163,8 @@ pub struct AllocationSession {
   priv register_order : Array[Int32]
   priv register_order_marks : Array[Bool]
   priv physical_register_indexes : Array[Int32]
-  priv queue_items : Array[Int32]
-  priv queue_priorities : Array[Int32]
-  priv queue_weights : Array[Int32]
+  priv queue_items : Array[BundleQueueEntry]
   priv queue_in_queue : Array[Bool]
-  priv queue_hints : Array[Int32]
 }
 
 ///|

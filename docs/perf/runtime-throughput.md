@@ -545,3 +545,26 @@ are retained; further hash/auth/generichash paired medians differ by about
 +0.25/+0.63/+0.20%, not a broad throughput win. All guest artifacts match
 exactly and native host text grows456 bytes. These are ARM64 controls, not
 x64 timings or compile/RSS improvements. Tracking: [ISS-713](../../issues/ISS-713.md).
+
+### Allocator queue entries and sifting
+
+Current large-module detail metrics attribute 2.58 of 6.27 seconds to register
+allocation, including 0.93 seconds in bundle allocation and 1.49 million queue
+pops. A private scalar entry keeps its bundle, priority, weight and hint together;
+hole sifting moves each parent or child once. Priority snapshots, tie order,
+membership, hints and session reuse retain their existing contracts.
+
+Ten alternating compile API pairs per mode give medians 6.281 -> 6.205 seconds
+with cancellation and 5.729 -> 5.660 without, with paired median improvements of
+about 1.52%/1.38%. All artifacts are byte-identical; detailed controls retain the
+same 10,463 per-function allocation decisions and code sizes. The sifting-only
+variant has inconsistent API gains across cohorts. Whole-encoder RSS is noisy.
+Five additional pairs per mode skip artifact encoding/writing: compiler-process
+RSS medians are 661.5 -> 655.7 MB and 647.2 -> 644.8 MB, with every pair improving.
+That scope includes input, validation, compilation and teardown. API medians in
+this harness improve less, 6.279 -> 6.264 and 5.719 -> 5.696 seconds; do not
+generalize the larger cohort's gain. No guest execution gain is claimed.
+All 70 original algorithm inputs also retain exact artifacts in both modes
+under all three verifiers (140 correctness comparisons, no timings retained).
+Full validation and platform acceptance are tracked in
+[ISS-714](../../issues/ISS-714.md).
