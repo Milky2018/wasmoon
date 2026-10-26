@@ -311,7 +311,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
   }
   let previous : @artifact.Artifact = {
     ..current,
-    manifest: { ..current.manifest, codegen_revision: "direct-vcode-30", },
+    manifest: { ..current.manifest, codegen_revision: "direct-vcode-31", },
   }
   let path = cache_test_file("previous-codegen")
   inspect(save_run_jit_cache(path, previous) is Ok(_), content="true")
@@ -327,7 +327,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("direct-vcode-31", "direct-vcode-30", true, false)
+      #|("direct-vcode-32", "direct-vcode-31", true, false)
     ),
   )
 }

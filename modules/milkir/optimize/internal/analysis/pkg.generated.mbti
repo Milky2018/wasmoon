@@ -8,6 +8,10 @@ import {
 // Values
 pub fn compute_use_counts(@milkir.Function) -> Array[Int32]
 
+pub fn depends_on_addresses(@milkir.Inst) -> Bool
+
+pub fn invalidates_addresses(@milkir.Inst) -> Bool
+
 pub fn is_cheap_rematerializable_constant(@milkir.Inst) -> Bool
 
 pub fn may_write_region(@milkir.Inst, Array[@milkir.AliasRegion?], @milkir.AliasRegion) -> Bool

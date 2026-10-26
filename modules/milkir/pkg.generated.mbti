@@ -212,6 +212,7 @@ pub(all) struct ExtensionEffects {
   write : AliasRegion?
   may_trap : Bool
   observable : Bool
+  invalidates_addresses : Bool
   pointer_region : AliasRegion?
   pointer_bytes : Int32
 } derive(Eq, Hash, @debug.Debug)

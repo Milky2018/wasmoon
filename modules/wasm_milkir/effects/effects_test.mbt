@@ -4,11 +4,28 @@ fn wasm(operation : @wasm_milkir.WasmOpcode) -> @milkir.Opcode {
 }
 
 ///|
+test "identity reference operations preserve values and physical addresses" {
+  for
+    operation in [
+      @wasm_milkir.WasmOpcode::RefEq,
+      AnyConvertExtern,
+      ExternConvertAny,
+    ] {
+    let effects = @effects.analyze(wasm(operation))
+    assert_true(effects.preserves_struct_values())
+    assert_true(effects.preserves_physical_addresses())
+    assert_false(effects.may_trap)
+    assert_eq(effects.read, None)
+    assert_eq(effects.write, None)
+  }
+}
+
+///|
 test "collection preserves checked identity but ends borrowed addresses" {
   let allocation = @effects.analyze(wasm(StructNew(0)))
   inspect(allocation.allocation, content="true")
   inspect(allocation.preserves_checked_references(), content="true")
-  inspect(allocation.preserves_struct_values(), content="false")
+  inspect(allocation.preserves_struct_values(), content="true")
   inspect(allocation.preserves_physical_addresses(), content="false")
   let write = @effects.analyze(wasm(StructSet(0, 2)))
   debug_inspect(write.write, content="Some(StructField(0, 2))")

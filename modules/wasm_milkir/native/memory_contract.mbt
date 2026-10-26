@@ -41,6 +41,7 @@ fn projection_opcode(projection : Projection) -> @milkir.ExtOp {
         FieldData(_, _, width, _, true) => width
         _ => 0
       },
+      invalidates_addresses: false,
       pointer_region: match projection {
         ArrayLength => None
         StructData(_) => Some(Context)
@@ -81,7 +82,7 @@ fn decode_projection(extension : @milkir.ExtOp) -> Projection? {
 ///|
 fn semantic_effects(opcode : @milkir.Opcode) -> @milkir.ExtensionEffects {
   let effects = @effects.analyze(opcode)
-  let write = if !effects.preserves_physical_addresses() {
+  let write = if !effects.preserves_checked_references() {
     Some(@milkir.AliasRegion::Other)
   } else {
     match effects.write {
@@ -106,6 +107,7 @@ fn semantic_effects(opcode : @milkir.Opcode) -> @milkir.ExtensionEffects {
     effects.may_reenter ||
     effects.may_suspend ||
     effects.may_replace_heap,
+    invalidates_addresses: !effects.preserves_physical_addresses(),
     pointer_region: None,
     pointer_bytes: 0,
   }

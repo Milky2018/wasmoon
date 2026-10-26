@@ -35,6 +35,7 @@ fn poll_region_opcode(region : PollRegion, guard_ : Bool) -> @milkir.ExtOp {
       },
       may_trap: !guard_,
       observable: !guard_,
+      invalidates_addresses: false,
       pointer_region: None,
       pointer_bytes: 0,
     }),

@@ -22,6 +22,7 @@ priv struct StoreVersion {
 
 ///|
 priv struct LastStoreState {
+  mut address_epoch : StoreVersion?
   mut heap : @hashmap.HashMap[Int32, StoreVersion]
   mut heap_default : StoreVersion?
   mut table : @hashmap.HashMap[Int32, StoreVersion]
@@ -40,6 +41,7 @@ priv enum MemoryWriteScope {
 
 ///|
 priv struct MemoryValueKey {
+  address_epoch : StoreVersion?
   last_store : StoreVersion?
   location : PtrLocationKey
   ty : @milkir.Type
@@ -60,6 +62,7 @@ fn PtrAccess::location_key(self : PtrAccess) -> PtrLocationKey {
 ///|
 fn LastStoreState::LastStoreState() -> LastStoreState {
   {
+    address_epoch: None,
     heap: HashMap([]),
     heap_default: None,
     table: HashMap([]),
@@ -84,6 +87,7 @@ fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
   }
   {
     heap,
+    address_epoch: self.address_epoch,
     heap_default: self.heap_default,
     table,
     table_default: self.table_default,
@@ -179,6 +183,11 @@ fn LastStoreState::meet_from(
   other : LastStoreState,
   join_token : StoreVersion,
 ) -> Bool {
+  let address_epoch = meet_last_store_token(
+    self.address_epoch,
+    other.address_epoch,
+    join_token,
+  )
   let control = meet_last_store_token(self.control, other.control, join_token)
   let context = meet_last_store_token(self.context, other.context, join_token)
   let other_token = meet_last_store_token(self.other, other.other, join_token)
@@ -208,13 +217,15 @@ fn LastStoreState::meet_from(
     table_default,
     join_token,
   )
-  let changed = control != self.control ||
+  let changed = address_epoch != self.address_epoch ||
+    control != self.control ||
     context != self.context ||
     other_token != self.other ||
     heap_default != self.heap_default ||
     table_default != self.table_default ||
     !indexed_store_maps_equal(merged_heap, self.heap) ||
     !indexed_store_maps_equal(merged_table, self.table)
+  self.address_epoch = address_epoch
   self.control = control
   self.context = context
   self.other = other_token
@@ -261,6 +272,7 @@ fn LastStoreState::set_all_tokens(
   self : LastStoreState,
   token : StoreVersion,
 ) -> Unit {
+  self.address_epoch = Some(token)
   self.heap.clear()
   self.heap_default = Some(token)
   self.table.clear()
@@ -307,6 +319,9 @@ fn update_last_store_state(
   inst_version : StoreVersion,
   ptr_base_infos : Array[@milkir.AliasRegion?],
 ) -> Unit {
+  if @analysis.invalidates_addresses(inst) {
+    state.address_epoch = Some(inst_version)
+  }
   match instruction_memory_write_scope(inst, ptr_base_infos) {
     NoWrite => ()
     WriteRegion(region) => state.set_region_token(region, inst_version)
@@ -464,8 +479,9 @@ fn memory_key_from_access(
   access : PtrAccess,
   ty : @milkir.Type,
   last_store : StoreVersion?,
+  address_epoch : StoreVersion?,
 ) -> MemoryValueKey {
-  { last_store, location: access.location_key(), ty, }
+  { address_epoch, last_store, location: access.location_key(), ty, }
 }
 
 ///|
@@ -494,6 +510,7 @@ fn is_gvn_candidate(inst : @milkir.Inst) -> Bool {
     extension.effects is Some(effects) &&
     effects.read is Some(_) &&
     effects.write is None &&
+    !effects.invalidates_addresses &&
     !effects.observable {
     // As with load CSE, the first dominating read performs its trap. Its
     // metadata version must remain unchanged before reusing its result.
@@ -545,6 +562,7 @@ priv struct AvailableExpression {
   value : @milkir.Value
   dependency : @milkir.AliasRegion?
   memory_version : StoreVersion?
+  address_epoch : StoreVersion?
   def_block_id : Int32
   def_inst_index : Int32
   position : Int32
@@ -769,6 +787,7 @@ fn AcyclicOptimizer::process_inst(
       load_access,
       load_ty,
       last_store_state.get_region_token(load_access.region),
+      last_store_state.address_epoch,
     )
     if self.memory_values.get(key) is Some(entry) &&
       inst_dominates(
@@ -804,6 +823,11 @@ fn AcyclicOptimizer::process_inst(
       store_access,
       store_ty,
       Some({ block_id, inst_id: inst.id, }),
+      if instruction_memory_write_scope(inst, self.ptr_base_infos) is WriteAll {
+        Some({ block_id, inst_id: inst.id, })
+      } else {
+        last_store_state.address_epoch
+      },
     )
     self.memory_values.set(key, {
       def_block_id: block_id,
@@ -826,6 +850,11 @@ fn AcyclicOptimizer::process_inst(
   }
   guard inst.first_result() is Some(result_val) else { return }
   let dependency = gvn_memory_dependency(self.func, inst, self.ptr_base_infos)
+  let address_epoch = if @analysis.depends_on_addresses(inst) {
+    last_store_state.address_epoch
+  } else {
+    None
+  }
   let memory_version = match dependency {
     Some(region) => last_store_state.get_region_token(region)
     None => None
@@ -843,6 +872,7 @@ fn AcyclicOptimizer::process_inst(
     self.value_lookup_probes = self.value_lookup_probes + 1
     if entry.dependency == dependency &&
       entry.memory_version == memory_version &&
+      entry.address_epoch == address_epoch &&
       inst_dominates(
         entry.def_block_id,
         entry.def_inst_index,
@@ -892,6 +922,7 @@ fn AcyclicOptimizer::process_inst(
     value: result_val,
     dependency,
     memory_version,
+    address_epoch,
     def_block_id: block_id,
     def_inst_index: inst_index,
     position,

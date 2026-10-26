@@ -29,10 +29,16 @@
 - Expansion budgets bound large-function compile cost; unsupported functions
   retain helpers. Constant division and bounded leaf inlining preserve traps,
   effects, source locations and allocation accounting. The CLI snapshots type
-  definitions together with recursive groups. Artifact codegen revision is 31;
+  definitions together with recursive groups. Artifact codegen revision is 32;
   JIT ABI is 8. Native and wasm interpreters keep their shared Store/runtime.
 
 ## Guarded control values (October 26)
+
+The subsequent [logical/address epoch separation](../gc-memory-epochs.md)
+preserves logical reads across collection without extending physical borrows.
+Its two matched rounds do not establish a material original-workload speedup;
+the guarded-control measurements below describe the preceding codegen31
+checkpoint.
 
 Budget-protected loops retain the original slow polling loop and charge each
 header/inlined poll at its original position. A successful guard now returns

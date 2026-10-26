@@ -153,7 +153,7 @@ fn wasm_effects(operation : @wasm_milkir.WasmOpcode) -> Effects {
         invalidates_address=true,
         allocation=true,
       )
-    I31New => effects()
+    I31New | RefEq | AnyConvertExtern | ExternConvertAny => effects()
     I31GetS | I31GetU => effects(may_trap=true)
     // Native ref tests/casts only inspect retained type metadata and identity
     // tables. They neither allocate nor invoke managed/guest code; a cast's
@@ -170,9 +170,6 @@ fn wasm_effects(operation : @wasm_milkir.WasmOpcode) -> Effects {
     | ReturnCallIndirect(_, _)
     | ReturnCallRef(_)
     | GetFuncRef(_)
-    | AnyConvertExtern
-    | ExternConvertAny
-    | RefEq
     | Throw(_)
     | ThrowRef
     | TryTableBegin(_)
@@ -206,7 +203,5 @@ pub fn Effects::preserves_physical_addresses(self : Effects) -> Bool {
 
 ///|
 pub fn Effects::preserves_struct_values(self : Effects) -> Bool {
-  self.preserves_checked_references() &&
-  !self.may_collect &&
-  !(self.write is Some(Unknown))
+  self.preserves_checked_references() && !(self.write is Some(Unknown))
 }
