@@ -106,6 +106,7 @@ fn wasmoon_native_environment(
     }),
     prepared_arrays=true,
     gc_array_regions=true,
+    exclusive_poll_controls=true,
     gc_heap_field=if layout.gc_heap_offset >= 0 && layout.gc_heap_offset != 255 {
       Some(gc_heap_field)
     } else {

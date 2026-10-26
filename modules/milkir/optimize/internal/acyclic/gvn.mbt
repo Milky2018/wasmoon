@@ -26,6 +26,7 @@ priv struct LastStoreState {
   mut heap_default : StoreVersion?
   mut table : @hashmap.HashMap[Int32, StoreVersion]
   mut table_default : StoreVersion?
+  mut control : StoreVersion?
   mut context : StoreVersion?
   mut other : StoreVersion?
 }
@@ -63,6 +64,7 @@ fn LastStoreState::LastStoreState() -> LastStoreState {
     heap_default: None,
     table: HashMap([]),
     table_default: None,
+    control: None,
     context: None,
     other: None,
   }
@@ -85,6 +87,7 @@ fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
     heap_default: self.heap_default,
     table,
     table_default: self.table_default,
+    control: self.control,
     context: self.context,
     other: self.other,
   }
@@ -176,6 +179,7 @@ fn LastStoreState::meet_from(
   other : LastStoreState,
   join_token : StoreVersion,
 ) -> Bool {
+  let control = meet_last_store_token(self.control, other.control, join_token)
   let context = meet_last_store_token(self.context, other.context, join_token)
   let other_token = meet_last_store_token(self.other, other.other, join_token)
   let heap_default = meet_last_store_token(
@@ -204,12 +208,14 @@ fn LastStoreState::meet_from(
     table_default,
     join_token,
   )
-  let changed = context != self.context ||
+  let changed = control != self.control ||
+    context != self.context ||
     other_token != self.other ||
     heap_default != self.heap_default ||
     table_default != self.table_default ||
     !indexed_store_maps_equal(merged_heap, self.heap) ||
     !indexed_store_maps_equal(merged_table, self.table)
+  self.control = control
   self.context = context
   self.other = other_token
   self.heap_default = heap_default
@@ -228,6 +234,7 @@ fn LastStoreState::get_region_token(
     Heap(index) => indexed_store_token(self.heap, self.heap_default, index)
     Table(index) => indexed_store_token(self.table, self.table_default, index)
     Context => self.context
+    Control => self.control
     Other => self.other
   }
 }
@@ -243,6 +250,7 @@ fn LastStoreState::set_region_token(
   match region {
     Heap(index) => self.heap.set(index, token)
     Table(index) => self.table.set(index, token)
+    Control => self.control = Some(token)
     Context => self.context = Some(token)
     Other => self.other = Some(token)
   }
@@ -257,6 +265,7 @@ fn LastStoreState::set_all_tokens(
   self.heap_default = Some(token)
   self.table.clear()
   self.table_default = Some(token)
+  self.control = Some(token)
   self.context = Some(token)
   self.other = Some(token)
 }

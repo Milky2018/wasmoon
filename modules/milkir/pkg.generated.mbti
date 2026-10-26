@@ -45,6 +45,7 @@ pub(all) enum AliasRegion {
   Heap(Int32)
   Table(Int32)
   Context
+  Control
   Other
 } derive(Eq, Hash, @debug.Debug)
 pub fn AliasRegion::equal(Self, Self) -> Bool

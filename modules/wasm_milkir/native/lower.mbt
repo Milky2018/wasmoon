@@ -12,6 +12,7 @@ const GC_SLOT_BYTES : Int32 = 16
 struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
   inline_heap : InlineHeapLayout?
+  exclusive_poll_controls : Bool
   gc_array_regions : Bool
   prepared_arrays : Bool
   expand_structs : Bool
@@ -31,6 +32,10 @@ struct Environment {
 /// independently verifies every physical borrow across the final CFG.
 /// `prepared_arrays` opts an embedding into the non-collecting try-array
 /// helper ABI. Existing providers keep the collecting allocation ABI by default.
+/// `exclusive_poll_controls` additionally promises that callback bindings and
+/// countdown storage cannot change during guest-only code except at its polls.
+/// Reentry/suspension expires that permission. The native seam can then create
+/// independently budget-verified loop regions; other embeddings keep full polls.
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
@@ -40,6 +45,7 @@ pub fn Environment::new(
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
   gc_heap_field~ : @native_types.EnvironmentField? = None,
   gc_array_regions~ : Bool = false,
+  exclusive_poll_controls~ : Bool = false,
   prepared_arrays~ : Bool = false,
   inline_heap~ : InlineHeapLayout? = None,
 ) -> Environment {
@@ -49,6 +55,7 @@ pub fn Environment::new(
     runtime_symbol,
     gc_heap_field,
     gc_array_regions,
+    exclusive_poll_controls,
     prepared_arrays,
     expand_structs: true,
     inline_heap,
@@ -1367,6 +1374,13 @@ fn lower_extension(
   environment : Environment,
   validation_context : @wasm_milkir.WasmValidationContext,
 ) -> String? {
+  if decode_poll_region(extension) is Some((region, guard_)) {
+    if !environment.exclusive_poll_controls {
+      return Some("native poll regions require exclusive invocation controls")
+    }
+    lower_poll_region(context, region, guard_)
+    return None
+  }
   if decode_projection(extension) is Some(projection) {
     if environment.gc_heap_field is None {
       return Some("GC projection requires an explicit heap environment")
@@ -1688,9 +1702,25 @@ pub fn lower_to_sink(
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
   if environment.gc_array_regions && environment.gc_heap_field is Some(_) {
-    prepare_gc_memory(function, validation_context, on_event~) catch {
+    prepare_gc_memory(
+      function,
+      validation_context,
+      exclusive_poll_controls=environment.exclusive_poll_controls,
+      on_event~,
+    ) catch {
       error =>
         raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
+    }
+  } else if function.blocks.any(block => {
+      function
+      .block_instruction_ids(block)
+      .any(id => {
+        function.instruction_by_id(id).unwrap().opcode is Ext(op, _) &&
+        decode_poll_region(op) is Some(_)
+      })
+    }) {
+    if gc_borrow_error(function) is Some(error) {
+      raise @milkir_native.NativeLowerError::invalid_milkir(error)
     }
   }
   let environment = if environment.inline_heap is Some(_) ||

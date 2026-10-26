@@ -267,6 +267,7 @@ pub(all) enum AliasRegion {
   Heap(Int32)
   Table(Int32)
   Context
+  Control
   Other
 } derive(Debug, Eq, Hash)
 
