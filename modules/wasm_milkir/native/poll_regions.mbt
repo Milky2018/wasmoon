@@ -68,13 +68,17 @@ fn lower_poll_region(
   region : PollRegion,
   guard_ : Bool,
 ) -> Unit {
+  if !guard_ {
+    lower_poll_charge(context, region)
+    return
+  }
   let unavailable = context.create_block([])
   let has_execution = context.create_block([])
   let has_controls = context.create_block([])
   let ready = context.create_block([])
   let allowed = context.create_block([])
   let disabled = context.create_block([])
-  let done = context.create_block(if guard_ { [I32] } else { [] })
+  let done = context.create_block([I32, Ptr64])
   let execution = heap_load(
     context,
     context.environment()[0],
@@ -113,11 +117,7 @@ fn lower_poll_region(
   context.branch_int_compare_immediate(
     SignedGreaterThan,
     budget,
-    if guard_ {
-      region.limit.to_uint64()
-    } else {
-      1UL
-    },
+    region.limit.to_uint64(),
     allowed,
     [],
     disabled,
@@ -128,47 +128,75 @@ fn lower_poll_region(
     SignedLessOrEqual,
     budget,
     0UL,
-    if guard_ {
-      allowed
-    } else {
-      done
-    },
+    allowed,
     [],
     unavailable,
     [],
   )
   context.switch_to_block(allowed)
-  if guard_ {
-    context.jump(done, [i32_immediate(context, 1)])
-  } else {
-    let remaining = context.emit(IntBinaryImmediate(Sub, 1UL), [budget], [I32])[0]
-    let (base, offset) = if region.budget < 0 {
-      let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [controls], [I64])[0]
-      let address = context.emit(
-          IntBinaryImmediate(
-            Add,
-            region.budget.to_int64().reinterpret_as_uint64(),
-          ),
-          [bits],
-          [I64],
-        )[0]
-      (context.emit(Convert(Bitcast(I64, Ptr64)), [address], [Ptr64])[0], 0)
-    } else {
-      (controls, region.budget)
-    }
-    heap_store(context, base, offset, remaining, I32)
-    context.jump(done, [])
-  }
+  context.jump(done, [i32_immediate(context, 1), controls])
   context.switch_to_block(unavailable)
-  if guard_ {
-    context.jump(done, [i32_immediate(context, 0)])
-  } else {
-    context.set_trap_terminator(Unreachable)
-  }
+  let null = context.emit(I64Const(0UL), [], [I64])[0]
+  let null = context.emit(Convert(Bitcast(I64, Ptr64)), [null], [Ptr64])[0]
+  context.jump(done, [i32_immediate(context, 0), null])
   context.switch_to_block(done)
-  if guard_ {
-    context.forward_results(context.block_parameters(done))
+  context.forward_results(context.block_parameters(done))
+}
+
+///|
+fn lower_poll_charge(
+  context : @adapter.InstructionContext,
+  region : PollRegion,
+) -> Unit {
+  // Only the matching successful guard may supply this control pointer.
+  // The independent credit proof rejects stale, foreign, forged and phi-carried
+  // tokens and every intervening mutation or reentry. The budget assertion and
+  // its store remain at the original poll position.
+  let controls = context.operands()[0]
+  let budget = heap_load(context, controls, region.budget, I32)
+  let enabled = context.create_block([])
+  let disabled = context.create_block([])
+  let invalid = context.create_block([])
+  let done = context.create_block([])
+  context.branch_int_compare_immediate(
+    SignedGreaterThan,
+    budget,
+    1UL,
+    enabled,
+    [],
+    disabled,
+    [],
+  )
+  context.switch_to_block(disabled)
+  context.branch_int_compare_immediate(
+    SignedLessOrEqual,
+    budget,
+    0UL,
+    done,
+    [],
+    invalid,
+    [],
+  )
+  context.switch_to_block(enabled)
+  let remaining = context.emit(IntBinaryImmediate(Sub, 1UL), [budget], [I32])[0]
+  let (base, offset) = if region.budget < 0 {
+    let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [controls], [I64])[0]
+    let address = context.emit(
+        IntBinaryImmediate(
+          Add,
+          region.budget.to_int64().reinterpret_as_uint64(),
+        ),
+        [bits],
+        [I64],
+      )[0]
+    (context.emit(Convert(Bitcast(I64, Ptr64)), [address], [Ptr64])[0], 0)
   } else {
-    context.finish_void()
+    (controls, region.budget)
   }
+  heap_store(context, base, offset, remaining, I32)
+  context.jump(done, [])
+  context.switch_to_block(invalid)
+  context.set_trap_terminator(Unreachable)
+  context.switch_to_block(done)
+  context.finish_void()
 }

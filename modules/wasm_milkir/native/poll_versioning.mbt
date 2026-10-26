@@ -213,11 +213,12 @@ fn version_poll_loops(
       function.append_block_param(guard_block, param.1)
     })
     let condition = function.new_value(I32)
+    let controls = function.new_value(Ptr)
     guard_block.append_inst(
       function.new_inst(
-        Ext(poll_region_opcode(region, true), Signature([], [I32])),
+        Ext(poll_region_opcode(region, true), Signature([], [I32, Ptr])),
         [],
-        [condition],
+        [condition, controls],
       ),
     )
     let copies : Map[Int32, @milkir.Block] = Map([])
@@ -273,14 +274,19 @@ fn version_poll_loops(
           is Some(SafepointPoll(_, _, _, _)) {
           @milkir.Opcode::Ext(
             poll_region_opcode(region, false),
-            Signature([], []),
+            Signature([Ptr], []),
           )
         } else {
           inst.opcode
         }
         let cloned = function.new_inst(
           opcode,
-          inst.args.map(mapped),
+          if @wasm_milkir.decode_opcode(inst.opcode)
+            is Some(SafepointPoll(_, _, _, _)) {
+            [controls]
+          } else {
+            inst.args.map(mapped)
+          },
           inst.results.map(mapped),
         )
         for metadata in inst.metadata {

@@ -13,7 +13,7 @@ test "native poll credits reject missing guards false edges overcharge and opaqu
     b.add_param(I64) |> ignore
     let region = test_poll_region(1)
     if mode != "missing" {
-      let guard_ = b.emit_ext_inst(I32, poll_region_opcode(region, true), [])
+      let guard_ = test_poll_guard(b, region)
       let yes = b.create_block()
       let no = b.create_block()
       b.branch(guard_, yes, [], no, [])
@@ -46,10 +46,10 @@ test "native poll credits reject missing guards false edges overcharge and opaqu
         },
         false,
       ),
-      [],
+      [test_poll_controls(b, region)],
     )
     if mode == "overcharge" {
-      b.emit_void_ext_inst(poll_region_opcode(region, false), [])
+      test_poll_charge(b, region)
     }
     b.return_([])
     let function = b.finalize()
@@ -63,15 +63,15 @@ test "native poll credit permits only its bounded true branch" {
   let b = @milkir.FunctionBuilder("poll_credit_valid")
   b.add_param(I64) |> ignore
   let region = test_poll_region(2)
-  let guard_ = b.emit_ext_inst(I32, poll_region_opcode(region, true), [])
+  let guard_ = test_poll_guard(b, region)
   let yes = b.create_block()
   let no = b.create_block()
   b.branch(guard_, yes, [], no, [])
   b.switch_to_block(no)
   b.return_([])
   b.switch_to_block(yes)
-  b.emit_void_ext_inst(poll_region_opcode(region, false), [])
-  b.emit_void_ext_inst(poll_region_opcode(region, false), [])
+  test_poll_charge(b, region)
+  test_poll_charge(b, region)
   b.return_([])
   assert_eq(poll_region_error(b.finalize()), None)
 }
@@ -149,7 +149,7 @@ test "budget proof recognizes both zero and nonzero conditional edges" {
     let b = @milkir.FunctionBuilder("native_poll_conditional")
     b.add_param(I64) |> ignore
     let region = test_poll_region(1)
-    let guard_ = b.emit_ext_inst(I32, poll_region_opcode(region, true), [])
+    let guard_ = test_poll_guard(b, region)
     let entry = b.get_function().blocks[0]
     let yes = b.create_block()
     let no = b.create_block()
@@ -163,7 +163,7 @@ test "budget proof recognizes both zero and nonzero conditional edges" {
     b.switch_to_block(no)
     b.return_([])
     b.switch_to_block(yes)
-    b.emit_void_ext_inst(poll_region_opcode(region, false), [])
+    test_poll_charge(b, region)
     b.return_([])
     assert_eq(poll_region_error(b.finalize()), None)
   }
@@ -249,12 +249,12 @@ test "a cycle cannot recharge credit without passing its budget guard" {
   let b = @milkir.FunctionBuilder("poll_credit_cycle")
   b.add_param(I64) |> ignore
   let region = test_poll_region(1)
-  let guard_ = b.emit_ext_inst(I32, poll_region_opcode(region, true), [])
+  let guard_ = test_poll_guard(b, region)
   let loop_ = b.create_block()
   let exit = b.create_block()
   b.branch(guard_, loop_, [], exit, [])
   b.switch_to_block(loop_)
-  b.emit_void_ext_inst(poll_region_opcode(region, false), [])
+  test_poll_charge(b, region)
   b.jump(loop_, [])
   b.switch_to_block(exit)
   b.return_([])
@@ -266,13 +266,13 @@ test "a poll between the guard and its branch invalidates the guard result" {
   let b = @milkir.FunctionBuilder("poll_stale_guard")
   b.add_param(I64) |> ignore
   let region = test_poll_region(1)
-  let guard_ = b.emit_ext_inst(I32, poll_region_opcode(region, true), [])
+  let guard_ = test_poll_guard(b, region)
   b.emit_void_ext_inst(@wasm_milkir.encode(SafepointPoll(-224, 64, 0, 16)), [])
   let yes = b.create_block()
   let no = b.create_block()
   b.branch(guard_, yes, [], no, [])
   b.switch_to_block(yes)
-  b.emit_void_ext_inst(poll_region_opcode(region, false), [])
+  test_poll_charge(b, region)
   b.return_([])
   b.switch_to_block(no)
   b.return_([])
@@ -284,18 +284,104 @@ test "branching again on an old guard result cannot restore spent credit" {
   let b = @milkir.FunctionBuilder("poll_reused_guard")
   b.add_param(I64) |> ignore
   let region = test_poll_region(1)
-  let guard_ = b.emit_ext_inst(I32, poll_region_opcode(region, true), [])
+  let guard_ = test_poll_guard(b, region)
   let first = b.create_block()
   let second = b.create_block()
   let exit = b.create_block()
   b.branch(guard_, first, [], exit, [])
   b.switch_to_block(first)
-  b.emit_void_ext_inst(poll_region_opcode(region, false), [])
+  test_poll_charge(b, region)
   b.branch(guard_, second, [], exit, [])
   b.switch_to_block(second)
-  b.emit_void_ext_inst(poll_region_opcode(region, false), [])
+  test_poll_charge(b, region)
   b.return_([])
   b.switch_to_block(exit)
+  b.return_([])
+  assert_true(poll_region_error(b.finalize()) is Some(_))
+}
+
+///|
+fn test_poll_guard(
+  b : @milkir.FunctionBuilder,
+  region : PollRegion,
+) -> @milkir.Value {
+  b.emit_multi_ext_inst([I32, Ptr], poll_region_opcode(region, true), [])[0]
+}
+
+///|
+fn test_poll_controls(
+  b : @milkir.FunctionBuilder,
+  region : PollRegion,
+) -> @milkir.Value {
+  let function = b.get_function()
+  for block in function.blocks {
+    for id in function.block_instruction_ids(block) {
+      let inst = function.instruction_by_id(id).unwrap()
+      if inst.opcode is Ext(op, _) &&
+        decode_poll_region(op) is Some((guard_, true)) &&
+        guard_.key == region.key &&
+        inst.results is [_, token] {
+        return token
+      }
+    }
+  }
+  b.emit_inst(Ptr, Scalar(Convert(Bitcast)), [b.iconst_i64(0L)])
+}
+
+///|
+fn test_poll_charge(b : @milkir.FunctionBuilder, region : PollRegion) -> Unit {
+  let token = test_poll_controls(b, region)
+  b.emit_void_ext_inst(poll_region_opcode(region, false), [token])
+}
+
+///|
+test "native poll charges reject forged and foreign control tokens" {
+  for forged in [false, true] {
+    let b = @milkir.FunctionBuilder("poll_control_token")
+    b.add_param(I64) |> ignore
+    let region = test_poll_region(1)
+    let other = { ..region, key: region.key + 1, }
+    let first_condition = test_poll_guard(b, other)
+    let unused = b.create_block()
+    let real = b.create_block()
+    // Each guard branches immediately in its defining block.
+    b.branch(first_condition, real, [], unused, [])
+    b.switch_to_block(unused)
+    b.return_([])
+    b.switch_to_block(real)
+    let guard_ = test_poll_guard(b, region)
+    let yes = b.create_block()
+    let no = b.create_block()
+    b.branch(guard_, yes, [], no, [])
+    b.switch_to_block(no)
+    b.return_([])
+    b.switch_to_block(yes)
+    let token = if forged {
+      b.emit_inst(Ptr, Scalar(Convert(Bitcast)), [b.iconst_i64(0L)])
+    } else {
+      test_poll_controls(b, other)
+    }
+    b.emit_void_ext_inst(poll_region_opcode(region, false), [token])
+    b.return_([])
+    assert_true(poll_region_error(b.finalize()) is Some(_))
+  }
+}
+
+///|
+test "native poll control tokens cannot be carried through block parameters" {
+  let b = @milkir.FunctionBuilder("poll_control_phi")
+  b.add_param(I64) |> ignore
+  let region = test_poll_region(1)
+  let guard_ = test_poll_guard(b, region)
+  let token = test_poll_controls(b, region)
+  let yes = b.create_block()
+  let carried = b.add_block_param(yes, Ptr)
+  let no = b.create_block()
+  b.branch(guard_, yes, [token], no, [])
+  b.switch_to_block(no)
+  b.return_([])
+  b.switch_to_block(yes)
+  b.emit_void_ext_inst(poll_region_opcode(region, false), [carried])
   b.return_([])
   assert_true(poll_region_error(b.finalize()) is Some(_))
 }

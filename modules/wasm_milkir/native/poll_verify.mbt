@@ -43,6 +43,7 @@ fn poll_invalidates_credit(
 /// a cycle without rechecking its guard eventually exhausts the proof.
 fn poll_region_error(function : @milkir.Function) -> String? {
   let guards : Map[Int32, PollRegion] = Map([])
+  let controls : Map[Int32, Int32] = Map([])
   let guard_values : Map[Int32, (Int32, Int32)] = Map([])
   for block in function.blocks {
     let mut pending : Int32? = None
@@ -60,10 +61,14 @@ fn poll_region_error(function : @milkir.Function) -> String? {
       }
       if inst.opcode is Ext(op, _) &&
         decode_poll_region(op) is Some((region, true)) {
-        if guards.contains(region.key) || !(inst.results is [_]) {
+        if guards.contains(region.key) ||
+          !(inst.results is [condition, token] &&
+          condition.ty == I32 &&
+          token.ty == Ptr) {
           return Some("duplicate native poll guard")
         }
         guards[region.key] = region
+        controls[region.key] = inst.results[1].id
         guard_values[inst.results[0].id] = (region.key, block.id)
         pending = Some(inst.results[0].id)
       }
@@ -84,10 +89,13 @@ fn poll_region_error(function : @milkir.Function) -> String? {
   }
   for block in function.blocks {
     for id in function.block_instruction_ids(block) {
-      if function.instruction_by_id(id).unwrap().opcode is Ext(op, _) &&
-        decode_poll_region(op) is Some((region, false)) &&
-        guards.get(region.key) != Some(region) {
-        return Some("native poll charge has no matching budget guard")
+      let inst = function.instruction_by_id(id).unwrap()
+      if inst.opcode is Ext(op, _) &&
+        decode_poll_region(op) is Some((region, false)) {
+        if guards.get(region.key) != Some(region) ||
+          !(inst.args is [token] && controls.get(region.key) == Some(token.id)) {
+          return Some("native poll charge has no matching guarded controls")
+        }
       }
     }
   }

@@ -8,7 +8,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-30"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-31"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int32 = "wasmoon_jit_host_operating_system_abi"
