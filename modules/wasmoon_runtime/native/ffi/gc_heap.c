@@ -124,18 +124,6 @@ int gc_heap_allocation_faults_disabled(void) {
 
 static int gc_barrier_assert_env_cached = -1;
 
-typedef enum { GC_ROOT_UNBOUND, GC_ROOT_EXCEPTION, GC_ROOT_CONTINUATION } GcRootOwnerKind;
-
-typedef struct GcParkedRoots {
-    GcHeap* heap;
-    struct GcParkedRoots* previous;
-    struct GcParkedRoots* next;
-    int64_t* roots;
-    int32_t root_count;
-    GcRootOwnerKind owner_kind;
-    int64_t owner_reference;
-} GcParkedRoots;
-
 static int gc_barrier_assert_enabled(void) {
     if (gc_barrier_assert_env_cached < 0) {
         const char* value = getenv("WASMOON_GC_ASSERT_BARRIER");
@@ -335,6 +323,29 @@ static GcHeap* gc_heap_new(size_t initial_capacity) {
     return heap;
 }
 
+static void link_parked_roots(GcHeap *heap, GcParkedRoots *registration) {
+    GcParkedRoots *head = heap->parked_jit_roots_head;
+    moonbit_incref(heap);
+    registration->heap = heap;
+    registration->next = head;
+    if (head) head->previous = registration;
+    heap->parked_jit_roots_head = registration;
+}
+
+int32_t gc_heap_register_parked_source(
+    GcHeap *heap, GcParkedRoots *registration, void *source,
+    int32_t (*copy_source)(void *, int64_t *),
+    void (*mark_source)(void *, GcHeap *)
+) {
+    if (!heap || !registration || registration->heap || !source ||
+        !copy_source || !mark_source) return 0;
+    registration->source = source;
+    registration->copy_source = copy_source;
+    registration->mark_source = mark_source;
+    link_parked_roots(heap, registration);
+    return 1;
+}
+
 int32_t gc_heap_register_parked_roots(
     GcHeap* heap,
     int32_t root_count,
@@ -360,15 +371,8 @@ int32_t gc_heap_register_parked_roots(
         free(registration);
         return 0;
     }
-    GcParkedRoots* head = (GcParkedRoots*)heap->parked_jit_roots_head;
-    moonbit_incref(heap);
-    registration->heap = heap;
     registration->root_count = root_count;
-    registration->next = head;
-    if (head) {
-        head->previous = registration;
-    }
-    heap->parked_jit_roots_head = registration;
+    link_parked_roots(heap, registration);
     *out_registration = registration;
     *out_roots = registration->roots;
     return 1;
@@ -397,8 +401,12 @@ void gc_heap_unregister_parked_roots(void* opaque_registration) {
     } else if (registration->owner_kind == GC_ROOT_CONTINUATION) {
         if (--heap->continuation_root_count == 0) heap->continuation_arena = NULL;
     }
-    free(registration->roots);
-    free(registration);
+    if (registration->source) {
+        memset(registration, 0, sizeof(*registration));
+    } else {
+        free(registration->roots);
+        free(registration);
+    }
     moonbit_decref(heap);
 }
 
@@ -429,13 +437,20 @@ int32_t gc_heap_bind_continuation_roots(void *opaque, struct native_continuation
 }
 
 int32_t gc_heap_registered_root_count(void *opaque) {
-    return opaque ? ((GcParkedRoots *)opaque)->root_count : 0;
+    GcParkedRoots *registration = opaque;
+    if (!registration) return 0;
+    return registration->source
+        ? registration->copy_source(registration->source, NULL)
+        : registration->root_count;
 }
 
-void gc_heap_copy_registered_roots(void *opaque, int64_t *roots) {
+int32_t gc_heap_copy_registered_roots(void *opaque, int64_t *roots) {
     GcParkedRoots *registration = opaque;
-    if (registration && registration->root_count)
+    if (registration && registration->source) {
+        return registration->copy_source(registration->source, roots);
+    } else if (registration && registration->root_count)
         memcpy(roots, registration->roots, (size_t)registration->root_count * sizeof(int64_t));
+    return registration ? registration->root_count : 0;
 }
 
 typedef struct {
@@ -465,10 +480,11 @@ static int32_t copy_execution_roots(GcHeap *heap, int64_t *destination) {
     int64_t total = active;
     for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next) {
         if (entry->owner_reference) continue;
-        if (total + entry->root_count > INT32_MAX) return -1;
-        if (destination && entry->root_count)
-            memcpy(destination + total, entry->roots, (size_t)entry->root_count * sizeof(int64_t));
-        total += entry->root_count;
+        int32_t count = gc_heap_registered_root_count(entry);
+        if (count < 0 || total + count > INT32_MAX) return -1;
+        if (destination && count &&
+            gc_heap_copy_registered_roots(entry, destination + total) != count) return -1;
+        total += count;
     }
     return (int32_t)total;
 }
@@ -567,8 +583,10 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_mark(GcCollectionRequest *request,
 MOONBIT_FFI_EXPORT void wasmoon_gc_collection_mark_conservative(GcCollectionRequest *request) {
     GcHeap *heap = request->heap;
     gc_heap_mark_roots(heap, request->roots, request->count);
-    for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next)
-        gc_heap_mark_roots(heap, entry->roots, entry->root_count);
+    for (GcParkedRoots *entry = heap->parked_jit_roots_head; entry; entry = entry->next) {
+        if (entry->source) entry->mark_source(entry->source, heap);
+        else gc_heap_mark_roots(heap, entry->roots, entry->root_count);
+    }
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_gc_collection_reset_auxiliary_marks(GcCollectionRequest *request) {

@@ -199,6 +199,46 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(GcHeap *heap) {
     return passed;
 }
 
+// Parking borrows the stopped activation; it must not allocate or copy its roots.
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_parked_activation_lease(GcHeap *heap) {
+    jit_context_t *ctx = alloc_context_internal(1);
+    if (!ctx) return 0;
+    ctx_set_gc_heap_internal(ctx, heap);
+    int32_t live = gc_heap_alloc_struct(heap, 0, NULL, 0);
+    int32_t dead = gc_heap_alloc_struct(heap, 0, NULL, 0);
+    if (!live || !dead) { free_context_internal(ctx); return 0; }
+    int64_t roots[] = {(int64_t)live << 1, (int64_t)dead << 1};
+    uint64_t mask = 1;
+    wasmoon_gc_function_frame_t frame;
+    jit_trap_activation_t parked;
+    jit_trap_activation_init(&parked, ctx);
+    jit_trap_activation_push(&parked);
+    gc_function_frame_enter_impl(ctx, &frame, roots, &mask, 2);
+    jit_trap_activation_detach();
+    void *registration = NULL;
+    wasmoon_native_fail_allocation_for_tests(1);
+    int passed = jit_parked_gc_roots_register(&parked, &registration);
+    // The pending failure proves that parking issued no fallible native request.
+    passed &= wasmoon_native_failures_enabled();
+    wasmoon_native_fail_allocation_for_tests(0);
+    if (registration) {
+        int64_t copied = 0;
+        passed &= gc_heap_registered_root_count(registration) == 1;
+        passed &= gc_heap_copy_registered_roots(registration, &copied) == 1;
+        passed &= copied == roots[0];
+    } else passed = 0;
+    gc_heap_collect(heap, NULL, 0);
+    passed &= gc_heap_is_valid(heap, live) && !gc_heap_is_valid(heap, dead);
+    jit_parked_gc_roots_unregister(registration);
+    jit_trap_activation_attach(&parked);
+    gc_function_frame_leave_impl(ctx, &frame);
+    jit_trap_activation_pop(&parked);
+    gc_heap_collect(heap, NULL, 0);
+    passed &= !gc_heap_is_valid(heap, live);
+    free_context_internal(ctx);
+    return passed;
+}
+
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_funcref_subtype(
     void *context, int32_t function, int32_t expected
 ) {

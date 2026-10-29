@@ -229,6 +229,24 @@ typedef struct GcHeap {
     GcArrayViewCache array_view;
 } GcHeap;
 
+typedef enum { GC_ROOT_UNBOUND, GC_ROOT_EXCEPTION, GC_ROOT_CONTINUATION } GcRootOwnerKind;
+
+// A source registration is embedded in its stopped activation. Its callbacks
+// cannot switch fibers or mutate roots. Unregister before resuming or releasing
+// that stack; the linked registration retains its heap independently.
+typedef struct GcParkedRoots {
+    GcHeap *heap;
+    struct GcParkedRoots *previous;
+    struct GcParkedRoots *next;
+    int64_t *roots;
+    int32_t root_count;
+    GcRootOwnerKind owner_kind;
+    int64_t owner_reference;
+    void *source;
+    int32_t (*copy_source)(void *, int64_t *);
+    void (*mark_source)(void *, GcHeap *);
+} GcParkedRoots;
+
 static inline void gc_heap_forget_views(GcHeap *heap) {
     heap->struct_view.reference = 0;
     heap->struct_view.payload = NULL;
@@ -394,8 +412,14 @@ int32_t gc_heap_register_parked_roots(
     int64_t** out_roots
 );
 
+int32_t gc_heap_register_parked_source(
+    GcHeap *heap, GcParkedRoots *registration, void *source,
+    int32_t (*copy_source)(void *, int64_t *),
+    void (*mark_source)(void *, GcHeap *)
+);
+
 /**
- * Remove and free one parked-root registration.
+ * Unlink a registration, freeing owned slots or resetting an embedded source.
  */
 void gc_heap_unregister_parked_roots(void* registration);
 
@@ -405,7 +429,7 @@ GcHeap *gc_heap_registration_heap(void *registration);
 int32_t gc_heap_bind_continuation_roots(void *registration,
     struct native_continuation_arena *arena, int64_t reference);
 int32_t gc_heap_registered_root_count(void *registration);
-void gc_heap_copy_registered_roots(void *registration, int64_t *roots);
+int32_t gc_heap_copy_registered_roots(void *registration, int64_t *roots);
 void continuation_arena_mark(struct native_continuation_arena *arena, int64_t reference);
 int32_t continuation_arena_marked_count(struct native_continuation_arena *arena);
 void continuation_arena_copy_marked(struct native_continuation_arena *arena, int64_t *roots);

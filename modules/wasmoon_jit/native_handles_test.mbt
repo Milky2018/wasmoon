@@ -842,6 +842,11 @@ test "parked scratch roots survive GC and resume restores the actual caller" {
 }
 
 ///|
+test "parked activation roots need no native allocation and retain exact liveness" {
+  inspect(@native_test_support.parked_activation_lease(), content="1")
+}
+
+///|
 fn context_with_owned_gc_metadata() -> @jit_ffi.JITContext raise {
   let context = @jit_ffi.JITContext::new(2)
   let types : FixedArray[Int32] = [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

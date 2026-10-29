@@ -95,6 +95,8 @@ pub fn nested_hostcall_tls_probe_trampoline() -> Int64
 
 pub fn nested_trap_probe() -> Int64
 
+pub fn parked_activation_lease() -> Int32
+
 pub fn parked_gc_root_probe() -> Int64
 
 pub fn raw_context_function_array() -> Int32

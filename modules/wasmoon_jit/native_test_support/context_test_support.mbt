@@ -76,6 +76,22 @@ pub fn activation_resume_roots() -> Int32 {
 }
 
 ///|
+#borrow(heap)
+extern "c" fn parked_activation_lease_raw(
+  heap : @jit_ffi.GCHeapHandle,
+) -> Int32 = "wasmoon_test_parked_activation_lease"
+
+///|
+pub fn parked_activation_lease() -> Int32 {
+  let heap = @jit_ffi.GCHeapHandle::new(1024L)
+  if heap.is_null() {
+    0
+  } else {
+    parked_activation_lease_raw(heap)
+  }
+}
+
+///|
 #borrow(context)
 pub extern "c" fn context_gc_funcref_subtype(
   context : @jit_ffi.JITContext,

@@ -150,6 +150,7 @@ typedef struct jit_trap_activation {
     int32_t debug_current_func_idx;
     int32_t previous_debug_func_idx;
     int context_detached;
+    GcParkedRoots parked_roots;
 } jit_trap_activation_t;
 
 typedef struct {
