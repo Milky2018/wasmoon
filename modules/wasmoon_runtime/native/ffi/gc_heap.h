@@ -37,13 +37,15 @@
 extern "C" {
 #endif
 
+// Keep these in sync with types/types.mbt.
+#define GC_EXTERNREF_TAG 0x4000000000000000LL
+#define GC_FUNCREF_TAG   0x2000000000000000LL
+#define GC_REF_TAGS_MASK (GC_EXTERNREF_TAG | GC_FUNCREF_TAG | GC_EXCEPTION_REF_TAG)
+
 // Object kinds
 #define GC_KIND_FREE   0
 #define GC_KIND_STRUCT 1
 #define GC_KIND_ARRAY  2
-
-// GC flags
-#define GC_FLAG_MARKED 0x01
 
 // Exception snapshots are outside the object table and have a distinct word tag.
 #define GC_EXCEPTION_REF_TAG INT64_C(0x1000000000000000)
@@ -63,7 +65,7 @@ typedef int32_t (*GcCollectionPolicy)(void *, void *, int32_t);
  */
 typedef struct GcHeader {
     uint8_t kind;       // GC_KIND_STRUCT or GC_KIND_ARRAY
-    uint8_t flags;      // GC_FLAG_MARKED, etc.
+    uint8_t flags;      // Reserved; collector marks live in identity pages.
     uint16_t type_idx;  // Type index in module
     uint32_t size;      // Total object size (including header)
     uint64_t reserved;  // For structs: field count; for arrays: unused
@@ -119,11 +121,25 @@ typedef struct {
 // released without making an old identity designate a different object.
 #define GC_ID_PAGE_BITS 10
 #define GC_ID_PAGE_SIZE (1 << GC_ID_PAGE_BITS)
-typedef struct {
+typedef struct GcCardSet GcCardSet;
+#define GC_CARD_SHIFT 8
+#define GC_CARD_SIZE (1 << GC_CARD_SHIFT)
+#define GC_CARD_MIN_FIELDS 8192
+typedef struct GcIdentityPage {
     int32_t offsets[GC_ID_PAGE_SIZE];
     int32_t runtime_types[GC_ID_PAGE_SIZE];
     int32_t live_count;
-    uint32_t visit_epochs[GC_ID_PAGE_SIZE];
+    uint64_t mark_bits[GC_ID_PAGE_SIZE / 64];
+    uint64_t incarnation;
+    int32_t has_marked_objects; // Conservative hint for whole-page retirement
+    // Appended metadata preserves the offsets consumed by generated code.
+    int32_t old_live_count;
+    uint64_t remembered[GC_ID_PAGE_SIZE / 64];
+    struct GcIdentityPage *remembered_next;
+    int32_t remembered_linked;
+    int32_t page_index;
+    GcCardSet **cards;
+    int32_t card_objects;
 } GcIdentityPage;
 
 // Shared mutable controls are read on every generated allocation.
@@ -142,6 +158,23 @@ typedef struct {
     void *payload;
 } GcStructViewCache;
 
+// A non-root array metadata hint. Payload lifetime changes invalidate it with
+// struct views; an encoded view keeps compact width and opaque-array behavior.
+typedef struct {
+    int64_t reference;
+    uintptr_t view;
+    int32_t width;
+} GcArrayViewCache;
+
+typedef struct {
+    int32_t tracking_enabled, has_untyped_allocations, tracing_young;
+    uint64_t young_epoch;
+    int32_t old_count, old_boundary, minor_collections, minors_since_major;
+    size_t old_size, last_major_size;
+    GcIdentityPage *remembered_pages;
+    int32_t remembered_count;
+} GcGeneration;
+
 typedef struct GcHeap {
     uint8_t* data;              // Heap memory
     size_t size;                // Current used size
@@ -150,7 +183,6 @@ typedef struct GcHeap {
 
     GcTypeLayout **layouts;
     int32_t layout_capacity;
-    uint32_t trace_epoch;
     GcIdentityPage **identity_pages;
     int32_t identity_page_capacity;
     int32_t object_count;       // High-water identity; next gc_ref = count + 1
@@ -189,11 +221,43 @@ typedef struct GcHeap {
     // slot are already allocated. Collection/rollback invalidates the window.
     int32_t identity_window_limit;
     GcIdentityPage *identity_window_page;
+    // False proves there are no pre-marked payload roots to discover. Marking
+    // sets this hint; complete mark clearing resets it before visitor callbacks.
+    int32_t has_marked_objects;
+    GcGeneration generation;
+    uint64_t structural_epoch; // Invalidates trace shortcuts before identity retirement.
+    GcArrayViewCache array_view;
 } GcHeap;
 
-static inline void gc_heap_forget_struct_view(GcHeap *heap) {
+typedef enum { GC_ROOT_UNBOUND, GC_ROOT_EXCEPTION, GC_ROOT_CONTINUATION } GcRootOwnerKind;
+
+// A source registration is embedded in its stopped activation. Its callbacks
+// cannot switch fibers or mutate roots. Unregister before resuming or releasing
+// that stack; the linked registration retains its heap independently.
+typedef struct GcParkedRoots {
+    GcHeap *heap;
+    struct GcParkedRoots *previous;
+    struct GcParkedRoots *next;
+    int64_t *roots;
+    int32_t root_count;
+    GcRootOwnerKind owner_kind;
+    int64_t owner_reference;
+    void *source;
+    int32_t (*copy_source)(void *, int64_t *);
+    void (*mark_source)(void *, GcHeap *);
+} GcParkedRoots;
+
+static inline void gc_heap_forget_views(GcHeap *heap) {
     heap->struct_view.reference = 0;
     heap->struct_view.payload = NULL;
+    heap->array_view.reference = 0;
+    heap->array_view.view = 0;
+}
+
+static inline void gc_heap_forget_reference_views(GcHeap *heap, int32_t ref) {
+    int64_t word = (int64_t)ref * 2;
+    if (heap->struct_view.reference == word || heap->array_view.reference == word)
+        gc_heap_forget_views(heap);
 }
 
 static inline GcIdentityPage *gc_heap_identity_page(GcHeap *heap, int32_t ref) {
@@ -206,15 +270,73 @@ static inline int32_t gc_heap_identity_offset(GcHeap *heap, int32_t ref) {
     return page ? page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] : -1;
 }
 
+static inline int gc_try_decode_heap_ref_candidate(
+    GcHeap* heap,
+    int64_t value,
+    int32_t* out_target_gc_ref
+) {
+    if (!heap || value <= 0) {
+        return 0;
+    }
+    // i31 and tagged refs are not GC heap references.
+    if ((value & 1L) != 0L || (value & GC_REF_TAGS_MASK) != 0L) {
+        return 0;
+    }
+    int64_t target64 = value >> 1;
+    if (target64 <= 0 || target64 > heap->object_count) {
+        return 0;
+    }
+    if (out_target_gc_ref) {
+        *out_target_gc_ref = (int32_t)target64;
+    }
+    return 1;
+}
+
+// All mark writers share the identity bitmap; read-only discovery owns separate
+// bits. Callers marking an identity have already resolved its live payload.
+static inline int gc_heap_is_marked(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
+    return page && ((page->mark_bits[slot >> 6] >> (slot & 63)) & 1);
+}
+
+static inline void gc_heap_clear_mark(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
+    page->mark_bits[slot >> 6] &= ~(UINT64_C(1) << (slot & 63));
+}
+
+static inline void gc_heap_mark_identity(GcHeap *heap, int32_t ref) {
+    GcIdentityPage *page = gc_heap_identity_page(heap, ref);
+    int32_t slot = (ref - 1) & (GC_ID_PAGE_SIZE - 1);
+    page->mark_bits[slot >> 6] |= UINT64_C(1) << (slot & 63);
+    heap->has_marked_objects = 1;
+    page->has_marked_objects = 1;
+}
+
 static inline int32_t gc_heap_runtime_type(GcHeap *heap, int32_t ref) {
     GcIdentityPage *page = gc_heap_identity_page(heap, ref);
     return page ? page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] : -1;
 }
 
 static inline void gc_heap_set_runtime_type(GcHeap *heap, int32_t ref, int32_t type) {
-    if (heap->struct_view.reference == (int64_t)ref * 2) gc_heap_forget_struct_view(heap);
+    gc_heap_forget_reference_views(heap, ref);
     GcIdentityPage *page = gc_heap_identity_page(heap, ref);
     if (page) page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = type;
+}
+
+// Capacity and resource admission precede publication. No allocation, callback
+// or safepoint may intervene between initializing the payload and this update.
+static inline int32_t gc_heap_publish_object(GcHeap *heap, int32_t offset, int32_t type) {
+    int32_t index = heap->object_count++;
+    GcIdentityPage *page = heap->identity_pages[index >> GC_ID_PAGE_BITS];
+    page->offsets[index & (GC_ID_PAGE_SIZE - 1)] = offset;
+    page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = type;
+    page->live_count++;
+    int32_t ref = index + 1;
+    heap->live_objects[heap->live_count++] = ref;
+    heap->total_allocations++;
+    return ref;
 }
 
 int32_t gc_heap_register_object(GcHeap *heap, int32_t offset);
@@ -222,6 +344,12 @@ int gc_heap_fast_allocation_enabled(void);
 
 static inline GcTypeLayout *gc_heap_layout(GcHeap *heap, int32_t identity) {
     return heap && identity >= 0 && identity < heap->layout_capacity ? heap->layouts[identity] : NULL;
+}
+
+static inline int64_t gc_layout_allocation_size(const GcTypeLayout *layout, int32_t count) {
+    int64_t bytes = GC_HEADER_SIZE + (layout->kind == GC_KIND_ARRAY
+        ? GC_ARRAY_DATA_OFFSET + (int64_t)count * layout->size : layout->size);
+    return (bytes + 15) & -INT64_C(16);
 }
 
 static inline GcTypeLayout *gc_object_layout(GcHeap *heap, const GcHeader *header) {
@@ -232,6 +360,8 @@ GcSlot gc_layout_read(const uint8_t *data, const GcFieldLayout *field);
 void gc_layout_write(uint8_t *data, const GcFieldLayout *field, GcSlot value);
 int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
     int32_t count, const void *values, int wide, int repeated, GcSlot init);
+int32_t gc_heap_try_array(GcHeap *heap, int32_t identity, int32_t local_type,
+    int32_t count, GcSlot init);
 void gc_heap_maybe_verify(GcHeap *heap, const char *op_name);
 int gc_should_fail_allocation(void);
 int gc_heap_admit(GcHeap *heap, size_t size);
@@ -249,6 +379,25 @@ static inline GcHeap *gc_heap_live(GcHeap *heap) {
     return heap && heap->data ? heap : NULL;
 }
 
+// Private generational primitives; MoonBit chooses collection policy and roots.
+void gc_generation_enable(GcHeap *heap);
+int gc_generation_can_collect_young(GcHeap *heap);
+void gc_generation_prepare_major(GcHeap *heap);
+void gc_generation_prepare_young(GcHeap *heap);
+void gc_generation_remember(GcHeap *heap, int32_t owner, int32_t child, int32_t field);
+void gc_generation_prepare_object(GcHeap *heap, int32_t ref);
+void gc_generation_retire_object(GcIdentityPage *page, int32_t ref);
+void gc_generation_free_page(GcIdentityPage *page);
+size_t gc_generation_page_metadata_bytes(const GcIdentityPage *page);
+GcCardSet *gc_generation_dirty_cards(GcHeap *heap, int32_t ref);
+int32_t gc_generation_next_card(const GcCardSet *cards, int32_t start);
+int32_t gc_generation_card_count(GcHeap *heap, int32_t ref);
+int32_t gc_generation_copy_remembered_roots(GcHeap *heap, int64_t *roots);
+void gc_generation_promote(GcHeap *heap, int young);
+int gc_generation_verify(GcHeap *heap, int verbose);
+int gc_heap_allocation_faults_disabled(void);
+int32_t gc_heap_collect_for_allocation(GcHeap *heap, const int64_t *roots, int32_t count);
+
 // ============ Heap Lifecycle ============
 
 /**
@@ -263,8 +412,14 @@ int32_t gc_heap_register_parked_roots(
     int64_t** out_roots
 );
 
+int32_t gc_heap_register_parked_source(
+    GcHeap *heap, GcParkedRoots *registration, void *source,
+    int32_t (*copy_source)(void *, int64_t *),
+    void (*mark_source)(void *, GcHeap *)
+);
+
 /**
- * Remove and free one parked-root registration.
+ * Unlink a registration, freeing owned slots or resetting an embedded source.
  */
 void gc_heap_unregister_parked_roots(void* registration);
 
@@ -274,7 +429,7 @@ GcHeap *gc_heap_registration_heap(void *registration);
 int32_t gc_heap_bind_continuation_roots(void *registration,
     struct native_continuation_arena *arena, int64_t reference);
 int32_t gc_heap_registered_root_count(void *registration);
-void gc_heap_copy_registered_roots(void *registration, int64_t *roots);
+int32_t gc_heap_copy_registered_roots(void *registration, int64_t *roots);
 void continuation_arena_mark(struct native_continuation_arena *arena, int64_t reference);
 int32_t continuation_arena_marked_count(struct native_continuation_arena *arena);
 void continuation_arena_copy_marked(struct native_continuation_arena *arena, int64_t *roots);
@@ -432,9 +587,11 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
 
 /**
  * Write barrier hook for reference stores.
- * Current collector is non-generational; this is a debug hook/assertion point.
+ * Records mature-to-young edges and preserves debug counters/assertions.
  */
 void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_value);
+// Logical field/element index; -1 conservatively dirties the entire owner.
+void gc_heap_write_barrier_at(GcHeap *heap, int32_t owner_gc_ref, int64_t written_value, int32_t field);
 
 // ============ Type Information ============
 

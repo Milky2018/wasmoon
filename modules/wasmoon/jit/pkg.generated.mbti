@@ -119,6 +119,7 @@ pub fn JITModule::init_shared_tables(Self, Array[@bridge.JITTable?], Array[(Int3
 pub fn JITModule::load_artifact(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?, resource_budget? : @runtime.ResourceBudget?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], function_names? : Array[String], debug_db? : @wasmoon_jit.JITDebugDB?, resource_budget? : @runtime.ResourceBudget?) -> Self raise JITModuleLoadError
 pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @execution.NativeExecutionState) -> Unit raise JITTrap
+pub fn JITModule::prepare_gc_environment(Self, ArrayView[@types.SubType], ArrayView[Int32], ArrayView[Int32]) -> @wasmoon_jit.PreparedGCEnvironment raise @wasmoon_jit.GCSetupError
 pub fn JITModule::refresh_table_layout(Self, Int32) -> Bool
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
@@ -132,6 +133,7 @@ pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallO
 pub fn JITModule::set_memory(Self, @ffi.MemoryDescriptor) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[@bridge.MemoryInfo]) -> Unit raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::setup_gc(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32]) -> Unit raise @wasmoon_jit.GCSetupError
+pub fn JITModule::setup_gc_environment(Self, @bridge.CHeap, @wasmoon_jit.PreparedGCEnvironment) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_gc_with_func_table(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32], Int64, Int32) -> Unit raise @wasmoon_jit.GCSetupError
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::start_continuation_call(Self, JITFunction, Array[Int64], capture_exceptions? : Bool) -> JITContinuationOutcome raise JITTrap

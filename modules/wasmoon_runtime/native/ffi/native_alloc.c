@@ -12,6 +12,10 @@ MOONBIT_FFI_EXPORT void wasmoon_native_fail_allocation_for_tests(int32_t attempt
     fail_after = attempt > 0 ? attempt : 0;
 }
 
+int wasmoon_native_failures_enabled(void) {
+    return fail_after > 0;
+}
+
 static int fail_allocation(void) {
     return fail_after > 0 && --fail_after == 0;
 }

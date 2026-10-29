@@ -267,6 +267,7 @@ pub(all) enum AliasRegion {
   Heap(Int32)
   Table(Int32)
   Context
+  Control
   Other
 } derive(Debug, Eq, Hash)
 
@@ -347,6 +348,10 @@ pub(all) struct ExtensionEffects {
   write : AliasRegion?
   may_trap : Bool
   observable : Bool
+  // A physical-address epoch is independent of logical alias-region writes.
+  // Address-producing extensions (pointer_region != None) and raw loads
+  // depend on this epoch. Invalidating it never permits retaining a borrow.
+  invalidates_addresses : Bool
   pointer_region : AliasRegion?
   // A dialect-validated readable bound, valid only in the current memory
   // epoch. Zero provides no nontrapping-load guarantee.

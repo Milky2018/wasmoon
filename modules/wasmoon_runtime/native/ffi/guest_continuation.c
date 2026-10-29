@@ -238,15 +238,23 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_continuation_body_gc_roots(int64_t address) 
     if (!body) return moonbit_make_int64_array(0, 0);
     void *registrations[] = { body->root_registration, body->input_root_registration,
         native_fiber_gc_roots_c(body->fiber) };
-    int32_t count = body->input_exception ? 1 : 0;
-    for (size_t i = 0; i < sizeof(registrations) / sizeof(registrations[0]); ++i)
-        count += gc_heap_registered_root_count(registrations[i]);
-    int64_t *roots = moonbit_make_int64_array(count, 0);
+    int64_t count = body->input_exception ? 1 : 0;
+    for (size_t i = 0; i < sizeof(registrations) / sizeof(registrations[0]); ++i) {
+        int32_t size = gc_heap_registered_root_count(registrations[i]);
+        if (size < 0 || count + size > INT32_MAX) return moonbit_make_int64_array(1, -2);
+        count += size;
+    }
+    int64_t *roots = moonbit_make_int64_array((int32_t)count, 0);
     int32_t at = 0;
     if (body->input_exception) roots[at++] = body->input_exception;
     for (size_t i = 0; i < sizeof(registrations) / sizeof(registrations[0]); ++i) {
-        gc_heap_copy_registered_roots(registrations[i], roots + at);
-        at += gc_heap_registered_root_count(registrations[i]);
+        int32_t size = gc_heap_registered_root_count(registrations[i]);
+        if (size < 0 || at + (int64_t)size > count ||
+            gc_heap_copy_registered_roots(registrations[i], roots + at) != size) {
+            moonbit_decref(roots);
+            return moonbit_make_int64_array(1, -2);
+        }
+        at += size;
     }
     return roots;
 }

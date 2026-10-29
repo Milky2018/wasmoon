@@ -254,6 +254,7 @@ pub(all) enum WasmOpcode {
   ContSuspend(Int32)
   ContResume(Int32, Int32, Int32, Int32)
   ContSwitch(Int32, Int32)
+  SafepointPoll(Int32, Int32, Int32, Int32)
 } derive(Eq, Hash, @debug.Debug)
 pub fn WasmOpcode::equal(Self, Self) -> Bool
 pub fn WasmOpcode::hash(Self) -> Int32
@@ -304,6 +305,8 @@ pub(all) enum WasmRuntimeHelper {
   GcTypeCheckSubtype
   GcRegisterStructInline
   GcReserveStructFast
+  GcTryArray
+  GcTryArrayWide
   GcRegisterArrayInline
   GcAllocStructSlow
   GcAllocArrayFromValuesSlow

@@ -1254,3 +1254,73 @@ test "AArch64 verifier rejects an unencodable comparison immediate" {
     _ => fail("expected an unencodable comparison immediate to be rejected")
   }
 }
+
+///|
+test "repeated words require nonaliasing early register temporaries" {
+  for mode in 0..<6 {
+    let builder : @vcode.Builder[@aarch64_target.AArch64Inst] = @vcode.Builder::new(
+      "word_fill_contract",
+      [Ptr64],
+    )
+    let entry = builder.entry_block()
+    builder.append_body(
+      entry,
+      StoreRepeated64(
+        if mode == 5 {
+          0xFFFFFFFFFFFFFFF8UL
+        } else {
+          24UL
+        },
+        if mode == 4 {
+          0U
+        } else {
+          65U
+        },
+        0xFEDCBA9876543210UL,
+      ),
+      [
+        @vcode.Input::any(builder.parameter(0)).with_timing(
+          if mode == 1 {
+            Early
+          } else {
+            Late
+          },
+        ),
+      ],
+      [
+        if mode == 3 {
+          @vcode.Output::tied(Ptr64, 0).with_timing(Early)
+        } else {
+          @vcode.Output::any(Ptr64).with_timing(Early)
+        },
+        @vcode.Output::any(I64).with_timing(
+          if mode == 2 {
+            Late
+          } else {
+            Early
+          },
+        ),
+        @vcode.Output::any(I64).with_timing(Early),
+      ],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    builder.set_terminator(
+      entry,
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    let admitted = try {
+      @aarch64_target.verify_vcode(builder.finish())
+      true
+    } catch {
+      _ => false
+    }
+    assert_eq(admitted, mode == 0, msg="mode=\{mode}")
+  }
+}

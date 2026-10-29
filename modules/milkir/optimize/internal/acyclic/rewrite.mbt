@@ -84,6 +84,9 @@ fn OptimizerSession::rewrite_int_binary(
   prefix : Array[@milkir.Inst],
 ) -> Bool {
   guard inst.operands is [left, right] else { return false }
+  if self.rewrite_wide_multiply(inst, op) {
+    return true
+  }
   if self.int_constant(left) is Some(a) &&
     self.int_constant(right) is Some(b) &&
     integer_width(left.ty) is Some(width) &&

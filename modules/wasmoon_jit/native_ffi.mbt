@@ -835,4 +835,10 @@ extern "c" fn c_jit_get_gc_array_data_heap_ptr() -> Int64 = "wasmoon_jit_get_gc_
 extern "c" fn c_jit_get_gc_struct_data_ptr() -> Int64 = "wasmoon_jit_get_gc_struct_data_ptr"
 
 ///|
+extern "c" fn c_jit_get_gc_try_array_ptr() -> Int64 = "wasmoon_jit_get_gc_try_array_ptr"
+
+///|
+extern "c" fn c_jit_get_gc_try_array_wide_ptr() -> Int64 = "wasmoon_jit_get_gc_try_array_wide_ptr"
+
+///|
 extern "c" fn c_jit_get_gc_reserve_struct_fast_ptr() -> Int64 = "wasmoon_jit_get_gc_reserve_struct_fast_ptr"

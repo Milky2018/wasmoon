@@ -87,9 +87,6 @@ pub fn BundleAllocationStatistics::to_repr(Self) -> @debug.Repr
 type DenseCfgEdges derive(@debug.Debug)
 pub fn DenseCfgEdges::to_repr(Self) -> @debug.Repr
 
-type DenseLiveSets derive(@debug.Debug)
-pub fn DenseLiveSets::to_repr(Self) -> @debug.Repr
-
 pub(all) enum EditPosition {
   Before(Int32)
   After(Int32)

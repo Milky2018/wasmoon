@@ -21,6 +21,10 @@ fn invalidates_borrows(
   inst : @milkir.Inst,
   aliases : Map[Int32, Int32],
 ) -> Bool {
+  if inst.opcode is Ext(extension, _) &&
+    decode_poll_region(extension) is Some(_) {
+    return false
+  }
   if inst.opcode is Ext(extension, _) && decode_projection(extension) is Some(_) {
     return false
   }
@@ -37,6 +41,9 @@ fn invalidates_borrows(
 /// including backedges and side entries, rather than trusting planner labels.
 /// A missing or incomplete proof fails closed before selection.
 fn gc_borrow_error(function : @milkir.Function) -> String? {
+  if poll_region_error(function) is Some(error) {
+    return Some(error)
+  }
   let origins : Map[Int32, Int32] = Map([])
   let shapes : Map[Int32, Projection] = Map([])
   let aliases : Map[Int32, Int32] = Map([])

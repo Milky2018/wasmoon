@@ -173,7 +173,7 @@ pub fn FloatUnaryOp::to_repr(Self) -> @debug.Repr
 pub struct FunctionRootFrameAbi {
   // private fields
 }
-pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32) -> Self
+pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32, preserves_mask? : Bool) -> Self
 
 pub struct HiddenSafepointAbi {
   // private fields
@@ -296,6 +296,7 @@ pub(all) enum Operation {
   IntShiftImmediate(IntBinaryOp, Int32)
   IntMultiplyAdd
   IntAddShiftedLeft(Int32)
+  IntLowBitsShiftLeft(Int32, Int32)
   IntHighMultiply(@native_types.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
@@ -309,6 +310,7 @@ pub(all) enum Operation {
   LoadIndexed(LoadSpec, Int32)
   Store(StoreSpec)
   StoreIndexed(StoreSpec, Int32)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   AtomicLoad(AtomicSpec)
   AtomicStore(AtomicSpec)
   AtomicRmw(AtomicSpec, AtomicRmwOp)

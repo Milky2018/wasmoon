@@ -39,6 +39,13 @@ pub extern "c" fn context_callable_lookup(
 
 ///|
 #borrow(context)
+pub extern "c" fn context_callable_native_reference(
+  context : @jit_ffi.JITContext,
+  value : Int64,
+) -> Int64 = "wasmoon_test_context_callable_native_reference"
+
+///|
+#borrow(context)
 pub extern "c" fn context_callable_subtype(
   context : @jit_ffi.JITContext,
   value : Int64,
@@ -65,6 +72,22 @@ pub fn activation_resume_roots() -> Int32 {
     0
   } else {
     activation_resume_roots_raw(heap)
+  }
+}
+
+///|
+#borrow(heap)
+extern "c" fn parked_activation_lease_raw(
+  heap : @jit_ffi.GCHeapHandle,
+) -> Int32 = "wasmoon_test_parked_activation_lease"
+
+///|
+pub fn parked_activation_lease() -> Int32 {
+  let heap = @jit_ffi.GCHeapHandle::new(1024L)
+  if heap.is_null() {
+    0
+  } else {
+    parked_activation_lease_raw(heap)
   }
 }
 

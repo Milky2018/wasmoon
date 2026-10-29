@@ -1,4 +1,23 @@
 ///|
+pub fn depends_on_addresses(inst : @milkir.Inst) -> Bool {
+  match inst.opcode {
+    Ext(extension, _) =>
+      extension.effects is Some(effects) && effects.pointer_region is Some(_)
+    Memory(_) => true
+    _ => false
+  }
+}
+
+///|
+pub fn invalidates_addresses(inst : @milkir.Inst) -> Bool {
+  match inst.opcode {
+    Ext(extension, _) if extension.effects is Some(effects) =>
+      effects.invalidates_addresses
+    _ => opcode_semantics(inst.opcode).memory is Unknown
+  }
+}
+
+///|
 fn collect_iconst_values(
   func : @milkir.Function,
   instructions? : Array[@milkir.Inst],

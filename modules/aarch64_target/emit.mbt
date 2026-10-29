@@ -955,6 +955,23 @@ fn encode_shift_immediate(
 }
 
 ///|
+fn encode_low_bits_shift_left(
+  width : GprWidth,
+  field_bits : Int32,
+  amount : Int32,
+  destination : @vcode.PhysicalReg,
+  source : @vcode.PhysicalReg,
+) -> UInt32 {
+  let bits = if width == W32 { 32 } else { 64 }
+  let base = if width == W32 { 0x53000000U } else { 0xD3400000U }
+  base |
+  (((bits - amount) % bits).reinterpret_as_uint() << 16) |
+  ((field_bits - 1).reinterpret_as_uint() << 10) |
+  (reg_bits(source) << 5) |
+  reg_bits(destination)
+}
+
+///|
 fn encode_add_shifted_left(
   width : GprWidth,
   amount : Int32,
@@ -2688,7 +2705,7 @@ fn value_home(
 fn function_input_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
-  body : Array[@vcode.Instruction],
+  body : ArrayView[@vcode.Instruction],
   start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
@@ -2726,20 +2743,9 @@ fn emit_function_inputs(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise AArch64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
     return
@@ -2803,20 +2809,9 @@ fn emit_incoming_call_results(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise AArch64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_incoming_call_result(
       function.instruction(body[current_index - 1]).unwrap(),
@@ -2881,7 +2876,7 @@ fn emit_incoming_call_results(
 fn incoming_call_result_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
-  body : Array[@vcode.Instruction],
+  body : ArrayView[@vcode.Instruction],
   start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
@@ -2924,7 +2919,7 @@ fn is_abi_materialization(instruction : AArch64Inst) -> Bool {
 fn function_output_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
-  body : Array[@vcode.Instruction],
+  body : ArrayView[@vcode.Instruction],
   start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
@@ -2954,20 +2949,9 @@ fn emit_function_outputs(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise AArch64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_function_output(function.instruction(body[current_index - 1]).unwrap()) {
     return
@@ -3036,6 +3020,8 @@ fn emit_instruction(
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   block : @vcode.Block,
+  body : ArrayView[@vcode.Instruction],
+  body_index : Int32,
   instruction : @vcode.Instruction,
   next_block : @vcode.Block?,
 ) -> Int32 raise AArch64EmitError {
@@ -3054,15 +3040,15 @@ fn emit_instruction(
   match function.instruction(instruction).unwrap() {
     IncomingReg(_, _) | IncomingStack(_, _) | IncomingResultArea(_) =>
       emit_function_inputs(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     IncomingCallResult(_, _) | IncomingCallAreaResult(_, _) =>
       emit_incoming_call_results(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     OutgoingReg(_, _) | OutgoingAreaResult(_, _) =>
       emit_function_outputs(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
@@ -3223,6 +3209,10 @@ fn emit_instruction(
     IntShiftImmediate(width, operation, amount) =>
       buffer.emit_word(
         encode_shift_immediate(width, operation, amount, reg(1), reg(0)),
+      )
+    IntLowBitsShiftLeft(width, field_bits, amount) =>
+      buffer.emit_word(
+        encode_low_bits_shift_left(width, field_bits, amount, reg(1), reg(0)),
       )
     IntAddShiftedLeft(width, amount) =>
       buffer.emit_word(
@@ -3422,6 +3412,37 @@ fn emit_instruction(
       buffer.emit_word(
         encode_scalar_uxtw_address(base, width, shift, reg(2), reg(0), reg(1)),
       )
+    }
+    StoreRepeated64(offset, count, bits) => {
+      let address = reg(1)
+      let remaining = reg(2)
+      let pattern = reg(3)
+      if add_sub_immediate_shift(offset) is Some(_) {
+        buffer.emit_word(
+          encode_int_binary_immediate(W64, Add, offset, address, reg(0)),
+        )
+      } else {
+        emit_constant(buffer, W64, address, offset)
+        buffer.emit_word(
+          encode_three_register(0x8B000000U, address, reg(0), address),
+        )
+      }
+      emit_constant(buffer, W64, remaining, count.to_uint64())
+      emit_constant(buffer, W64, pattern, bits)
+      let loop_offset = buffer.position()
+      metadata_offset = loop_offset
+      buffer.emit_word(
+        0xF9000000U | (reg_bits(address) << 5) | reg_bits(pattern),
+      )
+      buffer.emit_word(
+        encode_int_binary_immediate(W64, Add, 8UL, address, address),
+      )
+      buffer.emit_word(
+        encode_int_binary_immediate(W64, Sub, 1UL, remaining, remaining),
+      )
+      let retry = buffer.position()
+      buffer.emit_word(0xB5000000U | reg_bits(remaining))
+      patch_fixed_span_branch(buffer, retry, loop_offset, 19)
     }
     ScalarStore(width, value_type, offset) => {
       guard scalar_store_base(width, value_type) is Some(base) else {
@@ -3922,7 +3943,10 @@ fn emit_single_pass(
   let layout = function.layout()
   for block_index, block in layout {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
-    for instruction in function.block_body(block) {
+    // ABI transfer groups borrow this one snapshot; never copy/search the block
+    // again for each materialized argument or result.
+    let body = function.block_body(block)[:]
+    for body_index, instruction in body {
       let abi_materialization = is_abi_materialization(
         function.instruction(instruction).unwrap(),
       )
@@ -3935,6 +3959,8 @@ fn emit_single_pass(
         allocation,
         frame,
         block,
+        body,
+        body_index,
         instruction,
         None,
       )
@@ -3950,7 +3976,15 @@ fn emit_single_pass(
     let next_block = layout.get(block_index + 1)
     emit_edits_at(buffer, function, allocation, frame, terminator, Before)
     let terminator_offset = emit_instruction(
-      buffer, function, allocation, frame, block, terminator, next_block,
+      buffer,
+      function,
+      allocation,
+      frame,
+      block,
+      body,
+      body.length(),
+      terminator,
+      next_block,
     )
     record_instruction_metadata(
       buffer, function, allocation, frame, terminator, terminator_offset, sources,

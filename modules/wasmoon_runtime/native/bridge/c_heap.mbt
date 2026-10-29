@@ -507,3 +507,14 @@ pub fn CHeap::set_runtime_type(
 pub fn CHeap::clear_root_visitor(self : CHeap) -> Unit {
   self.ptr.clear_root_visitor()
 }
+
+///|
+/// Supply a read-only young-root provider while retaining full collection for
+/// explicit requests and unsupported resource/auxiliary states.
+pub fn CHeap::bind_generational_root_visitor(
+  self : CHeap,
+  visitor : (Int32, FixedArray[Int64]) -> FixedArray[Int64],
+  young_visitor : (FixedArray[Int64]) -> FixedArray[Int64]?,
+) -> Unit {
+  self.ptr.bind_generational_root_visitor(visitor, young_visitor)
+}

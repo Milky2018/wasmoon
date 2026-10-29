@@ -11,13 +11,13 @@ import {
 // Values
 pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, verify_input? : Bool, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @Milky2018/milkir/native.NativeLowerError
 
-pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @milkir.VerifyError
+pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext, exclusive_poll_controls? : Bool, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @milkir.VerifyError
 
 // Errors
 
 // Types and methods
 type Environment
-pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, inline_heap? : InlineHeapLayout?) -> Self
+pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, exclusive_poll_controls? : Bool, prepared_arrays? : Bool, inline_heap? : InlineHeapLayout?) -> Self
 
 pub(all) struct InlineHeapLayout {
   type_ids_offset : Int32

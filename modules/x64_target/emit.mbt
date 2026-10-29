@@ -495,6 +495,22 @@ fn raw_condition(condition : X64Condition) -> RawCondition {
 }
 
 ///|
+fn inverse_condition(condition : X64Condition) -> X64Condition {
+  match condition {
+    Eq => Ne
+    Ne => Eq
+    Hs => Lo
+    Lo => Hs
+    Hi => Ls
+    Ls => Hi
+    Ge => Lt
+    Lt => Ge
+    Gt => Le
+    Le => Gt
+  }
+}
+
+///|
 fn CodeBuffer::emit_local_jcc(
   self : CodeBuffer,
   condition : RawCondition,
@@ -3254,20 +3270,9 @@ fn emit_function_inputs(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise X64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
     return
@@ -3353,20 +3358,9 @@ fn emit_incoming_call_results(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise X64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_incoming_call_result(
       function.instruction(body[current_index - 1]).unwrap(),
@@ -3458,20 +3452,9 @@ fn emit_function_outputs(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise X64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_function_output(function.instruction(body[current_index - 1]).unwrap()) {
     return
@@ -3554,6 +3537,8 @@ fn emit_instruction(
   allocation : @vcode.Allocation,
   frame : X64Frame,
   block : @vcode.Block,
+  body : ArrayView[@vcode.Instruction],
+  body_index : Int32,
   instruction : @vcode.Instruction,
   next_block : @vcode.Block?,
 ) -> Int32 raise X64EmitError {
@@ -3572,15 +3557,15 @@ fn emit_instruction(
   match function.instruction(instruction).unwrap() {
     IncomingReg(_, _) | IncomingStack(_, _) | IncomingResultArea(_) =>
       emit_function_inputs(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     IncomingCallResult(_, _) | IncomingCallAreaResult(_, _) =>
       emit_incoming_call_results(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     OutgoingReg(_, _) | OutgoingAreaResult(_, _) =>
       emit_function_outputs(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
@@ -3900,6 +3885,29 @@ fn emit_instruction(
         immediate,
         reg(1),
       )
+    }
+    StoreRepeated64(offset, count, bits) => {
+      let address = reg(1)
+      let remaining = reg(2)
+      let pattern = reg(3)
+      if offset <= 0x7FFFFFFFUL {
+        emit_move(buffer, Ptr64, address, reg(0))
+        if offset != 0UL {
+          buffer.encoder.x86_emit_add_r_imm32(address.id, offset.to_int())
+        }
+      } else {
+        emit_constant(buffer, W64, address, offset)
+        buffer.encoder.x86_emit_add_rr(address.id, reg(0).id)
+      }
+      emit_constant(buffer, W64, remaining, count.to_uint64())
+      emit_constant(buffer, W64, pattern, bits)
+      let loop_offset = buffer.position()
+      metadata_offset = loop_offset
+      buffer.encoder.x86_emit_mov_m64_r64(address.id, 0, pattern.id)
+      buffer.encoder.x86_emit_add_r_imm8(address.id, 8)
+      buffer.encoder.x86_emit_add_r_imm8(remaining.id, -1)
+      let retry = buffer.emit_local_jcc(RawNe)
+      buffer.patch_local_rel32(retry, loop_offset)
     }
     ScalarStore(width, value_type, offset) => {
       let (address, immediate) = scalar_memory_address(
@@ -4264,7 +4272,8 @@ fn emit_instruction(
         buffer.x86_emit_jmp_rel32(function.block_index(target).unwrap())
       }
     }
-    BranchNonZero32 =>
+    BranchNonZero32 => {
+      buffer.encoder.x86_emit_test_rr32(reg(0).id, reg(0).id)
       emit_conditional_edges(
         buffer,
         function,
@@ -4272,9 +4281,20 @@ fn emit_instruction(
         frame,
         block,
         instruction,
-        reg(0),
+        Ne,
         next_block,
       )
+    }
+    BranchCompare(width, condition) => {
+      if width == W32 {
+        buffer.encoder.x86_emit_cmp_rr32(reg(0).id, reg(1).id)
+      } else {
+        buffer.encoder.x86_emit_cmp_rr(reg(0).id, reg(1).id)
+      }
+      emit_conditional_edges(
+        buffer, function, allocation, frame, block, instruction, condition, next_block,
+      )
+    }
     Switch(width, cases) =>
       emit_switch_edges(
         buffer,
@@ -4356,7 +4376,10 @@ fn emit_verified(
   let layout = function.layout()
   for block_index, block in layout {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
-    for instruction in function.block_body(block) {
+    // ABI transfer groups borrow this one snapshot; never copy/search the block
+    // again for each materialized argument or result.
+    let body = function.block_body(block)[:]
+    for body_index, instruction in body {
       let abi_materialization = is_abi_materialization(
         function.instruction(instruction).unwrap(),
       )
@@ -4369,6 +4392,8 @@ fn emit_verified(
         allocation,
         frame,
         block,
+        body,
+        body_index,
         instruction,
         None,
       )
@@ -4384,7 +4409,15 @@ fn emit_verified(
     let next_block = layout.get(block_index + 1)
     emit_edits_at(buffer, function, allocation, frame, terminator, Before)
     let terminator_offset = emit_instruction(
-      buffer, function, allocation, frame, block, terminator, next_block,
+      buffer,
+      function,
+      allocation,
+      frame,
+      block,
+      body,
+      body.length(),
+      terminator,
+      next_block,
     )
     record_instruction_metadata(
       buffer, function, allocation, frame, terminator, terminator_offset, sources,

@@ -14,6 +14,8 @@ import {
 type InstructionContext
 pub fn InstructionContext::block_parameters(Self, @native_lowering.Block) -> Array[@native_lowering.Value]
 pub fn InstructionContext::branch(Self, @native_lowering.Value, @native_lowering.Block, Array[@native_lowering.Value], @native_lowering.Block, Array[@native_lowering.Value]) -> Unit
+pub fn InstructionContext::branch_int_compare(Self, @native_lowering.IntComparison, @native_lowering.Value, @native_lowering.Value, @native_lowering.Block, Array[@native_lowering.Value], @native_lowering.Block, Array[@native_lowering.Value]) -> Unit
+pub fn InstructionContext::branch_int_compare_immediate(Self, @native_lowering.IntComparison, @native_lowering.Value, UInt64, @native_lowering.Block, Array[@native_lowering.Value], @native_lowering.Block, Array[@native_lowering.Value]) -> Unit
 pub fn InstructionContext::create_block(Self, Array[@native_types.ValueType]) -> @native_lowering.Block
 pub fn InstructionContext::create_stack_object(Self, Int32, Int32) -> @native_types.StackObject
 pub fn InstructionContext::emit(Self, @native_lowering.Operation, Array[@native_lowering.Value], Array[@native_types.ValueType]) -> Array[@native_lowering.Value]

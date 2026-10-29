@@ -594,3 +594,81 @@ test "gc: dead identity pages release storage without recycling stale references
   heap.collect([StructRef(next), StructRef(first)]) |> ignore
   assert_eq(heap.struct_get(next, 0, I32), I32(7))
 }
+
+///|
+#borrow(heap)
+extern "c" fn mark_heap_object_for_collection_test(
+  heap : @jit_ffi.GCHeapHandle,
+  reference : Int32,
+) -> Unit = "wasmoon_gc_heap_mark"
+
+///|
+test "gc: explicit native marks remain precise collection seeds" {
+  let heap = CHeap::CHeap()
+  defer heap.free()
+  defer heap.clear_root_visitor()
+  let child = heap.alloc_struct(0, [I32(42)])
+  let object = heap.alloc_struct(0, [StructRef(child)])
+  let parent_word = encode_heap_ref(object)
+  let child_word = encode_heap_ref(child)
+  heap.bind_root_visitor(fn(_, roots) {
+    for word in roots {
+      if word == parent_word {
+        return [child_word]
+      }
+    }
+    roots
+  })
+  mark_heap_object_for_collection_test(heap.get_ptr(), object + 1)
+  assert_eq(heap.collect([]), 0)
+  assert_true(heap.is_valid(object))
+  assert_true(heap.is_valid(child))
+  assert_eq(heap.collect([]), 2)
+  assert_false(heap.is_valid(object))
+  assert_false(heap.is_valid(child))
+  assert_true(heap.verify())
+}
+
+///|
+test "prepared GC environment freezes mappings and rebinds the same payloads" {
+  let context = NativeJITContext::try_alloc(1).unwrap()
+  context.set_func(0, 111L)
+  let types = [@types.SubType::func([], [])]
+  let canonical = [7]
+  let functions = [0]
+  let environment = context.prepare_gc_environment(
+    types[:],
+    canonical[:],
+    functions[:],
+  )
+  canonical[0] = 99
+  functions[0] = 17
+  context.set_func(0, 222L)
+  assert_eq(environment.canonical[0], 7)
+  assert_eq(environment.functions[0], 0)
+  assert_eq(environment.addresses[0], 111L)
+  let heap = CHeap()
+  defer heap.free()
+  for _ in 0..<3 {
+    context.setup_gc_environment(heap, environment)
+    assert_eq(
+      @native_test_support.context_gc_metadata_shares(
+        context.handle,
+        environment.types,
+        environment.canonical,
+        environment.functions,
+      ),
+      1,
+    )
+    context.teardown_gc()
+    assert_true(context.gc_environment_is_clear())
+  }
+  // Changing a native function table requires explicit new preparation.
+  let replacement = context.prepare_gc_environment(
+    types[:],
+    canonical[:],
+    functions[:],
+  )
+  assert_eq(replacement.addresses[0], 222L)
+  assert_eq(replacement.canonical[0], 99)
+}

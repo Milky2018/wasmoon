@@ -2,6 +2,8 @@
 // Segment operations for bulk memory/table instructions
 
 #include "jit_internal.h"
+#include "gc_access.h"
+#include "callable_lookup.h"
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -360,19 +362,29 @@ int64_t table_type_for_value(jit_context_t *ctx, int64_t val) {
     return type_idx;
 }
 
-static void **table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
-    if (!ctx || !ctx_tables(ctx) || !ctx_table_sizes(ctx) || table_idx < 0 || table_idx >= ctx_table_count(ctx) || index < 0 ||
-        (uint64_t)index >= ctx_table_sizes(ctx)[table_idx]) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+// Lookup is nontrapping; callers report bounds failure before reading entries.
+static inline void **find_table_entry(jit_context_t *ctx, int32_t table_idx, int64_t index) {
+    if (ctx && table_idx >= 0 && table_idx < ctx_table_count(ctx) && index >= 0) {
+        wasmoon_table_binding_t *bindings = ctx_runtime(ctx)->table_bindings;
+        if (bindings) {
+            // Context bindings retain the stable owner; growth and close update
+            // its live layout. Avoid decoding the VMContext array fields again.
+            const wasmoon_table_t *table = bindings[table_idx].owner;
+            if ((uint64_t)index < table->size)
+                return table->entries + (size_t)index * 2;
+        } else {
+            void ***tables = ctx_tables(ctx);
+            const size_t *sizes = ctx_table_sizes(ctx);
+            if (tables && sizes && (uint64_t)index < sizes[table_idx])
+                return tables[table_idx] + (size_t)index * 2;
+        }
     }
-    return ctx_tables(ctx)[table_idx] + (size_t)index * 2;
+    return NULL;
 }
 
 static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t table_idx, int64_t index) {
-    void **entry = table_entry(ctx, table_idx, index);
-    if (!entry) return 0;
+    void **entry = find_table_entry(ctx, table_idx, index);
+    if (!entry) return jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
     int64_t value = (int64_t)(intptr_t)entry[0];
 
     return value;
@@ -380,11 +392,17 @@ static int64_t WASMOON_GUEST_ABI table_get_impl(jit_context_t *ctx, int32_t tabl
 
 // Reference identity may exist before executable code is registered. Resolve
 // only at a call boundary, never by reinterpreting a Store handle as a pointer.
-int64_t callable_entry(jit_context_t *ctx, int64_t value) {
+// Optimize the read-only type/entry queries together at the call boundary.
+#if defined(_MSC_VER)
+static __forceinline
+#else
+static inline __attribute__((always_inline))
+#endif
+int64_t callable_entry_inline(jit_context_t *ctx, int64_t value) {
     int trap = 0;
     if (!value) trap = WASMOON_TRAP_NULL_REFERENCE;
     else {
-        value = callable_native_reference(ctx, value);
+        value = callable_native_reference_inline(ctx, value);
         if (value < 0) {
             int64_t index = -(value + 1);
             value = ctx && index < ctx_func_count(ctx)
@@ -395,12 +413,12 @@ int64_t callable_entry(jit_context_t *ctx, int64_t value) {
         else value = 0;
         if (!value) trap = WASMOON_TRAP_BACKEND;
     }
-    if (trap) {
-        g_trap_code = trap;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
-    }
+    if (trap) return jit_trap_result(trap);
     return value;
+}
+
+int64_t callable_entry(jit_context_t *ctx, int64_t value) {
+    return callable_entry_inline(ctx, value);
 }
 
 static int64_t WASMOON_GUEST_ABI funcref_call_target_impl(jit_context_t *ctx, int64_t value) {
@@ -418,24 +436,31 @@ static int64_t WASMOON_GUEST_ABI function_reference_impl(jit_context_t *ctx, int
     return pointer ? pointer | FUNCREF_TAG : -(int64_t)(index + 1);
 }
 
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+static int64_t WASMOON_GUEST_ABI table_call_target_legacy(jit_context_t *ctx,
+    int64_t value, int32_t actual, int32_t expected) {
+    if (!callable_subtype(ctx, actual, expected))
+        return jit_trap_result(WASMOON_TRAP_INDIRECT_TYPE);
+    return callable_entry_inline(ctx, value);
+}
+
 static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int32_t table_idx, int64_t index, int32_t expected) {
-    void **entry = table_entry(ctx, table_idx, index);
-    if (!entry) return 0;
+    void **entry = find_table_entry(ctx, table_idx, index);
+    if (!entry) return jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
     int64_t value = (int64_t)(intptr_t)entry[0];
-    if (!value) {
-        g_trap_code = WASMOON_TRAP_UNINITIALIZED_ELEMENT;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
-    }
-    int32_t actual = callable_type_for_value(ctx, value);
+    if (!value) return jit_trap_result(WASMOON_TRAP_UNINITIALIZED_ELEMENT);
+    int32_t actual = callable_type_for_value_inline(ctx, value);
     if (actual < 0 && !ctx_runtime(ctx)->callable_registry)
         actual = (int32_t)(intptr_t)entry[1];
-    if (!value || !callable_subtype(ctx, actual, expected)) {
-        g_trap_code = WASMOON_TRAP_INDIRECT_TYPE;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
-    }
-    return funcref_call_target_impl(ctx, value);
+    if (!ctx_runtime(ctx)->callable_local_types)
+        return table_call_target_legacy(ctx, value, actual, expected);
+    if (!callable_subtype_registered(ctx_runtime(ctx), actual, expected))
+        return jit_trap_result(WASMOON_TRAP_INDIRECT_TYPE);
+    return callable_entry_inline(ctx, value);
 }
 
 // table.fill - Fill table region with a value
@@ -763,25 +788,66 @@ static inline uint64_t read_u64_le(const uint8_t *p) {
     return (uint64_t)read_u32_le(p) | ((uint64_t)read_u32_le(p + 4) << 32);
 }
 
-static int64_t decode_array_elem_from_bytes(const uint8_t *p, int tag) {
+static GcSlot decode_array_elem_from_bytes(const uint8_t *p, int tag) {
+    GcSlot value = {0, 0};
     switch (tag) {
         case 1: // i8 (packed)
-            return (int64_t)(uint8_t)p[0];
+            value.lo = (uint8_t)p[0];
+            break;
         case 2: // i16 (packed)
-            return (int64_t)read_u16_le(p);
+            value.lo = read_u16_le(p);
+            break;
         case 3: // i32
-        case 5: { // f32
-            int32_t v = (int32_t)read_u32_le(p);
-            return (int64_t)v;
-        }
+        case 5: // f32
+            value.lo = (int32_t)read_u32_le(p);
+            break;
         case 4: // i64
-        case 6: { // f64
-            int64_t v = (int64_t)read_u64_le(p);
-            return v;
-        }
+        case 6: // f64
+            value.lo = (int64_t)read_u64_le(p);
+            break;
+        case 8: // v128
+            value.lo = (int64_t)read_u64_le(p);
+            value.hi = (int64_t)read_u64_le(p + 8);
+            break;
         default:
-            return 0;
+            break;
     }
+    return value;
+}
+
+// Callers have checked the complete source and destination ranges. Segment
+// Bytes are owned separately from heap payloads. Known numeric layouts have
+// no reference barriers; legacy slots keep their checked per-element adapter.
+static inline int try_initialize_array_data(GcHeap *heap, int32_t ref, int32_t offset,
+    const uint8_t *source, int32_t count, size_t width, int tag) {
+    static const uint8_t widths[] = {0, 1, 2, 4, 8, 4, 8, 0, 16};
+    const uint16_t endian = 1;
+    GcHeader *header = gc_access_object_header(heap, ref);
+    GcTypeLayout *layout = header ? gc_object_layout(heap, header) : NULL;
+    if (*(const uint8_t *)&endian == 1 && tag > 0 && tag < 9 &&
+        widths[tag] == width && layout && layout->kind == GC_KIND_ARRAY &&
+        !layout->fields[0].reference && layout->size == (int32_t)width) {
+        memcpy((uint8_t *)(header + 1) + GC_ARRAY_DATA_OFFSET + (size_t)offset * width,
+            source, (size_t)count * width);
+        gc_access_verify(heap, "array_data_init");
+        return 1;
+    }
+    return 0;
+}
+
+// Segment constructors share the ordinary Store-canonical physical layout.
+// This remains a single non-collecting attempt: segment admission and trap
+// ordering stay with the caller, and legacy embeddings retain wide slots.
+static int32_t allocate_segment_array(jit_context_t *ctx, int32_t type, int32_t count) {
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
+    int32_t identity = -1;
+    if (ctx_runtime(ctx)->callable_local_types && type >= 0 &&
+        type < ctx_runtime(ctx)->callable_local_type_count)
+        identity = ctx_runtime(ctx)->callable_local_types[type];
+    GcTypeLayout *layout = gc_heap_layout(heap, identity);
+    return layout && layout->kind == GC_KIND_ARRAY
+        ? gc_heap_alloc_typed(heap, identity, type, count, NULL, 1, 1, (GcSlot){0, 0})
+        : gc_heap_alloc_array(heap, type, count, 0);
 }
 
 // array.new_data - Create array from data segment
@@ -839,7 +905,7 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
         return 0;
     }
 
-    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
+    int32_t gc_ref = allocate_segment_array(ctx, type_idx, (int32_t)len_u32);
     if (gc_ref == 0) {
         g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -847,9 +913,11 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     }
 
     const uint8_t *p = seg_data ? seg_data + (size_t)off_u32 : NULL;
-    for (uint32_t i = 0; i < len_u32; i++) {
-        int64_t v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-        gc_heap_array_set(heap, gc_ref, (int32_t)i, v);
+    if (len_u32 < 4 || !try_initialize_array_data(heap, gc_ref, 0, p, (int32_t)len_u32, elem_size, elem_tag)) {
+        for (uint32_t i = 0; i < len_u32; i++) {
+            GcSlot value = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
+            gc_heap_array_set_wide(heap, gc_ref, (int32_t)i, value);
+        }
     }
 
     return ((int64_t)gc_ref) << 1;
@@ -864,7 +932,6 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     int64_t offset,
     int64_t length
 ) {
-    (void)type_idx;
     if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -899,7 +966,7 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
         return 0;
     }
 
-    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
+    int32_t gc_ref = allocate_segment_array(ctx, type_idx, (int32_t)len_u32);
     if (gc_ref == 0) {
         g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -977,9 +1044,11 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     }
 
     const uint8_t *p = seg_data ? seg_data + (size_t)data_off_u32 : NULL;
-    for (uint32_t i = 0; i < len_u32; i++) {
-        int64_t v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-        gc_heap_array_set(heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
+    if (len_u32 < 4 || !try_initialize_array_data(heap, gc_ref, (int32_t)arr_off_u32, p, (int32_t)len_u32, elem_size, elem_tag)) {
+        for (uint32_t i = 0; i < len_u32; i++) {
+            GcSlot value = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
+            gc_heap_array_set_wide(heap, gc_ref, (int32_t)(arr_off_u32 + i), value);
+        }
     }
 }
 

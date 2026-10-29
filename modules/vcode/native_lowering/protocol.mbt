@@ -223,6 +223,7 @@ pub struct DirectBuilder {
   priv mut root_scope_object : @native.StackObject?
   priv mut function_root_frame : (Value, Value, Value, Value, Int32)?
   priv function_root_slots : Map[Int32, Int32]
+  priv mut function_root_masks : Array[UInt64]?
   priv mut next_stack_map_id : Int32
   priv error : Ref[String?]
   priv mut current_block : Block
@@ -263,6 +264,7 @@ pub fn DirectBuilder::new(
     root_scope_object: None,
     function_root_frame: None,
     function_root_slots: Map([]),
+    function_root_masks: None,
     next_stack_map_id: 0,
     error: Ref(None),
     current_block: { id: (sink.entry_block)(), },
@@ -331,8 +333,8 @@ pub fn DirectBuilder::begin_function_roots(
     (environment, header_address, roots_address, mask_address, capacity),
   )
   // Keep the prologue in the original entry block: source lowering binds that
-  // block after the frame is entered. This one-time zeroing is linear in slots.
-  self.update_function_roots([], initialize=true)
+  // block after the frame is entered. Repeated zero words stay in that block.
+  self.update_function_roots([])
   let count = self.emit_raw(
       I32Const(capacity.reinterpret_as_uint()),
       [],
@@ -385,7 +387,6 @@ pub fn DirectBuilder::define_function_root(
 fn DirectBuilder::update_function_roots(
   self : DirectBuilder,
   live : Array[Value],
-  initialize~ : Bool = false,
 ) -> Unit {
   guard self.function_root_frame is Some((_, _, _, address, capacity)) else {
     return
@@ -400,32 +401,44 @@ fn DirectBuilder::update_function_roots(
     }
     masks[slot / 64] = masks[slot / 64] | (1UL << (slot % 64))
   }
+  let preserve_mask = self.call_abi is Some(abi) &&
+    abi.function_frame is Some(frame) &&
+    frame.preserves_mask
+  let previous = if preserve_mask { self.function_root_masks } else { None }
   let mut start = 0
   while start < masks.length() {
     let bits = masks[start]
+    if previous is Some(words) && words[start] == bits {
+      start += 1
+      continue
+    }
     let mut end = start + 1
-    while end < masks.length() && masks[end] == bits {
+    while end < masks.length() &&
+          masks[end] == bits &&
+          !(previous is Some(words) && words[end] == bits) {
       end += 1
     }
-    self.write_root_mask_run(address, start, end, bits, initialize~)
+    self.write_root_mask_run(address, start, end, bits)
     start = end
+  }
+  if preserve_mask {
+    self.function_root_masks = Some(masks)
   }
 }
 
 ///|
 /// Preserve every mask word, including clearing roots from unknown predecessor
 /// paths. Repeated words use a bounded loop instead of multiplying target
-/// instructions by frame capacity at each safepoint. No call or safepoint can
-/// observe the partially written mask. Short runs retain straight-line stores.
+/// instructions or allocator CFG cycles by frame capacity. No call or safepoint
+/// can observe the partially written mask. Short runs retain straight-line stores.
 fn DirectBuilder::write_root_mask_run(
   self : DirectBuilder,
   address : Value,
   start : Int32,
   end : Int32,
   bits : UInt64,
-  initialize~ : Bool,
 ) -> Unit {
-  if initialize || end - start <= 4 {
+  if end - start <= 4 {
     for index in start..<end {
       let value = self.emit_raw(
           I64Const(bits),
@@ -443,46 +456,17 @@ fn DirectBuilder::write_root_mask_run(
     }
     return
   }
-  let value = self.emit_raw(
-      I64Const(bits),
-      [],
-      [I64],
-      InstructionMetadata::empty(),
-    )[0]
-  let first = self.emit_raw(
-      I32Const(start.reinterpret_as_uint()),
-      [],
-      [I32],
-      InstructionMetadata::empty(),
-    )[0]
-  let body = self.create_block([I32])
-  let done = self.create_block([])
-  self.jump(body, [first])
-  self.switch_to_block(body)
-  let index = self.block_parameters(body)[0]
   self.emit_raw(
-    StoreIndexed(StoreSpec::new(W64, I64, 0UL, Little, None), 3),
-    [address, index, value],
+    StoreRepeated64(
+      (start * 8).to_uint64(),
+      (end - start).reinterpret_as_uint(),
+      bits,
+    ),
+    [address],
     [],
     InstructionMetadata::empty(),
   )
   |> ignore
-  let next = self.emit_raw(
-      IntBinaryImmediate(Add, 1UL),
-      [index],
-      [I32],
-      InstructionMetadata::empty(),
-    )[0]
-  self.branch_int_compare_immediate(
-    UnsignedLessThan,
-    next,
-    end.to_uint64(),
-    body,
-    [next],
-    done,
-    [],
-  )
-  self.switch_to_block(done)
 }
 
 ///|
@@ -640,6 +624,7 @@ pub fn DirectBuilder::switch_to_block(
   block : Block,
 ) -> Unit {
   if block != self.current_block {
+    self.function_root_masks = None
     self.flush_terminator()
     self.current_block = block
     (self.sink.switch_to_block)(self.target_blocks[block.id])
@@ -807,6 +792,10 @@ fn DirectBuilder::emit_call_with_abi(
       !metadata.live_gc_roots.is_empty() {
       self.update_function_roots(metadata.live_gc_roots)
     }
+    // The registered shadow frame owns these roots. Transporting them again
+    // as SSA call operands forces redundant preservation and reloads. Keep
+    // call-site/argument metadata; ordinary users still determine SSA liveness.
+    lowered_metadata = { ..lowered_metadata, live_gc_roots: [], }
   } else if !metadata.live_gc_roots.is_empty() {
     if call.behavior.returns_twice {
       self.record_error("returns-twice calls cannot use a caller root scope")
@@ -882,6 +871,10 @@ fn DirectBuilder::emit_call_with_abi(
     result_types,
     lowered_metadata,
   )
+  if call.behavior.returns_twice {
+    // A rewind can resume after later code changed this same stack mask.
+    self.function_root_masks = None
+  }
   if context is Some(environment) && elaboration.root_scope is Some(scope) {
     self.emit_raw(
       Call(root_scope_pop_call(scope.pop_symbol)),

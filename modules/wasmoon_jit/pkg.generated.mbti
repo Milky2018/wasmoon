@@ -27,7 +27,7 @@ import {
 // Values
 pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
 
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-20"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-32"
 
 pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 
@@ -458,6 +458,12 @@ pub struct NativeCallable {
 pub fn NativeCallable::entry_address(Self) -> Int64
 pub fn NativeCallable::release(Self) -> Unit
 
+pub struct NativeCallableBatch {
+  // private fields
+}
+pub fn NativeCallableBatch::entry_address(Self, Int32) -> Int64
+pub fn NativeCallableBatch::release(Self) -> Unit
+
 pub struct NativeCompiler {
   // private fields
 }
@@ -510,6 +516,7 @@ pub fn NativeJITContext::alloc_guarded_memory(Self, Int32, Int32?) -> @ffi.Memor
 pub fn NativeJITContext::alloc_indirect_table(Self, Int32) -> Bool
 pub fn NativeJITContext::bind_callable(Self, Int64) -> NativeCallable raise @installer.JitInstallError
 pub fn NativeJITContext::bind_callable_registry(Self, @callable.NativeCallableRegistry, Array[Int32], Array[Int32], functions? : Array[Int32]) -> Unit
+pub fn NativeJITContext::bind_callables(Self, Array[Int64]) -> NativeCallableBatch raise @installer.JitInstallError
 pub fn NativeJITContext::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn NativeJITContext::bind_segment_drop_flags(Self, FixedArray[Bool], FixedArray[Bool]) -> Unit
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int32, Bool) -> Int32 raise NativeFiberError
@@ -535,6 +542,7 @@ pub fn NativeJITContext::has_configured_native_fiber_stack_size(Self) -> Bool
 pub fn NativeJITContext::memory_descriptor(Self, Int32) -> @ffi.MemoryDescriptor
 pub fn NativeJITContext::memory_ptr(Self, Int32) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int32) -> Int64
+pub fn NativeJITContext::prepare_gc_environment(Self, ArrayView[@types.SubType], ArrayView[Int32], ArrayView[Int32]) -> PreparedGCEnvironment raise GCSetupError
 pub fn NativeJITContext::refresh_table_layout(Self, Int32) -> Bool
 pub fn NativeJITContext::register_safepoints(Self, Int32, Array[@code_object.SafepointSite]) -> Bool
 pub fn NativeJITContext::set_callable_types(Self, Array[Int32], Array[Int32], Array[(Int64, Int32)], Array[Int32]) -> Unit
@@ -553,6 +561,7 @@ pub fn NativeJITContext::set_memory(Self, @ffi.MemoryDescriptor) -> Unit
 pub fn NativeJITContext::set_memory_pointers(Self, Array[@bridge.MemoryInfo]) -> Unit raise NativeSetupError
 pub fn NativeJITContext::set_table_pointers(Self, Array[@bridge.JITTable?]) -> Unit raise NativeSetupError
 pub fn NativeJITContext::setup_gc(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32]) -> Unit raise GCSetupError
+pub fn NativeJITContext::setup_gc_environment(Self, @bridge.CHeap, PreparedGCEnvironment) -> Unit raise GCSetupError
 pub fn NativeJITContext::setup_gc_with_func_table(Self, @bridge.CHeap, Array[@types.SubType], Array[Int32], Array[Int32], Int64, Int32) -> Unit raise GCSetupError
 pub fn NativeJITContext::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit raise NativeSetupError
 pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int32, stack_size? : Int64, capture_exceptions? : Bool) -> NativeJITContinuation raise NativeFiberError
@@ -604,6 +613,10 @@ pub fn NativeUncaughtException::close(Self) -> Unit
 pub fn NativeUncaughtException::reference(Self) -> Int64?
 pub fn NativeUncaughtException::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeUncaughtException
+
+pub struct PreparedGCEnvironment {
+  // private fields
+}
 
 pub(all) struct Profiler {
   counter : CallCounter

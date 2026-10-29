@@ -814,15 +814,32 @@ int32_t ctx_gc_set_root_scratch_internal(
     return 1;
 }
 
+static int32_t collect_gc_with_root_indices(
+    jit_context_t *ctx, const int64_t *roots, int32_t root_count,
+    const uint8_t *indices, int allocation_collection,
+    const GcTypeLayout *operand_layout, int operand_array
+);
+
 int32_t gc_collect_for_alloc_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count
 ) {
-    return gc_collect_for_alloc_indexed_internal(ctx, roots, root_count, NULL);
+    // Public/host collection preserves complete reclamation semantics.
+    return collect_gc_with_root_indices(ctx, roots, root_count, NULL, 0, NULL, 0);
 }
 
 int32_t gc_collect_for_alloc_indexed_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count,
-    const uint8_t *indices
+    const uint8_t *indices, int prefer_young,
+    const GcTypeLayout *operand_layout, int operand_array
+) {
+    return collect_gc_with_root_indices(ctx, roots, root_count, indices, prefer_young,
+        operand_layout, operand_array);
+}
+
+static int32_t collect_gc_with_root_indices(
+    jit_context_t *ctx, const int64_t *roots, int32_t root_count,
+    const uint8_t *indices, int allocation_collection,
+    const GcTypeLayout *operand_layout, int operand_array
 ) {
     jit_context_t *activation = get_current_jit_context();
     if (activation && ctx && ctx_gc_heap(activation) == ctx_gc_heap(ctx)) ctx = activation;
@@ -879,7 +896,19 @@ int32_t gc_collect_for_alloc_indexed_internal(
         }
         int32_t at = 0;
         if (safe_root_count > 0 && roots) {
-            if (indices) {
+            if (operand_layout) {
+                // Allocation descriptors address staged payload words. Numeric
+                // fields are not roots even when their bits resemble a native
+                // handle. Keep the borrowed span and null only known scalars;
+                // unknown embedding layouts retain their conservative contract.
+                for (int32_t i = 0; i < safe_root_count; ++i) {
+                    uint32_t index = indices ? safepoint_u32(indices + (size_t)i * 4) : (uint32_t)i;
+                    uint32_t field = operand_array ? 0 : index;
+                    int numeric = field < (uint32_t)operand_layout->count &&
+                        !operand_layout->fields[field].reference;
+                    merged[at++] = numeric ? 0 : roots[index];
+                }
+            } else if (indices) {
                 for (int32_t i = 0; i < safe_root_count; ++i)
                     merged[at++] = roots[safepoint_u32(indices + (size_t)i * 4)];
             } else {
@@ -902,12 +931,18 @@ int32_t gc_collect_for_alloc_indexed_internal(
         if (table_root_count > 0) {
             at += gc_copy_table_roots(ctx, &merged[at]);
         }
-        jit_mark_active_gc_roots(heap);
-        collected = gc_heap_collect(heap, merged, total_roots);
+        // The precise coordinator copies active roots before tracing. Premarking
+        // them here would require a second discovery pass over the whole heap.
+        if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
+        collected = allocation_collection
+            ? gc_heap_collect_for_allocation(heap, merged, total_roots)
+            : gc_heap_collect(heap, merged, total_roots);
         free(merged);
     } else {
-        jit_mark_active_gc_roots(heap);
-        collected = gc_heap_collect(heap, NULL, 0);
+        if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
+        collected = allocation_collection
+            ? gc_heap_collect_for_allocation(heap, NULL, 0)
+            : gc_heap_collect(heap, NULL, 0);
     }
 
     if (gc_collect_debug_enabled()) {

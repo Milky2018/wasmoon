@@ -41,16 +41,22 @@ pub struct FunctionRootFrameAbi {
   priv enter_symbol : @native.ExternalSymbol
   priv leave_symbol : @native.ExternalSymbol
   priv environment_parameter : Int32
+  priv preserves_mask : Bool
 }
 
 ///|
 /// Stack-owned ABI: 32-byte opaque header, root words and precise mask words.
+/// `preserves_mask` promises that enter/leave helpers, collectors and reentry
+/// never modify compiler-owned mask bytes. Parking must preserve those bytes.
+/// Unknown providers keep complete writes. Returns-twice continuations and
+/// unknown CFG entries always discard the builder's previous mask knowledge.
 pub fn FunctionRootFrameAbi::new(
   enter_symbol : @native.ExternalSymbol,
   leave_symbol : @native.ExternalSymbol,
   environment_parameter~ : Int32 = 0,
+  preserves_mask~ : Bool = false,
 ) -> FunctionRootFrameAbi {
-  { enter_symbol, leave_symbol, environment_parameter, }
+  { enter_symbol, leave_symbol, environment_parameter, preserves_mask, }
 }
 
 ///|

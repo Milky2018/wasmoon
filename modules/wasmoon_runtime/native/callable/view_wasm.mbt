@@ -34,6 +34,8 @@ fn publish(
   addresses : FixedArray[Int64],
   identities : FixedArray[Int32],
   _entry_count : Int32,
+  _store_origin : Int32,
+  _store_positions : FixedArray[Int32],
 ) -> Unit {
   view.parents = parents
   view.addresses = addresses
@@ -49,6 +51,8 @@ fn publish_functions(
   references : FixedArray[Int64],
   reference_stores : FixedArray[Int32],
   _reference_count : Int32,
+  _store_origin : Int32,
+  _store_positions : FixedArray[Int32],
 ) -> Unit {
   view.stores = stores
   view.pointers = pointers

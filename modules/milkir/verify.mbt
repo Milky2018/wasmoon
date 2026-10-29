@@ -479,7 +479,7 @@ fn verify_global_value_data(data : GlobalValueData) -> Unit raise VerifyError {
               message="context field alias-region indices must be non-negative",
             )
           }
-        Context | Other => ()
+        Context | Control | Other => ()
       }
     }
   }

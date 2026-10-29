@@ -122,6 +122,7 @@ pub fn CHeap::array_fill(Self, Int32, Int32, @types.Value, Int32) -> Unit raise 
 pub fn CHeap::array_get(Self, Int32, Int32, @types.ValueType) -> @types.Value raise CHeapError
 pub fn CHeap::array_len(Self, Int32) -> Int32
 pub fn CHeap::array_set(Self, Int32, Int32, @types.Value) -> Unit raise CHeapError
+pub fn CHeap::bind_generational_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64], (FixedArray[Int64]) -> FixedArray[Int64]?) -> Unit
 pub fn CHeap::bind_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
 pub fn CHeap::clear_root_visitor(Self) -> Unit
 pub fn CHeap::collect(Self, Array[@types.Value]) -> Int32

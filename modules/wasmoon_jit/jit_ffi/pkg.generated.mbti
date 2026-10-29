@@ -17,6 +17,8 @@ pub fn is_windows() -> Bool
 
 pub fn release_exec_managed(@ffi.ExecCodeHandle) -> Int32
 
+pub fn snapshot_function_addresses(Int64, Int32) -> FixedArray[Int64]
+
 pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> @ffi.ExecCodeHandle
 
 // Errors

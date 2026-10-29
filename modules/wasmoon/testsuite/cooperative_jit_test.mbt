@@ -238,7 +238,7 @@ test "instrumented loop translations preserve dominance" {
       module_,
       0,
     )
-    ir.verify_core()
+    @wasm_milkir.verify_function(ir)
     for level in [0, 2] {
       let compiled = @commands.compile_module_to_jit(
         module_,

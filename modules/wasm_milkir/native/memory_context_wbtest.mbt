@@ -98,6 +98,32 @@ test "generated initialization bounds allocation code growth without removing al
   b.return_([])
   let function = b.get_function()
   let before = function.print()
-  assert_false(inline_allocation_fits(function, allocation_contract_context()))
+  let (structs, _, shared) = allocation_expansion_limits(
+    function,
+    allocation_contract_context(),
+  )
+  assert_false(structs)
+  assert_true(shared)
   assert_eq(function.print(), before)
+}
+
+///|
+test "shared reservation work is bounded independently without mutating input" {
+  for count in [30, 31] {
+    let b = @milkir.FunctionBuilder("shared_work_bound")
+    let n = b.add_param(I64)
+    for _ in 0..<count {
+      @wasm_milkir.struct_new(b, 0, [n, n]) |> ignore
+    }
+    b.return_([])
+    let function = b.get_function()
+    let before = function.print()
+    let (_, arrays, shared) = allocation_expansion_limits(
+      function,
+      allocation_contract_context(),
+    )
+    assert_eq(shared, count == 30)
+    assert_true(arrays)
+    assert_eq(function.print(), before)
+  }
 }

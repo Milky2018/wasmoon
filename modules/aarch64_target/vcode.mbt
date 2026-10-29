@@ -228,6 +228,7 @@ pub(all) enum AArch64Inst {
   IntShiftRegister(GprWidth, AArch64Shift)
   IntShiftImmediate(GprWidth, AArch64Shift, Int32)
   IntAddShiftedLeft(GprWidth, Int32)
+  IntLowBitsShiftLeft(GprWidth, Int32, Int32)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native.Signedness)
   IntWithOverflow(GprWidth, @lowering.IntOverflowOp)
@@ -259,6 +260,7 @@ pub(all) enum AArch64Inst {
     Int32
   )
   ScalarStore(@native.AccessWidth, @native.ValueType, UInt64)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   ScalarStoreUxtw(@native.AccessWidth, @native.ValueType, Int32)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
@@ -494,21 +496,6 @@ fn require_instruction_shape(
       raise InvalidInstruction(instruction~, message="invalid def value type")
     }
   }
-}
-
-///|
-fn incoming_stack_capacity(function : @vcode.Function[AArch64Inst]) -> Int32 {
-  let mut size = 0
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    if function.instruction(instruction) is Some(IncomingStack(ty, offset)) {
-      let end = offset + call_stack_size(ty)
-      if end > size {
-        size = end
-      }
-    }
-  }
-  call_align_up(size, 16)
 }
 
 ///|
@@ -1382,6 +1369,20 @@ fn verify_target_vcode(
         }
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
       }
+      IntLowBitsShiftLeft(width, field_bits, amount) => {
+        let ty = integer_type(width)
+        let bits = if width == W32 { 32 } else { 64 }
+        if field_bits <= 0 ||
+          field_bits > bits ||
+          amount < 0 ||
+          amount > bits - field_bits {
+          raise InvalidInstruction(
+            instruction~,
+            message="low-bit shift field or amount is out of range",
+          )
+        }
+        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+      }
       IntAddShiftedLeft(width, amount) => {
         let ty = integer_type(width)
         let bit_width = if width == W32 { 32 } else { 64 }
@@ -1439,7 +1440,7 @@ fn verify_target_vcode(
       }
       TrapIfZero(width) => {
         let ty = integer_type(width)
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(IntegerDivisionByZero) {
           raise InvalidInstruction(
             instruction~,
@@ -1450,7 +1451,7 @@ fn verify_target_vcode(
       }
       TrapIfSignedDivOverflow(width) => {
         let ty = integer_type(width)
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(IntegerOverflow) {
           raise InvalidInstruction(
             instruction~,
@@ -1566,7 +1567,7 @@ fn verify_target_vcode(
           IntegerOverflow
         }
         if (ty != F32 && ty != F64) ||
-          function.instruction_metadata(instruction).unwrap().trap !=
+          function.instruction_annotations(instruction).unwrap().trap() !=
           Some(reason) {
           raise InvalidInstruction(
             instruction~,
@@ -1671,6 +1672,33 @@ fn verify_target_vcode(
           false,
           0,
         )
+      }
+      StoreRepeated64(offset, count, _) => {
+        if count == 0U ||
+          offset > 0xFFFFFFFFFFFFFFFFUL - count.to_uint64() * 8UL {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid repeated word range",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [Ptr64, I64, I64],
+          false,
+          0,
+        )
+        for index, operand in function.instruction_operands(instruction) {
+          if operand.timing != (if index == 0 { Late } else { Early }) ||
+            operand.tie_id >= 0 ||
+            !(operand.constraint is AnyReg || operand.constraint is FixedReg(_)) {
+            raise InvalidInstruction(
+              instruction~,
+              message="word fill requires a late address and three independent early register temporaries",
+            )
+          }
+        }
       }
       ScalarStore(width, value_type, _) => {
         if !valid_scalar_store(width, value_type) {
@@ -1881,7 +1909,8 @@ fn verify_target_vcode(
       AtomicFence =>
         require_instruction_shape(function, instruction, [], [], false, 0)
       SafepointMarker => {
-        if function.instruction_metadata(instruction).unwrap().safepoint is None {
+        if function.instruction_annotations(instruction).unwrap().safepoint()
+          is None {
           raise InvalidInstruction(
             instruction~,
             message="safepoint marker requires safepoint metadata",
@@ -2091,7 +2120,7 @@ fn verify_target_vcode(
         )
       }
       Trap(reason) => {
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(reason) {
           raise InvalidInstruction(
             instruction~,

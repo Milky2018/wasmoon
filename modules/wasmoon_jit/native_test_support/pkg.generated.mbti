@@ -31,6 +31,8 @@ pub fn callback_capture_release_count() -> Int32
 
 pub fn context_callable_lookup(@ffi.JITContext, Int64) -> Int32
 
+pub fn context_callable_native_reference(@ffi.JITContext, Int64) -> Int64
+
 pub fn context_callable_subtype(@ffi.JITContext, Int64, Int32) -> Int32
 
 pub fn context_callable_tag(@ffi.JITContext) -> Int32
@@ -92,6 +94,8 @@ pub fn nested_activation_gc_root_probe() -> Int64
 pub fn nested_hostcall_tls_probe_trampoline() -> Int64
 
 pub fn nested_trap_probe() -> Int64
+
+pub fn parked_activation_lease() -> Int32
 
 pub fn parked_gc_root_probe() -> Int64
 

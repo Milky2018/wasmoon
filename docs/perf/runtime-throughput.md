@@ -1,0 +1,607 @@
+# Typed allocation throughput
+
+Local macOS ARM64 measurements against main `21c702b5` (0.18.0).
+Tracking: [ISS-679](../../issues/ISS-679.md). These are release binaries built
+from the stated base and an explicitly dirty implementation tree, not CI
+acceptance or a general engine ranking. The allocation changes do not alter
+object layout, the root protocol or public APIs. A separate
+[integer compiler follow-up](wide-multiply.md) recognizes wide multiplication.
+The later pressure follow-up changes collection admission timing, not the
+collector implementation.
+Measured baseline/candidate binary SHA256 prefixes are `3185b22dca61` /
+`0c522f45ed12`; the runners record complete binary and guest hashes.
+
+## Retained changes
+
+1. Typed default-zero arrays and structs reuse the allocation's existing zeroing
+   instead of rewriting every field/element. Both vector words participate in
+   deciding whether an initializer is zero.
+2. Arrays of at least one 16-byte block whose elements will all be written
+   initialize metadata and alignment padding separately, avoiding a full zero
+   pass before the real fill. The
+   complete body is initialized before publishing the object identity. Struct
+   padding and sub-vector arrays retain the original whole-object zeroing.
+3. Repeated initialization shares the existing bulk-fill path. Byte-repeated
+   values use `memset`; other widths use a repeated 16-byte pattern, fixed-size
+   `memcpy` blocks and an exact tail. Sub-vector fills retain scalar copies;
+   zero-length operations return immediately. This avoids unaligned typed accesses,
+   platform intrinsics and per-element variable-size copies. Reference admission
+   and bulk-write barriers stay with their existing callers.
+
+The scalar-width loop initially used constant-sized `memcpy` per element.
+Clang's optimization remarks and object disassembly showed scalar stores, not
+automatic vectorization. The block form emits 16-byte loads/stores. A separate
+five-sample control reduced nonzero i32 invocation from 115.463 to 46.162 ms;
+it did not improve the already full-width v128 loop. Avoiding redundant zeroing
+accounts for that workload's cumulative gain below.
+
+## Measurements
+
+`scripts/benchmark_gc_workloads.py --samples 5 --scale 10` generates and validates
+the same asserted guest for every engine. Arrays cumulatively allocate about
+1.6 GB; the graph control keeps a 32768-node chain, mutates a reference ring,
+churns arrays across collections, then verifies the live graph. Every probe
+returned 1. Samples alternate engine order and run serially, without concurrent
+builds or profiling. Sources, samples and cold caches are automatically removed.
+
+Wasmtime 49.0.1 explicitly uses `-C collector=copying -C parallel-compilation=n
+-C cache=n`. V8 14.1.146.11-node.14 uses `--no-liftoff
+--no-wasm-lazy-compilation --wasm-num-compilation-tasks=1`: optimized eager serial
+compilation, not a claim that GC has no worker threads.
+
+Median invocation time, milliseconds (one asserted export call):
+
+| Guest | Main | Change | V8 | Main / change |
+| --- | ---: | ---: | ---: | ---: |
+| i32 zero | 311.602 | 33.458 | 28.360 | 9.31x |
+| i32 nonzero | 321.801 | 56.790 | 33.507 | 5.67x |
+| i32, 4 elements | 35.202 | 31.193 | 4.242 | 1.13x |
+| i32, 1 element | 30.467 | 31.280 | 3.480 | 0.97x |
+| i32, 17 elements | 55.460 | 51.034 | 18.134 | 1.09x |
+| v128 high word | 121.427 | 42.047 | 38.405 | 2.89x |
+| survivors and mutation | 314.380 | 41.989 | 27.128 | 7.49x |
+
+Whole-process wall medians, milliseconds; these include compilation and teardown
+and must not be substituted for Wasmtime invocation times:
+
+| Guest | Change | Wasmtime | V8 / Node |
+| --- | ---: | ---: | ---: |
+| i32 zero | 41.785 | 79.170 | 80.543 |
+| i32 nonzero | 64.661 | 170.610 | 85.781 |
+| i32, 4 elements | 39.396 | 13.458 | 60.915 |
+| i32, 1 element | 37.813 | 10.454 | 52.087 |
+| i32, 17 elements | 58.419 | 16.635 | 66.396 |
+| v128 high word | 48.987 | 89.402 | 88.401 |
+| survivors and mutation | 50.733 | 458.279 | 77.111 |
+
+Compilation is unchanged at approximately 0.4–1.7 ms in these tiny guests.
+Peak RSS is also unchanged: Wasmoon approximately 76 MB (arrays) / 80 MB
+(graph), Wasmtime 14 / 19 MB, V8 / Node 65 / 66 MB. Whole-process RSS includes
+different host runtimes; this work does not solve memory footprint or claim a
+collector improvement. The short-array controls use one million allocations,
+including a partial-block tail. The one-element case is 2.7% slower in this
+round; no tiny-object speedup is claimed. It retains the scalar path after an
+earlier block-preparation experiment regressed by about 12%. The 17-element
+case reaches 156 MB RSS on both Wasmoon builds, versus 14 MB Wasmtime / 52 MB
+V8 / Node. Small-object allocation and heap footprint remain clear follow-up
+targets, not solved problems.
+
+The real pinned Core parse_double property also retains all 20000 iterations
+and returns 1 on each engine. Five samples using
+`scripts/benchmark_parse_double_gc.py --v8 --samples 5` give:
+
+| Boundary | Main | Change | V8 | Wasmtime |
+| --- | ---: | ---: | ---: | ---: |
+| Invoke (ms) | 2007.701 | 1900.167 | 725.885 | not isolated |
+| Compile (ms) | 815.503 | 814.056 | 416.122 | not isolated |
+| Whole process (ms) | 2901.336 | 2791.726 | 1191.718 | 2384.632 |
+
+Invocation improves 5.4%; compilation is effectively unchanged. The change is
+still 2.62x V8 invocation time and 1.17x Wasmtime cold wall time. The Wasmoon
+compile timer excludes parse/validation and code installation; V8's
+`WebAssembly.Module` timer includes validation/publication. Neither timer is a
+Wasmtime compile comparison. Core revision is
+`7547b846d38de3efa5509cb1b74ffb7ed9a4a3d1`; the extracted asserted guest SHA256
+is `fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1`.
+
+## Broad screening and rejected work
+
+The main/Wasmtime screen completed all 70 original algorithm pairs with fresh compilation evidence
+and no execution failures. This one-pair screen selects investigation targets;
+it does not establish an aggregate speedup. Many long linear-memory cases were
+already close to Wasmtime; short cases still expose cold compilation overhead.
+The sampled crypto modules contained no SIMD shuffles, ruling out that proposed
+emitter target for those guests.
+
+An independently tested ARM64 shift/rotate-plus-logic fusion reduced stream's
+function 55 from 4076 to 3548 machine-code bytes (160 to 64 standalone rotates,
+plus 96 fused operations), but five cold pairs regressed from 5.487 to 5.793 s.
+The experiment and its compiler/API/artifact-revision changes were removed.
+Smaller code is not sufficient performance evidence. Wasmtime 49.0.1 also emitted
+160 standalone rotates in the same function; no claim of a missing universal
+optimization follows from the instruction set alone.
+
+After removal, three cold pairs plus a warmup and separate diagnostic captures
+on stream, hash, hash3, auth and xchacha20 produced byte-identical artifacts
+between main and the retained runtime change. Stream wall medians were
+5.492 / 5.495 s; xchacha20 1.649 / 1.650 s. No speedup is claimed for these
+unaffected linear-memory controls. Short-case wall measurements remain noisy.
+
+## Validation boundary
+
+Tests cover every scalar width, high-only v128 bits, null/reference initializers,
+empty arrays, non-block-sized tails, explicit values and dirty arena reuse after
+collection. Existing mixed-layout copies, overlap directions, reference barriers,
+quotas and rollback regressions remain enabled. Cross-platform and sanitizer
+results must be recorded separately from these local performance samples.
+
+Final local validation: info/fmt and strict native/wasm; native 3102/3102 with
+`VCODE_REGALLOC_VALIDATION=1`, `WASMOON_GC_VERIFY=1` and
+`WASMOON_GC_ASSERT_BARRIER=1`; wasm 1462/1462; 180 Python tests with 54 existing
+platform skips; module boundaries, generated MSVC bridges and 44 strict C stubs.
+Fresh isolated ASan/UBSan passes 313/313 tests, the event-loop fixture and both
+ASan positive controls. Its sources were explicitly dirty on 21c702b5; local
+macOS does not provide Linux LSan or execute x64 instructions.
+
+CLI interpreter and JIT each pass Core 258/62563 with verification enabled;
+portable native and actual wasm each pass the same 258/62563. Component passes
+59 files / 1385 commands on each engine with zero skips. CLI behaviour, real
+archive installation, WASI execution on both engines, packaged native/wasm
+embedding and 17 packaged native diagnostic regressions pass. Owned temporary
+sources, builds, caches, profiles and reports were removed; no raw receipts are
+committed. Linux/Windows execution and leak acceptance remain CI work.
+
+## Prepared typed allocation follow-up
+
+A 3-second CPU sample of 300 million four-element i32 allocations on e4ff2f70
+put approximately 86% of main-thread samples in the allocation chain, including
+about 12% in collection; array projection accounted for another 9%. The sample
+is attribution, not a timing run. Optimized V8 machine code still allocates
+these arrays through its bump-pointer path, but forwards some subsequent
+fresh-array reads. Allocation cost alone therefore does not explain the gap.
+
+Typed allocation now consumes the existing prepared identity/live-list window
+when debug controls are known disabled, no quotas are bound, and payload,
+identity and collection capacity suffice. It increments the same attempt
+counter and uses one shared publication primitive. Otherwise the original
+fault-injection, quota admission, capacity growth and verifier path runs.
+Payloads are initialized before publication; no new root, layout, collector
+policy or public API is introduced. Collection and rollback already invalidate
+prepared capacity. A public regression retains more than two identity pages,
+rolls back a newer page, allocates again, collects and checks every payload.
+
+Three alternating serial samples of 100 million allocations per case
+(`--samples 3 --scale 1000` with the three small-array cases), invocation seconds:
+
+| Elements | e4ff2f70 | Prepared | V8 | Reduction |
+| --- | ---: | ---: | ---: | ---: |
+| 4 | 3.066 | 2.301 | 0.385 | 24.9% |
+| 1 | 3.284 | 2.531 | 0.342 | 23.0% |
+| 17 | 3.899 | 2.980 | 1.750 | 23.6% |
+
+The baseline is independently built from e4ff2f70 in a temporary checkout;
+binary SHA256 prefixes are e88a6c2ba269 / 51ca4ce12597. All controls return 1.
+Five samples of the full parse_double property give 1.899 / 1.878 seconds
+invocation and 0.818 / 0.823 seconds compilation: only a small real-workload
+change, not a solution to its remaining execution gap. The seven-case shorter
+screen leaves large-array and graph throughput essentially unchanged. No RSS
+improvement is claimed: long small-array controls still reach 156–175 MB.
+
+Follow-up validation: full native3103 with register-allocation, GC and barrier
+verification; ordinary sanitizer package214; wasm1462; Core interpreter/JIT
+each258/62563; strict checks on both targets; 44 C stubs and module/bridge audits.
+Fresh isolated local ASan/UBSan314, event loop and both ASan positive controls
+pass on the dirty e4ff2f70-based tree. macOS does not provide LSan acceptance;
+this follow-up requires its own Linux/Windows CI after commit.
+
+## Collect before unnecessary growth
+
+The next allocation could cross the collection threshold before the existing
+used-size check noticed pressure. Two arrays each half the physical capacity
+plus 16 bytes reproduced a 1 MiB to 2 MiB growth with no collection, even with
+the first array dead. The retained-live control already returned the right
+values and legitimately needed growth.
+
+The common collecting allocator now estimates a conservative slot-size bound;
+only near physical exhaustion does it resolve the exact typed size. If the
+allocation would need growth and cross the collection threshold, the existing
+precise-root collection runs first. Surviving objects can still require normal
+growth. Impossible allocations, explicit-GC low-level heaps, quotas and failure
+policy retain their existing paths. Typed sizing is shared with allocation.
+No lower threshold or new configuration is introduced.
+
+Five serial samples against f866185a (binary prefixes 51ca4ce12597 /
+b74e4bee5ef1) reduce the 17-element control from 41.873 to 31.069 ms invocation
+and peak RSS from 155.96 to 88.82 MB. Other controls have no clear improvement;
+this is a boundary-specific result, not a general RSS claim. Full native3105
+passes in ordinary and all-three-verifiers modes. Fresh isolated macOS
+ASan/UBSan316, event loop and both positive controls pass on the dirty
+f866185a-based tree; Linux LSan still requires CI for this new change.
+Core258/62563 and Component59/1385 also pass in each engine with verification
+enabled; wasm1462, strict checks, C44 and boundary/bridge audits pass.
+
+
+## New #568/#583 controls: frozen toolchain recheck
+
+An installed runner changed during the long session: the initial recorded
+SHA256 was `683cfa35312c832f0a59b66ad2b46033cfd8d0936e16e65bc32a3403d65040e4`,
+whereas the later October23 installation was
+`f0b2caf575622a8134507779e17256e90a29b9632e93ed8a91bd77b3d6876915`.
+The unpinned final-poll comparisons and interrupted library round are not
+accepted attribution. The results below supersede those provisional numbers.
+
+All five source stages were freshly rebuilt against one private frozen SDK:
+Moon/moonrun 0.1.20261023, moonc 0.10.17+d971670cd, including the same standard-library
+bundles and native headers. The global installation was not changed. Each stage
+has only the identical API-timer harness as a source modification. The downstream
+embedding remains ed848ac5, O2, cancellation=true, cooperation=true, quantum 1024.
+The current reference is official **October23 moonrun**, not Wasmtime or the
+October21 runner reported by the issue. No source/guest assertion is weakened.
+
+Each table contains five fresh-process samples per stage with cyclic order to
+balance positions. One small host-image preparation run precedes recording;
+every recorded process compiles fresh without an artifact cache. Builds and
+profilers stop before timing. RSS is decimal MB. Raw logs stay temporary.
+
+### Compiler-only public API (#583)
+
+Exact input: 4,938,531 bytes, SHA256
+`00002138ac7db01edc9217916b8c7b3c96a8e093f47f765faa465ac3eca792a6`.
+The O2 API includes parsing, validation and eager compilation, excludes input
+reading and encoding, and creates no Store, links no imports and runs no guest.
+Cancellation remains enabled; the disabled control is reported separately.
+
+| Source stage | Enabled API | Peak RSS |
+| --- | ---: | ---: |
+| 0.18.0 release (21c702b5) | 10.590 s | 1531.1 MB |
+| Before resumed changes (7b40e8ca) | 8.957 s | 718.4 MB |
+| ABI block cursor faea6beb | 7.130 s | 717.0 MB |
+| Prepared metadata b6e1cb10 | 7.069 s | 717.1 MB |
+| Poll-preserving inlining cc23d6f2 | 6.788 s | 658.3 MB |
+
+The ABI change improves enabled compilation by 20.4%, with unchanged memory. The
+plain control improves 7.692 -> 6.016 s (21.8%); final plain compilation at 5.983 s
+is effectively flat against that stage. Complete ABI-change artifacts are
+byte-identical in both modes. Final plain artifacts are unchanged after
+revision 25/26 normalization. The later poll change improves enabled compilation
+another 4.0% versus its immediate prepared-metadata predecessor and reduces
+compiler RSS by 8.2%. Whole-PR release/final improvement is 35.9% time and 57.0% RSS;
+that total includes the earlier changes and is not attributed to the new emitter.
+
+Both emitters now borrow one read-only block snapshot and its known local
+position for input/result/output ABI groups. The public snapshot API, parallel
+moves, metadata offsets and long-branch fallback are unchanged. A diagnostic on
+the original largest initializer records 17,460 snapshots, 350,542,399 copied
+handles and 173,302,982 position comparisons per emission attempt, repeated on
+fallback. CPU samples directly show copying/reference-release work. The
+regression exercises 32 mixed I64/F64/V128 transfers after a CFG join at O0/O2,
+both branch arms, plus production cross-compilation for both native targets.
+
+### Same-instance repeated work (#568)
+
+The archived zero/one/ten-call inputs keep their original SHA256 values and
+all 1,000-case checks. Every probe must return one; ten calls perform 10,000 checks
+after one startup. The stages below use the exact same binaries/SDK as above.
+
+| Stage | Zero calls | One call | Ten calls | Ten-call RSS |
+| --- | ---: | ---: | ---: | ---: |
+| Official October23 moonrun | 0.010 s | 0.057 s | 0.408 s | 26.2 MB |
+| Released Wasmoon | 1.133 s | 2.060 s | 10.398 s | 307.4 MB |
+| ABI-emitter stage | 1.027 s | 1.940 s | 10.121 s | 266.3 MB |
+| Prepared metadata | 1.025 s | 1.408 s | 4.852 s | 266.8 MB |
+| Final poll-preserving stage | 0.932 s | 1.297 s | 4.534 s | 261.3 MB |
+
+Sampling identifies repeated metadata copying/release on cooperative resume.
+The retained `PreparedGCEnvironment` freezes type/canonical/function/address
+payloads once, bound to their native owner. Every entry/resume still checks the
+live instance/module/owner and rebinds metadata plus the **current** heap. Roots,
+scopes, callbacks, quotas, rollback and scheduling remain dynamic. Close releases
+the snapshot. Legacy setup stays fresh; low-level function-table changes require
+explicit preparation. The discarded skip-setup diagnostic could not restore an
+intervening binding. Preparation improves ten-call wall by 52.1%; peak RSS is flat.
+
+Eager entry-poll expansion also made every cancellable leaf multi-block and
+therefore ineligible for leaf inlining. `SafepointPoll` now stays effectful in
+Wasm MilkIR until native lowering. Inlining clones every poll, even for unused
+results, and charges eight units against existing budgets for its seven late
+CFG blocks. The slow call keeps precise roots and the conservative call contract;
+signed offsets and unknown-provider runtime calls are preserved. Codegen revision 26 rejects
+stale caches. The enabled serialized artifact grows39.88 -> 42.34 MB (6.2%);
+that includes metadata, not just machine code. The cloner avoids duplicate
+decoding and general array mapping for its zero/one-result contract. This adds
+6.5% ten-call improvement. Disabling polls
+is not an accepted optimization or an additive speedup budget: preserved polls
+still end checked-reference/physical-borrow lifetimes.
+
+Whole-PR ten-call wall improves 56.4% against release, but remains 11.1x the new
+official reference. `(T10-T1)/9` is approximately 0.360 versus0.039 s (9.2x).
+These are process/incremental estimates including GC, polling, switching, tiering
+and startup, not isolated generated-code timers. Startup and GC/root/access
+costs remain open; #568 is not closed.
+
+### Validation and broader inputs
+
+Native 3192 passes ordinarily and with register/GC/barrier verification, wasm 1483
+and strict checks on both targets pass. Public tests compare callback counts,
+exact fuel outcomes, callback cancellation/reuse, quantum-one yields, GC during
+callbacks/parked work and resumed array reads between O0/O2. Compiler tests retain
+unused-result polls and precise metadata on both targets. Prepared environments
+have public owner/rebinding tests and private payload-reuse invariants.
+Fresh isolated Mac ASan/UBSan 373, the event loop and both controls pass on the
+dirty a4021683 tree with the exact final functional sources/tests; local LSan is
+unavailable. Clean source/platform receipts are tracked in PR582, independently
+of these local timings.
+
+The earlier b6e1cb10 library screen passed 36/36 runner/suite/round combinations
+and the 70-workload cold screen had zero engine failures. Those are historical
+stages, not current-head acceptance. The frozen-SDK final library runs retain
+all original Core/async/SQLite counts, cfgs, panics, snapshots, FD checks and four
+concurrent executables; guests are prepared outside measurement and their hashes
+are checked. Updated library/corpus results belong in PR582. Wasmtime corpus
+controls retain `-C parallel-compilation=n`. No raw report or receipt-only commit
+is required.
+
+## October26 follow-up: array metadata reuse
+
+The user extended work through October26 10:00 Shanghai. This independent
+change starts from accepted `00c44af6`, with the same private October23 SDK and
+unchanged zero/one/ten-call inputs. No global toolchain, quantum or guest
+assertion changes. An execution-only sample puts 62% of main-thread top samples
+in the two metadata projection helpers. Separate counters observe 395,997,591
+array projections, 96.3% repeating the preceding object; the existing struct hint
+already hits 95.6%. Samples and counters are not an additive speedup budget.
+
+The retained native change adds one heap-owned array metadata hint, costing
+24 bytes. It contains a reference, encoded view and compact width, never a root
+or cached element value. Growth, collection, compaction, retirement, rollback and
+runtime type updates invalidate it through the shared view lifecycle. Opaque,
+reference and legacy arrays, positive-width compatibility including V128,
+verification refusal, null/bounds traps, barriers, faults and quotas keep their
+previous contracts. Collection strategy and generated safepoints are unchanged.
+
+Five alternating fresh-process pairs reduce ten-call wall from 4.625 to 3.860s
+(-16.5%), with zero-call startup 0.992 -> 0.992s. One-call wall changes from
+1.326 to 1.273s. These are process boundaries, not isolated machine-code timers.
+Enabled and plain #583 artifacts remain byte-identical, respectively 42,339,695
+and 37,934,283 bytes. Three API-timed pairs are 6.516 -> 6.473s enabled and
+6.071 -> 6.185s plain; this runtime change is not a compiler-speedup claim.
+RSS from that encoder harness includes encoding after the API timer and is not
+substituted for the earlier compiler-only process boundary.
+
+Six asserted controls across Wasmoon before/after, Wasmtime and V8 pass 72 fresh
+processes. Nine additional native pairs per large graph/static-reference-array/
+mutated-reference-array give median paired invocation changes -0.48/+0.24/+0.56%,
+with bootstrap 95% intervals [-4.52,+1.28]/[-4.97,+1.61]/[+0.02,+2.65]%. This
+documents small residual costs and uncertainty rather than claiming every
+workload improves. The hint adds a miss-path update.
+
+A discarded full-check compiler expansion removes the C calls but only moves
+their work: three pairs increase #583 process wall 6.699 -> 8.092s and ten-call
+wall 4.534 -> 4.818s, with startup 0.919 -> 1.210s and incremental work flat.
+No such compiler expansion or new artifact revision is retained.
+
+Two public lifetime tests and a low-level ABI control pass before/after. They
+cover writes, growth, compaction, non-rooting, rollback, Store close, compact and
+opaque widths. Omitting retirement invalidation makes explicit heap verification
+fail after rollback; the temporary mutation is restored. Native 3195 passes
+ordinarily and with all three verifiers, wasm 1483, strict both targets/C45,
+boundaries, bridges and Python 180/54 existing skips pass. Both engines pass
+Core 258/62563 and Component 59 files/1385 commands without skips. Clean sanitizer
+and platform acceptance belong to this change's own committed head; see PR582
+and ISS-706.
+
+## Direct comparisons for expanded polls
+
+Starting from accepted59ece7b1, machine code shows five native poll conditions
+materialized as booleans before branching. The original MilkIR branch selector
+already avoids this, but semantic adapters lacked the native builder's existing
+comparison-branch interface. Two small forwarding methods expose it. Poll CFG,
+callback priority, signed budget checks, decrement, precise roots and slow-call
+reentry remain unchanged; quantum stays1024. AArch64 removes comparison-result
+materialization. The current x64 backend retains its condition materialization,
+so no x64 execution gain is claimed from ARM measurements. Codegen revision27
+invalidates previous generated-code caches.
+
+Five final alternating pairs on the unchanged original inputs give process
+medians zero/one/ten0.892/1.183/3.699s before and0.867/1.137/3.524s after. The
+10,000-assertion ten-call input improves4.7%. These include startup, GC and
+cooperative work rather than isolating guest machine-code time.
+
+Three pairs use byte-identical encoder harnesses. Enabled byte-to-artifact API
+medians6.439 -> 6.306s include parse/validation and exclude input reading and
+artifact encoding; serialized output shrinks42,339,695 -> 41,545,706 bytes
+(-1.9%). Plain API5.792 -> 5.802s offers no improvement claim; its37,934,283-byte
+artifact remains byte-identical before the manifest revision. Whole encoder
+RSS ranges overlap (enabled741-752MB; plain689-719MB) and do not establish a
+memory improvement. A separate compiler-only process boundary remains distinct
+from the encoder's post-timer allocations. Thirteen representative inputs pass
+130 asserted processes; short-input changes are not treated as universal gains.
+
+A separate cache-hit codegen prototype reduces ten-call wall4.8% but increases
+startup/compilation and slows several allocation controls3-5%; it is not retained.
+Prepopulating array hints during allocation is also flat on the original control
+and is discarded. The retained change adds no cache or runtime allocation.
+The public production diagnostics control fails before and passes after; public
+poll/callback/fuel/cancellation/root tests and full platform gates remain required.
+Acceptance belongs to the eventual committed head, tracked in ISS-707 and PR582.
+
+## x64 direct comparison branches
+
+The follow-up to revision27 removes the x64 backend's CompareSet, zero-extension
+and TEST sequence for native comparison terminators. A typed BranchCompare emits
+CMP/Jcc using the existing conditional-edge mover and inverse condition, preserving
+fallthrough and branch threading. Immediate comparisons still materialize their
+constant. There is no cross-instruction flags state or runtime policy change.
+Revision28 invalidates prior generated-code caches.
+
+Actual generated x64 code under Rosetta passes4840 signed/unsigned32/64-bit
+boundary and swapped-edge checks through the production guest trampoline. The
+41 relocation-free probe functions shrink2524 ->2188 bytes; the integer branch
+loop shrinks174 ->158 bytes. Seven alternating200M-iteration pairs give medians
+0.290700 ->0.291706s, establishing no execution gain. These timings do not predict
+native Intel/Windows performance. Public production diagnostics, typed verifier
+negatives and interpreter/JIT loop controls protect the lowering and edge logic.
+Exact-head platform acceptance is tracked separately in ISS-708 and PR582.
+
+## Bound table descriptor reads
+
+A fresh 70-algorithm cold-cache screen at db0198ea completes without failure or
+timeout. Single-pair geometric means are value 1.028 and wall 1.365 against
+Wasmtime 49.0.1 with parallel compilation disabled; 22 original-threshold gaps
+remain. This is screening evidence, not a before/after improvement estimate.
+
+Five independent pairs reproduce randombytes value ratio 1.262. Samples repeatedly
+land in indirect-call target resolution rather than WASI entropy copying. Native
+machine code decodes dynamic VMContext table-array fields before every lookup.
+Bound contexts already retain stable table owners; reading their current entries
+and size avoids that repeated decoding. Standalone unbound contexts retain the
+ABI-array path. Bounds, null/subtype checks, reentry, growth/close publication and
+reference identities are unchanged. No cache or artifact revision is added.
+
+Nine alternating cold pairs give randombytes paired median -1.35% with bootstrap
+95% interval [-2.09,-0.21]%; whole-process medians 0.4493 -> 0.4431s. Five pairs each
+of five shorter authentication/hash/cipher controls do not establish a systematic regression.
+An asserted loop of 100 million indirect calls gives process medians 0.5736 -> 0.5539s against
+Wasmtime 0.1674s; this residual gap remains. All generated artifacts in the paired
+corpus controls are byte-identical. These are ARM64 measurements. Safety/platform
+acceptance remains separate, tracked in ISS-709.
+
+A distinct register-allocator optional-wrapper experiment leaves 20 artifacts
+identical but changes compile API medians by less than 1%, without a demonstrated
+RSS reduction. It is not retained. Raw profiles and experiment outputs stay in
+the temporary workspace.
+
+## Low-field shift selection
+
+Separate profiling of the original Argon2id workload maps the hot native code to
+functions 40/41. Function 41 contains 64 standalone shifts followed by masks.
+Select a single-use constant shift and contiguous field mask as one typed native
+operation: AArch64 emits UBFIZ, while x64 retains shift/mask lowering. Shared uses
+and sparse masks keep their existing paths; field bounds and operand widths are
+checked independently at both compiler boundaries. Codegen revision is 29.
+
+Three alternating cold baseline/candidate pairs reduce whole-process median
+43.585 -> 41.811s; paired guest-value changes are -2.88%, -3.60%, -4.08%. Ten other
+original workloads, five pairs each, show predominantly +/-1% changes. This is a
+local macOS ARM64 result, not an x64 speed claim or a new whole-engine ranking.
+Matched original-builtin compilation retains 40 samples, including one 11.7%
+outlier: enabled API medians 6.253 -> 6.236s, plain 5.709 -> 5.691s, with no
+meaningful RSS improvement and byte-identical artifacts in both modes. Independent
+assembler controls, actual Rosetta x64 execution and public semantic/negative
+regressions cover the new rule. Tracking: [ISS-710](../../issues/ISS-710.md).
+
+## Adapter construction thunks
+
+Fresh compiler samples and generated C reveal an obsolete generic error wrapper
+around non-raising DirectBuilder operations. It eagerly allocates a closure and
+fallback Array even when emission succeeds. Call the builder directly and keep
+its deferred finish validation, adapter completion checks and call/root metadata.
+This removes the wrapper without introducing another interface or changing guest
+code. Twenty alternating large-module compiler runs preserve exact artifacts:
+API medians 6.268 -> 6.254s enabled, 5.722 -> 5.702s plain; paired changes are
+about -0.27% and RSS overlaps. This is a small simplification, not a material
+compile-time improvement or a solution to #583. Public tests retain completion
+once and final hidden-safepoint ABI rejection. Tracking: [ISS-711](../../issues/ISS-711.md).
+
+## Struct-view leaf hits
+
+Fresh execution samples attribute about41% of main-thread leaf samples to
+struct projection. Isolated counters on the original ten-call input report
+392.5 million struct queries and95.6% hits (array96.3%). The existing hint hits,
+but the old helper saves/restores an80-byte frame each time. Keep the admitted
+hit entry small and the complete checked body private. No hint capacity,
+lifetime invalidation, GC/root policy, public helper ABI or artifact changes.
+
+The first split improved the original workload but regressed alternating-object
+access by about23%. Independent controls identify premature type-map reads,
+duplicate hint checks and repeated dynamic heap lookup. Check the cheap hint
+key first and pass the located heap to the checked miss path; implicit TLS and
+verification calls keep their original fallback. Seven rotating fresh-process
+controls give hot invocation103.1 ->79.1ms and alternating191.3 ->189.7ms against
+the unsplit baseline. The latter is effectively flat, not another speed claim.
+The asserted hot/cold controls live in scripts/benchmark_gc_workloads.py.
+
+Five original zero/one/ten-call pairs give process medians0.842/1.117/3.466s
+before and0.848/1.094/3.238s after; all ten-call pairs improve6.36-7.15%.
+Zero-call changes are noise. Earlier split-only compiler controls preserved
+exact artifacts, with enabled API flat and plain paired median+0.44%/overlapping
+RSS; these are separate measurements, not a compile-time or memory gain.
+Evidence is local ARM64, not x64 timing or a new engine ranking.
+Tracking: [ISS-712](../../issues/ISS-712.md).
+
+## Checked callable resolution
+
+Current native samples still implicate type/entry resolution in randombytes.
+Frame-only prototypes offer no stable cross-case gain and are rejected. Inline
+the existing private resolver at its call boundaries, keep legacy subtype work
+private, and share the unchanged trap/zero-result behavior through trap.c.
+This lets C optimize related read-only queries together without a new cache,
+layout, public helper ABI, artifact revision or runtime-policy change.
+
+Five rotating100M-call controls improve about8-11% across1/2/64 targets. Nine
+additional original randombytes pairs all improve, paired value median-3.98%,
+process medians0.4412 ->0.4276s. Auth7 is flat. Short-control noise and outliers
+are retained; further hash/auth/generichash paired medians differ by about
++0.25/+0.63/+0.20%, not a broad throughput win. All guest artifacts match
+exactly and native host text grows456 bytes. These are ARM64 controls, not
+x64 timings or compile/RSS improvements. Tracking: [ISS-713](../../issues/ISS-713.md).
+
+### Allocator queue entries and sifting
+
+Current large-module detail metrics attribute 2.58 of 6.27 seconds to register
+allocation, including 0.93 seconds in bundle allocation and 1.49 million queue
+pops. A private scalar entry keeps its bundle, priority, weight and hint together;
+hole sifting moves each parent or child once. Priority snapshots, tie order,
+membership, hints and session reuse retain their existing contracts.
+
+Ten alternating compile API pairs per mode give medians 6.281 -> 6.205 seconds
+with cancellation and 5.729 -> 5.660 without, with paired median improvements of
+about 1.52%/1.38%. All artifacts are byte-identical; detailed controls retain the
+same 10,463 per-function allocation decisions and code sizes. The sifting-only
+variant has inconsistent API gains across cohorts. Whole-encoder RSS is noisy.
+Five additional pairs per mode skip artifact encoding/writing: compiler-process
+RSS medians are 661.5 -> 655.7 MB and 647.2 -> 644.8 MB, with every pair improving.
+That scope includes input, validation, compilation and teardown. API medians in
+this harness improve less, 6.279 -> 6.264 and 5.719 -> 5.696 seconds; do not
+generalize the larger cohort's gain. No guest execution gain is claimed.
+All 70 original algorithm inputs also retain exact artifacts in both modes
+under all three verifiers (140 correctness comparisons, no timings retained).
+Full validation and platform acceptance are tracked in
+[ISS-714](../../issues/ISS-714.md).
+
+### Weight queries without temporary use positions
+
+Two bundle-cost queries need only a program point, use kind and constraint.
+Pass these fields to the existing private weight function directly, preserving
+its complete arithmetic and all allocator decisions. Original-module counters
+remove4.93/4.69 million temporary records with/without cancellation (197/188MB
+cumulative requested payload, not peak RSS). All10463 per-function allocation
+decisions and both original artifacts remain exact.
+
+The first five paired runs per mode including encoding show mixed API changes:
+6.137 ->6.076s enabled,5.609 ->5.616s plain. Five further pairs per mode use an
+identical harness without encoding/writing: every pair improves0.8-2.9%, with
+medians6.201 ->6.145s and5.673 ->5.608s. Compiler-process RSS is effectively flat.
+These are local ARM64 allocation-churn controls, not universal CPU, peak-memory
+or guest-execution gains. Tracking: [ISS-715](../../issues/ISS-715.md).
+
+### Read-only instruction annotations
+
+Emitters and target validators need immutable source, trap, safepoint and
+stack-map annotations. An opaque owned view avoids copying full metadata and
+GC-root arrays. Full metadata snapshots remain independent; the view retains
+its annotations after the Function is released. Generated C represents the view
+and its Option as a nullable metadata pointer, with ownership/bounds checks and
+reference retention but no new allocation. No existing ABI or codegen revision
+changes.
+
+Normal compilation of the original module removes 2.537/2.251 million metadata
+snapshots with/without cancellation: 121.8/108.0 MB cumulative record payload,
+excluding copied root arrays and runtime headers, not peak RSS. Five alternating
+API pairs per mode give medians 6.154 -> 6.090 s and 5.645 -> 5.569 s, with exact
+artifacts. Five independent pairs per mode skip encoding/writing: 6.191 -> 6.108 s
+and 5.636 -> 5.556 s, paired median gains 1.39%/1.41%, nine of ten pairs faster.
+Both a 7.10% favorable outlier and a 0.25% slower pair are retained. Compiler-process
+RSS is effectively flat. All 10,463 per-function decisions remain exact. These
+are local ARM64 compiler controls, not guest execution or universal CPU/memory
+claims. Tracking: [ISS-716](../../issues/ISS-716.md).

@@ -29,8 +29,59 @@
 - Expansion budgets bound large-function compile cost; unsupported functions
   retain helpers. Constant division and bounded leaf inlining preserve traps,
   effects, source locations and allocation accounting. The CLI snapshots type
-  definitions together with recursive groups. Artifact codegen revision is 20;
+  definitions together with recursive groups. Artifact codegen revision is 32;
   JIT ABI is 8. Native and wasm interpreters keep their shared Store/runtime.
+
+## Guarded control values (October 26)
+
+The subsequent [logical/address epoch separation](../gc-memory-epochs.md)
+preserves logical reads across collection without extending physical borrows.
+Its two matched rounds do not establish a material original-workload speedup;
+the guarded-control measurements below describe the preceding codegen31
+checkpoint.
+
+Budget-protected loops retain the original slow polling loop and charge each
+header/inlined poll at its original position. A successful guard now returns
+both its condition and the admitted invocation-control pointer. Charges must
+consume that exact SSA result. The independent CFG proof rejects missing,
+foreign, forged, block-parameter-carried, stale and over-consumed controls;
+unknown mutation, reentry and collection revoke the proof. Each charge still
+checks disabled/exhausted budgets and stores the remaining countdown. This
+removes repeated execution/control/callback lookup without changing callbacks,
+cooperative yields, fuel, roots, physical-borrow lifetime or the helper ABI.
+
+Actual ARM64 code for Decimal right/left shifts (functions 453/454) was captured
+from Wasmoon, V8 12.9.202.13-rusty and Wasmtime 49.0.1 using the same original
+module. Constant division was already strength-reduced. V8 and Wasmtime use
+direct object addressing; Wasmoon retains checked admitted views and an explicit
+cooperation protocol. Machine-code size is not a timing attribution.
+The V8 code-event probe uses the SDK's V8 version, not a rebuilt SDK runner.
+
+Against parent `5b699ce8`, two independent alternating five-pair rounds on the
+unchanged ten-call input (`44bcb057bbd6ebaa86e96dc912b2d9e01002659d72e2fb76afda97b8e14acc5c`)
+find median paired whole-process reductions of 6.12% and 5.92%. All ten pairs
+improve, including the retained 0.74% first-round outlier; process RSS is flat.
+A subsequent independent four-engine round on the normalized final sources
+finds a weaker 4.89% paired reduction, with all five pairs faster. This final
+result is retained without a replacement run. Ten-call process medians are
+2.618 s (parent), 2.490 s (final), 0.431 s (official SDK V8), and 1.348 s
+(Wasmtime); final/reference ratios of medians are 5.77x and 1.85x respectively.
+These measurements include compilation, execution, GC and teardown. They do
+not establish a pure-guest speedup or a universal CPU gain. The matched 4.94 MB
+compiler API round excludes input I/O and encoding: enabled 6.587 to 6.567 s,
+plain 6.020 to 5.982 s, with essentially flat process RSS. The enabled round
+retains a +5.03% paired outlier and mixed samples; no compiler speedup is claimed.
+
+One matched Decimal charge path shrinks from 17 to 6 executed instructions
+while retaining its budget assertion; struct/array helper and full-poll call
+sites are unchanged. Two longer diagnostic execution samples change only the
+wrapper repeat count from 10 to 100; all 1389 other function bodies and original
+assertions are byte-identical. Projection-entry leaf shares are 26.39/26.57%,
+with a separate struct-slow leaf share of 4.75/4.26%. The two Decimal JIT bodies
+account for 33.21/32.48% of main-thread leaf samples. Cancellation's inclusive
+7.97/8.38% already includes root-copy work (4.99/5.11%); overlapping shares must
+not be summed or treated as a wall-time decomposition. The earlier checkpoint
+tables below retain their separate inputs and scopes.
 
 ## Reproduce measurements
 

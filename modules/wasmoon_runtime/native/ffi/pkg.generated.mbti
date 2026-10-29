@@ -19,6 +19,8 @@ pub fn is_windows() -> Bool
 
 pub fn release_exec_managed(ExecCodeHandle) -> Int32
 
+pub fn snapshot_function_addresses(Int64, Int32) -> FixedArray[Int64]
+
 pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> ExecCodeHandle
 
 // Errors
@@ -52,6 +54,8 @@ pub fn ExecCodeHandle::bind_reservation(Self, Reservation) -> Bool
 pub type GCHeapHandle
 pub fn GCHeapHandle::allocate_typed(Self, Int32, Int32, FixedArray[Int64], Int32, Bool) -> Int32
 pub fn GCHeapHandle::begin_trace(Self) -> NativeGcTraceHandle
+pub fn GCHeapHandle::begin_young_trace(Self) -> NativeGcTraceHandle
+pub fn GCHeapHandle::bind_generational_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64], (FixedArray[Int64]) -> FixedArray[Int64]?) -> Unit
 pub fn GCHeapHandle::bind_reservations(Self, Reservation, Reservation) -> Bool
 pub fn GCHeapHandle::bind_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
 pub fn GCHeapHandle::clear_root_visitor(Self) -> Unit
@@ -98,6 +102,7 @@ pub struct NativeContinuationArena {
 pub fn NativeContinuationArena::bind_quota(Self, Quota) -> Bool
 pub fn NativeContinuationArena::clear(Self) -> Unit
 pub fn NativeContinuationArena::gc_roots(Self, Int64) -> FixedArray[Int64]
+pub fn NativeContinuationArena::has_entries(Self) -> Bool
 pub fn NativeContinuationArena::is_live(Self, Int64) -> Bool
 pub fn NativeContinuationArena::new() -> Self raise NativeAllocationError
 pub fn NativeContinuationArena::reclaim_retired(Self) -> Unit
@@ -109,6 +114,7 @@ pub fn NativeExceptionArena::bind_quotas(Self, Quota, Quota) -> Bool
 pub fn NativeExceptionArena::clear(Self) -> Unit
 pub fn NativeExceptionArena::define_tag(Self, Int32, ArrayView[@types.ValueType]) -> Bool
 pub fn NativeExceptionArena::enable_reclamation(Self) -> Unit
+pub fn NativeExceptionArena::has_entries(Self) -> Bool
 pub fn NativeExceptionArena::insert(Self, GCHeapHandle, Int32, Array[Int64]) -> Int64
 pub fn NativeExceptionArena::new() -> Self raise NativeAllocationError
 pub fn NativeExceptionArena::quota_denied(Self) -> Int32

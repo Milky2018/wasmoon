@@ -57,6 +57,14 @@
 #endif
 #endif
 
+// Shared checked-helper failure: jump only through an active native trap
+// activation; low-level callers without one retain the zero-result contract.
+int64_t jit_trap_result(int32_t code) {
+    g_trap_code = code;
+    if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    return 0;
+}
+
 // ============ Trap Activations (Thread-Local) ============
 
 _Thread_local jit_activation_slot_t wasmoon_jit_activation_slot;
@@ -203,29 +211,41 @@ int32_t jit_copy_active_gc_roots(GcHeap *heap, int64_t *destination) {
     return (int32_t)total;
 }
 
+static void mark_activation_gc_roots(void *source, GcHeap *heap) {
+    jit_trap_activation_t *activation = source;
+    jit_context_t *context = activation->context;
+    const jit_execution_state_t *state = &activation->execution;
+    for (const wasmoon_gc_function_frame_t *frame = state->gc_function_frame_head;
+         frame; frame = frame->prev) {
+        for (int32_t slot = 0; slot < frame->slot_count; ++slot) {
+            if ((frame->mask[(uint32_t)slot / 64] >> ((uint32_t)slot % 64)) & 1)
+                gc_heap_mark_roots(heap, frame->roots + slot, 1);
+        }
+    }
+    for (const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
+         scope; scope = scope->prev) {
+        gc_heap_mark_roots(heap, scope->roots, scope->root_count);
+    }
+    exception_mark_activation_roots(heap, context, state);
+    gc_heap_mark_roots(heap, state->spilled_locals ? state->spilled_locals + state->spilled_locals_count : NULL, state->spilled_locals_count);
+    gc_heap_mark_roots(heap, state->gc_root_scratch, state->gc_root_scratch_len);
+}
+
 // Reentrant native calls may collect an outer Store, or share its heap while
 // its activation is detached from a reused context. Both remain live roots.
 void jit_mark_active_gc_roots(GcHeap *heap) {
     for (jit_trap_activation_t *activation = current_activation;
          activation; activation = activation->previous) {
-        jit_context_t *context = activation->context;
-        if (!activation->active || !context || ctx_gc_heap(context) != heap) continue;
-        const jit_execution_state_t *state = &activation->execution;
-        for (const wasmoon_gc_function_frame_t *frame = state->gc_function_frame_head;
-             frame; frame = frame->prev) {
-            for (int32_t slot = 0; slot < frame->slot_count; ++slot) {
-                if ((frame->mask[(uint32_t)slot / 64] >> ((uint32_t)slot % 64)) & 1)
-                    gc_heap_mark_roots(heap, frame->roots + slot, 1);
-            }
-        }
-        for (const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
-             scope; scope = scope->prev) {
-            gc_heap_mark_roots(heap, scope->roots, scope->root_count);
-        }
-        exception_mark_activation_roots(heap, context, state);
-        gc_heap_mark_roots(heap, state->spilled_locals ? state->spilled_locals + state->spilled_locals_count : NULL, state->spilled_locals_count);
-        gc_heap_mark_roots(heap, state->gc_root_scratch, state->gc_root_scratch_len);
+        if (!activation->active || !activation->context ||
+            ctx_gc_heap(activation->context) != heap) continue;
+        mark_activation_gc_roots(activation, heap);
     }
+}
+
+static int32_t copy_parked_activation_roots(void *source, int64_t *roots) {
+    jit_trap_activation_t *activation = source;
+    return roots ? copy_activation_roots(activation, roots)
+                 : activation_root_count(activation);
 }
 
 int jit_parked_gc_roots_register(
@@ -235,25 +255,12 @@ int jit_parked_gc_roots_register(
     if (!registration) return 0;
     *registration = NULL;
     if (!activation || !activation->context) return 1;
-    int32_t root_count = activation_root_count(activation);
-    if (root_count < 0) return 0;
-    if (root_count == 0) return 1;
     GcHeap *heap = (GcHeap *)ctx_gc_heap(activation->context);
-    if (!heap) return 0;
-    int64_t *roots = NULL;
-    if (!gc_heap_register_parked_roots(
-            heap,
-            root_count,
-            registration,
-            &roots
-        )) {
-        return 0;
-    }
-    if (copy_activation_roots(activation, roots) != root_count) {
-        gc_heap_unregister_parked_roots(*registration);
-        *registration = NULL;
-        return 0;
-    }
+    if (!heap) return activation_root_count(activation) == 0;
+    if (!activation->active || !activation->context_detached) return 0;
+    if (!gc_heap_register_parked_source(heap, &activation->parked_roots,
+            activation, copy_parked_activation_roots, mark_activation_gc_roots)) return 0;
+    *registration = &activation->parked_roots;
     return 1;
 }
 
@@ -354,6 +361,7 @@ static void release_activation_controls(jit_trap_activation_t *activation) {
 }
 
 void jit_trap_activation_pop(jit_trap_activation_t *activation) {
+    if (activation->parked_roots.heap) abort();
     if (current_activation != activation) abort();
     save_activation_context(activation);
     current_activation = activation->previous;
@@ -388,6 +396,7 @@ void jit_trap_activation_attach(jit_trap_activation_t *activation) {
 
 void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
     if (!activation) return;
+    if (activation->parked_roots.heap) abort();
     if (current_activation == activation) {
         save_activation_context(activation);
         current_activation = activation->previous;

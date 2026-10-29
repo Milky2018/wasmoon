@@ -156,109 +156,85 @@ fn used_callee_saved_registers(
 }
 
 ///|
-fn maximum_outgoing_args_size(function : @vcode.Function[X64Inst]) -> Int32 {
-  let mut maximum = 0
+priv struct FrameRequirements {
+  outgoing_args_size : Int32
+  incoming_args_size : Int32
+  tail_args_size : Int32
+  result_area_size : Int32
+  has_calls : Bool
+  stack_objects : StackObjectRequirements?
+}
+
+///|
+// Recompute from current target VCode independently for planning and verification.
+// Never reuse a cached analysis as a validation fact.
+fn frame_requirements(
+  function : @vcode.Function[X64Inst],
+) -> FrameRequirements raise X64FrameError {
+  let mut outgoing = 0
+  let mut incoming = 0
+  let mut tail = 0
+  let mut results = 0
+  let mut has_calls = false
+  let objects : Array[X64StackObject?] = []
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
-    if function.instruction(instruction)
-      is Some(
-        PlatformCall(_, signature)
-        | ReturnsTwicePlatformCall(_, signature)
-      ) {
-      let size = platform_call_layout(signature.params).stack_size
-      if size > maximum {
-        maximum = size
+    match function.instruction(instruction) {
+      Some(PlatformCall(_, signature) | ReturnsTwicePlatformCall(_, signature)) => {
+        has_calls = true
+        outgoing = outgoing.max(
+          platform_call_layout(signature.params).stack_size,
+        )
       }
-    } else if function.instruction(instruction)
-      is Some(InternalCall(_, _, plan)) &&
-      plan.stack_size > maximum {
-      maximum = plan.stack_size
-    } else if function.instruction(instruction)
-      is Some(InternalCallIndirect(_, plan)) &&
-      plan.stack_size > maximum {
-      maximum = plan.stack_size
-    }
-  }
-  maximum
-}
-
-///|
-fn function_has_calls(function : @vcode.Function[X64Inst]) -> Bool {
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    if function.instruction(instruction)
-      is Some(
-        PlatformCall(_, _)
-        | ReturnsTwicePlatformCall(_, _)
-        | InternalCall(_, _, _)
-        | InternalCallIndirect(_, _)
-      ) {
-      return true
-    }
-  }
-  false
-}
-
-///|
-fn maximum_tail_args_size(function : @vcode.Function[X64Inst]) -> Int32 {
-  let mut maximum = incoming_stack_capacity(function)
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    let size = match function.instruction(instruction) {
+      Some(InternalCall(_, _, plan) | InternalCallIndirect(_, plan)) => {
+        has_calls = true
+        outgoing = outgoing.max(plan.stack_size)
+        results = results.max(plan.result_area_size)
+      }
       Some(TailCallDirect(_, _, plan) | TailCallIndirect(_, plan)) =>
-        plan.stack_size
-      _ => 0
-    }
-    if size > maximum {
-      maximum = size
+        tail = tail.max(plan.stack_size)
+      Some(IncomingStack(ty, offset)) =>
+        incoming = incoming.max(offset + call_stack_size(ty))
+      Some(StackAddress(object)) => {
+        if !object.is_valid() {
+          raise InvalidStackObjectArea(
+            message="invalid stack-object descriptor in target VCode",
+          )
+        }
+        while objects.length() <= object.id {
+          objects.push(None)
+        }
+        match objects[object.id] {
+          Some(existing) if existing != object =>
+            raise InvalidStackObjectArea(
+              message="stack-object id has conflicting size or alignment",
+            )
+          None => objects[object.id] = Some(object)
+          _ => ()
+        }
+      }
+      _ => ()
     }
   }
-  maximum
-}
-
-///|
-fn maximum_result_area_size(function : @vcode.Function[X64Inst]) -> Int32 {
-  let mut maximum = 0
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    let size = match function.instruction(instruction) {
-      Some(InternalCall(_, _, plan) | InternalCallIndirect(_, plan)) =>
-        plan.result_area_size
-      _ => 0
-    }
-    if size > maximum {
-      maximum = size
-    }
+  incoming = call_align_up(incoming, 16)
+  {
+    outgoing_args_size: outgoing,
+    incoming_args_size: incoming,
+    tail_args_size: if function.protocol() == Internal {
+      incoming.max(tail)
+    } else {
+      incoming
+    },
+    result_area_size: results,
+    has_calls,
+    stack_objects: stack_object_area_requirements(objects),
   }
-  maximum
 }
 
 ///|
 fn stack_object_area_requirements(
-  function : @vcode.Function[X64Inst],
+  objects : Array[X64StackObject?],
 ) -> StackObjectRequirements? raise X64FrameError {
-  let objects : Array[X64StackObject?] = []
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    if function.instruction(instruction) is Some(StackAddress(object)) {
-      if !object.is_valid() {
-        raise InvalidStackObjectArea(
-          message="invalid stack-object descriptor in target VCode",
-        )
-      }
-      while objects.length() <= object.id {
-        objects.push(None)
-      }
-      match objects[object.id] {
-        Some(existing) if existing != object =>
-          raise InvalidStackObjectArea(
-            message="stack-object id has conflicting size or alignment",
-          )
-        None => objects[object.id] = Some(object)
-        _ => ()
-      }
-    }
-  }
   if objects.is_empty() {
     return None
   }
@@ -581,19 +557,16 @@ fn verify_target_frame(
       actual_edits=actual_edit_count,
     )
   }
-  let expected_outgoing = maximum_outgoing_args_size(function)
+  let requirements = frame_requirements(function)
+  let expected_outgoing = requirements.outgoing_args_size
   if frame.outgoing_args_size != expected_outgoing {
     raise OutgoingAreaMismatch(
       expected=expected_outgoing,
       actual=frame.outgoing_args_size,
     )
   }
-  let expected_incoming = incoming_stack_capacity(function)
-  let expected_tail = if function.protocol() == Internal {
-    maximum_tail_args_size(function)
-  } else {
-    expected_incoming
-  }
+  let expected_incoming = requirements.incoming_args_size
+  let expected_tail = requirements.tail_args_size
   let expected_tail_area = tail_argument_staging_size(
     expected_incoming, expected_tail,
   )
@@ -624,7 +597,7 @@ fn verify_target_frame(
       )
     }
   }
-  let expected_result_area = maximum_result_area_size(function)
+  let expected_result_area = requirements.result_area_size
   let actual_result_area = frame.result_area.map(area => area.size).unwrap_or(0)
   if actual_result_area != expected_result_area {
     raise ResultAreaMismatch(
@@ -640,7 +613,7 @@ fn verify_target_frame(
     ) {
     raise ResultAreaMismatch(expected=expected_result_area, actual=area.size)
   }
-  let expected_stack_objects = stack_object_area_requirements(function)
+  let expected_stack_objects = requirements.stack_objects
   let reserved_call_area_end = match frame.result_area {
     Some(area) => area.offset + area.size
     None => frame.outgoing_args_size
@@ -723,9 +696,10 @@ fn plan_frame_verified(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
 ) -> X64Frame raise X64FrameError {
-  let outgoing_args_size = maximum_outgoing_args_size(function)
+  let requirements = frame_requirements(function)
+  let outgoing_args_size = requirements.outgoing_args_size
   let mut offset = outgoing_args_size
-  let result_area_size = maximum_result_area_size(function)
+  let result_area_size = requirements.result_area_size
   let result_area = if result_area_size > 0 {
     offset = align_up(offset, 16)
     let area = { offset, size: result_area_size, }
@@ -734,7 +708,7 @@ fn plan_frame_verified(
   } else {
     None
   }
-  let stack_object_requirements = stack_object_area_requirements(function)
+  let stack_object_requirements = requirements.stack_objects
   let stack_objects = match stack_object_requirements {
     Some(requirements) => {
       offset = align_up(offset, requirements.alignment)
@@ -775,12 +749,8 @@ fn plan_frame_verified(
     offset += size
   }
   let local_size = align_up(offset, 16)
-  let incoming_args_size = incoming_stack_capacity(function)
-  let tail_args_size = if function.protocol() == Internal {
-    maximum_tail_args_size(function)
-  } else {
-    incoming_args_size
-  }
+  let incoming_args_size = requirements.incoming_args_size
+  let tail_args_size = requirements.tail_args_size
   let tail_area_size = tail_argument_staging_size(
     incoming_args_size, tail_args_size,
   )
@@ -799,7 +769,7 @@ fn plan_frame_verified(
     layout,
     has_setup_area: function.protocol() == Internal ||
     allocation_size > 0 ||
-    function_has_calls(function),
+    requirements.has_calls,
     local_size,
     incoming_args_size,
     tail_args_size,

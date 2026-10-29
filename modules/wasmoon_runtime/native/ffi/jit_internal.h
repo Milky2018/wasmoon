@@ -87,6 +87,9 @@ static inline int wasmoon_address_sanitizer_active(void) { return 0; }
 
 // ============ Trap Handling (trap.c) ============
 
+// Returns zero only when no native trap activation is active.
+int64_t jit_trap_result(int32_t code);
+
 // Trap codes (matching WebAssembly trap types):
 // 0 = no trap
 // 1 = out of bounds memory access
@@ -147,6 +150,7 @@ typedef struct jit_trap_activation {
     int32_t debug_current_func_idx;
     int32_t previous_debug_func_idx;
     int context_detached;
+    GcParkedRoots parked_roots;
 } jit_trap_activation_t;
 
 typedef struct {
@@ -327,7 +331,8 @@ int32_t ctx_gc_set_root_scratch_internal(
 );
 int32_t gc_collect_for_alloc_indexed_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count,
-    const uint8_t *indices
+    const uint8_t *indices, int prefer_young,
+    const GcTypeLayout *operand_layout, int operand_array
 );
 int32_t gc_collect_for_alloc_internal(
     jit_context_t *ctx,
@@ -433,6 +438,8 @@ void WASMOON_GUEST_ABI gc_function_frame_enter_impl(jit_context_t *ctx, wasmoon_
 void WASMOON_GUEST_ABI gc_function_frame_leave_impl(jit_context_t *ctx, wasmoon_gc_function_frame_t *frame);
 
 // ============ GC Operations (gc_ops.c) ============
+int64_t WASMOON_GUEST_ABI gc_try_array_impl(jit_context_t *ctx, int32_t type, int32_t len, int64_t init);
+int64_t WASMOON_GUEST_ABI gc_try_array_wide_impl(jit_context_t *ctx, int32_t type, int32_t len, const GcSlot *init);
 int64_t WASMOON_GUEST_ABI gc_reserve_struct_fast_impl(jit_context_t *ctx, int32_t local_type,
     int32_t count, uint64_t shape, int32_t total_size, int64_t *ticket);
 

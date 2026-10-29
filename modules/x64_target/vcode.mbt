@@ -246,6 +246,7 @@ pub(all) enum X64Inst {
     UInt64
   )
   ScalarStore(@native.AccessWidth, @native.ValueType, UInt64)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
   VectorLoadSplat(@lowering.VectorLane, UInt64)
@@ -267,6 +268,7 @@ pub(all) enum X64Inst {
   TailCallIndirect(@native.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
+  BranchCompare(GprWidth, X64Condition)
   Switch(GprWidth, Array[UInt64])
   Trap(@native.TrapReason)
   Return
@@ -512,21 +514,6 @@ fn require_instruction_shape(
       raise InvalidInstruction(instruction~, message="invalid def value type")
     }
   }
-}
-
-///|
-fn incoming_stack_capacity(function : @vcode.Function[X64Inst]) -> Int32 {
-  let mut size = 0
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    if function.instruction(instruction) is Some(IncomingStack(ty, offset)) {
-      let end = offset + call_stack_size(ty)
-      if end > size {
-        size = end
-      }
-    }
-  }
-  call_align_up(size, 16)
 }
 
 ///|
@@ -1436,7 +1423,7 @@ fn verify_target_vcode(
       }
       TrapIfZero(width) => {
         let ty = integer_type(width)
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(IntegerDivisionByZero) {
           raise InvalidInstruction(
             instruction~,
@@ -1447,7 +1434,7 @@ fn verify_target_vcode(
       }
       TrapIfSignedDivOverflow(width) => {
         let ty = integer_type(width)
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(IntegerOverflow) {
           raise InvalidInstruction(
             instruction~,
@@ -1547,7 +1534,7 @@ fn verify_target_vcode(
           IntegerOverflow
         }
         if (ty != F32 && ty != F64) ||
-          function.instruction_metadata(instruction).unwrap().trap !=
+          function.instruction_annotations(instruction).unwrap().trap() !=
           Some(reason) {
           raise InvalidInstruction(
             instruction~,
@@ -1603,6 +1590,33 @@ fn verify_target_vcode(
           false,
           0,
         )
+      }
+      StoreRepeated64(offset, count, _) => {
+        if count == 0U ||
+          offset > 0xFFFFFFFFFFFFFFFFUL - count.to_uint64() * 8UL {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid repeated word range",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [Ptr64, I64, I64],
+          false,
+          0,
+        )
+        for index, operand in function.instruction_operands(instruction) {
+          if operand.timing != (if index == 0 { Late } else { Early }) ||
+            operand.tie_id >= 0 ||
+            !(operand.constraint is AnyReg || operand.constraint is FixedReg(_)) {
+            raise InvalidInstruction(
+              instruction~,
+              message="word fill requires a late address and three independent early register temporaries",
+            )
+          }
+        }
       }
       ScalarStore(width, value_type, _) => {
         if !valid_scalar_store(width, value_type) {
@@ -1796,7 +1810,8 @@ fn verify_target_vcode(
       AtomicFence =>
         require_instruction_shape(function, instruction, [], [], false, 0)
       SafepointMarker => {
-        if function.instruction_metadata(instruction).unwrap().safepoint is None {
+        if function.instruction_annotations(instruction).unwrap().safepoint()
+          is None {
           raise InvalidInstruction(
             instruction~,
             message="safepoint marker requires safepoint metadata",
@@ -1952,6 +1967,10 @@ fn verify_target_vcode(
       Jump => require_instruction_shape(function, instruction, [], [], true, 1)
       BranchNonZero32 =>
         require_instruction_shape(function, instruction, [I32], [], true, 2)
+      BranchCompare(width, _) => {
+        let ty = integer_type(width)
+        require_instruction_shape(function, instruction, [ty, ty], [], true, 2)
+      }
       Switch(width, cases) => {
         let expected_type = integer_type(width)
         if function.instruction_successor_count(instruction) !=
@@ -1985,7 +2004,7 @@ fn verify_target_vcode(
         )
       }
       Trap(reason) => {
-        if function.instruction_metadata(instruction).unwrap().trap !=
+        if function.instruction_annotations(instruction).unwrap().trap() !=
           Some(reason) {
           raise InvalidInstruction(
             instruction~,

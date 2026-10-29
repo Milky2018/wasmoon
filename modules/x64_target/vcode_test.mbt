@@ -1095,3 +1095,111 @@ test "X64 verifier rejects a rotate that omits its rcx clobber" {
     _ => fail("expected a rotate without its rcx clobber to be rejected")
   }
 }
+
+///|
+test "repeated words require nonaliasing early register temporaries" {
+  for mode in 0..<6 {
+    let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
+      "word_fill_contract",
+      [Ptr64],
+    )
+    let entry = builder.entry_block()
+    builder.append_body(
+      entry,
+      StoreRepeated64(
+        if mode == 5 {
+          0xFFFFFFFFFFFFFFF8UL
+        } else {
+          24UL
+        },
+        if mode == 4 {
+          0U
+        } else {
+          65U
+        },
+        0xFEDCBA9876543210UL,
+      ),
+      [
+        @vcode.Input::any(builder.parameter(0)).with_timing(
+          if mode == 1 {
+            Early
+          } else {
+            Late
+          },
+        ),
+      ],
+      [
+        if mode == 3 {
+          @vcode.Output::tied(Ptr64, 0).with_timing(Early)
+        } else {
+          @vcode.Output::any(Ptr64).with_timing(Early)
+        },
+        @vcode.Output::any(I64).with_timing(
+          if mode == 2 {
+            Late
+          } else {
+            Early
+          },
+        ),
+        @vcode.Output::any(I64).with_timing(Early),
+      ],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    builder.set_terminator(
+      entry,
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    let admitted = try {
+      @x64_target.verify_vcode(builder.finish())
+      true
+    } catch {
+      _ => false
+    }
+    assert_eq(admitted, mode == 0, msg="mode=\{mode}")
+  }
+}
+
+///|
+test "X64 comparison branches validate their operand width and edge count" {
+  let cases : Array[(@native.ValueType, Int32)] = [(I64, 2), (I32, 1), (I32, 3)]
+  for (operand_type, edge_count) in cases {
+    let builder : @vcode.Builder[@x64_target.X64Inst] = @vcode.Builder::new(
+      "invalid_comparison_branch",
+      [operand_type, operand_type],
+    )
+    let target = builder.create_block([])
+    builder.set_terminator(
+      builder.entry_block(),
+      BranchCompare(W32, Eq),
+      [
+        @vcode.Input::any(builder.parameter(0)),
+        @vcode.Input::any(builder.parameter(1)),
+      ],
+      Array::makei(edge_count, _ => @vcode.Edge::new(target, [])),
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    builder.set_terminator(
+      target,
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    try @x64_target.verify_vcode(builder.finish()) catch {
+      _ => ()
+    } noraise {
+      _ => fail("expected an invalid comparison branch to be rejected")
+    }
+  }
+}

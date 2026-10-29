@@ -104,7 +104,9 @@ fn wasmoon_native_environment(
       identity_window_limit: native_layout_field(54),
       identity_window_page: native_layout_field(55),
     }),
+    prepared_arrays=true,
     gc_array_regions=true,
+    exclusive_poll_controls=true,
     gc_heap_field=if layout.gc_heap_offset >= 0 && layout.gc_heap_offset != 255 {
       Some(gc_heap_field)
     } else {
@@ -150,6 +152,7 @@ fn wasmoon_call_abi(
     function_frame=@native_lowering.FunctionRootFrameAbi::new(
       @native.ExternalSymbol::new(gc_function_frame_enter_symbol()),
       @native.ExternalSymbol::new(gc_function_frame_leave_symbol()),
+      preserves_mask=true,
     ),
     hidden_safepoints~,
   )

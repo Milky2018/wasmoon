@@ -90,6 +90,27 @@ fn lower_direct_operation(
   stack_object : (@native.StackObject) -> X64StackObject,
   scratch : DirectLoweringScratch,
 ) -> Array[@vcode.Value] raise X64LowerError {
+  if operation is StoreRepeated64(offset, count, bits) {
+    append_body(
+      builder,
+      block,
+      StoreRepeated64(offset, count, bits),
+      [@vcode.Input::any(operands[0]).with_timing(Late)],
+      [
+        @vcode.Output::any(Ptr64).with_timing(Early),
+        @vcode.Output::any(I64).with_timing(Early),
+        @vcode.Output::any(I64).with_timing(Early),
+      ],
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+    |> ignore
+    return []
+  }
   if operation is IntMultiplyAdd {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
@@ -114,6 +135,46 @@ fn lower_direct_operation(
         roots,
         operation.semantics(),
       ),
+    )
+  }
+  if operation is IntLowBitsShiftLeft(field_bits, amount) {
+    // Preserve the ordinary shift-and-mask sequence on targets without UBFIZ.
+    let shifted = lower_direct_operation(
+        context,
+        builder,
+        block,
+        block_index,
+        instruction_index,
+        IntShiftImmediate(ShiftLeft, amount),
+        operands,
+        operand_types,
+        result_types,
+        [],
+        None,
+        None,
+        stack_object,
+        scratch,
+      )[0]
+    let low_mask = if field_bits == 64 {
+      0xFFFFFFFFFFFFFFFFUL
+    } else {
+      (1UL << field_bits) - 1UL
+    }
+    return lower_direct_operation(
+      context,
+      builder,
+      block,
+      block_index,
+      instruction_index,
+      IntBinaryImmediate(And, low_mask << amount),
+      [shifted],
+      result_types,
+      result_types,
+      roots,
+      source_location,
+      stack_map,
+      stack_object,
+      scratch,
     )
   }
   if operation is IntAddShiftedLeft(amount) {
@@ -1406,6 +1467,42 @@ fn DirectLoweringSession::lower_return_values(
 }
 
 ///|
+/// Local raw-word aliases need a typed definition at a CFG boundary. Keep
+/// body aliases free, materialize only mismatches, and leave GC references and
+/// invalid semantic edge types to the ordinary strict verifier.
+fn DirectLoweringSession::edge_values(
+  self : DirectLoweringSession,
+  block : @vcode.Block,
+  ids : Array[Int32],
+) -> Array[@vcode.Value] raise X64LowerError {
+  let values : Array[@vcode.Value] = []
+  for id in ids {
+    let value = self.target_value(id)
+    let expected = self.value_types[id]
+    let needs_move = match expected {
+      Ptr64 => self.builder.value_type(value) == Some(I64)
+      I64 => self.builder.value_type(value) == Some(Ptr64)
+      _ => false
+    }
+    if needs_move {
+      values.push(
+        append_body(
+          self.builder,
+          block,
+          Move(expected),
+          [@vcode.Input::any(value)],
+          [@vcode.Output::any(expected)],
+          @vcode.InstructionMetadata::empty(),
+        )[0],
+      )
+    } else {
+      values.push(value)
+    }
+  }
+  values
+}
+
+///|
 fn DirectLoweringSession::terminate(
   self : DirectLoweringSession,
   block_id : Int32,
@@ -1422,7 +1519,12 @@ fn DirectLoweringSession::terminate(
           block,
           Jump,
           [],
-          [@vcode.Edge::new(self.blocks[target], self.target_values(arguments))],
+          [
+            @vcode.Edge::new(
+              self.blocks[target],
+              self.edge_values(block, arguments),
+            ),
+          ],
           ordinary_metadata,
         )
       Branch(
@@ -1440,11 +1542,11 @@ fn DirectLoweringSession::terminate(
           [
             @vcode.Edge::new(
               self.blocks[true_target],
-              self.target_values(true_arguments),
+              self.edge_values(block, true_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[false_target],
-              self.target_values(false_arguments),
+              self.edge_values(block, false_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1459,30 +1561,22 @@ fn DirectLoweringSession::terminate(
         false_arguments
       ) => {
         let width = if self.value_types[left] == I32 { W32 } else { W64 }
-        let condition = append_body(
-            self.builder,
-            block,
-            CompareSet(width, lower_condition(comparison)),
-            [
-              @vcode.Input::any(self.target_value(left)),
-              @vcode.Input::any(self.target_value(right)),
-            ],
-            [@vcode.Output::any(I32)],
-            @vcode.InstructionMetadata::empty(),
-          )[0]
         set_terminator(
           self.builder,
           block,
-          BranchNonZero32,
-          [@vcode.Input::any(condition)],
+          BranchCompare(width, lower_condition(comparison)),
+          [
+            @vcode.Input::any(self.target_value(left)),
+            @vcode.Input::any(self.target_value(right)),
+          ],
           [
             @vcode.Edge::new(
               self.blocks[true_target],
-              self.target_values(true_arguments),
+              self.edge_values(block, true_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[false_target],
-              self.target_values(false_arguments),
+              self.edge_values(block, false_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1506,30 +1600,22 @@ fn DirectLoweringSession::terminate(
             [@vcode.Output::any(self.value_types[input])],
             @vcode.InstructionMetadata::empty(),
           )[0]
-        let condition = append_body(
-            self.builder,
-            block,
-            CompareSet(width, lower_condition(comparison)),
-            [
-              @vcode.Input::any(self.target_value(input)),
-              @vcode.Input::any(constant),
-            ],
-            [@vcode.Output::any(I32)],
-            @vcode.InstructionMetadata::empty(),
-          )[0]
         set_terminator(
           self.builder,
           block,
-          BranchNonZero32,
-          [@vcode.Input::any(condition)],
+          BranchCompare(width, lower_condition(comparison)),
+          [
+            @vcode.Input::any(self.target_value(input)),
+            @vcode.Input::any(constant),
+          ],
           [
             @vcode.Edge::new(
               self.blocks[true_target],
-              self.target_values(true_arguments),
+              self.edge_values(block, true_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[false_target],
-              self.target_values(false_arguments),
+              self.edge_values(block, false_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1540,13 +1626,13 @@ fn DirectLoweringSession::terminate(
         let successors = cases.map(case => {
           @vcode.Edge::new(
             self.blocks[case.target],
-            self.target_values(case.arguments),
+            self.edge_values(block, case.arguments),
           )
         })
         successors.push(
           @vcode.Edge::new(
             self.blocks[default_target],
-            self.target_values(default_arguments),
+            self.edge_values(block, default_arguments),
           ),
         )
         set_terminator(

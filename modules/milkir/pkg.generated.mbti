@@ -45,6 +45,7 @@ pub(all) enum AliasRegion {
   Heap(Int32)
   Table(Int32)
   Context
+  Control
   Other
 } derive(Eq, Hash, @debug.Debug)
 pub fn AliasRegion::equal(Self, Self) -> Bool
@@ -211,6 +212,7 @@ pub(all) struct ExtensionEffects {
   write : AliasRegion?
   may_trap : Bool
   observable : Bool
+  invalidates_addresses : Bool
   pointer_region : AliasRegion?
   pointer_bytes : Int32
 } derive(Eq, Hash, @debug.Debug)

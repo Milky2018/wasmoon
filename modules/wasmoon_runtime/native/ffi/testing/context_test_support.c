@@ -11,6 +11,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_gc_word_access(
     case 2: return gc_array_get_heap_impl(heap, reference, index);
     case 3: gc_array_set_heap_impl(heap, reference, index, value); return 0;
     case 4: return gc_array_len_heap_impl(heap, reference);
+    case 5: return (int64_t)(uintptr_t)gc_array_data_heap_impl(heap, reference, index);
     default: return -1;
     }
 }
@@ -108,6 +109,11 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_callable_lookup(void *context, i
     return callable_type_for_value(ctx, value);
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_context_callable_native_reference(void *context, int64_t value) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
+    return callable_native_reference(ctx, value);
+}
+
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_callable_subtype(void *context, int64_t value, int32_t expected) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
     return gc_ref_test_impl(ctx, FUNCREF_TAG | value, expected, 0);
@@ -189,6 +195,46 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_resume_roots(GcHeap *heap) {
     passed &= ctx_gc_set_root_scratch_internal(ctx, &root, 1);
     jit_trap_activation_pop(&caller);
     passed &= ctx_execution(ctx)->gc_root_scratch[0] == other;
+    free_context_internal(ctx);
+    return passed;
+}
+
+// Parking borrows the stopped activation; it must not allocate or copy its roots.
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_parked_activation_lease(GcHeap *heap) {
+    jit_context_t *ctx = alloc_context_internal(1);
+    if (!ctx) return 0;
+    ctx_set_gc_heap_internal(ctx, heap);
+    int32_t live = gc_heap_alloc_struct(heap, 0, NULL, 0);
+    int32_t dead = gc_heap_alloc_struct(heap, 0, NULL, 0);
+    if (!live || !dead) { free_context_internal(ctx); return 0; }
+    int64_t roots[] = {(int64_t)live << 1, (int64_t)dead << 1};
+    uint64_t mask = 1;
+    wasmoon_gc_function_frame_t frame;
+    jit_trap_activation_t parked;
+    jit_trap_activation_init(&parked, ctx);
+    jit_trap_activation_push(&parked);
+    gc_function_frame_enter_impl(ctx, &frame, roots, &mask, 2);
+    jit_trap_activation_detach();
+    void *registration = NULL;
+    wasmoon_native_fail_allocation_for_tests(1);
+    int passed = jit_parked_gc_roots_register(&parked, &registration);
+    // The pending failure proves that parking issued no fallible native request.
+    passed &= wasmoon_native_failures_enabled();
+    wasmoon_native_fail_allocation_for_tests(0);
+    if (registration) {
+        int64_t copied = 0;
+        passed &= gc_heap_registered_root_count(registration) == 1;
+        passed &= gc_heap_copy_registered_roots(registration, &copied) == 1;
+        passed &= copied == roots[0];
+    } else passed = 0;
+    gc_heap_collect(heap, NULL, 0);
+    passed &= gc_heap_is_valid(heap, live) && !gc_heap_is_valid(heap, dead);
+    jit_parked_gc_roots_unregister(registration);
+    jit_trap_activation_attach(&parked);
+    gc_function_frame_leave_impl(ctx, &frame);
+    jit_trap_activation_pop(&parked);
+    gc_heap_collect(heap, NULL, 0);
+    passed &= !gc_heap_is_valid(heap, live);
     free_context_internal(ctx);
     return passed;
 }
@@ -525,11 +571,65 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_gc_identity_bytes(GcHeap *heap) {
     size_t bytes = (size_t)heap->identity_page_capacity * sizeof(GcIdentityPage *) +
         (size_t)heap->live_capacity * sizeof(int32_t);
     for (int32_t i = 0; i < heap->identity_page_capacity; i++) {
-        if (heap->identity_pages[i]) bytes += sizeof(GcIdentityPage);
+        if (heap->identity_pages[i]) bytes += sizeof(GcIdentityPage) + gc_generation_page_metadata_bytes(heap->identity_pages[i]);
     }
     return (int64_t)bytes;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_test_gc_allocation_budget(GcHeap *heap, int64_t bytes) {
     heap->collection_limit = heap->size + (size_t)bytes;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_allocation_collection(GcHeap *heap, const int64_t *roots) {
+    return gc_heap_collect_for_allocation(heap, roots, Moonbit_array_length(roots));
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_minor_collections(GcHeap *heap) {
+    return heap->generation.minor_collections;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_test_heap_collection_allowance(GcHeap *heap) {
+    return (int64_t)heap->collection_limit - (int64_t)heap->size;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_dirty_cards(GcHeap *heap, int32_t ref) {
+    return gc_generation_card_count(heap, ref);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_heap_unknown_reference_write(
+    GcHeap *heap, int32_t ref, int32_t field, int64_t value
+) {
+    if (!gc_heap_is_valid(heap, ref)) return 0;
+    GcHeader *header = (GcHeader *)(heap->data + gc_heap_identity_offset(heap, ref));
+    GcTypeLayout *layout = gc_object_layout(heap, header);
+    int array = header->kind == GC_KIND_ARRAY;
+    uint8_t *data = (uint8_t *)(header + 1);
+    int32_t count = array ? *(int32_t *)data : (int32_t)header->reserved;
+    if (!layout || field < 0 || field >= count) return 0;
+    GcFieldLayout *descriptor = &layout->fields[array ? 0 : field];
+    if (!descriptor->reference) return 0;
+    gc_heap_write_barrier(heap, ref, value);
+    gc_layout_write(array ? data + GC_ARRAY_DATA_OFFSET + (size_t)field * layout->size : data,
+        descriptor, (GcSlot){value, 0});
+    gc_heap_maybe_verify(heap, "unknown reference write");
+    return 1;
+}
+
+// Model a collected identity history without allocating a million live objects in
+// verifier-enabled tests. Keep the existing payload and all skipped pages empty.
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_gc_sparse_trace_history(GcHeap *heap) {
+    const int32_t capacity = 2048;
+    if (!heap || heap->object_count != 1 || heap->live_count != 1 ||
+        heap->identity_page_capacity > capacity) return 0;
+    GcIdentityPage **pages = wasmoon_native_realloc(heap->identity_pages,
+        (size_t)capacity * sizeof(*pages));
+    if (!pages) return 0;
+    memset(pages + heap->identity_page_capacity, 0,
+        (size_t)(capacity - heap->identity_page_capacity) * sizeof(*pages));
+    heap->identity_pages = pages;
+    heap->identity_page_capacity = capacity;
+    heap->object_count = 1024 * GC_ID_PAGE_SIZE;
+    heap->identity_window_limit = 0;
+    heap->identity_window_page = NULL;
+    return gc_heap_verify(heap, 0);
 }

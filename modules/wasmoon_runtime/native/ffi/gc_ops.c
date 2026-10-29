@@ -5,6 +5,7 @@
 #include "jit_internal.h"
 #include "gc_allocator.h"
 #include "gc_access.h"
+#include "callable_lookup.h"
 
 // ============ Value Decoding Helpers ============
 
@@ -458,6 +459,8 @@ int64_t WASMOON_GUEST_ABI gc_register_struct_inline(jit_context_t *ctx, uint8_t 
 
     // Calculate offset and register object
     int32_t offset = (int32_t)(obj_ptr - heap->data);
+    if (!gc_object_layout(heap, (GcHeader *)obj_ptr))
+        heap->generation.has_untyped_allocations = 1;
     int32_t gc_ref = gc_heap_register_object(heap, offset);
 
     // Update heap size to match what JIT allocated
@@ -561,6 +564,32 @@ int64_t WASMOON_GUEST_ABI gc_alloc_struct_slow(
 int64_t WASMOON_GUEST_ABI gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size) {
     // Same as struct registration - just register in object table
     return gc_register_struct_inline(ctx, obj_ptr, total_size);
+}
+
+// These entry points do not collect or register roots. Refusal must leave the
+// complete allocation to the checked slow path, including its trap ordering.
+static int64_t try_array(jit_context_t *ctx, int32_t type, int32_t len, GcSlot init) {
+    if (array_length_exceeds_layout(len)) return 0;
+    ctx = resolve_ctx(ctx);
+    GcHeap *heap = resolve_heap(ctx);
+    if (!heap || !ctx || !ctx_runtime(ctx)->callable_local_types || type < 0 ||
+        type >= ctx_runtime(ctx)->callable_local_type_count) return 0;
+    int32_t identity = ctx_runtime(ctx)->callable_local_types[type];
+    int32_t ref = gc_heap_try_array(heap, identity, type, len, init);
+    if (!ref) return 0;
+    ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
+    ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
+    return (int64_t)ref << 1;
+}
+
+int64_t WASMOON_GUEST_ABI gc_try_array_impl(jit_context_t *ctx, int32_t type,
+    int32_t len, int64_t init) {
+    return try_array(ctx, type, len, (GcSlot){init, 0});
+}
+
+int64_t WASMOON_GUEST_ABI gc_try_array_wide_impl(jit_context_t *ctx, int32_t type,
+    int32_t len, const GcSlot *init) {
+    return try_array(ctx, type, len, *init);
 }
 
 // Slow path for array allocation
@@ -969,29 +998,35 @@ _Static_assert(GC_ARRAY_DATA_OFFSET == 16, "numeric array view ABI");
 void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32_t width) {
     if (!heap || !ref || ref < 0 || ref > (int64_t)INT32_MAX * 2 || (ref & 1)) return NULL;
     if (gc_verify_env_cached != 0) return NULL;
-    GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
-    if (!header || header->kind != GC_KIND_ARRAY) return NULL;
-    GcTypeLayout *layout = gc_object_layout(heap, header);
-    int compact = layout && layout->count == 1 && layout->fields[0].offset == 0 &&
-        layout->fields[0].width == layout->size && !layout->fields[0].reference;
-    if (width == 0) {
-        uintptr_t code = !compact ? 0 : layout->size == 1 ? 1 : layout->size == 2 ? 2 :
-            layout->size == 4 ? 3 : layout->size == 8 ? 4 : 0;
-        // Opaque metadata view: length remains available even for legacy or
-        // reference arrays. Element refinement checks the exact width tag.
-        return (void *)((uintptr_t)(header + 1) | code);
+    GcArrayViewCache *cached = &heap->array_view;
+    if (cached->reference != ref) {
+        GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
+        if (!header || header->kind != GC_KIND_ARRAY) return NULL;
+        int32_t compact_width = gc_access_compact_array_width(gc_object_layout(heap, header));
+        *cached = (GcArrayViewCache){ref, gc_access_array_view(header + 1, compact_width), compact_width};
     }
-    if (!compact || layout->size != width) return NULL;
-    return header + 1;
+    if (width == 0) return (void *)cached->view;
+    if (width != cached->width) return NULL;
+    return (void *)(cached->view & ~(uintptr_t)15);
 }
 
 // Checked once per object/type and heap epoch. Subsequent field projections
 // are nontrapping metadata reads from this admitted, live struct payload.
-void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int32_t type_idx,
-    uint64_t shape, int32_t fields) {
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t ref, int32_t type_idx,
+    uint64_t shape, int32_t fields, GcHeap *resolved_heap) {
     if (!ref) { trap_null_reference(); return NULL; }
-    ctx = resolve_ctx(ctx);
-    GcHeap *heap = resolve_heap(ctx);
+    // The explicit-context entry already located the heap and rejected its
+    // hint without a call or mutation. TLS/verification entries resolve here.
+    GcHeap *heap = resolved_heap;
+    if (!heap) {
+        ctx = resolve_ctx(ctx);
+        heap = resolve_heap(ctx);
+    }
     if (!heap || ref < 0 || ref > (int64_t)INT32_MAX * 2 || (ref & 1) || fields < 0 || fields > 16) {
         trap_unreachable_i64(); return NULL;
     }
@@ -999,7 +1034,7 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
         type_idx < ctx_runtime(ctx)->callable_local_type_count
         ? ctx_runtime(ctx)->callable_local_types[type_idx] : -1;
     GcStructViewCache *cached = &heap->struct_view;
-    if (gc_verify_env_cached == 0 && target >= 0 &&
+    if (!resolved_heap && gc_verify_env_cached == 0 && target >= 0 &&
         cached->reference == ref && cached->identity == target &&
         cached->shape == shape && cached->fields == fields) return cached->payload;
     GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
@@ -1008,7 +1043,16 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
     }
     int32_t identity = (int32_t)(header->reserved >> 32) - 1;
     int exact = identity >= 0 && identity == target;
-    if (!exact && !gc_ref_test_impl(ctx, ref, type_idx, 0)) { trap_unreachable_i64(); return NULL; }
+    if (!exact) {
+        // The live struct and concrete target are already checked above. Use
+        // its canonical runtime identity without repeating ref.test's object
+        // decoding/kind queries; legacy identities retain that complete path.
+        int32_t actual = gc_heap_runtime_type(heap, decode_heap_ref(ref));
+        int compatible = actual >= 0 && target >= 0
+            ? callable_subtype_registered(ctx_runtime(ctx), actual, type_idx)
+            : gc_ref_test_impl(ctx, ref, type_idx, 0);
+        if (!compatible) { trap_unreachable_i64(); return NULL; }
+    }
     GcTypeLayout *layout = gc_object_layout(heap, header);
     uint64_t mask = fields == 16 ? UINT64_MAX : (UINT64_C(1) << (fields * 4)) - 1;
     if (layout && (layout->kind != GC_KIND_STRUCT || layout->count < fields || (layout->prefix_shape & mask) != shape)) {
@@ -1023,6 +1067,31 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
         *cached = (GcStructViewCache){ref, identity, fields, shape, view};
     }
     return view;
+}
+
+// A matching non-root hint has already admitted the reference, nominal type
+// and field span; malformed keys cannot hit an admitted entry.
+// Misses pass the located heap to the complete checked path without repeating
+// its hint probe. TLS, verification and legacy contexts keep their fallback.
+// Keep cold calls out of the common leaf's register frame.
+void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int32_t type_idx,
+    uint64_t shape, int32_t fields) {
+    GcHeap *heap = NULL;
+    if (ctx && ref && gc_verify_env_cached == 0) {
+        heap = (GcHeap *)ctx_gc_heap(ctx);
+        if (heap) {
+            GcStructViewCache *cached = &heap->struct_view;
+            if (cached->reference == ref && cached->shape == shape && cached->fields == fields) {
+                jit_runtime_state_t *runtime = ctx_runtime(ctx);
+                if (runtime->callable_local_types && type_idx >= 0 &&
+                    type_idx < runtime->callable_local_type_count) {
+                    int32_t target = runtime->callable_local_types[type_idx];
+                    if (target >= 0 && cached->identity == target) return cached->payload;
+                }
+            }
+        }
+    }
+    return gc_struct_data_slow(ctx, ref, type_idx, shape, fields, heap);
 }
 
 int64_t WASMOON_GUEST_ABI gc_array_get_heap_impl(GcHeap *heap, int64_t ref, int32_t idx) {
@@ -1061,7 +1130,7 @@ void WASMOON_GUEST_ABI gc_array_set_heap_impl(GcHeap *heap, int64_t ref, int32_t
     uint8_t *element = data + GC_ARRAY_DATA_OFFSET +
         (size_t)idx * (layout ? layout->size : 16);
     GcSlot slot = {value, 0};
-    if (access.reference) gc_heap_write_barrier(heap, gc_ref, value);
+    if (access.reference) gc_heap_write_barrier_at(heap, gc_ref, value, idx);
     gc_access_layout_write(element, &access, slot);
     gc_access_verify(heap, "array_set");
 }
@@ -1084,6 +1153,8 @@ int32_t WASMOON_GUEST_ABI gc_array_len_heap_impl(GcHeap *heap, int64_t ref) {
 
 #if defined(_MSC_VER) && !defined(__clang__)
 WASMOON_DEFINE_GUEST_TARGET(gc_reserve_struct_fast_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_try_array_impl);
+WASMOON_DEFINE_GUEST_TARGET(gc_try_array_wide_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_array_data_heap_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_struct_data_impl);
 WASMOON_DEFINE_GUEST_TARGET(gc_array_get_heap_impl);

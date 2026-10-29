@@ -14,6 +14,7 @@ fn projection(
         write: None,
         may_trap: false,
         observable: false,
+        invalidates_addresses: false,
         pointer_region: Some(Heap(-1)),
         pointer_bytes: 0,
       }),
@@ -179,6 +180,7 @@ test "LICM moves only admitted in-range loads across disjoint effects" {
           write: None,
           may_trap: true,
           observable: false,
+          invalidates_addresses: false,
           pointer_region: Some(Heap(-1)),
           pointer_bytes: if mode == "unchecked" {
             0
@@ -213,6 +215,7 @@ test "LICM moves only admitted in-range loads across disjoint effects" {
             write: Some(Heap(if mode == "alias" { -1 } else { -2 })),
             may_trap: false,
             observable: true,
+            invalidates_addresses: false,
             pointer_region: None,
             pointer_bytes: 0,
           }),
@@ -283,6 +286,7 @@ test "guarded LICM preserves zero-trip entry tests and stops at earlier effects"
           write: None,
           may_trap: true,
           observable: false,
+          invalidates_addresses: false,
           pointer_region: Some(Heap(0)),
           pointer_bytes: 4,
         }),
@@ -341,6 +345,7 @@ test "guarded LICM preserves header definitions used after a zero-trip loop" {
           write: None,
           may_trap: true,
           observable: false,
+          invalidates_addresses: false,
           pointer_region: Some(Heap(0)),
           pointer_bytes: 4,
         }),
@@ -356,5 +361,102 @@ test "guarded LICM preserves header definitions used after a zero-trip loop" {
     hoist_loop_invariants(function, guard_entries=true) |> ignore
     function.verify()
     assert_eq(function.blocks.length(), if escaping_phi { 4 } else { 6 })
+  }
+}
+
+///|
+test "invocation control writes preserve payload metadata versions but opaque writes revoke them" {
+  for unknown_store in [false, true] {
+    let b = @milkir.FunctionBuilder("control_metadata_versions")
+    let object = b.add_param(Ref)
+    b.add_result(Ptr)
+    b.add_result(Ptr)
+    let first = projection(b, object)
+    b.emit_void_ext_inst(
+      ExtOp(
+        "memory-test",
+        "control_write",
+        [],
+        effects=Some({
+          read: None,
+          write: Some(if unknown_store { Other } else { Control }),
+          may_trap: false,
+          observable: true,
+          invalidates_addresses: false,
+          pointer_region: None,
+          pointer_bytes: 0,
+        }),
+      ),
+      [],
+    )
+    let second = projection(b, object)
+    b.return_([first, second])
+    let function = b.finalize()
+    optimize_with_level(function, O2) |> ignore
+    let mut count = 0
+    for block in function.blocks {
+      for id in function.block_instruction_ids(block) {
+        if function.instruction_by_id(id).unwrap().opcode is Ext(op, _) &&
+          op.opcode == "project" {
+          count += 1
+        }
+      }
+    }
+    assert_eq(count, if unknown_store { 2 } else { 1 })
+  }
+}
+
+///|
+test "control reads are invalidated by control and opaque writes" {
+  for unknown_store in [false, true] {
+    let b = @milkir.FunctionBuilder("control_read_versions")
+    b.add_result(I32)
+    b.add_result(I32)
+    let read : @milkir.ExtOp = ExtOp(
+      "memory-test",
+      "control_read",
+      [],
+      effects=Some({
+        read: Some(Control),
+        write: None,
+        may_trap: false,
+        observable: false,
+        invalidates_addresses: false,
+        pointer_region: None,
+        pointer_bytes: 0,
+      }),
+    )
+    let first = b.emit_ext_inst(I32, read, [])
+    b.emit_void_ext_inst(
+      ExtOp(
+        "memory-test",
+        "write",
+        [],
+        effects=Some({
+          read: None,
+          write: Some(if unknown_store { Other } else { Control }),
+          may_trap: false,
+          observable: true,
+          invalidates_addresses: false,
+          pointer_region: None,
+          pointer_bytes: 0,
+        }),
+      ),
+      [],
+    )
+    let second = b.emit_ext_inst(I32, read, [])
+    b.return_([first, second])
+    let function = b.finalize()
+    optimize_with_level(function, O2) |> ignore
+    let mut count = 0
+    for block in function.blocks {
+      for id in function.block_instruction_ids(block) {
+        if function.instruction_by_id(id).unwrap().opcode is Ext(op, _) &&
+          op.opcode == "control_read" {
+          count += 1
+        }
+      }
+    }
+    assert_eq(count, 2)
   }
 }

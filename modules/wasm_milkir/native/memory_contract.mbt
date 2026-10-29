@@ -41,6 +41,7 @@ fn projection_opcode(projection : Projection) -> @milkir.ExtOp {
         FieldData(_, _, width, _, true) => width
         _ => 0
       },
+      invalidates_addresses: false,
       pointer_region: match projection {
         ArrayLength => None
         StructData(_) => Some(Context)
@@ -81,7 +82,7 @@ fn decode_projection(extension : @milkir.ExtOp) -> Projection? {
 ///|
 fn semantic_effects(opcode : @milkir.Opcode) -> @milkir.ExtensionEffects {
   let effects = @effects.analyze(opcode)
-  let write = if !effects.preserves_physical_addresses() {
+  let write = if !effects.preserves_checked_references() {
     Some(@milkir.AliasRegion::Other)
   } else {
     match effects.write {
@@ -106,6 +107,7 @@ fn semantic_effects(opcode : @milkir.Opcode) -> @milkir.ExtensionEffects {
     effects.may_reenter ||
     effects.may_suspend ||
     effects.may_replace_heap,
+    invalidates_addresses: !effects.preserves_physical_addresses(),
     pointer_region: None,
     pointer_bytes: 0,
   }
@@ -116,6 +118,9 @@ fn annotate_semantic(
   extension : @milkir.ExtOp,
   signature : @milkir.Signature,
 ) -> @milkir.ExtOp {
+  if decode_poll_region(extension) is Some(_) {
+    return extension
+  }
   let plain = @milkir.ExtOp(
     extension.dialect,
     extension.opcode,
@@ -146,6 +151,21 @@ fn validate_memory_extension(
   context : @wasm_milkir.WasmValidationContext,
   results : Array[@milkir.Type],
 ) -> String? {
+  if decode_poll_region(view.op) is Some((_, guard_)) {
+    if (if guard_ {
+        !view.operand_types.is_empty() ||
+        view.result_types.length() != 2 ||
+        view.result_types[0] != I32 ||
+        view.result_types[1] != Ptr
+      } else {
+        view.operand_types.length() != 1 ||
+        view.operand_types[0] != Ptr ||
+        !view.result_types.is_empty()
+      }) {
+      return Some("invalid native poll region signature")
+    }
+    return None
+  }
   if decode_projection(view.op) is Some(projection) {
     if view.op != projection_opcode(projection) {
       return Some("invalid projection memory effects")

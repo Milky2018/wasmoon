@@ -5,6 +5,8 @@
 
 // Read-only native view. Each pointer is an RC-owned MoonBit FixedArray payload.
 // MoonBit owns ordering, identity updates and publication policy.
+// Optional bounded Store indices contain record ordinals, not cached targets.
+// Replacing keys republishes their index; identity/pointer reads stay current.
 typedef struct {
     int32_t *parents;
     int64_t *addresses;
@@ -17,6 +19,10 @@ typedef struct {
     int64_t *reference_pointers;
     int32_t *reference_stores;
     int32_t reference_count;
+    int32_t store_origin;
+    int32_t *store_positions;
+    int32_t function_origin;
+    int32_t *function_positions;
 } jit_callable_registry_t;
 
 #endif

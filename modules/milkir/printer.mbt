@@ -510,6 +510,7 @@ fn format_global_value(
         Heap(index) => "heap[\{index}]"
         Table(index) => "table[\{index}]"
         Context => "context"
+        Control => "control"
         Other => "other"
       }
       "gv\{global_value.id} = context_field \{field.dialect}:\{field.key}[\{parameters.join(", ")}] : \{format_type(field.ty)} \{stability_text} -> \{region_text}"
