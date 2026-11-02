@@ -47,8 +47,8 @@ independent of these hints.
 
 Expansion is limited to at most eight natural-loop sites per kind in functions
 with 2..64 blocks, within the existing lowering budget. Leaf getters and larger
-functions keep the shared accessor. Codegen revision 33 rejects older cached
-code whose embedded heap offsets no longer describe this layout. Package
+functions keep the shared accessor. Codegen revision 34 rejects older cached
+code whose heap offsets or register assignments no longer match. Package
 versions and VMContext ABI version are unchanged.
 
 ## Regression controls
@@ -143,3 +143,22 @@ execution, GC, scheduling and teardown. `-j 1` serializes test executables; V8's
 internal defaults are unchanged. These results establish no universal speedup,
 pure guest-execution ratio or peak-memory improvement, and do not resolve the
 remaining overall gap to the official runtime.
+
+## Cross-target operand repair
+
+The initial cd0b6ee3 Linux and Windows runs found an x64 allocation-verification failure
+in the existing large sparse-mask regression. Its repeated-store instruction
+had a Late address reload and an Early temporary assigned the same natural
+register. The reload occurs before the whole instruction, so the local
+assignments violate the declared phase contract. The same input reproduces by
+cross-compilation on AArch64, beginning at 255 reference parameters.
+
+Local assignment now repairs this overlap while preserving fixed/tied
+readers, valid split regions and the complete allocation verifier. The
+regression compiles both targets at O0/O2/O3. The original failing native
+fixture and all existing allocator assertions remain intact. A broader gap
+restriction was rejected after exposing an existing valid allocation that
+could no longer obtain a register. Codegen34 separates changed allocation
+decisions from revision33 caches. Interrupted revision33 aggregate timings
+have no final performance conclusion; final measurements use the repaired
+allocator in both the complete candidate and its root/struct control.
