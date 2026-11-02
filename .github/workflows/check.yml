@@ -152,9 +152,9 @@ jobs:
         id: build
         run: |
           moon build --target native --release
-          if nm \
-            target/native/release/build/Milky2018/wasmoon_runtime/native/ffi/libffi.a \
-            | grep "live_gc_frame_count" >/dev/null; then
+          nm _build/native/release/build/Milky2018/wasmoon_runtime/native/ffi/libffi.a \
+            > _build/release-ffi-symbols.log
+          if grep "live_gc_frame_count" _build/release-ffi-symbols.log >/dev/null; then
             echo "release libffi.a contains test-only GC frame counters"
             exit 1
           fi
