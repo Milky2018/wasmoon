@@ -12,6 +12,11 @@ const GC_SLOT_BYTES : Int32 = 16
 struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
   inline_heap : InlineHeapLayout?
+  struct_views : StructViewLayout?
+  array_views : ArrayViewLayout?
+  mut array_projection_budget : Int32
+  mut projection_budget : Int32
+  projection_sites : Map[Int32, Bool]?
   exclusive_poll_controls : Bool
   gc_array_regions : Bool
   prepared_arrays : Bool
@@ -48,6 +53,8 @@ pub fn Environment::new(
   exclusive_poll_controls~ : Bool = false,
   prepared_arrays~ : Bool = false,
   inline_heap~ : InlineHeapLayout? = None,
+  struct_views~ : StructViewLayout? = None,
+  array_views~ : ArrayViewLayout? = None,
 ) -> Environment {
   {
     function_symbol,
@@ -57,8 +64,13 @@ pub fn Environment::new(
     gc_array_regions,
     exclusive_poll_controls,
     prepared_arrays,
+    projection_budget: 8,
+    projection_sites: None,
     expand_structs: true,
     inline_heap,
+    struct_views,
+    array_views,
+    array_projection_budget: 8,
   }
 }
 
@@ -1731,6 +1743,22 @@ pub fn lower_to_sink(
     )
     {
       ..environment,
+      projection_budget: if structs {
+        8
+      } else {
+        0
+      },
+      array_projection_budget: if arrays {
+        8
+      } else {
+        0
+      },
+      projection_sites: if (structs && environment.struct_views is Some(_)) ||
+        (arrays && environment.array_views is Some(_)) {
+        Some(loop_projection_sites(function))
+      } else {
+        None
+      },
       expand_structs: shared_structs,
       inline_heap: if structs {
         environment.inline_heap

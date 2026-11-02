@@ -368,6 +368,31 @@ fn lower_projection(
     context.forward_results(context.block_parameters(ready))
     return None
   }
+  if projection is ArrayData(0) &&
+    environment.array_views is Some(layout) &&
+    environment.array_projection_budget > 0 &&
+    (
+      environment.projection_sites is None ||
+      environment.projection_sites.unwrap().contains(context.instruction_id())
+    ) {
+    environment.array_projection_budget -= 1
+    inline_cached_array_projection(context, environment, layout)
+    return None
+  }
+  if projection is StructData(type_) &&
+    environment.struct_views is Some(layout) &&
+    environment.projection_budget > 0 &&
+    (
+      environment.projection_sites is None ||
+      environment.projection_sites.unwrap().contains(context.instruction_id())
+    ) {
+    environment.projection_budget -= 1
+    let (shape, fields) = struct_view_shape(validation, type_).unwrap()
+    inline_cached_struct_projection(
+      context, environment, layout, type_, shape, fields,
+    )
+    return None
+  }
   let heap = context.emit(
       EnvironmentField(environment.gc_heap_field.unwrap(), Mutable),
       context.environment(),

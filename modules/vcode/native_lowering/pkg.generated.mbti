@@ -173,12 +173,18 @@ pub fn FloatUnaryOp::to_repr(Self) -> @debug.Repr
 pub struct FunctionRootFrameAbi {
   // private fields
 }
-pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32, preserves_mask? : Bool) -> Self
+pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32, preserves_mask? : Bool, inline_layout? : InlineFunctionRootFrameLayout?) -> Self
 
 pub struct HiddenSafepointAbi {
   // private fields
 }
 pub fn HiddenSafepointAbi::new(@native_types.ExternalSymbol, StackMapArgumentRoots, owner? : Int32) -> Self
+
+pub(all) struct InlineFunctionRootFrameLayout {
+  execution_offset : Int32
+  active_offset : Int32
+  head_offset : Int32
+}
 
 pub(all) struct InstructionMetadata {
   source : @native_types.SourceLocation?

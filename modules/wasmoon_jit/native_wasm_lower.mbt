@@ -1,4 +1,24 @@
 ///|
+extern "C" fn poll_layout_field(index : Int32) -> Int32 = "wasmoon_jit_poll_layout_field"
+
+///|
+/// Immutable native offsets are shared by compiler environments. Per-function
+/// expansion state remains private to each lowering invocation.
+let native_struct_view_layout : @wasm_native.StructViewLayout = {
+  type_ids_offset: native_layout_field(25),
+  type_count_offset: native_layout_field(26),
+  allocation_control: native_layout_field(43),
+  control_enabled: native_layout_field(44),
+  struct_views: native_layout_field(56),
+  view_reference: native_layout_field(57),
+  view_identity: native_layout_field(58),
+  view_fields: native_layout_field(59),
+  view_shape: native_layout_field(60),
+  view_payload: native_layout_field(61),
+  view_bits: native_layout_field(62),
+}
+
+///|
 priv struct WasmoonNativeEnvironment {
   wasm : @wasm_native.Environment
   field_paths : Map[String, Array[Int32]]
@@ -73,6 +93,16 @@ fn wasmoon_native_environment(
     fn(helper) {
       @native.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
+    struct_views=Some(native_struct_view_layout),
+    array_views=Some({
+      allocation_control: native_layout_field(43),
+      control_enabled: native_layout_field(44),
+      array_views: native_layout_field(63),
+      view_reference: native_layout_field(64),
+      view_payload: native_layout_field(65),
+      view_bits: native_layout_field(66),
+      view_stride: native_layout_field(67),
+    }),
     inline_heap=Some({
       type_ids_offset: native_layout_field(25),
       type_count_offset: native_layout_field(26),
@@ -153,6 +183,11 @@ fn wasmoon_call_abi(
       @native.ExternalSymbol::new(gc_function_frame_enter_symbol()),
       @native.ExternalSymbol::new(gc_function_frame_leave_symbol()),
       preserves_mask=true,
+      inline_layout=Some({
+        execution_offset: poll_layout_field(0),
+        active_offset: poll_layout_field(1),
+        head_offset: poll_layout_field(4),
+      }),
     ),
     hidden_safepoints~,
   )

@@ -1,6 +1,7 @@
 ///|
 priv struct SinkTrace {
   operations : Array[Operation]
+  operation_blocks : Array[Int32]
   operands : Array[Array[Int32]]
   roots : Array[Array[Int32]]
   stack_maps : Array[@native.StackMapMetadata?]
@@ -19,6 +20,7 @@ fn traced_sink(
 ) -> (TargetSink, SinkTrace) {
   let trace : SinkTrace = {
     operations: [],
+    operation_blocks: [],
     operands: [],
     roots: [],
     stack_maps: [],
@@ -48,8 +50,9 @@ fn traced_sink(
       id
     },
     fn(_) { () },
-    fn(_, operation, operands, result_types, _, roots, stack_map) {
+    fn(block, operation, operands, result_types, _, roots, stack_map) {
       trace.operations.push(operation)
+      trace.operation_blocks.push(block)
       trace.operands.push(operands.copy())
       trace.roots.push(roots.copy())
       trace.stack_maps.push(stack_map)
@@ -726,5 +729,99 @@ test "unknown frame providers retain complete mask writes" {
       }
     }),
     content="[0, 0, 0, 0, 0, 0]",
+  )
+}
+
+///|
+fn trace_has_call_free_path(
+  trace : SinkTrace,
+  start : Int32,
+  target : Int32,
+) -> Bool {
+  let calls : Map[Int32, Bool] = Map([])
+  for index, operation in trace.operations {
+    if operation is Call(_) {
+      calls[trace.operation_blocks[index]] = true
+    }
+  }
+  let pending = [start]
+  let seen : Map[Int32, Bool] = Map([])
+  while pending.pop() is Some(block) {
+    if seen.contains(block) || calls.contains(block) {
+      continue
+    }
+    if block == target {
+      return true
+    }
+    seen[block] = true
+    for index, owner in trace.terminated_blocks {
+      if owner != block {
+        continue
+      }
+      match trace.terminators[index] {
+        Jump(next, _) => pending.push(next)
+        Branch(_, yes, _, no, _)
+        | BranchIntCompare(_, _, _, yes, _, no, _)
+        | BranchIntCompareImmediate(_, _, _, yes, _, no, _) => {
+          pending.push(yes)
+          pending.push(no)
+        }
+        _ => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+test "checked function root links retain helper fallbacks and a call-free body path" {
+  let (sink, trace) = traced_sink([11, 22], 509)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64],
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+        inline_layout=Some({
+          execution_offset: -16,
+          active_offset: 0,
+          head_offset: 8,
+        }),
+      ),
+    ),
+  )
+  builder.begin_function_roots(1)
+  let body = builder.entry_block()
+  assert_true(body.id != 0)
+  builder.define_function_root(builder.parameters()[1])
+  builder.return_([])
+  builder.finish()
+  let body_target = builder.target_blocks[body.id]
+  assert_true(trace_has_call_free_path(trace, 509, body_target))
+  let mut returned = -1
+  let mut enter = -1
+  let mut leave = -1
+  for index, operation in trace.operations {
+    if operation is Call(call) && call.callee is External(symbol) {
+      if symbol.name == "frame.enter" {
+        enter = trace.operation_blocks[index]
+      }
+      if symbol.name == "frame.leave" {
+        leave = trace.operation_blocks[index]
+      }
+    }
+  }
+  for index, terminator in trace.terminators {
+    if terminator is Return(_) {
+      returned = trace.terminated_blocks[index]
+    }
+  }
+  assert_true(enter >= 0 && leave >= 0 && returned >= 0)
+  assert_true(trace_has_call_free_path(trace, body_target, returned))
+  assert_true(
+    trace.terminators.any(terminator => {
+      terminator is BranchIntCompare(Equal, _, _, _, _, no, _) && no == leave
+    }),
   )
 }

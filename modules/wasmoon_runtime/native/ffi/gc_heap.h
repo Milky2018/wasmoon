@@ -158,6 +158,10 @@ typedef struct {
     void *payload;
 } GcStructViewCache;
 
+#define GC_STRUCT_VIEW_CACHE_BITS 4
+#define GC_STRUCT_VIEW_CACHE_SIZE (1 << GC_STRUCT_VIEW_CACHE_BITS)
+_Static_assert(sizeof(GcStructViewCache) == 32, "struct view entry ABI");
+
 // A non-root array metadata hint. Payload lifetime changes invalidate it with
 // struct views; an encoded view keeps compact width and opaque-array behavior.
 typedef struct {
@@ -165,6 +169,10 @@ typedef struct {
     uintptr_t view;
     int32_t width;
 } GcArrayViewCache;
+
+#define GC_ARRAY_VIEW_CACHE_BITS 4
+#define GC_ARRAY_VIEW_CACHE_SIZE (1 << GC_ARRAY_VIEW_CACHE_BITS)
+_Static_assert(sizeof(GcArrayViewCache) == 24, "array view entry ABI");
 
 typedef struct {
     int32_t tracking_enabled, has_untyped_allocations, tracing_young;
@@ -215,7 +223,7 @@ typedef struct GcHeap {
     GcAllocationPolicy allocation_policy; // Closed MoonBit function; no retained closure
     int32_t exception_root_count; // Leases borrowing exception_arena
     int32_t continuation_root_count; // Leases borrowing continuation_arena
-    GcStructViewCache struct_view; // Non-root hint, cleared on payload lifetime changes
+    GcStructViewCache struct_views[GC_STRUCT_VIEW_CACHE_SIZE]; // Non-root hints
     // Prepared capacity only: no identities, payload bytes or quota are charged.
     // For object_count < identity_window_limit, this page and the live-list
     // slot are already allocated. Collection/rollback invalidates the window.
@@ -226,7 +234,7 @@ typedef struct GcHeap {
     int32_t has_marked_objects;
     GcGeneration generation;
     uint64_t structural_epoch; // Invalidates trace shortcuts before identity retirement.
-    GcArrayViewCache array_view;
+    GcArrayViewCache array_views[GC_ARRAY_VIEW_CACHE_SIZE];
 } GcHeap;
 
 typedef enum { GC_ROOT_UNBOUND, GC_ROOT_EXCEPTION, GC_ROOT_CONTINUATION } GcRootOwnerKind;
@@ -247,17 +255,37 @@ typedef struct GcParkedRoots {
     void (*mark_source)(void *, GcHeap *);
 } GcParkedRoots;
 
+static inline GcStructViewCache *gc_struct_view_entry(GcHeap *heap, int64_t word) {
+    return &heap->struct_views[((uint64_t)word >> 1) & (GC_STRUCT_VIEW_CACHE_SIZE - 1)];
+}
+
+static inline GcArrayViewCache *gc_array_view_entry(GcHeap *heap, int64_t word) {
+    return &heap->array_views[((uint64_t)word >> 1) & (GC_ARRAY_VIEW_CACHE_SIZE - 1)];
+}
+
 static inline void gc_heap_forget_views(GcHeap *heap) {
-    heap->struct_view.reference = 0;
-    heap->struct_view.payload = NULL;
-    heap->array_view.reference = 0;
-    heap->array_view.view = 0;
+    for (int32_t i = 0; i < GC_STRUCT_VIEW_CACHE_SIZE; ++i) {
+        heap->struct_views[i].reference = 0;
+        heap->struct_views[i].payload = NULL;
+    }
+    for (int32_t i = 0; i < GC_ARRAY_VIEW_CACHE_SIZE; ++i) {
+        heap->array_views[i].reference = 0;
+        heap->array_views[i].view = 0;
+    }
 }
 
 static inline void gc_heap_forget_reference_views(GcHeap *heap, int32_t ref) {
     int64_t word = (int64_t)ref * 2;
-    if (heap->struct_view.reference == word || heap->array_view.reference == word)
-        gc_heap_forget_views(heap);
+    GcStructViewCache *cached = gc_struct_view_entry(heap, word);
+    if (cached->reference == word) {
+        cached->reference = 0;
+        cached->payload = NULL;
+    }
+    GcArrayViewCache *array = gc_array_view_entry(heap, word);
+    if (array->reference == word) {
+        array->reference = 0;
+        array->view = 0;
+    }
 }
 
 static inline GcIdentityPage *gc_heap_identity_page(GcHeap *heap, int32_t ref) {

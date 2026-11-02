@@ -43,6 +43,11 @@ static int32_t gc_frame_chain_depth(const jit_context_t *ctx) {
 
 // Function frame storage is part of the allocated native stack, never malloc'd.
 _Static_assert(sizeof(wasmoon_gc_function_frame_t) == 32, "function root frame ABI");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, prev) == 0, "root frame previous offset");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, roots) == 8, "root frame words offset");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, mask) == 16, "root frame mask offset");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, slot_count) == 24, "root frame count offset");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, reserved) == 28, "root frame reserved offset");
 
 int32_t jit_copy_function_frame_roots(const jit_execution_state_t *state, int64_t *destination) {
     int64_t total = 0;
@@ -1067,6 +1072,18 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_layout_field(int32_t index) {
         GC_ID_PAGE_BITS,
         offsetof(GcHeap, identity_window_limit),
         offsetof(GcHeap, identity_window_page),
+        offsetof(GcHeap, struct_views),
+        offsetof(GcStructViewCache, reference),
+        offsetof(GcStructViewCache, identity),
+        offsetof(GcStructViewCache, fields),
+        offsetof(GcStructViewCache, shape),
+        offsetof(GcStructViewCache, payload),
+        GC_STRUCT_VIEW_CACHE_BITS,
+        offsetof(GcHeap, array_views),
+        offsetof(GcArrayViewCache, reference),
+        offsetof(GcArrayViewCache, view),
+        GC_ARRAY_VIEW_CACHE_BITS,
+        sizeof(GcArrayViewCache),
 
     };
     assert(index >= 0 && (size_t)index < sizeof(fields) / sizeof(fields[0]));
@@ -1162,9 +1179,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_poll_layout_field(int32_t index) {
         (int32_t)offsetof(jit_runtime_state_t, execution) - (int32_t)sizeof(jit_runtime_state_t),
         (int32_t)offsetof(jit_execution_state_t, poll_controls),
         (int32_t)offsetof(jit_invocation_controls_t, cancellation_callback),
-        (int32_t)offsetof(jit_invocation_controls_t, scheduling_budget)
+        (int32_t)offsetof(jit_invocation_controls_t, scheduling_budget),
+        (int32_t)offsetof(jit_execution_state_t, gc_function_frame_head)
     };
-    return index >= 0 && index < 4 ? offsets[index] : 0;
+    return index >= 0 && index < 5 ? offsets[index] : 0;
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

@@ -998,7 +998,7 @@ _Static_assert(GC_ARRAY_DATA_OFFSET == 16, "numeric array view ABI");
 void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32_t width) {
     if (!heap || !ref || ref < 0 || ref > (int64_t)INT32_MAX * 2 || (ref & 1)) return NULL;
     if (gc_verify_env_cached != 0) return NULL;
-    GcArrayViewCache *cached = &heap->array_view;
+    GcArrayViewCache *cached = gc_array_view_entry(heap, ref);
     if (cached->reference != ref) {
         GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
         if (!header || header->kind != GC_KIND_ARRAY) return NULL;
@@ -1033,7 +1033,7 @@ static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t r
     int32_t target = ctx && ctx_runtime(ctx)->callable_local_types && type_idx >= 0 &&
         type_idx < ctx_runtime(ctx)->callable_local_type_count
         ? ctx_runtime(ctx)->callable_local_types[type_idx] : -1;
-    GcStructViewCache *cached = &heap->struct_view;
+    GcStructViewCache *cached = gc_struct_view_entry(heap, ref);
     if (!resolved_heap && gc_verify_env_cached == 0 && target >= 0 &&
         cached->reference == ref && cached->identity == target &&
         cached->shape == shape && cached->fields == fields) return cached->payload;
@@ -1080,7 +1080,7 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
     if (ctx && ref && gc_verify_env_cached == 0) {
         heap = (GcHeap *)ctx_gc_heap(ctx);
         if (heap) {
-            GcStructViewCache *cached = &heap->struct_view;
+            GcStructViewCache *cached = gc_struct_view_entry(heap, ref);
             if (cached->reference == ref && cached->shape == shape && cached->fields == fields) {
                 jit_runtime_state_t *runtime = ctx_runtime(ctx);
                 if (runtime->callable_local_types && type_idx >= 0 &&

@@ -37,11 +37,24 @@ pub fn CallerRootScopeAbi::new(
 }
 
 ///|
+/// Optional embedding-owned link protocol for the existing 32-byte stack frame.
+/// A non-null active word admits only the current, attached invocation. Other
+/// states retain the checked helpers. Root and mask storage remain compiler-owned.
+/// The header contains previous/roots/mask pointers at 0/8/16, an i32 count at
+/// 24 and a zero reserved word at 28. All pointer fields use the 64-bit native ABI.
+pub(all) struct InlineFunctionRootFrameLayout {
+  execution_offset : Int32
+  active_offset : Int32
+  head_offset : Int32
+}
+
+///|
 pub struct FunctionRootFrameAbi {
   priv enter_symbol : @native.ExternalSymbol
   priv leave_symbol : @native.ExternalSymbol
   priv environment_parameter : Int32
   priv preserves_mask : Bool
+  priv inline_layout : InlineFunctionRootFrameLayout?
 }
 
 ///|
@@ -55,8 +68,15 @@ pub fn FunctionRootFrameAbi::new(
   leave_symbol : @native.ExternalSymbol,
   environment_parameter~ : Int32 = 0,
   preserves_mask~ : Bool = false,
+  inline_layout~ : InlineFunctionRootFrameLayout? = None,
 ) -> FunctionRootFrameAbi {
-  { enter_symbol, leave_symbol, environment_parameter, preserves_mask, }
+  {
+    enter_symbol,
+    leave_symbol,
+    environment_parameter,
+    preserves_mask,
+    inline_layout,
+  }
 }
 
 ///|

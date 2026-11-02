@@ -1315,28 +1315,32 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             return gc_verify_fail("invalid prepared identity capacity", verbose);
         }
     }
-    if (heap->struct_view.reference) {
-        int64_t word = heap->struct_view.reference;
+    for (int32_t i = 0; i < GC_STRUCT_VIEW_CACHE_SIZE; ++i) {
+        GcStructViewCache *cached = &heap->struct_views[i];
+        if (!cached->reference) continue;
+        int64_t word = cached->reference;
         int32_t offset = word > 0 && !(word & 1) && word <= (int64_t)INT32_MAX * 2
             ? gc_heap_identity_offset(heap, (int32_t)(word >> 1)) : -1;
         GcHeader *header = offset >= 0 && (size_t)offset + GC_HEADER_SIZE <= heap->size
             ? (GcHeader *)(heap->data + offset) : NULL;
         if (!header || header->kind != GC_KIND_STRUCT ||
-            heap->struct_view.payload != header + 1 ||
-            heap->struct_view.identity != (int32_t)(header->reserved >> 32) - 1) {
+            cached->payload != header + 1 ||
+            cached->identity != (int32_t)(header->reserved >> 32) - 1) {
             return gc_verify_fail("invalid cached struct view", verbose);
         }
     }
 
-    if (heap->array_view.reference) {
-        int64_t word = heap->array_view.reference;
+    for (int32_t i = 0; i < GC_ARRAY_VIEW_CACHE_SIZE; ++i) {
+        GcArrayViewCache *cached = &heap->array_views[i];
+        if (!cached->reference) continue;
+        int64_t word = cached->reference;
         int32_t offset = word > 0 && !(word & 1) && word <= (int64_t)INT32_MAX * 2
             ? gc_heap_identity_offset(heap, (int32_t)(word >> 1)) : -1;
         GcHeader *header = offset >= 0 && (size_t)offset + GC_HEADER_SIZE <= heap->size
             ? (GcHeader *)(heap->data + offset) : NULL;
         int32_t width = header ? gc_access_compact_array_width(gc_object_layout(heap, header)) : 0;
-        if (!header || header->kind != GC_KIND_ARRAY || heap->array_view.width != width ||
-            heap->array_view.view != gc_access_array_view(header + 1, width))
+        if (!header || header->kind != GC_KIND_ARRAY || cached->width != width ||
+            cached->view != gc_access_array_view(header + 1, width))
             return gc_verify_fail("invalid cached array view", verbose);
     }
 

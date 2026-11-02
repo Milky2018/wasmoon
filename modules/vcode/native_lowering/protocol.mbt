@@ -221,6 +221,7 @@ pub struct DirectBuilder {
   priv call_abi : CallAbiElaboration?
   priv root_scope_capacity : Int32
   priv mut root_scope_object : @native.StackObject?
+  priv mut function_body_entry : Block
   priv mut function_root_frame : (Value, Value, Value, Value, Int32)?
   priv function_root_slots : Map[Int32, Int32]
   priv mut function_root_masks : Array[UInt64]?
@@ -262,6 +263,7 @@ pub fn DirectBuilder::new(
     call_abi,
     root_scope_capacity,
     root_scope_object: None,
+    function_body_entry: { id: 0, },
     function_root_frame: None,
     function_root_slots: Map([]),
     function_root_masks: None,
@@ -285,8 +287,10 @@ pub fn DirectBuilder::new(
 }
 
 ///|
-/// Reserve one precise shadow frame for the function. Slots are filled once
-/// where SSA values are defined; only liveness mask words change at safepoints.
+/// Reserve one precise shadow frame before binding source entry edges. With
+/// an inline link protocol, `entry_block` then names the body after its prologue.
+/// Slots are filled where SSA values are defined; only liveness mask words
+/// change at safepoints.
 pub fn DirectBuilder::begin_function_roots(
   self : DirectBuilder,
   capacity : Int32,
@@ -332,8 +336,8 @@ pub fn DirectBuilder::begin_function_roots(
   self.function_root_frame = Some(
     (environment, header_address, roots_address, mask_address, capacity),
   )
-  // Keep the prologue in the original entry block: source lowering binds that
-  // block after the frame is entered. Repeated zero words stay in that block.
+  // Initialize every mask word before publishing the frame. Source lowering
+  // binds the body returned by entry_block after this optional prologue.
   self.update_function_roots([])
   let count = self.emit_raw(
       I32Const(capacity.reinterpret_as_uint()),
@@ -341,6 +345,11 @@ pub fn DirectBuilder::begin_function_roots(
       [I32],
       InstructionMetadata::empty(),
     )[0]
+  let ready = frame.inline_layout.map(layout => {
+    self.prepare_inline_frame_enter(
+      environment, header_address, roots_address, mask_address, capacity, layout,
+    )
+  })
   let call = @native.NativeCall::new(
     External(frame.enter_symbol),
     @native.Signature::new([Ptr64, Ptr64, Ptr64, Ptr64, I32], []),
@@ -354,6 +363,13 @@ pub fn DirectBuilder::begin_function_roots(
     InstructionMetadata::empty(),
   )
   |> ignore
+  if ready is Some(ready) {
+    self.jump(ready, [])
+    self.switch_to_block(ready)
+    // Source entry edges enter the body; only native invocation enters the
+    // original prologue. Function parameters dominate both paths.
+    self.function_body_entry = ready
+  }
 }
 
 ///|
@@ -476,6 +492,9 @@ fn DirectBuilder::leave_function_roots(self : DirectBuilder) -> Unit {
     abi.function_frame is Some(frame) else {
     return
   }
+  let ready = frame.inline_layout.map(layout => {
+    self.prepare_inline_frame_leave(environment, header, layout)
+  })
   let call = @native.NativeCall::new(
     External(frame.leave_symbol),
     @native.Signature::new([Ptr64, Ptr64], []),
@@ -489,6 +508,10 @@ fn DirectBuilder::leave_function_roots(self : DirectBuilder) -> Unit {
     InstructionMetadata::empty(),
   )
   |> ignore
+  if ready is Some(ready) {
+    self.jump(ready, [])
+    self.switch_to_block(ready)
+  }
 }
 
 ///|
@@ -498,8 +521,7 @@ pub fn DirectBuilder::parameters(self : DirectBuilder) -> Array[Value] {
 
 ///|
 pub fn DirectBuilder::entry_block(self : DirectBuilder) -> Block {
-  ignore(self)
-  { id: 0, }
+  self.function_body_entry
 }
 
 ///|
