@@ -81,18 +81,31 @@ pub fn FunctionRootFrameAbi::new(
 
 ///|
 pub struct CallAbiElaboration {
+  priv scoped_function_frame : FunctionRootFrameAbi?
+  priv scoped_root_limit : Int32
   priv root_scope : CallerRootScopeAbi?
   priv function_frame : FunctionRootFrameAbi?
   priv hidden_safepoints : Array[HiddenSafepointAbi]
 }
 
 ///|
+/// A positive `scoped_root_limit` opts into balanced call-site use of the same
+/// stack-owned frame protocol after producer cost admission. The provider must
+/// preserve the complete frame through collection, parking and nonlocal unwind.
+/// Zero keeps the existing whole-function lifetime.
 pub fn CallAbiElaboration::new(
   root_scope? : CallerRootScopeAbi,
   function_frame? : FunctionRootFrameAbi,
   hidden_safepoints~ : Array[HiddenSafepointAbi] = [],
+  scoped_root_limit~ : Int32 = 0,
 ) -> CallAbiElaboration {
-  { root_scope, function_frame, hidden_safepoints: hidden_safepoints.copy(), }
+  {
+    root_scope,
+    function_frame,
+    scoped_function_frame: None,
+    hidden_safepoints: hidden_safepoints.copy(),
+    scoped_root_limit,
+  }
 }
 
 ///|
@@ -137,4 +150,29 @@ pub suberror DirectLoweringError {
 ///|
 pub impl Show for DirectLoweringError with fn output(self, logger) {
   logger.write_string(Repr(self).to_string())
+}
+
+///|
+/// Use the existing stack-owned frame only around collecting calls for a
+/// producer-admitted sparse live set. Larger or unknown sets keep the normal
+/// definition-once frame. Runtime unwinding and parking use the same protocol.
+pub fn CallAbiElaboration::for_root_capacity(
+  self : CallAbiElaboration,
+  capacity : Int32,
+) -> CallAbiElaboration {
+  if capacity > 0 &&
+    capacity <= self.scoped_root_limit &&
+    self.function_frame is Some(frame) {
+    { ..self, function_frame: None, scoped_function_frame: Some(frame), }
+  } else {
+    self
+  }
+}
+
+///|
+/// Whether definitions need persistent shadow slots for this function.
+pub fn CallAbiElaboration::has_function_frame(
+  self : CallAbiElaboration,
+) -> Bool {
+  self.function_frame is Some(_)
 }

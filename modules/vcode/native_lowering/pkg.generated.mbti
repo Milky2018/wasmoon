@@ -63,7 +63,9 @@ pub fn Block::to_repr(Self) -> @debug.Repr
 pub struct CallAbiElaboration {
   // private fields
 }
-pub fn CallAbiElaboration::new(root_scope? : CallerRootScopeAbi, function_frame? : FunctionRootFrameAbi, hidden_safepoints? : Array[HiddenSafepointAbi]) -> Self
+pub fn CallAbiElaboration::for_root_capacity(Self, Int32) -> Self
+pub fn CallAbiElaboration::has_function_frame(Self) -> Bool
+pub fn CallAbiElaboration::new(root_scope? : CallerRootScopeAbi, function_frame? : FunctionRootFrameAbi, hidden_safepoints? : Array[HiddenSafepointAbi], scoped_root_limit? : Int32) -> Self
 
 pub struct CallerRootScopeAbi {
   // private fields

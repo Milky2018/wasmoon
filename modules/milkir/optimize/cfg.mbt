@@ -971,6 +971,7 @@ fn resolve_jump_target_with_args(
   let mut current_args = args
   let mut cacheable = args.length() == 0
   let mut cyclic = false
+  let mut conditional_steps = 0
   let mut done = false
   while !done {
     if cacheable &&
@@ -1000,6 +1001,16 @@ fn resolve_jump_target_with_args(
         !forward_only_params[current_target]
       ) {
       break
+    }
+    if conditional_steps < 8 &&
+      thread_constant_branch(func, block, current_args)
+      is Some((next_target, next_args)) {
+      conditional_steps += 1
+      cacheable = false
+      empty_path.clear()
+      current_target = next_target
+      current_args = next_args
+      continue
     }
     match block.terminator {
       Some(Jump(next_target, next_args)) =>
@@ -1048,7 +1059,13 @@ fn thread_jumps(func : @milkir.Function) -> OptResult {
     if block.id < 0 || block.id >= forward_only_params.length() {
       continue
     }
-    if block.terminator is Some(Jump(_, outgoing_args)) {
+    let outgoing_args = match block.terminator {
+      Some(Jump(_, args)) => Some(args)
+      Some(Branch(condition, _, yes, _, no)) => Some([condition] + yes + no)
+      Some(Brz(condition, _, _) | Brnz(condition, _, _)) => Some([condition])
+      _ => None
+    }
+    if outgoing_args is Some(outgoing_args) {
       forward_only_params[block.id] = block.params.all(fn(param) {
         let mut outgoing_uses = 0
         for arg in outgoing_args {

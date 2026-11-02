@@ -190,6 +190,7 @@ fn wasmoon_call_abi(
       }),
     ),
     hidden_safepoints~,
+    scoped_root_limit=4,
   )
 }
 

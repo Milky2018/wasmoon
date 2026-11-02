@@ -221,6 +221,11 @@ pub struct DirectBuilder {
   priv call_abi : CallAbiElaboration?
   priv root_scope_capacity : Int32
   priv mut root_scope_object : @native.StackObject?
+  priv mut scoped_frame_objects : (
+    @native.StackObject,
+    @native.StackObject,
+    @native.StackObject,
+  )?
   priv mut function_body_entry : Block
   priv mut function_root_frame : (Value, Value, Value, Value, Int32)?
   priv function_root_slots : Map[Int32, Int32]
@@ -263,6 +268,7 @@ pub fn DirectBuilder::new(
     call_abi,
     root_scope_capacity,
     root_scope_object: None,
+    scoped_frame_objects: None,
     function_body_entry: { id: 0, },
     function_root_frame: None,
     function_root_slots: Map([]),
@@ -339,36 +345,11 @@ pub fn DirectBuilder::begin_function_roots(
   // Initialize every mask word before publishing the frame. Source lowering
   // binds the body returned by entry_block after this optional prologue.
   self.update_function_roots([])
-  let count = self.emit_raw(
-      I32Const(capacity.reinterpret_as_uint()),
-      [],
-      [I32],
-      InstructionMetadata::empty(),
-    )[0]
-  let ready = frame.inline_layout.map(layout => {
-    self.prepare_inline_frame_enter(
-      environment, header_address, roots_address, mask_address, capacity, layout,
-    )
-  })
-  let call = @native.NativeCall::new(
-    External(frame.enter_symbol),
-    @native.Signature::new([Ptr64, Ptr64, Ptr64, Ptr64, I32], []),
-    Platform,
-    @native.CallBehavior::new(ReadWrite, true, false, false, false),
+  self.publish_root_frame(
+    environment, header_address, roots_address, mask_address, capacity, frame,
   )
-  self.emit_raw(
-    Call(call),
-    [environment, header_address, roots_address, mask_address, count],
-    [],
-    InstructionMetadata::empty(),
-  )
-  |> ignore
-  if ready is Some(ready) {
-    self.jump(ready, [])
-    self.switch_to_block(ready)
-    // Source entry edges enter the body; only native invocation enters the
-    // original prologue. Function parameters dominate both paths.
-    self.function_body_entry = ready
+  if frame.inline_layout is Some(_) {
+    self.function_body_entry = self.current_block
   }
 }
 
@@ -492,26 +473,7 @@ fn DirectBuilder::leave_function_roots(self : DirectBuilder) -> Unit {
     abi.function_frame is Some(frame) else {
     return
   }
-  let ready = frame.inline_layout.map(layout => {
-    self.prepare_inline_frame_leave(environment, header, layout)
-  })
-  let call = @native.NativeCall::new(
-    External(frame.leave_symbol),
-    @native.Signature::new([Ptr64, Ptr64], []),
-    Platform,
-    @native.CallBehavior::new(ReadWrite, true, false, false, false),
-  )
-  self.emit_raw(
-    Call(call),
-    [environment, header],
-    [],
-    InstructionMetadata::empty(),
-  )
-  |> ignore
-  if ready is Some(ready) {
-    self.jump(ready, [])
-    self.switch_to_block(ready)
-  }
+  self.unlink_root_frame(environment, header, frame)
 }
 
 ///|
@@ -805,6 +767,7 @@ fn DirectBuilder::emit_call_with_abi(
     }
   }
   let mut context : Value? = None
+  let mut scoped_frame : (Value, Value, FunctionRootFrameAbi)? = None
   if self.function_root_frame is Some(_) {
     if call.behavior.returns_twice && !metadata.live_gc_roots.is_empty() {
       self.record_error("returns-twice calls cannot transport live SSA roots")
@@ -821,6 +784,13 @@ fn DirectBuilder::emit_call_with_abi(
   } else if !metadata.live_gc_roots.is_empty() {
     if call.behavior.returns_twice {
       self.record_error("returns-twice calls cannot use a caller root scope")
+    } else if elaboration.scoped_function_frame is Some(frame) &&
+      metadata.live_gc_roots.length() <= self.root_scope_capacity {
+      scoped_frame = self.enter_scoped_function_roots(
+        frame,
+        metadata.live_gc_roots,
+      )
+      lowered_metadata = { ..lowered_metadata, live_gc_roots: [], }
     } else if elaboration.root_scope is Some(scope) &&
       metadata.live_gc_roots.length() <= self.root_scope_capacity {
       if self.root_scope_object is None {
@@ -896,6 +866,9 @@ fn DirectBuilder::emit_call_with_abi(
   if call.behavior.returns_twice {
     // A rewind can resume after later code changed this same stack mask.
     self.function_root_masks = None
+  }
+  if scoped_frame is Some((environment, header, frame)) {
+    self.unlink_root_frame(environment, header, frame)
   }
   if context is Some(environment) && elaboration.root_scope is Some(scope) {
     self.emit_raw(
@@ -1118,5 +1091,145 @@ pub fn DirectBuilder::finish(
   (self.sink.finish)()
   if self.error.val is Some(message) {
     raise InvalidCallAbi(message~)
+  }
+}
+
+///|
+/// Publish the precise live prefix only while a collecting call is active.
+/// Storage and unwind markers use the existing function-frame protocol. Pure
+/// paths have no published frame, root-definition stores or heap scope nodes.
+fn DirectBuilder::enter_scoped_function_roots(
+  self : DirectBuilder,
+  frame : FunctionRootFrameAbi,
+  live : Array[Value],
+) -> (Value, Value, FunctionRootFrameAbi)? {
+  guard self.parameter_values.get(frame.environment_parameter)
+    is Some(environment) &&
+    self.value_type(environment) == Some(Ptr64) else {
+    self.record_error(
+      "scoped function frame requires an execution environment parameter",
+    )
+    return None
+  }
+  if self.scoped_frame_objects is None {
+    self.scoped_frame_objects = Some(
+      (
+        self.create_stack_object(32, 16),
+        self.create_stack_object(self.root_scope_capacity * 8, 16),
+        self.create_stack_object((self.root_scope_capacity + 63) / 64 * 8, 8),
+      ),
+    )
+  }
+  guard self.scoped_frame_objects
+    is Some((header_object, roots_object, mask_object)) else {
+    abort("scoped function-frame storage was not created")
+  }
+  let header = self.emit_raw(
+      StackAddress(header_object),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  let roots = self.emit_raw(
+      StackAddress(roots_object),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  let mask = self.emit_raw(
+      StackAddress(mask_object),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  for index, root in live {
+    self.emit_raw(
+      Store(StoreSpec::new(W64, GcRef64, (index * 8).to_uint64(), Little, None)),
+      [roots, root],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  }
+  let capacity = live.length()
+  for index in 0..<((capacity + 63) / 64) {
+    let remaining = capacity - index * 64
+    let bits = if remaining >= 64 {
+      0xFFFFFFFFFFFFFFFFUL
+    } else {
+      (1UL << remaining) - 1
+    }
+    self.write_root_mask_run(mask, index, index + 1, bits)
+  }
+  self.publish_root_frame(environment, header, roots, mask, capacity, frame)
+  Some((environment, header, frame))
+}
+
+///|
+fn DirectBuilder::unlink_root_frame(
+  self : DirectBuilder,
+  environment : Value,
+  header : Value,
+  frame : FunctionRootFrameAbi,
+) -> Unit {
+  let ready = frame.inline_layout.map(layout => {
+    self.prepare_inline_frame_leave(environment, header, layout)
+  })
+  let call = @native.NativeCall::new(
+    External(frame.leave_symbol),
+    @native.Signature::new([Ptr64, Ptr64], []),
+    Platform,
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  self.emit_raw(
+    Call(call),
+    [environment, header],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  if ready is Some(ready) {
+    self.jump(ready, [])
+    self.switch_to_block(ready)
+  }
+}
+
+///|
+fn DirectBuilder::publish_root_frame(
+  self : DirectBuilder,
+  environment : Value,
+  header : Value,
+  roots : Value,
+  mask : Value,
+  capacity : Int32,
+  frame : FunctionRootFrameAbi,
+) -> Unit {
+  let count = self.emit_raw(
+      I32Const(capacity.reinterpret_as_uint()),
+      [],
+      [I32],
+      InstructionMetadata::empty(),
+    )[0]
+  let ready = frame.inline_layout.map(layout => {
+    self.prepare_inline_frame_enter(
+      environment, header, roots, mask, capacity, layout,
+    )
+  })
+  let call = @native.NativeCall::new(
+    External(frame.enter_symbol),
+    @native.Signature::new([Ptr64, Ptr64, Ptr64, Ptr64, I32], []),
+    Platform,
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  self.emit_raw(
+    Call(call),
+    [environment, header, roots, mask, count],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  if ready is Some(ready) {
+    self.jump(ready, [])
+    self.switch_to_block(ready)
   }
 }

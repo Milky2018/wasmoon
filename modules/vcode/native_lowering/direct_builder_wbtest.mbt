@@ -825,3 +825,130 @@ test "checked function root links retain helper fallbacks and a call-free body p
     }),
   )
 }
+
+///|
+test "sparse root selection publishes only at collecting calls" {
+  let frame = FunctionRootFrameAbi::new(
+    @native.ExternalSymbol::new("frame.enter"),
+    @native.ExternalSymbol::new("frame.leave"),
+  )
+  assert_true(
+    CallAbiElaboration::new(function_frame=frame)
+    .for_root_capacity(1)
+    .has_function_frame(),
+  )
+  let abi = CallAbiElaboration::new(function_frame=frame, scoped_root_limit=4).for_root_capacity(
+    1,
+  )
+  assert_false(abi.has_function_frame())
+  assert_true(
+    CallAbiElaboration::new(function_frame=frame, scoped_root_limit=4)
+    .for_root_capacity(5)
+    .has_function_frame(),
+  )
+  let (sink, trace) = traced_sink([11, 22], 0)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64],
+    sink,
+    call_abi=abi,
+    root_scope_capacity=1,
+  )
+  builder.begin_function_roots(1)
+  let parameters = builder.parameters()
+  builder.define_function_root(parameters[1])
+  assert_true(trace.operations.is_empty())
+  builder.emit_with_metadata(
+    Call(platform_call("guest", [Ptr64], [], gc_safepoint=true)),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[1]]),
+  )
+  |> ignore
+  builder.return_([])
+  builder.finish()
+  let calls = trace.operations.filter_map(op => {
+    match op {
+      Call(call) =>
+        match call.callee {
+          External(symbol) => Some(symbol.name)
+          _ => None
+        }
+      _ => None
+    }
+  })
+  assert_eq(calls, ["frame.enter", "guest", "frame.leave"])
+  assert_eq(
+    trace.operations
+    .filter(op => op is Store(spec) && spec.value_type == GcRef64)
+    .length(),
+    1,
+  )
+}
+
+///|
+test "call frames reuse bounded storage while shrinking the precise live prefix" {
+  let frame = FunctionRootFrameAbi::new(
+    @native.ExternalSymbol::new("frame.enter"),
+    @native.ExternalSymbol::new("frame.leave"),
+  )
+  let abi = CallAbiElaboration::new(function_frame=frame, scoped_root_limit=65).for_root_capacity(
+    65,
+  )
+  let types : Array[@native.ValueType] = [Ptr64]
+  let ids = [1]
+  for index in 0..<65 {
+    types.push(GcRef64)
+    ids.push(index + 2)
+  }
+  let (sink, trace) = traced_sink(ids, 0)
+  let builder = DirectBuilder::new(
+    types,
+    sink,
+    call_abi=abi,
+    root_scope_capacity=65,
+  )
+  let params = builder.parameters()
+  for length in [65, 1] {
+    let roots = params[1:1 + length].to_owned()
+    let site = @native.StackMapMetadata::new(length, argument_root_count=0)
+    builder.emit_with_metadata(
+      Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+      [params[0]],
+      [],
+      InstructionMetadata::new(None, roots, stack_map=site),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  assert_eq(trace.stack_objects, [(32, 16), (520, 16), (16, 8)])
+  let mut observed = 0
+  for index, op in trace.operations {
+    if op is Call(call) &&
+      call.callee is External(symbol) &&
+      symbol.name == "collect" {
+      assert_true(trace.roots[index].is_empty())
+      assert_eq(
+        trace.stack_maps[index],
+        Some(
+          @native.StackMapMetadata::new(
+            if observed == 0 {
+              65
+            } else {
+              1
+            },
+            argument_root_count=0,
+          ),
+        ),
+      )
+      observed += 1
+    }
+  }
+  assert_eq(observed, 2)
+  assert_eq(
+    trace.operations
+    .filter(op => op is Store(spec) && spec.value_type == GcRef64)
+    .length(),
+    66,
+  )
+}

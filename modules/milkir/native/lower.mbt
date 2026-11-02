@@ -25,6 +25,7 @@ pub impl Show for NativeLowerError with fn output(self, logger) {
 ///|
 priv struct DialectLowering {
   name : String
+  prefer_scoped_root_site : (@milkir.ExtOp) -> Bool
   environment_parameters : Array[(Int32, @native_types.ValueType)]
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?
   resolve_context_field : (@milkir.ContextField) -> @native_types.EnvironmentField?
@@ -1774,14 +1775,42 @@ fn lower_verified_construction(
     None
   }
   let mut root_scope_capacity = 0
-  let function_root_values : Map[Int32, Bool] = Map([])
   if gc_roots is Some(roots) {
+    for instruction_roots in roots {
+      if instruction_roots.length() > root_scope_capacity {
+        root_scope_capacity = instruction_roots.length()
+      }
+    }
+  }
+  let mut prefer_scopes = dialect is Some(_)
+  if gc_roots is Some(roots) {
+    for block in function.blocks {
+      for id in function.block_instruction_ids(block) {
+        if !roots[id].is_empty() {
+          let inst = function.instruction_by_id(id).unwrap()
+          if !(dialect is Some(lowering) &&
+            inst.opcode is Ext(op, _) &&
+            (lowering.prefer_scoped_root_site)(op)) {
+            prefer_scopes = false
+          }
+        }
+      }
+    }
+  }
+  let call_abi = call_abi.map(abi => {
+    if prefer_scopes {
+      abi.for_root_capacity(root_scope_capacity)
+    } else {
+      abi
+    }
+  })
+  let function_root_values : Map[Int32, Bool] = Map([])
+  if call_abi is Some(abi) &&
+    abi.has_function_frame() &&
+    gc_roots is Some(roots) {
     for instruction_roots in roots {
       for id in instruction_roots {
         function_root_values[id] = true
-      }
-      if instruction_roots.length() > root_scope_capacity {
-        root_scope_capacity = instruction_roots.length()
       }
     }
   }
@@ -1945,6 +1974,8 @@ pub fn lower_core_to_sink(
 ///
 /// `verify_input=false` is reserved for compiler-owned IR that has already
 /// crossed a checked boundary. Public callers should keep the default.
+/// `prefer_scoped_root_site` is a cost hint. It changes only frame lifetime;
+/// every collecting call must still publish its complete live root set.
 pub fn lower_dialect_to_sink(
   function : @milkir.Function,
   dialect : String,
@@ -1956,6 +1987,7 @@ pub fn lower_dialect_to_sink(
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
   verify_input~ : Bool = true,
+  prefer_scoped_root_site~ : (@milkir.ExtOp) -> Bool = fn(_) { false },
   on_event~ : (NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise NativeLowerError {
   if verify_input {
@@ -1970,6 +2002,7 @@ pub fn lower_dialect_to_sink(
     function,
     Some({
       name: dialect,
+      prefer_scoped_root_site,
       environment_parameters: environment_parameters.copy(),
       lower,
       resolve_context_field,

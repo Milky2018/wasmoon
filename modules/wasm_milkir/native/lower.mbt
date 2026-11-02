@@ -1755,7 +1755,7 @@ pub fn lower_to_sink(
       },
       projection_sites: if (structs && environment.struct_views is Some(_)) ||
         (arrays && environment.array_views is Some(_)) {
-        Some(loop_projection_sites(function))
+        Some(inline_projection_sites(function))
       } else {
         None
       },
@@ -1803,6 +1803,11 @@ pub fn lower_to_sink(
     sink,
     call_abi?,
     verify_input~,
+    prefer_scoped_root_site=op => {
+      decode_poll_region(op) is Some(_) ||
+      @wasm_milkir.decode(op) is Some(SafepointPoll(_, _, _, _)) ||
+      (op.effects is Some(effects) && !effects.invalidates_addresses)
+    },
     on_event~,
   )
 }

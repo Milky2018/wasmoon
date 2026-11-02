@@ -3,6 +3,10 @@
 Tracking: [ISS-697](../../issues/ISS-697.md), [ISS-698](../../issues/ISS-698.md),
 [ISS-703](../../issues/ISS-703.md).
 
+The later [sparse call-frame policy](sparse-root-regions.md) avoids persistent
+definition stores only for producer-admitted small live sets. The complete
+whole-function protocol described here remains the default and fallback.
+
 A valid2048-object initializer on306daad has4098 MilkIR instructions but produces
 25.580MB of machine code,47.360MB of serialized artifact and2,089,994 reloads.
 Fresh CPU sampling and phase metrics identify register allocation and redundant

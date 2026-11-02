@@ -310,7 +310,9 @@ pub fn prepare_gc_memory(
     old_blocks.length() <= 2048
   if expand {
     if exclusive_poll_controls {
-      version_poll_loops(function, context)
+      if !version_poll_acyclic(function) {
+        version_poll_loops(function, context)
+      }
     }
     if poll_region_error(function) is Some(error) {
       raise @milkir.VerifyError::unverifiable_instruction(error)
