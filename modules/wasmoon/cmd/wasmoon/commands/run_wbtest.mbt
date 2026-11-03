@@ -311,7 +311,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
   }
   let previous : @artifact.Artifact = {
     ..current,
-    manifest: { ..current.manifest, codegen_revision: "direct-vcode-42", },
+    manifest: { ..current.manifest, codegen_revision: "direct-vcode-43", },
   }
   let path = cache_test_file("previous-codegen")
   inspect(save_run_jit_cache(path, previous) is Ok(_), content="true")
@@ -327,7 +327,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("direct-vcode-43", "direct-vcode-42", true, false)
+      #|("direct-vcode-44", "direct-vcode-43", true, false)
     ),
   )
 }
@@ -427,4 +427,58 @@ test "JIT names prefer function metadata then exports then indices" {
   module_.func_names.clear()
   module_.exports.clear()
   assert_eq(build_jit_function_names(module_), ["func_0"])
+}
+
+///|
+test "CLI JIT atomic add artifacts track the host CPU requirement" {
+  let module_ = @core_wat.parse(
+    (
+      #|(module
+      #|  (memory 1 1 shared)
+      #|  (func (export "add") (param i32) (result i32)
+      #|    i32.const 0
+      #|    local.get 0
+      #|    i32.atomic.rmw.add))
+    ),
+  )
+  guard compile_module_to_jit(module_, false, false, 0, false)
+    is Some((artifact, _)) else {
+    fail("expected native compilation")
+  }
+  let load_only = @core_wat.parse(
+    (
+      #|(module
+      #|  (memory 1 1 shared)
+      #|  (func (export "load") (result i32)
+      #|    i32.const 0
+      #|    i32.atomic.load16_u))
+    ),
+  )
+  guard compile_module_to_jit(load_only, false, false, 0, false)
+    is Some((load_artifact, _)) else {
+    fail("expected native compilation")
+  }
+  assert_true(load_artifact.manifest.required_cpu_features.is_empty())
+  let available = @wasmoon_jit.host_cpu_features()
+  let manifest = artifact.manifest
+  assert_true(manifest.required_cpu_features == available)
+  let loaded = verify_compiled_jit_artifact(artifact)
+  assert_true(loaded.artifact().manifest.required_cpu_features == available)
+  if !available.is_empty() {
+    let baseline = { ..manifest, required_cpu_features: [], }
+    assert_true(
+      run_jit_cache_file("", manifest) != run_jit_cache_file("", baseline),
+    )
+    let incompatible = try {
+      let _ = @wasmoon_jit.verify_artifact(artifact, {
+        ..jit_artifact_compatibility(manifest),
+        available_cpu_features: [],
+      })
+      false
+    } catch {
+      Incompatible(cause=MissingCpuFeature(name="aarch64-lse")) => true
+      error => raise error
+    }
+    inspect(incompatible, content="true")
+  }
 }

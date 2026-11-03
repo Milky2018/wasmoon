@@ -489,7 +489,7 @@ pub struct CompilationSession {
   // private fields
 }
 pub fn CompilationSession::compile_selected(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool, on_diagnostics? : ((String, String) -> Unit)?) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError
-pub fn CompilationSession::new() -> Self
+pub fn CompilationSession::new(lse_atomic_add? : Bool) -> Self
 
 pub struct DirectLoweringSession {
   // private fields

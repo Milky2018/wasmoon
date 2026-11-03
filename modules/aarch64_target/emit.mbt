@@ -45,6 +45,7 @@ priv struct CodeBuffer {
   // conditional branch and almost no function needs it. `emit` turns it on and
   // re-emits only after a branch has actually overflowed.
   long_branches : Bool
+  lse_atomic_add : Bool
 }
 
 ///|
@@ -75,8 +76,18 @@ pub impl Show for AArch64EmitError with fn output(self, logger) {
 }
 
 ///|
-fn CodeBuffer::new(long_branches~ : Bool = false) -> CodeBuffer {
-  { code: [], fixups: [], labels: [], relocations: [], long_branches, }
+fn CodeBuffer::new(
+  long_branches~ : Bool = false,
+  lse_atomic_add~ : Bool = false,
+) -> CodeBuffer {
+  {
+    code: [],
+    fixups: [],
+    labels: [],
+    relocations: [],
+    long_branches,
+    lse_atomic_add,
+  }
 }
 
 ///|
@@ -575,6 +586,23 @@ fn emit_atomic_rmw(
 ) -> Int32 raise AArch64EmitError {
   if width == W128 {
     raise InvalidScalarMemoryAccess
+  }
+  if buffer.lse_atomic_add && operation is Add {
+    let opcode = match width {
+      W8 => 0x38E00000U
+      W16 => 0x78E00000U
+      W32 => 0xB8E00000U
+      W64 => 0xF8E00000U
+      W128 => raise InvalidScalarMemoryAccess
+    }
+    let offset = buffer.position()
+    buffer.emit_word(
+      opcode |
+      (reg_bits(value) << 16) |
+      (reg_bits(address) << 5) |
+      reg_bits(result),
+    )
+    return offset
   }
   let scratch = @vcode.PhysicalReg::new(16, Int)
   let status = @vcode.PhysicalReg::new(17, Int)
@@ -3927,8 +3955,9 @@ fn emit_single_pass(
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   long_branches~ : Bool = false,
+  lse_atomic_add~ : Bool = false,
 ) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
-  let buffer = CodeBuffer::new(long_branches~)
+  let buffer = CodeBuffer::new(long_branches~, lse_atomic_add~)
   let block_offsets = Array::make(function.block_count(), -1)
   let sources : Array[@code_object.SourceSite] = []
   let traps : Array[@code_object.TrapSite] = []
@@ -4020,10 +4049,17 @@ fn emit_with_branch_fallback(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
+  lse_atomic_add~ : Bool = false,
 ) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
-  emit_single_pass(function, allocation, frame) catch {
+  emit_single_pass(function, allocation, frame, lse_atomic_add~) catch {
     BranchOutOfRange(_) =>
-      emit_single_pass(function, allocation, frame, long_branches=true)
+      emit_single_pass(
+        function,
+        allocation,
+        frame,
+        long_branches=true,
+        lse_atomic_add~,
+      )
     error => raise error
   }
 }

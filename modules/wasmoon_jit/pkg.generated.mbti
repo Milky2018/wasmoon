@@ -27,7 +27,7 @@ import {
 // Values
 pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
 
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-43"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-44"
 
 pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 
@@ -128,6 +128,8 @@ pub fn get_last_trap_details() -> TrapDetails
 pub fn get_last_trap_pcs() -> ReadOnlyArray[Int64]
 
 pub fn get_temperature(Int32, HotThreshold) -> FunctionTemperature
+
+pub fn host_cpu_features() -> Array[@artifact.CpuFeature]
 
 pub fn host_native_target() -> NativeTarget raise JitPipelineError
 
@@ -238,6 +240,8 @@ pub fn verify_artifact(@artifact.Artifact, @loader.ArtifactCompatibility) -> Loa
 pub fn vmcontext_layout() -> VMContextLayout
 
 pub fn wasm_function_signature(@types.FuncType) -> @native_types.Signature
+
+pub fn wasm_host_cpu_requirements(@types.Module) -> Array[@artifact.CpuFeature]
 
 pub fn wasm_import_identity(Int32, String, String, @types.FuncType) -> @artifact.ImportIdentity
 
@@ -469,6 +473,7 @@ pub struct NativeCompiler {
 }
 pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int32, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> @artifact.FunctionCode raise JitPipelineError
 pub fn NativeCompiler::diagnose_wasm_body(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int32, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> JitPipelineDiagnostics raise JitPipelineError
+pub fn NativeCompiler::for_manifest(@artifact.CompatibilityManifest) -> Self
 pub fn NativeCompiler::new(NativeTarget, context_shape? : @layout.ContextShape) -> Self
 
 type NativeFiber

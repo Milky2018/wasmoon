@@ -962,6 +962,7 @@ fn build_jit_artifact_manifest(
   @wasmoon_jit.build_host_artifact_manifest(
     module_identity=identity,
     context_shape=@wasmoon_jit.context_shape(mod_),
+    required_cpu_features=@wasmoon_jit.wasm_host_cpu_requirements(mod_),
     policy=jit_artifact_policy(
       opt_level,
       enable_cancellation,
@@ -976,7 +977,11 @@ fn jit_artifact_compatibility(
 ) -> @wasmoon_jit.ArtifactCompatibility {
   @wasmoon_jit.artifact_compatibility(
     manifest,
-    available_cpu_features=[],
+    available_cpu_features=if manifest.required_cpu_features.is_empty() {
+      []
+    } else {
+      @wasmoon_jit.host_cpu_features()
+    },
     runtime_symbols=@wasmoon_jit.wasmoon_runtime_external_symbols(),
     data_symbols=[],
   )
@@ -1036,7 +1041,10 @@ fn run_jit_cache_file(
   }
   let debug_tag = if manifest.policy.debug_info { "debug" } else { "no-debug" }
   let revision_tag = cache_revision_file_tag(manifest.codegen_revision)
-  let identity = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{nan_tag}-\{debug_tag}-r\{revision_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
+  let feature_tag = manifest.required_cpu_features
+    .map(feature => cache_revision_file_tag(feature.name))
+    .join(".")
+  let identity = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{nan_tag}-\{debug_tag}-r\{revision_tag}-f\{feature_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
   // Hash the complete existing identity, rather than truncating any digest or
   // revision. Filenames stay bounded even as codegen revision strings grow.
   let key = digest_hex(
@@ -1815,7 +1823,7 @@ fn compile_validated_module_to_jit(
   } else {
     None
   }
-  let native_target = @wasmoon_jit.host_native_target() catch {
+  let _ = @wasmoon_jit.host_native_target() catch {
     err => {
       emit_compile_progress(
         on_progress,
@@ -1937,10 +1945,7 @@ fn compile_validated_module_to_jit(
   }
   let imports : Array[@artifact.ImportIdentity] = []
   let functions : Array[@artifact.FunctionCode] = []
-  let native_compiler = @wasmoon_jit.NativeCompiler::new(
-    native_target,
-    context_shape=@wasmoon_jit.context_shape(mod_),
-  )
+  let native_compiler = @wasmoon_jit.NativeCompiler::for_manifest(manifest)
   let mut import_func_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
