@@ -385,20 +385,28 @@ fn lower_projection(
     environment.array_projection_budget > 0 &&
     (
       environment.projection_sites is None ||
-      environment.projection_sites.unwrap().contains(context.instruction_id())
+      environment.projection_sites.unwrap().eligible.contains(
+        context.instruction_id(),
+      )
     ) {
     environment.array_projection_budget -= 1
     inline_cached_array_projection(context, environment, layout)
     return None
   }
+  let reserved = environment.projection_sites is Some(sites) &&
+    sites.reserved_struct == Some(context.instruction_id())
   if projection is StructData(type_) &&
     environment.struct_views is Some(layout) &&
-    environment.projection_budget > 0 &&
+    (reserved || environment.projection_budget > 0) &&
     (
       environment.projection_sites is None ||
-      environment.projection_sites.unwrap().contains(context.instruction_id())
+      environment.projection_sites.unwrap().eligible.contains(
+        context.instruction_id(),
+      )
     ) {
-    environment.projection_budget -= 1
+    if !reserved {
+      environment.projection_budget -= 1
+    }
     let (shape, fields) = struct_view_shape(validation, type_).unwrap()
     inline_cached_struct_projection(
       context,

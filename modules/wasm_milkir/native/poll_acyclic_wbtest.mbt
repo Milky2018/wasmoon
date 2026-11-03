@@ -101,7 +101,7 @@ test "inline object views stay inside successful guarded regions" {
     allocation_contract_context(),
     exclusive_poll_controls=true,
   )
-  let sites = inline_projection_sites(function)
+  let sites = inline_projection_sites(function).eligible
   assert_true(sites.length() > 0)
   guard function.blocks[0].terminator is Some(Branch(_, fast, _, slow, _)) else {
     fail("missing guarded entry")
@@ -158,4 +158,50 @@ test "acyclic array reads share the exact poll-budget proof" {
     }
   }
   assert_eq((charges, fallback_polls), (2, 2))
+}
+
+///|
+test "loop reference projection gets a reserved struct expansion slot" {
+  let b = @milkir.FunctionBuilder("loop_projection_priority")
+  let object = b.add_param(Ref)
+  let again = b.add_param(I32)
+  let wider = b.create_block()
+  let body = b.create_block()
+  let latch = b.create_block()
+  let tight = b.create_block()
+  let exit = b.create_block()
+  fn read_reference_field() -> @milkir.Value {
+    let view = b.emit_ext_inst(Ptr, projection_opcode(StructData(0)), [object])
+    let field = b.emit_ext_inst(
+      Ptr,
+      projection_opcode(FieldData(0, 0, 8, 1, true)),
+      [view],
+    )
+    b.load_ptr(Ref, field, b.iconst_i64(0L)) |> ignore
+    view
+  }
+  b.jump(wider, [])
+  b.switch_to_block(wider)
+  b.branch(again, body, [], tight, [])
+  b.switch_to_block(body)
+  let wide_view = read_reference_field()
+  b.jump(latch, [])
+  b.switch_to_block(latch)
+  b.jump(wider, [])
+  b.switch_to_block(tight)
+  let tight_view = read_reference_field()
+  b.branch(again, tight, [], exit, [])
+  b.switch_to_block(exit)
+  b.return_([])
+  let function = b.finalize()
+  let wide_id = function.defining_inst(wide_view).unwrap().id
+  let tight_id = function.defining_inst(tight_view).unwrap().id
+  let sites = inline_projection_sites(function, reserve_struct=true)
+  inspect(sites.eligible.contains(wide_id), content="true")
+  inspect(sites.eligible.contains(tight_id), content="true")
+  inspect(sites.reserved_struct == Some(tight_id), content="true")
+  inspect(
+    inline_projection_sites(function).reserved_struct is None,
+    content="true",
+  )
 }

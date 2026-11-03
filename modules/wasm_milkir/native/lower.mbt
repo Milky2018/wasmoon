@@ -17,7 +17,7 @@ struct Environment {
   array_views : ArrayViewLayout?
   mut array_projection_budget : Int32
   mut projection_budget : Int32
-  projection_sites : Map[Int32, Bool]?
+  projection_sites : InlineProjectionSites?
   exclusive_poll_controls : Bool
   gc_array_regions : Bool
   prepared_arrays : Bool
@@ -1775,24 +1775,28 @@ pub fn lower_to_sink(
     let (structs, arrays, shared_structs) = allocation_expansion_limits(
       function, validation_context,
     )
+    let struct_views = structs && environment.struct_views is Some(_)
+    let projection_sites = if struct_views ||
+      (arrays && environment.array_views is Some(_)) {
+      Some(inline_projection_sites(function, reserve_struct=struct_views))
+    } else {
+      None
+    }
     {
       ..environment,
-      projection_budget: if structs {
-        8
-      } else {
+      projection_budget: if !structs {
         0
+      } else if projection_sites is Some({ reserved_struct: Some(_), .. }) {
+        7
+      } else {
+        8
       },
       array_projection_budget: if arrays {
         8
       } else {
         0
       },
-      projection_sites: if (structs && environment.struct_views is Some(_)) ||
-        (arrays && environment.array_views is Some(_)) {
-        Some(inline_projection_sites(function))
-      } else {
-        None
-      },
+      projection_sites,
       expand_structs: shared_structs,
       inline_heap: if structs {
         environment.inline_heap
