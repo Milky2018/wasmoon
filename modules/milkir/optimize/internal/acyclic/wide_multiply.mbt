@@ -115,6 +115,7 @@ fn OptimizerSession::rewrite_wide_multiply(
   self : OptimizerSession,
   inst : @milkir.Inst,
   operation : @milkir.IntBinaryOp,
+  prefix : Array[@milkir.Inst],
 ) -> Bool {
   guard operation is (Add | Or) &&
     inst.first_result() is Some(result) &&
@@ -147,10 +148,37 @@ fn OptimizerSession::rewrite_wide_multiply(
       for order in 0..<2 {
         let product = if order == 0 { u } else { v }
         let shifted = if order == 0 { v } else { u }
-        if self.wide_shift(shifted, UnsignedShiftRight) is Some(value) &&
-          self.same_value(value, carry) &&
-          self.wide_limb_product(product, a, b, true, true) {
+        guard self.wide_shift(shifted, UnsignedShiftRight) is Some(value) &&
+          self.same_value(value, carry) else {
+          continue
+        }
+        if self.wide_limb_product(product, a, b, true, true) {
           return self.replace_binary(inst, UnsignedMulHigh, a, b)
+        }
+        // Compilers can add a cross product before either carry is folded
+        // in. Reassociate only these modulo-2^64 additions. The two proven
+        // carry terms and the high-limb product still determine the high half.
+        if self.wide_parts(product, Add) is Some((x, y)) {
+          let extra = if self.wide_limb_product(x, a, b, true, true) {
+            Some(y)
+          } else if self.wide_limb_product(y, a, b, true, true) {
+            Some(x)
+          } else {
+            None
+          }
+          if extra is Some(extra) {
+            let marker = self.begin_candidates()
+            if self.stage_pure_candidate(
+                Scalar(IntBinary(UnsignedMulHigh)),
+                [a, b],
+                I64,
+              )
+              is Some(high) {
+              self.commit_candidates(marker, prefix)
+              return self.replace_binary(inst, Add, high, extra)
+            }
+            self.discard_candidates(marker)
+          }
         }
       }
     }
