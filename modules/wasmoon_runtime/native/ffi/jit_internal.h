@@ -331,7 +331,7 @@ int32_t ctx_gc_set_root_scratch_internal(
 );
 int32_t gc_collect_for_alloc_indexed_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count,
-    const uint8_t *indices, int prefer_young,
+    const uint8_t *indices, int collection_kind,
     const GcTypeLayout *operand_layout, int operand_array
 );
 int32_t gc_collect_for_alloc_internal(

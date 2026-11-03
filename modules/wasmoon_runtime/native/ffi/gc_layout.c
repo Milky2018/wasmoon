@@ -64,9 +64,21 @@ void gc_layout_write(uint8_t *data, const GcFieldLayout *field, GcSlot value) {
     gc_access_layout_write(data, field, value);
 }
 
+typedef enum {
+    GC_TYPED_NORMAL,
+    GC_TYPED_PREPARED_ONLY,
+    GC_TYPED_SEGMENT_COLLECT,
+} GcTypedAdmission;
+
+int gc_heap_segment_needs_collection(const GcHeap *heap) {
+    return heap->precise_roots && heap->size >= heap->collection_limit &&
+        !heap->byte_reservation && !heap->object_reservation &&
+        gc_heap_allocation_faults_disabled() && !wasmoon_native_failures_enabled();
+}
+
 static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identity, int32_t local_type,
     int32_t count, const void *values, int wide, int repeated, GcSlot init,
-    int prepared_only, const uint8_t *packed_array_data) {
+    GcTypedAdmission admission, const uint8_t *packed_array_data) {
     if (!layout || count < 0 || (layout->kind == GC_KIND_STRUCT && count != layout->count)) return 0;
     int array = layout->kind == GC_KIND_ARRAY;
     int64_t bytes = gc_layout_allocation_size(layout, count);
@@ -79,11 +91,14 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
         (size_t)bytes <= heap->capacity - heap->size &&
         (!heap->precise_roots || heap->size < heap->collection_limit) &&
         heap->object_count < heap->identity_window_limit;
-    if (prepared_only && !prepared) return 0;
-    heap->quota_denied = 0;
     if (prepared) {
+        heap->quota_denied = 0;
         heap->allocation_control->attempts++;
     } else {
+        if (admission == GC_TYPED_PREPARED_ONLY) return 0;
+        if (admission == GC_TYPED_SEGMENT_COLLECT && bytes <= INT32_MAX &&
+            gc_heap_segment_needs_collection(heap)) return GC_SEGMENT_NEEDS_COLLECTION;
+        heap->quota_denied = 0;
         if (gc_should_fail_allocation()) return 0;
         if (bytes > INT32_MAX || !gc_heap_admit(heap, (size_t)bytes)) return 0;
         if (!gc_heap_ensure_payload_capacity(heap, (size_t)bytes) || !gc_heap_ensure_object_capacity(heap)) {
@@ -142,16 +157,18 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
 int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
     int32_t count, const void *values, int wide, int repeated, GcSlot init) {
     return allocate_typed(heap, gc_heap_layout(heap, identity), identity, local_type,
-        count, values, wide, repeated, init, 0, NULL);
+        count, values, wide, repeated, init, GC_TYPED_NORMAL, NULL);
 }
 
 // The segment adapter has validated the independent source span, byte order,
 // and compact numeric layout. Keep the existing allocation admission and
 // publish only after the body and its alignment padding are initialized.
 int32_t gc_heap_alloc_typed_array_data(GcHeap *heap, GcTypeLayout *layout,
-    int32_t identity, int32_t local_type, int32_t count, const uint8_t *source) {
+    int32_t identity, int32_t local_type, int32_t count, const uint8_t *source,
+    int allow_collection) {
     return allocate_typed(heap, layout, identity, local_type, count,
-        NULL, 1, 1, (GcSlot){0, 0}, 0, source);
+        NULL, 1, 1, (GcSlot){0, 0},
+        allow_collection ? GC_TYPED_SEGMENT_COLLECT : GC_TYPED_NORMAL, source);
 }
 
 // Refusal is side-effect free. Successful preparation initializes every byte
@@ -160,7 +177,7 @@ int32_t gc_heap_try_array(GcHeap *heap, int32_t identity, int32_t local_type,
     int32_t count, GcSlot init) {
     GcTypeLayout *layout = gc_heap_layout(heap, identity);
     if (!layout || layout->kind != GC_KIND_ARRAY) return 0;
-    return allocate_typed(heap, layout, identity, local_type, count, NULL, 1, 1, init, 1, NULL);
+    return allocate_typed(heap, layout, identity, local_type, count, NULL, 1, 1, init, GC_TYPED_PREPARED_ONLY, NULL);
 }
 
 int32_t wasmoon_gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,

@@ -1139,7 +1139,7 @@ void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
     }
 }
 
-static int32_t gc_heap_sweep_mode(GcHeap *heap, int young) {
+static int32_t gc_heap_sweep_mode(GcHeap *heap, int young, int discard_dead_payload) {
     if (!heap) return 0;
     if (!young) gc_generation_prepare_major(heap);
     ++heap->structural_epoch;
@@ -1157,13 +1157,16 @@ static int32_t gc_heap_sweep_mode(GcHeap *heap, int young) {
         GcIdentityPage *page = heap->identity_pages[page_index];
         int32_t end = i + page->live_count - (young ? page->old_live_count : 0);
         if (!page->has_marked_objects && (!young || page->old_live_count == 0)) {
-            // Keep the existing dead-header state before retiring the page.
-            // Omitting these writes regresses large zero-filled allocation;
-            // only identity metadata retirement is batched here.
-            for (int32_t j = i; j < end; ++j) {
-                int32_t ref = heap->live_objects[j];
-                int32_t offset = page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)];
-                ((GcHeader *)(data + offset))->kind = GC_KIND_FREE;
+            // General allocation retains the existing header stores, which
+            // benefit later large zero fills. The packed constructor overwrites
+            // its destination. After retiring this unmarked page, compaction
+            // never reads these headers and no old identity can name them.
+            if (!discard_dead_payload) {
+                for (int32_t j = i; j < end; ++j) {
+                    int32_t ref = heap->live_objects[j];
+                    int32_t offset = page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)];
+                    ((GcHeader *)(data + offset))->kind = GC_KIND_FREE;
+                }
             }
             int32_t count = end - i;
             int32_t keep = heap->free_capacity - heap->free_count;
@@ -1200,7 +1203,7 @@ static int32_t gc_heap_sweep_mode(GcHeap *heap, int young) {
 }
 
 int32_t gc_heap_sweep(GcHeap *heap) {
-    return gc_heap_sweep_mode(heap, 0);
+    return gc_heap_sweep_mode(heap, 0, 0);
 }
 
 static void gc_heap_compact_mode(GcHeap *heap, int young, size_t allocation_budget) {
@@ -1265,7 +1268,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_collection_sweep(GcCollectionRequest *requ
     GcHeap *heap = request->heap;
     // Completion callbacks may publish full read-only graphs for the next GC.
     heap->generation.tracing_young = 0;
-    int32_t collected = gc_heap_sweep_mode(heap, request->young);
+    int discard_dead_payload = request->allocation_collection == GC_COLLECTION_PACKED_SEGMENT &&
+        heap->precise_roots;
+    int32_t collected = gc_heap_sweep_mode(heap, request->young, discard_dead_payload);
     gc_heap_compact_mode(heap, request->young, request->allocation_budget);
     return collected;
 }
@@ -1275,7 +1280,11 @@ int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
 }
 
 int32_t gc_heap_collect_for_allocation(GcHeap *heap, const int64_t *roots, int32_t count) {
-    return gc_run_collection(heap, roots, count, -1, 1);
+    return gc_run_collection(heap, roots, count, -1, GC_COLLECTION_ALLOCATION);
+}
+
+int32_t gc_heap_collect_for_packed_segment(GcHeap *heap, const int64_t *roots, int32_t count) {
+    return gc_run_collection(heap, roots, count, -1, GC_COLLECTION_PACKED_SEGMENT);
 }
 
 static int gc_verify_fail(const char* message, int32_t verbose) {

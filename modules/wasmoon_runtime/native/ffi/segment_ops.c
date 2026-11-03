@@ -882,6 +882,8 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     int64_t offset,
     int64_t length
 ) {
+    int allow_collection = 1;
+check_segment:
     if (!ctx || !ctx_gc_heap(ctx)) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -933,17 +935,37 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     GcTypeLayout *layout = gc_heap_layout(heap, identity);
     int packed = p && len_u32 && gc_verify_env_cached == 0 &&
         compact_numeric_segment_layout(layout, elem_size, elem_tag);
-    int32_t gc_ref = packed
-        ? gc_heap_alloc_typed_array_data(heap, layout, identity, type_idx, (int32_t)len_u32, p)
-        : allocate_segment_array(heap, layout, identity, type_idx, (int32_t)len_u32);
-    if (gc_ref == 0) {
-        g_trap_code = 9;
+    int32_t gc_ref;
+    if (packed) {
+        gc_ref = gc_heap_alloc_typed_array_data(
+            heap, layout, identity, type_idx, (int32_t)len_u32, p, allow_collection);
+        if (gc_ref > 0) return ((int64_t)gc_ref) << 1;
+    } else if (allow_collection &&
+        compact_numeric_segment_layout(layout, elem_size, elem_tag) &&
+        gc_heap_segment_needs_collection(heap)) {
+        gc_ref = GC_SEGMENT_NEEDS_COLLECTION;
+    } else {
+        gc_ref = allocate_segment_array(heap, layout, identity, type_idx, (int32_t)len_u32);
+    }
+    if (gc_ref <= 0) {
+        if (gc_ref == GC_SEGMENT_NEEDS_COLLECTION) {
+            int collection_kind = packed ? GC_COLLECTION_PACKED_SEGMENT : GC_COLLECTION_ALLOCATION;
+            if (gc_collect_for_alloc_indexed_internal(ctx, NULL, 0, NULL, collection_kind, NULL, 1) >= 0) {
+                // The root visitor can change the embedding. Read the entire
+                // segment and type again before borrowing payload or allocating.
+                allow_collection = 0;
+                goto check_segment;
+            }
+            g_trap_code = WASMOON_TRAP_MISSING_ROOTS;
+        } else {
+            g_trap_code = 9;
+        }
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
 
-    if (!packed && (len_u32 < 4 ||
-        !try_initialize_array_data(heap, gc_ref, 0, p, (int32_t)len_u32, elem_size, elem_tag))) {
+    if (len_u32 < 4 ||
+        !try_initialize_array_data(heap, gc_ref, 0, p, (int32_t)len_u32, elem_size, elem_tag)) {
         for (uint32_t i = 0; i < len_u32; i++) {
             GcSlot value = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
             gc_heap_array_set_wide(heap, gc_ref, (int32_t)i, value);
@@ -1049,7 +1071,8 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     }
 
     int32_t gc_ref = (int32_t)(array_ref >> 1);
-    int32_t array_len = gc_heap_array_len(heap, gc_ref);
+    GcHeader *header = gc_access_object_header(heap, gc_ref);
+    int32_t array_len = header ? *(const int32_t *)(header + 1) : 0;
     if ((uint64_t)array_len < (uint64_t)arr_off_u32 || (uint64_t)array_len - (uint64_t)arr_off_u32 < (uint64_t)len_u32) {
         g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -1076,11 +1099,19 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     }
 
     const uint8_t *p = seg_data ? seg_data + (size_t)data_off_u32 : NULL;
-    if (len_u32 < 4 || !try_initialize_array_data(heap, gc_ref, (int32_t)arr_off_u32, p, (int32_t)len_u32, elem_size, elem_tag)) {
-        for (uint32_t i = 0; i < len_u32; i++) {
-            GcSlot value = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-            gc_heap_array_set_wide(heap, gc_ref, (int32_t)(arr_off_u32 + i), value);
-        }
+    // No call can relocate this validated destination between admission and
+    // the numeric copy. Keep the checked setters for other layouts and
+    // verification of short writes.
+    if (len_u32 >= 2 && header && (len_u32 >= 4 || gc_verify_env_cached == 0) &&
+        compact_numeric_segment_layout(gc_object_layout(heap, header), elem_size, elem_tag)) {
+        uint8_t *dst = (uint8_t *)(header + 1) + GC_ARRAY_DATA_OFFSET + (size_t)arr_off_u32 * elem_size;
+        memcpy(dst, p, (size_t)total_bytes);
+        gc_access_verify(heap, "array_data_init");
+        return;
+    }
+    for (uint32_t i = 0; i < len_u32; i++) {
+        GcSlot value = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
+        gc_heap_array_set_wide(heap, gc_ref, (int32_t)(arr_off_u32 + i), value);
     }
 }
 

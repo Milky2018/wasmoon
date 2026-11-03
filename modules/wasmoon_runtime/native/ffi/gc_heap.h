@@ -389,8 +389,11 @@ GcSlot gc_layout_read(const uint8_t *data, const GcFieldLayout *field);
 void gc_layout_write(uint8_t *data, const GcFieldLayout *field, GcSlot value);
 int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
     int32_t count, const void *values, int wide, int repeated, GcSlot init);
+enum { GC_SEGMENT_NEEDS_COLLECTION = -1 };
+int gc_heap_segment_needs_collection(const GcHeap *heap);
 int32_t gc_heap_alloc_typed_array_data(GcHeap *heap, GcTypeLayout *layout,
-    int32_t identity, int32_t local_type, int32_t count, const uint8_t *source);
+    int32_t identity, int32_t local_type, int32_t count, const uint8_t *source,
+    int allow_collection);
 int32_t gc_heap_try_array(GcHeap *heap, int32_t identity, int32_t local_type,
     int32_t count, GcSlot init);
 void gc_heap_maybe_verify(GcHeap *heap, const char *op_name);
@@ -427,7 +430,9 @@ int32_t gc_generation_copy_remembered_roots(GcHeap *heap, int64_t *roots);
 void gc_generation_promote(GcHeap *heap, int young);
 int gc_generation_verify(GcHeap *heap, int verbose);
 int gc_heap_allocation_faults_disabled(void);
+enum { GC_COLLECTION_EXPLICIT, GC_COLLECTION_ALLOCATION, GC_COLLECTION_PACKED_SEGMENT };
 int32_t gc_heap_collect_for_allocation(GcHeap *heap, const int64_t *roots, int32_t count);
+int32_t gc_heap_collect_for_packed_segment(GcHeap *heap, const int64_t *roots, int32_t count);
 
 // ============ Heap Lifecycle ============
 

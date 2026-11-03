@@ -834,10 +834,10 @@ int32_t gc_collect_for_alloc_internal(
 
 int32_t gc_collect_for_alloc_indexed_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count,
-    const uint8_t *indices, int prefer_young,
+    const uint8_t *indices, int collection_kind,
     const GcTypeLayout *operand_layout, int operand_array
 ) {
-    return collect_gc_with_root_indices(ctx, roots, root_count, indices, prefer_young,
+    return collect_gc_with_root_indices(ctx, roots, root_count, indices, collection_kind,
         operand_layout, operand_array);
 }
 
@@ -939,15 +939,19 @@ static int32_t collect_gc_with_root_indices(
         // The precise coordinator copies active roots before tracing. Premarking
         // them here would require a second discovery pass over the whole heap.
         if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
-        collected = allocation_collection
-            ? gc_heap_collect_for_allocation(heap, merged, total_roots)
-            : gc_heap_collect(heap, merged, total_roots);
+        collected = allocation_collection == GC_COLLECTION_PACKED_SEGMENT
+            ? gc_heap_collect_for_packed_segment(heap, merged, total_roots)
+            : allocation_collection == GC_COLLECTION_ALLOCATION
+                ? gc_heap_collect_for_allocation(heap, merged, total_roots)
+                : gc_heap_collect(heap, merged, total_roots);
         free(merged);
     } else {
         if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
-        collected = allocation_collection
-            ? gc_heap_collect_for_allocation(heap, NULL, 0)
-            : gc_heap_collect(heap, NULL, 0);
+        collected = allocation_collection == GC_COLLECTION_PACKED_SEGMENT
+            ? gc_heap_collect_for_packed_segment(heap, NULL, 0)
+            : allocation_collection == GC_COLLECTION_ALLOCATION
+                ? gc_heap_collect_for_allocation(heap, NULL, 0)
+                : gc_heap_collect(heap, NULL, 0);
     }
 
     if (gc_collect_debug_enabled()) {
