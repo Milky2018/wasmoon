@@ -13,6 +13,7 @@ struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
   ordinary_view_publication : Bool
   inline_heap : InlineHeapLayout?
+  heap_cast_pages : Int32?
   struct_views : StructViewLayout?
   array_views : ArrayViewLayout?
   mut array_projection_budget : Int32
@@ -57,6 +58,7 @@ pub fn Environment::new(
   exclusive_poll_controls~ : Bool = false,
   prepared_arrays~ : Bool = false,
   inline_heap~ : InlineHeapLayout? = None,
+  heap_cast_pages~ : Int32? = None,
   struct_views~ : StructViewLayout? = None,
   array_views~ : ArrayViewLayout? = None,
   ordinary_view_publication~ : Bool = false,
@@ -74,6 +76,7 @@ pub fn Environment::new(
     projection_sites: None,
     expand_structs: true,
     inline_heap,
+    heap_cast_pages,
     struct_views,
     array_views,
     array_projection_budget: 8,
@@ -1496,7 +1499,26 @@ fn lower_extension(
       None
     }
     RefCast(type_index, nullable) => {
-      lower_ref_cast(context, environment, type_index, nullable)
+      if type_index >= 0 &&
+        type_index <= 0x1FFFFFFF &&
+        environment.inline_heap is Some(heap_layout) &&
+        environment.struct_views is Some(view_layout) &&
+        environment.gc_heap_field is Some(heap_field) &&
+        environment.heap_cast_pages is Some(pages_offset) {
+        inline_exact_heap_cast(
+          context,
+          environment,
+          heap_field,
+          heap_layout,
+          view_layout,
+          pages_offset,
+          context.operands()[0],
+          type_index,
+          nullable,
+        )
+      } else {
+        lower_ref_cast(context, environment, type_index, nullable)
+      }
       None
     }
     ArrayLen => {

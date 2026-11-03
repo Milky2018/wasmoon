@@ -100,6 +100,7 @@ fn wasmoon_native_environment(
     // resolved to ordinary mode. Allocation fault injection changes only
     // allocation attempts; it cannot change the verification setting.
     ordinary_view_publication=true,
+    heap_cast_pages=Some(native_layout_field(33)),
     struct_views=Some(native_struct_view_layout),
     array_views=Some({
       allocation_control: native_layout_field(43),
