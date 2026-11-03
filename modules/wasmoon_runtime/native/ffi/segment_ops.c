@@ -513,6 +513,21 @@ static void WASMOON_GUEST_ABI table_fill_impl(
         return;
     }
 
+    // A registered Store reference already has the representation stored
+    // by the generic path. Keep unresolved identities and debug tracing on
+    // that path. The range check above covers both entry words.
+    if (len == 1 && table_debug_cached == 0 && val >= 0 &&
+        (val & STORE_FUNCREF_TAG) == STORE_FUNCREF_TAG) {
+        int32_t canonical = callable_type_for_value_inline(ctx, val);
+        if (canonical >= 0) {
+            void **entry = table + (size_t)dst * 2;
+            entry[0] = (void *)(uintptr_t)val;
+            entry[1] = (void *)(intptr_t)canonical;
+            table_mark_mutated(ctx, table_idx);
+            return;
+        }
+    }
+
     int64_t type_idx = table_type_for_value(ctx, val);
 
     if (ctx_runtime(ctx)->table_bindings && ctx_runtime(ctx)->table_bindings[table_idx].owner &&
