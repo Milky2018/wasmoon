@@ -553,6 +553,21 @@ fn instantiate_canon_lower(
         state.resource_table,
       )
       let outer_task_id = current_task_id(async_state)
+      if outer_task_id != 0L &&
+        func is Lifted(core, _, lift_resources, _, _, _, None, false) &&
+        !core.may_suspend &&
+        scalar_canon_resources(resources) &&
+        scalar_canon_resources(lift_resources) &&
+        scalar_canon_signature_matches(func_type, args) {
+        return call_scalar_canon_adapter(
+          func, args, resources, store, caller_table, async_state,
+        ) catch {
+          error => {
+            trap_canon(canon_core_boundary_error_message(error))
+            []
+          }
+        }
+      }
       if func_type.is_async &&
         async_state.tasks.read_core_start_tasks(outer_task_id) is Some(_) {
         trap_canon("cannot block a synchronous task before returning")
