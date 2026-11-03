@@ -506,23 +506,15 @@ fn FuncEnvironment::can_eliminate_bounds_check(
   } else {
     0L // No minimum known, cannot eliminate
   }
-  if memory_min == 0L {
+  // The immediate is unsigned. Its Int64 carrier can represent a large
+  // offset as a negative value. Prove the range without a wrapping sum.
+  guard checked_access_end(offset, access_size) is Some(end) &&
+    end <= memory_min else {
     return false
   }
-  // Check if wasm_addr is a constant
   match builder.get_const_value(wasm_addr) {
+    Some(address) => address >= 0L && address <= memory_min - end
     None => false
-    Some(const_addr) => {
-      // Ensure const_addr is non-negative (valid wasm address)
-      if const_addr < 0L {
-        return false
-      }
-      // Check if const_addr + offset + access_size <= memory_min
-      // Use checked arithmetic to avoid overflow
-      let end_addr = const_addr + offset + access_size.to_int64()
-      // Also check for overflow (end_addr < const_addr would indicate overflow)
-      end_addr >= const_addr && end_addr <= memory_min
-    }
   }
 }
 
