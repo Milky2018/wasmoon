@@ -832,18 +832,23 @@ static GcSlot decode_array_elem_from_bytes(const uint8_t *p, int tag) {
     return value;
 }
 
+static inline int compact_numeric_segment_layout(const GcTypeLayout *layout,
+    size_t width, int tag) {
+    static const uint8_t widths[] = {0, 1, 2, 4, 8, 4, 8, 0, 16};
+    const uint16_t endian = 1;
+    return *(const uint8_t *)&endian == 1 && tag > 0 && tag < 9 &&
+        widths[tag] == width && layout && layout->kind == GC_KIND_ARRAY &&
+        !layout->fields[0].reference && layout->size == (int32_t)width;
+}
+
 // Callers have checked the complete source and destination ranges. Segment
 // Bytes are owned separately from heap payloads. Known numeric layouts have
 // no reference barriers; legacy slots keep their checked per-element adapter.
 static inline int try_initialize_array_data(GcHeap *heap, int32_t ref, int32_t offset,
     const uint8_t *source, int32_t count, size_t width, int tag) {
-    static const uint8_t widths[] = {0, 1, 2, 4, 8, 4, 8, 0, 16};
-    const uint16_t endian = 1;
     GcHeader *header = gc_access_object_header(heap, ref);
     GcTypeLayout *layout = header ? gc_object_layout(heap, header) : NULL;
-    if (*(const uint8_t *)&endian == 1 && tag > 0 && tag < 9 &&
-        widths[tag] == width && layout && layout->kind == GC_KIND_ARRAY &&
-        !layout->fields[0].reference && layout->size == (int32_t)width) {
+    if (compact_numeric_segment_layout(layout, width, tag)) {
         memcpy((uint8_t *)(header + 1) + GC_ARRAY_DATA_OFFSET + (size_t)offset * width,
             source, (size_t)count * width);
         gc_access_verify(heap, "array_data_init");
@@ -852,16 +857,17 @@ static inline int try_initialize_array_data(GcHeap *heap, int32_t ref, int32_t o
     return 0;
 }
 
+static int32_t segment_array_identity(jit_context_t *ctx, int32_t type) {
+    const jit_runtime_state_t *state = ctx_runtime(ctx);
+    return state->callable_local_types && type >= 0 && type < state->callable_local_type_count
+        ? state->callable_local_types[type] : -1;
+}
+
 // Segment constructors share the ordinary Store-canonical physical layout.
 // This remains a single non-collecting attempt: segment admission and trap
 // ordering stay with the caller, and legacy embeddings retain wide slots.
-static int32_t allocate_segment_array(jit_context_t *ctx, int32_t type, int32_t count) {
-    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
-    int32_t identity = -1;
-    if (ctx_runtime(ctx)->callable_local_types && type >= 0 &&
-        type < ctx_runtime(ctx)->callable_local_type_count)
-        identity = ctx_runtime(ctx)->callable_local_types[type];
-    GcTypeLayout *layout = gc_heap_layout(heap, identity);
+static int32_t allocate_segment_array(GcHeap *heap, const GcTypeLayout *layout,
+    int32_t identity, int32_t type, int32_t count) {
     return layout && layout->kind == GC_KIND_ARRAY
         ? gc_heap_alloc_typed(heap, identity, type, count, NULL, 1, 1, (GcSlot){0, 0})
         : gc_heap_alloc_array(heap, type, count, 0);
@@ -922,15 +928,22 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
         return 0;
     }
 
-    int32_t gc_ref = allocate_segment_array(ctx, type_idx, (int32_t)len_u32);
+    const uint8_t *p = seg_data ? seg_data + (size_t)off_u32 : NULL;
+    int32_t identity = segment_array_identity(ctx, type_idx);
+    GcTypeLayout *layout = gc_heap_layout(heap, identity);
+    int packed = p && len_u32 && gc_verify_env_cached == 0 &&
+        compact_numeric_segment_layout(layout, elem_size, elem_tag);
+    int32_t gc_ref = packed
+        ? gc_heap_alloc_typed_array_data(heap, layout, identity, type_idx, (int32_t)len_u32, p)
+        : allocate_segment_array(heap, layout, identity, type_idx, (int32_t)len_u32);
     if (gc_ref == 0) {
         g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
 
-    const uint8_t *p = seg_data ? seg_data + (size_t)off_u32 : NULL;
-    if (len_u32 < 4 || !try_initialize_array_data(heap, gc_ref, 0, p, (int32_t)len_u32, elem_size, elem_tag)) {
+    if (!packed && (len_u32 < 4 ||
+        !try_initialize_array_data(heap, gc_ref, 0, p, (int32_t)len_u32, elem_size, elem_tag))) {
         for (uint32_t i = 0; i < len_u32; i++) {
             GcSlot value = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
             gc_heap_array_set_wide(heap, gc_ref, (int32_t)i, value);
@@ -983,7 +996,9 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
         return 0;
     }
 
-    int32_t gc_ref = allocate_segment_array(ctx, type_idx, (int32_t)len_u32);
+    int32_t identity = segment_array_identity(ctx, type_idx);
+    int32_t gc_ref = allocate_segment_array(heap, gc_heap_layout(heap, identity),
+        identity, type_idx, (int32_t)len_u32);
     if (gc_ref == 0) {
         g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);

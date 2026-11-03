@@ -65,7 +65,8 @@ void gc_layout_write(uint8_t *data, const GcFieldLayout *field, GcSlot value) {
 }
 
 static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identity, int32_t local_type,
-    int32_t count, const void *values, int wide, int repeated, GcSlot init, int prepared_only) {
+    int32_t count, const void *values, int wide, int repeated, GcSlot init,
+    int prepared_only, const uint8_t *packed_array_data) {
     if (!layout || count < 0 || (layout->kind == GC_KIND_STRUCT && count != layout->count)) return 0;
     int array = layout->kind == GC_KIND_ARRAY;
     int64_t bytes = gc_layout_allocation_size(layout, count);
@@ -94,11 +95,12 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
     GcHeader *header = (GcHeader *)(heap->data + offset);
     int repeated_array = array && (repeated || !values);
     size_t body_bytes = array ? (size_t)count * layout->size : 0;
-    int fill_array = array && body_bytes >= 16 && (!repeated_array || init.lo || init.hi);
+    int fill_array = packed_array_data || (array && body_bytes >= 16 &&
+        (!repeated_array || init.lo || init.hi));
     if (fill_array) {
         // Every element is written below before publication. Only metadata and
         // alignment padding need zeroing; do not write the array body twice.
-        size_t end = GC_HEADER_SIZE + GC_ARRAY_DATA_OFFSET + (size_t)count * layout->size;
+        size_t end = GC_HEADER_SIZE + GC_ARRAY_DATA_OFFSET + body_bytes;
         memset(header, 0, GC_HEADER_SIZE + GC_ARRAY_DATA_OFFSET);
         if ((size_t)bytes != end)
             memset((uint8_t *)header + end, 0, (size_t)bytes - end);
@@ -113,7 +115,9 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
     if (array) *(int32_t *)data = count;
     // Default zero arrays already have initialized bodies. A v128 with only a
     // nonzero high word still needs the full-width fill.
-    if (repeated_array && body_bytes >= 16) {
+    if (packed_array_data) {
+        memcpy(data + GC_ARRAY_DATA_OFFSET, packed_array_data, body_bytes);
+    } else if (repeated_array && body_bytes >= 16) {
         if (init.lo || init.hi) {
             gc_access_fill_elements(data + GC_ARRAY_DATA_OFFSET, layout->size, init, count);
         }
@@ -137,7 +141,17 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
 
 int32_t gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
     int32_t count, const void *values, int wide, int repeated, GcSlot init) {
-    return allocate_typed(heap, gc_heap_layout(heap, identity), identity, local_type, count, values, wide, repeated, init, 0);
+    return allocate_typed(heap, gc_heap_layout(heap, identity), identity, local_type,
+        count, values, wide, repeated, init, 0, NULL);
+}
+
+// The segment adapter has validated the independent source span, byte order,
+// and compact numeric layout. Keep the existing allocation admission and
+// publish only after the body and its alignment padding are initialized.
+int32_t gc_heap_alloc_typed_array_data(GcHeap *heap, GcTypeLayout *layout,
+    int32_t identity, int32_t local_type, int32_t count, const uint8_t *source) {
+    return allocate_typed(heap, layout, identity, local_type, count,
+        NULL, 1, 1, (GcSlot){0, 0}, 0, source);
 }
 
 // Refusal is side-effect free. Successful preparation initializes every byte
@@ -146,7 +160,7 @@ int32_t gc_heap_try_array(GcHeap *heap, int32_t identity, int32_t local_type,
     int32_t count, GcSlot init) {
     GcTypeLayout *layout = gc_heap_layout(heap, identity);
     if (!layout || layout->kind != GC_KIND_ARRAY) return 0;
-    return allocate_typed(heap, layout, identity, local_type, count, NULL, 1, 1, init, 1);
+    return allocate_typed(heap, layout, identity, local_type, count, NULL, 1, 1, init, 1, NULL);
 }
 
 int32_t wasmoon_gc_heap_alloc_typed(GcHeap *heap, int32_t identity, int32_t local_type,
