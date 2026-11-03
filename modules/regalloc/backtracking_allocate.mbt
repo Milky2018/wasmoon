@@ -723,6 +723,64 @@ fn[F : FunctionView, S : AllocationSink] borrow_allocatable_register(
 }
 
 ///|
+/// An all-home register assignment cannot require an operand transfer.
+/// Check the complete function before changing the sink so a complex
+/// instruction can still use the general assignment path.
+fn[F : FunctionView, S : AllocationSink] try_assign_home_operands(
+  plan : AllocationWork[S],
+  function : F,
+  segments : Array[AllocationSegment],
+) -> Bool {
+  for segment in segments {
+    guard segment.location is Some(SegmentReg(reg)) &&
+      plan.sink.value_location(segment.value.id) is Some(home) &&
+      home == reg_location(reg) else {
+      return false
+    }
+  }
+  let block_count = function.block_count()
+  for block in 0..<block_count {
+    for index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, index)
+      let mut early_def = false
+      let mut late_use = false
+      for operand in function.instruction_operands(instruction) {
+        guard operand.tie_id < 0 &&
+          plan.sink.value_location(operand.vreg.id) is Some(home) &&
+          home.register() is Some(reg) else {
+          return false
+        }
+        if operand.constraint is FixedReg(required) && required != reg {
+          return false
+        }
+        if operand.timing is Early && !(operand.role is Use) {
+          early_def = true
+        }
+        if operand.timing is Late && !(operand.role is Def) {
+          late_use = true
+        }
+      }
+      if early_def && late_use {
+        return false
+      }
+    }
+  }
+  for block in 0..<block_count {
+    for index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, index)
+      for operand_index, operand in function.instruction_operands(instruction) {
+        plan.sink.assign_operand(
+          instruction,
+          operand_index,
+          plan.sink.value_location(operand.vreg.id).unwrap(),
+        )
+      }
+    }
+  }
+  true
+}
+
+///|
 fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   plan : AllocationWork[S],
   function : F,
@@ -731,6 +789,9 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   segments_by_value : Array[Array[Int32]],
   session~ : AllocationSession = AllocationSession::new(),
 ) -> Unit raise VerifyError {
+  if try_assign_home_operands(plan, function, segments) {
+    return
+  }
   let borrow_slots : Array[Int32?] = Array::make(function.value_count(), None)
   let register_indexes = PhysicalRegisterIndex::for_session(
     session,
