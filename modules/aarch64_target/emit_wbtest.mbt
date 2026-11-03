@@ -3445,11 +3445,24 @@ test "aarch64_target internal leaf functions establish an unwindable frame recor
   let frame = plan_frame(function, allocation)
   assert_eq(frame.frame_size(), 16)
   let object = emit(function, allocation, frame)
-  assert_true(
-    object
-    .unwind()
-    .any(directive => {
-      directive.operation is SetFramePointer(Int, 29, cfa_offset=16)
-    }),
+  let expected : Array[@code_object.UnwindDirective] = [
+    @code_object.UnwindDirective::new(4, StackAlloc(size=16)),
+    @code_object.UnwindDirective::new(4, SaveRegister(Int, 29, cfa_offset=-16)),
+    @code_object.UnwindDirective::new(4, SaveRegister(Int, 30, cfa_offset=-8)),
+    @code_object.UnwindDirective::new(
+      8,
+      SetFramePointer(Int, 29, cfa_offset=16),
+    ),
+  ]
+  assert_eq(object.unwind(), expected)
+  let code = object.code()
+  assert_eq(
+    code[0:4].to_owned(),
+    [0xFDU, 0x7BU, 0xBFU, 0xA9U].map(x => x.to_byte()),
   )
+  assert_eq(
+    code[8:12].to_owned(),
+    [0xFDU, 0x7BU, 0xC1U, 0xA8U].map(x => x.to_byte()),
+  )
+  assert_eq(code.length(), 16)
 }

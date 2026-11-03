@@ -64,7 +64,7 @@ test "native diagnostics stream MilkIR directly into both targets" {
   inspect(aarch64.target_vcode.contains("IntBinary(W64, Add)"), content="true")
   inspect(
     aarch64.machine_code,
-    content="ff 43 00 d1 fd 7b 00 a9 fd 03 00 91 20 00 02 8b fd 7b 40 a9 ff 43 00 91 c0 03 5f d6",
+    content="fd 7b bf a9 fd 03 00 91 20 00 02 8b fd 7b c1 a8 c0 03 5f d6",
   )
 }
 

@@ -150,11 +150,11 @@ test "AArch64 direct arithmetic selects modular negative immediates" {
     match expected {
       Some(word) => {
         let code = diagnostics.object.code()
-        inspect(code.length(), content="28")
-        let actual = code[12].to_uint() |
-          (code[13].to_uint() << 8) |
-          (code[14].to_uint() << 16) |
-          (code[15].to_uint() << 24)
+        inspect(code.length(), content="20")
+        let actual = code[8].to_uint() |
+          (code[9].to_uint() << 8) |
+          (code[10].to_uint() << 16) |
+          (code[11].to_uint() << 24)
         inspect(actual == word, content="true")
       }
       None =>
@@ -212,11 +212,11 @@ test "AArch64 value comparisons use immediate encoding only when eligible" {
     match expected {
       Some(word) => {
         let code = diagnostics.object.code()
-        inspect(code.length(), content="32")
-        let actual = code[12].to_uint() |
-          (code[13].to_uint() << 8) |
-          (code[14].to_uint() << 16) |
-          (code[15].to_uint() << 24)
+        inspect(code.length(), content="24")
+        let actual = code[8].to_uint() |
+          (code[9].to_uint() << 8) |
+          (code[10].to_uint() << 16) |
+          (code[11].to_uint() << 24)
         inspect(actual == word, content="true")
       }
       None =>
