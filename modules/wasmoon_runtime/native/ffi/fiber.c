@@ -72,6 +72,10 @@ typedef struct native_fiber {
     size_t mapping_size;
     size_t guard_size;
     size_t usable_size;
+#ifndef _WIN32
+    void *spare_child_mapping;
+    size_t spare_child_mapping_size;
+#endif
     native_fiber_entry_fn entry;
     void *closure;
     int owns_closure;
@@ -218,6 +222,15 @@ void native_fiber_disown_resource(void *opaque) {
     free(scope);
 }
 
+#ifndef _WIN32
+static void release_spare_child_stack(native_fiber_t *fiber) {
+    if (!fiber->spare_child_mapping) return;
+    munmap(fiber->spare_child_mapping, fiber->spare_child_mapping_size);
+    fiber->spare_child_mapping = NULL;
+    fiber->spare_child_mapping_size = 0;
+}
+#endif
+
 static void release_fiber_stack(native_fiber_t *fiber) {
     release_fiber_resources(fiber);
     if (fiber && fiber->atomic_waiter) {
@@ -228,7 +241,9 @@ static void release_fiber_stack(native_fiber_t *fiber) {
     if (!fiber || !fiber->context.handle) return;
     DeleteFiber(fiber->context.handle);
 #else
-    if (!fiber || !fiber->mapping) return;
+    if (!fiber) return;
+    release_spare_child_stack(fiber);
+    if (!fiber->mapping) return;
     munmap(fiber->mapping, fiber->mapping_size);
 #endif
     fiber->mapping = NULL;
@@ -295,6 +310,8 @@ static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
     abort();
 }
 
+static int64_t native_jit_continuation_entry(void *closure);
+
 static native_fiber_t *allocate_fiber(
     native_fiber_entry_fn entry,
     void *closure,
@@ -333,24 +350,30 @@ static native_fiber_t *allocate_fiber(
     if (requested > SIZE_MAX - page_size) return NULL;
     size_t usable_size = (requested + page_size - 1) / page_size * page_size;
     size_t mapping_size = page_size + usable_size;
-    void *mapping = mmap(
-        NULL,
-        mapping_size,
-        PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS,
-        -1,
-        0
-    );
-    if (mapping == MAP_FAILED) return NULL;
-    if (mprotect(mapping, page_size, PROT_NONE) != 0) {
-        munmap(mapping, mapping_size);
-        return NULL;
+    native_fiber_t *parent = current_native_fiber;
+    int reuse = entry == native_jit_continuation_entry && parent &&
+        parent->spare_child_mapping_size == mapping_size;
+    void *mapping;
+    if (reuse) {
+        mapping = parent->spare_child_mapping;
+    } else {
+        mapping = mmap(NULL, mapping_size, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (mapping == MAP_FAILED) return NULL;
+        if (mprotect(mapping, page_size, PROT_NONE) != 0) {
+            munmap(mapping, mapping_size);
+            return NULL;
+        }
     }
 
     native_fiber_t *fiber = (native_fiber_t *)wasmoon_native_calloc(1, sizeof(native_fiber_t));
     if (!fiber) {
-        munmap(mapping, mapping_size);
+        if (!reuse) munmap(mapping, mapping_size);
         return NULL;
+    }
+    if (reuse) {
+        parent->spare_child_mapping = NULL;
+        parent->spare_child_mapping_size = 0;
     }
     fiber->mapping = mapping;
     fiber->mapping_size = mapping_size;
@@ -536,6 +559,9 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
         return WASMOON_FIBER_ADVANCE_RESOURCE_FAILURE;
 #endif
     native_fiber_t *previous = current_native_fiber;
+#ifndef _WIN32
+    int first_advance = fiber->state == WASMOON_FIBER_STATE_READY;
+#endif
     current_native_fiber = fiber;
     fiber->resume_value = resume_value;
     fiber->state = WASMOON_FIBER_STATE_RUNNING;
@@ -563,6 +589,22 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
         return WASMOON_FIBER_ADVANCE_SUSPENDED;
     }
     if (fiber->state == WASMOON_FIBER_STATE_RETURNED) {
+#ifndef _WIN32
+        // Only a completed first JIT entry can donate its guarded mapping.
+        // Keep at most one equally sized stack, including the Component
+        // runtime's 16 MiB stack, while the parent is running.
+        if (first_advance && previous && !previous->spare_child_mapping &&
+            fiber->entry == native_jit_continuation_entry &&
+            fiber->return_value == 0 && fiber->usable_size == previous->usable_size &&
+            fiber->usable_size <= 16 * 1024 * 1024 &&
+            !fiber->parked_gc_roots && !fiber->detached_activation &&
+            !fiber->atomic_waiter && !fiber->resources) {
+            previous->spare_child_mapping = fiber->mapping;
+            previous->spare_child_mapping_size = fiber->mapping_size;
+            fiber->mapping = NULL;
+            fiber->mapping_size = 0;
+        }
+#endif
         return WASMOON_FIBER_ADVANCE_RETURNED;
     }
     return WASMOON_FIBER_ADVANCE_INVALID_STATE;
@@ -585,6 +627,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
         fiber->state = WASMOON_FIBER_STATE_RUNNING;
         return INT64_MIN;
     }
+#ifndef _WIN32
+    // A parked caller owns only the stack needed to resume it.
+    release_spare_child_stack(fiber);
+#endif
     native_fiber_swap_stacks(
         &fiber->context,
         &fiber->caller,

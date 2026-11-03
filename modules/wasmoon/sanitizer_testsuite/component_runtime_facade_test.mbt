@@ -1007,3 +1007,48 @@ test "WIT binding resolves referenced dependency interfaces" {
   )
   debug_inspect(bindings.paths(), content="[\"dep:math/math@1.0.0#increment\"]")
 }
+
+///|
+test "repeated native canonical calls keep their results across sibling entries" {
+  let component = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (component $provider
+      #|    (core module $m
+      #|      (func (export "increment") (param i32) (result i32)
+      #|        local.get 0 i32.const 1 i32.add))
+      #|    (core instance $m (instantiate $m))
+      #|    (func (export "increment") (param "value" u32) (result u32)
+      #|      (canon lift (core func $m "increment"))))
+      #|  (instance $provider (instantiate $provider))
+      #|  (alias export $provider "increment" (func $increment))
+      #|  (core func $increment-core (canon lower (func $increment)))
+      #|  (core instance $imports
+      #|    (export "increment" (func $increment-core)))
+      #|  (core module $consumer
+      #|    (import "provider" "increment" (func $increment (param i32) (result i32)))
+      #|    (func (export "run") (param $limit i32) (result i32)
+      #|      (local $value i32)
+      #|      block $exit
+      #|        loop $again
+      #|          local.get $value local.get $limit i32.ge_u br_if $exit
+      #|          local.get $value call $increment local.set $value
+      #|          br $again
+      #|        end
+      #|      end
+      #|      local.get $value))
+      #|  (core instance $consumer (instantiate $consumer (with "provider" (instance $imports))))
+      #|  (func (export "run") (param "limit" u32) (result u32)
+      #|    (canon lift (core func $consumer "run"))))
+    ),
+  )
+  let runtime = @component.ComponentRuntime()
+  defer runtime.close()
+  let run = runtime.instantiate("scalar", component).bind("run")
+  for count in [64U, 0U, 32U] {
+    debug_inspect(
+      run.call([U32(count)]) is [U32(value)] && value == count,
+      content="true",
+    )
+  }
+}
