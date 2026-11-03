@@ -201,3 +201,11 @@ pub extern "c" fn safepoint_parked_sharing(
 
 ///|
 pub extern "c" fn safepoint_allocation_bounds() -> Int32 = "wasmoon_test_safepoint_allocation_bounds"
+
+///|
+#borrow(context)
+pub extern "c" fn context_callable_exact_target(
+  context : @jit_ffi.JITContext,
+  value : Int64,
+  expected : Int32,
+) -> Int64 = "wasmoon_test_context_callable_exact_target"

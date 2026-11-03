@@ -94,6 +94,7 @@ pub fn NativeCallableRegistry::replace(
   } else {
     self.parents
   }
+  let mut identities_changed = false
   if addresses_changed {
     let ordinals = FixedArray::makei(entries.length(), i => i)
     // An input-position tie-break preserves the original first-duplicate rule.
@@ -123,11 +124,15 @@ pub fn NativeCallableRegistry::replace(
     self.store_positions = positions
   } else {
     for i, ordinal in self.ordinals {
-      self.identities[i] = entries[ordinal].1
+      let identity = entries[ordinal].1
+      if self.identities[i] != identity {
+        identities_changed = true
+        self.identities[i] = identity
+      }
     }
   }
   self.parents = new_parents
-  if parents_changed || addresses_changed {
+  if parents_changed || addresses_changed || identities_changed {
     publish(
       self.view,
       self.parents,

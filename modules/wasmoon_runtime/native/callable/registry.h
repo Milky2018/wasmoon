@@ -22,7 +22,11 @@ typedef struct {
     int32_t store_origin;
     int32_t *store_positions;
     int32_t function_origin;
+    // For at most UINT16_MAX functions, the low 16 bits hold the original
+    // one-based ordinal. A bounded dense exact-call view also uses the high
+    // bits for the canonical identity. Larger maps keep the full ordinal.
     int32_t *function_positions;
+    int32_t direct_span;
 } jit_callable_registry_t;
 
 #endif

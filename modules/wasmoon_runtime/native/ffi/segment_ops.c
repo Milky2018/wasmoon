@@ -453,6 +453,8 @@ static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int3
     if (!entry) return jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
     int64_t value = (int64_t)(intptr_t)entry[0];
     if (!value) return jit_trap_result(WASMOON_TRAP_UNINITIALIZED_ELEMENT);
+    int64_t exact = callable_exact_store_target(ctx_runtime(ctx), value, expected);
+    if (exact) return exact;
     int32_t actual = callable_type_for_value_inline(ctx, value);
     if (actual < 0 && !ctx_runtime(ctx)->callable_registry)
         actual = (int32_t)(intptr_t)entry[1];

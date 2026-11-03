@@ -25,6 +25,29 @@ static inline int callable_subtype_registered(
     return 0;
 }
 
+// Probe an exact Store call without repeating both ordinal searches. The
+// view joins only current identity and executable ordinals; the executable
+// pointer still comes from its original owner-backed array.
+static inline int64_t callable_exact_store_target(
+    const jit_runtime_state_t *state, int64_t value, int32_t local_expected
+) {
+    uint64_t address = (uint64_t)value - ((uint64_t)STORE_FUNCREF_TAG + 1);
+    const jit_callable_registry_t *registry = state->callable_registry;
+    if (address > INT32_MAX || !registry || !state->callable_local_types ||
+        (uint32_t)local_expected >= (uint32_t)state->callable_local_type_count)
+        return 0;
+    uint64_t relative = address - (uint32_t)registry->function_origin;
+    if (relative >= (uint32_t)registry->direct_span) return 0;
+    uint32_t slot = (uint32_t)registry->function_positions[relative];
+    uint32_t ordinal = slot & UINT16_MAX;
+    uint32_t identity = slot >> 16;
+    if (!ordinal || identity == 0x7fff ||
+        (int32_t)identity != state->callable_local_types[local_expected])
+        return 0;
+    int64_t pointer = registry->function_pointers[ordinal - 1];
+    return pointer > 0 && pointer < GC_EXCEPTION_REF_TAG ? pointer : 0;
+}
+
 static inline int64_t callable_native_reference_inline(jit_context_t *ctx, int64_t value) {
     if ((value & STORE_FUNCREF_TAG) != STORE_FUNCREF_TAG || value < 0) return value;
     const jit_callable_registry_t *registry = ctx ? ctx_runtime(ctx)->callable_registry : NULL;
@@ -34,7 +57,8 @@ static inline int64_t callable_native_reference_inline(jit_context_t *ctx, int64
     uint64_t index = address - 1 - (uint32_t)registry->function_origin;
     if (registry->function_positions &&
         index < (uint32_t)Moonbit_array_length(registry->function_positions)) {
-        int32_t position = registry->function_positions[index];
+        uint32_t position = (uint32_t)registry->function_positions[index];
+        if (registry->function_count <= UINT16_MAX) position &= UINT16_MAX;
         return position ? registry->function_pointers[position - 1] | FUNCREF_TAG : value;
     }
     int32_t low = 0, high = registry->function_count;

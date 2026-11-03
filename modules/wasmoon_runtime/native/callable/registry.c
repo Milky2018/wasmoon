@@ -1,6 +1,35 @@
 #include "registry.h"
 #include "moonbit.h"
 
+// The existing dense executable index owns these slots. Small maps leave
+// enough bits above the original ordinal for an exact type or a miss marker.
+static void refresh_direct_slots(jit_callable_registry_t *view) {
+    int32_t span = view->function_positions
+        ? Moonbit_array_length(view->function_positions) : 0;
+    int32_t store_span = view->store_positions
+        ? Moonbit_array_length(view->store_positions) : 0;
+    view->direct_span = 0;
+    if (!store_span || span > 16384 || view->function_count > UINT16_MAX)
+        return;
+    for (int32_t i = 0; i < span; ++i) {
+        uint32_t ordinal = (uint32_t)view->function_positions[i] & UINT16_MAX;
+        uint32_t identity = 0x7fff;
+        uint64_t address = (uint64_t)(uint32_t)view->function_origin + (uint32_t)i;
+        uint64_t relative = address - (uint32_t)view->store_origin;
+        if (ordinal && ordinal <= (uint32_t)view->function_count &&
+            relative < (uint32_t)store_span) {
+            int32_t position = view->store_positions[relative];
+            if (position > 0 && position <= view->entry_count) {
+                uint32_t candidate = (uint32_t)view->identities[position - 1];
+                if (candidate < (uint32_t)view->type_count && candidate < 0x7fff)
+                    identity = candidate;
+            }
+        }
+        view->function_positions[i] = (int32_t)((identity << 16) | ordinal);
+    }
+    view->direct_span = span;
+}
+
 static void release_callable_view(void *object) {
     jit_callable_registry_t *view = object;
     if (view->parents) moonbit_decref(view->parents);
@@ -43,6 +72,7 @@ MOONBIT_FFI_EXPORT void wasmoon_callable_view_publish(
     view->entry_count = entry_count;
     view->store_origin = store_origin;
     view->store_positions = store_positions;
+    refresh_direct_slots(view);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_callable_view_publish_functions(
@@ -69,4 +99,5 @@ MOONBIT_FFI_EXPORT void wasmoon_callable_view_publish_functions(
     view->reference_count = reference_count;
     view->function_origin = store_origin;
     view->function_positions = store_positions;
+    refresh_direct_slots(view);
 }

@@ -1555,3 +1555,42 @@ test "prepared GC environment rejects a different native context before binding"
   first.setup_gc_environment(heap, environment)
   first.teardown_gc()
 }
+
+///|
+test "exact Store call slots reflect identity and executable changes" {
+  let registry = @wasmoon_jit.NativeCallableRegistry::new()
+  let first = @wasmoon_jit.encode_store_funcref(54)
+  let hole = @wasmoon_jit.encode_store_funcref(55)
+  let last = @wasmoon_jit.encode_store_funcref(56)
+  assert_true(registry.replace([-1, -1], [(first, 1), (last, 0), (last, 1)]))
+  registry.replace_functions([(54, 16L), (56, 32L)], [])
+  let context = @jit_ffi.JITContext::new(1)
+  context.bind_callable_registry(registry, [1, 0], [7, 8])
+  fn lookup(value : Int64, expected : Int32) -> Int64 {
+    @native_test_support.context_callable_exact_target(context, value, expected)
+  }
+  assert_eq(lookup(first, 0), 16L)
+  assert_eq(
+    @native_test_support.context_callable_native_reference(context, first),
+    0x2000000000000010L,
+  )
+  assert_eq(lookup(last, 1), 32L)
+  assert_eq(lookup(hole, 0), 0L)
+  assert_eq(lookup(first, -1), 0L)
+  assert_eq(lookup(first, 2), 0L)
+  assert_eq(lookup(0L, 0), 0L)
+  // Same sorted keys and parent graph: only the identity value changes.
+  assert_true(registry.replace([-1, -1], [(first, 0), (last, 0), (last, 1)]))
+  assert_eq(lookup(first, 0), 0L)
+  assert_eq(lookup(first, 1), 16L)
+  registry.replace_functions([(55, 64L), (56, 0x3000000000000010L)], [])
+  assert_eq(lookup(first, 1), 0L)
+  assert_eq(lookup(hole, 1), 0L)
+  assert_eq(lookup(last, 1), 0L)
+  registry.replace_functions([(54, 64L), (1000000, 32L)], [])
+  assert_eq(lookup(first, 1), 0L)
+  registry.replace_functions([(54, 64L)], [])
+  assert_eq(lookup(first, 1), 64L)
+  registry.clear()
+  assert_eq(lookup(first, 1), 0L)
+}
