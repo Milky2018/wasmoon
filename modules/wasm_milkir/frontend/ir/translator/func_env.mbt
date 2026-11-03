@@ -623,7 +623,6 @@ fn FuncEnvironment::emit_bounds_check(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -638,6 +637,7 @@ fn FuncEnvironment::emit_bounds_check(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -784,7 +784,6 @@ fn FuncEnvironment::translate_memory_load(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -799,6 +798,7 @@ fn FuncEnvironment::translate_memory_load(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -895,7 +895,6 @@ fn FuncEnvironment::translate_memory_store(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -910,6 +909,7 @@ fn FuncEnvironment::translate_memory_store(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -998,7 +998,6 @@ fn FuncEnvironment::translate_memory_load_narrow(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -1013,6 +1012,7 @@ fn FuncEnvironment::translate_memory_load_narrow(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -1102,7 +1102,6 @@ fn FuncEnvironment::translate_memory_store_narrow(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -1117,6 +1116,7 @@ fn FuncEnvironment::translate_memory_store_narrow(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
