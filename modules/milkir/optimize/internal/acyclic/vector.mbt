@@ -25,6 +25,84 @@ fn vector_integer_lane(lane : @milkir.VectorIntLane) -> @milkir.VectorLane {
 }
 
 ///|
+/// Extract only full-width scalar integers. Const lanes are in Wasm byte
+/// order. Narrow lanes need explicit truncation and sign extension instead.
+fn OptimizerSession::project_integer_lane(
+  self : OptimizerSession,
+  vector : @milkir.Value,
+  lane : @milkir.VectorLane,
+  index : Int32,
+  type_ : @milkir.Type,
+) -> @milkir.Value? {
+  guard self.definition(vector) is Some(definition) else { return None }
+  match definition.opcode {
+    Vector(Splat(source_lane)) if lane == source_lane =>
+      definition.operands.get(0)
+    Vector(Const(bytes)) if bytes.length() == 16 => {
+      let width = if type_ == I32 { 4 } else { 8 }
+      let start = index * width
+      let mut bits = 0UL
+      for offset in 0..<width {
+        bits = bits |
+          (bytes[start + offset].to_int().to_uint64() << (offset * 8))
+      }
+      let scalar = if type_ == I32 {
+        bits.to_uint().reinterpret_as_int().to_int64()
+      } else {
+        bits.reinterpret_as_int64()
+      }
+      self.stage_pure_candidate(Scalar(IntConst(scalar)), [], type_)
+    }
+    _ => None
+  }
+}
+
+///|
+fn OptimizerSession::rewrite_integer_lane_projection(
+  self : OptimizerSession,
+  inst : @milkir.Inst,
+  lane : @milkir.VectorLane,
+  index : Int32,
+  prefix : Array[@milkir.Inst],
+) -> Bool {
+  guard inst.operands is [vector] &&
+    inst.first_result() is Some(result) &&
+    self.definition(vector) is Some(definition) else {
+    return false
+  }
+  let marker = self.begin_candidates()
+  if self.project_integer_lane(vector, lane, index, result.ty) is Some(value) {
+    self.commit_candidates(marker, prefix)
+    return self.replace_with_alias(inst, value)
+  }
+  guard self.has_single_use(vector) && definition.operands is [left, right] else {
+    return false
+  }
+  let scalar : @milkir.IntBinaryOp = match definition.opcode {
+    Vector(IntBinary(Add, width)) if vector_integer_lane(width) == lane => Add
+    Vector(IntBinary(Sub, width)) if vector_integer_lane(width) == lane => Sub
+    Vector(IntBinary(Mul, width)) if vector_integer_lane(width) == lane => Mul
+    Vector(Bitwise(And)) => And
+    Vector(Bitwise(Or)) => Or
+    Vector(Bitwise(Xor)) => Xor
+    _ => return false
+  }
+  if self.project_integer_lane(left, lane, index, result.ty) is Some(a) &&
+    self.project_integer_lane(right, lane, index, result.ty) is Some(b) &&
+    self.stage_pure_candidate(Scalar(IntBinary(scalar)), [a, b], result.ty)
+    is Some(value) &&
+    self.commit_candidates_if_cheaper(
+      marker,
+      1 + pure_candidate_cost(definition.opcode),
+      prefix,
+    ) {
+    return self.replace_with_alias(inst, value)
+  }
+  self.discard_candidates(marker)
+  false
+}
+
+///|
 fn OptimizerSession::rewrite_vector(
   self : OptimizerSession,
   inst : @milkir.Inst,
@@ -32,6 +110,10 @@ fn OptimizerSession::rewrite_vector(
   prefix : Array[@milkir.Inst],
 ) -> Bool {
   match op {
+    ExtractLane(I32, None, index) if index >= 0 && index < 4 =>
+      self.rewrite_integer_lane_projection(inst, I32, index, prefix)
+    ExtractLane(I64, None, index) if index >= 0 && index < 2 =>
+      self.rewrite_integer_lane_projection(inst, I64, index, prefix)
     Splat(lane) => {
       guard inst.operands is [source] else { return false }
       let bits = match lane {
