@@ -147,7 +147,8 @@ typedef struct GcIdentityPage {
 typedef struct { int32_t enabled; uint32_t attempts; } GcAllocationControl;
 
 // A heap-owned hint, never a GC root or an independently owned pointer. Only
-// exact canonical typed structs in ordinary mode are cached. Runtime type
+// actual canonical typed layouts in ordinary mode are cached. Requested
+// nominal subtype relations are checked against the current registry. Runtime type
 // changes, identity retirement, payload growth and compaction invalidate it.
 // Closing clears the complete heap; replacing a context's heap selects a
 // different hint. These are the heap's existing exclusive-mutator boundaries.

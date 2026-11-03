@@ -421,3 +421,62 @@ test "public root collection rejects empty and partially discovered native graph
   }
   assert_eq(store.collect_garbage(), 40)
 }
+
+///|
+test "warm read views preserve allocation fault controls" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #| (type $s (struct (field i32)))
+      #| (type $a (array i32))
+      #| (func (param (ref $s) (ref $a)) (result i32)
+      #|   (local $i i32) (local $sum i32)
+      #|   loop $read
+      #|     local.get $sum
+      #|     local.get 0 struct.get $s 0 i32.add
+      #|     local.get 1 i32.const 0 array.get $a i32.add
+      #|     local.set $sum
+      #|     local.get $i i32.const 1 i32.add local.tee $i i32.const 6 i32.lt_u
+      #|     br_if $read
+      #|   end
+      #|   local.get $sum)
+      #| (func (result i32)
+      #|   i32.const 99 struct.new $s struct.get $s 0))
+    ),
+  )
+  @validator.validate_module(module_)
+  for level in [0, 2, 3] {
+    let store = @runtime.Store::with_c_heap()
+    defer store.close()
+    let instance = @executor.instantiate_module_with_imports(
+      store,
+      module_,
+      Imports(store),
+    )
+    let context = build_gc_root_context(
+      module_,
+      instance,
+      store,
+      opt_level=level,
+    )
+    defer context.close()
+    let s = store.alloc_struct(0, [I32(19)], instance~)
+    let a = store.alloc_array(1, [I32(23)], instance~)
+    let inputs : Array[@types.Value] = [StructRef(s), ArrayRef(a)]
+    let roots = store.pin_gc_roots(inputs)
+    defer roots.release()
+    defer @wasmoon_jit.gc_debug_set_fail_alloc(0)
+    assert_eq(context.call_core_func(store, instance, 0, inputs), [I32(252)])
+    @wasmoon_jit.gc_debug_set_fail_alloc(0, fail_every=1)
+    assert_eq(context.call_core_func(store, instance, 0, inputs), [I32(252)])
+    try context.call_core_func(store, instance, 1, []) catch {
+      Trap(message) => assert_eq(message, "out of memory")
+      error => fail(error.to_string())
+    } noraise {
+      _ => fail("warm read views disabled allocation fault injection")
+    }
+    assert_eq(context.call_core_func(store, instance, 0, inputs), [I32(252)])
+    @wasmoon_jit.gc_debug_set_fail_alloc(0)
+    assert_eq(context.call_core_func(store, instance, 1, []), [I32(99)])
+  }
+}

@@ -262,6 +262,14 @@ pub fn WasmOpcode::hash_combine(Self, Hasher) -> Unit
 pub fn WasmOpcode::not_equal(Self, Self) -> Bool
 pub fn WasmOpcode::to_repr(Self) -> @debug.Repr
 
+pub(all) struct WasmReadOnlyCallContract {
+  polls : Int32
+  layout : (Int32, Int32, Int32, Int32)?
+} derive(Eq, @debug.Debug)
+pub fn WasmReadOnlyCallContract::equal(Self, Self) -> Bool
+pub fn WasmReadOnlyCallContract::not_equal(Self, Self) -> Bool
+pub fn WasmReadOnlyCallContract::to_repr(Self) -> @debug.Repr
+
 pub(all) enum WasmRuntimeHelper {
   MemoryGrow
   MemorySize
@@ -360,12 +368,17 @@ pub fn WasmTableContract::not_equal(Self, Self) -> Bool
 pub fn WasmTableContract::to_repr(Self) -> @debug.Repr
 
 type WasmValidationContext
+pub fn WasmValidationContext::admits_function_body(Self, Int32, @milkir.Function) -> Bool
 pub fn WasmValidationContext::array_element(Self, Int32) -> WasmFieldContract?
 pub fn WasmValidationContext::empty() -> Self
-pub fn WasmValidationContext::new(WasmValidationResolvers) -> Self
+pub fn WasmValidationContext::is_final_type(Self, Int32) -> Bool
+pub fn WasmValidationContext::new(WasmValidationResolvers, final_types? : Array[Int32]) -> Self
+pub fn WasmValidationContext::read_only_call_contract(Self, Int32) -> WasmReadOnlyCallContract?
 pub fn WasmValidationContext::struct_field(Self, Int32, Int32) -> WasmFieldContract?
 pub fn WasmValidationContext::validate_extension(Self, @milkir.ExtensionInstView, Array[@milkir.Type]) -> String?
 pub fn WasmValidationContext::validate_global_value(Self, @milkir.GlobalValueData) -> String?
+pub fn WasmValidationContext::validate_guarded_call_signature(Self, @milkir.ExtensionInstView, Int32) -> String?
+pub fn WasmValidationContext::with_read_only_call_contracts(Self, Map[Int32, WasmReadOnlyCallContract]) -> Self
 
 pub(all) struct WasmValidationResolvers {
   function_contract : (Int32) -> WasmFunctionContract?

@@ -11,6 +11,7 @@ const GC_SLOT_BYTES : Int32 = 16
 /// the embedding product after target emission.
 struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
+  ordinary_view_publication : Bool
   inline_heap : InlineHeapLayout?
   struct_views : StructViewLayout?
   array_views : ArrayViewLayout?
@@ -37,6 +38,9 @@ struct Environment {
 /// independently verifies every physical borrow across the final CFG.
 /// `prepared_arrays` opts an embedding into the non-collecting try-array
 /// helper ABI. Existing providers keep the collecting allocation ABI by default.
+/// `ordinary_view_publication` promises that checked view helpers publish
+/// only in ordinary mode and the mode cannot change while a view exists.
+/// The allocation fault gate does not govern reads under that contract.
 /// `exclusive_poll_controls` additionally promises that callback bindings and
 /// countdown storage cannot change during guest-only code except at its polls.
 /// Reentry/suspension expires that permission. The native seam can then create
@@ -55,6 +59,7 @@ pub fn Environment::new(
   inline_heap~ : InlineHeapLayout? = None,
   struct_views~ : StructViewLayout? = None,
   array_views~ : ArrayViewLayout? = None,
+  ordinary_view_publication~ : Bool = false,
 ) -> Environment {
   {
     function_symbol,
@@ -62,6 +67,7 @@ pub fn Environment::new(
     runtime_symbol,
     gc_heap_field,
     gc_array_regions,
+    ordinary_view_publication,
     exclusive_poll_controls,
     prepared_arrays,
     projection_budget: 8,
@@ -80,21 +86,25 @@ fn direct_call_contract(
   function_index : Int32,
   environment : Environment,
   result_types : Array[@native_types.ValueType],
+  argument_start~ : Int32 = 0,
+  behavior~ : @native_types.CallBehavior = @native_types.CallBehavior::conservative(),
 ) -> (@native_types.NativeCall, Array[@lowering.Value]) {
   let parameter_types : Array[@native_types.ValueType] = [Ptr64]
-  for ty in context.operand_types() {
-    parameter_types.push(ty)
+  let types = context.operand_types()
+  let arguments = context.operands()
+  for i in argument_start..<types.length() {
+    parameter_types.push(types[i])
   }
   let operands = context.environment()
-  for operand in context.operands() {
-    operands.push(operand)
+  for i in argument_start..<arguments.length() {
+    operands.push(arguments[i])
   }
   (
     @native_types.NativeCall::new(
       Internal((environment.function_symbol)(function_index)),
       @native_types.Signature::new(parameter_types, result_types),
       Internal,
-      @native_types.CallBehavior::conservative(),
+      behavior,
     ),
     operands,
   )
@@ -1386,6 +1396,27 @@ fn lower_extension(
   environment : Environment,
   validation_context : @wasm_milkir.WasmValidationContext,
 ) -> String? {
+  if decode_guarded_call(extension) is Some(guarded) {
+    if !environment.exclusive_poll_controls {
+      return Some("guarded calls require exclusive invocation controls")
+    }
+    let (call, operands) = direct_call_contract(
+      context,
+      guarded.target,
+      environment,
+      context.result_types(),
+      argument_start=1,
+      behavior=@native_types.CallBehavior::new(
+        ReadWrite,
+        true,
+        true,
+        false,
+        false,
+      ),
+    )
+    context.finish_call(call, operands)
+    return None
+  }
   if decode_poll_region(extension) is Some((region, guard_)) {
     if !environment.exclusive_poll_controls {
       return Some("native poll regions require exclusive invocation controls")
@@ -1728,7 +1759,10 @@ pub fn lower_to_sink(
       .block_instruction_ids(block)
       .any(id => {
         function.instruction_by_id(id).unwrap().opcode is Ext(op, _) &&
-        decode_poll_region(op) is Some(_)
+        (
+          decode_poll_region(op) is Some(_) ||
+          decode_guarded_call(op) is Some(_)
+        )
       })
     }) {
     if gc_borrow_error(function) is Some(error) {
@@ -1803,6 +1837,9 @@ pub fn lower_to_sink(
     sink,
     call_abi?,
     verify_input~,
+    root_free_extension=op => {
+      decode_poll_region(op) is Some(_) || decode_guarded_call(op) is Some(_)
+    },
     prefer_scoped_root_site=op => {
       decode_poll_region(op) is Some(_) ||
       @wasm_milkir.decode(op) is Some(SafepointPoll(_, _, _, _)) ||

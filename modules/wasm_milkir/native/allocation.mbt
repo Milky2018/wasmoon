@@ -18,7 +18,11 @@ fn lower_fast_struct(
   let mut size = 0
   let mut index = 0
   while validation.struct_field(type_index, index) is Some(field) {
-    guard field_width(field) is Some(width) && index < 16 else { return false }
+    guard field_width(field) is Some(width) &&
+      index < 16 &&
+      !(field.storage is Value(CallableRef | OpaqueRef)) else {
+      return false
+    }
     size = (size + width - 1) / width * width
     offsets.push(size + 16)
     size += width
@@ -172,6 +176,30 @@ fn lower_fast_struct(
 }
 
 ///|
+/// Access views can admit reference carriers and a bounded prefix of a large
+/// object. Allocation expansion still requires its original complete shape;
+/// extending the access contract must not silently change allocator selection.
+fn allocation_field_count(
+  validation : @wasm_milkir.WasmValidationContext,
+  type_ : Int32,
+) -> Int32? {
+  let mut count = 0
+  while validation.struct_field(type_, count) is Some(field) {
+    if count == 16 ||
+      !(field.storage
+      is (Packed8 | Packed16 | Value(I32 | F32 | I64 | F64 | V128 | Ref))) {
+      return None
+    }
+    count += 1
+  }
+  if count == 0 {
+    None
+  } else {
+    Some(count)
+  }
+}
+
+///|
 /// Stable-identity publication expands beyond a plain bump allocation. Inspect
 /// the static allocation sites once for both policies: inline struct stores
 /// have a bounded instruction budget; shared prepared arrays add two CFG blocks
@@ -190,7 +218,7 @@ fn allocation_expansion_limits(
       match @wasm_milkir.decode_opcode(inst.opcode) {
         Some(StructNew(type_) | StructNewDefault(type_)) if struct_cost <= 512 ||
           shared_cost <= 1200 =>
-          if struct_view_shape(validation, type_) is Some((_, fields)) {
+          if allocation_field_count(validation, type_) is Some(fields) {
             struct_cost += 128 + fields * 4
             // Shared reservation still expands guards, header/payload stores
             // and a slow/join diamond. Bound that work independently of the

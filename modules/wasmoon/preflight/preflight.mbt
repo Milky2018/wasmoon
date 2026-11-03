@@ -201,6 +201,9 @@ pub fn validate_jit(
   } else {
     Map([])
   }
+  let validation_context = @wasm_optimize.with_read_only_calls(
+    validation_context, scalar_callees,
+  )
   for i, _ in wasm_module.codes {
     let func_idx = num_imports + i
     let func_name = get_func_name(wasm_module, func_idx)

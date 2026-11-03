@@ -1800,6 +1800,9 @@ fn compile_validated_module_to_jit(
   source_module~ : Bytes? = None,
   instruction_sources~ : Array[Array[@types.InstructionSource]] = [],
 ) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
+  // Progress callbacks may mutate caller-owned section arrays. Effect proofs,
+  // source templates and every compiled body must describe one owned module.
+  let mod_ = mod_.snapshot()
   use_reusable_pipeline |> ignore
   // DWARF registration consumes the completed artifact when the JIT module is
   // loaded; target compilation itself has no separate debug path.
@@ -1841,7 +1844,7 @@ fn compile_validated_module_to_jit(
           }
         }
         if enabled_count > 0 {
-          Some(mask)
+          Some(mask.copy())
         } else {
           None
         }
@@ -1900,6 +1903,14 @@ fn compile_validated_module_to_jit(
     @wasm_frontend.scalar_callees(translation_ctx, mod_)
   } else {
     Map([])
+  }
+  // A missing native body may resolve to an interpreter/host adapter. Its
+  // effects are not the effects of the source template, so partial artifacts
+  // keep conservative call boundaries even for verified read-only source.
+  let wasm_validation_context = if compile_mask is None {
+    @wasm_optimize.with_read_only_calls(wasm_validation_context, scalar_callees)
+  } else {
+    wasm_validation_context
   }
   let mut compiled_count = 0
   let manifest = build_jit_artifact_manifest(

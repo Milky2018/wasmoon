@@ -254,6 +254,9 @@ fn compile_component_artifact(
   } else {
     Map([])
   }
+  let validation_context = @wasm_optimize.with_read_only_calls(
+    validation_context, scalar_callees,
+  )
   let imports : Array[@artifact.ImportIdentity] = []
   let mut imported_function_index = 0
   for import_ in module_.imports {
@@ -347,6 +350,9 @@ fn load_component_jit_context(
   prepared_code~ : NativeComponentCode? = None,
   on_compile~ : () -> Unit = fn() { () },
 ) -> (@core_jit.JITModuleContext, @core_jit.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
+  // Checkpoints and compile hooks may reenter caller code. Keep effect proofs,
+  // compiled bodies and the later installation metadata on the same snapshot.
+  let module_ = module_.snapshot()
   store.check_instance(instance) catch {
     error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
   }

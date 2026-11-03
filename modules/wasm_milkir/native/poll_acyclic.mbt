@@ -2,7 +2,10 @@
 /// Version small acyclic regions with repeated object reads. The guard proves
 /// sufficient credit; each charge stays at its original position. The complete
 /// polling path remains available for callbacks and quantum boundaries.
-fn version_poll_acyclic(function : @milkir.Function) -> Bool {
+fn version_poll_acyclic(
+  function : @milkir.Function,
+  context~ : @wasm_milkir.WasmValidationContext = @wasm_milkir.WasmValidationContext::empty(),
+) -> Bool {
   let sources = function.blocks.copy()
   if sources.is_empty() ||
     sources.length() > 24 ||
@@ -65,6 +68,20 @@ fn version_poll_acyclic(function : @milkir.Function) -> Bool {
           layout = Some(offsets)
           polls += 1
         }
+        Some(WasmCall(target)) => {
+          guard clean &&
+            context.read_only_call_contract(target) is Some(contract) else {
+            return false
+          }
+          if contract.layout is Some((a, b, c, d)) {
+            let offsets : FixedArray[Int32] = [a, b, c, d]
+            if layout is Some(previous) && previous != offsets {
+              return false
+            }
+            layout = Some(offsets)
+          }
+          polls += contract.polls
+        }
         Some(
           StructGet(type_, _)
           | StructGetS(type_, _, _)
@@ -80,7 +97,7 @@ fn version_poll_acyclic(function : @milkir.Function) -> Bool {
         _ => ()
       }
       if !(@wasm_milkir.decode_opcode(inst.opcode)
-        is Some(SafepointPoll(_, _, _, _))) &&
+        is Some(SafepointPoll(_, _, _, _) | WasmCall(_))) &&
         poll_invalidates_credit(function, inst) {
         clean = false
       }
@@ -89,7 +106,8 @@ fn version_poll_acyclic(function : @milkir.Function) -> Bool {
   }
   if instructions > 64 ||
     polls < 2 ||
-    polls > 8 ||
+    polls > 256 ||
+    layout is None ||
     !repeated.values().any(count => count >= 2) {
     return false
   }
@@ -150,13 +168,32 @@ fn version_poll_acyclic(function : @milkir.Function) -> Bool {
       let inst = function.instruction_by_id(id).unwrap()
       let polled = @wasm_milkir.decode_opcode(inst.opcode)
         is Some(SafepointPoll(_, _, _, _))
+      let call = match @wasm_milkir.decode_opcode(inst.opcode) {
+        Some(WasmCall(target)) =>
+          Some(GuardedCall::{
+            region,
+            target,
+            polls: context.read_only_call_contract(target).unwrap().polls,
+          })
+        _ => None
+      }
       let cloned = function.new_inst(
-        if polled {
+        if call is Some(call) {
+          Ext(
+            guarded_call_opcode(call),
+            Signature(
+              [Ptr] + inst.args.map(value => value.ty),
+              inst.results.map(value => value.ty),
+            ),
+          )
+        } else if polled {
           Ext(poll_region_opcode(region, false), Signature([Ptr], []))
         } else {
           inst.opcode
         },
-        if polled {
+        if call is Some(_) {
+          [controls] + inst.args.map(mapped)
+        } else if polled {
           [controls]
         } else {
           inst.args.map(mapped)

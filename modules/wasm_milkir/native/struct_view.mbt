@@ -1,6 +1,6 @@
 ///|
 /// Optional embedding-owned admission hints, independent of allocation layout.
-/// Only complete checked helpers may publish exact canonical keys. Payload
+/// Only complete checked helpers may publish actual canonical layout keys. Payload
 /// movement, retirement, rollback, type changes and heap replacement must
 /// invalidate affected hints; close clears them all. The control word excludes
 /// full verification mode.
@@ -18,6 +18,9 @@ pub(all) struct StructViewLayout {
   view_shape : Int32
   view_payload : Int32
   view_bits : Int32
+  registry_offset : Int32
+  registry_parents : Int32
+  registry_type_count : Int32
 }
 
 ///|
@@ -54,9 +57,10 @@ fn view_guard_immediate(
 }
 
 ///|
-/// Only the complete helper publishes admitted exact-layout keys. The generated
-/// hit path repeats that key; every miss, verifier mode and unsupported layout
-/// selects the same trapping accessor. Existing borrow epochs remain unchanged.
+/// The complete helper publishes a physical prefix under the actual identity.
+/// Exact types and a current immediate-parent relation can use that prefix;
+/// transitive relations retain the complete helper. No nominal result is cached.
+/// Every miss and verifier mode keeps the trapping accessor and borrow epoch.
 fn inline_cached_struct_projection(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -64,6 +68,7 @@ fn inline_cached_struct_projection(
   type_index : Int32,
   shape : UInt64,
   fields : Int32,
+  exact_type~ : Bool,
 ) -> Unit {
   let slow = context.create_block([])
   let ready = context.create_block([Ptr64])
@@ -73,15 +78,17 @@ fn inline_cached_struct_projection(
       [Ptr64],
     )[0]
   view_guard_nonzero(context, heap, slow)
-  let control = heap_load(context, heap, layout.allocation_control, Ptr64)
-  view_guard_nonzero(context, control, slow)
-  view_guard_immediate(
-    context,
-    NotEqual,
-    heap_load(context, control, layout.control_enabled, I32),
-    0UL,
-    slow,
-  )
+  if !environment.ordinary_view_publication {
+    let control = heap_load(context, heap, layout.allocation_control, Ptr64)
+    view_guard_nonzero(context, control, slow)
+    view_guard_immediate(
+      context,
+      NotEqual,
+      heap_load(context, control, layout.control_enabled, I32),
+      0UL,
+      slow,
+    )
+  }
   let ref_pointer = context.emit(GcRefAddress, context.operands(), [Ptr64])[0]
   view_guard_nonzero(context, ref_pointer, slow)
   let word = context.emit(Convert(Bitcast(Ptr64, I64)), [ref_pointer], [I64])[0]
@@ -110,18 +117,26 @@ fn inline_cached_struct_projection(
   context.switch_to_block(matched)
   view_guard_immediate(
     context,
-    Equal,
+    if exact_type {
+      Equal
+    } else {
+      UnsignedGreaterOrEqual
+    },
     heap_load(context, entry, layout.view_fields, I32),
     fields.to_uint64(),
     slow,
   )
-  view_guard_immediate(
-    context,
-    Equal,
-    heap_load(context, entry, layout.view_shape, I64),
-    shape,
-    slow,
-  )
+  let actual_shape = heap_load(context, entry, layout.view_shape, I64)
+  let prefix_shape = if exact_type || fields == 16 {
+    actual_shape
+  } else {
+    context.emit(
+      IntBinaryImmediate(And, (1UL << (fields * 4)) - 1UL),
+      [actual_shape],
+      [I64],
+    )[0]
+  }
+  view_guard_immediate(context, Equal, prefix_shape, shape, slow)
   let ids = heap_load(
     context,
     context.environment()[0],
@@ -145,7 +160,59 @@ fn inline_cached_struct_projection(
   let identity = heap_load(context, ids, type_index * 4, I32)
   let actual = heap_load(context, entry, layout.view_identity, I32)
   let admitted = context.create_block([])
-  context.branch_int_compare(Equal, identity, actual, admitted, [], slow, [])
+  if exact_type {
+    context.branch_int_compare(Equal, identity, actual, admitted, [], slow, [])
+  } else {
+    let subtype = context.create_block([])
+    context.branch_int_compare(Equal, identity, actual, admitted, [], subtype, [])
+    context.switch_to_block(subtype)
+    let registry = heap_load(
+      context,
+      context.environment()[0],
+      layout.registry_offset,
+      Ptr64,
+    )
+    view_guard_nonzero(context, registry, slow)
+    let type_count = heap_load(
+      context,
+      registry,
+      layout.registry_type_count,
+      I32,
+    )
+    let in_bounds = context.create_block([])
+    context.branch_int_compare(
+      UnsignedLessThan,
+      actual,
+      type_count,
+      in_bounds,
+      [],
+      slow,
+      [],
+    )
+    context.switch_to_block(in_bounds)
+    // The complete registry walk only matches a live identity. Parent
+    // sentinels and out-of-range entries cannot admit a rebound local type.
+    let valid_target = context.create_block([])
+    context.branch_int_compare(
+      UnsignedLessThan,
+      identity,
+      type_count,
+      valid_target,
+      [],
+      slow,
+      [],
+    )
+    context.switch_to_block(valid_target)
+    let parents = heap_load(context, registry, layout.registry_parents, Ptr64)
+    view_guard_nonzero(context, parents, slow)
+    let parent = heap_load(
+      context,
+      heap_index(context, parents, actual, 2),
+      0,
+      I32,
+    )
+    context.branch_int_compare(Equal, identity, parent, admitted, [], slow, [])
+  }
   context.switch_to_block(admitted)
   context.jump(ready, [heap_load(context, entry, layout.view_payload, Ptr64)])
   context.switch_to_block(slow)

@@ -18,6 +18,8 @@ import {
 }
 
 import {
+  "Milky2018/wasm_core/wat" @core_wat,
+  "Milky2018/wasmoon/executor",
   "moonbitlang/async",
   "Milky2018/wasm_component/text" @component_text,
 } for "wbtest"

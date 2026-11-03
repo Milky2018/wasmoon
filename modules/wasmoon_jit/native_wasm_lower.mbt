@@ -16,6 +16,9 @@ let native_struct_view_layout : @wasm_native.StructViewLayout = {
   view_shape: native_layout_field(60),
   view_payload: native_layout_field(61),
   view_bits: native_layout_field(62),
+  registry_offset: native_layout_field(68),
+  registry_parents: native_layout_field(69),
+  registry_type_count: native_layout_field(70),
 }
 
 ///|
@@ -93,6 +96,10 @@ fn wasmoon_native_environment(
     fn(helper) {
       @native.ExternalSymbol::new(runtime_symbols.symbol_name(helper))
     },
+    // The C helpers publish only after the process verification setting has
+    // resolved to ordinary mode. Allocation fault injection changes only
+    // allocation attempts; it cannot change the verification setting.
+    ordinary_view_publication=true,
     struct_views=Some(native_struct_view_layout),
     array_views=Some({
       allocation_control: native_layout_field(43),

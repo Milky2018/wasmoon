@@ -26,15 +26,17 @@ fn inline_cached_array_projection(
       [Ptr64],
     )[0]
   view_guard_nonzero(context, heap, slow)
-  let control = heap_load(context, heap, layout.allocation_control, Ptr64)
-  view_guard_nonzero(context, control, slow)
-  view_guard_immediate(
-    context,
-    NotEqual,
-    heap_load(context, control, layout.control_enabled, I32),
-    0UL,
-    slow,
-  )
+  if !environment.ordinary_view_publication {
+    let control = heap_load(context, heap, layout.allocation_control, Ptr64)
+    view_guard_nonzero(context, control, slow)
+    view_guard_immediate(
+      context,
+      NotEqual,
+      heap_load(context, control, layout.control_enabled, I32),
+      0UL,
+      slow,
+    )
+  }
   let ref_pointer = context.emit(GcRefAddress, context.operands(), [Ptr64])[0]
   view_guard_nonzero(context, ref_pointer, slow)
   let word = context.emit(Convert(Bitcast(Ptr64, I64)), [ref_pointer], [I64])[0]

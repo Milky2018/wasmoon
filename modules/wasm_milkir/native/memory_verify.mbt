@@ -22,7 +22,10 @@ fn invalidates_borrows(
   aliases : Map[Int32, Int32],
 ) -> Bool {
   if inst.opcode is Ext(extension, _) &&
-    decode_poll_region(extension) is Some(_) {
+    (
+      decode_poll_region(extension) is Some(_) ||
+      decode_guarded_call(extension) is Some(_)
+    ) {
     return false
   }
   if inst.opcode is Ext(extension, _) && decode_projection(extension) is Some(_) {
@@ -260,8 +263,8 @@ fn valid_borrow_access(inst : @milkir.Inst, shape : Projection) -> Bool {
     _ => return false
   }
   match inst.opcode {
-    Memory(Load(Ref)) => reference && width == 8
-    Memory(Store(Ref)) => false // A raw store must never bypass a reference barrier.
+    Memory(Load(Ref | CallableRef | OpaqueRef)) => reference && width == 8
+    Memory(Store(Ref | CallableRef | OpaqueRef)) => false // A raw store must never bypass a reference barrier.
     Memory(Load(I32 | F32)) => !reference && width == 4
     Memory(Load(I64 | F64)) => !reference && width == 8
     Memory(LoadNarrow(I32, bits, _)) => !reference && bits == width * 8

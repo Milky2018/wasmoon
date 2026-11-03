@@ -107,6 +107,20 @@ fn version_poll_loops(
             layout = Some(offsets)
             polls += 1
           }
+          Some(WasmCall(target)) =>
+            match context.read_only_call_contract(target) {
+              None => eligible = false
+              Some(contract) => {
+                polls += contract.polls
+                if contract.layout is Some((a, b, c, d)) {
+                  let offsets : FixedArray[Int32] = [a, b, c, d]
+                  if layout is Some(previous) && previous != offsets {
+                    eligible = false
+                  }
+                  layout = Some(offsets)
+                }
+              }
+            }
           _ => {
             let effects = @effects.analyze(inst.opcode)
             if (
@@ -124,7 +138,8 @@ fn version_poll_loops(
       instructions > 96 ||
       total + instructions > 1200 ||
       polls == 0 ||
-      polls > 256 {
+      polls > 256 ||
+      layout is None {
       continue
     }
     // Frontend exits can use an empty forwarding block before the actual
@@ -270,18 +285,34 @@ fn version_poll_loops(
       let copy = copies[id]
       for inst_id in function.block_instruction_ids(source) {
         let inst = function.instruction_by_id(inst_id).unwrap()
-        let opcode = if @wasm_milkir.decode_opcode(inst.opcode)
-          is Some(SafepointPoll(_, _, _, _)) {
+        let call = match @wasm_milkir.decode_opcode(inst.opcode) {
+          Some(WasmCall(target)) =>
+            Some(GuardedCall::{
+              region,
+              target,
+              polls: context.read_only_call_contract(target).unwrap().polls,
+            })
+          _ => None
+        }
+        let opcode = if call is Some(call) {
           @milkir.Opcode::Ext(
-            poll_region_opcode(region, false),
-            Signature([Ptr], []),
+            guarded_call_opcode(call),
+            Signature(
+              [Ptr] + inst.args.map(value => value.ty),
+              inst.results.map(value => value.ty),
+            ),
           )
+        } else if @wasm_milkir.decode_opcode(inst.opcode)
+          is Some(SafepointPoll(_, _, _, _)) {
+          Ext(poll_region_opcode(region, false), Signature([Ptr], []))
         } else {
           inst.opcode
         }
         let cloned = function.new_inst(
           opcode,
-          if @wasm_milkir.decode_opcode(inst.opcode)
+          if call is Some(_) {
+            [controls] + inst.args.map(mapped)
+          } else if @wasm_milkir.decode_opcode(inst.opcode)
             is Some(SafepointPoll(_, _, _, _)) {
             [controls]
           } else {

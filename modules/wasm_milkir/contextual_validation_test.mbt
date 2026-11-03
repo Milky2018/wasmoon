@@ -1,62 +1,77 @@
 ///|
-fn contextual_test_context() -> @wasm_milkir.WasmValidationContext {
-  @wasm_milkir.WasmValidationContext::new({
-    function_contract: fn(index) {
-      if index == 7 {
-        Some({ params: [I32], results: [I64], })
-      } else {
-        None
-      }
+fn contextual_test_context(
+  final_types~ : Array[Int32] = [],
+) -> @wasm_milkir.WasmValidationContext {
+  @wasm_milkir.WasmValidationContext::new(
+    {
+      function_contract: fn(index) {
+        if index == 7 {
+          Some({ params: [I32], results: [I64], })
+        } else {
+          None
+        }
+      },
+      defined_type_contract: fn(index) {
+        match index {
+          2 => Some(Function({ params: [I64], results: [F32], }))
+          3 =>
+            Some(
+              Struct([
+                { storage: Value(I64), mutable_: true, defaultable: true, },
+                { storage: Packed8, mutable_: false, defaultable: true, },
+              ]),
+            )
+          4 =>
+            Some(
+              Array({ storage: Value(F64), mutable_: true, defaultable: true, }),
+            )
+          5 =>
+            Some(
+              Array({ storage: Packed16, mutable_: false, defaultable: true, }),
+            )
+          6 =>
+            Some(
+              Array({ storage: Value(Ref), mutable_: true, defaultable: true, }),
+            )
+          _ => None
+        }
+      },
+      table_contract: fn(index) {
+        if index == 1 {
+          Some({ index_type: I64, element_type: CallableRef, })
+        } else {
+          None
+        }
+      },
+      tag_contract: fn(index) {
+        if index == 0 {
+          Some({ params: [I32, F64], results: [], })
+        } else {
+          None
+        }
+      },
+      memory_exists: fn(index) { index == 0 },
+      data_segment_exists: fn(index) { index == 0 },
+      element_segment_type: fn(index) {
+        if index == 0 {
+          Some(Ref)
+        } else {
+          None
+        }
+      },
     },
-    defined_type_contract: fn(index) {
-      match index {
-        2 => Some(Function({ params: [I64], results: [F32], }))
-        3 =>
-          Some(
-            Struct([
-              { storage: Value(I64), mutable_: true, defaultable: true, },
-              { storage: Packed8, mutable_: false, defaultable: true, },
-            ]),
-          )
-        4 =>
-          Some(
-            Array({ storage: Value(F64), mutable_: true, defaultable: true, }),
-          )
-        5 =>
-          Some(
-            Array({ storage: Packed16, mutable_: false, defaultable: true, }),
-          )
-        6 =>
-          Some(
-            Array({ storage: Value(Ref), mutable_: true, defaultable: true, }),
-          )
-        _ => None
-      }
-    },
-    table_contract: fn(index) {
-      if index == 1 {
-        Some({ index_type: I64, element_type: CallableRef, })
-      } else {
-        None
-      }
-    },
-    tag_contract: fn(index) {
-      if index == 0 {
-        Some({ params: [I32, F64], results: [], })
-      } else {
-        None
-      }
-    },
-    memory_exists: fn(index) { index == 0 },
-    data_segment_exists: fn(index) { index == 0 },
-    element_segment_type: fn(index) {
-      if index == 0 {
-        Some(Ref)
-      } else {
-        None
-      }
-    },
-  })
+    final_types~,
+  )
+}
+
+///|
+test "context snapshots optional final type metadata" {
+  let indices = [3]
+  let context = contextual_test_context(final_types=indices)
+  indices[0] = 4
+  assert_true(context.is_final_type(3))
+  assert_false(context.is_final_type(4))
+  assert_false(contextual_test_context().is_final_type(3))
 }
 
 ///|

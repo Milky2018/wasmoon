@@ -1,5 +1,6 @@
 import {
   "Milky2018/wasm_milkir",
+  "Milky2018/wasm_milkir/effects",
   "Milky2018/milkir",
   "Milky2018/milkir/optimize" @generic,
 }

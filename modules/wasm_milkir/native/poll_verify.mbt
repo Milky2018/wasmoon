@@ -27,6 +27,9 @@ fn poll_invalidates_credit(
   function : @milkir.Function,
   inst : @milkir.Inst,
 ) -> Bool {
+  if inst.opcode is Ext(op, _) && decode_guarded_call(op) is Some(_) {
+    return false
+  }
   if poll_checked_store(function, inst) {
     return false
   }
@@ -54,7 +57,10 @@ fn poll_region_error(function : @milkir.Function) -> String? {
           poll_invalidates_credit(function, inst) ||
           (
             inst.opcode is Ext(op, _) &&
-            decode_poll_region(op) is Some((_, false))
+            (
+              decode_poll_region(op) is Some((_, false)) ||
+              decode_guarded_call(op) is Some(_)
+            )
           )
         ) {
         return Some("native poll guard invalidated before its branch")
@@ -90,6 +96,13 @@ fn poll_region_error(function : @milkir.Function) -> String? {
   for block in function.blocks {
     for id in function.block_instruction_ids(block) {
       let inst = function.instruction_by_id(id).unwrap()
+      if inst.opcode is Ext(op, _) && decode_guarded_call(op) is Some(call) {
+        if guards.get(call.region.key) != Some(call.region) ||
+          inst.args.get(0).map(token => token.id) !=
+          controls.get(call.region.key) {
+          return Some("guarded call has no matching guarded controls")
+        }
+      }
       if inst.opcode is Ext(op, _) &&
         decode_poll_region(op) is Some((region, false)) {
         if guards.get(region.key) != Some(region) ||
@@ -158,6 +171,13 @@ fn poll_region_error(function : @milkir.Function) -> String? {
         }
         return -1
       }
+      if inst.opcode is Ext(op, _) && decode_guarded_call(op) is Some(call) {
+        return if call.region == region {
+          (-1).max(credit - call.polls)
+        } else {
+          -1
+        }
+      }
       if poll_invalidates_credit(function, inst) {
         -1
       } else {
@@ -192,6 +212,12 @@ fn poll_region_error(function : @milkir.Function) -> String? {
           charge == region &&
           credit < 1 {
           return Some("native poll charge exceeds its guarded budget")
+        }
+        if inst.opcode is Ext(op, _) &&
+          decode_guarded_call(op) is Some(call) &&
+          call.region == region &&
+          credit < call.polls {
+          return Some("guarded call exceeds its guarded budget")
         }
         credit = after(inst, credit)
       }

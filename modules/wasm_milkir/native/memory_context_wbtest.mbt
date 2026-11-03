@@ -127,3 +127,63 @@ test "shared reservation work is bounded independently without mutating input" {
     assert_eq(function.print(), before)
   }
 }
+
+///|
+test "broader access views do not consume unrelated allocation expansion budgets" {
+  let context = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { None },
+    defined_type_contract: fn(index) {
+      let scalar : @wasm_milkir.WasmFieldContract = {
+        storage: Value(I64),
+        mutable_: true,
+        defaultable: true,
+      }
+      match index {
+        0 => Some(Struct([scalar, scalar]))
+        1 =>
+          Some(
+            Struct([
+              {
+                storage: Value(CallableRef),
+                mutable_: true,
+                defaultable: true,
+              },
+              scalar,
+            ]),
+          )
+        2 =>
+          Some(
+            Struct([
+              { storage: Value(OpaqueRef), mutable_: true, defaultable: true, },
+              scalar,
+            ]),
+          )
+        3 => Some(Struct(Array::make(17, scalar)))
+        _ => None
+      }
+    },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  let b = @milkir.FunctionBuilder("independent_access_and_allocation")
+  let callback = b.add_param(CallableRef)
+  let opaque_value = b.add_param(OpaqueRef)
+  let number = b.add_param(I64)
+  for _ in 0..<12 {
+    @wasm_milkir.struct_new(b, 1, [callback, number]) |> ignore
+    @wasm_milkir.struct_new(b, 2, [opaque_value, number]) |> ignore
+    @wasm_milkir.struct_new(b, 3, Array::make(17, number)) |> ignore
+  }
+  @wasm_milkir.struct_new(b, 0, [number, number]) |> ignore
+  b.return_([])
+  let function = b.get_function()
+  let before = function.print()
+  assert_true(struct_view_shape(context, 1) is Some(_))
+  assert_true(struct_view_shape(context, 2) is Some(_))
+  assert_true(struct_view_shape(context, 3) is Some(_))
+  assert_eq(allocation_expansion_limits(function, context), (true, true, true))
+  assert_eq(function.print(), before)
+}

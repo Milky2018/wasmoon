@@ -1325,8 +1325,20 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             ? (GcHeader *)(heap->data + offset) : NULL;
         if (!header || header->kind != GC_KIND_STRUCT ||
             cached->payload != header + 1 ||
-            cached->identity != (int32_t)(header->reserved >> 32) - 1) {
+            cached->identity != (int32_t)(header->reserved >> 32) - 1 ||
+            cached->identity != gc_heap_runtime_type(heap, (int32_t)(word >> 1))) {
             return gc_verify_fail("invalid cached struct view", verbose);
+        }
+        GcTypeLayout *layout = gc_object_layout(heap, header);
+        if (cached->fields < 0 || cached->fields > 16 || !layout ||
+            layout->kind != GC_KIND_STRUCT || cached->fields > layout->count ||
+            (uint32_t)cached->fields > (uint32_t)header->reserved) {
+            return gc_verify_fail("invalid cached struct view prefix", verbose);
+        }
+        uint64_t mask = cached->fields == 16 ? UINT64_MAX :
+            (UINT64_C(1) << (cached->fields * 4)) - 1;
+        if (cached->shape != (layout->prefix_shape & mask)) {
+            return gc_verify_fail("invalid cached struct view shape", verbose);
         }
     }
 

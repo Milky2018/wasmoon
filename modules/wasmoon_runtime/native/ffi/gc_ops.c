@@ -1010,8 +1010,15 @@ void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32
     return (void *)(cached->view & ~(uintptr_t)15);
 }
 
-// Checked once per object/type and heap epoch. Subsequent field projections
-// are nontrapping metadata reads from this admitted, live struct payload.
+static inline int gc_struct_view_has_prefix(const GcStructViewCache *cached,
+    uint64_t shape, int32_t fields) {
+    if (fields < 0 || fields > 16 || cached->fields < fields) return 0;
+    uint64_t mask = fields == 16 ? UINT64_MAX : (UINT64_C(1) << (fields * 4)) - 1;
+    return (cached->shape & mask) == shape;
+}
+
+// Physical admission belongs to the actual object and heap epoch. Nominal
+// admission belongs to the current requested type and Store registry.
 #if defined(_MSC_VER)
 __declspec(noinline)
 #else
@@ -1021,7 +1028,8 @@ static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t r
     uint64_t shape, int32_t fields, GcHeap *resolved_heap) {
     if (!ref) { trap_null_reference(); return NULL; }
     // The explicit-context entry already located the heap and rejected its
-    // hint without a call or mutation. TLS/verification entries resolve here.
+    // exact key. Prefix and subtype admission belong to this complete path.
+    // TLS/verification entries also resolve the heap here.
     GcHeap *heap = resolved_heap;
     if (!heap) {
         ctx = resolve_ctx(ctx);
@@ -1034,20 +1042,21 @@ static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t r
         type_idx < ctx_runtime(ctx)->callable_local_type_count
         ? ctx_runtime(ctx)->callable_local_types[type_idx] : -1;
     GcStructViewCache *cached = gc_struct_view_entry(heap, ref);
-    if (!resolved_heap && gc_verify_env_cached == 0 && target >= 0 &&
-        cached->reference == ref && cached->identity == target &&
-        cached->shape == shape && cached->fields == fields) return cached->payload;
+    if (gc_verify_env_cached == 0 && target >= 0 &&
+        cached->reference == ref && gc_struct_view_has_prefix(cached, shape, fields) &&
+        (cached->identity == target ||
+         callable_subtype_registered(ctx_runtime(ctx), cached->identity, type_idx))) return cached->payload;
     GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
     if (!header || header->kind != GC_KIND_STRUCT || (uint32_t)header->reserved < (uint32_t)fields) {
         trap_unreachable_i64(); return NULL;
     }
     int32_t identity = (int32_t)(header->reserved >> 32) - 1;
+    int32_t actual = gc_heap_runtime_type(heap, decode_heap_ref(ref));
     int exact = identity >= 0 && identity == target;
     if (!exact) {
         // The live struct and concrete target are already checked above. Use
         // its canonical runtime identity without repeating ref.test's object
         // decoding/kind queries; legacy identities retain that complete path.
-        int32_t actual = gc_heap_runtime_type(heap, decode_heap_ref(ref));
         int compatible = actual >= 0 && target >= 0
             ? callable_subtype_registered(ctx_runtime(ctx), actual, type_idx)
             : gc_ref_test_impl(ctx, ref, type_idx, 0);
@@ -1063,17 +1072,23 @@ static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t r
     uintptr_t flags = layout ? 0 : 1;
     if (!layout || gc_verify_env_cached != 0) flags |= 2;
     void *view = (void *)((uintptr_t)(header + 1) | flags);
-    if (exact && layout && gc_verify_env_cached == 0) {
-        *cached = (GcStructViewCache){ref, identity, fields, shape, view};
+    // Cache physical admission under the actual identity. A subtype hit must
+    // still consult the current registry, so replacing or clearing its parent
+    // relation cannot preserve a previous nominal admission.
+    if (identity >= 0 && actual == identity && layout && gc_verify_env_cached == 0) {
+        int32_t prefix = layout->count < 16 ? layout->count : 16;
+        if ((uint32_t)prefix > (uint32_t)header->reserved) prefix = (int32_t)(uint32_t)header->reserved;
+        uint64_t prefix_mask = prefix == 16 ? UINT64_MAX : (UINT64_C(1) << (prefix * 4)) - 1;
+        *cached = (GcStructViewCache){ref, identity, prefix, layout->prefix_shape & prefix_mask, view};
     }
     return view;
 }
 
-// A matching non-root hint has already admitted the reference, nominal type
-// and field span; malformed keys cannot hit an admitted entry.
-// Misses pass the located heap to the complete checked path without repeating
-// its hint probe. TLS, verification and legacy contexts keep their fallback.
-// Keep cold calls out of the common leaf's register frame.
+// Keep exact-key equality in the common leaf. Prefix masks and current subtype
+// walks belong to the complete path, which accepts the already located heap.
+// A hit has admitted the live reference, nominal type and complete field span;
+// malformed keys cannot match. TLS, verification and legacy contexts retain
+// their fallback. The leaf needs neither a call frame nor a subtype loop.
 void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int32_t type_idx,
     uint64_t shape, int32_t fields) {
     GcHeap *heap = NULL;

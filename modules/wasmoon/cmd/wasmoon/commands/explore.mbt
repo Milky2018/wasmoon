@@ -138,6 +138,9 @@ fn run_explore_with_compiler(
   } else {
     Map([])
   }
+  let wasm_validation_context = @wasm_optimize.with_read_only_calls(
+    wasm_validation_context, scalar_callees,
+  )
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
