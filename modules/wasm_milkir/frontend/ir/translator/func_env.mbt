@@ -31,6 +31,7 @@ priv struct FuncEnvironment {
   // Shared trap block for memory out-of-bounds errors
   // All bounds checks in the same function share this block to reduce CFG size
   mut memory_trap_block : Block?
+  mut table_trap_block : Block?
   // Shared trap block for atomic unaligned accesses
   mut atomic_unaligned_trap_block : Block?
   // Per-block dynamic bounds-check cache:
@@ -81,6 +82,7 @@ fn FuncEnvironment::FuncEnvironment(
     memory_is_shared,
     memory_page_size_log2,
     memory_trap_block: None,
+    table_trap_block: None,
     atomic_unaligned_trap_block: None,
     bounds_check_cache: HashMap([]),
   }
@@ -216,7 +218,7 @@ fn FuncEnvironment::translate_table_size(
 }
 
 ///|
-/// Read the shared table through the runtime's stable-reference decoder.
+/// Read the stable reference from table zero's published layout.
 fn FuncEnvironment::translate_table_get(
   self : FuncEnvironment,
   builder : FunctionBuilder,
@@ -227,6 +229,45 @@ fn FuncEnvironment::translate_table_get(
   is_table64~ : Bool = false,
 ) -> Value {
   let index = if is_table64 { elem_idx } else { builder.uextend(I64, elem_idx) }
+  if table_idx == 0 {
+    // The embedding publishes these fields for every growth and close. A
+    // missing or closed binding has size zero, so the entry is never read.
+    let layout = self.runtime_layout
+    let size = builder.load_ptr(
+      I64,
+      vmctx,
+      builder.iconst_i64(layout.table0_elements_offset.to_int64()),
+    )
+    let current = builder.current_block()
+    let trap = match self.table_trap_block {
+      Some(block) => block
+      None => {
+        let block = builder.create_block()
+        builder.switch_to_block(block)
+        let source = builder.set_source_byte_offset(None)
+        builder.trap("out of bounds table access")
+        builder.set_source_byte_offset(source) |> ignore
+        builder.switch_to_block(current)
+        self.table_trap_block = Some(block)
+        block
+      }
+    }
+    let in_bounds = builder.icmp(Ult, index, size)
+    let access = builder.create_block()
+    builder.brnz(in_bounds, access, trap)
+    builder.switch_to_block(access)
+    let base = builder.load_ptr(
+      I64,
+      vmctx,
+      builder.iconst_i64(layout.table0_base_offset.to_int64()),
+    )
+    let stride = builder.iconst_i64(layout.table_entry_stride.to_int64())
+    let entry = builder.iadd(base, builder.imul(index, stride))
+    let value_offset = builder.iconst_i64(
+      layout.table_entry_value_offset.to_int64(),
+    )
+    return builder.load_ptr(result_type, entry, value_offset)
+  }
   let symbol = builder
     .get_function()
     .declare_external_symbol(self.runtime_symbols.symbol_name(TableGet))
@@ -641,6 +682,65 @@ fn FuncEnvironment::emit_bounds_check(
 
   // Return effective address: memory_base + addr + offset
   builder.iadd(memory_base, addr_plus_offset)
+}
+
+///|
+/// Move one native-width value after checking both complete ranges. A single
+/// source read before any store preserves overlap. Memory zero uses the live
+/// non-shared descriptor cache, including after a reentrant grow or rebind.
+fn FuncEnvironment::try_fixed_memory_copy(
+  self : FuncEnvironment,
+  builder : FunctionBuilder,
+  vmctx : Value,
+  dst_memidx : Int32,
+  src_memidx : Int32,
+  dst : Value,
+  src : Value,
+  length : Value,
+) -> Bool {
+  guard dst_memidx == 0 &&
+    src_memidx == 0 &&
+    self.memory_is_shared.get(0) == Some(false) &&
+    builder.get_const_value(length) is Some(size) &&
+    (size == 1L || size == 2L || size == 4L || size == 8L || size == 16L) else {
+    return false
+  }
+  let width = size.to_int()
+  let byte_count = builder.iconst_i64(size)
+  let available = self.load_memory_size(builder, vmctx, 0)
+  let trap = self.get_or_create_memory_trap_block(builder)
+  let check_offsets = builder.create_block()
+  builder.brnz(builder.icmp(Uge, available, byte_count), check_offsets, trap)
+  builder.switch_to_block(check_offsets)
+  let last_valid_offset = builder.isub(available, byte_count)
+  let is_memory64 = self.memory_is_64.get(0) == Some(true)
+  let dst = if is_memory64 { dst } else { builder.uextend(I64, dst) }
+  let src = if is_memory64 { src } else { builder.uextend(I64, src) }
+  let dst_in_bounds = builder.icmp(Ule, dst, last_valid_offset)
+  let src_in_bounds = builder.icmp(Ule, src, last_valid_offset)
+  let copy = builder.create_block()
+  builder.brnz(builder.band(dst_in_bounds, src_in_bounds), copy, trap)
+  builder.switch_to_block(copy)
+  // Use the live base after the explicit bounds checks. The positive size
+  // bound also rejects a cleared memory-zero binding.
+  let base = @wasm_milkir.load_mem_base(builder, vmctx, 0, Mutable)
+  let dst = builder.iadd(base, dst)
+  let src = builder.iadd(base, src)
+  let zero = builder.iconst_i64(0L)
+  if width < 4 {
+    let bits = width * 8
+    let value = builder.load_ptr_narrow(I32, bits, false, src, zero)
+    builder.store_ptr_narrow(bits, dst, value, zero)
+  } else {
+    let ty : Type = match width {
+      4 => I32
+      8 => I64
+      _ => V128
+    }
+    let value = builder.load_ptr(ty, src, zero)
+    builder.store_ptr(ty, dst, value, zero)
+  }
+  true
 }
 
 ///|

@@ -205,3 +205,23 @@ test "bulk memory: dropped data still checks both zero-length offsets" {
     }
   }
 }
+
+///|
+test "fixed-width memory copy preserves both directions of unaligned overlap" {
+  let source =
+    #|(module
+    #|  (memory 1)
+    #|  (data (i32.const 0) "\00\01\02\03\04\05\06\07\08\09\0a\0b\0c\0d\0e\0f\10")
+    #|  (func (export "copy") (param $dst i32) (param $src i32) (result i32)
+    #|    local.get $dst local.get $src i32.const 16 memory.copy
+    #|    local.get $dst i32.load8_u
+    #|    local.get $dst i32.load8_u offset=15 i32.const 8 i32.shl i32.or))
+  inspect(
+    @testsuite.compare_jit_interp(source, "copy", [I32(1), I32(0)]).to_string(),
+    content="JIT: I32(3840)\nInterpreter: I32(3840)\nResult: MATCH",
+  )
+  inspect(
+    @testsuite.compare_jit_interp(source, "copy", [I32(0), I32(1)]).to_string(),
+    content="JIT: I32(4097)\nInterpreter: I32(4097)\nResult: MATCH",
+  )
+}
