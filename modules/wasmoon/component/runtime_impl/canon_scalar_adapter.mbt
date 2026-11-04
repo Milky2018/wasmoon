@@ -84,7 +84,7 @@ fn call_scalar_canon_adapter(
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   guard func
     is Lifted(core, ty, lift_resources, types, callee_table, entry, None, false) else {
-    abort("expected synchronous scalar lift")
+    raise CanonCallError("expected synchronous scalar lift")
   }
   with_sync_lift_task(state, callee_table.id, func, fn() raise ComponentRuntimeError {
     let results = invoke_sync_lift_core(state, store, entry, core, args.copy())
