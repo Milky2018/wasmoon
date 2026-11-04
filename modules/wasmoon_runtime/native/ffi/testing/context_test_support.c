@@ -16,42 +16,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_gc_word_access(
     }
 }
 
-extern void wasmoon_jit_ctx_init_data_segments(int64_t ctx, int count);
-extern void wasmoon_jit_ctx_init_elem_segments(int64_t ctx, int count);
-
-// Exercise the optional state's ownership through reset, reuse and destruction.
-MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_optional_state(void) {
-    jit_context_t *first = alloc_context_internal(1);
-    jit_context_t *second = alloc_context_internal(1);
-    if (!first || !second) {
-        free_context_internal(first);
-        free_context_internal(second);
-        return 0;
-    }
-    int passed = !ctx_runtime(first)->segments &&
-        !ctx_runtime(first)->exception_arena && !ctx_runtime(first)->continuation_arena;
-    int64_t address = (int64_t)(uintptr_t)first;
-    wasmoon_jit_ctx_init_data_segments(address, 0);
-    wasmoon_jit_ctx_init_elem_segments(address, 0);
-    passed = passed && !ctx_runtime(first)->segments;
-    wasmoon_jit_ctx_init_data_segments(address, 1);
-    wasmoon_jit_ctx_init_elem_segments(address, 2);
-    passed = passed && ctx_runtime(first)->segments &&
-        Moonbit_array_length(ctx_runtime(first)->segments->data_segments) == 1 &&
-        Moonbit_array_length(ctx_runtime(first)->segments->elem_segments) == 2 &&
-        !ctx_runtime(second)->segments;
-    ctx_clear_segments_internal(first);
-    passed = passed && !ctx_runtime(first)->segments;
-    ctx_clear_segments_internal(first);
-    wasmoon_jit_ctx_init_elem_segments(address, 1);
-    passed = passed && ctx_runtime(first)->segments &&
-        Moonbit_array_length(ctx_runtime(first)->segments->elem_segments) == 1 &&
-        !ctx_runtime(first)->segments->data_segments;
-    free_context_internal(first);
-    free_context_internal(second);
-    return passed;
-}
-
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_ownership(void) {
     jit_context_t *ctx = alloc_context_internal(3);
     if (!ctx) return 0;
@@ -260,26 +224,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_funcref_subtype(
     return result;
 }
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_legacy_rebind(void *context) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
-    int32_t types[] = {-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    int32_t canonical[] = {0, 1};
-    int32_t functions[] = {1};
-    set_type_cache_internal(ctx, types, 2);
-    set_canonical_indices_internal(ctx, canonical, 2);
-    set_func_type_indices_internal(ctx, functions, 1);
-    types[6] = -1;
-    canonical[1] = 0;
-    functions[0] = 0;
-    jit_runtime_state_t *state = ctx_runtime(ctx);
-    int passed = state->gc_type_cache[6] == 0 &&
-        state->gc_canonical_indices[1] == 1 && state->gc_func_type_indices[0] == 1;
-    clear_type_cache_internal(ctx);
-    clear_type_cache_internal(ctx);
-    return passed && !state->gc_type_cache && !state->gc_canonical_indices &&
-        !state->gc_func_type_indices;
-}
-
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_metadata_shares(
     void *context, int32_t *types, int32_t *canonical, int32_t *functions
 ) {
@@ -306,22 +250,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_valid(void *context) 
     return table->stackmap_blob_size == 24 && table->stackmap_blob[0] == 2 && table->stackmap_blob[8] == 0 &&
         table->safepoint_count == 2 && table->code_offsets[1] == 12 &&
         state->gc_func_table_size == 2 && state->gc_func_table[1] == 32;
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_legacy(void *context) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
-    jit_runtime_state_t *state = ctx_runtime(ctx);
-    wasmoon_gc_safepoint_table_t *table = &state->gc_func_safepoint_tables[0];
-    uint8_t blob[24] = {2, 0, 0, 0, 2};
-    int32_t offsets[] = {4, 12};
-    void *addresses[] = {(void *)(uintptr_t)16, (void *)(uintptr_t)32};
-    int passed = ctx_gc_set_func_safepoints_internal(ctx, 0, blob, sizeof(blob), offsets, 2);
-    set_func_table_internal(ctx, addresses, 2);
-    blob[8] = 99;
-    offsets[1] = 99;
-    addresses[1] = NULL;
-    return passed && table == &state->gc_func_safepoint_tables[0] &&
-        wasmoon_test_context_gc_payload_valid(context);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_gc_payload_empty(void *context) {
@@ -439,29 +367,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_valid(void *context) {
         Moonbit_array_length(state->elem_segments[0]) == 2 && state->elem_segments[0][0] == 16;
 }
 
-extern void wasmoon_jit_ctx_add_data_segment(int64_t, int, uint8_t *, int, int);
-extern void wasmoon_jit_ctx_add_elem_segment(int64_t, int, int64_t *, int, int);
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_legacy(void *context) {
-    int64_t address = wasmoon_jit_context_ptr(context);
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)address;
-    uint8_t data[] = {1, 2, 3};
-    int64_t elements[] = {16, 0};
-    wasmoon_jit_ctx_add_data_segment(address, 0, data, 3, 0);
-    wasmoon_jit_ctx_add_elem_segment(address, 0, elements, 1, 0);
-    data[2] = 99;
-    elements[0] = 99;
-    int passed = wasmoon_test_context_segments_valid(context);
-    wasmoon_jit_ctx_add_data_segment(address, 0, data, 3, 1);
-    wasmoon_jit_ctx_add_elem_segment(address, 0, elements, 1, 1);
-    passed &= Moonbit_array_length(ctx_runtime(ctx)->segments->data_segments[0]) == 0 &&
-        Moonbit_array_length(ctx_runtime(ctx)->segments->elem_segments[0]) == 0;
-    return passed;
-}
-
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_segments_empty(void *context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
-    return !ctx_runtime(ctx)->segments;
+    return ctx && !ctx_runtime(ctx)->segments;
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_function_array(void *context) {
@@ -488,29 +396,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_raw_context_function_array(void) {
         }
         free_context_internal(ctx);
     }
-    return passed;
-}
-
-// Exercise RC-to-legacy and legacy-to-RC replacement under sanitizers.
-MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_globals_ownership(void) {
-    jit_context_t *ctx = alloc_context_internal(0);
-    if (!ctx) return 0;
-    int64_t *managed = moonbit_make_int64_array(2, 0);
-    managed[0] = 16;
-    managed[1] = 32;
-    moonbit_incref(managed);
-    ctx_set_globals_internal(ctx, managed, 1);
-    moonbit_incref(managed);
-    ctx_set_globals_internal(ctx, managed, 1);
-    int passed = ctx_globals(ctx) == managed && managed[1] == 32;
-    int64_t *legacy = malloc(2 * sizeof(int64_t));
-    if (!legacy) { moonbit_decref(managed); free_context_internal(ctx); return 0; }
-    legacy[0] = 48;
-    ctx_set_globals_internal(ctx, legacy, 0);
-    ctx_set_globals_internal(ctx, legacy, 0);
-    passed &= ((int64_t *)ctx_globals(ctx))[0] == 48 && managed[0] == 16;
-    ctx_set_globals_internal(ctx, managed, 1);
-    free_context_internal(ctx);
     return passed;
 }
 

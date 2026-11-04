@@ -56,52 +56,6 @@ static void free_elem_segments(jit_context_t *ctx) {
     ctx_runtime(ctx)->segments->elem_segments = NULL;
 }
 
-// Legacy raw setters copy inputs into the same RC-managed representation.
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments(int64_t ctx_ptr, int count) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || (count <= 0 && !ctx_runtime(ctx)->segments) || !ensure_segments(ctx)) return;
-    uint8_t **segments = count > 0 ?
-        (uint8_t **)moonbit_make_ref_array(count, moonbit_make_bytes(0, 0)) : NULL;
-    free_data_segments(ctx);
-    ctx_runtime(ctx)->segments->data_segments = segments;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment(
-    int64_t ctx_ptr, int idx, uint8_t *data, int size, int is_dropped
-) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || idx < 0 || idx >= segment_count(ctx_segments_state(ctx)->data_segments)) return;
-    int count = !is_dropped && size > 0 ? size : 0;
-    uint8_t *copy = moonbit_make_bytes(count, 0);
-    if (count) memcpy(copy, data, (size_t)count);
-    uint8_t **segments = ctx_runtime(ctx)->segments->data_segments;
-    moonbit_decref(segments[idx]);
-    segments[idx] = copy;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_elem_segments(int64_t ctx_ptr, int count) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || (count <= 0 && !ctx_runtime(ctx)->segments) || !ensure_segments(ctx)) return;
-    int64_t **segments = count > 0 ?
-        (int64_t **)moonbit_make_ref_array(count, moonbit_make_int64_array(0, 0)) : NULL;
-    free_elem_segments(ctx);
-    ctx_runtime(ctx)->segments->elem_segments = segments;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment(
-    int64_t ctx_ptr, int idx, int64_t *data, int size, int is_dropped
-) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || idx < 0 || idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) return;
-    if (size > INT32_MAX / 2) return;
-    int count = !is_dropped && size > 0 ? size * 2 : 0;
-    int64_t *copy = moonbit_make_int64_array(count, 0);
-    if (count) memcpy(copy, data, (size_t)count * sizeof(int64_t));
-    int64_t **segments = ctx_runtime(ctx)->segments->elem_segments;
-    moonbit_decref(segments[idx]);
-    segments[idx] = copy;
-}
-
 void ctx_clear_segments_internal(jit_context_t *ctx) {
     if (!ctx || !ctx_runtime(ctx)->segments) return;
     free_data_segments(ctx);
@@ -110,10 +64,6 @@ void ctx_clear_segments_internal(jit_context_t *ctx) {
     if (ctx_runtime(ctx)->segments->elem_dropped) moonbit_decref(ctx_runtime(ctx)->segments->elem_dropped);
     free(ctx_runtime(ctx)->segments);
     ctx_runtime(ctx)->segments = NULL;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments(int64_t ctx_ptr) {
-    ctx_clear_segments_internal((jit_context_t *)(uintptr_t)ctx_ptr);
 }
 
 extern int64_t wasmoon_jit_context_ptr(void *jit_context);
@@ -168,50 +118,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_bind_segments(
     return 1;
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments_managed(
-    void *jit_context, int count
-) {
-    wasmoon_jit_ctx_init_data_segments(
-        wasmoon_jit_context_ptr(jit_context), count
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment_managed(
-    void *jit_context,
-    int idx,
-    uint8_t *data,
-    int size,
-    int is_dropped
-) {
-    wasmoon_jit_ctx_add_data_segment(
-        wasmoon_jit_context_ptr(jit_context), idx, data, size, is_dropped
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_elem_segments_managed(
-    void *jit_context, int count
-) {
-    wasmoon_jit_ctx_init_elem_segments(
-        wasmoon_jit_context_ptr(jit_context), count
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment_managed(
-    void *jit_context,
-    int idx,
-    int64_t *data,
-    int size,
-    int is_dropped
-) {
-    wasmoon_jit_ctx_add_elem_segment(
-        wasmoon_jit_context_ptr(jit_context), idx, data, size, is_dropped
-    );
-}
-
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments_managed(
     void *jit_context
 ) {
-    wasmoon_jit_ctx_clear_segments(wasmoon_jit_context_ptr(jit_context));
+    ctx_clear_segments_internal((jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(jit_context));
 }
 
 // ============ Memory Segment Libcalls ============

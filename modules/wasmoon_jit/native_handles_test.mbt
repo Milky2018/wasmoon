@@ -599,11 +599,6 @@ test "guarded and shared descriptor access uses committed length rather than res
 }
 
 ///|
-test "context allocates optional segment state on demand and releases it on reset" {
-  inspect(@native_test_support.context_optional_state(), content="1")
-}
-
-///|
 test "Store callable registry updates are shared and preserve instance isolation" {
   let first = @wasmoon_jit.NativeCallableRegistry::new()
   let second = @wasmoon_jit.NativeCallableRegistry::new()
@@ -869,7 +864,6 @@ fn context_with_owned_gc_metadata() -> @jit_ffi.JITContext raise {
 test "GC metadata survives MoonBit owners and supports replacement and clearing" {
   let first = context_with_owned_gc_metadata()
   let second = context_with_owned_gc_metadata()
-  inspect(@native_test_support.context_gc_legacy_rebind(second), content="1")
   second.bind_gc_metadata([-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [], [0, 1])
   inspect(
     @native_test_support.context_gc_funcref_subtype(first, 1, 0),
@@ -919,14 +913,13 @@ fn context_with_owned_gc_payloads() -> @jit_ffi.JITContext {
 }
 
 ///|
-test "GC payloads retain MoonBit owners through replacement and legacy bindings" {
+test "GC payloads retain MoonBit owners through replacement" {
   let first = context_with_owned_gc_payloads()
   let second = context_with_owned_gc_payloads()
   inspect(@native_test_support.context_gc_payload_valid(first), content="1")
   assert_false(first.bind_gc_safepoints(-1, b"", []))
   assert_false(first.bind_gc_safepoints(2, b"", []))
   inspect(@native_test_support.context_gc_payload_valid(first), content="1")
-  inspect(@native_test_support.context_gc_payload_legacy(first), content="1")
   assert_true(first.bind_gc_safepoints(0, b"", []))
   first.bind_gc_function_addresses([])
   inspect(@native_test_support.context_gc_payload_empty(first), content="1")
@@ -950,7 +943,11 @@ fn contexts_with_owned_segments() -> (@jit_ffi.JITContext, @jit_ffi.JITContext) 
   let blob = Bytes::from_array([1, 2, 3])
   let data = [blob]
   let elements = [[16L, 0L]]
-  guard first.set_segments(data, elements) &&
+  guard @native_test_support.context_segments_empty(first) == 1 &&
+    first.set_segments([], []) &&
+    @native_test_support.context_segments_empty(first) == 1 &&
+    first.set_segments(data, elements) &&
+    @native_test_support.context_segments_empty(second) == 1 &&
     second.set_segments(data, elements) else {
     abort("segment binding failed")
   }
@@ -967,7 +964,6 @@ test "segment snapshots retain data and isolate mutable inputs and instance drop
   let (first, second) = contexts_with_owned_segments()
   inspect(@native_test_support.context_segments_valid(first), content="1")
   inspect(@native_test_support.context_segments_valid(second), content="1")
-  inspect(@native_test_support.context_segments_legacy(first), content="1")
   inspect(@native_test_support.context_segments_valid(second), content="1")
   assert_true(first.set_segments([], []))
   assert_true(first.set_segments([], []))
@@ -993,7 +989,7 @@ test "function address arrays retain storage without owning executable pointers"
 }
 
 ///|
-test "global pointer tables snapshot addresses and release both ownership modes" {
+test "global pointer tables snapshot addresses and release replaced arrays" {
   guard @wasmoon_jit.NativeJITContext::try_alloc(0) is Some(context) else {
     fail("context allocation failed")
   }
@@ -1004,7 +1000,13 @@ test "global pointer tables snapshot addresses and release both ownership modes"
   inspect(@wasmoon_jit.native_value_slot_read(table, 1), content="16")
   context.bind_globals([]) |> ignore
   context.bind_globals([48L]) |> ignore
-  inspect(@native_test_support.context_globals_ownership(), content="1")
+  let handle = @jit_ffi.JITContext::new(0)
+  let shared : FixedArray[Int64] = [16L, 32L]
+  let first = handle.bind_globals(shared)
+  assert_eq(handle.bind_globals(shared), first)
+  inspect(@wasmoon_jit.native_value_slot_read(first, 1), content="32")
+  handle.bind_globals([48L]) |> ignore
+  assert_eq(shared[0], 16L)
 }
 
 ///|

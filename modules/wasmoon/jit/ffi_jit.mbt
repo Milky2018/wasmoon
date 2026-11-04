@@ -104,12 +104,6 @@ fn JITContext::set_memory(
 }
 
 ///|
-/// Set globals array in the context
-fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
-  self.ctx.set_globals(globals_ptr)
-}
-
-///|
 /// Allocate guarded memory with mmap for bounds check elimination
 /// Memory is allocated with guard pages (PROT_NONE) after the accessible region
 /// Access to guard pages triggers SIGSEGV which is caught and converted to a trap

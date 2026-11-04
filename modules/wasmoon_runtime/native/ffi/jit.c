@@ -467,11 +467,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, wasmoon_memo
     }
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_globals(int64_t ctx_ptr, int64_t globals_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (ctx) ctx_set_globals_internal(ctx, (void *)globals_ptr, 0);
-}
-
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_func_table(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     return ctx ? (int64_t)ctx_func_table(ctx) : 0;
@@ -1628,40 +1623,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_try_array_wide_ptr(void) {
     return WASMOON_GUEST_ADDRESS(gc_try_array_wide_impl);
 }
 
-// ============ Type Cache Management FFI Exports ============
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(
-    int64_t ctx_ptr,
-    int32_t *types_data,
-    int num_types
-) {
-    set_type_cache_internal((jit_context_t *)(uintptr_t)ctx_ptr, types_data, num_types);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_canonical_indices(
-    int64_t ctx_ptr,
-    int32_t *canonical,
-    int num_types
-) {
-    set_canonical_indices_internal((jit_context_t *)(uintptr_t)ctx_ptr, canonical, num_types);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_type_indices(
-    int64_t ctx_ptr,
-    int32_t *indices,
-    int num_funcs
-) {
-    set_func_type_indices_internal((jit_context_t *)(uintptr_t)ctx_ptr, indices, num_funcs);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_table(
-    int64_t ctx_ptr,
-    int64_t func_table_ptr,
-    int num_funcs
-) {
-    set_func_table_internal((jit_context_t *)(uintptr_t)ctx_ptr, (void **)(uintptr_t)func_table_ptr, num_funcs);
-}
-
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(int64_t ctx_ptr) {
     clear_type_cache_internal((jit_context_t *)(uintptr_t)ctx_ptr);
 }
@@ -1811,18 +1772,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_managed(
     wasmoon_jit_ctx_set_memory(MANAGED_CTX(jit_context), mem0_ptr);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_globals_managed(
-    void *jit_context, int64_t globals_ptr
-) {
-    wasmoon_jit_ctx_set_globals(MANAGED_CTX(jit_context), globals_ptr);
-}
-
 // Consume a MoonBit Int64 array of borrowed cell addresses.
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_bind_globals_managed(
     void *jit_context, int64_t *globals
 ) {
     jit_context_t *ctx = (jit_context_t *)MANAGED_CTX(jit_context);
-    ctx_set_globals_internal(ctx, globals, 1);
+    ctx_set_globals_internal(ctx, globals);
     return ctx ? (int64_t)ctx_globals(ctx) : 0;
 }
 
@@ -1926,38 +1881,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_environment_is_clear_managed(
     void *jit_context
 ) {
     return wasmoon_jit_gc_environment_is_clear(MANAGED_CTX(jit_context));
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache_managed(
-    void *jit_context, int32_t *types_data, int num_types
-) {
-    wasmoon_jit_gc_set_type_cache(
-        MANAGED_CTX(jit_context), types_data, num_types
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_canonical_indices_managed(
-    void *jit_context, int32_t *canonical, int num_types
-) {
-    wasmoon_jit_gc_set_canonical_indices(
-        MANAGED_CTX(jit_context), canonical, num_types
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_type_indices_managed(
-    void *jit_context, int32_t *indices, int num_funcs
-) {
-    wasmoon_jit_gc_set_func_type_indices(
-        MANAGED_CTX(jit_context), indices, num_funcs
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_table_managed(
-    void *jit_context, int64_t func_table_ptr, int num_funcs
-) {
-    wasmoon_jit_gc_set_func_table(
-        MANAGED_CTX(jit_context), func_table_ptr, num_funcs
-    );
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache_managed(

@@ -10,9 +10,6 @@ pub extern "c" fn context_layout_shared(
 ) -> Int32 = "wasmoon_test_context_layout_shared"
 
 ///|
-pub extern "c" fn context_optional_state() -> Int32 = "wasmoon_test_context_optional_state"
-
-///|
 pub extern "c" fn safepoint_ownership() -> Int32 = "wasmoon_test_safepoint_ownership"
 
 ///|
@@ -100,12 +97,6 @@ pub extern "c" fn context_gc_funcref_subtype(
 ) -> Int32 = "wasmoon_test_context_gc_funcref_subtype"
 
 ///|
-#borrow(context)
-pub extern "c" fn context_gc_legacy_rebind(
-  context : @jit_ffi.JITContext,
-) -> Int32 = "wasmoon_test_context_gc_legacy_rebind"
-
-///|
 #borrow(context, types, canonical, functions)
 pub extern "c" fn context_gc_metadata_shares(
   context : @jit_ffi.JITContext,
@@ -131,12 +122,6 @@ pub extern "c" fn context_gc_payload_valid(
 
 ///|
 #borrow(context)
-pub extern "c" fn context_gc_payload_legacy(
-  context : @jit_ffi.JITContext,
-) -> Int32 = "wasmoon_test_context_gc_payload_legacy"
-
-///|
-#borrow(context)
 pub extern "c" fn context_gc_payload_empty(
   context : @jit_ffi.JITContext,
 ) -> Int32 = "wasmoon_test_context_gc_payload_empty"
@@ -159,12 +144,6 @@ pub extern "c" fn context_segments_valid(
 
 ///|
 #borrow(context)
-pub extern "c" fn context_segments_legacy(
-  context : @jit_ffi.JITContext,
-) -> Int32 = "wasmoon_test_context_segments_legacy"
-
-///|
-#borrow(context)
 pub extern "c" fn context_segments_empty(
   context : @jit_ffi.JITContext,
 ) -> Int32 = "wasmoon_test_context_segments_empty"
@@ -177,9 +156,6 @@ pub extern "c" fn context_function_array(
 
 ///|
 pub extern "c" fn raw_context_function_array() -> Int32 = "wasmoon_test_raw_context_function_array"
-
-///|
-pub extern "c" fn context_globals_ownership() -> Int32 = "wasmoon_test_context_globals_ownership"
 
 ///|
 #borrow(context)

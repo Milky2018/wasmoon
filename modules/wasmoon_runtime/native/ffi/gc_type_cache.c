@@ -293,39 +293,6 @@ void WASMOON_GUEST_ABI gc_type_check_subtype_impl(jit_context_t *ctx, int32_t ac
 
 // ============ Type Cache Management ============
 
-// Legacy raw-pointer C setters copy into managed arrays. Raw input is never
-// treated as a MoonBit object, and all retained cache slots use one RC contract.
-static int32_t *copy_type_metadata(const int32_t *source, int32_t count) {
-    if (!source || count <= 0) return NULL;
-    int32_t *copy = moonbit_make_int32_array_raw(count);
-    memcpy(copy, source, (size_t)count * sizeof(int32_t));
-    return copy;
-}
-
-void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types) {
-    if (!ctx || num_types < 0 || num_types > INT32_MAX / GC_TYPE_CACHE_STRIDE) return;
-    int32_t *copy = copy_type_metadata(types_data, num_types * GC_TYPE_CACHE_STRIDE);
-    if (ctx_runtime(ctx)->gc_type_cache) moonbit_decref(ctx_runtime(ctx)->gc_type_cache);
-    ctx_runtime(ctx)->gc_type_cache = copy;
-    ctx_runtime(ctx)->gc_num_types = num_types;
-}
-
-void set_canonical_indices_internal(jit_context_t *ctx, int32_t *canonical, int num_types) {
-    if (!ctx || num_types < 0) return;
-    int32_t *copy = copy_type_metadata(canonical, num_types);
-    if (ctx_runtime(ctx)->gc_canonical_indices) moonbit_decref(ctx_runtime(ctx)->gc_canonical_indices);
-    ctx_runtime(ctx)->gc_canonical_indices = copy;
-    ctx_runtime(ctx)->gc_num_canonical = num_types;
-}
-
-void set_func_type_indices_internal(jit_context_t *ctx, int32_t *indices, int num_funcs) {
-    if (!ctx || num_funcs < 0) return;
-    int32_t *copy = copy_type_metadata(indices, num_funcs);
-    if (ctx_runtime(ctx)->gc_func_type_indices) moonbit_decref(ctx_runtime(ctx)->gc_func_type_indices);
-    ctx_runtime(ctx)->gc_func_type_indices = copy;
-    ctx_runtime(ctx)->gc_num_funcs = num_funcs;
-}
-
 // The FFI conversion copies native pointers into typed MoonBit scalar storage.
 MOONBIT_FFI_EXPORT int64_t *wasmoon_jit_snapshot_gc_function_addresses(
     int64_t table_address, int32_t count
@@ -337,15 +304,6 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_jit_snapshot_gc_function_addresses(
         for (int32_t i = 0; i < count; ++i) addresses[i] = (int64_t)(uintptr_t)table[i];
     }
     return addresses;
-}
-
-void set_func_table_internal(jit_context_t *ctx, void **func_table_ptr, int num_funcs) {
-    if (!ctx || num_funcs < 0) return;
-    int64_t *copy = num_funcs ? wasmoon_jit_snapshot_gc_function_addresses(
-        (int64_t)(uintptr_t)func_table_ptr, num_funcs) : NULL;
-    if (ctx_runtime(ctx)->gc_func_table) moonbit_decref(ctx_runtime(ctx)->gc_func_table);
-    ctx_runtime(ctx)->gc_func_table = copy;
-    ctx_runtime(ctx)->gc_func_table_size = num_funcs;
 }
 
 void clear_type_cache_internal(jit_context_t *ctx) {

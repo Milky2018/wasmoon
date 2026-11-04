@@ -1115,15 +1115,6 @@ pub fn JITModule::bind_globals(
 }
 
 ///|
-/// Transfer a malloc-owned table of borrowed global-cell addresses.
-/// Prefer bind_globals for MoonBit-owned input.
-pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
-  if self.context is Some(ctx) {
-    ctx.set_globals(globals_ptr)
-  }
-}
-
-///|
 /// Set GC heap in the JIT context for inline allocation
 /// This enables fast-path bump-pointer allocation in JIT-compiled code
 pub fn JITModule::set_gc_heap(

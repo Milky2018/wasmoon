@@ -132,7 +132,6 @@ pub fn JITModule::set_cooperative_scheduling(Self, Bool, quantum? : Int32) -> Bo
 pub fn JITModule::set_exception_arena(Self, @ffi.NativeExceptionArena) -> Unit
 pub fn JITModule::set_execution_scope(Self, @runtime.ExecutionScope?) -> Bool
 pub fn JITModule::set_gc_heap(Self, @ffi.GCHeapHandle) -> Unit
-pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit
 pub fn JITModule::set_memory(Self, @ffi.MemoryDescriptor) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[@bridge.MemoryInfo]) -> Unit raise @wasmoon_jit.NativeSetupError

@@ -291,7 +291,7 @@ void table_publish_layout(wasmoon_table_t *table, void **entries, size_t size);
 MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_native_table_empty(void);
 
 // GC heap management
-void ctx_set_globals_internal(jit_context_t *ctx, void *globals, int managed);
+void ctx_set_globals_internal(jit_context_t *ctx, int64_t *globals);
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 int32_t ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
@@ -382,10 +382,6 @@ int64_t WASMOON_GUEST_ABI gc_ref_cast_impl(jit_context_t *ctx, int64_t value, in
 void WASMOON_GUEST_ABI gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type);
 
 // Type cache management
-void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types);
-void set_canonical_indices_internal(jit_context_t *ctx, int32_t *canonical, int num_types);
-void set_func_type_indices_internal(jit_context_t *ctx, int32_t *indices, int num_funcs);
-void set_func_table_internal(jit_context_t *ctx, void **func_table_ptr, int num_funcs);
 void clear_type_cache_internal(jit_context_t *ctx);
 
 // ============ Exception Handling (exception.c) ============

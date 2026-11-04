@@ -195,16 +195,6 @@ pub fn NativeJITContext::bind_globals(
 }
 
 ///|
-/// Transfer a malloc-owned table of borrowed cell addresses to this context.
-/// Prefer bind_globals for MoonBit-owned input.
-pub fn NativeJITContext::set_globals(
-  self : NativeJITContext,
-  globals_ptr : Int64,
-) -> Unit {
-  c_jit_ctx_set_globals_managed(self.handle, globals_ptr)
-}
-
-///|
 /// Configure the guarded stack size used by future native JIT continuations.
 /// The stack mapping is allocated only when a continuation starts.
 #alias(alloc_wasm_stack, deprecated="Use configure_native_fiber_stack_size instead")

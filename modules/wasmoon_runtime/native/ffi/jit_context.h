@@ -103,7 +103,6 @@ typedef struct jit_runtime_state {
     int wasi_exited;          // WASI: proc_exit called
     int wasi_exit_code;       // WASI: exit code
     int32_t gc_func_safepoint_table_count;
-    int globals_managed;     // RC array versus legacy malloc-owned pointer table
     int callable_local_type_count;
     int callable_tag_count;
     int callable_function_count;

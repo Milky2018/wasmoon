@@ -27,7 +27,7 @@ import {
 // Values
 pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
 
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-49"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-50"
 
 pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 
@@ -571,7 +571,6 @@ pub fn NativeJITContext::set_exception_arena(Self, @ffi.NativeExceptionArena) ->
 pub fn NativeJITContext::set_func(Self, Int32, Int64) -> Unit
 pub fn NativeJITContext::set_gc_heap(Self, @bridge.CHeap) -> Unit
 pub fn NativeJITContext::set_gc_heap_ptr(Self, @ffi.GCHeapHandle) -> Unit
-pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
 pub fn NativeJITContext::set_hostcall_callback(Self, () -> NativeHostcallOutcome) -> Unit
 pub fn NativeJITContext::set_indirect(Self, Int32, Int32, Int32) -> Unit
 pub fn NativeJITContext::set_memory(Self, @ffi.MemoryDescriptor) -> Unit
