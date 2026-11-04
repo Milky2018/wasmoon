@@ -18,13 +18,6 @@ priv struct ResultArea {
 }
 
 ///|
-priv struct StackObjectRequirements {
-  size : Int32
-  alignment : Int32
-  offsets : Array[Int32]
-}
-
-///|
 pub struct AArch64Frame {
   priv layout : @vcode.FrameLayout
   priv has_frame_record : Bool
@@ -84,269 +77,46 @@ fn register_save_size(reg : @vcode.PhysicalReg) -> Int32 {
 }
 
 ///|
+fn frame_requirements(
+  function : @vcode.Function[AArch64Inst],
+) -> @vcode.FrameRequirements raise AArch64FrameError {
+  match
+    @vcode.collect_frame_requirements(function, inst => {
+      match inst {
+        PlatformCall(_, signature) | ReturnsTwicePlatformCall(_, signature) =>
+          Some(Call(platform_call_layout(signature.params).stack_size, 0))
+        InternalCall(_, _, plan) | InternalCallIndirect(_, plan) =>
+          Some(Call(plan.stack_size, plan.result_area_size))
+        TailCallDirect(_, _, plan) | TailCallIndirect(_, plan) =>
+          Some(Tail(plan.stack_size))
+        IncomingStack(ty, offset) =>
+          Some(Incoming(offset + call_stack_size(ty)))
+        StackAddress(object) =>
+          Some(LocalObject(object.id, object.size, object.alignment))
+        _ => None
+      }
+    }) {
+    Ok(requirements) => requirements
+    Err(message) => raise InvalidStackObjectArea(message~)
+  }
+}
+
+///|
 fn used_callee_saved_registers(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   has_calls : Bool,
 ) -> Array[@vcode.PhysicalReg] {
-  let regs : Array[@vcode.PhysicalReg] = []
-  fn record(
-    regs : Array[@vcode.PhysicalReg],
-    reg : @vcode.PhysicalReg,
-  ) -> Unit {
-    if is_callee_saved(reg) && !regs.contains(reg) {
-      regs.push(reg)
-    }
-  }
-  for index in 0..<function.value_count() {
-    let location = allocation.allocated_value_location_at(index).unwrap()
-    if location.is_register() {
-      record(regs, location.register_unchecked())
-    }
-  }
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    for operand in 0..<function.instruction_operand_count(instruction) {
-      let location = allocation
-        .allocated_operand_location_at(index, operand)
-        .unwrap()
-      if location.is_register() {
-        record(regs, location.register_unchecked())
-      }
-    }
-  }
-  for edit in allocation.edits() {
-    match edit.kind() {
-      Spill(reg~, ..) | Reload(reg~, ..) => record(regs, reg)
-      Move(from~, to~, ..) => {
-        record(regs, from)
-        record(regs, to)
-      }
-      EdgeMove(from~, to~, ..) => {
-        if from is Register(reg) {
-          record(regs, reg)
-        }
-        if to is Register(reg) {
-          record(regs, reg)
-        }
-      }
-    }
-  }
-  if function.protocol() != Internal && has_calls {
-    regs.push(@vcode.PhysicalReg::new(30, Int))
-  }
-  regs.sort_by(fn(left, right) {
-    let class_order = match (left.class, right.class) {
-      (Int, FpVector) => -1
-      (FpVector, Int) => 1
-      _ => 0
-    }
-    if class_order != 0 {
-      class_order
+  @vcode.used_callee_saved_registers(
+    function,
+    allocation,
+    is_callee_saved,
+    link_register=if function.protocol() != Internal && has_calls {
+      Some(@vcode.PhysicalReg::new(30, Int))
     } else {
-      left.id.compare(right.id)
-    }
-  })
-  regs
-}
-
-///|
-priv struct FrameRequirements {
-  outgoing_args_size : Int32
-  incoming_args_size : Int32
-  tail_args_size : Int32
-  result_area_size : Int32
-  has_calls : Bool
-  stack_objects : StackObjectRequirements?
-}
-
-///|
-// Recompute from current target VCode independently for planning and verification.
-// Never reuse a cached analysis as a validation fact.
-fn frame_requirements(
-  function : @vcode.Function[AArch64Inst],
-) -> FrameRequirements raise AArch64FrameError {
-  let mut outgoing = 0
-  let mut incoming = 0
-  let mut tail = 0
-  let mut results = 0
-  let mut has_calls = false
-  let objects : Array[AArch64StackObject?] = []
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    match function.instruction(instruction) {
-      Some(PlatformCall(_, signature) | ReturnsTwicePlatformCall(_, signature)) => {
-        has_calls = true
-        outgoing = outgoing.max(
-          platform_call_layout(signature.params).stack_size,
-        )
-      }
-      Some(InternalCall(_, _, plan) | InternalCallIndirect(_, plan)) => {
-        has_calls = true
-        outgoing = outgoing.max(plan.stack_size)
-        results = results.max(plan.result_area_size)
-      }
-      Some(TailCallDirect(_, _, plan) | TailCallIndirect(_, plan)) =>
-        tail = tail.max(plan.stack_size)
-      Some(IncomingStack(ty, offset)) =>
-        incoming = incoming.max(offset + call_stack_size(ty))
-      Some(StackAddress(object)) => {
-        if !object.is_valid() {
-          raise InvalidStackObjectArea(
-            message="invalid stack-object descriptor in target VCode",
-          )
-        }
-        while objects.length() <= object.id {
-          objects.push(None)
-        }
-        match objects[object.id] {
-          Some(existing) if existing != object =>
-            raise InvalidStackObjectArea(
-              message="stack-object id has conflicting size or alignment",
-            )
-          None => objects[object.id] = Some(object)
-          _ => ()
-        }
-      }
-      _ => ()
-    }
-  }
-  incoming = call_align_up(incoming, 16)
-  {
-    outgoing_args_size: outgoing,
-    incoming_args_size: incoming,
-    tail_args_size: if function.protocol() == Internal {
-      incoming.max(tail)
-    } else {
-      incoming
+      None
     },
-    result_area_size: results,
-    has_calls,
-    stack_objects: stack_object_area_requirements(objects),
-  }
-}
-
-///|
-fn stack_object_area_requirements(
-  objects : Array[AArch64StackObject?],
-) -> StackObjectRequirements? raise AArch64FrameError {
-  if objects.is_empty() {
-    return None
-  }
-  let offsets : Array[Int32] = []
-  let mut cursor = 0
-  let mut area_alignment = 1
-  for object in objects {
-    guard object is Some(object) else {
-      raise InvalidStackObjectArea(
-        message="stack-object ids must be dense within one function",
-      )
-    }
-    cursor = align_up(cursor, object.alignment)
-    offsets.push(cursor)
-    cursor += object.size
-    if object.alignment > area_alignment {
-      area_alignment = object.alignment
-    }
-  }
-  Some({
-    size: align_up(cursor, area_alignment),
-    alignment: area_alignment,
-    offsets,
-  })
-}
-
-///|
-fn moves_require_emergency(
-  moves : Array[@vcode.ParallelMove],
-) -> Bool raise AArch64FrameError {
-  @vcode.plan_parallel_moves(
-    moves,
-    int_transfer_scratch(),
-    fp_transfer_scratch(),
-  ).requires_emergency catch {
-    error => raise MovePlanningFailed(cause=error)
-  }
-}
-
-///|
-fn instruction_edits_require_emergency(
-  function : @vcode.Function[AArch64Inst],
-  allocation : @vcode.Allocation,
-  instruction : @vcode.Instruction,
-  placement : @vcode.PointPlacement,
-) -> Bool raise AArch64FrameError {
-  if allocation.edits_at(instruction, placement).is_empty() {
-    return false
-  }
-  moves_require_emergency(
-    edit_parallel_moves(function, allocation, instruction, placement),
   )
-}
-
-///|
-fn edge_edits_require_emergency(
-  function : @vcode.Function[AArch64Inst],
-  allocation : @vcode.Allocation,
-  block : @vcode.Block,
-  successor_index : Int32,
-) -> Bool raise AArch64FrameError {
-  if allocation.edge_edits_at(block, successor_index).is_empty() {
-    return false
-  }
-  moves_require_emergency(
-    edge_parallel_moves(function, allocation, block, successor_index),
-  )
-}
-
-///|
-fn requires_emergency_move_area(
-  function : @vcode.Function[AArch64Inst],
-  allocation : @vcode.Allocation,
-) -> Bool raise AArch64FrameError {
-  for block in function.layout() {
-    for instruction in function.block_body(block) {
-      if !is_abi_materialization(function.instruction(instruction).unwrap()) {
-        if instruction_edits_require_emergency(
-            function,
-            allocation,
-            instruction,
-            Before,
-          ) ||
-          instruction_edits_require_emergency(
-            function,
-            allocation,
-            instruction,
-            After,
-          ) {
-          return true
-        }
-      }
-    }
-    let terminator = function.block_terminator(block).unwrap()
-    if instruction_edits_require_emergency(
-        function,
-        allocation,
-        terminator,
-        Before,
-      ) ||
-      instruction_edits_require_emergency(
-        function,
-        allocation,
-        terminator,
-        After,
-      ) {
-      return true
-    }
-    for successor_index in 0..<function.instruction_successor_count(terminator) {
-      if edge_edits_require_emergency(
-          function, allocation, block, successor_index,
-        ) {
-        return true
-      }
-    }
-  }
-  false
 }
 
 ///|
@@ -649,9 +419,15 @@ fn plan_frame_verified(
     }
     None => None
   }
-  let requires_emergency_moves = requires_emergency_move_area(
-    function, allocation,
-  )
+  let requires_emergency_moves = @vcode.requires_emergency_move_area(
+    function,
+    allocation,
+    is_abi_materialization,
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
+  ) catch {
+    error => raise MovePlanningFailed(cause=error)
+  }
   let emergency_move_offset = if requires_emergency_moves {
     offset = align_up(offset, 16)
     let emergency_offset = offset

@@ -1,28 +1,4 @@
 ///|
-fn edge_parallel_moves(
-  function : @vcode.Function[X64Inst],
-  allocation : @vcode.Allocation,
-  block : @vcode.Block,
-  successor_index : Int32,
-) -> Array[@vcode.ParallelMove] {
-  let transfers : Array[@vcode.ParallelMove] = []
-  for edit in allocation.edge_edits_at(block, successor_index) {
-    match edit.kind() {
-      EdgeMove(value~, from~, to~, ..) =>
-        transfers.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            from,
-            to,
-          ),
-        )
-      _ => ()
-    }
-  }
-  transfers
-}
-
-///|
 fn resolve_edge_moves(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
@@ -33,7 +9,7 @@ fn resolve_edge_moves(
     return @vcode.ResolvedMovePlan::empty()
   }
   @vcode.plan_parallel_moves(
-    edge_parallel_moves(function, allocation, block, successor_index),
+    @vcode.allocation_edge_moves(function, allocation, block, successor_index),
     int_transfer_scratch(),
     fp_transfer_scratch(),
   ) catch {

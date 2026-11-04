@@ -8,6 +8,12 @@ import {
 }
 
 // Values
+pub fn[Inst] allocation_edge_moves(Function[Inst], Allocation, Block, Int32) -> Array[ParallelMove]
+
+pub fn[Inst] allocation_edit_moves(Function[Inst], Allocation, Instruction, PointPlacement) -> Array[ParallelMove]
+
+pub fn[Inst] collect_frame_requirements(Function[Inst], (Inst) -> FrameUse?) -> Result[FrameRequirements, String]
+
 pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int32, Int32, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
 
 pub fn plan_parallel_moves(Array[ParallelMove], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
@@ -16,7 +22,11 @@ pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int32, Int3
 
 pub fn reg_class_for_value_type(@native_types.ValueType) -> @allocation_types.RegClass
 
+pub fn[Inst] requires_emergency_move_area(Function[Inst], Allocation, (Inst) -> Bool, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Bool raise MoveResolveError
+
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
+
+pub fn[Inst] used_callee_saved_registers(Function[Inst], Allocation, (@allocation_types.PhysicalReg) -> Bool, link_register? : @allocation_types.PhysicalReg?) -> Array[@allocation_types.PhysicalReg]
 
 pub fn[Inst] verify_allocated(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
 
@@ -324,6 +334,22 @@ pub fn[Inst] FrameLayout::new(Function[Inst], Allocation, Int32, Int32) -> Self
 pub fn FrameLayout::place_slot(Self, StackSlot, Int32) -> Bool
 pub fn FrameLayout::slot_offset(Self, StackSlot) -> Int32?
 
+pub(all) struct FrameRequirements {
+  outgoing_args_size : Int32
+  incoming_args_size : Int32
+  tail_args_size : Int32
+  result_area_size : Int32
+  has_calls : Bool
+  stack_objects : StackObjectRequirements?
+}
+
+pub(all) enum FrameUse {
+  Call(Int32, Int32)
+  Incoming(Int32)
+  Tail(Int32)
+  LocalObject(Int32, Int32, Int32)
+}
+
 pub struct Function[Inst] {
   // private fields
 }
@@ -566,6 +592,12 @@ pub struct StackArgumentTransfer {
 pub fn StackArgumentTransfer::equal(Self, Self) -> Bool
 pub fn StackArgumentTransfer::not_equal(Self, Self) -> Bool
 pub fn StackArgumentTransfer::to_repr(Self) -> @debug.Repr
+
+pub(all) struct StackObjectRequirements {
+  size : Int32
+  alignment : Int32
+  offsets : Array[Int32]
+}
 
 pub struct StackSlot {
   // private fields

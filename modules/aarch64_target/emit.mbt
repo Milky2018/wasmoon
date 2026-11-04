@@ -2506,46 +2506,6 @@ fn emit_epilogue(
 }
 
 ///|
-fn[Inst] edit_parallel_moves(
-  function : @vcode.Function[Inst],
-  allocation : @vcode.Allocation,
-  instruction : @vcode.Instruction,
-  placement : @vcode.PointPlacement,
-) -> Array[@vcode.ParallelMove] {
-  let moves : Array[@vcode.ParallelMove] = []
-  for edit in allocation.edits_at(instruction, placement) {
-    match edit.kind() {
-      Spill(value~, reg~, slot~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Register(reg),
-            Stack(slot),
-          ),
-        )
-      Reload(value~, slot~, reg~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Stack(slot),
-            Register(reg),
-          ),
-        )
-      Move(value~, from~, to~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Register(from),
-            Register(to),
-          ),
-        )
-      EdgeMove(..) => ()
-    }
-  }
-  moves
-}
-
-///|
 fn[Inst] emit_edits_at(
   buffer : CodeBuffer,
   function : @vcode.Function[Inst],
@@ -2558,7 +2518,7 @@ fn[Inst] emit_edits_at(
     return
   }
   let resolved = @vcode.plan_parallel_moves(
-    edit_parallel_moves(function, allocation, instruction, placement),
+    @vcode.allocation_edit_moves(function, allocation, instruction, placement),
     int_transfer_scratch(),
     fp_transfer_scratch(),
   ) catch {
