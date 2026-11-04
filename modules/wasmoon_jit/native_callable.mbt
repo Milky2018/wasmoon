@@ -47,6 +47,84 @@ pub fn NativeCallable::release(self : NativeCallable) -> Unit {
 }
 
 ///|
+/// One immutable installation of leaf context bindings. Entry addresses are
+/// valid only while this owner is retained and unreleased. The caller must
+/// finish every invocation before release, as with a standalone NativeCallable.
+pub struct NativeCallableBatch {
+  priv context : NativeJITContext
+  priv entry : InstalledTrampoline?
+  priv offsets : FixedArray[Int32]
+}
+
+///|
+/// Preserve the standalone binding ABI while publishing all entries together.
+/// No executable page is shared with another batch or modified after publication.
+/// Target code is borrowed and must outlive these bindings, as with bind_callable.
+pub fn NativeJITContext::bind_callables(
+  self : NativeJITContext,
+  targets : Array[Int64],
+) -> NativeCallableBatch raise JitInstallError {
+  let offsets = FixedArray::make(targets.length(), -1)
+  let bytes = FixedArray::make(40, b'\x00')
+  let code : Array[Int32] = []
+  for index, target in targets {
+    if target == 0L {
+      continue
+    }
+    let size = write_bound_entry_code(self.handle, target, bytes)
+    if size <= 0 {
+      raise TrampolineAllocationFailed(code_size=0)
+    }
+    let aligned = (code.length().to_int64() + 15L) / 16L * 16L
+    if aligned + size.to_int64() > 2147483647L {
+      raise TrampolineAllocationFailed(code_size=0)
+    }
+    while code.length().to_int64() < aligned {
+      code.push(0)
+    }
+    offsets[index] = code.length()
+    for i in 0..<size {
+      code.push(bytes[i].to_int())
+    }
+  }
+  let entry = if code.is_empty() {
+    None
+  } else {
+    Some(JitCodeInstaller::new(fn(_) { None }).install_trampoline(code))
+  }
+  { context: self, entry, offsets, }
+}
+
+///|
+/// Return zero for an absent/out-of-range entry or a released installation.
+pub fn NativeCallableBatch::entry_address(
+  self : NativeCallableBatch,
+  index : Int32,
+) -> Int64 {
+  self.context |> ignore
+  guard index >= 0 &&
+    index < self.offsets.length() &&
+    self.offsets[index] >= 0 &&
+    self.entry is Some(entry) else {
+    return 0L
+  }
+  let base = entry.entry_address()
+  if base == 0L {
+    0L
+  } else {
+    base + self.offsets[index].to_int64()
+  }
+}
+
+///|
+/// Release the complete installation once all of its callers are finished.
+pub fn NativeCallableBatch::release(self : NativeCallableBatch) -> Unit {
+  if self.entry is Some(entry) {
+    entry.release()
+  }
+}
+
+///|
 /// Bind shared Store identities with this instance's local type and tag maps.
 pub fn NativeJITContext::bind_callable_registry(
   self : NativeJITContext,

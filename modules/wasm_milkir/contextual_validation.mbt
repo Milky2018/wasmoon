@@ -1,41 +1,46 @@
 ///|
 /// The lowered MilkIR carrier contract for a WebAssembly function type.
+#derive(Eq, Debug)
 pub(all) struct WasmFunctionContract {
   params : Array[@milkir.Type]
   results : Array[@milkir.Type]
-} derive(Eq, Debug)
+}
 
 ///|
 /// The lowered MilkIR carrier and packed representation of a WebAssembly field.
+#derive(Eq, Debug)
 pub(all) enum WasmStorageContract {
   Value(@milkir.Type)
   Packed8
   Packed16
-} derive(Eq, Debug)
+}
 
 ///|
 /// The contextual contract for one WebAssembly struct field or array element.
+#derive(Eq, Debug)
 pub(all) struct WasmFieldContract {
   storage : WasmStorageContract
   mutable_ : Bool
   defaultable : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The contextual contract for a WebAssembly indexed type.
+#derive(Eq, Debug)
 pub(all) enum WasmDefinedTypeContract {
   Function(WasmFunctionContract)
   Continuation(Int32)
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The contextual contract for a WebAssembly table.
+#derive(Eq, Debug)
 pub(all) struct WasmTableContract {
   index_type : @milkir.Type
   element_type : @milkir.Type
-} derive(Eq, Debug)
+}
 
 ///|
 /// Module and linker metadata required to validate Wasm extension operations.
@@ -45,6 +50,8 @@ pub(all) struct WasmTableContract {
 /// indexed types, tables, tags, and segments use module-local indices.
 struct WasmValidationContext {
   function_contract : (Int32) -> WasmFunctionContract?
+  read_only_calls : Map[Int32, WasmReadOnlyCallContract]
+  final_types : Map[Int32, Bool]
   defined_type_contract : (Int32) -> WasmDefinedTypeContract?
   table_contract : (Int32) -> WasmTableContract?
   tag_contract : (Int32) -> WasmFunctionContract?
@@ -69,9 +76,16 @@ pub(all) struct WasmValidationResolvers {
 /// Construct an explicit contextual-validation adapter.
 pub fn WasmValidationContext::new(
   resolvers : WasmValidationResolvers,
+  final_types~ : Array[Int32] = [],
 ) -> WasmValidationContext {
+  let finality : Map[Int32, Bool] = Map([])
+  for index in final_types {
+    finality[index] = true
+  }
   {
     function_contract: resolvers.function_contract,
+    read_only_calls: Map([]),
+    final_types: finality,
     defined_type_contract: resolvers.defined_type_contract,
     table_contract: resolvers.table_contract,
     tag_contract: resolvers.tag_contract,
@@ -79,6 +93,16 @@ pub fn WasmValidationContext::new(
     data_segment_exists: resolvers.data_segment_exists,
     element_segment_type: resolvers.element_segment_type,
   }
+}
+
+///|
+/// Finality selects a compact exact-layout hit path; every miss still uses the
+/// complete nominal accessor. Missing producer metadata is conservative.
+pub fn WasmValidationContext::is_final_type(
+  self : WasmValidationContext,
+  index : Int32,
+) -> Bool {
+  self.final_types.contains(index)
 }
 
 ///|

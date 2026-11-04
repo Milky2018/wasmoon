@@ -1,30 +1,34 @@
 ///|
+#derive(Eq, Hash, Debug)
 pub(all) enum EditPosition {
   Before(Int32)
   After(Int32)
   Edge(source_block~ : Int32, successor_index~ : Int32)
-} derive(Eq, Hash, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct AllocationEdit {
   value : VirtualReg
   from : Location
   to : Location
   position : EditPosition
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct OperandAssignment {
   instruction : Int32
   operand : Int32
   location : Location
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct SpillSlotSpec {
   size : Int32
   alignment : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn SpillSlotSpec::new(size : Int32, alignment : Int32) -> SpillSlotSpec {

@@ -99,9 +99,11 @@ fn memory_access(
       )
     _ => return None
   }
-  if projection is FieldData(type_, _, _, _, _) &&
-    struct_view_shape(context, type_) is None {
-    return None
+  if projection is FieldData(type_, field, _, _, _) {
+    guard struct_view_shape(context, type_) is Some((_, fields)) &&
+      field < fields else {
+      return None
+    }
   }
   guard contract is Some(field) && field_width(field) is Some(width) else {
     return None
@@ -112,7 +114,7 @@ fn memory_access(
   }
   // Reference writes retain the runtime's barrier and arena admission. Numeric
   // array projections accept only a compact non-reference physical layout.
-  if (write && type_ == Ref) || (array && type_ == Ref) {
+  if (write || array) && field_is_reference(field) {
     return None
   }
   let projection = match projection {
@@ -122,7 +124,7 @@ fn memory_access(
         type_,
         field,
         width,
-        if contract.unwrap().storage is Value(Ref) {
+        if field_is_reference(contract.unwrap()) {
           1
         } else {
           0
@@ -266,6 +268,7 @@ fn expand_memory_access(
 pub fn prepare_gc_memory(
   function : @milkir.Function,
   context : @wasm_milkir.WasmValidationContext,
+  exclusive_poll_controls~ : Bool = false,
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir.VerifyError {
   fn validate(view : @milkir.ExtensionInstView) -> String? {
@@ -308,9 +311,22 @@ pub fn prepare_gc_memory(
     1200 &&
     old_blocks.length() <= 2048
   if expand {
+    if exclusive_poll_controls {
+      if !version_poll_acyclic(function, context~) {
+        version_poll_loops(function, context)
+      }
+    }
+    if poll_region_error(function) is Some(error) {
+      raise @milkir.VerifyError::unverifiable_instruction(error)
+    }
+    function.verify_with_dialect_validator(
+      @wasm_milkir.WASM_DIALECT,
+      validate,
+      validate_global,
+    )
     // Logical reads use the same effect/versioned GVN before their checked
-    // physical expansion, including compatibility edges and immutable length.
-    for block in old_blocks {
+    // physical expansion, including cloned loops and immutable length.
+    for block in function.blocks {
       for id in function.block_instruction_ids(block) {
         let inst = function.instruction_by_id(id).unwrap()
         if inst.opcode is Ext(extension, signature) {
@@ -326,6 +342,7 @@ pub fn prepare_gc_memory(
     for block in function.blocks.copy() {
       let ids = function.block_instruction_ids(block).to_owned()
       let term = block.terminator
+      let term_metadata = block.terminator_metadata()
       block.clear_instructions_for_move()
       let mut current = block
       for id in ids {
@@ -353,7 +370,7 @@ pub fn prepare_gc_memory(
           current.append_inst(inst)
         }
       }
-      current.set_terminator(term.unwrap())
+      current.set_terminator(term.unwrap(), metadata=term_metadata)
     }
     // New split blocks dominate some original blocks. Keep SSA producers in
     // reverse postorder for streaming selectors while retaining stable IDs.

@@ -254,6 +254,9 @@ fn compile_component_artifact(
   } else {
     Map([])
   }
+  let validation_context = @wasm_optimize.with_read_only_calls(
+    validation_context, scalar_callees,
+  )
   let imports : Array[@artifact.ImportIdentity] = []
   let mut imported_function_index = 0
   for import_ in module_.imports {
@@ -270,10 +273,29 @@ fn compile_component_artifact(
     }
   }
   let functions : Array[@artifact.FunctionCode] = []
-  let native_compiler = @wasmoon_jit.NativeCompiler::new(
+  let policy : @artifact.CompilationPolicy = {
+    optimization_level: component_artifact_optimization_level(opt_level),
+    code_model: Small,
+    call_binding: DirectBody,
+    nan_canonicalization: false,
+    cancellation_safepoints: true,
+    debug_info: false,
+  }
+  let manifest = @wasmoon_jit.build_artifact_manifest(
     target,
+    @wasmoon_jit.host_operating_system_abi(),
+    module_identity=@wasmoon_jit.artifact_module_identity(
+      "component-core-module",
+      encoded_component_module(module_),
+      component_semantic_features(actual_memory_max),
+    ),
+    policy~,
+    required_cpu_features=@wasmoon_jit.wasm_host_cpu_requirements(module_),
     context_shape=@wasmoon_jit.context_shape(module_),
-  )
+  ) catch {
+    error => raise NativeCompilationFailed("artifact manifest failed: \{error}")
+  }
+  let native_compiler = @wasmoon_jit.NativeCompiler::for_manifest(manifest)
   for local_index, code in module_.codes {
     checkpoint()
     let function_index = imported_function_index + local_index
@@ -314,25 +336,6 @@ fn compile_component_artifact(
     checkpoint()
     functions.push(compiled)
   }
-  let policy : @artifact.CompilationPolicy = {
-    optimization_level: component_artifact_optimization_level(opt_level),
-    code_model: Small,
-    call_binding: DirectBody,
-    nan_canonicalization: false,
-    cancellation_safepoints: true,
-    debug_info: false,
-  }
-  let manifest = @wasmoon_jit.build_host_artifact_manifest(
-    module_identity=@wasmoon_jit.artifact_module_identity(
-      "component-core-module",
-      encoded_component_module(module_),
-      component_semantic_features(actual_memory_max),
-    ),
-    policy~,
-    context_shape=@wasmoon_jit.context_shape(module_),
-  ) catch {
-    error => raise NativeCompilationFailed("artifact manifest failed: \{error}")
-  }
   { manifest, imports, functions, }
 }
 
@@ -347,6 +350,9 @@ fn load_component_jit_context(
   prepared_code~ : NativeComponentCode? = None,
   on_compile~ : () -> Unit = fn() { () },
 ) -> (@core_jit.JITModuleContext, @core_jit.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
+  // Checkpoints and compile hooks may reenter caller code. Keep effect proofs,
+  // compiled bodies and the later installation metadata on the same snapshot.
+  let module_ = module_.snapshot()
   store.check_instance(instance) catch {
     error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
   }
@@ -392,7 +398,11 @@ fn load_component_jit_context(
   }
   let compatibility = @wasmoon_jit.artifact_compatibility(
     artifact.manifest,
-    available_cpu_features=[],
+    available_cpu_features=if artifact.manifest.required_cpu_features.is_empty() {
+      []
+    } else {
+      @wasmoon_jit.host_cpu_features()
+    },
     runtime_symbols=@wasmoon_jit.wasmoon_runtime_external_symbols(),
     data_symbols=[],
   )

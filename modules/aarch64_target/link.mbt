@@ -1,11 +1,12 @@
 ///|
+#derive(Eq, Debug)
 pub suberror AArch64LinkError {
   InvalidCodeObject(message~ : String)
   InvalidCodeBase(address~ : Int64)
   UnresolvedRelocation(index~ : Int32)
   RelocationOutOfRange(index~ : Int32)
   UnsupportedRelocation(index~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for AArch64LinkError with fn output(self, logger) {
@@ -13,11 +14,12 @@ pub impl Show for AArch64LinkError with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug)
 pub struct AArch64LinkPlan {
   priv code : Array[Byte]
   priv relocations : Array[@code_object.Relocation]
   priv veneer_offsets : Array[Int32]
-} derive(Debug)
+}
 
 ///|
 pub fn AArch64LinkPlan::code(self : AArch64LinkPlan) -> Array[Byte] {

@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub(all) suberror RuntimeError {
   UnsupportedHostCapability(String)
   HostExit(Int32)
@@ -58,7 +59,7 @@ pub(all) suberror RuntimeError {
   AsyncHostCallCancelled
   AsyncHostError(String)
   HostCallbackError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// Recover a structured runtime error from the language-wide `Error` type.

@@ -3445,11 +3445,57 @@ test "aarch64_target internal leaf functions establish an unwindable frame recor
   let frame = plan_frame(function, allocation)
   assert_eq(frame.frame_size(), 16)
   let object = emit(function, allocation, frame)
-  assert_true(
-    object
-    .unwind()
-    .any(directive => {
-      directive.operation is SetFramePointer(Int, 29, cfa_offset=16)
-    }),
+  let expected : Array[@code_object.UnwindDirective] = [
+    @code_object.UnwindDirective::new(4, StackAlloc(size=16)),
+    @code_object.UnwindDirective::new(4, SaveRegister(Int, 29, cfa_offset=-16)),
+    @code_object.UnwindDirective::new(4, SaveRegister(Int, 30, cfa_offset=-8)),
+    @code_object.UnwindDirective::new(
+      8,
+      SetFramePointer(Int, 29, cfa_offset=16),
+    ),
+  ]
+  assert_eq(object.unwind(), expected)
+  let code = object.code()
+  assert_eq(
+    code[0:4].to_owned(),
+    [0xFDU, 0x7BU, 0xBFU, 0xA9U].map(x => x.to_byte()),
   )
+  assert_eq(
+    code[8:12].to_owned(),
+    [0xFDU, 0x7BU, 0xC1U, 0xA8U].map(x => x.to_byte()),
+  )
+  assert_eq(code.length(), 16)
+}
+
+///|
+test "AArch64 LSE atomic add encodes each access width and retains its trap offset" {
+  let address = @vcode.PhysicalReg::new(3, Int)
+  let value = @vcode.PhysicalReg::new(1, Int)
+  let result = @vcode.PhysicalReg::new(2, Int)
+  let forms : Array[(@native.AccessWidth, Byte)] = [
+    (W8, 0x38),
+    (W16, 0x78),
+    (W32, 0xb8),
+    (W64, 0xf8),
+  ]
+  for form in forms {
+    let (width, opcode) = form
+    let buffer = CodeBuffer::new(lse_atomic_add=true)
+    let offset = emit_atomic_rmw(buffer, width, Add, address, value, result)
+    inspect(offset, content="0")
+    assert_true(buffer.code == [0x62, 0x00, 0xe1, opcode])
+  }
+}
+
+///|
+test "AArch64 poll prefix pointer uses the signed byte load displacement" {
+  let buffer = CodeBuffer::new()
+  emit_negative_scalar_load(
+    buffer,
+    0xF9400000U,
+    @vcode.PhysicalReg::new(19, Int),
+    @vcode.PhysicalReg::new(0, Int),
+    -240L,
+  )
+  debug_inspect(buffer.code, content="[0x60, 0x02, 0x51, 0xf8]")
 }

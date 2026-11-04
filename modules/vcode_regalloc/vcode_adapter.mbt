@@ -28,12 +28,13 @@ pub fn VCodeAllocationEnvironment::with_fixed_operand_regs(
 }
 
 ///|
+#derive(Debug)
 pub suberror VCodeAllocationError {
   InvalidSelected(cause~ : @vcode.VCodeVerifyError)
   RegallocFailure(cause~ : @regalloc.VerifyError)
   AllocationConstructionRejected
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for VCodeAllocationError with fn output(self, logger) {

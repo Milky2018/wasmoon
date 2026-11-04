@@ -124,3 +124,60 @@ test "struct view hints do not root provisional objects or survive heap close" {
     }
   }
 }
+
+///|
+test "struct projections preserve transitive subtypes and legacy fallback" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #| (type $base (sub (struct (field (mut i64)))))
+      #| (type $child (sub $base (struct (field (mut i64)) (field i32))))
+      #| (type $leaf (sub $child (struct (field (mut i64)) (field i32) (field f64))))
+      #| (type $wrong (struct (field (mut f64)) (field i32) (field f64)))
+      #| (func (export "read") (param (ref $base)) (result i64)
+      #|   local.get 0 struct.get $base 0))
+    ),
+  )
+  @validator.validate_module(module_)
+  for level in [0, 2, 3] {
+    let store = @runtime.Store::with_c_heap()
+    defer store.close()
+    let instance = @executor.instantiate_module_with_imports(
+      store,
+      module_,
+      Imports(store),
+    )
+    let context = build_gc_root_context(
+      module_,
+      instance,
+      store,
+      opt_level=level,
+    )
+    defer context.close()
+    let heap = store.native_heap().unwrap()
+    let object = store.alloc_struct(2, [I64(42L), I32(7), F64(1.0)], instance~)
+    let legacy = heap.alloc_struct(2, [I64(17L), I32(8), F64(2.0)])
+    let wrong = store.alloc_struct(3, [F64(3.0), I32(9), F64(4.0)], instance~)
+    let read = fn(object : Int32) -> Array[Int64] raise @jit.JITTrap {
+      context.jit_module.call_with_context(
+        context.jit_module.get_func(0).unwrap(),
+        [(object + 1).to_int64() << 1],
+      )
+    }
+    assert_eq(read(object), [42L])
+    assert_eq(read(legacy), [17L])
+    try read(wrong) catch {
+      JITTrap(message) => assert_true(message.contains("unreachable"))
+      error => fail(error.to_string())
+    } noraise {
+      _ => fail("an unrelated equal-width layout passed subtype admission")
+    }
+    assert_eq(read(object), [42L])
+    assert_eq(read(legacy), [17L])
+    assert_eq(
+      @executor.call_exported_func(store, instance, "read", [StructRef(object)]),
+      [I64(42L)],
+    )
+    assert_true(heap.verify())
+  }
+}

@@ -1,10 +1,12 @@
 ///|
+#derive(Debug)
 priv struct ExceptionAllocationJournal {
   instances : Array[Int32]
   snapshots : Array[(Int32, Int64)]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct NativeReferenceState {
   native_execution : @native_bridge.NativeExecutionState
   // One heap slot shared by Store operations and retained reference codecs.
@@ -13,7 +15,7 @@ priv struct NativeReferenceState {
   mut exception_allocations : ExceptionAllocationJournal?
   native_exception_to_store : Map[Int64, Int32]
   store_exception_to_native : Map[Int32, Int64]
-} derive(Debug)
+}
 
 ///|
 fn StoreReferences::record_exception_allocation(

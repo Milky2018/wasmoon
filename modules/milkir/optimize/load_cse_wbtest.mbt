@@ -77,6 +77,7 @@ test "unknown readers may alias writes in any concrete region" {
         write: None,
         may_trap: false,
         observable: false,
+        invalidates_addresses: false,
         pointer_region: Some(Heap(0)),
         pointer_bytes: 0,
       }),

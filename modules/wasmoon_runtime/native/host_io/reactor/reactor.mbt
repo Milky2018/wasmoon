@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub(all) suberror NativeReactorError {
   Closed
   BlockingWaitInExternalLoop
@@ -7,7 +8,7 @@ pub(all) suberror NativeReactorError {
   RegistrationFailed(Int32)
   WaitFailed(Int32)
   WakeFailed(Int32)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for NativeReactorError with fn output(self, logger) {

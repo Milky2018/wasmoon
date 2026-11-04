@@ -40,11 +40,12 @@ pub fn Parser::Parser(data : Bytes) -> Parser {
 ///|
 /// Work includes bytes visited (including type pre-scans) and expanded vector
 /// entries. Admission runs before expansion; nesting counts expression frames.
+#derive(Debug)
 pub(all) struct ParseLimits {
   max_input_bytes : Int64
   max_work : Int64
   max_depth : Int32
-} derive(Debug)
+}
 
 ///|
 pub extend ParseLimits with Debug::{to_repr}

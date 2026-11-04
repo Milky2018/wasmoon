@@ -1,12 +1,14 @@
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum IntUnaryOp {
   Not
   CountLeadingZeros
   CountTrailingZeros
   PopulationCount
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum IntBinaryOp {
   Add
   Sub
@@ -23,9 +25,10 @@ pub(all) enum IntBinaryOp {
   UnsignedShiftRight
   RotateLeft
   RotateRight
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum IntComparison {
   Equal
   NotEqual
@@ -37,16 +40,18 @@ pub(all) enum IntComparison {
   UnsignedLessOrEqual
   UnsignedGreaterThan
   UnsignedGreaterOrEqual
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum IntOverflowOp {
   Add(@native.Signedness)
   Sub(@native.Signedness)
   Mul(@native.Signedness)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum FloatUnaryOp {
   Negate
   Absolute
@@ -55,9 +60,10 @@ pub(all) enum FloatUnaryOp {
   Floor
   Truncate
   Nearest
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum FloatBinaryOp {
   Add
   Sub
@@ -66,17 +72,19 @@ pub(all) enum FloatBinaryOp {
   Min
   Max
   CopySign
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum FloatTernaryOp {
   FusedMultiplyAdd
   FusedNegatedMultiplyAdd
   FusedMultiplySubtract
   FusedNegatedMultiplySubtract
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum FloatComparison {
   Equal
   NotEqual
@@ -86,15 +94,17 @@ pub(all) enum FloatComparison {
   GreaterOrEqual
   Ordered
   Unordered
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum ReferenceComparison {
   Equal
   NotEqual
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum ConversionOp {
   I32WrapI64
   I64ExtendI32(@native.Signedness)
@@ -109,9 +119,10 @@ pub(all) enum ConversionOp {
   IntToFloat(@native.IntegerType, @native.FloatType, @native.Signedness)
   SignExtend(@native.IntegerType, @native.AccessWidth)
   Bitcast(@native.ValueType, @native.ValueType)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub struct LoadSpec {
   width : @native.AccessWidth
   extension : @native.LoadExtension
@@ -119,7 +130,7 @@ pub struct LoadSpec {
   offset : UInt64
   endianness : @native.Endianness
   trap : @native.TrapReason?
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn LoadSpec::new(
@@ -134,13 +145,14 @@ pub fn LoadSpec::new(
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub struct StoreSpec {
   width : @native.AccessWidth
   value_type : @native.ValueType
   offset : UInt64
   endianness : @native.Endianness
   trap : @native.TrapReason?
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn StoreSpec::new(
@@ -154,6 +166,7 @@ pub fn StoreSpec::new(
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum AtomicRmwOp {
   Add
   Sub
@@ -161,18 +174,19 @@ pub(all) enum AtomicRmwOp {
   Or
   Xor
   Exchange
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// A sequentially consistent atomic memory access. Weaker memory orders are
 /// not part of the current native-lowering contract.
+#derive(Debug, Eq, Hash)
 pub struct AtomicSpec {
   width : @native.AccessWidth
   value_type : @native.ValueType
   offset : UInt64
   endianness : @native.Endianness
   trap : @native.TrapReason?
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn AtomicSpec::new(
@@ -186,6 +200,7 @@ pub fn AtomicSpec::new(
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorLane {
   I8x16
   I16x8
@@ -193,9 +208,10 @@ pub(all) enum VectorLane {
   I64x2
   F32x4
   F64x2
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorBitwiseOp {
   Not
   And
@@ -203,23 +219,26 @@ pub(all) enum VectorBitwiseOp {
   Xor
   AndNot
   BitSelect
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntUnaryOp {
   Absolute
   Negate
   PopulationCount
   ExtendAddPairwise(@native.Signedness)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorHalf {
   Low
   High
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntBinaryOp {
   Add
   Sub
@@ -232,15 +251,17 @@ pub(all) enum VectorIntBinaryOp {
   ExtendMultiply(VectorHalf, @native.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntShiftOp {
   Left
   Right(@native.Signedness)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntComparison {
   Equal
   NotEqual
@@ -248,9 +269,10 @@ pub(all) enum VectorIntComparison {
   LessOrEqual(@native.Signedness)
   GreaterThan(@native.Signedness)
   GreaterOrEqual(@native.Signedness)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorFloatUnaryOp {
   Absolute
   Negate
@@ -259,9 +281,10 @@ pub(all) enum VectorFloatUnaryOp {
   Floor
   Truncate
   Nearest
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorFloatBinaryOp {
   Add
   Sub
@@ -271,9 +294,10 @@ pub(all) enum VectorFloatBinaryOp {
   Max
   PseudoMin
   PseudoMax
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorFloatComparison {
   Equal
   NotEqual
@@ -281,16 +305,18 @@ pub(all) enum VectorFloatComparison {
   LessOrEqual
   GreaterThan
   GreaterOrEqual
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorPredicateOp {
   AnyTrue
   AllTrue(VectorLane)
   BitMask(VectorLane)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorConversionOp {
   ExtendLow(VectorLane, @native.Signedness)
   ExtendHigh(VectorLane, @native.Signedness)
@@ -299,9 +325,10 @@ pub(all) enum VectorConversionOp {
   IntToFloat(VectorLane, VectorLane, @native.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorRelaxedOp {
   Swizzle
   FloatToInt(VectorLane, VectorLane, @native.Signedness)
@@ -312,23 +339,25 @@ pub(all) enum VectorRelaxedOp {
   Q15MultiplyRoundedSigned
   Dot8To16Signed
   Dot8To32AddSigned
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorLoadKind {
   Splat(VectorLane)
   Extend(VectorLane, @native.Signedness)
   Zero(@native.AccessWidth)
   Lane(VectorLane, Int32)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub struct VectorLoadSpec {
   kind : VectorLoadKind
   offset : UInt64
   endianness : @native.Endianness
   trap : @native.TrapReason?
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn VectorLoadSpec::new(
@@ -341,13 +370,14 @@ pub fn VectorLoadSpec::new(
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub struct VectorStoreLaneSpec {
   lane : VectorLane
   lane_index : Int32
   offset : UInt64
   endianness : @native.Endianness
   trap : @native.TrapReason?
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn VectorStoreLaneSpec::new(
@@ -361,6 +391,7 @@ pub fn VectorStoreLaneSpec::new(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum VectorOp {
   Splat(VectorLane)
   ExtractLane(VectorLane, Int32, @native.Signedness?)
@@ -379,9 +410,10 @@ pub(all) enum VectorOp {
   Predicate(VectorPredicateOp)
   Convert(VectorConversionOp)
   Relaxed(VectorRelaxedOp)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Operation {
   I32Const(UInt32)
   I64Const(UInt64)
@@ -412,6 +444,8 @@ pub(all) enum Operation {
   IntShiftImmediate(IntBinaryOp, Int32)
   IntMultiplyAdd
   IntAddShiftedLeft(Int32)
+  /// Keep the low field bits, then shift left; other result bits are zero.
+  IntLowBitsShiftLeft(Int32, Int32)
   IntHighMultiply(@native.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
@@ -425,6 +459,9 @@ pub(all) enum Operation {
   LoadIndexed(LoadSpec, Int32)
   Store(StoreSpec)
   StoreIndexed(StoreSpec, Int32)
+  /// Write a positive constant count of little-endian 64-bit words. The caller
+  /// owns the complete destination range; this has no call or safepoint.
+  StoreRepeated64(UInt64, UInt32, UInt64)
   AtomicLoad(AtomicSpec)
   AtomicStore(AtomicSpec)
   AtomicRmw(AtomicSpec, AtomicRmwOp)
@@ -435,7 +472,7 @@ pub(all) enum Operation {
   VectorStoreLane(VectorStoreLaneSpec)
   Call(@native.NativeCall)
   Safepoint(@native.SafepointKind)
-} derive(Debug, Eq)
+}
 
 ///|
 fn VectorOp::copy(self : VectorOp) -> VectorOp {
@@ -491,6 +528,7 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | IntShiftImmediate(_, _)
     | IntMultiplyAdd
     | IntAddShiftedLeft(_)
+    | IntLowBitsShiftLeft(_, _)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
@@ -504,6 +542,7 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | LoadIndexed(_, _)
     | Store(_)
     | StoreIndexed(_, _)
+    | StoreRepeated64(_, _, _)
     | AtomicLoad(_)
     | AtomicStore(_)
     | AtomicRmw(_, _)
@@ -1272,6 +1311,24 @@ pub fn verify_operation_contract(
       }
       None
     }
+    IntLowBitsShiftLeft(field_bits, amount) => {
+      if operands.length() != 1 ||
+        results.length() != 1 ||
+        !is_integer_type(operands[0]) ||
+        operands[0] != results[0] {
+        return operation_error(
+          "low-bit shift expects one matching i32 or i64 result",
+        )
+      }
+      let width = value_type_bits(operands[0])
+      if field_bits <= 0 ||
+        field_bits > width ||
+        amount < 0 ||
+        amount > width - field_bits {
+        return operation_error("low-bit shift field or amount is out of range")
+      }
+      None
+    }
     IntAddShiftedLeft(amount) => {
       if operands.length() != 2 ||
         results.length() != 1 ||
@@ -1446,6 +1503,14 @@ pub fn verify_operation_contract(
             "store",
           )
       }
+    StoreRepeated64(offset, count, _) =>
+      if count == 0U || offset > 0xFFFFFFFFFFFFFFFFUL - count.to_uint64() * 8UL {
+        operation_error(
+          "repeated word store requires a positive nonwrapping range",
+        )
+      } else {
+        require_shape(operands, results, [Ptr64], [], "repeated word store")
+      }
     StoreIndexed(spec, shift) =>
       match verify_store_spec(spec) {
         Some(error) => Some(error)
@@ -1586,6 +1651,8 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
         memory: Write,
         may_trap: spec.trap is Some(_),
       }
+    StoreRepeated64(_, _, _) =>
+      { ..@native.OperationSemantics::pure(), memory: Write, }
     AtomicLoad(spec) =>
       {
         ..@native.OperationSemantics::pure(),
@@ -1654,6 +1721,7 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
     | IntShiftImmediate(_, _)
     | IntMultiplyAdd
     | IntAddShiftedLeft(_)
+    | IntLowBitsShiftLeft(_, _)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)

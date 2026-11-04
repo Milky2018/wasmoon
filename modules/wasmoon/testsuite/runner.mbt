@@ -3,20 +3,23 @@
 
 ///|
 /// Test runner error types
+#derive(Debug)
 pub suberror TestRunnerError {
   ParseError(String)
   ModuleLoadError(String)
-} derive(Debug)
+}
 
 ///|
 /// JSON test file structure
+#derive(FromJson)
 priv struct JsonTestFile {
   source_filename : String?
   commands : Array[JsonCommand]
-} derive(FromJson)
+}
 
 ///|
 /// JSON command structure
+#derive(FromJson(fields(type_(rename="type"), as_(rename="as"))))
 priv struct JsonCommand {
   type_ : String
   line : Int32?
@@ -26,26 +29,29 @@ priv struct JsonCommand {
   action : JsonAction?
   expected : Array[JsonValue]?
   text : String?
-} derive(FromJson(fields(type_(rename="type"), as_(rename="as"))))
+}
 
 ///|
 /// JSON action structure
+#derive(FromJson(fields(type_(rename="type"), module_(rename="module"))))
 priv struct JsonAction {
   type_ : String
   module_ : String?
   field : String?
   args : Array[JsonValue]?
-} derive(FromJson(fields(type_(rename="type"), module_(rename="module"))))
+}
 
 ///|
 /// JSON value structure
+#derive(FromJson(fields(type_(rename="type"))), Debug)
 pub(all) struct JsonValue {
   type_ : String
   value : String?
-} derive(FromJson(fields(type_(rename="type"))), Debug)
+}
 
 ///|
 /// Test command types from the JSON format
+#derive(Debug)
 pub enum TestCommand {
   Module(String) // filename
   AssertReturn(TestAction, Array[TestValue])
@@ -55,31 +61,35 @@ pub enum TestCommand {
   AssertUninstantiable(String, String) // filename, message
   Register(String, String?) // as, name
   Action(TestAction)
-} derive(Debug)
+}
 
 ///|
 /// Test command with line number information
+#derive(Debug)
 pub struct TestCommandWithLine {
   line : Int32?
   command : TestCommand
-} derive(Debug)
+}
 
 ///|
 /// Test action types
+#derive(Debug)
 pub enum TestAction {
   Invoke(String?, String, Array[TestValue]) // module name, field, args
   Get(String?, String) // module name, field
-} derive(Debug)
+}
 
 ///|
 /// Test value representation
+#derive(Debug)
 pub struct TestValue {
   type_ : String
   value : String?
-} derive(Debug)
+}
 
 ///|
 /// Test result
+#derive(Debug)
 pub(all) struct TestResult {
   mut passed : Int32
   mut failed : Int32
@@ -87,7 +97,7 @@ pub(all) struct TestResult {
   failures : Array[String]
   skip_reasons : Array[String]
   mut source_filename : String? // Source .wast filename for better error reporting
-} derive(Debug)
+}
 
 ///|
 pub fn TestResult::TestResult() -> TestResult {

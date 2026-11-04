@@ -6,6 +6,81 @@ fn native_bulk_types() -> @types.Module raise {
 }
 
 ///|
+test "typed allocations retain payloads across identity pages collection and rollback" {
+  let module_ = native_bulk_types()
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  store.set_module_types(module_.types, rec_groups=module_.type_rec_groups)
+  for round in 0..<3 {
+    let roots : Array[@types.Value] = []
+    for index in 0..<2051 {
+      let length = index % 19 + 1
+      let array = store.alloc_array_repeated(2, length, I32(index + round))
+      roots.push(ArrayRef(array))
+    }
+    let pinned = store.pin_gc_roots(roots)
+    defer pinned.release()
+    // Roll back newer identities without invalidating the retained page prefix.
+    store.with_instantiation(fn() -> Unit raise @runtime.RuntimeError {
+      for _ in 0..<1031 {
+        store.alloc_array_repeated(2, 1, I32(-1)) |> ignore
+      }
+      raise OutOfMemory
+    }) catch {
+      OutOfMemory => ()
+      error => fail(error.to_string())
+    }
+    let after = store.alloc_array(2, [I32(42), I32(-7)])
+    let after_root = store.pin_gc_roots([ArrayRef(after)])
+    defer after_root.release()
+    store.collect_garbage() |> ignore
+    for index, value in roots {
+      guard value is ArrayRef(array) else { fail("missing array") }
+      assert_eq(store.array_get(array, index % 19), I32(index + round))
+    }
+    assert_eq(store.array_get(after, 0), I32(42))
+    assert_eq(store.array_get(after, 1), I32(-7))
+    assert_true(store.native_heap().unwrap().verify())
+    after_root.release()
+    pinned.release()
+    store.collect_garbage() |> ignore
+  }
+}
+
+///|
+test "typed array initialization distinguishes zero bits and the high vector word" {
+  let module_ = native_bulk_types()
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  store.set_module_types(module_.types, rec_groups=module_.type_rec_groups)
+  let upper = @types.Value::V128(
+    b"\x00\x00\x00\x00\x00\x00\x00\x00\x2a\x00\x00\x00\x00\x00\x00\x00",
+  )
+  for
+    (type_, value) in [
+      (2, @types.Value::I32(0)),
+      (6, V128(Bytes::make(16, 0))),
+      (6, upper),
+      (7, Null),
+    ] {
+    for count in [0, 1, 65] {
+      // Reuse nonzero arena bytes instead of relying on fresh OS-zeroed pages.
+      store.alloc_array_repeated(3, 256, I64(-1L)) |> ignore
+      store.collect_garbage() |> ignore
+      let repeated = store.alloc_array_repeated(type_, count, value)
+      let explicit = store.alloc_array(type_, Array::make(count, value))
+      for index in 0..<count {
+        assert_eq(store.array_get(repeated, index), value)
+        assert_eq(store.array_get(explicit, index), value)
+      }
+      assert_true(store.native_heap().unwrap().verify())
+    }
+  }
+  let array = store.alloc_array(2, [I32(0), I32(42), I32(0)])
+  assert_eq(store.array_get(array, 1), I32(42))
+}
+
+///|
 test "native bulk arrays preserve every scalar width and mixed physical layouts" {
   let module_ = native_bulk_types()
   let store = @runtime.Store::with_c_heap()
@@ -32,6 +107,10 @@ test "native bulk arrays preserve every scalar width and mixed physical layouts"
   ]
   for kind, value in values {
     for count in [0, 1, 7, 65] {
+      let initialized = store.alloc_array_repeated(kind, count, value)
+      for index in 0..<count {
+        assert_eq(store.array_get(initialized, index), value)
+      }
       for mode in 0..<4 {
         let source = if mode == 1 || mode == 2 {
           heap.alloc_array(kind, count + 2, zeros[kind])

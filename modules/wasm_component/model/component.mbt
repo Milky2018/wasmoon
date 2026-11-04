@@ -6,6 +6,7 @@
 /// later instantiation work.
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Component {
   binary : ComponentBinary
   core_modules : Array[Bytes]
@@ -19,7 +20,7 @@ pub(all) struct Component {
   canons : Array[Canon]
   start : Start?
   components : Array[Component]
-} derive(Debug, Eq)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to

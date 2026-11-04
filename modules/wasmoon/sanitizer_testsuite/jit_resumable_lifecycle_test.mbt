@@ -4,8 +4,16 @@ fn build_resumable_lifecycle_context(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
   valid_func_type_indices~ : Bool = true,
+  cooperative~ : Bool = false,
 ) -> @wast.JITModuleContext raise {
-  guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
+  guard @commands.compile_module_to_jit(
+      mod_,
+      false,
+      false,
+      0,
+      false,
+      enable_cancellation=cooperative,
+    )
     is Some((artifact, debug_db)) else {
     fail("JIT compile returned unsupported")
   }
@@ -15,6 +23,7 @@ fn build_resumable_lifecycle_context(
     function_names=@commands.build_jit_function_names(mod_),
     debug_db~,
   )
+  assert_true(jm.set_cooperative_scheduling(cooperative))
   jm.configure_native_fiber_stack_size(1024L * 1024L) |> ignore
   let globals_ptr = @wast.init_jit_globals_from_store(instance, store, jm)
   let func_type_indices : Array[Int32] = []
@@ -180,4 +189,58 @@ test "parked table synchronization retains GC roots and releases cancellation st
     store.close()
     assert_true(context.jit_module.gc_environment_is_clear())
   }
+}
+
+///|
+test "cooperative resume restores GC metadata after an intervening binding" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #|  (type $a (array (mut i32)))
+      #|  (func (export "run") (result i32) (local $count i32)
+      #|    i32.const 10000 local.set $count
+      #|    (loop $again local.get $count i32.const 1 i32.sub local.tee $count br_if $again)
+      #|    (array.get $a
+      #|      (array.new $a (i32.const 42) (i32.const 1)) (i32.const 0))))
+    ),
+  )
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    module_,
+    Imports(store),
+  )
+  let context = build_resumable_lifecycle_context(
+    module_,
+    store,
+    instance,
+    cooperative=true,
+  )
+  defer context.close()
+  let other_store = @runtime.Store::with_c_heap()
+  defer other_store.close()
+  let other_heap = other_store.native_heap().unwrap()
+  let mut outcome = context.call_core_func_resumable(store, instance, 0, [])
+  defer (if outcome is NativeCoreSuspended(_, continuation) {
+    continuation.cancel()
+  })
+  let mut yields = 0
+  while outcome is NativeCoreSuspended(CooperativeYield, continuation) {
+    yields += 1
+    // A prepared environment must rebind its payloads and heap, not assume that
+    // a previous installation remains active while execution is parked.
+    context.jit_module.setup_gc(
+      other_heap,
+      [],
+      [],
+      instance.func_type_indices[:].to_owned(),
+    )
+    outcome = continuation.continue_execution()
+  }
+  assert_true(yields > 1)
+  guard outcome is NativeCoreReturned(values) else {
+    fail("unexpected suspension")
+  }
+  debug_inspect(values, content="[I32(42)]")
 }

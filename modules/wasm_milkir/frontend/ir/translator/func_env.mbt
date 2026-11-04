@@ -31,6 +31,7 @@ priv struct FuncEnvironment {
   // Shared trap block for memory out-of-bounds errors
   // All bounds checks in the same function share this block to reduce CFG size
   mut memory_trap_block : Block?
+  mut table_trap_block : Block?
   // Shared trap block for atomic unaligned accesses
   mut atomic_unaligned_trap_block : Block?
   // Per-block dynamic bounds-check cache:
@@ -81,6 +82,7 @@ fn FuncEnvironment::FuncEnvironment(
     memory_is_shared,
     memory_page_size_log2,
     memory_trap_block: None,
+    table_trap_block: None,
     atomic_unaligned_trap_block: None,
     bounds_check_cache: HashMap([]),
   }
@@ -95,67 +97,20 @@ fn FuncEnvironment::emit_cancellation_safepoint(
   if self.cancellation_symbol is Some(symbol) {
     match self.safepoint_poll_layout {
       None => builder.call_symbol(symbol, None, [vmctx]) |> ignore
-      Some(layout) => {
-        let slow = builder.create_block()
-        let countdown = builder.create_block()
-        let decrement = builder.create_block()
-        let done = builder.create_block()
-        let has_execution = builder.create_block()
-        let has_controls = builder.create_block()
-        let zero = builder.iconst(I64, 0L)
-        let execution = builder.load_ptr(
-          Ptr,
-          vmctx,
-          builder.iconst(I64, layout.execution_offset.to_int64()),
-        )
-        let execution_bits = builder.bitcast(I64, execution)
-        builder.branch(
-          builder.icmp_ne(execution_bits, zero),
-          has_execution,
-          [],
-          slow,
+      // Keep the poll semantic until native lowering, so its fast-path CFG
+      // does not prevent leaf inlining. Every cloned poll remains effectful.
+      Some(layout) =>
+        builder.emit_void_ext_inst(
+          @wasm_milkir.encode(
+            SafepointPoll(
+              layout.execution_offset,
+              layout.controls_offset,
+              layout.callback_offset,
+              layout.budget_offset,
+            ),
+          ),
           [],
         )
-        builder.switch_to_block(has_execution)
-        let controls = builder.load_ptr(
-          Ptr,
-          execution,
-          builder.iconst(I64, layout.controls_offset.to_int64()),
-        )
-        let controls_bits = builder.bitcast(I64, controls)
-        builder.branch(
-          builder.icmp_ne(controls_bits, zero),
-          has_controls,
-          [],
-          slow,
-          [],
-        )
-        builder.switch_to_block(has_controls)
-        let callback = builder.load_ptr(
-          I64,
-          controls,
-          builder.iconst(I64, layout.callback_offset.to_int64()),
-        )
-        let budget_offset = builder.iconst(I64, layout.budget_offset.to_int64())
-        let budget = builder.load_ptr(I32, controls, budget_offset)
-        let has_callback = builder.icmp_ne(callback, builder.iconst(I64, 0L))
-        builder.branch(has_callback, slow, [], countdown, [])
-        builder.switch_to_block(countdown)
-        let active = builder.icmp_sgt(budget, builder.iconst(I32, 0L))
-        let expired = builder.icmp_eq(budget, builder.iconst(I32, 1L))
-        let enabled = builder.create_block()
-        builder.branch(active, enabled, [], done, [])
-        builder.switch_to_block(enabled)
-        builder.branch(expired, slow, [], decrement, [])
-        builder.switch_to_block(decrement)
-        let remaining = builder.isub(budget, builder.iconst(I32, 1L))
-        builder.store_ptr(I32, controls, remaining, budget_offset)
-        builder.jump(done, [])
-        builder.switch_to_block(slow)
-        builder.call_symbol(symbol, None, [vmctx]) |> ignore
-        builder.jump(done, [])
-        builder.switch_to_block(done)
-      }
     }
   }
 }
@@ -263,7 +218,7 @@ fn FuncEnvironment::translate_table_size(
 }
 
 ///|
-/// Read the shared table through the runtime's stable-reference decoder.
+/// Read the stable reference from table zero's published layout.
 fn FuncEnvironment::translate_table_get(
   self : FuncEnvironment,
   builder : FunctionBuilder,
@@ -274,6 +229,45 @@ fn FuncEnvironment::translate_table_get(
   is_table64~ : Bool = false,
 ) -> Value {
   let index = if is_table64 { elem_idx } else { builder.uextend(I64, elem_idx) }
+  if table_idx == 0 {
+    // The embedding publishes these fields for every growth and close. A
+    // missing or closed binding has size zero, so the entry is never read.
+    let layout = self.runtime_layout
+    let size = builder.load_ptr(
+      I64,
+      vmctx,
+      builder.iconst_i64(layout.table0_elements_offset.to_int64()),
+    )
+    let current = builder.current_block()
+    let trap = match self.table_trap_block {
+      Some(block) => block
+      None => {
+        let block = builder.create_block()
+        builder.switch_to_block(block)
+        let source = builder.set_source_byte_offset(None)
+        builder.trap("out of bounds table access")
+        builder.set_source_byte_offset(source) |> ignore
+        builder.switch_to_block(current)
+        self.table_trap_block = Some(block)
+        block
+      }
+    }
+    let in_bounds = builder.icmp(Ult, index, size)
+    let access = builder.create_block()
+    builder.brnz(in_bounds, access, trap)
+    builder.switch_to_block(access)
+    let base = builder.load_ptr(
+      I64,
+      vmctx,
+      builder.iconst_i64(layout.table0_base_offset.to_int64()),
+    )
+    let stride = builder.iconst_i64(layout.table_entry_stride.to_int64())
+    let entry = builder.iadd(base, builder.imul(index, stride))
+    let value_offset = builder.iconst_i64(
+      layout.table_entry_value_offset.to_int64(),
+    )
+    return builder.load_ptr(result_type, entry, value_offset)
+  }
   let symbol = builder
     .get_function()
     .declare_external_symbol(self.runtime_symbols.symbol_name(TableGet))
@@ -512,23 +506,15 @@ fn FuncEnvironment::can_eliminate_bounds_check(
   } else {
     0L // No minimum known, cannot eliminate
   }
-  if memory_min == 0L {
+  // The immediate is unsigned. Its Int64 carrier can represent a large
+  // offset as a negative value. Prove the range without a wrapping sum.
+  guard checked_access_end(offset, access_size) is Some(end) &&
+    end <= memory_min else {
     return false
   }
-  // Check if wasm_addr is a constant
   match builder.get_const_value(wasm_addr) {
+    Some(address) => address >= 0L && address <= memory_min - end
     None => false
-    Some(const_addr) => {
-      // Ensure const_addr is non-negative (valid wasm address)
-      if const_addr < 0L {
-        return false
-      }
-      // Check if const_addr + offset + access_size <= memory_min
-      // Use checked arithmetic to avoid overflow
-      let end_addr = const_addr + offset + access_size.to_int64()
-      // Also check for overflow (end_addr < const_addr would indicate overflow)
-      end_addr >= const_addr && end_addr <= memory_min
-    }
   }
 }
 
@@ -637,7 +623,6 @@ fn FuncEnvironment::emit_bounds_check(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -652,6 +637,7 @@ fn FuncEnvironment::emit_bounds_check(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -688,6 +674,65 @@ fn FuncEnvironment::emit_bounds_check(
 
   // Return effective address: memory_base + addr + offset
   builder.iadd(memory_base, addr_plus_offset)
+}
+
+///|
+/// Move one native-width value after checking both complete ranges. A single
+/// source read before any store preserves overlap. Memory zero uses the live
+/// non-shared descriptor cache, including after a reentrant grow or rebind.
+fn FuncEnvironment::try_fixed_memory_copy(
+  self : FuncEnvironment,
+  builder : FunctionBuilder,
+  vmctx : Value,
+  dst_memidx : Int32,
+  src_memidx : Int32,
+  dst : Value,
+  src : Value,
+  length : Value,
+) -> Bool {
+  guard dst_memidx == 0 &&
+    src_memidx == 0 &&
+    self.memory_is_shared.get(0) == Some(false) &&
+    builder.get_const_value(length) is Some(size) &&
+    (size == 1L || size == 2L || size == 4L || size == 8L || size == 16L) else {
+    return false
+  }
+  let width = size.to_int()
+  let byte_count = builder.iconst_i64(size)
+  let available = self.load_memory_size(builder, vmctx, 0)
+  let trap = self.get_or_create_memory_trap_block(builder)
+  let check_offsets = builder.create_block()
+  builder.brnz(builder.icmp(Uge, available, byte_count), check_offsets, trap)
+  builder.switch_to_block(check_offsets)
+  let last_valid_offset = builder.isub(available, byte_count)
+  let is_memory64 = self.memory_is_64.get(0) == Some(true)
+  let dst = if is_memory64 { dst } else { builder.uextend(I64, dst) }
+  let src = if is_memory64 { src } else { builder.uextend(I64, src) }
+  let dst_in_bounds = builder.icmp(Ule, dst, last_valid_offset)
+  let src_in_bounds = builder.icmp(Ule, src, last_valid_offset)
+  let copy = builder.create_block()
+  builder.brnz(builder.band(dst_in_bounds, src_in_bounds), copy, trap)
+  builder.switch_to_block(copy)
+  // Use the live base after the explicit bounds checks. The positive size
+  // bound also rejects a cleared memory-zero binding.
+  let base = @wasm_milkir.load_mem_base(builder, vmctx, 0, Mutable)
+  let dst = builder.iadd(base, dst)
+  let src = builder.iadd(base, src)
+  let zero = builder.iconst_i64(0L)
+  if width < 4 {
+    let bits = width * 8
+    let value = builder.load_ptr_narrow(I32, bits, false, src, zero)
+    builder.store_ptr_narrow(bits, dst, value, zero)
+  } else {
+    let ty : Type = match width {
+      4 => I32
+      8 => I64
+      _ => V128
+    }
+    let value = builder.load_ptr(ty, src, zero)
+    builder.store_ptr(ty, dst, value, zero)
+  }
+  true
 }
 
 ///|
@@ -739,7 +784,6 @@ fn FuncEnvironment::translate_memory_load(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -754,6 +798,7 @@ fn FuncEnvironment::translate_memory_load(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -850,7 +895,6 @@ fn FuncEnvironment::translate_memory_store(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -865,6 +909,7 @@ fn FuncEnvironment::translate_memory_store(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -953,7 +998,6 @@ fn FuncEnvironment::translate_memory_load_narrow(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -968,6 +1012,7 @@ fn FuncEnvironment::translate_memory_load_narrow(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -1057,7 +1102,6 @@ fn FuncEnvironment::translate_memory_store_narrow(
     memidx,
     self.memory_base_stability(memidx),
   )
-  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -1072,6 +1116,7 @@ fn FuncEnvironment::translate_memory_store_narrow(
   let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
+    let memory_size = self.load_memory_size(builder, vmctx, memidx)
     // Need runtime bounds check
     let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)

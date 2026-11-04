@@ -1,11 +1,12 @@
 ///|
+#derive(Eq, Debug)
 pub suberror X64LinkError {
   InvalidCodeObject(message~ : String)
   InvalidCodeBase(address~ : Int64)
   UnresolvedRelocation(index~ : Int32)
   RelocationOutOfRange(index~ : Int32)
   UnsupportedRelocation(index~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for X64LinkError with fn output(self, logger) {
@@ -13,11 +14,12 @@ pub impl Show for X64LinkError with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug)
 pub struct X64LinkPlan {
   priv code : Array[Byte]
   priv relocations : Array[@code_object.Relocation]
   priv veneer_offsets : Array[Int32]
-} derive(Debug)
+}
 
 ///|
 pub fn X64LinkPlan::code(self : X64LinkPlan) -> Array[Byte] {

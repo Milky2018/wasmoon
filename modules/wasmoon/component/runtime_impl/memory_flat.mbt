@@ -126,11 +126,12 @@ fn core_valtype_size(vt : @types.ValueType) -> Int32 {
 }
 
 ///|
+#derive(Debug)
 struct FlatStorageField {
   vt : @types.ValueType
   size : Int32
   align : Int32
-} derive(Debug)
+}
 
 ///|
 fn default_flat_storage_field(vt : @types.ValueType) -> FlatStorageField {

@@ -1,13 +1,15 @@
 ///|
+#derive(Eq, Debug)
 pub(all) struct RuntimeSymbol {
   name : String
   address : Int64
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) struct RuntimeSymbolResolver {
   symbols : Array[RuntimeSymbol]
-} derive(Debug)
+}
 
 ///|
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols {
@@ -27,6 +29,8 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     resolver.add_symbol(names.symbol_name(helper), address)
   }
   add(GcReserveStructFast, c_jit_get_gc_reserve_struct_fast_ptr())
+  add(GcTryArray, c_jit_get_gc_try_array_ptr())
+  add(GcTryArrayWide, c_jit_get_gc_try_array_wide_ptr())
   add(GcRefTest, c_jit_get_gc_ref_test_ptr())
   add(GcRefCast, c_jit_get_gc_ref_cast_ptr())
   resolver.add_symbol(

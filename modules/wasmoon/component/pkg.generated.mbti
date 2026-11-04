@@ -6,14 +6,15 @@ import {
   "Milky2018/wasmoon/wasi_component",
   "Milky2018/wasmoon_runtime/runtime",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn component_value_from_json(Json, ComponentValueType) -> ComponentValue raise ComponentRuntimeError
+pub fn component_value_from_json(@json.Json, ComponentValueType) -> ComponentValue raise ComponentRuntimeError
 
-pub fn component_value_to_json(ComponentValue) -> Json
+pub fn component_value_to_json(ComponentValue) -> @json.Json
 
-pub fn component_values_to_json(Array[ComponentValue]) -> Json
+pub fn component_values_to_json(Array[ComponentValue]) -> @json.Json
 
 pub fn interpreter_component_engine() -> ComponentEngine
 
@@ -46,6 +47,7 @@ pub fn sniff_binary_kind(Bytes) -> @model.BinaryKind?
 pub fn wasi_command_component_host(@wasi_component.WasiComponentCtx) -> ComponentHostInstaller
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror ComponentRuntimeError {
   ParseFailed(String)
   ValidationFailed(String)
@@ -72,7 +74,7 @@ pub(all) suberror ComponentRuntimeError {
   Cancelled
   HostExit(Int32)
   JsonValueError(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentRuntimeError::equal(Self, Self) -> Bool
 pub fn ComponentRuntimeError::not_equal(Self, Self) -> Bool
 pub fn ComponentRuntimeError::output(Self, &Logger) -> Unit
@@ -87,18 +89,20 @@ pub async fn ComponentCall::join(Self) -> Array[ComponentValue] raise ComponentR
 pub fn ComponentCall::poll(Self) -> ComponentCallPoll raise ComponentRuntimeError
 pub fn ComponentCall::wait(Self) -> Array[ComponentValue] raise ComponentRuntimeError
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ComponentCallPoll {
   Pending
   Ready(Array[ComponentValue])
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentCallPoll::equal(Self, Self) -> Bool
 pub fn ComponentCallPoll::not_equal(Self, Self) -> Bool
 pub fn ComponentCallPoll::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ComponentCase {
   name : String
   ty : ComponentValueType?
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentCase::ComponentCase(String, ComponentValueType?) -> Self
 pub fn ComponentCase::equal(Self, Self) -> Bool
 pub fn ComponentCase::not_equal(Self, Self) -> Bool
@@ -109,10 +113,11 @@ pub impl Show for ComponentCase
 
 type ComponentEngine
 
+#derive(Eq, @debug.Debug)
 pub struct ComponentField {
   name : String
   ty : ComponentValueType
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentField::ComponentField(String, ComponentValueType) -> Self
 pub fn ComponentField::equal(Self, Self) -> Bool
 pub fn ComponentField::not_equal(Self, Self) -> Bool
@@ -121,11 +126,12 @@ pub fn ComponentField::to_repr(Self) -> @debug.Repr
 pub fn ComponentField::to_string(Self) -> String
 pub impl Show for ComponentField
 
+#derive(Eq, @debug.Debug)
 pub struct ComponentFuncType {
   is_async : Bool
   params : Array[ComponentParam]
   result : ComponentValueType?
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentFuncType::ComponentFuncType(Array[ComponentParam], ComponentValueType?, is_async? : Bool) -> Self
 pub fn ComponentFuncType::equal(Self, Self) -> Bool
 pub fn ComponentFuncType::not_equal(Self, Self) -> Bool
@@ -145,10 +151,11 @@ type ComponentInstance
 pub fn ComponentInstance::bind(Self, String) -> ComponentFunction raise ComponentRuntimeError
 pub fn ComponentInstance::bind_typed(Self, String, ComponentFuncType) -> ComponentFunction raise ComponentRuntimeError
 
+#derive(Eq, @debug.Debug)
 pub struct ComponentParam {
   name : String
   ty : ComponentValueType
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentParam::ComponentParam(String, ComponentValueType) -> Self
 pub fn ComponentParam::equal(Self, Self) -> Bool
 pub fn ComponentParam::not_equal(Self, Self) -> Bool
@@ -157,13 +164,15 @@ pub fn ComponentParam::to_repr(Self) -> @debug.Repr
 pub fn ComponentParam::to_string(Self) -> String
 pub impl Show for ComponentParam
 
-type ComponentResource derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type ComponentResource
 pub fn ComponentResource::equal(Self, Self) -> Bool
 pub fn ComponentResource::not_equal(Self, Self) -> Bool
 pub fn ComponentResource::to_repr(Self) -> @debug.Repr
 pub fn ComponentResource::type_(Self) -> ComponentResourceType
 
-type ComponentResourceType derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type ComponentResourceType
 pub fn ComponentResourceType::equal(Self, Self) -> Bool
 pub fn ComponentResourceType::name(Self) -> String
 pub fn ComponentResourceType::named(String) -> Self
@@ -178,6 +187,7 @@ pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance r
 pub fn ComponentRuntime::instantiate_component(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
 pub fn[T] ComponentRuntime::with_execution_limits(Self, () -> T raise, timeout_ms? : Int32?, safepoints? : Int64?, cancel? : (() -> Bool)?) -> T raise
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ComponentValue {
   Bool(Bool)
   S8(Int32)
@@ -204,7 +214,7 @@ pub(all) enum ComponentValue {
   ResultOk(ComponentValue?)
   ResultErr(ComponentValue?)
   Resource(ComponentResource)
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentValue::equal(Self, Self) -> Bool
 pub fn ComponentValue::not_equal(Self, Self) -> Bool
 pub fn ComponentValue::output(Self, &Logger) -> Unit
@@ -212,6 +222,7 @@ pub fn ComponentValue::to_repr(Self) -> @debug.Repr
 pub fn ComponentValue::to_string(Self) -> String
 pub impl Show for ComponentValue
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ComponentValueType {
   Bool
   S8
@@ -241,7 +252,7 @@ pub(all) enum ComponentValueType {
   Borrow(ComponentResourceType)
   Stream(ComponentValueType?)
   Future(ComponentValueType?)
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentValueType::equal(Self, Self) -> Bool
 pub fn ComponentValueType::not_equal(Self, Self) -> Bool
 pub fn ComponentValueType::output(Self, &Logger) -> Unit
@@ -249,11 +260,12 @@ pub fn ComponentValueType::to_repr(Self) -> @debug.Repr
 pub fn ComponentValueType::to_string(Self) -> String
 pub impl Show for ComponentValueType
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NativeComponentExecutionEvent {
   RunToReturn
   Resumable
   ExplicitInterpreter
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeComponentExecutionEvent::equal(Self, Self) -> Bool
 pub fn NativeComponentExecutionEvent::not_equal(Self, Self) -> Bool
 pub fn NativeComponentExecutionEvent::to_repr(Self) -> @debug.Repr

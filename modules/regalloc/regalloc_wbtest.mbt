@@ -60,8 +60,11 @@ test "sparse live sets preserve defs and successor propagation" {
   defs[0].set(1_000_000, true)
   live_in[2].set(1_000_000, true)
   let sets = propagate_live_sets(3, cfg, defs, live_in)
-  debug_inspect(sets.live_in, content="[[], [1000000], [1000000]]")
-  debug_inspect(sets.live_out, content="[[1000000], [1000000], []]")
+  debug_inspect(
+    live_in.map(set => set.to_sorted_array()),
+    content="[[], [1000000], [1000000]]",
+  )
+  debug_inspect(sets, content="[[1000000], [1000000], []]")
 }
 
 ///|
@@ -88,8 +91,11 @@ test "sparse live sets cover diamond loop and unreachable CFG regions" {
   live_in[3].set(7, true)
   live_in[4].set(1_000_000, true)
   let sets = propagate_live_sets(5, cfg, defs, live_in)
-  debug_inspect(sets.live_in, content="[[], [7], [7], [7], [1000000]]")
-  debug_inspect(sets.live_out, content="[[7], [7], [7], [7], []]")
+  debug_inspect(
+    live_in.map(set => set.to_sorted_array()),
+    content="[[], [7], [7], [7], [1000000]]",
+  )
+  debug_inspect(sets, content="[[7], [7], [7], [7], []]")
 }
 
 ///|
@@ -105,8 +111,11 @@ test "compute sparse live sets over reusable CFG model" {
   live_in[1].set(1, true)
   live_in[2].set(0, true)
   let live_sets = propagate_live_sets(3, cfg, defs, live_in)
-  debug_inspect(live_sets.live_in, content="[[1], [0, 1], [0]]")
-  debug_inspect(live_sets.live_out, content="[[0, 1], [0], []]")
+  debug_inspect(
+    live_in.map(set => set.to_sorted_array()),
+    content="[[1], [0, 1], [0]]",
+  )
+  debug_inspect(live_sets, content="[[0, 1], [0], []]")
 }
 
 ///|

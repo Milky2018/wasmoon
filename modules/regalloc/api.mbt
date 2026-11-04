@@ -4,6 +4,7 @@
 /// Reported through `RegallocConfig::observer` so a caller that owns a clock
 /// can attribute compile time per phase. This module stays clock-free: it
 /// only says which phase it is entering (ISS-371).
+#derive(Eq, Debug)
 pub(all) enum RegallocPhase {
   InputValidation
   LiveRanges
@@ -15,7 +16,7 @@ pub(all) enum RegallocPhase {
   EdgeTransfers
   EditResolution
   Verification
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for RegallocPhase with fn output(self, logger) {
@@ -40,6 +41,7 @@ pub impl Show for RegallocPhase with fn output(self, logger) {
 ///
 /// These count allocator decisions rather than elapsed time, so callers can
 /// compare runs without making this reusable module own a clock.
+#derive(Eq, Debug)
 pub struct BundleAllocationStatistics {
   mut queue_pops : Int32
   mut register_probes : Int32
@@ -49,7 +51,7 @@ pub struct BundleAllocationStatistics {
   mut bundle_splits : Int32
   mut second_chance_attempts : Int32
   mut max_queue_length : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 fn BundleAllocationStatistics::new() -> BundleAllocationStatistics {
@@ -163,11 +165,8 @@ pub struct AllocationSession {
   priv register_order : Array[Int32]
   priv register_order_marks : Array[Bool]
   priv physical_register_indexes : Array[Int32]
-  priv queue_items : Array[Int32]
-  priv queue_priorities : Array[Int32]
-  priv queue_weights : Array[Int32]
+  priv queue_items : Array[BundleQueueEntry]
   priv queue_in_queue : Array[Bool]
-  priv queue_hints : Array[Int32]
 }
 
 ///|

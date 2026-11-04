@@ -1,21 +1,24 @@
 ///|
 /// Opaque handles used only while one MilkIR function is streamed into a
 /// target selector. They do not own an SSA graph.
+#derive(Debug, Eq, Hash)
 pub(all) struct Value {
   id : Int32
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) struct Block {
   id : Int32
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct InstructionMetadata {
   source : @native.SourceLocation?
   live_gc_roots : Array[Value]
   stack_map : @native.StackMapMetadata?
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn InstructionMetadata::empty() -> InstructionMetadata {
@@ -32,10 +35,11 @@ pub fn InstructionMetadata::new(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminatorMetadata {
   source : @native.SourceLocation?
   live_gc_roots : Array[Value]
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn TerminatorMetadata::new(
@@ -46,13 +50,15 @@ pub fn TerminatorMetadata::new(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SwitchCase {
   bits : UInt64
   target : Block
   arguments : Array[Value]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Terminator {
   Jump(Block, Array[Value])
   Branch(Value, Block, Array[Value], Block, Array[Value])
@@ -79,7 +85,7 @@ pub(all) enum Terminator {
   TailCall(@native.NativeCall, Array[Value])
   NoReturnCall(@native.NativeCall, Array[Value])
   Trap(@native.TrapReason)
-} derive(Debug, Eq)
+}
 
 ///|
 pub(all) struct TargetSwitchCase {
@@ -221,8 +227,15 @@ pub struct DirectBuilder {
   priv call_abi : CallAbiElaboration?
   priv root_scope_capacity : Int32
   priv mut root_scope_object : @native.StackObject?
+  priv mut scoped_frame_objects : (
+    @native.StackObject,
+    @native.StackObject,
+    @native.StackObject,
+  )?
+  priv mut function_body_entry : Block
   priv mut function_root_frame : (Value, Value, Value, Value, Int32)?
   priv function_root_slots : Map[Int32, Int32]
+  priv mut function_root_masks : Array[UInt64]?
   priv mut next_stack_map_id : Int32
   priv error : Ref[String?]
   priv mut current_block : Block
@@ -261,8 +274,11 @@ pub fn DirectBuilder::new(
     call_abi,
     root_scope_capacity,
     root_scope_object: None,
+    scoped_frame_objects: None,
+    function_body_entry: { id: 0, },
     function_root_frame: None,
     function_root_slots: Map([]),
+    function_root_masks: None,
     next_stack_map_id: 0,
     error: Ref(None),
     current_block: { id: (sink.entry_block)(), },
@@ -283,8 +299,10 @@ pub fn DirectBuilder::new(
 }
 
 ///|
-/// Reserve one precise shadow frame for the function. Slots are filled once
-/// where SSA values are defined; only liveness mask words change at safepoints.
+/// Reserve one precise shadow frame before binding source entry edges. With
+/// an inline link protocol, `entry_block` then names the body after its prologue.
+/// Slots are filled where SSA values are defined; only liveness mask words
+/// change at safepoints.
 pub fn DirectBuilder::begin_function_roots(
   self : DirectBuilder,
   capacity : Int32,
@@ -330,28 +348,15 @@ pub fn DirectBuilder::begin_function_roots(
   self.function_root_frame = Some(
     (environment, header_address, roots_address, mask_address, capacity),
   )
-  // Keep the prologue in the original entry block: source lowering binds that
-  // block after the frame is entered. This one-time zeroing is linear in slots.
-  self.update_function_roots([], initialize=true)
-  let count = self.emit_raw(
-      I32Const(capacity.reinterpret_as_uint()),
-      [],
-      [I32],
-      InstructionMetadata::empty(),
-    )[0]
-  let call = @native.NativeCall::new(
-    External(frame.enter_symbol),
-    @native.Signature::new([Ptr64, Ptr64, Ptr64, Ptr64, I32], []),
-    Platform,
-    @native.CallBehavior::new(ReadWrite, true, false, false, false),
+  // Initialize every mask word before publishing the frame. Source lowering
+  // binds the body returned by entry_block after this optional prologue.
+  self.update_function_roots([])
+  self.publish_root_frame(
+    environment, header_address, roots_address, mask_address, capacity, frame,
   )
-  self.emit_raw(
-    Call(call),
-    [environment, header_address, roots_address, mask_address, count],
-    [],
-    InstructionMetadata::empty(),
-  )
-  |> ignore
+  if frame.inline_layout is Some(_) {
+    self.function_body_entry = self.current_block
+  }
 }
 
 ///|
@@ -385,7 +390,6 @@ pub fn DirectBuilder::define_function_root(
 fn DirectBuilder::update_function_roots(
   self : DirectBuilder,
   live : Array[Value],
-  initialize~ : Bool = false,
 ) -> Unit {
   guard self.function_root_frame is Some((_, _, _, address, capacity)) else {
     return
@@ -400,32 +404,44 @@ fn DirectBuilder::update_function_roots(
     }
     masks[slot / 64] = masks[slot / 64] | (1UL << (slot % 64))
   }
+  let preserve_mask = self.call_abi is Some(abi) &&
+    abi.function_frame is Some(frame) &&
+    frame.preserves_mask
+  let previous = if preserve_mask { self.function_root_masks } else { None }
   let mut start = 0
   while start < masks.length() {
     let bits = masks[start]
+    if previous is Some(words) && words[start] == bits {
+      start += 1
+      continue
+    }
     let mut end = start + 1
-    while end < masks.length() && masks[end] == bits {
+    while end < masks.length() &&
+          masks[end] == bits &&
+          !(previous is Some(words) && words[end] == bits) {
       end += 1
     }
-    self.write_root_mask_run(address, start, end, bits, initialize~)
+    self.write_root_mask_run(address, start, end, bits)
     start = end
+  }
+  if preserve_mask {
+    self.function_root_masks = Some(masks)
   }
 }
 
 ///|
 /// Preserve every mask word, including clearing roots from unknown predecessor
 /// paths. Repeated words use a bounded loop instead of multiplying target
-/// instructions by frame capacity at each safepoint. No call or safepoint can
-/// observe the partially written mask. Short runs retain straight-line stores.
+/// instructions or allocator CFG cycles by frame capacity. No call or safepoint
+/// can observe the partially written mask. Short runs retain straight-line stores.
 fn DirectBuilder::write_root_mask_run(
   self : DirectBuilder,
   address : Value,
   start : Int32,
   end : Int32,
   bits : UInt64,
-  initialize~ : Bool,
 ) -> Unit {
-  if initialize || end - start <= 4 {
+  if end - start <= 4 {
     for index in start..<end {
       let value = self.emit_raw(
           I64Const(bits),
@@ -443,46 +459,17 @@ fn DirectBuilder::write_root_mask_run(
     }
     return
   }
-  let value = self.emit_raw(
-      I64Const(bits),
-      [],
-      [I64],
-      InstructionMetadata::empty(),
-    )[0]
-  let first = self.emit_raw(
-      I32Const(start.reinterpret_as_uint()),
-      [],
-      [I32],
-      InstructionMetadata::empty(),
-    )[0]
-  let body = self.create_block([I32])
-  let done = self.create_block([])
-  self.jump(body, [first])
-  self.switch_to_block(body)
-  let index = self.block_parameters(body)[0]
   self.emit_raw(
-    StoreIndexed(StoreSpec::new(W64, I64, 0UL, Little, None), 3),
-    [address, index, value],
+    StoreRepeated64(
+      (start * 8).to_uint64(),
+      (end - start).reinterpret_as_uint(),
+      bits,
+    ),
+    [address],
     [],
     InstructionMetadata::empty(),
   )
   |> ignore
-  let next = self.emit_raw(
-      IntBinaryImmediate(Add, 1UL),
-      [index],
-      [I32],
-      InstructionMetadata::empty(),
-    )[0]
-  self.branch_int_compare_immediate(
-    UnsignedLessThan,
-    next,
-    end.to_uint64(),
-    body,
-    [next],
-    done,
-    [],
-  )
-  self.switch_to_block(done)
 }
 
 ///|
@@ -492,19 +479,7 @@ fn DirectBuilder::leave_function_roots(self : DirectBuilder) -> Unit {
     abi.function_frame is Some(frame) else {
     return
   }
-  let call = @native.NativeCall::new(
-    External(frame.leave_symbol),
-    @native.Signature::new([Ptr64, Ptr64], []),
-    Platform,
-    @native.CallBehavior::new(ReadWrite, true, false, false, false),
-  )
-  self.emit_raw(
-    Call(call),
-    [environment, header],
-    [],
-    InstructionMetadata::empty(),
-  )
-  |> ignore
+  self.unlink_root_frame(environment, header, frame)
 }
 
 ///|
@@ -514,8 +489,7 @@ pub fn DirectBuilder::parameters(self : DirectBuilder) -> Array[Value] {
 
 ///|
 pub fn DirectBuilder::entry_block(self : DirectBuilder) -> Block {
-  ignore(self)
-  { id: 0, }
+  self.function_body_entry
 }
 
 ///|
@@ -640,6 +614,7 @@ pub fn DirectBuilder::switch_to_block(
   block : Block,
 ) -> Unit {
   if block != self.current_block {
+    self.function_root_masks = None
     self.flush_terminator()
     self.current_block = block
     (self.sink.switch_to_block)(self.target_blocks[block.id])
@@ -798,6 +773,7 @@ fn DirectBuilder::emit_call_with_abi(
     }
   }
   let mut context : Value? = None
+  let mut scoped_frame : (Value, Value, FunctionRootFrameAbi)? = None
   if self.function_root_frame is Some(_) {
     if call.behavior.returns_twice && !metadata.live_gc_roots.is_empty() {
       self.record_error("returns-twice calls cannot transport live SSA roots")
@@ -807,9 +783,20 @@ fn DirectBuilder::emit_call_with_abi(
       !metadata.live_gc_roots.is_empty() {
       self.update_function_roots(metadata.live_gc_roots)
     }
+    // The registered shadow frame owns these roots. Transporting them again
+    // as SSA call operands forces redundant preservation and reloads. Keep
+    // call-site/argument metadata; ordinary users still determine SSA liveness.
+    lowered_metadata = { ..lowered_metadata, live_gc_roots: [], }
   } else if !metadata.live_gc_roots.is_empty() {
     if call.behavior.returns_twice {
       self.record_error("returns-twice calls cannot use a caller root scope")
+    } else if elaboration.scoped_function_frame is Some(frame) &&
+      metadata.live_gc_roots.length() <= self.root_scope_capacity {
+      scoped_frame = self.enter_scoped_function_roots(
+        frame,
+        metadata.live_gc_roots,
+      )
+      lowered_metadata = { ..lowered_metadata, live_gc_roots: [], }
     } else if elaboration.root_scope is Some(scope) &&
       metadata.live_gc_roots.length() <= self.root_scope_capacity {
       if self.root_scope_object is None {
@@ -882,6 +869,13 @@ fn DirectBuilder::emit_call_with_abi(
     result_types,
     lowered_metadata,
   )
+  if call.behavior.returns_twice {
+    // A rewind can resume after later code changed this same stack mask.
+    self.function_root_masks = None
+  }
+  if scoped_frame is Some((environment, header, frame)) {
+    self.unlink_root_frame(environment, header, frame)
+  }
   if context is Some(environment) && elaboration.root_scope is Some(scope) {
     self.emit_raw(
       Call(root_scope_pop_call(scope.pop_symbol)),
@@ -1103,5 +1097,145 @@ pub fn DirectBuilder::finish(
   (self.sink.finish)()
   if self.error.val is Some(message) {
     raise InvalidCallAbi(message~)
+  }
+}
+
+///|
+/// Publish the precise live prefix only while a collecting call is active.
+/// Storage and unwind markers use the existing function-frame protocol. Pure
+/// paths have no published frame, root-definition stores or heap scope nodes.
+fn DirectBuilder::enter_scoped_function_roots(
+  self : DirectBuilder,
+  frame : FunctionRootFrameAbi,
+  live : Array[Value],
+) -> (Value, Value, FunctionRootFrameAbi)? {
+  guard self.parameter_values.get(frame.environment_parameter)
+    is Some(environment) &&
+    self.value_type(environment) == Some(Ptr64) else {
+    self.record_error(
+      "scoped function frame requires an execution environment parameter",
+    )
+    return None
+  }
+  if self.scoped_frame_objects is None {
+    self.scoped_frame_objects = Some(
+      (
+        self.create_stack_object(32, 16),
+        self.create_stack_object(self.root_scope_capacity * 8, 16),
+        self.create_stack_object((self.root_scope_capacity + 63) / 64 * 8, 8),
+      ),
+    )
+  }
+  guard self.scoped_frame_objects
+    is Some((header_object, roots_object, mask_object)) else {
+    abort("scoped function-frame storage was not created")
+  }
+  let header = self.emit_raw(
+      StackAddress(header_object),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  let roots = self.emit_raw(
+      StackAddress(roots_object),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  let mask = self.emit_raw(
+      StackAddress(mask_object),
+      [],
+      [Ptr64],
+      InstructionMetadata::empty(),
+    )[0]
+  for index, root in live {
+    self.emit_raw(
+      Store(StoreSpec::new(W64, GcRef64, (index * 8).to_uint64(), Little, None)),
+      [roots, root],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  }
+  let capacity = live.length()
+  for index in 0..<((capacity + 63) / 64) {
+    let remaining = capacity - index * 64
+    let bits = if remaining >= 64 {
+      0xFFFFFFFFFFFFFFFFUL
+    } else {
+      (1UL << remaining) - 1
+    }
+    self.write_root_mask_run(mask, index, index + 1, bits)
+  }
+  self.publish_root_frame(environment, header, roots, mask, capacity, frame)
+  Some((environment, header, frame))
+}
+
+///|
+fn DirectBuilder::unlink_root_frame(
+  self : DirectBuilder,
+  environment : Value,
+  header : Value,
+  frame : FunctionRootFrameAbi,
+) -> Unit {
+  let ready = frame.inline_layout.map(layout => {
+    self.prepare_inline_frame_leave(environment, header, layout)
+  })
+  let call = @native.NativeCall::new(
+    External(frame.leave_symbol),
+    @native.Signature::new([Ptr64, Ptr64], []),
+    Platform,
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  self.emit_raw(
+    Call(call),
+    [environment, header],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  if ready is Some(ready) {
+    self.jump(ready, [])
+    self.switch_to_block(ready)
+  }
+}
+
+///|
+fn DirectBuilder::publish_root_frame(
+  self : DirectBuilder,
+  environment : Value,
+  header : Value,
+  roots : Value,
+  mask : Value,
+  capacity : Int32,
+  frame : FunctionRootFrameAbi,
+) -> Unit {
+  let count = self.emit_raw(
+      I32Const(capacity.reinterpret_as_uint()),
+      [],
+      [I32],
+      InstructionMetadata::empty(),
+    )[0]
+  let ready = frame.inline_layout.map(layout => {
+    self.prepare_inline_frame_enter(
+      environment, header, roots, mask, capacity, layout,
+    )
+  })
+  let call = @native.NativeCall::new(
+    External(frame.enter_symbol),
+    @native.Signature::new([Ptr64, Ptr64, Ptr64, Ptr64, I32], []),
+    Platform,
+    @native.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  self.emit_raw(
+    Call(call),
+    [environment, header, roots, mask, count],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  if ready is Some(ready) {
+    self.jump(ready, [])
+    self.switch_to_block(ready)
   }
 }

@@ -4,21 +4,23 @@
 /// `CallbackStep` returns a callback code before the component scheduler
 /// decides whether to invoke it again. `Stackful` may suspend without returning
 /// from the core function and therefore requires a resumable execution stack.
+#derive(Debug, Eq)
 pub(all) enum CoreCallStyle {
   RunToCompletion
   CallbackStep
   Stackful
-} derive(Debug, Eq)
+}
 
 ///|
 /// Whether an execution adapter may select its native backend for this call.
 ///
 /// This is deliberately separate from `CoreCallStyle`: execution semantics do
 /// not change merely because an instance cannot use the native backend.
+#derive(Debug, Eq)
 pub(all) enum CoreBackendPolicy {
   PreferNative
   InterpreterOnly
-} derive(Debug, Eq)
+}
 
 ///|
 /// Whether this particular core entry must preserve its activation when a
@@ -27,18 +29,20 @@ pub(all) enum CoreBackendPolicy {
 /// This is independent of `CoreCallStyle`: a callback step normally returns a
 /// callback code, but may still call a sync-lowered async import before it
 /// returns.
+#derive(Debug, Eq)
 pub(all) enum CoreSuspensionPolicy {
   RunToReturn
   Resumable
-} derive(Debug, Eq)
+}
 
 ///|
 /// Typed contract passed from component execution to a core backend adapter.
+#derive(Debug, Eq)
 pub struct CoreExecutionRequest {
   style : CoreCallStyle
   backend : CoreBackendPolicy
   suspension : CoreSuspensionPolicy
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn CoreExecutionRequest::CoreExecutionRequest(
@@ -51,11 +55,12 @@ pub fn CoreExecutionRequest::CoreExecutionRequest(
 
 ///|
 /// Why a core execution continuation stopped.
+#derive(Debug, Eq)
 pub(all) enum CoreSuspension {
   CooperativeYield
   Yield
   Wait(Int64)
-} derive(Debug, Eq)
+}
 
 ///|
 /// A suspended core computation.
@@ -109,10 +114,11 @@ pub impl Debug for CoreContinuation with fn to_repr(_self) {
 
 ///|
 /// Result of entering or resuming a core function.
+#derive(Debug)
 pub(all) enum CoreExecutionOutcome {
   Returned(Array[@types.Value])
   Suspended(CoreSuspension, CoreContinuation)
-} derive(Debug)
+}
 
 ///|
 /// Component-owned seam for core Wasm execution.

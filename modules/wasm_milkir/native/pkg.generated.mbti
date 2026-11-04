@@ -11,13 +11,23 @@ import {
 // Values
 pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, verify_input? : Bool, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @Milky2018/milkir/native.NativeLowerError
 
-pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @milkir.VerifyError
+pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext, exclusive_poll_controls? : Bool, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @milkir.VerifyError
 
 // Errors
 
 // Types and methods
+pub(all) struct ArrayViewLayout {
+  allocation_control : Int32
+  control_enabled : Int32
+  array_views : Int32
+  view_reference : Int32
+  view_payload : Int32
+  view_bits : Int32
+  view_stride : Int32
+}
+
 type Environment
-pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, inline_heap? : InlineHeapLayout?) -> Self
+pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, exclusive_poll_controls? : Bool, poll_budget_offset? : Int32?, prepared_arrays? : Bool, inline_heap? : InlineHeapLayout?, heap_cast_pages? : Int32?, struct_views? : StructViewLayout?, array_views? : ArrayViewLayout?, ordinary_view_publication? : Bool) -> Self
 
 pub(all) struct InlineHeapLayout {
   type_ids_offset : Int32
@@ -49,6 +59,23 @@ pub(all) struct InlineHeapLayout {
   identity_window_limit : Int32
   identity_window_page : Int32
   identity_page_bits : Int32
+}
+
+pub(all) struct StructViewLayout {
+  type_ids_offset : Int32
+  type_count_offset : Int32
+  allocation_control : Int32
+  control_enabled : Int32
+  struct_views : Int32
+  view_reference : Int32
+  view_identity : Int32
+  view_fields : Int32
+  view_shape : Int32
+  view_payload : Int32
+  view_bits : Int32
+  registry_offset : Int32
+  registry_parents : Int32
+  registry_type_count : Int32
 }
 
 // Type aliases

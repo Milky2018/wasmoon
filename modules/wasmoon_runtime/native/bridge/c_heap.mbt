@@ -33,9 +33,10 @@ pub using @jit_ffi {type GCHeapHandle}
 
 ///|
 /// Logical owner of a shared managed GC heap.
+#derive(Debug)
 pub struct CHeap {
   priv mut ptr : GCHeapHandle
-} derive(Debug)
+}
 
 ///|
 /// Create a new C heap with the given initial capacity
@@ -506,4 +507,15 @@ pub fn CHeap::set_runtime_type(
 /// Release a scoped embedding visitor after execution or collection completes.
 pub fn CHeap::clear_root_visitor(self : CHeap) -> Unit {
   self.ptr.clear_root_visitor()
+}
+
+///|
+/// Supply a read-only young-root provider while retaining full collection for
+/// explicit requests and unsupported resource/auxiliary states.
+pub fn CHeap::bind_generational_root_visitor(
+  self : CHeap,
+  visitor : (Int32, FixedArray[Int64]) -> FixedArray[Int64],
+  young_visitor : (FixedArray[Int64]) -> FixedArray[Int64]?,
+) -> Unit {
+  self.ptr.bind_generational_root_visitor(visitor, young_visitor)
 }

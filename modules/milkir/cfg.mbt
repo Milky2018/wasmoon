@@ -1,11 +1,12 @@
 ///|
+#derive(Debug)
 pub struct CFG {
   size : Int32
   num_blocks : Int32
   successors : Array[Array[Int32]]
   predecessors : Array[Array[Int32]]
   valid : Array[Bool]
-} derive(Debug)
+}
 
 ///|
 pub fn CFG::build(func : Function) -> CFG {
@@ -343,11 +344,12 @@ pub fn CFG::find_back_edges(self : CFG) -> Array[(Int32, Int32)] {
 }
 
 ///|
+#derive(Debug)
 pub struct Loop {
   header : Int32
   blocks : Array[Int32]
   back_edges : Array[(Int32, Int32)]
-} derive(Debug)
+}
 
 ///|
 pub fn CFG::find_loops(self : CFG) -> Array[Loop] {

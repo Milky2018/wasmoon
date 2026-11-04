@@ -36,3 +36,46 @@ test "memory64 data scalar SIMD and bulk accesses preserve high address bits" {
     ),
   )
 }
+
+///|
+test "memory64 unsigned offsets trap before accessing wrapped addresses" {
+  let source =
+    #|(module
+    #|  (memory i64 1)
+    #|  (data (i64.const 0) "A")
+    #|  (func (export "load") (result i32)
+    #|    i64.const 1 i32.load8_u offset=18446744073709551615)
+    #|  (func (export "store")
+    #|    i64.const 1 i32.const 99 i32.store8 offset=18446744073709551615)
+    #|  (func (export "simd") (result i32)
+    #|    i64.const 8 v128.load offset=18446744073709551608 i32x4.extract_lane 0)
+    #|  (func (export "dynamic") (param i64) (result i32)
+    #|    local.get 0 i32.load8_u offset=18446744073709551615)
+    #|  (func (export "last") (result i32)
+    #|    i64.const 65534 i32.load8_u offset=1)
+    #|  (func (export "read") (result i32)
+    #|    i64.const 0 i32.load8_u))
+    #|(assert_trap (invoke "load") "out of bounds memory access")
+    #|(assert_trap (invoke "store") "out of bounds memory access")
+    #|(assert_trap (invoke "simd") "out of bounds memory access")
+    #|(assert_trap (invoke "dynamic" (i64.const 1)) "out of bounds memory access")
+    #|(assert_return (invoke "last") (i32.const 0))
+    #|(assert_return (invoke "read") (i32.const 65))
+  let compiler = @wast.JITCompiler(fn(mod_, instance, store) {
+    Ok(prepare_async_jit_context(mod_, instance, store)) catch {
+      error => Err("\{error}")
+    }
+  })
+  for jit in [false, true] {
+    let result = @wast.run_wast_commands(
+      @wast.parse(source),
+      ".",
+      jit,
+      false,
+      jit_compiler=Some(compiler),
+    )
+    assert_eq(result.failed, 0, msg=result.failures.join("\n"))
+    assert_eq(result.skipped, 0)
+    assert_eq(result.passed, 6)
+  }
+}

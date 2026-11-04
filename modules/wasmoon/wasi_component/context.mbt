@@ -36,11 +36,12 @@ struct WasiComponentCtxRuntimeOwner {
 }
 
 ///|
+#derive(Eq)
 pub(all) enum WasiNetworkPolicy {
   DenyAll
   LoopbackOnly
   AllowAll
-} derive(Eq)
+}
 
 ///|
 struct WasiComponentCtxBuilder {
@@ -467,6 +468,7 @@ priv enum PollSource {
 }
 
 ///|
+#derive(Eq)
 priv enum TcpSocketPhase {
   Unbound
   BindStarted
@@ -476,7 +478,7 @@ priv enum TcpSocketPhase {
   ListenStarted
   Listening
   Closed
-} derive(Eq)
+}
 
 ///|
 priv struct TcpSocketState {
@@ -490,12 +492,13 @@ priv struct TcpSocketState {
 }
 
 ///|
+#derive(Eq)
 priv enum UdpSocketPhase {
   UdpUnbound
   UdpBindStarted
   UdpBound
   UdpClosed
-} derive(Eq)
+}
 
 ///|
 priv struct UdpSocketState {

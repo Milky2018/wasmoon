@@ -1746,6 +1746,7 @@ pub async fn instantiate_module_with_imports_async(
 
 ///|
 /// Failure category for controlled export invocation.
+#derive(Debug)
 pub(all) enum CallExportFailureKind {
   ExportNotFound
   NotFunctionExport
@@ -1755,7 +1756,7 @@ pub(all) enum CallExportFailureKind {
   TimedOut
   InvalidOption
   UnsupportedOption
-} derive(Debug)
+}
 
 ///|
 /// Structured failure for controlled export invocation.
@@ -1780,10 +1781,11 @@ pub impl Debug for CallExportFailure with fn to_repr(self) {
 
 ///|
 /// Result type for controlled export invocation.
+#derive(Debug)
 pub(all) enum CallExportResult {
   Ok(Array[@types.Value])
   Err(CallExportFailure)
-} derive(Debug)
+}
 
 ///|
 /// Options for controlled export invocation.

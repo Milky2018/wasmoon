@@ -6,6 +6,8 @@ pub struct NativeCallableRegistry {
   priv mut addresses : FixedArray[Int64]
   priv mut identities : FixedArray[Int32]
   priv mut ordinals : FixedArray[Int32]
+  priv mut store_origin : Int32
+  priv mut store_positions : FixedArray[Int32]
 }
 
 ///|
@@ -25,6 +27,8 @@ pub fn NativeCallableRegistry::new() -> NativeCallableRegistry {
     addresses: [],
     identities: [],
     ordinals: [],
+    store_origin: 0,
+    store_positions: [],
   }
 }
 
@@ -42,7 +46,18 @@ pub fn NativeCallableRegistry::clear(self : NativeCallableRegistry) -> Unit {
   self.addresses = []
   self.identities = []
   self.ordinals = []
-  publish(self.view, self.parents, 0, self.addresses, self.identities, 0)
+  self.store_origin = 0
+  self.store_positions = []
+  publish(
+    self.view,
+    self.parents,
+    0,
+    self.addresses,
+    self.identities,
+    0,
+    self.store_origin,
+    self.store_positions,
+  )
   self.replace_functions([], [])
 }
 
@@ -79,6 +94,7 @@ pub fn NativeCallableRegistry::replace(
   } else {
     self.parents
   }
+  let mut identities_changed = false
   if addresses_changed {
     let ordinals = FixedArray::makei(entries.length(), i => i)
     // An input-position tie-break preserves the original first-duplicate rule.
@@ -101,13 +117,22 @@ pub fn NativeCallableRegistry::replace(
     self.addresses = addresses
     self.identities = identities
     self.ordinals = ordinals
+    let (origin, positions) = store_interval_index(addresses.length(), i => {
+      store_address(addresses[i])
+    })
+    self.store_origin = origin
+    self.store_positions = positions
   } else {
     for i, ordinal in self.ordinals {
-      self.identities[i] = entries[ordinal].1
+      let identity = entries[ordinal].1
+      if self.identities[i] != identity {
+        identities_changed = true
+        self.identities[i] = identity
+      }
     }
   }
   self.parents = new_parents
-  if parents_changed || addresses_changed {
+  if parents_changed || addresses_changed || identities_changed {
     publish(
       self.view,
       self.parents,
@@ -115,6 +140,8 @@ pub fn NativeCallableRegistry::replace(
       self.addresses,
       self.identities,
       self.addresses.length(),
+      self.store_origin,
+      self.store_positions,
     )
   }
   true
@@ -132,13 +159,17 @@ pub fn NativeCallableRegistry::replace_functions(
   references.sort_by((a, b) => {
     a.0.reinterpret_as_uint64().compare(b.0.reinterpret_as_uint64())
   })
+  let stores = FixedArray::makei(functions.length(), i => functions[i].0)
+  let (origin, positions) = store_interval_index(stores.length(), i => stores[i])
   publish_functions(
     self.view,
-    FixedArray::makei(functions.length(), i => functions[i].0),
+    stores,
     FixedArray::makei(functions.length(), i => functions[i].1),
     functions.length(),
     FixedArray::makei(references.length(), i => references[i].0),
     FixedArray::makei(references.length(), i => references[i].1),
     references.length(),
+    origin,
+    positions,
   )
 }

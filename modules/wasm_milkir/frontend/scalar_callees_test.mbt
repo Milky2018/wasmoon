@@ -30,3 +30,28 @@ test "scalar callee templates use linked local indices and preserve entry polls"
     assert_eq(has_poll_call, polling)
   }
 }
+
+///|
+test "countdown safepoints retain a single-block scalar template" {
+  let module_ = @types.Module::simple(
+    [I32],
+    [I64],
+    [LocalGet(0), I64ExtendI32S],
+    "extend",
+  )
+  let environment = {
+    ..native_test_env(),
+    cancellation_safepoints: true,
+    safepoint_poll_layout: Some({
+      execution_offset: 8,
+      controls_offset: 16,
+      callback_offset: 24,
+      budget_offset: 32,
+    }),
+  }
+  let context = @frontend.translation_context_from_module(module_, environment)
+  let template = @frontend.scalar_callees(context, module_)[0]
+  @wasm_milkir.verify_function(template)
+  assert_eq(template.blocks.length(), 1)
+  assert_true(template.print().contains("ext.wasm.safepoint_poll"))
+}

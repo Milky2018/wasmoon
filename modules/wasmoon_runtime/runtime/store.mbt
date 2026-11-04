@@ -1,20 +1,23 @@
 ///|
 /// Exception instance - represents a caught exception
+#derive(Debug)
 pub struct ExnInstance {
   tag_addr : Int32 // Which tag was thrown
   values : Array[@types.Value] // Exception values
-} derive(Debug)
+}
 
 ///|
 /// Represents the ownership status of a function in the store
+#derive(Debug, Eq)
 pub(all) enum FuncOwner {
   HostFunc // Host function - never has an owner module
   Unowned // WASM function not yet assigned to a module
   Module(Int32) // WASM function owned by module at given index
-} derive(Debug, Eq)
+}
 
 ///|
 /// The store contains all global runtime state
+#derive(Debug)
 #cfg(target="native")
 pub struct Store {
   nan_canonicalization : Bool
@@ -72,7 +75,7 @@ pub struct Store {
   priv mut next_pinned_gc_roots_id : Int64
   priv mut instantiation : RollbackRegistrar?
   priv closed : Ref[Bool]
-} derive(Debug)
+}
 
 ///|
 #cfg(target="native")
@@ -521,12 +524,13 @@ pub fn GcRootLease::release(self : GcRootLease) -> Unit {
 }
 
 ///|
+#derive(Debug)
 priv struct PinnedGcRoots {
   lease : ResourceLease?
   values : Array[@types.Value]
   active : Ref[Bool]
   mut guest_owned : Bool
-} derive(Debug)
+}
 
 ///|
 fn GcRootLease::delegate_to_guest(self : GcRootLease) -> Unit {

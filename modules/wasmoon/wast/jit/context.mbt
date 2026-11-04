@@ -24,6 +24,7 @@ pub struct JITModuleContext {
   module_rec_groups : ReadOnlyArray[Int32]
   // Whether this module uses subtype helper for call_indirect checks
   use_subtype_indirect_check : Bool
+  priv mut gc_environment : @wasmoon_jit.PreparedGCEnvironment?
   priv mut owner : @runtime.ModuleInstance?
   priv async_host_drivers : Map[Int64, @runtime.AsyncHostCallDriver]
   priv async_host_errors : Map[Int64, @runtime.RuntimeError]
@@ -54,6 +55,7 @@ pub fn JITModuleContext::JITModuleContext(
     module_types: ReadOnlyArray::from_array(module_types),
     module_rec_groups: ReadOnlyArray::from_array(module_rec_groups),
     use_subtype_indirect_check,
+    gc_environment: None,
     owner: None,
     async_host_drivers: Map([]),
     async_host_errors: Map([]),
@@ -65,6 +67,7 @@ pub fn JITModuleContext::JITModuleContext(
 /// Release the native module after every call and continuation has ended.
 pub fn JITModuleContext::close(self : JITModuleContext) -> Unit {
   self.jit_module.close()
+  self.gc_environment = None
 }
 
 ///|

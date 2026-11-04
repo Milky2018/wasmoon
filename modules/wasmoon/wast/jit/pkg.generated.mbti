@@ -46,6 +46,7 @@ pub fn register_owned_instance_funcrefs_for_jit(@Milky2018/wasmoon/jit.JITModule
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @Milky2018/wasmoon/jit.JITModule) -> Unit
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror JITCoreCallError {
   FunctionUnavailable(Int32)
   ArgumentTypeMismatch(Int32)
@@ -57,7 +58,7 @@ pub(all) suberror JITCoreCallError {
   HostInvocation(@runtime.RuntimeError)
   GcSetupFailed(String)
   ExecutionStateFailure(@execution.NativeExecutionStateError)
-} derive(Eq, @debug.Debug)
+}
 pub fn JITCoreCallError::equal(Self, Self) -> Bool
 pub fn JITCoreCallError::not_equal(Self, Self) -> Bool
 pub fn JITCoreCallError::output(Self, &Logger) -> Unit

@@ -369,10 +369,34 @@ test "mismatched try end becomes an explicit JIT invariant trap" {
 ///|
 test "suspended nested hostcall restores the outer hostcall slots" {
   let context = native_continuation_test_context()
+  assert_true(context.configure_native_fiber_stack_size(16L * 1024L * 1024L))
   let nested : Array[@wasmoon_jit.NativeJITContinuation?] = [None]
   context.set_hostcall_callback(fn() {
     match @wasmoon_jit.get_hostcall_func_addr() {
       46 => {
+        let probe = @native_test_support.active_fiber_stack_probe_trampoline()
+        let bounds = FixedArray::from_array([0L, 0L])
+        let returned = context.start_continuation(probe, 1L, bounds, 2) catch {
+          _ => return HostcallTrap(8)
+        }
+        let first_event = returned.continue_with() catch {
+          _ => return HostcallTrap(8)
+        }
+        guard first_event is NativeJITCompleted && bounds[0] == 1L else {
+          return HostcallTrap(8)
+        }
+        let failed = {
+          fail_native_allocation_for_tests(1)
+          defer fail_native_allocation_for_tests(0)
+          try {
+            context.start_continuation(probe, 1L, bounds, 2) |> ignore
+            false
+          } catch {
+            StackAllocationFailed(_) => true
+            _ => false
+          }
+        }
+        guard failed else { return HostcallTrap(8) }
         let continuation = context.start_continuation(
           @native_test_support.fiber_stack_hostcall_probe_trampoline(),
           1L,
@@ -385,6 +409,8 @@ test "suspended nested hostcall restores the outer hostcall slots" {
           _ => return HostcallTrap(8)
         }
         guard event is NativeSuspended(HostCall) else { return HostcallTrap(8) }
+        // The first handle stays live after its backing stack is reused.
+        guard returned.phase() is Returned else { return HostcallTrap(8) }
         nested[0] = Some(continuation)
         @wasmoon_jit.hostcall_value_slot_write(0, 77L)
         HostcallCompleted

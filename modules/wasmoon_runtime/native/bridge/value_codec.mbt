@@ -4,10 +4,11 @@
 /// `lo` is the runtime word. Every value kind except v128 is encoded entirely
 /// into it, and it is the only word the collector scans for references, so a
 /// reference must never be written to `hi`.
+#derive(Eq, Debug)
 pub struct GcSlot {
   lo : Int64
   hi : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 /// Encode a Value into a C heap slot.

@@ -216,10 +216,11 @@ fn waitable_set_has_event(async_state : AsyncState, ws_key : Int64) -> Bool {
 }
 
 ///|
+#derive(Debug)
 struct DecodedCallbackCode {
   tag : Int32
   payload : Int32
-} derive(Debug)
+}
 
 ///|
 fn decode_callback_code(code : Int32) -> DecodedCallbackCode {
@@ -1198,93 +1199,66 @@ fn call_component_func_in_task_impl(
         }
         None => ()
       }
-      // A synchronous export still creates a fresh logical task and thread.
-      // Its context slots must not alias the caller's or a previous invocation's.
-      let caller_task_id = current_task_id(async_state)
-      let sync_task_id = alloc_task_id(async_state)
-      init_task_meta(async_state, sync_task_id, callee_table.id, caller_task_id)
-      install_task_return_contract(async_state, sync_task_id, func)
-      push_task(async_state, sync_task_id, false)
-      defer {
-        pop_task(async_state)
-        retire_task(async_state, sync_task_id)
-      }
-      errdefer abort_task_children(async_state, sync_task_id)
-      if func_type_needs_memory(func_type, types) && resources.mem_addr is None {
-        raise MissingCanonMemory
-      }
-      let (xargs, direct_borrow_lends) = transfer_args_if_needed(
-        args,
-        func_type,
-        types,
-        async_state,
-        resource_table.id,
-        callee_table.id,
-      )
-      defer release_direct_borrow_lends(direct_borrow_lends)
-      let core_args = component_args_to_core(
-        xargs, func_type, types, resources, store, callee_table, callee_table,
-      )
-      // A sync-typed lift may still reach a suspending canonical import.
-      // Instance construction conservatively propagates that fact so native
-      // code is never entered when a continuation may be required.
-      let previous_can_block = async_state.task_can_block[0]
-      async_state.task_can_block[0] = false
-      let core_results = {
-        errdefer {
-          async_state.task_can_block[0] = previous_can_block
+      with_sync_lift_task(async_state, callee_table.id, func, fn() raise ComponentRuntimeError {
+        if func_type_needs_memory(func_type, types) &&
+          resources.mem_addr is None {
+          raise MissingCanonMemory
         }
-        if core_func.may_suspend {
-          drive_core_to_completion(
+        let (xargs, direct_borrow_lends) = transfer_args_if_needed(
+          args,
+          func_type,
+          types,
+          async_state,
+          resource_table.id,
+          callee_table.id,
+        )
+        defer release_direct_borrow_lends(direct_borrow_lends)
+        let core_args = component_args_to_core(
+          xargs, func_type, types, resources, store, callee_table, callee_table,
+        )
+        let core_results = invoke_sync_lift_core(
+          async_state, store, entry, core_func, core_args,
+        )
+        let task_id = current_task_id(async_state)
+        let component_results = if async_abi {
+          take_required_task_result(
             async_state,
             store,
-            call_core_func_guarded_outcome(
-              store,
-              entry,
-              core_func,
-              core_args,
-              Stackful,
-            ),
+            callee_table.id,
+            task_id,
           )
         } else {
-          call_core_func_guarded(store, entry, core_func, core_args)
+          core_results_to_component(
+            core_results, func_type, types, resources, store, callee_table,
+          )
         }
-      }
-      async_state.task_can_block[0] = previous_can_block
-      let task_id = current_task_id(async_state)
-      let component_results = if async_abi {
-        take_required_task_result(async_state, store, callee_table.id, task_id)
-      } else {
-        core_results_to_component(
-          core_results, func_type, types, resources, store, callee_table,
+        // `canon lift` must validate stream/future handles at the point they are lifted
+        // from core values (component-spec "done" semantics).
+        match func_type.result {
+          Some(rty) =>
+            if component_results.length() > 0 {
+              validate_lifted_stream_future(
+                rty,
+                component_results[0],
+                types,
+                async_state,
+                callee_table.id,
+              )
+            } else {
+              ()
+            }
+          None => ()
+        }
+        run_post_return(resources, core_results, entry, store)
+        transfer_results_if_needed(
+          component_results,
+          func_type.result,
+          types,
+          async_state,
+          callee_table.id,
+          resource_table.id,
         )
-      }
-      // `canon lift` must validate stream/future handles at the point they are lifted
-      // from core values (component-spec "done" semantics).
-      match func_type.result {
-        Some(rty) =>
-          if component_results.length() > 0 {
-            validate_lifted_stream_future(
-              rty,
-              component_results[0],
-              types,
-              async_state,
-              callee_table.id,
-            )
-          } else {
-            ()
-          }
-        None => ()
-      }
-      run_post_return(resources, core_results, entry, store)
-      transfer_results_if_needed(
-        component_results,
-        func_type.result,
-        types,
-        async_state,
-        callee_table.id,
-        resource_table.id,
-      )
+      })
     }
   }
 }

@@ -4,10 +4,11 @@
 /// This mirrors Wasmtime's `Caller` concept at a simpler level:
 /// - `store` gives access to runtime state (memories, tables, globals, etc.).
 /// - `instance` is the wasm module instance that called into the host.
+#derive(Debug)
 pub struct Caller {
   store : Store
   instance : ModuleInstance
-} derive(Debug)
+}
 
 ///|
 pub fn Caller::Caller(

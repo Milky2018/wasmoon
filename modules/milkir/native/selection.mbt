@@ -19,6 +19,7 @@ priv enum ScalarSelection {
   ShiftImmediate(@milkir.Value, @lowering.IntBinaryOp, Int32)
   MultiplyAdd(@milkir.Value, @milkir.Value, @milkir.Value)
   AddShiftedLeft(@milkir.Value, @milkir.Value, Int32)
+  LowBitsShiftedLeft(@milkir.Value, Int32, Int32)
 }
 
 ///|
@@ -826,7 +827,7 @@ fn compute_should_defer_instruction(
             facts.instructions[consumer_id].unwrap(),
             facts,
           )
-          is Some(AddShiftedLeft(_, _, _))
+          is Some(AddShiftedLeft(_, _, _) | LowBitsShiftedLeft(_, _, _))
         _ => false
       }
     Scalar(IntCompare(_)) =>
@@ -872,10 +873,45 @@ fn select_shifted_add(
 }
 
 ///|
+fn select_low_bits_shift(
+  shifted : @milkir.Value,
+  mask : UInt64,
+  facts : SelectionFacts,
+) -> ScalarSelection? {
+  guard facts.uses[shifted.id] == 1 &&
+    facts.definitions[shifted.id] is Some(shift) &&
+    shift.opcode is Scalar(IntBinary(ShiftLeft)) &&
+    binary_operands(shift) is Some((input, amount)) &&
+    facts.constants[amount.id] is Some(bits) else {
+    return None
+  }
+  let width = if shifted.ty == I32 { 32 } else { 64 }
+  let amount = (bits % width.to_uint64()).to_int()
+  guard amount > 0 else { return None }
+  let mask = if width == 32 { mask & 0xFFFFFFFFUL } else { mask }
+  guard (mask & ((1UL << amount) - 1UL)) == 0UL else { return None }
+  let field = mask >> amount
+  guard field != 0UL && (field & (field + 1UL)) == 0UL else { return None }
+  Some(LowBitsShiftedLeft(input, 64 - field.clz(), amount))
+}
+
+///|
 fn select_scalar_lowering(
   instruction : @milkir.Inst,
   facts : SelectionFacts,
 ) -> ScalarSelection? {
+  if instruction.opcode is Scalar(IntBinary(And)) &&
+    instruction.results is [_] &&
+    binary_operands(instruction) is Some((left, right)) {
+    if facts.constants[right.id] is Some(mask) &&
+      select_low_bits_shift(left, mask, facts) is Some(selected) {
+      return Some(selected)
+    }
+    if facts.constants[left.id] is Some(mask) &&
+      select_low_bits_shift(right, mask, facts) is Some(selected) {
+      return Some(selected)
+    }
+  }
   if instruction.opcode is Scalar(IntBinary(Add)) &&
     instruction.results is [_] &&
     binary_operands(instruction) is Some((left, right)) {

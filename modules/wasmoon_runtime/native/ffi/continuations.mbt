@@ -470,3 +470,11 @@ pub fn JITContext::define_continuation_type(
   }
   self.define_continuation_type_raw(index, trampoline, params, results, roots)
 }
+
+///|
+/// Whether metadata entries, including retired entries, still exist.
+pub fn NativeContinuationArena::has_entries(
+  self : NativeContinuationArena,
+) -> Bool {
+  !self.state.handles.is_empty()
+}

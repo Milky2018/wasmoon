@@ -1,10 +1,11 @@
 ///|
+#derive(Debug)
 pub suberror AArch64CompileError {
   TargetValidationFailed(cause~ : TargetVCodeVerifyError)
   AllocationFailed(cause~ : AArch64AllocationError)
   FramePlanningFailed(cause~ : AArch64FrameError)
   EmissionFailed(cause~ : AArch64EmitError)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for AArch64CompileError with fn output(self, logger) {
@@ -21,11 +22,16 @@ pub impl Show for AArch64CompileError with fn output(self, logger) {
 pub struct CompilationSession {
   priv allocation : @vcode_regalloc.AllocationSession
   priv allocation_environment : @vcode_regalloc.VCodeAllocationEnvironment
+  priv lse_atomic_add : Bool
 }
 
 ///|
-pub fn CompilationSession::new() -> CompilationSession {
+/// Callers enabling LSE must restrict generated code to CPUs supporting it.
+pub fn CompilationSession::new(
+  lse_atomic_add~ : Bool = false,
+) -> CompilationSession {
   {
+    lse_atomic_add,
     allocation: @vcode_regalloc.AllocationSession::new(),
     allocation_environment: @vcode_regalloc.VCodeAllocationEnvironment::new(
       allocatable_physical_regs(),
@@ -65,7 +71,12 @@ fn CompilationSession::compile_selected_function(
   }
   on_event(FramePlanningFinished)
   on_event(EmissionStarted)
-  let object = emit_with_branch_fallback(function, allocation, frame) catch {
+  let object = emit_with_branch_fallback(
+    function,
+    allocation,
+    frame,
+    lse_atomic_add=self.lse_atomic_add,
+  ) catch {
     error => raise EmissionFailed(cause=error)
   }
   on_event(EmissionFinished)

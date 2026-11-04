@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 pub struct ParallelMove {
   ty : ValueType
   from : Location
   to : Location
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ParallelMove::new(
@@ -15,17 +16,19 @@ pub fn ParallelMove::new(
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ResolvedMoveStep {
   Transfer(ParallelMove)
   SpillScratchToEmergency(ty~ : ValueType, scratch~ : PhysicalReg)
   ReloadScratchFromEmergency(ty~ : ValueType, scratch~ : PhysicalReg)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct ResolvedMovePlan {
   steps : Array[ResolvedMoveStep]
   requires_emergency : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ResolvedMovePlan::empty() -> ResolvedMovePlan {
@@ -33,12 +36,13 @@ pub fn ResolvedMovePlan::empty() -> ResolvedMovePlan {
 }
 
 ///|
+#derive(Eq, Debug)
 pub suberror MoveResolveError {
   MissingScratch(class~ : RegClass)
   InvalidScratch(reg~ : PhysicalReg, expected~ : RegClass)
   NoSafeCycleScratch(class~ : RegClass)
   BrokenCycle
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for MoveResolveError with fn output(self, logger) {

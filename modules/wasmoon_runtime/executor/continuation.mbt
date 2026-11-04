@@ -1,20 +1,22 @@
 ///|
 /// Result of entering or resuming a suspendable interpreter invocation.
+#derive(Debug)
 pub(all) enum SuspensionReason {
   HostCall(Int64)
   CooperativeYield
   AtomicWait
   GuestEffect(@runtime.GuestContinuationEffect)
-} derive(Debug)
+}
 
 ///|
 pub extend SuspensionReason with @debug.Debug::{to_repr}
 
 ///|
+#derive(Debug)
 pub(all) enum ResumableCallOutcome {
   Returned(Array[@types.Value])
   Suspended(SuspensionReason, ExecutionContinuation)
-} derive(Debug)
+}
 
 ///|
 /// Suspendable interpreter result for a JIT/import bridge that must preserve

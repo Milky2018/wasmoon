@@ -14,6 +14,7 @@ pub fn validate_module(@types.Module, bulk_memory? : Bool, stack_switching? : Bo
 pub fn validate_module_with_context(@types.Module, bulk_memory? : Bool, stack_switching? : Bool) -> Unit raise ValidationError
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror ValidationError {
   TypeMismatch(String)
   StackUnderflow(String)
@@ -44,7 +45,7 @@ pub(all) suberror ValidationError {
   UndeclaredFunctionReference(Int32)
   UnsupportedInstruction(String)
   WithContext(ValidationErrorContext)
-} derive(@debug.Debug)
+}
 pub fn ValidationError::output(Self, &Logger) -> Unit
 pub fn ValidationError::to_repr(Self) -> @debug.Repr
 pub fn ValidationError::to_string(Self) -> String
@@ -59,12 +60,13 @@ pub fn ValidatedModule::new(@types.Module, bulk_memory? : Bool, stack_switching?
 pub fn ValidatedModule::snapshot(Self) -> @types.Module
 pub fn ValidatedModule::start(Self) -> Int32?
 
+#derive(@debug.Debug)
 pub(all) struct ValidationErrorContext {
   error_msg : String
   func_idx : Int32?
   instr_offset : Int32?
   instruction : String?
-} derive(@debug.Debug)
+}
 pub fn ValidationErrorContext::ValidationErrorContext(String) -> Self
 pub fn ValidationErrorContext::format(Self) -> String
 pub fn ValidationErrorContext::from_error(ValidationError) -> Self

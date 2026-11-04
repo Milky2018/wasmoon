@@ -26,6 +26,7 @@ import {
   "Milky2018/wasmoon/wasi",
   "Milky2018/wasm_component/wit",
   "Milky2018/wasm_milkir/frontend" @wasm_frontend,
+  "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/native_test_support",
   "moonbitlang/core/double",
   "moonbitlang/core/float",

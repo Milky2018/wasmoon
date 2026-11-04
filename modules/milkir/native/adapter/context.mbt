@@ -61,20 +61,6 @@ fn InstructionContext::record_error(
 }
 
 ///|
-fn[T] InstructionContext::attempt(
-  self : InstructionContext,
-  action : () -> T raise,
-  fallback : T,
-) -> T {
-  action() catch {
-    error => {
-      self.record_error(Repr(error).to_string())
-      fallback
-    }
-  }
-}
-
-///|
 fn InstructionContext::complete_once(
   self : InstructionContext,
   results : Array[@lowering.Value],
@@ -158,22 +144,19 @@ pub fn InstructionContext::source(
 }
 
 ///|
+// DirectBuilder records construction failures for finish(); its emission and
+// control-flow APIs are non-raising and need no error-capturing closure.
 pub fn InstructionContext::emit(
   self : InstructionContext,
   operation : @lowering.Operation,
   operands : Array[@lowering.Value],
   result_types : Array[@native.ValueType],
 ) -> Array[@lowering.Value] {
-  self.attempt(
-    fn() {
-      self.builder.emit_with_metadata(
-        operation,
-        operands,
-        result_types,
-        self.instruction_metadata(false),
-      )
-    },
-    [],
+  self.builder.emit_with_metadata(
+    operation,
+    operands,
+    result_types,
+    self.instruction_metadata(false),
   )
 }
 
@@ -183,17 +166,7 @@ pub fn InstructionContext::finish_operation(
   operation : @lowering.Operation,
   operands : Array[@lowering.Value],
 ) -> Unit {
-  let results = self.attempt(
-    fn() {
-      self.builder.emit_with_metadata(
-        operation,
-        operands,
-        self.result_types,
-        self.instruction_metadata(false),
-      )
-    },
-    [],
-  )
+  let results = self.emit(operation, operands, self.result_types)
   self.complete_once(results)
 }
 
@@ -204,16 +177,11 @@ pub fn InstructionContext::emit_call(
   operands : Array[@lowering.Value],
   result_types : Array[@native.ValueType],
 ) -> Array[@lowering.Value] {
-  self.attempt(
-    fn() {
-      self.builder.emit_with_metadata(
-        Call(call),
-        operands,
-        result_types,
-        self.instruction_metadata(true),
-      )
-    },
-    [],
+  self.builder.emit_with_metadata(
+    Call(call),
+    operands,
+    result_types,
+    self.instruction_metadata(true),
   )
 }
 
@@ -224,16 +192,11 @@ pub fn InstructionContext::emit_call_without_roots(
   operands : Array[@lowering.Value],
   result_types : Array[@native.ValueType],
 ) -> Array[@lowering.Value] {
-  self.attempt(
-    fn() {
-      self.builder.emit_with_metadata(
-        Call(call),
-        operands,
-        result_types,
-        self.instruction_metadata(false),
-      )
-    },
-    [],
+  self.builder.emit_with_metadata(
+    Call(call),
+    operands,
+    result_types,
+    self.instruction_metadata(false),
   )
 }
 
@@ -291,10 +254,7 @@ pub fn InstructionContext::create_block(
   self : InstructionContext,
   parameter_types : Array[@native.ValueType],
 ) -> @lowering.Block {
-  self.attempt(
-    fn() { self.builder.create_block(parameter_types) },
-    ({ id: -1, } : @lowering.Block),
-  )
+  self.builder.create_block(parameter_types)
 }
 
 ///|
@@ -319,7 +279,7 @@ pub fn InstructionContext::switch_to_block(
   self : InstructionContext,
   block : @lowering.Block,
 ) -> Unit {
-  self.attempt(fn() { self.builder.switch_to_block(block) }, ())
+  self.builder.switch_to_block(block)
 }
 
 ///|
@@ -328,7 +288,7 @@ pub fn InstructionContext::jump(
   target : @lowering.Block,
   arguments : Array[@lowering.Value],
 ) -> Unit {
-  self.attempt(fn() { self.builder.jump(target, arguments) }, ())
+  self.builder.jump(target, arguments)
 }
 
 ///|
@@ -340,13 +300,42 @@ pub fn InstructionContext::branch(
   false_target : @lowering.Block,
   false_arguments : Array[@lowering.Value],
 ) -> Unit {
-  self.attempt(
-    fn() {
-      self.builder.branch(
-        condition, true_target, true_arguments, false_target, false_arguments,
-      )
-    },
-    (),
+  self.builder.branch(
+    condition, true_target, true_arguments, false_target, false_arguments,
+  )
+}
+
+///|
+/// Select an integer comparison directly as a control-flow condition.
+pub fn InstructionContext::branch_int_compare_immediate(
+  self : InstructionContext,
+  comparison : @lowering.IntComparison,
+  input : @lowering.Value,
+  bits : UInt64,
+  true_target : @lowering.Block,
+  true_arguments : Array[@lowering.Value],
+  false_target : @lowering.Block,
+  false_arguments : Array[@lowering.Value],
+) -> Unit {
+  self.builder.branch_int_compare_immediate(
+    comparison, input, bits, true_target, true_arguments, false_target, false_arguments,
+  )
+}
+
+///|
+/// Branch on two integer operands without materializing a boolean result.
+pub fn InstructionContext::branch_int_compare(
+  self : InstructionContext,
+  comparison : @lowering.IntComparison,
+  left : @lowering.Value,
+  right : @lowering.Value,
+  true_target : @lowering.Block,
+  true_arguments : Array[@lowering.Value],
+  false_target : @lowering.Block,
+  false_arguments : Array[@lowering.Value],
+) -> Unit {
+  self.builder.branch_int_compare(
+    comparison, left, right, true_target, true_arguments, false_target, false_arguments,
   )
 }
 
@@ -355,7 +344,7 @@ pub fn InstructionContext::trap(
   self : InstructionContext,
   reason : @native.TrapReason,
 ) -> Unit {
-  self.attempt(fn() { self.builder.trap(reason) }, ())
+  self.builder.trap(reason)
   if self.source is Some(source) {
     self.builder.set_terminator_source(source)
   }
@@ -371,7 +360,7 @@ pub fn InstructionContext::set_trap_terminator(
   self : InstructionContext,
   reason : @native.TrapReason,
 ) -> Unit {
-  self.attempt(fn() { self.builder.trap(reason) }, ())
+  self.builder.trap(reason)
   if self.source is Some(source) {
     self.builder.set_terminator_source(source)
   }
@@ -383,15 +372,10 @@ pub fn InstructionContext::tail_call(
   call : @native.NativeCall,
   operands : Array[@lowering.Value],
 ) -> Unit {
-  self.attempt(
-    fn() {
-      self.builder.tail_call_with_metadata(
-        call,
-        operands,
-        self.terminator_metadata(),
-      )
-    },
-    (),
+  self.builder.tail_call_with_metadata(
+    call,
+    operands,
+    self.terminator_metadata(),
   )
   self.terminates_block.val = true
   self.finish_void()
@@ -408,10 +392,7 @@ pub fn InstructionContext::noreturn_call(
   } else {
     @lowering.TerminatorMetadata::new(self.source, [])
   }
-  self.attempt(
-    fn() { self.builder.noreturn_call_with_metadata(call, operands, metadata) },
-    (),
-  )
+  self.builder.noreturn_call_with_metadata(call, operands, metadata)
   self.terminates_block.val = true
   self.finish_void()
 }

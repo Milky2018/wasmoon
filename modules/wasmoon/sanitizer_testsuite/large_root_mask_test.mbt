@@ -147,3 +147,58 @@ test "large dense function masks preserve every live object during collection" {
     assert_true(store.native_heap().unwrap().verify())
   }
 }
+
+///|
+test "repeated mixed mask words retain alternating live payloads exactly" {
+  let count = 320
+  let locals = Array::makei(count, i => "(local $r\{i} (ref null $node))").join(
+    " ",
+  )
+  let load = Array::makei(count, i => {
+    "i32.const \{i} table.get $roots local.set $r\{i}\n" +
+    "i32.const \{i} ref.null $node table.set $roots"
+  }).join("\n")
+  let consume = fn(parity : Int32) -> String {
+    Array::makei(count / 2, index => {
+      let i = index * 2 + parity
+      "local.get $sum local.get $r\{i} struct.get $node 0 i32.add local.set $sum\n" +
+      "ref.null $node local.set $r\{i}"
+    }).join("\n")
+  }
+  let source =
+    $|(module (type $node (struct (field i32)))
+    $| (import "h" "collect" (func $collect))
+    $| (table $roots \{count} (ref null $node))
+    $| (func $seed (local $i i32)
+    $|  loop $again local.get $i local.get $i struct.new $node table.set $roots
+    $|   local.get $i i32.const 1 i32.add local.tee $i
+    $|   i32.const \{count} i32.lt_u br_if $again end)
+    $| (func (export "probe") (result i32) \{locals} (local $sum i32)
+    $|  \{load} call $collect
+    $|  \{consume(1)} call $collect
+    $|  \{consume(0)} local.get $sum i32.const \{count * (count - 1) / 2} i32.eq))
+  let module_ = @wat.parse(source)
+  @validator.validate_module(module_)
+  for opt_level in [0, 2, 3] {
+    let store = @runtime.Store::with_c_heap()
+    defer store.close()
+    let reclaimed : Array[Int32] = []
+    let collect = store.alloc_host_func(fn(_) {
+      reclaimed.push(store.collect_garbage())
+      []
+    })
+    let imports = @runtime.Imports::Imports(store)
+    imports.add_func("h", "collect", collect)
+    let instance = @executor.instantiate_module_with_imports(
+      store, module_, imports,
+    )
+    let context = build_gc_root_context(module_, instance, store, opt_level~)
+    defer context.close()
+    context.install_hostcall_dispatcher(store, instance)
+    assert_eq(context.call_core_func(store, instance, 1, []), [])
+    assert_eq(context.call_core_func(store, instance, 2, []), [I32(1)])
+    assert_eq(reclaimed, [0, count / 2])
+    assert_eq(store.collect_garbage(), count / 2)
+    assert_true(store.native_heap().unwrap().verify())
+  }
+}

@@ -16,10 +16,11 @@ pub fn clear_canon_trap_message() -> Unit {
 
 ///|
 /// Cooperative suspension marker used by certain canonical intrinsics (e.g. thread.yield).
+#derive(Debug, Eq)
 pub(all) enum CanonSuspend {
   Yield
   Wait(Int64) // waitable-set key (handle_key(owner_component_id, local_index))
-} derive(Debug, Eq)
+}
 
 ///|
 /// When a host intrinsic wants to suspend execution, it sets this and traps.

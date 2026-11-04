@@ -3,6 +3,7 @@
 ///
 /// `Ptr64` is an untraced address or opaque handle. `GcRef64` is a nullable
 /// managed reference and must be reported as a root at GC safepoints.
+#derive(Debug, Eq, Hash)
 pub(all) enum ValueType {
   I32
   I64
@@ -11,7 +12,7 @@ pub(all) enum ValueType {
   V128
   Ptr64
   GcRef64
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub impl Show for ValueType with fn output(self, logger) {
@@ -31,10 +32,11 @@ pub impl Show for ValueType with fn output(self, logger) {
 ///|
 /// Ordered logical parameters and results. ABI placement is intentionally
 /// absent.
+#derive(Debug, Eq, Hash)
 pub(all) struct Signature {
   params : Array[ValueType]
   results : Array[ValueType]
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn Signature::new(
@@ -45,35 +47,39 @@ pub fn Signature::new(
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum CallProtocol {
   Internal
   Platform
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Function-local stack-object request used during native lowering. The id is
 /// interpreted only by the current target-lowering session.
+#derive(Debug, Eq, Hash)
 pub(all) struct StackObject {
   id : Int32
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Native call target selected during streaming lowering.
+#derive(Debug, Eq, Hash)
 pub(all) enum Callee {
   Internal(CodeSymbol)
   External(ExternalSymbol)
   Indirect
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Target-independent native call contract. This is ABI metadata, not an
 /// instruction or an intermediate representation node.
+#derive(Debug, Eq, Hash)
 pub(all) struct NativeCall {
   callee : Callee
   signature : Signature
   protocol : CallProtocol
   behavior : CallBehavior
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn NativeCall::new(
@@ -96,9 +102,10 @@ pub fn NativeCall::copy(self : NativeCall) -> NativeCall {
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) struct CodeSymbol {
   name : String
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn CodeSymbol::new(name : String) -> CodeSymbol {
@@ -106,9 +113,10 @@ pub fn CodeSymbol::new(name : String) -> CodeSymbol {
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) struct ExternalSymbol {
   name : String
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn ExternalSymbol::new(name : String) -> ExternalSymbol {
@@ -116,9 +124,10 @@ pub fn ExternalSymbol::new(name : String) -> ExternalSymbol {
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) struct DataSymbol {
   name : String
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn DataSymbol::new(name : String) -> DataSymbol {
@@ -130,10 +139,11 @@ pub fn DataSymbol::new(name : String) -> DataSymbol {
 ///
 /// The identity carries no byte offset or target addressing mode. The
 /// embedding target environment resolves it during target lowering.
+#derive(Debug, Eq, Hash)
 pub(all) struct EnvironmentField {
   name : String
   value_type : ValueType
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn EnvironmentField::new(
@@ -150,67 +160,77 @@ pub fn EnvironmentField::new(
 /// `Stable` grants reuse permission for the invocation. `Mutable` requires each
 /// operation to observe the current field value. Target lowering may
 /// rematerialize either form.
+#derive(Debug, Eq, Hash)
 pub(all) enum EnvironmentFieldStability {
   Stable
   Mutable
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum Signedness {
   Signed
   Unsigned
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum IntegerType {
   I32
   I64
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum FloatType {
   F32
   F64
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum ConversionMode {
   Trapping
   Saturating
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum Endianness {
   Little
   Big
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum AccessWidth {
   W8
   W16
   W32
   W64
   W128
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum LoadExtension {
   None
   Signed
   Unsigned
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum MemoryEffect {
   None
   Read
   Write
   ReadWrite
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Canonical observable behavior of one semantic operation.
+#derive(Debug, Eq, Hash)
 pub(all) struct OperationSemantics {
   memory : MemoryEffect
   may_trap : Bool
@@ -218,7 +238,7 @@ pub(all) struct OperationSemantics {
   gc_safepoint : Bool
   cancellation_safepoint : Bool
   returns_twice : Bool
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn OperationSemantics::pure() -> OperationSemantics {
@@ -246,6 +266,7 @@ pub fn OperationSemantics::must_preserve_if_unused(
 
 ///|
 /// Explicit call behavior. Protocol and callee identity never imply effects.
+#derive(Debug, Eq, Hash)
 pub(all) struct CallBehavior {
   memory : MemoryEffect
   may_trap : Bool
@@ -253,7 +274,7 @@ pub(all) struct CallBehavior {
   gc_safepoint : Bool
   cancellation_safepoint : Bool
   returns_twice : Bool
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn CallBehavior::conservative() -> CallBehavior {
@@ -299,13 +320,15 @@ pub fn CallBehavior::semantics(self : CallBehavior) -> OperationSemantics {
 }
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum SafepointKind {
   Gc
   Cancellation
   GcAndCancellation
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum TrapReason {
   Unreachable
   IntegerDivisionByZero
@@ -322,15 +345,16 @@ pub(all) enum TrapReason {
   UnsupportedOperation
   StackOverflow
   User(Int32)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) struct SourceLocation {
   file : String
   line : Int32
   column : Int32
   byte_offset : Int64?
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn SourceLocation::new(

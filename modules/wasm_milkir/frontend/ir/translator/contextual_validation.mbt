@@ -80,37 +80,46 @@ pub fn TranslationContext::wasm_validation_context(
   self : TranslationContext,
 ) -> @wasm_milkir.WasmValidationContext {
   let function_contracts = self.linked_function_contracts()
-  @wasm_milkir.WasmValidationContext::new({
-    function_contract: fn(index) { function_contracts.get(index) },
-    defined_type_contract: fn(index) {
-      self.module_types.get(index).map(validation_defined_type_contract)
-    },
-    table_contract: fn(index) {
-      self.tables
-      .get(index)
-      .map(fn(table) {
-        {
-          index_type: if table.type_.is_table64 {
-            I64
-          } else {
-            I32
-          },
-          element_type: type_from_wasm(table.type_.elem_type),
+  let final_types : Array[Int32] = []
+  for index, subtype in self.module_types {
+    if subtype.final_ {
+      final_types.push(index)
+    }
+  }
+  @wasm_milkir.WasmValidationContext::new(
+    {
+      function_contract: fn(index) { function_contracts.get(index) },
+      defined_type_contract: fn(index) {
+        self.module_types.get(index).map(validation_defined_type_contract)
+      },
+      table_contract: fn(index) {
+        self.tables
+        .get(index)
+        .map(fn(table) {
+          {
+            index_type: if table.type_.is_table64 {
+              I64
+            } else {
+              I32
+            },
+            element_type: type_from_wasm(table.type_.elem_type),
+          }
+        })
+      },
+      tag_contract: fn(index) {
+        guard self.tags.get(index) is Some(tag) else { None }
+        guard self.module_types.get(tag.type_idx) is Some(subtype) else { None }
+        match subtype.composite {
+          Func(func_type) => Some(validation_function_contract(func_type))
+          _ => None
         }
-      })
+      },
+      memory_exists: fn(index) { index >= 0 && index < self.memory_count },
+      data_segment_exists: fn(index) { index >= 0 && index < self.data_count },
+      element_segment_type: fn(index) {
+        self.element_types.get(index).map(type_from_wasm)
+      },
     },
-    tag_contract: fn(index) {
-      guard self.tags.get(index) is Some(tag) else { None }
-      guard self.module_types.get(tag.type_idx) is Some(subtype) else { None }
-      match subtype.composite {
-        Func(func_type) => Some(validation_function_contract(func_type))
-        _ => None
-      }
-    },
-    memory_exists: fn(index) { index >= 0 && index < self.memory_count },
-    data_segment_exists: fn(index) { index >= 0 && index < self.data_count },
-    element_segment_type: fn(index) {
-      self.element_types.get(index).map(type_from_wasm)
-    },
-  })
+    final_types~,
+  )
 }

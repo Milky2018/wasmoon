@@ -6,9 +6,10 @@ pub(all) struct HostcallImportTrampolineCode {
 }
 
 ///|
+#derive(Debug, Eq)
 pub suberror HostcallImportTrampolineError {
   UnsupportedHostcallImportTrampoline(message~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 priv enum RuntimeValueBridge {

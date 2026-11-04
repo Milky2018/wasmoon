@@ -7,6 +7,7 @@ pub using @implementation {
   is_windows,
   release_exec_managed,
   stage_exec_managed,
+  snapshot_function_addresses,
   type GCMetadataError,
   type NativeAllocationError,
   type CleanupOwner,

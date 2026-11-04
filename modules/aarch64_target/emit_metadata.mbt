@@ -33,12 +33,12 @@ fn record_instruction_metadata(
   traps : Array[@code_object.TrapSite],
   safepoints : Array[@code_object.SafepointSite],
 ) -> Unit {
-  let metadata = function.instruction_metadata(instruction).unwrap()
-  if (metadata.trap is Some(_) || metadata.safepoint is Some(_)) &&
+  let metadata = function.instruction_annotations(instruction).unwrap()
+  if (metadata.trap() is Some(_) || metadata.safepoint() is Some(_)) &&
     buffer.position() == offset {
     buffer.emit_word(0xD503201FU)
   }
-  if metadata.source is Some(source) {
+  if metadata.source() is Some(source) {
     let length = buffer.position() - offset
     if length > 0 {
       if sources.last() is Some(previous) &&
@@ -54,12 +54,12 @@ fn record_instruction_metadata(
       }
     }
   }
-  if metadata.trap is Some(reason) {
+  if metadata.trap() is Some(reason) {
     traps.push(
-      @code_object.TrapSite::new(offset, reason, source?=metadata.source),
+      @code_object.TrapSite::new(offset, reason, source?=metadata.source()),
     )
   }
-  if metadata.safepoint is Some(kind) {
+  if metadata.safepoint() is Some(kind) {
     let roots = allocation
       .safepoint_roots(instruction)
       .map(entry => {
@@ -71,8 +71,8 @@ fn record_instruction_metadata(
         offset,
         kind,
         roots,
-        source?=metadata.source,
-        stack_map?=metadata.stack_map,
+        source?=metadata.source(),
+        stack_map?=metadata.stack_map(),
       ),
     )
   }

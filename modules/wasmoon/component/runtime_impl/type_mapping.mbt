@@ -73,8 +73,9 @@ fn core_types_for_valtype(
   mem_is_64 : Bool,
   max_flat~ : Int32 = 2147483647,
 ) -> Array[@types.ValueType] raise ComponentRuntimeError {
-  match @component.canonical_abi_plan(ty, types, mem_is_64, max_flat~) {
-    Some(plan) => plan.flat
+  let pointer_type : @types.ValueType = if mem_is_64 { I64 } else { I32 }
+  match @component.canonical_flat_types(ty, types, pointer_type, max_flat~) {
+    Some(flat) => flat
     None =>
       match ty {
         TypeIdx(idx) => raise InvalidTypeDef(idx)

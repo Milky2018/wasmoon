@@ -1,5 +1,6 @@
 ///|
 /// The store contains all global runtime state
+#derive(Debug)
 pub struct Store {
   nan_canonicalization : Bool
   interpreter_limits : InterpreterLimits
@@ -47,7 +48,7 @@ pub struct Store {
   priv mut next_pinned_gc_roots_id : Int64
   priv mut instantiation : RollbackRegistrar?
   priv closed : Ref[Bool]
-} derive(Debug)
+}
 
 ///|
 fn Store::register_rollback(

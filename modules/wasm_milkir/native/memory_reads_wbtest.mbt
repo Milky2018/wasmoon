@@ -121,7 +121,7 @@ test "array length forwarding survives element writes" {
 }
 
 ///|
-test "allocation barriers discard cached GC reads" {
+test "allocation preserves logical GC reads without retaining physical views" {
   let b = @milkir.FunctionBuilder::FunctionBuilder("allocation_barrier")
   let object = b.add_param(Ref)
   @wasm_milkir.struct_get(b, 0, 0, object, I32) |> ignore
@@ -130,7 +130,7 @@ test "allocation barriers discard cached GC reads" {
   b.return_([])
   let function = b.get_function()
   optimize_memory_test(function, test_context(), O2) |> ignore
-  inspect(gc_read_count(function), content="2")
+  inspect(gc_read_count(function), content="1")
 }
 
 ///|

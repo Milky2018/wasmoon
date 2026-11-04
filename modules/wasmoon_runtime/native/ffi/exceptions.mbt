@@ -566,3 +566,9 @@ fn install_exception_factory(context : JITContext) -> JITContext {
   })
   context
 }
+
+///|
+/// Whether metadata entries, including retired entries, still exist.
+pub fn NativeExceptionArena::has_entries(self : NativeExceptionArena) -> Bool {
+  !self.state.entries.is_empty()
+}

@@ -168,14 +168,16 @@ fn is_loop_invariant(
   if admitted_load && read_region is None {
     return false
   }
-  if read_region is Some(region) {
+  let address_dependent = @analysis.depends_on_addresses(inst)
+  if read_region is Some(_) || address_dependent {
     for block in func.blocks {
       if loop_.contains(block.id) {
         for id in func.block_instruction_ids(block) {
-          if @analysis.may_write_region(
-              func.instruction_by_id(id).unwrap(),
-              pointers,
-              region,
+          let other = func.instruction_by_id(id).unwrap()
+          if (address_dependent && @analysis.invalidates_addresses(other)) ||
+            (
+              read_region is Some(region) &&
+              @analysis.may_write_region(other, pointers, region)
             ) {
             return false
           }

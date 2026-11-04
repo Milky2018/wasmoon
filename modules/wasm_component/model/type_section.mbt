@@ -5,6 +5,7 @@
 /// to unblock end-to-end parsing and testing.
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum PrimValType {
   Bool
   S8
@@ -20,37 +21,42 @@ pub(all) enum PrimValType {
   Char
   String
   ErrorContext
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ValType {
   TypeIdx(Int32)
   Prim(PrimValType)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ResourceKind {
   /// Resources defined within a component.
   GuestDefined
   /// Resources imported from the host environment.
   HostDefined
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Param {
   label : String
   ty : ValType
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct FuncType {
   is_async : Bool
   params : Array[Param]
   result : ValType?
-} derive(Debug, Eq)
+}
 
 ///|
 /// A subset of instance type declarations (enough for wasmtime/component-spec).
+#derive(Debug, Eq)
 pub(all) enum InstanceDecl {
   // Embedded core typedef (module type / func type / etc).
   CoreType(Bytes)
@@ -62,10 +68,11 @@ pub(all) enum InstanceDecl {
   // `kind` is the component model external kind discriminator.
   AliasInstanceExport(Int32, Int32, String)
   Export(String, Array[NameAttribute], ExternDesc)
-} derive(Debug, Eq)
+}
 
 ///|
 /// A subset of component type declarations (enough for WIT-encoded components).
+#derive(Debug, Eq)
 pub(all) enum ComponentDecl {
   // Embedded core typedef (module type / func type / etc).
   CoreType(Bytes)
@@ -76,9 +83,10 @@ pub(all) enum ComponentDecl {
   AliasInstanceExport(Int32, Int32, String)
   Import(String, Array[NameAttribute], ExternDesc)
   Export(String, Array[NameAttribute], ExternDesc)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
@@ -104,7 +112,7 @@ pub(all) enum TypeDef {
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for TypeDef with fn output(self, logger) {
@@ -112,18 +120,20 @@ pub impl Show for TypeDef with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct RecordField {
   label : String
   ty : ValType
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct VariantCase {
   label : String
   ty : ValType?
   // `refines` points at a previously defined case index.
   refines : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
 

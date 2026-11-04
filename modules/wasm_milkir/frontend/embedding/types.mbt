@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub(all) struct RuntimeLayout {
   memory0_base_offset : Int32
   memory0_size_offset : Int32
@@ -14,25 +15,28 @@ pub(all) struct RuntimeLayout {
   table_entry_value_offset : Int32
   table_entry_stride : Int32
   func_table_entry_stride : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct MemoryDescriptorLayout {
   base_offset : Int32
   current_length_offset : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Optional embedding protocol for an allocation-free safepoint countdown.
 /// A non-null callback always takes the runtime slow path.
+#derive(Debug, Eq)
 pub(all) struct SafepointPollLayout {
   execution_offset : Int32
   controls_offset : Int32
   callback_offset : Int32
   budget_offset : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug)
 pub(all) struct EmbeddingEnvironment {
   runtime_symbol_prefix : String
   hidden_context_type : @milkir.Type?
@@ -41,7 +45,7 @@ pub(all) struct EmbeddingEnvironment {
   wasm_runtime_symbols : @wasm_milkir.RuntimeSymbols
   cancellation_safepoints : Bool
   safepoint_poll_layout : SafepointPollLayout?
-} derive(Debug)
+}
 
 ///|
 pub fn EmbeddingEnvironment::EmbeddingEnvironment(

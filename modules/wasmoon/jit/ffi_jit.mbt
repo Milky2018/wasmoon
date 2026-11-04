@@ -6,6 +6,7 @@
 
 ///|
 /// Terminal failure reported by a JIT invocation.
+#derive(Debug)
 pub suberror JITTrap {
   JITTrap(String)
   JITUncaughtException(@wasmoon_jit.NativeUncaughtException)
@@ -13,7 +14,7 @@ pub suberror JITTrap {
   JITExit(Int32)
   JITCancelled
   JITResourceLimit(@runtime.ResourceKind)
-} derive(Debug)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to

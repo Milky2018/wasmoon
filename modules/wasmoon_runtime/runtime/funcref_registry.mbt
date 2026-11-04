@@ -1,16 +1,18 @@
 ///|
+#derive(Debug)
 priv struct StoreFuncrefMappingOwner {
   registration : Int32
   store_addr : Int32
   func_ptr : Int64
-} derive(Debug)
+}
 
 ///|
 /// One Store-local function address and its native executable pointer.
+#derive(Debug, Eq)
 pub struct StoreFuncrefEntry {
   store_addr : Int32
   func_ptr : Int64
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn StoreFuncrefEntry::StoreFuncrefEntry(
@@ -21,13 +23,14 @@ pub fn StoreFuncrefEntry::StoreFuncrefEntry(
 }
 
 ///|
+#derive(Debug)
 priv struct StoreFuncrefRegistry {
   store_to_ptr : Map[Int32, Array[StoreFuncrefMappingOwner]]
   ptr_to_store : Map[Int64, Array[StoreFuncrefMappingOwner]]
   next_registration : Ref[Int32]
   mut native : @native_bridge.NativeCallableRegistry?
   owners : Array[NativeCallableOwner]
-} derive(Debug)
+}
 
 ///|
 struct StoreFuncrefRegistration {

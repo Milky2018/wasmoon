@@ -15,7 +15,7 @@ fn operand_program_point(
 fn[F : FunctionView] collect_function_liveness(
   function : F,
   ranges : LiveRangeSet,
-) -> DenseLiveSets {
+) -> Array[Array[Int32]] {
   let word_count = (function.value_count() + 63) / 64
   let block_count = function.block_count()
   let use_dense = block_count == 0 || word_count <= 262144 / block_count
@@ -225,8 +225,8 @@ fn[F : FunctionView] build_function_live_ranges(function : F) -> LiveRangeSet {
     block_order[block] = block
   }
   let ranges = LiveRangeSet::LiveRangeSet(block_order)
-  let live_sets = collect_function_liveness(function, ranges)
-  build_function_range_fragments(ranges, function, live_sets.live_out)
+  let live_out = collect_function_liveness(function, ranges)
+  build_function_range_fragments(ranges, function, live_out)
   ranges.ranges.sort_by(fn(a, b) {
     match (a.start(), b.start()) {
       (Some(lhs), Some(rhs)) => {

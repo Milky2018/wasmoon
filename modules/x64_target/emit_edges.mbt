@@ -157,6 +157,7 @@ fn threaded_branch_target(
 }
 
 ///|
+// The caller emits CMP/TEST. Test its flags before edge moves can clobber them.
 fn emit_conditional_edges(
   buffer : CodeBuffer,
   function : @vcode.Function[X64Inst],
@@ -164,7 +165,7 @@ fn emit_conditional_edges(
   frame : X64Frame,
   block : @vcode.Block,
   instruction : @vcode.Instruction,
-  condition : @vcode.PhysicalReg,
+  condition : X64Condition,
   next_block : @vcode.Block?,
 ) -> Unit raise X64EmitError {
   let when_true = function.instruction_successor_at(instruction, 0).unwrap().target
@@ -180,14 +181,15 @@ fn emit_conditional_edges(
   let threaded_false = function
     .block_index(threaded_branch_target(function, allocation, when_false))
     .unwrap()
-  buffer.encoder.x86_emit_test_rr32(condition.id, condition.id)
+  let positive = raw_condition(condition)
+  let negative = raw_condition(inverse_condition(condition))
   if next_block == Some(when_false) {
     if true_moves.steps.is_empty() {
-      buffer.x86_emit_jcc_rel32(RawNe, threaded_true)
+      buffer.x86_emit_jcc_rel32(positive, threaded_true)
       emit_resolved_moves(buffer, frame, false_moves)
     } else {
       buffer.emit_byte(0x0F)
-      buffer.emit_byte(x86_cond_to_jcc_opcode(RawEq))
+      buffer.emit_byte(x86_cond_to_jcc_opcode(negative))
       let local_false_branch = buffer.position()
       emit_u32_le(buffer.encoder, 0)
       emit_resolved_moves(buffer, frame, true_moves)
@@ -197,11 +199,11 @@ fn emit_conditional_edges(
     }
   } else if next_block == Some(when_true) {
     if false_moves.steps.is_empty() {
-      buffer.x86_emit_jcc_rel32(RawEq, threaded_false)
+      buffer.x86_emit_jcc_rel32(negative, threaded_false)
       emit_resolved_moves(buffer, frame, true_moves)
     } else {
       buffer.emit_byte(0x0F)
-      buffer.emit_byte(x86_cond_to_jcc_opcode(RawNe))
+      buffer.emit_byte(x86_cond_to_jcc_opcode(positive))
       let local_true_branch = buffer.position()
       emit_u32_le(buffer.encoder, 0)
       emit_resolved_moves(buffer, frame, false_moves)
@@ -210,16 +212,16 @@ fn emit_conditional_edges(
       emit_resolved_moves(buffer, frame, true_moves)
     }
   } else if true_moves.steps.is_empty() {
-    buffer.x86_emit_jcc_rel32(RawNe, threaded_true)
+    buffer.x86_emit_jcc_rel32(positive, threaded_true)
     emit_resolved_moves(buffer, frame, false_moves)
     buffer.x86_emit_jmp_rel32(threaded_false)
   } else if false_moves.steps.is_empty() {
-    buffer.x86_emit_jcc_rel32(RawEq, threaded_false)
+    buffer.x86_emit_jcc_rel32(negative, threaded_false)
     emit_resolved_moves(buffer, frame, true_moves)
     buffer.x86_emit_jmp_rel32(threaded_true)
   } else {
     buffer.emit_byte(0x0F)
-    buffer.emit_byte(x86_cond_to_jcc_opcode(RawEq))
+    buffer.emit_byte(x86_cond_to_jcc_opcode(negative))
     let local_false_branch = buffer.position()
     emit_u32_le(buffer.encoder, 0)
     emit_resolved_moves(buffer, frame, true_moves)

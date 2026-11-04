@@ -1,8 +1,9 @@
 ///|
 /// A native owner could not allocate its backing state.
+#derive(Debug)
 pub(all) suberror NativeAllocationError {
   OutOfMemory
-} derive(Debug)
+}
 
 ///|
 pub extend NativeAllocationError with Debug::{to_repr}

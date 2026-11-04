@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 #valtype
 pub(all) struct ProgramPoint {
   block : Int32
   inst : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ProgramPoint::ProgramPoint(block : Int32, inst : Int32) -> ProgramPoint {
@@ -50,11 +51,12 @@ fn compare_program_positions(
 }
 
 ///|
+#derive(Eq, Debug)
 #valtype
 pub(all) struct ProgramRange {
   start : ProgramPoint
   end : ProgramPoint
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ProgramRange::ProgramRange(
@@ -85,20 +87,22 @@ pub fn ProgramRange::contains(
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum UseKind {
   LiveDef
   LiveUse
   LiveUseDef
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind
   constraint : OperandConstraint
   preference : PhysicalReg?
   tie_id : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn UsePosition::UsePosition(
@@ -123,12 +127,13 @@ pub fn UsePosition::with_preference(
 }
 
 ///|
+#derive(Debug)
 struct LiveRange {
   id : Int32
   vreg : VirtualReg
   ranges : Array[ProgramRange]
   uses : Array[UsePosition]
-} derive(Debug)
+}
 
 ///|
 pub fn LiveRange::LiveRange(id : Int32, vreg : VirtualReg) -> LiveRange {
@@ -405,6 +410,7 @@ pub fn LiveRange::total_length(self : LiveRange) -> Int32 {
 }
 
 ///|
+#derive(Debug)
 struct LiveRangeSet {
   ranges : Array[LiveRange]
   block_order : Array[Int32]
@@ -413,7 +419,7 @@ struct LiveRangeSet {
   int_ranges_by_id : Array[LiveRange?]
   float_ranges_by_id : Array[LiveRange?]
   vector_ranges_by_id : Array[LiveRange?]
-} derive(Debug)
+}
 
 ///|
 pub fn LiveRangeSet::LiveRangeSet(block_order : Array[Int32]) -> LiveRangeSet {

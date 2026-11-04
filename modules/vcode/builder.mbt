@@ -280,6 +280,7 @@ fn[Inst] Builder::commit_instruction(
   for reg in clobbers {
     self.function.clobbers.push(reg)
   }
+  self.function.instruction_handles.push(instruction)
   self.function.instructions.push({
     inst,
     parent: block,
@@ -375,6 +376,7 @@ fn[Inst] Builder::commit_unconstrained_body(
   for reg in clobbers {
     self.function.clobbers.push(reg)
   }
+  self.function.instruction_handles.push(instruction)
   self.function.instructions.push({
     inst,
     parent: block,

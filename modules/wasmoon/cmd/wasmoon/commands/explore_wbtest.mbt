@@ -188,3 +188,47 @@ test "explore matches production artifacts with compact context and imported fun
     }
   }
 }
+
+///|
+test "explore preserves large root mask addresses across early target temporaries" {
+  // Native CI enables allocation verification. Cross-compiling both targets
+  // also exercises their operand timing contracts on the other host ISA.
+  let count = 255
+  let parts = [
+    "(module (type $s (struct (field i32)))", "(import \"host\" \"gc\" (func $gc (result i32)))",
+    "(func $observe (param $object (ref $s)) (result i32) call $gc drop local.get $object struct.get $s 0)",
+    "(func (export \"probe\") (param $side i32)",
+  ]
+  for index in 0..<count {
+    parts.push("(param $r\{index} (ref null $s))")
+  }
+  parts.push(
+    "(result i32) (local $left (ref $s)) (local $right (ref $s)) (local $sum i32) " +
+    "(local.set $left (struct.new $s (i32.const 42))) " +
+    "(local.set $right (struct.new $s (i32.const 43))) call $gc drop",
+  )
+  for index in 0..<count {
+    parts.push(
+      "(local.set $sum (i32.add (local.get $sum) (ref.is_null (local.get $r\{index}))))",
+    )
+  }
+  parts.push(
+    "(i32.add (local.get $sum) (if (result i32) (local.get $side) " +
+    "(then (call $observe (local.get $left))) " +
+    "(else (call $observe (local.get $right)))))))",
+  )
+  let directory = @env.get_env_var("TMPDIR").unwrap_or(@test_fs.temp_dir())
+  let path = directory + "/wasmoon-large-mask-targets-\{@env.now()}.wat"
+  let html = path[:path.length() - 4].to_owned() + ".html"
+  @fs.write_string_to_file(path, parts.join("\n"))
+  defer (@fs.remove_file(path) catch { _ => () })
+  defer (@fs.remove_file(html) catch { _ => () })
+  for target in ["x64", "aarch64"] {
+    for level in [0, 2, 3] {
+      inspect(
+        run_explore(path, Some(2), level, [], true, false, target_name=target),
+        content="0",
+      )
+    }
+  }
+}

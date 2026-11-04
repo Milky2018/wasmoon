@@ -20,9 +20,6 @@ pub extend BundleAllocationStatistics with Eq::{not_equal, equal}
 pub extend DenseCfgEdges with Debug::{to_repr}
 
 ///|
-pub extend DenseLiveSets with Debug::{to_repr}
-
-///|
 pub extend EditPosition with Debug::{to_repr}
 
 ///|

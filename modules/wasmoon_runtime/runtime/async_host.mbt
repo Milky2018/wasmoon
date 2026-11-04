@@ -7,11 +7,12 @@ pub type AsyncHostFunction = async (Caller, Array[@types.Value]) -> Result[
 
 ///|
 /// Result of polling the host operation at the current Wasm call site.
+#derive(Debug)
 pub(all) enum AsyncHostPoll {
   AsyncHostPending
   AsyncHostReady(Array[@types.Value])
   AsyncHostThrown(Int32, Array[@types.Value])
-} derive(Debug)
+}
 
 ///|
 priv enum AsyncHostCallState {

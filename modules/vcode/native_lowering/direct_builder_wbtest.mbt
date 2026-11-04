@@ -1,6 +1,7 @@
 ///|
 priv struct SinkTrace {
   operations : Array[Operation]
+  operation_blocks : Array[Int32]
   operands : Array[Array[Int32]]
   roots : Array[Array[Int32]]
   stack_maps : Array[@native.StackMapMetadata?]
@@ -19,6 +20,7 @@ fn traced_sink(
 ) -> (TargetSink, SinkTrace) {
   let trace : SinkTrace = {
     operations: [],
+    operation_blocks: [],
     operands: [],
     roots: [],
     stack_maps: [],
@@ -48,8 +50,9 @@ fn traced_sink(
       id
     },
     fn(_) { () },
-    fn(_, operation, operands, result_types, _, roots, stack_map) {
+    fn(block, operation, operands, result_types, _, roots, stack_map) {
       trace.operations.push(operation)
+      trace.operation_blocks.push(block)
       trace.operands.push(operands.copy())
       trace.roots.push(roots.copy())
       trace.stack_maps.push(stack_map)
@@ -417,9 +420,21 @@ test "sparse function roots bound mask code growth across safepoints" {
       }
     })
     .length()
-  // Initial zeroing may scale with frame capacity. Repeated sparse safepoints
-  // must not emit a complete dense bitmap's worth of stores at every call.
-  assert_true(mask_stores <= capacity / 64 + points * 8)
+  // Entry zeroing and repeated sparse safepoints both keep bounded VCode.
+  assert_true(mask_stores <= (points + 1) * 8)
+  let mut initial_fill = None
+  for operation in trace.operations {
+    if operation is StoreRepeated64(offset, count, bits) {
+      initial_fill = Some((offset, count, bits))
+      break
+    }
+  }
+  assert_eq(
+    initial_fill,
+    Some((0UL, (capacity / 64).reinterpret_as_uint(), 0UL)),
+  )
+  // Repeated mask writes must not multiply CFG cycles and liveness sets.
+  assert_eq(trace.terminated_blocks.length(), 1)
 }
 
 ///|
@@ -460,5 +475,480 @@ test "root aliases defined on sibling paths publish their slot on both paths" {
     .filter(operation => operation is Store(spec) && spec.value_type == GcRef64)
     .length(),
     2,
+  )
+}
+
+///|
+test "registered function frames own roots without duplicate SSA call transport" {
+  let (sink, trace) = traced_sink([11, 22], 0)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64],
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+      ),
+    ),
+  )
+  builder.begin_function_roots(1)
+  let parameters = builder.parameters()
+  builder.define_function_root(parameters[1])
+  builder.emit_with_metadata(
+    Call(platform_call("guest", [Ptr64], [], gc_safepoint=true)),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(
+      None,
+      [parameters[1]],
+      stack_map=@native.StackMapMetadata::new(9, argument_root_count=0),
+    ),
+  )
+  |> ignore
+  builder.return_([])
+  builder.finish()
+  let mut observed = false
+  for index, operation in trace.operations {
+    if operation is Call(call) &&
+      call.callee is External(symbol) &&
+      symbol.name == "guest" {
+      observed = true
+      assert_eq(trace.roots[index], [])
+      guard trace.stack_maps[index] is Some(site) else {
+        fail("function-root admission lost call-site metadata")
+      }
+      assert_eq(site.id, 9)
+      assert_eq(site.argument_root_count, 0)
+      assert_true(call.behavior.gc_safepoint)
+    }
+  }
+  assert_true(observed)
+  assert_eq(
+    trace.operations
+    .filter(operation => operation is Store(spec) && spec.value_type == GcRef64)
+    .length(),
+    1,
+  )
+}
+
+///|
+test "repeated word stores enforce typed positive ranges without safepoints" {
+  let operation = StoreRepeated64(24UL, 65U, 0xFEDCBA9876543210UL)
+  assert_true(verify_operation_contract(operation, [Ptr64], []) is None)
+  for
+    invalid in [
+      StoreRepeated64(0UL, 0U, 0UL),
+      StoreRepeated64(0xFFFFFFFFFFFFFFF8UL, 2U, 0UL),
+    ] {
+    assert_true(verify_operation_contract(invalid, [Ptr64], []) is Some(_))
+  }
+  assert_true(verify_operation_contract(operation, [I64], []) is Some(_))
+  assert_true(verify_operation_contract(operation, [Ptr64], [I64]) is Some(_))
+  let semantics = operation.semantics()
+  assert_eq(semantics.memory, Write)
+  assert_false(semantics.gc_safepoint)
+  assert_false(semantics.cancellation_safepoint)
+  assert_false(semantics.may_trap)
+}
+
+///|
+fn framed_trace(
+  types : Array[@native.ValueType],
+  capacity : Int32,
+  preserves_mask~ : Bool = true,
+) -> (DirectBuilder, SinkTrace) {
+  let (sink, trace) = traced_sink(Array::makei(types.length(), i => 100 + i), 0)
+  let builder = DirectBuilder::new(
+    types,
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+        preserves_mask~,
+      ),
+    ),
+  )
+  builder.begin_function_roots(capacity)
+  (builder, trace)
+}
+
+///|
+test "straight-line masks publish changed boundary words without repeated stores" {
+  let (builder, trace) = framed_trace([Ptr64] + Array::make(65, GcRef64), 65)
+  let parameters = builder.parameters()
+  for root in parameters[1:] {
+    builder.define_function_root(root)
+  }
+  for
+    live in [[parameters[1]], [parameters[1]], [parameters[1], parameters[65]]] {
+    builder.emit_with_metadata(
+      Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+      [parameters[0]],
+      [],
+      InstructionMetadata::new(None, live),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  debug_inspect(
+    trace.operations.filter_map(operation => {
+      match operation {
+        I64Const(bits) => Some(bits)
+        _ => None
+      }
+    }),
+    content="[0, 0, 1, 1]",
+  )
+}
+
+///|
+test "unknown loop predecessors restore every function mask word" {
+  let (builder, trace) = framed_trace(
+    [Ptr64] + Array::make(65, GcRef64) + [I32],
+    65,
+  )
+  let parameters = builder.parameters()
+  for root in parameters[1:66] {
+    builder.define_function_root(root)
+  }
+  let collect = platform_call("collect", [Ptr64], [], gc_safepoint=true)
+  builder.emit_with_metadata(
+    Call(collect),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[1]]),
+  )
+  |> ignore
+  let left = builder.create_block([])
+  let right = builder.create_block([])
+  let done = builder.create_block([])
+  builder.branch(parameters[66], left, [], right, [])
+  builder.switch_to_block(left)
+  builder.emit_with_metadata(
+    Call(collect),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[1]]),
+  )
+  |> ignore
+  builder.branch(parameters[66], done, [], right, [])
+  builder.switch_to_block(right)
+  builder.emit_with_metadata(
+    Call(collect),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[65]]),
+  )
+  |> ignore
+  builder.jump(left, [])
+  builder.switch_to_block(done)
+  builder.return_([])
+  builder.finish()
+  let writes : Array[Array[UInt64]] = []
+  let pending : Array[UInt64] = []
+  for operation in trace.operations {
+    match operation {
+      I64Const(bits) => pending.push(bits)
+      Call(call) => {
+        if call.callee is External(symbol) && symbol.name == "collect" {
+          writes.push(pending.copy())
+        }
+        pending.clear()
+      }
+      _ => ()
+    }
+  }
+  // Ignore entry-block elision: both unknown predecessors must overwrite
+  // every word, including clearing a bit set on the loop's other path.
+  debug_inspect(writes[1:].to_owned(), content="[[1, 0], [0, 1]]")
+}
+
+///|
+test "returns-twice calls discard known masks before resuming ordinary code" {
+  let (builder, trace) = framed_trace([Ptr64], 65)
+  let checkpoint = @native.NativeCall::new(
+    External(@native.ExternalSymbol::new("checkpoint")),
+    @native.Signature::new([Ptr64], []),
+    Platform,
+    @native.CallBehavior::new(
+      ReadWrite,
+      true,
+      false,
+      false,
+      false,
+      returns_twice=true,
+    ),
+  )
+  for
+    call in [
+      checkpoint,
+      platform_call("collect", [Ptr64], [], gc_safepoint=true),
+    ] {
+    builder.emit_with_metadata(
+      Call(call),
+      [builder.parameters()[0]],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  debug_inspect(
+    trace.operations.filter_map(operation => {
+      match operation {
+        I64Const(bits) => Some(bits)
+        _ => None
+      }
+    }),
+    content="[0, 0, 0, 0]",
+  )
+}
+
+///|
+test "unknown frame providers retain complete mask writes" {
+  let (builder, trace) = framed_trace([Ptr64], 65, preserves_mask=false)
+  for _ in 0..<2 {
+    builder.emit_with_metadata(
+      Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+      [builder.parameters()[0]],
+      [],
+      InstructionMetadata::empty(),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  debug_inspect(
+    trace.operations.filter_map(operation => {
+      match operation {
+        I64Const(bits) => Some(bits)
+        _ => None
+      }
+    }),
+    content="[0, 0, 0, 0, 0, 0]",
+  )
+}
+
+///|
+fn trace_has_call_free_path(
+  trace : SinkTrace,
+  start : Int32,
+  target : Int32,
+) -> Bool {
+  let calls : Map[Int32, Bool] = Map([])
+  for index, operation in trace.operations {
+    if operation is Call(_) {
+      calls[trace.operation_blocks[index]] = true
+    }
+  }
+  let pending = [start]
+  let seen : Map[Int32, Bool] = Map([])
+  while pending.pop() is Some(block) {
+    if seen.contains(block) || calls.contains(block) {
+      continue
+    }
+    if block == target {
+      return true
+    }
+    seen[block] = true
+    for index, owner in trace.terminated_blocks {
+      if owner != block {
+        continue
+      }
+      match trace.terminators[index] {
+        Jump(next, _) => pending.push(next)
+        Branch(_, yes, _, no, _)
+        | BranchIntCompare(_, _, _, yes, _, no, _)
+        | BranchIntCompareImmediate(_, _, _, yes, _, no, _) => {
+          pending.push(yes)
+          pending.push(no)
+        }
+        _ => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+test "checked function root links retain helper fallbacks and a call-free body path" {
+  let (sink, trace) = traced_sink([11, 22], 509)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64],
+    sink,
+    call_abi=CallAbiElaboration::new(
+      function_frame=FunctionRootFrameAbi::new(
+        @native.ExternalSymbol::new("frame.enter"),
+        @native.ExternalSymbol::new("frame.leave"),
+        inline_layout=Some({
+          execution_offset: -16,
+          active_offset: 0,
+          head_offset: 8,
+        }),
+      ),
+    ),
+  )
+  builder.begin_function_roots(1)
+  let body = builder.entry_block()
+  assert_true(body.id != 0)
+  builder.define_function_root(builder.parameters()[1])
+  builder.return_([])
+  builder.finish()
+  let body_target = builder.target_blocks[body.id]
+  assert_true(trace_has_call_free_path(trace, 509, body_target))
+  let mut returned = -1
+  let mut enter = -1
+  let mut leave = -1
+  for index, operation in trace.operations {
+    if operation is Call(call) && call.callee is External(symbol) {
+      if symbol.name == "frame.enter" {
+        enter = trace.operation_blocks[index]
+      }
+      if symbol.name == "frame.leave" {
+        leave = trace.operation_blocks[index]
+      }
+    }
+  }
+  for index, terminator in trace.terminators {
+    if terminator is Return(_) {
+      returned = trace.terminated_blocks[index]
+    }
+  }
+  assert_true(enter >= 0 && leave >= 0 && returned >= 0)
+  assert_true(trace_has_call_free_path(trace, body_target, returned))
+  assert_true(
+    trace.terminators.any(terminator => {
+      terminator is BranchIntCompare(Equal, _, _, _, _, no, _) && no == leave
+    }),
+  )
+}
+
+///|
+test "sparse root selection publishes only at collecting calls" {
+  let frame = FunctionRootFrameAbi::new(
+    @native.ExternalSymbol::new("frame.enter"),
+    @native.ExternalSymbol::new("frame.leave"),
+  )
+  assert_true(
+    CallAbiElaboration::new(function_frame=frame)
+    .for_root_capacity(1)
+    .has_function_frame(),
+  )
+  let abi = CallAbiElaboration::new(function_frame=frame, scoped_root_limit=4).for_root_capacity(
+    1,
+  )
+  assert_false(abi.has_function_frame())
+  assert_true(
+    CallAbiElaboration::new(function_frame=frame, scoped_root_limit=4)
+    .for_root_capacity(5)
+    .has_function_frame(),
+  )
+  let (sink, trace) = traced_sink([11, 22], 0)
+  let builder = DirectBuilder::new(
+    [Ptr64, GcRef64],
+    sink,
+    call_abi=abi,
+    root_scope_capacity=1,
+  )
+  builder.begin_function_roots(1)
+  let parameters = builder.parameters()
+  builder.define_function_root(parameters[1])
+  assert_true(trace.operations.is_empty())
+  builder.emit_with_metadata(
+    Call(platform_call("guest", [Ptr64], [], gc_safepoint=true)),
+    [parameters[0]],
+    [],
+    InstructionMetadata::new(None, [parameters[1]]),
+  )
+  |> ignore
+  builder.return_([])
+  builder.finish()
+  let calls = trace.operations.filter_map(op => {
+    match op {
+      Call(call) =>
+        match call.callee {
+          External(symbol) => Some(symbol.name)
+          _ => None
+        }
+      _ => None
+    }
+  })
+  assert_eq(calls, ["frame.enter", "guest", "frame.leave"])
+  assert_eq(
+    trace.operations
+    .filter(op => op is Store(spec) && spec.value_type == GcRef64)
+    .length(),
+    1,
+  )
+}
+
+///|
+test "call frames reuse bounded storage while shrinking the precise live prefix" {
+  let frame = FunctionRootFrameAbi::new(
+    @native.ExternalSymbol::new("frame.enter"),
+    @native.ExternalSymbol::new("frame.leave"),
+  )
+  let abi = CallAbiElaboration::new(function_frame=frame, scoped_root_limit=65).for_root_capacity(
+    65,
+  )
+  let types : Array[@native.ValueType] = [Ptr64]
+  let ids = [1]
+  for index in 0..<65 {
+    types.push(GcRef64)
+    ids.push(index + 2)
+  }
+  let (sink, trace) = traced_sink(ids, 0)
+  let builder = DirectBuilder::new(
+    types,
+    sink,
+    call_abi=abi,
+    root_scope_capacity=65,
+  )
+  let params = builder.parameters()
+  for length in [65, 1] {
+    let roots = params[1:1 + length].to_owned()
+    let site = @native.StackMapMetadata::new(length, argument_root_count=0)
+    builder.emit_with_metadata(
+      Call(platform_call("collect", [Ptr64], [], gc_safepoint=true)),
+      [params[0]],
+      [],
+      InstructionMetadata::new(None, roots, stack_map=site),
+    )
+    |> ignore
+  }
+  builder.return_([])
+  builder.finish()
+  assert_eq(trace.stack_objects, [(32, 16), (520, 16), (16, 8)])
+  let mut observed = 0
+  for index, op in trace.operations {
+    if op is Call(call) &&
+      call.callee is External(symbol) &&
+      symbol.name == "collect" {
+      assert_true(trace.roots[index].is_empty())
+      assert_eq(
+        trace.stack_maps[index],
+        Some(
+          @native.StackMapMetadata::new(
+            if observed == 0 {
+              65
+            } else {
+              1
+            },
+            argument_root_count=0,
+          ),
+        ),
+      )
+      observed += 1
+    }
+  }
+  assert_eq(observed, 2)
+  assert_eq(
+    trace.operations
+    .filter(op => op is Store(spec) && spec.value_type == GcRef64)
+    .length(),
+    66,
   )
 }

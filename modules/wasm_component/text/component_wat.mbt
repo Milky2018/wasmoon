@@ -211,23 +211,26 @@ fn parse_sexpr(reader : TextReader) -> SExpr raise ComponentTextError {
 }
 
 ///|
+#derive(Eq)
 priv enum ValTypeEncoding {
   Prim(Int32)
   TypeIdx(Int32)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct FuncParam {
   label : String
   ty : ValTypeEncoding
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct FuncTypeSig {
   params : Array[FuncParam]
   result_ty : ValTypeEncoding?
   is_async : Bool
-} derive(Eq)
+}
 
 ///|
 priv struct ImportEntry {

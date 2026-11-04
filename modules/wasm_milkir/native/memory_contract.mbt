@@ -41,6 +41,7 @@ fn projection_opcode(projection : Projection) -> @milkir.ExtOp {
         FieldData(_, _, width, _, true) => width
         _ => 0
       },
+      invalidates_addresses: false,
       pointer_region: match projection {
         ArrayLength => None
         StructData(_) => Some(Context)
@@ -81,7 +82,7 @@ fn decode_projection(extension : @milkir.ExtOp) -> Projection? {
 ///|
 fn semantic_effects(opcode : @milkir.Opcode) -> @milkir.ExtensionEffects {
   let effects = @effects.analyze(opcode)
-  let write = if !effects.preserves_physical_addresses() {
+  let write = if !effects.preserves_checked_references() {
     Some(@milkir.AliasRegion::Other)
   } else {
     match effects.write {
@@ -106,6 +107,7 @@ fn semantic_effects(opcode : @milkir.Opcode) -> @milkir.ExtensionEffects {
     effects.may_reenter ||
     effects.may_suspend ||
     effects.may_replace_heap,
+    invalidates_addresses: !effects.preserves_physical_addresses(),
     pointer_region: None,
     pointer_bytes: 0,
   }
@@ -116,6 +118,10 @@ fn annotate_semantic(
   extension : @milkir.ExtOp,
   signature : @milkir.Signature,
 ) -> @milkir.ExtOp {
+  if decode_poll_region(extension) is Some(_) ||
+    decode_guarded_call(extension) is Some(_) {
+    return extension
+  }
   let plain = @milkir.ExtOp(
     extension.dialect,
     extension.opcode,
@@ -135,9 +141,14 @@ fn field_width(field : @wasm_milkir.WasmFieldContract) -> Int32? {
     Packed8 => Some(1)
     Packed16 => Some(2)
     Value(I32 | F32) => Some(4)
-    Value(I64 | F64 | Ref) => Some(8)
+    Value(I64 | F64 | Ref | CallableRef | OpaqueRef) => Some(8)
     _ => None
   }
+}
+
+///|
+fn field_is_reference(field : @wasm_milkir.WasmFieldContract) -> Bool {
+  field.storage is Value(Ref | CallableRef | OpaqueRef)
 }
 
 ///|
@@ -146,6 +157,24 @@ fn validate_memory_extension(
   context : @wasm_milkir.WasmValidationContext,
   results : Array[@milkir.Type],
 ) -> String? {
+  if decode_guarded_call(view.op) is Some(call) {
+    return validate_guarded_call(view, call, context)
+  }
+  if decode_poll_region(view.op) is Some((_, guard_)) {
+    if (if guard_ {
+        !view.operand_types.is_empty() ||
+        view.result_types.length() != 2 ||
+        view.result_types[0] != I32 ||
+        view.result_types[1] != Ptr
+      } else {
+        view.operand_types.length() != 1 ||
+        view.operand_types[0] != Ptr ||
+        !view.result_types.is_empty()
+      }) {
+      return Some("invalid native poll region signature")
+    }
+    return None
+  }
   if decode_projection(view.op) is Some(projection) {
     if view.op != projection_opcode(projection) {
       return Some("invalid projection memory effects")
@@ -178,10 +207,13 @@ fn validate_memory_extension(
     }
     if projection is FieldData(type_, field, width, reference, _) {
       guard context.struct_field(type_, field) is Some(contract) &&
-        field_width(contract) == Some(width) else {
+        field_width(contract) == Some(width) &&
+        struct_view_shape(context, type_)
+        .map(shape => field < shape.1)
+        .unwrap_or(false) else {
         return Some("invalid field projection contract")
       }
-      if (if contract.storage is Value(Ref) { 1 } else { 0 }) != reference {
+      if (if field_is_reference(contract) { 1 } else { 0 }) != reference {
         return Some("invalid reference projection contract")
       }
     }
@@ -348,6 +380,45 @@ fn lower_projection(
     context.forward_results(context.block_parameters(ready))
     return None
   }
+  if projection is ArrayData(0) &&
+    environment.array_views is Some(layout) &&
+    environment.array_projection_budget > 0 &&
+    (
+      environment.projection_sites is None ||
+      environment.projection_sites.unwrap().eligible.contains(
+        context.instruction_id(),
+      )
+    ) {
+    environment.array_projection_budget -= 1
+    inline_cached_array_projection(context, environment, layout)
+    return None
+  }
+  let reserved = environment.projection_sites is Some(sites) &&
+    sites.reserved_struct == Some(context.instruction_id())
+  if projection is StructData(type_) &&
+    environment.struct_views is Some(layout) &&
+    (reserved || environment.projection_budget > 0) &&
+    (
+      environment.projection_sites is None ||
+      environment.projection_sites.unwrap().eligible.contains(
+        context.instruction_id(),
+      )
+    ) {
+    if !reserved {
+      environment.projection_budget -= 1
+    }
+    let (shape, fields) = struct_view_shape(validation, type_).unwrap()
+    inline_cached_struct_projection(
+      context,
+      environment,
+      layout,
+      type_,
+      shape,
+      fields,
+      exact_type=validation.is_final_type(type_),
+    )
+    return None
+  }
   let heap = context.emit(
       EnvironmentField(environment.gc_heap_field.unwrap(), Mutable),
       context.environment(),
@@ -412,7 +483,9 @@ fn struct_view_shape(
   let mut count = 0
   while context.struct_field(type_, count) is Some(field) {
     if count == 16 {
-      return None
+      // This proves the complete physical prefix used by its field projections.
+      // Larger suffixes keep checked accessors; they are not admitted by type.
+      return Some((shape, count))
     }
     let code = match field.storage {
       Packed8 => 1UL
@@ -420,7 +493,7 @@ fn struct_view_shape(
       Value(I32 | F32) => 3UL
       Value(I64 | F64) => 4UL
       Value(V128) => 5UL
-      Value(Ref) => 12UL
+      Value(Ref | CallableRef | OpaqueRef) => 12UL
       _ => return None
     }
     shape = shape | (code << (count * 4))

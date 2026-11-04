@@ -17,11 +17,12 @@ priv struct FunctionOwnerContext {
 /// The authoritative SSA definition for a value. Instruction placement is
 /// deliberately absent: definitions belong to the DFG while placement belongs
 /// to block layout.
+#derive(Eq)
 priv enum ValueDefinition {
   FunctionParameter(Int32)
   BlockParameter(Int32, Int32)
   InstructionResult(InstId, Int32)
-} derive(Eq)
+}
 
 ///|
 priv struct ValueData {
@@ -162,6 +163,7 @@ pub impl Debug for Value with fn to_repr(self) {
 ///
 /// `Ptr`, `Ref`, `CallableRef`, and `OpaqueRef` are fixed-width 64-bit
 /// carriers. Their representation does not vary with the host pointer width.
+#derive(Debug, Eq, Hash)
 pub(all) enum Type {
   I32
   I64
@@ -172,7 +174,7 @@ pub(all) enum Type {
   Ref
   CallableRef
   OpaqueRef
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
@@ -194,10 +196,11 @@ pub impl Show for Type with fn output(self, logger) {
 }
 
 ///|
+#derive(Eq, Debug, Hash)
 pub struct Signature {
   params : Array[Type]
   results : Array[Type]
-} derive(Eq, Debug, Hash)
+}
 
 ///|
 pub fn Signature::Signature(
@@ -208,21 +211,23 @@ pub fn Signature::Signature(
 }
 
 ///|
+#derive(Eq, Debug, Hash)
 pub struct ExternalSymbol {
   name : String
-} derive(Eq, Debug, Hash)
+}
 
 ///|
 /// Opaque embedding-context field identity.
 ///
 /// The dialect owns the meaning of `key` and `parameters`; MilkIR only relies
 /// on the declared type and optimizer-visible global-value contract.
+#derive(Debug)
 pub struct ContextField {
   dialect : String
   key : Int32
   parameters : FixedArray[Int32]
   ty : Type
-} derive(Debug)
+}
 
 ///|
 pub fn ContextField::new(
@@ -263,28 +268,32 @@ pub impl Hash for ContextField with fn hash_combine(self, hasher) {
 
 ///|
 /// Disjoint abstract memory regions used by alias analysis.
+#derive(Debug, Eq, Hash)
 pub(all) enum AliasRegion {
   Heap(Int32)
   Table(Int32)
   Context
+  Control
   Other
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Whether a context field may change while the function is executing.
 ///
 /// `Stable` grants reuse permission for one invocation. `Mutable` requires
 /// invalidation at calls and writes that may affect the context region.
+#derive(Debug, Eq, Hash)
 pub(all) enum GlobalValueStability {
   Stable
   Mutable
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Function-scoped global-value declaration.
+#derive(Debug, Eq, Hash)
 pub(all) enum GlobalValueData {
   ContextField(ContextField, GlobalValueStability, AliasRegion)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn GlobalValueData::context_field(
@@ -342,16 +351,21 @@ pub fn ExternalSymbol::ExternalSymbol(name : String) -> ExternalSymbol {
 /// including memory writes and traps. `Other` writes invalidate every region.
 /// Pointer provenance describes the projected payload, not the metadata read
 /// needed to produce its address.
+#derive(Eq, Hash, Debug)
 pub(all) struct ExtensionEffects {
   read : AliasRegion?
   write : AliasRegion?
   may_trap : Bool
   observable : Bool
+  // A physical-address epoch is independent of logical alias-region writes.
+  // Address-producing extensions (pointer_region != None) and raw loads
+  // depend on this epoch. Invalidating it never permits retaining a borrow.
+  invalidates_addresses : Bool
   pointer_region : AliasRegion?
   // A dialect-validated readable bound, valid only in the current memory
   // epoch. Zero provides no nontrapping-load guarantee.
   pointer_bytes : Int32
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub extend ExtensionEffects with Eq::{equal, not_equal}
@@ -384,12 +398,13 @@ pub impl Debug for ExtOp with fn to_repr(self) {
 }
 
 ///|
+#derive(Eq, Debug, Hash)
 pub(all) struct ExtOpDescriptor {
   dialect : String
   opcode : String
   min_immediates : Int32
   max_immediates : Int32
-} derive(Eq, Debug, Hash)
+}
 
 ///|
 pub fn ExtOpDescriptor::ExtOpDescriptor(
@@ -446,11 +461,12 @@ pub fn ExtOp::ExtOp(
 
 ///|
 /// Read-only instruction shape exposed to an extension dialect validator.
+#derive(Debug)
 pub struct ExtensionInstView {
   op : ExtOp
   operand_types : ReadOnlyArray[Type]
   result_types : ReadOnlyArray[Type]
-} derive(Debug)
+}
 
 ///|
 /// Preserve the operand/result shape when a layered dialect validates a
@@ -502,11 +518,12 @@ pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Metadata {
   SourceLoc(String)
   SourceByteOffset(Int64)
   Comment(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Block - represents a basic block in the control flow graph
@@ -799,6 +816,7 @@ pub fn Inst::all_results(self : Inst) -> Array[Value] {
 
 ///|
 /// Generic memory semantics over an explicit address and offset operand.
+#derive(Debug, Eq, Hash)
 pub(all) enum MemoryOp {
   Atomic(AtomicMemoryOp)
   Load(Type)
@@ -806,20 +824,22 @@ pub(all) enum MemoryOp {
   LoadNarrow(Type, Int32, Bool)
   StoreNarrow(Int32)
   Vector(VectorMemoryOp)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Sequentially consistent accesses; operands use the same base/offset layout
 /// as ordinary memory operations, with compare-exchange taking two values.
+#derive(Debug, Eq, Hash)
 pub(all) enum AtomicMemoryOp {
   Load(Type, Int32)
   Store(Type, Int32)
   Rmw(Type, Int32, AtomicRmwOp)
   CompareExchange(Type, Int32)
   Fence
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum AtomicRmwOp {
   Add
   Sub
@@ -827,17 +847,19 @@ pub(all) enum AtomicRmwOp {
   Or
   Xor
   Exchange
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Generic call semantics. Pointer-call operands are laid out as the callee
 /// pointer followed by ordinary arguments.
+#derive(Debug, Eq, Hash)
 pub(all) enum CallOp {
   Direct(ExternalSymbol, Signature)
   Pointer(Int32, Int32)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorLane {
   I8
   I16
@@ -845,67 +867,76 @@ pub(all) enum VectorLane {
   I64
   F32
   F64
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorExtension {
   None
   Signed
   Unsigned
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntLane {
   I8
   I16
   I32
   I64
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorFloatLane {
   F32
   F64
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorSignedness {
   Signed
   Unsigned
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorHalf {
   Low
   High
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorBitwiseOp {
   Not
   And
   Or
   Xor
   Bitselect
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorPredicateOp {
   AnyTrue
   AllTrue(VectorIntLane)
   Bitmask(VectorIntLane)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntUnaryOp {
   Abs
   Neg
   Popcnt
   Extend(VectorHalf, VectorSignedness)
   ExtAddPairwise(VectorSignedness)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntBinaryOp {
   Add
   Sub
@@ -918,15 +949,17 @@ pub(all) enum VectorIntBinaryOp {
   ExtMul(VectorHalf, VectorSignedness)
   Dot16To32Signed
   Q15MulrSaturating
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntShiftOp {
   Left
   Right(VectorSignedness)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorIntCompareOp {
   Eq
   Ne
@@ -934,9 +967,10 @@ pub(all) enum VectorIntCompareOp {
   Gt(VectorSignedness)
   Le(VectorSignedness)
   Ge(VectorSignedness)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorFloatUnaryOp {
   Abs
   Neg
@@ -945,9 +979,10 @@ pub(all) enum VectorFloatUnaryOp {
   Floor
   Trunc
   Nearest
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorFloatBinaryOp {
   Add
   Sub
@@ -957,9 +992,10 @@ pub(all) enum VectorFloatBinaryOp {
   Max
   PseudoMin
   PseudoMax
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorFloatCompareOp {
   Eq
   Ne
@@ -967,9 +1003,10 @@ pub(all) enum VectorFloatCompareOp {
   Gt
   Le
   Ge
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorConversionOp {
   TruncSatF32ToI32(VectorSignedness)
   TruncSatF64ToI32Zero(VectorSignedness)
@@ -977,27 +1014,30 @@ pub(all) enum VectorConversionOp {
   ConvertLowI32ToF64(VectorSignedness)
   DemoteF64ToF32Zero
   PromoteLowF32ToF64
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Vector memory operations consume an already checked effective address.
 /// Source-language memory indices, alignment hints, and offsets belong to the
 /// frontend.
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorMemoryOp {
   LoadExtend(VectorIntLane, VectorSignedness)
   LoadSplat(VectorIntLane)
   LoadZero(VectorIntLane)
   LoadLane(VectorIntLane, Int32)
   StoreLane(VectorIntLane, Int32)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorFmaOp {
   Add
   NegatedAdd
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorRelaxedOp {
   Swizzle
   TruncF32ToI32(VectorSignedness)
@@ -1009,10 +1049,11 @@ pub(all) enum VectorRelaxedOp {
   Q15MulrSigned
   Dot8To16Signed
   Dot8To32AddSigned
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Language-neutral V128 operations normalized by semantic family.
+#derive(Debug, Eq, Hash)
 pub(all) enum VectorOp {
   Const(Bytes)
   Splat(VectorLane)
@@ -1032,9 +1073,10 @@ pub(all) enum VectorOp {
   FloatCompare(VectorFloatCompareOp, VectorFloatLane)
   Convert(VectorConversionOp)
   Relaxed(VectorRelaxedOp)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum IntBinaryOp {
   Add
   Sub
@@ -1053,17 +1095,19 @@ pub(all) enum IntBinaryOp {
   UnsignedShiftRight
   RotateLeft
   RotateRight
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum IntUnaryOp {
   Not
   CountLeadingZeros
   CountTrailingZeros
   PopulationCount
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum FloatBinaryOp {
   Add
   Sub
@@ -1071,9 +1115,10 @@ pub(all) enum FloatBinaryOp {
   Div
   Min
   Max
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum FloatUnaryOp {
   Neg
   Abs
@@ -1082,9 +1127,10 @@ pub(all) enum FloatUnaryOp {
   Floor
   Trunc
   Nearest
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum ConversionOp {
   IntReduce
   SignedExtend
@@ -1098,9 +1144,10 @@ pub(all) enum ConversionOp {
   SignedIntToFloat
   UnsignedIntToFloat
   Bitcast
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum ScalarOp {
   IntConst(Int64)
   FloatConst32(UInt32)
@@ -1115,10 +1162,11 @@ pub(all) enum ScalarOp {
   SignExtendFrom(Int32)
   Select
   Copy
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Opcode - the operation performed by an instruction
+#derive(Debug, Eq, Hash)
 pub(all) enum Opcode {
   // Language-neutral scalar operations.
   Scalar(ScalarOp)
@@ -1139,7 +1187,7 @@ pub(all) enum Opcode {
 
   // Language-neutral vector operations.
   Vector(VectorOp)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub impl Show for Opcode with fn output(self, logger) {
@@ -1163,6 +1211,7 @@ fn reject_foreign_opcode_entities(
 
 ///|
 /// Integer comparison condition codes
+#derive(Debug, Eq, Hash)
 pub(all) enum IntCC {
   Eq // Equal
   Ne // Not equal
@@ -1174,10 +1223,11 @@ pub(all) enum IntCC {
   Ule // Unsigned less than or equal
   Ugt // Unsigned greater than
   Uge // Unsigned greater than or equal
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Floating point comparison condition codes
+#derive(Debug, Eq, Hash)
 pub(all) enum FloatCC {
   Eq // Equal (ordered)
   Ne // Not equal (unordered)
@@ -1185,10 +1235,11 @@ pub(all) enum FloatCC {
   Le // Less than or equal (ordered)
   Gt // Greater than (ordered)
   Ge // Greater than or equal (ordered)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Terminator - how a basic block ends
+#derive(Debug)
 pub(all) enum Terminator {
   // Unconditional jump
   Jump(Int32, Array[Value]) // target block, arguments
@@ -1207,7 +1258,7 @@ pub(all) enum Terminator {
   // Trap/Unreachable
   Trap(String) // trap reason
   TrapExit(String)
-} derive(Debug)
+}
 
 ///|
 /// Function - a complete mutable IR function.

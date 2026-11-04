@@ -3,6 +3,12 @@
 // This file only contains MOONBIT_FFI_EXPORT functions that wrap internal implementations
 
 #include "jit_internal.h"
+#if defined(__aarch64__) && defined(__APPLE__)
+#include <sys/sysctl.h>
+#elif defined(__aarch64__) && defined(__linux__)
+#include <asm/hwcap.h>
+#include <sys/auxv.h>
+#endif
 #ifdef _WIN32
 #include <malloc.h>
 #endif
@@ -34,6 +40,19 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_operating_system_abi(void) {
     return 3;
 #elif defined(_WIN32)
     return 4;
+#else
+    return 0;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_has_aarch64_lse(void) {
+#if defined(__aarch64__) && defined(__APPLE__)
+    int supported = 0;
+    size_t size = sizeof(supported);
+    return sysctlbyname("hw.optional.arm.FEAT_LSE", &supported, &size, NULL, 0) == 0
+        && size == sizeof(supported) && supported != 0;
+#elif defined(__aarch64__) && defined(__linux__) && defined(HWCAP_ATOMICS)
+    return (getauxval(AT_HWCAP) & HWCAP_ATOMICS) != 0;
 #else
     return 0;
 #endif
@@ -1601,6 +1620,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_reserve_struct_fast_ptr(void) {
     return WASMOON_GUEST_ADDRESS(gc_reserve_struct_fast_impl);
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_try_array_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(gc_try_array_impl);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_try_array_wide_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(gc_try_array_wide_impl);
+}
+
 // ============ Type Cache Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(
@@ -1713,7 +1740,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_collect_heap(
     if (active && ctx_gc_heap(active) == heap) {
         return gc_collect_for_alloc_internal(active, roots, root_count);
     }
-    jit_mark_active_gc_roots(heap);
+    if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
     return gc_heap_collect(heap, roots, root_count);
 }
 

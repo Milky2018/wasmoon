@@ -25,10 +25,14 @@ priv struct SegmentMetadata {
 }
 
 ///|
-fn use_weight(use_position : UsePosition, loop_depths : Array[Int32]) -> Int32 {
-  let mut depth = if use_position.point.block >= 0 &&
-    use_position.point.block < loop_depths.length() {
-    loop_depths[use_position.point.block]
+fn use_weight(
+  point : ProgramPoint,
+  kind : UseKind,
+  constraint : OperandConstraint,
+  loop_depths : Array[Int32],
+) -> Int32 {
+  let mut depth = if point.block >= 0 && point.block < loop_depths.length() {
+    loop_depths[point.block]
   } else {
     0
   }
@@ -42,11 +46,11 @@ fn use_weight(use_position : UsePosition, loop_depths : Array[Int32]) -> Int32 {
   for _ in 0..<depth {
     hot_bonus = hot_bonus * 4
   }
-  let def_bonus = match use_position.kind {
+  let def_bonus = match kind {
     LiveDef | LiveUseDef => 2000
     LiveUse => 0
   }
-  let constraint_weight = match use_position.constraint {
+  let constraint_weight = match constraint {
     AnyLocation | PreservedHome => 0
     AnyReg => 1000
     FixedReg(_) => 2000
@@ -75,7 +79,13 @@ fn segment_metadata(
   for use_index in use_start..<end {
     let use_position = range.uses[use_index]
     if fragment.contains(use_position.point, ranges.block_order) {
-      use_cost = use_cost + use_weight(use_position, loop_depths)
+      use_cost = use_cost +
+        use_weight(
+          use_position.point,
+          use_position.kind,
+          use_position.constraint,
+          loop_depths,
+        )
       if use_position.constraint is FixedReg(_) {
         has_fixed_constraint = true
       }
@@ -713,6 +723,64 @@ fn[F : FunctionView, S : AllocationSink] borrow_allocatable_register(
 }
 
 ///|
+/// An all-home register assignment cannot require an operand transfer.
+/// Check the complete function before changing the sink so a complex
+/// instruction can still use the general assignment path.
+fn[F : FunctionView, S : AllocationSink] try_assign_home_operands(
+  plan : AllocationWork[S],
+  function : F,
+  segments : Array[AllocationSegment],
+) -> Bool {
+  for segment in segments {
+    guard segment.location is Some(SegmentReg(reg)) &&
+      plan.sink.value_location(segment.value.id) is Some(home) &&
+      home == reg_location(reg) else {
+      return false
+    }
+  }
+  let block_count = function.block_count()
+  for block in 0..<block_count {
+    for index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, index)
+      let mut early_def = false
+      let mut late_use = false
+      for operand in function.instruction_operands(instruction) {
+        guard operand.tie_id < 0 &&
+          plan.sink.value_location(operand.vreg.id) is Some(home) &&
+          home.register() is Some(reg) else {
+          return false
+        }
+        if operand.constraint is FixedReg(required) && required != reg {
+          return false
+        }
+        if operand.timing is Early && !(operand.role is Use) {
+          early_def = true
+        }
+        if operand.timing is Late && !(operand.role is Def) {
+          late_use = true
+        }
+      }
+      if early_def && late_use {
+        return false
+      }
+    }
+  }
+  for block in 0..<block_count {
+    for index in 0..<function.block_instruction_count(block) {
+      let instruction = function.block_instruction_at(block, index)
+      for operand_index, operand in function.instruction_operands(instruction) {
+        plan.sink.assign_operand(
+          instruction,
+          operand_index,
+          plan.sink.value_location(operand.vreg.id).unwrap(),
+        )
+      }
+    }
+  }
+  true
+}
+
+///|
 fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   plan : AllocationWork[S],
   function : F,
@@ -721,6 +789,9 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   segments_by_value : Array[Array[Int32]],
   session~ : AllocationSession = AllocationSession::new(),
 ) -> Unit raise VerifyError {
+  if try_assign_home_operands(plan, function, segments) {
+    return
+  }
   let borrow_slots : Array[Int32?] = Array::make(function.value_count(), None)
   let register_indexes = PhysicalRegisterIndex::for_session(
     session,
@@ -766,6 +837,7 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   }
   let assigned : Array[Location?] = []
   let natural_locations : Array[Location] = []
+  let reserved_registers : Array[PhysicalReg?] = []
   let operand_segments : Array[Int32?] = []
   let used_temps : Array[PhysicalReg] = []
   let borrowed_temps : Array[PhysicalReg] = []
@@ -804,6 +876,7 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
       let operands = function.instruction_operands(instruction)
       assigned.clear()
       natural_locations.clear()
+      reserved_registers.clear()
       operand_segments.clear()
       used_temps.clear()
       borrowed_temps.clear()
@@ -812,7 +885,16 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
       tied_constraints.clear()
       tied_locations.clear()
       resident_operand_segments.clear()
+      let mut phase_mask = 0
       for operand in operands {
+        if operand.timing is Early &&
+          (operand.role is Def || operand.role is UseDef) {
+          phase_mask = phase_mask | 1
+        }
+        if operand.timing is Late &&
+          (operand.role is Use || operand.role is UseDef) {
+          phase_mask = phase_mask | 2
+        }
         assigned.push(None)
         let tie_slot = if operand.tie_id < 0 {
           None
@@ -881,6 +963,7 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
           AnyReg => natural.register()
           PreservedHome => home.register()
         }
+        reserved_registers.push(reserved)
         if tie_slot is Some(slot) &&
           constraint is AnyReg &&
           reserved is Some(reg) &&
@@ -898,6 +981,43 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
           Some(slot) => tied_locations[slot]
           None => None
         }
+        // Split segments can put a late read and an early definition in the
+        // same natural register. Reloads execute before the whole instruction,
+        // so their local assignments must remain distinct across both phases.
+        // Keep fixed/tied readers in place and move the unconstrained operand.
+        let mut phase_conflict = false
+        if phase_mask == 3 &&
+          tie_slot is None &&
+          (operand.constraint is AnyReg || operand.constraint is AnyLocation) &&
+          reserved_registers[operand_index] is Some(reg) {
+          for other_index, other in operands {
+            if other.vreg == operand.vreg ||
+              reserved_registers[other_index] != Some(reg) {
+              continue
+            }
+            let early_definition = other.timing is Early &&
+              (other.role is Def || other.role is UseDef)
+            let fixed_late_read = other.timing is Late &&
+              (other.role is Use || other.role is UseDef) &&
+              (
+                other.tie_id >= 0 ||
+                !(other.constraint is AnyReg || other.constraint is AnyLocation)
+              )
+            if (
+                operand.timing is Late &&
+                (operand.role is Use || operand.role is UseDef) &&
+                early_definition
+              ) ||
+              (
+                operand.timing is Early &&
+                (operand.role is Def || operand.role is UseDef) &&
+                fixed_late_read
+              ) {
+              phase_conflict = true
+              break
+            }
+          }
+        }
         let selected = match tied_location {
           Some(location) => location
           None =>
@@ -909,16 +1029,18 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
               }) {
               FixedReg(reg) => reg_location(reg)
               PreservedHome => home
-              AnyLocation =>
+              AnyLocation if !phase_conflict || home.is_spill() =>
                 if operand.role is Def {
+                  home
+                } else if phase_conflict {
                   home
                 } else {
                   natural_locations[operand_index]
                 }
-              AnyReg =>
+              AnyReg | AnyLocation =>
                 match natural_locations[operand_index].register() {
-                  Some(reg) => reg_location(reg)
-                  None => {
+                  Some(reg) if !phase_conflict => reg_location(reg)
+                  _ => {
                     let point = operand_program_point(
                       block,
                       instruction_index,

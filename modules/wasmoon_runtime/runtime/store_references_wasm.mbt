@@ -1,7 +1,8 @@
 ///|
+#derive(Debug)
 priv enum NativeReferenceState {
   Empty
-} derive(Debug)
+}
 
 ///|
 fn StoreReferences::record_exception_allocation(

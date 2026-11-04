@@ -11,8 +11,19 @@ const GC_SLOT_BYTES : Int32 = 16
 /// the embedding product after target emission.
 struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
+  ordinary_view_publication : Bool
   inline_heap : InlineHeapLayout?
+  heap_cast_pages : Int32?
+  struct_views : StructViewLayout?
+  array_views : ArrayViewLayout?
+  mut array_projection_budget : Int32
+  mut projection_budget : Int32
+  projection_sites : InlineProjectionSites?
+  exclusive_poll_controls : Bool
+  poll_budget_offset : Int32?
   gc_array_regions : Bool
+  prepared_arrays : Bool
+  expand_structs : Bool
   function_symbol : (Int32) -> @native_types.CodeSymbol
   memory_base_field : (Int32) -> @native_types.EnvironmentField
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol
@@ -27,6 +38,17 @@ struct Environment {
 /// `gc_array_regions` is the compatibility spelling of the native memory-SSA
 /// opt-in. It expands checked GC operations before generic optimization and
 /// independently verifies every physical borrow across the final CFG.
+/// `prepared_arrays` opts an embedding into the non-collecting try-array
+/// helper ABI. Existing providers keep the collecting allocation ABI by default.
+/// `ordinary_view_publication` promises that checked view helpers publish
+/// only in ordinary mode and the mode cannot change while a view exists.
+/// The allocation fault gate does not govern reads under that contract.
+/// `exclusive_poll_controls` additionally promises that callback bindings and
+/// countdown storage cannot change during guest-only code except at its polls.
+/// Reentry/suspension expires that permission. The native seam can then create
+/// independently budget-verified loop regions; other embeddings keep full polls.
+/// `poll_budget_offset` binds a nullable pointer to the current activation's
+/// callback-free countdown. A null pointer always selects the runtime poll.
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
@@ -36,7 +58,14 @@ pub fn Environment::new(
   runtime_symbol : (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol,
   gc_heap_field~ : @native_types.EnvironmentField? = None,
   gc_array_regions~ : Bool = false,
+  exclusive_poll_controls~ : Bool = false,
+  poll_budget_offset~ : Int32? = None,
+  prepared_arrays~ : Bool = false,
   inline_heap~ : InlineHeapLayout? = None,
+  heap_cast_pages~ : Int32? = None,
+  struct_views~ : StructViewLayout? = None,
+  array_views~ : ArrayViewLayout? = None,
+  ordinary_view_publication~ : Bool = false,
 ) -> Environment {
   {
     function_symbol,
@@ -44,7 +73,18 @@ pub fn Environment::new(
     runtime_symbol,
     gc_heap_field,
     gc_array_regions,
+    ordinary_view_publication,
+    exclusive_poll_controls,
+    poll_budget_offset,
+    prepared_arrays,
+    projection_budget: 8,
+    projection_sites: None,
+    expand_structs: true,
     inline_heap,
+    heap_cast_pages,
+    struct_views,
+    array_views,
+    array_projection_budget: 8,
   }
 }
 
@@ -54,21 +94,25 @@ fn direct_call_contract(
   function_index : Int32,
   environment : Environment,
   result_types : Array[@native_types.ValueType],
+  argument_start~ : Int32 = 0,
+  behavior~ : @native_types.CallBehavior = @native_types.CallBehavior::conservative(),
 ) -> (@native_types.NativeCall, Array[@lowering.Value]) {
   let parameter_types : Array[@native_types.ValueType] = [Ptr64]
-  for ty in context.operand_types() {
-    parameter_types.push(ty)
+  let types = context.operand_types()
+  let arguments = context.operands()
+  for i in argument_start..<types.length() {
+    parameter_types.push(types[i])
   }
   let operands = context.environment()
-  for operand in context.operands() {
-    operands.push(operand)
+  for i in argument_start..<arguments.length() {
+    operands.push(arguments[i])
   }
   (
     @native_types.NativeCall::new(
       Internal((environment.function_symbol)(function_index)),
       @native_types.Signature::new(parameter_types, result_types),
       Internal,
-      @native_types.CallBehavior::conservative(),
+      behavior,
     ),
     operands,
   )
@@ -745,7 +789,60 @@ fn lower_array_new(
   operands.push(i32_immediate(context, type_index))
   operands.push(length)
   operands.push(initial)
-  let word = emit_gc_allocation(
+  let parameter_types : Array[@native_types.ValueType] = [
+    Ptr64,
+    I32,
+    I32,
+    if is_vector {
+      Ptr64
+    } else {
+      I64
+    },
+  ]
+  if !environment.prepared_arrays {
+    let word = emit_gc_allocation(
+      context,
+      environment,
+      if is_vector {
+        GcAllocArrayWideSlow
+      } else {
+        GcAllocArraySlow
+      },
+      operands,
+      parameter_types,
+    )
+    finish_runtime_word(context, word)
+    return None
+  }
+  let slow = context.create_block([])
+  let join = context.create_block([I64])
+  let fast = context.emit_call_without_roots(
+      @native_types.NativeCall::new(
+        External(
+          (environment.runtime_symbol)(
+            if is_vector {
+              GcTryArrayWide
+            } else {
+              GcTryArray
+            },
+          ),
+        ),
+        @native_types.Signature::new(parameter_types, [I64]),
+        Platform,
+        @native_types.CallBehavior::new(ReadWrite, false, false, false, false),
+      ),
+      operands,
+      [I64],
+    )[0]
+  context.branch(
+    context.emit(IntCompareImmediate(NotEqual, 0UL), [fast], [I32])[0],
+    join,
+    [fast],
+    slow,
+    [],
+  )
+  context.switch_to_block(slow)
+  let fallback = emit_gc_allocation(
     context,
     environment,
     if is_vector {
@@ -754,8 +851,11 @@ fn lower_array_new(
       GcAllocArraySlow
     },
     operands,
-    [Ptr64, I32, I32, if is_vector { Ptr64 } else { I64 }],
+    parameter_types,
   )
+  context.jump(join, [fallback])
+  context.switch_to_block(join)
+  let word = context.block_parameters(join)[0]
   finish_runtime_word(context, word)
   None
 }
@@ -1304,6 +1404,34 @@ fn lower_extension(
   environment : Environment,
   validation_context : @wasm_milkir.WasmValidationContext,
 ) -> String? {
+  if decode_guarded_call(extension) is Some(guarded) {
+    if !environment.exclusive_poll_controls {
+      return Some("guarded calls require exclusive invocation controls")
+    }
+    let (call, operands) = direct_call_contract(
+      context,
+      guarded.target,
+      environment,
+      context.result_types(),
+      argument_start=1,
+      behavior=@native_types.CallBehavior::new(
+        ReadWrite,
+        true,
+        true,
+        false,
+        false,
+      ),
+    )
+    context.finish_call(call, operands)
+    return None
+  }
+  if decode_poll_region(extension) is Some((region, guard_)) {
+    if !environment.exclusive_poll_controls {
+      return Some("native poll regions require exclusive invocation controls")
+    }
+    lower_poll_region(context, region, guard_)
+    return None
+  }
   if decode_projection(extension) is Some(projection) {
     if environment.gc_heap_field is None {
       return Some("GC projection requires an explicit heap environment")
@@ -1317,6 +1445,12 @@ fn lower_extension(
     None => return Some("Wasm extension changed after successful validation")
   }
   match opcode {
+    SafepointPoll(execution, controls, callback, budget) => {
+      lower_safepoint_poll(
+        context, environment, execution, controls, callback, budget,
+      )
+      None
+    }
     GetFuncRef(function_index) => {
       lower_get_function_reference(context, function_index, environment)
       None
@@ -1370,7 +1504,26 @@ fn lower_extension(
       None
     }
     RefCast(type_index, nullable) => {
-      lower_ref_cast(context, environment, type_index, nullable)
+      if type_index >= 0 &&
+        type_index <= 0x1FFFFFFF &&
+        environment.inline_heap is Some(heap_layout) &&
+        environment.struct_views is Some(view_layout) &&
+        environment.gc_heap_field is Some(heap_field) &&
+        environment.heap_cast_pages is Some(pages_offset) {
+        inline_exact_heap_cast(
+          context,
+          environment,
+          heap_field,
+          heap_layout,
+          view_layout,
+          pages_offset,
+          context.operands()[0],
+          type_index,
+          nullable,
+        )
+      } else {
+        lower_ref_cast(context, environment, type_index, nullable)
+      }
       None
     }
     ArrayLen => {
@@ -1619,24 +1772,115 @@ pub fn lower_to_sink(
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
   if environment.gc_array_regions && environment.gc_heap_field is Some(_) {
-    prepare_gc_memory(function, validation_context, on_event~) catch {
+    prepare_gc_memory(
+      function,
+      validation_context,
+      exclusive_poll_controls=environment.exclusive_poll_controls,
+      on_event~,
+    ) catch {
       error =>
         raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
     }
+  } else if function.blocks.any(block => {
+      function
+      .block_instruction_ids(block)
+      .any(id => {
+        function.instruction_by_id(id).unwrap().opcode is Ext(op, _) &&
+        (
+          decode_poll_region(op) is Some(_) ||
+          decode_guarded_call(op) is Some(_)
+        )
+      })
+    }) {
+    if gc_borrow_error(function) is Some(error) {
+      raise @milkir_native.NativeLowerError::invalid_milkir(error)
+    }
   }
-  let environment = if environment.inline_heap is Some(_) &&
-    !inline_allocation_fits(function, validation_context) {
-    { ..environment, inline_heap: None, }
+  let poll_cache = if environment.exclusive_poll_controls &&
+    environment.gc_array_regions &&
+    environment.gc_heap_field is Some(_) {
+    prepare_poll_cache(function) catch {
+      error =>
+        raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
+    }
+  } else {
+    None
+  }
+  defer (if poll_cache is Some(edit) { (edit.restore)() })
+  let cached_polls = match poll_cache {
+    Some(edit) => edit.operations
+    None => Map([])
+  }
+  let environment = if environment.inline_heap is Some(_) ||
+    environment.prepared_arrays ||
+    environment.gc_heap_field is Some(_) {
+    let (structs, arrays, shared_structs) = allocation_expansion_limits(
+      function, validation_context,
+    )
+    let struct_views = structs && environment.struct_views is Some(_)
+    let projection_sites = if struct_views ||
+      (arrays && environment.array_views is Some(_)) {
+      Some(inline_projection_sites(function, reserve_struct=struct_views))
+    } else {
+      None
+    }
+    {
+      ..environment,
+      projection_budget: if !structs {
+        0
+      } else if projection_sites is Some({ reserved_struct: Some(_), .. }) {
+        7
+      } else {
+        8
+      },
+      array_projection_budget: if arrays {
+        8
+      } else {
+        0
+      },
+      projection_sites,
+      expand_structs: shared_structs,
+      inline_heap: if structs {
+        environment.inline_heap
+      } else {
+        None
+      },
+      prepared_arrays: environment.prepared_arrays &&
+      environment.gc_heap_field is Some(_) &&
+      arrays,
+    }
   } else {
     environment
   }
   fn validate(view : @milkir.ExtensionInstView) -> String? {
+    if !cached_polls.is_empty() && decode_cached_poll(view.op) is Some(poll) {
+      if (match poll {
+          Step(_, true) =>
+            view.operand_types.is_empty() && view.result_types is [I32]
+          Step(_, false) =>
+            view.operand_types is [I32] && view.result_types is [I32]
+          Publish(_) =>
+            view.operand_types is [I32] && view.result_types.is_empty()
+        }) {
+        return None
+      }
+      return Some("invalid cached poll signature")
+    }
     validate_memory_extension(view, validation_context, function.results)
   }
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
   ) -> String? {
+    if decode_cached_poll(extension) is Some(poll) {
+      if cached_polls.get(context.instruction_id()) != Some(poll) {
+        return Some(
+          "cached poll was not produced by the verified loop transformation",
+        )
+      }
+      lower_cached_poll(context, poll, environment)
+      return None
+    }
     lower_extension(context, extension, environment, validation_context)
   }
   fn validate_global(data : @milkir.GlobalValueData) -> String? {
@@ -1660,7 +1904,18 @@ pub fn lower_to_sink(
     resolve_context_field,
     sink,
     call_abi?,
-    verify_input~,
+    verify_input=verify_input || !cached_polls.is_empty(),
+    root_free_extension=op => {
+      decode_poll_region(op) is Some(_) ||
+      decode_guarded_call(op) is Some(_) ||
+      decode_cached_poll(op) is Some(Publish(_))
+    },
+    prefer_scoped_root_site=op => {
+      decode_poll_region(op) is Some(_) ||
+      decode_cached_poll(op) is Some(Step(_, _)) ||
+      @wasm_milkir.decode(op) is Some(SafepointPoll(_, _, _, _)) ||
+      (op.effects is Some(effects) && !effects.invalidates_addresses)
+    },
     on_event~,
   )
 }

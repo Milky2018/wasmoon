@@ -869,16 +869,26 @@ fn Translator::translate_instruction_impl(
       let n = self.pop() // size
       let s = self.pop() // source
       let d = self.pop() // destination
-      @wasm_milkir.memory_copy(
-        self.builder,
-        self.func_env.runtime_symbols,
-        self.vmctx,
-        dst_memidx,
-        src_memidx,
-        d,
-        s,
-        n,
-      )
+      if !self.func_env.try_fixed_memory_copy(
+          self.builder,
+          self.vmctx,
+          dst_memidx,
+          src_memidx,
+          d,
+          s,
+          n,
+        ) {
+        @wasm_milkir.memory_copy(
+          self.builder,
+          self.func_env.runtime_symbols,
+          self.vmctx,
+          dst_memidx,
+          src_memidx,
+          d,
+          s,
+          n,
+        )
+      }
     }
     MemoryInit(memidx, data_idx) => {
       let n = self.pop() // size

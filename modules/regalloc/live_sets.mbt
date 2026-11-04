@@ -1,10 +1,4 @@
 ///|
-struct DenseLiveSets {
-  live_in : Array[Array[Int32]]
-  live_out : Array[Array[Int32]]
-} derive(Debug)
-
-///|
 priv struct LivenessWorklist {
   queue : Array[Int32]
   in_worklist : Array[Bool]
@@ -42,7 +36,7 @@ fn propagate_live_sets(
   cfg : DenseCfgEdges,
   block_defs : Array[SparseVRegSet],
   live_in : Array[SparseVRegSet],
-) -> DenseLiveSets {
+) -> Array[Array[Int32]] {
   let live_out : Array[SparseVRegSet] = []
   let dense_word_count = match live_in.get(0) {
     Some(set) =>
@@ -87,8 +81,7 @@ fn propagate_live_sets(
       }
     }
   }
-  {
-    live_in: live_in.map(set => set.to_sorted_array()),
-    live_out: live_out.map(set => set.to_sorted_array()),
-  }
+  // The caller owns the propagated live-in sets. Range construction consumes
+  // only live-out; avoid allocating and sorting an unused copy of live-in.
+  live_out.map(set => set.to_sorted_array())
 }

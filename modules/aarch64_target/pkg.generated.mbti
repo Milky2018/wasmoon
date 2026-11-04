@@ -33,28 +33,31 @@ pub fn verify_frame(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Fram
 pub fn verify_vcode(@vcode.Function[AArch64Inst]) -> Unit raise TargetVCodeVerifyError
 
 // Errors
+#derive(@debug.Debug)
 pub suberror AArch64AllocationError {
   InvalidVCode(cause~ : TargetVCodeVerifyError)
   AllocatorFailure(cause~ : @vcode_regalloc.VCodeAllocationError)
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
   IllegalRegister(reg~ : @allocation_types.PhysicalReg)
-} derive(@debug.Debug)
+}
 pub fn AArch64AllocationError::output(Self, &Logger) -> Unit
 pub fn AArch64AllocationError::to_repr(Self) -> @debug.Repr
 pub fn AArch64AllocationError::to_string(Self) -> String
 pub impl Show for AArch64AllocationError
 
+#derive(@debug.Debug)
 pub suberror AArch64CompileError {
   TargetValidationFailed(cause~ : TargetVCodeVerifyError)
   AllocationFailed(cause~ : AArch64AllocationError)
   FramePlanningFailed(cause~ : AArch64FrameError)
   EmissionFailed(cause~ : AArch64EmitError)
-} derive(@debug.Debug)
+}
 pub fn AArch64CompileError::output(Self, &Logger) -> Unit
 pub fn AArch64CompileError::to_repr(Self) -> @debug.Repr
 pub fn AArch64CompileError::to_string(Self) -> String
 pub impl Show for AArch64CompileError
 
+#derive(@debug.Debug)
 pub suberror AArch64EmitError {
   InvalidFrame(cause~ : AArch64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
@@ -74,12 +77,13 @@ pub suberror AArch64EmitError {
   BranchLabelUnbound(label~ : Int32)
   BranchSpanNotFixed(offset~ : Int32)
   BranchOutOfRange(offset~ : Int32, bits~ : Int32)
-} derive(@debug.Debug)
+}
 pub fn AArch64EmitError::output(Self, &Logger) -> Unit
 pub fn AArch64EmitError::to_repr(Self) -> @debug.Repr
 pub fn AArch64EmitError::to_string(Self) -> String
 pub impl Show for AArch64EmitError
 
+#derive(@debug.Debug)
 pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
@@ -93,19 +97,20 @@ pub suberror AArch64FrameError {
   InvalidEmergencyMoveArea(offset~ : Int32?)
   StaleAllocation(expected_edits~ : Int32, actual_edits~ : Int32)
   SavedRegisterSetMismatch
-} derive(@debug.Debug)
+}
 pub fn AArch64FrameError::output(Self, &Logger) -> Unit
 pub fn AArch64FrameError::to_repr(Self) -> @debug.Repr
 pub fn AArch64FrameError::to_string(Self) -> String
 pub impl Show for AArch64FrameError
 
+#derive(Eq, @debug.Debug)
 pub suberror AArch64LinkError {
   InvalidCodeObject(message~ : String)
   InvalidCodeBase(address~ : Int64)
   UnresolvedRelocation(index~ : Int32)
   RelocationOutOfRange(index~ : Int32)
   UnsupportedRelocation(index~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64LinkError::equal(Self, Self) -> Bool
 pub fn AArch64LinkError::not_equal(Self, Self) -> Bool
 pub fn AArch64LinkError::output(Self, &Logger) -> Unit
@@ -113,24 +118,26 @@ pub fn AArch64LinkError::to_repr(Self) -> @debug.Repr
 pub fn AArch64LinkError::to_string(Self) -> String
 pub impl Show for AArch64LinkError
 
+#derive(@debug.Debug)
 pub suberror AArch64LowerError {
   UnsupportedOperation(block_index~ : Int32, instruction_index~ : Int32, operation~ : @native_lowering.Operation)
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
-} derive(@debug.Debug)
+}
 pub fn AArch64LowerError::output(Self, &Logger) -> Unit
 pub fn AArch64LowerError::to_repr(Self) -> @debug.Repr
 pub fn AArch64LowerError::to_string(Self) -> String
 pub impl Show for AArch64LowerError
 
+#derive(Eq, @debug.Debug)
 pub suberror InternalAbiError {
   InvalidRegister(role~ : String, index~ : Int32)
   DuplicateRegister(role~ : String, index~ : Int32)
   ContextRegisterReused(index~ : Int32)
   ResultAreaRegisterReused(index~ : Int32)
   InvalidSignature(message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn InternalAbiError::equal(Self, Self) -> Bool
 pub fn InternalAbiError::not_equal(Self, Self) -> Bool
 pub fn InternalAbiError::output(Self, &Logger) -> Unit
@@ -138,10 +145,11 @@ pub fn InternalAbiError::to_repr(Self) -> @debug.Repr
 pub fn InternalAbiError::to_string(Self) -> String
 pub impl Show for InternalAbiError
 
+#derive(Eq, @debug.Debug)
 pub suberror TargetVCodeVerifyError {
   CommonFailure(cause~ : @vcode.VCodeVerifyError)
   InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn TargetVCodeVerifyError::equal(Self, Self) -> Bool
 pub fn TargetVCodeVerifyError::not_equal(Self, Self) -> Bool
 pub fn TargetVCodeVerifyError::output(Self, &Logger) -> Unit
@@ -150,15 +158,17 @@ pub fn TargetVCodeVerifyError::to_string(Self) -> String
 pub impl Show for TargetVCodeVerifyError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64Address {
   Code(@native_types.CodeSymbol)
   External(@native_types.ExternalSymbol)
   Data(@native_types.DataSymbol)
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64Address::equal(Self, Self) -> Bool
 pub fn AArch64Address::not_equal(Self, Self) -> Bool
 pub fn AArch64Address::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64Condition {
   Eq
   Ne
@@ -170,11 +180,12 @@ pub(all) enum AArch64Condition {
   Ls
   Hi
   Hs
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64Condition::equal(Self, Self) -> Bool
 pub fn AArch64Condition::not_equal(Self, Self) -> Bool
 pub fn AArch64Condition::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64Conversion {
   WrapI64ToI32
   ExtendI32ToI64(@native_types.Signedness)
@@ -184,11 +195,12 @@ pub(all) enum AArch64Conversion {
   Bitcast(@native_types.ValueType, @native_types.ValueType)
   IntToFloat(@native_types.IntegerType, @native_types.FloatType, @native_types.Signedness)
   FloatToInt(@native_types.FloatType, @native_types.IntegerType, @native_types.Signedness)
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64Conversion::equal(Self, Self) -> Bool
 pub fn AArch64Conversion::not_equal(Self, Self) -> Bool
 pub fn AArch64Conversion::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64FloatBinary {
   Add
   Sub
@@ -197,11 +209,12 @@ pub(all) enum AArch64FloatBinary {
   Min
   Max
   CopySign
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64FloatBinary::equal(Self, Self) -> Bool
 pub fn AArch64FloatBinary::not_equal(Self, Self) -> Bool
 pub fn AArch64FloatBinary::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64FloatCondition {
   Equal
   NotEqual
@@ -211,31 +224,34 @@ pub(all) enum AArch64FloatCondition {
   GreaterOrEqual
   Ordered
   Unordered
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64FloatCondition::equal(Self, Self) -> Bool
 pub fn AArch64FloatCondition::not_equal(Self, Self) -> Bool
 pub fn AArch64FloatCondition::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64FloatTernary {
   Fmadd
   Fmsub
   Fnmadd
   Fnmsub
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64FloatTernary::equal(Self, Self) -> Bool
 pub fn AArch64FloatTernary::not_equal(Self, Self) -> Bool
 pub fn AArch64FloatTernary::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64FloatTrapCondition {
   Unordered
   LessThan
   LessOrEqual
   GreaterOrEqual
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64FloatTrapCondition::equal(Self, Self) -> Bool
 pub fn AArch64FloatTrapCondition::not_equal(Self, Self) -> Bool
 pub fn AArch64FloatTrapCondition::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64FloatUnary {
   Negate
   Absolute
@@ -244,7 +260,7 @@ pub(all) enum AArch64FloatUnary {
   Floor
   Truncate
   Nearest
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64FloatUnary::equal(Self, Self) -> Bool
 pub fn AArch64FloatUnary::not_equal(Self, Self) -> Bool
 pub fn AArch64FloatUnary::to_repr(Self) -> @debug.Repr
@@ -263,6 +279,7 @@ pub fn AArch64Frame::stack_object_offset(Self, AArch64StackObject) -> Int32?
 pub fn AArch64Frame::summary(Self) -> String
 pub fn AArch64Frame::tail_args_size(Self) -> Int32
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64Inst {
   IncomingReg(@native_types.ValueType, @allocation_types.PhysicalReg)
   IncomingStack(@native_types.ValueType, Int32)
@@ -308,6 +325,7 @@ pub(all) enum AArch64Inst {
   IntShiftRegister(GprWidth, AArch64Shift)
   IntShiftImmediate(GprWidth, AArch64Shift, Int32)
   IntAddShiftedLeft(GprWidth, Int32)
+  IntLowBitsShiftLeft(GprWidth, Int32, Int32)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native_types.Signedness)
   IntWithOverflow(GprWidth, @native_lowering.IntOverflowOp)
@@ -329,6 +347,7 @@ pub(all) enum AArch64Inst {
   ScalarLoad(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, UInt64)
   ScalarLoadUxtw(@native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, Int32)
   ScalarStore(@native_types.AccessWidth, @native_types.ValueType, UInt64)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   ScalarStoreUxtw(@native_types.AccessWidth, @native_types.ValueType, Int32)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
@@ -356,11 +375,12 @@ pub(all) enum AArch64Inst {
   Switch(GprWidth, Array[UInt64])
   Trap(@native_types.TrapReason)
   Return
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64Inst::equal(Self, Self) -> Bool
 pub fn AArch64Inst::not_equal(Self, Self) -> Bool
 pub fn AArch64Inst::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64IntBinary {
   Add
   Sub
@@ -370,49 +390,54 @@ pub(all) enum AArch64IntBinary {
   Eor
   Sdiv
   Udiv
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64IntBinary::equal(Self, Self) -> Bool
 pub fn AArch64IntBinary::not_equal(Self, Self) -> Bool
 pub fn AArch64IntBinary::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64IntUnary {
   Mvn
   Clz
   Rbit
   Neg
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64IntUnary::equal(Self, Self) -> Bool
 pub fn AArch64IntUnary::not_equal(Self, Self) -> Bool
 pub fn AArch64IntUnary::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct AArch64LinkPlan {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn AArch64LinkPlan::code(Self) -> Array[Byte]
 pub fn AArch64LinkPlan::link(Self, Int64, (@code_object.RelocationTarget) -> Int64?) -> Array[Byte] raise AArch64LinkError
 pub fn AArch64LinkPlan::to_repr(Self) -> @debug.Repr
 pub fn AArch64LinkPlan::veneer_offsets(Self) -> Array[Int32]
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64Shift {
   Lsl
   Asr
   Lsr
   Ror
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64Shift::equal(Self, Self) -> Bool
 pub fn AArch64Shift::not_equal(Self, Self) -> Bool
 pub fn AArch64Shift::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct AArch64StackObject {
   id : Int32
   size : Int32
   alignment : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64StackObject::equal(Self, Self) -> Bool
 pub fn AArch64StackObject::new(Int32, Int32, Int32) -> Self
 pub fn AArch64StackObject::not_equal(Self, Self) -> Bool
 pub fn AArch64StackObject::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64VectorConversion {
   ExtendLow(@native_lowering.VectorLane, @native_types.Signedness)
   ExtendHigh(@native_lowering.VectorLane, @native_types.Signedness)
@@ -421,11 +446,12 @@ pub(all) enum AArch64VectorConversion {
   IntToFloat(@native_lowering.VectorLane, @native_types.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64VectorConversion::equal(Self, Self) -> Bool
 pub fn AArch64VectorConversion::not_equal(Self, Self) -> Bool
 pub fn AArch64VectorConversion::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64VectorIntBinary {
   Add
   Sub
@@ -438,41 +464,46 @@ pub(all) enum AArch64VectorIntBinary {
   ExtendMultiply(@native_lowering.VectorHalf, @native_types.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64VectorIntBinary::equal(Self, Self) -> Bool
 pub fn AArch64VectorIntBinary::not_equal(Self, Self) -> Bool
 pub fn AArch64VectorIntBinary::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64VectorIntUnary {
   Absolute
   Negate
   PopulationCount
   ExtendAddPairwise(@native_types.Signedness)
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64VectorIntUnary::equal(Self, Self) -> Bool
 pub fn AArch64VectorIntUnary::not_equal(Self, Self) -> Bool
 pub fn AArch64VectorIntUnary::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AArch64VectorPredicate {
   AnyTrue
   AllTrue(@native_lowering.VectorLane)
   BitMask(@native_lowering.VectorLane)
-} derive(Eq, @debug.Debug)
+}
 pub fn AArch64VectorPredicate::equal(Self, Self) -> Bool
 pub fn AArch64VectorPredicate::not_equal(Self, Self) -> Bool
 pub fn AArch64VectorPredicate::to_repr(Self) -> @debug.Repr
 
-type CallArgumentLocation derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type CallArgumentLocation
 pub fn CallArgumentLocation::equal(Self, Self) -> Bool
 pub fn CallArgumentLocation::not_equal(Self, Self) -> Bool
 pub fn CallArgumentLocation::to_repr(Self) -> @debug.Repr
 
-type CallLayout derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type CallLayout
 pub fn CallLayout::equal(Self, Self) -> Bool
 pub fn CallLayout::not_equal(Self, Self) -> Bool
 pub fn CallLayout::to_repr(Self) -> @debug.Repr
 
-type CallResultLocation derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type CallResultLocation
 pub fn CallResultLocation::equal(Self, Self) -> Bool
 pub fn CallResultLocation::not_equal(Self, Self) -> Bool
 pub fn CallResultLocation::to_repr(Self) -> @debug.Repr
@@ -487,7 +518,7 @@ pub struct CompilationSession {
   // private fields
 }
 pub fn CompilationSession::compile_selected(Self, SelectedFunction, on_event? : (@vcode.TargetCompileEvent) -> Unit, verify_allocation? : Bool, on_diagnostics? : ((String, String) -> Unit)?) -> (@code_object.UnlinkedCodeObject, Int32) raise AArch64CompileError
-pub fn CompilationSession::new() -> Self
+pub fn CompilationSession::new(lse_atomic_add? : Bool) -> Self
 
 pub struct DirectLoweringSession {
   // private fields
@@ -496,10 +527,11 @@ pub fn DirectLoweringSession::finish_selected(Self, verify_selected? : Bool) -> 
 pub fn DirectLoweringSession::new(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType], LoweringContext, on_event? : (@vcode.TargetCompileEvent) -> Unit) -> Self raise AArch64LowerError
 pub fn DirectLoweringSession::sink(Self) -> @native_lowering.TargetSink
 
+#derive(Eq, @debug.Debug)
 pub(all) enum GprWidth {
   W32
   W64
-} derive(Eq, @debug.Debug)
+}
 pub fn GprWidth::equal(Self, Self) -> Bool
 pub fn GprWidth::not_equal(Self, Self) -> Bool
 pub fn GprWidth::to_repr(Self) -> @debug.Repr
@@ -509,9 +541,10 @@ pub struct InternalAbi {
 }
 pub fn InternalAbi::new(Int32, Int32, Array[Int32], Array[Int32], Array[Int32], Array[Int32]) -> Self raise InternalAbiError
 
+#derive(Eq, @debug.Debug)
 pub struct InternalCallPlan {
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn InternalCallPlan::equal(Self, Self) -> Bool
 pub fn InternalCallPlan::not_equal(Self, Self) -> Bool
 pub fn InternalCallPlan::to_repr(Self) -> @debug.Repr

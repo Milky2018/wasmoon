@@ -1,5 +1,6 @@
 ///|
 /// Runtime instance of a WebAssembly module
+#derive(Debug)
 pub struct ModuleInstance {
   types : ReadOnlyArray[@types.SubType] // GC: now stores SubType
   type_rec_groups : ReadOnlyArray[Int32] // rec group IDs for each type
@@ -19,7 +20,7 @@ pub struct ModuleInstance {
   priv dropped_datas : FixedArray[Bool] // true if data segment has been dropped
   priv mut owner : Ref[Bool]?
   priv function_names : Map[Int32, String]
-} derive(Debug)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to

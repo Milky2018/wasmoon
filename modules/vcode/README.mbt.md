@@ -71,10 +71,11 @@ instructions from different functions cannot be mixed accidentally.
 
 ```moonbit check
 ///|
+#derive(Debug)
 priv enum ExampleInst {
   AddOne
   Return
-} derive(Debug)
+}
 
 ///|
 test "construct and verify target VCode" {

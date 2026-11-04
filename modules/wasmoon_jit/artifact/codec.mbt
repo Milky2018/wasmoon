@@ -1,9 +1,11 @@
 ///|
+#derive(Eq, Debug)
 pub suberror ArtifactEncodeError {
   InvalidArtifactField(field~ : String, message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub suberror ArtifactDecodeError {
   ArtifactTooLarge(size~ : Int32, limit~ : Int32)
   BadMagic
@@ -19,10 +21,11 @@ pub suberror ArtifactDecodeError {
   InvalidUtf8(field~ : String)
   LimitExceeded(field~ : String, count~ : Int32, limit~ : Int32)
   TrailingBytes(count~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Resource limits applied before allocating variable-length artifact data.
+#derive(Eq, Debug)
 pub(all) struct DecodeLimits {
   max_artifact_bytes : Int32
   max_imports : Int32
@@ -38,7 +41,7 @@ pub(all) struct DecodeLimits {
   max_safepoints_per_function : Int32
   max_unwind_directives_per_function : Int32
   max_roots_per_safepoint : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn DecodeLimits::default() -> DecodeLimits {

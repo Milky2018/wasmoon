@@ -15,14 +15,14 @@ test "native storage uses the shared module descriptor and inline arrays" {
     MemoryInfo(memory, 65536L, Some(2)),
   ])
   a.set_table_pointers([Some(table.table()), Some(table.table())])
-  inspect(@native_test_support.context_storage_bytes(a.handle), content="424")
+  inspect(@native_test_support.context_storage_bytes(a.handle), content="432")
   a.set_memory_pointers([])
   a.set_table_pointers([])
   let cases : Array[(ContextShape, Int32)] = [
-    (Module(0, 0, 0), 272),
-    (Module(1, 0, 0), 320),
-    (Module(0, 1, 0), 344),
-    (Module(300, 257, 1), 8928),
+    (Module(0, 0, 0), 280),
+    (Module(1, 0, 0), 328),
+    (Module(0, 1, 0), 352),
+    (Module(300, 257, 1), 8936),
   ]
   for (shape, bytes) in cases {
     let context = NativeJITContext::try_alloc(

@@ -1,5 +1,6 @@
 ///|
 /// Structured failure while invoking a prepared JIT module context.
+#derive(Debug, Eq)
 pub(all) suberror JITCoreCallError {
   FunctionUnavailable(Int32)
   ArgumentTypeMismatch(Int32)
@@ -11,7 +12,7 @@ pub(all) suberror JITCoreCallError {
   HostInvocation(@runtime.RuntimeError)
   GcSetupFailed(String)
   ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for JITCoreCallError with fn output(self, logger) {
@@ -97,12 +98,21 @@ fn prepare_jit_core_environment(
   errdefer context.jit_module.set_execution_scope(None) |> ignore
   match store.native_heap() {
     Some(heap) => {
-      context.jit_module.setup_gc(
-        heap,
-        context.module_types[:].to_owned(),
-        context.canonical_type_indices[:].to_owned(),
-        context.func_type_indices[:].to_owned(),
-      ) catch {
+      try {
+        let environment = match context.gc_environment {
+          Some(environment) => environment
+          None => {
+            let environment = context.jit_module.prepare_gc_environment(
+              context.module_types[:],
+              context.canonical_type_indices[:],
+              context.func_type_indices[:],
+            )
+            context.gc_environment = Some(environment)
+            environment
+          }
+        }
+        context.jit_module.setup_gc_environment(heap, environment)
+      } catch {
         error => raise GcSetupFailed(error.to_string())
       }
       context.jit_module.set_gc_heap(heap.get_ptr())

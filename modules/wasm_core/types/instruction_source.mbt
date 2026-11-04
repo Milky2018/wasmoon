@@ -2,10 +2,11 @@
 /// Original module-byte position of one decoded instruction. Entries are in
 /// preorder; subtree_end is the exclusive entry index after nested bodies.
 /// Positions are independent of semantic AST equality and encoding choices.
+#derive(Debug, Eq)
 pub(all) struct InstructionSource {
   byte_offset : Int32
   subtree_end : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend InstructionSource with Debug::{to_repr}

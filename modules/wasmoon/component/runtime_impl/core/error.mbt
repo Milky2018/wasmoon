@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub(all) suberror ComponentRuntimeError {
   UnsupportedComponent(String)
   ComponentParseError(String)
@@ -52,7 +53,7 @@ pub(all) suberror ComponentRuntimeError {
   InvocationAlreadyDriving
   /// The same linker is already instantiating another root component.
   ReentrantInstantiation
-} derive(Debug, Eq)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to

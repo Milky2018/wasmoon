@@ -68,6 +68,7 @@ pub(all) enum FunctionCompileStage {
 }
 
 ///|
+#derive(ToJson)
 pub struct IRPassMetric {
   name : String
   duration_us : Int64
@@ -80,22 +81,25 @@ pub struct IRPassMetric {
   work_done : Int32?
   value_lookup_probes : Int32?
   budget_exhausted : Bool?
-} derive(ToJson)
+}
 
 ///|
+#derive(ToJson)
 pub struct RegallocPhaseMetric {
   name : String
   duration_us : Int64
-} derive(ToJson)
+}
 
 ///|
+#derive(ToJson)
 pub struct CompileSubphaseMetric {
   name : String
   parent : String
   duration_us : Int64
-} derive(ToJson)
+}
 
 ///|
+#derive(ToJson)
 pub struct RegallocLoopMetric {
   queue_pops : Int32
   register_probes : Int32
@@ -105,9 +109,10 @@ pub struct RegallocLoopMetric {
   bundle_splits : Int32
   second_chance_attempts : Int32
   max_queue_length : Int32
-} derive(ToJson)
+}
 
 ///|
+#derive(ToJson)
 pub struct FunctionMetrics {
   func_idx : Int32
   func_name : String
@@ -131,16 +136,17 @@ pub struct FunctionMetrics {
   mut regalloc_loop : RegallocLoopMetric?
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
-} derive(ToJson)
+}
 
 ///|
+#derive(ToJson)
 pub struct ModuleMetricsReport {
   schema_version : Int32
   expected_functions : Int32
   mut module_compile_us : Int64
   compile_subphases : Array[CompileSubphaseMetric]
   functions : Array[FunctionMetrics]
-} derive(ToJson)
+}
 
 ///|
 let module_state : Ref[ModuleMetricsReport?] = { val: None, }

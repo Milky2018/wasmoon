@@ -18,9 +18,10 @@ priv struct HostExceptionState {
 
 ///|
 /// A transport signal, distinct from ordinary RuntimeError and engine traps.
+#derive(Debug)
 pub(all) suberror HostGuestException {
   HostThrows(GuestException)
-} derive(Debug)
+}
 
 ///|
 pub impl Debug for GuestException with fn to_repr(_self) {
@@ -215,11 +216,12 @@ pub fn normalize_host_error(error : Error) -> RuntimeError {
 ///|
 /// Synchronous execution bridge. A thrown payload owns a root lease until the
 /// interpreter/native caller incorporates it into guest roots or abandons it.
+#derive(Debug)
 pub(all) enum HostCallOutcome {
   HostCallReturned(Array[@types.Value])
   HostCallThrown(Int32, Array[@types.Value], GcRootLease)
   HostCallFailed(RuntimeError)
-} derive(Debug)
+}
 
 ///|
 pub extend HostCallOutcome with Debug::{to_repr}

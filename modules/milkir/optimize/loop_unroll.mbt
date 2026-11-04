@@ -32,10 +32,11 @@ priv enum CountedLoopDecision {
 }
 
 ///|
+#derive(Eq)
 priv enum CountedDirection {
   Increasing
   Decreasing
-} derive(Eq)
+}
 
 ///|
 priv enum CountedSignedness {

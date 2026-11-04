@@ -43,6 +43,11 @@ static int32_t gc_frame_chain_depth(const jit_context_t *ctx) {
 
 // Function frame storage is part of the allocated native stack, never malloc'd.
 _Static_assert(sizeof(wasmoon_gc_function_frame_t) == 32, "function root frame ABI");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, prev) == 0, "root frame previous offset");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, roots) == 8, "root frame words offset");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, mask) == 16, "root frame mask offset");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, slot_count) == 24, "root frame count offset");
+_Static_assert(offsetof(wasmoon_gc_function_frame_t, reserved) == 28, "root frame reserved offset");
 
 int32_t jit_copy_function_frame_roots(const jit_execution_state_t *state, int64_t *destination) {
     int64_t total = 0;
@@ -814,15 +819,32 @@ int32_t ctx_gc_set_root_scratch_internal(
     return 1;
 }
 
+static int32_t collect_gc_with_root_indices(
+    jit_context_t *ctx, const int64_t *roots, int32_t root_count,
+    const uint8_t *indices, int allocation_collection,
+    const GcTypeLayout *operand_layout, int operand_array
+);
+
 int32_t gc_collect_for_alloc_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count
 ) {
-    return gc_collect_for_alloc_indexed_internal(ctx, roots, root_count, NULL);
+    // Public/host collection preserves complete reclamation semantics.
+    return collect_gc_with_root_indices(ctx, roots, root_count, NULL, 0, NULL, 0);
 }
 
 int32_t gc_collect_for_alloc_indexed_internal(
     jit_context_t *ctx, const int64_t *roots, int32_t root_count,
-    const uint8_t *indices
+    const uint8_t *indices, int collection_kind,
+    const GcTypeLayout *operand_layout, int operand_array
+) {
+    return collect_gc_with_root_indices(ctx, roots, root_count, indices, collection_kind,
+        operand_layout, operand_array);
+}
+
+static int32_t collect_gc_with_root_indices(
+    jit_context_t *ctx, const int64_t *roots, int32_t root_count,
+    const uint8_t *indices, int allocation_collection,
+    const GcTypeLayout *operand_layout, int operand_array
 ) {
     jit_context_t *activation = get_current_jit_context();
     if (activation && ctx && ctx_gc_heap(activation) == ctx_gc_heap(ctx)) ctx = activation;
@@ -879,7 +901,19 @@ int32_t gc_collect_for_alloc_indexed_internal(
         }
         int32_t at = 0;
         if (safe_root_count > 0 && roots) {
-            if (indices) {
+            if (operand_layout) {
+                // Allocation descriptors address staged payload words. Numeric
+                // fields are not roots even when their bits resemble a native
+                // handle. Keep the borrowed span and null only known scalars;
+                // unknown embedding layouts retain their conservative contract.
+                for (int32_t i = 0; i < safe_root_count; ++i) {
+                    uint32_t index = indices ? safepoint_u32(indices + (size_t)i * 4) : (uint32_t)i;
+                    uint32_t field = operand_array ? 0 : index;
+                    int numeric = field < (uint32_t)operand_layout->count &&
+                        !operand_layout->fields[field].reference;
+                    merged[at++] = numeric ? 0 : roots[index];
+                }
+            } else if (indices) {
                 for (int32_t i = 0; i < safe_root_count; ++i)
                     merged[at++] = roots[safepoint_u32(indices + (size_t)i * 4)];
             } else {
@@ -902,12 +936,22 @@ int32_t gc_collect_for_alloc_indexed_internal(
         if (table_root_count > 0) {
             at += gc_copy_table_roots(ctx, &merged[at]);
         }
-        jit_mark_active_gc_roots(heap);
-        collected = gc_heap_collect(heap, merged, total_roots);
+        // The precise coordinator copies active roots before tracing. Premarking
+        // them here would require a second discovery pass over the whole heap.
+        if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
+        collected = allocation_collection == GC_COLLECTION_PACKED_SEGMENT
+            ? gc_heap_collect_for_packed_segment(heap, merged, total_roots)
+            : allocation_collection == GC_COLLECTION_ALLOCATION
+                ? gc_heap_collect_for_allocation(heap, merged, total_roots)
+                : gc_heap_collect(heap, merged, total_roots);
         free(merged);
     } else {
-        jit_mark_active_gc_roots(heap);
-        collected = gc_heap_collect(heap, NULL, 0);
+        if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
+        collected = allocation_collection == GC_COLLECTION_PACKED_SEGMENT
+            ? gc_heap_collect_for_packed_segment(heap, NULL, 0)
+            : allocation_collection == GC_COLLECTION_ALLOCATION
+                ? gc_heap_collect_for_allocation(heap, NULL, 0)
+                : gc_heap_collect(heap, NULL, 0);
     }
 
     if (gc_collect_debug_enabled()) {
@@ -1032,7 +1076,21 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_layout_field(int32_t index) {
         GC_ID_PAGE_BITS,
         offsetof(GcHeap, identity_window_limit),
         offsetof(GcHeap, identity_window_page),
-
+        offsetof(GcHeap, struct_views),
+        offsetof(GcStructViewCache, reference),
+        offsetof(GcStructViewCache, identity),
+        offsetof(GcStructViewCache, fields),
+        offsetof(GcStructViewCache, shape),
+        offsetof(GcStructViewCache, payload),
+        GC_STRUCT_VIEW_CACHE_BITS,
+        offsetof(GcHeap, array_views),
+        offsetof(GcArrayViewCache, reference),
+        offsetof(GcArrayViewCache, view),
+        GC_ARRAY_VIEW_CACHE_BITS,
+        sizeof(GcArrayViewCache),
+        (int32_t)offsetof(jit_runtime_state_t, callable_registry) - (int32_t)offsetof(jit_context_owner_t, abi),
+        offsetof(jit_callable_registry_t, parents),
+        offsetof(jit_callable_registry_t, type_count),
     };
     assert(index >= 0 && (size_t)index < sizeof(fields) / sizeof(fields[0]));
     return fields[index];
@@ -1127,9 +1185,11 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_poll_layout_field(int32_t index) {
         (int32_t)offsetof(jit_runtime_state_t, execution) - (int32_t)sizeof(jit_runtime_state_t),
         (int32_t)offsetof(jit_execution_state_t, poll_controls),
         (int32_t)offsetof(jit_invocation_controls_t, cancellation_callback),
-        (int32_t)offsetof(jit_invocation_controls_t, scheduling_budget)
+        (int32_t)offsetof(jit_invocation_controls_t, scheduling_budget),
+        (int32_t)offsetof(jit_execution_state_t, gc_function_frame_head),
+        (int32_t)offsetof(jit_runtime_state_t, poll_budget) - (int32_t)sizeof(jit_runtime_state_t)
     };
-    return index >= 0 && index < 4 ? offsets[index] : 0;
+    return index >= 0 && index < 6 ? offsets[index] : 0;
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

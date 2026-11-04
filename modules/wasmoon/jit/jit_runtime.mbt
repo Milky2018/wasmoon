@@ -16,6 +16,7 @@ pub struct JITFunction {
 
 ///|
 /// Error when loading a precompiled JIT module
+#derive(Debug)
 pub suberror JITModuleLoadError {
   ContextAllocationFailed(total_funcs~ : Int32)
   UnsupportedImport(
@@ -38,7 +39,7 @@ pub suberror JITModuleLoadError {
   ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
   CodeQuotaExceeded
   FunctionMetadataRegistrationFailed(func_idx~ : Int32, message~ : String)
-} derive(Debug)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
@@ -99,17 +100,18 @@ pub fn JITFunction::wasm_offset(
 
 ///|
 /// Address range for PC-to-function mapping (sorted by start address)
+#derive(Debug)
 struct AddressRange {
   start : Int64 // Function start address
   end : Int64 // Function end address (start + code_size)
   func_idx : Int32 // Wasm function index
-} derive(Debug)
+}
 
 ///|
 /// Loaded precompiled module with executable functions
 struct JITModule {
   functions : Map[Int32, JITFunction]
-  callables : Map[Int32, @wasmoon_jit.NativeCallable]
+  mut callables : @wasmoon_jit.NativeCallableBatch?
   mut callable_owners : Int32
   mut close_requested : Bool
   by_name : Map[String, Int32]
@@ -129,7 +131,7 @@ struct JITModule {
 pub fn JITModule::JITModule() -> JITModule {
   {
     functions: Map([]),
-    callables: Map([]),
+    callables: None,
     callable_owners: 0,
     close_requested: false,
     by_name: Map([]),
@@ -391,17 +393,15 @@ fn load_artifact_with_imports_using_registrar(
     })
   }
   jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
-  for index in 0..<ctx.ctx.func_count() {
-    let target = ctx.ctx.func_ptr(index)
-    if target == 0L {
-      continue
-    }
-    let callable = ctx.ctx.bind_callable(target) catch {
-      cause => raise ArtifactInstallationFailed(cause~)
-    }
-    jit_module.callables.set(index, callable)
-    ctx.ctx.set_func(index, callable.entry_address())
+  let callables = ctx.ctx.bind_callables(
+    Array::makei(ctx.ctx.func_count(), i => ctx.ctx.func_ptr(i)),
+  ) catch {
+    cause => raise ArtifactInstallationFailed(cause~)
   }
+  for index in 0..<ctx.ctx.func_count() {
+    ctx.ctx.set_func(index, callables.entry_address(index))
+  }
+  jit_module.callables = Some(callables)
   jit_module.context = Some(ctx)
   jit_module.debug_db = debug_db
   jit_module.installed_code = Some(installed)
@@ -444,10 +444,10 @@ fn JITModule::release_code(self : JITModule) -> Unit {
     context.close()
   }
   self.context = None
-  for _, callable in self.callables {
-    callable.release()
+  if self.callables is Some(callables) {
+    callables.release()
   }
-  self.callables.clear()
+  self.callables = None
   for trampoline in self.owned_trampolines {
     trampoline.release()
   }
@@ -505,8 +505,11 @@ pub fn JITModule::get_func_by_name(
 /// Get function pointer by function index (for indirect table initialization)
 /// Returns the executable code pointer for the function, or 0 if not found
 pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int32) -> Int64 {
-  if self.callables.get(func_idx) is Some(callable) {
-    return callable.entry_address()
+  if self.callables is Some(callables) {
+    let address = callables.entry_address(func_idx)
+    if address != 0L {
+      return address
+    }
   }
   // Keep transaction-owned mappings reachable while returning their address.
   self.installed_code |> ignore
@@ -822,6 +825,7 @@ pub fn JITCallContinuation::cancel(
 
 ///|
 /// Structured result for a cooperative JIT invocation.
+#derive(Debug)
 pub(all) enum JITCallResult {
   Completed(Array[Int64])
   Cancelled
@@ -829,7 +833,7 @@ pub(all) enum JITCallResult {
   UnsupportedCancellation
   TimedOut
   InvalidTimeout
-} derive(Debug)
+}
 
 ///|
 /// Invoke JIT code with an invocation-local cooperative cancellation callback.
@@ -1263,6 +1267,31 @@ pub fn JITModule::setup_gc_with_func_table(
   context.ctx.setup_gc_with_func_table(
     heap, types, canonical_indices, func_type_indices, func_table_ptr, num_funcs,
   )
+}
+
+///|
+/// Prepare immutable metadata after this module's function addresses are installed.
+pub fn JITModule::prepare_gc_environment(
+  self : JITModule,
+  types : ArrayView[@types.SubType],
+  canonical_indices : ArrayView[Int32],
+  func_type_indices : ArrayView[Int32],
+) -> @wasmoon_jit.PreparedGCEnvironment raise @wasmoon_jit.GCSetupError {
+  guard self.context is Some(context) else { raise MissingJITContext }
+  context.ctx.prepare_gc_environment(
+    types, canonical_indices, func_type_indices,
+  )
+}
+
+///|
+/// Rebind a prepared environment while retaining live-module/context checks.
+pub fn JITModule::setup_gc_environment(
+  self : JITModule,
+  heap : @wasmoon_jit.CHeap,
+  environment : @wasmoon_jit.PreparedGCEnvironment,
+) -> Unit raise @wasmoon_jit.GCSetupError {
+  guard self.context is Some(context) else { raise MissingJITContext }
+  context.ctx.setup_gc_environment(heap, environment)
 }
 
 ///|

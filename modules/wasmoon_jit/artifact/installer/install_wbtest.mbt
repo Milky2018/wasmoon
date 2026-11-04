@@ -5,12 +5,14 @@ using @loader {verify_artifact, load_artifact}
 using @artifact_test_support {loader_artifact, loader_compatibility}
 
 ///|
+#derive(Eq, Debug)
 struct InstalledImportSnapshot {
   function_index : Int32
   symbol : String
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 struct InstalledFunctionSnapshot {
   function_index : Int32
   symbol : String
@@ -20,13 +22,14 @@ struct InstalledFunctionSnapshot {
   trap_count : Int32
   safepoint_count : Int32
   unwind_count : Int32
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 struct InstallationSnapshot {
   imports : Array[InstalledImportSnapshot]
   functions : Array[InstalledFunctionSnapshot]
-} derive(Eq, Debug)
+}
 
 ///|
 fn installation_snapshot(installed : InstalledCode) -> InstallationSnapshot {

@@ -12,6 +12,7 @@ import {
 // Values
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror JitInstallError {
   ResolutionFailed(kind~ : String, name~ : String)
   AllocationFailed(function_index~ : Int32)
@@ -21,7 +22,7 @@ pub(all) suberror JitInstallError {
   PublicationFailed(message~ : String)
   TrampolineAllocationFailed(code_size~ : Int32)
   CodeQuotaExceeded
-} derive(Eq, @debug.Debug)
+}
 pub fn JitInstallError::equal(Self, Self) -> Bool
 pub fn JitInstallError::not_equal(Self, Self) -> Bool
 pub fn JitInstallError::to_repr(Self) -> @debug.Repr

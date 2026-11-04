@@ -256,3 +256,34 @@ test "prepared code cannot override the session compilation policy" {
   assert_eq(compilations.val, 1)
   assert_eq(code.artifacts.length(), 1)
 }
+
+///|
+test "component compilation reentry cannot replace the owned core module" {
+  let module_ = @core_wat.parse(
+    "(module (func (export \"run\") (result i32) i32.const 42))",
+  )
+  let replacement = @core_wat.parse(
+    "(module (func (export \"run\") (result i32) i32.const 99))",
+  )
+  @validator.validate_module(module_)
+  let (store, instance) = @executor.instantiate_module(module_)
+  defer store.close()
+  let changed = Ref(false)
+  let (context, registration) = load_component_jit_context(
+    module_,
+    instance,
+    store,
+    @wasmoon_jit.host_native_target(),
+    2,
+    fn(_) { false },
+    on_compile=fn() {
+      module_.codes[0] = replacement.codes[0]
+      changed.val = true
+    },
+  )
+  defer context.close()
+  defer registration.release()
+  assert_true(changed.val)
+  assert_eq(module_.codes[0], replacement.codes[0])
+  assert_eq(context.call_core_func(store, instance, 0, []), [I32(42)])
+}

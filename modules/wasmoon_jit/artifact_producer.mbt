@@ -8,10 +8,56 @@ pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-20"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-48"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int32 = "wasmoon_jit_host_operating_system_abi"
+
+///|
+const AARCH64_LSE_FEATURE : String = "aarch64-lse"
+
+///|
+extern "c" fn host_has_aarch64_lse() -> Int32 = "wasmoon_jit_host_has_aarch64_lse"
+
+///|
+pub fn host_cpu_features() -> Array[@artifact.CpuFeature] {
+  if host_has_aarch64_lse() != 0 {
+    [{ name: AARCH64_LSE_FEATURE, }]
+  } else {
+    []
+  }
+}
+
+///|
+fn contains_atomic_add(body : ReadOnlyArray[@types.Instruction]) -> Bool {
+  body.any(fn(instruction) {
+    match instruction {
+      // WebAssembly subopcodes for the seven integer RMW-add forms.
+      Atomic(op, _, _, _) => op >= 0x1E && op <= 0x24
+      Block(_, body) | Loop(_, body) | TryTable(_, _, body) =>
+        contains_atomic_add(body)
+      If(_, yes, no) => contains_atomic_add(yes) || contains_atomic_add(no)
+      _ => false
+    }
+  })
+}
+
+///|
+/// Select the optional host feature only for shared-memory modules that
+/// contain an eligible operation. Other artifacts keep the baseline profile.
+pub fn wasm_host_cpu_requirements(
+  mod_ : @types.Module,
+) -> Array[@artifact.CpuFeature] {
+  let shared = mod_.memories.any(memory => memory.is_shared) ||
+    mod_.imports.any(item => item.desc is Memory(memory) && memory.is_shared)
+  if shared &&
+    host_has_aarch64_lse() != 0 &&
+    mod_.codes.any(code => contains_atomic_add(code.body)) {
+    [{ name: AARCH64_LSE_FEATURE, }]
+  } else {
+    []
+  }
+}
 
 ///|
 fn artifact_architecture(target : NativeTarget) -> @code_object.Architecture {
@@ -242,12 +288,39 @@ pub fn NativeCompiler::new(
   target : NativeTarget,
   context_shape~ : ContextShape = Legacy,
 ) -> NativeCompiler {
+  native_compiler(target, context_shape, false)
+}
+
+///|
+/// Select code generation from the same manifest that is verified at install.
+pub fn NativeCompiler::for_manifest(
+  manifest : @artifact.CompatibilityManifest,
+) -> NativeCompiler {
+  let target : NativeTarget = match manifest.target.architecture {
+    AArch64 => AArch64
+    X64 => X64
+  }
+  native_compiler(
+    target,
+    manifest.context_shape,
+    manifest.required_cpu_features.any(feature => {
+      feature.name == AARCH64_LSE_FEATURE
+    }),
+  )
+}
+
+///|
+fn native_compiler(
+  target : NativeTarget,
+  context_shape : ContextShape,
+  lse_atomic_add : Bool,
+) -> NativeCompiler {
   match target {
     AArch64 =>
       {
         target,
         context_layout: shaped_vmcontext_layout(context_shape),
-        aarch64: Some(@aarch64_target.CompilationSession::new()),
+        aarch64: Some(@aarch64_target.CompilationSession::new(lse_atomic_add~)),
         x64: None,
       }
     X64 =>

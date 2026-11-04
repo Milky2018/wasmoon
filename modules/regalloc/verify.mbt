@@ -1,4 +1,5 @@
 ///|
+#derive(Debug)
 pub suberror VerifyError {
   Unassigned(vreg~ : VirtualReg)
   FixedConstraintViolation(
@@ -10,7 +11,7 @@ pub suberror VerifyError {
   IncorrectValue(vreg~ : VirtualReg, location~ : Location)
   ScratchRegisterUnavailable(message~ : String)
   InvalidPlan(message~ : String)
-} derive(Debug)
+}
 
 ///|
 fn location_key(location : Location) -> (Int32, Int32) {

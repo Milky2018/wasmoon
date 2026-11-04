@@ -65,7 +65,11 @@ fn Store::trace_table_roots(
 }
 
 ///|
-fn Store::begin_native_gc_trace(_self : Store) -> NativeGcTrace {
+fn Store::begin_native_gc_trace(
+  _self : Store,
+  young~ : Bool = false,
+) -> NativeGcTrace {
+  ignore(young)
   Disabled
 }
 

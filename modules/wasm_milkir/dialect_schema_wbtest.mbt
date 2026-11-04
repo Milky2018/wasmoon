@@ -11,7 +11,7 @@ fn valid_immediates(spec : WasmOpcodeSpec) -> FixedArray[Int32] {
 
 ///|
 test "generated Wasm opcode codec round-trips every schema row" {
-  inspect(wasm_opcode_specs.length(), content="51")
+  inspect(wasm_opcode_specs.length(), content="52")
   let observed_wire_names : Map[String, Unit] = Map([])
   for spec in wasm_opcode_specs {
     let opcode = match opcode_from_payload(spec.id, valid_immediates(spec)) {

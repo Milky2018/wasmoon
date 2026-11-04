@@ -45,9 +45,11 @@ priv struct CodeBuffer {
   // conditional branch and almost no function needs it. `emit` turns it on and
   // re-emits only after a branch has actually overflowed.
   long_branches : Bool
+  lse_atomic_add : Bool
 }
 
 ///|
+#derive(Debug)
 pub suberror AArch64EmitError {
   InvalidFrame(cause~ : AArch64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
@@ -67,7 +69,7 @@ pub suberror AArch64EmitError {
   BranchLabelUnbound(label~ : Int32)
   BranchSpanNotFixed(offset~ : Int32)
   BranchOutOfRange(offset~ : Int32, bits~ : Int32)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for AArch64EmitError with fn output(self, logger) {
@@ -75,8 +77,18 @@ pub impl Show for AArch64EmitError with fn output(self, logger) {
 }
 
 ///|
-fn CodeBuffer::new(long_branches~ : Bool = false) -> CodeBuffer {
-  { code: [], fixups: [], labels: [], relocations: [], long_branches, }
+fn CodeBuffer::new(
+  long_branches~ : Bool = false,
+  lse_atomic_add~ : Bool = false,
+) -> CodeBuffer {
+  {
+    code: [],
+    fixups: [],
+    labels: [],
+    relocations: [],
+    long_branches,
+    lse_atomic_add,
+  }
 }
 
 ///|
@@ -576,6 +588,23 @@ fn emit_atomic_rmw(
   if width == W128 {
     raise InvalidScalarMemoryAccess
   }
+  if buffer.lse_atomic_add && operation is Add {
+    let opcode = match width {
+      W8 => 0x38E00000U
+      W16 => 0x78E00000U
+      W32 => 0xB8E00000U
+      W64 => 0xF8E00000U
+      W128 => raise InvalidScalarMemoryAccess
+    }
+    let offset = buffer.position()
+    buffer.emit_word(
+      opcode |
+      (reg_bits(value) << 16) |
+      (reg_bits(address) << 5) |
+      reg_bits(result),
+    )
+    return offset
+  }
   let scratch = @vcode.PhysicalReg::new(16, Int)
   let status = @vcode.PhysicalReg::new(17, Int)
   let loop_offset = buffer.position()
@@ -692,6 +721,23 @@ fn scalar_load_base(
     (F64, W64, None) => Some(0xFD400000U)
     _ => None
   }
+}
+
+///|
+fn emit_negative_scalar_load(
+  buffer : CodeBuffer,
+  scaled_base : UInt32,
+  address : @vcode.PhysicalReg,
+  result : @vcode.PhysicalReg,
+  offset : Int64,
+) -> Unit {
+  // LDUR uses a signed byte displacement in bits 20:12.
+  buffer.emit_word(
+    (scaled_base & 0xFEFFFFFFU) |
+    ((offset.to_int().reinterpret_as_uint() & 0x1FFU) << 12) |
+    (reg_bits(address) << 5) |
+    reg_bits(result),
+  )
 }
 
 ///|
@@ -952,6 +998,23 @@ fn encode_shift_immediate(
       reg_bits(destination)
     }
   }
+}
+
+///|
+fn encode_low_bits_shift_left(
+  width : GprWidth,
+  field_bits : Int32,
+  amount : Int32,
+  destination : @vcode.PhysicalReg,
+  source : @vcode.PhysicalReg,
+) -> UInt32 {
+  let bits = if width == W32 { 32 } else { 64 }
+  let base = if width == W32 { 0x53000000U } else { 0xD3400000U }
+  base |
+  (((bits - amount) % bits).reinterpret_as_uint() << 16) |
+  ((field_bits - 1).reinterpret_as_uint() << 10) |
+  (reg_bits(source) << 5) |
+  reg_bits(destination)
 }
 
 ///|
@@ -2352,10 +2415,12 @@ fn emit_prologue(
 ) -> Unit raise AArch64EmitError {
   if frame.has_frame_record {
     // Establish the chain before large-frame probes can hit the guard page.
-    emit_sp_adjust(buffer, true, 16, unwind~)
+    buffer.emit_word(0xA9BF7BFDU) // STP X29, X30, [SP, #-16]!
+    unwind.push(
+      @code_object.UnwindDirective::new(buffer.position(), StackAlloc(size=16)),
+    )
     let fp = @vcode.PhysicalReg::new(29, Int)
     let lr = @vcode.PhysicalReg::new(30, Int)
-    emit_register_pair_save_or_restore(buffer, false, fp, lr, 0)
     record_saved_register_unwind(unwind, buffer.position(), 16, (fp, 0))
     record_saved_register_unwind(unwind, buffer.position(), 16, (lr, 8))
     buffer.emit_word(0x910003FDU) // MOV X29, SP
@@ -2436,14 +2501,7 @@ fn emit_epilogue(
   }
   emit_sp_adjust(buffer, false, frame.allocation_size())
   if frame.has_frame_record {
-    emit_register_pair_save_or_restore(
-      buffer,
-      true,
-      @vcode.PhysicalReg::new(29, Int),
-      @vcode.PhysicalReg::new(30, Int),
-      0,
-    )
-    emit_sp_adjust(buffer, false, 16)
+    buffer.emit_word(0xA8C17BFDU) // LDP X29, X30, [SP], #16
   }
 }
 
@@ -2688,7 +2746,7 @@ fn value_home(
 fn function_input_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
-  body : Array[@vcode.Instruction],
+  body : ArrayView[@vcode.Instruction],
   start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
@@ -2726,20 +2784,9 @@ fn emit_function_inputs(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise AArch64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
     return
@@ -2803,20 +2850,9 @@ fn emit_incoming_call_results(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise AArch64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_incoming_call_result(
       function.instruction(body[current_index - 1]).unwrap(),
@@ -2881,7 +2917,7 @@ fn emit_incoming_call_results(
 fn incoming_call_result_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
-  body : Array[@vcode.Instruction],
+  body : ArrayView[@vcode.Instruction],
   start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
@@ -2924,7 +2960,7 @@ fn is_abi_materialization(instruction : AArch64Inst) -> Bool {
 fn function_output_register_moves(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
-  body : Array[@vcode.Instruction],
+  body : ArrayView[@vcode.Instruction],
   start : Int32,
 ) -> Array[@vcode.ParallelMove] {
   let moves : Array[@vcode.ParallelMove] = []
@@ -2954,20 +2990,9 @@ fn emit_function_outputs(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
-  block : @vcode.Block,
-  instruction : @vcode.Instruction,
+  body : ArrayView[@vcode.Instruction],
+  current_index : Int32,
 ) -> Unit raise AArch64EmitError {
-  let body = function.block_body(block)
-  let mut current_index = -1
-  for index, candidate in body {
-    if candidate == instruction {
-      current_index = index
-      break
-    }
-  }
-  if current_index < 0 {
-    return
-  }
   if current_index > 0 &&
     is_function_output(function.instruction(body[current_index - 1]).unwrap()) {
     return
@@ -3036,6 +3061,8 @@ fn emit_instruction(
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   block : @vcode.Block,
+  body : ArrayView[@vcode.Instruction],
+  body_index : Int32,
   instruction : @vcode.Instruction,
   next_block : @vcode.Block?,
 ) -> Int32 raise AArch64EmitError {
@@ -3054,15 +3081,15 @@ fn emit_instruction(
   match function.instruction(instruction).unwrap() {
     IncomingReg(_, _) | IncomingStack(_, _) | IncomingResultArea(_) =>
       emit_function_inputs(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     IncomingCallResult(_, _) | IncomingCallAreaResult(_, _) =>
       emit_incoming_call_results(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     OutgoingReg(_, _) | OutgoingAreaResult(_, _) =>
       emit_function_outputs(
-        buffer, function, allocation, frame, block, instruction,
+        buffer, function, allocation, frame, body, body_index,
       )
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
@@ -3223,6 +3250,10 @@ fn emit_instruction(
     IntShiftImmediate(width, operation, amount) =>
       buffer.emit_word(
         encode_shift_immediate(width, operation, amount, reg(1), reg(0)),
+      )
+    IntLowBitsShiftLeft(width, field_bits, amount) =>
+      buffer.emit_word(
+        encode_low_bits_shift_left(width, field_bits, amount, reg(1), reg(0)),
       )
     IntAddShiftedLeft(width, amount) =>
       buffer.emit_word(
@@ -3403,16 +3434,22 @@ fn emit_instruction(
       guard scalar_load_base(width, extension, result_type) is Some(base) else {
         raise InvalidScalarMemoryAccess
       }
-      let (address, immediate) = scalar_memory_address(
-        buffer,
-        reg(0),
-        width,
-        offset,
-      )
-      metadata_offset = buffer.position()
-      buffer.emit_word(
-        base | (immediate << 10) | (reg_bits(address) << 5) | reg_bits(reg(1)),
-      )
+      let displacement = offset.reinterpret_as_int64()
+      if displacement < 0L && displacement >= -256L {
+        metadata_offset = buffer.position()
+        emit_negative_scalar_load(buffer, base, reg(0), reg(1), displacement)
+      } else {
+        let (address, immediate) = scalar_memory_address(
+          buffer,
+          reg(0),
+          width,
+          offset,
+        )
+        metadata_offset = buffer.position()
+        buffer.emit_word(
+          base | (immediate << 10) | (reg_bits(address) << 5) | reg_bits(reg(1)),
+        )
+      }
     }
     ScalarLoadUxtw(width, extension, result_type, shift) => {
       guard scalar_load_base(width, extension, result_type) is Some(base) else {
@@ -3422,6 +3459,37 @@ fn emit_instruction(
       buffer.emit_word(
         encode_scalar_uxtw_address(base, width, shift, reg(2), reg(0), reg(1)),
       )
+    }
+    StoreRepeated64(offset, count, bits) => {
+      let address = reg(1)
+      let remaining = reg(2)
+      let pattern = reg(3)
+      if add_sub_immediate_shift(offset) is Some(_) {
+        buffer.emit_word(
+          encode_int_binary_immediate(W64, Add, offset, address, reg(0)),
+        )
+      } else {
+        emit_constant(buffer, W64, address, offset)
+        buffer.emit_word(
+          encode_three_register(0x8B000000U, address, reg(0), address),
+        )
+      }
+      emit_constant(buffer, W64, remaining, count.to_uint64())
+      emit_constant(buffer, W64, pattern, bits)
+      let loop_offset = buffer.position()
+      metadata_offset = loop_offset
+      buffer.emit_word(
+        0xF9000000U | (reg_bits(address) << 5) | reg_bits(pattern),
+      )
+      buffer.emit_word(
+        encode_int_binary_immediate(W64, Add, 8UL, address, address),
+      )
+      buffer.emit_word(
+        encode_int_binary_immediate(W64, Sub, 1UL, remaining, remaining),
+      )
+      let retry = buffer.position()
+      buffer.emit_word(0xB5000000U | reg_bits(remaining))
+      patch_fixed_span_branch(buffer, retry, loop_offset, 19)
     }
     ScalarStore(width, value_type, offset) => {
       guard scalar_store_base(width, value_type) is Some(base) else {
@@ -3911,8 +3979,9 @@ fn emit_single_pass(
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   long_branches~ : Bool = false,
+  lse_atomic_add~ : Bool = false,
 ) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
-  let buffer = CodeBuffer::new(long_branches~)
+  let buffer = CodeBuffer::new(long_branches~, lse_atomic_add~)
   let block_offsets = Array::make(function.block_count(), -1)
   let sources : Array[@code_object.SourceSite] = []
   let traps : Array[@code_object.TrapSite] = []
@@ -3922,7 +3991,10 @@ fn emit_single_pass(
   let layout = function.layout()
   for block_index, block in layout {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
-    for instruction in function.block_body(block) {
+    // ABI transfer groups borrow this one snapshot; never copy/search the block
+    // again for each materialized argument or result.
+    let body = function.block_body(block)[:]
+    for body_index, instruction in body {
       let abi_materialization = is_abi_materialization(
         function.instruction(instruction).unwrap(),
       )
@@ -3935,6 +4007,8 @@ fn emit_single_pass(
         allocation,
         frame,
         block,
+        body,
+        body_index,
         instruction,
         None,
       )
@@ -3950,7 +4024,15 @@ fn emit_single_pass(
     let next_block = layout.get(block_index + 1)
     emit_edits_at(buffer, function, allocation, frame, terminator, Before)
     let terminator_offset = emit_instruction(
-      buffer, function, allocation, frame, block, terminator, next_block,
+      buffer,
+      function,
+      allocation,
+      frame,
+      block,
+      body,
+      body.length(),
+      terminator,
+      next_block,
     )
     record_instruction_metadata(
       buffer, function, allocation, frame, terminator, terminator_offset, sources,
@@ -3991,10 +4073,17 @@ fn emit_with_branch_fallback(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
+  lse_atomic_add~ : Bool = false,
 ) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
-  emit_single_pass(function, allocation, frame) catch {
+  emit_single_pass(function, allocation, frame, lse_atomic_add~) catch {
     BranchOutOfRange(_) =>
-      emit_single_pass(function, allocation, frame, long_branches=true)
+      emit_single_pass(
+        function,
+        allocation,
+        frame,
+        long_branches=true,
+        lse_atomic_add~,
+      )
     error => raise error
   }
 }

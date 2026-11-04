@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub suberror NativeLowerError {
   InvalidMilkIR(message~ : String)
   UnsupportedOperation(
@@ -9,7 +10,7 @@ pub suberror NativeLowerError {
   MissingValue(value_id~ : Int32)
   MissingBlock(block_id~ : Int32)
   InvalidTargetLowering(message~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// Report a dialect's failed pre-selection verification through this seam.
@@ -25,6 +26,8 @@ pub impl Show for NativeLowerError with fn output(self, logger) {
 ///|
 priv struct DialectLowering {
   name : String
+  prefer_scoped_root_site : (@milkir.ExtOp) -> Bool
+  root_free_extension : (@milkir.ExtOp) -> Bool
   environment_parameters : Array[(Int32, @native_types.ValueType)]
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?
   resolve_context_field : (@milkir.ContextField) -> @native_types.EnvironmentField?
@@ -795,13 +798,20 @@ fn terminator_values(terminator : @milkir.Terminator) -> Array[@milkir.Value] {
 }
 
 ///|
-fn instruction_needs_gc_roots(instruction : @milkir.Inst) -> Bool {
+fn instruction_needs_gc_roots(
+  instruction : @milkir.Inst,
+  root_free_extension : (@milkir.ExtOp) -> Bool,
+) -> Bool {
   match instruction.opcode {
     Call(_) => true
     Ext(extension, _) =>
-      match extension.effects {
-        None => true
-        Some(effects) => effects.observable
+      if root_free_extension(extension) {
+        false
+      } else {
+        match extension.effects {
+          None => true
+          Some(effects) => effects.observable
+        }
       }
     _ => false
   }
@@ -811,6 +821,7 @@ fn instruction_needs_gc_roots(instruction : @milkir.Inst) -> Bool {
 fn compute_gc_roots(
   function : @milkir.Function,
   cfg : @milkir.CFG,
+  root_free_extension : (@milkir.ExtOp) -> Bool,
 ) -> Array[Array[Int32]] {
   let block_uses : Array[@hashset.HashSet[Int32]] = Array::makei(
     function.next_block_id,
@@ -926,7 +937,9 @@ fn compute_gc_roots(
           live.add(operand.id)
         }
       }
-      let needs_roots = instruction_needs_gc_roots(instruction)
+      let needs_roots = instruction_needs_gc_roots(
+        instruction, root_free_extension,
+      )
       if needs_roots {
         let instruction_roots : Array[Int32] = []
         for value in live {
@@ -1258,6 +1271,16 @@ fn lower_scalar_instruction(
         instruction_metadata(instruction, []),
       )
       assign_instruction_results(values, instruction, lowered_results)
+      return
+    }
+    Some(LowBitsShiftedLeft(input, field_bits, amount)) => {
+      let results = builder.emit_with_metadata(
+        IntLowBitsShiftLeft(field_bits, amount),
+        [demand_value(builder, values, value_types, facts, input)],
+        instruction.results.map(result => lower_type(result.ty)),
+        instruction_metadata(instruction, []),
+      )
+      assign_instruction_results(values, instruction, results)
       return
     }
     Some(AddShiftedLeft(accumulator, input, amount)) => {
@@ -1729,6 +1752,9 @@ fn lower_verified_construction(
     function.next_value_id,
     None,
   )
+  let root_free_extension = dialect
+    .map(lowering => lowering.root_free_extension)
+    .unwrap_or(fn(_) { false })
   let mut has_gc_references = false
   let mut has_gc_points = false
   for index, parameter in function.params {
@@ -1742,7 +1768,8 @@ fn lower_verified_construction(
     }
     for instruction_id in function.block_instruction_ids(block) {
       let instruction = function.instruction_by_id(instruction_id).unwrap()
-      has_gc_points = has_gc_points || instruction_needs_gc_roots(instruction)
+      has_gc_points = has_gc_points ||
+        instruction_needs_gc_roots(instruction, root_free_extension)
       for result in instruction.results {
         value_types[result.id] = Some(lower_type(result.ty))
         has_gc_references = has_gc_references || is_gc_reference_type(result.ty)
@@ -1757,21 +1784,49 @@ fn lower_verified_construction(
   )
   let gc_roots = if has_gc_references && has_gc_points {
     on_event(PreparationStarted(name="native_gc_liveness"))
-    let roots = compute_gc_roots(function, cfg)
+    let roots = compute_gc_roots(function, cfg, root_free_extension)
     on_event(TargetConstructionStarted)
     Some(roots)
   } else {
     None
   }
   let mut root_scope_capacity = 0
-  let function_root_values : Map[Int32, Bool] = Map([])
   if gc_roots is Some(roots) {
+    for instruction_roots in roots {
+      if instruction_roots.length() > root_scope_capacity {
+        root_scope_capacity = instruction_roots.length()
+      }
+    }
+  }
+  let mut prefer_scopes = dialect is Some(_)
+  if gc_roots is Some(roots) {
+    for block in function.blocks {
+      for id in function.block_instruction_ids(block) {
+        if !roots[id].is_empty() {
+          let inst = function.instruction_by_id(id).unwrap()
+          if !(dialect is Some(lowering) &&
+            inst.opcode is Ext(op, _) &&
+            (lowering.prefer_scoped_root_site)(op)) {
+            prefer_scopes = false
+          }
+        }
+      }
+    }
+  }
+  let call_abi = call_abi.map(abi => {
+    if prefer_scopes {
+      abi.for_root_capacity(root_scope_capacity)
+    } else {
+      abi
+    }
+  })
+  let function_root_values : Map[Int32, Bool] = Map([])
+  if call_abi is Some(abi) &&
+    abi.has_function_frame() &&
+    gc_roots is Some(roots) {
     for instruction_roots in roots {
       for id in instruction_roots {
         function_root_values[id] = true
-      }
-      if instruction_roots.length() > root_scope_capacity {
-        root_scope_capacity = instruction_roots.length()
       }
     }
   }
@@ -1935,6 +1990,12 @@ pub fn lower_core_to_sink(
 ///
 /// `verify_input=false` is reserved for compiler-owned IR that has already
 /// crossed a checked boundary. Public callers should keep the default.
+/// `prefer_scoped_root_site` is a cost hint. It changes only frame lifetime;
+/// every collecting call must still publish its complete live root set.
+/// `root_free_extension` is a validated lowering contract, not a cost hint:
+/// only operations proved to perform no collecting/cooperative/reentrant edge
+/// may return true. Observability and address stability alone do not prove it.
+/// Unknown operations retain the ordinary conservative root plan.
 pub fn lower_dialect_to_sink(
   function : @milkir.Function,
   dialect : String,
@@ -1946,6 +2007,8 @@ pub fn lower_dialect_to_sink(
   sink : @lowering.TargetSink,
   call_abi? : @lowering.CallAbiElaboration,
   verify_input~ : Bool = true,
+  prefer_scoped_root_site~ : (@milkir.ExtOp) -> Bool = fn(_) { false },
+  root_free_extension~ : (@milkir.ExtOp) -> Bool = fn(_) { false },
   on_event~ : (NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise NativeLowerError {
   if verify_input {
@@ -1960,6 +2023,8 @@ pub fn lower_dialect_to_sink(
     function,
     Some({
       name: dialect,
+      prefer_scoped_root_site,
+      root_free_extension,
       environment_parameters: environment_parameters.copy(),
       lower,
       resolve_context_field,

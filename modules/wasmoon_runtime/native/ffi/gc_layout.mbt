@@ -30,6 +30,15 @@ pub extern "c" fn GCHeapHandle::begin_trace(
 ) -> NativeGcTraceHandle = "wasmoon_gc_heap_begin_trace"
 
 ///|
+/// A collector-scoped young closure, including remembered mature owners.
+/// Only valid during an admitted young root callback. Ordinary begin_trace
+/// retains its complete read-only graph semantics everywhere.
+#borrow(self)
+pub extern "c" fn GCHeapHandle::begin_young_trace(
+  self : GCHeapHandle,
+) -> NativeGcTraceHandle = "wasmoon_gc_heap_begin_young_trace"
+
+///|
 /// Read-only graph expansion: [0, boundary (word, kind) pairs...].
 /// -1 denotes an untyped seed; -2 denotes incomplete discovery.
 #borrow(self)

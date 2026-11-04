@@ -12,9 +12,10 @@ pub fn verify_call_operands(@native_types.NativeCall, Array[@native_types.ValueT
 pub fn verify_operation_contract(Operation, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> String?
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub suberror DirectLoweringError {
   InvalidCallAbi(message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn DirectLoweringError::equal(Self, Self) -> Bool
 pub fn DirectLoweringError::not_equal(Self, Self) -> Bool
 pub fn DirectLoweringError::output(Self, &Logger) -> Unit
@@ -23,6 +24,7 @@ pub fn DirectLoweringError::to_string(Self) -> String
 pub impl Show for DirectLoweringError
 
 // Types and methods
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum AtomicRmwOp {
   Add
   Sub
@@ -30,20 +32,21 @@ pub(all) enum AtomicRmwOp {
   Or
   Xor
   Exchange
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn AtomicRmwOp::equal(Self, Self) -> Bool
 pub fn AtomicRmwOp::hash(Self) -> Int32
 pub fn AtomicRmwOp::hash_combine(Self, Hasher) -> Unit
 pub fn AtomicRmwOp::not_equal(Self, Self) -> Bool
 pub fn AtomicRmwOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub struct AtomicSpec {
   width : @native_types.AccessWidth
   value_type : @native_types.ValueType
   offset : UInt64
   endianness : @native_types.Endianness
   trap : @native_types.TrapReason?
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn AtomicSpec::equal(Self, Self) -> Bool
 pub fn AtomicSpec::hash(Self) -> Int32
 pub fn AtomicSpec::hash_combine(Self, Hasher) -> Unit
@@ -51,9 +54,10 @@ pub fn AtomicSpec::new(@native_types.AccessWidth, @native_types.ValueType, UInt6
 pub fn AtomicSpec::not_equal(Self, Self) -> Bool
 pub fn AtomicSpec::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) struct Block {
   id : Int32
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn Block::equal(Self, Self) -> Bool
 pub fn Block::hash(Self) -> Int32
 pub fn Block::hash_combine(Self, Hasher) -> Unit
@@ -63,13 +67,16 @@ pub fn Block::to_repr(Self) -> @debug.Repr
 pub struct CallAbiElaboration {
   // private fields
 }
-pub fn CallAbiElaboration::new(root_scope? : CallerRootScopeAbi, function_frame? : FunctionRootFrameAbi, hidden_safepoints? : Array[HiddenSafepointAbi]) -> Self
+pub fn CallAbiElaboration::for_root_capacity(Self, Int32) -> Self
+pub fn CallAbiElaboration::has_function_frame(Self) -> Bool
+pub fn CallAbiElaboration::new(root_scope? : CallerRootScopeAbi, function_frame? : FunctionRootFrameAbi, hidden_safepoints? : Array[HiddenSafepointAbi], scoped_root_limit? : Int32) -> Self
 
 pub struct CallerRootScopeAbi {
   // private fields
 }
 pub fn CallerRootScopeAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol) -> Self
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum ConversionOp {
   I32WrapI64
   I64ExtendI32(@native_types.Signedness)
@@ -79,7 +86,7 @@ pub(all) enum ConversionOp {
   IntToFloat(@native_types.IntegerType, @native_types.FloatType, @native_types.Signedness)
   SignExtend(@native_types.IntegerType, @native_types.AccessWidth)
   Bitcast(@native_types.ValueType, @native_types.ValueType)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn ConversionOp::equal(Self, Self) -> Bool
 pub fn ConversionOp::hash(Self) -> Int32
 pub fn ConversionOp::hash_combine(Self, Hasher) -> Unit
@@ -112,6 +119,7 @@ pub fn DirectBuilder::tail_call_with_metadata(Self, @native_types.NativeCall, Ar
 pub fn DirectBuilder::trap(Self, @native_types.TrapReason) -> Unit
 pub fn DirectBuilder::value_type(Self, Value) -> @native_types.ValueType?
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum FloatBinaryOp {
   Add
   Sub
@@ -120,13 +128,14 @@ pub(all) enum FloatBinaryOp {
   Min
   Max
   CopySign
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn FloatBinaryOp::equal(Self, Self) -> Bool
 pub fn FloatBinaryOp::hash(Self) -> Int32
 pub fn FloatBinaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn FloatBinaryOp::not_equal(Self, Self) -> Bool
 pub fn FloatBinaryOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum FloatComparison {
   Equal
   NotEqual
@@ -136,25 +145,27 @@ pub(all) enum FloatComparison {
   GreaterOrEqual
   Ordered
   Unordered
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn FloatComparison::equal(Self, Self) -> Bool
 pub fn FloatComparison::hash(Self) -> Int32
 pub fn FloatComparison::hash_combine(Self, Hasher) -> Unit
 pub fn FloatComparison::not_equal(Self, Self) -> Bool
 pub fn FloatComparison::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum FloatTernaryOp {
   FusedMultiplyAdd
   FusedNegatedMultiplyAdd
   FusedMultiplySubtract
   FusedNegatedMultiplySubtract
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn FloatTernaryOp::equal(Self, Self) -> Bool
 pub fn FloatTernaryOp::hash(Self) -> Int32
 pub fn FloatTernaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn FloatTernaryOp::not_equal(Self, Self) -> Bool
 pub fn FloatTernaryOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum FloatUnaryOp {
   Negate
   Absolute
@@ -163,7 +174,7 @@ pub(all) enum FloatUnaryOp {
   Floor
   Truncate
   Nearest
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn FloatUnaryOp::equal(Self, Self) -> Bool
 pub fn FloatUnaryOp::hash(Self) -> Int32
 pub fn FloatUnaryOp::hash_combine(Self, Hasher) -> Unit
@@ -173,24 +184,32 @@ pub fn FloatUnaryOp::to_repr(Self) -> @debug.Repr
 pub struct FunctionRootFrameAbi {
   // private fields
 }
-pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32) -> Self
+pub fn FunctionRootFrameAbi::new(@native_types.ExternalSymbol, @native_types.ExternalSymbol, environment_parameter? : Int32, preserves_mask? : Bool, inline_layout? : InlineFunctionRootFrameLayout?) -> Self
 
 pub struct HiddenSafepointAbi {
   // private fields
 }
 pub fn HiddenSafepointAbi::new(@native_types.ExternalSymbol, StackMapArgumentRoots, owner? : Int32) -> Self
 
+pub(all) struct InlineFunctionRootFrameLayout {
+  execution_offset : Int32
+  active_offset : Int32
+  head_offset : Int32
+}
+
+#derive(Eq, @debug.Debug)
 pub(all) struct InstructionMetadata {
   source : @native_types.SourceLocation?
   live_gc_roots : Array[Value]
   stack_map : @native_types.StackMapMetadata?
-} derive(Eq, @debug.Debug)
+}
 pub fn InstructionMetadata::empty() -> Self
 pub fn InstructionMetadata::equal(Self, Self) -> Bool
 pub fn InstructionMetadata::new(@native_types.SourceLocation?, Array[Value], stack_map? : @native_types.StackMapMetadata) -> Self
 pub fn InstructionMetadata::not_equal(Self, Self) -> Bool
 pub fn InstructionMetadata::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum IntBinaryOp {
   Add
   Sub
@@ -207,13 +226,14 @@ pub(all) enum IntBinaryOp {
   UnsignedShiftRight
   RotateLeft
   RotateRight
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn IntBinaryOp::equal(Self, Self) -> Bool
 pub fn IntBinaryOp::hash(Self) -> Int32
 pub fn IntBinaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn IntBinaryOp::not_equal(Self, Self) -> Bool
 pub fn IntBinaryOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum IntComparison {
   Equal
   NotEqual
@@ -225,36 +245,39 @@ pub(all) enum IntComparison {
   UnsignedLessOrEqual
   UnsignedGreaterThan
   UnsignedGreaterOrEqual
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn IntComparison::equal(Self, Self) -> Bool
 pub fn IntComparison::hash(Self) -> Int32
 pub fn IntComparison::hash_combine(Self, Hasher) -> Unit
 pub fn IntComparison::not_equal(Self, Self) -> Bool
 pub fn IntComparison::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum IntOverflowOp {
   Add(@native_types.Signedness)
   Sub(@native_types.Signedness)
   Mul(@native_types.Signedness)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn IntOverflowOp::equal(Self, Self) -> Bool
 pub fn IntOverflowOp::hash(Self) -> Int32
 pub fn IntOverflowOp::hash_combine(Self, Hasher) -> Unit
 pub fn IntOverflowOp::not_equal(Self, Self) -> Bool
 pub fn IntOverflowOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum IntUnaryOp {
   Not
   CountLeadingZeros
   CountTrailingZeros
   PopulationCount
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn IntUnaryOp::equal(Self, Self) -> Bool
 pub fn IntUnaryOp::hash(Self) -> Int32
 pub fn IntUnaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn IntUnaryOp::not_equal(Self, Self) -> Bool
 pub fn IntUnaryOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub struct LoadSpec {
   width : @native_types.AccessWidth
   extension : @native_types.LoadExtension
@@ -262,7 +285,7 @@ pub struct LoadSpec {
   offset : UInt64
   endianness : @native_types.Endianness
   trap : @native_types.TrapReason?
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn LoadSpec::equal(Self, Self) -> Bool
 pub fn LoadSpec::hash(Self) -> Int32
 pub fn LoadSpec::hash_combine(Self, Hasher) -> Unit
@@ -270,6 +293,7 @@ pub fn LoadSpec::new(@native_types.AccessWidth, @native_types.LoadExtension, @na
 pub fn LoadSpec::not_equal(Self, Self) -> Bool
 pub fn LoadSpec::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Operation {
   I32Const(UInt32)
   I64Const(UInt64)
@@ -296,6 +320,7 @@ pub(all) enum Operation {
   IntShiftImmediate(IntBinaryOp, Int32)
   IntMultiplyAdd
   IntAddShiftedLeft(Int32)
+  IntLowBitsShiftLeft(Int32, Int32)
   IntHighMultiply(@native_types.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
@@ -309,6 +334,7 @@ pub(all) enum Operation {
   LoadIndexed(LoadSpec, Int32)
   Store(StoreSpec)
   StoreIndexed(StoreSpec, Int32)
+  StoreRepeated64(UInt64, UInt32, UInt64)
   AtomicLoad(AtomicSpec)
   AtomicStore(AtomicSpec)
   AtomicRmw(AtomicSpec, AtomicRmwOp)
@@ -319,39 +345,42 @@ pub(all) enum Operation {
   VectorStoreLane(VectorStoreLaneSpec)
   Call(@native_types.NativeCall)
   Safepoint(@native_types.SafepointKind)
-} derive(Eq, @debug.Debug)
+}
 pub fn Operation::copy(Self) -> Self
 pub fn Operation::equal(Self, Self) -> Bool
 pub fn Operation::not_equal(Self, Self) -> Bool
 pub fn Operation::semantics(Self) -> @native_types.OperationSemantics
 pub fn Operation::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum ReferenceComparison {
   Equal
   NotEqual
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn ReferenceComparison::equal(Self, Self) -> Bool
 pub fn ReferenceComparison::hash(Self) -> Int32
 pub fn ReferenceComparison::hash_combine(Self, Hasher) -> Unit
 pub fn ReferenceComparison::not_equal(Self, Self) -> Bool
 pub fn ReferenceComparison::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum StackMapArgumentRoots {
   Fixed(Int32)
   I32ConstantOperand(Int32)
   AllocationOperands
-} derive(Eq, @debug.Debug)
+}
 pub fn StackMapArgumentRoots::equal(Self, Self) -> Bool
 pub fn StackMapArgumentRoots::not_equal(Self, Self) -> Bool
 pub fn StackMapArgumentRoots::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub struct StoreSpec {
   width : @native_types.AccessWidth
   value_type : @native_types.ValueType
   offset : UInt64
   endianness : @native_types.Endianness
   trap : @native_types.TrapReason?
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn StoreSpec::equal(Self, Self) -> Bool
 pub fn StoreSpec::hash(Self) -> Int32
 pub fn StoreSpec::hash_combine(Self, Hasher) -> Unit
@@ -359,11 +388,12 @@ pub fn StoreSpec::new(@native_types.AccessWidth, @native_types.ValueType, UInt64
 pub fn StoreSpec::not_equal(Self, Self) -> Bool
 pub fn StoreSpec::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SwitchCase {
   bits : UInt64
   target : Block
   arguments : Array[Value]
-} derive(Eq, @debug.Debug)
+}
 pub fn SwitchCase::equal(Self, Self) -> Bool
 pub fn SwitchCase::not_equal(Self, Self) -> Bool
 pub fn SwitchCase::to_repr(Self) -> @debug.Repr
@@ -398,6 +428,7 @@ pub(all) struct TargetTerminatorMetadata {
   live_gc_roots : Array[Int32]
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Terminator {
   Jump(Block, Array[Value])
   Branch(Value, Block, Array[Value], Block, Array[Value])
@@ -408,29 +439,32 @@ pub(all) enum Terminator {
   TailCall(@native_types.NativeCall, Array[Value])
   NoReturnCall(@native_types.NativeCall, Array[Value])
   Trap(@native_types.TrapReason)
-} derive(Eq, @debug.Debug)
+}
 pub fn Terminator::equal(Self, Self) -> Bool
 pub fn Terminator::not_equal(Self, Self) -> Bool
 pub fn Terminator::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct TerminatorMetadata {
   source : @native_types.SourceLocation?
   live_gc_roots : Array[Value]
-} derive(Eq, @debug.Debug)
+}
 pub fn TerminatorMetadata::equal(Self, Self) -> Bool
 pub fn TerminatorMetadata::new(@native_types.SourceLocation?, Array[Value]) -> Self
 pub fn TerminatorMetadata::not_equal(Self, Self) -> Bool
 pub fn TerminatorMetadata::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) struct Value {
   id : Int32
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn Value::equal(Self, Self) -> Bool
 pub fn Value::hash(Self) -> Int32
 pub fn Value::hash_combine(Self, Hasher) -> Unit
 pub fn Value::not_equal(Self, Self) -> Bool
 pub fn Value::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorBitwiseOp {
   Not
   And
@@ -438,13 +472,14 @@ pub(all) enum VectorBitwiseOp {
   Xor
   AndNot
   BitSelect
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorBitwiseOp::equal(Self, Self) -> Bool
 pub fn VectorBitwiseOp::hash(Self) -> Int32
 pub fn VectorBitwiseOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorBitwiseOp::not_equal(Self, Self) -> Bool
 pub fn VectorBitwiseOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorConversionOp {
   ExtendLow(VectorLane, @native_types.Signedness)
   ExtendHigh(VectorLane, @native_types.Signedness)
@@ -453,13 +488,14 @@ pub(all) enum VectorConversionOp {
   IntToFloat(VectorLane, VectorLane, @native_types.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorConversionOp::equal(Self, Self) -> Bool
 pub fn VectorConversionOp::hash(Self) -> Int32
 pub fn VectorConversionOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorConversionOp::not_equal(Self, Self) -> Bool
 pub fn VectorConversionOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorFloatBinaryOp {
   Add
   Sub
@@ -469,13 +505,14 @@ pub(all) enum VectorFloatBinaryOp {
   Max
   PseudoMin
   PseudoMax
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorFloatBinaryOp::equal(Self, Self) -> Bool
 pub fn VectorFloatBinaryOp::hash(Self) -> Int32
 pub fn VectorFloatBinaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorFloatBinaryOp::not_equal(Self, Self) -> Bool
 pub fn VectorFloatBinaryOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorFloatComparison {
   Equal
   NotEqual
@@ -483,13 +520,14 @@ pub(all) enum VectorFloatComparison {
   LessOrEqual
   GreaterThan
   GreaterOrEqual
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorFloatComparison::equal(Self, Self) -> Bool
 pub fn VectorFloatComparison::hash(Self) -> Int32
 pub fn VectorFloatComparison::hash_combine(Self, Hasher) -> Unit
 pub fn VectorFloatComparison::not_equal(Self, Self) -> Bool
 pub fn VectorFloatComparison::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorFloatUnaryOp {
   Absolute
   Negate
@@ -498,23 +536,25 @@ pub(all) enum VectorFloatUnaryOp {
   Floor
   Truncate
   Nearest
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorFloatUnaryOp::equal(Self, Self) -> Bool
 pub fn VectorFloatUnaryOp::hash(Self) -> Int32
 pub fn VectorFloatUnaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorFloatUnaryOp::not_equal(Self, Self) -> Bool
 pub fn VectorFloatUnaryOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorHalf {
   Low
   High
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorHalf::equal(Self, Self) -> Bool
 pub fn VectorHalf::hash(Self) -> Int32
 pub fn VectorHalf::hash_combine(Self, Hasher) -> Unit
 pub fn VectorHalf::not_equal(Self, Self) -> Bool
 pub fn VectorHalf::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorIntBinaryOp {
   Add
   Sub
@@ -527,13 +567,14 @@ pub(all) enum VectorIntBinaryOp {
   ExtendMultiply(VectorHalf, @native_types.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorIntBinaryOp::equal(Self, Self) -> Bool
 pub fn VectorIntBinaryOp::hash(Self) -> Int32
 pub fn VectorIntBinaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntBinaryOp::not_equal(Self, Self) -> Bool
 pub fn VectorIntBinaryOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorIntComparison {
   Equal
   NotEqual
@@ -541,35 +582,38 @@ pub(all) enum VectorIntComparison {
   LessOrEqual(@native_types.Signedness)
   GreaterThan(@native_types.Signedness)
   GreaterOrEqual(@native_types.Signedness)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorIntComparison::equal(Self, Self) -> Bool
 pub fn VectorIntComparison::hash(Self) -> Int32
 pub fn VectorIntComparison::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntComparison::not_equal(Self, Self) -> Bool
 pub fn VectorIntComparison::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorIntShiftOp {
   Left
   Right(@native_types.Signedness)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorIntShiftOp::equal(Self, Self) -> Bool
 pub fn VectorIntShiftOp::hash(Self) -> Int32
 pub fn VectorIntShiftOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntShiftOp::not_equal(Self, Self) -> Bool
 pub fn VectorIntShiftOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorIntUnaryOp {
   Absolute
   Negate
   PopulationCount
   ExtendAddPairwise(@native_types.Signedness)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorIntUnaryOp::equal(Self, Self) -> Bool
 pub fn VectorIntUnaryOp::hash(Self) -> Int32
 pub fn VectorIntUnaryOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorIntUnaryOp::not_equal(Self, Self) -> Bool
 pub fn VectorIntUnaryOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorLane {
   I8x16
   I16x8
@@ -577,31 +621,33 @@ pub(all) enum VectorLane {
   I64x2
   F32x4
   F64x2
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorLane::equal(Self, Self) -> Bool
 pub fn VectorLane::hash(Self) -> Int32
 pub fn VectorLane::hash_combine(Self, Hasher) -> Unit
 pub fn VectorLane::not_equal(Self, Self) -> Bool
 pub fn VectorLane::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorLoadKind {
   Splat(VectorLane)
   Extend(VectorLane, @native_types.Signedness)
   Zero(@native_types.AccessWidth)
   Lane(VectorLane, Int32)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorLoadKind::equal(Self, Self) -> Bool
 pub fn VectorLoadKind::hash(Self) -> Int32
 pub fn VectorLoadKind::hash_combine(Self, Hasher) -> Unit
 pub fn VectorLoadKind::not_equal(Self, Self) -> Bool
 pub fn VectorLoadKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub struct VectorLoadSpec {
   kind : VectorLoadKind
   offset : UInt64
   endianness : @native_types.Endianness
   trap : @native_types.TrapReason?
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorLoadSpec::equal(Self, Self) -> Bool
 pub fn VectorLoadSpec::hash(Self) -> Int32
 pub fn VectorLoadSpec::hash_combine(Self, Hasher) -> Unit
@@ -609,6 +655,7 @@ pub fn VectorLoadSpec::new(VectorLoadKind, UInt64, @native_types.Endianness, @na
 pub fn VectorLoadSpec::not_equal(Self, Self) -> Bool
 pub fn VectorLoadSpec::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum VectorOp {
   Splat(VectorLane)
   ExtractLane(VectorLane, Int32, @native_types.Signedness?)
@@ -627,22 +674,24 @@ pub(all) enum VectorOp {
   Predicate(VectorPredicateOp)
   Convert(VectorConversionOp)
   Relaxed(VectorRelaxedOp)
-} derive(Eq, @debug.Debug)
+}
 pub fn VectorOp::equal(Self, Self) -> Bool
 pub fn VectorOp::not_equal(Self, Self) -> Bool
 pub fn VectorOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorPredicateOp {
   AnyTrue
   AllTrue(VectorLane)
   BitMask(VectorLane)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorPredicateOp::equal(Self, Self) -> Bool
 pub fn VectorPredicateOp::hash(Self) -> Int32
 pub fn VectorPredicateOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorPredicateOp::not_equal(Self, Self) -> Bool
 pub fn VectorPredicateOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum VectorRelaxedOp {
   Swizzle
   FloatToInt(VectorLane, VectorLane, @native_types.Signedness)
@@ -653,20 +702,21 @@ pub(all) enum VectorRelaxedOp {
   Q15MultiplyRoundedSigned
   Dot8To16Signed
   Dot8To32AddSigned
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorRelaxedOp::equal(Self, Self) -> Bool
 pub fn VectorRelaxedOp::hash(Self) -> Int32
 pub fn VectorRelaxedOp::hash_combine(Self, Hasher) -> Unit
 pub fn VectorRelaxedOp::not_equal(Self, Self) -> Bool
 pub fn VectorRelaxedOp::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub struct VectorStoreLaneSpec {
   lane : VectorLane
   lane_index : Int32
   offset : UInt64
   endianness : @native_types.Endianness
   trap : @native_types.TrapReason?
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn VectorStoreLaneSpec::equal(Self, Self) -> Bool
 pub fn VectorStoreLaneSpec::hash(Self) -> Int32
 pub fn VectorStoreLaneSpec::hash_combine(Self, Hasher) -> Unit

@@ -1,0 +1,182 @@
+///|
+/// Expand only after semantic optimization and leaf inlining. A poll is an
+/// effectful boundary even when its countdown avoids the runtime call. The
+/// slow call uses the ordinary precise-root and conservative reentry contract.
+fn lower_safepoint_poll(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  execution_offset : Int32,
+  controls_offset : Int32,
+  callback_offset : Int32,
+  budget_offset : Int32,
+) -> Unit {
+  if environment.poll_budget_offset is Some(offset) {
+    lower_bound_poll(context, environment, offset)
+    return
+  }
+  let slow = context.create_block([])
+  let countdown = context.create_block([])
+  let decrement = context.create_block([])
+  let done = context.create_block([])
+  let has_execution = context.create_block([])
+  let has_controls = context.create_block([])
+  let enabled = context.create_block([])
+  let vmctx = context.environment()[0]
+  let execution = heap_load(context, vmctx, execution_offset, Ptr64)
+  let execution_bits = context.emit(Convert(Bitcast(Ptr64, I64)), [execution], [
+      I64,
+    ])[0]
+  context.branch_int_compare_immediate(
+    NotEqual,
+    execution_bits,
+    0UL,
+    has_execution,
+    [],
+    slow,
+    [],
+  )
+  context.switch_to_block(has_execution)
+  let controls = heap_load(context, execution, controls_offset, Ptr64)
+  let controls_bits = context.emit(Convert(Bitcast(Ptr64, I64)), [controls], [
+      I64,
+    ])[0]
+  context.branch_int_compare_immediate(
+    NotEqual,
+    controls_bits,
+    0UL,
+    has_controls,
+    [],
+    slow,
+    [],
+  )
+  context.switch_to_block(has_controls)
+  let callback = heap_load(context, controls, callback_offset, I64)
+  let budget = heap_load(context, controls, budget_offset, I32)
+  context.branch_int_compare_immediate(
+    NotEqual,
+    callback,
+    0UL,
+    slow,
+    [],
+    countdown,
+    [],
+  )
+  context.switch_to_block(countdown)
+  let one = context.emit(I32Const(1U), [], [I32])[0]
+  context.branch_int_compare_immediate(
+    SignedGreaterThan,
+    budget,
+    0UL,
+    enabled,
+    [],
+    done,
+    [],
+  )
+  context.switch_to_block(enabled)
+  context.branch_int_compare(Equal, budget, one, slow, [], decrement, [])
+  context.switch_to_block(decrement)
+  let remaining = context.emit(IntBinary(Sub), [budget, one], [I32])[0]
+  let (budget_base, budget_offset) = if budget_offset < 0 {
+    let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [controls], [I64])[0]
+    let address = context.emit(
+        IntBinaryImmediate(
+          Add,
+          budget_offset.to_int64().reinterpret_as_uint64(),
+        ),
+        [bits],
+        [I64],
+      )[0]
+    (context.emit(Convert(Bitcast(I64, Ptr64)), [address], [Ptr64])[0], 0)
+  } else {
+    (controls, budget_offset)
+  }
+  heap_store(context, budget_base, budget_offset, remaining, I32)
+  context.jump(done, [])
+  context.switch_to_block(slow)
+  emit_slow_poll(context, environment, vmctx)
+  context.jump(done, [])
+  context.switch_to_block(done)
+  context.finish_void()
+}
+
+///|
+fn load_poll_budget_address(
+  context : @adapter.InstructionContext,
+  vmctx : @lowering.Value,
+  offset : Int32,
+) -> @lowering.Value {
+  if offset < -256 || offset >= 0 {
+    return heap_load(context, vmctx, offset, Ptr64)
+  }
+  // The prefix precedes the context pointer. Encode the byte displacement
+  // directly so native targets can use a signed-offset load.
+  context.emit(
+    Load(
+      @lowering.LoadSpec::new(
+        W64,
+        None,
+        Ptr64,
+        offset.to_int64().reinterpret_as_uint64(),
+        Little,
+        None,
+      ),
+    ),
+    [vmctx],
+    [Ptr64],
+  )[0]
+}
+
+///|
+fn lower_bound_poll(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  offset : Int32,
+) -> Unit {
+  let slow = context.create_block([])
+  let done = context.create_block([])
+  let decrement = context.create_block([])
+  let boundary = context.create_block([])
+  let vmctx = context.environment()[0]
+  let address = load_poll_budget_address(context, vmctx, offset)
+  require_poll_pointer(context, address, slow)
+  let budget = heap_load(context, address, 0, I32)
+  context.branch_int_compare_immediate(
+    SignedGreaterThan,
+    budget,
+    1UL,
+    decrement,
+    [],
+    boundary,
+    [],
+  )
+  context.switch_to_block(decrement)
+  let remaining = context.emit(IntBinaryImmediate(Sub, 1UL), [budget], [I32])[0]
+  heap_store(context, address, 0, remaining, I32)
+  context.jump(done, [])
+  context.switch_to_block(boundary)
+  context.branch_int_compare_immediate(Equal, budget, 1UL, slow, [], done, [])
+  context.switch_to_block(slow)
+  emit_slow_poll(context, environment, vmctx)
+  context.jump(done, [])
+  context.switch_to_block(done)
+  context.finish_void()
+}
+
+///|
+fn emit_slow_poll(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  vmctx : @lowering.Value,
+) -> Unit {
+  context.emit_call(
+    @native_types.NativeCall::new(
+      External((environment.runtime_symbol)(CancelPoll)),
+      @native_types.Signature::new([Ptr64], []),
+      Platform,
+      @native_types.CallBehavior::conservative(),
+    ),
+    [vmctx],
+    [],
+  )
+  |> ignore
+}

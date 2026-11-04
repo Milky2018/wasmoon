@@ -20,10 +20,11 @@ priv struct BlockData {
 }
 
 ///|
+#derive(Eq)
 priv enum InstructionRole {
   Body
   Terminator
-} derive(Eq)
+}
 
 ///|
 priv struct InstructionData[Inst] {
@@ -50,6 +51,9 @@ pub struct Function[Inst] {
   priv values : Array[ValueData]
   priv blocks : Array[BlockData]
   priv instructions : Array[InstructionData[Inst]]
+  // Dense immutable handles avoid allocating wrappers for repeated flat scans.
+  // Both builder insertion paths append the same handle published to the block.
+  priv instruction_handles : Array[Instruction]
   priv operands : Array[AllocationOperand]
   priv clobbers : Array[PhysicalReg]
   priv mut layout : Array[Block]
@@ -71,6 +75,7 @@ fn[Inst] Function::new(
     values: [],
     blocks: [],
     instructions: [],
+    instruction_handles: [],
     operands: [],
     clobbers: [],
     layout: [],
@@ -341,7 +346,7 @@ pub fn[Inst] Function::instruction_at(
   index : Int32,
 ) -> Instruction? {
   if index >= 0 && index < self.instructions.length() {
-    Some(Instruction::new(self.owner, index))
+    Some(self.instruction_handles[index])
   } else {
     None
   }
@@ -604,6 +609,19 @@ pub fn[Inst] Function::instruction_metadata(
 ) -> InstructionMetadata? {
   if self.owns_instruction(instruction) {
     Some(self.instructions[instruction.id].metadata.copy())
+  } else {
+    None
+  }
+}
+
+///|
+/// Return a read-only annotation view, or None for an unowned instruction.
+pub fn[Inst] Function::instruction_annotations(
+  self : Function[Inst],
+  instruction : Instruction,
+) -> InstructionAnnotations? {
+  if self.owns_instruction(instruction) {
+    Some({ metadata: self.instructions[instruction.id].metadata, })
   } else {
     None
   }

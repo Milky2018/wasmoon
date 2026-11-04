@@ -189,7 +189,8 @@ pub fn opcode_semantics(opcode : @milkir.Opcode) -> OpcodeSemantics {
               None
             },
             may_trap: effects.may_trap,
-            other_observable_effect: effects.observable,
+            other_observable_effect: effects.observable ||
+            effects.invalidates_addresses,
           }
       }
     Vector(op) => op.semantics()

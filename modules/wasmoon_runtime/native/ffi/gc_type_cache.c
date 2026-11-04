@@ -3,6 +3,7 @@
 // Implements ref.test, ref.cast, and subtype checking
 
 #include "jit_internal.h"
+#include "callable_lookup.h"
 
 // ============ Value Encoding Helpers ============
 
@@ -198,31 +199,30 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
     }
 
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
+    if (type_idx >= 0) {
+        // Concrete checks need the canonical identity, not the object's kind.
+        // Legacy allocations still use their module-local type cache.
+        int32_t actual = gc_heap_runtime_type(heap, gc_ref);
+        if (actual >= 0) return callable_subtype(ctx, actual, type_idx);
+        return is_concrete_subtype(ctx, gc_heap_get_type_idx(heap, gc_ref), type_idx);
+    }
+
+    // Abstract checks need the kind but never the local type index.
     int32_t obj_kind = gc_heap_get_kind(heap, gc_ref);
-    int32_t obj_type_idx = gc_heap_get_type_idx(heap, gc_ref);
-
-    // Handle abstract types
-    if (type_idx < 0) {
-        switch (type_idx) {
-            case ABSTRACT_TYPE_ANY:
-                return 1;
-            case ABSTRACT_TYPE_EQ:
-                return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
-            case ABSTRACT_TYPE_STRUCT:
-                return (obj_kind == 1) ? 1 : 0;
-            case ABSTRACT_TYPE_ARRAY:
-                return (obj_kind == 2) ? 1 : 0;
-            case ABSTRACT_TYPE_EXTERN:
-                return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
-            default:
-                return 0;
-        }
+    switch (type_idx) {
+        case ABSTRACT_TYPE_ANY:
+            return 1;
+        case ABSTRACT_TYPE_EQ:
+            return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
+        case ABSTRACT_TYPE_STRUCT:
+            return (obj_kind == 1) ? 1 : 0;
+        case ABSTRACT_TYPE_ARRAY:
+            return (obj_kind == 2) ? 1 : 0;
+        case ABSTRACT_TYPE_EXTERN:
+            return (obj_kind == 1 || obj_kind == 2) ? 1 : 0;
+        default:
+            return 0;
     }
-
-    if (gc_ref <= heap->object_count && gc_heap_runtime_type(heap, gc_ref) >= 0) {
-        return callable_subtype(ctx, gc_heap_runtime_type(heap, gc_ref), type_idx);
-    }
-    return is_concrete_subtype(ctx, obj_type_idx, type_idx);
 }
 
 // ============ ref.cast Implementation ============
@@ -240,26 +240,6 @@ int64_t WASMOON_GUEST_ABI gc_ref_cast_impl(jit_context_t *ctx, int64_t value, in
 
 // ============ Type Check for call_indirect ============
 
-static inline int callable_subtype_registered(
-    const jit_runtime_state_t *state, int32_t actual, int32_t local_expected
-) {
-    if ((uint32_t)local_expected >= (uint32_t)state->callable_local_type_count) return 0;
-    int32_t expected = state->callable_local_types[local_expected];
-    const jit_callable_registry_t *registry = state->callable_registry;
-    if (!registry) return 0;
-    // Counts are nonnegative at publication. Snapshot the read-only view once;
-    // unsigned bounds checks also reject negative type indices.
-    uint32_t type_count = (uint32_t)registry->type_count;
-    const int32_t *parents = registry->parents;
-    while ((uint32_t)actual < type_count) {
-        if (actual == expected) return 1;
-        int32_t parent = parents[actual];
-        if (parent == actual) return 0;
-        actual = parent;
-    }
-    return 0;
-}
-
 int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected) {
     if (!ctx || !ctx_runtime(ctx)->callable_local_types)
         return is_subtype_cached_ctx(ctx, actual, local_expected);
@@ -268,19 +248,7 @@ int callable_subtype(jit_context_t *ctx, int32_t actual, int32_t local_expected)
 
 // Store references are stable table values; native entries are resolved at reads.
 int64_t callable_native_reference(jit_context_t *ctx, int64_t value) {
-    if ((value & STORE_FUNCREF_TAG) != STORE_FUNCREF_TAG || value < 0) return value;
-    const jit_callable_registry_t *registry = ctx ? ctx_runtime(ctx)->callable_registry : NULL;
-    if (!registry) return value;
-    uint64_t address = (uint64_t)value & ~(uint64_t)STORE_FUNCREF_TAG;
-    if (!address || address - 1 > INT32_MAX) return 0;
-    int32_t low = 0, high = registry->function_count;
-    while (low < high) {
-        int32_t mid = low + (high - low) / 2;
-        if ((uint32_t)registry->function_stores[mid] < address - 1) low = mid + 1;
-        else high = mid;
-    }
-    return low < registry->function_count && registry->function_stores[low] == (int32_t)(address - 1)
-        ? registry->function_pointers[low] | FUNCREF_TAG : value;
+    return callable_native_reference_inline(ctx, value);
 }
 
 int64_t callable_store_reference(jit_context_t *ctx, int64_t value) {
@@ -309,32 +277,7 @@ int64_t callable_store_reference(jit_context_t *ctx, int64_t value) {
 }
 
 int32_t callable_type_for_value(jit_context_t *ctx, int64_t value) {
-    if (!ctx || !value) return -1;
-    // The registry also indexes stable Store handles, including uncompiled
-    // functions. Only legacy index values need executable-pointer conversion.
-    uint64_t pointer;
-    if (value >= 0 && (value & STORE_FUNCREF_TAG) == STORE_FUNCREF_TAG) {
-        pointer = (uint64_t)value;
-    } else if (value < 0) {
-        int64_t index = -(value + 1);
-        if (index < 0 || index >= ctx_func_count(ctx)) return -1;
-        pointer = (uint64_t)(uintptr_t)ctx_func_table(ctx)[index];
-    } else {
-        pointer = (uint64_t)value & ~FUNCREF_TAG;
-    }
-    const jit_callable_registry_t *registry = ctx_runtime(ctx)->callable_registry;
-    if (!registry) return -1;
-    int32_t low = 0, high = registry->entry_count;
-    while (low < high) {
-        int32_t middle = low + (high - low) / 2;
-        if ((uint64_t)registry->addresses[middle] < pointer)
-            low = middle + 1;
-        else
-            high = middle;
-    }
-    if (low < registry->entry_count && (uint64_t)registry->addresses[low] == pointer)
-        return registry->identities[low];
-    return -1;
+    return callable_type_for_value_inline(ctx, value);
 }
 
 void WASMOON_GUEST_ABI gc_type_check_subtype_impl(jit_context_t *ctx, int32_t actual_type, int32_t expected_type) {

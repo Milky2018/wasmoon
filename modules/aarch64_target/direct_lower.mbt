@@ -63,6 +63,27 @@ fn lower_direct_operation(
   stack_map : @native.StackMapMetadata?,
   stack_object : (@native.StackObject) -> AArch64StackObject,
 ) -> Array[@vcode.Value] raise AArch64LowerError {
+  if operation is StoreRepeated64(offset, count, bits) {
+    append_body(
+      builder,
+      block,
+      StoreRepeated64(offset, count, bits),
+      [@vcode.Input::any(operands[0]).with_timing(Late)],
+      [
+        @vcode.Output::any(Ptr64).with_timing(Early),
+        @vcode.Output::any(I64).with_timing(Early),
+        @vcode.Output::any(I64).with_timing(Early),
+      ],
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+    |> ignore
+    return []
+  }
   if operation is IntMultiplyAdd {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
@@ -71,6 +92,24 @@ fn lower_direct_operation(
       builder,
       block,
       IntMultiplyAdd(width),
+      operands,
+      result_types,
+      direct_source_metadata(
+        source_location,
+        stack_map,
+        roots,
+        operation.semantics(),
+      ),
+    )
+  }
+  if operation is IntLowBitsShiftLeft(field_bits, amount) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    return append_unconstrained_body(
+      builder,
+      block,
+      IntLowBitsShiftLeft(width, field_bits, amount),
       operands,
       result_types,
       direct_source_metadata(
@@ -1352,6 +1391,42 @@ fn DirectLoweringSession::lower_return_values(
 }
 
 ///|
+/// Local raw-word aliases need a typed definition at a CFG boundary. Keep
+/// body aliases free, materialize only mismatches, and leave GC references and
+/// invalid semantic edge types to the ordinary strict verifier.
+fn DirectLoweringSession::edge_values(
+  self : DirectLoweringSession,
+  block : @vcode.Block,
+  ids : Array[Int32],
+) -> Array[@vcode.Value] raise AArch64LowerError {
+  let values : Array[@vcode.Value] = []
+  for id in ids {
+    let value = self.target_value(id)
+    let expected = self.value_types[id]
+    let needs_move = match expected {
+      Ptr64 => self.builder.value_type(value) == Some(I64)
+      I64 => self.builder.value_type(value) == Some(Ptr64)
+      _ => false
+    }
+    if needs_move {
+      values.push(
+        append_body(
+          self.builder,
+          block,
+          Move(expected),
+          [@vcode.Input::any(value)],
+          [@vcode.Output::any(expected)],
+          @vcode.InstructionMetadata::empty(),
+        )[0],
+      )
+    } else {
+      values.push(value)
+    }
+  }
+  values
+}
+
+///|
 fn DirectLoweringSession::terminate(
   self : DirectLoweringSession,
   block_id : Int32,
@@ -1368,7 +1443,12 @@ fn DirectLoweringSession::terminate(
           block,
           Jump,
           [],
-          [@vcode.Edge::new(self.blocks[target], self.target_values(arguments))],
+          [
+            @vcode.Edge::new(
+              self.blocks[target],
+              self.edge_values(block, arguments),
+            ),
+          ],
           ordinary_metadata,
         )
       Branch(
@@ -1386,11 +1466,11 @@ fn DirectLoweringSession::terminate(
           [
             @vcode.Edge::new(
               self.blocks[true_target],
-              self.target_values(true_arguments),
+              self.edge_values(block, true_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[false_target],
-              self.target_values(false_arguments),
+              self.edge_values(block, false_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1416,11 +1496,11 @@ fn DirectLoweringSession::terminate(
           [
             @vcode.Edge::new(
               self.blocks[true_target],
-              self.target_values(true_arguments),
+              self.edge_values(block, true_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[false_target],
-              self.target_values(false_arguments),
+              self.edge_values(block, false_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1479,11 +1559,11 @@ fn DirectLoweringSession::terminate(
           [
             @vcode.Edge::new(
               self.blocks[first_target],
-              self.target_values(first_arguments),
+              self.edge_values(block, first_arguments),
             ),
             @vcode.Edge::new(
               self.blocks[second_target],
-              self.target_values(second_arguments),
+              self.edge_values(block, second_arguments),
             ),
           ],
           ordinary_metadata,
@@ -1494,13 +1574,13 @@ fn DirectLoweringSession::terminate(
         let successors = cases.map(case => {
           @vcode.Edge::new(
             self.blocks[case.target],
-            self.target_values(case.arguments),
+            self.edge_values(block, case.arguments),
           )
         })
         successors.push(
           @vcode.Edge::new(
             self.blocks[default_target],
-            self.target_values(default_arguments),
+            self.edge_values(block, default_arguments),
           ),
         )
         set_terminator(

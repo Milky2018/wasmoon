@@ -1,4 +1,5 @@
 ///|
+#derive(Eq, Debug)
 pub suberror CodeObjectVerifyError {
   EmptyCode
   MisalignedCodeSize(size~ : Int32)
@@ -10,7 +11,7 @@ pub suberror CodeObjectVerifyError {
   InvalidRootLocation(safepoint~ : Int32, root~ : Int32)
   InvalidStackMap(safepoint~ : Int32)
   InvalidUnwindDirective(index~ : Int32, message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for CodeObjectVerifyError with fn output(self, logger) {

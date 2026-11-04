@@ -271,3 +271,246 @@ test "struct read layout offsets fold without losing write fallbacks" {
     }
   }
 }
+
+///|
+test "both targets retain collecting array fallback beside the no-GC constructor" {
+  let validation = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { None },
+    defined_type_contract: fn(index) {
+      Some(
+        Array({
+          storage: Value(
+            match index {
+              0 => I32
+              1 => Ref
+              _ => V128
+            },
+          ),
+          mutable_: true,
+          defaultable: true,
+        }),
+      )
+    },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  for type_index in 0..<3 {
+    for default_ in [false, true] {
+      let b = @milkir.FunctionBuilder("prepared_array")
+      b.add_param(Ptr) |> ignore
+      let length = b.add_param(I32)
+      let init = b.add_param(
+        match type_index {
+          0 => I32
+          1 => Ref
+          _ => V128
+        },
+      )
+      b.add_result(Ref)
+      b.return_([
+        if default_ {
+          @wasm_milkir.array_new_default(b, type_index, length)
+        } else {
+          @wasm_milkir.array_new(b, type_index, init, length)
+        },
+      ])
+      let vector = type_index == 2 && !default_
+      for target in [@wasmoon_jit.NativeTarget::X64, AArch64] {
+        let code = @wasmoon_jit.compile_wasm_body_artifact_function(
+          b.get_function(),
+          validation,
+          target,
+          function_index=0,
+          signature=@native.Signature::new(
+            [
+              I32,
+              match type_index {
+                0 => I32
+                1 => GcRef64
+                _ => V128
+              },
+            ],
+            [GcRef64],
+          ),
+        )
+        for
+          name in [
+            if vector {
+              "wasmoon.runtime.gc.try_array_wide"
+            } else {
+              "wasmoon.runtime.gc.try_array"
+            },
+            if vector {
+              "wasmoon.runtime.gc.alloc_array_wide_slow"
+            } else {
+              "wasmoon.runtime.gc.alloc_array_slow"
+            },
+          ] {
+          assert_eq(
+            code.relocations
+            .filter(r => r.target is External(symbol) && symbol.name == name)
+            .length(),
+            1,
+          )
+        }
+        // Only the collecting fallback owns a GC safepoint; the prepared
+        // constructor must not stage roots or acquire a collecting contract.
+        assert_eq(
+          code.safepoints
+          .filter(site => site.kind is Gc || site.kind is GcAndCancellation)
+          .length(),
+          1,
+        )
+        if type_index == 1 && !default_ {
+          // Registered function slots own the reference initializer. The
+          // collecting site keeps its identity without duplicating SSA roots.
+          assert_true(code.safepoints.all(site => site.roots.is_empty()))
+          for
+            name in [
+              "wasmoon.runtime.gc.function_frame_enter", "wasmoon.runtime.gc.function_frame_leave",
+            ] {
+            assert_eq(
+              code.relocations
+              .filter(r => r.target is External(symbol) && symbol.name == name)
+              .length(),
+              1,
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+test "large straight-line array initializers keep the original shared allocation path" {
+  let validation = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { None },
+    defined_type_contract: fn(_) {
+      Some(Array({ storage: Value(I32), mutable_: true, defaultable: true, }))
+    },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  for copies in [16, 17, 100] {
+    let b = @milkir.FunctionBuilder("bounded_prepared_arrays")
+    b.add_param(Ptr) |> ignore
+    let length = b.add_param(I32)
+    for _ in 0..<copies {
+      @wasm_milkir.array_new_default(b, 0, length) |> ignore
+    }
+    b.return_([])
+    for target in [@wasmoon_jit.NativeTarget::X64, AArch64] {
+      let code = @wasmoon_jit.compile_wasm_body_artifact_function(
+        b.get_function(),
+        validation,
+        target,
+        function_index=0,
+        signature=@native.Signature::new([I32], []),
+      )
+      for
+        (name, expected) in [
+          (
+            "wasmoon.runtime.gc.try_array",
+            if copies <= 16 {
+              copies
+            } else {
+              0
+            },
+          ),
+          ("wasmoon.runtime.gc.alloc_array_slow", copies),
+        ] {
+        assert_eq(
+          code.relocations
+          .filter(r => r.target is External(symbol) && symbol.name == name)
+          .length(),
+          expected,
+        )
+      }
+    }
+  }
+}
+
+///|
+test "both targets select bounded repeated word stores for long precise masks" {
+  let validation = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { Some({ params: [], results: [], }) },
+    defined_type_contract: fn(_) { None },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  let b = @milkir.FunctionBuilder("repeated_function_masks")
+  b.add_param(Ptr) |> ignore
+  let roots = Array::makei(320, _ => b.add_param(Ref))
+  b.add_result(I32)
+  @wasm_milkir.call_multi(b, 0, [], []) |> ignore
+  let null = b.iconst(Ref, 0L)
+  let mut sum = b.iconst_i32(0)
+  for root in roots {
+    sum = b.iadd(sum, b.icmp_eq(root, null))
+  }
+  b.return_([sum])
+  for target in [@wasmoon_jit.NativeTarget::X64, AArch64] {
+    let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
+      b.get_function(),
+      validation,
+      target,
+    )
+    assert_true(diagnostics.target_vcode.contains("StoreRepeated64("))
+    assert_true(diagnostics.allocated_vcode.contains("StoreRepeated64("))
+    assert_true(diagnostics.code_object.contains("gc.function_frame_enter"))
+  }
+}
+
+///|
+test "both targets bound shared struct reservation expansion" {
+  let validation = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { None },
+    defined_type_contract: fn(index) {
+      match index {
+        0 =>
+          Some(
+            Struct([
+              { storage: Value(I32), mutable_: false, defaultable: true, },
+            ]),
+          )
+        1 =>
+          Some(
+            Array({ storage: Value(Ref), mutable_: false, defaultable: true, }),
+          )
+        _ => None
+      }
+    },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  let b = @milkir.FunctionBuilder("bounded_shared_structs")
+  b.add_param(Ptr) |> ignore
+  let input = b.add_param(I32)
+  b.add_result(Ref)
+  let members = Array::makei(64, index => {
+    @wasm_milkir.struct_new(b, 0, [b.iadd(input, b.iconst_i32(index))])
+  })
+  b.return_([@wasm_milkir.array_new_fixed(b, 1, members.length(), members)])
+  for target in [@wasmoon_jit.NativeTarget::X64, AArch64] {
+    let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
+      b.get_function(),
+      validation,
+      target,
+    )
+    assert_false(diagnostics.code_object.contains("gc.reserve_struct_fast"))
+    assert_true(diagnostics.code_object.contains("gc.alloc_struct_slow"))
+  }
+}

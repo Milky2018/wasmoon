@@ -730,6 +730,7 @@ fn storage_type_byte_size(st : @types.StorageType) -> Int32 {
       match vt {
         I32 | F32 => 4
         I64 | F64 => 8
+        V128 => 16
         _ => 4 // Default to 4 for reference types
       }
     Packed(pt) =>
@@ -788,6 +789,7 @@ fn read_value_from_bytes(
       }
       F64(bits.reinterpret_as_double())
     }
+    Val(V128) => V128(Bytes::makei(16, i => bytes[offset + i]))
     Val(_) =>
       // Reference types are not valid for data segments
       Null

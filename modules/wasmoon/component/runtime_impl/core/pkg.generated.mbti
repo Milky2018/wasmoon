@@ -50,6 +50,7 @@ pub fn trap_canon(String) -> Unit raise @runtime.RuntimeError
 pub fn trap_message() -> String?
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror ComponentRuntimeError {
   UnsupportedComponent(String)
   ComponentParseError(String)
@@ -96,7 +97,7 @@ pub(all) suberror ComponentRuntimeError {
   HostEventLoopAlreadyInstalled
   InvocationAlreadyDriving
   ReentrantInstantiation
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentRuntimeError::equal(Self, Self) -> Bool
 pub fn ComponentRuntimeError::from_core(@runtime.RuntimeError) -> Self
 pub fn ComponentRuntimeError::not_equal(Self, Self) -> Bool
@@ -106,15 +107,17 @@ pub fn ComponentRuntimeError::to_string(Self) -> String
 pub impl Show for ComponentRuntimeError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum CanonSuspend {
   Yield
   Wait(Int64)
-} derive(Eq, @debug.Debug)
+}
 pub fn CanonSuspend::equal(Self, Self) -> Bool
 pub fn CanonSuspend::not_equal(Self, Self) -> Bool
 pub fn CanonSuspend::to_repr(Self) -> @debug.Repr
 
-type ComponentInstanceEntryState derive(@debug.Debug)
+#derive(@debug.Debug)
+type ComponentInstanceEntryState
 pub fn ComponentInstanceEntryState::enter(Self) -> Unit
 pub fn ComponentInstanceEntryState::leave(Self) -> Unit
 pub fn ComponentInstanceEntryState::may_start_async(Self) -> Bool
@@ -122,19 +125,21 @@ pub fn ComponentInstanceEntryState::new(poisoned? : @ref.Ref[Bool]) -> Self
 pub fn ComponentInstanceEntryState::poison(Self) -> Unit
 pub fn ComponentInstanceEntryState::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CoreBackendPolicy {
   PreferNative
   InterpreterOnly
-} derive(Eq, @debug.Debug)
+}
 pub fn CoreBackendPolicy::equal(Self, Self) -> Bool
 pub fn CoreBackendPolicy::not_equal(Self, Self) -> Bool
 pub fn CoreBackendPolicy::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CoreCallStyle {
   RunToCompletion
   CallbackStep
   Stackful
-} derive(Eq, @debug.Debug)
+}
 pub fn CoreCallStyle::equal(Self, Self) -> Bool
 pub fn CoreCallStyle::not_equal(Self, Self) -> Bool
 pub fn CoreCallStyle::to_repr(Self) -> @debug.Repr
@@ -164,22 +169,25 @@ pub fn CoreExecutionLifecycle::new() -> Self
 pub fn CoreExecutionLifecycle::request_close(Self, () -> Unit) -> Unit
 pub fn[T] CoreExecutionLifecycle::with_lease(Self, () -> T raise ComponentRuntimeError, rollback? : () -> Unit) -> T raise ComponentRuntimeError
 
+#derive(@debug.Debug)
 pub(all) enum CoreExecutionOutcome {
   Returned(Array[@types.Value])
   Suspended(CoreSuspension, CoreContinuation)
-} derive(@debug.Debug)
+}
 pub fn CoreExecutionOutcome::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct CoreExecutionRequest {
   style : CoreCallStyle
   backend : CoreBackendPolicy
   suspension : CoreSuspensionPolicy
-} derive(Eq, @debug.Debug)
+}
 pub fn CoreExecutionRequest::CoreExecutionRequest(CoreCallStyle, CoreBackendPolicy, CoreSuspensionPolicy) -> Self
 pub fn CoreExecutionRequest::equal(Self, Self) -> Bool
 pub fn CoreExecutionRequest::not_equal(Self, Self) -> Bool
 pub fn CoreExecutionRequest::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int32
@@ -187,22 +195,24 @@ pub(all) struct CoreFuncRef {
   debug_name : String?
   may_suspend : Bool
   native_eligible : Bool
-} derive(@debug.Debug)
+}
 pub fn CoreFuncRef::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CoreSuspension {
   CooperativeYield
   Yield
   Wait(Int64)
-} derive(Eq, @debug.Debug)
+}
 pub fn CoreSuspension::equal(Self, Self) -> Bool
 pub fn CoreSuspension::not_equal(Self, Self) -> Bool
 pub fn CoreSuspension::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CoreSuspensionPolicy {
   RunToReturn
   Resumable
-} derive(Eq, @debug.Debug)
+}
 pub fn CoreSuspensionPolicy::equal(Self, Self) -> Bool
 pub fn CoreSuspensionPolicy::not_equal(Self, Self) -> Bool
 pub fn CoreSuspensionPolicy::to_repr(Self) -> @debug.Repr

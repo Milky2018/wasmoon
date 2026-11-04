@@ -1,5 +1,6 @@
 ///|
 /// Host and module contract used to accept or reject a decoded artifact.
+#derive(Eq, Debug)
 pub(all) struct ArtifactCompatibility {
   target : @artifact.TargetSpec
   available_cpu_features : Array[@artifact.CpuFeature]
@@ -10,9 +11,10 @@ pub(all) struct ArtifactCompatibility {
   policy : @artifact.CompilationPolicy
   runtime_symbols : Array[@native.ExternalSymbol]
   data_symbols : Array[@native.DataSymbol]
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub suberror ArtifactIncompatible {
   TargetMismatch(
     expected~ : @artifact.TargetSpec,
@@ -35,15 +37,16 @@ pub suberror ArtifactIncompatible {
   DuplicateFunctionIndex(index~ : Int32)
   DuplicateSymbol(name~ : String)
   UnknownSymbol(kind~ : String, name~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub suberror ArtifactLoadError {
   NativePreparationFailed(message~ : String)
   DecodeFailed(cause~ : @artifact.ArtifactDecodeError)
   Incompatible(cause~ : ArtifactIncompatible)
   CodeObjectInvalid(cause~ : @code_object.CodeObjectVerifyError)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Report a checked failure while preparing native metadata for verified input.

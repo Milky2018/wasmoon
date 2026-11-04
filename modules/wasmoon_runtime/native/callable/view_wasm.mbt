@@ -1,5 +1,6 @@
 ///|
 /// Managed callable metadata; native builds publish the same arrays to a C view.
+#derive(Debug)
 pub struct NativeCallableView {
   priv mut parents : FixedArray[Int32]
   priv mut addresses : FixedArray[Int64]
@@ -8,7 +9,7 @@ pub struct NativeCallableView {
   priv mut pointers : FixedArray[Int64]
   priv mut references : FixedArray[Int64]
   priv mut reference_stores : FixedArray[Int32]
-} derive(Debug)
+}
 
 ///|
 pub extend NativeCallableView with Debug::{to_repr}
@@ -34,6 +35,8 @@ fn publish(
   addresses : FixedArray[Int64],
   identities : FixedArray[Int32],
   _entry_count : Int32,
+  _store_origin : Int32,
+  _store_positions : FixedArray[Int32],
 ) -> Unit {
   view.parents = parents
   view.addresses = addresses
@@ -49,6 +52,8 @@ fn publish_functions(
   references : FixedArray[Int64],
   reference_stores : FixedArray[Int32],
   _reference_count : Int32,
+  _store_origin : Int32,
+  _store_positions : FixedArray[Int32],
 ) -> Unit {
   view.stores = stores
   view.pointers = pointers

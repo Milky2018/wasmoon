@@ -61,11 +61,12 @@ pub fn WasiComponentHost::add_preview3_sockets(Self) -> Unit raise @core.Compone
 pub fn WasiComponentHost::context(Self) -> WasiComponentCtx
 pub fn WasiComponentHost::runtime(Self) -> @runtime_impl.HostRuntimeState
 
+#derive(Eq)
 pub(all) enum WasiNetworkPolicy {
   DenyAll
   LoopbackOnly
   AllowAll
-} derive(Eq)
+}
 pub fn WasiNetworkPolicy::equal(Self, Self) -> Bool
 pub fn WasiNetworkPolicy::not_equal(Self, Self) -> Bool
 

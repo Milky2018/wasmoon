@@ -89,7 +89,7 @@ pub fn GCHeapHandle::new(capacity : Int64) -> GCHeapHandle {
   allocate_heap(
     capacity,
     fn(request, wide) { allocate(request, wide) },
-    { visitor: None, collecting: false, },
+    { visitor: None, young_visitor: None, collecting: false, },
     fn(state, request, rollback) { state.collect(request, rollback) },
   )
 }

@@ -9,21 +9,23 @@ pub struct InternalAbi {
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct InternalCallPlan {
   priv arguments : Array[CallArgumentLocation]
   priv results : Array[CallResultLocation]
   priv stack_size : Int32
   priv result_area_size : Int32
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub suberror InternalAbiError {
   InvalidRegister(role~ : String, index~ : Int32)
   DuplicateRegister(role~ : String, index~ : Int32)
   ContextRegisterReused(index~ : Int32)
   ResultAreaRegisterReused(index~ : Int32)
   InvalidSignature(message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for InternalAbiError with fn output(self, logger) {

@@ -40,3 +40,65 @@ test "explicit heap helpers preserve wide objects dynamic layouts and tombstones
     assert_eq(gc_word_access(heap.get_ptr(), 0, 2L, 1, 0L), 0L)
   }
 }
+
+///|
+test "array metadata projections preserve exact width opaque layouts and retirement" {
+  let heap = CHeap()
+  defer heap.free()
+  let objects : Array[(Int32, Int32)] = []
+  for identity, width in [1, 2, 4, 8, 16] {
+    assert_true(heap.get_ptr().define_layout(identity, [width], true))
+    let initial : @types.Value = if width == 16 {
+      V128(Bytes::make(16, 0))
+    } else {
+      I64(42L)
+    }
+    objects.push(
+      (heap.alloc_array(identity, 3, initial, runtime_type=identity), width),
+    )
+  }
+  assert_true(heap.get_ptr().define_layout(5, [-8], true))
+  objects.push((heap.alloc_array(5, 3, Null, runtime_type=5), 0))
+  objects.push((heap.alloc_array(0, 3, I64(17L)), 0))
+  for _ in 0..<2 {
+    for (object, compact_width) in objects {
+      let reference = (object + 1).to_int64() << 1
+      let view = gc_word_access(heap.get_ptr(), 5, reference, 0, 0L)
+      let payload = view & -16L
+      // Verification mode declines a projection and leaves checked access active.
+      let tag = if view == 0L {
+        0L
+      } else {
+        match compact_width {
+          1 => 1L
+          2 => 2L
+          4 => 3L
+          8 => 4L
+          _ => 0L
+        }
+      }
+      assert_eq(view & 15L, tag)
+      for requested in [1, 2, 4, 8, 16] {
+        assert_eq(
+          gc_word_access(heap.get_ptr(), 5, reference, requested, 0L),
+          if requested == compact_width {
+            payload
+          } else {
+            0L
+          },
+        )
+      }
+      assert_eq(gc_word_access(heap.get_ptr(), 5, reference, 0, 0L), view)
+      assert_true(heap.verify())
+    }
+  }
+  heap.collect([]) |> ignore
+  for (object, _) in objects {
+    assert_false(heap.is_valid(object))
+    assert_eq(
+      gc_word_access(heap.get_ptr(), 5, (object + 1).to_int64() << 1, 0, 0L),
+      0L,
+    )
+  }
+  assert_true(heap.verify())
+}

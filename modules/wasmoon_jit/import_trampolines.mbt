@@ -22,11 +22,12 @@ pub fn resolve_import_function_ptr(
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ImportFunctionResolution {
   DirectImportFunction(Int64)
   HostImportFunctionAddr(Int32)
   UnsupportedImportFunction
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn classify_import_function_ptr(ptr : Int64) -> ImportFunctionResolution {

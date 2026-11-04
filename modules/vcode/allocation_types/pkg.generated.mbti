@@ -10,19 +10,21 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum AllocationConstraint {
   AnyReg
   AnyLocation
   PreservedHome
   FixedReg(PhysicalReg)
-} derive(Eq, @debug.Debug)
+}
 pub fn AllocationConstraint::equal(Self, Self) -> Bool
 pub fn AllocationConstraint::not_equal(Self, Self) -> Bool
 pub fn AllocationConstraint::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct AllocationLocation {
   encoded : Int64
-} derive(Eq)
+}
 pub fn AllocationLocation::equal(Self, Self) -> Bool
 pub fn AllocationLocation::is_register(Self) -> Bool
 pub fn AllocationLocation::is_spill(Self) -> Bool
@@ -36,6 +38,7 @@ pub fn AllocationLocation::spill_index_unchecked(Self) -> Int32
 pub fn AllocationLocation::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for AllocationLocation
 
+#derive(Eq, @debug.Debug)
 pub(all) struct AllocationOperand {
   vreg : VirtualReg
   role : OperandRole
@@ -43,7 +46,7 @@ pub(all) struct AllocationOperand {
   preference : PhysicalReg?
   tie_id : Int32
   timing : OperandTiming
-} derive(Eq, @debug.Debug)
+}
 pub fn AllocationOperand::def(VirtualReg) -> Self
 pub fn AllocationOperand::equal(Self, Self) -> Bool
 pub fn AllocationOperand::not_equal(Self, Self) -> Bool
@@ -54,39 +57,43 @@ pub fn AllocationOperand::with_preference(Self, PhysicalReg) -> Self
 pub fn AllocationOperand::with_tie(Self, Int32) -> Self
 pub fn AllocationOperand::with_timing(Self, OperandTiming) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum OperandRole {
   Use
   Def
   UseDef
-} derive(Eq, @debug.Debug)
+}
 pub fn OperandRole::equal(Self, Self) -> Bool
 pub fn OperandRole::not_equal(Self, Self) -> Bool
 pub fn OperandRole::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum OperandTiming {
   Early
   Late
-} derive(Eq, @debug.Debug)
+}
 pub fn OperandTiming::equal(Self, Self) -> Bool
 pub fn OperandTiming::not_equal(Self, Self) -> Bool
 pub fn OperandTiming::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct PhysicalReg {
   id : Int32
   class : RegClass
-} derive(Eq)
+}
 pub fn PhysicalReg::equal(Self, Self) -> Bool
 pub fn PhysicalReg::new(Int32, RegClass) -> Self
 pub fn PhysicalReg::not_equal(Self, Self) -> Bool
 pub fn PhysicalReg::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for PhysicalReg
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum RegClass {
   Int
   Float
   Vector
   FpVector
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn RegClass::equal(Self, Self) -> Bool
 pub fn RegClass::hash(Self) -> Int32
 pub fn RegClass::hash_combine(Self, Hasher) -> Unit
@@ -94,10 +101,11 @@ pub fn RegClass::not_equal(Self, Self) -> Bool
 pub fn RegClass::text(Self) -> String
 pub fn RegClass::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct VirtualReg {
   id : Int32
   class : RegClass
-} derive(Eq, @debug.Debug)
+}
 pub fn VirtualReg::equal(Self, Self) -> Bool
 pub fn VirtualReg::not_equal(Self, Self) -> Bool
 pub fn VirtualReg::to_repr(Self) -> @debug.Repr

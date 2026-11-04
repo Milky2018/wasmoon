@@ -1,31 +1,35 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum NativeTarget {
   X64
   AArch64
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct JitFuncAddrFixup {
   offset : Int32
   target : @code_object.RelocationTarget
   reg : Int32
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct JitCallFixup {
   offset : Int32
   target : @code_object.RelocationTarget
   veneer_offset : Int32
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 pub struct JitCodeObject {
   priv code : Array[Int32]
   priv frame_size : Int32
   priv func_addr_fixups : Array[JitFuncAddrFixup]
   priv call_fixups : Array[JitCallFixup]
   priv gc_safepoints : Array[GcSafepoint]
-} derive(Debug)
+}
 
 ///|
 fn JitCodeObject::new(
