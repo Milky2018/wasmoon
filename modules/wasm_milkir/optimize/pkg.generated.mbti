@@ -9,8 +9,6 @@ import {
 // Values
 pub fn optimize_with_level(@milkir.Function, @wasm_milkir.WasmValidationContext, @Milky2018/milkir/optimize.OptLevel, scalar_callees? : Map[Int32, @milkir.Function]) -> Bool raise @milkir.VerifyError
 
-pub fn with_read_only_calls(@wasm_milkir.WasmValidationContext, Map[Int32, @milkir.Function]) -> @wasm_milkir.WasmValidationContext
-
 // Errors
 
 // Types and methods

@@ -18,8 +18,8 @@ priv struct InlineProjectionSites {
 }
 
 ///|
-/// Expand bounded loops, successful budget-guard regions and small acyclic
-/// accessors. Larger CFGs retain shared accessors to bound code growth.
+/// Expand bounded loops and small acyclic accessors. Larger CFGs retain
+/// shared accessors to bound code growth.
 fn inline_projection_sites(
   function : @milkir.Function,
   reserve_struct~ : Bool = false,
@@ -60,23 +60,6 @@ fn inline_projection_sites(
       total + block.instruction_count()
     }) <=
     64
-  let fast_regions : Array[Int32] = []
-  for block in function.blocks {
-    for id in function.block_instruction_ids(block) {
-      let inst = function.instruction_by_id(id).unwrap()
-      if inst.opcode is Ext(op, _) && decode_poll_region(op) is Some((_, true)) {
-        let guard_value = inst.results[0]
-        match block.terminator {
-          Some(Branch(condition, yes, _, _, _) | Brnz(condition, yes, _)) if condition.id ==
-            guard_value.id => fast_regions.push(yes)
-          Some(Brz(condition, _, yes)) if condition.id == guard_value.id =>
-            fast_regions.push(yes)
-          _ => ()
-        }
-      }
-    }
-  }
-  let dominance = cfg.compute_dominance()
   let mut reserved_struct = None
   let mut smallest_loop = function.blocks.length() + 1
   for (block, id, reference_read) in candidates {
@@ -92,9 +75,7 @@ fn inline_projection_sites(
         }
       }
     }
-    if small_accessor ||
-      in_loop ||
-      fast_regions.any(entry => dominance.dominates(entry, block)) {
+    if small_accessor || in_loop {
       sites[id] = true
     }
   }

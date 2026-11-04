@@ -3,14 +3,11 @@ package "Milky2018/wasm_milkir/effects"
 
 import {
   "Milky2018/milkir",
-  "Milky2018/wasm_milkir",
   "moonbitlang/core/debug",
 }
 
 // Values
 pub fn analyze(@milkir.Opcode) -> Effects
-
-pub fn read_only_call_contracts(Map[Int32, @milkir.Function], @wasm_milkir.WasmValidationContext) -> Map[Int32, @wasm_milkir.WasmReadOnlyCallContract]
 
 // Errors
 

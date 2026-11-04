@@ -50,7 +50,6 @@ pub(all) struct WasmTableContract {
 /// indexed types, tables, tags, and segments use module-local indices.
 struct WasmValidationContext {
   function_contract : (Int32) -> WasmFunctionContract?
-  read_only_calls : Map[Int32, WasmReadOnlyCallContract]
   final_types : Map[Int32, Bool]
   defined_type_contract : (Int32) -> WasmDefinedTypeContract?
   table_contract : (Int32) -> WasmTableContract?
@@ -84,7 +83,6 @@ pub fn WasmValidationContext::new(
   }
   {
     function_contract: resolvers.function_contract,
-    read_only_calls: Map([]),
     final_types: finality,
     defined_type_contract: resolvers.defined_type_contract,
     table_contract: resolvers.table_contract,
@@ -93,6 +91,27 @@ pub fn WasmValidationContext::new(
     data_segment_exists: resolvers.data_segment_exists,
     element_segment_type: resolvers.element_segment_type,
   }
+}
+
+///|
+/// Check a function template's carrier signature before inlining its body.
+pub fn WasmValidationContext::admits_function_body(
+  self : WasmValidationContext,
+  index : Int32,
+  function : @milkir.Function,
+) -> Bool {
+  guard (self.function_contract)(index) is Some(contract) &&
+    function.params.length() == contract.params.length() + 1 &&
+    function.params[0].1 == I64 &&
+    function.results == contract.results else {
+    return false
+  }
+  for i, type_ in contract.params {
+    if function.params[i + 1].1 != type_ {
+      return false
+    }
+  }
+  true
 }
 
 ///|

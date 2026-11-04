@@ -118,10 +118,6 @@ fn annotate_semantic(
   extension : @milkir.ExtOp,
   signature : @milkir.Signature,
 ) -> @milkir.ExtOp {
-  if decode_poll_region(extension) is Some(_) ||
-    decode_guarded_call(extension) is Some(_) {
-    return extension
-  }
   let plain = @milkir.ExtOp(
     extension.dialect,
     extension.opcode,
@@ -157,24 +153,6 @@ fn validate_memory_extension(
   context : @wasm_milkir.WasmValidationContext,
   results : Array[@milkir.Type],
 ) -> String? {
-  if decode_guarded_call(view.op) is Some(call) {
-    return validate_guarded_call(view, call, context)
-  }
-  if decode_poll_region(view.op) is Some((_, guard_)) {
-    if (if guard_ {
-        !view.operand_types.is_empty() ||
-        view.result_types.length() != 2 ||
-        view.result_types[0] != I32 ||
-        view.result_types[1] != Ptr
-      } else {
-        view.operand_types.length() != 1 ||
-        view.operand_types[0] != Ptr ||
-        !view.result_types.is_empty()
-      }) {
-      return Some("invalid native poll region signature")
-    }
-    return None
-  }
   if decode_projection(view.op) is Some(projection) {
     if view.op != projection_opcode(projection) {
       return Some("invalid projection memory effects")

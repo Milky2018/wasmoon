@@ -1,5 +1,5 @@
 ///|
-fn guarded_direct_module() -> @types.Module raise {
+fn polled_direct_module() -> @types.Module raise {
   let module_ = @wat.parse(
     (
       #|(module
@@ -19,8 +19,8 @@ fn guarded_direct_module() -> @types.Module raise {
 }
 
 ///|
-test "guarded direct calls preserve original callback fuel and quantum boundaries" {
-  let module_ = guarded_direct_module()
+test "direct calls preserve callback fuel and quantum boundaries" {
+  let module_ = polled_direct_module()
   let callback_counts : Array[Int32] = []
   let allowances : Array[Array[Bool]] = []
   let yields : Array[Array[Int32]] = []
@@ -88,7 +88,7 @@ test "guarded direct calls preserve original callback fuel and quantum boundarie
       @wast.JITCoreCallError::HostInvocation(ExecutionCancelled) => ()
       error => fail(error.to_string())
     } noraise {
-      _ => fail("guarded call ignored cancellation")
+      _ => fail("direct call ignored cancellation")
     }
     assert_eq(interruptions.val, 3)
     let counts : Array[Int32] = []
@@ -105,7 +105,7 @@ test "guarded direct calls preserve original callback fuel and quantum boundarie
         call = continuation.continue_execution()
       }
       guard call is NativeCoreReturned(values) else {
-        fail("guarded call did not return")
+        fail("direct call did not return")
       }
       assert_eq(values, [I64(103L)])
       counts.push(count)

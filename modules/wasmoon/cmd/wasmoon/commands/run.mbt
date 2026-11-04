@@ -1912,14 +1912,6 @@ fn compile_validated_module_to_jit(
   } else {
     Map([])
   }
-  // A missing native body may resolve to an interpreter/host adapter. Its
-  // effects are not the effects of the source template, so partial artifacts
-  // keep conservative call boundaries even for verified read-only source.
-  let wasm_validation_context = if compile_mask is None {
-    @wasm_optimize.with_read_only_calls(wasm_validation_context, scalar_callees)
-  } else {
-    wasm_validation_context
-  }
   let mut compiled_count = 0
   let manifest = build_jit_artifact_manifest(
     mod_,

@@ -94,25 +94,21 @@ fn direct_call_contract(
   function_index : Int32,
   environment : Environment,
   result_types : Array[@native_types.ValueType],
-  argument_start~ : Int32 = 0,
-  behavior~ : @native_types.CallBehavior = @native_types.CallBehavior::conservative(),
 ) -> (@native_types.NativeCall, Array[@lowering.Value]) {
   let parameter_types : Array[@native_types.ValueType] = [Ptr64]
-  let types = context.operand_types()
-  let arguments = context.operands()
-  for i in argument_start..<types.length() {
-    parameter_types.push(types[i])
+  for type_ in context.operand_types() {
+    parameter_types.push(type_)
   }
   let operands = context.environment()
-  for i in argument_start..<arguments.length() {
-    operands.push(arguments[i])
+  for argument in context.operands() {
+    operands.push(argument)
   }
   (
     @native_types.NativeCall::new(
       Internal((environment.function_symbol)(function_index)),
       @native_types.Signature::new(parameter_types, result_types),
       Internal,
-      behavior,
+      @native_types.CallBehavior::conservative(),
     ),
     operands,
   )
@@ -1404,34 +1400,6 @@ fn lower_extension(
   environment : Environment,
   validation_context : @wasm_milkir.WasmValidationContext,
 ) -> String? {
-  if decode_guarded_call(extension) is Some(guarded) {
-    if !environment.exclusive_poll_controls {
-      return Some("guarded calls require exclusive invocation controls")
-    }
-    let (call, operands) = direct_call_contract(
-      context,
-      guarded.target,
-      environment,
-      context.result_types(),
-      argument_start=1,
-      behavior=@native_types.CallBehavior::new(
-        ReadWrite,
-        true,
-        true,
-        false,
-        false,
-      ),
-    )
-    context.finish_call(call, operands)
-    return None
-  }
-  if decode_poll_region(extension) is Some((region, guard_)) {
-    if !environment.exclusive_poll_controls {
-      return Some("native poll regions require exclusive invocation controls")
-    }
-    lower_poll_region(context, region, guard_)
-    return None
-  }
   if decode_projection(extension) is Some(projection) {
     if environment.gc_heap_field is None {
       return Some("GC projection requires an explicit heap environment")
@@ -1772,28 +1740,9 @@ pub fn lower_to_sink(
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
   if environment.gc_array_regions && environment.gc_heap_field is Some(_) {
-    prepare_gc_memory(
-      function,
-      validation_context,
-      exclusive_poll_controls=environment.exclusive_poll_controls,
-      on_event~,
-    ) catch {
+    prepare_gc_memory(function, validation_context, on_event~) catch {
       error =>
         raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
-    }
-  } else if function.blocks.any(block => {
-      function
-      .block_instruction_ids(block)
-      .any(id => {
-        function.instruction_by_id(id).unwrap().opcode is Ext(op, _) &&
-        (
-          decode_poll_region(op) is Some(_) ||
-          decode_guarded_call(op) is Some(_)
-        )
-      })
-    }) {
-    if gc_borrow_error(function) is Some(error) {
-      raise @milkir_native.NativeLowerError::invalid_milkir(error)
     }
   }
   let poll_cache = if environment.exclusive_poll_controls &&
@@ -1905,13 +1854,8 @@ pub fn lower_to_sink(
     sink,
     call_abi?,
     verify_input=verify_input || !cached_polls.is_empty(),
-    root_free_extension=op => {
-      decode_poll_region(op) is Some(_) ||
-      decode_guarded_call(op) is Some(_) ||
-      decode_cached_poll(op) is Some(Publish(_))
-    },
+    root_free_extension=op => decode_cached_poll(op) is Some(Publish(_)),
     prefer_scoped_root_site=op => {
-      decode_poll_region(op) is Some(_) ||
       decode_cached_poll(op) is Some(Step(_, _)) ||
       @wasm_milkir.decode(op) is Some(SafepointPoll(_, _, _, _)) ||
       (op.effects is Some(effects) && !effects.invalidates_addresses)

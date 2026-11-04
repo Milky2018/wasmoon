@@ -254,9 +254,6 @@ fn compile_component_artifact(
   } else {
     Map([])
   }
-  let validation_context = @wasm_optimize.with_read_only_calls(
-    validation_context, scalar_callees,
-  )
   let imports : Array[@artifact.ImportIdentity] = []
   let mut imported_function_index = 0
   for import_ in module_.imports {
