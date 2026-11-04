@@ -1,7 +1,7 @@
 # AArch64 zero-extended constants and shared comparison matching
 
 Baseline: `17e9ad4d51f0ab073e1feebca0752aca8a17abc5`, native macOS ARM64.
-Tracking: [ISS-597](../../issues/ISS-597.md).
+Tracking: [ISS-597](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-597.md).
 
 ## Changes
 

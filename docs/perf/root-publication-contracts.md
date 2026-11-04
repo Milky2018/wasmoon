@@ -1,6 +1,6 @@
 # Root publication contracts
 
-Tracking: [ISS-726](../../issues/ISS-726.md).
+Tracking: [#598](https://github.com/Milky2018/wasmoon/issues/598).
 
 The native adapter plans liveness at collecting/cooperative edges, then the
 existing scoped or persistent frame owns each admitted root. Persistent slots

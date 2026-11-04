@@ -1,6 +1,6 @@
 # Unsigned wide multiplication
 
-Tracking: [ISS-680](../../issues/ISS-680.md), part of
+Tracking: [ISS-680](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-680.md), part of
 [PR 582](https://github.com/Milky2018/wasmoon/pull/582).
 
 ## Diagnosis and retained change

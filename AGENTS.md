@@ -54,10 +54,9 @@ code comments, documentation, issues, and PR text. Report changes, validation
 results, and delivery status at handoff.
 
 Track bugs, tasks, and follow-ups in
-[GitHub Issues](https://github.com/Milky2018/wasmoon/issues). Treat local issue
-files and indexes as historical references. When resuming an archived item,
-reuse its GitHub issue if one exists and cite the legacy ID when filing a new
-issue.
+[GitHub Issues](https://github.com/Milky2018/wasmoon/issues). The
+[legacy Markdown records](https://github.com/Milky2018/wasmoon/tree/35b1d7930daa268d17d7438604fdde44829f2e37/issues)
+are preserved in Git history. Cite the legacy ID when filing a follow-up.
 
 ## Testing
 

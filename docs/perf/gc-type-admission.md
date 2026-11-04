@@ -1,6 +1,6 @@
 # Native GC type admission
 
-Tracking: [ISS-692](../../issues/ISS-692.md), [ISS-693](../../issues/ISS-693.md).
+Tracking: [ISS-692](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-692.md), [ISS-693](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-693.md).
 
 A five-second current-head regex sample places struct-view admission ahead of
 other native helpers. Separate diagnostic counters at n=2100 observe 1,042,931,643

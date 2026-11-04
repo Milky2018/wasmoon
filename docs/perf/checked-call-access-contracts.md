@@ -1,6 +1,6 @@
 # Checked call and access contracts
 
-Tracking: [ISS-726](../../issues/ISS-726.md).
+Tracking: [#598](https://github.com/Milky2018/wasmoon/issues/598).
 
 ## Module facts and invocation proofs
 

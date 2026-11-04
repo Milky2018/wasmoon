@@ -125,7 +125,7 @@ ASan run is not evidence that they passed.
 An intermediate incremental build mixed old/new private struct layouts. ASan
 reported a 1096-byte initialization into a 1088-byte stack allocation. Clean
 native and sanitizer rebuilds removed the mismatch; final checks did not reuse
-those objects. [ISS-634](../../../issues/ISS-634.md) tracks dependency/cache
+those objects. [#595](https://github.com/Milky2018/wasmoon/issues/595) tracks dependency/cache
 invalidation separately; [the failing ASan trace](abi-cache-before.log) is
 preserved. Do not treat that intermediate crash as a passing sanitizer run.
 

@@ -3,9 +3,9 @@
 Source: `25381fc764c47e805f318012c272fdd51f62c57f` (main).
 Platform: macOS ARM64. MoonBit: stable `0.1.20261012` (`748b63c`).
 Engine: interpreter, through the public executor and runtime interfaces.
-Tracking: [ISS-624](../../../issues/ISS-624.md),
-[ISS-625](../../../issues/ISS-625.md), and
-[ISS-626](../../../issues/ISS-626.md).
+Tracking: [ISS-624](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-624.md),
+[ISS-625](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-625.md), and
+[ISS-626](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-626.md).
 
 The review created an independent temporary native MoonBit package importing
 the current workspace modules. It did not change production source or existing

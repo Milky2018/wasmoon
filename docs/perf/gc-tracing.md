@@ -1,6 +1,6 @@
 # Independently owned native graph traces
 
-Tracking: [ISS-694](../../issues/ISS-694.md).
+Tracking: [ISS-694](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-694.md).
 
 An earlier generational regex2100 diagnostic examined137 million candidate edges,77 million already
 seen. Discovery stored a32-bit visit epoch per identity; interleaved read-only

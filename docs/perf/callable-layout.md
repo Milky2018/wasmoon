@@ -1,6 +1,6 @@
 # Compact bound-callable storage
 
-Tracking: [ISS-682](../../issues/ISS-682.md), part of PR582.
+Tracking: [ISS-682](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-682.md), part of PR582.
 
 ## Cause and ownership
 
