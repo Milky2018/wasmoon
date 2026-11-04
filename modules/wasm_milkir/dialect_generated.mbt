@@ -2,6 +2,7 @@
 // DO NOT EDIT. Update the schema and run a Moon development command.
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) enum WasmOpcode {
   WasmCall(Int)
   WasmCallIndirect(Int, Int)
@@ -55,7 +56,7 @@ pub(all) enum WasmOpcode {
   ContResume(Int, Int, Int, Int)
   ContSwitch(Int, Int)
   SafepointPoll(Int, Int, Int, Int)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 let wasm_opcode_specs : Array[WasmOpcodeSpec] = [

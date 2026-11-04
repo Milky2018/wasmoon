@@ -3,6 +3,7 @@ package "Milky2018/wasmoon_jit/perf"
 
 import {
   "Milky2018/wasmoon_runtime/clock",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -51,12 +52,13 @@ pub fn tick_now() -> @clock.Instant
 // Errors
 
 // Types and methods
+#derive(@json.ToJson)
 pub struct CompileSubphaseMetric {
   name : String
   parent : String
   duration_us : Int64
-} derive(ToJson)
-pub fn CompileSubphaseMetric::to_json(Self) -> Json
+}
+pub fn CompileSubphaseMetric::to_json(Self) -> @json.Json
 
 pub(all) enum FunctionCompileStage {
   Optimize
@@ -67,6 +69,7 @@ pub(all) enum FunctionCompileStage {
   Emission
 }
 
+#derive(@json.ToJson)
 pub struct FunctionMetrics {
   func_idx : Int32
   func_name : String
@@ -90,9 +93,10 @@ pub struct FunctionMetrics {
   mut regalloc_loop : RegallocLoopMetric?
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
-} derive(ToJson)
-pub fn FunctionMetrics::to_json(Self) -> Json
+}
+pub fn FunctionMetrics::to_json(Self) -> @json.Json
 
+#derive(@json.ToJson)
 pub struct IRPassMetric {
   name : String
   duration_us : Int64
@@ -105,18 +109,20 @@ pub struct IRPassMetric {
   work_done : Int32?
   value_lookup_probes : Int32?
   budget_exhausted : Bool?
-} derive(ToJson)
-pub fn IRPassMetric::to_json(Self) -> Json
+}
+pub fn IRPassMetric::to_json(Self) -> @json.Json
 
+#derive(@json.ToJson)
 pub struct ModuleMetricsReport {
   schema_version : Int32
   expected_functions : Int32
   mut module_compile_us : Int64
   compile_subphases : Array[CompileSubphaseMetric]
   functions : Array[FunctionMetrics]
-} derive(ToJson)
-pub fn ModuleMetricsReport::to_json(Self) -> Json
+}
+pub fn ModuleMetricsReport::to_json(Self) -> @json.Json
 
+#derive(@json.ToJson)
 pub struct RegallocLoopMetric {
   queue_pops : Int32
   register_probes : Int32
@@ -126,14 +132,15 @@ pub struct RegallocLoopMetric {
   bundle_splits : Int32
   second_chance_attempts : Int32
   max_queue_length : Int32
-} derive(ToJson)
-pub fn RegallocLoopMetric::to_json(Self) -> Json
+}
+pub fn RegallocLoopMetric::to_json(Self) -> @json.Json
 
+#derive(@json.ToJson)
 pub struct RegallocPhaseMetric {
   name : String
   duration_us : Int64
-} derive(ToJson)
-pub fn RegallocPhaseMetric::to_json(Self) -> Json
+}
+pub fn RegallocPhaseMetric::to_json(Self) -> @json.Json
 
 // Type aliases
 pub using @clock {type Instant}

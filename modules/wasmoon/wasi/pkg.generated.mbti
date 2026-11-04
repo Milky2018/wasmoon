@@ -426,14 +426,16 @@ pub(all) enum Errno {
 }
 pub fn Errno::to_i32(Self) -> Int32
 
-pub(all) struct Fd(Int32) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct Fd(Int32)
 pub fn Fd::equal(Self, Self) -> Bool
 pub fn Fd::from_int(Int32) -> Self
 pub fn Fd::not_equal(Self, Self) -> Bool
 pub fn Fd::to_int(Self) -> Int32
 pub fn Fd::to_repr(Self) -> @debug.Repr
 
-pub(all) struct FileSize(Int64) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct FileSize(Int64)
 pub fn FileSize::equal(Self, Self) -> Bool
 pub fn FileSize::not_equal(Self, Self) -> Bool
 pub fn FileSize::to_int64(Self) -> Int64
@@ -523,13 +525,15 @@ pub(all) enum ResolvePathError {
   NotCapable
 }
 
-pub(all) struct Size(Int32) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct Size(Int32)
 pub fn Size::equal(Self, Self) -> Bool
 pub fn Size::not_equal(Self, Self) -> Bool
 pub fn Size::to_int(Self) -> Int32
 pub fn Size::to_repr(Self) -> @debug.Repr
 
-pub(all) struct Timestamp(Int64) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct Timestamp(Int64)
 pub fn Timestamp::equal(Self, Self) -> Bool
 pub fn Timestamp::not_equal(Self, Self) -> Bool
 pub fn Timestamp::to_int64(Self) -> Int64

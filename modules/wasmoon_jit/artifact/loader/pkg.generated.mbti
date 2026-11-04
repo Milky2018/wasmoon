@@ -15,6 +15,7 @@ pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLim
 pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtifact raise ArtifactLoadError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub suberror ArtifactIncompatible {
   TargetMismatch(expected~ : @artifact.TargetSpec, actual~ : @artifact.TargetSpec)
   InvalidFunctionIndex(index~ : Int32)
@@ -28,23 +29,25 @@ pub suberror ArtifactIncompatible {
   DuplicateFunctionIndex(index~ : Int32)
   DuplicateSymbol(name~ : String)
   UnknownSymbol(kind~ : String, name~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn ArtifactIncompatible::equal(Self, Self) -> Bool
 pub fn ArtifactIncompatible::not_equal(Self, Self) -> Bool
 pub fn ArtifactIncompatible::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub suberror ArtifactLoadError {
   NativePreparationFailed(message~ : String)
   DecodeFailed(cause~ : @artifact.ArtifactDecodeError)
   Incompatible(cause~ : ArtifactIncompatible)
   CodeObjectInvalid(cause~ : @code_object.CodeObjectVerifyError)
-} derive(Eq, @debug.Debug)
+}
 pub fn ArtifactLoadError::equal(Self, Self) -> Bool
 pub fn ArtifactLoadError::native_preparation_failed(String) -> Self
 pub fn ArtifactLoadError::not_equal(Self, Self) -> Bool
 pub fn ArtifactLoadError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ArtifactCompatibility {
   target : @artifact.TargetSpec
   available_cpu_features : Array[@artifact.CpuFeature]
@@ -55,7 +58,7 @@ pub(all) struct ArtifactCompatibility {
   policy : @artifact.CompilationPolicy
   runtime_symbols : Array[@native_types.ExternalSymbol]
   data_symbols : Array[@native_types.DataSymbol]
-} derive(Eq, @debug.Debug)
+}
 pub fn ArtifactCompatibility::equal(Self, Self) -> Bool
 pub fn ArtifactCompatibility::not_equal(Self, Self) -> Bool
 pub fn ArtifactCompatibility::to_repr(Self) -> @debug.Repr

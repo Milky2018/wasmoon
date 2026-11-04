@@ -10,13 +10,14 @@ import {
 pub fn supported() -> Bool
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub suberror NativeExecutionStateError {
   ExecutionStateSealed
   UnknownInvocation(Int64)
   InvocationNotActive(Int64)
   InvocationNotParked(Int64)
   InvocationNotCurrent(Int64)
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeExecutionStateError::equal(Self, Self) -> Bool
 pub fn NativeExecutionStateError::not_equal(Self, Self) -> Bool
 pub fn NativeExecutionStateError::output(Self, &Logger) -> Unit
@@ -52,10 +53,11 @@ pub fn NativeInvocationHandle::resource_id(Self) -> Int64 raise NativeExecutionS
 pub fn NativeInvocationHandle::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeInvocationHandle
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NativeInvocationPhase {
   Active
   Parked
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeInvocationPhase::equal(Self, Self) -> Bool
 pub fn NativeInvocationPhase::not_equal(Self, Self) -> Bool
 pub fn NativeInvocationPhase::to_repr(Self) -> @debug.Repr

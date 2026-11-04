@@ -168,40 +168,45 @@ pub fn wasm_funcref_type() -> @milkir.Type
 // Errors
 
 // Types and methods
-type RuntimeSymbols derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type RuntimeSymbols
 pub fn RuntimeSymbols::equal(Self, Self) -> Bool
 pub fn RuntimeSymbols::not_equal(Self, Self) -> Bool
 pub fn RuntimeSymbols::symbol_name(Self, WasmRuntimeHelper) -> String
 pub fn RuntimeSymbols::to_repr(Self) -> @debug.Repr
 pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WasmDefinedTypeContract {
   Function(WasmFunctionContract)
   Continuation(Int32)
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
-} derive(Eq, @debug.Debug)
+}
 pub fn WasmDefinedTypeContract::equal(Self, Self) -> Bool
 pub fn WasmDefinedTypeContract::not_equal(Self, Self) -> Bool
 pub fn WasmDefinedTypeContract::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WasmFieldContract {
   storage : WasmStorageContract
   mutable_ : Bool
   defaultable : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn WasmFieldContract::equal(Self, Self) -> Bool
 pub fn WasmFieldContract::not_equal(Self, Self) -> Bool
 pub fn WasmFieldContract::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WasmFunctionContract {
   params : Array[@milkir.Type]
   results : Array[@milkir.Type]
-} derive(Eq, @debug.Debug)
+}
 pub fn WasmFunctionContract::equal(Self, Self) -> Bool
 pub fn WasmFunctionContract::not_equal(Self, Self) -> Bool
 pub fn WasmFunctionContract::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum WasmOpcode {
   WasmCall(Int32)
   WasmCallIndirect(Int32, Int32)
@@ -255,21 +260,23 @@ pub(all) enum WasmOpcode {
   ContResume(Int32, Int32, Int32, Int32)
   ContSwitch(Int32, Int32)
   SafepointPoll(Int32, Int32, Int32, Int32)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn WasmOpcode::equal(Self, Self) -> Bool
 pub fn WasmOpcode::hash(Self) -> Int32
 pub fn WasmOpcode::hash_combine(Self, Hasher) -> Unit
 pub fn WasmOpcode::not_equal(Self, Self) -> Bool
 pub fn WasmOpcode::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WasmReadOnlyCallContract {
   polls : Int32
   layout : (Int32, Int32, Int32, Int32)?
-} derive(Eq, @debug.Debug)
+}
 pub fn WasmReadOnlyCallContract::equal(Self, Self) -> Bool
 pub fn WasmReadOnlyCallContract::not_equal(Self, Self) -> Bool
 pub fn WasmReadOnlyCallContract::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WasmRuntimeHelper {
   MemoryGrow
   MemorySize
@@ -345,24 +352,26 @@ pub(all) enum WasmRuntimeHelper {
   ExceptionSigsetjmp
   ExceptionSpillLocals
   ExceptionGetSpilledLocal
-} derive(Eq, @debug.Debug)
+}
 pub fn WasmRuntimeHelper::equal(Self, Self) -> Bool
 pub fn WasmRuntimeHelper::not_equal(Self, Self) -> Bool
 pub fn WasmRuntimeHelper::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WasmStorageContract {
   Value(@milkir.Type)
   Packed8
   Packed16
-} derive(Eq, @debug.Debug)
+}
 pub fn WasmStorageContract::equal(Self, Self) -> Bool
 pub fn WasmStorageContract::not_equal(Self, Self) -> Bool
 pub fn WasmStorageContract::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct WasmTableContract {
   index_type : @milkir.Type
   element_type : @milkir.Type
-} derive(Eq, @debug.Debug)
+}
 pub fn WasmTableContract::equal(Self, Self) -> Bool
 pub fn WasmTableContract::not_equal(Self, Self) -> Bool
 pub fn WasmTableContract::to_repr(Self) -> @debug.Repr

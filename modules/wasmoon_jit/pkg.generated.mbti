@@ -252,21 +252,23 @@ pub fn wasm_trap_payload(String) -> Int32
 pub fn wasmoon_runtime_external_symbols() -> Array[@native_types.ExternalSymbol]
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror GCSetupError {
   MissingJITContext
   InvalidMetadata
   InvalidFuncCount(num_funcs~ : Int32)
   FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int32, num_funcs~ : Int32)
   MissingFunctionTableContext(num_funcs~ : Int32)
-} derive(@debug.Debug)
+}
 pub fn GCSetupError::output(Self, &Logger) -> Unit
 pub fn GCSetupError::to_repr(Self) -> @debug.Repr
 pub fn GCSetupError::to_string(Self) -> String
 pub impl Show for GCSetupError
 
+#derive(Eq, @debug.Debug)
 pub suberror HostcallImportTrampolineError {
   UnsupportedHostcallImportTrampoline(message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn HostcallImportTrampolineError::equal(Self, Self) -> Bool
 pub fn HostcallImportTrampolineError::not_equal(Self, Self) -> Bool
 pub fn HostcallImportTrampolineError::output(Self, &Logger) -> Unit
@@ -274,6 +276,7 @@ pub fn HostcallImportTrampolineError::to_repr(Self) -> @debug.Repr
 pub fn HostcallImportTrampolineError::to_string(Self) -> String
 pub impl Show for HostcallImportTrampolineError
 
+#derive(@debug.Debug)
 pub suberror JitPipelineError {
   NativeLoweringFailed(cause~ : @native.NativeLowerError)
   AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
@@ -289,12 +292,13 @@ pub suberror JitPipelineError {
   UnsupportedHostArchitecture(tag~ : Int32)
   UnsupportedHostOsAbi(tag~ : Int32)
   InvalidFunctionIndex(index~ : Int32)
-} derive(@debug.Debug)
+}
 pub fn JitPipelineError::output(Self, &Logger) -> Unit
 pub fn JitPipelineError::to_repr(Self) -> @debug.Repr
 pub fn JitPipelineError::to_string(Self) -> String
 pub impl Show for JitPipelineError
 
+#derive(Eq, @debug.Debug)
 pub suberror NativeFiberError {
   StackAllocationFailed(Int64)
   WrongThread
@@ -302,7 +306,7 @@ pub suberror NativeFiberError {
   InvalidState(Int32)
   UnexpectedYield(Int64)
   NativeFailure(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeFiberError::equal(Self, Self) -> Bool
 pub fn NativeFiberError::not_equal(Self, Self) -> Bool
 pub fn NativeFiberError::output(Self, &Logger) -> Unit
@@ -310,6 +314,7 @@ pub fn NativeFiberError::to_repr(Self) -> @debug.Repr
 pub fn NativeFiberError::to_string(Self) -> String
 pub impl Show for NativeFiberError
 
+#derive(@debug.Debug)
 pub(all) suberror NativeSetupError {
   SegmentAllocationFailed
   RootFrameAllocationFailed
@@ -318,7 +323,7 @@ pub(all) suberror NativeSetupError {
   MemoryBindingAllocationFailed
   TableBindingAllocationFailed
   InvalidBinding(String)
-} derive(@debug.Debug)
+}
 pub fn NativeSetupError::output(Self, &Logger) -> Unit
 pub fn NativeSetupError::to_repr(Self) -> @debug.Repr
 pub fn NativeSetupError::to_string(Self) -> String
@@ -369,11 +374,12 @@ pub fn FunctionTemperature::output(Self, &Logger) -> Unit
 pub fn FunctionTemperature::to_string(Self) -> String
 pub impl Show for FunctionTemperature
 
+#derive(@debug.Debug)
 pub struct GcSafepoint {
   code_offset : Int32
   live_refs : Array[Int32]
   metadata : Int64
-} derive(@debug.Debug)
+}
 pub fn GcSafepoint::GcSafepoint(Int32, Array[Int32], Int64) -> Self
 pub fn GcSafepoint::to_repr(Self) -> @debug.Repr
 
@@ -397,11 +403,12 @@ pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
 pub fn HotThreshold::default() -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ImportFunctionResolution {
   DirectImportFunction(Int64)
   HostImportFunctionAddr(Int32)
   UnsupportedImportFunction
-} derive(Eq, @debug.Debug)
+}
 pub fn ImportFunctionResolution::equal(Self, Self) -> Bool
 pub fn ImportFunctionResolution::not_equal(Self, Self) -> Bool
 pub fn ImportFunctionResolution::to_repr(Self) -> @debug.Repr
@@ -421,9 +428,10 @@ pub struct JITFunctionDebug {
 }
 pub fn JITFunctionDebug::JITFunctionDebug(String, String, String, String) -> Self
 
+#derive(@debug.Debug)
 pub struct JitCodeObject {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn JitCodeObject::get_bytes(Self) -> Array[Int32]
 pub fn JitCodeObject::to_repr(Self) -> @debug.Repr
 
@@ -433,12 +441,13 @@ pub(all) struct JitIntegrationPlan {
   object : JitCodeObject
 }
 
+#derive(@debug.Debug)
 pub struct JitPipelineDiagnostics {
   target_vcode : String
   allocated_vcode : String
   code_object : String
   machine_code : String
-} derive(@debug.Debug)
+}
 pub fn JitPipelineDiagnostics::to_repr(Self) -> @debug.Repr
 
 pub struct LoadedArtifact {
@@ -487,31 +496,34 @@ pub fn NativeFiber::suspend(Int64) -> Int64
 pub fn NativeFiber::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for NativeFiber
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NativeFiberEvent {
   Yielded(Int64)
   Finished(Int64)
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeFiberEvent::equal(Self, Self) -> Bool
 pub fn NativeFiberEvent::not_equal(Self, Self) -> Bool
 pub fn NativeFiberEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NativeFiberPhase {
   Ready
   Running
   Suspended
   Returned
   Cancelled
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeFiberPhase::equal(Self, Self) -> Bool
 pub fn NativeFiberPhase::not_equal(Self, Self) -> Bool
 pub fn NativeFiberPhase::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NativeHostcallOutcome {
   HostcallCompleted
   HostcallExit(Int32)
   HostcallTrap(Int32)
   HostcallSuspended
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeHostcallOutcome::equal(Self, Self) -> Bool
 pub fn NativeHostcallOutcome::not_equal(Self, Self) -> Bool
 pub fn NativeHostcallOutcome::to_repr(Self) -> @debug.Repr
@@ -585,28 +597,31 @@ pub fn NativeJITContinuation::continue_with(Self, value? : Int64) -> NativeJITCo
 pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
 pub fn NativeJITContinuation::uncaught_exception(Self) -> NativeUncaughtException?
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NativeJITContinuationEvent {
   NativeSuspended(NativeSuspensionReason)
   NativeJITCompleted
   NativeJITTrapped(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeJITContinuationEvent::equal(Self, Self) -> Bool
 pub fn NativeJITContinuationEvent::not_equal(Self, Self) -> Bool
 pub fn NativeJITContinuationEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NativeSuspensionReason {
   HostCall
   CooperativeYield
   AtomicWait
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeSuspensionReason::equal(Self, Self) -> Bool
 pub fn NativeSuspensionReason::not_equal(Self, Self) -> Bool
 pub fn NativeSuspensionReason::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NativeTarget {
   X64
   AArch64
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeTarget::equal(Self, Self) -> Bool
 pub fn NativeTarget::not_equal(Self, Self) -> Bool
 pub fn NativeTarget::to_repr(Self) -> @debug.Repr
@@ -642,17 +657,19 @@ pub fn Profiler::stats(Self) -> (Int32, Int32, Int32, Int32)
 pub fn Profiler::to_string(Self) -> String
 pub impl Show for Profiler
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RuntimeSymbol {
   name : String
   address : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn RuntimeSymbol::equal(Self, Self) -> Bool
 pub fn RuntimeSymbol::not_equal(Self, Self) -> Bool
 pub fn RuntimeSymbol::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct RuntimeSymbolResolver {
   symbols : Array[RuntimeSymbol]
-} derive(@debug.Debug)
+}
 pub fn RuntimeSymbolResolver::RuntimeSymbolResolver() -> Self
 pub fn RuntimeSymbolResolver::add_symbol(Self, String, Int64) -> Unit
 pub fn RuntimeSymbolResolver::resolve(Self, String) -> Int64?

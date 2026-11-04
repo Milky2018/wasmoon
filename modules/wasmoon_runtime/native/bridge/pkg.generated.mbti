@@ -110,9 +110,10 @@ pub(all) suberror CHeapError {
 }
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct CHeap {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn CHeap::CHeap(capacity? : Int32) -> Self raise CHeapError
 pub fn CHeap::alloc_array(Self, Int32, Int32, @types.Value, runtime_type? : Int32) -> Int32 raise CHeapError
 pub fn CHeap::alloc_array_from_values(Self, Int32, Array[@types.Value], runtime_type? : Int32) -> Int32 raise CHeapError
@@ -153,15 +154,17 @@ pub fn CHeap::struct_set(Self, Int32, Int32, @types.Value) -> Unit
 pub fn CHeap::to_repr(Self) -> @debug.Repr
 pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub struct GcSlot {
   lo : Int64
   hi : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn GcSlot::equal(Self, Self) -> Bool
 pub fn GcSlot::not_equal(Self, Self) -> Bool
 pub fn GcSlot::to_repr(Self) -> @debug.Repr
 
-type JITTable derive(@debug.Debug)
+#derive(@debug.Debug)
+type JITTable
 pub fn JITTable::get_entry_type(Self, Int32) -> Int32
 pub fn JITTable::get_entry_value(Self, Int32) -> Int64
 pub fn JITTable::get_max(Self) -> Int64?
@@ -171,7 +174,8 @@ pub fn JITTable::refresh_layout(Self, @ffi.NativeTableHandle, Int32) -> Unit
 pub fn JITTable::set(Self, Int32, Int64, Int32) -> Unit
 pub fn JITTable::to_repr(Self) -> @debug.Repr
 
-type JITTableOwner derive(@debug.Debug)
+#derive(@debug.Debug)
+type JITTableOwner
 pub fn JITTableOwner::close(Self) -> Unit
 pub fn JITTableOwner::table(Self) -> JITTable
 pub fn JITTableOwner::to_repr(Self) -> @debug.Repr

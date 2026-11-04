@@ -29,6 +29,7 @@ pub fn[Inst] verify_framed(Function[Inst], Allocation, FrameLayout) -> Unit rais
 pub fn[Inst] verify_selected(Function[Inst]) -> Unit raise VCodeVerifyError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub suberror AllocationVerifyError {
   SelectedFailure(cause~ : VCodeVerifyError)
   SourceMismatch
@@ -49,7 +50,7 @@ pub suberror AllocationVerifyError {
   InvalidEdgeMove(index~ : Int32)
   MissingSafepointRoot(instruction~ : Instruction, value~ : Value)
   UnexpectedSafepointRoot(instruction~ : Instruction, value~ : Value)
-} derive(Eq, @debug.Debug)
+}
 pub fn AllocationVerifyError::equal(Self, Self) -> Bool
 pub fn AllocationVerifyError::not_equal(Self, Self) -> Bool
 pub fn AllocationVerifyError::output(Self, &Logger) -> Unit
@@ -57,6 +58,7 @@ pub fn AllocationVerifyError::to_repr(Self) -> @debug.Repr
 pub fn AllocationVerifyError::to_string(Self) -> String
 pub impl Show for AllocationVerifyError
 
+#derive(Eq, @debug.Debug)
 pub suberror CallTransferError {
   InvalidSourceClass(index~ : Int32)
   ForeignSourceStack(index~ : Int32)
@@ -70,14 +72,15 @@ pub suberror CallTransferError {
   OverlappingStackDestination(first~ : Int32, second~ : Int32)
   ProtectedLocationOverwrite(index~ : Int32, location~ : Location)
   MoveResolutionFailed(cause~ : MoveResolveError)
-} derive(Eq, @debug.Debug)
+}
 pub fn CallTransferError::equal(Self, Self) -> Bool
 pub fn CallTransferError::not_equal(Self, Self) -> Bool
 pub fn CallTransferError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub suberror EmissionVerifyError {
   FrameFailure(cause~ : FrameVerifyError)
-} derive(Eq, @debug.Debug)
+}
 pub fn EmissionVerifyError::equal(Self, Self) -> Bool
 pub fn EmissionVerifyError::not_equal(Self, Self) -> Bool
 pub fn EmissionVerifyError::output(Self, &Logger) -> Unit
@@ -85,6 +88,7 @@ pub fn EmissionVerifyError::to_repr(Self) -> @debug.Repr
 pub fn EmissionVerifyError::to_string(Self) -> String
 pub impl Show for EmissionVerifyError
 
+#derive(Eq, @debug.Debug)
 pub suberror FrameVerifyError {
   AllocationFailure(cause~ : AllocationVerifyError)
   SourceMismatch
@@ -94,7 +98,7 @@ pub suberror FrameVerifyError {
   MisalignedStackSlot(slot~ : StackSlot)
   OverlappingStackSlots(left~ : StackSlot, right~ : StackSlot)
   StackSlotOutOfFrame(slot~ : StackSlot)
-} derive(Eq, @debug.Debug)
+}
 pub fn FrameVerifyError::equal(Self, Self) -> Bool
 pub fn FrameVerifyError::not_equal(Self, Self) -> Bool
 pub fn FrameVerifyError::output(Self, &Logger) -> Unit
@@ -102,12 +106,13 @@ pub fn FrameVerifyError::to_repr(Self) -> @debug.Repr
 pub fn FrameVerifyError::to_string(Self) -> String
 pub impl Show for FrameVerifyError
 
+#derive(Eq, @debug.Debug)
 pub suberror MoveResolveError {
   MissingScratch(class~ : @allocation_types.RegClass)
   InvalidScratch(reg~ : @allocation_types.PhysicalReg, expected~ : @allocation_types.RegClass)
   NoSafeCycleScratch(class~ : @allocation_types.RegClass)
   BrokenCycle
-} derive(Eq, @debug.Debug)
+}
 pub fn MoveResolveError::equal(Self, Self) -> Bool
 pub fn MoveResolveError::not_equal(Self, Self) -> Bool
 pub fn MoveResolveError::output(Self, &Logger) -> Unit
@@ -115,6 +120,7 @@ pub fn MoveResolveError::to_repr(Self) -> @debug.Repr
 pub fn MoveResolveError::to_string(Self) -> String
 pub impl Show for MoveResolveError
 
+#derive(Eq, @debug.Debug)
 pub suberror VCodeBuildError {
   InvalidParameter(index~ : Int32)
   InvalidBlockParameter(block~ : Block, index~ : Int32)
@@ -130,7 +136,7 @@ pub suberror VCodeBuildError {
   InvalidStackMap
   MissingTerminator(block~ : Block)
   InvalidLayout
-} derive(Eq, @debug.Debug)
+}
 pub fn VCodeBuildError::equal(Self, Self) -> Bool
 pub fn VCodeBuildError::not_equal(Self, Self) -> Bool
 pub fn VCodeBuildError::output(Self, &Logger) -> Unit
@@ -138,6 +144,7 @@ pub fn VCodeBuildError::to_repr(Self) -> @debug.Repr
 pub fn VCodeBuildError::to_string(Self) -> String
 pub impl Show for VCodeBuildError
 
+#derive(Eq, @debug.Debug)
 pub suberror VCodeVerifyError {
   EmptyFunction
   MissingTerminator(block~ : Block)
@@ -155,7 +162,7 @@ pub suberror VCodeVerifyError {
   UseBeforeDefinition(instruction~ : Instruction, value~ : Value)
   DefinitionDoesNotDominate(instruction~ : Instruction, value~ : Value)
   InvalidLayout
-} derive(Eq, @debug.Debug)
+}
 pub fn VCodeVerifyError::equal(Self, Self) -> Bool
 pub fn VCodeVerifyError::not_equal(Self, Self) -> Bool
 pub fn VCodeVerifyError::output(Self, &Logger) -> Unit
@@ -211,13 +218,14 @@ pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int32, Int32) -> In
 pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int32) -> @allocation_types.AllocationLocation?
 pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int32) -> @native_types.ValueType
 
+#derive(Eq, @debug.Debug)
 pub struct AllocationStatistics {
   spill_slots : Int32
   spills : Int32
   reloads : Int32
   reg_moves : Int32
   spill_to_spill : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn AllocationStatistics::equal(Self, Self) -> Bool
 pub fn AllocationStatistics::not_equal(Self, Self) -> Bool
 pub fn AllocationStatistics::to_repr(Self) -> @debug.Repr
@@ -254,10 +262,11 @@ pub struct CallTransfer {
 pub fn CallTransfer::to_register(@native_types.ValueType, Location, @allocation_types.PhysicalReg) -> Self
 pub fn CallTransfer::to_stack(@native_types.ValueType, Location, Int32) -> Self
 
+#derive(Eq, @debug.Debug)
 pub struct CallTransferPlan {
   stack_transfers : Array[StackArgumentTransfer]
   register_moves : Array[ParallelMove]
-} derive(Eq, @debug.Debug)
+}
 pub fn CallTransferPlan::equal(Self, Self) -> Bool
 pub fn CallTransferPlan::not_equal(Self, Self) -> Bool
 pub fn CallTransferPlan::to_repr(Self) -> @debug.Repr
@@ -295,12 +304,13 @@ pub fn Edit::register_move(ProgramPoint, Value, @allocation_types.PhysicalReg, @
 pub fn Edit::reload(ProgramPoint, Value, StackSlot, @allocation_types.PhysicalReg) -> Self
 pub fn Edit::spill(ProgramPoint, Value, @allocation_types.PhysicalReg, StackSlot) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum EditKind {
   Spill(value~ : Value, reg~ : @allocation_types.PhysicalReg, slot~ : StackSlot)
   Reload(value~ : Value, slot~ : StackSlot, reg~ : @allocation_types.PhysicalReg)
   Move(value~ : Value, from~ : @allocation_types.PhysicalReg, to~ : @allocation_types.PhysicalReg)
   EdgeMove(source~ : Block, successor_index~ : Int32, value~ : Value, from~ : Location, to~ : Location)
-} derive(Eq, @debug.Debug)
+}
 pub fn EditKind::equal(Self, Self) -> Bool
 pub fn EditKind::not_equal(Self, Self) -> Bool
 pub fn EditKind::to_repr(Self) -> @debug.Repr
@@ -424,15 +434,17 @@ pub fn InstructionMetadata::empty() -> Self
 pub fn InstructionMetadata::new(source? : @native_types.SourceLocation, trap? : @native_types.TrapReason, safepoint? : @native_types.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference, stack_map? : @native_types.StackMapMetadata) -> Self
 pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
 
+#derive(Eq)
 pub(all) enum Location {
   Register(@allocation_types.PhysicalReg)
   Stack(StackSlot)
-} derive(Eq)
+}
 pub fn Location::equal(Self, Self) -> Bool
 pub fn Location::not_equal(Self, Self) -> Bool
 pub fn Location::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Location
 
+#derive(Eq, @debug.Debug)
 pub struct Operand {
   value : Value
   role : @allocation_types.OperandRole
@@ -440,17 +452,18 @@ pub struct Operand {
   preference : @allocation_types.PhysicalReg?
   timing : @allocation_types.OperandTiming
   tie_id : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn Operand::equal(Self, Self) -> Bool
 pub fn Operand::not_equal(Self, Self) -> Bool
 pub fn Operand::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum OperandConstraint {
   Any
   AnyLocation
   Fixed(@allocation_types.PhysicalReg)
   TiedTo(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn OperandConstraint::equal(Self, Self) -> Bool
 pub fn OperandConstraint::not_equal(Self, Self) -> Bool
 pub fn OperandConstraint::to_repr(Self) -> @debug.Repr
@@ -468,20 +481,22 @@ pub fn Output::tied(@native_types.ValueType, Int32) -> Self
 pub fn Output::with_preference(Self, @allocation_types.PhysicalReg) -> Self
 pub fn Output::with_timing(Self, @allocation_types.OperandTiming) -> Self
 
+#derive(Eq, @debug.Debug)
 pub struct ParallelMove {
   ty : @native_types.ValueType
   from : Location
   to : Location
-} derive(Eq, @debug.Debug)
+}
 pub fn ParallelMove::equal(Self, Self) -> Bool
 pub fn ParallelMove::new(@native_types.ValueType, Location, Location) -> Self
 pub fn ParallelMove::not_equal(Self, Self) -> Bool
 pub fn ParallelMove::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum PointPlacement {
   Before
   After
-} derive(Eq, @debug.Debug)
+}
 pub fn PointPlacement::equal(Self, Self) -> Bool
 pub fn PointPlacement::not_equal(Self, Self) -> Bool
 pub fn PointPlacement::to_repr(Self) -> @debug.Repr
@@ -497,6 +512,7 @@ pub fn ProgramPoint::to_repr(Self) -> @debug.Repr
 pub impl Eq for ProgramPoint
 pub impl @debug.Debug for ProgramPoint
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RegallocLoopStatistics {
   queue_pops : Int32
   register_probes : Int32
@@ -506,43 +522,47 @@ pub(all) struct RegallocLoopStatistics {
   bundle_splits : Int32
   second_chance_attempts : Int32
   max_queue_length : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn RegallocLoopStatistics::equal(Self, Self) -> Bool
 pub fn RegallocLoopStatistics::not_equal(Self, Self) -> Bool
 pub fn RegallocLoopStatistics::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ResolvedCallTransferPlan {
   stack_transfers : Array[StackArgumentTransfer]
   register_moves : ResolvedMovePlan
-} derive(Eq, @debug.Debug)
+}
 pub fn ResolvedCallTransferPlan::equal(Self, Self) -> Bool
 pub fn ResolvedCallTransferPlan::not_equal(Self, Self) -> Bool
 pub fn ResolvedCallTransferPlan::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ResolvedMovePlan {
   steps : Array[ResolvedMoveStep]
   requires_emergency : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn ResolvedMovePlan::empty() -> Self
 pub fn ResolvedMovePlan::equal(Self, Self) -> Bool
 pub fn ResolvedMovePlan::not_equal(Self, Self) -> Bool
 pub fn ResolvedMovePlan::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ResolvedMoveStep {
   Transfer(ParallelMove)
   SpillScratchToEmergency(ty~ : @native_types.ValueType, scratch~ : @allocation_types.PhysicalReg)
   ReloadScratchFromEmergency(ty~ : @native_types.ValueType, scratch~ : @allocation_types.PhysicalReg)
-} derive(Eq, @debug.Debug)
+}
 pub fn ResolvedMoveStep::equal(Self, Self) -> Bool
 pub fn ResolvedMoveStep::not_equal(Self, Self) -> Bool
 pub fn ResolvedMoveStep::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct StackArgumentTransfer {
   ty : @native_types.ValueType
   source : Location
   offset : Int32
   scratch : @allocation_types.PhysicalReg?
-} derive(Eq, @debug.Debug)
+}
 pub fn StackArgumentTransfer::equal(Self, Self) -> Bool
 pub fn StackArgumentTransfer::not_equal(Self, Self) -> Bool
 pub fn StackArgumentTransfer::to_repr(Self) -> @debug.Repr
@@ -556,15 +576,17 @@ pub fn StackSlot::to_repr(Self) -> @debug.Repr
 pub impl Eq for StackSlot
 pub impl @debug.Debug for StackSlot
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SymbolReference {
   Code(@native_types.CodeSymbol)
   External(@native_types.ExternalSymbol)
   Data(@native_types.DataSymbol)
-} derive(Eq, @debug.Debug)
+}
 pub fn SymbolReference::equal(Self, Self) -> Bool
 pub fn SymbolReference::not_equal(Self, Self) -> Bool
 pub fn SymbolReference::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum TargetCompileEvent {
   TargetAnalysisStarted
   TargetConstructionStarted
@@ -582,7 +604,7 @@ pub(all) enum TargetCompileEvent {
   FramePlanningFinished
   EmissionStarted
   EmissionFinished
-} derive(Eq, @debug.Debug)
+}
 pub fn TargetCompileEvent::equal(Self, Self) -> Bool
 pub fn TargetCompileEvent::not_equal(Self, Self) -> Bool
 pub fn TargetCompileEvent::to_repr(Self) -> @debug.Repr

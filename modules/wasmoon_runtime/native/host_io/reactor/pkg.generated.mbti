@@ -9,6 +9,7 @@ import {
 pub fn detach_external_wakeup() -> Unit
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror NativeReactorError {
   Closed
   BlockingWaitInExternalLoop
@@ -17,7 +18,7 @@ pub(all) suberror NativeReactorError {
   RegistrationFailed(Int32)
   WaitFailed(Int32)
   WakeFailed(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn NativeReactorError::equal(Self, Self) -> Bool
 pub fn NativeReactorError::not_equal(Self, Self) -> Bool
 pub fn NativeReactorError::output(Self, &Logger) -> Unit

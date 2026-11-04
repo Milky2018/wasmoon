@@ -12,6 +12,7 @@ pub fn[F : FunctionView] allocate_function(F, MachineEnv, config? : RegallocConf
 pub fn reserve_spill_slot(Int32, @allocation_types.RegClass) -> SpillSlotReservation
 
 // Errors
+#derive(@debug.Debug)
 pub suberror VerifyError {
   Unassigned(vreg~ : @allocation_types.VirtualReg)
   FixedConstraintViolation(vreg~ : @allocation_types.VirtualReg, required~ : @allocation_types.PhysicalReg, actual~ : @allocation_types.AllocationLocation)
@@ -19,16 +20,17 @@ pub suberror VerifyError {
   IncorrectValue(vreg~ : @allocation_types.VirtualReg, location~ : @allocation_types.AllocationLocation)
   ScratchRegisterUnavailable(message~ : String)
   InvalidPlan(message~ : String)
-} derive(@debug.Debug)
+}
 pub fn VerifyError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct AllocationEdit {
   value : @allocation_types.VirtualReg
   from : @allocation_types.AllocationLocation
   to : @allocation_types.AllocationLocation
   position : EditPosition
-} derive(Eq, @debug.Debug)
+}
 pub fn AllocationEdit::equal(Self, Self) -> Bool
 pub fn AllocationEdit::not_equal(Self, Self) -> Bool
 pub fn AllocationEdit::to_repr(Self) -> @debug.Repr
@@ -62,6 +64,7 @@ pub fn[F : FunctionView] AllocationSession::allocate_function(Self, F, MachineEn
 pub fn[F : FunctionView, S : AllocationSink] AllocationSession::allocate_into(Self, F, MachineEnv, S, config? : RegallocConfig) -> Unit raise VerifyError
 pub fn AllocationSession::new() -> Self
 
+#derive(Eq, @debug.Debug)
 pub struct BundleAllocationStatistics {
   mut queue_pops : Int32
   mut register_probes : Int32
@@ -71,7 +74,7 @@ pub struct BundleAllocationStatistics {
   mut bundle_splits : Int32
   mut second_chance_attempts : Int32
   mut max_queue_length : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn BundleAllocationStatistics::bundle_splits(Self) -> Int32
 pub fn BundleAllocationStatistics::conflicts(Self) -> Int32
 pub fn BundleAllocationStatistics::equal(Self, Self) -> Bool
@@ -84,21 +87,24 @@ pub fn BundleAllocationStatistics::register_probes(Self) -> Int32
 pub fn BundleAllocationStatistics::second_chance_attempts(Self) -> Int32
 pub fn BundleAllocationStatistics::to_repr(Self) -> @debug.Repr
 
-type DenseCfgEdges derive(@debug.Debug)
+#derive(@debug.Debug)
+type DenseCfgEdges
 pub fn DenseCfgEdges::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum EditPosition {
   Before(Int32)
   After(Int32)
   Edge(source_block~ : Int32, successor_index~ : Int32)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn EditPosition::equal(Self, Self) -> Bool
 pub fn EditPosition::hash(Self) -> Int32
 pub fn EditPosition::hash_combine(Self, Hasher) -> Unit
 pub fn EditPosition::not_equal(Self, Self) -> Bool
 pub fn EditPosition::to_repr(Self) -> @debug.Repr
 
-type LiveRange derive(@debug.Debug)
+#derive(@debug.Debug)
+type LiveRange
 pub fn LiveRange::LiveRange(Int32, @allocation_types.VirtualReg) -> Self
 pub fn LiveRange::add_range(Self, ProgramRange) -> Unit
 pub fn LiveRange::add_use(Self, UsePosition) -> Unit
@@ -121,7 +127,8 @@ pub fn LiveRange::use_at(Self, Int32) -> UsePosition?
 pub fn LiveRange::use_count(Self) -> Int32
 pub fn LiveRange::vreg(Self) -> @allocation_types.VirtualReg
 
-type LiveRangeSet derive(@debug.Debug)
+#derive(@debug.Debug)
+type LiveRangeSet
 pub fn LiveRangeSet::LiveRangeSet(Array[Int32]) -> Self
 pub fn LiveRangeSet::add_range(Self, LiveRange) -> Unit
 pub fn LiveRangeSet::block_order(Self) -> Array[Int32]
@@ -146,29 +153,32 @@ pub fn MachineEnv::scratch_regs(Self) -> Array[@allocation_types.PhysicalReg]
 pub fn MachineEnv::with_fixed_operand_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
 pub fn MachineEnv::with_operand_scratch_regs(Self, Array[@allocation_types.PhysicalReg]) -> Self
 
+#derive(Eq, @debug.Debug)
 pub struct OperandAssignment {
   instruction : Int32
   operand : Int32
   location : @allocation_types.AllocationLocation
-} derive(Eq, @debug.Debug)
+}
 pub fn OperandAssignment::equal(Self, Self) -> Bool
 pub fn OperandAssignment::not_equal(Self, Self) -> Bool
 pub fn OperandAssignment::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ProgramPoint {
   block : Int32
   inst : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ProgramPoint::ProgramPoint(Int32, Int32) -> Self
 pub fn ProgramPoint::compare_with_order(Self, Self, Array[Int32]) -> Int32
 pub fn ProgramPoint::equal(Self, Self) -> Bool
 pub fn ProgramPoint::not_equal(Self, Self) -> Bool
 pub fn ProgramPoint::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ProgramRange {
   start : ProgramPoint
   end : ProgramPoint
-} derive(Eq, @debug.Debug)
+}
 pub fn ProgramRange::ProgramRange(ProgramPoint, ProgramPoint) -> Self
 pub fn ProgramRange::contains(Self, ProgramPoint, Array[Int32]) -> Bool
 pub fn ProgramRange::equal(Self, Self) -> Bool
@@ -185,6 +195,7 @@ pub fn RegallocConfig::RegallocConfig(verify? : Bool, observer? : ((RegallocPhas
 pub fn RegallocConfig::enter_phase(Self, RegallocPhase?) -> Unit
 pub fn RegallocConfig::verify(Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RegallocPhase {
   InputValidation
   LiveRanges
@@ -196,7 +207,7 @@ pub(all) enum RegallocPhase {
   EdgeTransfers
   EditResolution
   Verification
-} derive(Eq, @debug.Debug)
+}
 pub fn RegallocPhase::equal(Self, Self) -> Bool
 pub fn RegallocPhase::not_equal(Self, Self) -> Bool
 pub fn RegallocPhase::output(Self, &Logger) -> Unit
@@ -204,40 +215,44 @@ pub fn RegallocPhase::to_repr(Self) -> @debug.Repr
 pub fn RegallocPhase::to_string(Self) -> String
 pub impl Show for RegallocPhase
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SpillSlotReservation {
   slot : Int32
   next_slot : Int32
   slots_used : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn SpillSlotReservation::equal(Self, Self) -> Bool
 pub fn SpillSlotReservation::not_equal(Self, Self) -> Bool
 pub fn SpillSlotReservation::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct SpillSlotSpec {
   size : Int32
   alignment : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn SpillSlotSpec::equal(Self, Self) -> Bool
 pub fn SpillSlotSpec::new(Int32, Int32) -> Self
 pub fn SpillSlotSpec::not_equal(Self, Self) -> Bool
 pub fn SpillSlotSpec::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum UseKind {
   LiveDef
   LiveUse
   LiveUseDef
-} derive(Eq, @debug.Debug)
+}
 pub fn UseKind::equal(Self, Self) -> Bool
 pub fn UseKind::not_equal(Self, Self) -> Bool
 pub fn UseKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind
   constraint : @allocation_types.AllocationConstraint
   preference : @allocation_types.PhysicalReg?
   tie_id : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn UsePosition::UsePosition(ProgramPoint, UseKind, @allocation_types.AllocationConstraint) -> Self
 pub fn UsePosition::equal(Self, Self) -> Bool
 pub fn UsePosition::not_equal(Self, Self) -> Bool

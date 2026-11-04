@@ -26,13 +26,14 @@ pub fn try_lower_native_function(@embedding.EmbeddingEnvironment, @types.Module,
 pub fn wasm_validation_context(@translator.TranslationContext) -> @wasm_milkir.WasmValidationContext
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub suberror LowerError {
   FunctionIndexOutOfRange(index~ : Int32)
   TypeIndexOutOfRange(index~ : Int32)
   NonFunctionType(index~ : Int32)
   MissingCode(index~ : Int32)
   UnsupportedNativeLowering(index~ : Int32, reason~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn LowerError::equal(Self, Self) -> Bool
 pub fn LowerError::not_equal(Self, Self) -> Bool
 pub fn LowerError::output(Self, &Logger) -> Unit

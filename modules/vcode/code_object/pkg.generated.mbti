@@ -10,6 +10,7 @@ import {
 pub fn build(Architecture, Array[Byte], relocations? : Array[Relocation], sources? : Array[SourceSite], traps? : Array[TrapSite], safepoints? : Array[SafepointSite], unwind? : Array[UnwindDirective]) -> UnlinkedCodeObject raise CodeObjectVerifyError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub suberror CodeObjectVerifyError {
   EmptyCode
   MisalignedCodeSize(size~ : Int32)
@@ -21,7 +22,7 @@ pub suberror CodeObjectVerifyError {
   InvalidRootLocation(safepoint~ : Int32, root~ : Int32)
   InvalidStackMap(safepoint~ : Int32)
   InvalidUnwindDirective(index~ : Int32, message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn CodeObjectVerifyError::equal(Self, Self) -> Bool
 pub fn CodeObjectVerifyError::not_equal(Self, Self) -> Bool
 pub fn CodeObjectVerifyError::output(Self, &Logger) -> Unit
@@ -30,33 +31,37 @@ pub fn CodeObjectVerifyError::to_string(Self) -> String
 pub impl Show for CodeObjectVerifyError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Architecture {
   AArch64
   X64
-} derive(Eq, @debug.Debug)
+}
 pub fn Architecture::equal(Self, Self) -> Bool
 pub fn Architecture::not_equal(Self, Self) -> Bool
 pub fn Architecture::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RegisterBank {
   Int
   FpVector
-} derive(Eq, @debug.Debug)
+}
 pub fn RegisterBank::equal(Self, Self) -> Bool
 pub fn RegisterBank::not_equal(Self, Self) -> Bool
 pub fn RegisterBank::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct Relocation {
   offset : Int32
   kind : RelocationKind
   target : RelocationTarget
   addend : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn Relocation::equal(Self, Self) -> Bool
 pub fn Relocation::new(Int32, RelocationKind, RelocationTarget, addend? : Int64) -> Self
 pub fn Relocation::not_equal(Self, Self) -> Bool
 pub fn Relocation::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RelocationKind {
   AArch64Call26
   AArch64Jump26
@@ -64,63 +69,69 @@ pub(all) enum RelocationKind {
   AArch64PageOffset12
   X64PcRelative32
   Absolute64
-} derive(Eq, @debug.Debug)
+}
 pub fn RelocationKind::equal(Self, Self) -> Bool
 pub fn RelocationKind::not_equal(Self, Self) -> Bool
 pub fn RelocationKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RelocationTarget {
   Code(@native_types.CodeSymbol)
   External(@native_types.ExternalSymbol)
   Data(@native_types.DataSymbol)
-} derive(Eq, @debug.Debug)
+}
 pub fn RelocationTarget::equal(Self, Self) -> Bool
 pub fn RelocationTarget::not_equal(Self, Self) -> Bool
 pub fn RelocationTarget::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RootLocation {
   Register(RegisterBank, Int32)
   Stack(offset~ : Int32, ty~ : @native_types.ValueType)
-} derive(Eq, @debug.Debug)
+}
 pub fn RootLocation::equal(Self, Self) -> Bool
 pub fn RootLocation::not_equal(Self, Self) -> Bool
 pub fn RootLocation::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct SafepointSite {
   offset : Int32
   kind : @native_types.SafepointKind
   roots : Array[RootLocation]
   source : @native_types.SourceLocation?
   stack_map : @native_types.StackMapMetadata?
-} derive(Eq, @debug.Debug)
+}
 pub fn SafepointSite::equal(Self, Self) -> Bool
 pub fn SafepointSite::new(Int32, @native_types.SafepointKind, Array[RootLocation], source? : @native_types.SourceLocation, stack_map? : @native_types.StackMapMetadata) -> Self
 pub fn SafepointSite::not_equal(Self, Self) -> Bool
 pub fn SafepointSite::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct SourceSite {
   offset : Int32
   length : Int32
   source : @native_types.SourceLocation
-} derive(Eq, @debug.Debug)
+}
 pub fn SourceSite::equal(Self, Self) -> Bool
 pub fn SourceSite::new(Int32, @native_types.SourceLocation, length? : Int32) -> Self
 pub fn SourceSite::not_equal(Self, Self) -> Bool
 pub fn SourceSite::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct TrapSite {
   offset : Int32
   reason : @native_types.TrapReason
   source : @native_types.SourceLocation?
-} derive(Eq, @debug.Debug)
+}
 pub fn TrapSite::equal(Self, Self) -> Bool
 pub fn TrapSite::new(Int32, @native_types.TrapReason, source? : @native_types.SourceLocation) -> Self
 pub fn TrapSite::not_equal(Self, Self) -> Bool
 pub fn TrapSite::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct UnlinkedCodeObject {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn UnlinkedCodeObject::architecture(Self) -> Architecture
 pub fn UnlinkedCodeObject::code(Self) -> Array[Byte]
 pub fn UnlinkedCodeObject::relocations(Self) -> Array[Relocation]
@@ -131,20 +142,22 @@ pub fn UnlinkedCodeObject::traps(Self) -> Array[TrapSite]
 pub fn UnlinkedCodeObject::unwind(Self) -> Array[UnwindDirective]
 pub fn UnlinkedCodeObject::verify(Self) -> Unit raise CodeObjectVerifyError
 
+#derive(Eq, @debug.Debug)
 pub struct UnwindDirective {
   offset : Int32
   operation : UnwindOperation
-} derive(Eq, @debug.Debug)
+}
 pub fn UnwindDirective::equal(Self, Self) -> Bool
 pub fn UnwindDirective::new(Int32, UnwindOperation) -> Self
 pub fn UnwindDirective::not_equal(Self, Self) -> Bool
 pub fn UnwindDirective::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum UnwindOperation {
   StackAlloc(size~ : Int32)
   SetFramePointer(RegisterBank, Int32, cfa_offset~ : Int32)
   SaveRegister(RegisterBank, Int32, cfa_offset~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn UnwindOperation::equal(Self, Self) -> Bool
 pub fn UnwindOperation::not_equal(Self, Self) -> Bool
 pub fn UnwindOperation::to_repr(Self) -> @debug.Repr

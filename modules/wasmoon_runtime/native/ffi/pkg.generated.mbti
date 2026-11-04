@@ -24,20 +24,22 @@ pub fn snapshot_function_addresses(Int64, Int32) -> FixedArray[Int64]
 pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> ExecCodeHandle
 
 // Errors
+#derive(@debug.Debug)
 pub suberror GCMetadataError {
   InvalidTypeStride
   PayloadCountMismatch
   PayloadTooLarge
   InvalidSafepointMap
-} derive(@debug.Debug)
+}
 pub fn GCMetadataError::output(Self, &Logger) -> Unit
 pub fn GCMetadataError::to_repr(Self) -> @debug.Repr
 pub fn GCMetadataError::to_string(Self) -> String
 pub impl Show for GCMetadataError
 
+#derive(@debug.Debug)
 pub(all) suberror NativeAllocationError {
   OutOfMemory
-} derive(@debug.Debug)
+}
 pub fn NativeAllocationError::output(Self, &Logger) -> Unit
 pub fn NativeAllocationError::to_repr(Self) -> @debug.Repr
 pub fn NativeAllocationError::to_string(Self) -> String

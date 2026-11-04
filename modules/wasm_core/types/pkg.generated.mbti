@@ -75,40 +75,44 @@ pub fn validate_instruction_sources(ArrayView[Instruction], ArrayView[Instructio
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ArrayType {
   element : FieldType
-} derive(Eq, @debug.Debug)
+}
 pub fn ArrayType::equal(Self, Self) -> Bool
 pub fn ArrayType::not_equal(Self, Self) -> Bool
 pub fn ArrayType::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum BlockType {
   Empty
   Value(ValueType)
   MultiValue(ReadOnlyArray[ValueType])
   InlineType(ReadOnlyArray[ValueType], ReadOnlyArray[ValueType])
   TypeIndex(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn BlockType::equal(Self, Self) -> Bool
 pub fn BlockType::not_equal(Self, Self) -> Bool
 pub fn BlockType::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CatchHandler {
   Catch(Int32, Int32)
   CatchRef(Int32, Int32)
   CatchAll(Int32)
   CatchAllRef(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn CatchHandler::equal(Self, Self) -> Bool
 pub fn CatchHandler::not_equal(Self, Self) -> Bool
 pub fn CatchHandler::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CompositeType {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
   Cont(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn CompositeType::equal(Self, Self) -> Bool
 pub fn CompositeType::not_equal(Self, Self) -> Bool
 pub fn CompositeType::output(Self, &Logger) -> Unit
@@ -116,64 +120,71 @@ pub fn CompositeType::to_repr(Self) -> @debug.Repr
 pub fn CompositeType::to_string(Self) -> String
 pub impl Show for CompositeType
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Data {
   memory_idx : Int32
   offset : ReadOnlyArray[Instruction]
   init : Bytes
-} derive(Eq, @debug.Debug)
+}
 pub fn Data::equal(Self, Self) -> Bool
 pub fn Data::not_equal(Self, Self) -> Bool
 pub fn Data::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ElemMode {
   Active(Int32, ReadOnlyArray[Instruction])
   Passive
   Declarative
-} derive(Eq, @debug.Debug)
+}
 pub fn ElemMode::equal(Self, Self) -> Bool
 pub fn ElemMode::not_equal(Self, Self) -> Bool
 pub fn ElemMode::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Element {
   mode : ElemMode
   type_ : ValueType
   init : ReadOnlyArray[ReadOnlyArray[Instruction]]
-} derive(Eq, @debug.Debug)
+}
 pub fn Element::equal(Self, Self) -> Bool
 pub fn Element::not_equal(Self, Self) -> Bool
 pub fn Element::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Export {
   name : String
   desc : ExportDesc
-} derive(Eq, @debug.Debug)
+}
 pub fn Export::equal(Self, Self) -> Bool
 pub fn Export::not_equal(Self, Self) -> Bool
 pub fn Export::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ExportDesc {
   Func(Int32)
   Table(Int32)
   Memory(Int32)
   Global(Int32)
   Tag(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn ExportDesc::equal(Self, Self) -> Bool
 pub fn ExportDesc::not_equal(Self, Self) -> Bool
 pub fn ExportDesc::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct FieldType {
   storage_type : StorageType
   mutable : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn FieldType::equal(Self, Self) -> Bool
 pub fn FieldType::not_equal(Self, Self) -> Bool
 pub fn FieldType::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct FuncType {
   params : ReadOnlyArray[ValueType]
   results : ReadOnlyArray[ValueType]
-} derive(Eq, @debug.Debug)
+}
 pub fn FuncType::equal(Self, Self) -> Bool
 pub fn FuncType::not_equal(Self, Self) -> Bool
 pub fn FuncType::output(Self, &Logger) -> Unit
@@ -183,10 +194,11 @@ pub fn FuncType::to_repr(Self) -> @debug.Repr
 pub fn FuncType::to_string(Self) -> String
 pub impl Show for FuncType
 
+#derive(Eq, @debug.Debug)
 pub(all) struct FunctionCode {
   locals : ReadOnlyArray[ValueType]
   body : ReadOnlyArray[Instruction]
-} derive(Eq, @debug.Debug)
+}
 pub fn FunctionCode::equal(Self, Self) -> Bool
 pub fn FunctionCode::not_equal(Self, Self) -> Bool
 pub fn FunctionCode::output(Self, &Logger) -> Unit
@@ -194,18 +206,20 @@ pub fn FunctionCode::to_repr(Self) -> @debug.Repr
 pub fn FunctionCode::to_string(Self) -> String
 pub impl Show for FunctionCode
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Global {
   type_ : GlobalType
   init : ReadOnlyArray[Instruction]
-} derive(Eq, @debug.Debug)
+}
 pub fn Global::equal(Self, Self) -> Bool
 pub fn Global::not_equal(Self, Self) -> Bool
 pub fn Global::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GlobalType {
   value_type : ValueType
   mutable : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn GlobalType::equal(Self, Self) -> Bool
 pub fn GlobalType::not_equal(Self, Self) -> Bool
 pub fn GlobalType::output(Self, &Logger) -> Unit
@@ -213,26 +227,29 @@ pub fn GlobalType::to_repr(Self) -> @debug.Repr
 pub fn GlobalType::to_string(Self) -> String
 pub impl Show for GlobalType
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Import {
   mod_name : String
   name : String
   desc : ImportDesc
-} derive(Eq, @debug.Debug)
+}
 pub fn Import::equal(Self, Self) -> Bool
 pub fn Import::not_equal(Self, Self) -> Bool
 pub fn Import::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ImportDesc {
   Func(Int32)
   Table(TableType)
   Memory(MemoryType)
   Global(GlobalType)
   Tag(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn ImportDesc::equal(Self, Self) -> Bool
 pub fn ImportDesc::not_equal(Self, Self) -> Bool
 pub fn ImportDesc::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Instruction {
   Unreachable
   Nop
@@ -743,7 +760,7 @@ pub(all) enum Instruction {
   I16x8RelaxedQ15mulrS
   I16x8RelaxedDotI8x16I7x16S
   I32x4RelaxedDotI8x16I7x16AddS
-} derive(Eq, @debug.Debug)
+}
 pub fn Instruction::equal(Self, Self) -> Bool
 pub fn Instruction::not_equal(Self, Self) -> Bool
 pub fn Instruction::output(Self, &Logger) -> Unit
@@ -751,28 +768,31 @@ pub fn Instruction::to_repr(Self) -> @debug.Repr
 pub fn Instruction::to_string(Self) -> String
 pub impl Show for Instruction
 
+#derive(Eq, @debug.Debug)
 pub(all) struct InstructionSource {
   byte_offset : Int32
   subtree_end : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn InstructionSource::equal(Self, Self) -> Bool
 pub fn InstructionSource::not_equal(Self, Self) -> Bool
 pub fn InstructionSource::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Limits {
   min : Int64
   max : Int64?
-} derive(Eq, @debug.Debug)
+}
 pub fn Limits::equal(Self, Self) -> Bool
 pub fn Limits::not_equal(Self, Self) -> Bool
 pub fn Limits::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool
   is_shared : Bool
   page_size_log2 : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn MemoryType::addr_type(Self) -> ValueType
 pub fn MemoryType::equal(Self, Self) -> Bool
 pub fn MemoryType::not_equal(Self, Self) -> Bool
@@ -781,6 +801,7 @@ pub fn MemoryType::to_repr(Self) -> @debug.Repr
 pub fn MemoryType::to_string(Self) -> String
 pub impl Show for MemoryType
 
+#derive(@debug.Debug)
 pub(all) struct Module {
   types : Array[SubType]
   type_rec_groups : Array[Int32]
@@ -796,7 +817,7 @@ pub(all) struct Module {
   datas : Array[Data]
   tags : Array[TagType]
   func_names : Map[Int32, String]
-} derive(@debug.Debug)
+}
 pub fn Module::Module() -> Self
 pub fn Module::array_type_at(Self, Int32) -> ArrayType?
 pub fn Module::empty() -> Self
@@ -815,26 +836,29 @@ pub fn Module::validated_func_type_at(Self, Int32) -> FuncType
 pub fn Module::validated_struct_type_at(Self, Int32) -> StructType
 pub impl Show for Module
 
+#derive(Eq, @debug.Debug)
 pub(all) enum PackedType {
   I8
   I16
-} derive(Eq, @debug.Debug)
+}
 pub fn PackedType::equal(Self, Self) -> Bool
 pub fn PackedType::not_equal(Self, Self) -> Bool
 pub fn PackedType::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ResumeHandler {
   OnLabel(Int32, Int32)
   OnSwitch(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn ResumeHandler::equal(Self, Self) -> Bool
 pub fn ResumeHandler::not_equal(Self, Self) -> Bool
 pub fn ResumeHandler::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum StorageType {
   Val(ValueType)
   Packed(PackedType)
-} derive(Eq, @debug.Debug)
+}
 pub fn StorageType::equal(Self, Self) -> Bool
 pub fn StorageType::not_equal(Self, Self) -> Bool
 pub fn StorageType::output(Self, &Logger) -> Unit
@@ -842,18 +866,20 @@ pub fn StorageType::to_repr(Self) -> @debug.Repr
 pub fn StorageType::to_string(Self) -> String
 pub impl Show for StorageType
 
+#derive(Eq, @debug.Debug)
 pub(all) struct StructType {
   fields : ReadOnlyArray[FieldType]
-} derive(Eq, @debug.Debug)
+}
 pub fn StructType::equal(Self, Self) -> Bool
 pub fn StructType::not_equal(Self, Self) -> Bool
 pub fn StructType::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SubType {
   final_ : Bool
   supertypes : ReadOnlyArray[Int32]
   composite : CompositeType
-} derive(Eq, @debug.Debug)
+}
 pub fn SubType::equal(Self, Self) -> Bool
 pub fn SubType::from_func(FuncType) -> Self
 pub fn SubType::func(ReadOnlyArray[ValueType], ReadOnlyArray[ValueType]) -> Self
@@ -880,19 +906,21 @@ pub fn SubtypingContext::same_module(ArrayView[SubType], rec_groups? : ArrayView
 pub fn SubtypingContext::validate_declared_subtype(Self, Int32, Int32) -> Bool
 pub fn SubtypingContext::value_type_subtype(Self, ValueType, ValueType, _idx1? : Int32, _idx2? : Int32) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Table {
   type_ : TableType
   init : ReadOnlyArray[Instruction]?
-} derive(Eq, @debug.Debug)
+}
 pub fn Table::equal(Self, Self) -> Bool
 pub fn Table::not_equal(Self, Self) -> Bool
 pub fn Table::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
   is_table64 : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn TableType::equal(Self, Self) -> Bool
 pub fn TableType::not_equal(Self, Self) -> Bool
 pub fn TableType::output(Self, &Logger) -> Unit
@@ -900,9 +928,10 @@ pub fn TableType::to_repr(Self) -> @debug.Repr
 pub fn TableType::to_string(Self) -> String
 pub impl Show for TableType
 
+#derive(Eq, @debug.Debug)
 pub(all) struct TagType {
   type_idx : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn TagType::equal(Self, Self) -> Bool
 pub fn TagType::not_equal(Self, Self) -> Bool
 pub fn TagType::to_repr(Self) -> @debug.Repr
@@ -912,6 +941,7 @@ pub fn TypeEquivalenceContext::cross_module(ArrayView[SubType], ArrayView[SubTyp
 pub fn TypeEquivalenceContext::same_module(ArrayView[SubType], type_rec_groups? : ArrayView[Int32]) -> Self
 pub fn TypeEquivalenceContext::types_equivalent(Self, Int32, Int32) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Value {
   I32(Int32)
   I64(Int64)
@@ -926,7 +956,7 @@ pub(all) enum Value {
   ArrayRef(Int32)
   I31(Int32)
   Null
-} derive(Eq, @debug.Debug)
+}
 pub fn Value::equal(Self, Self) -> Bool
 pub fn Value::not_equal(Self, Self) -> Bool
 pub fn Value::output(Self, &Logger) -> Unit
@@ -934,6 +964,7 @@ pub fn Value::to_repr(Self) -> @debug.Repr
 pub fn Value::to_string(Self) -> String
 pub impl Show for Value
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ValueType {
   I32
   I64
@@ -972,7 +1003,7 @@ pub(all) enum ValueType {
   NullFuncRef
   NullExnRef
   NullExternRef
-} derive(Eq, @debug.Debug)
+}
 pub fn ValueType::equal(Self, Self) -> Bool
 pub fn ValueType::from_abstract_heap_type(Int32, Bool) -> Self?
 pub fn ValueType::is_continuation_ref(Self) -> Bool

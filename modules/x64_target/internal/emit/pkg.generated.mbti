@@ -279,12 +279,13 @@ pub(all) enum RawCondition {
   RawAl
 }
 
+#derive(@debug.Debug)
 pub(all) enum RawLaneSize {
   B8
   H16
   S32
   D64
-} derive(@debug.Debug)
+}
 pub fn RawLaneSize::to_repr(Self) -> @debug.Repr
 
 // Type aliases

@@ -64,9 +64,10 @@ pub fn validate_continuation_gc_storage(@types.Module) -> Unit raise @runtime.Ru
 pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror InterpreterDiagnosticError {
   InterpreterFailed(InterpreterFailure)
-} derive(@debug.Debug)
+}
 pub fn InterpreterDiagnosticError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
@@ -78,6 +79,7 @@ pub struct CallExportFailure {
 pub fn CallExportFailure::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for CallExportFailure
 
+#derive(@debug.Debug)
 pub(all) enum CallExportFailureKind {
   ExportNotFound
   NotFunctionExport
@@ -87,7 +89,7 @@ pub(all) enum CallExportFailureKind {
   TimedOut
   InvalidOption
   UnsupportedOption
-} derive(@debug.Debug)
+}
 pub fn CallExportFailureKind::to_repr(Self) -> @debug.Repr
 
 pub struct CallExportOptions {
@@ -98,13 +100,15 @@ pub struct CallExportOptions {
 }
 pub fn CallExportOptions::CallExportOptions(timeout_ms? : Int32?, fuel? : Int32?, budget? : Int32?, cancel? : (() -> Bool)?) -> Self
 
+#derive(@debug.Debug)
 pub(all) enum CallExportResult {
   Ok(Array[@types.Value])
   Err(CallExportFailure)
-} derive(@debug.Debug)
+}
 pub fn CallExportResult::to_repr(Self) -> @debug.Repr
 
-type ExecContext derive(@debug.Debug)
+#derive(@debug.Debug)
+type ExecContext
 pub fn ExecContext::call_func(Self, Int32, Array[@types.Value]) -> Array[@types.Value] raise
 pub fn ExecContext::exec_tail_call(Self, Int32) -> Unit raise
 pub fn ExecContext::exec_tail_call_indirect(Self, Int32, Int32) -> Unit raise
@@ -156,28 +160,31 @@ pub(all) enum InstantiateWithImportDiagnosticsResult {
   RuntimeFailure(@runtime.RuntimeError)
 }
 
+#derive(@debug.Debug)
 pub(all) struct InterpreterFailure {
   kind : InterpreterFailureKind
   error : @runtime.RuntimeError
   frames : ReadOnlyArray[InterpreterFrame]
-} derive(@debug.Debug)
+}
 pub fn InterpreterFailure::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum InterpreterFailureKind {
   GuestTrap
   HostFailure
   ExecutionFailure
-} derive(Eq, @debug.Debug)
+}
 pub fn InterpreterFailureKind::equal(Self, Self) -> Bool
 pub fn InterpreterFailureKind::not_equal(Self, Self) -> Bool
 pub fn InterpreterFailureKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct InterpreterFrame {
   module_index : Int32
   function_index : Int32
   function_name : String?
   instruction_path : ReadOnlyArray[Int32]
-} derive(Eq, @debug.Debug)
+}
 pub fn InterpreterFrame::equal(Self, Self) -> Bool
 pub fn InterpreterFrame::not_equal(Self, Self) -> Bool
 pub fn InterpreterFrame::to_repr(Self) -> @debug.Repr
@@ -188,10 +195,11 @@ pub(all) enum InvokeWithExceptionResult {
   HostFailed(@runtime.RuntimeError)
 }
 
+#derive(@debug.Debug)
 pub(all) enum ResumableCallOutcome {
   Returned(Array[@types.Value])
   Suspended(SuspensionReason, ExecutionContinuation)
-} derive(@debug.Debug)
+}
 pub fn ResumableCallOutcome::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ResumableCallWithExceptionOutcome {
@@ -201,12 +209,13 @@ pub(all) enum ResumableCallWithExceptionOutcome {
   ResumableHostFailed(@runtime.RuntimeError)
 }
 
+#derive(@debug.Debug)
 pub(all) enum SuspensionReason {
   HostCall(Int64)
   CooperativeYield
   AtomicWait
   GuestEffect(@runtime.GuestContinuationEffect)
-} derive(@debug.Debug)
+}
 pub fn SuspensionReason::to_repr(Self) -> @debug.Repr
 
 // Type aliases

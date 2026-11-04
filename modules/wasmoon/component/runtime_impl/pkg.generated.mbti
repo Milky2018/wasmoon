@@ -31,6 +31,7 @@ pub fn take_core_suspension() -> @core.CoreSuspension?
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) struct AsyncState {
   concurrent_resources : ConcurrentResources
   trapped : @ref.Ref[Bool]
@@ -59,23 +60,28 @@ pub(all) struct AsyncState {
   future_endpoints : ConcurrentMap[Int64, FutureEndpoint]
   host_future_values : Map[Int32, HostFutureValue]
   backpressure_by_instance : Map[Int32, Int32]
-} derive(@debug.Debug)
+}
 pub fn AsyncState::AsyncState(StreamTable, core_engine? : @core.CoreExecutionEngine) -> Self
 pub fn AsyncState::to_repr(Self) -> @debug.Repr
 
-type CallbackTask derive(@debug.Debug)
+#derive(@debug.Debug)
+type CallbackTask
 pub fn CallbackTask::to_repr(Self) -> @debug.Repr
 
-type CanonResources derive(@debug.Debug)
+#derive(@debug.Debug)
+type CanonResources
 pub fn CanonResources::to_repr(Self) -> @debug.Repr
 
-type CanonicalGuestString derive(@debug.Debug)
+#derive(@debug.Debug)
+type CanonicalGuestString
 pub fn CanonicalGuestString::to_repr(Self) -> @debug.Repr
 
-type CanonicalPayload derive(@debug.Debug)
+#derive(@debug.Debug)
+type CanonicalPayload
 pub fn CanonicalPayload::to_repr(Self) -> @debug.Repr
 
-type CanonicalPayloadType derive(@debug.Debug)
+#derive(@debug.Debug)
+type CanonicalPayloadType
 pub fn CanonicalPayloadType::to_repr(Self) -> @debug.Repr
 
 type CanonicalRealloc
@@ -150,10 +156,11 @@ pub fn ComponentInvocation::published_result(Self) -> Array[ComponentValue]? rai
 pub fn ComponentInvocation::step(Self) -> ComponentInvocationProgress raise @core.ComponentRuntimeError
 pub fn ComponentInvocation::wait(Self) -> Array[ComponentValue] raise @core.ComponentRuntimeError
 
+#derive(@debug.Debug)
 pub(all) enum ComponentInvocationPoll {
   InvocationPending
   InvocationReady(Array[ComponentValue])
-} derive(@debug.Debug)
+}
 pub fn ComponentInvocationPoll::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ComponentInvocationProgress {
@@ -182,6 +189,7 @@ pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
 pub fn ComponentLinker::validate_input(Self, Bytes, wit_names? : Bool, component_implements? : Bool) -> @validator.ValidatedComponent raise
 pub fn ComponentLinker::with_core_execution_engine(@core.CoreExecutionEngine, resource_budget? : @runtime.ResourceBudget?) -> Self raise @core.ComponentRuntimeError
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ComponentValue {
   Bool(Bool)
   S8(Int32)
@@ -203,7 +211,7 @@ pub(all) enum ComponentValue {
   Tuple(Array[ComponentValue])
   Variant(Int32, ComponentValue?)
   ResourceValue(Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn ComponentValue::equal(Self, Self) -> Bool
 pub fn ComponentValue::not_equal(Self, Self) -> Bool
 pub fn ComponentValue::output(Self, &Logger) -> Unit
@@ -216,12 +224,14 @@ pub struct ConcurrentMap[K, V] {
 }
 pub fn[K, V] ConcurrentMap::length(Self[K, V]) -> Int32
 
-type ConcurrentResourceLease derive(@debug.Debug)
+#derive(@debug.Debug)
+type ConcurrentResourceLease
 pub fn ConcurrentResourceLease::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct ConcurrentResources {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn ConcurrentResources::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CoreInstance {
@@ -235,31 +245,38 @@ pub fn CoreInstance::output(Self, &Logger) -> Unit
 pub fn CoreInstance::to_string(Self) -> String
 pub impl Show for CoreInstance
 
-type DecodedCallbackCode derive(@debug.Debug)
+#derive(@debug.Debug)
+type DecodedCallbackCode
 pub fn DecodedCallbackCode::to_repr(Self) -> @debug.Repr
 
-type FlatStorageField derive(@debug.Debug)
+#derive(@debug.Debug)
+type FlatStorageField
 pub fn FlatStorageField::to_repr(Self) -> @debug.Repr
 
-type FutureEndpoint derive(@debug.Debug)
+#derive(@debug.Debug)
+type FutureEndpoint
 pub fn FutureEndpoint::to_repr(Self) -> @debug.Repr
 
-type FutureState derive(@debug.Debug)
+#derive(@debug.Debug)
+type FutureState
 pub fn FutureState::to_repr(Self) -> @debug.Repr
 
-type GuestThread derive(@debug.Debug)
+#derive(@debug.Debug)
+type GuestThread
 pub fn GuestThread::to_repr(Self) -> @debug.Repr
 
-type GuestThreadPhase derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type GuestThreadPhase
 pub fn GuestThreadPhase::equal(Self, Self) -> Bool
 pub fn GuestThreadPhase::not_equal(Self, Self) -> Bool
 pub fn GuestThreadPhase::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum HostByteStreamRead {
   Pending
   Data(Bytes)
   Closed
-} derive(@debug.Debug)
+}
 pub fn HostByteStreamRead::to_repr(Self) -> @debug.Repr
 
 type HostEventLoop
@@ -274,10 +291,11 @@ pub(all) enum HostFuturePoll {
 
 type HostFutureValue
 
+#derive(@debug.Debug)
 pub(all) enum HostFutureValuePoll {
   Pending
   Ready(ComponentValue)
-} derive(@debug.Debug)
+}
 pub fn HostFutureValuePoll::to_repr(Self) -> @debug.Repr
 
 type HostInstanceBuilder
@@ -315,25 +333,31 @@ pub fn HostRuntimeState::stream_table(Self) -> StreamTable
 
 type HostValueStream
 
+#derive(@debug.Debug)
 pub(all) enum HostValueStreamPoll {
   Pending
   Values(Array[ComponentValue])
   Closed
-} derive(@debug.Debug)
+}
 pub fn HostValueStreamPoll::to_repr(Self) -> @debug.Repr
 
-type PendingFutureRead derive(@debug.Debug)
+#derive(@debug.Debug)
+type PendingFutureRead
 pub fn PendingFutureRead::to_repr(Self) -> @debug.Repr
 
-type PendingFutureWrite derive(@debug.Debug)
+#derive(@debug.Debug)
+type PendingFutureWrite
 pub fn PendingFutureWrite::to_repr(Self) -> @debug.Repr
 
-type PendingStreamRead derive(@debug.Debug)
+#derive(@debug.Debug)
+type PendingStreamRead
 pub fn PendingStreamRead::to_repr(Self) -> @debug.Repr
 
-type PendingStreamWrite derive(@debug.Debug)
+#derive(@debug.Debug)
+type PendingStreamWrite
 pub fn PendingStreamWrite::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct ResourceHandle {
   type_id : Int32
   rep : Int32
@@ -344,9 +368,10 @@ pub(all) struct ResourceHandle {
   own : Bool
   borrow_scope : Int64?
   num_lends : Array[Int32]
-} derive(@debug.Debug)
+}
 pub fn ResourceHandle::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct ResourceTable {
   id : Int32
   next_handle : @ref.Ref[Int32]
@@ -354,69 +379,82 @@ pub(all) struct ResourceTable {
   entries : @ref.Ref[Map[Int32, ResourceHandle]]
   error_contexts : ConcurrentMap[Int32, String]
   next_error_context : @ref.Ref[Int32]
-} derive(@debug.Debug)
+}
 pub fn ResourceTable::ResourceTable(resources? : ConcurrentResources) -> Self
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int32
 pub fn ResourceTable::free(Self, Int32) -> ResourceHandle?
 pub fn ResourceTable::get(Self, Int32) -> ResourceHandle?
 pub fn ResourceTable::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct StreamEndpoint {
   stream_id : Int32
   is_readable : Bool
   notified_peer_dropped : Array[Bool]
   in_waitable_set : @ref.Ref[Bool]
-} derive(@debug.Debug)
+}
 pub fn StreamEndpoint::to_repr(Self) -> @debug.Repr
 
-type StreamState derive(@debug.Debug)
+#derive(@debug.Debug)
+type StreamState
 pub fn StreamState::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct StreamTable {
   concurrent_resources : ConcurrentResources
   next_stream_id : Array[Int32]
   endpoints : ConcurrentMap[Int64, StreamEndpoint]
   streams : ConcurrentMap[Int32, StreamState]
   host_values : Map[Int32, HostValueStream]
-} derive(@debug.Debug)
+}
 pub fn StreamTable::StreamTable(resource_budget? : @runtime.ResourceBudget?) -> Self
 pub fn StreamTable::to_repr(Self) -> @debug.Repr
 
-type Subtask derive(@debug.Debug)
+#derive(@debug.Debug)
+type Subtask
 pub fn Subtask::to_repr(Self) -> @debug.Repr
 
-type SubtaskDriver derive(@debug.Debug)
+#derive(@debug.Debug)
+type SubtaskDriver
 pub fn SubtaskDriver::to_repr(Self) -> @debug.Repr
 
-type SubtaskPhase derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type SubtaskPhase
 pub fn SubtaskPhase::equal(Self, Self) -> Bool
 pub fn SubtaskPhase::not_equal(Self, Self) -> Bool
 pub fn SubtaskPhase::to_repr(Self) -> @debug.Repr
 
-type SyncLowerState derive(@debug.Debug)
+#derive(@debug.Debug)
+type SyncLowerState
 pub fn SyncLowerState::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct TaskRegistry {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn TaskRegistry::subtask_count(Self) -> Int32
 pub fn TaskRegistry::to_repr(Self) -> @debug.Repr
 
-type TaskReturnContract derive(@debug.Debug)
+#derive(@debug.Debug)
+type TaskReturnContract
 pub fn TaskReturnContract::to_repr(Self) -> @debug.Repr
 
-type TaskStep derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type TaskStep
 pub fn TaskStep::equal(Self, Self) -> Bool
 pub fn TaskStep::not_equal(Self, Self) -> Bool
 pub fn TaskStep::to_repr(Self) -> @debug.Repr
 
-type TaskSuspension derive(@debug.Debug)
+#derive(@debug.Debug)
+type TaskSuspension
 pub fn TaskSuspension::to_repr(Self) -> @debug.Repr
 
-type WaitEvent derive(@debug.Debug)
+#derive(@debug.Debug)
+type WaitEvent
 pub fn WaitEvent::to_repr(Self) -> @debug.Repr
 
-type WaitableSet derive(@debug.Debug)
+#derive(@debug.Debug)
+type WaitableSet
 pub fn WaitableSet::to_repr(Self) -> @debug.Repr
 
 // Type aliases

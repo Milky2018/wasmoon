@@ -19,11 +19,12 @@ pub fn ParserError::to_string(Self) -> String
 pub impl Show for ParserError
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) struct ParseLimits {
   max_input_bytes : Int64
   max_work : Int64
   max_depth : Int32
-} derive(@debug.Debug)
+}
 pub fn ParseLimits::to_repr(Self) -> @debug.Repr
 
 type Parser

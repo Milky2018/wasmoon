@@ -31,9 +31,10 @@ pub(all) enum OptLevel {
 }
 pub fn OptLevel::from_int(Int32) -> Self
 
+#derive(Eq)
 pub struct OptResult {
   mut changed : Bool
-} derive(Eq)
+}
 pub fn OptResult::equal(Self, Self) -> Bool
 pub fn OptResult::not_equal(Self, Self) -> Bool
 

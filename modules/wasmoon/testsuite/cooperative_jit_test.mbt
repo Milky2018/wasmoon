@@ -342,7 +342,7 @@ test "cached loop polls preserve quantum and cancellation callback counts" {
   }
   defer before_load.cancel()
   try before_load.continue_execution() catch {
-    @wast.JITCoreCallError::Trap(message) =>
+    Trap(message) =>
       assert_true(message.contains("out of bounds memory access"))
     error => raise error
   } noraise {
@@ -357,8 +357,7 @@ test "cached loop polls preserve quantum and cancellation callback counts" {
   }
   defer before_guard.cancel()
   try before_guard.continue_execution() catch {
-    @wast.JITCoreCallError::Trap(message) =>
-      assert_true(message.contains("unreachable"))
+    Trap(message) => assert_true(message.contains("unreachable"))
     error => raise error
   } noraise {
     _ => fail("the inlined guard should trap before the faulting reader")
