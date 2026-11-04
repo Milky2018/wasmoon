@@ -117,8 +117,11 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
         // alignment padding need zeroing; do not write the array body twice.
         size_t end = GC_HEADER_SIZE + GC_ARRAY_DATA_OFFSET + body_bytes;
         memset(header, 0, GC_HEADER_SIZE + GC_ARRAY_DATA_OFFSET);
-        if ((size_t)bytes != end)
-            memset((uint8_t *)header + end, 0, (size_t)bytes - end);
+        if ((size_t)bytes != end) {
+            // Alignment adds fewer than sixteen bytes. Clear the final
+            // aligned block now; body initialization overwrites any overlap.
+            memset((uint8_t *)header + (size_t)bytes - 16, 0, 16);
+        }
     } else {
         memset(header, 0, (size_t)bytes);
     }
