@@ -53,6 +53,7 @@ pub struct X64Frame {
 }
 
 ///|
+#derive(Debug)
 pub suberror X64FrameError {
   InvalidAllocation(cause~ : X64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
@@ -71,7 +72,7 @@ pub suberror X64FrameError {
   InvalidEmergencyMoveArea(offset~ : Int32?)
   StaleAllocation(expected_edits~ : Int32, actual_edits~ : Int32)
   SavedRegisterSetMismatch
-} derive(Debug)
+}
 
 ///|
 pub impl Show for X64FrameError with fn output(self, logger) {

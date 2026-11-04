@@ -1,15 +1,17 @@
 ///|
 /// Type indices always travel with their defining component environment.
+#derive(Debug)
 struct CanonicalPayloadType {
   ty : ValType?
   types : Array[TypeDef?]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct CanonicalPayload {
   payload_type : CanonicalPayloadType
   values : Array[ComponentValue]
-} derive(Debug)
+}
 
 ///|
 fn CanonicalPayloadType::layout(

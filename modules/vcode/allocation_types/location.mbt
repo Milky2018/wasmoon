@@ -3,10 +3,11 @@
 ///
 /// Spill indices are session-local and must be translated at ownership
 /// boundaries before they are exposed as product-facing stack-slot handles.
+#derive(Eq)
 #valtype
 pub(all) struct AllocationLocation {
   encoded : Int64
-} derive(Eq)
+}
 
 ///|
 fn reg_class_code(class : RegClass) -> Int32 {

@@ -1,6 +1,7 @@
 ///|
 /// Physical concurrent-resource slots shared by otherwise typed owner tables.
 /// Capacity limits growth; slots freed before or after shrinking remain usable.
+#derive(Debug)
 pub struct ConcurrentResources {
   priv budget : @runtime.ResourceBudget?
   priv closed : Ref[Bool]
@@ -8,7 +9,7 @@ pub struct ConcurrentResources {
   priv allocated : Ref[Int64]
   priv free : Array[Int64]
   priv live : Ref[Int64]
-} derive(Debug)
+}
 
 ///|
 fn ConcurrentResources::new(
@@ -33,12 +34,13 @@ fn ConcurrentResources::set_capacity(
 }
 
 ///|
+#derive(Debug)
 struct ConcurrentResourceLease {
   pool : ConcurrentResources
   slot : Int64
   active : Ref[Bool]
   budget_lease : @runtime.ResourceLease?
-} derive(Debug)
+}
 
 ///|
 fn ConcurrentResources::allocate(

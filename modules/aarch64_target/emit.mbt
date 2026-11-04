@@ -49,6 +49,7 @@ priv struct CodeBuffer {
 }
 
 ///|
+#derive(Debug)
 pub suberror AArch64EmitError {
   InvalidFrame(cause~ : AArch64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
@@ -68,7 +69,7 @@ pub suberror AArch64EmitError {
   BranchLabelUnbound(label~ : Int32)
   BranchSpanNotFixed(offset~ : Int32)
   BranchOutOfRange(offset~ : Int32, bits~ : Int32)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for AArch64EmitError with fn output(self, logger) {

@@ -43,6 +43,7 @@ pub struct AArch64Frame {
 }
 
 ///|
+#derive(Debug)
 pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
@@ -61,7 +62,7 @@ pub suberror AArch64FrameError {
   InvalidEmergencyMoveArea(offset~ : Int32?)
   StaleAllocation(expected_edits~ : Int32, actual_edits~ : Int32)
   SavedRegisterSetMismatch
-} derive(Debug)
+}
 
 ///|
 pub impl Show for AArch64FrameError with fn output(self, logger) {

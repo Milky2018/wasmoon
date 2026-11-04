@@ -181,16 +181,18 @@ extern "c" fn table_entry_word(
 
 ///|
 /// Shared indirect table that can be used by multiple JIT modules.
+#derive(Debug)
 struct JITTable {
   mut table_ptr : NativeTableHandle // Pointer to the shared C-side table
   max : Int64?
-} derive(Debug)
+}
 
 ///|
 /// Logical close capability for one shared JIT table view.
+#derive(Debug)
 struct JITTableOwner {
   table : JITTable
-} derive(Debug)
+}
 
 ///|
 /// Create a new owned shared JIT table.

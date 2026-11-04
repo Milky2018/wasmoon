@@ -1,4 +1,5 @@
 ///|
+#derive(Debug)
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int32
@@ -6,4 +7,4 @@ pub(all) struct CoreFuncRef {
   debug_name : String?
   may_suspend : Bool
   native_eligible : Bool
-} derive(Debug)
+}

@@ -1,5 +1,6 @@
 ///|
 /// Structured failures from the Wasmoon-owned executable-code transaction.
+#derive(Eq, Debug)
 pub(all) suberror JitInstallError {
   ResolutionFailed(kind~ : String, name~ : String)
   AllocationFailed(function_index~ : Int32)
@@ -9,7 +10,7 @@ pub(all) suberror JitInstallError {
   PublicationFailed(message~ : String)
   TrampolineAllocationFailed(code_size~ : Int32)
   CodeQuotaExceeded
-} derive(Eq, Debug)
+}
 
 ///|
 /// A resolved import retained by a committed installation.
@@ -219,6 +220,7 @@ pub fn JitCodeInstaller::install_trampoline(
 }
 
 ///|
+#derive(Eq)
 priv enum InstallFailurePoint {
   Resolution
   Allocation
@@ -226,7 +228,7 @@ priv enum InstallFailurePoint {
   Registration
   Protection
   Publication
-} derive(Eq)
+}
 
 ///|
 priv enum PreparedLink {

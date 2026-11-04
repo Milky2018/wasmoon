@@ -6,12 +6,13 @@ pub struct HttpFields {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum HeaderError {
   InvalidSyntax
   Forbidden
   Immutable
   SizeExceeded
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend HeaderError with Eq::{not_equal, equal}

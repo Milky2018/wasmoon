@@ -1,12 +1,13 @@
 ///|
 /// A synchronous adapter borrows the span only until its destination arguments
 /// have been lowered. Async payload loading never constructs this value.
+#derive(Debug)
 struct CanonicalGuestString {
   memory : @runtime.Memory
   ptr : Int64
   len : Int64
   encoding : StringEncoding
-} derive(Debug)
+}
 
 ///|
 pub extend CanonicalGuestString with @debug.Debug::{to_repr}

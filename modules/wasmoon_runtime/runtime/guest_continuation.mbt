@@ -1,9 +1,10 @@
 ///|
 /// Delivery at a guest suspension point, including exception injection.
+#derive(Debug)
 pub(all) enum GuestContinuationInput {
   Values(Array[@types.Value])
   Exception(Int32, Array[@types.Value])
-} derive(Debug)
+}
 
 ///|
 /// Engine-owned execution state. The Store owns its cancellation capability.
@@ -158,15 +159,17 @@ pub fn Store::take_guest_continuation(
 }
 
 ///|
+#derive(Debug)
 pub(all) enum GuestContinuationEffect {
   Suspend(Int32, Array[@types.Value])
   Switch(Int32, GuestContinuationBody, Array[@types.Value])
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) suberror GuestContinuationSignal {
   GuestContinuationYield(GuestContinuationEffect, GuestContinuationBody)
-} derive(Debug)
+}
 
 ///|
 pub extend GuestContinuationInput with Debug::{to_repr}

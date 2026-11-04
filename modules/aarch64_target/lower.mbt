@@ -1,4 +1,5 @@
 ///|
+#derive(Debug)
 pub suberror AArch64LowerError {
   UnsupportedOperation(
     block_index~ : Int32,
@@ -8,7 +9,7 @@ pub suberror AArch64LowerError {
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for AArch64LowerError with fn output(self, logger) {

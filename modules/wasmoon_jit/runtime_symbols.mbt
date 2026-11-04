@@ -1,13 +1,15 @@
 ///|
+#derive(Eq, Debug)
 pub(all) struct RuntimeSymbol {
   name : String
   address : Int64
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) struct RuntimeSymbolResolver {
   symbols : Array[RuntimeSymbol]
-} derive(Debug)
+}
 
 ///|
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols {

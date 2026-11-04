@@ -33,9 +33,10 @@ pub using @jit_ffi {type GCHeapHandle}
 
 ///|
 /// Logical owner of a shared managed GC heap.
+#derive(Debug)
 pub struct CHeap {
   priv mut ptr : GCHeapHandle
-} derive(Debug)
+}
 
 ///|
 /// Create a new C heap with the given initial capacity

@@ -1,11 +1,12 @@
 ///|
 /// Invalid native metadata must be rejected before publishing any pointers.
+#derive(Debug)
 pub suberror GCMetadataError {
   InvalidTypeStride
   PayloadCountMismatch
   PayloadTooLarge
   InvalidSafepointMap
-} derive(Debug)
+}
 
 ///|
 pub extend GCMetadataError with Debug::{to_repr}

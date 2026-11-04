@@ -5,6 +5,7 @@
 /// to keep index spaces and types wired up for later validation/linking.
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Sort {
   Core(Int32) // core:sort opcode (0x00..)
   Func
@@ -12,13 +13,14 @@ pub(all) enum Sort {
   Type
   Component
   Instance
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SortIdx {
   sort : Sort
   idx : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for SortIdx with fn output(self, logger) {
@@ -26,18 +28,21 @@ pub impl Show for SortIdx with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum TypeBound {
   Eq(Int32)
   SubResource
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ValueBound {
   Eq(Int32)
   Type(ValType)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ExternDesc {
   CoreModuleType(Int32) // core:typeidx (u32)
   FuncType(Int32) // typeidx
@@ -45,7 +50,7 @@ pub(all) enum ExternDesc {
   Type(TypeBound)
   ComponentType(Int32) // typeidx
   InstanceType(Int32) // typeidx
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ExternDesc with fn output(self, logger) {
@@ -53,38 +58,43 @@ pub impl Show for ExternDesc with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ImportName {
   Plain(Bytes)
   WithVersion(Bytes, Bytes)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ExportName {
   Plain(Bytes)
   WithVersion(Bytes, Bytes)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum NameAttribute {
   Implements(Bytes)
   VersionSuffix(Bytes)
   ExternalId(Bytes)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Import {
   name : ImportName
   attributes : Array[NameAttribute]
   desc : ExternDesc
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Export {
   name : ExportName
   attributes : Array[NameAttribute]
   sortidx : SortIdx
   desc : ExternDesc?
-} derive(Debug, Eq)
+}
 
 ///|
 fn parse_name_annot(reader : Reader) -> Bytes raise ComponentParseError {

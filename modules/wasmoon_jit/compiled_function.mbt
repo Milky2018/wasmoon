@@ -5,6 +5,7 @@ const STACKMAP_I32_MAX : Int32 = 0x7FFFFFFF
 
 ///|
 /// Information about a GC safepoint in generated code.
+#derive(Debug)
 pub struct GcSafepoint {
   /// Offset in generated machine code where this safepoint is.
   code_offset : Int32
@@ -12,7 +13,7 @@ pub struct GcSafepoint {
   live_refs : Array[Int32]
   /// Additional metadata, such as return address for stack unwinding.
   metadata : Int64
-} derive(Debug)
+}
 
 ///|
 pub fn GcSafepoint::GcSafepoint(

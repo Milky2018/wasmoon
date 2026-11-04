@@ -1,5 +1,6 @@
 ///|
 /// Units admitted by one explicitly shared embedding budget.
+#derive(Debug, Eq)
 pub(all) enum ResourceKind {
   MemoryBytes
   TableElements
@@ -10,7 +11,7 @@ pub(all) enum ResourceKind {
   PendingWork
   InputBytes
   CompilationUnits
-} derive(Debug, Eq)
+}
 
 ///|
 fn ResourceKind::index(self : ResourceKind) -> Int32 {
@@ -31,10 +32,11 @@ fn ResourceKind::index(self : ResourceKind) -> Int32 {
 /// Aggregate quotas shared by explicitly related Stores. Units are logical
 /// resource sizes, not process RSS. A reservation survives its Store when an
 /// independently retained native allocation still owns it.
+#derive(Debug)
 pub struct ResourceBudget {
   priv quotas : FixedArray[@jit_ffi.Quota]
   compilation_depth : Int32
-} derive(Debug)
+}
 
 ///|
 pub fn ResourceBudget::new(
@@ -84,9 +86,10 @@ pub fn ResourceBudget::native_quota(
 }
 
 ///|
+#derive(Debug)
 pub struct ResourceLease {
   priv reservation : @jit_ffi.Reservation
-} derive(Debug)
+}
 
 ///|
 /// Reserve before side effects. Copies share one reservation and release once.

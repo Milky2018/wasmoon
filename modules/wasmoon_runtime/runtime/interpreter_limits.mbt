@@ -7,13 +7,14 @@
 /// `max_stack_bytes` optionally limits accounted live execution state per
 /// context: 32 bytes/value or local, 64/function frame, 96/control plus label.
 /// This portable accounting excludes allocator capacity and referenced objects.
+#derive(Debug)
 pub struct InterpreterLimits {
   max_frames : Int32
   max_values : Int32
   max_controls : Int32
   max_reentry_depth : Int32
   max_stack_bytes : Int64?
-} derive(Debug)
+}
 
 ///|
 pub fn InterpreterLimits::new(

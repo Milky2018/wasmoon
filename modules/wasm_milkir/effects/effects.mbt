@@ -2,12 +2,13 @@
 /// Logical locations are independent of physical addresses. Indexed struct
 /// types can alias through subtyping; field invalidation must not use a type
 /// index as evidence that two objects are disjoint.
+#derive(Eq, Debug)
 pub(all) enum Location {
   StructField(Int32, Int32)
   ArrayLength
   ArrayElements
   Unknown
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Location with Eq::{equal, not_equal}

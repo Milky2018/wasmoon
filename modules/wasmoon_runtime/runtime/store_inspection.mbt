@@ -1,5 +1,6 @@
 ///|
 /// Read-only diagnostic counts; no mutable backing storage is exposed.
+#derive(Debug)
 pub struct StoreCounts {
   funcs : Int32
   func_types : Int32
@@ -18,7 +19,7 @@ pub struct StoreCounts {
   heap_slots : Int32
   heap_live : Int32
   wrapped_extern_capacity : Int32
-} derive(Debug)
+}
 
 ///|
 #cfg(target="native")

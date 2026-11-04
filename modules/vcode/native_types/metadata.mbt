@@ -1,9 +1,10 @@
 ///|
 /// Embedding-visible stack-map identity and argument-root contract.
+#derive(Debug, Eq)
 pub(all) struct StackMapMetadata {
   id : Int32
   argument_root_count : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn StackMapMetadata::new(

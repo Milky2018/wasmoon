@@ -16,6 +16,7 @@ pub struct JITFunction {
 
 ///|
 /// Error when loading a precompiled JIT module
+#derive(Debug)
 pub suberror JITModuleLoadError {
   ContextAllocationFailed(total_funcs~ : Int32)
   UnsupportedImport(
@@ -38,7 +39,7 @@ pub suberror JITModuleLoadError {
   ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
   CodeQuotaExceeded
   FunctionMetadataRegistrationFailed(func_idx~ : Int32, message~ : String)
-} derive(Debug)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
@@ -99,11 +100,12 @@ pub fn JITFunction::wasm_offset(
 
 ///|
 /// Address range for PC-to-function mapping (sorted by start address)
+#derive(Debug)
 struct AddressRange {
   start : Int64 // Function start address
   end : Int64 // Function end address (start + code_size)
   func_idx : Int32 // Wasm function index
-} derive(Debug)
+}
 
 ///|
 /// Loaded precompiled module with executable functions
@@ -823,6 +825,7 @@ pub fn JITCallContinuation::cancel(
 
 ///|
 /// Structured result for a cooperative JIT invocation.
+#derive(Debug)
 pub(all) enum JITCallResult {
   Completed(Array[Int64])
   Cancelled
@@ -830,7 +833,7 @@ pub(all) enum JITCallResult {
   UnsupportedCancellation
   TimedOut
   InvalidTimeout
-} derive(Debug)
+}
 
 ///|
 /// Invoke JIT code with an invocation-local cooperative cancellation callback.

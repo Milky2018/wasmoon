@@ -1,17 +1,19 @@
 ///|
+#derive(Debug, Eq)
 pub(all) enum ComponentErrorFormat {
   Text
   Json
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ComponentErrorCode {
   CompFileNotFound
   CompParseError
   CompValidateError
   CompUnsupported
   CompRuntimeError
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ComponentErrorFormat with fn output(self, logger) {

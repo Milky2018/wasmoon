@@ -27,10 +27,11 @@ priv struct StackSlotData {
 }
 
 ///|
+#derive(Eq)
 pub(all) enum Location {
   Register(PhysicalReg)
   Stack(StackSlot)
-} derive(Eq)
+}
 
 ///|
 pub impl Debug for Location with fn to_repr(self) {
@@ -41,6 +42,7 @@ pub impl Debug for Location with fn to_repr(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum EditKind {
   Spill(value~ : Value, reg~ : PhysicalReg, slot~ : StackSlot)
   Reload(value~ : Value, slot~ : StackSlot, reg~ : PhysicalReg)
@@ -52,17 +54,18 @@ pub(all) enum EditKind {
     from~ : Location,
     to~ : Location
   )
-} derive(Eq, Debug)
+}
 
 ///|
 /// Read-only summary of the transfers introduced by register allocation.
+#derive(Eq, Debug)
 pub struct AllocationStatistics {
   spill_slots : Int32
   spills : Int32
   reloads : Int32
   reg_moves : Int32
   spill_to_spill : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub struct Edit {
@@ -671,6 +674,7 @@ pub fn Allocation::safepoint_roots(
 }
 
 ///|
+#derive(Eq, Debug)
 pub suberror AllocationVerifyError {
   SelectedFailure(cause~ : VCodeVerifyError)
   SourceMismatch
@@ -691,7 +695,7 @@ pub suberror AllocationVerifyError {
   InvalidEdgeMove(index~ : Int32)
   MissingSafepointRoot(instruction~ : Instruction, value~ : Value)
   UnexpectedSafepointRoot(instruction~ : Instruction, value~ : Value)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for AllocationVerifyError with fn output(self, logger) {
@@ -761,6 +765,7 @@ pub fn FrameLayout::slot_offset(self : FrameLayout, slot : StackSlot) -> Int32? 
 }
 
 ///|
+#derive(Eq, Debug)
 pub suberror FrameVerifyError {
   AllocationFailure(cause~ : AllocationVerifyError)
   SourceMismatch
@@ -770,7 +775,7 @@ pub suberror FrameVerifyError {
   MisalignedStackSlot(slot~ : StackSlot)
   OverlappingStackSlots(left~ : StackSlot, right~ : StackSlot)
   StackSlotOutOfFrame(slot~ : StackSlot)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for FrameVerifyError with fn output(self, logger) {
@@ -778,9 +783,10 @@ pub impl Show for FrameVerifyError with fn output(self, logger) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub suberror EmissionVerifyError {
   FrameFailure(cause~ : FrameVerifyError)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for EmissionVerifyError with fn output(self, logger) {

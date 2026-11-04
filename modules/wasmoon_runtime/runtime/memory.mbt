@@ -3,13 +3,15 @@
 ///
 /// Native builds use an authoritative C descriptor shared with JIT. Wasm builds
 /// use managed storage selected at compile time; both reuse checked guest access.
+#derive(Debug)
 #cfg(target="native")
 priv enum MemoryDescriptorState {
   Open(@native_bridge.MemoryDescriptor)
   Closed
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct Memory {
   mut binding : ResourceBinding?
   descriptor_state : Ref[MemoryDescriptorState]
@@ -18,7 +20,7 @@ struct Memory {
   is_shared : Bool
   page_size_log2 : Int32
   page_size_bytes : Int64
-} derive(Debug)
+}
 
 ///|
 /// Retain the native memory descriptor.

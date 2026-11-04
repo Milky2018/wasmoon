@@ -1,33 +1,38 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum Architecture {
   AArch64
   X64
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum RegisterBank {
   Int
   FpVector
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum RootLocation {
   Register(RegisterBank, Int32)
   Stack(offset~ : Int32, ty~ : @native.ValueType)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum UnwindOperation {
   StackAlloc(size~ : Int32)
   SetFramePointer(RegisterBank, Int32, cfa_offset~ : Int32)
   SaveRegister(RegisterBank, Int32, cfa_offset~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct UnwindDirective {
   offset : Int32
   operation : UnwindOperation
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn UnwindDirective::new(
@@ -38,13 +43,15 @@ pub fn UnwindDirective::new(
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum RelocationTarget {
   Code(@native.CodeSymbol)
   External(@native.ExternalSymbol)
   Data(@native.DataSymbol)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum RelocationKind {
   AArch64Call26
   AArch64Jump26
@@ -52,15 +59,16 @@ pub(all) enum RelocationKind {
   AArch64PageOffset12
   X64PcRelative32
   Absolute64
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct Relocation {
   offset : Int32
   kind : RelocationKind
   target : RelocationTarget
   addend : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Relocation::new(
@@ -73,11 +81,12 @@ pub fn Relocation::new(
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct TrapSite {
   offset : Int32
   reason : @native.TrapReason
   source : @native.SourceLocation?
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn TrapSite::new(
@@ -89,11 +98,12 @@ pub fn TrapSite::new(
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct SourceSite {
   offset : Int32
   length : Int32
   source : @native.SourceLocation
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn SourceSite::new(
@@ -105,13 +115,14 @@ pub fn SourceSite::new(
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct SafepointSite {
   offset : Int32
   kind : @native.SafepointKind
   roots : Array[RootLocation]
   source : @native.SourceLocation?
   stack_map : @native.StackMapMetadata?
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn SafepointSite::new(
@@ -125,6 +136,7 @@ pub fn SafepointSite::new(
 }
 
 ///|
+#derive(Debug)
 pub struct UnlinkedCodeObject {
   priv architecture : Architecture
   priv code : Array[Byte]
@@ -133,7 +145,7 @@ pub struct UnlinkedCodeObject {
   priv traps : Array[TrapSite]
   priv safepoints : Array[SafepointSite]
   priv unwind : Array[UnwindDirective]
-} derive(Debug)
+}
 
 ///|
 pub fn UnlinkedCodeObject::architecture(

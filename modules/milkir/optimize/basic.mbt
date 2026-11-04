@@ -3,9 +3,10 @@
 
 ///|
 /// Result of an optimization pass
+#derive(Eq)
 pub struct OptResult {
   mut changed : Bool // Whether the IR was modified
-} derive(Eq)
+}
 
 ///|
 fn OptResult::OptResult() -> OptResult {

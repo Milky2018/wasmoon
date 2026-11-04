@@ -2,13 +2,15 @@
 /// Parsing for canonical section (8) and start section (9).
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum StringEncoding {
   Utf8
   Utf16
   Latin1Utf16
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum CanonOpt {
   StringEncoding(StringEncoding)
   Memory(Int32)
@@ -18,9 +20,10 @@ pub(all) enum CanonOpt {
   Gc
   Async
   Callback(Int32)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Canon {
   Lift(Int32, Array[CanonOpt], Int32) // core funcidx, opts, typeidx
   Lower(Int32, Array[CanonOpt]) // funcidx, opts
@@ -66,7 +69,7 @@ pub(all) enum Canon {
   ResourceNew(Int32) // typeidx
   ResourceDrop(Int32) // typeidx
   ResourceRep(Int32) // typeidx
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for Canon with fn output(self, logger) {
@@ -374,11 +377,12 @@ pub fn parse_canon_section(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Start {
   func_idx : Int32
   args : Array[Int32]
   results : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for Start with fn output(self, logger) {

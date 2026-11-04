@@ -1,8 +1,9 @@
 ///|
+#derive(Debug)
 struct DenseCfgEdges {
   preds : Array[Array[Int32]]
   succs : Array[Array[Int32]]
-} derive(Debug)
+}
 
 ///|
 fn build_dense_successor_edges(

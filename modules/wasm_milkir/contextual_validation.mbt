@@ -1,41 +1,46 @@
 ///|
 /// The lowered MilkIR carrier contract for a WebAssembly function type.
+#derive(Eq, Debug)
 pub(all) struct WasmFunctionContract {
   params : Array[@milkir.Type]
   results : Array[@milkir.Type]
-} derive(Eq, Debug)
+}
 
 ///|
 /// The lowered MilkIR carrier and packed representation of a WebAssembly field.
+#derive(Eq, Debug)
 pub(all) enum WasmStorageContract {
   Value(@milkir.Type)
   Packed8
   Packed16
-} derive(Eq, Debug)
+}
 
 ///|
 /// The contextual contract for one WebAssembly struct field or array element.
+#derive(Eq, Debug)
 pub(all) struct WasmFieldContract {
   storage : WasmStorageContract
   mutable_ : Bool
   defaultable : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The contextual contract for a WebAssembly indexed type.
+#derive(Eq, Debug)
 pub(all) enum WasmDefinedTypeContract {
   Function(WasmFunctionContract)
   Continuation(Int32)
   Struct(Array[WasmFieldContract])
   Array(WasmFieldContract)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The contextual contract for a WebAssembly table.
+#derive(Eq, Debug)
 pub(all) struct WasmTableContract {
   index_type : @milkir.Type
   element_type : @milkir.Type
-} derive(Eq, Debug)
+}
 
 ///|
 /// Module and linker metadata required to validate Wasm extension operations.

@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub suberror NativeLowerError {
   InvalidMilkIR(message~ : String)
   UnsupportedOperation(
@@ -9,7 +10,7 @@ pub suberror NativeLowerError {
   MissingValue(value_id~ : Int32)
   MissingBlock(block_id~ : Int32)
   InvalidTargetLowering(message~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// Report a dialect's failed pre-selection verification through this seam.

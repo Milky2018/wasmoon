@@ -4,6 +4,7 @@
 /// The helper identity stays typed throughout lowering. An embedding assigns
 /// its external symbol spelling only when the operation enters MilkIR or
 /// native lowering.
+#derive(Debug, Eq)
 pub(all) enum WasmRuntimeHelper {
   MemoryGrow
   MemorySize
@@ -81,7 +82,7 @@ pub(all) enum WasmRuntimeHelper {
   ExceptionSigsetjmp
   ExceptionSpillLocals
   ExceptionGetSpilledLocal
-} derive(Debug, Eq)
+}
 
 ///|
 fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
@@ -165,9 +166,10 @@ fn WasmRuntimeHelper::suffix(self : WasmRuntimeHelper) -> String {
 
 ///|
 /// Embedding-specific external names for WebAssembly runtime helpers.
+#derive(Debug, Eq)
 struct RuntimeSymbols {
   prefix : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn RuntimeSymbols::with_runtime_prefix(prefix : String) -> RuntimeSymbols {

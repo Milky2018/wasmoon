@@ -1,5 +1,6 @@
 ///|
 /// @types.Value stack for operands
+#derive(Debug)
 struct Stack {
   values : Array[@types.Value]
   limit : Int32
@@ -7,7 +8,7 @@ struct Stack {
   mut sp : Int32 // stack pointer
   byte_limit : Int64?
   mut accounted_bytes : Int64
-} derive(Debug)
+}
 
 ///|
 pub fn Stack::Stack(

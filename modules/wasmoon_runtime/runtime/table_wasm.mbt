@@ -1,7 +1,8 @@
 ///|
+#derive(Debug)
 priv enum TableStorage {
   Managed(Array[@types.Value])
-} derive(Debug)
+}
 
 ///|
 fn Table::storage_size(self : Table) -> Int32 {

@@ -1,20 +1,23 @@
 ///|
+#derive(Debug)
 priv enum BundleStateSnapshot {
   SnapshotPending
   SnapshotReg(PhysicalReg)
   SnapshotDeferredSpill
   SnapshotSpill
   SnapshotSplit
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv enum SegmentLocationSnapshot {
   SnapshotUnallocated
   SnapshotSegmentReg(PhysicalReg)
   SnapshotSegmentSpill
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct BundleSnapshot {
   id : Int32
   segments : Array[Int32]
@@ -22,39 +25,44 @@ priv struct BundleSnapshot {
   weight : Int32
   has_fixed_constraint : Bool
   state : BundleStateSnapshot
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct BundleQueueSnapshot {
   bundles : Array[BundleSnapshot]
   order : Array[Int32]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct BundleAllocationSnapshot {
   bundles : Array[BundleSnapshot]
   segment_owner : Array[Int32]
   segment_locations : Array[SegmentLocationSnapshot]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct BundleProbeSnapshot {
   conflicts : Array[Int32]
   conflict_cost : Int32
   first_conflict : ProgramPoint?
   clobbered : Bool
   can_evict : Bool
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct BundleEvictionSnapshot {
   bundles : Array[BundleSnapshot]
   segment_locations : Array[SegmentLocationSnapshot]
   occupied : Array[Array[Int32]]
   requeued : Array[Int32]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct GapSplitSnapshot {
   before : Int32?
   spill : Int32
@@ -64,7 +72,7 @@ priv struct GapSplitSnapshot {
   spill_sets : Array[Int32]
   use_free : Array[Bool]
   weights : Array[Int32]
-} derive(Debug)
+}
 
 ///|
 fn optional_program_point_snapshot(

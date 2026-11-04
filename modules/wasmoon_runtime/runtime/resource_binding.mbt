@@ -1,9 +1,10 @@
 ///|
 /// Store identity without retaining the Store or creating an ownership cycle.
+#derive(Debug)
 priv struct ResourceBinding {
   store : Ref[Bool]
   active : Ref[Bool]
-} derive(Debug)
+}
 
 ///|
 fn check_resource_open(binding : ResourceBinding?) -> Unit raise RuntimeError {

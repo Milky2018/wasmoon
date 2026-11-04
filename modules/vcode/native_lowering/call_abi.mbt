@@ -1,10 +1,11 @@
 ///|
 /// How a hidden safepoint describes GC roots already present in its arguments.
+#derive(Debug, Eq)
 pub(all) enum StackMapArgumentRoots {
   Fixed(Int32)
   I32ConstantOperand(Int32)
   AllocationOperands
-} derive(Debug, Eq)
+}
 
 ///|
 pub struct HiddenSafepointAbi {
@@ -143,9 +144,10 @@ fn root_scope_pop_call(symbol : @native.ExternalSymbol) -> @native.NativeCall {
 }
 
 ///|
+#derive(Debug, Eq)
 pub suberror DirectLoweringError {
   InvalidCallAbi(message~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for DirectLoweringError with fn output(self, logger) {

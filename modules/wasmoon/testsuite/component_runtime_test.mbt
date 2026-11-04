@@ -928,6 +928,7 @@ test "component runtime: close releases only owned instances" {
 }
 
 ///|
+#derive(Eq)
 priv struct CoreStoreAllocationBaseline {
   funcs : Int32
   func_types : Int32
@@ -947,7 +948,7 @@ priv struct CoreStoreAllocationBaseline {
   interpreter_heap_live : Int32
   native_heap_size : Int64
   native_heap_objects : Int32
-} derive(Eq)
+}
 
 ///|
 fn core_store_allocation_baseline(

@@ -1,10 +1,11 @@
 ///|
 /// The point within an instruction where an allocation operand is read or
 /// written.
+#derive(Eq, Debug)
 pub(all) enum OperandTiming {
   Early
   Late
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend OperandTiming with Debug::{to_repr}
@@ -18,11 +19,12 @@ pub extend OperandTiming with Eq::{not_equal, equal}
 ///
 /// SSA VCode producers use `Use` and `Def`. `UseDef` remains available to
 /// standalone register-allocation clients that model in-place updates.
+#derive(Eq, Debug)
 pub(all) enum OperandRole {
   Use
   Def
   UseDef
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend OperandRole with Debug::{to_repr}
@@ -35,6 +37,7 @@ pub extend OperandRole with Eq::{not_equal, equal}
 ///
 /// Operand ties are represented separately by a shared nonnegative tie label,
 /// so this type contains only location constraints.
+#derive(Eq, Debug)
 pub(all) enum AllocationConstraint {
   AnyReg
   AnyLocation
@@ -42,7 +45,7 @@ pub(all) enum AllocationConstraint {
   /// clobbers without materializing a temporary. This is used for stack maps.
   PreservedHome
   FixedReg(PhysicalReg)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend AllocationConstraint with Debug::{to_repr}
@@ -52,11 +55,12 @@ pub extend AllocationConstraint with Eq::{not_equal, equal}
 
 ///|
 /// A dense virtual-register identity within one allocation session.
+#derive(Eq, Debug)
 #valtype
 pub(all) struct VirtualReg {
   id : Int32
   class : RegClass
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend VirtualReg with Debug::{to_repr}
@@ -66,6 +70,7 @@ pub extend VirtualReg with Eq::{not_equal, equal}
 
 ///|
 /// The canonical allocation facts for one instruction operand.
+#derive(Eq, Debug)
 pub(all) struct AllocationOperand {
   vreg : VirtualReg
   role : OperandRole
@@ -73,7 +78,7 @@ pub(all) struct AllocationOperand {
   preference : PhysicalReg?
   tie_id : Int32
   timing : OperandTiming
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn AllocationOperand::use_reg(vreg : VirtualReg) -> AllocationOperand {

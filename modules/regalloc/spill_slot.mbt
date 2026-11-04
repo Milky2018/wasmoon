@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 pub(all) struct SpillSlotReservation {
   slot : Int32
   next_slot : Int32
   slots_used : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Reserve spill slots in 8-byte units.

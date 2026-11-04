@@ -1,8 +1,9 @@
 ///|
+#derive(Debug)
 pub(all) enum ComponentInvocationPoll {
   InvocationPending
   InvocationReady(Array[ComponentValue])
-} derive(Debug)
+}
 
 ///|
 priv enum ComponentInvocationPhase {

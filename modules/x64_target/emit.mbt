@@ -23,6 +23,7 @@ priv struct CodeBuffer {
 }
 
 ///|
+#derive(Debug)
 pub suberror X64EmitError {
   InvalidFrame(cause~ : X64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
@@ -41,7 +42,7 @@ pub suberror X64EmitError {
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int32, bits~ : Int32)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for X64EmitError with fn output(self, logger) {

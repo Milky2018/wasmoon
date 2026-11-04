@@ -1,10 +1,11 @@
 ///|
 /// A target physical register identified within one register class.
+#derive(Eq)
 #valtype
 pub(all) struct PhysicalReg {
   id : Int32
   class : RegClass
-} derive(Eq)
+}
 
 ///|
 pub fn PhysicalReg::new(id : Int32, class : RegClass) -> PhysicalReg {

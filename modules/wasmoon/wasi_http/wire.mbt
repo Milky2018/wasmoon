@@ -1,7 +1,8 @@
 ///|
+#derive(Debug)
 priv suberror HttpTransportError {
   HttpTransportError(Int32, String)
-} derive(Debug)
+}
 
 ///|
 priv struct HttpInput {

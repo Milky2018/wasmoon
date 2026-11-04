@@ -1,21 +1,23 @@
 ///|
+#derive(Debug)
 priv enum ExecutionKind {
   BlockControl
   LoopControl
   TryControl(ReadOnlyArray[@types.CatchHandler])
   FunctionControl(@runtime.ModuleInstance, Int32, Int32)
-} derive(Debug)
+}
 
 ///|
 /// A structured instruction sequence and its exit action. Function entries
 /// share the same stack, so call, branch, exception and resume all unwind here.
+#derive(Debug)
 priv struct ExecutionFrame {
   body : ArrayView[@types.Instruction]
   mut ip : Int32
   kind : ExecutionKind
   arity : Int32
   height : Int32
-} derive(Debug)
+}
 
 ///|
 fn ExecContext::check_control_capacity(self : ExecContext) -> Unit raise {

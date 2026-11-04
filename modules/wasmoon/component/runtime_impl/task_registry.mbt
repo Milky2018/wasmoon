@@ -1,5 +1,6 @@
 ///|
 /// Stable internal task identities are independent of reusable guest handles.
+#derive(Debug)
 pub struct TaskRegistry {
   priv resources : ConcurrentResources
   priv records : Map[Int64, TaskRecord]
@@ -7,12 +8,13 @@ pub struct TaskRegistry {
   priv handles : Map[Int64, Int64]
   priv next_id : Ref[Int64]
   priv closed : Ref[Bool]
-} derive(Debug)
+}
 
 ///|
 pub extend TaskRegistry with @debug.Debug::{to_repr}
 
 ///|
+#derive(Debug)
 priv struct TaskRecord {
   leases : Array[ConcurrentResourceLease]
   id : Int64
@@ -35,7 +37,7 @@ priv struct TaskRecord {
   mut waiting_ws : Int64?
   mut sync_lower_states : SyncLowerState?
   mut subtasks : Subtask?
-} derive(Debug)
+}
 
 ///|
 fn TaskRegistry::new(resources : ConcurrentResources) -> TaskRegistry {

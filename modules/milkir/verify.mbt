@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub suberror VerifyError {
   MissingTerminator(block_id~ : Int32)
   EmptyFunction
@@ -23,7 +24,7 @@ pub suberror VerifyError {
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)
   UnverifiableInstruction(message~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 priv struct InstructionPlacement {

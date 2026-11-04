@@ -2,27 +2,31 @@
 /// Parsing for core instance section (section 2 in the component binary format).
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CoreInstantiateArg {
   name : String
   sortidx : SortIdx
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CoreInlineExport {
   name : String
   sortidx : SortIdx
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum CoreInstanceExpr {
   Instantiate(Int32, Array[CoreInstantiateArg])
   InlineExports(Array[CoreInlineExport])
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CoreInstanceDecl {
   expr : CoreInstanceExpr
-} derive(Debug, Eq)
+}
 
 ///|
 fn parse_core_inlineexport(

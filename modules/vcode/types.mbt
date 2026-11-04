@@ -125,10 +125,11 @@ pub impl Show for Instruction with fn output(self, logger) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum PointPlacement {
   Before
   After
-} derive(Eq, Debug)
+}
 
 ///|
 pub struct ProgramPoint {
@@ -173,12 +174,13 @@ pub fn ProgramPoint::placement(self : ProgramPoint) -> PointPlacement {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum OperandConstraint {
   Any
   AnyLocation
   Fixed(PhysicalReg)
   TiedTo(Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 #valtype
@@ -266,6 +268,7 @@ pub fn Output::with_timing(self : Output, timing : OperandTiming) -> Output {
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct Operand {
   value : Value
   role : OperandRole
@@ -273,7 +276,7 @@ pub struct Operand {
   preference : PhysicalReg?
   timing : OperandTiming
   tie_id : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 fn allocation_operand_snapshot(
@@ -310,11 +313,12 @@ fn Edge::copy(self : Edge) -> Edge {
 pub type SafepointKind = @native.SafepointKind
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum SymbolReference {
   Code(@native.CodeSymbol)
   External(@native.ExternalSymbol)
   Data(@native.DataSymbol)
-} derive(Eq, Debug)
+}
 
 ///|
 pub struct InstructionMetadata {
@@ -384,6 +388,7 @@ fn InstructionMetadata::copy(self : InstructionMetadata) -> InstructionMetadata 
 }
 
 ///|
+#derive(Eq, Debug)
 pub suberror VCodeBuildError {
   InvalidParameter(index~ : Int32)
   InvalidBlockParameter(block~ : Block, index~ : Int32)
@@ -399,7 +404,7 @@ pub suberror VCodeBuildError {
   InvalidStackMap
   MissingTerminator(block~ : Block)
   InvalidLayout
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for VCodeBuildError with fn output(self, logger) {
@@ -407,6 +412,7 @@ pub impl Show for VCodeBuildError with fn output(self, logger) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub suberror VCodeVerifyError {
   EmptyFunction
   MissingTerminator(block~ : Block)
@@ -424,7 +430,7 @@ pub suberror VCodeVerifyError {
   UseBeforeDefinition(instruction~ : Instruction, value~ : Value)
   DefinitionDoesNotDominate(instruction~ : Instruction, value~ : Value)
   InvalidLayout
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for VCodeVerifyError with fn output(self, logger) {

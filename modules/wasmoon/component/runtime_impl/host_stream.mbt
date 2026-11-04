@@ -1,9 +1,10 @@
 ///|
+#derive(Debug)
 pub(all) enum HostByteStreamRead {
   Pending
   Data(Bytes)
   Closed
-} derive(Debug)
+}
 
 ///|
 fn HostRuntimeState::new_closed_host_stream(

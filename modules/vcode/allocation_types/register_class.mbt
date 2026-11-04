@@ -5,12 +5,13 @@
 /// `FpVector` preserves targets whose scalar floating-point and vector values
 /// occupy one physical register bank. `Float` and `Vector` remain available to
 /// standalone allocator embeddings that model distinct banks.
+#derive(Eq, Debug, Hash)
 pub(all) enum RegClass {
   Int
   Float
   Vector
   FpVector
-} derive(Eq, Debug, Hash)
+}
 
 ///|
 pub extend RegClass with Debug::{to_repr}

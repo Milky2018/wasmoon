@@ -1,10 +1,11 @@
 ///|
+#derive(Debug)
 pub suberror X64AllocationError {
   InvalidVCode(cause~ : TargetVCodeVerifyError)
   AllocatorFailure(cause~ : @vcode_regalloc.VCodeAllocationError)
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
   IllegalRegister(reg~ : @vcode.PhysicalReg)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for X64AllocationError with fn output(self, logger) {

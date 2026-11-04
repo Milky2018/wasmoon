@@ -1,32 +1,36 @@
 ///|
 /// Owned guest frame, innermost first. Positions are zero-based indices through
 /// nested instruction sequences, not byte offsets or native return addresses.
+#derive(Debug, Eq)
 pub(all) struct InterpreterFrame {
   module_index : Int32
   function_index : Int32
   function_name : String?
   instruction_path : ReadOnlyArray[Int32]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum InterpreterFailureKind {
   GuestTrap
   HostFailure
   ExecutionFailure
-} derive(Debug, Eq)
+}
 
 ///|
 /// Contains no Store, guest values, root leases or executable state.
+#derive(Debug)
 pub(all) struct InterpreterFailure {
   kind : InterpreterFailureKind
   error : @runtime.RuntimeError
   frames : ReadOnlyArray[InterpreterFrame]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) suberror InterpreterDiagnosticError {
   InterpreterFailed(InterpreterFailure)
-} derive(Debug)
+}
 
 ///|
 fn ExecContext::capture_failure(self : ExecContext, error : Error) -> Error {

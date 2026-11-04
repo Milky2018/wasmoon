@@ -243,7 +243,8 @@ pub fn Errno::to_i32(self : Errno) -> Int32 {
 
 ///|
 /// File descriptor type
-pub(all) struct Fd(Int32) derive(Eq, Debug)
+#derive(Eq, Debug)
+pub(all) struct Fd(Int32)
 
 ///|
 /// Standard file descriptors
@@ -291,7 +292,8 @@ pub fn ClockId::from_i32(n : Int32) -> ClockId? {
 
 ///|
 /// Timestamp in nanoseconds
-pub(all) struct Timestamp(Int64) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub(all) struct Timestamp(Int64)
 
 ///|
 pub fn Timestamp::to_int64(self : Timestamp) -> Int64 {
@@ -300,7 +302,8 @@ pub fn Timestamp::to_int64(self : Timestamp) -> Int64 {
 
 ///|
 /// Size type (corresponds to wasi size)
-pub(all) struct Size(Int32) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub(all) struct Size(Int32)
 
 ///|
 pub fn Size::to_int(self : Size) -> Int32 {
@@ -309,7 +312,8 @@ pub fn Size::to_int(self : Size) -> Int32 {
 
 ///|
 /// File size type
-pub(all) struct FileSize(Int64) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub(all) struct FileSize(Int64)
 
 ///|
 pub fn FileSize::to_int64(self : FileSize) -> Int64 {

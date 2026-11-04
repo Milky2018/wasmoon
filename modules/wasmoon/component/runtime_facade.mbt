@@ -7,9 +7,10 @@
 /// scheduler state remain private implementation details.
 
 ///|
+#derive(Debug, Eq)
 struct ComponentResourceType {
   identity : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn ComponentResourceType::named(name : String) -> ComponentResourceType {
@@ -22,6 +23,7 @@ pub fn ComponentResourceType::name(self : ComponentResourceType) -> String {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ComponentValueType {
   Bool
   S8
@@ -51,7 +53,7 @@ pub(all) enum ComponentValueType {
   Borrow(ComponentResourceType)
   Stream(ComponentValueType?)
   Future(ComponentValueType?)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ComponentValueType with fn output(self, logger) {
@@ -59,10 +61,11 @@ pub impl Show for ComponentValueType with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub struct ComponentField {
   name : String
   ty : ComponentValueType
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ComponentField with fn output(self, logger) {
@@ -78,10 +81,11 @@ pub fn ComponentField::ComponentField(
 }
 
 ///|
+#derive(Debug, Eq)
 pub struct ComponentCase {
   name : String
   ty : ComponentValueType?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ComponentCase with fn output(self, logger) {
@@ -97,10 +101,11 @@ pub fn ComponentCase::ComponentCase(
 }
 
 ///|
+#derive(Debug, Eq)
 pub struct ComponentParam {
   name : String
   ty : ComponentValueType
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ComponentParam with fn output(self, logger) {
@@ -116,11 +121,12 @@ pub fn ComponentParam::ComponentParam(
 }
 
 ///|
+#derive(Debug, Eq)
 pub struct ComponentFuncType {
   is_async : Bool
   params : Array[ComponentParam]
   result : ComponentValueType?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ComponentFuncType with fn output(self, logger) {
@@ -137,10 +143,11 @@ pub fn ComponentFuncType::ComponentFuncType(
 }
 
 ///|
+#derive(Debug, Eq)
 struct ComponentResource {
   handle : Int32
   type_ : ComponentResourceType
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn ComponentResource::type_(
@@ -150,6 +157,7 @@ pub fn ComponentResource::type_(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ComponentValue {
   Bool(Bool)
   S8(Int32)
@@ -176,7 +184,7 @@ pub(all) enum ComponentValue {
   ResultOk(ComponentValue?)
   ResultErr(ComponentValue?)
   Resource(ComponentResource)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ComponentValue with fn output(self, logger) {
@@ -184,6 +192,7 @@ pub impl Show for ComponentValue with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) suberror ComponentRuntimeError {
   ParseFailed(String)
   ValidationFailed(String)
@@ -214,7 +223,7 @@ pub(all) suberror ComponentRuntimeError {
   Cancelled
   HostExit(Int32)
   JsonValueError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ComponentRuntimeError with fn output(self, logger) {
@@ -263,10 +272,11 @@ struct ComponentCall {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ComponentCallPoll {
   Pending
   Ready(Array[ComponentValue])
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn ComponentRuntime::ComponentRuntime(

@@ -9,6 +9,7 @@ priv enum NativeFiberProtocolFailure {
 
 ///|
 // Debug is consumed only by the white-box protocol snapshot.
+#derive(Debug)
 #warnings("-unused_value")
 priv enum NativeFiberAdvanceCode {
   FiberDidSuspend
@@ -17,7 +18,7 @@ priv enum NativeFiberAdvanceCode {
   FiberAdvanceInvalidTransition
   FiberAdvanceInvalidState
   FiberAdvanceNativeFailure(Int32)
-} derive(Debug)
+}
 
 ///|
 priv enum NativeFiberAdvanceResult {
@@ -27,13 +28,14 @@ priv enum NativeFiberAdvanceResult {
 }
 
 ///|
+#derive(Debug)
 #warnings("-unused_value")
 priv enum NativeFiberCancelCode {
   FiberDidCancel
   FiberCancelWrongThread
   FiberCancelInvalidTransition
   FiberCancelNativeFailure(Int32)
-} derive(Debug)
+}
 
 ///|
 priv enum NativeJITAdvanceResult {

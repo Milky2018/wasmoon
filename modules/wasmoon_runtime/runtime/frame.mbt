@@ -1,11 +1,12 @@
 ///|
 /// Call frame for function execution
+#derive(Debug)
 struct Frame {
   func_idx : Int32
   locals : Array[@types.Value]
   ip : Int32 // instruction pointer
   return_arity : Int32 // number of return values
-} derive(Debug)
+}
 
 ///|
 pub fn Frame::Frame(

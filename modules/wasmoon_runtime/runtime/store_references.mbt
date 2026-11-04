@@ -1,4 +1,5 @@
 ///|
+#derive(Debug)
 priv struct StoreReferences {
   resource_budget : ResourceBudget?
   closed : Ref[Bool]
@@ -12,7 +13,7 @@ priv struct StoreReferences {
   mut exns : Map[Int32, ExnInstance]
   mut wrapped_externs : Map[Int32, @types.Value]
   auxiliary_leases : Map[(Int32, Int64), (ResourceLease, ResourceLease)]
-} derive(Debug)
+}
 
 ///|
 fn StoreReferences::new(

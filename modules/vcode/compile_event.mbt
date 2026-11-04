@@ -1,5 +1,6 @@
 ///|
 /// Deterministic counters for the allocator's bundle-probing loop.
+#derive(Eq, Debug)
 pub(all) struct RegallocLoopStatistics {
   queue_pops : Int32
   register_probes : Int32
@@ -9,12 +10,13 @@ pub(all) struct RegallocLoopStatistics {
   bundle_splits : Int32
   second_chance_attempts : Int32
   max_queue_length : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Target-compilation boundaries exposed to an embedding-owned observer.
 ///
 /// The observer must not mutate compiler inputs from inside the callback.
+#derive(Eq, Debug)
 pub(all) enum TargetCompileEvent {
   // Target instruction-selection analysis began. Targets without a distinct
   // analysis pass may proceed directly to `TargetConstructionStarted`.
@@ -48,4 +50,4 @@ pub(all) enum TargetCompileEvent {
   FramePlanningFinished
   EmissionStarted
   EmissionFinished
-} derive(Eq, Debug)
+}

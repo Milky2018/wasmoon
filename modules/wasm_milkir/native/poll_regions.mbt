@@ -1,4 +1,5 @@
 ///|
+#derive(Eq)
 priv struct PollRegion {
   execution : Int32
   controls : Int32
@@ -6,7 +7,7 @@ priv struct PollRegion {
   budget : Int32
   limit : Int32
   key : Int32
-} derive(Eq)
+}
 
 ///|
 fn poll_region_opcode(region : PollRegion, guard_ : Bool) -> @milkir.ExtOp {

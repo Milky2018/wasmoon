@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub(all) enum ComponentValue {
   Bool(Bool)
   S8(Int32)
@@ -26,7 +27,7 @@ pub(all) enum ComponentValue {
   // Resource representation after a borrow crosses into the component
   // instance that implements its resource type.
   ResourceValue(Int32)
-} derive(Debug, Eq)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
@@ -62,22 +63,25 @@ pub fn HostResourceDestructor::destroy(
 }
 
 ///|
+#derive(Debug)
 struct TaskReturnContract {
   result : ValType?
   types : Array[TypeDef?]
   resources : CanonResources
   owner_component_id : Int32
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct CanonResources {
   mem_addr : Int32?
   realloc : CanonicalRealloc?
   post_return : CoreFuncRef?
   encoding : StringEncoding
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) struct ResourceHandle {
   type_id : Int32
   rep : Int32
@@ -88,9 +92,10 @@ pub(all) struct ResourceHandle {
   own : Bool
   borrow_scope : Int64?
   num_lends : Array[Int32]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) struct ResourceTable {
   id : Int32
   next_handle : Ref[Int32]
@@ -99,7 +104,7 @@ pub(all) struct ResourceTable {
   // Error contexts use a separate per-component handle namespace.
   error_contexts : ConcurrentMap[Int32, String]
   next_error_context : Ref[Int32]
-} derive(Debug)
+}
 
 ///|
 let resource_table_id_counter : Array[Int32] = [0]
@@ -190,6 +195,7 @@ fn registered_resource_table(
 }
 
 ///|
+#derive(Debug)
 pub(all) struct StreamEndpoint {
   stream_id : Int32
   is_readable : Bool
@@ -197,9 +203,10 @@ pub(all) struct StreamEndpoint {
   // reads/writes/lifts should trap (component-spec "done" semantics).
   notified_peer_dropped : Array[Bool]
   in_waitable_set : Ref[Bool]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct PendingStreamRead {
   // Memory where the read buffer lives (from the canonical options of stream.read).
   // Writes can come from a different component instance/memory, so we must keep
@@ -219,9 +226,10 @@ struct PendingStreamRead {
   reader_handle : Int32
   // Whether we've already enqueued a STREAM_READ event for this pending read.
   event_enqueued : Bool
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct PendingStreamWrite {
   // Resource table of the writer component instance (used to transfer `own` resources).
   writer_table : ResourceTable
@@ -239,9 +247,10 @@ struct PendingStreamWrite {
   // the write becomes fully consumed. This gives the reader a chance to drop the
   // readable end before the writer observes completion (tests/upstream/component-model/upstream/async/sync-streams).
   defer_complete : Bool
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct StreamState {
   // Whether guest endpoints in the same component may copy this payload.
   allows_intra_component : Bool
@@ -249,14 +258,15 @@ struct StreamState {
   pending_write : PendingStreamWrite?
   readable_dropped : Bool
   writable_dropped : Bool
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) enum HostValueStreamPoll {
   Pending
   Values(Array[ComponentValue])
   Closed
-} derive(Debug)
+}
 
 ///|
 struct HostValueStream {
@@ -275,6 +285,7 @@ impl Debug for HostValueStream with fn to_repr(_self) {
 }
 
 ///|
+#derive(Debug)
 pub(all) struct StreamTable {
   concurrent_resources : ConcurrentResources
   next_stream_id : Array[Int32]
@@ -282,7 +293,7 @@ pub(all) struct StreamTable {
   endpoints : ConcurrentMap[Int64, StreamEndpoint]
   streams : ConcurrentMap[Int32, StreamState]
   host_values : Map[Int32, HostValueStream]
-} derive(Debug)
+}
 
 ///|
 pub fn StreamTable::StreamTable(
@@ -337,6 +348,7 @@ fn cleanup_closed_future(async_state : AsyncState, future_id : Int32) -> Unit {
 ///
 /// Waitable/stream/future/subtask handle numbers are per component instance (resource_table.id).
 /// Internally we key maps by `handle_key(component_id, local_handle)` to avoid collisions.
+#derive(Debug)
 pub(all) struct AsyncState {
   concurrent_resources : ConcurrentResources
   // A core trap rejects new host calls; admitted continuations may still resume.
@@ -387,18 +399,20 @@ pub(all) struct AsyncState {
   // Per-component backpressure counter used by `canon backpressure.*`.
   // Matches Wasmtime behavior: enabled when > 0; valid range is u16.
   backpressure_by_instance : Map[Int32, Int32]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct WaitEvent {
   // Component instance id where this waitable index is valid.
   owner_component_id : Int32
   code : Int32
   index : Int32
   payload : Int32
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct WaitableSet {
   // Local index (per component instance).
   id : Int32
@@ -406,18 +420,20 @@ struct WaitableSet {
   queue : Array[WaitEvent]
   // Number of active waiters; dropping a set with waiters traps.
   waiters : Array[Int32]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct FutureEndpoint {
   future_id : Int32
   is_readable : Bool
   // Component instance id where this future was created (resource_table.id).
   creator_component_id : Int32
   in_waitable_set : Ref[Bool]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct PendingFutureRead {
   // Memory where the read pointer lives (from the canonical options of future.read).
   // Writes can come from a different component instance/memory.
@@ -432,18 +448,20 @@ struct PendingFutureRead {
   // The readable endpoint that initiated this pending read.
   reader_component_id : Int32
   reader_handle : Int32
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct PendingFutureWrite {
   // The writable endpoint that initiated this pending write.
   writer_component_id : Int32
   writer_handle : Int32
   // Pending write value (already loaded from memory if needed).
   payload : CanonicalPayload
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct FutureState {
   // The element type of this future; used for intra-component checks.
   payload_ty : ValType?
@@ -458,13 +476,14 @@ struct FutureState {
   write_observed_readable_drop : Bool
   // True once a value has been provided via `future.write` (even if it blocked).
   wrote_value : Bool
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) enum HostFutureValuePoll {
   Pending
   Ready(ComponentValue)
-} derive(Debug)
+}
 
 ///|
 struct HostFutureValue {
@@ -481,13 +500,15 @@ impl Debug for HostFutureValue with fn to_repr(_self) {
 }
 
 ///|
+#derive(Debug, Eq)
 enum GuestThreadPhase {
   NotStarted
   Suspended
   Completed
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug)
 struct GuestThread {
   owner_component_id : Int32
   // Guest-visible local thread handle.
@@ -502,27 +523,30 @@ struct GuestThread {
   scheduled : Array[Bool]
   waiting_ws : Array[Int64?]
   continuation : Array[CoreContinuation?]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug, Eq)
 enum SubtaskPhase {
   Starting
   Started
   Returned
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug)
 enum SubtaskDriver {
   // Callback-driven: step using callback codes and waitable-set events.
   CallbackLifted(CallbackTask)
-} derive(Debug)
+}
 
 ///|
+#derive(Debug, Eq)
 enum TaskStep {
   Blocked
   Progressed
   Done
-} derive(Debug, Eq)
+}
 
 ///|
 priv enum TaskCorePoll {
@@ -531,6 +555,7 @@ priv enum TaskCorePoll {
 }
 
 ///|
+#derive(Debug)
 struct CallbackTask {
   func : ComponentFunc
   args : Array[ComponentValue]
@@ -551,15 +576,17 @@ struct CallbackTask {
   cancelled : Array[Bool]
   // Exact core interpreter state captured at the suspension point.
   continuation : Array[CoreContinuation?]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct SyncLowerState {
   task_id : Int64
   task : CallbackTask
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct Subtask {
   id : Int32
   // Detached subtasks are internal background tasks (spawned by sync-lowering)
@@ -576,7 +603,7 @@ struct Subtask {
   types : Array[TypeDef?]
   resources : CanonResources
   driver : SubtaskDriver
-} derive(Debug)
+}
 
 ///|
 pub fn AsyncState::AsyncState(
@@ -1650,11 +1677,12 @@ fn pop_waitable_event(async_state : AsyncState, ws_key : Int64) -> WaitEvent? {
 ///|
 
 ///|
+#derive(Debug)
 enum TaskSuspension {
   Yield(Bool)
   Suspend(Bool)
   Wait(Bool)
-} derive(Debug)
+}
 
 ///|
 pub extend TaskSuspension with Debug::{to_repr}

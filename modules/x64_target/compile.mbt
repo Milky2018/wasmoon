@@ -1,10 +1,11 @@
 ///|
+#derive(Debug)
 pub suberror X64CompileError {
   TargetValidationFailed(cause~ : TargetVCodeVerifyError)
   AllocationFailed(cause~ : X64AllocationError)
   FramePlanningFailed(cause~ : X64FrameError)
   EmissionFailed(cause~ : X64EmitError)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for X64CompileError with fn output(self, logger) {

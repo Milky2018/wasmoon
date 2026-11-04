@@ -1,10 +1,11 @@
 ///|
 /// Resource counts defining an instance's native storage. Legacy contexts allow
 /// resources to be configured after allocation and retain the fixed public ABI.
+#derive(Eq, Debug)
 pub(all) enum ContextShape {
   Legacy
   Module(Int32, Int32, Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ContextShape::from_module(module_ : @types.Module) -> ContextShape {

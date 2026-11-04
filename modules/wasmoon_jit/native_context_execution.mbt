@@ -1,5 +1,6 @@
 ///|
 /// Recoverable failure while preparing per-instance native state.
+#derive(Debug)
 pub(all) suberror NativeSetupError {
   SegmentAllocationFailed
   RootFrameAllocationFailed
@@ -8,7 +9,7 @@ pub(all) suberror NativeSetupError {
   MemoryBindingAllocationFailed
   TableBindingAllocationFailed
   InvalidBinding(String)
-} derive(Debug)
+}
 
 ///|
 pub extend NativeSetupError with Debug::{to_repr}
@@ -230,12 +231,13 @@ pub fn NativeJITContext::has_configured_native_fiber_stack_size(
 
 ///|
 /// Typed result returned by a JIT hostcall dispatcher.
+#derive(Debug, Eq)
 pub(all) enum NativeHostcallOutcome {
   HostcallCompleted
   HostcallExit(Int32)
   HostcallTrap(Int32)
   HostcallSuspended
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn NativeJITContext::set_hostcall_callback(

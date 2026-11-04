@@ -1,19 +1,22 @@
 ///|
 /// Store-local identities retain recursive-group equivalence across modules.
+#derive(Debug)
 priv struct RegisteredTypeGraph {
   id : Int64
   types : ArrayView[@types.SubType]
   groups : ArrayView[Int32]
   mapping : Array[Int32]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct RegisteredInstanceTypes {
   instance : ModuleInstance
   graph : RegisteredTypeGraph
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct StoreTypeRegistry {
   representatives : Array[(RegisteredTypeGraph, Int32)]
   group_buckets : Map[Int64, Array[(RegisteredTypeGraph, Array[Int32])]]
@@ -26,7 +29,7 @@ priv struct StoreTypeRegistry {
   entries : Map[Int64, Int32]
   heap_types : Map[Int32, Int32]
   mut native_layout_count : Int32
-} derive(Debug)
+}
 
 ///|
 fn StoreTypeRegistry::new() -> StoreTypeRegistry {

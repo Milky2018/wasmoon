@@ -1,5 +1,6 @@
 ///|
 /// WebAssembly table with target-specific backing storage
+#derive(Debug)
 struct Table {
   mut reservation : @jit_ffi.Reservation?
   mut binding : ResourceBinding?
@@ -8,7 +9,7 @@ struct Table {
   mut storage : TableStorage
   max : Int64?
   is_table64 : Bool // true for table64 (i64-indexed table)
-} derive(Debug)
+}
 
 ///|
 pub fn Table::Table(
@@ -298,11 +299,12 @@ pub fn Table::close(self : Table) -> Unit {
 }
 
 ///|
+#derive(Debug)
 #cfg(target="native")
 priv enum TableStorage {
   Managed(Array[@types.Value])
   Native(NativeTableStorage)
-} derive(Debug)
+}
 
 ///|
 #cfg(target="native")

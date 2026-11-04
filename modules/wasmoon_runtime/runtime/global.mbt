@@ -1,11 +1,12 @@
 ///|
 /// Runtime representation of a global variable
+#derive(Debug)
 struct GlobalInstance {
   mut binding : ResourceBinding?
   type_ : @types.GlobalType
   mut value : @types.Value
   mut native : NativeGlobalBinding?
-} derive(Debug)
+}
 
 ///|
 pub fn GlobalInstance::GlobalInstance(

@@ -2,10 +2,11 @@
 /// Run component-model WAST scripts encoded as JSON commands.
 
 ///|
+#derive(Debug)
 priv suberror ComponentTestError {
   ParseError(String)
   ScriptError(String)
-} derive(Debug)
+}
 
 ///|
 priv enum ComponentTestErrorCode {
@@ -29,11 +30,13 @@ fn component_test_error_code_string(code : ComponentTestErrorCode) -> String {
 }
 
 ///|
+#derive(FromJson)
 priv struct ScriptFile {
   commands : Array[JsonCommand]
-} derive(FromJson)
+}
 
 ///|
+#derive(FromJson(fields(type_(rename="type"))))
 priv struct JsonCommand {
   type_ : String
   name : String?
@@ -45,16 +48,17 @@ priv struct JsonCommand {
   args : Array[JsonValue]?
   expected : Array[JsonValue]?
   text : String?
-} derive(FromJson(fields(type_(rename="type"))))
+}
 
 ///|
+#derive(FromJson(fields(type_(rename="type"))))
 priv struct JsonValue {
   type_ : String
   value : String?
   items : Array[JsonValue]?
   label : String?
   labels : Array[String]?
-} derive(FromJson(fields(type_(rename="type"))))
+}
 
 ///|
 priv struct ScriptResult {

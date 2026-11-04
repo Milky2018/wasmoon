@@ -1,10 +1,11 @@
 ///|
 /// A bounded direct body can read guest state and trap. Polls retain their
 /// original positions; this summary alone never makes a call noncollecting.
+#derive(Eq, Debug)
 pub(all) struct WasmReadOnlyCallContract {
   polls : Int32
   layout : (Int32, Int32, Int32, Int32)?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend WasmReadOnlyCallContract with Eq::{equal, not_equal}

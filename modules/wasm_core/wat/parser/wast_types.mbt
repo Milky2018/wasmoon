@@ -4,6 +4,7 @@
 
 ///|
 /// WAST command types
+#derive(Debug)
 pub enum WastCommand {
   Module(@types.Module, String?)
   ModuleDefinition(@types.Module, String?)
@@ -23,26 +24,29 @@ pub enum WastCommand {
   Action(WastAction)
   Thread(String, String?, Array[(WastCommand, Int32)])
   Wait(String)
-} derive(Debug)
+}
 
 ///|
 /// Module source for assert_invalid/malformed
+#derive(Debug)
 pub enum WastModuleSource {
   Binary(Bytes)
   Quote(Array[String])
   Inline(@types.Module)
   FailedToParse(String)
-} derive(Debug)
+}
 
 ///|
 /// WAST action (invoke or get)
+#derive(Debug)
 pub enum WastAction {
   Invoke(String?, String, Array[WastValue])
   Get(String?, String)
-} derive(Debug)
+}
 
 ///|
 /// WAST value (typed constant)
+#derive(Debug)
 pub enum WastValue {
   I32(Int32)
   I64(Int64)
@@ -69,7 +73,7 @@ pub enum WastValue {
   RefAny // (ref.any) - any reference
   // Relaxed SIMD: multiple valid results
   Either(Array[WastValue]) // (either v1 v2 ...) - any of the alternatives is valid
-} derive(Debug)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
@@ -80,6 +84,7 @@ pub impl Show for WastValue with fn output(self, logger) {
 
 ///|
 /// Lane value for V128 pattern matching
+#derive(Debug)
 pub enum WastLaneValue {
   F32(Float)
   F64(Double)
@@ -87,7 +92,7 @@ pub enum WastLaneValue {
   F32ArithmeticNan
   F64CanonicalNan
   F64ArithmeticNan
-} derive(Debug)
+}
 
 ///|
 /// WAST script (collection of commands with line numbers)

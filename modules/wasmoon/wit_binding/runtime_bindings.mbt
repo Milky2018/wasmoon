@@ -7,6 +7,7 @@
 /// typed functions and WIT-semantic values.
 
 ///|
+#derive(Debug, Eq)
 pub(all) suberror WitBindingError {
   UnknownWorld(String)
   UnknownInterface(String)
@@ -16,7 +17,7 @@ pub(all) suberror WitBindingError {
   DuplicateFunction(String)
   MissingFunction(String)
   RuntimeBindingFailed(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for WitBindingError with fn output(self, logger) {

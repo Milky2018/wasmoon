@@ -9,12 +9,13 @@ pub(all) struct JitIntegrationPlan {
 /// Stable, read-only renderings of the final native compilation checkpoints.
 /// Concrete target instruction, allocation, and frame types remain owned by
 /// their target modules and do not cross this diagnostics facade.
+#derive(Debug)
 pub struct JitPipelineDiagnostics {
   target_vcode : String
   allocated_vcode : String
   code_object : String
   machine_code : String
-} derive(Debug)
+}
 
 ///|
 fn code_object_diagnostic_text(
@@ -37,6 +38,7 @@ fn code_object_diagnostic_text(
 }
 
 ///|
+#derive(Debug)
 pub suberror JitPipelineError {
   NativeLoweringFailed(cause~ : @milkir_native.NativeLowerError)
   AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
@@ -56,7 +58,7 @@ pub suberror JitPipelineError {
   UnsupportedHostArchitecture(tag~ : Int32)
   UnsupportedHostOsAbi(tag~ : Int32)
   InvalidFunctionIndex(index~ : Int32)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for JitPipelineError with fn output(self, logger) {

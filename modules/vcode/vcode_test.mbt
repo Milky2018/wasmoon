@@ -1,10 +1,11 @@
 ///|
+#derive(Debug)
 priv enum TestInst {
   Add
   Call
   Jump
   Return
-} derive(Debug)
+}
 
 ///|
 fn build_test_function() -> @vcode.Function[TestInst] raise @vcode.VCodeBuildError {

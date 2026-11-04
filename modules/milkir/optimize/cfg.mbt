@@ -2,11 +2,12 @@
 
 ///|
 /// Abstract value for block parameters during constant-phi analysis
+#derive(Eq)
 priv enum PhiAbstractValue {
   None
   One(Int32)
   Many
-} derive(Eq)
+}
 
 ///|
 fn PhiAbstractValue::join(

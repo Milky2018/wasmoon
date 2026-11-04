@@ -1,5 +1,6 @@
 ///|
 /// Token types for WAT lexer
+#derive(Debug, Eq)
 priv enum Token {
   LParen // (
   RParen // )
@@ -8,24 +9,26 @@ priv enum Token {
   Number(String) // numeric literals
   String_(String) // byte strings, one code unit per byte
   Eof
-} derive(Debug, Eq)
+}
 
 ///|
 /// Source span with start and end positions
+#derive(Debug)
 priv struct SourceSpan {
   start_line : Int32
   start_column : Int32
   end_line : Int32
   end_column : Int32
-} derive(Debug)
+}
 
 ///|
 /// Token with source location and raw text
+#derive(Debug)
 priv struct LocatedToken {
   token : Token
   span : SourceSpan
   raw : String // Original text representation
-} derive(Debug)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to

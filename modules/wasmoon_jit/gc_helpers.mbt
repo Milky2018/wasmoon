@@ -303,6 +303,7 @@ fn gc_use_func_safepoints(context : JITContext, func_idx : Int32) -> Unit {
 
 ///|
 /// Error for invalid JIT GC setup context
+#derive(Debug)
 pub(all) suberror GCSetupError {
   MissingJITContext
   InvalidMetadata
@@ -312,7 +313,7 @@ pub(all) suberror GCSetupError {
     num_funcs~ : Int32
   )
   MissingFunctionTableContext(num_funcs~ : Int32)
-} derive(Debug)
+}
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to

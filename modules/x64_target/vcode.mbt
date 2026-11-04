@@ -1,18 +1,21 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum GprWidth {
   W32
   W64
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64IntUnary {
   Mvn
   Clz
   Rbit
   Neg
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64IntBinary {
   Add
   Sub
@@ -26,9 +29,10 @@ pub(all) enum X64IntBinary {
   Ror
   Sdiv
   Udiv
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64Condition {
   Eq
   Ne
@@ -40,9 +44,10 @@ pub(all) enum X64Condition {
   Ls
   Hi
   Hs
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64FloatUnary {
   Negate
   Absolute
@@ -51,9 +56,10 @@ pub(all) enum X64FloatUnary {
   Floor
   Truncate
   Nearest
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64FloatBinary {
   Add
   Sub
@@ -62,25 +68,28 @@ pub(all) enum X64FloatBinary {
   Min
   Max
   CopySign
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64FloatTernary {
   Fmadd
   Fmsub
   Fnmadd
   Fnmsub
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64VectorIntUnary {
   Absolute
   Negate
   PopulationCount
   ExtendAddPairwise(@native.Signedness)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64VectorIntBinary {
   Add
   Sub
@@ -93,9 +102,10 @@ pub(all) enum X64VectorIntBinary {
   ExtendMultiply(@lowering.VectorHalf, @native.Signedness)
   Dot16To32Signed
   Q15MultiplyRoundedSaturating
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64VectorConversion {
   ExtendLow(@lowering.VectorLane, @native.Signedness)
   ExtendHigh(@lowering.VectorLane, @native.Signedness)
@@ -104,16 +114,18 @@ pub(all) enum X64VectorConversion {
   IntToFloat(@lowering.VectorLane, @native.Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64VectorPredicate {
   AnyTrue
   AllTrue(@lowering.VectorLane)
   BitMask(@lowering.VectorLane)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64FloatCondition {
   Equal
   NotEqual
@@ -123,24 +135,27 @@ pub(all) enum X64FloatCondition {
   GreaterOrEqual
   Ordered
   Unordered
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64FloatTrapCondition {
   Unordered
   LessThan
   LessOrEqual
   GreaterOrEqual
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64Address {
   Code(@native.CodeSymbol)
   External(@native.ExternalSymbol)
   Data(@native.DataSymbol)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64Conversion {
   WrapI64ToI32
   ExtendI32ToI64(@native.Signedness)
@@ -155,14 +170,15 @@ pub(all) enum X64Conversion {
     @native.IntegerType,
     @native.Signedness
   )
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct X64StackObject {
   id : Int32
   size : Int32
   alignment : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn X64StackObject::new(
@@ -184,6 +200,7 @@ fn X64StackObject::is_valid(self : X64StackObject) -> Bool {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum X64Inst {
   IncomingReg(@native.ValueType, @vcode.PhysicalReg)
   IncomingStack(@native.ValueType, Int32)
@@ -272,13 +289,14 @@ pub(all) enum X64Inst {
   Switch(GprWidth, Array[UInt64])
   Trap(@native.TrapReason)
   Return
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub suberror TargetVCodeVerifyError {
   CommonFailure(cause~ : @vcode.VCodeVerifyError)
   InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for TargetVCodeVerifyError with fn output(self, logger) {
@@ -319,16 +337,18 @@ fn require_home_def(
 }
 
 ///|
+#derive(Eq, Debug)
 enum CallArgumentLocation {
   CallRegister(@vcode.PhysicalReg)
   CallStack(Int32)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 struct CallLayout {
   arguments : Array[CallArgumentLocation]
   stack_size : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 fn call_align_up(value : Int32, alignment : Int32) -> Int32 {
@@ -336,10 +356,11 @@ fn call_align_up(value : Int32, alignment : Int32) -> Int32 {
 }
 
 ///|
+#derive(Eq, Debug)
 enum CallResultLocation {
   CallResultRegister(@vcode.PhysicalReg)
   CallResultArea(Int32, @vcode.PhysicalReg)
-} derive(Eq, Debug)
+}
 
 ///|
 fn call_stack_size(ty : @native.ValueType) -> Int32 {

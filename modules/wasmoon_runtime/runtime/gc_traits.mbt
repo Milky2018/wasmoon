@@ -82,6 +82,7 @@ pub(open) trait GcHeap {
 
 ///|
 /// GC statistics
+#derive(Debug)
 pub struct GcStats {
   /// Total allocated objects (including freed slots)
   total_slots : Int32
@@ -95,7 +96,7 @@ pub struct GcStats {
   bytes_allocated : Int64
   /// Total bytes collected (if tracked)
   bytes_collected : Int64
-} derive(Debug)
+}
 
 ///|
 /// Runtime GC coordination interface

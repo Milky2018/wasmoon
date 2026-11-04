@@ -8,12 +8,13 @@ priv struct BundleTestFunction {
 }
 
 ///|
+#derive(Debug)
 priv struct BundlePlanSnapshot {
   range_to_bundle : Array[Int32]
   segment_to_bundle : Array[Int32]
   bundle_ranges : Array[Array[Int32]]
   bundle_segments : Array[Array[Int32]]
-} derive(Debug)
+}
 
 ///|
 fn bundle_plan_snapshot(plan : ProductionBundlePlan) -> BundlePlanSnapshot {

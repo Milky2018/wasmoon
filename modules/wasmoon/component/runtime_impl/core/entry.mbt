@@ -6,10 +6,11 @@
 /// Synchronous calls may nest. The active depth gates new async tasks and is
 /// released while stackful execution is suspended. Shared poison rejects new
 /// host calls without preventing admitted tasks from resuming.
+#derive(Debug)
 struct ComponentInstanceEntryState {
   active_depth : Ref[Int32]
   poisoned : Ref[Bool]
-} derive(Debug)
+}
 
 ///|
 pub fn ComponentInstanceEntryState::new(

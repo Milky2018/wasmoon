@@ -1,10 +1,11 @@
 ///|
+#derive(Debug)
 pub suberror AArch64AllocationError {
   InvalidVCode(cause~ : TargetVCodeVerifyError)
   AllocatorFailure(cause~ : @vcode_regalloc.VCodeAllocationError)
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
   IllegalRegister(reg~ : @vcode.PhysicalReg)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for AArch64AllocationError with fn output(self, logger) {

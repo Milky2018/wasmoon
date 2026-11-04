@@ -1,5 +1,6 @@
 ///|
 /// Structured failure while invoking a prepared JIT module context.
+#derive(Debug, Eq)
 pub(all) suberror JITCoreCallError {
   FunctionUnavailable(Int32)
   ArgumentTypeMismatch(Int32)
@@ -11,7 +12,7 @@ pub(all) suberror JITCoreCallError {
   HostInvocation(@runtime.RuntimeError)
   GcSetupFailed(String)
   ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for JITCoreCallError with fn output(self, logger) {

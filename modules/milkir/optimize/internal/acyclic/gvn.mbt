@@ -8,17 +8,19 @@ priv struct PtrAccess {
 }
 
 ///|
+#derive(Eq, Hash)
 priv struct PtrLocationKey {
   base_id : Int32
   offset_id : Int32
   region : @milkir.AliasRegion
-} derive(Eq, Hash)
+}
 
 ///|
+#derive(Eq, Hash)
 priv struct StoreVersion {
   block_id : Int32
   inst_id : Int32
-} derive(Eq, Hash)
+}
 
 ///|
 priv struct LastStoreState {
@@ -40,12 +42,13 @@ priv enum MemoryWriteScope {
 }
 
 ///|
+#derive(Eq, Hash)
 priv struct MemoryValueKey {
   address_epoch : StoreVersion?
   last_store : StoreVersion?
   location : PtrLocationKey
   ty : @milkir.Type
-} derive(Eq, Hash)
+}
 
 ///|
 priv struct MemoryValueEntry {

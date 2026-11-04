@@ -2,23 +2,26 @@
 /// Parsing for component instance and alias sections (sections 5 and 6).
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct InstantiateArg {
   name : String
   sortidx : SortIdx
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct InlineExport {
   name : String
   attributes : Array[NameAttribute]
   sortidx : SortIdx
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum InstanceExpr {
   Instantiate(Int32, Array[InstantiateArg])
   InlineExports(Array[InlineExport])
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for InstanceExpr with fn output(self, logger) {
@@ -26,9 +29,10 @@ pub impl Show for InstanceExpr with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Instance {
   expr : InstanceExpr
-} derive(Debug, Eq)
+}
 
 ///|
 fn parse_inlineexport(
@@ -106,17 +110,19 @@ pub fn parse_instance_section(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum AliasTarget {
   Export(Int32, String)
   CoreExport(Int32, String)
   Outer(Int32, Int32)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Alias {
   sort : Sort
   target : AliasTarget
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for Alias with fn output(self, logger) {

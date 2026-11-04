@@ -5,11 +5,12 @@
 /// a known version number to distinguish core modules vs components.
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum BinaryKind {
   CoreModule
   Component
   UnknownPreamble(Int32, Int32)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for BinaryKind with fn output(self, logger) {
@@ -42,17 +43,19 @@ pub fn sniff_binary_kind(bytes : Bytes) -> BinaryKind? {
 }
 
 ///|
+#derive(Debug, Eq)
 pub struct Section {
   id : Int32
   payload : Bytes
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub struct ComponentBinary {
   version : Int32
   layer : Int32
   sections : Array[Section]
-} derive(Debug, Eq)
+}
 
 ///|
 pub suberror ComponentParseError {

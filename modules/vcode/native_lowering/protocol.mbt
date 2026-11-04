@@ -1,21 +1,24 @@
 ///|
 /// Opaque handles used only while one MilkIR function is streamed into a
 /// target selector. They do not own an SSA graph.
+#derive(Debug, Eq, Hash)
 pub(all) struct Value {
   id : Int32
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) struct Block {
   id : Int32
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct InstructionMetadata {
   source : @native.SourceLocation?
   live_gc_roots : Array[Value]
   stack_map : @native.StackMapMetadata?
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn InstructionMetadata::empty() -> InstructionMetadata {
@@ -32,10 +35,11 @@ pub fn InstructionMetadata::new(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminatorMetadata {
   source : @native.SourceLocation?
   live_gc_roots : Array[Value]
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn TerminatorMetadata::new(
@@ -46,13 +50,15 @@ pub fn TerminatorMetadata::new(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SwitchCase {
   bits : UInt64
   target : Block
   arguments : Array[Value]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Terminator {
   Jump(Block, Array[Value])
   Branch(Value, Block, Array[Value], Block, Array[Value])
@@ -79,7 +85,7 @@ pub(all) enum Terminator {
   TailCall(@native.NativeCall, Array[Value])
   NoReturnCall(@native.NativeCall, Array[Value])
   Trap(@native.TrapReason)
-} derive(Debug, Eq)
+}
 
 ///|
 pub(all) struct TargetSwitchCase {

@@ -1,26 +1,29 @@
 ///|
 /// Observable lifecycle of a single-threaded native fiber.
+#derive(Debug, Eq)
 pub(all) enum NativeFiberPhase {
   Ready
   Running
   Suspended
   Returned
   Cancelled
-} derive(Debug, Eq)
+}
 
 ///|
 /// Result of entering or continuing a native fiber.
+#derive(Debug, Eq)
 pub(all) enum NativeFiberEvent {
   Yielded(Int64)
   Finished(Int64)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum NativeSuspensionReason {
   HostCall
   CooperativeYield
   AtomicWait
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend NativeSuspensionReason with Debug::{to_repr}
@@ -30,13 +33,15 @@ pub extend NativeSuspensionReason with Eq::{equal, not_equal}
 
 ///|
 /// Result of advancing a stackful JIT invocation.
+#derive(Debug, Eq)
 pub(all) enum NativeJITContinuationEvent {
   NativeSuspended(NativeSuspensionReason)
   NativeJITCompleted
   NativeJITTrapped(Int32)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub suberror NativeFiberError {
   StackAllocationFailed(Int64)
   WrongThread
@@ -44,7 +49,7 @@ pub suberror NativeFiberError {
   InvalidState(Int32)
   UnexpectedYield(Int64)
   NativeFailure(Int32)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for NativeFiberError with fn output(self, logger) {

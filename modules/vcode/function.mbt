@@ -20,10 +20,11 @@ priv struct BlockData {
 }
 
 ///|
+#derive(Eq)
 priv enum InstructionRole {
   Body
   Terminator
-} derive(Eq)
+}
 
 ///|
 priv struct InstructionData[Inst] {

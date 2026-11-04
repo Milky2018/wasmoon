@@ -8,11 +8,12 @@ struct ComponentEngine {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum NativeComponentExecutionEvent {
   RunToReturn
   Resumable
   ExplicitInterpreter
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn interpreter_component_engine() -> ComponentEngine {

@@ -31,26 +31,30 @@ pub fn CallTransfer::to_stack(
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct StackArgumentTransfer {
   ty : ValueType
   source : Location
   offset : Int32
   scratch : PhysicalReg?
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct CallTransferPlan {
   stack_transfers : Array[StackArgumentTransfer]
   register_moves : Array[ParallelMove]
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct ResolvedCallTransferPlan {
   stack_transfers : Array[StackArgumentTransfer]
   register_moves : ResolvedMovePlan
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub suberror CallTransferError {
   InvalidSourceClass(index~ : Int32)
   ForeignSourceStack(index~ : Int32)
@@ -68,7 +72,7 @@ pub suberror CallTransferError {
   OverlappingStackDestination(first~ : Int32, second~ : Int32)
   ProtectedLocationOverwrite(index~ : Int32, location~ : Location)
   MoveResolutionFailed(cause~ : MoveResolveError)
-} derive(Eq, Debug)
+}
 
 ///|
 fn transfer_size(ty : ValueType) -> Int32 {

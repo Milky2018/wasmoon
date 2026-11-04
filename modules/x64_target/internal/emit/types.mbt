@@ -1,10 +1,11 @@
 ///|
+#derive(Debug)
 pub(all) enum RawLaneSize {
   B8
   H16
   S32
   D64
-} derive(Debug)
+}
 
 ///|
 impl Show for RawLaneSize with fn output(self, logger) {

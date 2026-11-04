@@ -1,10 +1,11 @@
 ///|
+#derive(Debug)
 pub suberror AArch64CompileError {
   TargetValidationFailed(cause~ : TargetVCodeVerifyError)
   AllocationFailed(cause~ : AArch64AllocationError)
   FramePlanningFailed(cause~ : AArch64FrameError)
   EmissionFailed(cause~ : AArch64EmitError)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for AArch64CompileError with fn output(self, logger) {

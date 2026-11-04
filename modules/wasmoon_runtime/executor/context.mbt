@@ -60,11 +60,12 @@ fn gc_stress_every() -> Int32 {
 /// is_loop: true for loops (branch goes to start, uses param arity)
 /// arity: number of values to carry when branching
 /// stack_height: stack depth when the block was entered (for stack unwinding)
+#derive(Debug)
 priv struct LabelInfo {
   is_loop : Bool
   arity : Int32
   stack_height : Int32
-} derive(Debug)
+}
 
 ///|
 priv struct CancellationPoller {
@@ -99,6 +100,7 @@ impl Debug for ResumeAction with fn to_repr(_self) {
 
 ///|
 /// Execution context for running WASM code
+#derive(Debug)
 struct ExecContext {
   stack : @runtime.Stack
   store : @runtime.Store
@@ -127,7 +129,7 @@ struct ExecContext {
   capture_diagnostics : Ref[Bool]
   mut diagnostic_frames : ReadOnlyArray[InterpreterFrame]?
   mut host_exception_root : @runtime.GcRootLease?
-} derive(Debug)
+}
 
 ///|
 fn ExecContext::ExecContext(
