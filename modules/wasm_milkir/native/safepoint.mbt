@@ -10,6 +10,10 @@ fn lower_safepoint_poll(
   callback_offset : Int32,
   budget_offset : Int32,
 ) -> Unit {
+  if environment.poll_budget_offset is Some(offset) {
+    lower_bound_poll(context, environment, offset)
+    return
+  }
   let slow = context.create_block([])
   let countdown = context.create_block([])
   let decrement = context.create_block([])
@@ -88,6 +92,69 @@ fn lower_safepoint_poll(
   }
   heap_store(context, budget_base, budget_offset, remaining, I32)
   context.jump(done, [])
+  context.switch_to_block(slow)
+  emit_slow_poll(context, environment, vmctx)
+  context.jump(done, [])
+  context.switch_to_block(done)
+  context.finish_void()
+}
+
+///|
+fn load_poll_budget_address(
+  context : @adapter.InstructionContext,
+  vmctx : @lowering.Value,
+  offset : Int32,
+) -> @lowering.Value {
+  if offset < -256 || offset >= 0 {
+    return heap_load(context, vmctx, offset, Ptr64)
+  }
+  // The prefix precedes the context pointer. Encode the byte displacement
+  // directly so native targets can use a signed-offset load.
+  context.emit(
+    Load(
+      @lowering.LoadSpec::new(
+        W64,
+        None,
+        Ptr64,
+        offset.to_int64().reinterpret_as_uint64(),
+        Little,
+        None,
+      ),
+    ),
+    [vmctx],
+    [Ptr64],
+  )[0]
+}
+
+///|
+fn lower_bound_poll(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  offset : Int32,
+) -> Unit {
+  let slow = context.create_block([])
+  let done = context.create_block([])
+  let decrement = context.create_block([])
+  let boundary = context.create_block([])
+  let vmctx = context.environment()[0]
+  let address = load_poll_budget_address(context, vmctx, offset)
+  require_poll_pointer(context, address, slow)
+  let budget = heap_load(context, address, 0, I32)
+  context.branch_int_compare_immediate(
+    SignedGreaterThan,
+    budget,
+    1UL,
+    decrement,
+    [],
+    boundary,
+    [],
+  )
+  context.switch_to_block(decrement)
+  let remaining = context.emit(IntBinaryImmediate(Sub, 1UL), [budget], [I32])[0]
+  heap_store(context, address, 0, remaining, I32)
+  context.jump(done, [])
+  context.switch_to_block(boundary)
+  context.branch_int_compare_immediate(Equal, budget, 1UL, slow, [], done, [])
   context.switch_to_block(slow)
   emit_slow_poll(context, environment, vmctx)
   context.jump(done, [])

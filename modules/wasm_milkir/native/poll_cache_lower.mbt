@@ -1,5 +1,5 @@
 ///|
-fn cached_poll_require_pointer(
+fn require_poll_pointer(
   context : @adapter.InstructionContext,
   pointer : @lowering.Value,
   slow : @lowering.Block,
@@ -24,18 +24,20 @@ fn publish_cached_budget(
   context : @adapter.InstructionContext,
   layout : PollCacheLayout,
   budget : @lowering.Value,
+  environment : Environment,
 ) -> Unit {
   // A positive cached value comes from a callback-free acquisition in this
   // activation. The loop verifier requires publication before every possible
   // change of execution, including faulting instructions and calls.
-  let execution = heap_load(
-    context,
-    context.environment()[0],
-    layout.execution,
-    Ptr64,
-  )
-  let controls = cached_poll_controls(context, execution, layout)
-  heap_store(context, controls, layout.budget, budget, I32)
+  let vmctx = context.environment()[0]
+  if environment.poll_budget_offset is Some(offset) {
+    let address = load_poll_budget_address(context, vmctx, offset)
+    heap_store(context, address, 0, budget, I32)
+  } else {
+    let execution = heap_load(context, vmctx, layout.execution, Ptr64)
+    let controls = cached_poll_controls(context, execution, layout)
+    heap_store(context, controls, layout.budget, budget, I32)
+  }
 }
 
 ///|
@@ -59,7 +61,7 @@ fn lower_cached_poll(
         [],
       )
       context.switch_to_block(write)
-      publish_cached_budget(context, layout, cached)
+      publish_cached_budget(context, layout, cached, environment)
       context.jump(done, [])
       context.switch_to_block(done)
       context.finish_void()
@@ -96,28 +98,34 @@ fn lower_cached_poll(
         context.switch_to_block(publish)
         // Let the original runtime poll charge the last unit. It may yield or
         // cancel, so no value from this cache survives its call.
-        publish_cached_budget(context, layout, cached)
+        publish_cached_budget(context, layout, cached, environment)
         context.jump(slow, [])
         context.switch_to_block(acquire)
       }
       let vmctx = context.environment()[0]
-      let execution = heap_load(context, vmctx, layout.execution, Ptr64)
-      cached_poll_require_pointer(context, execution, slow)
-      let controls = cached_poll_controls(context, execution, layout)
-      cached_poll_require_pointer(context, controls, slow)
-      let callback = heap_load(context, controls, layout.callback, I64)
-      let ready = context.create_block([])
-      context.branch_int_compare_immediate(
-        Equal,
-        callback,
-        0UL,
-        ready,
-        [],
-        slow,
-        [],
-      )
-      context.switch_to_block(ready)
-      let budget = heap_load(context, controls, layout.budget, I32)
+      let budget = if environment.poll_budget_offset is Some(offset) {
+        let address = load_poll_budget_address(context, vmctx, offset)
+        require_poll_pointer(context, address, slow)
+        heap_load(context, address, 0, I32)
+      } else {
+        let execution = heap_load(context, vmctx, layout.execution, Ptr64)
+        require_poll_pointer(context, execution, slow)
+        let controls = cached_poll_controls(context, execution, layout)
+        require_poll_pointer(context, controls, slow)
+        let callback = heap_load(context, controls, layout.callback, I64)
+        let ready = context.create_block([])
+        context.branch_int_compare_immediate(
+          Equal,
+          callback,
+          0UL,
+          ready,
+          [],
+          slow,
+          [],
+        )
+        context.switch_to_block(ready)
+        heap_load(context, controls, layout.budget, I32)
+      }
       let boundary = context.create_block([])
       context.branch_int_compare_immediate(
         SignedGreaterThan,

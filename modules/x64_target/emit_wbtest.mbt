@@ -435,3 +435,18 @@ test "x64_target internal leaf functions establish an unwindable frame record" {
     }),
   )
 }
+
+///|
+test "x64 scalar memory uses a signed displacement without address synthesis" {
+  let buffer = CodeBuffer::new()
+  let base = @vcode.PhysicalReg::new(0, Int)
+  let (address, offset) = scalar_memory_address(
+    buffer,
+    base,
+    W64,
+    (-240L).reinterpret_as_uint64(),
+  )
+  assert_true(address == base)
+  assert_eq(offset, -240)
+  assert_true(buffer.code.is_empty())
+}

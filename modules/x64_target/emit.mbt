@@ -205,8 +205,9 @@ fn scalar_memory_address(
   offset : UInt64,
 ) -> (@vcode.PhysicalReg, Int32) {
   ignore(width)
-  if offset <= 0x7FFFFFFFUL {
-    return (address, offset.to_int())
+  let displacement = offset.reinterpret_as_int64()
+  if displacement >= -0x80000000L && displacement <= 0x7FFFFFFFL {
+    return (address, displacement.to_int())
   }
   let immediate = @vcode.PhysicalReg::new(10, Int)
   let scratch = @vcode.PhysicalReg::new(11, Int)

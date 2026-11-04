@@ -278,6 +278,25 @@ static jit_trap_activation_t *matching_context_activation(jit_context_t *context
 
 static void release_activation_controls(jit_trap_activation_t *activation);
 
+// Only the current activation publishes generated-code controls. A context
+// without this binding must use the TLS-aware slow poll, including while a
+// child or a parked continuation owns the effective controls.
+static void unpublish_poll_controls(jit_trap_activation_t *activation) {
+    if (!activation) return;
+    activation->execution.poll_controls = NULL;
+    if (activation->context) ctx_runtime(activation->context)->poll_budget = NULL;
+}
+
+static void publish_poll_controls(jit_trap_activation_t *activation) {
+    if (!activation) return;
+    jit_invocation_controls_t *controls = activation->controls;
+    activation->execution.poll_controls = controls;
+    if (activation->context) {
+        ctx_runtime(activation->context)->poll_budget =
+            controls && !controls->cancellation_callback ? &controls->scheduling_budget : NULL;
+    }
+}
+
 int jit_trap_activation_push(jit_trap_activation_t *activation) {
     activation->previous = current_activation;
     if (activation->context) {
@@ -310,8 +329,8 @@ int jit_trap_activation_push(jit_trap_activation_t *activation) {
         }
         if (standalone && previous) exception_reset_execution_state(previous);
     }
-    if (current_activation) current_activation->execution.poll_controls = NULL;
-    activation->execution.poll_controls = activation->controls;
+    unpublish_poll_controls(current_activation);
+    publish_poll_controls(activation);
     current_activation = activation;
     return 1;
 }
@@ -363,9 +382,10 @@ static void release_activation_controls(jit_trap_activation_t *activation) {
 void jit_trap_activation_pop(jit_trap_activation_t *activation) {
     if (activation->parked_roots.heap) abort();
     if (current_activation != activation) abort();
+    unpublish_poll_controls(activation);
     save_activation_context(activation);
     current_activation = activation->previous;
-    if (current_activation) current_activation->execution.poll_controls = current_activation->controls;
+    publish_poll_controls(current_activation);
     jit_execution_state_clear(&activation->execution);
     release_activation_controls(activation);
     activation->active = 0;
@@ -374,23 +394,23 @@ void jit_trap_activation_pop(jit_trap_activation_t *activation) {
 jit_trap_activation_t *jit_trap_activation_detach(void) {
     jit_trap_activation_t *activation = current_activation;
     if (!activation) return NULL;
+    unpublish_poll_controls(activation);
     save_activation_context(activation);
-    activation->execution.poll_controls = NULL;
     current_activation = activation->previous;
-    if (current_activation) current_activation->execution.poll_controls = current_activation->controls;
+    publish_poll_controls(current_activation);
     return activation;
 }
 
 void jit_trap_activation_attach(jit_trap_activation_t *activation) {
     if (!activation) return;
     activation->previous = current_activation;
-    if (current_activation) current_activation->execution.poll_controls = NULL;
+    unpublish_poll_controls(current_activation);
     restore_activation_context(activation);
     activation->controls = &activation->owned_controls;
     if (activation->inherit_controls && current_activation) {
         activation->controls = current_activation->controls;
     }
-    activation->execution.poll_controls = activation->controls;
+    publish_poll_controls(activation);
     current_activation = activation;
 }
 
@@ -398,9 +418,10 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
     if (!activation) return;
     if (activation->parked_roots.heap) abort();
     if (current_activation == activation) {
+        unpublish_poll_controls(activation);
         save_activation_context(activation);
         current_activation = activation->previous;
-        if (current_activation) current_activation->execution.poll_controls = current_activation->controls;
+        publish_poll_controls(current_activation);
     }
     jit_execution_state_clear(&activation->execution);
     release_activation_controls(activation);

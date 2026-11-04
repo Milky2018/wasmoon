@@ -27,7 +27,7 @@ pub(all) struct ArrayViewLayout {
 }
 
 type Environment
-pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, exclusive_poll_controls? : Bool, prepared_arrays? : Bool, inline_heap? : InlineHeapLayout?, heap_cast_pages? : Int32?, struct_views? : StructViewLayout?, array_views? : ArrayViewLayout?, ordinary_view_publication? : Bool) -> Self
+pub fn Environment::new((Int32) -> @native_types.CodeSymbol, (Int32) -> @native_types.EnvironmentField, @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (Int32) -> @native_types.EnvironmentField, (@wasm_milkir.WasmRuntimeHelper) -> @native_types.ExternalSymbol, gc_heap_field? : @native_types.EnvironmentField?, gc_array_regions? : Bool, exclusive_poll_controls? : Bool, poll_budget_offset? : Int32?, prepared_arrays? : Bool, inline_heap? : InlineHeapLayout?, heap_cast_pages? : Int32?, struct_views? : StructViewLayout?, array_views? : ArrayViewLayout?, ordinary_view_publication? : Bool) -> Self
 
 pub(all) struct InlineHeapLayout {
   type_ids_offset : Int32

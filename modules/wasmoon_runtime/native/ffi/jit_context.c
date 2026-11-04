@@ -1186,9 +1186,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_poll_layout_field(int32_t index) {
         (int32_t)offsetof(jit_execution_state_t, poll_controls),
         (int32_t)offsetof(jit_invocation_controls_t, cancellation_callback),
         (int32_t)offsetof(jit_invocation_controls_t, scheduling_budget),
-        (int32_t)offsetof(jit_execution_state_t, gc_function_frame_head)
+        (int32_t)offsetof(jit_execution_state_t, gc_function_frame_head),
+        (int32_t)offsetof(jit_runtime_state_t, poll_budget) - (int32_t)sizeof(jit_runtime_state_t)
     };
-    return index >= 0 && index < 5 ? offsets[index] : 0;
+    return index >= 0 && index < 6 ? offsets[index] : 0;
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

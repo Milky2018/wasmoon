@@ -367,7 +367,8 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_controls(void) {
     jit_trap_activation_init(&root, ctx);
     jit_trap_activation_push(&root);
     wasmoon_jit_clear_cancellation_callback((int64_t)(uintptr_t)ctx);
-    int passed = control_capture_releases == 0 && wasmoon_jit_cancellation_requested(ctx);
+    int passed = control_capture_releases == 0 && wasmoon_jit_cancellation_requested(ctx) &&
+        ctx_runtime(ctx)->poll_budget == NULL;
     root.controls->scheduling_budget = 3;
     set_control_capture(ctx, 0);
     ctx_runtime(ctx)->control_defaults.scheduling_budget = 5;
@@ -400,6 +401,25 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_activation_controls(void) {
     passed &= control_capture_releases == 1;
     jit_trap_activation_abandon(&caller);
     passed &= control_capture_releases == 2;
+
+    // Callback-free publication follows the active context and inherited
+    // controls, including when a parked child reattaches.
+    jit_trap_activation_init(&root, ctx);
+    jit_trap_activation_push(&root);
+    int32_t *budget = &root.controls->scheduling_budget;
+    passed &= ctx_runtime(ctx)->poll_budget == budget && ctx_runtime(other)->poll_budget == NULL;
+    jit_trap_activation_init(&bound, other);
+    bound.inherit_controls = 1;
+    jit_trap_activation_push(&bound);
+    passed &= ctx_runtime(ctx)->poll_budget == NULL && ctx_runtime(other)->poll_budget == budget;
+    jit_trap_activation_detach();
+    passed &= ctx_runtime(ctx)->poll_budget == budget && ctx_runtime(other)->poll_budget == NULL;
+    jit_trap_activation_attach(&bound);
+    passed &= ctx_runtime(ctx)->poll_budget == NULL && ctx_runtime(other)->poll_budget == budget;
+    jit_trap_activation_pop(&bound);
+    passed &= ctx_runtime(ctx)->poll_budget == budget && ctx_runtime(other)->poll_budget == NULL;
+    jit_trap_activation_abandon(&root);
+    passed &= ctx_runtime(ctx)->poll_budget == NULL;
     free_context_internal(other);
     free_context_internal(ctx);
     return passed;

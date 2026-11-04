@@ -267,11 +267,17 @@ test "cached loop polls preserve quantum and cancellation callback counts" {
       #| (func (export "read") (param $n i32) (param $addr i32) (result i32)
       #|  (local $sum i32)
       #|  (loop $l
-      #|   local.get $sum local.get $addr i32.load8_u call $identity
+      #|   local.get $n i32.const 1 i32.const 64 call $check
+      #|   local.get $sum local.get $addr call $read_byte
       #|   i32.add local.set $sum
       #|   local.get $n i32.const 1 i32.sub local.tee $n br_if $l)
       #|  local.get $sum)
-      #| (func $identity (param i32) (result i32) local.get 0))
+      #| (func $read_byte (param i32) (result i32) local.get 0 i32.load8_u)
+      #| (func $check (param $n i32) (param $lo i32) (param $hi i32)
+      #|  local.get $n local.get $hi i32.le_s
+      #|  if local.get $n local.get $lo i32.ge_s
+      #|     if else unreachable end
+      #|  else unreachable end))
     ),
   )
   let store = @runtime.Store::with_c_heap()
@@ -290,10 +296,10 @@ test "cached loop polls preserve quantum and cancellation callback counts" {
   )
   defer context.close()
   // Entry plus one loop poll per iteration. The second function also
-  // charges the identity function's entry poll after each memory access.
+  // charges the inlined bounds guard and memory reader before their work.
   let cases : Array[(Int32, Array[@types.Value], Int32, Int32)] = [
     (0, [I32(64)], 65, 42),
-    (1, [I32(64), I32(0)], 129, 64),
+    (1, [I32(64), I32(0)], 193, 64),
   ]
   for (function, args, total_polls, result) in cases {
     for quantum in [1, 2, 3, 7, 64, 65, 128] {
@@ -330,12 +336,32 @@ test "cached loop polls preserve quantum and cancellation callback counts" {
     fail("the entry and header polls should yield before the faulting load")
   }
   defer continuation.cancel()
-  try continuation.continue_execution() catch {
+  guard continuation.continue_execution()
+    is NativeCoreSuspended(CooperativeYield, before_load) else {
+    fail("the inlined guard and reader must charge before the faulting load")
+  }
+  defer before_load.cancel()
+  try before_load.continue_execution() catch {
     @wast.JITCoreCallError::Trap(message) =>
       assert_true(message.contains("out of bounds memory access"))
     error => raise error
   } noraise {
     _ => fail("expected the out-of-bounds load to trap")
+  }
+  guard context.call_core_func_resumable(store, instance, 1, [
+      I32(65),
+      I32(65536),
+    ])
+    is NativeCoreSuspended(CooperativeYield, before_guard) else {
+    fail("entry and header should yield before the guard")
+  }
+  defer before_guard.cancel()
+  try before_guard.continue_execution() catch {
+    @wast.JITCoreCallError::Trap(message) =>
+      assert_true(message.contains("unreachable"))
+    error => raise error
+  } noraise {
+    _ => fail("the inlined guard should trap before the faulting reader")
   }
   assert_true(context.jit_module.set_cooperative_scheduling(false))
   let polls = Ref(0)

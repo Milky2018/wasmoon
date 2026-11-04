@@ -3486,3 +3486,16 @@ test "AArch64 LSE atomic add encodes each access width and retains its trap offs
     assert_true(buffer.code == [0x62, 0x00, 0xe1, opcode])
   }
 }
+
+///|
+test "AArch64 poll prefix pointer uses the signed byte load displacement" {
+  let buffer = CodeBuffer::new()
+  emit_negative_scalar_load(
+    buffer,
+    0xF9400000U,
+    @vcode.PhysicalReg::new(19, Int),
+    @vcode.PhysicalReg::new(0, Int),
+    -240L,
+  )
+  debug_inspect(buffer.code, content="[0x60, 0x02, 0x51, 0xf8]")
+}

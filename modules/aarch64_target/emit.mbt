@@ -724,6 +724,23 @@ fn scalar_load_base(
 }
 
 ///|
+fn emit_negative_scalar_load(
+  buffer : CodeBuffer,
+  scaled_base : UInt32,
+  address : @vcode.PhysicalReg,
+  result : @vcode.PhysicalReg,
+  offset : Int64,
+) -> Unit {
+  // LDUR uses a signed byte displacement in bits 20:12.
+  buffer.emit_word(
+    (scaled_base & 0xFEFFFFFFU) |
+    ((offset.to_int().reinterpret_as_uint() & 0x1FFU) << 12) |
+    (reg_bits(address) << 5) |
+    reg_bits(result),
+  )
+}
+
+///|
 fn scalar_store_base(
   width : @native.AccessWidth,
   value_type : @native.ValueType,
@@ -3417,16 +3434,22 @@ fn emit_instruction(
       guard scalar_load_base(width, extension, result_type) is Some(base) else {
         raise InvalidScalarMemoryAccess
       }
-      let (address, immediate) = scalar_memory_address(
-        buffer,
-        reg(0),
-        width,
-        offset,
-      )
-      metadata_offset = buffer.position()
-      buffer.emit_word(
-        base | (immediate << 10) | (reg_bits(address) << 5) | reg_bits(reg(1)),
-      )
+      let displacement = offset.reinterpret_as_int64()
+      if displacement < 0L && displacement >= -256L {
+        metadata_offset = buffer.position()
+        emit_negative_scalar_load(buffer, base, reg(0), reg(1), displacement)
+      } else {
+        let (address, immediate) = scalar_memory_address(
+          buffer,
+          reg(0),
+          width,
+          offset,
+        )
+        metadata_offset = buffer.position()
+        buffer.emit_word(
+          base | (immediate << 10) | (reg_bits(address) << 5) | reg_bits(reg(1)),
+        )
+      }
     }
     ScalarLoadUxtw(width, extension, result_type, shift) => {
       guard scalar_load_base(width, extension, result_type) is Some(base) else {

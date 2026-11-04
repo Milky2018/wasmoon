@@ -20,6 +20,7 @@ struct Environment {
   mut projection_budget : Int32
   projection_sites : InlineProjectionSites?
   exclusive_poll_controls : Bool
+  poll_budget_offset : Int32?
   gc_array_regions : Bool
   prepared_arrays : Bool
   expand_structs : Bool
@@ -46,6 +47,8 @@ struct Environment {
 /// countdown storage cannot change during guest-only code except at its polls.
 /// Reentry/suspension expires that permission. The native seam can then create
 /// independently budget-verified loop regions; other embeddings keep full polls.
+/// `poll_budget_offset` binds a nullable pointer to the current activation's
+/// callback-free countdown. A null pointer always selects the runtime poll.
 pub fn Environment::new(
   function_symbol : (Int32) -> @native_types.CodeSymbol,
   memory_base_field : (Int32) -> @native_types.EnvironmentField,
@@ -56,6 +59,7 @@ pub fn Environment::new(
   gc_heap_field~ : @native_types.EnvironmentField? = None,
   gc_array_regions~ : Bool = false,
   exclusive_poll_controls~ : Bool = false,
+  poll_budget_offset~ : Int32? = None,
   prepared_arrays~ : Bool = false,
   inline_heap~ : InlineHeapLayout? = None,
   heap_cast_pages~ : Int32? = None,
@@ -71,6 +75,7 @@ pub fn Environment::new(
     gc_array_regions,
     ordinary_view_publication,
     exclusive_poll_controls,
+    poll_budget_offset,
     prepared_arrays,
     projection_budget: 8,
     projection_sites: None,

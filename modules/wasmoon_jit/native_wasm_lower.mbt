@@ -145,6 +145,7 @@ fn wasmoon_native_environment(
     prepared_arrays=true,
     gc_array_regions=true,
     exclusive_poll_controls=true,
+    poll_budget_offset=Some(poll_layout_field(5)),
     gc_heap_field=if layout.gc_heap_offset >= 0 && layout.gc_heap_offset != 255 {
       Some(gc_heap_field)
     } else {

@@ -53,6 +53,10 @@ typedef struct {
 } jit_invocation_controls_t;
 
 typedef struct jit_runtime_state {
+    // Published only for the current activation when it has no callback.
+    // Keep this at the start so existing ABI-relative offsets stay fixed.
+    int32_t *poll_budget;
+
     // Retained immutable MoonBit layout; NULL selects the legacy ABI.
     uint8_t *layout;
     jit_execution_state_t *execution;
