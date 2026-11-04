@@ -89,6 +89,18 @@ fn lower_safepoint_poll(
   heap_store(context, budget_base, budget_offset, remaining, I32)
   context.jump(done, [])
   context.switch_to_block(slow)
+  emit_slow_poll(context, environment, vmctx)
+  context.jump(done, [])
+  context.switch_to_block(done)
+  context.finish_void()
+}
+
+///|
+fn emit_slow_poll(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  vmctx : @lowering.Value,
+) -> Unit {
   context.emit_call(
     @native_types.NativeCall::new(
       External((environment.runtime_symbol)(CancelPoll)),
@@ -100,7 +112,4 @@ fn lower_safepoint_poll(
     [],
   )
   |> ignore
-  context.jump(done, [])
-  context.switch_to_block(done)
-  context.finish_void()
 }

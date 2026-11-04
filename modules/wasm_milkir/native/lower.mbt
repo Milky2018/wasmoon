@@ -1791,6 +1791,21 @@ pub fn lower_to_sink(
       raise @milkir_native.NativeLowerError::invalid_milkir(error)
     }
   }
+  let poll_cache = if environment.exclusive_poll_controls &&
+    environment.gc_array_regions &&
+    environment.gc_heap_field is Some(_) {
+    prepare_poll_cache(function) catch {
+      error =>
+        raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
+    }
+  } else {
+    None
+  }
+  defer (if poll_cache is Some(edit) { (edit.restore)() })
+  let cached_polls = match poll_cache {
+    Some(edit) => edit.operations
+    None => Map([])
+  }
   let environment = if environment.inline_heap is Some(_) ||
     environment.prepared_arrays ||
     environment.gc_heap_field is Some(_) {
@@ -1833,12 +1848,34 @@ pub fn lower_to_sink(
     environment
   }
   fn validate(view : @milkir.ExtensionInstView) -> String? {
+    if !cached_polls.is_empty() && decode_cached_poll(view.op) is Some(poll) {
+      if (match poll {
+          Step(_, true) =>
+            view.operand_types.is_empty() && view.result_types is [I32]
+          Step(_, false) =>
+            view.operand_types is [I32] && view.result_types is [I32]
+          Publish(_) =>
+            view.operand_types is [I32] && view.result_types.is_empty()
+        }) {
+        return None
+      }
+      return Some("invalid cached poll signature")
+    }
     validate_memory_extension(view, validation_context, function.results)
   }
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
   ) -> String? {
+    if decode_cached_poll(extension) is Some(poll) {
+      if cached_polls.get(context.instruction_id()) != Some(poll) {
+        return Some(
+          "cached poll was not produced by the verified loop transformation",
+        )
+      }
+      lower_cached_poll(context, poll, environment)
+      return None
+    }
     lower_extension(context, extension, environment, validation_context)
   }
   fn validate_global(data : @milkir.GlobalValueData) -> String? {
@@ -1862,12 +1899,15 @@ pub fn lower_to_sink(
     resolve_context_field,
     sink,
     call_abi?,
-    verify_input~,
+    verify_input=verify_input || !cached_polls.is_empty(),
     root_free_extension=op => {
-      decode_poll_region(op) is Some(_) || decode_guarded_call(op) is Some(_)
+      decode_poll_region(op) is Some(_) ||
+      decode_guarded_call(op) is Some(_) ||
+      decode_cached_poll(op) is Some(Publish(_))
     },
     prefer_scoped_root_site=op => {
       decode_poll_region(op) is Some(_) ||
+      decode_cached_poll(op) is Some(Step(_, _)) ||
       @wasm_milkir.decode(op) is Some(SafepointPoll(_, _, _, _)) ||
       (op.effects is Some(effects) && !effects.invalidates_addresses)
     },

@@ -253,3 +253,102 @@ test "instrumented loop translations preserve dominance" {
     }
   }
 }
+
+///|
+test "cached loop polls preserve quantum and cancellation callback counts" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #| (memory 1)
+      #| (data (i32.const 0) "\01")
+      #| (func (export "run") (param $n i32) (result i32)
+      #|  (loop $l local.get $n i32.const 1 i32.sub local.tee $n br_if $l)
+      #|  i32.const 42)
+      #| (func (export "read") (param $n i32) (param $addr i32) (result i32)
+      #|  (local $sum i32)
+      #|  (loop $l
+      #|   local.get $sum local.get $addr i32.load8_u call $identity
+      #|   i32.add local.set $sum
+      #|   local.get $n i32.const 1 i32.sub local.tee $n br_if $l)
+      #|  local.get $sum)
+      #| (func $identity (param i32) (result i32) local.get 0))
+    ),
+  )
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    module_,
+    Imports(store),
+  )
+  let context = prepare_async_jit_context(
+    module_,
+    instance,
+    store,
+    cooperative=true,
+    opt_level=2,
+  )
+  defer context.close()
+  // Entry plus one loop poll per iteration. The second function also
+  // charges the identity function's entry poll after each memory access.
+  let cases : Array[(Int32, Array[@types.Value], Int32, Int32)] = [
+    (0, [I32(64)], 65, 42),
+    (1, [I32(64), I32(0)], 129, 64),
+  ]
+  for (function, args, total_polls, result) in cases {
+    for quantum in [1, 2, 3, 7, 64, 65, 128] {
+      assert_true(context.jit_module.set_cooperative_scheduling(true, quantum~))
+      let mut outcome = context.call_core_func_resumable(
+        store, instance, function, args,
+      )
+      defer (if outcome is NativeCoreSuspended(_, continuation) {
+        continuation.cancel()
+      })
+      let mut yields = 0
+      while outcome is NativeCoreSuspended(CooperativeYield, continuation) {
+        yields += 1
+        assert_true(yields <= total_polls)
+        outcome = continuation.continue_execution()
+      }
+      guard outcome is NativeCoreReturned(values) else {
+        fail("unexpected suspension")
+      }
+      assert_eq(values, [I32(result)])
+      assert_eq(
+        yields,
+        total_polls / quantum,
+        msg="function \{function}, quantum \{quantum}",
+      )
+    }
+  }
+  assert_true(context.jit_module.set_cooperative_scheduling(true, quantum=2))
+  guard context.call_core_func_resumable(store, instance, 1, [
+      I32(64),
+      I32(65536),
+    ])
+    is NativeCoreSuspended(CooperativeYield, continuation) else {
+    fail("the entry and header polls should yield before the faulting load")
+  }
+  defer continuation.cancel()
+  try continuation.continue_execution() catch {
+    @wast.JITCoreCallError::Trap(message) =>
+      assert_true(message.contains("out of bounds memory access"))
+    error => raise error
+  } noraise {
+    _ => fail("expected the out-of-bounds load to trap")
+  }
+  assert_true(context.jit_module.set_cooperative_scheduling(false))
+  let polls = Ref(0)
+  debug_inspect(
+    context.jit_module.call_with_context_controlled(
+      context.jit_module.get_func(0).unwrap(),
+      [64L],
+      cancel=Some(() => {
+        polls.val += 1
+        polls.val >= 63
+      }),
+    ),
+    content="Cancelled",
+  )
+  assert_eq(polls.val, 63)
+}
