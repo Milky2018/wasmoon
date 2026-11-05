@@ -56,161 +56,6 @@ fn format_value(v : @types.Value) -> String {
 }
 
 ///|
-/// Convert Value array to Int64 array for JIT call
-fn convert_args_to_jit(
-  args : Array[@types.Value],
-) -> Array[Int64] raise CommandFailure {
-  args.map(v => {
-    match v {
-      I32(n) => n.to_int64()
-      I64(n) => n
-      F32(f) => f.reinterpret_as_int().to_int64()
-      F64(d) => d.reinterpret_as_int64()
-      ContRef(_) => @wasmoon_jit.value_to_i64(v)
-      FuncRef(idx) => idx.to_int64()
-      ExternRef(idx) => @wasmoon_jit.encode_externref(idx)
-      Null => @wasm_milkir.NULL_REF
-      V128(_) => {
-        @logger.error("V128 args not yet supported")
-        raise CommandFailure(1)
-      }
-      StructRef(idx) => @wasmoon_jit.encode_heap_ref(idx)
-      ArrayRef(idx) => @wasmoon_jit.encode_heap_ref(idx)
-      I31(n) => (n.to_int64() << 1) | 1L
-      ExnRef(idx) => idx.to_int64()
-    }
-  })
-}
-
-///|
-/// Convert JIT Int64 results to Value array using result types
-fn convert_jit_results(
-  results : Array[Int64],
-  result_types : ArrayView[@types.ValueType],
-) -> Array[@types.Value] {
-  let values : Array[@types.Value] = []
-  let mut slot_idx = 0
-  for ty in result_types {
-    let value : @types.Value = match ty {
-      ContRef
-      | RefCont
-      | RefContTyped(_)
-      | RefNullContTyped(_)
-      | NullContRef
-      | RefNoCont => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        @wasmoon_jit.i64_to_value(raw, ty)
-      }
-      I32 => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        I32(raw.to_int())
-      }
-      I64 => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        I64(raw)
-      }
-      F32 => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        F32(Float::reinterpret_from_int(raw.to_int()))
-      }
-      F64 => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        F64(raw.reinterpret_as_double())
-      }
-      FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        if raw == @wasm_milkir.NULL_REF {
-          Null
-        } else if raw < 0L {
-          FuncRef((-(raw + 1L)).to_int())
-        } else {
-          FuncRef(raw.to_int())
-        }
-      }
-      ExternRef | RefExtern | NullExternRef => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        if raw == @wasm_milkir.NULL_REF {
-          Null
-        } else {
-          match @wasmoon_jit.decode_externref(raw) {
-            Some(idx) => ExternRef(idx)
-            None => ExternRef(raw.to_int())
-          }
-        }
-      }
-      AnyRef | NullRef | RefAny | RefEq | RefNullEq => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        if raw == 0L {
-          Null
-        } else if (raw & 1L) == 1L {
-          I31((raw >> 1).to_int())
-        } else {
-          StructRef(@wasmoon_jit.decode_heap_ref(raw))
-        }
-      }
-      ExnRef | NullExnRef => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        if raw == 0L {
-          Null
-        } else {
-          ExnRef(raw.to_int())
-        }
-      }
-      RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        if raw == 0L {
-          Null
-        } else {
-          StructRef(@wasmoon_jit.decode_heap_ref(raw))
-        }
-      }
-      RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        if raw == 0L {
-          Null
-        } else {
-          ArrayRef(@wasmoon_jit.decode_heap_ref(raw))
-        }
-      }
-      RefI31 | RefNullI31 => {
-        let raw = results[slot_idx]
-        slot_idx += 1
-        if raw == 0L {
-          Null
-        } else if (raw & 1L) == 1L {
-          I31((raw >> 1).to_int())
-        } else {
-          Null
-        }
-      }
-      RefNone => {
-        slot_idx += 1
-        Null
-      }
-      V128 => {
-        let low = results[slot_idx]
-        let high = results[slot_idx + 1]
-        slot_idx += 2
-        V128(@types.int64_pair_to_v128_le(low, high))
-      }
-    }
-    values.push(value)
-  }
-  values
-}
-
-///|
 /// Stage markers for `compile_module` progress callbacks.
 pub(all) enum CompileStage {
   Parse
@@ -468,6 +313,10 @@ pub fn run_wasm(
       return 1
     }
   }
+  let preload_contexts : Array[@core_jit.JITModuleContext] = []
+  defer (for i in 0..<preload_contexts.length() {
+    preload_contexts[preload_contexts.length() - 1 - i].close()
+  })
   // Load preloaded modules
   for preload in preloads {
     // Parse NAME=PATH format
@@ -498,6 +347,23 @@ pub fn run_wasm(
           error => {
             @logger.error("Failed to register preloaded module: \{error}")
             return 1
+          }
+        }
+        if use_jit {
+          match
+            compile_native_module_context(
+              preload_mod,
+              preload_instance,
+              linker.get_store(),
+              opt_level,
+              fn(_count) { () },
+              fn(_error) { false },
+            ) {
+            Ok(context) => preload_contexts.push(context)
+            Err(message) => {
+              @logger.error("Compiling preload module '\{name}': \{message}")
+              return 1
+            }
           }
         }
       }
@@ -566,38 +432,9 @@ pub fn run_wasm(
     }
     // Call the function
     if use_jit {
-      // Check if JIT can handle this module.
-      let import_ok = check_jit_import_support(mod_, instance, store, debug)
-      let has_cross_imports = @wast.has_cross_module_imports(mod_)
-      let exports_shared = @wast.exports_shared_resources(mod_)
-      let has_unsupported = @wast.has_unsupported_instructions(mod_)
-      let can_use_jit = import_ok &&
-        !has_cross_imports &&
-        !exports_shared &&
-        !has_unsupported
-      if !can_use_jit {
-        let reasons : Array[String] = []
-        if !import_ok {
-          reasons.push("unsupported imports")
-        }
-        if has_cross_imports {
-          reasons.push("cross-module imports")
-        }
-        if exports_shared {
-          reasons.push("exports shared resources")
-        }
-        if has_unsupported {
-          reasons.push("unsupported instructions")
-        }
-        let reason_str = if reasons.is_empty() {
-          "unknown reason"
-        } else {
-          reasons.join(", ")
-        }
+      if !check_jit_import_support(mod_, instance, store, debug) {
         @logger.error(
-          "JIT mode is not supported for this module (" +
-          reason_str +
-          "). " +
+          "JIT mode is not supported for this module (unsupported imports). " +
           "Please re-run with --no-jit.",
         )
         return 1
@@ -744,72 +581,7 @@ fn build_run_compile_mask(
   mod_ : @types.Module,
   entry_func_idx : Int32,
 ) -> Array[Bool]? {
-  let total_local_funcs = mod_.codes.length()
-  if total_local_funcs == 0 {
-    return None
-  }
-  let num_imports = count_func_imports(mod_.imports)
-  let compile_mask : Array[Bool] = []
-  for _ in 0..<total_local_funcs {
-    compile_mask.push(false)
-  }
-  let pending_locals : Array[Int32] = []
-
-  mark_wast_reachable_local_func(
-    entry_func_idx, num_imports, compile_mask, pending_locals,
-  )
-  if mod_.start is Some(func_idx) {
-    mark_wast_reachable_local_func(
-      func_idx, num_imports, compile_mask, pending_locals,
-    )
-  }
-  for global in mod_.globals {
-    collect_wast_reachable_from_instrs(
-      global.init,
-      num_imports,
-      compile_mask,
-      pending_locals,
-    )
-  }
-  for elem in mod_.elems {
-    if elem.mode is Active(_, offset_expr) {
-      collect_wast_reachable_from_instrs(
-        offset_expr, num_imports, compile_mask, pending_locals,
-      )
-    }
-    for expr in elem.init {
-      collect_wast_reachable_from_instrs(
-        expr, num_imports, compile_mask, pending_locals,
-      )
-    }
-  }
-
-  for cursor = 0; cursor < pending_locals.length(); {
-    let local_idx = pending_locals[cursor]
-    collect_wast_reachable_from_instrs(
-      mod_.codes[local_idx].body,
-      num_imports,
-      compile_mask,
-      pending_locals,
-    )
-    continue cursor + 1
-  }
-
-  let selected = count_true(compile_mask)
-  if selected == 0 || selected >= total_local_funcs {
-    None
-  } else {
-    Some(compile_mask)
-  }
-}
-
-///|
-fn int_array_to_bytes(ints : Array[Int32]) -> Bytes {
-  let bytes : Array[Byte] = []
-  for value in ints {
-    bytes.push((value & 0xFF).to_byte())
-  }
-  Bytes::from_array(bytes)
+  build_compile_mask(mod_, [entry_func_idx])
 }
 
 ///|
@@ -949,9 +721,7 @@ fn build_jit_artifact_manifest(
   let use_subtype_indirect_check = force_subtype_indirect_check.unwrap_or(
     module_indirect_subtype_check_reason(mod_) is Some(_),
   )
-  let source = source_module.unwrap_or_else(fn() {
-    int_array_to_bytes(@encoder.encode(mod_))
-  })
+  let source = source_module.unwrap_or_else(fn() { @encoder.encode_bytes(mod_) })
   let identity = @wasmoon_jit.artifact_module_identity(
     "wasm-module",
     source,
@@ -1223,22 +993,6 @@ fn get_import_func_type_idx(
 }
 
 ///|
-/// Bind the Store's authoritative tables without rewriting their entries.
-fn init_jit_tables(
-  instance : @runtime.ModuleInstance,
-  store : @runtime.Store,
-  jm : @jit.JITModule,
-) -> Unit raise @wasmoon_jit.NativeSetupError {
-  if instance.table_addrs.is_empty() {
-    return
-  }
-  let tables = Array::makei(instance.table_addrs.length(), i => {
-    store.get_jit_table(instance.table_addrs[i])
-  })
-  jm.init_shared_tables(tables, [])
-}
-
-///|
 /// Run a function using JIT compilation
 fn run_with_jit(
   mod_ : @types.Module,
@@ -1379,7 +1133,7 @@ fn run_with_jit(
       record_run_phase(run_metrics, "cache_write_and_report")
       // Build func_signatures array for JITModule::load
       let func_signatures = build_jit_func_signatures(mod_)
-      let external_imports = @wast.build_external_imports_for_jit(
+      let external_imports = @core_jit.build_external_imports_for_jit(
         mod_, instance, store,
       )
       // Load JIT module
@@ -1429,21 +1183,21 @@ fn run_with_jit(
           }
           // Store-format references need their callable identities and type metadata
           // before globals, tables or passive elements are exposed to native code.
-          @wast.register_instance_funcrefs_for_jit(jm, instance, store) catch {
+          @core_jit.register_instance_funcrefs_for_jit(jm, instance, store) catch {
             error => {
               @logger.error("Failed to register JIT callables: \{error}")
               raise CommandFailure(1)
             }
           }
           // Initialize all memories (multi-memory support)
-          let _ = @wast.init_jit_memories_from_store(instance, store, jm) catch {
+          let _ = @core_jit.init_jit_memories_from_store(instance, store, jm) catch {
             error => {
               @logger.error("Failed to initialize JIT memories: \{error}")
               raise CommandFailure(1)
             }
           }
           // Initialize globals (pass jm for tagged funcref pointers)
-          let globals_ptr = @wast.init_jit_globals_from_store(
+          let globals_ptr = @core_jit.init_jit_globals_from_store(
             instance, store, jm,
           ) catch {
             error => {
@@ -1456,27 +1210,27 @@ fn run_with_jit(
               mod_,
             )
             is Some(_)
-          init_jit_tables(instance, store, jm) catch {
+          @core_jit.bind_instance_tables(instance, store, jm) catch {
             error => {
               @logger.error("Failed to initialize JIT table bindings: \{error}")
               raise CommandFailure(1)
             }
           }
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
-          @wast.init_bulk_segments(mod_, jm, instance, store) catch {
+          @core_jit.init_bulk_segments(mod_, jm, instance, store) catch {
             error => {
               @logger.error("JIT reference transfer failed: \{error}")
               raise CommandFailure(1)
             }
           }
-          let jit_ctx = @wast.JITModuleContext::JITModuleContext(
+          let jit_ctx = @core_jit.JITModuleContext::JITModuleContext(
             jm,
             globals_ptr,
-            instance.global_addrs[:].to_owned(),
-            instance.table_addrs[:].to_owned(),
-            instance.func_addrs[:].to_owned(),
-            instance.func_type_indices[:].to_owned(),
-            instance.canonical_type_indices[:].to_owned(),
+            instance.global_addrs,
+            instance.table_addrs,
+            instance.func_addrs,
+            instance.func_type_indices,
+            instance.canonical_type_indices,
             mod_.types,
             mod_.type_rec_groups,
             use_subtype_indirect_check,
@@ -1493,7 +1247,18 @@ fn run_with_jit(
           match jit_func {
             Some(f) => {
               // Convert args to Int64 using shared helper
-              let i64_args = convert_args_to_jit(args)
+              let i64_args = @core_jit.encode_jit_entry_args(
+                args,
+                f.func_idx,
+                store,
+                jm,
+                instance,
+              ) catch {
+                error => {
+                  @logger.error("JIT argument transfer failed: \{error}")
+                  raise CommandFailure(1)
+                }
+              }
               @logger.debug("JIT: Calling function '\{func_name}'")
               store.begin_gc_tracing()
               defer store.end_gc_tracing()
@@ -1592,7 +1357,18 @@ fn run_with_jit(
               // Sync JIT globals back to interpreter store for consistency.
 
               // Convert Int64 results to Value using shared helper
-              let values = convert_jit_results(results, f.result_types)
+              let values = @core_jit.decode_jit_entry_results(
+                results,
+                f.result_types,
+                store,
+                jm,
+                instance,
+              ) catch {
+                error => {
+                  @logger.error("JIT result transfer failed: \{error}")
+                  raise CommandFailure(1)
+                }
+              }
               // NOTE: Memory and globals are freed automatically by JITContext finalizer (GC-managed)
               values
             }
@@ -1749,7 +1525,6 @@ pub fn compile_module_to_jit(
   compile_start~ : @perf.PerfTick? = None,
   local_compile_mask~ : Array[Bool]? = None,
   force_subtype_indirect_check~ : Bool? = None,
-  use_reusable_pipeline~ : Bool = true,
   enable_cancellation~ : Bool = false,
   nan_canonicalization~ : Bool = false,
   stack_switching~ : Bool = false,
@@ -1783,7 +1558,6 @@ pub fn compile_module_to_jit(
     compile_start=Some(progress_start),
     local_compile_mask~,
     force_subtype_indirect_check~,
-    use_reusable_pipeline~,
     enable_cancellation~,
     nan_canonicalization~,
   )
@@ -1802,7 +1576,6 @@ fn compile_validated_module_to_jit(
   compile_start~ : @perf.PerfTick? = None,
   local_compile_mask~ : Array[Bool]? = None,
   force_subtype_indirect_check~ : Bool? = None,
-  use_reusable_pipeline~ : Bool = true,
   enable_cancellation~ : Bool = false,
   nan_canonicalization~ : Bool = false,
   source_module~ : Bytes? = None,
@@ -1811,7 +1584,6 @@ fn compile_validated_module_to_jit(
   // Progress callbacks may mutate caller-owned section arrays. Effect proofs,
   // source templates and every compiled body must describe one owned module.
   let mod_ = mod_.snapshot()
-  use_reusable_pipeline |> ignore
   // DWARF registration consumes the completed artifact when the JIT module is
   // loaded; target compilation itself has no separate debug path.
   enable_dwarf |> ignore
@@ -1876,10 +1648,6 @@ fn compile_validated_module_to_jit(
   if perf_on {
     @perf.reset_module(total_compile_funcs)
   }
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
   let subtype_check_reason = module_indirect_subtype_check_reason(mod_)
   let default_use_subtype_indirect_check = subtype_check_reason is Some(_)
   let use_subtype_indirect_check = match force_subtype_indirect_check {
@@ -2089,8 +1857,6 @@ fn compile_validated_module_to_jit(
       wasm_validation_context,
       function_index=func_idx,
       signature=@wasmoon_jit.wasm_function_signature(func_type),
-      use_subtype_indirect_check~,
-      canonical_type_indices~,
     ) catch {
       err => {
         emit_compile_progress(
@@ -2330,7 +2096,12 @@ fn check_jit_import_support(
               continue
             }
           }
-          if !(inst is (HostFunc(_) | ThrowingHostFunc(_))) {
+          let supported = match inst {
+            HostFunc(_) | ThrowingHostFunc(_) => true
+            WasmFunc(_) => store.lookup_jit_funcref_ptr(func_addr) is Some(_)
+            AsyncHostFunc(_) => false
+          }
+          if !supported {
             unsupported.push("\{imp.mod_name}.\{imp.name}")
           }
         }

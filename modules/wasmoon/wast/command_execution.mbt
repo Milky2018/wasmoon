@@ -45,16 +45,15 @@ fn publish_wast_module(
   ctx : WastContext,
   prepared : PreparedWastModule,
 ) -> Unit {
-  ctx.current_module = Some(prepared.instance)
+  ctx.modules.publish(prepared.instance, prepared.name)
   ctx.current_jit = prepared.jit
   if prepared.name is Some(name) {
-    ctx.named_modules.set(name, prepared.instance)
     match prepared.jit {
       Some(jit) => ctx.jit_modules.set(name, jit)
       None => ctx.jit_modules.remove(name)
     }
     if ctx.register_named_modules {
-      ctx.registered_modules.set(name, prepared.instance)
+      ctx.modules.register(name, prepared.instance)
       if name == "spectest" || name == "wasi_snapshot_preview1" {
         ctx.overridden_builtin_modules.add(name)
       }
@@ -63,42 +62,31 @@ fn publish_wast_module(
 }
 
 ///|
-fn run_wast_module(
+fn instantiate_script_module(
   ctx : WastContext,
   module_ : @types.Module,
   name : String?,
-  line : Int32,
-  result : WastResult,
-) -> Unit {
-  try {
-    let prepared = prepare_wast_module(ctx, module_, name)
-    if module_.start is Some(index) {
-      let (instance, jit, index) = resolve_wast_call(
-        ctx,
-        prepared.instance,
-        prepared.jit,
-        index,
-      )
-      let _ = match jit {
-        Some(jit) =>
-          jit.call_core_func(ctx.store, instance, index, []) catch {
-            error => raise classify_jit_failure(error)
-          }
-        None =>
-          @executor.call_func_by_index(ctx.store, instance, index, []) catch {
-            error => raise classify_runtime_failure(error)
-          }
-      }
-    }
-    publish_wast_module(ctx, prepared)
-  } catch {
-    error => {
-      result.failed += 1
-      result.failures.push(
-        "line \{line}: module instantiation failed: \{error}",
-      )
+) -> Unit raise WastRunnerError {
+  let prepared = prepare_wast_module(ctx, module_, name)
+  if module_.start is Some(index) {
+    let (instance, jit, index) = resolve_wast_call(
+      ctx,
+      prepared.instance,
+      prepared.jit,
+      index,
+    )
+    let _ = match jit {
+      Some(jit) =>
+        jit.call_core_func(ctx.store, instance, index, []) catch {
+          error => raise classify_jit_failure(error)
+        }
+      None =>
+        @executor.call_func_by_index(ctx.store, instance, index, []) catch {
+          error => raise classify_runtime_failure(error)
+        }
     }
   }
+  publish_wast_module(ctx, prepared)
 }
 
 ///|
@@ -152,45 +140,5 @@ fn classify_jit_failure(error : JITCoreCallError) -> WastRunnerError {
         GuestTrap(message)
       }
     error => RuntimeError(error.to_string())
-  }
-}
-
-///|
-/// Check an already completed action without invoking guest code again.
-fn finish_wast_action(
-  ctx : WastContext,
-  command : @wat.WastCommand,
-  action : @wat.WastAction,
-  line : Int32,
-  result : WastResult,
-  show_success : Bool,
-  outcome : Result[Array[@types.Value], WastRunnerError],
-) -> Unit {
-  let description = @assertions.format_action(action)
-  let return_failure = match (command, outcome) {
-    (AssertReturn(_, expected), Ok(values)) =>
-      check_assert_return(ctx, action, expected, values)
-    _ => None
-  }
-  let (label, failure) = @assertions.check_action_outcome(
-    command, action, outcome, return_failure,
-  )
-  match failure {
-    Some(message) => {
-      result.failed += 1
-      result.failures.push("line \{line}: \{label}: \{message}")
-    }
-    None =>
-      if !(command is Action(_)) {
-        result.passed += 1
-        if show_success {
-          let success_label = if command is AssertTrap(_, _) {
-            "assert_trap \{description}"
-          } else {
-            label
-          }
-          println("line \{line}: \{success_label}: PASSED")
-        }
-      }
   }
 }

@@ -1,6 +1,6 @@
 ///|
 /// JIT Execution Runtime
-/// Loads and executes verified v9 JIT artifacts.
+/// Loads and executes verified JIT artifacts.
 
 ///|
 /// JIT-compiled function ready for execution

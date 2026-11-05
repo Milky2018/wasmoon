@@ -1,0 +1,9 @@
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_milkir",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/executor",
+  "Milky2018/wasmoon/jit" @compiled_jit,
+  "Milky2018/wasmoon_jit",
+  "moonbitlang/async",
+}

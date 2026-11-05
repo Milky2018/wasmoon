@@ -182,18 +182,6 @@ fn write_bytes_file(path : String, data : Bytes) -> Unit {
 }
 
 ///|
-fn write_binary_file(path : String, data : Array[Int32]) -> Unit {
-  let byte_arr : Array[Byte] = []
-  for b in data {
-    byte_arr.push(b.to_byte())
-  }
-  let bytes = Bytes::from_array(byte_arr)
-  @fs.write_bytes_to_file(path, bytes) catch {
-    IOError(message) => exit_error("writing file '\{path}': \{message}")
-  }
-}
-
-///|
 fn read_text_file(path : String) -> String {
   @fs.read_file_to_string(path) catch {
     IOError(message) => {

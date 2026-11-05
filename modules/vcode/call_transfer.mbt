@@ -307,3 +307,47 @@ pub fn plan_resolved_call_transfers(
   }
   { stack_transfers: transfer_plan.stack_transfers, register_moves, }
 }
+
+///|
+pub fn call_argument_transfers(
+  allocation : Allocation,
+  instruction : Instruction,
+  types : Array[ValueType],
+  locations : ArrayView[CallArgumentLocation],
+  operand_start~ : Int32 = 0,
+  stack_base~ : Int32 = 0,
+  callee? : (Int32, PhysicalReg),
+  result_area? : (Int32, PhysicalReg),
+) -> Array[CallTransfer] {
+  let transfers : Array[CallTransfer] = []
+  for index, ty in types {
+    let source = allocation
+      .operand_location(instruction, operand_start + index)
+      .unwrap()
+    match locations[index] {
+      CallRegister(destination) =>
+        transfers.push(CallTransfer::to_register(ty, source, destination))
+      CallStack(offset) =>
+        transfers.push(CallTransfer::to_stack(ty, source, stack_base + offset))
+    }
+  }
+  if callee is Some((operand_index, destination)) {
+    transfers.push(
+      CallTransfer::to_register(
+        Ptr64,
+        allocation.operand_location(instruction, operand_index).unwrap(),
+        destination,
+      ),
+    )
+  }
+  if result_area is Some((operand_index, destination)) {
+    transfers.push(
+      CallTransfer::to_register(
+        Ptr64,
+        allocation.operand_location(instruction, operand_index).unwrap(),
+        destination,
+      ),
+    )
+  }
+  transfers
+}

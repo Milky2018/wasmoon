@@ -5,7 +5,7 @@ fn guard_loop_entry(
   function : @milkir.Function,
   loop_ : @milkir.Loop,
   preheader : @milkir.Block,
-  definitions : @hashmap.HashMap[Int32, Int32],
+  definitions : Array[Int32],
 ) -> @milkir.Block? {
   guard preheader.terminator is Some(Jump(target, arguments)) &&
     target == loop_.header else {
@@ -88,7 +88,7 @@ fn guard_loop_entry(
     if unconditional.contains(id) {
       preheader.append_inst(inst)
       for value in inst.results {
-        definitions.set(value.id, preheader.id)
+        definitions[value.id] = preheader.id
       }
     } else {
       kept.push(inst)
@@ -153,7 +153,7 @@ fn guard_loop_entry(
 fn first_iteration_invariants(
   function : @milkir.Function,
   loop_ : @milkir.Loop,
-  definitions : @hashmap.HashMap[Int32, Int32],
+  definitions : Array[Int32],
 ) -> Map[Int32, Bool] {
   let result : Map[Int32, Bool] = Map([])
   guard loop_.blocks.length() <= 64 &&
@@ -173,8 +173,7 @@ fn first_iteration_invariants(
   }
   guard next is Some(first) && first != header.id else { return result }
   let invariant : @hashmap.HashMap[Int32, Bool] = HashMap([])
-  let pointers = @analysis.pointer_regions(function)
-  let readable = @analysis.nontrapping_loads(function)
+  let memory = LoopMemoryFacts::new(function)
   let visited : Map[Int32, Bool] = Map([])
   let mut current = first
   let mut budget = 256
@@ -192,8 +191,7 @@ fn first_iteration_invariants(
         loop_,
         definitions,
         invariant,
-        pointers,
-        readable,
+        memory,
         function,
         first_iteration=true,
       )

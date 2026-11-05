@@ -1,18 +1,8 @@
 ///|
-#derive(Eq, Debug)
-pub(all) enum GprWidth {
-  W32
-  W64
-}
+pub type GprWidth = @vcode.RegisterWidth
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64IntUnary {
-  Mvn
-  Clz
-  Rbit
-  Neg
-}
+pub type AArch64IntUnary = @vcode.ScalarIntUnary
 
 ///|
 #derive(Eq, Debug)
@@ -37,127 +27,37 @@ pub(all) enum AArch64Shift {
 }
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64Condition {
-  Eq
-  Ne
-  Lt
-  Le
-  Gt
-  Ge
-  Lo
-  Ls
-  Hi
-  Hs
-}
+pub type AArch64Condition = @vcode.IntegerCondition
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64FloatUnary {
-  Negate
-  Absolute
-  SquareRoot
-  Ceil
-  Floor
-  Truncate
-  Nearest
-}
+pub type AArch64FloatUnary = @lowering.FloatUnaryOp
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64FloatBinary {
-  Add
-  Sub
-  Mul
-  Div
-  Min
-  Max
-  CopySign
-}
+pub type AArch64FloatBinary = @lowering.FloatBinaryOp
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64FloatTernary {
-  Fmadd
-  Fmsub
-  Fnmadd
-  Fnmsub
-}
+pub type AArch64FloatTernary = @lowering.FloatTernaryOp
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64VectorIntUnary {
-  Absolute
-  Negate
-  PopulationCount
-  ExtendAddPairwise(@native.Signedness)
-}
+pub type AArch64VectorIntUnary = @lowering.VectorIntUnaryOp
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64VectorIntBinary {
-  Add
-  Sub
-  Mul
-  AverageUnsigned
-  Min(@native.Signedness)
-  Max(@native.Signedness)
-  SaturatingAdd(@native.Signedness)
-  SaturatingSub(@native.Signedness)
-  ExtendMultiply(@lowering.VectorHalf, @native.Signedness)
-  Dot16To32Signed
-  Q15MultiplyRoundedSaturating
-}
+pub type AArch64VectorIntBinary = @lowering.VectorIntBinaryOp
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64VectorConversion {
-  ExtendLow(@lowering.VectorLane, @native.Signedness)
-  ExtendHigh(@lowering.VectorLane, @native.Signedness)
-  Narrow(@lowering.VectorLane, @native.Signedness)
-  FloatToInt(@lowering.VectorLane, @native.Signedness)
-  IntToFloat(@lowering.VectorLane, @native.Signedness)
-  PromoteLowF32x4
-  DemoteZeroF64x2
-}
+pub type AArch64VectorPredicate = @lowering.VectorPredicateOp
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64VectorPredicate {
-  AnyTrue
-  AllTrue(@lowering.VectorLane)
-  BitMask(@lowering.VectorLane)
-}
+pub type AArch64VectorConversion = @vcode.VectorConversion
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64FloatCondition {
-  Equal
-  NotEqual
-  LessThan
-  LessOrEqual
-  GreaterThan
-  GreaterOrEqual
-  Ordered
-  Unordered
-}
+pub type AArch64FloatCondition = @lowering.FloatComparison
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64FloatTrapCondition {
-  Unordered
-  LessThan
-  LessOrEqual
-  GreaterOrEqual
-}
+pub type AArch64FloatTrapCondition = @vcode.FloatTrapCondition
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum AArch64Address {
-  Code(@native.CodeSymbol)
-  External(@native.ExternalSymbol)
-  Data(@native.DataSymbol)
-}
+pub type AArch64Address = @vcode.SymbolicAddress
 
 ///|
 #derive(Eq, Debug)
@@ -173,31 +73,7 @@ pub(all) enum AArch64Conversion {
 }
 
 ///|
-#derive(Eq, Debug)
-pub struct AArch64StackObject {
-  id : Int32
-  size : Int32
-  alignment : Int32
-}
-
-///|
-pub fn AArch64StackObject::new(
-  id : Int32,
-  size : Int32,
-  alignment : Int32,
-) -> AArch64StackObject {
-  { id, size, alignment, }
-}
-
-///|
-fn is_power_of_two(value : Int32) -> Bool {
-  value > 0 && (value & (value - 1)) == 0
-}
-
-///|
-fn AArch64StackObject::is_valid(self : AArch64StackObject) -> Bool {
-  self.id >= 0 && self.size > 0 && is_power_of_two(self.alignment)
-}
+pub type AArch64StackObject = @vcode.SizedStackObject
 
 ///|
 #derive(Eq, Debug)
@@ -309,164 +185,18 @@ pub(all) enum AArch64Inst {
 }
 
 ///|
-#derive(Eq, Debug)
-pub suberror TargetVCodeVerifyError {
-  CommonFailure(cause~ : @vcode.VCodeVerifyError)
-  InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
-}
-
-///|
-pub impl Show for TargetVCodeVerifyError with fn output(self, logger) {
-  logger.write_string(Repr(self).to_string())
-}
-
-///|
-fn require_fixed_use(
-  function : @vcode.Function[AArch64Inst],
-  instruction : @vcode.Instruction,
-  operand_index : Int32,
-  expected : @vcode.PhysicalReg,
-) -> Unit raise TargetVCodeVerifyError {
-  let operand = function
-    .instruction_operand_at(instruction, operand_index)
-    .unwrap()
-  if operand.constraint != FixedReg(expected) {
-    raise InvalidInstruction(
-      instruction~,
-      message="operand does not use the required ABI register",
-    )
-  }
-}
-
-///|
-fn require_home_def(
-  function : @vcode.Function[AArch64Inst],
-  instruction : @vcode.Instruction,
-  operand_index : Int32,
-) -> Unit raise TargetVCodeVerifyError {
-  if function.instruction_operand_at(instruction, operand_index).unwrap().constraint !=
-    AnyLocation {
-    raise InvalidInstruction(
-      instruction~,
-      message="ABI materialization result must use its stable home",
-    )
-  }
-}
-
-///|
-#derive(Eq, Debug)
-enum CallArgumentLocation {
-  CallRegister(@vcode.PhysicalReg)
-  CallStack(Int32)
-}
-
-///|
-#derive(Eq, Debug)
-struct CallLayout {
-  arguments : Array[CallArgumentLocation]
-  stack_size : Int32
-}
-
-///|
-fn call_align_up(value : Int32, alignment : Int32) -> Int32 {
-  (value + alignment - 1) / alignment * alignment
-}
-
-///|
-#derive(Eq, Debug)
-enum CallResultLocation {
-  CallResultRegister(@vcode.PhysicalReg)
-  CallResultArea(Int32, @vcode.PhysicalReg)
-}
-
-///|
-fn call_stack_size(ty : @native.ValueType) -> Int32 {
-  if ty == V128 {
-    16
-  } else {
-    8
-  }
-}
+let platform_integer_arguments : Array[Int32] = [0, 1, 2, 3, 4, 5, 6, 7]
 
 ///|
 fn platform_call_layout(types : Array[@native.ValueType]) -> CallLayout {
-  let arguments : Array[CallArgumentLocation] = []
-  let mut int_index = 0
-  let mut fp_index = 0
-  let mut stack_size = 0
-  for ty in types {
-    let class = @vcode.reg_class_for_value_type(ty)
-    let index = if class == Int {
-      let current = int_index
-      int_index += 1
-      current
-    } else {
-      let current = fp_index
-      fp_index += 1
-      current
-    }
-    if index < 8 {
-      arguments.push(CallRegister(@vcode.PhysicalReg::new(index, class)))
-    } else {
-      let alignment = call_stack_size(ty)
-      stack_size = call_align_up(stack_size, alignment)
-      arguments.push(CallStack(stack_size))
-      stack_size += alignment
-    }
-  }
-  { arguments, stack_size: call_align_up(stack_size, 16), }
-}
-
-///|
-fn call_preference(location : CallArgumentLocation) -> @vcode.PhysicalReg? {
-  match location {
-    CallRegister(reg) if is_allocatable(reg) => Some(reg)
-    CallRegister(_) | CallStack(_) => None
-  }
-}
-
-///|
-fn require_call_argument_inputs(
-  function : @vcode.Function[AArch64Inst],
-  instruction : @vcode.Instruction,
-  operand_start : Int32,
-  locations : Array[CallArgumentLocation],
-) -> Unit raise TargetVCodeVerifyError {
-  for index, location in locations {
-    let operand = function
-      .instruction_operand_at(instruction, operand_start + index)
-      .unwrap()
-    if operand.constraint != AnyLocation ||
-      operand.preference != call_preference(location) {
-      raise InvalidInstruction(
-        instruction~,
-        message="call argument does not match its ABI preference",
-      )
-    }
-  }
+  @vcode.platform_call_layout(types, platform_integer_arguments[:])
 }
 
 ///|
 fn platform_result_registers(
   types : Array[@native.ValueType],
 ) -> Array[@vcode.PhysicalReg] {
-  let registers : Array[@vcode.PhysicalReg] = []
-  let mut int_index = 0
-  let mut fp_index = 0
-  for ty in types {
-    let class = @vcode.reg_class_for_value_type(ty)
-    let index = if class == Int {
-      let current = int_index
-      int_index += 1
-      current
-    } else {
-      let current = fp_index
-      fp_index += 1
-      current
-    }
-    registers.push(@vcode.PhysicalReg::new(index, class))
-  }
-  registers
+  @vcode.platform_result_registers(types)
 }
 
 ///|
@@ -484,193 +214,10 @@ fn platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
 }
 
 ///|
-fn require_instruction_shape(
-  function : @vcode.Function[AArch64Inst],
-  instruction : @vcode.Instruction,
-  use_types : Array[@native.ValueType],
-  def_types : Array[@native.ValueType],
-  terminator : Bool,
-  successor_count : Int32,
-) -> Unit raise TargetVCodeVerifyError {
-  let operands = function.instruction_operands(instruction)
-  let uses = operands.filter(operand => operand.role == Use)
-  let defs = operands.filter(operand => operand.role == Def)
-  if uses.length() != use_types.length() ||
-    defs.length() != def_types.length() ||
-    function.instruction_is_terminator(instruction) != terminator ||
-    function.instruction_successor_count(instruction) != successor_count {
-    raise InvalidInstruction(
-      instruction~,
-      message="invalid operand, placement, or successor shape",
-    )
-  }
-  for index, operand in uses {
-    let expected = use_types[index]
-    let actual = function.value_type(operand.value)
-    if actual != Some(expected) &&
-      !((actual == Some(I64) && expected == Ptr64) ||
-      (actual == Some(Ptr64) && expected == I64)) {
-      raise InvalidInstruction(instruction~, message="invalid use value type")
-    }
-  }
-  for index, operand in defs {
-    if function.value_type(operand.value) != Some(def_types[index]) {
-      raise InvalidInstruction(instruction~, message="invalid def value type")
-    }
-  }
-}
-
-///|
-fn valid_result_plan(
-  types : Array[@native.ValueType],
-  plan : InternalCallPlan,
-) -> Bool {
-  if plan.results.length() != types.length() ||
-    plan.result_area_size < 0 ||
-    plan.result_area_size % 16 != 0 {
-    return false
-  }
-  let mut area_end = 0
-  let mut area_register : @vcode.PhysicalReg? = None
-  for index, ty in types {
-    match plan.results[index] {
-      CallResultRegister(reg) =>
-        if reg.id < 0 ||
-          reg.id >= 16 ||
-          reg.class != @vcode.reg_class_for_value_type(ty) {
-          return false
-        }
-      CallResultArea(offset, reg) => {
-        let size = call_stack_size(ty)
-        if offset < 0 ||
-          offset % size != 0 ||
-          reg.id < 0 ||
-          reg.id >= 16 ||
-          reg.class != Int {
-          return false
-        }
-        match area_register {
-          Some(expected) if expected != reg => return false
-          None => area_register = Some(reg)
-          _ => ()
-        }
-        let end = offset + size
-        if end > area_end {
-          area_end = end
-        }
-      }
-    }
-  }
-  call_align_up(area_end, 16) == plan.result_area_size
-}
-
-///|
-fn require_tail_call_plan(
-  function : @vcode.Function[AArch64Inst],
-  instruction : @vcode.Instruction,
-  signature : @native.Signature,
-  plan : InternalCallPlan,
-  indirect : Bool,
-) -> Unit raise TargetVCodeVerifyError {
-  if plan.arguments.length() != signature.params.length() ||
-    !valid_result_plan(signature.results, plan) ||
-    plan.stack_size < 0 ||
-    plan.stack_size % 16 != 0 ||
-    function.protocol() != Internal ||
-    signature.results != function.result_types() {
-    raise InvalidInstruction(
-      instruction~,
-      message="tail-call plan is not compatible with the current function",
-    )
-  }
-  let use_types : Array[@native.ValueType] = if indirect {
-    [Ptr64, ..signature.params]
-  } else {
-    signature.params.copy()
-  }
-  if plan.result_area_size > 0 {
-    use_types.push(Ptr64)
-  }
-  require_instruction_shape(function, instruction, use_types, [], true, 0)
-  let operand_start = if indirect { 1 } else { 0 }
-  if indirect {
-    let callee = function.instruction_operand_at(instruction, 0).unwrap()
-    if callee.constraint != AnyLocation || callee.preference is Some(_) {
-      raise InvalidInstruction(
-        instruction~,
-        message="tail-call callee must remain allocatable without a preference",
-      )
-    }
-  }
-  require_call_argument_inputs(
-    function,
-    instruction,
-    operand_start,
-    plan.arguments,
-  )
-  if plan.result_area_size > 0 {
-    let operand = function
-      .instruction_operand_at(
-        instruction,
-        operand_start + signature.params.length(),
-      )
-      .unwrap()
-    let expected = result_area_register(plan).bind(reg => {
-      if is_allocatable(reg) {
-        Some(reg)
-      } else {
-        None
-      }
-    })
-    if operand.constraint != AnyLocation || operand.preference != expected {
-      raise InvalidInstruction(
-        instruction~,
-        message="tail-call result area does not match its ABI preference",
-      )
-    }
-  }
-  if function.instruction_clobbers(instruction) != platform_call_clobbers() {
-    raise InvalidInstruction(
-      instruction~,
-      message="tail call has an invalid caller-saved clobber set",
-    )
-  }
-}
-
-///|
 fn integer_type(width : GprWidth) -> @native.ValueType {
   match width {
     W32 => I32
     W64 => I64
-  }
-}
-
-///|
-fn valid_scalar_load(
-  width : @native.AccessWidth,
-  extension : @native.LoadExtension,
-  result_type : @native.ValueType,
-) -> Bool {
-  match (result_type, width, extension) {
-    (I32, W8 | W16, Signed | Unsigned) | (I32, W32, None) => true
-    (I64, W8 | W16 | W32, Signed | Unsigned) | (I64, W64, None) => true
-    (Ptr64 | GcRef64, W64, None) => true
-    (F32, W32, None) | (F64, W64, None) => true
-    _ => false
-  }
-}
-
-///|
-fn valid_scalar_store(
-  width : @native.AccessWidth,
-  value_type : @native.ValueType,
-) -> Bool {
-  match (value_type, width) {
-    (I32, W8 | W16 | W32) => true
-    (I64, W8 | W16 | W32 | W64) => true
-    (Ptr64 | GcRef64, W64) => true
-    (F32, W32) | (F64, W64) => true
-    _ => false
   }
 }
 
@@ -690,60 +237,6 @@ fn valid_scalar_register_shift(
 }
 
 ///|
-fn vector_lane_scalar_type(lane : @lowering.VectorLane) -> @native.ValueType {
-  match lane {
-    I8x16 | I16x8 | I32x4 => I32
-    I64x2 => I64
-    F32x4 => F32
-    F64x2 => F64
-  }
-}
-
-///|
-fn vector_lane_count(lane : @lowering.VectorLane) -> Int32 {
-  match lane {
-    I8x16 => 16
-    I16x8 => 8
-    I32x4 | F32x4 => 4
-    I64x2 | F64x2 => 2
-  }
-}
-
-///|
-fn is_integer_vector_lane(lane : @lowering.VectorLane) -> Bool {
-  match lane {
-    I8x16 | I16x8 | I32x4 | I64x2 => true
-    F32x4 | F64x2 => false
-  }
-}
-
-///|
-fn valid_atomic_access(
-  width : @native.AccessWidth,
-  ty : @native.ValueType,
-) -> Bool {
-  match (ty, width) {
-    (I32, W8 | W16 | W32) => true
-    (I64, W8 | W16 | W32 | W64) => true
-    _ => false
-  }
-}
-
-///|
-fn valid_scalar_bitcast(
-  from : @native.ValueType,
-  to : @native.ValueType,
-) -> Bool {
-  match (from, to) {
-    (I32, I32 | F32) | (F32, I32 | F32) => true
-    (I64, I64 | Ptr64 | F64)
-    | (Ptr64, I64 | Ptr64 | F64)
-    | (F64, I64 | Ptr64 | F64) => true
-    _ => false
-  }
-}
-
-///|
 fn conversion_shape(
   conversion : AArch64Conversion,
 ) -> (@native.ValueType, @native.ValueType)? {
@@ -755,7 +248,7 @@ fn conversion_shape(
     DemoteF64ToF32 => Some((F64, F32))
     PromoteF32ToF64 => Some((F32, F64))
     Bitcast(from, to) =>
-      if valid_scalar_bitcast(from, to) {
+      if @native.valid_scalar_bitcast(from, to) {
         Some((from, to))
       } else {
         None
@@ -788,223 +281,34 @@ fn verify_target_vcode(
 ) -> Unit raise TargetVCodeVerifyError {
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
+    let check = @vcode.TargetInstructionVerifier::new(function, instruction)
     match function.instruction(instruction).unwrap() {
-      IncomingReg(ty, reg) => {
-        if reg.class != @vcode.reg_class_for_value_type(ty) {
-          raise InvalidInstruction(
-            instruction~,
-            message="incoming register class does not match value type",
-          )
-        }
-        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
-        require_fixed_use(function, instruction, 0, reg)
-        require_home_def(function, instruction, 1)
-      }
-      IncomingStack(ty, offset) => {
-        if offset < 0 || offset % 8 != 0 {
-          raise InvalidInstruction(
-            instruction~,
-            message="incoming stack offset must be non-negative and 8-byte aligned",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [ty], false, 0)
-        require_home_def(function, instruction, 0)
-      }
-      IncomingResultArea(reg) => {
-        if reg.id < 0 || reg.id >= 16 || reg.class != Int {
-          raise InvalidInstruction(
-            instruction~,
-            message="incoming result-area register must be an integer ABI register",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
-        require_home_def(function, instruction, 0)
-      }
-      IncomingCallResult(ty, reg) => {
-        if reg.class != @vcode.reg_class_for_value_type(ty) {
-          raise InvalidInstruction(
-            instruction~,
-            message="call result register class does not match value type",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [ty], false, 0)
-        require_home_def(function, instruction, 0)
-      }
-      IncomingCallAreaResult(ty, offset) => {
-        let size = call_stack_size(ty)
-        if offset < 0 || offset % size != 0 {
-          raise InvalidInstruction(
-            instruction~,
-            message="call result-area offset is invalid for its value type",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [ty], false, 0)
-        require_home_def(function, instruction, 0)
-      }
-      LoadConstant(width, bits) => {
-        if width == W32 && bits > 0xFFFFFFFFUL {
-          raise InvalidInstruction(
-            instruction~,
-            message="32-bit constant has non-zero high bits",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [],
-          [integer_type(width)],
-          false,
-          0,
-        )
-      }
-      LoadVectorConstant(_, _) =>
-        require_instruction_shape(function, instruction, [], [V128], false, 0)
-      LoadNull(ty) => {
-        if ty != Ptr64 && ty != GcRef64 {
-          raise InvalidInstruction(
-            instruction~,
-            message="null materialization requires ptr64 or gcref64",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [ty], false, 0)
-      }
-      LoadAddress(_) =>
-        require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
-      StackAddress(object) => {
-        if !object.is_valid() {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid target stack-object descriptor",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
-      }
-      LoadFloatConstant(ty, bits) => {
-        if (ty != F32 && ty != F64) || (ty == F32 && bits > 0xFFFFFFFFUL) {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid scalar floating-point constant",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [ty], false, 0)
-      }
-      OutgoingReg(ty, reg) => {
-        if reg.class != @vcode.reg_class_for_value_type(ty) {
-          raise InvalidInstruction(
-            instruction~,
-            message="outgoing register class does not match value type",
-          )
-        }
-        require_instruction_shape(function, instruction, [ty], [], false, 0)
-      }
-      OutgoingAreaResult(ty, offset) => {
-        let size = call_stack_size(ty)
-        if offset < 0 || offset % size != 0 {
-          raise InvalidInstruction(
-            instruction~,
-            message="outgoing result-area offset is invalid for its value type",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, ty],
-          [],
-          false,
-          0,
-        )
-      }
-      KeepAlive(ty) =>
-        require_instruction_shape(function, instruction, [ty], [], false, 0)
-      Move(ty) =>
-        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
-      CarrierMove(from, to) => {
-        if !((from == GcRef64 && to == Ptr64) || (from == I64 && to == GcRef64)) {
-          raise InvalidInstruction(
-            instruction~,
-            message="carrier move requires gcref64-to-ptr64 or i64-to-gcref64",
-          )
-        }
-        require_instruction_shape(function, instruction, [from], [to], false, 0)
-      }
-      Select(ty) => {
-        if ty == V128 {
-          raise InvalidInstruction(
-            instruction~,
-            message="scalar select does not accept v128",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [I32, ty, ty],
-          [ty],
-          false,
-          0,
-        )
-      }
-      SpectreGuard =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [I32, Ptr64, Ptr64],
-          [Ptr64],
-          false,
-          0,
-        )
-      VectorSelect =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [I32, V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      VectorSplat(lane) =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [vector_lane_scalar_type(lane)],
-          [V128],
-          false,
-          0,
-        )
-      VectorExtractLane(lane, index, extension) => {
-        let requires_extension = lane == I8x16 || lane == I16x8
-        let has_extension = extension is Some(_)
-        if index < 0 ||
-          index >= vector_lane_count(lane) ||
-          requires_extension != has_extension {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid vector lane extraction contract",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128],
-          [vector_lane_scalar_type(lane)],
-          false,
-          0,
-        )
-      }
+      IncomingReg(ty, reg) => check.incoming_reg(ty, reg)
+      IncomingStack(ty, offset) => check.incoming_stack(ty, offset)
+      IncomingResultArea(reg) => check.incoming_result_area(reg)
+      IncomingCallResult(ty, reg) => check.incoming_call_result(ty, reg)
+      IncomingCallAreaResult(ty, offset) =>
+        check.incoming_call_area_result(ty, offset)
+      LoadConstant(width, bits) =>
+        check.load_constant(integer_type(width), bits)
+      LoadVectorConstant(_, _) => check.shape([], [V128])
+      LoadNull(ty) => check.load_null(ty)
+      LoadAddress(_) => check.shape([], [Ptr64])
+      StackAddress(object) => check.stack_address(object.is_valid())
+      LoadFloatConstant(ty, bits) => check.load_float_constant(ty, bits)
+      OutgoingReg(ty, reg) => check.outgoing_reg(ty, reg)
+      OutgoingAreaResult(ty, offset) => check.outgoing_area_result(ty, offset)
+      KeepAlive(ty) => check.shape([ty], [])
+      Move(ty) => check.shape([ty], [ty])
+      CarrierMove(from, to) => check.carrier_move(from, to)
+      Select(ty) => check.scalar_select(ty)
+      SpectreGuard => check.shape([I32, Ptr64, Ptr64], [Ptr64])
+      VectorSelect => check.shape([I32, V128, V128], [V128])
+      VectorSplat(lane) => check.shape([lane.scalar_type()], [V128])
+      VectorExtractLane(lane, index, extension) =>
+        check.vector_extract_lane(lane, index, extension is Some(_))
       VectorReplaceLane(lane, index) => {
-        if index < 0 || index >= vector_lane_count(lane) {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid vector lane replacement index",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, vector_lane_scalar_type(lane)],
-          [V128],
-          false,
-          0,
-        )
+        check.vector_replace_lane(lane, index)
         let source = function.instruction_operand_at(instruction, 0).unwrap()
         let result = function.instruction_operand_at(instruction, 2).unwrap()
         if result.tie_id < 0 || result.tie_id != source.tie_id {
@@ -1014,340 +318,30 @@ fn verify_target_vcode(
           )
         }
       }
-      VectorShuffle(mask) => {
-        if mask.length() != 16 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector shuffle requires exactly 16 lane indices",
-          )
-        }
-        for lane in mask {
-          if lane < 0 || lane >= 32 {
-            raise InvalidInstruction(
-              instruction~,
-              message="vector shuffle lane index is out of range",
-            )
-          }
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorSwizzle =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      VectorIntUnary(lane, operation) => {
-        if !is_integer_vector_lane(lane) {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector integer unary operation requires integer lanes",
-          )
-        }
-        if operation == PopulationCount && lane != I8x16 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector population count requires i8x16 lanes",
-          )
-        }
-        if operation is ExtendAddPairwise(_) &&
-          lane != I16x8 &&
-          lane != I32x4 &&
-          lane != I64x2 {
-          raise InvalidInstruction(
-            instruction~,
-            message="pairwise extending add requires widened integer lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorIntBinary(lane, operation) => {
-        if !is_integer_vector_lane(lane) {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector integer binary operation requires integer lanes",
-          )
-        }
-        if operation == AverageUnsigned && lane != I8x16 && lane != I16x8 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector unsigned average requires i8x16 or i16x8 lanes",
-          )
-        }
-        if operation is ExtendMultiply(_, _) &&
-          lane != I16x8 &&
-          lane != I32x4 &&
-          lane != I64x2 {
-          raise InvalidInstruction(
-            instruction~,
-            message="extending multiply requires widened integer lanes",
-          )
-        }
-        if operation == Dot16To32Signed && lane != I32x4 {
-          raise InvalidInstruction(
-            instruction~,
-            message="dot16-to32 requires i32x4 destination lanes",
-          )
-        }
-        if operation == Q15MultiplyRoundedSaturating && lane != I16x8 {
-          raise InvalidInstruction(
-            instruction~,
-            message="q15 rounded saturating multiply requires i16x8 lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorIntShift(lane, _) => {
-        if !is_integer_vector_lane(lane) {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector integer shift requires integer lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, I32],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorIntCompare(lane, _) => {
-        if !is_integer_vector_lane(lane) {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector integer comparison requires integer lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorConvert(conversion) =>
-        match conversion {
-          ExtendLow(lane, _) | ExtendHigh(lane, _) => {
-            if lane != I16x8 && lane != I32x4 && lane != I64x2 {
-              raise InvalidInstruction(
-                instruction~,
-                message="vector extension requires widened integer lanes",
-              )
-            }
-            require_instruction_shape(
-              function,
-              instruction,
-              [V128],
-              [V128],
-              false,
-              0,
-            )
-          }
-          Narrow(lane, _) => {
-            if lane != I8x16 && lane != I16x8 {
-              raise InvalidInstruction(
-                instruction~,
-                message="vector narrowing requires i8x16 or i16x8 lanes",
-              )
-            }
-            require_instruction_shape(
-              function,
-              instruction,
-              [V128, V128],
-              [V128],
-              false,
-              0,
-            )
-          }
-          FloatToInt(source, _) => {
-            if source != F32x4 && source != F64x2 {
-              raise InvalidInstruction(
-                instruction~,
-                message="vector float-to-int requires f32x4 or f64x2 source lanes",
-              )
-            }
-            require_instruction_shape(
-              function,
-              instruction,
-              [V128],
-              [V128],
-              false,
-              0,
-            )
-          }
-          IntToFloat(result, _) => {
-            if result != F32x4 && result != F64x2 {
-              raise InvalidInstruction(
-                instruction~,
-                message="vector int-to-float requires f32x4 or f64x2 result lanes",
-              )
-            }
-            require_instruction_shape(
-              function,
-              instruction,
-              [V128],
-              [V128],
-              false,
-              0,
-            )
-          }
-          PromoteLowF32x4 | DemoteZeroF64x2 =>
-            require_instruction_shape(
-              function,
-              instruction,
-              [V128],
-              [V128],
-              false,
-              0,
-            )
-        }
-      VectorPredicate(predicate) => {
-        match predicate {
-          AllTrue(lane) if !is_integer_vector_lane(lane) =>
-            raise InvalidInstruction(
-              instruction~,
-              message="vector all-true predicate requires integer lanes",
-            )
-          BitMask(lane) if !is_integer_vector_lane(lane) =>
-            raise InvalidInstruction(
-              instruction~,
-              message="vector bitmask predicate requires integer lanes",
-            )
-          _ => ()
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128],
-          [I32],
-          false,
-          0,
-        )
-      }
-      VectorFloatUnary(lane, _) => {
-        if lane != F32x4 && lane != F64x2 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector float unary operation requires floating lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorFloatBinary(lane, _) | VectorFloatCompare(lane, _) => {
-        if lane != F32x4 && lane != F64x2 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector float operation requires floating lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorFloatTernary(lane, _) => {
-        if lane != F32x4 && lane != F64x2 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector float ternary operation requires floating lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorRelaxedDot8To16 =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      VectorPairwiseAddI16x8 =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128, V128],
-          [V128],
-          false,
-          0,
-        )
-      VectorBitwise(operation) => {
-        let arity = match operation {
-          Not => 1
-          And | Or | Xor | AndNot => 2
-          BitSelect => 3
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          Array::make(arity, V128),
-          [V128],
-          false,
-          0,
-        )
-      }
-      IntUnary(width, _) => {
-        let ty = integer_type(width)
-        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
-      }
-      IntBinary(width, _) => {
-        let ty = integer_type(width)
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [ty],
-          false,
-          0,
-        )
-      }
+      VectorShuffle(mask) => check.vector_shuffle(mask)
+      VectorSwizzle | VectorRelaxedDot8To16 | VectorPairwiseAddI16x8 =>
+        check.shape([V128, V128], [V128])
+      VectorIntUnary(lane, operation) => check.vector_int_unary(lane, operation)
+      VectorIntBinary(lane, operation) =>
+        check.vector_int_binary(lane, operation)
+      VectorIntShift(lane, _) => check.vector_int_shift(lane)
+      VectorIntCompare(lane, _) => check.vector_int_compare(lane)
+      VectorConvert(conversion) => check.vector_conversion(conversion)
+      VectorPredicate(predicate) => check.vector_predicate(predicate)
+      VectorFloatUnary(lane, _) => check.vector_float_unary(lane)
+      VectorFloatBinary(lane, _) | VectorFloatCompare(lane, _) =>
+        check.vector_float_binary(lane)
+      VectorFloatTernary(lane, _) => check.vector_float_ternary(lane)
+      VectorBitwise(operation) => check.vector_bitwise(operation)
+      IntUnary(width, _) | PopulationCount(width) =>
+        check.shape([integer_type(width)], [integer_type(width)])
+      IntBinary(width, _)
+      | IntShiftRegister(width, _)
+      | IntHighMultiply(width, _)
+      | IntRemainder(width, _) =>
+        check.shape([integer_type(width), integer_type(width)], [
+          integer_type(width),
+        ])
       IntBinaryImmediate(width, operation, bits) => {
         let ty = integer_type(width)
         if !valid_int_binary_immediate(width, operation, bits) {
@@ -1356,30 +350,13 @@ fn verify_target_vcode(
             message="integer immediate cannot be encoded",
           )
         }
-        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+        check.shape([ty], [ty])
       }
-      IntMultiplyAdd(width) => {
-        let ty = integer_type(width)
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty, ty],
-          [ty],
-          false,
-          0,
+      IntMultiplyAdd(width) =>
+        check.shape(
+          [integer_type(width), integer_type(width), integer_type(width)],
+          [integer_type(width)],
         )
-      }
-      IntShiftRegister(width, _) => {
-        let ty = integer_type(width)
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [ty],
-          false,
-          0,
-        )
-      }
       IntShiftImmediate(width, _, amount) => {
         let ty = integer_type(width)
         let bit_width = if width == W32 { 32 } else { 64 }
@@ -1389,7 +366,7 @@ fn verify_target_vcode(
             message="integer shift amount is out of range",
           )
         }
-        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+        check.shape([ty], [ty])
       }
       IntLowBitsShiftLeft(width, field_bits, amount) => {
         let ty = integer_type(width)
@@ -1403,7 +380,7 @@ fn verify_target_vcode(
             message="low-bit shift field or amount is out of range",
           )
         }
-        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+        check.shape([ty], [ty])
       }
       IntAddShiftedLeft(width, amount) => {
         let ty = integer_type(width)
@@ -1414,74 +391,16 @@ fn verify_target_vcode(
             message="integer shift amount is out of range",
           )
         }
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [ty],
-          false,
-          0,
-        )
+        check.shape([ty, ty], [ty])
       }
-      PopulationCount(width) => {
-        let ty = integer_type(width)
-        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
-      }
-      IntHighMultiply(width, _) => {
-        let ty = integer_type(width)
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [ty],
-          false,
-          0,
-        )
-      }
-      IntWithOverflow(width, _) => {
-        let ty = integer_type(width)
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [ty, I32],
-          false,
-          0,
-        )
-      }
-      IntRemainder(width, _) => {
-        let ty = integer_type(width)
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [ty],
-          false,
-          0,
-        )
-      }
-      TrapIfZero(width) => {
-        let ty = integer_type(width)
-        if function.instruction_annotations(instruction).unwrap().trap() !=
-          Some(IntegerDivisionByZero) {
-          raise InvalidInstruction(
-            instruction~,
-            message="zero-divisor check requires division-by-zero trap metadata",
-          )
-        }
-        require_instruction_shape(function, instruction, [ty], [], false, 0)
-      }
-      TrapIfSignedDivOverflow(width) => {
-        let ty = integer_type(width)
-        if function.instruction_annotations(instruction).unwrap().trap() !=
-          Some(IntegerOverflow) {
-          raise InvalidInstruction(
-            instruction~,
-            message="signed-division check requires overflow trap metadata",
-          )
-        }
-        require_instruction_shape(function, instruction, [ty, ty], [], false, 0)
-      }
+      IntWithOverflow(width, _) =>
+        check.shape([integer_type(width), integer_type(width)], [
+          integer_type(width),
+          I32,
+        ])
+      TrapIfZero(width) => check.trap_if_zero(integer_type(width))
+      TrapIfSignedDivOverflow(width) =>
+        check.trap_if_signed_div_overflow(integer_type(width))
       CompareSetImmediate(width, _, bits) => {
         if add_sub_immediate_shift(bits) is None {
           raise InvalidInstruction(
@@ -1489,147 +408,24 @@ fn verify_target_vcode(
             message="comparison immediate cannot be encoded",
           )
         }
-        require_instruction_shape(
-          function,
-          instruction,
-          [integer_type(width)],
-          [I32],
-          false,
-          0,
+        check.shape([integer_type(width)], [I32])
+      }
+      CompareSet(width, _) =>
+        check.shape([integer_type(width), integer_type(width)], [I32])
+      ReferenceCompareSet(ty, _) => check.reference_compare(ty)
+      FloatUnary(ty, _) => check.float_unary(ty)
+      FloatBinary(ty, _) => check.float_binary(ty)
+      FloatTernary(ty, _) => check.float_ternary(ty)
+      FloatCompareSet(ty, _) => check.float_compare(ty)
+      TrapIfFloat(ty, condition) =>
+        check.trap_if_float(ty, condition == Unordered)
+      Convert(conversion) =>
+        check.conversion(
+          conversion_shape(conversion),
+          conversion is (Bitcast(I64, Ptr64) | Bitcast(Ptr64, I64)),
+          target="AArch64",
         )
-      }
-      CompareSet(width, _) => {
-        let ty = integer_type(width)
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [I32],
-          false,
-          0,
-        )
-      }
-      ReferenceCompareSet(ty, _) => {
-        if ty != Ptr64 && ty != GcRef64 {
-          raise InvalidInstruction(
-            instruction~,
-            message="reference comparison requires ptr64 or gcref64",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [I32],
-          false,
-          0,
-        )
-      }
-      FloatUnary(ty, _) => {
-        if ty != F32 && ty != F64 {
-          raise InvalidInstruction(
-            instruction~,
-            message="scalar floating-point unary operation requires f32 or f64",
-          )
-        }
-        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
-      }
-      FloatBinary(ty, _) => {
-        if ty != F32 && ty != F64 {
-          raise InvalidInstruction(
-            instruction~,
-            message="scalar floating-point binary operation requires f32 or f64",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [ty],
-          false,
-          0,
-        )
-      }
-      FloatTernary(ty, _) => {
-        if ty != F32 && ty != F64 {
-          raise InvalidInstruction(
-            instruction~,
-            message="scalar floating-point ternary operation requires f32 or f64",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty, ty],
-          [ty],
-          false,
-          0,
-        )
-      }
-      FloatCompareSet(ty, _) => {
-        if ty != F32 && ty != F64 {
-          raise InvalidInstruction(
-            instruction~,
-            message="scalar floating-point comparison requires f32 or f64",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [ty, ty],
-          [I32],
-          false,
-          0,
-        )
-      }
-      TrapIfFloat(ty, condition) => {
-        let reason : @native.TrapReason = if condition == Unordered {
-          InvalidConversionToInteger
-        } else {
-          IntegerOverflow
-        }
-        if (ty != F32 && ty != F64) ||
-          function.instruction_annotations(instruction).unwrap().trap() !=
-          Some(reason) {
-          raise InvalidInstruction(
-            instruction~,
-            message="float trap check requires a scalar float and matching conversion trap metadata",
-          )
-        }
-        let uses = if condition == Unordered { [ty] } else { [ty, ty] }
-        require_instruction_shape(function, instruction, uses, [], false, 0)
-      }
-      Convert(conversion) => {
-        if conversion is (Bitcast(I64, Ptr64) | Bitcast(Ptr64, I64)) {
-          raise InvalidInstruction(
-            instruction~,
-            message="raw-word pointer bitcasts must be erased before VCode",
-          )
-        }
-        guard conversion_shape(conversion) is Some((source, result)) else {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid AArch64 scalar conversion",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [source],
-          [result],
-          false,
-          0,
-        )
-      }
-      AddAddress =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, I64],
-          [Ptr64],
-          false,
-          0,
-        )
+      AddAddress => check.shape([Ptr64, I64], [Ptr64])
       AddAddressImmediate(bits) => {
         if add_sub_immediate_shift(bits) is None {
           raise InvalidInstruction(
@@ -1637,14 +433,7 @@ fn verify_target_vcode(
             message="address immediate cannot be encoded",
           )
         }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64],
-          [Ptr64],
-          false,
-          0,
-        )
+        check.shape([Ptr64], [Ptr64])
       }
       AddAddressUxtw(shift) => {
         if shift < 0 || shift > 4 {
@@ -1653,452 +442,90 @@ fn verify_target_vcode(
             message="invalid AArch64 extended address shift",
           )
         }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, I32],
-          [Ptr64],
-          false,
-          0,
-        )
+        check.shape([Ptr64, I32], [Ptr64])
       }
-      ScalarLoad(width, extension, result_type, _) => {
-        if !valid_scalar_load(width, extension, result_type) {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid AArch64 scalar load type or extension",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64],
-          [result_type],
-          false,
-          0,
-        )
-      }
+      ScalarLoad(width, extension, result_type, _) =>
+        check.scalar_load(width, extension, result_type, target="AArch64")
       ScalarLoadUxtw(width, extension, result_type, shift) => {
-        if !valid_scalar_load(width, extension, result_type) ||
+        if !@native.valid_scalar_load(width, extension, result_type) ||
           !valid_scalar_register_shift(width, shift) {
           raise InvalidInstruction(
             instruction~,
             message="invalid AArch64 scalar register-offset load",
           )
         }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, I32],
-          [result_type],
-          false,
-          0,
-        )
+        check.shape([Ptr64, I32], [result_type])
       }
-      StoreRepeated64(offset, count, _) => {
-        if count == 0U ||
-          offset > 0xFFFFFFFFFFFFFFFFUL - count.to_uint64() * 8UL {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid repeated word range",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64],
-          [Ptr64, I64, I64],
-          false,
-          0,
-        )
-        for index, operand in function.instruction_operands(instruction) {
-          if operand.timing != (if index == 0 { Late } else { Early }) ||
-            operand.tie_id >= 0 ||
-            !(operand.constraint is AnyReg || operand.constraint is FixedReg(_)) {
-            raise InvalidInstruction(
-              instruction~,
-              message="word fill requires a late address and three independent early register temporaries",
-            )
-          }
-        }
-      }
-      ScalarStore(width, value_type, _) => {
-        if !valid_scalar_store(width, value_type) {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid AArch64 scalar store type or width",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, value_type],
-          [],
-          false,
-          0,
-        )
-      }
+      StoreRepeated64(offset, count, _) => check.store_repeated64(offset, count)
+      ScalarStore(width, value_type, _) =>
+        check.scalar_store(width, value_type, target="AArch64")
       ScalarStoreUxtw(width, value_type, shift) => {
-        if !valid_scalar_store(width, value_type) ||
+        if !@native.valid_scalar_store(width, value_type) ||
           !valid_scalar_register_shift(width, shift) {
           raise InvalidInstruction(
             instruction~,
             message="invalid AArch64 scalar register-offset store",
           )
         }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, I32, value_type],
-          [],
-          false,
-          0,
-        )
+        check.shape([Ptr64, I32, value_type], [])
       }
-      VectorLoad128(_) =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64],
-          [V128],
-          false,
-          0,
-        )
-      VectorStore128(_) =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, V128],
-          [],
-          false,
-          0,
-        )
-      VectorLoadSplat(_, _) =>
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64],
-          [V128],
-          false,
-          0,
-        )
-      VectorLoadZero(width, _) => {
-        if width != W32 && width != W64 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector load-zero requires width 32 or 64",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorLoadExtend(lane, _, _) => {
-        if lane != I16x8 && lane != I32x4 && lane != I64x2 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector load-extend requires widened integer lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorLoadLane(lane, index, _) => {
-        if index < 0 || index >= vector_lane_count(lane) {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector load-lane index is out of range",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, V128],
-          [V128],
-          false,
-          0,
-        )
-      }
-      VectorStoreLane(lane, index, _) => {
-        if index < 0 || index >= vector_lane_count(lane) {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector store-lane index is out of range",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, V128],
-          [],
-          false,
-          0,
-        )
-      }
-      AtomicLoad(width, ty) => {
-        if !valid_atomic_access(width, ty) {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid AArch64 atomic load width or type",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64],
-          [ty],
-          false,
-          0,
-        )
-      }
-      AtomicStore(width, ty) => {
-        if !valid_atomic_access(width, ty) {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid AArch64 atomic store width or type",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, ty],
-          [],
-          false,
-          0,
-        )
-      }
+      VectorLoad128(_) | VectorLoadSplat(_, _) => check.shape([Ptr64], [V128])
+      VectorStore128(_) => check.shape([Ptr64, V128], [])
+      VectorLoadZero(width, _) => check.vector_load_zero(width)
+      VectorLoadExtend(lane, _, _) => check.vector_load_extend(lane)
+      VectorLoadLane(lane, index, _) => check.vector_load_lane(lane, index)
+      VectorStoreLane(lane, index, _) => check.vector_store_lane(lane, index)
+      AtomicLoad(width, ty) => check.atomic_load(width, ty, target="AArch64")
+      AtomicStore(width, ty) => check.atomic_store(width, ty, target="AArch64")
       AtomicRmw(width, ty, _) => {
-        if !valid_atomic_access(width, ty) {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid AArch64 atomic RMW width or type",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, ty],
-          [ty],
-          false,
-          0,
-        )
-        let result = function
-          .instruction_operands(instruction)
-          .filter(operand => operand.role == Def)[0]
-        if result.timing != Early {
-          raise InvalidInstruction(
-            instruction~,
-            message="atomic RMW result must be an early definition",
-          )
-        }
+        check.atomic_rmw(width, ty, target="AArch64")
+        check.atomic_early_def("atomic RMW result must be an early definition")
       }
-      AtomicCompareExchange(width, ty) => {
-        if !valid_atomic_access(width, ty) {
-          raise InvalidInstruction(
-            instruction~,
-            message="invalid AArch64 atomic compare-exchange width or type",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, ty, ty],
-          [ty],
-          false,
-          0,
+      AtomicCompareExchange(width, ty) =>
+        check.atomic_compare_exchange(width, ty, target="AArch64")
+      AtomicFence => check.shape([], [])
+      SafepointMarker => check.safepoint_marker()
+      PlatformCall(_, signature) | ReturnsTwicePlatformCall(_, signature) =>
+        check.platform_call(
+          signature, platform_call_layout, is_allocatable, platform_call_clobbers,
         )
-        let result = function
-          .instruction_operands(instruction)
-          .filter(operand => operand.role == Def)[0]
-        if result.timing != Early {
-          raise InvalidInstruction(
-            instruction~,
-            message="atomic compare-exchange result must be an early definition",
-          )
-        }
-      }
-      AtomicFence =>
-        require_instruction_shape(function, instruction, [], [], false, 0)
-      SafepointMarker => {
-        if function.instruction_annotations(instruction).unwrap().safepoint()
-          is None {
-          raise InvalidInstruction(
-            instruction~,
-            message="safepoint marker requires safepoint metadata",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [], false, 0)
-      }
-      PlatformCall(_, signature) | ReturnsTwicePlatformCall(_, signature) => {
-        if signature.results.length() > 1 {
-          raise InvalidInstruction(
-            instruction~,
-            message="platform call supports at most one direct result",
-          )
-        }
-        let argument_layout = platform_call_layout(signature.params)
-        let result_registers = platform_result_registers(signature.results)
-        require_instruction_shape(
-          function,
-          instruction,
-          signature.params,
-          [],
-          false,
-          0,
-        )
-        require_call_argument_inputs(
-          function,
-          instruction,
-          0,
-          argument_layout.arguments,
-        )
-        ignore(result_registers)
-        if function.instruction_clobbers(instruction) !=
-          platform_call_clobbers() {
-          raise InvalidInstruction(
-            instruction~,
-            message="platform call has an invalid caller-saved clobber set",
-          )
-        }
-      }
-      InternalCall(_, signature, plan) => {
-        if plan.arguments.length() != signature.params.length() ||
-          !valid_result_plan(signature.results, plan) ||
-          plan.stack_size < 0 ||
-          plan.stack_size % 16 != 0 {
-          raise InvalidInstruction(
-            instruction~,
-            message="internal call plan does not match its signature",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          signature.params,
-          [],
-          false,
-          0,
-        )
-        for index, ty in signature.params {
-          match plan.arguments[index] {
-            CallRegister(reg) =>
-              if reg.id < 0 ||
-                reg.id >= 16 ||
-                reg.class != @vcode.reg_class_for_value_type(ty) {
-                raise InvalidInstruction(
-                  instruction~,
-                  message="internal call has an invalid argument register",
-                )
-              }
-            CallStack(offset) => {
-              let size = call_stack_size(ty)
-              if offset < 0 ||
-                offset % size != 0 ||
-                offset + size > plan.stack_size {
-                raise InvalidInstruction(
-                  instruction~,
-                  message="internal call has an invalid stack argument",
-                )
-              }
-            }
-          }
-        }
-        require_call_argument_inputs(function, instruction, 0, plan.arguments)
-        if function.instruction_clobbers(instruction) !=
-          platform_call_clobbers() {
-          raise InvalidInstruction(
-            instruction~,
-            message="internal call has an invalid caller-saved clobber set",
-          )
-        }
-      }
-      InternalCallIndirect(signature, plan) => {
-        if plan.arguments.length() != signature.params.length() ||
-          !valid_result_plan(signature.results, plan) ||
-          plan.stack_size < 0 ||
-          plan.stack_size % 16 != 0 {
-          raise InvalidInstruction(
-            instruction~,
-            message="indirect internal call plan does not match its signature",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [Ptr64, ..signature.params],
-          [],
-          false,
-          0,
-        )
-        for index, ty in signature.params {
-          match plan.arguments[index] {
-            CallRegister(reg) =>
-              if reg.id < 0 ||
-                reg.id >= 16 ||
-                reg.class != @vcode.reg_class_for_value_type(ty) {
-                raise InvalidInstruction(
-                  instruction~,
-                  message="indirect call has an invalid argument register",
-                )
-              }
-            CallStack(offset) => {
-              let size = call_stack_size(ty)
-              if offset < 0 ||
-                offset % size != 0 ||
-                offset + size > plan.stack_size {
-                raise InvalidInstruction(
-                  instruction~,
-                  message="indirect call has an invalid stack argument",
-                )
-              }
-            }
-          }
-        }
-        let callee = function.instruction_operand_at(instruction, 0).unwrap()
-        if callee.constraint != AnyLocation || callee.preference is Some(_) {
-          raise InvalidInstruction(
-            instruction~,
-            message="indirect callee must remain allocatable without a preference",
-          )
-        }
-        require_call_argument_inputs(function, instruction, 1, plan.arguments)
-        if function.instruction_clobbers(instruction) !=
-          platform_call_clobbers() {
-          raise InvalidInstruction(
-            instruction~,
-            message="indirect call has an invalid caller-saved clobber set",
-          )
-        }
-      }
+      InternalCall(_, signature, plan) =>
+        check.internal_call(signature, plan, indirect=false, is_allocatable, _ => {
+          platform_call_clobbers()
+        })
+      InternalCallIndirect(signature, plan) =>
+        check.internal_call(signature, plan, indirect=true, is_allocatable, _ => {
+          platform_call_clobbers()
+        })
       TailCallDirect(_, signature, plan) =>
-        require_tail_call_plan(function, instruction, signature, plan, false)
-      TailCallIndirect(signature, plan) =>
-        require_tail_call_plan(function, instruction, signature, plan, true)
-      Jump => require_instruction_shape(function, instruction, [], [], true, 1)
-      BranchNonZero(width) =>
-        require_instruction_shape(
+        require_tail_call_plan(
           function,
           instruction,
-          [integer_type(width)],
-          [],
-          true,
-          2,
+          signature,
+          plan,
+          false,
+          is_allocatable,
+          platform_call_clobbers(),
         )
-      BranchCompare(width, _) => {
-        let ty = integer_type(width)
-        require_instruction_shape(function, instruction, [ty, ty], [], true, 2)
-      }
+      TailCallIndirect(signature, plan) =>
+        require_tail_call_plan(
+          function,
+          instruction,
+          signature,
+          plan,
+          true,
+          is_allocatable,
+          platform_call_clobbers(),
+        )
+      Jump => check.shape([], [], successors=1)
+      BranchNonZero(width) =>
+        check.shape([integer_type(width)], [], successors=2)
+      BranchCompare(width, _) =>
+        check.shape(
+          [integer_type(width), integer_type(width)],
+          [],
+          successors=2,
+        )
       BranchCompareImmediate(width, _, bits) => {
         let ty = integer_type(width)
         if add_sub_immediate_shift(bits) is None {
@@ -2107,187 +534,35 @@ fn verify_target_vcode(
             message="branch comparison immediate cannot be encoded",
           )
         }
-        require_instruction_shape(function, instruction, [ty], [], true, 2)
+        check.shape([ty], [], successors=2)
       }
-      Switch(width, cases) => {
-        let expected_type = integer_type(width)
-        if function.instruction_successor_count(instruction) !=
-          cases.length() + 1 {
-          raise InvalidInstruction(
-            instruction~,
-            message="switch successor count does not match its cases",
-          )
-        }
-        for index, bits in cases {
-          let mut duplicate = false
-          for previous in 0..<index {
-            if cases[previous] == bits {
-              duplicate = true
-            }
-          }
-          if (width == W32 && bits > 0xFFFFFFFFUL) || duplicate {
-            raise InvalidInstruction(
-              instruction~,
-              message="switch cases must be unique values of the index width",
-            )
-          }
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [expected_type],
-          [],
-          true,
-          cases.length() + 1,
-        )
-      }
-      Trap(reason) => {
-        if function.instruction_annotations(instruction).unwrap().trap() !=
-          Some(reason) {
-          raise InvalidInstruction(
-            instruction~,
-            message="trap terminator metadata does not match its reason",
-          )
-        }
-        require_instruction_shape(function, instruction, [], [], true, 0)
-      }
-      Return => {
-        let operands = function.instruction_operands(instruction)
-        if !function.instruction_is_terminator(instruction) ||
-          function.instruction_successor_count(instruction) != 0 ||
-          !operands.is_empty() {
-          raise InvalidInstruction(instruction~, message="invalid return shape")
-        }
-      }
+      Switch(width, cases) => check.switch_shape(integer_type(width), cases)
+      Trap(reason) => check.trap(reason)
+      Return => check.return_shape()
     }
   }
-  let mut incoming_result_area : @vcode.Value? = None
-  for index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(index).unwrap()
-    match function.instruction(instruction).unwrap() {
-      IncomingResultArea(_) => {
-        let value = function.instruction_operand_at(instruction, 0).unwrap().value
-        if incoming_result_area is Some(_) {
-          raise InvalidInstruction(
-            instruction~,
-            message="function has more than one incoming result area",
-          )
-        }
-        incoming_result_area = Some(value)
-      }
-      OutgoingAreaResult(_, _) => {
-        let address = function.instruction_operand_at(instruction, 0).unwrap().value
-        if incoming_result_area != Some(address) {
-          raise InvalidInstruction(
-            instruction~,
-            message="outgoing area result does not use the incoming result area",
-          )
-        }
-      }
-      TailCallDirect(_, signature, plan) =>
-        if plan.result_area_size > 0 {
-          let address = function
-            .instruction_operand_at(instruction, signature.params.length())
-            .unwrap().value
-          if incoming_result_area != Some(address) {
-            raise InvalidInstruction(
-              instruction~,
-              message="tail call does not forward the incoming result area",
-            )
-          }
-        }
-      TailCallIndirect(signature, plan) =>
-        if plan.result_area_size > 0 {
-          let address = function
-            .instruction_operand_at(instruction, signature.params.length() + 1)
-            .unwrap().value
-          if incoming_result_area != Some(address) {
-            raise InvalidInstruction(
-              instruction~,
-              message="indirect tail call does not forward the incoming result area",
-            )
-          }
-        }
-      _ => ()
-    }
-  }
-  for block in function.layout() {
-    let body = function.block_body(block)
-    let consumed_results = Array::make(body.length(), false)
-    for index, instruction in body {
-      let call_results = match function.instruction(instruction) {
-        Some(
-          PlatformCall(_, signature)
-          | ReturnsTwicePlatformCall(_, signature)
-        ) =>
-          Some(
-            (
-              signature,
-              platform_result_registers(signature.results).map(reg => {
-                CallResultRegister(reg)
-              }),
-            ),
-          )
-        Some(InternalCall(_, signature, plan)) =>
-          Some((signature, plan.results))
-        Some(InternalCallIndirect(signature, plan)) =>
-          Some((signature, plan.results))
-        _ => None
-      }
-      if call_results is Some((signature, locations)) {
-        for result_index, ty in signature.results {
-          let body_index = index + result_index + 1
-          let expected = match locations[result_index] {
-            CallResultRegister(reg) => IncomingCallResult(ty, reg)
-            CallResultArea(offset, _) => IncomingCallAreaResult(ty, offset)
-          }
-          if body_index >= body.length() ||
-            function.instruction(body[body_index]) != Some(expected) {
-            raise InvalidInstruction(
-              instruction~,
-              message="direct call results are not materialized in ABI order",
-            )
-          }
-          consumed_results[body_index] = true
-        }
-      }
-    }
-    for index, instruction in body {
-      if function.instruction(instruction)
-        is Some(IncomingCallResult(_, _) | IncomingCallAreaResult(_, _)) &&
-        !consumed_results[index] {
-        raise InvalidInstruction(
-          instruction~,
-          message="call result is not attached to a preceding direct call",
-        )
-      }
-    }
-  }
-  for block in function.layout() {
-    let terminator = function.block_terminator(block).unwrap()
-    if function.instruction(terminator) == Some(Return) {
-      let body = function.block_body(block)
-      let result_types = function.result_types()
-      if body.length() < result_types.length() {
-        raise InvalidInstruction(
-          instruction=terminator,
-          message="return is missing ABI result materialization",
-        )
-      }
-      let start = body.length() - result_types.length()
-      for result_index, ty in result_types {
-        let valid = match function.instruction(body[start + result_index]) {
-          Some(OutgoingReg(actual_ty, _) | OutgoingAreaResult(actual_ty, _)) =>
-            actual_ty == ty
-          _ => false
-        }
-        if !valid {
-          raise InvalidInstruction(
-            instruction=terminator,
-            message="return ABI materialization does not match function signature",
-          )
-        }
-      }
-    }
+  @vcode.verify_abi_materialization(
+    function, abi_materialization, platform_result_registers,
+  )
+}
+
+///|
+fn abi_materialization(inst : AArch64Inst) -> @vcode.AbiMaterialization {
+  match inst {
+    PlatformCall(_, signature) | ReturnsTwicePlatformCall(_, signature) =>
+      PlatformResults(signature)
+    InternalCall(_, signature, plan) | InternalCallIndirect(signature, plan) =>
+      InternalResults(signature, plan)
+    TailCallDirect(_, signature, plan) if plan.result_area_size > 0 =>
+      ForwardResultArea(signature.params.length(), indirect=false)
+    TailCallIndirect(signature, plan) if plan.result_area_size > 0 =>
+      ForwardResultArea(signature.params.length() + 1, indirect=true)
+    IncomingResultArea(_) => ReceiveResultArea
+    IncomingCallResult(ty, reg) => ReceiveRegisterResult(ty, reg)
+    IncomingCallAreaResult(ty, offset) => ReceiveAreaResult(ty, offset)
+    OutgoingReg(ty, _) => ReturnRegisterResult(ty)
+    OutgoingAreaResult(ty, _) => ReturnAreaResult(ty)
+    Return => Return
+    _ => Ordinary
   }
 }

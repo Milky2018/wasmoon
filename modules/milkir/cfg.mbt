@@ -328,7 +328,14 @@ pub fn[Scope] visit_dominator_tree(
 
 ///|
 pub fn CFG::find_back_edges(self : CFG) -> Array[(Int32, Int32)] {
-  let dominance = self.compute_dominance()
+  self.back_edges_with_dominance(self.compute_dominance())
+}
+
+///|
+fn CFG::back_edges_with_dominance(
+  self : CFG,
+  dominance : Dominance,
+) -> Array[(Int32, Int32)] {
   let back_edges : Array[(Int32, Int32)] = []
   for block_id in 0..<self.size {
     if !self.valid[block_id] {
@@ -353,8 +360,16 @@ pub struct Loop {
 
 ///|
 pub fn CFG::find_loops(self : CFG) -> Array[Loop] {
+  self.analyze_loops().1
+}
+
+///|
+/// Discover natural loops and return the dominance used to discover them.
+/// Both results describe the same CFG snapshot.
+pub fn CFG::analyze_loops(self : CFG) -> (Dominance, Array[Loop]) {
+  let dominance = self.compute_dominance()
   let loops : Array[Loop] = []
-  let back_edges = self.find_back_edges()
+  let back_edges = self.back_edges_with_dominance(dominance)
   // Preserve back-edge discovery order in the public loop array.
   let grouped : Map[Int32, Array[(Int32, Int32)]] = Map([])
   for edge in back_edges {
@@ -371,7 +386,7 @@ pub fn CFG::find_loops(self : CFG) -> Array[Loop] {
       back_edges: edges,
     })
   })
-  loops
+  (dominance, loops)
 }
 
 ///|

@@ -3,6 +3,35 @@
 pub type TranslationContext = @ir.TranslationContext
 
 ///|
+fn get_func_type(
+  mod_ : @types.Module,
+  func_local_idx : Int32,
+) -> @types.FuncType raise LowerError {
+  if func_local_idx < 0 || func_local_idx >= mod_.funcs.length() {
+    raise FunctionIndexOutOfRange(index=func_local_idx)
+  }
+  let type_idx = mod_.funcs[func_local_idx]
+  if type_idx < 0 || type_idx >= mod_.types.length() {
+    raise TypeIndexOutOfRange(index=type_idx)
+  }
+  match mod_.types[type_idx].composite {
+    Func(func_type) => func_type
+    _ => raise NonFunctionType(index=type_idx)
+  }
+}
+
+///|
+fn get_code(
+  mod_ : @types.Module,
+  func_local_idx : Int32,
+) -> @types.FunctionCode raise LowerError {
+  if func_local_idx < 0 || func_local_idx >= mod_.codes.length() {
+    raise MissingCode(index=func_local_idx)
+  }
+  mod_.codes[func_local_idx]
+}
+
+///|
 /// Translate one module function through the canonical production frontend.
 pub fn translate_function(
   embedding_env : EmbeddingEnvironment,

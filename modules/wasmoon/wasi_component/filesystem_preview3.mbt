@@ -74,15 +74,14 @@ fn preview3_filesystem_error() -> @runtime_impl.ComponentValue {
 }
 
 ///|
-fn preview3_filesystem_ok_void() -> @runtime_impl.ComponentValue {
-  Variant(0, None)
-}
-
-///|
-fn preview3_filesystem_ok(
-  value : @runtime_impl.ComponentValue,
+fn preview3_filesystem_void_result(
+  success : Bool,
 ) -> @runtime_impl.ComponentValue {
-  Variant(0, Some(value))
+  if success {
+    filesystem_ok_void()
+  } else {
+    preview3_filesystem_error()
+  }
 }
 
 ///|
@@ -315,14 +314,14 @@ fn preview3_file_write_future(
   HostFuture(
     () => {
       if done.val {
-        return Ready([preview3_filesystem_ok_void()])
+        return Ready([filesystem_ok_void()])
       }
       while true {
         match host.runtime.read_host_byte_stream(table, readable) {
           Pending => return Pending
           Closed => {
             cleanup()
-            return Ready([preview3_filesystem_ok_void()])
+            return Ready([filesystem_ok_void()])
           }
           Data(bytes) => {
             let mut written_total = 0
@@ -518,21 +517,21 @@ fn preview3_filesystem_basic_operation(
         if state.file_type == 3 {
           preview3_filesystem_error_for(Badf)
         } else {
-          preview3_filesystem_ok_void()
+          filesystem_ok_void()
         },
       ]
     }
     "sync-data" =>
       [
         if @wasi.native_fdatasync(state.fd) {
-          preview3_filesystem_ok_void()
+          filesystem_ok_void()
         } else {
           preview3_filesystem_error()
         },
       ]
     "get-flags" =>
       [
-        preview3_filesystem_ok(
+        filesystem_ok(
           U32(
             if state.file_type == 3 {
               (state.flags & descriptor_write.lnot()) | descriptor_read
@@ -542,8 +541,7 @@ fn preview3_filesystem_basic_operation(
           ),
         ),
       ]
-    "get-type" =>
-      [preview3_filesystem_ok(preview3_descriptor_type(state.file_type))]
+    "get-type" => [filesystem_ok(preview3_descriptor_type(state.file_type))]
     "set-size" => {
       let size = filesystem_u64_arg(args, 1)
       if !descriptor_has(state, descriptor_write) {
@@ -553,7 +551,7 @@ fn preview3_filesystem_basic_operation(
       } else {
         [
           if @wasi.native_ftruncate(state.fd, size) {
-            preview3_filesystem_ok_void()
+            filesystem_ok_void()
           } else {
             preview3_filesystem_error()
           },
@@ -569,7 +567,7 @@ fn preview3_filesystem_basic_operation(
           ) {
           (Some((atim, af)), Some((mtim, mf))) =>
             if @wasi.native_futimens(state.fd, atim, mtim, af | mf) {
-              preview3_filesystem_ok_void()
+              filesystem_ok_void()
             } else {
               preview3_filesystem_error()
             }
@@ -579,7 +577,7 @@ fn preview3_filesystem_basic_operation(
     "sync" =>
       [
         if @wasi.native_fsync(state.fd) {
-          preview3_filesystem_ok_void()
+          filesystem_ok_void()
         } else {
           preview3_filesystem_error()
         },
@@ -587,8 +585,7 @@ fn preview3_filesystem_basic_operation(
     "stat" =>
       [
         match @wasi.native_fstat(state.fd) {
-          Some(stat) =>
-            preview3_filesystem_ok(preview3_descriptor_stat_value(stat))
+          Some(stat) => filesystem_ok(preview3_descriptor_stat_value(stat))
           None => preview3_filesystem_error()
         },
       ]
@@ -607,7 +604,7 @@ fn preview3_filesystem_basic_operation(
       [
         match @wasi.native_fstat(state.fd) {
           Some(stat) =>
-            preview3_filesystem_ok(
+            filesystem_ok(
               Tuple([
                 U64((stat.dev ^ stat.ino ^ stat.size).reinterpret_as_int64()),
                 U64((stat.mtim ^ stat.ctim ^ stat.nlink).reinterpret_as_int64()),
@@ -677,20 +674,10 @@ fn preview3_filesystem_path_operation(
       if reject_path(path) {
         return [preview3_filesystem_error_for(rejected_path_error(path))]
       }
-      match open_capability_parent(state, path) {
-        None => [preview3_filesystem_error()]
-        Some((parent, leaf)) => {
-          let success = @wasi.native_mkdirat(parent, leaf, 0o755)
-          @wasi.native_close(parent) |> ignore
-          [
-            if success {
-              preview3_filesystem_ok_void()
-            } else {
-              preview3_filesystem_error()
-            },
-          ]
-        }
-      }
+      let success = with_capability_parent(state, path, (fd, leaf) => {
+        @wasi.native_mkdirat(fd, leaf, 0o755)
+      }).unwrap_or(false)
+      [preview3_filesystem_void_result(success)]
     }
     "stat-at" | "metadata-hash-at" => {
       let follow = (filesystem_flags_arg(args, 1) & 0x01) != 0
@@ -702,18 +689,9 @@ fn preview3_filesystem_path_operation(
         None => [preview3_filesystem_error()]
         Some(stat) =>
           if name == "stat-at" {
-            [preview3_filesystem_ok(preview3_descriptor_stat_value(stat))]
+            [filesystem_ok(preview3_descriptor_stat_value(stat))]
           } else {
-            [
-              preview3_filesystem_ok(
-                Tuple([
-                  U64((stat.dev ^ stat.ino ^ stat.size).reinterpret_as_int64()),
-                  U64(
-                    (stat.mtim ^ stat.ctim ^ stat.nlink).reinterpret_as_int64(),
-                  ),
-                ]),
-              ),
-            ]
+            [filesystem_ok(metadata_hash_value(stat))]
           }
       }
     }
@@ -731,56 +709,11 @@ fn preview3_filesystem_path_operation(
         parse_preview3_new_timestamp(args[4], 0x04, 0x08) is Some((mtim, mf)) else {
         return [preview3_filesystem_error_for(Overflow)]
       }
-      if follow {
-        match capability_parent_and_leaf(path) {
-          None => [preview3_filesystem_error_for(rejected_path_error(path))]
-          Some((parent, leaf)) =>
-            match
-              @wasi.native_openat_beneath(
-                state.fd,
-                parent,
-                leaf,
-                [ReadOnly],
-                0,
-                true,
-              ) {
-              None => [preview3_filesystem_error()]
-              Some(fd) => {
-                let success = @wasi.native_futimens(fd, atim, mtim, af | mf)
-                @wasi.native_close(fd) |> ignore
-                [
-                  if success {
-                    preview3_filesystem_ok_void()
-                  } else {
-                    preview3_filesystem_error()
-                  },
-                ]
-              }
-            }
-        }
-      } else {
-        match open_capability_parent(state, path) {
-          None => [preview3_filesystem_error()]
-          Some((parent, leaf)) => {
-            let success = @wasi.native_utimensat(
-              parent,
-              leaf,
-              atim,
-              mtim,
-              af | mf,
-              @wasi.AT_SYMLINK_NOFOLLOW,
-            )
-            @wasi.native_close(parent) |> ignore
-            [
-              if success {
-                preview3_filesystem_ok_void()
-              } else {
-                preview3_filesystem_error()
-              },
-            ]
-          }
-        }
-      }
+      [
+        preview3_filesystem_void_result(
+          set_capability_path_times(state, path, follow, atim, mtim, af | mf),
+        ),
+      ]
     }
     "open-at" => {
       let path_flags = filesystem_flags_arg(args, 1)
@@ -808,19 +741,7 @@ fn preview3_filesystem_path_operation(
       if mutating && !descriptor_has(state, descriptor_mutate_directory) {
         return [preview3_filesystem_error_for(ROFS)]
       }
-      let native_flags = descriptor_flags_to_open(requested_flags)
-      if (open_flags & 0x01) != 0 {
-        native_flags.push(Create)
-      }
-      if (open_flags & 0x02) != 0 {
-        native_flags.push(Directory)
-      }
-      if (open_flags & 0x04) != 0 {
-        native_flags.push(Exclusive)
-      }
-      if (open_flags & 0x08) != 0 {
-        native_flags.push(Truncate)
-      }
+      let native_flags = descriptor_open_flags(requested_flags, open_flags)
       match capability_parent_and_leaf(path) {
         None => [preview3_filesystem_error_for(rejected_path_error(path))]
         Some((parent, leaf)) =>
@@ -848,21 +769,14 @@ fn preview3_filesystem_path_operation(
       if reject_path(path) {
         return [preview3_filesystem_error_for(rejected_path_error(path))]
       }
-      match open_capability_parent(state, path) {
+      let target = with_capability_parent(state, path, (fd, leaf) => {
+        @wasi.native_readlinkat(fd, leaf, 65536)
+      }).bind(value => value)
+      match target {
+        Some(target) if target.has_prefix("/") =>
+          [preview3_filesystem_error_for(Perm)]
+        Some(target) => [filesystem_ok(String(target))]
         None => [preview3_filesystem_error()]
-        Some((parent, leaf)) => {
-          let target = @wasi.native_readlinkat(parent, leaf, 65536)
-          @wasi.native_close(parent) |> ignore
-          match target {
-            Some(target) =>
-              if target.has_prefix("/") {
-                [preview3_filesystem_error_for(Perm)]
-              } else {
-                [preview3_filesystem_ok(String(target))]
-              }
-            None => [preview3_filesystem_error()]
-          }
-        }
       }
     }
     "remove-directory-at" | "unlink-file-at" => {
@@ -906,7 +820,7 @@ fn preview3_filesystem_path_operation(
           @wasi.native_close(parent) |> ignore
           [
             if success {
-              preview3_filesystem_ok_void()
+              filesystem_ok_void()
             } else {
               preview3_filesystem_error()
             },
@@ -942,37 +856,15 @@ fn preview3_filesystem_path_operation(
       if reject_path(new_path) {
         return [preview3_filesystem_error_for(rejected_path_error(new_path))]
       }
-      match
-        (
-          open_capability_parent(state, old_path),
-          open_capability_parent(target_state, new_path),
-        ) {
-        (Some((old_fd, old_leaf)), Some((new_fd, new_leaf))) => {
-          let success = if name == "link-at" {
-            @wasi.native_linkat(old_fd, old_leaf, new_fd, new_leaf, 0)
-          } else {
-            @wasi.native_renameat(old_fd, old_leaf, new_fd, new_leaf)
-          }
-          @wasi.native_close(old_fd) |> ignore
-          @wasi.native_close(new_fd) |> ignore
-          [
-            if success {
-              preview3_filesystem_ok_void()
-            } else {
-              preview3_filesystem_error()
-            },
-          ]
-        }
-        (Some((old_fd, _)), None) => {
-          @wasi.native_close(old_fd) |> ignore
-          [preview3_filesystem_error()]
-        }
-        (None, Some((new_fd, _))) => {
-          @wasi.native_close(new_fd) |> ignore
-          [preview3_filesystem_error()]
-        }
-        _ => [preview3_filesystem_error()]
+      let operation : CapabilityPairOperation = if name == "link-at" {
+        Link
+      } else {
+        Rename
       }
+      let success = operate_on_capability_pair(
+        state, old_path, target_state, new_path, operation,
+      )
+      [preview3_filesystem_void_result(success)]
     }
     "symlink-at" => {
       if !descriptor_has(state, descriptor_mutate_directory) {
@@ -983,20 +875,10 @@ fn preview3_filesystem_path_operation(
       if target.has_prefix("/") || reject_path(path) {
         return [preview3_filesystem_error_for(Perm)]
       }
-      match open_capability_parent(state, path) {
-        None => [preview3_filesystem_error()]
-        Some((parent, leaf)) => {
-          let success = @wasi.native_symlinkat(target, parent, leaf)
-          @wasi.native_close(parent) |> ignore
-          [
-            if success {
-              preview3_filesystem_ok_void()
-            } else {
-              preview3_filesystem_error()
-            },
-          ]
-        }
-      }
+      let success = with_capability_parent(state, path, (fd, leaf) => {
+        @wasi.native_symlinkat(target, fd, leaf)
+      }).unwrap_or(false)
+      [preview3_filesystem_void_result(success)]
     }
     _ => raise HostCallError("unknown Preview 3 filesystem path operation")
   }

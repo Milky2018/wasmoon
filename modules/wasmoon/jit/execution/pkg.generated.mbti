@@ -1,0 +1,119 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/jit/execution"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_runtime/native/bridge",
+  "Milky2018/wasmoon_runtime/runtime",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn bind_instance_tables(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit raise @runtime.RuntimeError
+
+pub fn build_external_imports_for_jit(@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Map[String, Map[String, Int64]]
+
+pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], Array[@types.ValueType])]
+
+pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int32)]
+
+pub fn count_func_imports(Array[@types.Import]) -> Int32
+
+pub fn decode_jit_entry_results(Array[Int64], ArrayView[@types.ValueType], @runtime.Store, @jit.JITModule, @runtime.ModuleInstance) -> Array[@types.Value] raise JITCoreCallError
+
+pub fn encode_jit_entry_args(Array[@types.Value], Int32, @runtime.Store, @jit.JITModule, @runtime.ModuleInstance) -> Array[Int64] raise JITCoreCallError
+
+pub fn eval_elem_offset_expr(ArrayView[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int32 raise @runtime.RuntimeError
+
+pub fn get_func_name(@types.Module, Int32) -> String
+
+pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit raise @runtime.RuntimeError
+
+pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Int64 raise @runtime.RuntimeError
+
+pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@bridge.MemoryInfo] raise @runtime.RuntimeError
+
+pub fn register_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit raise @runtime.RuntimeError
+
+pub fn register_owned_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> FuncrefRegistration raise @runtime.RuntimeError
+
+// Errors
+#derive(Eq, @debug.Debug)
+pub(all) suberror JITCoreCallError {
+  FunctionUnavailable(Int32)
+  ArgumentTypeMismatch(Int32)
+  ResultTypeMismatch(Int32)
+  Trap(String)
+  NativeFiberFailure(String)
+  Cancelled
+  Exit(Int32)
+  HostInvocation(@runtime.RuntimeError)
+  GcSetupFailed(String)
+  ExecutionStateFailure(@Milky2018/wasmoon_runtime/native/execution.NativeExecutionStateError)
+}
+pub fn JITCoreCallError::equal(Self, Self) -> Bool
+pub fn JITCoreCallError::not_equal(Self, Self) -> Bool
+pub fn JITCoreCallError::output(Self, &Logger) -> Unit
+pub fn JITCoreCallError::to_repr(Self) -> @debug.Repr
+pub fn JITCoreCallError::to_string(Self) -> String
+pub impl Show for JITCoreCallError
+
+// Types and methods
+type FuncrefRegistration
+pub fn FuncrefRegistration::release(Self) -> Unit
+
+pub struct JITCompiler {
+  compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]
+}
+pub fn JITCompiler::JITCompiler((@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]) -> Self
+
+pub(all) enum JITCoreCallOutcome {
+  NativeCoreReturned(Array[@types.Value])
+  NativeCoreSuspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
+}
+
+pub(all) enum JITCoreCallWithExceptionOutcome {
+  Returned(Array[@types.Value])
+  Suspended(@wasmoon_jit.NativeSuspensionReason, JITCoreContinuation)
+  Thrown(@runtime.RootedValue)
+}
+
+pub(all) enum JITCoreCallWithExceptionResult {
+  Returned(Array[@types.Value])
+  Thrown(@runtime.RootedValue)
+}
+
+type JITCoreContinuation
+pub fn JITCoreContinuation::cancel(Self) -> Unit
+pub fn JITCoreContinuation::continue_execution(Self) -> JITCoreCallOutcome raise JITCoreCallError
+pub fn JITCoreContinuation::continue_execution_with_exception(Self) -> JITCoreCallWithExceptionOutcome raise JITCoreCallError
+
+pub struct JITModuleContext {
+  jit_module : @jit.JITModule
+  globals_ptr : Int64
+  global_addrs : ReadOnlyArray[Int32]
+  table_addrs : ReadOnlyArray[Int32]
+  func_addrs : ReadOnlyArray[Int32]
+  func_type_indices : ReadOnlyArray[Int32]
+  canonical_type_indices : ReadOnlyArray[Int32]
+  module_types : ReadOnlyArray[@types.SubType]
+  module_rec_groups : ReadOnlyArray[Int32]
+  use_subtype_indirect_check : Bool
+  // private fields
+}
+pub fn JITModuleContext::JITModuleContext(@jit.JITModule, Int64, ArrayView[Int32], ArrayView[Int32], ArrayView[Int32], ArrayView[Int32], ArrayView[Int32], ArrayView[@types.SubType], ArrayView[Int32], Bool) -> Self
+pub fn JITModuleContext::bind_instance(Self, @runtime.Store, @runtime.ModuleInstance) -> Unit raise @runtime.RuntimeError
+pub fn JITModuleContext::call_core_func(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
+pub async fn JITModuleContext::call_core_func_async(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
+pub async fn JITModuleContext::call_core_func_async_with_exception(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallWithExceptionResult raise JITCoreCallError
+pub fn JITModuleContext::call_core_func_resumable(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallOutcome raise JITCoreCallError
+pub fn JITModuleContext::call_core_func_resumable_with_exception(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallWithExceptionOutcome raise JITCoreCallError
+pub fn JITModuleContext::call_core_func_with_exception(Self, @runtime.Store, @runtime.ModuleInstance, Int32, Array[@types.Value]) -> JITCoreCallWithExceptionResult raise JITCoreCallError
+pub fn JITModuleContext::close(Self) -> Unit
+pub fn JITModuleContext::install_hostcall_dispatcher(Self, @runtime.Store, @runtime.ModuleInstance, before_dispatch? : () -> Unit raise @runtime.RuntimeError, after_dispatch? : () -> Unit raise @runtime.RuntimeError, classify_suspension? : (@runtime.RuntimeError) -> Bool) -> Unit raise @runtime.RuntimeError
+
+// Type aliases
+
+// Traits

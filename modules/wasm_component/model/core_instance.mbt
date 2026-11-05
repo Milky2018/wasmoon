@@ -29,53 +29,36 @@ pub(all) struct CoreInstanceDecl {
 }
 
 ///|
-fn parse_core_inlineexport(
+fn parse_core_named_index(
   reader : Reader,
-) -> CoreInlineExport raise ComponentParseError {
+) -> (String, SortIdx) raise ComponentParseError {
   let name = reader.read_name()
-  // Core instance exports reference the core index spaces directly via a
-  // single-byte "kind" followed by an index, unlike the generic SortIdx
-  // encoding used in other sections.
   let kind = reader.read_u8()
   let idx = reader.read_leb_u32()
-  let sortidx : SortIdx = { sort: Core(kind), idx, }
-  { name, sortidx, }
-}
-
-///|
-fn parse_core_instantiatearg(
-  reader : Reader,
-) -> CoreInstantiateArg raise ComponentParseError {
-  let name = reader.read_name()
-  // Same encoding as parse_core_inlineexport: (kind:u8, idx:u32).
-  let kind = reader.read_u8()
-  let idx = reader.read_leb_u32()
-  let sortidx : SortIdx = { sort: Core(kind), idx, }
-  { name, sortidx, }
+  (name, { sort: Core(kind), idx, })
 }
 
 ///|
 fn parse_core_instanceexpr(
   reader : Reader,
 ) -> CoreInstanceExpr raise ComponentParseError {
-  let tag = reader.read_u8()
-  if tag == 0x00 {
-    let module_idx = reader.read_leb_u32()
-    let n = reader.read_leb_u32()
-    let args : Array[CoreInstantiateArg] = []
-    for _ in 0..<n {
-      args.push(parse_core_instantiatearg(reader))
+  match reader.read_u8() {
+    0 => {
+      let module_idx = reader.read_leb_u32()
+      let args = reader.read_vector(r => {
+        let (name, sortidx) = parse_core_named_index(r)
+        ({ name, sortidx, } : CoreInstantiateArg)
+      })
+      Instantiate(module_idx, args)
     }
-    Instantiate(module_idx, args)
-  } else if tag == 0x01 {
-    let n = reader.read_leb_u32()
-    let exports : Array[CoreInlineExport] = []
-    for _ in 0..<n {
-      exports.push(parse_core_inlineexport(reader))
-    }
-    InlineExports(exports)
-  } else {
-    raise InvalidInstanceSection
+    1 =>
+      InlineExports(
+        reader.read_vector(r => {
+          let (name, sortidx) = parse_core_named_index(r)
+          { name, sortidx, }
+        }),
+      )
+    _ => raise InvalidInstanceSection
   }
 }
 
@@ -83,14 +66,9 @@ fn parse_core_instanceexpr(
 pub fn parse_core_instance_section(
   payload : Bytes,
 ) -> Array[CoreInstanceDecl] raise ComponentParseError {
-  let reader = Reader::Reader(payload)
-  let n = reader.read_leb_u32()
-  let instances : Array[CoreInstanceDecl] = []
-  for _ in 0..<n {
-    instances.push({ expr: parse_core_instanceexpr(reader), })
-  }
-  if !reader.is_eof() {
-    raise InvalidInstanceSection
-  }
-  instances
+  parse_vector_section(
+    payload,
+    reader => { expr: parse_core_instanceexpr(reader), },
+    InvalidInstanceSection,
+  )
 }

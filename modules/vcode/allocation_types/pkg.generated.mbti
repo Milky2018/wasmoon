@@ -21,6 +21,20 @@ pub fn AllocationConstraint::equal(Self, Self) -> Bool
 pub fn AllocationConstraint::not_equal(Self, Self) -> Bool
 pub fn AllocationConstraint::to_repr(Self) -> @debug.Repr
 
+pub struct AllocationContents[V] {
+  // private fields
+}
+pub fn[V : Eq] AllocationContents::add_alias(Self[V], V, AllocationLocation) -> Unit
+pub fn[V : Eq] AllocationContents::contains(Self[V], V, AllocationLocation) -> Bool
+pub fn[V] AllocationContents::copy(Self[V]) -> Self[V]
+pub fn[V] AllocationContents::copy_location_from(Self[V], Self[V], AllocationLocation, AllocationLocation) -> Unit
+pub fn[V : Eq] AllocationContents::equals(Self[V], Self[V]) -> Bool
+pub fn[V : Eq] AllocationContents::meet_with(Self[V], Self[V]) -> Unit
+pub fn[V] AllocationContents::new() -> Self[V]
+pub fn[V] AllocationContents::remove_register(Self[V], PhysicalReg) -> Unit
+pub fn[V : Eq] AllocationContents::remove_value(Self[V], V) -> Unit
+pub fn[V] AllocationContents::set(Self[V], V, AllocationLocation) -> Unit
+
 #derive(Eq)
 pub(all) struct AllocationLocation {
   encoded : Int64

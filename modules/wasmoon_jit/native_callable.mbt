@@ -159,8 +159,6 @@ pub fn NativeJITContext::set_callable_types(
   tags : Array[Int32],
 ) -> Unit {
   let registry = NativeCallableRegistry::new()
-  if !registry.replace(parents, entries) {
-    abort("failed to allocate native callable registry")
-  }
+  registry.replace(parents, entries)
   self.bind_callable_registry(registry, local_types, tags)
 }

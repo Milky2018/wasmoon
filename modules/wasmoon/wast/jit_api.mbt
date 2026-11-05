@@ -1,18 +1,16 @@
 ///|
 pub using @jit_support {
+  encode_jit_entry_args,
+  decode_jit_entry_results,
   type JITCompiler,
   type FuncrefRegistration,
   init_jit_globals_from_store,
   register_instance_funcrefs_for_jit,
   register_owned_instance_funcrefs_for_jit,
   collect_registered_funcref_entries,
-  has_unsupported_instructions,
-  has_unsupported_instructions_for_wast,
-  has_cross_module_imports,
-  exports_shared_resources,
   get_func_name,
   eval_elem_offset_expr,
-  init_elem_segments,
+  bind_instance_tables,
   init_bulk_segments,
   build_func_signatures,
   count_func_imports,
@@ -21,6 +19,5 @@ pub using @jit_support {
   type JITCoreCallOutcome,
   type JITCoreContinuation,
   init_jit_memories_from_store,
-  sync_jit_memories_to_store,
   type JITModuleContext,
 }

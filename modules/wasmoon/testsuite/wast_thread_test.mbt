@@ -5,7 +5,7 @@ test "WAST nested implicit joins include child assertions" {
     #| (thread $inner
     #|  (module (func (export "run") (result i32) i32.const 42))
     #|  (assert_return (invoke "run") (i32.const 42))))
-  let result = @wast.run_wast_commands(@wast.parse(source), ".", false, false)
+  let result = @wast.run_wast_commands(@wast.parse(source), false, false)
   debug_inspect(
     (result.passed, result.failed, result.skipped),
     content="(1, 0, 0)",
@@ -19,7 +19,7 @@ test "WAST thread assertion failures propagate through joins" {
     #| (module (func (export "run") (result i32) i32.const 1))
     #| (assert_return (invoke "run") (i32.const 2)))
     #|(wait $child)
-  let result = @wast.run_wast_commands(@wast.parse(source), ".", false, false)
+  let result = @wast.run_wast_commands(@wast.parse(source), false, false)
   debug_inspect(
     (result.passed, result.failed, result.skipped),
     content="(0, 1, 0)",
@@ -30,7 +30,7 @@ test "WAST thread assertion failures propagate through joins" {
 ///|
 test "WAST thread joins reject unknown and already joined names" {
   for source in ["(wait $unknown)", "(thread $child)(wait $child)(wait $child)"] {
-    let result = @wast.run_wast_commands(@wast.parse(source), ".", false, false)
+    let result = @wast.run_wast_commands(@wast.parse(source), false, false)
     debug_inspect(
       (result.passed, result.failed, result.skipped),
       content="(0, 1, 0)",
@@ -46,7 +46,7 @@ test "WAST shared contexts reject ordinary memory imports" {
     #|(thread $child (shared (module $M))
     #| (module (memory (import "M" "memory") 1)))
     #|(wait $child)
-  let result = @wast.run_wast_commands(@wast.parse(source), ".", false, false)
+  let result = @wast.run_wast_commands(@wast.parse(source), false, false)
   debug_inspect(
     (result.passed, result.failed, result.skipped),
     content="(0, 1, 0)",
@@ -75,7 +75,6 @@ test "WAST starts dispatch imported host and guest functions to their owners" {
     })
     let result = @wast.run_wast_commands(
       @wast.parse(source),
-      ".",
       use_jit,
       false,
       jit_compiler=Some(compiler),

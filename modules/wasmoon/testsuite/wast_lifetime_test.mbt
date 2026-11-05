@@ -31,7 +31,6 @@ test "WAST scripts release stores and every compiled module on success and failu
     )
     let result = @wast.run_wast_commands(
       script,
-      ".",
       true,
       false,
       jit_compiler=Some(compiler),
@@ -63,7 +62,7 @@ test "WAST close is idempotent and rejects subsequent commands" {
     let result = @wast.WastResult()
     let script = @wast.parse("(module definition $m)")
     let (command, line) = script.commands[0]
-    @wast.run_wast_command(context, command, line, result, ".", false)
+    @wast.run_wast_command(context, command, line, result, false)
     inspect(result.failed, content="1")
     inspect(result.passed, content="0")
   }

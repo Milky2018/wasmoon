@@ -54,7 +54,6 @@ pub suberror JitPipelineError {
     index~ : Int32,
     message~ : String
   )
-  UnsupportedEntrySignature(message~ : String)
   UnsupportedHostArchitecture(tag~ : Int32)
   UnsupportedHostOsAbi(tag~ : Int32)
   InvalidFunctionIndex(index~ : Int32)
@@ -132,19 +131,14 @@ pub fn plan_wasm_body_milkir_integration_for_target(
   target : NativeTarget,
 ) -> JitIntegrationPlan raise JitPipelineError {
   if target is AArch64 {
-    let compiled = compile_wasm_body_aarch64_target(
-      func,
-      validation_context,
-      true,
-      [],
-    )
+    let compiled = compile_wasm_body_aarch64_target(func, validation_context)
     return {
       entry_symbol: func.name,
       target,
       object: jit_code_object_from_aarch64(compiled.object, compiled.frame_size),
     }
   }
-  let compiled = compile_wasm_body_x64_target(func, validation_context, true, [])
+  let compiled = compile_wasm_body_x64_target(func, validation_context)
   {
     entry_symbol: func.name,
     target,

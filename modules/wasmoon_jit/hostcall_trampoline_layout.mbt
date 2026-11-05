@@ -9,8 +9,6 @@ pub(all) struct HostcallImportTrampolineLayout {
   arg_slots : Int32
   result_slots : Int32
   values_vec_bytes : Int32
-  int_overflow_count : Int32
-  float_overflow_types : Array[@types.ValueType]
 }
 
 ///|
@@ -38,31 +36,7 @@ fn is_hostcall_int_class(ty : @types.ValueType) -> Bool {
 pub fn plan_hostcall_import_trampoline_layout(
   param_types : ArrayView[@types.ValueType],
   result_types : ArrayView[@types.ValueType],
-  max_int_regs : Int32,
-  max_float_regs : Int32,
 ) -> HostcallImportTrampolineLayout {
-  let mut total_int = 0
-  for ty in param_types {
-    if is_hostcall_int_class(ty) {
-      total_int = total_int + 1
-    }
-  }
-  let int_overflow_count = if total_int > max_int_regs {
-    total_int - max_int_regs
-  } else {
-    0
-  }
-  let float_overflow_types : Array[@types.ValueType] = []
-  let mut float_seen = 0
-  for ty in param_types {
-    if is_hostcall_int_class(ty) {
-      continue
-    }
-    if float_seen >= max_float_regs {
-      float_overflow_types.push(ty)
-    }
-    float_seen = float_seen + 1
-  }
   let mut arg_slots = 0
   for ty in param_types {
     arg_slots = arg_slots + hostcall_value_slot_count(ty)
@@ -71,11 +45,5 @@ pub fn plan_hostcall_import_trampoline_layout(
   for ty in result_types {
     result_slots = result_slots + hostcall_value_slot_count(ty)
   }
-  {
-    arg_slots,
-    result_slots,
-    values_vec_bytes: (arg_slots + result_slots) * 8,
-    int_overflow_count,
-    float_overflow_types,
-  }
+  { arg_slots, result_slots, values_vec_bytes: (arg_slots + result_slots) * 8, }
 }

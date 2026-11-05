@@ -64,12 +64,7 @@ fn instantiate_canon_waitable_set_wait(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let mem = store.get_mem(mem_addr) catch {
-      e => {
-        trap_canon(e.to_string())
-        return [I32(0)]
-      }
-    }
+    let mem = store.get_mem(mem_addr) catch { e => trap_canon(e.to_string()) }
     fn ensure_subtask_return_ready(ev : WaitEvent) -> Unit {
       // Materialize the subtask result immediately before exposing RETURNED.
       if ev.code != 1 || ev.payload != 2 {
@@ -163,13 +158,11 @@ fn instantiate_canon_waitable_set_wait(
               // Even if the argument is invalid (e.g. unaligned), component-spec
               // expects synchronous tasks to trap before attempting to block.
               trap_canon("cannot block a synchronous task before returning")
-              return [I32(0)]
             }
           }
         }
         if (ptr.reinterpret_as_uint() & 3U) != 0U {
           trap_canon("unaligned pointer")
-          return [I32(0)]
         }
         let task_id = current_task_id(async_state)
         async_state.tasks.clear_task_suspensions(task_id)
@@ -207,10 +200,10 @@ fn instantiate_canon_waitable_set_wait(
         ensure_subtask_return_ready(ev)
         acknowledge_waitable_event(async_state, ev)
         release_waiter(async_state, task_id, ws_key)
-        mem.store_i32(ptr + 0, ev.index) catch {
+        mem.store_i32_at(mem.offset32(ptr + 0), ev.index) catch {
           _ => ()
         }
-        mem.store_i32(ptr + 4, ev.payload) catch {
+        mem.store_i32_at(mem.offset32(ptr + 4), ev.payload) catch {
           _ => ()
         }
         set_canon_debug_message(
@@ -218,10 +211,7 @@ fn instantiate_canon_waitable_set_wait(
         )
         [I32(ev.code)]
       }
-      _ => {
-        trap_canon("type mismatch")
-        [I32(0)]
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(
@@ -249,12 +239,7 @@ fn instantiate_canon_waitable_set_poll(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let mem = store.get_mem(mem_addr) catch {
-      e => {
-        trap_canon(e.to_string())
-        return [I32(0)]
-      }
-    }
+    let mem = store.get_mem(mem_addr) catch { e => trap_canon(e.to_string()) }
     match args {
       [I32(ws), I32(ptr)] => {
         let task_id = current_task_id(async_state)
@@ -265,35 +250,31 @@ fn instantiate_canon_waitable_set_poll(
         }
         if (ptr.reinterpret_as_uint() & 3U) != 0U {
           trap_canon("unaligned pointer")
-          return [I32(0)]
         }
         let ws_key = handle_key(owner_component_id, ws)
         match pop_waitable_event(async_state, ws_key) {
           Some(ev) => {
             acknowledge_waitable_event(async_state, ev)
-            mem.store_i32(ptr + 0, ev.index) catch {
+            mem.store_i32_at(mem.offset32(ptr + 0), ev.index) catch {
               _ => ()
             }
-            mem.store_i32(ptr + 4, ev.payload) catch {
+            mem.store_i32_at(mem.offset32(ptr + 4), ev.payload) catch {
               _ => ()
             }
             [I32(ev.code)]
           }
           None => {
-            mem.store_i32(ptr + 0, 0) catch {
+            mem.store_i32_at(mem.offset32(ptr + 0), 0) catch {
               _ => ()
             }
-            mem.store_i32(ptr + 4, 0) catch {
+            mem.store_i32_at(mem.offset32(ptr + 4), 0) catch {
               _ => ()
             }
             [I32(0)]
           }
         }
       }
-      _ => {
-        trap_canon("type mismatch")
-        [I32(0)]
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
@@ -320,7 +301,6 @@ fn instantiate_canon_waitable_set_drop(
           Some(set) =>
             if set.waiters[0] > 0 {
               trap_canon("cannot drop waitable set with waiters")
-              []
             } else {
               async_state.waitable_sets.remove(ws_key)
               // Clean up membership mappings.
@@ -345,16 +325,10 @@ fn instantiate_canon_waitable_set_drop(
               free_shared_handle(async_state, owner_component_id, ws)
               []
             }
-          None => {
-            trap_canon("unknown waitable set index \{ws}")
-            []
-          }
+          None => trap_canon("unknown waitable set index \{ws}")
         }
       }
-      _ => {
-        trap_canon("type mismatch")
-        []
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
@@ -382,7 +356,6 @@ fn instantiate_canon_waitable_join(
           trap_canon(
             "waitable cannot be used synchronously while added to a waitable set",
           )
-          return []
         }
         if ws == 0 {
           if async_state.stream_table.endpoints.get(waitable_key)
@@ -452,17 +425,39 @@ fn instantiate_canon_waitable_join(
               }
             }
           }
-          None => {
-            trap_canon("unknown waitable set index \{ws}")
-            []
-          }
+          None => trap_canon("unknown waitable set index \{ws}")
         }
       }
-      _ => {
-        trap_canon("type mismatch")
-        []
-      }
+      _ => trap_canon("type mismatch")
     }
+  }
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
+}
+
+///|
+fn instantiate_waitable_cancel(
+  state : BuildState,
+  store : @runtime.Store,
+  is_async_cancel : Bool,
+  cancel : (Int32) -> Int32 raise @runtime.RuntimeError,
+) -> Unit raise ComponentRuntimeError {
+  let core_type : @types.FuncType = { params: [I32], results: [I32], }
+  let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
+  let host = fn(
+    args : Array[@types.Value],
+  ) -> Array[@types.Value] raise @runtime.RuntimeError {
+    if !canon_may_leave[0] {
+      trap_canon("cannot leave component instance")
+    }
+    guard args is [I32(handle)] else { trap_canon("type mismatch") }
+    if !is_async_cancel &&
+      waitable_is_in_set(async_state, owner_component_id, handle) {
+      trap_canon(
+        "waitable cannot be used synchronously while added to a waitable set",
+      )
+    }
+    [I32(cancel(handle))]
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

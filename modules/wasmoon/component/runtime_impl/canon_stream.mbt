@@ -148,18 +148,7 @@ fn progress_host_stream_sources(
       Closed => {
         table.streams.replace(stream_id, {
           allows_intra_component: state.allows_intra_component,
-          pending_read: Some({
-            mem_addr: read.mem_addr,
-            realloc: read.realloc,
-            encoding: read.encoding,
-            payload_type: read.payload_type,
-            reader_table: read.reader_table,
-            ptr: read.ptr,
-            len: read.len,
-            filled: read.filled,
-            reader_handle: read.reader_handle,
-            event_enqueued: true,
-          }),
+          pending_read: Some({ ..read, event_enqueued: true, }),
           pending_write: state.pending_write,
           readable_dropped: state.readable_dropped,
           writable_dropped: true,
@@ -199,18 +188,7 @@ fn progress_host_stream_sources(
         let filled = read.filled + values.length()
         table.streams.replace(stream_id, {
           allows_intra_component: state.allows_intra_component,
-          pending_read: Some({
-            mem_addr: read.mem_addr,
-            realloc: read.realloc,
-            encoding: read.encoding,
-            payload_type: read.payload_type,
-            reader_table: read.reader_table,
-            ptr: read.ptr,
-            len: read.len,
-            filled,
-            reader_handle: read.reader_handle,
-            event_enqueued: true,
-          }),
+          pending_read: Some({ ..read, filled, event_enqueued: true, }),
           pending_write: state.pending_write,
           readable_dropped: state.readable_dropped,
           writable_dropped: false,
@@ -266,19 +244,13 @@ fn instantiate_canon_stream_read(
     }
 
     let (elem_size, _) = payload_type.layout(resources, store) catch {
-      error => {
-        trap_canon(canon_err_message(error))
-        return ret_i32(0)
-      }
+      error => trap_canon(canon_err_message(error))
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
         let ptr = ptr.to_int64() & 0xffffffffL
         payload_type.check_transmit_buffer(resources, store, ptr, len) catch {
-          error => {
-            trap_canon(canon_err_message(error))
-            return ret_i32(0)
-          }
+          error => trap_canon(canon_err_message(error))
         }
         if table.endpoints.get(handle_key(owner_component_id, handle))
           is Some(ep) &&
@@ -287,41 +259,24 @@ fn instantiate_canon_stream_read(
             "cannot read after being notified that the writable end dropped",
           )
         }
-        if !is_async {
-          resume_sync_waitable_use(
-            async_state, owner_component_id, handle, task_id,
-          )
-          |> ignore
-        }
-        if !is_async &&
-          waitable_is_in_set(async_state, owner_component_id, handle) {
-          trap_canon(
-            "waitable cannot be used synchronously while added to a waitable set",
-          )
-          return ret_i32(0)
-        }
+        async_state.resume_transmit_use(
+          owner_component_id, handle, task_id, is_async,
+        )
+        |> ignore
         // BLOCKED=-1, COMPLETED=0 | (n<<4), DROPPED=1 | (n<<4)
         if len.reinterpret_as_uint() > 0x0fffffffU {
           trap_canon("stream read/write count too large")
-          ret_i32(0)
         } else {
           let key = handle_key(owner_component_id, handle)
           match table.endpoints.get(key) {
-            None => {
-              trap_canon("unknown stream handle index \{handle}")
-              ret_i32(0)
-            }
+            None => trap_canon("unknown stream handle index \{handle}")
             Some(ep) =>
               if !ep.is_readable {
                 trap_canon("type mismatch")
-                ret_i32(0)
               } else {
                 let st0 = match table.streams.get(ep.stream_id) {
                   Some(s) => s
-                  None => {
-                    trap_canon("unknown stream handle index \{handle}")
-                    return ret_i32(0)
-                  }
+                  None => trap_canon("unknown stream handle index \{handle}")
                 }
                 match table.host_values.get(ep.stream_id) {
                   Some(source) => {
@@ -331,15 +286,11 @@ fn instantiate_canon_stream_read(
                           trap_canon(
                             "cannot have concurrent operations active on a future/stream",
                           )
-                          return ret_i32(0)
                         } else if read.reader_handle == handle &&
                           read.event_enqueued {
                           table.streams.replace(ep.stream_id, {
-                            allows_intra_component: st0.allows_intra_component,
+                            ..st0,
                             pending_read: None,
-                            pending_write: st0.pending_write,
-                            readable_dropped: st0.readable_dropped,
-                            writable_dropped: st0.writable_dropped,
                           })
                           if st0.writable_dropped {
                             ep.notified_peer_dropped[0] = true
@@ -354,10 +305,7 @@ fn instantiate_canon_stream_read(
                       None => ()
                     }
                     let poll_result = poll_host_value_stream(source, len) catch {
-                      e => {
-                        trap_canon(e.to_string())
-                        return ret_i32(0)
-                      }
+                      e => trap_canon(e.to_string())
                     }
                     match poll_result {
                       Values(values) => {
@@ -371,10 +319,7 @@ fn instantiate_canon_stream_read(
                             reader_table,
                             ptr + i.to_int64() * elem_size.to_int64(),
                           ) catch {
-                            e => {
-                              trap_canon(e.to_string())
-                              return ret_i32(0)
-                            }
+                            e => trap_canon(e.to_string())
                           }
                         }
                         return ret_i32(values.length() << 4)
@@ -429,7 +374,6 @@ fn instantiate_canon_stream_read(
                       trap_canon(
                         "cannot have concurrent operations active on a future/stream",
                       )
-                      return ret_i32(0)
                     } else if pr0.reader_handle == handle {
                       if pr0.filled == pr0.len || st0.writable_dropped {
                         let dropped = if st0.writable_dropped { 1 } else { 0 }
@@ -437,11 +381,8 @@ fn instantiate_canon_stream_read(
                           ep.notified_peer_dropped[0] = true
                         }
                         table.streams.replace(ep.stream_id, {
-                          allows_intra_component: st0.allows_intra_component,
+                          ..st0,
                           pending_read: None,
-                          pending_write: st0.pending_write,
-                          readable_dropped: st0.readable_dropped,
-                          writable_dropped: st0.writable_dropped,
                         })
                         let out_code = dropped | (pr0.filled << 4)
                         set_canon_debug_message(
@@ -458,7 +399,6 @@ fn instantiate_canon_stream_read(
                           trap_canon(
                             "cannot block a synchronous task before returning",
                           )
-                          return ret_i32(0)
                         }
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
@@ -469,7 +409,6 @@ fn instantiate_canon_stream_read(
                     } else {
                       // Another read is already in progress.
                       trap_canon("cannot remove busy stream")
-                      return ret_i32(0)
                     }
                   None => ()
                 }
@@ -503,19 +442,11 @@ fn instantiate_canon_stream_read(
                       // Persist the updated `event_enqueued` bit and then behave as if there is
                       // no pending data for readers.
                       table.streams.replace(ep.stream_id, {
-                        allows_intra_component: st0.allows_intra_component,
-                        pending_read: st0.pending_read,
+                        ..st0,
                         pending_write: Some({
-                          writer_table: pw.writer_table,
-                          buf: pw.buf,
-                          count: pw.count,
-                          sent: pw.sent,
-                          writer_handle: pw.writer_handle,
+                          ..pw,
                           event_enqueued: pw_event_enqueued,
-                          defer_complete: pw.defer_complete,
                         }),
-                        readable_dropped: st0.readable_dropped,
-                        writable_dropped: st0.writable_dropped,
                       })
                       if st0.writable_dropped {
                         ep.notified_peer_dropped[0] = true
@@ -540,13 +471,8 @@ fn instantiate_canon_stream_read(
                         allows_intra_component: st0.allows_intra_component,
                         pending_read: Some(pr),
                         pending_write: Some({
-                          writer_table: pw.writer_table,
-                          buf: pw.buf,
-                          count: pw.count,
-                          sent: pw.sent,
-                          writer_handle: pw.writer_handle,
+                          ..pw,
                           event_enqueued: pw_event_enqueued,
-                          defer_complete: pw.defer_complete,
                         }),
                         readable_dropped: st0.readable_dropped,
                         writable_dropped: st0.writable_dropped,
@@ -561,7 +487,6 @@ fn instantiate_canon_stream_read(
                           trap_canon(
                             "cannot block a synchronous task before returning",
                           )
-                          return ret_i32(0)
                         }
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
@@ -582,10 +507,7 @@ fn instantiate_canon_stream_read(
                       async_state,
                       ptr,
                     ) catch {
-                      error => {
-                        trap_canon(canon_err_message(error))
-                        return ret_i32(0)
-                      }
+                      error => trap_canon(canon_err_message(error))
                     }
                     let new_sent = pw.sent + n
                     // Publish cumulative progress. Further reads may extend
@@ -614,21 +536,10 @@ fn instantiate_canon_stream_read(
                       )
                       event_enqueued = true
                     }
-                    let pw2 = Some({
-                      writer_table: pw.writer_table,
-                      buf: pw.buf,
-                      count: pw.count,
-                      sent: new_sent,
-                      writer_handle: pw.writer_handle,
-                      event_enqueued,
-                      defer_complete: pw.defer_complete,
-                    })
+                    let pw2 = Some({ ..pw, sent: new_sent, event_enqueued, })
                     table.streams.replace(ep.stream_id, {
-                      allows_intra_component: st0.allows_intra_component,
-                      pending_read: st0.pending_read,
+                      ..st0,
                       pending_write: pw2,
-                      readable_dropped: st0.readable_dropped,
-                      writable_dropped: st0.writable_dropped,
                     })
                     let dropped = if st0.writable_dropped &&
                       new_sent == pw.count {
@@ -664,11 +575,8 @@ fn instantiate_canon_stream_read(
                         event_enqueued: false,
                       }
                       table.streams.replace(ep.stream_id, {
-                        allows_intra_component: st0.allows_intra_component,
+                        ..st0,
                         pending_read: Some(pr),
-                        pending_write: st0.pending_write,
-                        readable_dropped: st0.readable_dropped,
-                        writable_dropped: st0.writable_dropped,
                       })
                       if is_async {
                         set_canon_debug_message(
@@ -680,7 +588,6 @@ fn instantiate_canon_stream_read(
                           trap_canon(
                             "cannot block a synchronous task before returning",
                           )
-                          return ret_i32(0)
                         }
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
@@ -694,10 +601,7 @@ fn instantiate_canon_stream_read(
           }
         }
       }
-      _ => {
-        trap_canon("type mismatch")
-        ret_i32(0)
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(
@@ -744,59 +648,35 @@ fn instantiate_canon_stream_write(
     }
 
     let _ = payload_type.layout(resources, store) catch {
-      error => {
-        trap_canon(canon_err_message(error))
-        return ret_i32(0)
-      }
+      error => trap_canon(canon_err_message(error))
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
         let ptr = ptr.to_int64() & 0xffffffffL
         payload_type.check_transmit_buffer(resources, store, ptr, len) catch {
-          error => {
-            trap_canon(canon_err_message(error))
-            return ret_i32(0)
-          }
+          error => trap_canon(canon_err_message(error))
         }
-        if !is_async {
-          resume_sync_waitable_use(
-            async_state, owner_component_id, handle, task_id,
-          )
-          |> ignore
-        }
-        if !is_async &&
-          waitable_is_in_set(async_state, owner_component_id, handle) {
-          trap_canon(
-            "waitable cannot be used synchronously while added to a waitable set",
-          )
-          return ret_i32(0)
-        }
+        async_state.resume_transmit_use(
+          owner_component_id, handle, task_id, is_async,
+        )
+        |> ignore
         if len.reinterpret_as_uint() > 0x0fffffffU {
           trap_canon("stream read/write count too large")
-          ret_i32(0)
         } else {
           match table.endpoints.get(handle_key(owner_component_id, handle)) {
-            None => {
-              trap_canon("unknown stream handle index \{handle}")
-              ret_i32(0)
-            }
+            None => trap_canon("unknown stream handle index \{handle}")
             Some(ep) =>
               if ep.is_readable {
                 trap_canon("type mismatch")
-                ret_i32(0)
               } else {
                 if ep.notified_peer_dropped[0] {
                   trap_canon(
                     "cannot write after being notified that the readable end dropped",
                   )
-                  return ret_i32(0)
                 }
                 let st0 = match table.streams.get(ep.stream_id) {
                   Some(s) => s
-                  None => {
-                    trap_canon("unknown stream handle index \{handle}")
-                    return ret_i32(0)
-                  }
+                  None => trap_canon("unknown stream handle index \{handle}")
                 }
                 // A resumed blocking write retries this host instruction with
                 // the same pending operation.
@@ -806,7 +686,6 @@ fn instantiate_canon_stream_write(
                       trap_canon(
                         "cannot have concurrent operations active on a future/stream",
                       )
-                      return ret_i32(0)
                     } else if pw0.writer_handle == handle {
                       let total_elems = pw0.count
                       if st0.readable_dropped || pw0.sent >= total_elems {
@@ -819,19 +698,8 @@ fn instantiate_canon_stream_write(
                           pw0.sent >= total_elems &&
                           !pw0.defer_complete {
                           table.streams.replace(ep.stream_id, {
-                            allows_intra_component: st0.allows_intra_component,
-                            pending_read: st0.pending_read,
-                            pending_write: Some({
-                              writer_table: pw0.writer_table,
-                              buf: pw0.buf,
-                              count: pw0.count,
-                              sent: pw0.sent,
-                              writer_handle: pw0.writer_handle,
-                              event_enqueued: pw0.event_enqueued,
-                              defer_complete: true,
-                            }),
-                            readable_dropped: st0.readable_dropped,
-                            writable_dropped: st0.writable_dropped,
+                            ..st0,
+                            pending_write: Some({ ..pw0, defer_complete: true, }),
                           })
                           mark_sync_waitable_blocked(
                             async_state, owner_component_id, handle, task_id,
@@ -844,11 +712,8 @@ fn instantiate_canon_stream_write(
                           ep.notified_peer_dropped[0] = true
                         }
                         table.streams.replace(ep.stream_id, {
-                          allows_intra_component: st0.allows_intra_component,
-                          pending_read: st0.pending_read,
+                          ..st0,
                           pending_write: None,
-                          readable_dropped: st0.readable_dropped,
-                          writable_dropped: st0.writable_dropped,
                         })
                         let code = dropped | (pw0.sent << 4)
                         set_canon_debug_message(
@@ -865,7 +730,6 @@ fn instantiate_canon_stream_write(
                           trap_canon(
                             "cannot block a synchronous task before returning",
                           )
-                          return ret_i32(0)
                         }
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
@@ -875,7 +739,6 @@ fn instantiate_canon_stream_write(
                       }
                     } else {
                       trap_canon("cannot drop busy stream")
-                      return ret_i32(0)
                     }
                   None => ()
                 }
@@ -914,28 +777,14 @@ fn instantiate_canon_stream_write(
                             payload: 0,
                           },
                         )
-                        Some({
-                          mem_addr: pr0.mem_addr,
-                          realloc: pr0.realloc,
-                          encoding: pr0.encoding,
-                          payload_type: pr0.payload_type,
-                          reader_table: pr0.reader_table,
-                          ptr: pr0.ptr,
-                          len: pr0.len,
-                          filled: pr0.filled,
-                          reader_handle: pr0.reader_handle,
-                          event_enqueued: true,
-                        })
+                        Some({ ..pr0, event_enqueued: true, })
                       } else {
                         st0.pending_read
                       }
                       let buf = payload_type.load(
                         resources, store, ptr, len, writer_table,
                       ) catch {
-                        error => {
-                          trap_canon(canon_err_message(error))
-                          return ret_i32(0)
-                        }
+                        error => trap_canon(canon_err_message(error))
                       }
                       table.streams.replace(ep.stream_id, {
                         allows_intra_component: st0.allows_intra_component,
@@ -962,7 +811,6 @@ fn instantiate_canon_stream_write(
                           trap_canon(
                             "cannot block a synchronous task before returning",
                           )
-                          return ret_i32(0)
                         }
                         mark_sync_waitable_blocked(
                           async_state, owner_component_id, handle, task_id,
@@ -976,10 +824,7 @@ fn instantiate_canon_stream_write(
                     let buf = payload_type.load(
                       resources, store, ptr, len, writer_table,
                     ) catch {
-                      error => {
-                        trap_canon(canon_err_message(error))
-                        return ret_i32(0)
-                      }
+                      error => trap_canon(canon_err_message(error))
                     }
                     let reader_resources : CanonResources = {
                       mem_addr: pr0.mem_addr,
@@ -990,10 +835,7 @@ fn instantiate_canon_stream_write(
                     let (reader_size, _) = pr0.payload_type.layout(
                       reader_resources, store,
                     ) catch {
-                      error => {
-                        trap_canon(canon_err_message(error))
-                        return ret_i32(0)
-                      }
+                      error => trap_canon(canon_err_message(error))
                     }
                     buf.store(
                       0,
@@ -1006,10 +848,7 @@ fn instantiate_canon_stream_write(
                       async_state,
                       pr0.ptr + pr0.filled.to_int64() * reader_size.to_int64(),
                     ) catch {
-                      error => {
-                        trap_canon(canon_err_message(error))
-                        return ret_i32(0)
-                      }
+                      error => trap_canon(canon_err_message(error))
                     }
                     let filled1 = pr0.filled + n
                     let mut event_enqueued = pr0.event_enqueued
@@ -1037,24 +876,10 @@ fn instantiate_canon_stream_write(
                       )
                       event_enqueued = true
                     }
-                    let pr1 = {
-                      mem_addr: pr0.mem_addr,
-                      realloc: pr0.realloc,
-                      encoding: pr0.encoding,
-                      payload_type: pr0.payload_type,
-                      reader_table: pr0.reader_table,
-                      ptr: pr0.ptr,
-                      len: pr0.len,
-                      filled: filled1,
-                      reader_handle: pr0.reader_handle,
-                      event_enqueued,
-                    }
+                    let pr1 = { ..pr0, filled: filled1, event_enqueued, }
                     table.streams.replace(ep.stream_id, {
-                      allows_intra_component: st0.allows_intra_component,
+                      ..st0,
                       pending_read: Some(pr1),
-                      pending_write: st0.pending_write,
-                      readable_dropped: st0.readable_dropped,
-                      writable_dropped: st0.writable_dropped,
                     })
                     let out_code = n << 4
                     set_canon_debug_message(
@@ -1067,14 +892,10 @@ fn instantiate_canon_stream_write(
                     let buf = payload_type.load(
                       resources, store, ptr, len, writer_table,
                     ) catch {
-                      error => {
-                        trap_canon(canon_err_message(error))
-                        return ret_i32(0)
-                      }
+                      error => trap_canon(canon_err_message(error))
                     }
                     table.streams.replace(ep.stream_id, {
-                      allows_intra_component: st0.allows_intra_component,
-                      pending_read: st0.pending_read,
+                      ..st0,
                       pending_write: Some({
                         writer_table,
                         buf,
@@ -1084,8 +905,6 @@ fn instantiate_canon_stream_write(
                         event_enqueued: false,
                         defer_complete: false,
                       }),
-                      readable_dropped: st0.readable_dropped,
-                      writable_dropped: st0.writable_dropped,
                     })
                     if is_async {
                       set_canon_debug_message(
@@ -1097,7 +916,6 @@ fn instantiate_canon_stream_write(
                         trap_canon(
                           "cannot block a synchronous task before returning",
                         )
-                        return ret_i32(0)
                       }
                       mark_sync_waitable_blocked(
                         async_state, owner_component_id, handle, task_id,
@@ -1111,10 +929,7 @@ fn instantiate_canon_stream_write(
           }
         }
       }
-      _ => {
-        trap_canon("type mismatch")
-        [I32(0)]
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(
@@ -1128,165 +943,48 @@ fn instantiate_canon_stream_write(
 }
 
 ///|
-fn instantiate_canon_stream_cancel_read(
-  _tyidx : Int32,
+fn instantiate_canon_stream_cancel(
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
+  readable~ : Bool,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32], }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
-  let host = fn(
-    args : Array[@types.Value],
-  ) -> Array[@types.Value] raise @runtime.RuntimeError {
-    if !canon_may_leave[0] {
-      trap_canon("cannot leave component instance")
+  instantiate_waitable_cancel(state, store, is_async_cancel, fn(
+    handle : Int32,
+  ) -> Int32 raise @runtime.RuntimeError {
+    guard table.endpoints.get(handle_key(owner_component_id, handle))
+      is Some(ep) else {
+      trap_canon("unknown stream handle index \{handle}")
     }
-    match args {
-      [I32(handle)] =>
-        if !is_async_cancel &&
-          waitable_is_in_set(async_state, owner_component_id, handle) {
-          trap_canon(
-            "waitable cannot be used synchronously while added to a waitable set",
-          )
-          return [I32(0)]
-        }
-      _ => ()
+    guard ep.is_readable == readable else { trap_canon("type mismatch") }
+    guard table.streams.get(ep.stream_id) is Some(st) else {
+      trap_canon("unknown stream handle index \{handle}")
     }
-    match args {
-      [I32(handle)] =>
-        match table.endpoints.get(handle_key(owner_component_id, handle)) {
-          None => {
-            trap_canon("unknown stream handle index \{handle}")
-            [I32(0)]
-          }
-          Some(ep) =>
-            if !ep.is_readable {
-              trap_canon("type mismatch")
-              [I32(0)]
-            } else {
-              let st0 = match table.streams.get(ep.stream_id) {
-                Some(s) => s
-                None => {
-                  trap_canon("unknown stream handle index \{handle}")
-                  return [I32(0)]
-                }
-              }
-              match st0.pending_read {
-                Some(pr) => {
-                  let code = if st0.writable_dropped { 1 } else { 2 }
-                  let filled = pr.filled
-                  let payload = code | (filled << 4)
-                  remove_waitable_events_for(
-                    async_state, owner_component_id, handle, 2,
-                  )
-                  acknowledge_waitable_event(async_state, {
-                    owner_component_id,
-                    code: 2,
-                    index: handle,
-                    payload,
-                  })
-                  [I32(code | (filled << 4))]
-                }
-                None => {
-                  trap_canon(
-                    "stream or future read cancelled when no read is pending",
-                  )
-                  [I32(0)]
-                }
-              }
-            }
-        }
-      _ => {
-        trap_canon("type mismatch")
-        [I32(0)]
+    let (event_code, payload) = if readable {
+      guard st.pending_read is Some(read) else {
+        trap_canon("stream or future read cancelled when no read is pending")
       }
-    }
-  }
-  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
-}
-
-///|
-fn instantiate_canon_stream_cancel_write(
-  _tyidx : Int32,
-  is_async_cancel : Bool,
-  state : BuildState,
-  store : @runtime.Store,
-) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = { params: [I32], results: [I32], }
-  let table = state.stream_table
-  let async_state = state.async_state
-  let owner_component_id = state.resource_table.id
-  let host = fn(
-    args : Array[@types.Value],
-  ) -> Array[@types.Value] raise @runtime.RuntimeError {
-    if !canon_may_leave[0] {
-      trap_canon("cannot leave component instance")
-    }
-    match args {
-      [I32(handle)] =>
-        if !is_async_cancel &&
-          waitable_is_in_set(async_state, owner_component_id, handle) {
-          trap_canon(
-            "waitable cannot be used synchronously while added to a waitable set",
-          )
-          return [I32(0)]
-        }
-      _ => ()
-    }
-    match args {
-      [I32(handle)] =>
-        match table.endpoints.get(handle_key(owner_component_id, handle)) {
-          None => {
-            trap_canon("unknown stream handle index \{handle}")
-            [I32(0)]
-          }
-          Some(ep) =>
-            if ep.is_readable {
-              trap_canon("type mismatch")
-              [I32(0)]
-            } else {
-              let st0 = match table.streams.get(ep.stream_id) {
-                Some(s) => s
-                None => {
-                  trap_canon("unknown stream handle index \{handle}")
-                  return [I32(0)]
-                }
-              }
-              match st0.pending_write {
-                Some(pw) => {
-                  let code = if st0.readable_dropped { 1 } else { 2 }
-                  let sent = pw.sent
-                  let payload = code | (sent << 4)
-                  remove_waitable_events_for(
-                    async_state, owner_component_id, handle, 3,
-                  )
-                  acknowledge_waitable_event(async_state, {
-                    owner_component_id,
-                    code: 3,
-                    index: handle,
-                    payload,
-                  })
-                  [I32(code | (sent << 4))]
-                }
-                None => {
-                  trap_canon(
-                    "stream or future write cancelled when no write is pending",
-                  )
-                  [I32(0)]
-                }
-              }
-            }
-        }
-      _ => {
-        trap_canon("type mismatch")
-        [I32(0)]
+      (2, (if st.writable_dropped { 1 } else { 2 }) | (read.filled << 4))
+    } else {
+      guard st.pending_write is Some(write) else {
+        trap_canon("stream or future write cancelled when no write is pending")
       }
+      (3, (if st.readable_dropped { 1 } else { 2 }) | (write.sent << 4))
     }
-  }
-  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
+    remove_waitable_events_for(
+      async_state, owner_component_id, handle, event_code,
+    )
+    acknowledge_waitable_event(async_state, {
+      owner_component_id,
+      code: event_code,
+      index: handle,
+      payload,
+    })
+    payload
+  })
 }
 
 ///|
@@ -1308,27 +1006,19 @@ fn instantiate_canon_stream_drop_readable(
     match args {
       [I32(handle)] =>
         match table.endpoints.get(handle_key(owner_component_id, handle)) {
-          None => {
-            trap_canon("unknown stream handle index \{handle}")
-            []
-          }
+          None => trap_canon("unknown stream handle index \{handle}")
           Some(ep) =>
             if !ep.is_readable {
               trap_canon("type mismatch")
-              []
             } else {
               let st0 = match table.streams.get(ep.stream_id) {
                 Some(s) => s
-                None => {
-                  trap_canon("unknown stream handle index \{handle}")
-                  return []
-                }
+                None => trap_canon("unknown stream handle index \{handle}")
               }
               // Dropping a readable endpoint is only invalid if there is an
               // active read in progress on that endpoint.
               if st0.pending_read is Some(_) {
                 trap_canon("cannot remove busy stream")
-                return []
               }
               // Dropping readable may resolve a pending write as DROPPED.
               match st0.pending_write {
@@ -1355,26 +1045,15 @@ fn instantiate_canon_stream_drop_readable(
                   table.streams.replace(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
                     pending_read: st0.pending_read,
-                    pending_write: Some({
-                      writer_table: pw.writer_table,
-                      buf: pw.buf,
-                      count: pw.count,
-                      sent: pw.sent,
-                      writer_handle: pw.writer_handle,
-                      event_enqueued: true,
-                      defer_complete: pw.defer_complete,
-                    }),
+                    pending_write: Some({ ..pw, event_enqueued: true, }),
                     readable_dropped: true,
                     writable_dropped: st0.writable_dropped,
                   })
                 }
                 None =>
                   table.streams.replace(ep.stream_id, {
-                    allows_intra_component: st0.allows_intra_component,
-                    pending_read: st0.pending_read,
-                    pending_write: st0.pending_write,
+                    ..st0,
                     readable_dropped: true,
-                    writable_dropped: st0.writable_dropped,
                   })
               }
               // Remove from any waitable-set membership and queued events.
@@ -1396,10 +1075,7 @@ fn instantiate_canon_stream_drop_readable(
               []
             }
         }
-      _ => {
-        trap_canon("type mismatch")
-        []
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
@@ -1424,27 +1100,19 @@ fn instantiate_canon_stream_drop_writable(
     match args {
       [I32(handle)] =>
         match table.endpoints.get(handle_key(owner_component_id, handle)) {
-          None => {
-            trap_canon("unknown stream handle index \{handle}")
-            []
-          }
+          None => trap_canon("unknown stream handle index \{handle}")
           Some(ep) =>
             if ep.is_readable {
               trap_canon("type mismatch")
-              []
             } else {
               let st0 = match table.streams.get(ep.stream_id) {
                 Some(s) => s
-                None => {
-                  trap_canon("unknown stream handle index \{handle}")
-                  return []
-                }
+                None => trap_canon("unknown stream handle index \{handle}")
               }
               // Dropping a writable endpoint is only invalid if there is an
               // active write in progress on that endpoint.
               if st0.pending_write is Some(_) {
                 trap_canon("cannot drop busy stream")
-                return []
               }
               // Dropping writable may resolve a pending read as DROPPED.
               match st0.pending_read {
@@ -1470,18 +1138,7 @@ fn instantiate_canon_stream_drop_writable(
                   )
                   table.streams.replace(ep.stream_id, {
                     allows_intra_component: st0.allows_intra_component,
-                    pending_read: Some({
-                      mem_addr: pr.mem_addr,
-                      realloc: pr.realloc,
-                      encoding: pr.encoding,
-                      payload_type: pr.payload_type,
-                      reader_table: pr.reader_table,
-                      ptr: pr.ptr,
-                      len: pr.len,
-                      filled: pr.filled,
-                      reader_handle: pr.reader_handle,
-                      event_enqueued: true,
-                    }),
+                    pending_read: Some({ ..pr, event_enqueued: true, }),
                     pending_write: st0.pending_write,
                     readable_dropped: st0.readable_dropped,
                     writable_dropped: true,
@@ -1489,10 +1146,7 @@ fn instantiate_canon_stream_drop_writable(
                 }
                 None =>
                   table.streams.replace(ep.stream_id, {
-                    allows_intra_component: st0.allows_intra_component,
-                    pending_read: st0.pending_read,
-                    pending_write: st0.pending_write,
-                    readable_dropped: st0.readable_dropped,
+                    ..st0,
                     writable_dropped: true,
                   })
               }
@@ -1506,10 +1160,7 @@ fn instantiate_canon_stream_drop_writable(
               []
             }
         }
-      _ => {
-        trap_canon("type mismatch")
-        []
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))

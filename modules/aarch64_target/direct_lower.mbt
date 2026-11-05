@@ -1,53 +1,4 @@
 ///|
-fn direct_source_metadata(
-  source_location : @native.SourceLocation?,
-  stack_map : @native.StackMapMetadata?,
-  values : Array[@vcode.Value],
-  semantics : @native.OperationSemantics,
-  trap? : @native.TrapReason,
-) -> @vcode.InstructionMetadata {
-  let safepoint : @native.SafepointKind? = match
-    (semantics.gc_safepoint, semantics.cancellation_safepoint) {
-    (true, true) => Some(GcAndCancellation)
-    (true, false) => Some(Gc)
-    (false, true) => Some(Cancellation)
-    (false, false) => None
-  }
-  match source_location {
-    Some(location) =>
-      @vcode.InstructionMetadata::new(
-        source=location,
-        trap?,
-        safepoint?,
-        live_gc_roots=values,
-        stack_map?,
-      )
-    None =>
-      @vcode.InstructionMetadata::new(
-        trap?,
-        safepoint?,
-        live_gc_roots=values,
-        stack_map?,
-      )
-  }
-}
-
-///|
-/// Reusable lowering views for the common unconstrained VCode path. Checked
-/// VCode construction consumes these arrays synchronously and stores normalized
-/// operands, so the buffers can be cleared after every selected instruction.
-priv struct DirectLoweringScratch {
-  operands : Array[@vcode.Value]
-  operand_types : Array[@native.ValueType]
-  roots : Array[@vcode.Value]
-}
-
-///|
-fn DirectLoweringScratch::new() -> DirectLoweringScratch {
-  { operands: [], operand_types: [], roots: [], }
-}
-
-///|
 fn lower_direct_operation(
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
@@ -63,6 +14,12 @@ fn lower_direct_operation(
   stack_map : @native.StackMapMetadata?,
   stack_object : (@native.StackObject) -> AArch64StackObject,
 ) -> Array[@vcode.Value] raise AArch64LowerError {
+  let site = @vcode.DirectOperationSource::new(
+    source_location,
+    stack_map,
+    roots,
+    operation.semantics(),
+  )
   if operation is StoreRepeated64(offset, count, bits) {
     append_body(
       builder,
@@ -74,12 +31,7 @@ fn lower_direct_operation(
         @vcode.Output::any(I64).with_timing(Early),
         @vcode.Output::any(I64).with_timing(Early),
       ],
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
     |> ignore
     return []
@@ -94,12 +46,7 @@ fn lower_direct_operation(
       IntMultiplyAdd(width),
       operands,
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
   }
   if operation is IntLowBitsShiftLeft(field_bits, amount) {
@@ -112,12 +59,7 @@ fn lower_direct_operation(
       IntLowBitsShiftLeft(width, field_bits, amount),
       operands,
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
   }
   if operation is IntAddShiftedLeft(amount) {
@@ -130,12 +72,7 @@ fn lower_direct_operation(
       IntAddShiftedLeft(width, amount),
       operands,
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
   }
   if operation is IntShiftImmediate(binary, amount) {
@@ -163,12 +100,7 @@ fn lower_direct_operation(
       selected,
       operands,
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
   }
   if operation is IntCompareImmediate(comparison, bits) {
@@ -179,15 +111,10 @@ fn lower_direct_operation(
       return append_unconstrained_body(
         builder,
         block,
-        CompareSetImmediate(width, lower_condition(comparison), bits),
+        CompareSetImmediate(width, @vcode.select_condition(comparison), bits),
         operands,
         result_types,
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-        ),
+        site.metadata(),
       )
     }
     let constant = append_body(
@@ -201,15 +128,10 @@ fn lower_direct_operation(
     return append_unconstrained_body(
       builder,
       block,
-      CompareSet(width, lower_condition(comparison)),
+      CompareSet(width, @vcode.select_condition(comparison)),
       [operands[0], constant],
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
   }
   if operation is IntBinaryImmediate(binary, bits) {
@@ -256,12 +178,7 @@ fn lower_direct_operation(
         IntBinary(width, lowered),
         [operands[0], constant],
         result_types,
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-        ),
+        site.metadata(),
       )
     }
     return append_unconstrained_body(
@@ -270,21 +187,11 @@ fn lower_direct_operation(
       selected.unwrap(),
       operands,
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
   }
   if operation is Call(call) {
-    let metadata = direct_source_metadata(
-      source_location,
-      stack_map,
-      roots,
-      operation.semantics(),
-    )
+    let metadata = site.metadata()
     let results = match call.protocol {
       Platform =>
         lower_direct_platform_call(
@@ -308,13 +215,7 @@ fn lower_direct_operation(
       TrapIfZero(width),
       [@vcode.Input::any(operands[1])],
       [],
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-        trap=IntegerDivisionByZero,
-      ),
+      site.metadata(trap=IntegerDivisionByZero),
     )
     |> ignore
     if binary == SignedDiv {
@@ -324,13 +225,7 @@ fn lower_direct_operation(
         TrapIfSignedDivOverflow(width),
         operands,
         [],
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-          trap=IntegerOverflow,
-        ),
+        site.metadata(trap=IntegerOverflow),
       )
       |> ignore
     }
@@ -347,87 +242,28 @@ fn lower_direct_operation(
       selected,
       operands,
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
     return results
   }
   if operation is Convert(FloatToInt(source, result, signedness, mode)) {
-    let source_type = float_value_type(source)
     if mode == Trapping {
-      append_body(
-        builder,
+      builder.append_float_to_int_checks(
         block,
-        TrapIfFloat(source_type, Unordered),
-        [@vcode.Input::any(operands[0])],
-        [],
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-          trap=InvalidConversionToInteger,
-        ),
-      )
-      |> ignore
-      let (minimum_bits, maximum_bits, inclusive_minimum) = float_to_int_bounds(
-        source, result, signedness,
-      )
-      let minimum = append_body(
-          builder,
-          block,
-          LoadFloatConstant(source_type, minimum_bits),
-          [],
-          [@vcode.Output::any(source_type)],
-          @vcode.InstructionMetadata::empty(),
-        )[0]
-      let lower_condition : AArch64FloatTrapCondition = if inclusive_minimum {
-        LessOrEqual
-      } else {
-        LessThan
+        operands[0],
+        source,
+        result,
+        signedness,
+        site,
+        (ty, bits) => LoadFloatConstant(ty, bits),
+        ty => TrapIfFloat(ty, Unordered),
+        (ty, inclusive) => {
+          TrapIfFloat(ty, if inclusive { LessOrEqual } else { LessThan })
+        },
+        ty => TrapIfFloat(ty, GreaterOrEqual),
+      ) catch {
+        error => raise BuildFailure(cause=error)
       }
-      append_body(
-        builder,
-        block,
-        TrapIfFloat(source_type, lower_condition),
-        [@vcode.Input::any(operands[0]), @vcode.Input::any(minimum)],
-        [],
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-          trap=IntegerOverflow,
-        ),
-      )
-      |> ignore
-      let maximum = append_body(
-          builder,
-          block,
-          LoadFloatConstant(source_type, maximum_bits),
-          [],
-          [@vcode.Output::any(source_type)],
-          @vcode.InstructionMetadata::empty(),
-        )[0]
-      append_body(
-        builder,
-        block,
-        TrapIfFloat(source_type, GreaterOrEqual),
-        [@vcode.Input::any(operands[0]), @vcode.Input::any(maximum)],
-        [],
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-          trap=IntegerOverflow,
-        ),
-      )
-      |> ignore
     }
     let results = append_unconstrained_body(
       builder,
@@ -435,12 +271,7 @@ fn lower_direct_operation(
       Convert(FloatToInt(source, result, signedness)),
       operands,
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
     return results
   }
@@ -462,12 +293,7 @@ fn lower_direct_operation(
       IntUnary(width, Clz),
       [reversed],
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
     return results
   }
@@ -489,12 +315,7 @@ fn lower_direct_operation(
       IntShiftRegister(width, Ror),
       [operands[0], negated_shift],
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
     return results
   }
@@ -525,12 +346,7 @@ fn lower_direct_operation(
           [@vcode.Input::any(current)],
           [@vcode.Output::any(ty)],
           if last {
-            direct_source_metadata(
-              source_location,
-              stack_map,
-              roots,
-              operation.semantics(),
-            )
+            site.metadata()
           } else {
             @vcode.InstructionMetadata::empty()
           },
@@ -545,12 +361,7 @@ fn lower_direct_operation(
       VectorReplaceLane(lane, index),
       operands.map(@vcode.Input::any),
       [@vcode.Output::tied(V128, 0)],
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-      ),
+      site.metadata(),
     )
     return results
   }
@@ -593,12 +404,7 @@ fn lower_direct_operation(
         VectorIntBinary(I32x4, Add),
         [@vcode.Input::any(dot_products), @vcode.Input::any(operands[2])],
         [@vcode.Output::any(V128)],
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-        ),
+        site.metadata(),
       )[0]
     return [result]
   }
@@ -618,13 +424,7 @@ fn lower_direct_operation(
         VectorLoad128(spec.offset),
         [address],
         result_types,
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-          trap?=spec.trap,
-        ),
+        site.metadata(trap?=spec.trap),
       )
     }
     let selected = if spec.offset == 0UL {
@@ -644,13 +444,7 @@ fn lower_direct_operation(
         ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset),
         [address],
         result_types,
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-          trap?=spec.trap,
-        ),
+        site.metadata(trap?=spec.trap),
       )
     }
     return append_unconstrained_body(
@@ -659,13 +453,7 @@ fn lower_direct_operation(
       selected,
       operands,
       result_types,
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-        trap?=spec.trap,
-      ),
+      site.metadata(trap?=spec.trap),
     )
   }
   if operation is StoreIndexed(spec, shift) {
@@ -684,13 +472,7 @@ fn lower_direct_operation(
         VectorStore128(spec.offset),
         [@vcode.Input::any(address), @vcode.Input::any(operands[2])],
         [],
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-          trap?=spec.trap,
-        ),
+        site.metadata(trap?=spec.trap),
       )
     }
     if spec.offset == 0UL {
@@ -700,13 +482,7 @@ fn lower_direct_operation(
         ScalarStoreUxtw(spec.width, spec.value_type, shift),
         operands,
         [],
-        direct_source_metadata(
-          source_location,
-          stack_map,
-          roots,
-          operation.semantics(),
-          trap?=spec.trap,
-        ),
+        site.metadata(trap?=spec.trap),
       )
     }
     let address = append_body(
@@ -723,13 +499,7 @@ fn lower_direct_operation(
       ScalarStore(spec.width, spec.value_type, spec.offset),
       [@vcode.Input::any(address), @vcode.Input::any(operands[2])],
       [],
-      direct_source_metadata(
-        source_location,
-        stack_map,
-        roots,
-        operation.semantics(),
-        trap?=spec.trap,
-      ),
+      site.metadata(trap?=spec.trap),
     )
   }
   let selected = match operation {
@@ -756,49 +526,16 @@ fn lower_direct_operation(
     Vector(Shuffle(mask)) => Some(VectorShuffle(mask))
     Vector(Swizzle) => Some(VectorSwizzle)
     Vector(Bitwise(operation)) => Some(VectorBitwise(operation))
-    Vector(IntUnary(lane, Absolute)) => Some(VectorIntUnary(lane, Absolute))
-    Vector(IntUnary(lane, Negate)) => Some(VectorIntUnary(lane, Negate))
-    Vector(IntUnary(lane, PopulationCount)) =>
-      Some(VectorIntUnary(lane, PopulationCount))
-    Vector(IntUnary(lane, ExtendAddPairwise(signedness))) =>
-      Some(VectorIntUnary(lane, ExtendAddPairwise(signedness)))
-    Vector(IntBinary(lane, Add)) => Some(VectorIntBinary(lane, Add))
-    Vector(IntBinary(lane, Sub)) => Some(VectorIntBinary(lane, Sub))
-    Vector(IntBinary(lane, Mul)) => Some(VectorIntBinary(lane, Mul))
-    Vector(IntBinary(lane, AverageUnsigned)) =>
-      Some(VectorIntBinary(lane, AverageUnsigned))
-    Vector(IntBinary(lane, Min(signedness))) =>
-      Some(VectorIntBinary(lane, Min(signedness)))
-    Vector(IntBinary(lane, Max(signedness))) =>
-      Some(VectorIntBinary(lane, Max(signedness)))
-    Vector(IntBinary(lane, SaturatingAdd(signedness))) =>
-      Some(VectorIntBinary(lane, SaturatingAdd(signedness)))
-    Vector(IntBinary(lane, SaturatingSub(signedness))) =>
-      Some(VectorIntBinary(lane, SaturatingSub(signedness)))
-    Vector(IntBinary(lane, ExtendMultiply(half, signedness))) =>
-      Some(VectorIntBinary(lane, ExtendMultiply(half, signedness)))
-    Vector(IntBinary(lane, Dot16To32Signed)) =>
-      Some(VectorIntBinary(lane, Dot16To32Signed))
-    Vector(IntBinary(lane, Q15MultiplyRoundedSaturating)) =>
-      Some(VectorIntBinary(lane, Q15MultiplyRoundedSaturating))
+    Vector(IntUnary(lane, operation)) => Some(VectorIntUnary(lane, operation))
+    Vector(IntBinary(lane, operation)) => Some(VectorIntBinary(lane, operation))
     Vector(IntShift(lane, operation)) => Some(VectorIntShift(lane, operation))
     Vector(IntCompare(lane, comparison)) =>
       Some(VectorIntCompare(lane, comparison))
-    Vector(Convert(ExtendLow(lane, signedness))) =>
-      Some(VectorConvert(ExtendLow(lane, signedness)))
-    Vector(Convert(ExtendHigh(lane, signedness))) =>
-      Some(VectorConvert(ExtendHigh(lane, signedness)))
-    Vector(Convert(Narrow(lane, signedness))) =>
-      Some(VectorConvert(Narrow(lane, signedness)))
-    Vector(Convert(FloatToInt(source, I32x4, signedness, Saturating))) =>
-      Some(VectorConvert(FloatToInt(source, signedness)))
-    Vector(Convert(IntToFloat(I32x4, result, signedness))) =>
-      Some(VectorConvert(IntToFloat(result, signedness)))
-    Vector(Convert(PromoteLowF32x4)) => Some(VectorConvert(PromoteLowF32x4))
-    Vector(Convert(DemoteZeroF64x2)) => Some(VectorConvert(DemoteZeroF64x2))
-    Vector(Predicate(AnyTrue)) => Some(VectorPredicate(AnyTrue))
-    Vector(Predicate(AllTrue(lane))) => Some(VectorPredicate(AllTrue(lane)))
-    Vector(Predicate(BitMask(lane))) => Some(VectorPredicate(BitMask(lane)))
+    Vector(Convert(operation)) =>
+      @vcode.select_vector_conversion(operation).map(conversion => {
+        VectorConvert(conversion)
+      })
+    Vector(Predicate(predicate)) => Some(VectorPredicate(predicate))
     Vector(FloatUnary(lane, operation)) =>
       Some(VectorFloatUnary(lane, operation))
     Vector(FloatBinary(lane, operation)) =>
@@ -823,11 +560,17 @@ fn lower_direct_operation(
       match operand_type {
         Some(Ptr64) =>
           Some(
-            ReferenceCompareSet(Ptr64, lower_reference_condition(comparison)),
+            ReferenceCompareSet(
+              Ptr64,
+              @vcode.select_reference_condition(comparison),
+            ),
           )
         Some(GcRef64) =>
           Some(
-            ReferenceCompareSet(GcRef64, lower_reference_condition(comparison)),
+            ReferenceCompareSet(
+              GcRef64,
+              @vcode.select_reference_condition(comparison),
+            ),
           )
         _ => None
       }
@@ -863,7 +606,8 @@ fn lower_direct_operation(
     IntCompare(comparison) => {
       let operand_type = operand_types.get(0)
       match optional_gpr_width(operand_type) {
-        Some(width) => Some(CompareSet(width, lower_condition(comparison)))
+        Some(width) =>
+          Some(CompareSet(width, @vcode.select_condition(comparison)))
         None => None
       }
     }
@@ -878,28 +622,28 @@ fn lower_direct_operation(
         None => None
       }
     FloatUnary(unary) =>
-      match (result_types.get(0), lower_float_unary(unary)) {
-        (Some(F32), Some(unary)) => Some(FloatUnary(F32, unary))
-        (Some(F64), Some(unary)) => Some(FloatUnary(F64, unary))
+      match result_types.get(0) {
+        Some(F32) => Some(FloatUnary(F32, unary))
+        Some(F64) => Some(FloatUnary(F64, unary))
         _ => None
       }
     FloatBinary(binary) =>
-      match (result_types.get(0), lower_float_binary(binary)) {
-        (Some(F32), Some(binary)) => Some(FloatBinary(F32, binary))
-        (Some(F64), Some(binary)) => Some(FloatBinary(F64, binary))
+      match result_types.get(0) {
+        Some(F32) => Some(FloatBinary(F32, binary))
+        Some(F64) => Some(FloatBinary(F64, binary))
         _ => None
       }
     FloatTernary(ternary) =>
       match result_types.get(0) {
-        Some(F32) => Some(FloatTernary(F32, lower_float_ternary(ternary)))
-        Some(F64) => Some(FloatTernary(F64, lower_float_ternary(ternary)))
+        Some(F32) => Some(FloatTernary(F32, ternary))
+        Some(F64) => Some(FloatTernary(F64, ternary))
         _ => None
       }
     FloatCompare(comparison) => {
       let operand_type = operand_types.get(0)
-      match (operand_type, lower_float_condition(comparison)) {
-        (Some(F32), Some(condition)) => Some(FloatCompareSet(F32, condition))
-        (Some(F64), Some(condition)) => Some(FloatCompareSet(F64, condition))
+      match operand_type {
+        Some(F32) => Some(FloatCompareSet(F32, comparison))
+        Some(F64) => Some(FloatCompareSet(F64, comparison))
         _ => None
       }
     }
@@ -946,53 +690,16 @@ fn lower_direct_operation(
     None =>
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
   }
-  let selected_operands = match operation {
-    AtomicLoad(spec)
-    | AtomicStore(spec)
-    | AtomicRmw(spec, _)
-    | AtomicCompareExchange(spec) =>
-      if spec.offset == 0UL {
-        operands
-      } else {
-        let offset = append_body(
-            builder,
-            block,
-            LoadConstant(W64, spec.offset),
-            [],
-            [@vcode.Output::any(I64)],
-            @vcode.InstructionMetadata::empty(),
-          )[0]
-        let address = append_body(
-            builder,
-            block,
-            AddAddress,
-            [@vcode.Input::any(operands[0]), @vcode.Input::any(offset)],
-            [@vcode.Output::any(Ptr64)],
-            @vcode.InstructionMetadata::empty(),
-          )[0]
-        let selected_operands = operands.copy()
-        selected_operands[0] = address
-        selected_operands
-      }
-    _ => operands
+  let selected_operands = builder.materialize_atomic_address(
+    block,
+    operation,
+    operands,
+    bits => LoadConstant(W64, bits),
+    AddAddress,
+  ) catch {
+    error => raise BuildFailure(cause=error)
   }
-  let metadata = direct_source_metadata(
-    source_location,
-    stack_map,
-    roots,
-    operation.semantics(),
-    trap?=match operation {
-      Load(spec) => spec.trap
-      Store(spec) => spec.trap
-      VectorLoad(spec) => spec.trap
-      VectorStoreLane(spec) => spec.trap
-      AtomicLoad(spec) => spec.trap
-      AtomicStore(spec) => spec.trap
-      AtomicRmw(spec, _) => spec.trap
-      AtomicCompareExchange(spec) => spec.trap
-      _ => None
-    },
-  )
+  let metadata = site.selected_metadata(operation)
   let results = match operation {
     AtomicRmw(_, _) | AtomicCompareExchange(_) =>
       append_body(
@@ -1012,30 +719,8 @@ fn lower_direct_operation(
 }
 
 ///|
-
-///|
-priv struct DirectStackObjectRequest {
-  size : Int32
-  alignment : Int32
-}
-
-///|
 pub struct DirectLoweringSession {
-  priv builder : @vcode.CheckedBuilder[AArch64Inst]
-  priv context : LoweringContext
-  priv protocol : @native.CallProtocol
-  priv signature : @native.Signature
-  priv values : Array[@vcode.Value]
-  priv value_types : Array[@native.ValueType]
-  priv blocks : Array[@vcode.Block]
-  priv layout : Array[@vcode.Block]
-  priv stack_objects : Array[DirectStackObjectRequest]
-  priv scratch : DirectLoweringScratch
-  priv result_area : @vcode.Value?
-  priv mut instruction_index : Int32
-  priv mut first_error : AArch64LowerError?
-  priv mut constructed : ConstructedFunction?
-  priv on_event : (@vcode.TargetCompileEvent) -> Unit
+  priv state : @vcode.DirectLoweringState[AArch64Inst, AArch64LowerError]
 }
 
 ///|
@@ -1073,64 +758,33 @@ fn lower_direct_parameters(
   protocol : @native.CallProtocol,
   signature : @native.Signature,
 ) -> (Array[@vcode.Value], @vcode.Value?) raise AArch64LowerError {
-  let entry = builder.entry_block()
-  let layout = match protocol {
-    Platform => platform_call_layout(signature.params)
-    Internal =>
-      context.internal_abi.call_layout(signature) catch {
+  let (arguments, result_area) = match protocol {
+    Platform => (platform_call_layout(signature.params).arguments, None)
+    Internal => {
+      let abi = context.internal_abi
+      let plan = abi.call_plan(signature) catch {
         error => raise UnsupportedAbi(message=error.to_string())
       }
-  }
-  let values : Array[@vcode.Value] = []
-  for index, ty in signature.params {
-    let raw = builder.parameter(index) catch {
-      error => raise BuildFailure(cause=error)
+      let result_area = if plan.result_area_size > 0 {
+        Some(abi.result_area_argument)
+      } else {
+        None
+      }
+      (plan.arguments, result_area)
     }
-    values.push(
-      match layout.arguments[index] {
-        CallRegister(reg) =>
-          append_body(
-            builder,
-            entry,
-            IncomingReg(ty, reg),
-            [@vcode.Input::fixed(raw, reg)],
-            [abi_home_output(ty, reg)],
-            @vcode.InstructionMetadata::empty(),
-          )[0]
-        CallStack(offset) =>
-          append_body(
-            builder,
-            entry,
-            IncomingStack(ty, offset),
-            [],
-            [@vcode.Output::any_location(ty)],
-            @vcode.InstructionMetadata::empty(),
-          )[0]
-      },
-    )
   }
-  let result_area = if protocol == Internal {
-    let plan = context.internal_abi.call_plan(signature) catch {
-      error => raise UnsupportedAbi(message=error.to_string())
-    }
-    if plan.result_area_size > 0 {
-      Some(
-        append_body(
-          builder,
-          entry,
-          IncomingResultArea(context.internal_abi.result_area_argument),
-          [],
-          [@vcode.Output::any_location(Ptr64)],
-          @vcode.InstructionMetadata::empty(),
-        )[0],
-      )
-    } else {
-      None
-    }
-  } else {
-    None
+  @vcode.materialize_entry_arguments(
+    builder,
+    signature.params,
+    arguments,
+    result_area,
+    (ty, reg) => IncomingReg(ty, reg),
+    (ty, offset) => IncomingStack(ty, offset),
+    reg => IncomingResultArea(reg),
+    is_allocatable,
+  ) catch {
+    error => raise BuildFailure(cause=error)
   }
-  (values, result_area)
 }
 
 ///|
@@ -1153,103 +807,11 @@ pub fn DirectLoweringSession::new(
   let (values, result_area) = lower_direct_parameters(
     builder, context, protocol, signature,
   )
-  let entry = builder.entry_block()
   {
-    builder,
-    context,
-    protocol,
-    signature,
-    values,
-    value_types: signature.params.copy(),
-    blocks: [entry],
-    layout: [entry],
-    stack_objects: [],
-    scratch: DirectLoweringScratch::new(),
-    result_area,
-    instruction_index: 0,
-    first_error: None,
-    constructed: None,
-    on_event,
+    state: @vcode.DirectLoweringState::new(
+      builder, context, protocol, signature, values, result_area, on_event,
+    ),
   }
-}
-
-///|
-fn DirectLoweringSession::record_error(
-  self : DirectLoweringSession,
-  error : AArch64LowerError,
-) -> Unit {
-  if self.first_error is None {
-    self.first_error = Some(error)
-  }
-}
-
-///|
-fn DirectLoweringSession::target_value(
-  self : DirectLoweringSession,
-  id : Int32,
-) -> @vcode.Value {
-  self.values[id]
-}
-
-///|
-fn DirectLoweringSession::target_values_into(
-  self : DirectLoweringSession,
-  ids : Array[Int32],
-  values : Array[@vcode.Value],
-) -> Array[@vcode.Value] {
-  values.clear()
-  for id in ids {
-    values.push(self.target_value(id))
-  }
-  values
-}
-
-///|
-fn DirectLoweringSession::target_values(
-  self : DirectLoweringSession,
-  ids : Array[Int32],
-) -> Array[@vcode.Value] {
-  ids.map(id => self.target_value(id))
-}
-
-///|
-fn DirectLoweringSession::create_block(
-  self : DirectLoweringSession,
-  parameter_types : Array[@native.ValueType],
-) -> (Int32, Array[Int32]) {
-  let block = self.builder.create_block(parameter_types)
-  let block_id = self.blocks.length()
-  self.blocks.push(block)
-  let parameters : Array[Int32] = []
-  for index, ty in parameter_types {
-    let value = self.builder.block_parameter(block, index) catch {
-      _ => abort("aarch64 direct lowering could not read a new block parameter")
-    }
-    parameters.push(self.values.length())
-    self.values.push(value)
-    self.value_types.push(ty)
-  }
-  (block_id, parameters)
-}
-
-///|
-fn DirectLoweringSession::create_stack_object(
-  self : DirectLoweringSession,
-  size : Int32,
-  alignment : Int32,
-) -> Int32 {
-  let id = self.stack_objects.length()
-  self.stack_objects.push({ size, alignment, })
-  id
-}
-
-///|
-fn DirectLoweringSession::switch_to_block(
-  self : DirectLoweringSession,
-  block_id : Int32,
-) -> Unit {
-  let block = self.blocks[block_id]
-  self.layout.push(block)
 }
 
 ///|
@@ -1263,80 +825,43 @@ fn DirectLoweringSession::emit(
   root_ids : Array[Int32],
   stack_map : @native.StackMapMetadata?,
 ) -> Array[Int32] {
-  let block = self.blocks[block_id]
-  // I64 and Ptr64 are the same untraced 64-bit register representation.
-  // Preserve the semantic result type without creating another live range.
+  let block = self.state.block(block_id)
   if operation is Convert(Bitcast(from, to)) &&
-    operand_ids is [operand_id] &&
-    result_types is [result_type] &&
-    self.value_types[operand_id] == from &&
-    result_type == to &&
-    ((from == I64 && to == Ptr64) || (from == Ptr64 && to == I64)) {
-    let id = self.values.length()
-    self.values.push(self.target_value(operand_id))
-    self.value_types.push(result_type)
-    self.instruction_index += 1
+    self.state.alias_word_bitcast(operand_ids, result_types, from, to)
+    is Some(id) {
     return [id]
   }
-  let operands = self.target_values_into(operand_ids, self.scratch.operands)
-  self.scratch.operand_types.clear()
-  for id in operand_ids {
-    self.scratch.operand_types.push(self.value_types[id])
-  }
-  let roots = self.target_values_into(root_ids, self.scratch.roots)
-  let results = if self.first_error is Some(_) {
-    result_types.map(ty => append_placeholder(self.builder, block, ty))
+  let (operands, operand_types, roots) = self.state.instruction_operands(
+    operand_ids, root_ids,
+  )
+  let results = if self.state.first_error() is Some(_) {
+    result_types.map(ty => append_placeholder(self.state.builder, block, ty))
   } else {
     lower_direct_operation(
-      self.context,
-      self.builder,
+      self.state.context,
+      self.state.builder,
       block,
       block_id,
-      self.instruction_index,
+      self.state.instruction_index(),
       operation,
       operands,
-      self.scratch.operand_types,
+      operand_types,
       result_types,
       roots,
       source,
       stack_map,
       object => {
-        let request = self.stack_objects[object.id]
-        AArch64StackObject::new(object.id, request.size, request.alignment)
+        let (size, alignment) = self.state.stack_object(object.id)
+        AArch64StackObject::new(object.id, size, alignment)
       },
     ) catch {
       error => {
-        self.record_error(error)
-        result_types.map(ty => append_placeholder(self.builder, block, ty))
+        self.state.record_error(error)
+        result_types.map(ty => append_placeholder(self.state.builder, block, ty))
       }
     }
   }
-  self.instruction_index += 1
-  let ids : Array[Int32] = []
-  for index, value in results {
-    ids.push(self.values.length())
-    self.values.push(value)
-    self.value_types.push(result_types[index])
-  }
-  ids
-}
-
-///|
-fn DirectLoweringSession::terminator_metadata(
-  self : DirectLoweringSession,
-  metadata : @lowering.TargetTerminatorMetadata,
-) -> @vcode.InstructionMetadata {
-  match metadata.source {
-    Some(source) =>
-      @vcode.InstructionMetadata::new(
-        source~,
-        live_gc_roots=self.target_values(metadata.live_gc_roots),
-      )
-    None =>
-      @vcode.InstructionMetadata::new(
-        live_gc_roots=self.target_values(metadata.live_gc_roots),
-      )
-  }
+  self.state.record_results(results, result_types)
 }
 
 ///|
@@ -1345,85 +870,28 @@ fn DirectLoweringSession::lower_return_values(
   block : @vcode.Block,
   values : Array[@vcode.Value],
 ) -> Unit raise AArch64LowerError {
-  let locations : Array[CallResultLocation] = match self.protocol {
-    Platform => {
-      if self.signature.results.length() > 1 {
-        raise UnsupportedAbi(
-          message="platform functions support at most one direct result",
-        )
-      }
-      platform_result_registers(self.signature.results).map(reg => {
-        CallResultRegister(reg)
-      })
-    }
-    Internal =>
-      self.context.internal_abi.result_layout(self.signature.results).0
-  }
-  for index, value in values {
-    let ty = self.signature.results[index]
-    match locations[index] {
-      CallResultRegister(reg) =>
-        append_body(
-          self.builder,
-          block,
-          OutgoingReg(ty, reg),
-          [@vcode.Input::any(value)],
-          [],
-          @vcode.InstructionMetadata::empty(),
-        )
-        |> ignore
-      CallResultArea(offset, _) => {
-        guard self.result_area is Some(address) else {
-          raise UnsupportedAbi(message="internal result area is unavailable")
-        }
-        append_body(
-          self.builder,
-          block,
-          OutgoingAreaResult(ty, offset),
-          [@vcode.Input::any(address), @vcode.Input::any(value)],
-          [],
-          @vcode.InstructionMetadata::empty(),
-        )
-        |> ignore
-      }
-    }
+  self.state.materialize_return_values(
+    block,
+    values,
+    platform_result_registers,
+    (ty, reg) => OutgoingReg(ty, reg),
+    (ty, offset) => OutgoingAreaResult(ty, offset),
+  ) catch {
+    UnsupportedAbi(message) => raise UnsupportedAbi(message~)
+    BuildFailure(error) => raise BuildFailure(cause=error)
   }
 }
 
 ///|
-/// Local raw-word aliases need a typed definition at a CFG boundary. Keep
-/// body aliases free, materialize only mismatches, and leave GC references and
-/// invalid semantic edge types to the ordinary strict verifier.
-fn DirectLoweringSession::edge_values(
+fn DirectLoweringSession::edge(
   self : DirectLoweringSession,
   block : @vcode.Block,
+  target : Int32,
   ids : Array[Int32],
-) -> Array[@vcode.Value] raise AArch64LowerError {
-  let values : Array[@vcode.Value] = []
-  for id in ids {
-    let value = self.target_value(id)
-    let expected = self.value_types[id]
-    let needs_move = match expected {
-      Ptr64 => self.builder.value_type(value) == Some(I64)
-      I64 => self.builder.value_type(value) == Some(Ptr64)
-      _ => false
-    }
-    if needs_move {
-      values.push(
-        append_body(
-          self.builder,
-          block,
-          Move(expected),
-          [@vcode.Input::any(value)],
-          [@vcode.Output::any(expected)],
-          @vcode.InstructionMetadata::empty(),
-        )[0],
-      )
-    } else {
-      values.push(value)
-    }
+) -> @vcode.Edge raise AArch64LowerError {
+  self.state.edge(block, target, ids, ty => Move(ty)) catch {
+    error => raise BuildFailure(cause=error)
   }
-  values
 }
 
 ///|
@@ -1433,22 +901,20 @@ fn DirectLoweringSession::terminate(
   terminator : @lowering.TargetTerminator,
   metadata : @lowering.TargetTerminatorMetadata,
 ) -> Unit {
-  let block = self.blocks[block_id]
-  let ordinary_metadata = self.terminator_metadata(metadata)
+  let block = self.state.block(block_id)
+  let ordinary_metadata = self.state.terminator_metadata(
+    metadata.source,
+    metadata.live_gc_roots,
+  )
   let action : () -> Unit raise AArch64LowerError = fn() raise AArch64LowerError {
     match terminator {
       Jump(target, arguments) =>
         set_terminator(
-          self.builder,
+          self.state.builder,
           block,
           Jump,
           [],
-          [
-            @vcode.Edge::new(
-              self.blocks[target],
-              self.edge_values(block, arguments),
-            ),
-          ],
+          [self.edge(block, target, arguments)],
           ordinary_metadata,
         )
       Branch(
@@ -1459,19 +925,13 @@ fn DirectLoweringSession::terminate(
         false_arguments
       ) =>
         set_terminator(
-          self.builder,
+          self.state.builder,
           block,
           BranchNonZero(W32),
-          [@vcode.Input::any(self.target_value(condition))],
+          [@vcode.Input::any(self.state.target_value(condition))],
           [
-            @vcode.Edge::new(
-              self.blocks[true_target],
-              self.edge_values(block, true_arguments),
-            ),
-            @vcode.Edge::new(
-              self.blocks[false_target],
-              self.edge_values(block, false_arguments),
-            ),
+            self.edge(block, true_target, true_arguments),
+            self.edge(block, false_target, false_arguments),
           ],
           ordinary_metadata,
         )
@@ -1484,24 +944,22 @@ fn DirectLoweringSession::terminate(
         false_target,
         false_arguments
       ) => {
-        let width = if self.value_types[left] == I32 { W32 } else { W64 }
+        let width : GprWidth = if self.state.value_type(left) == I32 {
+          W32
+        } else {
+          W64
+        }
         set_terminator(
-          self.builder,
+          self.state.builder,
           block,
-          BranchCompare(width, lower_condition(comparison)),
+          BranchCompare(width, @vcode.select_condition(comparison)),
           [
-            @vcode.Input::any(self.target_value(left)),
-            @vcode.Input::any(self.target_value(right)),
+            @vcode.Input::any(self.state.target_value(left)),
+            @vcode.Input::any(self.state.target_value(right)),
           ],
           [
-            @vcode.Edge::new(
-              self.blocks[true_target],
-              self.edge_values(block, true_arguments),
-            ),
-            @vcode.Edge::new(
-              self.blocks[false_target],
-              self.edge_values(block, false_arguments),
-            ),
+            self.edge(block, true_target, true_arguments),
+            self.edge(block, false_target, false_arguments),
           ],
           ordinary_metadata,
         )
@@ -1515,7 +973,11 @@ fn DirectLoweringSession::terminate(
         false_target,
         false_arguments
       ) => {
-        let width = if self.value_types[input] == I32 { W32 } else { W64 }
+        let width : GprWidth = if self.state.value_type(input) == I32 {
+          W32
+        } else {
+          W64
+        }
         let mut first_target = true_target
         let mut first_arguments = true_arguments
         let mut second_target = false_target
@@ -1528,145 +990,157 @@ fn DirectLoweringSession::terminate(
             second_target = true_target
             second_arguments = true_arguments
           }
-          (BranchNonZero(width), [@vcode.Input::any(self.target_value(input))])
+          (
+            BranchNonZero(width),
+            [@vcode.Input::any(self.state.target_value(input))],
+          )
         } else if add_sub_immediate_shift(bits) is Some(_) {
           (
-            BranchCompareImmediate(width, lower_condition(comparison), bits),
-            [@vcode.Input::any(self.target_value(input))],
+            BranchCompareImmediate(
+              width,
+              @vcode.select_condition(comparison),
+              bits,
+            ),
+            [@vcode.Input::any(self.state.target_value(input))],
           )
         } else {
           let constant = append_body(
-              self.builder,
+              self.state.builder,
               block,
               LoadConstant(width, bits),
               [],
-              [@vcode.Output::any(self.value_types[input])],
+              [@vcode.Output::any(self.state.value_type(input))],
               @vcode.InstructionMetadata::empty(),
             )[0]
           (
-            BranchCompare(width, lower_condition(comparison)),
+            BranchCompare(width, @vcode.select_condition(comparison)),
             [
-              @vcode.Input::any(self.target_value(input)),
+              @vcode.Input::any(self.state.target_value(input)),
               @vcode.Input::any(constant),
             ],
           )
         }
         set_terminator(
-          self.builder,
+          self.state.builder,
           block,
           selected,
           inputs,
           [
-            @vcode.Edge::new(
-              self.blocks[first_target],
-              self.edge_values(block, first_arguments),
-            ),
-            @vcode.Edge::new(
-              self.blocks[second_target],
-              self.edge_values(block, second_arguments),
-            ),
+            self.edge(block, first_target, first_arguments),
+            self.edge(block, second_target, second_arguments),
           ],
           ordinary_metadata,
         )
       }
       Switch(index, cases, default_target, default_arguments) => {
-        let width = if self.value_types[index] == I32 { W32 } else { W64 }
-        let successors = cases.map(case => {
-          @vcode.Edge::new(
-            self.blocks[case.target],
-            self.edge_values(block, case.arguments),
-          )
-        })
-        successors.push(
-          @vcode.Edge::new(
-            self.blocks[default_target],
-            self.edge_values(block, default_arguments),
-          ),
-        )
-        set_terminator(
-          self.builder,
+        let width : GprWidth = if self.state.value_type(index) == I32 {
+          W32
+        } else {
+          W64
+        }
+        let (keys, successors) = self.state.switch_targets(
           block,
-          Switch(width, cases.map(case => case.bits)),
-          [@vcode.Input::any(self.target_value(index))],
+          cases,
+          default_target,
+          default_arguments,
+          ty => Move(ty),
+        ) catch {
+          error => raise BuildFailure(cause=error)
+        }
+        set_terminator(
+          self.state.builder,
+          block,
+          Switch(width, keys),
+          [@vcode.Input::any(self.state.target_value(index))],
           successors,
           ordinary_metadata,
         )
       }
       Return(values) => {
-        self.lower_return_values(block, self.target_values(values))
-        set_terminator(self.builder, block, Return, [], [], ordinary_metadata)
+        self.lower_return_values(block, self.state.target_values(values))
+        set_terminator(
+          self.state.builder,
+          block,
+          Return,
+          [],
+          [],
+          ordinary_metadata,
+        )
       }
       TailCall(call, operands) =>
         self.terminate_tail_call(
           block,
           call,
-          self.target_values(operands),
+          self.state.target_values(operands),
           ordinary_metadata,
         )
       NoReturnCall(call, operands) => {
-        let roots = self.target_values(metadata.live_gc_roots)
-        let call_metadata = terminator_call_metadata(
+        let operands = self.state.target_values(operands)
+        let call_metadata = direct_source_metadata(
           metadata.source,
+          None,
+          ordinary_metadata.live_gc_roots,
           call.behavior.semantics(),
-        )
-        let call_metadata = @vcode.InstructionMetadata::new(
-          source?=call_metadata.source,
-          safepoint?=call_metadata.safepoint,
-          live_gc_roots=roots,
         )
         match call.protocol {
           Platform =>
             lower_direct_platform_call(
-              self.builder,
+              self.state.builder,
               block,
               call,
-              self.target_values(operands),
+              operands,
               [],
               call_metadata,
             )
             |> ignore
           Internal =>
             lower_internal_call(
-              self.context,
-              self.builder,
+              self.state.context,
+              self.state.builder,
               block,
               call,
-              self.target_values(operands),
+              operands,
               [],
               call_metadata,
             )
             |> ignore
         }
         set_terminator(
-          self.builder,
+          self.state.builder,
           block,
           Trap(Unreachable),
           [],
           [],
-          terminator_trap_metadata(metadata.source, Unreachable),
+          @vcode.InstructionMetadata::new(
+            source?=metadata.source,
+            trap=Unreachable,
+          ),
         )
       }
       Trap(reason) =>
         set_terminator(
-          self.builder,
+          self.state.builder,
           block,
           Trap(reason),
           [],
           [],
-          terminator_trap_metadata(metadata.source, reason),
+          @vcode.InstructionMetadata::new(source?=metadata.source, trap=reason),
         )
     }
   }
   action() catch {
     error => {
-      self.record_error(error)
+      self.state.record_error(error)
       set_terminator(
-        self.builder,
+        self.state.builder,
         block,
         Trap(Unreachable),
         [],
         [],
-        terminator_trap_metadata(metadata.source, Unreachable),
+        @vcode.InstructionMetadata::new(
+          source?=metadata.source,
+          trap=Unreachable,
+        ),
       ) catch {
         _ => abort("aarch64 direct lowering could not seal an error block")
       }
@@ -1682,66 +1156,25 @@ fn DirectLoweringSession::terminate_tail_call(
   operands : Array[@vcode.Value],
   metadata : @vcode.InstructionMetadata,
 ) -> Unit raise AArch64LowerError {
-  if self.protocol != Internal || call.protocol != Internal {
-    raise UnsupportedAbi(
-      message="true tail calls require Internal caller and callee protocols",
-    )
-  }
-  let plan = self.context.internal_abi.call_plan(call.signature) catch {
-    error => raise UnsupportedAbi(message=error.to_string())
-  }
-  let operands = operands.copy()
-  if plan.result_area_size > 0 {
-    guard self.result_area is Some(address) else {
-      raise UnsupportedAbi(message="tail-call result area is unavailable")
-    }
-    operands.push(address)
+  let (plan, inputs) = self.state.tail_call_inputs(
+    call, operands, is_allocatable,
+  ) catch {
+    UnsupportedAbi(message) => raise UnsupportedAbi(message~)
+    BuildFailure(cause) => raise BuildFailure(cause~)
   }
   let target = match call.callee {
     Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
     Indirect => TailCallIndirect(call.signature, plan)
-    External(_) =>
-      raise UnsupportedAbi(
-        message="internal tail calls cannot target an external symbol",
-      )
-  }
-  let inputs = match call.callee {
-    Internal(_) =>
-      call_argument_inputs(
-        operands[:call.signature.params.length()].to_owned(),
-        plan.arguments,
-      )
-    Indirect =>
-      [
-        @vcode.Input::any_location(operands[0]),
-        ..call_argument_inputs(
-          operands[1:call.signature.params.length() + 1].to_owned(),
-          plan.arguments,
-        ),
-      ]
     External(_) => abort("external tail call rejected above")
   }
-  if plan.result_area_size > 0 {
-    let index = inputs.length()
-    let input = @vcode.Input::any_location(operands[index])
-    inputs.push(
-      match result_area_register(plan) {
-        Some(reg) if is_allocatable(reg) => input.with_preference(reg)
-        _ => input
-      },
-    )
-  }
-  let call_metadata = terminator_call_metadata(
+  let metadata = direct_source_metadata(
     metadata.source,
+    None,
+    metadata.live_gc_roots,
     call.behavior.semantics(),
   )
-  let metadata = @vcode.InstructionMetadata::new(
-    source?=call_metadata.source,
-    safepoint?=call_metadata.safepoint,
-    live_gc_roots=metadata.live_gc_roots,
-  )
   set_terminator(
-    self.builder,
+    self.state.builder,
     block,
     target,
     inputs,
@@ -1752,44 +1185,22 @@ fn DirectLoweringSession::terminate_tail_call(
 }
 
 ///|
-fn DirectLoweringSession::finish_construction(
-  self : DirectLoweringSession,
-) -> Unit {
-  if self.constructed is Some(_) {
-    return
-  }
-  let lowered = self.builder.finish() catch {
-    error => {
-      self.record_error(BuildFailure(cause=error))
-      return
-    }
-  }
-  lowered.set_layout(self.layout) catch {
-    error => {
-      self.record_error(BuildFailure(cause=error))
-      return
-    }
-  }
-  self.constructed = Some({ function: lowered, })
-}
-
-///|
 pub fn DirectLoweringSession::sink(
   self : DirectLoweringSession,
 ) -> @lowering.TargetSink {
   @lowering.TargetSink::new(
-    fn() { Array::makei(self.signature.params.length(), index => index) },
+    fn() { Array::makei(self.state.signature.params.length(), index => index) },
     fn() { 0 },
-    fn(types) { self.create_block(types) },
-    fn(size, alignment) { self.create_stack_object(size, alignment) },
-    fn(block) { self.switch_to_block(block) },
+    fn(types) { self.state.create_block(types) },
+    fn(size, alignment) { self.state.create_stack_object(size, alignment) },
+    fn(block) { self.state.switch_to_block(block) },
     fn(block, operation, operands, results, source, roots, stack_map) {
       self.emit(block, operation, operands, results, source, roots, stack_map)
     },
     fn(block, terminator, metadata) {
       self.terminate(block, terminator, metadata)
     },
-    fn() { self.finish_construction() },
+    fn() { self.state.finish_construction(error => BuildFailure(cause=error)) },
     folds_unsigned_index_into_memory=true,
     supports_int_compare_immediate=fn(ty, bits) {
       (ty == I32 || ty == I64) && add_sub_immediate_shift(bits) is Some(_)
@@ -1806,19 +1217,18 @@ pub fn DirectLoweringSession::finish_selected(
   self : DirectLoweringSession,
   verify_selected~ : Bool = true,
 ) -> SelectedFunction raise AArch64LowerError {
-  if self.constructed is None {
-    self.finish_construction()
-  }
-  if self.first_error is Some(error) {
+  self.state.finish_construction(error => BuildFailure(cause=error))
+  if self.state.first_error() is Some(error) {
     raise error
   }
-  guard self.constructed is Some(constructed) else {
+  guard self.state.constructed_function() is Some(function) else {
     raise UnsupportedAbi(message="direct lowering did not construct VCode")
   }
+  let constructed : ConstructedFunction = { function, }
   if verify_selected {
-    validate_constructed(constructed, self.on_event)
+    validate_constructed(constructed, self.state.on_event)
   }
-  (self.on_event)(TargetSealingStarted)
-  (self.on_event)(TargetSelectionFinished)
+  (self.state.on_event)(TargetSealingStarted)
+  (self.state.on_event)(TargetSelectionFinished)
   { constructed, }
 }

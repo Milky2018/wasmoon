@@ -124,6 +124,12 @@ pub fn TypeEquivalenceContext::types_equivalent(
   idx1 : Int32,
   idx2 : Int32,
 ) -> Bool {
+  if idx1 < 0 ||
+    idx1 >= self.types1.length() ||
+    idx2 < 0 ||
+    idx2 >= self.types2.length() {
+    return false
+  }
   // Same index in same module is trivially equivalent
   if !self.cross_module && idx1 == idx2 {
     return true
@@ -364,32 +370,6 @@ fn TypeEquivalenceContext::value_types_equal(
   other_idx : Int32,
 ) -> Bool {
   match (v1, v2) {
-    // Basic types must match exactly
-    (I32, I32)
-    | (I64, I64)
-    | (F32, F32)
-    | (F64, F64)
-    | (V128, V128)
-    | (FuncRef, FuncRef)
-    | (ExternRef, ExternRef)
-    | (RefFunc, RefFunc)
-    | (RefExtern, RefExtern)
-    | (AnyRef, AnyRef)
-    | (ExnRef, ExnRef)
-    | (NullRef, NullRef)
-    | (NullFuncRef, NullFuncRef)
-    | (ContRef, ContRef)
-    | (RefCont, RefCont)
-    | (NullContRef, NullContRef)
-    | (RefNoCont, RefNoCont)
-    | (NullExnRef, NullExnRef)
-    | (NullExternRef, NullExternRef)
-    | (RefAny, RefAny)
-    | (RefEq, RefEq)
-    | (RefNullEq, RefNullEq)
-    | (RefI31, RefI31)
-    | (RefNullI31, RefNullI31)
-    | (RefNone, RefNone) => true
     // Typed references
     (RefFuncTyped(ref1), RefFuncTyped(ref2))
     | (RefNullFuncTyped(ref1), RefNullFuncTyped(ref2))
@@ -397,12 +377,15 @@ fn TypeEquivalenceContext::value_types_equal(
     | (RefNullContTyped(ref1), RefNullContTyped(ref2)) =>
       self.type_refs_equal(ref1, ref2, self_idx, other_idx)
     (RefStruct(ref1), RefStruct(ref2))
-    | (RefNullStruct(ref1), RefNullStruct(ref2)) =>
-      self.type_refs_equal(ref1, ref2, self_idx, other_idx)
-    (RefArray(ref1), RefArray(ref2))
+    | (RefNullStruct(ref1), RefNullStruct(ref2))
+    | (RefArray(ref1), RefArray(ref2))
     | (RefNullArray(ref1), RefNullArray(ref2)) =>
-      self.type_refs_equal(ref1, ref2, self_idx, other_idx)
-    _ => false
+      if ref1 == -1 || ref2 == -1 {
+        ref1 == ref2
+      } else {
+        self.type_refs_equal(ref1, ref2, self_idx, other_idx)
+      }
+    _ => v1 == v2
   }
 }
 
@@ -608,62 +591,5 @@ fn rec_groups_equivalent(
 /// Note: This does NOT handle typed function references properly - use
 /// TypeEquivalenceContext for full recursive type comparison.
 pub fn func_types_equal(t1 : FuncType, t2 : FuncType) -> Bool {
-  if t1.params.length() != t2.params.length() ||
-    t1.results.length() != t2.results.length() {
-    return false
-  }
-  for i, p1 in t1.params {
-    if !value_types_simple_equal(p1, t2.params[i]) {
-      return false
-    }
-  }
-  for i, r1 in t1.results {
-    if !value_types_simple_equal(r1, t2.results[i]) {
-      return false
-    }
-  }
-  true
-}
-
-///|
-/// Compare two value types for simple equality.
-/// For typed references, compares indices directly (only valid for same module).
-fn value_types_simple_equal(v1 : ValueType, v2 : ValueType) -> Bool {
-  match (v1, v2) {
-    (I32, I32)
-    | (I64, I64)
-    | (F32, F32)
-    | (F64, F64)
-    | (V128, V128)
-    | (FuncRef, FuncRef)
-    | (ExternRef, ExternRef)
-    | (RefFunc, RefFunc)
-    | (RefExtern, RefExtern)
-    | (AnyRef, AnyRef)
-    | (ExnRef, ExnRef)
-    | (NullRef, NullRef)
-    | (NullFuncRef, NullFuncRef)
-    | (ContRef, ContRef)
-    | (RefCont, RefCont)
-    | (NullContRef, NullContRef)
-    | (RefNoCont, RefNoCont)
-    | (NullExnRef, NullExnRef)
-    | (NullExternRef, NullExternRef)
-    // GC types
-    | (RefAny, RefAny)
-    | (RefEq, RefEq)
-    | (RefNullEq, RefNullEq)
-    | (RefI31, RefI31)
-    | (RefNullI31, RefNullI31)
-    | (RefNone, RefNone) => true
-    (RefFuncTyped(ref1), RefFuncTyped(ref2)) => ref1 == ref2
-    (RefNullFuncTyped(ref1), RefNullFuncTyped(ref2)) => ref1 == ref2
-    (RefContTyped(ref1), RefContTyped(ref2)) => ref1 == ref2
-    (RefNullContTyped(ref1), RefNullContTyped(ref2)) => ref1 == ref2
-    (RefStruct(ref1), RefStruct(ref2)) => ref1 == ref2
-    (RefNullStruct(ref1), RefNullStruct(ref2)) => ref1 == ref2
-    (RefArray(ref1), RefArray(ref2)) => ref1 == ref2
-    (RefNullArray(ref1), RefNullArray(ref2)) => ref1 == ref2
-    _ => false
-  }
+  t1 == t2
 }

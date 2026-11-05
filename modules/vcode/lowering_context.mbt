@@ -6,18 +6,14 @@ priv struct EnvironmentFieldBinding {
 
 ///|
 pub struct LoweringContext {
-  priv internal_abi : InternalAbi
+  internal_abi : InternalAbi
   priv environment_fields : Array[EnvironmentFieldBinding]
   priv environment_field_resolver : ((@native.EnvironmentField) -> Array[Int32]?)?
 }
 
 ///|
 pub fn LoweringContext::new(internal_abi : InternalAbi) -> LoweringContext {
-  {
-    internal_abi: internal_abi.copy(),
-    environment_fields: [],
-    environment_field_resolver: None,
-  }
+  { internal_abi, environment_fields: [], environment_field_resolver: None, }
 }
 
 ///|
@@ -31,7 +27,7 @@ pub fn LoweringContext::with_environment_field(
     if binding.field == field {
       bindings[index] = { field, offsets: offsets.copy(), }
       return {
-        internal_abi: self.internal_abi.copy(),
+        internal_abi: self.internal_abi,
         environment_fields: bindings,
         environment_field_resolver: self.environment_field_resolver,
       }
@@ -39,7 +35,7 @@ pub fn LoweringContext::with_environment_field(
   }
   bindings.push({ field, offsets: offsets.copy(), })
   {
-    internal_abi: self.internal_abi.copy(),
+    internal_abi: self.internal_abi,
     environment_fields: bindings,
     environment_field_resolver: self.environment_field_resolver,
   }
@@ -51,14 +47,14 @@ pub fn LoweringContext::with_environment_field_resolver(
   resolve : (@native.EnvironmentField) -> Array[Int32]?,
 ) -> LoweringContext {
   {
-    internal_abi: self.internal_abi.copy(),
+    internal_abi: self.internal_abi,
     environment_fields: self.environment_fields.copy(),
     environment_field_resolver: Some(resolve),
   }
 }
 
 ///|
-fn LoweringContext::environment_field_offsets(
+pub fn LoweringContext::environment_field_offsets(
   self : LoweringContext,
   field : @native.EnvironmentField,
 ) -> Array[Int32]? {

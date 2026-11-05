@@ -1,115 +1,5 @@
 ///|
-priv struct AllocationState {
-  values : Map[(Int32, Int32), Array[Value]]
-}
-
-///|
-fn allocation_location_key(location : AllocationLocation) -> (Int32, Int32) {
-  if location.is_register() {
-    let reg = location.register_unchecked()
-    match reg.class {
-      Int => (0, reg.id)
-      FpVector => (1, reg.id)
-      Float => (1, reg.id)
-      Vector => (2, reg.id)
-    }
-  } else {
-    (3, location.spill_index_unchecked())
-  }
-}
-
-///|
-fn AllocationState::new() -> AllocationState {
-  { values: Map([]), }
-}
-
-///|
-fn AllocationState::copy(self : AllocationState) -> AllocationState {
-  let values : Map[(Int32, Int32), Array[Value]] = Map([])
-  for key, value in self.values {
-    values[key] = value.copy()
-  }
-  { values, }
-}
-
-///|
-fn AllocationState::equals(
-  self : AllocationState,
-  other : AllocationState,
-) -> Bool {
-  if self.values.length() != other.values.length() {
-    return false
-  }
-  for key, values in self.values {
-    guard other.values.get(key) is Some(other_values) else { return false }
-    if values.length() != other_values.length() ||
-      !values.all(value => other_values.contains(value)) {
-      return false
-    }
-  }
-  true
-}
-
-///|
-fn AllocationState::meet_with(
-  self : AllocationState,
-  other : AllocationState,
-) -> Unit {
-  for key in self.values.keys().to_array() {
-    match other.values.get(key) {
-      None => self.values.remove(key)
-      Some(other_values) => {
-        let retained = self.values[key].filter(value => {
-          other_values.contains(value)
-        })
-        if retained.is_empty() {
-          self.values.remove(key)
-        } else {
-          self.values[key] = retained
-        }
-      }
-    }
-  }
-}
-
-///|
-fn AllocationState::remove_value(self : AllocationState, value : Value) -> Unit {
-  for key in self.values.keys().to_array() {
-    self.values[key].retain(other => other != value)
-    if self.values[key].is_empty() {
-      self.values.remove(key)
-    }
-  }
-}
-
-///|
-fn AllocationState::remove_register(
-  self : AllocationState,
-  reg : PhysicalReg,
-) -> Unit {
-  self.values.remove(allocation_location_key(AllocationLocation::reg(reg)))
-}
-
-///|
-fn AllocationState::contains(
-  self : AllocationState,
-  value : Value,
-  location : AllocationLocation,
-) -> Bool {
-  self.values
-  .get(allocation_location_key(location))
-  .map(values => values.contains(value))
-  .unwrap_or(false)
-}
-
-///|
-fn AllocationState::set(
-  self : AllocationState,
-  value : Value,
-  location : AllocationLocation,
-) -> Unit {
-  self.values[allocation_location_key(location)] = [value]
-}
+type AllocationState = @allocation_types.AllocationContents[Value]
 
 ///|
 fn Allocation::edit_index(self : Allocation, edit : Edit) -> Int32 {
@@ -145,9 +35,7 @@ fn apply_state_edit(
   if !state.contains(value, from) {
     raise InvalidEdit(index=allocation.edit_index(edit))
   }
-  state.values[allocation_location_key(to)] = state.values[allocation_location_key(
-    from,
-  )].copy()
+  state.copy_location_from(state, from, to)
 }
 
 ///|
@@ -255,11 +143,11 @@ fn[Inst] prepare_allocation_successor_state(
         if !original.contains(value, allocation.import_location(from).unwrap()) {
           raise InvalidEdit(index=allocation.edit_index(edit))
         }
-        state.values[allocation_location_key(
-          allocation.import_location(to).unwrap(),
-        )] = original.values[allocation_location_key(
+        state.copy_location_from(
+          original,
           allocation.import_location(from).unwrap(),
-        )].copy()
+          allocation.import_location(to).unwrap(),
+        )
       }
     None => ()
   }
@@ -276,16 +164,10 @@ fn[Inst] prepare_allocation_successor_state(
     state.remove_value(parameter)
   }
   for parameter in parameters {
-    let key = allocation_location_key(
+    state.add_alias(
+      parameter,
       allocation.value_locations[parameter.id].unwrap(),
     )
-    match state.values.get(key) {
-      Some(aliases) =>
-        if !aliases.contains(parameter) {
-          aliases.push(parameter)
-        }
-      None => state.values[key] = [parameter]
-    }
   }
   state
 }

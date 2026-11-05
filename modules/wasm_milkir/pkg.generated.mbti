@@ -374,6 +374,7 @@ pub fn WasmValidationContext::empty() -> Self
 pub fn WasmValidationContext::is_final_type(Self, Int32) -> Bool
 pub fn WasmValidationContext::new(WasmValidationResolvers, final_types? : Array[Int32]) -> Self
 pub fn WasmValidationContext::struct_field(Self, Int32, Int32) -> WasmFieldContract?
+pub fn WasmValidationContext::struct_fields(Self, Int32) -> ArrayView[WasmFieldContract]?
 pub fn WasmValidationContext::validate_extension(Self, @milkir.ExtensionInstView, Array[@milkir.Type]) -> String?
 pub fn WasmValidationContext::validate_global_value(Self, @milkir.GlobalValueData) -> String?
 

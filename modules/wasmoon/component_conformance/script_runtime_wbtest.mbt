@@ -19,6 +19,6 @@ test "component script releases only unreachable instance Stores" {
   inspect(first_memory.byte_len(), content="65536")
   runtime.release_unreferenced(Some(second))
   inspect(first_memory.byte_len(), content="0")
-  second_memory.store_i32(0, 42)
-  inspect(second_memory.load_i32(0), content="42")
+  second_memory.store_i32_at(0L, 42)
+  inspect(second_memory.load_i32_at(0L), content="42")
 }

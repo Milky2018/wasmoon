@@ -93,30 +93,7 @@ pub fn Linker::build_imports(self : Linker) -> Imports {
   let imports = Imports::Imports(self.store)
   for entry in self.modules {
     let (mod_name, instance) = entry
-    for exp in instance.exports {
-      match exp.desc {
-        Func(idx) => {
-          let func_addr = instance.func_addrs[idx]
-          imports.add_func(mod_name, exp.name, func_addr)
-        }
-        Table(idx) => {
-          let table_addr = instance.table_addrs[idx]
-          imports.add_table(mod_name, exp.name, table_addr)
-        }
-        Memory(idx) => {
-          let mem_addr = instance.mem_addrs[idx]
-          imports.add_memory(mod_name, exp.name, mem_addr)
-        }
-        Global(idx) => {
-          let global_addr = instance.global_addrs[idx]
-          imports.add_global(mod_name, exp.name, global_addr)
-        }
-        Tag(idx) => {
-          let tag_addr = instance.tag_addrs[idx]
-          imports.add_tag(mod_name, exp.name, tag_addr)
-        }
-      }
-    }
+    imports.add_instance(mod_name, instance)
   }
   imports
 }

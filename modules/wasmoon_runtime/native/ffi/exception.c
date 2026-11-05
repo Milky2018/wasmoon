@@ -337,8 +337,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_get_ref_ptr(void) {
 
 // Snapshot only the current exception's typed reference words. The immutable
 // exception token, when present, is sufficient to trace its complete payload.
-int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_state_t *state, int64_t *roots) {
+int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_state_t *state,
+    int64_t *roots, int32_t capacity) {
     if (state->exception_ref) {
+        if (capacity == 0) return -1;
         if (roots) roots[0] = state->exception_ref;
         return 1;
     }
@@ -346,6 +348,7 @@ int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_
     int32_t count = 0;
     for (int32_t i = 0; i < state->exception_value_count; ++i) {
         if (state->exception_values && (!layout || (i < Moonbit_array_length(layout) && layout[i]))) {
+            if (count == capacity) return -1;
             if (roots) roots[count] = state->exception_values[i];
             ++count;
         }

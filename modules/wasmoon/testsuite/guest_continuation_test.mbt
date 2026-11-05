@@ -13,7 +13,6 @@ test "guest continuation interpreter: suspension differs from traps and exceptio
     #|(assert_exception (invoke "throw"))
   let result = @wast.run_wast_commands(
     @wast.parse(source),
-    ".",
     false,
     false,
     stack_switching=true,
@@ -27,7 +26,6 @@ test "guest continuation interpreter: suspension differs from traps and exceptio
     ] {
     let result = @wast.run_wast_commands(
       @wast.parse(source + assertion),
-      ".",
       false,
       false,
       stack_switching=true,
@@ -62,7 +60,6 @@ test "guest continuation interpreter: resuspended owner survives stale alias tra
     #|(assert_return (invoke "finish") (i32.const 42))
   let result = @wast.run_wast_commands(
     @wast.parse(source),
-    ".",
     false,
     false,
     stack_switching=true,
@@ -147,7 +144,6 @@ test "guest continuation GC capability: unused storage types remain valid" {
     " \"Stack switching feature not compatible with GC\")"
   let result = @wast.run_wast_commands(
     @wast.parse(script),
-    ".",
     false,
     false,
     stack_switching=true,

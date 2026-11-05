@@ -1,0 +1,26 @@
+///|
+/// Compatibility import for the native Core execution package.
+pub using @implementation {
+  build_external_imports_for_jit,
+  build_func_signatures,
+  collect_registered_funcref_entries,
+  count_func_imports,
+  decode_jit_entry_results,
+  encode_jit_entry_args,
+  eval_elem_offset_expr,
+  get_func_name,
+  init_bulk_segments,
+  bind_instance_tables,
+  init_jit_globals_from_store,
+  init_jit_memories_from_store,
+  register_instance_funcrefs_for_jit,
+  register_owned_instance_funcrefs_for_jit,
+  type FuncrefRegistration,
+  type JITCompiler,
+  type JITCoreCallError,
+  type JITCoreCallOutcome,
+  type JITCoreCallWithExceptionOutcome,
+  type JITCoreCallWithExceptionResult,
+  type JITCoreContinuation,
+  type JITModuleContext,
+}

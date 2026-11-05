@@ -1,40 +1,6 @@
 // Wasmoon Executor - Main instruction dispatch and module execution
 
 ///|
-/// Check if subtype is a subtype of supertype for value types.
-/// This implements WebAssembly reference type subtyping:
-/// - RefFunc <: FuncRef (ref func <: ref null func)
-/// - RefExtern <: ExternRef (ref extern <: ref null extern)
-/// - RefFuncTyped(i) <: RefNullFuncTyped(i) (ref $t <: ref null $t)
-/// - RefFuncTyped(i) <: RefFunc <: FuncRef (concrete <: abstract <: nullable abstract)
-/// - RefNullFuncTyped(i) <: FuncRef (ref null $t <: ref null func)
-/// - All types are subtypes of themselves
-fn is_value_type_subtype(
-  subtype : @types.ValueType,
-  supertype : @types.ValueType,
-) -> Bool {
-  if subtype == supertype {
-    return true
-  }
-  match (subtype, supertype) {
-    // RefFunc (ref func) is subtype of FuncRef (ref null func)
-    (RefFunc, FuncRef) => true
-    // RefExtern (ref extern) is subtype of ExternRef (ref null extern)
-    (RefExtern, ExternRef) => true
-    // RefFuncTyped(i) is subtype of RefNullFuncTyped(i) for same i
-    (RefFuncTyped(i), RefNullFuncTyped(j)) => i == j
-    // RefFuncTyped is subtype of RefFunc (concrete <: abstract)
-    (RefFuncTyped(_), RefFunc) => true
-    // RefFuncTyped is subtype of FuncRef (concrete <: nullable abstract)
-    (RefFuncTyped(_), FuncRef) => true
-    // RefNullFuncTyped is subtype of FuncRef (nullable concrete <: nullable abstract)
-    (RefNullFuncTyped(_), FuncRef) => true
-    // Everything else: not a subtype
-    _ => false
-  }
-}
-
-///|
 /// Execute a single instruction
 fn ExecContext::exec_instr(
   self : ExecContext,
@@ -544,11 +510,12 @@ fn ExecContext::exec_instr(
     // GC instructions - struct operations
     StructNew(type_idx) => self.exec_struct_new(type_idx)
     StructNewDefault(type_idx) => self.exec_struct_new_default(type_idx)
-    StructGet(type_idx, field_idx) => self.exec_struct_get(type_idx, field_idx)
+    StructGet(_, field_idx) =>
+      self.stack.push(self.read_struct_field(field_idx))
     StructGetS(type_idx, field_idx) =>
-      self.exec_struct_get_s(type_idx, field_idx)
+      self.exec_struct_get_packed(type_idx, field_idx, signed=true)
     StructGetU(type_idx, field_idx) =>
-      self.exec_struct_get_u(type_idx, field_idx)
+      self.exec_struct_get_packed(type_idx, field_idx, signed=false)
     StructSet(type_idx, field_idx) => self.exec_struct_set(type_idx, field_idx)
 
     // GC instructions - array operations
@@ -559,9 +526,9 @@ fn ExecContext::exec_instr(
       self.exec_array_new_data(type_idx, data_idx)
     ArrayNewElem(type_idx, elem_idx) =>
       self.exec_array_new_elem(type_idx, elem_idx)
-    ArrayGet(type_idx) => self.exec_array_get(type_idx)
-    ArrayGetS(type_idx) => self.exec_array_get_s(type_idx)
-    ArrayGetU(type_idx) => self.exec_array_get_u(type_idx)
+    ArrayGet(_) => self.stack.push(self.read_array_element())
+    ArrayGetS(type_idx) => self.exec_array_get_packed(type_idx, signed=true)
+    ArrayGetU(type_idx) => self.exec_array_get_packed(type_idx, signed=false)
     ArraySet(type_idx) => self.exec_array_set(type_idx)
     ArrayLen => self.exec_array_len()
     ArrayFill(type_idx) => self.exec_array_fill(type_idx)

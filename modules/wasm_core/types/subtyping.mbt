@@ -75,16 +75,14 @@ pub fn SubtypingContext::is_subtype(
   idx1 : Int32,
   idx2 : Int32,
 ) -> Bool {
-  // Same index in same module means same type
-  if !self.cross_module && idx1 == idx2 {
-    return true
-  }
-  // Bounds check
   if idx1 < 0 ||
     idx1 >= self.types1.length() ||
     idx2 < 0 ||
     idx2 >= self.types2.length() {
     return false
+  }
+  if !self.cross_module && idx1 == idx2 {
+    return true
   }
   // Check cache to handle cycles
   let key = (idx1, idx2)
@@ -94,28 +92,9 @@ pub fn SubtypingContext::is_subtype(
   // Assume true to break cycles (if we reach here again, types are compatible)
   self.visited[key] = true
 
-  // 1. Check type equality
-  if self.cross_module {
-    // For cross-module, use structural equivalence with rec group handling
-    let equiv_ctx = TypeEquivalenceContext::cross_module(
-      self.types1,
-      self.types2,
-      rec_groups1=self.rec_groups1,
-      rec_groups2=self.rec_groups2,
-    )
-    if equiv_ctx.types_equivalent(idx1, idx2) {
-      self.visited[key] = true
-      return true
-    }
-    // For same-module, use canonical indices
-  } else if self.canonical1.length() > 0 &&
-    self.canonical2.length() > 0 &&
-    idx1 < self.canonical1.length() &&
-    idx2 < self.canonical2.length() {
-    if self.canonical1[idx1] == self.canonical2[idx2] {
-      self.visited[key] = true
-      return true
-    }
+  if self.types_equivalent(idx1, idx2) {
+    self.visited[key] = true
+    return true
   }
   let t1 = self.types1[idx1]
   // 2. Check if idx2 is in idx1's supertype chain (declared subtyping)
@@ -278,6 +257,108 @@ fn SubtypingContext::storage_types_equal(
 }
 
 ///|
+pub fn ValueType::is_reference(self : ValueType) -> Bool {
+  match self {
+    I32 | I64 | F32 | F64 | V128 => false
+    _ => true
+  }
+}
+
+///|
+/// Concrete type indices must be compared in their defining modules.
+fn indexed_reference_pair(
+  actual : ValueType,
+  expected : ValueType,
+) -> (Int32, Int32)? {
+  match (actual, expected) {
+    (RefFuncTyped(a), RefFuncTyped(b) | RefNullFuncTyped(b))
+    | (RefNullFuncTyped(a), RefNullFuncTyped(b))
+    | (RefContTyped(a), RefContTyped(b) | RefNullContTyped(b))
+    | (RefNullContTyped(a), RefNullContTyped(b)) => Some((a, b))
+    (RefStruct(a), RefStruct(b) | RefNullStruct(b))
+    | (RefNullStruct(a), RefNullStruct(b))
+    | (RefArray(a), RefArray(b) | RefNullArray(b))
+    | (RefNullArray(a), RefNullArray(b)) if b != -1 => Some((a, b))
+    _ => None
+  }
+}
+
+///|
+fn ValueType::is_internal_reference(self : ValueType) -> Bool {
+  match self {
+    RefAny
+    | AnyRef
+    | RefEq
+    | RefNullEq
+    | RefI31
+    | RefNullI31
+    | RefStruct(_)
+    | RefNullStruct(_)
+    | RefArray(_)
+    | RefNullArray(_)
+    | RefNone
+    | NullRef => true
+    _ => false
+  }
+}
+
+///|
+fn non_indexed_subtype(actual : ValueType, expected : ValueType) -> Bool {
+  if actual == expected {
+    return true
+  }
+  match (actual, expected) {
+    (RefNoCont, _) => expected.is_continuation_ref()
+    (NullContRef, _) => expected.is_continuation_ref() && expected.is_nullable()
+    (RefCont | RefContTyped(_) | RefNullContTyped(_), ContRef)
+    | (RefContTyped(_), RefCont) => true
+    (RefI31, RefNullI31)
+    | (RefEq, RefNullEq)
+    | (RefAny, AnyRef)
+    | (RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef, FuncRef)
+    | (RefFuncTyped(_), RefFunc)
+    | (RefExtern | NullExternRef, ExternRef) => true
+    (RefStruct(_), RefStruct(-1) | RefNullStruct(-1))
+    | (RefNullStruct(_), RefNullStruct(-1))
+    | (RefArray(_), RefArray(-1) | RefNullArray(-1))
+    | (RefNullArray(_), RefNullArray(-1)) => true
+    (RefStruct(_) | RefArray(_) | RefI31, RefEq | RefNullEq)
+    | (RefNullStruct(_) | RefNullArray(_) | RefNullI31, RefNullEq)
+    | (RefNone, RefNullStruct(_) | RefNullArray(_) | RefNullEq | RefNullI31) =>
+      true
+    (_, RefAny) => actual.is_internal_reference() && !actual.is_nullable()
+    (_, AnyRef) => actual.is_internal_reference()
+    _ => false
+  }
+}
+
+///|
+/// Compare types whose concrete indices are already in the same index space.
+/// The validator also uses generalized bottom types for its operand stack.
+pub fn value_type_subtype_without_context(
+  actual : ValueType,
+  expected : ValueType,
+) -> Bool {
+  if actual == expected {
+    return true
+  }
+  if !expected.is_continuation_ref() &&
+    (
+      (actual == RefNone && expected.is_reference()) ||
+      (actual == NullRef && expected.is_nullable())
+    ) {
+    return true
+  }
+  if indexed_reference_pair(actual, expected) is Some((a, b)) {
+    return a == b
+  }
+  match (actual, expected) {
+    (NullFuncRef, RefNullFuncTyped(_)) | (NullExnRef, ExnRef) => true
+    _ => non_indexed_subtype(actual, expected)
+  }
+}
+
+///|
 /// Value type subtyping including abstract heap type hierarchy.
 pub fn SubtypingContext::value_type_subtype(
   self : SubtypingContext,
@@ -286,84 +367,9 @@ pub fn SubtypingContext::value_type_subtype(
   _idx1~ : Int32 = 0,
   _idx2~ : Int32 = 0,
 ) -> Bool {
-  match (v1, v2) {
-    (RefContTyped(a), RefContTyped(b))
-    | (RefContTyped(a), RefNullContTyped(b))
-    | (RefNullContTyped(a), RefNullContTyped(b)) => return self.is_subtype(a, b)
-    (RefContTyped(_), RefCont | ContRef) | (RefNullContTyped(_), ContRef) =>
-      return true
-    (RefCont, ContRef) => return true
-    (NullContRef, ContRef | RefNullContTyped(_)) => return true
-    (
-      RefNoCont,
-      ContRef
-      | RefCont
-      | NullContRef
-      | RefContTyped(_)
-      | RefNullContTyped(_),
-    ) => return true
-    _ => ()
-  }
-  if v1 == v2 {
-    return true
-  }
-  // Helper: check if a type is an internal reference type
-  fn is_internal_ref(t : ValueType) -> Bool {
-    match t {
-      RefAny | AnyRef | RefEq | RefNullEq | RefI31 | RefNullI31 => true
-      RefStruct(_) | RefNullStruct(_) | RefArray(_) | RefNullArray(_) => true
-      RefNone | NullRef => true
-      _ => false
-    }
-  }
-
-  match (v1, v2) {
-    // Non-null to nullable of same base type
-    (RefFuncTyped(t1), RefNullFuncTyped(t2)) => self.is_subtype(t1, t2)
-    (RefStruct(t1), RefNullStruct(t2)) => t2 == -1 || self.is_subtype(t1, t2)
-    (RefArray(t1), RefNullArray(t2)) => t2 == -1 || self.is_subtype(t1, t2)
-    (RefI31, RefNullI31) => true
-    (RefEq, RefNullEq) => true
-    (RefAny, AnyRef) => true
-    (RefFunc, FuncRef) => true
-    (RefExtern, ExternRef) => true
-    // Typed to abstract struct/array
-    (RefStruct(_), RefStruct(-1)) => true
-    (RefNullStruct(_), RefNullStruct(-1)) => true
-    (RefArray(_), RefArray(-1)) => true
-    (RefNullArray(_), RefNullArray(-1)) => true
-    // Struct/array/i31 to eqref
-    (RefStruct(_), RefEq) => true
-    (RefStruct(_), RefNullEq) => true
-    (RefNullStruct(_), RefNullEq) => true
-    (RefArray(_), RefEq) => true
-    (RefArray(_), RefNullEq) => true
-    (RefNullArray(_), RefNullEq) => true
-    (RefI31, RefEq) => true
-    (RefI31, RefNullEq) => true
-    (RefNullI31, RefNullEq) => true
-    // Everything internal to anyref
-    (_, RefAny) => is_internal_ref(v1) && !v1.is_nullable()
-    (_, AnyRef) => is_internal_ref(v1)
-    // Typed func refs to funcref
-    (RefFuncTyped(_), RefFunc) => true
-    (RefFuncTyped(_), FuncRef) => true
-    (RefNullFuncTyped(_), FuncRef) => true
-    // bottom types
-    (RefNone, RefNullStruct(_)) => true
-    (RefNone, RefNullArray(_)) => true
-    (RefNone, RefNullEq) => true
-    (RefNone, RefNullI31) => true
-    (NullFuncRef, FuncRef) => true
-    (NullExternRef, ExternRef) => true
-    // Typed references subtyping via declared supertypes
-    (RefFuncTyped(t1), RefFuncTyped(t2)) => self.is_subtype(t1, t2)
-    (RefNullFuncTyped(t1), RefNullFuncTyped(t2)) => self.is_subtype(t1, t2)
-    (RefStruct(t1), RefStruct(t2)) => self.is_subtype(t1, t2)
-    (RefNullStruct(t1), RefNullStruct(t2)) => self.is_subtype(t1, t2)
-    (RefArray(t1), RefArray(t2)) => self.is_subtype(t1, t2)
-    (RefNullArray(t1), RefNullArray(t2)) => self.is_subtype(t1, t2)
-    _ => false
+  match indexed_reference_pair(v1, v2) {
+    Some((a, b)) => self.is_subtype(a, b)
+    None => non_indexed_subtype(v1, v2)
   }
 }
 
@@ -376,54 +382,57 @@ fn SubtypingContext::value_types_equal(
   _idx1 : Int32,
   _idx2 : Int32,
 ) -> Bool {
-  if v1 == v2 {
-    return true
-  }
-  // For typed references, check if they refer to equivalent types
   match (v1, v2) {
-    (RefFuncTyped(t1), RefFuncTyped(t2)) => self.types_equivalent(t1, t2)
-    (RefNullFuncTyped(t1), RefNullFuncTyped(t2)) =>
-      self.types_equivalent(t1, t2)
-    (RefStruct(t1), RefStruct(t2)) => self.types_equivalent(t1, t2)
-    (RefNullStruct(t1), RefNullStruct(t2)) => self.types_equivalent(t1, t2)
-    (RefArray(t1), RefArray(t2)) => self.types_equivalent(t1, t2)
-    (RefContTyped(t1), RefContTyped(t2))
+    (RefFuncTyped(t1), RefFuncTyped(t2))
+    | (RefNullFuncTyped(t1), RefNullFuncTyped(t2))
+    | (RefContTyped(t1), RefContTyped(t2))
     | (RefNullContTyped(t1), RefNullContTyped(t2)) =>
       self.types_equivalent(t1, t2)
-    (RefNullArray(t1), RefNullArray(t2)) => self.types_equivalent(t1, t2)
-    _ => false
+    (RefStruct(t1), RefStruct(t2))
+    | (RefNullStruct(t1), RefNullStruct(t2))
+    | (RefArray(t1), RefArray(t2))
+    | (RefNullArray(t1), RefNullArray(t2)) =>
+      if t1 == -1 || t2 == -1 {
+        t1 == t2
+      } else {
+        self.types_equivalent(t1, t2)
+      }
+    _ => v1 == v2
   }
 }
 
 ///|
-/// Check type equivalence for invariant contexts.
-/// Two types are equivalent if they have the same canonical index
-/// or are structurally identical.
+/// Compare invariant types in their defining recursive type graphs.
 fn SubtypingContext::types_equivalent(
   self : SubtypingContext,
   t1 : Int32,
   t2 : Int32,
 ) -> Bool {
-  // Same index in same module
-  if !self.cross_module && t1 == t2 {
-    return true
-  }
-  // Check canonical indices
-  if self.canonical1.length() > 0 &&
-    self.canonical2.length() > 0 &&
-    t1 < self.canonical1.length() &&
-    t2 < self.canonical2.length() {
-    return self.canonical1[t1] == self.canonical2[t2]
-  }
-  // For cross-module without canonical indices, require exact structural match
-  // This is a simplified check; full check would need TypeEquivalenceContext
   if t1 < 0 ||
     t1 >= self.types1.length() ||
     t2 < 0 ||
     t2 >= self.types2.length() {
     return false
   }
-  self.types1[t1].composite == self.types2[t2].composite
+  if !self.cross_module {
+    if t1 == t2 {
+      return true
+    }
+    if t1 < self.canonical1.length() && t2 < self.canonical2.length() {
+      return self.canonical1[t1] == self.canonical2[t2]
+    }
+    TypeEquivalenceContext::same_module(
+      self.types1,
+      type_rec_groups=self.rec_groups1,
+    ).types_equivalent(t1, t2)
+  } else {
+    TypeEquivalenceContext::cross_module(
+      self.types1,
+      self.types2,
+      rec_groups1=self.rec_groups1,
+      rec_groups2=self.rec_groups2,
+    ).types_equivalent(t1, t2)
+  }
 }
 
 ///|

@@ -449,3 +449,17 @@ test "embedded core modules preserve byte string spellings" {
   }
   inspect(rejected, content="true")
 }
+
+///|
+test "component text rejects a decimal type index that wraps to zero" {
+  try
+    parse_component_wat(
+      "(component (type $t u32) (export \"t\" (type 4294967296)))",
+    )
+  catch {
+    Unsupported(message) => assert_true(message.contains("type reference"))
+    error => fail(error.to_string())
+  } noraise {
+    _ => fail("a type index beyond u32 was accepted")
+  }
+}

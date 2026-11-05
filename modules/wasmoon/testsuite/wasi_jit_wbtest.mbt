@@ -363,20 +363,8 @@ fn run_wasi_jit_quiet(
     }
     let globals_ptr = @wast.init_jit_globals_from_store(instance, store, jm)
     let use_subtype_indirect_check = true
-    @wast.init_elem_segments(
-      mod_,
-      jm,
-      instance,
-      store,
-      use_subtype_indirect_check~,
-    )
-    @wast.init_bulk_segments(
-      mod_,
-      jm,
-      instance,
-      store,
-      use_subtype_indirect_check~,
-    )
+    @wast.bind_instance_tables(instance, store, jm)
+    @wast.init_bulk_segments(mod_, jm, instance, store)
     let global_addrs : Array[Int32] = []
     for addr in instance.global_addrs {
       global_addrs.push(addr)

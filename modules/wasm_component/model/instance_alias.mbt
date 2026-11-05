@@ -38,23 +38,11 @@ pub(all) struct Instance {
 fn parse_inlineexport(
   reader : Reader,
 ) -> InlineExport raise ComponentParseError {
-  // Inline exports use the same nameattributes encoding as component exports.
-  let tag = reader.read_u8()
-  let (name, attributes) = if tag == 0x00 {
-    let len = reader.read_leb_u32()
-    let bytes = reader.read_bytes(len)
-    (decode_utf8_validated(bytes), [])
-  } else if tag == 0x01 {
-    let len = reader.read_leb_u32()
-    let bytes = reader.read_bytes(len)
-    (decode_utf8_validated(bytes), [])
-  } else if tag == 0x02 {
-    let len = reader.read_leb_u32()
-    let bytes = reader.read_bytes(len)
-    (decode_utf8_validated(bytes), parse_attributes(reader))
-  } else {
-    raise InvalidInstanceSection
-  }
+  let (name, attributes) = parse_annotated_name(
+    reader,
+    Reader::read_name,
+    InvalidInstanceSection,
+  )
   let sortidx = parse_sortidx(reader)
   { name, attributes, sortidx, }
 }
@@ -72,24 +60,14 @@ fn parse_instantiatearg(
 fn parse_instanceexpr(
   reader : Reader,
 ) -> InstanceExpr raise ComponentParseError {
-  let tag = reader.read_u8()
-  if tag == 0x00 {
-    let component_idx = reader.read_leb_u32()
-    let n = reader.read_leb_u32()
-    let args : Array[InstantiateArg] = []
-    for _ in 0..<n {
-      args.push(parse_instantiatearg(reader))
-    }
-    Instantiate(component_idx, args)
-  } else if tag == 0x01 {
-    let n = reader.read_leb_u32()
-    let exports : Array[InlineExport] = []
-    for _ in 0..<n {
-      exports.push(parse_inlineexport(reader))
-    }
-    InlineExports(exports)
-  } else {
-    raise InvalidInstanceSection
+  match reader.read_u8() {
+    0 =>
+      Instantiate(
+        reader.read_leb_u32(),
+        reader.read_vector(parse_instantiatearg),
+      )
+    1 => InlineExports(reader.read_vector(parse_inlineexport))
+    _ => raise InvalidInstanceSection
   }
 }
 
@@ -97,16 +75,11 @@ fn parse_instanceexpr(
 pub fn parse_instance_section(
   payload : Bytes,
 ) -> Array[Instance] raise ComponentParseError {
-  let reader = Reader::Reader(payload)
-  let n = reader.read_leb_u32()
-  let instances : Array[Instance] = []
-  for _ in 0..<n {
-    instances.push({ expr: parse_instanceexpr(reader), })
-  }
-  if !reader.is_eof() {
-    raise InvalidInstanceSection
-  }
-  instances
+  parse_vector_section(
+    payload,
+    reader => { expr: parse_instanceexpr(reader), },
+    InvalidInstanceSection,
+  )
 }
 
 ///|
@@ -160,14 +133,5 @@ fn parse_alias(reader : Reader) -> Alias raise ComponentParseError {
 pub fn parse_alias_section(
   payload : Bytes,
 ) -> Array[Alias] raise ComponentParseError {
-  let reader = Reader::Reader(payload)
-  let n = reader.read_leb_u32()
-  let aliases : Array[Alias] = []
-  for _ in 0..<n {
-    aliases.push(parse_alias(reader))
-  }
-  if !reader.is_eof() {
-    raise InvalidAliasSection
-  }
-  aliases
+  parse_vector_section(payload, parse_alias, InvalidAliasSection)
 }

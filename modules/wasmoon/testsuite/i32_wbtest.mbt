@@ -987,5 +987,9 @@ test "wasm-testsuite: i32.1.wasm should fail validation" {
   ]
   let bytes_data = Bytes::from_array(bytes)
   let mod = @parser.parse_module(bytes_data)
-  inspect(!succeeds(() => @validator.validate_module(mod)), content="true")
+  try @validator.validate_module(mod) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected validation to reject the module")
+  }
 }

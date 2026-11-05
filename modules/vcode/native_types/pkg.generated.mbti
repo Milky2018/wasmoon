@@ -6,6 +6,13 @@ import {
 }
 
 // Values
+pub fn valid_atomic_access(AccessWidth, ValueType) -> Bool
+
+pub fn valid_scalar_bitcast(ValueType, ValueType) -> Bool
+
+pub fn valid_scalar_load(AccessWidth, LoadExtension, ValueType) -> Bool
+
+pub fn valid_scalar_store(AccessWidth, ValueType) -> Bool
 
 // Errors
 

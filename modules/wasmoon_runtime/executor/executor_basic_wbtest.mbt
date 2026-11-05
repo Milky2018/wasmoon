@@ -855,7 +855,7 @@ test "host function: caller can access exported memory" {
     let mem = caller.get_exported_memory("mem")
     match mem {
       Some(m) => {
-        m.store_i32(0, 7)
+        m.store_i32_at(0L, 7)
         []
       }
       None => raise UndefinedElement
@@ -923,7 +923,7 @@ test "memory import: shared memory between modules" {
   let mem_addr = store.alloc_mem(shared_mem)
 
   // Write a value to the shared memory
-  shared_mem.store_i32(0, 12345) catch {
+  shared_mem.store_i32_at(0L, 12345) catch {
     _ => fail("Failed to store")
   }
 
@@ -1021,7 +1021,7 @@ test "memory import: write to imported memory" {
   let instance = instantiate_module_with_imports(store, mod, imports)
   call_exported_func(store, instance, "write", []) |> ignore
   // Verify the write by reading from the shared memory directly
-  let value = shared_mem.load_i32(100) catch {
+  let value = shared_mem.load_i32_at(100L) catch {
     _ => {
       fail("Failed to load")
       0

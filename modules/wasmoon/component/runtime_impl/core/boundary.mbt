@@ -27,7 +27,7 @@ pub(all) enum CanonSuspend {
 let canon_suspend : Array[CanonSuspend?] = [None]
 
 ///|
-pub fn trap_canon(msg : String) -> Unit raise @runtime.RuntimeError {
+pub fn[T] trap_canon(msg : String) -> T raise @runtime.RuntimeError {
   canon_trap_message[0] = Some(msg)
   raise Unreachable
 }

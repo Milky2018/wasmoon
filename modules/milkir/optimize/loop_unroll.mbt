@@ -58,27 +58,6 @@ fn find_unroll_block(
 }
 
 ///|
-/// The instruction outside the loop that defines `value`, if there is one.
-fn definition_outside_loop(
-  func : @milkir.Function,
-  loop_ : @milkir.Loop,
-  value : @milkir.Value,
-) -> @milkir.Inst? {
-  for block in func.blocks {
-    if loop_.contains(block.id) {
-      continue
-    }
-    for inst_id in block.instruction_ids() {
-      let inst = func.instruction_by_id(inst_id).unwrap()
-      if inst.results.any(result => result.id == value.id) {
-        return Some(inst)
-      }
-    }
-  }
-  None
-}
-
-///|
 /// Resolve `value` to an integer constant defined outside the loop, following
 /// copies.
 ///
@@ -89,6 +68,7 @@ fn find_integer_constant_outside_loop(
   func : @milkir.Function,
   loop_ : @milkir.Loop,
   value : @milkir.Value,
+  definitions : Array[Int32],
 ) -> Int64? {
   if value.ty != I32 && value.ty != I64 {
     return None
@@ -97,7 +77,10 @@ fn find_integer_constant_outside_loop(
   let mut current = value
   while !visited.contains(current.id) {
     visited.add(current.id)
-    guard definition_outside_loop(func, loop_, current) is Some(inst) else {
+    let block = definitions.get(current.id).unwrap_or(-1)
+    guard block >= 0 &&
+      !loop_.contains(block) &&
+      func.defining_inst(current) is Some(inst) else {
       return None
     }
     match inst.opcode {
@@ -115,50 +98,13 @@ fn find_integer_constant_outside_loop(
 }
 
 ///|
-fn find_iteration_definition(
-  func : @milkir.Function,
-  iteration_blocks : Array[@milkir.Block],
-  value_id : Int32,
-) -> @milkir.Inst? {
-  for block in iteration_blocks {
-    for inst_id in block.instruction_ids() {
-      let inst = func.instruction_by_id(inst_id).unwrap()
-      for result in inst.results {
-        if result.id == value_id {
-          return Some(inst)
-        }
-      }
-    }
-  }
-  None
-}
-
-///|
 fn is_defined_in_unroll_loop(
-  func : @milkir.Function,
   loop_ : @milkir.Loop,
   value_id : Int32,
+  definitions : Array[Int32],
 ) -> Bool {
-  for block in func.blocks {
-    if !loop_.contains(block.id) {
-      continue
-    }
-    for item in block.params {
-      let (param, _) = item
-      if param.id == value_id {
-        return true
-      }
-    }
-    for inst_id in block.instruction_ids() {
-      let inst = func.instruction_by_id(inst_id).unwrap()
-      for result in inst.results {
-        if result.id == value_id {
-          return true
-        }
-      }
-    }
-  }
-  false
+  let block = definitions.get(value_id).unwrap_or(-1)
+  block >= 0 && loop_.contains(block)
 }
 
 ///|
@@ -390,6 +336,7 @@ fn analyze_counted_loop(
   cfg : @milkir.CFG,
   loop_ : @milkir.Loop,
   max_trip_count : Int32,
+  definitions~ : Array[Int32] = loop_definition_blocks(func),
 ) -> CountedLoopDecision {
   if loop_.back_edges.length() != 1 {
     return Skip("loop must have one back edge")
@@ -585,7 +532,7 @@ fn analyze_counted_loop(
       let inst = func.instruction_by_id(inst_id).unwrap()
       for arg in inst.args {
         if !header_param_ids.contains(arg.id) &&
-          is_defined_in_unroll_loop(func, loop_, arg.id) &&
+          is_defined_in_unroll_loop(loop_, arg.id, definitions) &&
           !clone_available.contains(arg.id) {
           return Skip(
             "body depends on a loop value unavailable in the preheader",
@@ -612,19 +559,16 @@ fn analyze_counted_loop(
       return Skip("latch argument types must match the loop header")
     }
     if !header_param_ids.contains(arg.id) &&
-      is_defined_in_unroll_loop(func, loop_, arg.id) &&
+      is_defined_in_unroll_loop(loop_, arg.id, definitions) &&
       !clone_available.contains(arg.id) {
       return Skip("latch argument cannot be remapped in the preheader")
     }
   }
-  let update = match
-    find_iteration_definition(
-      func,
-      iteration_blocks,
-      latch_args[induction_index].id,
-    ) {
-    Some(inst) => inst
-    None => return Skip("latch induction update must be defined in the loop")
+  let updated_induction = latch_args[induction_index]
+  let update_block = definitions.get(updated_induction.id).unwrap_or(-1)
+  guard iteration_blocks.any(block => block.id == update_block) &&
+    func.defining_inst(updated_induction) is Some(update) else {
+    return Skip("latch induction update must be defined in the loop")
   }
   let update_opcode = update.opcode
   if (
@@ -654,17 +598,18 @@ fn analyze_counted_loop(
       func,
       loop_,
       initial_args[induction_index],
+      definitions,
     ) {
     Some(value) => value
     None => return Skip("initial induction value must be constant")
   }
   let bound_constant = match
-    find_integer_constant_outside_loop(func, loop_, bound_value) {
+    find_integer_constant_outside_loop(func, loop_, bound_value, definitions) {
     Some(value) => value
     None => return Skip("loop bound must be constant")
   }
   let step_constant = match
-    find_integer_constant_outside_loop(func, loop_, step_value) {
+    find_integer_constant_outside_loop(func, loop_, step_value, definitions) {
     Some(value) => value
     None => return Skip("induction step must be constant")
   }
@@ -832,12 +777,32 @@ fn factor_two_growth(plan : CountedLoopPlan, instructions : Int32) -> Int64 {
 }
 
 ///|
-fn unroll_counted_loops(func : @milkir.Function) -> OptResult {
+fn unroll_counted_loops(
+  func : @milkir.Function,
+  analysis~ : (@milkir.CFG, Array[@milkir.Loop], Array[Int32])? = None,
+) -> OptResult {
   let result = OptResult::OptResult()
-  let cfg = @milkir.CFG::build(func)
+  let (cfg, loops, definitions) = match analysis {
+    Some(facts) => facts
+    None => {
+      let cfg = @milkir.CFG::build(func)
+      let loops = cfg.find_loops()
+      if loops.is_empty() {
+        return result
+      }
+      (cfg, loops, loop_definition_blocks(func))
+    }
+  }
   let plans : Array[CountedLoopPlan] = []
-  for loop_ in cfg.find_loops() {
-    match analyze_counted_loop(func, cfg, loop_, MAX_FACTOR_TWO_TRIP_COUNT) {
+  for loop_ in loops {
+    match
+      analyze_counted_loop(
+        func,
+        cfg,
+        loop_,
+        MAX_FACTOR_TWO_TRIP_COUNT,
+        definitions~,
+      ) {
       Apply(plan) => plans.push(plan)
       // Keep the reason available to white-box diagnostics while the staged
       // pass intentionally ignores unsupported loops.

@@ -287,73 +287,6 @@ test "plan MilkIR CallPtr through reusable JIT pipeline" {
 }
 
 ///|
-test "plan scalar entry trampoline through reusable JIT pipeline" {
-  let params : Array[@types.ValueType] = [I64, I64]
-  let results : Array[@types.ValueType] = [I64]
-  let plan = @wasmoon_jit.plan_entry_trampoline_for_target(params, results, X64) catch {
-    err => fail(Repr(err).to_string())
-  }
-  debug_inspect(plan.target, content="X64")
-  inspect(plan.entry_symbol, content="entry_trampoline")
-  inspect(plan.object.get_bytes().length() > 0, content="true")
-  let aarch64_plan = @wasmoon_jit.plan_entry_trampoline_for_target(
-    params,
-    results,
-    AArch64,
-  ) catch {
-    err => fail(Repr(err).to_string())
-  }
-  inspect(aarch64_plan.object.get_bytes().length() > 0, content="true")
-  inspect(
-    aarch64_plan.object.get_bytes()[aarch64_plan.object.get_bytes().length() - 4],
-    content="192",
-  )
-  inspect(
-    aarch64_plan.object.get_bytes()[aarch64_plan.object.get_bytes().length() - 1],
-    content="214",
-  )
-}
-
-///|
-test "entry trampoline reports V128 MilkIR planner gap" {
-  let params : Array[@types.ValueType] = [V128]
-  let results : Array[@types.ValueType] = []
-  try
-    @wasmoon_jit.plan_entry_trampoline_for_target(params, results, X64)
-  catch {
-    UnsupportedEntrySignature(message=msg) =>
-      inspect(msg.contains("V128 MilkIR entry trampoline"), content="true")
-    error => fail("unexpected entry trampoline error: \{Repr(error)}")
-  } noraise {
-    _ => fail("expected V128 trampoline planning to report unsupported")
-  }
-}
-
-///|
-test "entry trampoline production gate is conservative" {
-  inspect(
-    @wasmoon_jit.can_use_reusable_entry_trampoline([I64, I64], [I64]),
-    content="true",
-  )
-  inspect(
-    @wasmoon_jit.can_use_reusable_entry_trampoline([I64, I64, I64], [I64]),
-    content="false",
-  )
-  inspect(
-    @wasmoon_jit.can_use_reusable_entry_trampoline([F64], [F64]),
-    content="false",
-  )
-  inspect(
-    @wasmoon_jit.can_use_reusable_entry_trampoline([V128], []),
-    content="false",
-  )
-  inspect(
-    @wasmoon_jit.can_use_reusable_entry_trampoline([I64], [I64, I64]),
-    content="false",
-  )
-}
-
-///|
 test "entry trampoline signature planning lives in wasmoon_jit" {
   debug_inspect(
     @wasmoon_jit.entry_trampoline_type_codes([
@@ -372,7 +305,9 @@ test "entry trampoline signature planning lives in wasmoon_jit" {
   )
   inspect(
     @wasmoon_jit.entry_trampoline_signature_hash([I64, I64], [I64]) ==
-    @wasmoon_jit.entry_trampoline_signature_hash([I64, I64], [I64]),
+    @wasmoon_jit.entry_trampoline_signature_hash([ExternRef, RefAny], [
+      StructRef,
+    ]),
     content="true",
   )
   inspect(
@@ -395,13 +330,11 @@ test "plan hostcall import trampoline values_vec layout" {
   ]
   let results : Array[@types.ValueType] = [I64, V128, F32]
   let layout = @wasmoon_jit.plan_hostcall_import_trampoline_layout(
-    params, results, 2, 2,
+    params, results,
   )
   inspect(layout.arg_slots, content="8")
   inspect(layout.result_slots, content="4")
   inspect(layout.values_vec_bytes, content="96")
-  inspect(layout.int_overflow_count, content="2")
-  debug_inspect(layout.float_overflow_types, content="[V128]")
   inspect(@wasmoon_jit.hostcall_value_slot_count(V128), content="2")
   inspect(@wasmoon_jit.hostcall_value_byte_count(V128), content="16")
   inspect(@wasmoon_jit.hostcall_value_slot_count(ExternRef), content="1")

@@ -23,7 +23,7 @@ rule(
 
 dev_build(
   rule: "generate_http_contracts",
-  input: "wit",
+  input: [ "wit", "../wasi_component/wit/preview3.contracts.json" ],
   output: "contracts_generated.mbt",
 )
 

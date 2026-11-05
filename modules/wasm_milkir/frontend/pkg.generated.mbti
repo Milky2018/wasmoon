@@ -11,8 +11,6 @@ import {
 }
 
 // Values
-pub fn lower_function(@embedding.EmbeddingEnvironment, @types.Module, Int32) -> @milkir.Function raise LowerError
-
 pub fn scalar_callees(@translator.TranslationContext, @types.Module) -> Map[Int32, @milkir.Function]
 
 pub fn translate_function(@embedding.EmbeddingEnvironment, @types.Module, Int32, name? : String, memory_max_override? : Int32?) -> @milkir.Function raise LowerError
@@ -20,8 +18,6 @@ pub fn translate_function(@embedding.EmbeddingEnvironment, @types.Module, Int32,
 pub fn translate_function_body(@translator.TranslationContext, String, @types.FuncType, ArrayView[@types.ValueType], ArrayView[@types.Instruction], instruction_sources? : Array[@types.InstructionSource]) -> @milkir.Function
 
 pub fn translation_context_from_module(@types.Module, @embedding.EmbeddingEnvironment, memory_max_override? : Int32?, func_base? : Int32, import_remap? : Array[Int32]) -> @translator.TranslationContext
-
-pub fn try_lower_native_function(@embedding.EmbeddingEnvironment, @types.Module, Int32) -> @milkir.Function? raise LowerError
 
 pub fn wasm_validation_context(@translator.TranslationContext) -> @wasm_milkir.WasmValidationContext
 
@@ -32,7 +28,6 @@ pub suberror LowerError {
   TypeIndexOutOfRange(index~ : Int32)
   NonFunctionType(index~ : Int32)
   MissingCode(index~ : Int32)
-  UnsupportedNativeLowering(index~ : Int32, reason~ : String)
 }
 pub fn LowerError::equal(Self, Self) -> Bool
 pub fn LowerError::not_equal(Self, Self) -> Bool

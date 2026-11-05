@@ -1,12 +1,5 @@
 ///|
-pub(all) enum AtomicRmwOp {
-  Add
-  Sub
-  And
-  Or
-  Xor
-  Exchange
-}
+pub type AtomicRmwOp = @types.AtomicRmwOp
 
 ///|
 fn Memory::checked_atomic_descriptor(

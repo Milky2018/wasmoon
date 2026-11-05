@@ -409,20 +409,33 @@ fn lower_ref_cast(
   type_index : Int32,
   nullable : Bool,
 ) -> Unit {
-  let operands = context.environment()
-  for operand in context.operands() {
-    operands.push(operand)
-  }
-  operands.push(i32_immediate(context, type_index))
-  operands.push(bool_immediate(context, nullable))
-  finish_runtime_call(
-    context,
-    environment,
-    GcRefCast,
-    operands,
-    [Ptr64, GcRef64, I32, I32],
-    @native_types.CallBehavior::new(Read, true, false, false, false),
-  )
+  context.forward_results([
+    emit_ref_cast(context, environment, type_index, nullable),
+  ])
+}
+
+///|
+fn emit_ref_cast(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  type_index : Int32,
+  nullable : Bool,
+) -> @lowering.Value {
+  context.emit_call_without_roots(
+    @native_types.NativeCall::new(
+      External((environment.runtime_symbol)(GcRefCast)),
+      @native_types.Signature::new([Ptr64, GcRef64, I32, I32], [GcRef64]),
+      Platform,
+      @native_types.CallBehavior::new(Read, true, false, false, false),
+    ),
+    [
+      context.environment()[0],
+      context.operands()[0],
+      i32_immediate(context, type_index),
+      bool_immediate(context, nullable),
+    ],
+    [GcRef64],
+  )[0]
 }
 
 ///|
@@ -1817,6 +1830,8 @@ pub fn lower_to_sink(
     }
     validate_memory_extension(view, validation_context, function.results)
   }
+  let cast_views = adjacent_cast_views(function, environment)
+  let pending_view : Ref[(Int32, @lowering.Value)?] = Ref(None)
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
@@ -1828,6 +1843,28 @@ pub fn lower_to_sink(
         )
       }
       lower_cached_poll(context, poll, environment)
+      return None
+    }
+    if pending_view.val is Some((projection, view)) {
+      pending_view.val = None
+      guard context.instruction_id() == projection &&
+        decode_projection(extension) is Some(StructData(type_index)) &&
+        struct_view_shape(validation_context, type_index)
+        is Some((shape, fields)) else {
+        return Some(
+          "checked cast view was not consumed by its adjacent projection",
+        )
+      }
+      lower_cast_view_use(context, environment, type_index, shape, fields, view)
+      return None
+    }
+    if cast_views.get(context.instruction_id()) is Some(projection) &&
+      @wasm_milkir.decode(extension) is Some(RefCast(type_index, false)) &&
+      struct_view_shape(validation_context, type_index) is Some((shape, fields)) {
+      let view = lower_cast_with_view(
+        context, environment, type_index, shape, fields,
+      )
+      pending_view.val = Some((projection, view))
       return None
     }
     lower_extension(context, extension, environment, validation_context)

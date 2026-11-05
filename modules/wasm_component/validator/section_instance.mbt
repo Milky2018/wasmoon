@@ -7,52 +7,18 @@ fn validate_component_section_instance(
   type_table : Array[@component.TypeDef?],
   known_type_sigs : Map[Int32, TypeSig],
   resource_ids : Array[Int32?],
-  component_sizes : Array[Int32],
-  instance_sizes : Array[Int32],
-  core_module_exports : Array[Map[String, Int32]?],
-  core_module_defs : Array[@types.Module?],
-  core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
-  component_import_sorts : Array[Map[String, @component.Sort]?],
-  component_import_instance_sigs : Array[Map[String, InstanceSig]?],
-  component_import_func_sigs : Array[Map[String, FuncSigShape]?],
-  component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int32]]?,
-  ],
-  component_import_core_module_exports : Array[Map[String, Map[String, Int32]]?],
-  component_import_core_module_import_sigs : Array[
-    Map[String, Map[String, CoreExternType]]?,
-  ],
-  component_import_type_bounds : Array[Map[String, @component.TypeBound]?],
-  component_import_type_sigs : Array[Map[String, TypeSig]?],
-  component_export_sorts : Array[Map[String, @component.Sort]?],
-  component_export_instance_sigs : Array[Map[String, InstanceSig]?],
-  component_export_instance_type_sigs : Array[
-    Map[String, Map[String, TypeSig]]?,
-  ],
-  component_export_instance_func_sigs : Array[
-    Map[String, Map[String, FuncSigShape]]?,
-  ],
-  component_export_type_sigs : Array[Map[String, TypeSig]?],
-  component_export_func_sigs : Array[Map[String, FuncSigShape]?],
-  instance_sigs : Array[InstanceSig?],
-  instance_export_type_idxs : Array[Array[Int32]?],
-  instance_export_func_idxs : Array[Array[Int32]?],
-  instance_export_type_map : Array[Map[String, ExportedTypeInfo]?],
-  instance_export_type_sigs : Array[Map[String, TypeSig]?],
-  instance_export_func_sigs : Array[Map[String, FuncSigShape]?],
-  instance_nested_instance_type_sigs : Array[Map[String, Map[String, TypeSig]]?],
-  instance_nested_instance_func_sigs : Array[
-    Map[String, Map[String, FuncSigShape]]?,
-  ],
+  components : Array[ComponentIndexEntry],
+  instances : Array[InstanceIndexEntry],
+  core_modules : Array[CoreModuleIndexEntry],
   func_types : Array[@component.FuncType?],
   func_sig_shapes : Array[FuncSigShape?],
   next_resource_id : Int32,
 ) -> Int32 raise ComponentValidationError {
   let mut next_resource_id = next_resource_id
-  let instances = @component.parse_instance_section(payload) catch {
+  let declarations = @component.parse_instance_section(payload) catch {
     e => raise SectionParseError(5, "\{e}")
   }
-  for inst in instances {
+  for inst in declarations {
     let mut inst_sig : InstanceSig? = None
     let mut inst_size = 1
     let mut inst_type_idxs : Array[Int32]? = None
@@ -67,61 +33,18 @@ fn validate_component_section_instance(
         if component_idx < 0 || component_idx >= counts.component {
           raise InvalidComponentIndex(component_idx)
         }
-        if component_idx >= 0 && component_idx < component_sizes.length() {
-          inst_size = component_sizes[component_idx]
-        } else {
-          inst_size = 1
-        }
-        // Validate instantiation args against the component's import
-        // signature when available.
-        let expected_imports = if component_idx >= 0 &&
-          component_idx < component_import_sorts.length() {
-          component_import_sorts[component_idx]
-        } else {
-          None
-        }
-        let expected_import_instance_sigs = if component_idx >= 0 &&
-          component_idx < component_import_instance_sigs.length() {
-          component_import_instance_sigs[component_idx]
-        } else {
-          None
-        }
-        let expected_import_func_sigs = if component_idx >= 0 &&
-          component_idx < component_import_func_sigs.length() {
-          component_import_func_sigs[component_idx]
-        } else {
-          None
-        }
-        let expected_import_core_modules = if component_idx >= 0 &&
-          component_idx < component_import_core_module_exports.length() {
-          component_import_core_module_exports[component_idx]
-        } else {
-          None
-        }
-        let expected_import_core_module_import_sigs = if component_idx >= 0 &&
-          component_idx < component_import_core_module_import_sigs.length() {
-          component_import_core_module_import_sigs[component_idx]
-        } else {
-          None
-        }
-        let expected_import_type_sigs = if component_idx >= 0 &&
-          component_idx < component_import_type_sigs.length() {
-          component_import_type_sigs[component_idx]
-        } else {
-          None
-        }
-        let expected_import_type_bounds = if component_idx >= 0 &&
-          component_idx < component_import_type_bounds.length() {
-          component_import_type_bounds[component_idx]
-        } else {
-          None
-        }
-        let expected_import_instance_resource_exports = if component_idx >= 0 &&
-          component_idx < component_import_instance_resource_exports.length() {
-          component_import_instance_resource_exports[component_idx]
-        } else {
-          None
-        }
+        let entry = components
+          .get(component_idx)
+          .unwrap_or_else(() => ComponentIndexEntry::unknown(1))
+        inst_size = entry.size
+        // The component declaration may have no known signature.
+        let expected_imports = entry.import_sorts
+        let expected_import_instance_sigs = entry.import_instance_sigs
+        let expected_import_func_sigs = entry.import_func_sigs
+        let expected_import_core_modules = entry.import_core_modules
+        let expected_import_type_sigs = entry.import_type_sigs
+        let expected_import_type_bounds = entry.import_type_bounds
+        let expected_import_instance_resource_exports = entry.import_instance_resource_exports
         let pending_type_args : Array[(String, Int32)] = []
         let pending_func_args : Array[(String, Int32)] = []
         let pending_instance_args : Array[(String, Int32)] = []
@@ -150,49 +73,27 @@ fn validate_component_section_instance(
                       (Instance, Some(sig_map)) =>
                         match sig_map.get(a.name) {
                           Some(req) => {
-                            let actual = if a.sortidx.idx >= 0 &&
-                              a.sortidx.idx < instance_sigs.length() {
-                              instance_sigs[a.sortidx.idx]
-                            } else {
-                              None
-                            }
+                            let actual = instances
+                              .get(a.sortidx.idx)
+                              .bind(entry => entry.signature)
                             check_instance_subtype(actual, req)
                           }
                           None => ()
                         }
                       _ => ()
                     }
-                    match (sort, expected_import_core_modules) {
-                      (Core(0x11), Some(core_map)) =>
-                        match core_map.get(a.name) {
-                          Some(req) =>
-                            if a.sortidx.idx >= 0 &&
-                              a.sortidx.idx < core_module_exports.length() {
-                              check_core_module_subtype(
-                                core_module_exports[a.sortidx.idx],
-                                req,
-                              )
-                            } else {
-                              ()
-                            }
-                          None => ()
-                        }
-                      _ => ()
-                    }
-                    match (sort, expected_import_core_module_import_sigs) {
-                      (Core(0x11), Some(sig_map)) =>
-                        match sig_map.get(a.name) {
-                          Some(req) => {
-                            let actual_sig = core_module_import_sig_of_idx(
-                              a.sortidx.idx,
-                              core_module_defs,
-                              core_module_type_imports,
-                            )
-                            check_core_module_import_subtype(actual_sig, req)
-                          }
-                          None => ()
-                        }
-                      _ => ()
+                    if sort is Core(0x11) &&
+                      expected_import_core_modules is Some(requirements) &&
+                      requirements.get(a.name) is Some(required) &&
+                      core_modules.get(a.sortidx.idx) is Some(actual) {
+                      check_core_module_subtype(
+                        actual.export_kinds,
+                        required.exports,
+                      )
+                      check_core_module_import_subtype(
+                        actual.import_signature(),
+                        required.imports,
+                      )
                     }
                     if sort is Type {
                       pending_type_args.push((a.name, a.sortidx.idx))
@@ -224,12 +125,9 @@ fn validate_component_section_instance(
                 Some(exports) =>
                   for kv2 in exports.iter() {
                     let (tname, expected_rid) = kv2
-                    let tmap = if inst_idx >= 0 &&
-                      inst_idx < instance_export_type_map.length() {
-                      instance_export_type_map[inst_idx]
-                    } else {
-                      None
-                    }
+                    let tmap = instances
+                      .get(inst_idx)
+                      .bind(entry => entry.exported_types)
                     match tmap {
                       Some(map) =>
                         match map.get(tname) {
@@ -398,144 +296,107 @@ fn validate_component_section_instance(
 
         // Propagate the component's export signature to the instantiated
         // instance so later aliasing/instantiations can validate exports.
-        if component_idx >= 0 && component_idx < component_export_sorts.length() {
-          match component_export_sorts[component_idx] {
-            Some(exports) => {
-              let nested = if component_idx >= 0 &&
-                component_idx < component_export_instance_sigs.length() {
-                match component_export_instance_sigs[component_idx] {
-                  Some(m) => m
-                  None => Map([])
-                }
-              } else {
-                Map([])
-              }
-              inst_sig = Some({ exports, nested, })
-            }
-            None => ()
-          }
+        if entry.export_sorts is Some(exports) {
+          let nested = entry.export_instance_sigs.unwrap_or_else(() => Map([]))
+          inst_sig = Some({ exports, nested, })
         }
 
         // Track exported types so `(alias export $inst "t" (type $x))` can
         // resolve resource identities (wasm-tools/resources.wast).
-        if component_idx >= 0 &&
-          component_idx < component_export_type_sigs.length() {
-          match component_export_type_sigs[component_idx] {
-            Some(sig_map) => {
-              let out : Map[String, ExportedTypeInfo] = Map([])
-              let sig_out : Map[String, TypeSig] = Map([])
-              // Allocate every fresh resource before translating signatures.
-              // Dependent types and aliases must see the same instance-local
-              // identity regardless of export iteration order.
-              for (_, sig) in sig_map.iter() {
-                if sig is Resource(rid) && rid_subst.get(rid) is None {
-                  rid_subst.set(rid, next_resource_id)
-                  next_resource_id += 1
-                }
-              }
-              for kv in sig_map.iter() {
-                let (name, sig0) = kv
-                sig_out.set(name, type_sig_subst_resources(sig0, rid_subst))
-                match sig0 {
-                  Resource(rid0) => {
-                    let actual_rid = rid_subst.get(rid0).unwrap()
-                    let mut found : Int32? = None
-                    for i in 0..<type_table.length() {
-                      if type_sig_of_typeidx(
-                          i,
-                          type_table,
-                          resource_ids,
-                          known_sigs=known_type_sigs,
-                        ) ==
-                        Resource(actual_rid) {
-                        found = Some(i)
-                        break
-                      }
-                    }
-                    match found {
-                      Some(idx) => out.set(name, Existing(idx))
-                      None => out.set(name, Resource(actual_rid))
-                    }
-                  }
-                  _ => {
-                    let sig = type_sig_subst_resources(sig0, rid_subst)
-                    let mut found : Int32? = None
-                    for i in 0..<type_table.length() {
-                      if type_sig_of_typeidx(
-                          i,
-                          type_table,
-                          resource_ids,
-                          known_sigs=known_type_sigs,
-                        ) ==
-                        sig {
-                        found = Some(i)
-                        break
-                      }
-                    }
-                    match found {
-                      Some(idx) => out.set(name, Existing(idx))
-                      None => out.set(name, Opaque)
-                    }
+        if entry.export_type_sigs is Some(sig_map) {
+          let out : Map[String, ExportedTypeInfo] = Map([])
+          let sig_out : Map[String, TypeSig] = Map([])
+          // Allocate every fresh resource before translating signatures.
+          // Dependent types and aliases must see the same instance-local
+          // identity regardless of export iteration order.
+          for (_, sig) in sig_map.iter() {
+            if sig is Resource(rid) && rid_subst.get(rid) is None {
+              rid_subst.set(rid, next_resource_id)
+              next_resource_id += 1
+            }
+          }
+          for kv in sig_map.iter() {
+            let (name, sig0) = kv
+            sig_out.set(name, type_sig_subst_resources(sig0, rid_subst))
+            match sig0 {
+              Resource(rid0) => {
+                let actual_rid = rid_subst.get(rid0).unwrap()
+                let mut found : Int32? = None
+                for i in 0..<type_table.length() {
+                  if type_sig_of_typeidx(
+                      i,
+                      type_table,
+                      resource_ids,
+                      known_sigs=known_type_sigs,
+                    ) ==
+                    Resource(actual_rid) {
+                    found = Some(i)
+                    break
                   }
                 }
-              }
-              inst_type_map = Some(out)
-              inst_type_sig_map = Some(sig_out)
-            }
-            None => ()
-          }
-        }
-        if component_idx >= 0 &&
-          component_idx < component_export_func_sigs.length() {
-          match component_export_func_sigs[component_idx] {
-            Some(sig_map) => {
-              let out : Map[String, FuncSigShape] = Map([])
-              for kv in sig_map.iter() {
-                let (name, sig0) = kv
-                out.set(name, funcsig_subst_resources(sig0, rid_subst))
-              }
-              inst_func_sig_map = Some(out)
-            }
-            None => ()
-          }
-        }
-        if component_idx >= 0 &&
-          component_idx < component_export_instance_type_sigs.length() {
-          match component_export_instance_type_sigs[component_idx] {
-            Some(inst_map0) => {
-              let out : Map[String, Map[String, TypeSig]] = Map([])
-              for kv in inst_map0.iter() {
-                let (inst_name, types0) = kv
-                let types : Map[String, TypeSig] = Map([])
-                for kv2 in types0.iter() {
-                  let (name, sig0) = kv2
-                  types.set(name, type_sig_subst_resources(sig0, rid_subst))
+                match found {
+                  Some(idx) => out.set(name, Existing(idx))
+                  None => out.set(name, Resource(actual_rid))
                 }
-                out.set(inst_name, types)
               }
-              inst_nested_type_sigs = Some(out)
-            }
-            None => ()
-          }
-        }
-        if component_idx >= 0 &&
-          component_idx < component_export_instance_func_sigs.length() {
-          match component_export_instance_func_sigs[component_idx] {
-            Some(inst_map0) => {
-              let out : Map[String, Map[String, FuncSigShape]] = Map([])
-              for kv in inst_map0.iter() {
-                let (inst_name, funcs0) = kv
-                let funcs : Map[String, FuncSigShape] = Map([])
-                for kv2 in funcs0.iter() {
-                  let (name, sig0) = kv2
-                  funcs.set(name, funcsig_subst_resources(sig0, rid_subst))
+              _ => {
+                let sig = type_sig_subst_resources(sig0, rid_subst)
+                let mut found : Int32? = None
+                for i in 0..<type_table.length() {
+                  if type_sig_of_typeidx(
+                      i,
+                      type_table,
+                      resource_ids,
+                      known_sigs=known_type_sigs,
+                    ) ==
+                    sig {
+                    found = Some(i)
+                    break
+                  }
                 }
-                out.set(inst_name, funcs)
+                match found {
+                  Some(idx) => out.set(name, Existing(idx))
+                  None => out.set(name, Opaque)
+                }
               }
-              inst_nested_func_sigs = Some(out)
             }
-            None => ()
           }
+          inst_type_map = Some(out)
+          inst_type_sig_map = Some(sig_out)
+        }
+        if entry.export_func_sigs is Some(sig_map) {
+          let out : Map[String, FuncSigShape] = Map([])
+          for kv in sig_map.iter() {
+            let (name, sig0) = kv
+            out.set(name, funcsig_subst_resources(sig0, rid_subst))
+          }
+          inst_func_sig_map = Some(out)
+        }
+        if entry.export_instance_type_sigs is Some(inst_map0) {
+          let out : Map[String, Map[String, TypeSig]] = Map([])
+          for kv in inst_map0.iter() {
+            let (inst_name, types0) = kv
+            let types : Map[String, TypeSig] = Map([])
+            for kv2 in types0.iter() {
+              let (name, sig0) = kv2
+              types.set(name, type_sig_subst_resources(sig0, rid_subst))
+            }
+            out.set(inst_name, types)
+          }
+          inst_nested_type_sigs = Some(out)
+        }
+        if entry.export_instance_func_sigs is Some(inst_map0) {
+          let out : Map[String, Map[String, FuncSigShape]] = Map([])
+          for kv in inst_map0.iter() {
+            let (inst_name, funcs0) = kv
+            let funcs : Map[String, FuncSigShape] = Map([])
+            for kv2 in funcs0.iter() {
+              let (name, sig0) = kv2
+              funcs.set(name, funcsig_subst_resources(sig0, rid_subst))
+            }
+            out.set(inst_name, funcs)
+          }
+          inst_nested_func_sigs = Some(out)
         }
       }
       InlineExports(inline_exports) => {
@@ -611,12 +472,10 @@ fn validate_component_section_instance(
           }
           match ex.sortidx.sort {
             Instance => {
-              let delta = if ex.sortidx.idx >= 0 &&
-                ex.sortidx.idx < instance_sizes.length() {
-                instance_sizes[ex.sortidx.idx]
-              } else {
-                1
-              }
+              let delta = instances
+                .get(ex.sortidx.idx)
+                .map(entry => entry.size)
+                .unwrap_or(1)
               size = add_type_size(size, delta)
             }
             _ => size = add_type_size(size, 1)
@@ -631,15 +490,18 @@ fn validate_component_section_instance(
         inst_func_sig_map = Some(func_map)
       }
     }
-    instance_sigs.push(inst_sig)
-    instance_sizes.push(inst_size)
-    instance_export_type_idxs.push(inst_type_idxs)
-    instance_export_func_idxs.push(inst_func_idxs)
-    instance_export_type_map.push(inst_type_map)
-    instance_export_type_sigs.push(inst_type_sig_map)
-    instance_export_func_sigs.push(inst_func_sig_map)
-    instance_nested_instance_type_sigs.push(inst_nested_type_sigs)
-    instance_nested_instance_func_sigs.push(inst_nested_func_sigs)
+    instances.push({
+      signature: inst_sig,
+      size: inst_size,
+      type_indices: inst_type_idxs,
+      function_indices: inst_func_idxs,
+      exported_types: inst_type_map,
+      type_signatures: inst_type_sig_map,
+      function_signatures: inst_func_sig_map,
+      nested_type_signatures: inst_nested_type_sigs,
+      nested_function_signatures: inst_nested_func_sigs,
+      in_interface: false,
+    })
     counts.instance += 1
   }
   next_resource_id

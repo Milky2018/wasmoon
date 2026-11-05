@@ -936,6 +936,19 @@ pub fn WasmValidationContext::array_element(
 }
 
 ///|
+/// Resolve the struct once for callers that need to inspect a field prefix.
+/// The view exposes storage contracts without exposing the mutable array.
+pub fn WasmValidationContext::struct_fields(
+  self : WasmValidationContext,
+  index : Int32,
+) -> ArrayView[WasmFieldContract]? {
+  match (self.defined_type_contract)(index) {
+    Some(Struct(fields)) => Some(fields[:])
+    _ => None
+  }
+}
+
+///|
 /// Resolve the semantic field contract without assuming a physical layout.
 pub fn WasmValidationContext::struct_field(
   self : WasmValidationContext,

@@ -375,11 +375,11 @@ test "Core boundary: explicit shared Memory imports preserve independent close" 
   let memory = @runtime.Memory::Memory(1, Some(2), is_shared=true)
   a.alloc_mem(memory) |> ignore
   let imported = b.get_mem(b.alloc_shared_mem(memory))
-  memory.store_i32(0, 11)
+  memory.store_i32_at(0L, 11)
   a.close()
-  inspect(imported.load_i32(0), content="11")
-  imported.store_i32(0, 22)
-  inspect(imported.load_i32(0), content="22")
+  inspect(imported.load_i32_at(0L), content="11")
+  imported.store_i32_at(0L, 22)
+  inspect(imported.load_i32_at(0L), content="22")
 }
 
 ///|

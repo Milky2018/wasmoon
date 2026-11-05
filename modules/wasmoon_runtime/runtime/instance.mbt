@@ -323,75 +323,51 @@ pub fn Store::new_instance(
   }
   for index, expected in expected_memories {
     let memory = self.get_mem(mem_addrs[index])
-    let (minimum, maximum) = memory.get_limits64()
     guard memory.is_memory64() == expected.is_memory64 &&
       memory.is_shared() == expected.is_shared &&
       memory.page_size_bytes() == 1L << expected.page_size_log2 &&
-      minimum.reinterpret_as_uint64() >=
-      expected.limits.min.reinterpret_as_uint64() else {
+      expected.limits.import_mismatch(memory.get_limits64()) is None else {
       raise TypeMismatch
-    }
-    if expected.limits.max is Some(limit) {
-      guard maximum is Some(actual) &&
-        actual.reinterpret_as_uint64() <= limit.reinterpret_as_uint64() else {
-        raise TypeMismatch
-      }
     }
   }
   for index, expected in expected_tables {
     let table = self.get_table(table_addrs[index])
-    let (minimum, maximum) = table.get_limits64()
     guard table.is_table64() == expected.is_table64 &&
-      minimum.reinterpret_as_uint64() >=
-      expected.limits.min.reinterpret_as_uint64() else {
+      expected.limits.import_mismatch(table.get_limits64()) is None else {
       raise TypeMismatch
     }
-    let context = self.resource_type_context(Table(table_addrs[index]), module_)
-    guard context.value_type_subtype(table.get_elem_type(), expected.elem_type) &&
-      reverse_type_context(context).value_type_subtype(
-        expected.elem_type,
-        table.get_elem_type(),
-      ) else {
+    guard self.resource_value_type_matches(
+      Table(table_addrs[index]),
+      module_,
+      table.get_elem_type(),
+      expected.elem_type,
+      invariant=true,
+    ) else {
       raise TypeMismatch
-    }
-    if expected.limits.max is Some(limit) {
-      guard maximum is Some(actual) &&
-        actual.reinterpret_as_uint64() <= limit.reinterpret_as_uint64() else {
-        raise TypeMismatch
-      }
     }
   }
   for index, expected in expected_globals {
     let actual = self.get_global(global_addrs[index]).get_type()
-    let context = self.resource_type_context(
-      Global(global_addrs[index]),
-      module_,
-    )
     guard actual.mutable == expected.mutable &&
-      context.value_type_subtype(actual.value_type, expected.value_type) else {
-      raise TypeMismatch
-    }
-    if expected.mutable &&
-      !reverse_type_context(context).value_type_subtype(
-        expected.value_type,
+      self.resource_value_type_matches(
+        Global(global_addrs[index]),
+        module_,
         actual.value_type,
-      ) {
+        expected.value_type,
+        invariant=expected.mutable,
+      ) else {
       raise TypeMismatch
     }
   }
   for index, expected in expected_tags {
-    let actual = self.get_tag_type(tag_addrs[index])
-    let expected_signature = module_.validated_func_type_at(expected)
-    guard actual.params.length() == expected_signature.params.length() else {
+    let addr = tag_addrs[index]
+    guard self.tag_type_matches(
+      addr,
+      module_,
+      expected,
+      self.get_tag_type(addr),
+    ) else {
       raise TypeMismatch
-    }
-    let context = self.resource_type_context(Tag(tag_addrs[index]), module_)
-    for parameter, actual in actual.params {
-      let expected = expected_signature.params[parameter]
-      guard context.value_type_subtype(actual, expected) &&
-        reverse_type_context(context).value_type_subtype(expected, actual) else {
-        raise TypeMismatch
-      }
     }
   }
   let instance = {
@@ -419,7 +395,17 @@ pub fn Store::new_instance(
     dropped_elems: FixedArray::make(module_.elems.length(), false),
     dropped_datas: FixedArray::make(module_.datas.length(), false),
   }
-  self.register_instance(instance, admission~) |> ignore
+  let index = self.register_instance(instance, admission~)
+  if !instance.types.is_empty() {
+    // A guest definition binds its own types. Raw host resources without a
+    // type scope retain the scope of their first typed import.
+    for address in table_addrs {
+      self.record_resource_origin(self.tables[address].binding, index)
+    }
+    for address in global_addrs {
+      self.record_resource_origin(self.globals[address].binding, index)
+    }
+  }
   for index, element in module_.elems {
     if element.mode is Declarative {
       instance.drop_element(index)
@@ -512,32 +498,77 @@ pub fn Store::host_exports(
 }
 
 ///|
+/// Check a guest tag's canonical function type, including its recursive group.
+/// Host tags have a parameter signature but no defining type index.
+pub fn Store::tag_type_matches(
+  self : Store,
+  address : Int32,
+  target : @types.Module,
+  expected : Int32,
+  actual : @types.FuncType,
+) -> Bool {
+  let index = self.get_tag_type_idx(address)
+  if index >= 0 && self.get_tag_owner(address) is Some(owner) {
+    index < owner.types.length() &&
+    @types.TypeEquivalenceContext::cross_module(
+      owner.types,
+      target.types,
+      rec_groups1=owner.type_rec_groups,
+      rec_groups2=target.type_rec_groups,
+    ).types_equivalent(index, expected)
+  } else {
+    actual.params == target.validated_func_type_at(expected).params
+  }
+}
+
+///|
+/// Check a resource's declared value type in the exporting instance's type
+/// space. Mutable resources also require the reverse relation.
+pub fn Store::resource_value_type_matches(
+  self : Store,
+  resource : ExternVal,
+  target : @types.Module,
+  actual : @types.ValueType,
+  expected : @types.ValueType,
+  invariant~ : Bool,
+) -> Bool {
+  if !expected.is_reference() {
+    return actual == expected
+  }
+  let context = self.resource_type_context(resource, target)
+  context.value_type_subtype(actual, expected) &&
+  (
+    !invariant ||
+    reverse_type_context(context).value_type_subtype(expected, actual)
+  )
+}
+
+///|
+fn Store::record_resource_origin(
+  self : Store,
+  binding : ResourceBinding?,
+  instance : Int32,
+) -> Unit {
+  if binding is Some(binding) && binding.type_instance is None {
+    binding.type_instance = Some(instance)
+    self.on_instantiation_rollback(fn() { binding.type_instance = None })
+  }
+}
+
+///|
 fn Store::resource_type_context(
   self : Store,
   value : ExternVal,
   target : @types.Module,
 ) -> @types.SubtypingContext {
-  let owner = match value {
-    Tag(address) => self.get_tag_owner(address)
-    _ => {
-      let mut found : ModuleInstance? = None
-      for instance in self.instances {
-        if instance.types.is_empty() {
-          continue
-        }
-        let contains = match value {
-          Table(address) => instance.table_addrs.contains(address)
-          Global(address) => instance.global_addrs.contains(address)
-          _ => false
-        }
-        if contains {
-          found = Some(instance)
-          break
-        }
-      }
-      found
-    }
+  let binding = match value {
+    Table(address) => self.tables.get(address).bind(table => table.binding)
+    Global(address) => self.globals.get(address).bind(global => global.binding)
+    _ => None
   }
+  let owner = binding
+    .bind(binding => binding.type_instance)
+    .bind(index => self.instances.get(index))
   match owner {
     Some(owner) =>
       @types.SubtypingContext::cross_module(

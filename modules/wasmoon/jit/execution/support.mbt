@@ -1,4 +1,4 @@
-// JIT support functions for WAST runner
+// Store-bound native execution and state binding.
 
 ///|
 fn encode_extern_value(
@@ -287,82 +287,6 @@ pub fn collect_registered_funcref_entries(
 }
 
 ///|
-/// Check if a module contains JIT-unsupported instructions
-pub fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
-  // Check all function bodies for unsupported instructions
-  for code in mod_.codes {
-    if contains_unsupported_instruction(code.body) {
-      return true
-    }
-  }
-  false
-}
-
-///|
-/// WAST-only JIT support check.
-pub fn has_unsupported_instructions_for_wast(mod_ : @types.Module) -> Bool {
-  has_unsupported_instructions(mod_)
-}
-
-///|
-/// Recursively check if instruction list contains unsupported instructions
-fn contains_unsupported_instruction(
-  instrs : ArrayView[@types.Instruction],
-) -> Bool {
-  for instr in instrs {
-    match instr {
-      // All bulk memory/table + segment-based GC array ops are supported via libcalls.
-      // Block instructions - need to check nested instructions
-      Block(_, body) | Loop(_, body) =>
-        if contains_unsupported_instruction(body) {
-          return true
-        }
-      If(_, then_body, else_body) => {
-        if contains_unsupported_instruction(then_body) {
-          return true
-        }
-        if !else_body.is_empty() && contains_unsupported_instruction(else_body) {
-          return true
-        }
-      }
-      _ => ()
-    }
-  }
-  false
-}
-
-///|
-/// Check if a module has cross-module imports (imports from user modules)
-/// JIT can't properly share state with interpreter for cross-module globals/memory/tables
-pub fn has_cross_module_imports(mod_ : @types.Module) -> Bool {
-  for imp in mod_.imports {
-    // JIT-supported modules are handled by trampolines
-    // Other modules are user modules that need state sharing
-    if !@wasmoon_jit.is_jit_supported_module(imp.mod_name) {
-      // User module import - globals and tables still need sharing.
-      // Memories are descriptor-backed and can be shared safely.
-      if imp.desc is (Global(_) | Table(_)) {
-        return true
-      }
-    }
-  }
-  false
-}
-
-///|
-/// Check if a module exports memory or tables
-/// These might be imported by other modules, and JIT can't share the backing storage
-pub fn exports_shared_resources(mod_ : @types.Module) -> Bool {
-  for exp in mod_.exports {
-    // Tables are not yet descriptor-backed/shared with the interpreter.
-    if exp.desc is Table(_) {
-      return true
-    }
-  }
-  false
-}
-
-///|
 /// Get function name from exports or generate default name "func_N"
 pub fn get_func_name(mod_ : @types.Module, func_idx : Int32) -> String {
   for exp in mod_.exports {
@@ -581,16 +505,13 @@ pub fn eval_elem_offset_expr(
 }
 
 ///|
-/// Initialize element segments for call_indirect support
-pub fn init_elem_segments(
-  _mod_ : @types.Module,
-  jm : @compiled_jit.JITModule,
+/// Bind the Store's authoritative tables without replaying element initializers.
+pub fn bind_instance_tables(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  use_subtype_indirect_check~ : Bool = false,
+  jm : @compiled_jit.JITModule,
 ) -> Unit raise @runtime.RuntimeError {
   store.check_instance(instance)
-  use_subtype_indirect_check |> ignore
   let tables = Array::makei(instance.table_addrs.length(), i => {
     store.get_jit_table(instance.table_addrs[i])
   })
@@ -615,14 +536,12 @@ pub fn init_bulk_segments(
   jm : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-  use_subtype_indirect_check~ : Bool = false,
 ) -> Unit raise @runtime.RuntimeError {
   store.check_instance(instance)
   jm.prepare_continuations(mod_.types, store.native_execution_state()) catch {
     error =>
       raise LinkErrorDetail("native continuation preparation failed: \{error}")
   }
-  use_subtype_indirect_check |> ignore
   // Imported functions retain their actual Store type, which can be a subtype
   // of the signature declared by this module's import.
   let func_table_types : Array[Int32] = []

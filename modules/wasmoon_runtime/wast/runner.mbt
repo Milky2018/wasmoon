@@ -14,59 +14,66 @@ pub fn WastResult::WastResult() -> WastResult {
 }
 
 ///|
-/// Build imports from registered modules
-pub fn CoreWastContext::build_imports(
-  self : CoreWastContext,
-) -> @runtime.Imports {
-  let imports = @runtime.Imports::Imports(self.store)
-  for entry in self.registered_modules.iter() {
-    let (mod_name, instance) = entry
-    // Add all exports from this module as imports
-    for exp in instance.exports {
-      match exp.desc {
-        Func(func_idx) => {
-          let addr = instance.func_addrs[func_idx]
-          imports.add_func(mod_name, exp.name, addr)
-        }
-        Memory(mem_idx) => {
-          let addr = instance.mem_addrs[mem_idx]
-          imports.add_memory(mod_name, exp.name, addr)
-        }
-        Table(table_idx) => {
-          let addr = instance.table_addrs[table_idx]
-          imports.add_table(mod_name, exp.name, addr)
-        }
-        Global(global_idx) => {
-          let addr = instance.global_addrs[global_idx]
-          imports.add_global(mod_name, exp.name, addr)
-        }
-        Tag(tag_idx) => {
-          let addr = instance.tag_addrs[tag_idx]
-          imports.add_tag(mod_name, exp.name, addr)
-        }
-      }
-    }
-  }
-  imports
+pub fn WastResult::record_pass(self : WastResult) -> Unit {
+  self.passed += 1
 }
 
 ///|
-pub fn run_wast_command(
-  ctx : CoreWastContext,
+pub fn WastResult::record_failure(self : WastResult, message : String) -> Unit {
+  self.failed += 1
+  self.failures.push(message)
+}
+
+///|
+pub(open) trait WastEngine {
+  fn modules(Self) -> WastModules
+  fn store(Self) -> @runtime.Store
+  fn closed(Self) -> Bool
+  fn instantiate(Self, @types.Module, String?) -> Unit raise
+  fn validate(Self, @types.Module) -> Unit raise
+  fn invoke(Self, @wat.WastAction) -> Array[@types.Value] raise WastRunnerError
+  fn source_is_invalid(Self, @wat.WastModuleSource, String) -> Bool raise WastRunnerError
+  fn source_traps(Self, @wat.WastModuleSource, String) -> Bool
+  fn registered(Self, String) -> Unit
+}
+
+///|
+fn[E : WastEngine] instantiate_command(
+  engine : E,
+  module_ : @types.Module,
+  name : String?,
+  line : Int32,
+  result : WastResult,
+  track_unsupported : Bool,
+) -> Unit {
+  engine.instantiate(module_, name) catch {
+    @runtime.RuntimeError::UnsupportedHostCapability(detail) if track_unsupported =>
+      result.unsupported.push("line \{line}: \{detail}")
+    error =>
+      result.record_failure(
+        "line \{line}: module instantiation failed: \{error}",
+      )
+  }
+}
+
+///|
+pub fn[E : WastEngine] execute_command(
+  engine : E,
   cmd : @wat.WastCommand,
   line : Int32,
   result : WastResult,
-  base_dir : String,
   show_success : Bool,
+  track_unsupported~ : Bool = false,
 ) -> Unit {
-  ignore(base_dir)
-  if ctx.closed {
+  if engine.closed() {
     result.failed += 1
     result.failures.push("line \{line}: WAST context is closed")
     return
   }
+  let modules = engine.modules()
   match cmd {
-    Module(mod_, name) => run_wast_module(ctx, mod_, name, line, result)
+    Module(mod_, name) =>
+      instantiate_command(engine, mod_, name, line, result, track_unsupported)
     ModuleQuote(parts) => {
       let mod_ = @wat.parse(parts.join(""), implicit_module=true) catch {
         e => {
@@ -75,7 +82,7 @@ pub fn run_wast_command(
           return
         }
       }
-      run_wast_module(ctx, mod_, None, line, result)
+      instantiate_command(engine, mod_, None, line, result, track_unsupported)
     }
     ModuleBinaryFailed(err) => {
       result.failed = result.failed + 1
@@ -84,7 +91,7 @@ pub fn run_wast_command(
     ModuleDefinition(mod_, name) => {
       // Module definition - validates and stores for later instantiation
       // Used with (module instance ...) to create multiple instances
-      ctx.validate_core_module(mod_) catch {
+      engine.validate(mod_) catch {
         e => {
           result.failed = result.failed + 1
           result.failures.push(
@@ -93,19 +100,12 @@ pub fn run_wast_command(
           return
         }
       }
-      ctx.current_definition = Some(mod_)
-      // Store the module definition for later instantiation via (module instance ...)
-      if name is Some(n) {
-        ctx.module_definitions.set(n, mod_)
-      }
+      modules.record_definition(mod_, name)
       result.passed = result.passed + 1
     }
     ModuleInstance(instance_name, def_name) => {
       // Instantiate a previously defined module
-      let definition = match def_name {
-        Some(name) => ctx.module_definitions.get(name)
-        None => ctx.current_definition
-      }
+      let definition = modules.definition(def_name)
       guard definition is Some(mod_) else {
         result.failed = result.failed + 1
         result.failures.push(
@@ -113,7 +113,9 @@ pub fn run_wast_command(
         )
         return
       }
-      run_wast_module(ctx, mod_, instance_name, line, result)
+      instantiate_command(
+        engine, mod_, instance_name, line, result, track_unsupported,
+      )
     }
     AssertReturn(action, _)
     | AssertTrap(action, _)
@@ -121,21 +123,21 @@ pub fn run_wast_command(
     | AssertException(action)
     | AssertExhaustion(action, _)
     | Action(action) => {
-      let outcome = try invoke_action(ctx, action) catch {
+      let outcome = try engine.invoke(action) catch {
         error => Err(error)
       } noraise {
         values => Ok(values)
       }
-      if outcome is Err(UnsupportedCapability(detail)) {
+      if track_unsupported && outcome is Err(UnsupportedCapability(detail)) {
         result.unsupported.push("line \{line}: \{detail}")
         return
       }
-      finish_wast_action(ctx, cmd, action, line, result, show_success, outcome)
+      finish_action(modules, cmd, action, line, result, show_success, outcome)
     }
     AssertModuleTrap(source, msg) => {
       // Try to instantiate - should trap during instantiation (e.g., start function)
       // Unlike assert_unlinkable, this tests for runtime traps, not linking errors
-      let trapped = try_instantiate_source_traps(ctx, source, msg)
+      let trapped = engine.source_traps(source, msg)
       if trapped {
         result.passed = result.passed + 1
         if show_success {
@@ -149,12 +151,8 @@ pub fn run_wast_command(
       }
     }
     AssertInvalid(source, msg) => {
-      let valid_module = @assertions.validate_module_source(
-        source,
-        bulk_memory=true,
-        stack_switching=ctx.stack_switching,
-      ) catch {
-        UnsupportedCapability(detail) => {
+      let invalid = engine.source_is_invalid(source, msg) catch {
+        UnsupportedCapability(detail) if track_unsupported => {
           result.unsupported.push("line \{line}: \{detail}")
           return
         }
@@ -164,7 +162,7 @@ pub fn run_wast_command(
           return
         }
       }
-      if valid_module is Some(_) {
+      if !invalid {
         result.failed = result.failed + 1
         result.failures.push(
           "line \{line}: assert_invalid: module should have been invalid (expected: \{msg})",
@@ -177,7 +175,11 @@ pub fn run_wast_command(
       }
     }
     AssertMalformed(source, msg) => {
-      let parsed = parse_module_source(source)
+      let parsed = try @assertions.parse_module_source(source) catch {
+        _ => false
+      } noraise {
+        _ => true
+      }
       if parsed {
         result.failed = result.failed + 1
         result.failures.push(
@@ -191,8 +193,8 @@ pub fn run_wast_command(
       }
     }
     AssertUnlinkable(source, msg) => {
-      let linked = try_instantiate_source(ctx, source) catch {
-        UnsupportedCapability(detail) => {
+      let linked = try_instantiate_source(engine, source, track_unsupported) catch {
+        UnsupportedCapability(detail) if track_unsupported => {
           result.unsupported.push("line \{line}: \{detail}")
           return
         }
@@ -217,19 +219,13 @@ pub fn run_wast_command(
       }
     }
     Register(name, module_name) => {
-      // Register module for imports
-      let inst : @runtime.ModuleInstance? = match module_name {
-        Some(n) =>
-          match ctx.named_modules.get(n) {
-            Some(i) => Some(i)
-            None => ctx.current_module
-          }
-        None => ctx.current_module
+      let instance = match modules.instance(module_name) {
+        Some(instance) => Some(instance)
+        None => modules.instance(None)
       }
-      if inst is Some(i) {
-        ctx.registered_modules.set(name, i)
-        // Also add to named_modules for later reference
-        ctx.named_modules.set(name, i)
+      if instance is Some(instance) {
+        modules.register(name, instance)
+        engine.registered(name)
       }
     }
     Thread(_, _, _) | Wait(_) => {
@@ -243,7 +239,7 @@ pub fn run_wast_command(
 
 ///|
 fn check_assert_return(
-  ctx : CoreWastContext,
+  modules : WastModules,
   action : @wat.WastAction,
   expected : Array[@wat.WastValue],
   results : Array[@types.Value],
@@ -256,10 +252,7 @@ fn check_assert_return(
   let module_name = match action {
     Invoke(name, _, _) | Get(name, _) => name
   }
-  let instance = match module_name {
-    Some(name) => ctx.named_modules.get(name)
-    None => ctx.current_module
-  }
+  let instance = modules.instance(module_name)
   let func_addrs = match instance {
     Some(instance) => instance.func_addrs
     None => []
@@ -275,8 +268,26 @@ fn check_assert_return(
 }
 
 ///|
-fn[T] succeeds(body : () -> T raise) -> Bool {
-  try body() catch {
+fn[E : WastEngine] try_instantiate_source(
+  engine : E,
+  source : @wat.WastModuleSource,
+  track_unsupported : Bool,
+) -> Bool raise WastRunnerError {
+  // Parse and validation failures cannot satisfy an instantiation assertion.
+  let module_ = @assertions.parse_module_source(source)
+  engine.validate(module_) catch {
+    error => raise RuntimeError("module validation failed: \{error}")
+  }
+  let store = engine.store()
+  try
+    @executor.instantiate_module_with_imports(
+      store,
+      module_,
+      engine.modules().build_imports(store),
+    )
+  catch {
+    UnsupportedHostCapability(detail) if track_unsupported =>
+      raise UnsupportedCapability(detail)
     _ => false
   } noraise {
     _ => true
@@ -284,83 +295,36 @@ fn[T] succeeds(body : () -> T raise) -> Bool {
 }
 
 ///|
-fn parse_module_source(source : @wat.WastModuleSource) -> Bool {
-  match source {
-    Binary(bytes) => succeeds(() => @parser.parse_module(bytes))
-    Quote(parts) =>
-      succeeds(() => @wat.parse(parts.join(""), implicit_module=true))
-    Inline(_) => true // Already parsed successfully
-    FailedToParse(_) => false // Module failed to parse
-  }
-}
-
-///|
-fn try_instantiate_source(
-  ctx : CoreWastContext,
-  source : @wat.WastModuleSource,
-) -> Bool raise WastRunnerError {
-  // A build failure cannot satisfy an assertion about instantiation. The
-  // pinned adapter does include start-function traps in instantiation errors.
-  let mod_ = try {
-    match source {
-      Binary(bytes) => @parser.parse_module(bytes)
-      Quote(parts) => @wat.parse(parts.join(""), implicit_module=true)
-      Inline(mod_) => mod_
-      FailedToParse(message) => raise WastRunnerError::RuntimeError(message)
-    }
-  } catch {
-    error => raise RuntimeError("module parsing failed: \{error}")
-  }
-  ctx.validate_core_module(mod_) catch {
-    error => raise RuntimeError("module validation failed: \{error}")
-  }
-  let imports = ctx.build_imports()
-  try {
-    @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
-    |> ignore
-    true
-  } catch {
-    UnsupportedHostCapability(detail) => raise UnsupportedCapability(detail)
-    _ => false
-  }
-}
-
-///|
-fn CoreWastContext::validate_core_module(
-  self : CoreWastContext,
-  module_ : @types.Module,
-) -> Unit raise {
-  @validator.validate_module(
-    module_,
-    bulk_memory=true,
-    stack_switching=self.stack_switching,
-  )
-  @executor.validate_continuation_gc_storage(module_)
-}
-
-///|
-pub fn invoke_action(
-  ctx : CoreWastContext,
+pub fn invoke_script_action(
+  store : @runtime.Store,
+  modules : WastModules,
   action : @wat.WastAction,
+  invoke_native? : (
+    String?,
+    @runtime.ModuleInstance,
+    String,
+    Array[@types.Value],
+  ) -> Array[@types.Value]? raise WastRunnerError,
 ) -> Array[@types.Value] raise WastRunnerError {
+  let name = match action {
+    Invoke(name, _, _) | Get(name, _) => name
+  }
+  guard modules.instance(name) is Some(instance) else {
+    match name {
+      Some(name) => raise ModuleNotFound(name)
+      None => raise NoCurrentModule
+    }
+  }
   match action {
     Invoke(module_name, func_name, args) => {
       // Get instance for validation
-      let instance = match module_name {
-        Some(name) =>
-          match ctx.named_modules.get(name) {
-            Some(inst) => inst
-            None => raise ModuleNotFound(name)
-          }
-        None =>
-          match ctx.current_module {
-            Some(inst) => inst
-            None => raise NoCurrentModule
-          }
-      }
       let runtime_args = args.map(value => {
         wast_value_to_runtime(value, func_addrs=instance.func_addrs)
       })
+      if invoke_native is Some(invoke) &&
+        invoke(module_name, instance, func_name, runtime_args) is Some(values) {
+        return values
+      }
       let mut func_idx = None
       for export_ in instance.exports {
         if export_.name == func_name && export_.desc is Func(index) {
@@ -372,10 +336,7 @@ pub fn invoke_action(
         raise RuntimeError("unknown exported function: \{func_name}")
       }
       let outcome = @executor.call_func_by_index_with_exception(
-        ctx.store,
-        instance,
-        index,
-        runtime_args,
+        store, instance, index, runtime_args,
       ) catch {
         error => raise classify_runtime_failure(error)
       }
@@ -385,24 +346,8 @@ pub fn invoke_action(
         HostFailed(error) => raise RuntimeError(error.to_string())
       }
     }
-    Get(module_name, global_name) => {
-      let instance = match module_name {
-        Some(name) =>
-          match ctx.named_modules.get(name) {
-            Some(inst) => inst
-            None => raise ModuleNotFound(name)
-          }
-        None =>
-          match ctx.current_module {
-            Some(inst) => inst
-            None => raise NoCurrentModule
-          }
-      }
-      let value = @executor.get_exported_global(
-        ctx.store,
-        instance,
-        global_name,
-      ) catch {
+    Get(_, global_name) => {
+      let value = @executor.get_exported_global(store, instance, global_name) catch {
         e => raise RuntimeError(e.to_string())
       }
       [value]
@@ -412,8 +357,8 @@ pub fn invoke_action(
 
 ///|
 /// Check an already completed action without invoking guest code again.
-fn finish_wast_action(
-  ctx : CoreWastContext,
+pub fn finish_action(
+  modules : WastModules,
   command : @wat.WastCommand,
   action : @wat.WastAction,
   line : Int32,
@@ -424,7 +369,7 @@ fn finish_wast_action(
   let description = @assertions.format_action(action)
   let return_failure = match (command, outcome) {
     (AssertReturn(_, expected), Ok(values)) =>
-      check_assert_return(ctx, action, expected, values)
+      check_assert_return(modules, action, expected, values)
     _ => None
   }
   let (label, failure) = @assertions.check_action_outcome(

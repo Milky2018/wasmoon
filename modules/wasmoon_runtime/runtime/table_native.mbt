@@ -1,4 +1,56 @@
 ///|
+#cfg(target="native")
+fn Store::prepare_table_backing(
+  self : Store,
+  table : Table,
+  use_jit : Bool,
+) -> Unit raise RuntimeError {
+  let owner = if use_jit {
+    match
+      @native_bridge.JITTableOwner::try_alloc(
+        table.size(),
+        table.get_limits64().1,
+      ) {
+      Some(owner) => {
+        if table.reservation is Some(reservation) {
+          guard owner.table().raw_ptr().bind_reservation(reservation) else {
+            owner.close()
+            raise InvalidHandle
+          }
+        }
+        Some(owner)
+      }
+      None => raise TableAllocationFailed
+    }
+  } else {
+    None
+  }
+  if owner is Some(owner) {
+    errdefer owner.close()
+    self.bind_table_storage(table, owner.table())
+  }
+  self.jit_tables.push(owner.map(fn(owner) { owner.table() }))
+  self.jit_table_owners.push(owner)
+}
+
+///|
+#cfg(target="native")
+fn Store::discard_table_backing(
+  self : Store,
+  table : Table,
+  idx : Int32,
+) -> Unit {
+  if self.jit_table_owners.get(idx) is Some(Some(owner)) {
+    owner.close()
+  }
+  table.close()
+  self.jit_tables.truncate(idx)
+  self.jit_tables.shrink_to_fit()
+  self.jit_table_owners.truncate(idx)
+  self.jit_table_owners.shrink_to_fit()
+}
+
+///|
 // A native Store adopts managed construction state once. Thereafter the native
 // descriptor is authoritative for interpreter, host and compiled table access.
 fn Store::bind_table_storage(

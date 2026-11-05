@@ -52,10 +52,7 @@ fn instantiate_canon_resource_new(
         })
         [I32(handle)]
       }
-      _ => {
-        trap_canon("type mismatch")
-        []
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
@@ -87,7 +84,6 @@ fn instantiate_canon_resource_rep(
               trap_canon(
                 "unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
               )
-              []
             } else if entry.type_id != type_id {
               let expected_desc = if expected_kind == GuestDefined {
                 "guest-defined resource"
@@ -107,21 +103,15 @@ fn instantiate_canon_resource_rep(
               trap_canon(
                 "handle index \{resource_handle_index_text(handle)} used with the wrong type, expected \{expected_desc} but found \{suffix}",
               )
-              []
             } else {
               [I32(entry.rep)]
             }
-          None => {
+          None =>
             trap_canon(
               "resource.rep: unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource in table \{table.id}",
             )
-            []
-          }
         }
-      _ => {
-        trap_canon("type mismatch")
-        []
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
@@ -156,7 +146,6 @@ fn instantiate_canon_resource_drop(
               trap_canon(
                 "unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
               )
-              []
             } else if entry.type_id != type_id {
               let expected_desc = if expected_kind == GuestDefined {
                 "guest-defined resource"
@@ -176,11 +165,9 @@ fn instantiate_canon_resource_drop(
               trap_canon(
                 "handle index \{resource_handle_index_text(handle)} used with the wrong type, expected \{expected_desc} but found \{suffix}",
               )
-              []
             } else {
               if entry.own && entry.num_lends[0] > 0 {
                 trap_canon("cannot drop resource handle while it is borrowed")
-                return []
               }
               let taken = table.free(handle)
               match taken {
@@ -220,17 +207,12 @@ fn instantiate_canon_resource_drop(
               }
               []
             }
-          None => {
+          None =>
             trap_canon(
               "resource.drop: unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource in table \{table.id}",
             )
-            []
-          }
         }
-      _ => {
-        trap_canon("type mismatch")
-        []
-      }
+      _ => trap_canon("type mismatch")
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))

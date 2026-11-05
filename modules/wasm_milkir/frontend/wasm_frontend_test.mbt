@@ -23,16 +23,11 @@ fn native_test_env() -> @frontend.EmbeddingEnvironment {
 }
 
 ///|
-fn frontend_test_env() -> @frontend.EmbeddingEnvironment {
-  EmbeddingEnvironment(runtime_symbol_prefix="test", hidden_context_type=None)
-}
-
-///|
 test "lower empty wasm function through embedding environment" {
   let mod_ = @types.Module::simple([], [], [], "run")
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
-  inspect(func.name, content="wasm_func_0")
+  let func = @frontend.translate_function(env, mod_, 0)
+  inspect(func.name, content="run")
   inspect(func.signature().params.length(), content="1")
   inspect(func.signature().results.length(), content="0")
   inspect(func.blocks.length(), content="1")
@@ -47,19 +42,16 @@ test "lower simple wasm body into MilkIR operations" {
     [LocalGet(0), LocalGet(1), I32Add],
     "run",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
-  inspect(func.signature().params.length(), content="2")
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
+  inspect(func.signature().params.length(), content="3")
   inspect(func.signature().results.length(), content="1")
-  inspect(func.blocks[0].instruction_count(), content="2")
   inspect(func.print().contains("iadd"), content="true")
-  inspect(func.print().contains("ireduce"), content="true")
-  inspect(func.print().contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower locals through native linear fast path" {
+test "lower locals" {
   let body : Array[@types.Instruction] = [
     LocalGet(0),
     LocalGet(1),
@@ -78,17 +70,16 @@ test "lower locals through native linear fast path" {
     ),
     codes: [{ locals: [I32], body: ReadOnlyArray::from_array(body), }],
   }
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("iadd"), content="true")
   inspect(text.contains("imul"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower nop and float locals through native linear fast path" {
+test "lower nop and float locals" {
   let body : Array[@types.Instruction] = [Nop, LocalGet(1), LocalGet(0), F64Add]
   let mod_ = {
     ..@types.Module::simple(
@@ -99,82 +90,44 @@ test "lower nop and float locals through native linear fast path" {
     ),
     codes: [{ locals: [F64], body: ReadOnlyArray::from_array(body), }],
   }
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fconst"), content="true")
   inspect(text.contains("fadd"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower branchless blocks through native linear fast path" {
+test "lower branchless blocks" {
   let mod_ = @types.Module::simple(
     [I32],
     [I32],
     [Block(Value(I32), [LocalGet(0), Block(Value(I32), [I32Const(1)]), I32Add])],
     "branchless_block",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(func.blocks.length(), content="1")
+  inspect(func.blocks.length() > 1, content="true")
   inspect(text.contains("iadd"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower branchless loop through native linear fast path" {
+test "lower branchless loop" {
   let mod_ = @types.Module::simple(
     [I32],
     [I32],
     [Loop(Value(I32), [LocalGet(0), I32Const(1), I32Add])],
     "branchless_loop",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(func.blocks.length(), content="1")
+  inspect(func.blocks.length() > 1, content="true")
   inspect(text.contains("iadd"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
-}
-
-///|
-test "try lower native function does not use legacy fallback" {
-  let env = frontend_test_env()
-  let linear = @types.Module::simple(
-    [I32, I32],
-    [I32],
-    [LocalGet(0), LocalGet(1), I32Add],
-    "linear",
-  )
-  let structured = @types.Module::simple(
-    [],
-    [],
-    [Block(Empty, [Br(0)])],
-    "structured_branch",
-  )
-  let loop_branch = @types.Module::simple(
-    [],
-    [],
-    [Loop(Empty, [Br(0)])],
-    "loop_branch",
-  )
-  inspect(
-    @frontend.try_lower_native_function(env, linear, 0) is Some(_),
-    content="true",
-  )
-  inspect(
-    @frontend.try_lower_native_function(env, structured, 0) is Some(_),
-    content="true",
-  )
-  inspect(
-    @frontend.try_lower_native_function(env, loop_branch, 0) is None,
-    content="true",
-  )
 }
 
 ///|
@@ -218,126 +171,83 @@ test "unreachable structured continuations remain verifier-safe" {
 }
 
 ///|
-test "lower direct block branch through native linear fast path" {
+test "lower direct block branch" {
   let mod_ = @types.Module::simple(
     [],
     [I32],
     [Block(Value(I32), [I32Const(7), Br(0)])],
     "block_exit_branch",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(func.blocks.length(), content="1")
+  inspect(func.blocks.length() > 1, content="true")
   inspect(text.contains("iconst 7"), content="true")
   inspect(text.contains("iconst 9"), content="false")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "non-terminal block branch falls back to interpreter trampoline" {
-  let mod_ = @types.Module::simple(
-    [],
-    [I32],
-    [Block(Value(I32), [I32Const(4), I32Const(8), Br(0), I32Add])],
-    "block_nonterminal_branch",
-  )
-  let env = frontend_test_env()
-  inspect(
-    @frontend.try_lower_native_function(env, mod_, 0) is None,
-    content="true",
-  )
-}
-
-///|
-test "lower terminal block br_if through native linear fast path" {
+test "lower terminal block br_if" {
   let mod_ = @types.Module::simple(
     [],
     [I32],
     [Block(Value(I32), [I32Const(7), I32Const(1), BrIf(0)])],
     "block_exit_branch_if",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(func.blocks.length(), content="1")
+  inspect(func.blocks.length() > 1, content="true")
   inspect(text.contains("iconst 7"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(text.contains("branch "), content="true")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower terminal current-block br_table through native linear fast path" {
+test "lower terminal current-block br_table" {
   let mod_ = @types.Module::simple(
     [],
     [I32],
     [Block(Value(I32), [I32Const(7), I32Const(1), BrTable([0, 0], 0)])],
     "block_exit_branch_table",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(func.blocks.length(), content="1")
+  inspect(func.blocks.length() > 1, content="true")
   inspect(text.contains("iconst 7"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(text.contains("br_table "), content="true")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower terminal current-block ref branches through native linear fast path" {
-  let env = frontend_test_env()
-  let null_branch = @types.Module::simple(
-    [],
-    [FuncRef],
-    [Block(Value(FuncRef), [RefNull(FuncRef), BrOnNull(0)])],
-    "block_exit_br_on_null",
-  )
-  let non_null_branch = @types.Module::simple(
-    [],
-    [FuncRef],
-    [Block(Value(FuncRef), [RefNull(FuncRef), BrOnNonNull(0)])],
-    "block_exit_br_on_non_null",
-  )
-  inspect(
-    @frontend.try_lower_native_function(env, null_branch, 0) is Some(_),
-    content="true",
-  )
-  inspect(
-    @frontend.try_lower_native_function(env, non_null_branch, 0) is Some(_),
-    content="true",
-  )
-}
-
-///|
-test "lower empty if through native linear fast path" {
+test "lower empty if" {
   let mod_ = @types.Module::simple(
     [],
     [I32],
     [I32Const(1), If(Empty, [], []), I32Const(7)],
     "empty_if",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("iconst 7"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower nop-only if through native linear fast path" {
+test "lower nop-only if" {
   let mod_ = @types.Module::simple(
     [],
     [I32],
     [I32Const(0), If(Empty, [Nop], [Nop, Nop]), I32Const(9)],
     "nop_only_if",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("iconst 9"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -355,20 +265,16 @@ test "lower globals through native VMContext loads and stores" {
     ],
   }
   let env = native_test_env()
-  let lowered = @frontend.try_lower_native_function(env, mod_, 0)
-  guard lowered is Some(func) else {
-    fail("global roundtrip did not lower natively")
-  }
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("load.i64"), content="true")
   inspect(text.contains("store.i32"), content="true")
   inspect(text.contains("load.i32"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower table size through VMContext and table get through the runtime" {
+test "lower table size and checked funcref table access" {
   let table : @types.Table = {
     type_: {
       elem_type: FuncRef,
@@ -380,19 +286,19 @@ test "lower table size through VMContext and table get through the runtime" {
   let mod_ = {
     ..@types.Module::simple(
       [],
-      [I32, I64],
+      [I32, FuncRef],
       [TableSize(0), I32Const(0), TableGet(0)],
       "table_probe",
     ),
     tables: [table],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("load.i64"), content="true")
   inspect(text.contains("ireduce"), content="true")
-  inspect(text.contains("call test.runtime.table_get"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(text.contains("load.callable_ref"), content="true")
+  inspect(text.contains("trap \"out of bounds table access\""), content="true")
   @wasm_milkir.verify_function(func)
 }
 
@@ -442,7 +348,7 @@ test "lower table set through native table fill runtime call" {
   }
   let mod_ = {
     ..@types.Module::simple(
-      [I64],
+      [FuncRef],
       [],
       [I32Const(0), LocalGet(0), TableSet(0)],
       "table_set",
@@ -450,24 +356,22 @@ test "lower table set through native table fill runtime call" {
     tables: [table],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.TableFill"), content="false")
   inspect(text.contains("call test.runtime.table_fill"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower linear explicit return without legacy bridge" {
+test "lower linear explicit return" {
   let mod_ = @types.Module::simple(
     [I64, I64],
     [I64],
     [LocalGet(0), LocalGet(1), I64Add, Return],
     "add64",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("iadd"), content="true")
@@ -476,32 +380,31 @@ test "lower linear explicit return without legacy bridge" {
 }
 
 ///|
-test "lower return with dead tail without legacy bridge" {
+test "lower return with dead tail" {
   let mod_ = @types.Module::simple(
     [],
     [I32],
     [I32Const(7), Return, I32Const(1), I32Const(2), I32Add],
     "dead_tail",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("return"), content="true")
   inspect(text.contains("iadd"), content="false")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower linear float arithmetic and drop without legacy bridge" {
+test "lower linear float arithmetic and drop" {
   let mod_ = @types.Module::simple(
     [F64],
     [F64],
     [F64Const(99.0), Drop, LocalGet(0), F64Const(0.5), F64Sub],
     "adjust",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("fsub"), content="true")
@@ -545,8 +448,8 @@ test "lower linear integer bitops comparisons and select natively" {
     ..mod_,
     codes: [{ locals: [I32], body: ReadOnlyArray::from_array(body), }],
   }
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("band"), content="true")
   inspect(text.contains("ishl"), content="true")
@@ -563,8 +466,8 @@ test "lower linear float compare and unary ops natively" {
     [LocalGet(0), F64Neg, F64Abs, F64Ceil, F64Const(1.0), F64Ge],
     "float_cmp",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fneg"), content="true")
   inspect(text.contains("fabs"), content="true")
@@ -581,12 +484,11 @@ test "lower linear integer extensions and reduction natively" {
     [LocalGet(0), I32WrapI64, I32Extend8S],
     "extend_i32",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("ireduce"), content="true")
   inspect(text.contains("sextend8"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -598,12 +500,11 @@ test "lower linear i64 extensions natively" {
     [LocalGet(0), I64ExtendI32U, I64Extend32S],
     "extend_i64",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("uextend"), content="true")
   inspect(text.contains("sextend32"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -615,12 +516,11 @@ test "lower linear float promotion and demotion natively" {
     [LocalGet(0), F32DemoteF64, F64PromoteF32, F32DemoteF64],
     "float_resize",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fdemote"), content="true")
   inspect(text.contains("fpromote"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -632,12 +532,11 @@ test "lower linear numeric conversions natively" {
     [LocalGet(0), I32TruncF64S, Drop, LocalGet(1), F32ConvertI64U],
     "numeric_convert",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fcvt_to_sint"), content="true")
   inspect(text.contains("uint_to_fcvt"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -649,34 +548,32 @@ test "lower linear saturating conversion and reinterpret natively" {
     [LocalGet(0), I32TruncSatF32U, Drop, LocalGet(1), F64ReinterpretI64],
     "sat_bitcast",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fcvt_to_uint_sat"), content="true")
   inspect(text.contains("bitcast"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower pure if into native MilkIR select" {
+test "lower pure if" {
   let mod_ = @types.Module::simple(
     [I32],
     [I32],
     [LocalGet(0), If(Value(I32), [I32Const(111)], [I32Const(222)])],
     "select_const",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(func.blocks.length(), content="1")
-  inspect(text.contains("select"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.blocks.length() > 1, content="true")
+  inspect(text.contains("brnz "), content="true")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower pure if expression bodies into native MilkIR select" {
+test "lower pure if expression bodies" {
   let mod_ = @types.Module::simple(
     [I32],
     [I32],
@@ -690,14 +587,13 @@ test "lower pure if expression bodies into native MilkIR select" {
     ],
     "select_expr_body",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(func.blocks.length(), content="1")
+  inspect(func.blocks.length() > 1, content="true")
   inspect(text.contains("iadd"), content="true")
   inspect(text.contains("ishl"), content="true")
-  inspect(text.contains("select"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(text.contains("brnz "), content="true")
   @wasm_milkir.verify_function(func)
 }
 
@@ -716,27 +612,25 @@ test "lower pure if copysign expression bodies" {
     ],
     "select_copysign_body",
   )
-  let env = frontend_test_env()
-  let float_func = @frontend.lower_function(env, float_mod, 0)
+  let env = native_test_env()
+  let float_func = @frontend.translate_function(env, float_mod, 0)
   inspect(float_func.print().contains("bor"), content="true")
   inspect(float_func.print().contains("select"), content="true")
-  inspect(float_func.print().contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(float_func)
 }
 
 ///|
-test "lower trap without wasm_frontend skeleton fallback" {
+test "lower trap" {
   let mod_ = @types.Module::simple([], [], [Unreachable], "trap")
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("unreachable"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower direct calls as generic MilkIR calls" {
+test "lower direct calls with the Wasm callee index" {
   let add_func : @types.FunctionCode = {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
@@ -767,10 +661,9 @@ test "lower direct calls as generic MilkIR calls" {
     func_names: Map([]),
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 1)
+  let func = @frontend.translate_function(env, mod_, 1)
   let text = func.print()
-  inspect(text.contains("call_ptr(3) -> 1"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(text.contains("ext.wasm.call [0]"), content="true")
   @wasm_milkir.verify_function(func)
 }
 
@@ -799,13 +692,11 @@ test "lower memory operations through native MilkIR memory ops" {
     ],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.LoadMemBase"), content="false")
-  inspect(text.contains("load.i64"), content="true")
+  inspect(text.contains("context_field wasm:0[0]"), content="true")
   inspect(text.contains("load.i32"), content="true")
   inspect(text.contains("store.i32"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -824,13 +715,12 @@ test "lower copysign through native MilkIR bit operations" {
     ],
     "copysign",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("bitcast"), content="true")
   inspect(text.contains("band"), content="true")
   inspect(text.contains("bor"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -849,13 +739,12 @@ test "lower wide i64 multiply through native MilkIR high-half ops" {
     ],
     "wide_mul",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("imul"), content="true")
   inspect(text.contains("umulh"), content="true")
   inspect(text.contains("smulh"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -884,18 +773,16 @@ test "lower narrow memory operations through native MilkIR memory ops" {
     ],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.LoadMemBase"), content="false")
-  inspect(text.contains("load.i64"), content="true")
+  inspect(text.contains("context_field wasm:0[0]"), content="true")
   inspect(text.contains("store16"), content="true")
   inspect(text.contains("load8_s.i32"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower memory grow size and bulk helpers as native helper calls" {
+test "lower memory size, grow and bulk operations" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -930,27 +817,21 @@ test "lower memory grow size and bulk helpers as native helper calls" {
     ],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.MemorySize"), content="false")
-  inspect(text.contains("test.MemoryGrow"), content="false")
   inspect(text.contains("load.i64"), content="true")
-  inspect(text.contains("ushr"), content="true")
+  inspect(text.contains("call test.runtime.memory_size"), content="true")
   inspect(text.contains("call test.runtime.memory_grow"), content="true")
-  inspect(text.contains("test.MemoryFill"), content="false")
-  inspect(text.contains("test.MemoryCopy"), content="false")
   inspect(text.contains("call test.runtime.memory_fill"), content="true")
-  inspect(text.contains("call test.runtime.memory_copy"), content="true")
-  inspect(text.contains("test.MemoryInit"), content="false")
-  inspect(text.contains("test.DataDrop"), content="false")
+  inspect(text.contains("trap \"memory out of bounds\""), content="true")
   inspect(text.contains("call test.runtime.memory_init"), content="true")
   inspect(text.contains("call test.runtime.data_drop"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(text.contains("store.i64"), content="true")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower non-zero memory.size through native descriptor loads" {
+test "lower memory.size with a nonzero memory index" {
   let mod_ = {
     ..@types.Module::simple([], [I32], [MemorySize(1)], "memory1_size"),
     memories: [
@@ -969,12 +850,10 @@ test "lower non-zero memory.size through native descriptor loads" {
     ],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.MemorySize"), content="false")
-  inspect(text.contains("load.i64"), content="true")
-  inspect(text.contains("ushr"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(text.contains("iconst 1"), content="true")
+  inspect(text.contains("call test.runtime.memory_size"), content="true")
   @wasm_milkir.verify_function(func)
 }
 
@@ -982,13 +861,13 @@ test "lower non-zero memory.size through native descriptor loads" {
 test "lower non-zero memory load store with explicit bounds check" {
   let mod_ = {
     ..@types.Module::simple(
-      [],
+      [I32],
       [I32],
       [
-        I32Const(0),
+        LocalGet(0),
         I32Const(7),
         I32Store(1, 2, 0),
-        I32Const(0),
+        LocalGet(0),
         I32Load(1, 2, 0),
       ],
       "memory1_roundtrip",
@@ -1009,13 +888,11 @@ test "lower non-zero memory load store with explicit bounds check" {
     ],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.LoadMemBase"), content="false")
   inspect(text.contains("trap \"memory out of bounds\""), content="true")
   inspect(text.contains("load.i32"), content="true")
   inspect(text.contains("store.i32"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -1023,9 +900,9 @@ test "lower non-zero memory load store with explicit bounds check" {
 test "lower memory64 load with overflow-safe bounds check" {
   let mod_ = {
     ..@types.Module::simple(
-      [],
+      [I64],
       [I32],
-      [I64Const(0L), I32Load(0, 2, 0)],
+      [LocalGet(0), I32Load(0, 2, 0)],
       "memory64_load",
     ),
     memories: [
@@ -1038,16 +915,11 @@ test "lower memory64 load with overflow-safe bounds check" {
     ],
   }
   let env = native_test_env()
-  let lowered = @frontend.try_lower_native_function(env, mod_, 0)
-  guard lowered is Some(func) else {
-    fail("memory64 load did not lower natively")
-  }
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.LoadMemBase"), content="false")
   inspect(text.contains("trap \"memory out of bounds\""), content="true")
   inspect(text.contains("icmp.uge"), content="true")
   inspect(text.contains("icmp.ule"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -1055,13 +927,13 @@ test "lower memory64 load with overflow-safe bounds check" {
 test "lower memory64 narrow load store with overflow-safe bounds check" {
   let mod_ = {
     ..@types.Module::simple(
-      [],
+      [I64],
       [I32],
       [
-        I64Const(0L),
+        LocalGet(0),
         I32Const(7),
         I32Store8(0, 0, 0),
-        I64Const(0L),
+        LocalGet(0),
         I32Load8U(0, 0, 0),
       ],
       "memory64_narrow_roundtrip",
@@ -1076,16 +948,11 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
     ],
   }
   let env = native_test_env()
-  let lowered = @frontend.try_lower_native_function(env, mod_, 0)
-  guard lowered is Some(func) else {
-    fail("memory64 narrow load/store did not lower natively")
-  }
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.LoadMemBase"), content="false")
   inspect(text.contains("trap \"memory out of bounds\""), content="true")
   inspect(text.contains("load8_u.i32"), content="true")
   inspect(text.contains("store8"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -1115,12 +982,10 @@ test "lower v128 load store through native memory path" {
     ],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("load.v128"), content="true")
   inspect(text.contains("store.v128"), content="true")
-  inspect(text.contains("test.LoadMemBase"), content="false")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -1136,7 +1001,7 @@ test "lower table bulk helpers as native helper calls" {
   }
   let mod_ = {
     ..@types.Module::simple(
-      [I64],
+      [FuncRef],
       [],
       [
         LocalGet(0),
@@ -1162,23 +1027,13 @@ test "lower table bulk helpers as native helper calls" {
     tables: [table],
   }
   let env = native_test_env()
-  inspect(
-    @frontend.try_lower_native_function(env, mod_, 0) is Some(_),
-    content="true",
-  )
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.TableGrow"), content="false")
-  inspect(text.contains("test.TableFill"), content="false")
-  inspect(text.contains("test.TableCopy"), content="false")
-  inspect(text.contains("test.TableInit"), content="false")
-  inspect(text.contains("test.ElemDrop"), content="false")
   inspect(text.contains("call test.runtime.table_grow"), content="true")
   inspect(text.contains("call test.runtime.table_fill"), content="true")
   inspect(text.contains("call test.runtime.table_copy"), content="true")
   inspect(text.contains("call test.runtime.table_init"), content="true")
   inspect(text.contains("call test.runtime.elem_drop"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -1191,11 +1046,10 @@ test "lower reference null and is_null natively" {
     "ref_null_test",
   )
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("iconst"), content="true")
   inspect(text.contains("icmp.eq"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
@@ -1208,86 +1062,44 @@ test "lower reference func non-null and eq natively" {
     "ref_func_eq",
   )
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("test.GetFuncRef"), content="false")
-  inspect(text.contains("load.ref"), content="true")
-  inspect(text.contains("bor"), content="true")
+  inspect(text.contains("ext.wasm.get_func_ref [0]"), content="true")
+  inspect(text.contains("ext.wasm.ref_eq"), content="true")
   inspect(text.contains("trap \"null reference\""), content="true")
   inspect(text.contains("icmp.eq"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower i31 refs through native linear fast path" {
+test "lower i31 refs" {
   let mod_ = @types.Module::simple(
     [I32],
     [I32],
     [LocalGet(0), RefI31, I31GetS],
     "i31_roundtrip",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("band"), content="true")
-  inspect(text.contains("uextend"), content="true")
-  inspect(text.contains("trap \"null i31 reference\""), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(text.contains("ext.wasm.i31_new"), content="true")
+  inspect(text.contains("ext.wasm.i31_get_s"), content="true")
   @wasm_milkir.verify_function(func)
 }
 
 ///|
-test "lower ref conversion copies through native linear fast path" {
+test "lower ref conversion copies" {
   let mod_ = @types.Module::simple(
     [I32],
     [I32],
     [LocalGet(0), RefI31, ExternConvertAny, AnyConvertExtern, I31GetU],
     "ref_convert_copy",
   )
-  let env = frontend_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let env = native_test_env()
+  let func = @frontend.translate_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("copy"), content="true")
-  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   @wasm_milkir.verify_function(func)
-}
-
-///|
-test "pure if rejects trapping i31 get in branch expression" {
-  let mod_ = @types.Module::simple(
-    [I32],
-    [I32],
-    [LocalGet(0), If(Value(I32), [I32Const(7)], [RefNull(RefNullI31), I31GetS])],
-    "if_i31_trap_arm",
-  )
-  let env = frontend_test_env()
-  inspect(
-    @frontend.try_lower_native_function(env, mod_, 0) is None,
-    content="true",
-  )
-}
-
-///|
-test "unsupported structured branch reports label-stack capability" {
-  let mod_ = @types.Module::simple(
-    [],
-    [],
-    [Loop(Empty, [Br(0)])],
-    "loop_branch",
-  )
-  let env = frontend_test_env()
-  try @frontend.lower_function(env, mod_, 0) catch {
-    err => {
-      let msg = Repr(err).to_string()
-      inspect(
-        msg.contains("structured branches require label-stack lowering"),
-        content="true",
-      )
-    }
-  } noraise {
-    _ => fail("expected unsupported native lowering")
-  }
 }
 
 ///|
@@ -1309,7 +1121,7 @@ test "memory64 bulk helper uses the reusable runtime ABI" {
     ],
   }
   let env = native_test_env()
-  let func = @frontend.lower_function(env, mod_, 0)
+  let func = @frontend.translate_function(env, mod_, 0)
   inspect(
     func.print().contains("call test.runtime.memory_fill"),
     content="true",
@@ -1320,7 +1132,7 @@ test "memory64 bulk helper uses the reusable runtime ABI" {
 test "lower rejects missing wasm function" {
   let mod_ = @types.Module::empty()
   let env = native_test_env()
-  try @frontend.lower_function(env, mod_, 0) catch {
+  try @frontend.translate_function(env, mod_, 0) catch {
     err => inspect(err, content="FunctionIndexOutOfRange(index=0)")
   } noraise {
     _ => fail("expected missing wasm function")

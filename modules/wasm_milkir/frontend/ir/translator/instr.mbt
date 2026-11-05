@@ -1665,10 +1665,16 @@ fn Translator::translate_atomic(
     )
   }
 
-  let op = if subopcode >= 0x10 { subopcode - 12 } else { subopcode }
-  match op {
+  guard @types.atomic_opcode(subopcode) is Some(info) else {
+    self.builder.trap("unsupported atomic")
+    self.is_unreachable = true
+    return
+  }
+  let ty : Type = if info.value_type == I32 { I32 } else { I64 }
+  let bits = info.width * 8
+  match info.operation {
     // Runtime queues perform comparison/enqueue and notification atomically.
-    0 => {
+    Notify => {
       let count = self.pop()
       let addr = self.pop()
       align_check(addr, 4)
@@ -1684,11 +1690,11 @@ fn Translator::translate_atomic(
         ),
       )
     }
-    1 | 2 => {
+    Wait => {
       let timeout = self.pop()
       let expected = self.pop()
       let addr = self.pop()
-      let width = if op == 1 { 4 } else { 8 }
+      let width = info.width
       align_check(addr, width)
       let pointer = bounds_ptr(addr, width)
       if memidx >= self.memory_is_shared.length() ||
@@ -1711,68 +1717,50 @@ fn Translator::translate_atomic(
     }
 
     // atomic.fence
-    3 => self.builder.atomic_fence()
-    4..<=66 => {
-      let shape = if op <= 10 {
-        op - 4
-      } else if op <= 17 {
-        op - 11
-      } else {
-        (op - 18) % 7
-      }
-      let (ty, bits) : (Type, Int32) = match shape {
-        0 => (I32, 32)
-        1 => (I64, 64)
-        2 => (I32, 8)
-        3 => (I32, 16)
-        4 => (I64, 8)
-        5 => (I64, 16)
-        _ => (I64, 32)
-      }
+    Fence => self.builder.atomic_fence()
+    Load => {
       let zero = self.builder.iconst_i64(0L)
-      if op <= 10 {
-        let address = self.pop()
-        align_check(address, bits / 8)
-        let pointer = bounds_ptr(address, bits / 8)
-        self.push(self.builder.atomic_load(ty, bits, pointer, zero))
-      } else if op <= 17 {
-        let value = self.pop()
-        let address = self.pop()
-        align_check(address, bits / 8)
-        let pointer = bounds_ptr(address, bits / 8)
-        self.builder.atomic_store(bits, pointer, value, zero)
-      } else if op <= 59 {
-        let value = self.pop()
-        let address = self.pop()
-        align_check(address, bits / 8)
-        let pointer = bounds_ptr(address, bits / 8)
-        let operation : @milkir.AtomicRmwOp = match (op - 18) / 7 {
-          0 => Add
-          1 => Sub
-          2 => And
-          3 => Or
-          4 => Xor
-          _ => Exchange
-        }
-        self.push(
-          self.builder.atomic_rmw(operation, bits, pointer, value, zero),
-        )
-      } else {
-        let replacement = self.pop()
-        let expected = self.pop()
-        let address = self.pop()
-        align_check(address, bits / 8)
-        let pointer = bounds_ptr(address, bits / 8)
-        self.push(
-          self.builder.atomic_compare_exchange(
-            bits, pointer, expected, replacement, zero,
-          ),
-        )
-      }
+      let address = self.pop()
+      align_check(address, bits / 8)
+      let pointer = bounds_ptr(address, bits / 8)
+      self.push(self.builder.atomic_load(ty, bits, pointer, zero))
     }
-    _ => {
-      self.builder.trap("unsupported atomic")
-      self.is_unreachable = true
+    Store => {
+      let zero = self.builder.iconst_i64(0L)
+      let value = self.pop()
+      let address = self.pop()
+      align_check(address, bits / 8)
+      let pointer = bounds_ptr(address, bits / 8)
+      self.builder.atomic_store(bits, pointer, value, zero)
+    }
+    Rmw(rmw) => {
+      let zero = self.builder.iconst_i64(0L)
+      let value = self.pop()
+      let address = self.pop()
+      align_check(address, bits / 8)
+      let pointer = bounds_ptr(address, bits / 8)
+      let operation : @milkir.AtomicRmwOp = match rmw {
+        Add => Add
+        Sub => Sub
+        And => And
+        Or => Or
+        Xor => Xor
+        Exchange => Exchange
+      }
+      self.push(self.builder.atomic_rmw(operation, bits, pointer, value, zero))
+    }
+    CompareExchange => {
+      let zero = self.builder.iconst_i64(0L)
+      let replacement = self.pop()
+      let expected = self.pop()
+      let address = self.pop()
+      align_check(address, bits / 8)
+      let pointer = bounds_ptr(address, bits / 8)
+      self.push(
+        self.builder.atomic_compare_exchange(
+          bits, pointer, expected, replacement, zero,
+        ),
+      )
     }
   }
 }

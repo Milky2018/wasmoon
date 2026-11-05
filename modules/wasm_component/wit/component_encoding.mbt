@@ -17,84 +17,6 @@
 /// - World inline interfaces / import/export funcs / include / use (world-level)
 
 ///|
-priv struct ByteBuf {
-  data : Array[Byte]
-}
-
-///|
-fn ByteBuf::ByteBuf() -> ByteBuf {
-  { data: [], }
-}
-
-///|
-fn ByteBuf::push_u8(self : ByteBuf, b : Int32) -> Unit {
-  self.data.push(b.to_byte())
-}
-
-///|
-fn ByteBuf::push_bytes(self : ByteBuf, bs : Bytes) -> Unit {
-  for i in 0..<bs.length() {
-    self.data.push(bs[i])
-  }
-}
-
-///|
-fn ByteBuf::push_uleb_u32(self : ByteBuf, n : Int32) -> Unit {
-  // Standard unsigned LEB128 encoding.
-  let mut x = n
-  let mut more = true
-  while more {
-    let mut b = x & 0x7f
-    x = x >> 7
-    more = x != 0
-    if more {
-      b = b | 0x80
-    }
-    self.push_u8(b)
-  }
-}
-
-///|
-fn ByteBuf::push_sleb_i32(self : ByteBuf, n : Int32) -> Unit {
-  // Standard signed LEB128 encoding for 32-bit-ish ints.
-  let mut x = n
-  let mut more = true
-  while more {
-    let mut b = x & 0x7f
-    x = x >> 7
-    let sign_bit_set = (b & 0x40) != 0
-    // Stop when the remaining bits are all sign-extension.
-    if (x == 0 && !sign_bit_set) || (x == -1 && sign_bit_set) {
-      more = false
-    } else {
-      b = b | 0x80
-    }
-    self.push_u8(b)
-  }
-}
-
-///|
-fn ByteBuf::push_ascii(self : ByteBuf, s : String) -> Unit {
-  // Component names are UTF-8 in general; for now we assume ASCII since we're
-  // generating names from WIT identifiers/packages.
-  for i in 0..<s.length() {
-    self.data.push(s.code_unit_at(i).to_int().to_byte())
-  }
-}
-
-///|
-fn ByteBuf::push_name(self : ByteBuf, s : String) -> Unit {
-  // name = u32-len + utf8 bytes. We currently assume ASCII input.
-  self.push_uleb_u32(s.length())
-  self.push_ascii(s)
-}
-
-///|
-fn ByteBuf::to_bytes(self : ByteBuf) -> Bytes {
-  Bytes::from_array(self.data)
-}
-
-///|
 fn wit_type_to_prim_opcode(t : TypeExpr) -> Int32 raise WitError {
   match t {
     Id(n) =>
@@ -128,10 +50,10 @@ priv enum EncValType {
 }
 
 ///|
-fn encode_valtype(buf : ByteBuf, vt : EncValType) -> Unit {
+fn encode_valtype(buf : @binary.Writer, vt : EncValType) -> Unit {
   match vt {
-    Prim(op) => buf.push_u8(op)
-    TypeIdx(idx) => buf.push_sleb_i32(idx)
+    Prim(op) => buf.write_byte(op)
+    TypeIdx(idx) => buf.write_s32(idx)
   }
 }
 
@@ -143,23 +65,23 @@ priv struct EncFuncType {
 }
 
 ///|
-fn encode_functype(buf : ByteBuf, f : EncFuncType) -> Unit {
+fn encode_functype(buf : @binary.Writer, f : EncFuncType) -> Unit {
   // functype ::= 0x40|0x43 paramlist resultlist
-  buf.push_u8(if f.is_async { 0x43 } else { 0x40 })
+  buf.write_byte(if f.is_async { 0x43 } else { 0x40 })
   // paramlist
-  buf.push_uleb_u32(f.params.length())
+  buf.write_u32(f.params.length())
   for p in f.params {
-    buf.push_name(p.0)
+    buf.write_name(p.0)
     encode_valtype(buf, p.1)
   }
   // resultlist: either 0x01 0x00 (empty) or 0x00 valtype (single)
   match f.result {
     None => {
-      buf.push_u8(0x01)
-      buf.push_u8(0x00)
+      buf.write_byte(0x01)
+      buf.write_byte(0x00)
     }
     Some(r) => {
-      buf.push_u8(0x00)
+      buf.write_byte(0x00)
       encode_valtype(buf, r)
     }
   }
@@ -167,24 +89,24 @@ fn encode_functype(buf : ByteBuf, f : EncFuncType) -> Unit {
 
 ///|
 fn typedef_prim(op : Int32) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(op)
+  let b = @binary.Writer()
+  b.write_byte(op)
   b.to_bytes()
 }
 
 ///|
 fn typedef_list(elem : EncValType) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x70)
+  let b = @binary.Writer()
+  b.write_byte(0x70)
   encode_valtype(b, elem)
   b.to_bytes()
 }
 
 ///|
 fn typedef_tuple(elems : Array[EncValType]) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x6f)
-  b.push_uleb_u32(elems.length())
+  let b = @binary.Writer()
+  b.write_byte(0x6f)
+  b.write_u32(elems.length())
   for e in elems {
     encode_valtype(b, e)
   }
@@ -193,27 +115,27 @@ fn typedef_tuple(elems : Array[EncValType]) -> Bytes {
 
 ///|
 fn typedef_option(t : EncValType) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x6b)
+  let b = @binary.Writer()
+  b.write_byte(0x6b)
   encode_valtype(b, t)
   b.to_bytes()
 }
 
 ///|
 fn typedef_result(ok : EncValType?, err : EncValType?) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x6a)
+  let b = @binary.Writer()
+  b.write_byte(0x6a)
   match ok {
-    None => b.push_u8(0x00)
+    None => b.write_byte(0x00)
     Some(v) => {
-      b.push_u8(0x01)
+      b.write_byte(0x01)
       encode_valtype(b, v)
     }
   }
   match err {
-    None => b.push_u8(0x00)
+    None => b.write_byte(0x00)
     Some(v) => {
-      b.push_u8(0x01)
+      b.write_byte(0x01)
       encode_valtype(b, v)
     }
   }
@@ -222,11 +144,11 @@ fn typedef_result(ok : EncValType?, err : EncValType?) -> Bytes {
 
 ///|
 fn typedef_record(fields : Array[(String, EncValType)]) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x72)
-  b.push_uleb_u32(fields.length())
+  let b = @binary.Writer()
+  b.write_byte(0x72)
+  b.write_u32(fields.length())
   for f in fields {
-    b.push_name(f.0)
+    b.write_name(f.0)
     encode_valtype(b, f.1)
   }
   b.to_bytes()
@@ -234,70 +156,70 @@ fn typedef_record(fields : Array[(String, EncValType)]) -> Bytes {
 
 ///|
 fn typedef_variant(cases : Array[(String, EncValType?)]) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x71)
-  b.push_uleb_u32(cases.length())
+  let b = @binary.Writer()
+  b.write_byte(0x71)
+  b.write_u32(cases.length())
   for c in cases {
-    b.push_name(c.0)
+    b.write_name(c.0)
     match c.1 {
-      None => b.push_u8(0x00)
+      None => b.write_byte(0x00)
       Some(v) => {
-        b.push_u8(0x01)
+        b.write_byte(0x01)
         encode_valtype(b, v)
       }
     }
     // No `refines` support here.
-    b.push_u8(0x00)
+    b.write_byte(0x00)
   }
   b.to_bytes()
 }
 
 ///|
 fn typedef_flags(names : Array[String]) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x6e)
-  b.push_uleb_u32(names.length())
+  let b = @binary.Writer()
+  b.write_byte(0x6e)
+  b.write_u32(names.length())
   for n in names {
-    b.push_name(n)
+    b.write_name(n)
   }
   b.to_bytes()
 }
 
 ///|
 fn typedef_enum(names : Array[String]) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x6d)
-  b.push_uleb_u32(names.length())
+  let b = @binary.Writer()
+  b.write_byte(0x6d)
+  b.write_u32(names.length())
   for n in names {
-    b.push_name(n)
+    b.write_name(n)
   }
   b.to_bytes()
 }
 
 ///|
 fn typedef_own(resource_typeidx : Int32) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x69)
-  b.push_uleb_u32(resource_typeidx)
+  let b = @binary.Writer()
+  b.write_byte(0x69)
+  b.write_u32(resource_typeidx)
   b.to_bytes()
 }
 
 ///|
 fn typedef_borrow(resource_typeidx : Int32) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x68)
-  b.push_uleb_u32(resource_typeidx)
+  let b = @binary.Writer()
+  b.write_byte(0x68)
+  b.write_u32(resource_typeidx)
   b.to_bytes()
 }
 
 ///|
 fn typedef_future(payload : EncValType?) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x65)
+  let b = @binary.Writer()
+  b.write_byte(0x65)
   match payload {
-    None => b.push_u8(0x00)
+    None => b.write_byte(0x00)
     Some(v) => {
-      b.push_u8(0x01)
+      b.write_byte(0x01)
       encode_valtype(b, v)
     }
   }
@@ -306,12 +228,12 @@ fn typedef_future(payload : EncValType?) -> Bytes {
 
 ///|
 fn typedef_stream(payload : EncValType?) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x66)
+  let b = @binary.Writer()
+  b.write_byte(0x66)
   match payload {
-    None => b.push_u8(0x00)
+    None => b.write_byte(0x00)
     Some(v) => {
-      b.push_u8(0x01)
+      b.write_byte(0x01)
       encode_valtype(b, v)
     }
   }
@@ -319,28 +241,28 @@ fn typedef_stream(payload : EncValType?) -> Bytes {
 }
 
 ///|
-fn encode_exportname_string_plain(buf : ByteBuf, name : String) -> Unit {
+fn encode_exportname_string_plain(buf : @binary.Writer, name : String) -> Unit {
   // exportname-string: 0x00 + name
-  buf.push_u8(0x00)
-  buf.push_name(name)
+  buf.write_byte(0x00)
+  buf.write_name(name)
 }
 
 ///|
-fn encode_externdesc_functype(buf : ByteBuf, idx : Int32) -> Unit {
-  buf.push_u8(0x01)
-  buf.push_uleb_u32(idx)
+fn encode_externdesc_functype(buf : @binary.Writer, idx : Int32) -> Unit {
+  buf.write_byte(0x01)
+  buf.write_u32(idx)
 }
 
 ///|
-fn encode_externdesc_instancetype(buf : ByteBuf, idx : Int32) -> Unit {
-  buf.push_u8(0x05)
-  buf.push_uleb_u32(idx)
+fn encode_externdesc_instancetype(buf : @binary.Writer, idx : Int32) -> Unit {
+  buf.write_byte(0x05)
+  buf.write_u32(idx)
 }
 
 ///|
-fn encode_externdesc_componenttype(buf : ByteBuf, idx : Int32) -> Unit {
-  buf.push_u8(0x04)
-  buf.push_uleb_u32(idx)
+fn encode_externdesc_componenttype(buf : @binary.Writer, idx : Int32) -> Unit {
+  buf.write_byte(0x04)
+  buf.write_u32(idx)
 }
 
 ///|
@@ -351,46 +273,46 @@ priv enum EncTypeBound {
 
 ///|
 fn instancedecl_type(typedef : Bytes) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x01)
-  b.push_bytes(typedef)
+  let b = @binary.Writer()
+  b.write_byte(0x01)
+  b.write_bytes(typedef)
   b.to_bytes()
 }
 
 ///|
 fn instancedecl_alias_outer_type(count : Int32, idx : Int32) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x02)
+  let b = @binary.Writer()
+  b.write_byte(0x02)
   // kind = Type
-  b.push_u8(0x03)
+  b.write_byte(0x03)
   // target = Outer (0x02)
-  b.push_u8(0x02)
-  b.push_uleb_u32(count)
-  b.push_uleb_u32(idx)
+  b.write_byte(0x02)
+  b.write_u32(count)
+  b.write_u32(idx)
   b.to_bytes()
 }
 
 ///|
 fn instancedecl_export_type(name : String, bound : EncTypeBound) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x04)
+  let b = @binary.Writer()
+  b.write_byte(0x04)
   encode_exportname_string_plain(b, name)
   // externdesc::Type
-  b.push_u8(0x03)
+  b.write_byte(0x03)
   match bound {
     Eq(ti) => {
-      b.push_u8(0x00)
-      b.push_uleb_u32(ti)
+      b.write_byte(0x00)
+      b.write_u32(ti)
     }
-    SubResource => b.push_u8(0x01)
+    SubResource => b.write_byte(0x01)
   }
   b.to_bytes()
 }
 
 ///|
 fn instancedecl_export_func(name : String, functype_idx : Int32) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x04)
+  let b = @binary.Writer()
+  b.write_byte(0x04)
   encode_exportname_string_plain(b, name)
   encode_externdesc_functype(b, functype_idx)
   b.to_bytes()
@@ -398,20 +320,20 @@ fn instancedecl_export_func(name : String, functype_idx : Int32) -> Bytes {
 
 ///|
 fn encode_instancetype(decls : Array[Bytes]) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x42)
-  b.push_uleb_u32(decls.length())
+  let b = @binary.Writer()
+  b.write_byte(0x42)
+  b.write_u32(decls.length())
   for d in decls {
-    b.push_bytes(d)
+    b.write_bytes(d)
   }
   b.to_bytes()
 }
 
 ///|
 fn componentdecl_type(typedef : Bytes) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x01)
-  b.push_bytes(typedef)
+  let b = @binary.Writer()
+  b.write_byte(0x01)
+  b.write_bytes(typedef)
   b.to_bytes()
 }
 
@@ -420,8 +342,8 @@ fn componentdecl_import_instance(
   name : String,
   instancetype_typeidx : Int32,
 ) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x03)
+  let b = @binary.Writer()
+  b.write_byte(0x03)
   encode_exportname_string_plain(b, name)
   encode_externdesc_instancetype(b, instancetype_typeidx)
   b.to_bytes()
@@ -432,8 +354,8 @@ fn componentdecl_export_instance(
   name : String,
   instancetype_typeidx : Int32,
 ) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x04)
+  let b = @binary.Writer()
+  b.write_byte(0x04)
   encode_exportname_string_plain(b, name)
   encode_externdesc_instancetype(b, instancetype_typeidx)
   b.to_bytes()
@@ -446,25 +368,25 @@ fn componentdecl_alias_instance_export_type(
   instance_idx : Int32,
   name : String,
 ) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x02)
+  let b = @binary.Writer()
+  b.write_byte(0x02)
   // kind = Type
-  b.push_u8(0x03)
+  b.write_byte(0x03)
   // target = InstanceExport (0x00)
-  b.push_u8(0x00)
-  b.push_uleb_u32(instance_idx)
+  b.write_byte(0x00)
+  b.write_u32(instance_idx)
   // Alias targets use plain `name` encoding (len + bytes).
-  b.push_name(name)
+  b.write_name(name)
   b.to_bytes()
 }
 
 ///|
 fn encode_componenttype(decls : Array[Bytes]) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(0x41)
-  b.push_uleb_u32(decls.length())
+  let b = @binary.Writer()
+  b.write_byte(0x41)
+  b.write_u32(decls.length())
   for d in decls {
-    b.push_bytes(d)
+    b.write_bytes(d)
   }
   b.to_bytes()
 }
@@ -1039,7 +961,7 @@ fn encode_interface_instancetype_full(
         let ft = { is_async: f.is_async, params, result, }
         let ft_idx = env.alloc_type(
           {
-            let bb = ByteBuf::ByteBuf()
+            let bb = @binary.Writer()
             encode_functype(bb, ft)
             bb.to_bytes()
           },
@@ -1072,7 +994,7 @@ fn encode_interface_instancetype_full(
           let ft = { is_async: m.is_async, params, result, }
           let ft_idx = env.alloc_type(
             {
-              let bb = ByteBuf::ByteBuf()
+              let bb = @binary.Writer()
               encode_functype(bb, ft)
               bb.to_bytes()
             },
@@ -1217,7 +1139,7 @@ fn encode_componenttype_wrapper_for_interface(
 
 ///|
 fn encode_componenttype_inner_for_world(
-  buf : ByteBuf,
+  buf : @binary.Writer,
   world : World,
   cur_pkg_key : String,
   iface_map : Map[String, Interface],
@@ -1275,28 +1197,28 @@ fn encode_componenttype_inner_for_world(
     )
     local_typeidx = local_typeidx + 1
   }
-  buf.push_bytes(encode_componenttype(decls))
+  buf.write_bytes(encode_componenttype(decls))
 }
 
 ///|
 fn encode_componenttype_wrapper_for_world(
-  buf : ByteBuf,
+  buf : @binary.Writer,
   world : World,
   cur_pkg_key : String,
   pkg_name : String,
   pkg_version : String?,
   iface_map : Map[String, Interface],
 ) -> Unit raise WitError {
-  buf.push_u8(0x41)
+  buf.write_byte(0x41)
   // decls:
   // - type inner componenttype
   // - export "pkg/world[@ver]" (component (type 0))
-  buf.push_uleb_u32(2)
+  buf.write_u32(2)
   // type inner
-  buf.push_u8(0x01)
+  buf.write_byte(0x01)
   encode_componenttype_inner_for_world(buf, world, cur_pkg_key, iface_map)
   // export wrapper
-  buf.push_u8(0x04)
+  buf.write_byte(0x04)
   let full = world_full_name(pkg_name, world.name, pkg_version)
   encode_exportname_string_plain(buf, full)
   encode_externdesc_componenttype(buf, 0)
@@ -1304,33 +1226,33 @@ fn encode_componenttype_wrapper_for_world(
 
 ///|
 fn encode_type_section_one(typedef_bytes : Bytes) -> Bytes {
-  let p = ByteBuf::ByteBuf()
-  p.push_uleb_u32(1)
-  p.push_bytes(typedef_bytes)
+  let p = @binary.Writer()
+  p.write_u32(1)
+  p.write_bytes(typedef_bytes)
   p.to_bytes()
 }
 
 ///|
 fn encode_export_section_one(name : String, typeidx : Int32) -> Bytes {
-  let p = ByteBuf::ByteBuf()
-  p.push_uleb_u32(1)
+  let p = @binary.Writer()
+  p.write_u32(1)
   // exportname = 0x00 + name
-  p.push_u8(0x00)
-  p.push_name(name)
+  p.write_byte(0x00)
+  p.write_name(name)
   // sort = Type (0x03)
-  p.push_u8(0x03)
-  p.push_uleb_u32(typeidx)
+  p.write_byte(0x03)
+  p.write_u32(typeidx)
   // opt-externdesc = none
-  p.push_u8(0x00)
+  p.write_byte(0x00)
   p.to_bytes()
 }
 
 ///|
 fn encode_section(id : Int32, payload : Bytes) -> Bytes {
-  let b = ByteBuf::ByteBuf()
-  b.push_u8(id)
-  b.push_uleb_u32(payload.length())
-  b.push_bytes(payload)
+  let b = @binary.Writer()
+  b.write_byte(id)
+  b.write_u32(payload.length())
+  b.write_bytes(payload)
   b.to_bytes()
 }
 
@@ -1416,16 +1338,16 @@ pub fn encode_wit_component_wasm(res : ResolveResult) -> Bytes raise WitError {
   }
   root_ifaces.sort_by(fn(a, b) { a.name.compare(b.name) })
   root_worlds.sort_by(fn(a, b) { a.name.compare(b.name) })
-  let out = ByteBuf::ByteBuf()
+  let out = @binary.Writer()
   // wasm magic + component preamble (version=13, layer=1)
-  out.push_u8(0x00)
-  out.push_u8(0x61)
-  out.push_u8(0x73)
-  out.push_u8(0x6d)
-  out.push_u8(0x0d)
-  out.push_u8(0x00)
-  out.push_u8(0x01)
-  out.push_u8(0x00)
+  out.write_byte(0x00)
+  out.write_byte(0x61)
+  out.write_byte(0x73)
+  out.write_byte(0x6d)
+  out.write_byte(0x0d)
+  out.write_byte(0x00)
+  out.write_byte(0x01)
+  out.write_byte(0x00)
 
   // wasm-tools exports each type immediately after defining it. We'll do the same.
   let mut export_typeidx = 0
@@ -1433,19 +1355,19 @@ pub fn encode_wit_component_wasm(res : ResolveResult) -> Bytes raise WitError {
     let typedef = encode_componenttype_wrapper_for_interface(
       iface, root_key, root_pkg_name, root_pkg_ver, iface_map,
     )
-    out.push_bytes(encode_section(7, encode_type_section_one(typedef)))
-    out.push_bytes(
+    out.write_bytes(encode_section(7, encode_type_section_one(typedef)))
+    out.write_bytes(
       encode_section(11, encode_export_section_one(iface.name, export_typeidx)),
     )
     export_typeidx = export_typeidx + 2
   }
   for world in root_worlds {
-    let tb = ByteBuf::ByteBuf()
+    let tb = @binary.Writer()
     encode_componenttype_wrapper_for_world(
       tb, world, root_key, root_pkg_name, root_pkg_ver, iface_map,
     )
-    out.push_bytes(encode_section(7, encode_type_section_one(tb.to_bytes())))
-    out.push_bytes(
+    out.write_bytes(encode_section(7, encode_type_section_one(tb.to_bytes())))
+    out.write_bytes(
       encode_section(11, encode_export_section_one(world.name, export_typeidx)),
     )
     export_typeidx = export_typeidx + 2

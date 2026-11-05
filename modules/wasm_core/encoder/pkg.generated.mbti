@@ -8,6 +8,8 @@ import {
 // Values
 pub fn encode(@types.Module) -> Array[Int32]
 
+pub fn encode_bytes(@types.Module) -> Bytes
+
 // Errors
 
 // Types and methods

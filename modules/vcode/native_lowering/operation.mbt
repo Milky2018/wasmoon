@@ -211,6 +211,34 @@ pub(all) enum VectorLane {
 }
 
 ///|
+pub fn VectorLane::scalar_type(self : VectorLane) -> @native.ValueType {
+  match self {
+    I8x16 | I16x8 | I32x4 => I32
+    I64x2 => I64
+    F32x4 => F32
+    F64x2 => F64
+  }
+}
+
+///|
+pub fn VectorLane::lane_count(self : VectorLane) -> Int32 {
+  match self {
+    I8x16 => 16
+    I16x8 => 8
+    I32x4 | F32x4 => 4
+    I64x2 | F64x2 => 2
+  }
+}
+
+///|
+pub fn VectorLane::is_integer(self : VectorLane) -> Bool {
+  match self {
+    I8x16 | I16x8 | I32x4 | I64x2 => true
+    F32x4 | F64x2 => false
+  }
+}
+
+///|
 #derive(Debug, Eq, Hash)
 pub(all) enum VectorBitwiseOp {
   Not

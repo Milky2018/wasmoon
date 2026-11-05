@@ -513,109 +513,132 @@ fn resolve_one_package(
 }
 
 ///|
+priv struct TypeNamespace {
+  names : Map[String, Bool]
+  types : Map[String, Bool]
+  context : String
+}
+
+///|
+fn TypeNamespace::new(context : String) -> TypeNamespace {
+  { names: Map([]), types: Map([]), context, }
+}
+
+///|
+fn TypeNamespace::add_name(
+  self : TypeNamespace,
+  name : String,
+  is_type : Bool,
+) -> Unit raise WitError {
+  if self.names.get(name) is Some(_) {
+    raise Error("duplicate name `" + name + "` in " + self.context)
+  }
+  self.names.set(name, true)
+  if is_type {
+    self.types.set(name, true)
+  }
+}
+
+///|
+fn TypeNamespace::define_items(
+  self : TypeNamespace,
+  items : Array[InterfaceItem],
+) -> Unit raise WitError {
+  for item in items {
+    match item {
+      Func(f) => self.add_name(f.name, false)
+      TypeAlias(t) => self.add_name(t.name, true)
+      Record(r) => self.add_name(r.name, true)
+      Resource(r) => self.add_name(r.name, true)
+      Variant(v) => self.add_name(v.name, true)
+      Flags(f) => self.add_name(f.name, true)
+      Enum(e) => self.add_name(e.name, true)
+      Use(_) => ()
+    }
+  }
+}
+
+///|
+fn TypeNamespace::import_use(
+  self : TypeNamespace,
+  use_ : UseItem,
+  pkg_key : String,
+  pkgs : Map[String, Package],
+  iface_type_exports : Map[String, Map[String, Bool]],
+) -> IfaceRef raise WitError {
+  let target = use_path_to_iface_ref(pkg_key, use_.path)
+  let exports = get_iface_type_exports(target, pkgs, iface_type_exports)
+  for (name, renamed) in use_.names {
+    if exports.get(name) is None {
+      raise Error("unknown name `" + name + "` in use " + use_.path.raw)
+    }
+    self.add_name(renamed.unwrap_or(name), true)
+  }
+  target
+}
+
+///|
+fn validate_declaration_types(
+  visible : Map[String, Bool],
+  item : InterfaceItem,
+) -> Unit raise WitError {
+  match item {
+    TypeAlias(t) => validate_type_expr(visible, t.ty)
+    Record(r) =>
+      for (_, ty) in r.fields {
+        validate_type_expr(visible, ty)
+      }
+    Variant(v) =>
+      for case_ in v.cases {
+        if case_.payload is Some(ty) {
+          validate_type_expr(visible, ty)
+        }
+      }
+    Resource(r) =>
+      for function_ in r.methods {
+        validate_func_sig(visible, function_)
+      }
+    Func(f) => validate_func_sig(visible, f)
+    _ => ()
+  }
+}
+
+///|
+fn WorldItem::interface_declaration(self : WorldItem) -> InterfaceItem? {
+  match self {
+    TypeAlias(t) => Some(TypeAlias(t))
+    Record(r) => Some(Record(r))
+    Resource(r) => Some(Resource(r))
+    Variant(v) => Some(Variant(v))
+    Flags(f) => Some(Flags(f))
+    Enum(e) => Some(Enum(e))
+    Use(u) => Some(Use(u))
+    _ => None
+  }
+}
+
+///|
 fn resolve_interface_in_package(
   pkg_key : String,
   iface : Interface,
   pkgs : Map[String, Package],
   iface_type_exports : Map[String, Map[String, Bool]],
 ) -> (Map[String, Bool], Array[IfaceRef]) raise WitError {
-  let names : Map[String, Bool] = Map([])
-  let type_exports : Map[String, Bool] = Map([])
-
-  // First pass: local defs + funcs occupy the interface namespace.
+  let scope = TypeNamespace::new("interface `" + iface.name + "`")
+  scope.define_items(iface.items)
+  let dependencies : Array[IfaceRef] = []
   for item in iface.items {
-    match item {
-      Func(f) =>
-        if names.get(f.name) is Some(_) {
-          raise Error(
-            "duplicate name `" + f.name + "` in interface `" + iface.name + "`",
-          )
-        } else {
-          names.set(f.name, true)
-        }
-      TypeAlias(t) => add_type_name(names, type_exports, t.name, iface.name)
-      Record(r) => add_type_name(names, type_exports, r.name, iface.name)
-      Resource(r) => add_type_name(names, type_exports, r.name, iface.name)
-      Variant(v) => add_type_name(names, type_exports, v.name, iface.name)
-      Flags(f) => add_type_name(names, type_exports, f.name, iface.name)
-      Enum(e) => add_type_name(names, type_exports, e.name, iface.name)
-      _ => ()
+    if item is Use(use_) {
+      dependencies.push(
+        scope.import_use(use_, pkg_key, pkgs, iface_type_exports),
+      )
     }
   }
-
-  // Second pass: `use` imports types/resources into the interface namespace.
-  let deps_arr : Array[IfaceRef] = []
   for item in iface.items {
-    if item is Use(u) {
-      let target = use_path_to_iface_ref(pkg_key, u.path)
-      deps_arr.push(target)
-      let exports = get_iface_type_exports(target, pkgs, iface_type_exports)
-      for pair in u.names {
-        let (n, asn) = pair
-        if exports.get(n) is None {
-          raise Error("unknown name `" + n + "` in use " + u.path.raw)
-        }
-        let local_name = match asn {
-          Some(x) => x
-          None => n
-        }
-        if names.get(local_name) is Some(_) {
-          raise Error(
-            "duplicate name `" +
-            local_name +
-            "` in interface `" +
-            iface.name +
-            "`",
-          )
-        }
-        names.set(local_name, true)
-        type_exports.set(local_name, true)
-      }
-    }
+    validate_declaration_types(scope.types, item)
   }
-
-  // Validate type references.
-  for item in iface.items {
-    match item {
-      TypeAlias(t) => validate_type_expr(type_exports, t.ty)
-      Record(r) =>
-        for field in r.fields {
-          validate_type_expr(type_exports, field.1)
-        }
-      Variant(v) =>
-        for c in v.cases {
-          if c.payload is Some(t) {
-            validate_type_expr(type_exports, t)
-          }
-        }
-      Resource(r) =>
-        for m in r.methods {
-          validate_func_sig(type_exports, m)
-        }
-      Func(f) => validate_func_sig(type_exports, f)
-      _ => ()
-    }
-  }
-
-  // Validate non-recursive local type definitions.
-  check_interface_type_cycles(type_exports, iface)
-  (type_exports, deps_arr)
-}
-
-///|
-fn add_type_name(
-  ns : Map[String, Bool],
-  types : Map[String, Bool],
-  name : String,
-  iface_name : String,
-) -> Unit raise WitError {
-  if ns.get(name) is Some(_) {
-    raise Error(
-      "duplicate name `" + name + "` in interface `" + iface_name + "`",
-    )
-  }
-  ns.set(name, true)
-  types.set(name, true)
+  check_type_cycles(iface.items, scope.context)
+  (scope.types, dependencies)
 }
 
 ///|
@@ -630,6 +653,10 @@ fn get_iface_type_exports(
     .unwrap_or_else(() => {
       raise WitError::Error("unknown package `" + target.pkg_key + "`")
     })
+  // Only resolved interfaces are inserted into this table.
+  if iface_type_exports.get(iface_key(target)) is Some(exports) {
+    return exports
+  }
   let mut found = false
   for it in pkg.items {
     if it is Interface(i) && i.name == target.name {
@@ -645,12 +672,7 @@ fn get_iface_type_exports(
       "`",
     )
   }
-  let key = iface_key(target)
-  match iface_type_exports.get(key) {
-    Some(m) => m
-    None =>
-      raise Error("internal: interface `" + target.name + "` not resolved yet")
-  }
+  raise Error("internal: interface `" + target.name + "` not resolved yet")
 }
 
 ///|
@@ -731,13 +753,13 @@ fn is_builtin_ctor(n : String) -> Bool {
 }
 
 ///|
-fn check_interface_type_cycles(
-  visible_types : Map[String, Bool],
-  iface : Interface,
+fn check_type_cycles(
+  items : Array[InterfaceItem],
+  context : String,
 ) -> Unit raise WitError {
   // Only consider locally-defined names for cycle detection.
   let locals : Map[String, Bool] = Map([])
-  for item in iface.items {
+  for item in items {
     match item {
       TypeAlias(t) => locals.set(t.name, true)
       Record(r) => locals.set(r.name, true)
@@ -753,7 +775,7 @@ fn check_interface_type_cycles(
     let (n, _) = kv
     edges.set(n, [])
   }
-  for item in iface.items {
+  for item in items {
     match item {
       TypeAlias(t) => edges.set(t.name, type_deps_in_expr(locals, t.ty))
       Record(r) => {
@@ -781,14 +803,9 @@ fn check_interface_type_cycles(
   }
   let names = map_keys(locals)
   topo_sort_graph(names, edges, fn(k) {
-    "recursive type definition involving `" +
-    k +
-    "` in interface `" +
-    iface.name +
-    "`"
+    "recursive type definition involving `" + k + "` in " + context
   })
   |> ignore
-  visible_types |> ignore
 }
 
 ///|
@@ -863,14 +880,9 @@ fn resolve_world_in_package(
   let required : Map[String, IfaceRef] = Map([])
   for wi in items {
     match wi {
-      Import(p) => {
+      Import(p) | Export(p) => {
         let r = use_path_to_iface_ref(pkg_key, p)
-        validate_iface_exists(r, pkgs, iface_type_exports)
-        required.set(iface_key(r), r)
-      }
-      Export(p) => {
-        let r = use_path_to_iface_ref(pkg_key, p)
-        validate_iface_exists(r, pkgs, iface_type_exports)
+        get_iface_type_exports(r, pkgs, iface_type_exports) |> ignore
         required.set(iface_key(r), r)
       }
       Use(u) => {
@@ -1114,37 +1126,6 @@ fn world_item_key(wi : WorldItem) -> String {
 }
 
 ///|
-fn validate_iface_exists(
-  r : IfaceRef,
-  pkgs : Map[String, Package],
-  iface_type_exports : Map[String, Map[String, Bool]],
-) -> Unit raise WitError {
-  let pkg = pkgs
-    .get(r.pkg_key)
-    .unwrap_or_else(() => {
-      raise WitError::Error("unknown package `" + r.pkg_key + "`")
-    })
-  // Ensure the interface name exists in the parsed package even if it has no exports.
-  let mut found = false
-  for it in pkg.items {
-    if it is Interface(i) && i.name == r.name {
-      found = true
-    }
-  }
-  if !found {
-    raise Error(
-      "unknown interface `" + r.name + "` in package `" + r.pkg_key + "`",
-    )
-  }
-  // Ensure export info exists.
-  if iface_type_exports.get(iface_key(r)) is None {
-    raise Error(
-      "unknown interface `" + r.name + "` in package `" + r.pkg_key + "`",
-    )
-  }
-}
-
-///|
 fn compute_iface_closure(
   roots : Map[String, IfaceRef],
   iface_deps : Map[String, Array[IfaceRef]],
@@ -1237,81 +1218,17 @@ fn validate_inline_interface_types(
   pkgs : Map[String, Package],
   pkg_key : String,
 ) -> Unit raise WitError {
-  // Inline interfaces are validated like normal interfaces, but they don't participate in re-export.
-  let ns : Map[String, Bool] = Map([])
-  let visible : Map[String, Bool] = Map([])
+  let scope = TypeNamespace::new("inline interface")
+  scope.define_items(iface.items)
   for item in iface.items {
-    match item {
-      Func(f) => ns.set(f.name, true)
-      TypeAlias(t) => {
-        ns.set(t.name, true)
-        visible.set(t.name, true)
-      }
-      Record(r) => {
-        ns.set(r.name, true)
-        visible.set(r.name, true)
-      }
-      Resource(r) => {
-        ns.set(r.name, true)
-        visible.set(r.name, true)
-      }
-      Variant(v) => {
-        ns.set(v.name, true)
-        visible.set(v.name, true)
-      }
-      Flags(f) => {
-        ns.set(f.name, true)
-        visible.set(f.name, true)
-      }
-      Enum(e) => {
-        ns.set(e.name, true)
-        visible.set(e.name, true)
-      }
-      _ => ()
+    if item is Use(use_) {
+      scope.import_use(use_, pkg_key, pkgs, iface_type_exports) |> ignore
     }
   }
   for item in iface.items {
-    if item is Use(u) {
-      let r = use_path_to_iface_ref(pkg_key, u.path)
-      let exports = get_iface_type_exports(r, pkgs, iface_type_exports)
-      for pair in u.names {
-        let (n, asn) = pair
-        if exports.get(n) is None {
-          raise Error("unknown name `" + n + "` in use " + u.path.raw)
-        }
-        let local_name = match asn {
-          Some(x) => x
-          None => n
-        }
-        if ns.get(local_name) is Some(_) {
-          raise Error("duplicate name `" + local_name + "` in inline interface")
-        }
-        ns.set(local_name, true)
-        visible.set(local_name, true)
-      }
-    }
+    validate_declaration_types(scope.types, item)
   }
-  for item in iface.items {
-    match item {
-      TypeAlias(t) => validate_type_expr(visible, t.ty)
-      Record(r) =>
-        for field in r.fields {
-          validate_type_expr(visible, field.1)
-        }
-      Variant(v) =>
-        for c in v.cases {
-          if c.payload is Some(t) {
-            validate_type_expr(visible, t)
-          }
-        }
-      Resource(r) =>
-        for m in r.methods {
-          validate_func_sig(visible, m)
-        }
-      Func(f) => validate_func_sig(visible, f)
-      _ => ()
-    }
-  }
+  check_type_cycles(iface.items, scope.context)
 }
 
 ///|
@@ -1322,81 +1239,40 @@ fn validate_world_types(
   iface_type_exports : Map[String, Map[String, Bool]],
   pkgs : Map[String, Package],
 ) -> Unit raise WitError {
-  let ns : Map[String, Bool] = Map([])
-  let visible : Map[String, Bool] = Map([])
-  for wi in items {
-    match wi {
-      TypeAlias(t) => {
-        ns.set(t.name, true)
-        visible.set(t.name, true)
-      }
-      Record(r) => {
-        ns.set(r.name, true)
-        visible.set(r.name, true)
-      }
-      Resource(r) => {
-        ns.set(r.name, true)
-        visible.set(r.name, true)
-      }
-      Variant(v) => {
-        ns.set(v.name, true)
-        visible.set(v.name, true)
-      }
-      Flags(f) => {
-        ns.set(f.name, true)
-        visible.set(f.name, true)
-      }
-      Enum(e) => {
-        ns.set(e.name, true)
-        visible.set(e.name, true)
-      }
+  let declarations : Array[InterfaceItem] = []
+  for item in items {
+    if item.interface_declaration() is Some(declaration) {
+      declarations.push(declaration)
+    }
+  }
+  let scope = TypeNamespace::new("world `" + world_name + "`")
+  scope.define_items(declarations)
+  for item in declarations {
+    if item is Use(use_) {
+      scope.import_use(use_, pkg_key, pkgs, iface_type_exports) |> ignore
+    }
+  }
+  let exports = TypeNamespace::new("exports of world `" + world_name + "`")
+  for item in items {
+    match item {
+      ImportFunc(function_) => scope.add_name(function_.name, false)
+      ImportInlineInterface(name, _) => scope.add_name(name, false)
+      ExportFunc(function_) => exports.add_name(function_.name, false)
+      ExportInlineInterface(name, _) => exports.add_name(name, false)
       _ => ()
     }
   }
-  for wi in items {
-    if wi is Use(u) {
-      let r = use_path_to_iface_ref(pkg_key, u.path)
-      let exports = get_iface_type_exports(r, pkgs, iface_type_exports)
-      for pair in u.names {
-        let (n, asn) = pair
-        if exports.get(n) is None {
-          raise Error("unknown name `" + n + "` in use " + u.path.raw)
+  for item in items {
+    match item {
+      ImportFunc(function_) | ExportFunc(function_) =>
+        validate_func_sig(scope.types, function_)
+      _ =>
+        if item.interface_declaration() is Some(declaration) {
+          validate_declaration_types(scope.types, declaration)
         }
-        let local_name = match asn {
-          Some(x) => x
-          None => n
-        }
-        if ns.get(local_name) is Some(_) {
-          raise Error(
-            "duplicate name `" + local_name + "` in world `" + world_name + "`",
-          )
-        }
-        ns.set(local_name, true)
-        visible.set(local_name, true)
-      }
     }
   }
-  for wi in items {
-    match wi {
-      TypeAlias(t) => validate_type_expr(visible, t.ty)
-      Record(r) =>
-        for field in r.fields {
-          validate_type_expr(visible, field.1)
-        }
-      Variant(v) =>
-        for c in v.cases {
-          if c.payload is Some(t) {
-            validate_type_expr(visible, t)
-          }
-        }
-      Resource(r) =>
-        for m in r.methods {
-          validate_func_sig(visible, m)
-        }
-      ImportFunc(f) | ExportFunc(f) => validate_func_sig(visible, f)
-      _ => ()
-    }
-  }
+  check_type_cycles(declarations, scope.context)
 }
 
 ///|

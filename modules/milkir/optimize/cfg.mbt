@@ -168,6 +168,69 @@ fn retained_block_arguments(
 }
 
 ///|
+/// Commit parameter removal and rewrite the corresponding incoming arguments
+/// through the same checked mutation APIs in both phi-elimination passes.
+fn retain_block_parameters(
+  func : @milkir.Function,
+  block_idx : Array[Int32],
+  params_to_keep : Array[Array[Int32]],
+  result : OptResult,
+) -> Unit {
+  for block in func.blocks {
+    let block_i = if block.id >= 0 && block.id < block_idx.length() {
+      block_idx[block.id]
+    } else {
+      -1
+    }
+    if block_i < 0 || block_i >= params_to_keep.length() {
+      continue
+    }
+    let keep = params_to_keep[block_i]
+    if keep.length() != block.params.length() {
+      func.retain_block_params(block, keep)
+      result.mark_changed()
+    }
+  }
+  for block in func.blocks {
+    match block.terminator {
+      Some(Jump(target, arguments)) =>
+        if retained_block_arguments(
+            target, arguments, block_idx, params_to_keep,
+          )
+          is Some(retained) {
+          block.set_terminator(
+            Jump(target, retained),
+            metadata=block.terminator_metadata(),
+          )
+          result.mark_changed()
+        }
+      Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
+        let retained_true = retained_block_arguments(
+          true_target, true_args, block_idx, params_to_keep,
+        )
+        let retained_false = retained_block_arguments(
+          false_target, false_args, block_idx, params_to_keep,
+        )
+        if retained_true is Some(_) || retained_false is Some(_) {
+          block.set_terminator(
+            Branch(
+              cond,
+              true_target,
+              retained_true.unwrap_or(true_args),
+              false_target,
+              retained_false.unwrap_or(false_args),
+            ),
+            metadata=block.terminator_metadata(),
+          )
+          result.mark_changed()
+        }
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
 /// Constant Block Parameter Elimination
 /// Removes block parameters that always take the same value across all incoming edges.
 /// This mirrors Cranelift's constant-phi removal, but operates on IR block params.
@@ -293,58 +356,7 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
     return result
   }
   compress_replace_array(replace_ids)
-  for block in func.blocks {
-    let block_i = if block.id >= 0 && block.id < block_idx.length() {
-      block_idx[block.id]
-    } else {
-      -1
-    }
-    if block_i < 0 || block_i >= params_to_keep.length() {
-      continue
-    }
-    let keep = params_to_keep[block_i]
-    if keep.length() != block.params.length() {
-      func.retain_block_params(block, keep)
-      result.mark_changed()
-    }
-  }
-  for block in func.blocks {
-    match block.terminator {
-      Some(Jump(target, arguments)) =>
-        if retained_block_arguments(
-            target, arguments, block_idx, params_to_keep,
-          )
-          is Some(retained) {
-          block.set_terminator(
-            Jump(target, retained),
-            metadata=block.terminator_metadata(),
-          )
-          result.mark_changed()
-        }
-      Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
-        let retained_true = retained_block_arguments(
-          true_target, true_args, block_idx, params_to_keep,
-        )
-        let retained_false = retained_block_arguments(
-          false_target, false_args, block_idx, params_to_keep,
-        )
-        if retained_true is Some(_) || retained_false is Some(_) {
-          block.set_terminator(
-            Branch(
-              cond,
-              true_target,
-              retained_true.unwrap_or(true_args),
-              false_target,
-              retained_false.unwrap_or(false_args),
-            ),
-            metadata=block.terminator_metadata(),
-          )
-          result.mark_changed()
-        }
-      }
-      _ => ()
-    }
-  }
+  retain_block_parameters(func, block_idx, params_to_keep, result)
   let replace_values : Array[@milkir.Value?] = Array::make(value_count, None)
   let values = build_value_array(func, value_count)
   for from_id, to_id in replace_ids {
@@ -369,129 +381,17 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
         result.mark_changed()
       }
     }
-    if block.terminator is Some(term) {
-      match term {
-        Jump(target, args) => {
-          let mut new_args : Array[@milkir.Value]? = None
-          for i, arg in args {
-            if arg.id >= 0 && arg.id < value_count {
-              if replace_values[arg.id] is Some(replacement) &&
-                replacement.id != arg.id {
-                if new_args is None {
-                  new_args = Some(args.copy())
-                }
-                if new_args is Some(updated_args) {
-                  updated_args[i] = replacement
-                }
-              }
-            }
-          }
-          if new_args is Some(updated_args) {
-            block.set_terminator(
-              Jump(target, updated_args),
-              metadata=block.terminator_metadata(),
-            )
-            result.mark_changed()
-          }
+    if block.terminator is Some(term) &&
+      rewrite_terminator_values(term, fn(value) {
+        if value.id >= 0 && value.id < value_count {
+          replace_values[value.id].unwrap_or(value)
+        } else {
+          value
         }
-        Brz(cond, then_target, else_target) =>
-          if cond.id >= 0 && cond.id < value_count {
-            if replace_values[cond.id] is Some(resolved) &&
-              resolved.id != cond.id {
-              block.set_terminator(
-                Brz(resolved, then_target, else_target),
-                metadata=block.terminator_metadata(),
-              )
-              result.mark_changed()
-            }
-          }
-        Brnz(cond, then_target, else_target) =>
-          if cond.id >= 0 && cond.id < value_count {
-            if replace_values[cond.id] is Some(resolved) &&
-              resolved.id != cond.id {
-              block.set_terminator(
-                Brnz(resolved, then_target, else_target),
-                metadata=block.terminator_metadata(),
-              )
-              result.mark_changed()
-            }
-          }
-        Branch(cond, true_target, true_args, false_target, false_args) => {
-          let mut new_cond = cond
-          let mut changed = false
-          if cond.id >= 0 && cond.id < value_count {
-            if replace_values[cond.id] is Some(resolved) &&
-              resolved.id != cond.id {
-              new_cond = resolved
-              changed = true
-            }
-          }
-          let new_true_args = true_args.copy()
-          for i, arg in true_args {
-            if arg.id >= 0 && arg.id < value_count {
-              if replace_values[arg.id] is Some(resolved) &&
-                resolved.id != arg.id {
-                new_true_args[i] = resolved
-                changed = true
-              }
-            }
-          }
-          let new_false_args = false_args.copy()
-          for i, arg in false_args {
-            if arg.id >= 0 && arg.id < value_count {
-              if replace_values[arg.id] is Some(resolved) &&
-                resolved.id != arg.id {
-                new_false_args[i] = resolved
-                changed = true
-              }
-            }
-          }
-          if changed {
-            block.set_terminator(
-              Branch(
-                new_cond, true_target, new_true_args, false_target, new_false_args,
-              ),
-              metadata=block.terminator_metadata(),
-            )
-            result.mark_changed()
-          }
-        }
-        BrTable(index, targets, default_target) =>
-          if index.id >= 0 && index.id < value_count {
-            if replace_values[index.id] is Some(resolved) &&
-              resolved.id != index.id {
-              block.set_terminator(
-                BrTable(resolved, targets, default_target),
-                metadata=block.terminator_metadata(),
-              )
-              result.mark_changed()
-            }
-          }
-        Return(values) => {
-          let mut new_values : Array[@milkir.Value]? = None
-          for i, value in values {
-            if value.id >= 0 && value.id < value_count {
-              if replace_values[value.id] is Some(replacement) &&
-                replacement.id != value.id {
-                if new_values is None {
-                  new_values = Some(values.copy())
-                }
-                if new_values is Some(updated_values) {
-                  updated_values[i] = replacement
-                }
-              }
-            }
-          }
-          if new_values is Some(updated_values) {
-            block.set_terminator(
-              Return(updated_values),
-              metadata=block.terminator_metadata(),
-            )
-            result.mark_changed()
-          }
-        }
-        Trap(_) | TrapExit(_) => ()
-      }
+      })
+      is Some(updated) {
+      block.set_terminator(updated, metadata=block.terminator_metadata())
+      result.mark_changed()
     }
   }
   result
@@ -545,64 +445,7 @@ fn eliminate_dead_block_params(func : @milkir.Function) -> OptResult {
     return result
   }
 
-  // Update block parameters - remove unused ones
-  for block in func.blocks {
-    let block_i = if block.id >= 0 && block.id < block_idx.length() {
-      block_idx[block.id]
-    } else {
-      -1
-    }
-    if block_i < 0 || block_i >= params_to_keep.length() {
-      continue
-    }
-    let keep = params_to_keep[block_i]
-    if keep.length() != block.params.length() {
-      func.retain_block_params(block, keep)
-      result.mark_changed()
-    }
-  }
-
-  // Update terminators - remove arguments corresponding to removed parameters
-  for block in func.blocks {
-    match block.terminator {
-      Some(Jump(target, arguments)) =>
-        if retained_block_arguments(
-            target, arguments, block_idx, params_to_keep,
-          )
-          is Some(retained) {
-          block.set_terminator(
-            Jump(target, retained),
-            metadata=block.terminator_metadata(),
-          )
-          result.mark_changed()
-        }
-      Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
-        let retained_true = retained_block_arguments(
-          true_target, true_args, block_idx, params_to_keep,
-        )
-        let retained_false = retained_block_arguments(
-          false_target, false_args, block_idx, params_to_keep,
-        )
-        if retained_true is Some(_) || retained_false is Some(_) {
-          block.set_terminator(
-            Branch(
-              cond,
-              true_target,
-              retained_true.unwrap_or(true_args),
-              false_target,
-              retained_false.unwrap_or(false_args),
-            ),
-            metadata=block.terminator_metadata(),
-          )
-          result.mark_changed()
-        }
-      }
-      Some(Brz(_, _, _)) | Some(Brnz(_, _, _)) | Some(BrTable(_, _, _)) =>
-        // These don't pass arguments, nothing to update
-        ()
-      _ => ()
-    }
-  }
+  retain_block_parameters(func, block_idx, params_to_keep, result)
   result
 }
 

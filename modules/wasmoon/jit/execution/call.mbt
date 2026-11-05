@@ -20,16 +20,20 @@ pub impl Show for JITCoreCallError with fn output(self, logger) {
 }
 
 ///|
-fn encode_jit_entry_args(
+/// Validate Store-owned arguments and encode the typed native entry slots.
+pub fn encode_jit_entry_args(
   args : Array[@types.Value],
-  param_types : ArrayView[@types.ValueType],
+  func_idx : Int32,
   store : @runtime.Store,
   jit_module : @compiled_jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Array[Int64] raise JITCoreCallError {
-  if args.length() != param_types.length() {
-    raise ArgumentTypeMismatch(args.length())
+  let signature = @executor.validate_call_arguments(
+    store, instance, func_idx, args,
+  ) catch {
+    error => raise HostInvocation(error)
   }
+  let param_types = signature.params
   let slots : Array[Int64] = []
   for i, ty in param_types {
     let encoded = encode_value(ty, args[i], store, jit_module, instance) catch {
@@ -47,7 +51,9 @@ fn encode_jit_entry_args(
 }
 
 ///|
-fn decode_jit_entry_results(
+/// Decode typed native results using their Store identities and object kinds.
+/// Vector results consume two consecutive slots; extra or missing slots fail.
+pub fn decode_jit_entry_results(
   results : Array[Int64],
   result_types : ArrayView[@types.ValueType],
   store : @runtime.Store,
@@ -404,12 +410,9 @@ fn JITModuleContext::start_core_func_resumable(
   guard self.jit_module.get_func(func_idx) is Some(func) else {
     raise FunctionUnavailable(func_idx)
   }
-  let _ = @executor.validate_call_arguments(store, instance, func_idx, args) catch {
-    error => raise HostInvocation(error)
-  }
   let encoded_args = encode_jit_entry_args(
     args,
-    func.param_types,
+    func_idx,
     store,
     self.jit_module,
     instance,
@@ -563,12 +566,9 @@ fn JITModuleContext::call_core_func_impl(
   guard self.jit_module.get_func(func_idx) is Some(func) else {
     raise FunctionUnavailable(func_idx)
   }
-  let _ = @executor.validate_call_arguments(store, instance, func_idx, args) catch {
-    error => raise HostInvocation(error)
-  }
   let encoded_args = encode_jit_entry_args(
     args,
-    func.param_types,
+    func_idx,
     store,
     self.jit_module,
     instance,

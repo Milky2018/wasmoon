@@ -746,6 +746,28 @@ fn resume_sync_waitable_use(
 }
 
 ///|
+/// Resuming synchronous transmission releases the task's previous claim before
+/// checking membership. Asynchronous transmission leaves both maps untouched.
+fn AsyncState::resume_transmit_use(
+  self : AsyncState,
+  owner : Int32,
+  handle : Int32,
+  task : Int64,
+  is_async : Bool,
+) -> Bool raise @runtime.RuntimeError {
+  if is_async {
+    return false
+  }
+  let resumed = resume_sync_waitable_use(self, owner, handle, task)
+  if waitable_is_in_set(self, owner, handle) {
+    trap_canon(
+      "waitable cannot be used synchronously while added to a waitable set",
+    )
+  }
+  resumed
+}
+
+///|
 fn mark_sync_waitable_blocked(
   async_state : AsyncState,
   owner_component_id : Int32,
@@ -825,11 +847,8 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
         st0.pending_read is Some(pr) &&
         pr.reader_handle == ev.index {
         async_state.stream_table.streams.replace(ep.stream_id, {
-          allows_intra_component: st0.allows_intra_component,
+          ..st0,
           pending_read: None,
-          pending_write: st0.pending_write,
-          readable_dropped: st0.readable_dropped,
-          writable_dropped: st0.writable_dropped,
         })
       }
     }
@@ -843,11 +862,8 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
         st0.pending_write is Some(pw) &&
         pw.writer_handle == ev.index {
         async_state.stream_table.streams.replace(ep.stream_id, {
-          allows_intra_component: st0.allows_intra_component,
-          pending_read: st0.pending_read,
+          ..st0,
           pending_write: None,
-          readable_dropped: st0.readable_dropped,
-          writable_dropped: st0.writable_dropped,
         })
       }
     }
@@ -1240,15 +1256,9 @@ fn transfer_stream_future_value(
               }
               async_state.tasks.write_task_borrows(task_id, count + 1)
               let new_handle = to_table.alloc({
-                type_id: entry.type_id,
-                rep: entry.rep,
-                dtor: entry.dtor,
-                host_dtor: entry.host_dtor,
-                kind: entry.kind,
-                impl_component_id: entry.impl_component_id,
+                ..entry,
                 own: false,
                 borrow_scope: Some(task_id),
-                num_lends: entry.num_lends,
               })
               async_state.resource_tables.set(to_component_id, to_table)
               U32(new_handle)

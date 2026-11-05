@@ -1,7 +1,4 @@
 ///|
-pub extend FunctionTemperature with Show::{output}
-
-///|
 pub extend GCSetupError with Debug::{to_repr}
 
 ///|
@@ -78,9 +75,6 @@ pub extend NativeTarget with Debug::{to_repr}
 
 ///|
 pub extend NativeTarget with Eq::{not_equal, equal}
-
-///|
-pub extend Profiler with Show::{output}
 
 ///|
 pub extend RuntimeSymbol with Debug::{to_repr}

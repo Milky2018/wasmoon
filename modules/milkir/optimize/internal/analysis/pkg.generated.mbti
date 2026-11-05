@@ -14,13 +14,13 @@ pub fn invalidates_addresses(@milkir.Inst) -> Bool
 
 pub fn is_cheap_rematerializable_constant(@milkir.Inst) -> Bool
 
-pub fn may_write_region(@milkir.Inst, Array[@milkir.AliasRegion?], @milkir.AliasRegion) -> Bool
-
-pub fn nontrapping_loads(@milkir.Function) -> Array[Bool]
+pub fn loop_pointer_facts(@milkir.Function) -> (Array[@milkir.AliasRegion?], Array[Bool])
 
 pub fn opcode_semantics(@milkir.Opcode) -> OpcodeSemantics
 
 pub fn pointer_regions(@milkir.Function, instructions? : Array[@milkir.Inst]) -> Array[@milkir.AliasRegion?]
+
+pub fn region_write(@milkir.Inst, Array[@milkir.AliasRegion?]) -> RegionWrite
 
 // Errors
 
@@ -32,6 +32,7 @@ pub struct FunctionAnalysis {
   block_idx : Array[Int32]
 }
 pub fn FunctionAnalysis::build(@milkir.Function) -> Self
+pub fn FunctionAnalysis::from_control_flow(@milkir.Function, @milkir.CFG, @milkir.Dominance) -> Self
 
 pub(all) enum MemoryEffect {
   None
@@ -49,6 +50,13 @@ pub struct OpcodeSemantics {
 }
 pub fn OpcodeSemantics::can_stage_as_pure_candidate(Self) -> Bool
 pub fn OpcodeSemantics::must_preserve_if_unused(Self) -> Bool
+
+pub(all) enum RegionWrite {
+  NoWrite
+  AllRegions
+  ExactRegion(@milkir.AliasRegion)
+  RegionOrUnknownRead(@milkir.AliasRegion)
+}
 
 // Type aliases
 

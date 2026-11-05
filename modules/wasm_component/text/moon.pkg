@@ -1,11 +1,16 @@
 import {
+  "Milky2018/wasm_core/binary",
   "Milky2018/wasm_core/encoder",
   "Milky2018/wasm_component" @component,
-  "Milky2018/wasm_component/validator" @component_model,
   "Milky2018/wasm_core/wat",
   "moonbitlang/core/encoding/utf8",
 }
 
 import {
+  "Milky2018/wasm_component/validator" @component_model,
   "Milky2018/wasm_core/parser" @core_parser,
 } for "wbtest"
+
+import {
+  "Milky2018/wasm_component/validator" @component_model,
+} for "test"

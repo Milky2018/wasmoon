@@ -34,7 +34,7 @@ fn run() -> Unit raise {
   })
   assert_eq(results[0].scalar(), I32(43))
   assert_eq(observed.val, 21)
-  assert_eq(store.get_mem(instance.mem_addrs[0]).load_i32(0), 21)
+  assert_eq(store.get_mem(instance.mem_addrs[0]).load_i32_at(0L), 21)
   store.close()
   assert_eq(budget.used(MemoryBytes), 0L)
   assert_eq(budget.used(Instances), 0L)

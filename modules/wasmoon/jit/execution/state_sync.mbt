@@ -35,14 +35,3 @@ pub fn init_jit_memories_from_store(
   }
   memories
 }
-
-///|
-/// Sync is no longer necessary once JIT/interpreter share descriptor-backed
-/// memories. This function is kept as a no-op for callers that still invoke it.
-pub fn sync_jit_memories_to_store(
-  _instance : @runtime.ModuleInstance,
-  _store : @runtime.Store,
-  _jm : @compiled_jit.JITModule,
-) -> Unit {
-  ()
-}

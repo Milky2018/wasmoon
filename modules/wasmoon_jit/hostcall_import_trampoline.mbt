@@ -12,55 +12,6 @@ pub suberror HostcallImportTrampolineError {
 }
 
 ///|
-priv enum RuntimeValueBridge {
-  Hostcall(Int32)
-}
-
-///|
-priv enum HostcallRegClass {
-  Int
-  Float32
-  Float64
-  Vector
-}
-
-///|
-priv struct HostcallPReg {
-  index : Int32
-}
-
-///|
-priv enum HostcallAbiValueLocation {
-  Reg(HostcallPReg)
-  Stack(offset~ : Int32, size~ : Int32)
-  ReturnArea(offset~ : Int32, size~ : Int32)
-}
-
-///|
-fn hostcall_abi_location_stack_size(
-  location : HostcallAbiValueLocation,
-) -> Int32 {
-  match location {
-    Reg(_) => 0
-    Stack(size~, ..) | ReturnArea(size~, ..) => size
-  }
-}
-
-///|
-fn RuntimeValueBridge::bridge_arg(self : RuntimeValueBridge) -> Int64 {
-  match self {
-    Hostcall(host_func_addr) => host_func_addr.to_int64()
-  }
-}
-
-///|
-fn RuntimeValueBridge::x64_bridge_ptr(self : RuntimeValueBridge) -> Int64 {
-  match self {
-    Hostcall(_) => c_jit_get_hostcall_ptr()
-  }
-}
-
-///|
 pub impl Show for HostcallImportTrampolineError with fn output(self, logger) {
   logger.write_string(Repr(self).to_string())
 }
@@ -70,172 +21,6 @@ fn unsupported_hostcall_import(
   message : String,
 ) -> Unit raise HostcallImportTrampolineError {
   raise UnsupportedHostcallImportTrampoline(message~)
-}
-
-///|
-fn hostcall_scalar_class(ty : @types.ValueType) -> HostcallRegClass {
-  match ty {
-    I32 | I64 => Int
-    F32 => Float32
-    F64 => Float64
-    V128 => Vector
-    _ => Int
-  }
-}
-
-///|
-fn hostcall_abi_stack_align(ty : @types.ValueType) -> Int32 {
-  match ty {
-    V128 => 16
-    _ => 8
-  }
-}
-
-///|
-fn hostcall_abi_stack_location(
-  ty : @types.ValueType,
-  offset : Int32,
-) -> HostcallAbiValueLocation {
-  let size = hostcall_value_byte_count(ty)
-  let align = hostcall_abi_stack_align(ty)
-  align |> ignore
-  Stack(offset~, size~)
-}
-
-///|
-fn hostcall_param_locations(
-  param_types : ArrayView[@types.ValueType],
-  int_arg_regs : Array[Int32],
-  float_arg_reg_count : Int32,
-) -> Array[HostcallAbiValueLocation] {
-  let locations : Array[HostcallAbiValueLocation] = []
-  let mut int_seen = 0
-  let mut float_seen = 0
-  let mut stack_offset = 0
-  for ty in param_types {
-    match hostcall_scalar_class(ty) {
-      Int =>
-        if int_seen < int_arg_regs.length() {
-          locations.push(Reg({ index: int_arg_regs[int_seen], }))
-          int_seen = int_seen + 1
-        } else {
-          let align = hostcall_abi_stack_align(ty)
-          let offset = align_to(stack_offset, align)
-          let location = hostcall_abi_stack_location(ty, offset)
-          locations.push(location)
-          stack_offset = offset + hostcall_abi_location_stack_size(location)
-          int_seen = int_seen + 1
-        }
-      Float32 | Float64 | Vector =>
-        if float_seen < float_arg_reg_count {
-          locations.push(Reg({ index: float_seen, }))
-          float_seen = float_seen + 1
-        } else {
-          let align = hostcall_abi_stack_align(ty)
-          let offset = align_to(stack_offset, align)
-          let location = hostcall_abi_stack_location(ty, offset)
-          locations.push(location)
-          stack_offset = offset + hostcall_abi_location_stack_size(location)
-          float_seen = float_seen + 1
-        }
-    }
-  }
-  locations
-}
-
-///|
-fn hostcall_abi_return_area_location(
-  ty : @types.ValueType,
-  offset : Int32,
-) -> HostcallAbiValueLocation {
-  let size = hostcall_value_byte_count(ty)
-  let align = hostcall_abi_stack_align(ty)
-  align |> ignore
-  ReturnArea(offset~, size~)
-}
-
-///|
-fn hostcall_result_locations(
-  result_types : ArrayView[@types.ValueType],
-  int_result_regs : Array[Int32],
-  float_result_reg_count : Int32,
-) -> Array[HostcallAbiValueLocation] {
-  let locations : Array[HostcallAbiValueLocation] = []
-  let mut int_seen = 0
-  let mut float_seen = 0
-  let mut return_area_offset = 0
-  for ty in result_types {
-    match hostcall_scalar_class(ty) {
-      Int =>
-        if int_seen < int_result_regs.length() {
-          locations.push(Reg({ index: int_result_regs[int_seen], }))
-          int_seen = int_seen + 1
-        } else {
-          let align = hostcall_abi_stack_align(ty)
-          let offset = align_to(return_area_offset, align)
-          let location = hostcall_abi_return_area_location(ty, offset)
-          locations.push(location)
-          return_area_offset = offset +
-            hostcall_abi_location_stack_size(location)
-          int_seen = int_seen + 1
-        }
-      Float32 | Float64 | Vector =>
-        if float_seen < float_result_reg_count {
-          locations.push(Reg({ index: float_seen, }))
-          float_seen = float_seen + 1
-        } else {
-          let align = hostcall_abi_stack_align(ty)
-          let offset = align_to(return_area_offset, align)
-          let location = hostcall_abi_return_area_location(ty, offset)
-          locations.push(location)
-          return_area_offset = offset +
-            hostcall_abi_location_stack_size(location)
-          float_seen = float_seen + 1
-        }
-    }
-  }
-  locations
-}
-
-///|
-fn hostcall_stack_arg_size(
-  locations : Array[HostcallAbiValueLocation],
-) -> Int32 {
-  let mut size = 0
-  for location in locations {
-    if location is Stack(offset~, ..) {
-      let end = offset + hostcall_abi_location_stack_size(location)
-      if end > size {
-        size = end
-      }
-    }
-  }
-  align_to(size, 16)
-}
-
-///|
-fn hostcall_return_area_size(
-  locations : Array[HostcallAbiValueLocation],
-) -> Int32 {
-  let mut size = 0
-  for location in locations {
-    if location is ReturnArea(offset~, ..) {
-      let end = offset + hostcall_abi_location_stack_size(location)
-      if end > size {
-        size = end
-      }
-    }
-  }
-  align_to(size, 16)
-}
-
-///|
-fn validate_hostcall_import_signature(
-  param_types : ArrayView[@types.ValueType],
-  result_types : ArrayView[@types.ValueType],
-) -> Unit {
-  param_types |> ignore
-  result_types |> ignore
 }
 
 ///|
@@ -599,24 +384,17 @@ fn a64_emit_load_slot_base(
 fn a64_emit_store_arg_to_values_vec(
   code : Array[Int32],
   ty : @types.ValueType,
-  location : HostcallAbiValueLocation,
+  location : @vcode.CallArgumentLocation,
   values_offset : Int32,
   caller_stack_base_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
-    Reg(preg) => a64_emit_store_slot(code, ty, preg.index, values_offset)
-    Stack(offset~, ..) => {
-      let scratch = match hostcall_scalar_class(ty) {
-        Int => 16
-        Float32 | Float64 | Vector => 16
-      }
+    CallRegister(preg) => a64_emit_store_slot(code, ty, preg.id, values_offset)
+    CallStack(offset) => {
+      let scratch = 16
       a64_emit_load_slot(code, ty, scratch, caller_stack_base_offset + offset)
       a64_emit_store_slot(code, ty, scratch, values_offset)
     }
-    ReturnArea(..) =>
-      unsupported_hostcall_import(
-        "hostcall import trampoline parameters cannot live in return areas",
-      )
   }
 }
 
@@ -624,23 +402,17 @@ fn a64_emit_store_arg_to_values_vec(
 fn a64_emit_load_result_from_values_vec(
   code : Array[Int32],
   ty : @types.ValueType,
-  location : HostcallAbiValueLocation,
+  location : @vcode.CallResultLocation,
   values_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
-    Reg(preg) => a64_emit_load_slot(code, ty, preg.index, values_offset)
-    ReturnArea(offset~, ..) => {
-      let scratch = match hostcall_scalar_class(ty) {
-        Int => 16
-        Float32 | Float64 | Vector => 16
-      }
+    CallResultRegister(preg) =>
+      a64_emit_load_slot(code, ty, preg.id, values_offset)
+    CallResultArea(offset, _) => {
+      let scratch = 16
       a64_emit_load_slot(code, ty, scratch, values_offset)
       a64_emit_store_slot_base(code, ty, scratch, 23, offset)
     }
-    Stack(..) =>
-      unsupported_hostcall_import(
-        "hostcall import trampoline results cannot live in stack argument slots",
-      )
   }
 }
 
@@ -648,25 +420,18 @@ fn a64_emit_load_result_from_values_vec(
 fn a64_emit_store_result_to_values_vec(
   code : Array[Int32],
   ty : @types.ValueType,
-  location : HostcallAbiValueLocation,
+  location : @vcode.CallResultLocation,
   values_offset : Int32,
   return_area_offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
-    Reg(preg) =>
-      a64_emit_store_slot_base(code, ty, preg.index, 19, values_offset)
-    ReturnArea(offset~, ..) => {
-      let scratch = match hostcall_scalar_class(ty) {
-        Int => 16
-        Float32 | Float64 | Vector => 16
-      }
+    CallResultRegister(preg) =>
+      a64_emit_store_slot_base(code, ty, preg.id, 19, values_offset)
+    CallResultArea(offset, _) => {
+      let scratch = 16
       a64_emit_load_slot(code, ty, scratch, return_area_offset + offset)
       a64_emit_store_slot_base(code, ty, scratch, 19, values_offset)
     }
-    Stack(..) =>
-      unsupported_hostcall_import(
-        "entry trampoline results cannot live in stack argument slots",
-      )
   }
 }
 
@@ -674,23 +439,13 @@ fn a64_emit_store_result_to_values_vec(
 fn build_aarch64_hostcall_import_trampoline(
   param_types : ArrayView[@types.ValueType],
   result_types : ArrayView[@types.ValueType],
-  bridge : RuntimeValueBridge,
+  host_func_addr : Int32,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
-  validate_hostcall_import_signature(param_types, result_types)
   let code : Array[Int32] = []
-  let param_locations = hostcall_param_locations(
-    param_types,
-    [1, 2, 3, 4, 5, 6, 7],
-    8,
-  )
-  let result_locations = hostcall_result_locations(
-    result_types,
-    [0, 1, 2, 3, 4, 5, 6, 7],
-    8,
-  )
-  let layout = plan_hostcall_import_trampoline_layout(
-    param_types, result_types, 7, 8,
-  )
+  let plan = wasm_internal_bridge_plan(param_types, result_types, AArch64)
+  let param_locations = plan.arguments[1:]
+  let result_locations = plan.results
+  let layout = plan_hostcall_import_trampoline_layout(param_types, result_types)
   // Preserve x23 while using it to keep the incoming x8 result-area pointer
   // alive across the platform C call. LR occupies the final eight bytes.
   let frame_size = align_to(layout.values_vec_bytes + 16, 16)
@@ -711,7 +466,7 @@ fn build_aarch64_hostcall_import_trampoline(
     )
     offset = offset + hostcall_value_byte_count(ty)
   }
-  a64_emit_load_imm64_fixed(code, 1, bridge.bridge_arg())
+  a64_emit_load_imm64_fixed(code, 1, host_func_addr.to_int64())
   a64_emit_add_imm(code, 2, 31, 0)
   a64_emit_load_imm64_fixed(code, 3, layout.arg_slots.to_int64())
   a64_emit_load_imm64_fixed(code, 4, layout.result_slots.to_int64())
@@ -960,24 +715,17 @@ fn x64_emit_load_slot_base(
 fn x64_emit_store_arg_to_values_vec(
   code : Array[Int32],
   ty : @types.ValueType,
-  location : HostcallAbiValueLocation,
+  location : @vcode.CallArgumentLocation,
   values_offset : Int32,
   caller_stack_base_offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
+) -> Unit {
   match location {
-    Reg(preg) => x64_emit_store_slot(code, ty, preg.index, values_offset)
-    Stack(offset~, ..) => {
-      let scratch = match hostcall_scalar_class(ty) {
-        Int => 10
-        Float32 | Float64 | Vector => 15
-      }
+    CallRegister(preg) => x64_emit_store_slot(code, ty, preg.id, values_offset)
+    CallStack(offset) => {
+      let scratch = if is_hostcall_int_class(ty) { 10 } else { 15 }
       x64_emit_load_slot(code, ty, scratch, caller_stack_base_offset + offset)
       x64_emit_store_slot(code, ty, scratch, values_offset)
     }
-    ReturnArea(..) =>
-      unsupported_hostcall_import(
-        "hostcall import trampoline parameters cannot live in return areas",
-      )
   }
 }
 
@@ -985,24 +733,18 @@ fn x64_emit_store_arg_to_values_vec(
 fn x64_emit_load_result_from_values_vec(
   code : Array[Int32],
   ty : @types.ValueType,
-  location : HostcallAbiValueLocation,
+  location : @vcode.CallResultLocation,
   values_offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
+) -> Unit {
   match location {
-    Reg(preg) => x64_emit_load_slot(code, ty, preg.index, values_offset)
-    ReturnArea(offset~, ..) => {
-      let scratch = match hostcall_scalar_class(ty) {
-        // r10 already holds the eighth integer result. r11 is call scratch.
-        Int => 11
-        Float32 | Float64 | Vector => 15
-      }
+    CallResultRegister(preg) =>
+      x64_emit_load_slot(code, ty, preg.id, values_offset)
+    CallResultArea(offset, _) => {
+      // r10 already holds the eighth integer result. r11 is call scratch.
+      let scratch = if is_hostcall_int_class(ty) { 11 } else { 15 }
       x64_emit_load_slot(code, ty, scratch, values_offset)
       x64_emit_store_slot_base(code, ty, scratch, 12, offset)
     }
-    Stack(..) =>
-      unsupported_hostcall_import(
-        "hostcall import trampoline results cannot live in stack argument slots",
-      )
   }
 }
 
@@ -1010,25 +752,18 @@ fn x64_emit_load_result_from_values_vec(
 fn x64_emit_store_result_to_values_vec(
   code : Array[Int32],
   ty : @types.ValueType,
-  location : HostcallAbiValueLocation,
+  location : @vcode.CallResultLocation,
   values_offset : Int32,
   return_area_offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
+) -> Unit {
   match location {
-    Reg(preg) =>
-      x64_emit_store_slot_base(code, ty, preg.index, 14, values_offset)
-    ReturnArea(offset~, ..) => {
-      let scratch = match hostcall_scalar_class(ty) {
-        Int => 10
-        Float32 | Float64 | Vector => 15
-      }
+    CallResultRegister(preg) =>
+      x64_emit_store_slot_base(code, ty, preg.id, 14, values_offset)
+    CallResultArea(offset, _) => {
+      let scratch = if is_hostcall_int_class(ty) { 10 } else { 15 }
       x64_emit_load_slot(code, ty, scratch, return_area_offset + offset)
       x64_emit_store_slot_base(code, ty, scratch, 14, values_offset)
     }
-    Stack(..) =>
-      unsupported_hostcall_import(
-        "entry trampoline results cannot live in stack argument slots",
-      )
   }
 }
 
@@ -1043,20 +778,13 @@ fn x64_hostcall_stack_adjust(values_vec_bytes : Int32) -> Int32 {
 fn build_x64_hostcall_import_trampoline(
   param_types : ArrayView[@types.ValueType],
   result_types : ArrayView[@types.ValueType],
-  bridge : RuntimeValueBridge,
+  host_func_addr : Int32,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
-  validate_hostcall_import_signature(param_types, result_types)
   let code : Array[Int32] = []
-  let int_arg_regs = [6, 2, 1, 8, 9]
-  let param_locations = hostcall_param_locations(param_types, int_arg_regs, 8)
-  let result_locations = hostcall_result_locations(
-    result_types,
-    [0, 2, 1, 8, 9, 6, 7, 10],
-    8,
-  )
-  let layout = plan_hostcall_import_trampoline_layout(
-    param_types, result_types, 5, 8,
-  )
+  let plan = wasm_internal_bridge_plan(param_types, result_types, X64)
+  let param_locations = plan.arguments[1:]
+  let result_locations = plan.results
+  let layout = plan_hostcall_import_trampoline_layout(param_types, result_types)
   let frame_size = x64_hostcall_stack_adjust(layout.values_vec_bytes)
   x64_sub_rsp(code, frame_size)
   let mut offset = 0
@@ -1070,11 +798,11 @@ fn build_x64_hostcall_import_trampoline(
     )
     offset = offset + hostcall_value_byte_count(ty)
   }
-  x64_mov_imm64(code, 6, bridge.bridge_arg())
+  x64_mov_imm64(code, 6, host_func_addr.to_int64())
   x64_mov_rr(code, 2, 4)
   x64_mov_imm64(code, 1, layout.arg_slots.to_int64())
   x64_mov_imm64(code, 8, layout.result_slots.to_int64())
-  x64_mov_imm64(code, 11, bridge.x64_bridge_ptr())
+  x64_mov_imm64(code, 11, c_jit_get_hostcall_ptr())
   x64_call_reg(code, 11)
   let mut result_offset = offset
   for i, ty in result_types {
@@ -1101,25 +829,13 @@ pub fn build_hostcall_import_trampoline_for_target(
   match target {
     AArch64 =>
       build_aarch64_hostcall_import_trampoline(
-        param_types,
-        result_types,
-        Hostcall(host_func_addr),
+        param_types, result_types, host_func_addr,
       )
     X64 =>
       build_x64_hostcall_import_trampoline(
-        param_types,
-        result_types,
-        Hostcall(host_func_addr),
+        param_types, result_types, host_func_addr,
       )
   }
-}
-
-///|
-fn validate_entry_trampoline_signature(
-  param_types : ArrayView[@types.ValueType],
-  result_types : ArrayView[@types.ValueType],
-) -> Unit {
-  validate_hostcall_import_signature(param_types, result_types)
 }
 
 ///|
@@ -1127,20 +843,12 @@ fn build_aarch64_entry_trampoline(
   param_types : ArrayView[@types.ValueType],
   result_types : ArrayView[@types.ValueType],
 ) -> Array[Int32] raise HostcallImportTrampolineError {
-  validate_entry_trampoline_signature(param_types, result_types)
   let code : Array[Int32] = []
-  let param_locations = hostcall_param_locations(
-    param_types,
-    [1, 2, 3, 4, 5, 6, 7],
-    8,
-  )
-  let result_locations = hostcall_result_locations(
-    result_types,
-    [0, 1, 2, 3, 4, 5, 6, 7],
-    8,
-  )
-  let outgoing_stack_size = hostcall_stack_arg_size(param_locations)
-  let return_area_size = hostcall_return_area_size(result_locations)
+  let plan = wasm_internal_bridge_plan(param_types, result_types, AArch64)
+  let param_locations = plan.arguments[1:]
+  let result_locations = plan.results
+  let outgoing_stack_size = plan.stack_size
+  let return_area_size = plan.result_area_size
   let return_area_offset = outgoing_stack_size
   let save_area_offset = return_area_offset + return_area_size
   let frame_size = align_to(save_area_offset + 32, 16)
@@ -1158,20 +866,13 @@ fn build_aarch64_entry_trampoline(
   let mut value_offset = 0
   for i, ty in param_types {
     match param_locations[i] {
-      Reg(preg) =>
-        a64_emit_load_slot_base(code, ty, preg.index, 19, value_offset)
-      Stack(offset~, ..) => {
-        let scratch = match hostcall_scalar_class(ty) {
-          Int => 16
-          Float32 | Float64 | Vector => 16
-        }
+      CallRegister(preg) =>
+        a64_emit_load_slot_base(code, ty, preg.id, 19, value_offset)
+      CallStack(offset) => {
+        let scratch = 16
         a64_emit_load_slot_base(code, ty, scratch, 19, value_offset)
         a64_emit_store_slot(code, ty, scratch, offset)
       }
-      ReturnArea(..) =>
-        unsupported_hostcall_import(
-          "entry trampoline parameters cannot live in return areas",
-        )
     }
     value_offset = value_offset + hostcall_value_byte_count(ty)
   }
@@ -1202,17 +903,12 @@ fn build_x64_entry_trampoline(
   param_types : ArrayView[@types.ValueType],
   result_types : ArrayView[@types.ValueType],
 ) -> Array[Int32] raise HostcallImportTrampolineError {
-  validate_entry_trampoline_signature(param_types, result_types)
   let code : Array[Int32] = []
-  let int_arg_regs = [6, 2, 1, 8, 9]
-  let param_locations = hostcall_param_locations(param_types, int_arg_regs, 8)
-  let result_locations = hostcall_result_locations(
-    result_types,
-    [0, 2, 1, 8, 9, 6, 7, 10],
-    8,
-  )
-  let outgoing_stack_size = hostcall_stack_arg_size(param_locations)
-  let return_area_size = hostcall_return_area_size(result_locations)
+  let plan = wasm_internal_bridge_plan(param_types, result_types, X64)
+  let param_locations = plan.arguments[1:]
+  let result_locations = plan.results
+  let outgoing_stack_size = plan.stack_size
+  let return_area_size = plan.result_area_size
   let return_area_offset = outgoing_stack_size
   let stack_adjust = outgoing_stack_size + return_area_size
   code.push(0x41)
@@ -1230,18 +926,14 @@ fn build_x64_entry_trampoline(
   let mut value_offset = 0
   for i, ty in param_types {
     match param_locations[i] {
-      Reg(preg) =>
+      CallRegister(preg) =>
         match ty {
-          V128 => x64_movdqu_xmm_m128_base(code, preg.index, 14, value_offset)
-          F32 | F64 =>
-            x64_movsd_xmm_m64_base(code, preg.index, 14, value_offset)
-          _ => x64_mov_r64_m64_base(code, preg.index, 14, value_offset)
+          V128 => x64_movdqu_xmm_m128_base(code, preg.id, 14, value_offset)
+          F32 | F64 => x64_movsd_xmm_m64_base(code, preg.id, 14, value_offset)
+          _ => x64_mov_r64_m64_base(code, preg.id, 14, value_offset)
         }
-      Stack(offset~, ..) => {
-        let scratch = match hostcall_scalar_class(ty) {
-          Int => 10
-          Float32 | Float64 | Vector => 15
-        }
+      CallStack(offset) => {
+        let scratch = if is_hostcall_int_class(ty) { 10 } else { 15 }
         match ty {
           V128 => {
             x64_movdqu_xmm_m128_base(code, scratch, 14, value_offset)
@@ -1257,10 +949,6 @@ fn build_x64_entry_trampoline(
           }
         }
       }
-      ReturnArea(..) =>
-        unsupported_hostcall_import(
-          "entry trampoline parameters cannot live in return areas",
-        )
     }
     value_offset = value_offset + hostcall_value_byte_count(ty)
   }

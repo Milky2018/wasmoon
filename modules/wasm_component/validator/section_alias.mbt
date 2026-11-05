@@ -9,66 +9,32 @@ fn validate_component_section_alias(
   resource_ids : Array[Int32?],
   type_sizes : Array[Int32],
   type_depths : Array[Int32],
-  component_sizes : Array[Int32],
-  instance_sizes : Array[Int32],
+  components : Array[ComponentIndexEntry],
+  instances : Array[InstanceIndexEntry],
   named_types : Map[Int32, Int32],
-  core_module_exports : Array[Map[String, Int32]?],
-  core_module_defs : Array[@types.Module?],
+  core_modules : Array[CoreModuleIndexEntry],
+  core_types : Array[CoreModuleTypeSignature?],
+  core_type_outers : Array[Array[CoreModuleTypeSignature?]],
   core_func_types : Array[@types.FuncType?],
-  core_module_export_types : Array[Map[String, CoreExternType]?],
-  core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
-  core_instance_exports : Array[Map[String, Int32]?],
-  core_instance_export_types : Array[Map[String, CoreExternType]?],
+  core_instances : Array[CoreInstanceIndexEntry],
   core_memory_types : Array[@types.MemoryType?],
-  component_import_sorts : Array[Map[String, @component.Sort]?],
-  component_import_instance_sigs : Array[Map[String, InstanceSig]?],
-  component_import_func_sigs : Array[Map[String, FuncSigShape]?],
-  component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int32]]?,
-  ],
-  component_import_core_module_exports : Array[Map[String, Map[String, Int32]]?],
-  component_import_core_module_import_sigs : Array[
-    Map[String, Map[String, CoreExternType]]?,
-  ],
-  component_import_type_bounds : Array[Map[String, @component.TypeBound]?],
-  component_import_type_sigs : Array[Map[String, TypeSig]?],
-  component_export_sorts : Array[Map[String, @component.Sort]?],
-  component_export_instance_sigs : Array[Map[String, InstanceSig]?],
-  component_export_instance_type_sigs : Array[
-    Map[String, Map[String, TypeSig]]?,
-  ],
-  component_export_instance_func_sigs : Array[
-    Map[String, Map[String, FuncSigShape]]?,
-  ],
-  component_export_type_sigs : Array[Map[String, TypeSig]?],
-  component_export_func_sigs : Array[Map[String, FuncSigShape]?],
-  instance_sigs : Array[InstanceSig?],
-  interface_instance_idxs : Map[Int32, Int32],
-  instance_export_type_idxs : Array[Array[Int32]?],
-  instance_export_func_idxs : Array[Array[Int32]?],
-  instance_export_type_map : Array[Map[String, ExportedTypeInfo]?],
-  instance_export_type_sigs : Array[Map[String, TypeSig]?],
-  instance_export_func_sigs : Array[Map[String, FuncSigShape]?],
-  instance_nested_instance_type_sigs : Array[Map[String, Map[String, TypeSig]]?],
-  instance_nested_instance_func_sigs : Array[
-    Map[String, Map[String, FuncSigShape]]?,
-  ],
   func_types : Array[@component.FuncType?],
   func_sig_shapes : Array[FuncSigShape?],
   type_outers : Array[Array[@component.TypeDef?]],
-  component_size_outers : Array[Array[Int32]],
+  component_outers : Array[Array[ComponentIndexEntry]],
 ) -> Unit raise ComponentValidationError {
   let aliases = @component.parse_alias_section(payload) catch {
     e => raise SectionParseError(6, "\{e}")
   }
   for a in aliases {
+    if a.sort is Core(0x12) {
+      raise UnsupportedCoreSort(0x12)
+    }
     let mut new_core_func_ty : @types.FuncType? = None
     let mut new_core_memory_ty : @types.MemoryType? = None
     let mut new_instance_sig : InstanceSig? = None
     let mut new_instance_export_type_sigs : Map[String, TypeSig]? = None
     let mut new_instance_export_func_sigs : Map[String, FuncSigShape]? = None
-    let new_instance_nested_type_sigs : Map[String, Map[String, TypeSig]]? = None
-    let new_instance_nested_func_sigs : Map[String, Map[String, FuncSigShape]]? = None
     let mut new_component_size = 1
     match a.target {
       Export(instance_idx, _name) =>
@@ -93,15 +59,15 @@ fn validate_component_section_alias(
     }
     if a.sort is Component && a.target is Outer(ct, idx) {
       if ct == 0 {
-        if idx >= 0 && idx < component_sizes.length() {
-          new_component_size = component_sizes[idx]
+        if idx >= 0 && idx < components.length() {
+          new_component_size = components[idx].size
         }
       } else {
         let depth = ct - 1
-        if depth >= 0 && depth < component_size_outers.length() {
-          let tbl = component_size_outers[depth]
+        if depth >= 0 && depth < component_outers.length() {
+          let tbl = component_outers[depth]
           if idx >= 0 && idx < tbl.length() {
-            new_component_size = tbl[idx]
+            new_component_size = tbl[idx].size
           }
         }
       }
@@ -109,37 +75,21 @@ fn validate_component_section_alias(
     // If we are aliasing an instance export that has a known ascribed
     // instance type, propagate its export signature into the new
     // instance index-space entry.
-    if (a.sort, a.target) is (Instance, Export(instance_idx, name)) {
-      let parent = if instance_idx >= 0 && instance_idx < instance_sigs.length() {
-        instance_sigs[instance_idx]
-      } else {
-        None
-      }
-      if parent is Some(sig) && sig.nested.get(name) is Some(child) {
-        new_instance_sig = Some(child)
-      }
-      if instance_idx >= 0 &&
-        instance_idx < instance_nested_instance_type_sigs.length() &&
-        instance_nested_instance_type_sigs[instance_idx] is Some(map) &&
-        map.get(name) is Some(m) {
-        new_instance_export_type_sigs = Some(m)
-      }
-      if instance_idx >= 0 &&
-        instance_idx < instance_nested_instance_func_sigs.length() &&
-        instance_nested_instance_func_sigs[instance_idx] is Some(map) &&
-        map.get(name) is Some(m) {
-        new_instance_export_func_sigs = Some(m)
-      }
+    if (a.sort, a.target) is (Instance, Export(instance_idx, name)) &&
+      instances.get(instance_idx) is Some(parent) {
+      new_instance_sig = parent.signature.bind(sig => sig.nested.get(name))
+      new_instance_export_type_sigs = parent.nested_type_signatures.bind(map => {
+        map.get(name)
+      })
+      new_instance_export_func_sigs = parent.nested_function_signatures.bind(map => {
+        map.get(name)
+      })
     }
     match a.target {
       Export(instance_idx, name) => {
         // Keep validation robust even if our auxiliary tables lag behind
         // counts (e.g. for inline/aliased instances).
-        let sig = if instance_idx >= 0 && instance_idx < instance_sigs.length() {
-          instance_sigs[instance_idx]
-        } else {
-          None
-        }
+        let sig = instances.get(instance_idx).bind(entry => entry.signature)
         match sig {
           Some(s) =>
             match s.exports.get(name) {
@@ -153,12 +103,9 @@ fn validate_component_section_alias(
         }
       }
       CoreExport(core_instance_idx, name) => {
-        let export_kinds = if core_instance_idx >= 0 &&
-          core_instance_idx < core_instance_exports.length() {
-          core_instance_exports[core_instance_idx]
-        } else {
-          None
-        }
+        let export_kinds = core_instances
+          .get(core_instance_idx)
+          .bind(entry => entry.export_kinds)
         match export_kinds {
           Some(map) =>
             match map.get(name) {
@@ -180,12 +127,9 @@ fn validate_component_section_alias(
     // Capture core memory types for later canonical ABI checks.
     match (a.sort, a.target) {
       (Core(0x00), CoreExport(core_instance_idx, name)) => {
-        let export_types = if core_instance_idx >= 0 &&
-          core_instance_idx < core_instance_export_types.length() {
-          core_instance_export_types[core_instance_idx]
-        } else {
-          None
-        }
+        let export_types = core_instances
+          .get(core_instance_idx)
+          .bind(entry => entry.export_types)
         match export_types {
           Some(map) =>
             match map.get(name) {
@@ -196,12 +140,9 @@ fn validate_component_section_alias(
         }
       }
       (Core(0x02), CoreExport(core_instance_idx, name)) => {
-        let export_types = if core_instance_idx >= 0 &&
-          core_instance_idx < core_instance_export_types.length() {
-          core_instance_export_types[core_instance_idx]
-        } else {
-          None
-        }
+        let export_types = core_instances
+          .get(core_instance_idx)
+          .bind(entry => entry.export_types)
         match export_types {
           Some(map) =>
             match map.get(name) {
@@ -253,12 +194,9 @@ fn validate_component_section_alias(
             new_td = outer_td
           }
         Export(instance_idx, name) => {
-          let tmap = if instance_idx >= 0 &&
-            instance_idx < instance_export_type_map.length() {
-            instance_export_type_map[instance_idx]
-          } else {
-            None
-          }
+          let tmap = instances
+            .get(instance_idx)
+            .bind(entry => entry.exported_types)
           match tmap {
             Some(map) =>
               match map.get(name) {
@@ -284,12 +222,9 @@ fn validate_component_section_alias(
                   new_rid = Some(rid)
                 }
                 Some(Opaque) => {
-                  let sigmap = if instance_idx >= 0 &&
-                    instance_idx < instance_export_type_sigs.length() {
-                    instance_export_type_sigs[instance_idx]
-                  } else {
-                    None
-                  }
+                  let sigmap = instances
+                    .get(instance_idx)
+                    .bind(entry => entry.type_signatures)
                   match sigmap {
                     Some(sm) =>
                       match sm.get(name) {
@@ -320,8 +255,8 @@ fn validate_component_section_alias(
       // index in this component's local type namespace.
       match a.target {
         Export(instance_idx, name) =>
-          if instance_export_type_sigs.get(instance_idx)
-            is Some(Some(signatures)) &&
+          if instances.get(instance_idx) is Some(entry) &&
+            entry.type_signatures is Some(signatures) &&
             signatures.get(name) is Some(signature) {
             known_type_sigs.set(type_table.length(), signature)
           }
@@ -337,7 +272,8 @@ fn validate_component_section_alias(
       type_sizes.push(new_size)
       type_depths.push(new_depth)
       if a.target is Export(instance_idx, _name) &&
-        interface_instance_idxs.get(instance_idx) is Some(_) {
+        instances.get(instance_idx) is Some(entry) &&
+        entry.in_interface {
         named_types.set(type_table.length() - 1, 1)
       }
     } else {
@@ -357,12 +293,9 @@ fn validate_component_section_alias(
                 }
               }
             Export(instance_idx, name) => {
-              let fmap = if instance_idx >= 0 &&
-                instance_idx < instance_export_func_sigs.length() {
-                instance_export_func_sigs[instance_idx]
-              } else {
-                None
-              }
+              let fmap = instances
+                .get(instance_idx)
+                .bind(entry => entry.function_signatures)
               match fmap {
                 Some(map) =>
                   match map.get(name) {
@@ -377,42 +310,26 @@ fn validate_component_section_alias(
           func_types.push(new_ft)
           func_sig_shapes.push(new_sig)
         }
-        Instance => {
-          instance_sigs.push(new_instance_sig)
-          instance_export_type_idxs.push(None)
-          instance_export_func_idxs.push(None)
-          instance_export_type_map.push(None)
-          instance_export_type_sigs.push(new_instance_export_type_sigs)
-          instance_export_func_sigs.push(new_instance_export_func_sigs)
-          instance_nested_instance_type_sigs.push(new_instance_nested_type_sigs)
-          instance_nested_instance_func_sigs.push(new_instance_nested_func_sigs)
-          instance_sizes.push(1)
-        }
-        Component => {
-          component_import_sorts.push(None)
-          component_import_instance_sigs.push(None)
-          component_import_func_sigs.push(None)
-          component_import_instance_resource_exports.push(None)
-          component_import_core_module_exports.push(None)
-          component_import_core_module_import_sigs.push(None)
-          component_import_type_bounds.push(None)
-          component_import_type_sigs.push(None)
-          component_export_sorts.push(None)
-          component_export_instance_sigs.push(None)
-          component_export_instance_type_sigs.push(None)
-          component_export_instance_func_sigs.push(None)
-          component_export_type_sigs.push(None)
-          component_export_func_sigs.push(None)
-          component_sizes.push(new_component_size)
-        }
+        Instance =>
+          instances.push({
+            ..InstanceIndexEntry::unknown(),
+            signature: new_instance_sig,
+            type_signatures: new_instance_export_type_sigs,
+            function_signatures: new_instance_export_func_sigs,
+          })
+        Component =>
+          components.push(ComponentIndexEntry::unknown(new_component_size))
         Core(core_sort) =>
           if core_sort == 0x11 {
-            core_module_exports.push(None)
-            core_module_export_types.push(None)
-            core_module_type_imports.push(None)
-            core_module_defs.push(None)
-          } else if core_sort == 0x12 {
-            core_instance_exports.push(None)
+            core_modules.push(CoreModuleIndexEntry::unknown())
+          } else if core_sort == 0x10 || core_sort == 0x05 {
+            let signature = match a.target {
+              Outer(0, index) => core_types[index]
+              Outer(count, index) =>
+                outer_core_type_of_alias(core_type_outers, count, index)
+              _ => raise AliasTargetMismatch("core type")
+            }
+            core_types.push(signature)
           } else if core_sort == 0x00 {
             core_func_types.push(new_core_func_ty)
           } else if core_sort == 0x02 {

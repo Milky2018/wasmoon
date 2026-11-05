@@ -684,25 +684,50 @@ fn core_module_import_sig_of_type(
 }
 
 ///|
-fn core_module_import_sig_of_idx(
-  idx : Int32,
-  core_module_defs : Array[@types.Module?],
-  core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
+fn CoreModuleIndexEntry::import_signature(
+  self : CoreModuleIndexEntry,
 ) -> Map[String, CoreExternType]? {
-  if idx < 0 || idx >= core_module_defs.length() {
-    return None
+  match self.definition {
+    Some(module_) => Some(core_module_import_sig_of_module(module_))
+    None => self.import_types.map(core_module_import_sig_of_type)
   }
-  match core_module_defs[idx] {
-    Some(m) => Some(core_module_import_sig_of_module(m))
-    None =>
-      if idx >= 0 && idx < core_module_type_imports.length() {
-        match core_module_type_imports[idx] {
-          Some(sig) => Some(core_module_import_sig_of_type(sig))
-          None => None
-        }
-      } else {
-        None
-      }
+}
+
+///|
+fn check_core_module_provider(
+  module_name : String,
+  field : String,
+  expected : CoreExternType?,
+  providers : Map[String, Int32],
+  core_instances : Array[CoreInstanceIndexEntry],
+) -> Unit raise ComponentValidationError {
+  guard providers.get(module_name) is Some(index) else {
+    raise CoreModuleError(
+      "module import `\{module_name}::\{field}` not defined",
+    )
+  }
+  guard core_instances.get(index) is Some(provider) else {
+    raise InvalidCoreInstanceIndex(index)
+  }
+  guard expected is Some(expected) else { return }
+  if provider.export_kinds is Some(kinds) {
+    guard kinds.get(field) is Some(kind) else {
+      raise CoreModuleError(
+        "module import `\{module_name}::\{field}` not defined",
+      )
+    }
+    if kind != core_kind_of_extern_type(expected) {
+      raise CoreModuleError(
+        "module import `\{module_name}::\{field}` has the wrong type",
+      )
+    }
+  }
+  if provider.export_types is Some(types) &&
+    types.get(field) is Some(actual) &&
+    !core_import_compatible(expected, actual) {
+    raise CoreModuleError(
+      "module import `\{module_name}::\{field}` has the wrong type",
+    )
   }
 }
 
@@ -1541,20 +1566,9 @@ fn CoreTypeReader::read_u8(
 fn CoreTypeReader::read_leb_u32(
   self : CoreTypeReader,
 ) -> Int32 raise ComponentValidationError {
-  let mut result = 0
-  let mut shift = 0
-  while true {
-    if shift >= 35 {
-      raise SectionParseError(3, "leb128 too large")
-    }
-    let byte = self.read_u8()
-    result = result | ((byte & 0x7F) << shift)
-    if (byte & 0x80) == 0 {
-      break
-    }
-    shift += 7
-  }
-  result
+  @binary.read_u32(self, CoreTypeReader::read_u8, () => {
+    SectionParseError(3, "leb128 too large")
+  })
 }
 
 ///|
@@ -1562,15 +1576,12 @@ fn CoreTypeReader::read_bytes(
   self : CoreTypeReader,
   n : Int32,
 ) -> Bytes raise ComponentValidationError {
-  if n < 0 || self.pos + n > self.data.length() {
+  let start = self.pos
+  if n < 0 || n > self.data.length() - start {
     raise SectionParseError(3, "unexpected end of core type payload")
   }
-  let bytes : Array[Byte] = []
-  for i in 0..<n {
-    bytes.push(self.data[self.pos + i])
-  }
   self.pos += n
-  Bytes::from_array(bytes)
+  self.data[start:self.pos].to_owned()
 }
 
 ///|
@@ -1587,21 +1598,12 @@ fn ascii_bytes_to_string(bytes : Bytes) -> String? {
 }
 
 ///|
-fn CoreTypeReader::read_name_ascii(
+fn CoreTypeReader::read_name(
   self : CoreTypeReader,
-) -> String? raise ComponentValidationError {
+) -> String raise ComponentValidationError {
   let len = self.read_leb_u32()
-  ascii_bytes_to_string(self.read_bytes(len))
-}
-
-///|
-fn CoreTypeReader::skip_limits(
-  self : CoreTypeReader,
-) -> Unit raise ComponentValidationError {
-  let flags = self.read_u8()
-  self.read_leb_u32() |> ignore
-  if (flags & 0x01) != 0 {
-    self.read_leb_u32() |> ignore
+  @utf8.decode(self.read_bytes(len), ignore_bom=false) catch {
+    _ => raise SectionParseError(3, "invalid UTF-8")
   }
 }
 
@@ -1627,55 +1629,6 @@ fn CoreTypeReader::skip_func_type_body(
   let nresults = self.read_leb_u32()
   for _i in 0..<nresults {
     self.read_core_valtype() |> ignore
-  }
-}
-
-///|
-fn CoreTypeReader::validate_extern_type(
-  self : CoreTypeReader,
-  kind : Int32,
-  func_type_bound : Int32,
-) -> Unit raise ComponentValidationError {
-  match kind {
-    0x00 => {
-      let idx = self.read_leb_u32()
-      if idx < 0 || idx >= func_type_bound {
-        raise SectionParseError(3, "type index out of bounds")
-      }
-    }
-    0x01 => {
-      self.read_core_valtype() |> ignore
-      self.skip_limits()
-    }
-    0x02 => {
-      // Memory limits are bounded for 32-bit memories (wasm-tools expects this
-      // validation in module types).
-      let flags = self.read_u8()
-      let min = self.read_leb_u32()
-      if min > 65536 {
-        raise SectionParseError(3, "memory size out of bounds")
-      }
-      if (flags & 0x01) != 0 {
-        let max = self.read_leb_u32()
-        if max > 65536 || max < min {
-          raise SectionParseError(3, "memory size out of bounds")
-        }
-      }
-    }
-    0x03 => {
-      self.read_core_valtype() |> ignore
-      self.read_u8() |> ignore // mut
-    }
-    0x04 => {
-      if self.read_u8() != 0x00 {
-        raise SectionParseError(3, "invalid tag attribute")
-      }
-      let idx = self.read_leb_u32()
-      if idx < 0 || idx >= func_type_bound {
-        raise SectionParseError(3, "type index out of bounds")
-      }
-    }
-    _ => raise SectionParseError(3, "unknown core extern kind: \{kind}")
   }
 }
 
@@ -1760,6 +1713,7 @@ fn CoreTypeReader::read_extern_type_sig(
   kind : Int32,
   func_types : Array[@types.FuncType?],
   func_type_bound : Int32,
+  capture : Bool,
 ) -> CoreExternType? raise ComponentValidationError {
   match kind {
     0x00 => {
@@ -1767,29 +1721,20 @@ fn CoreTypeReader::read_extern_type_sig(
       if idx < 0 || idx >= func_type_bound {
         raise SectionParseError(3, "type index out of bounds")
       }
-      if idx >= 0 && idx < func_types.length() {
-        match func_types[idx] {
-          Some(ft) => Some(Func(ft))
-          None => None
-        }
-      } else {
-        None
-      }
+      func_types.get(idx).bind(ty => ty).map(ft => Func(ft))
     }
     0x01 => {
       // tabletype: elemtype + limits
       let elem_ty = self.read_core_valtype()
-      match elem_ty {
-        I32 | I64 | F32 | F64 | V128 =>
-          raise SectionParseError(3, "table element type must be a reference")
-        _ => ()
-      }
       let flags = self.read_u8()
       let min = self.read_leb_u32()
       let max = if (flags & 0x01) != 0 {
         Some(self.read_leb_u32())
       } else {
         None
+      }
+      if !capture {
+        return None
       }
       let limits : @types.Limits = {
         min: min.to_int64(),
@@ -1816,6 +1761,9 @@ fn CoreTypeReader::read_extern_type_sig(
       } else {
         None
       }
+      if !capture {
+        return None
+      }
       let limits : @types.Limits = {
         min: min.to_int64(),
         max: match max {
@@ -1838,7 +1786,11 @@ fn CoreTypeReader::read_extern_type_sig(
       let vt = self.read_core_valtype()
       let mut_ = self.read_u8()
       let mutable = mut_ != 0
-      Some(Global({ value_type: vt, mutable, }))
+      if capture {
+        Some(Global({ value_type: vt, mutable, }))
+      } else {
+        None
+      }
     }
     0x04 => {
       if self.read_u8() != 0 {
@@ -1848,122 +1800,8 @@ fn CoreTypeReader::read_extern_type_sig(
       if idx < 0 || idx >= func_type_bound {
         raise SectionParseError(3, "type index out of bounds")
       }
-      match func_types.get(idx) {
-        Some(Some(ft)) => {
-          if !ft.results.is_empty() {
-            raise SectionParseError(3, "tag type must not return values")
-          }
-          Some(Tag(ft))
-        }
-        _ => None
-      }
+      func_types.get(idx).bind(ty => ty).map(ft => Tag(ft))
     }
-    _ => {
-      self.validate_extern_type(kind, func_type_bound)
-      None
-    }
+    _ => raise SectionParseError(3, "unknown core extern kind: \{kind}")
   }
-}
-
-///|
-fn parse_core_type_module_sig(
-  r : CoreTypeReader,
-  max_outer_depth : Int32,
-  current_core_type_bound : Int32,
-  outer_core_type_bounds : Array[Int32],
-) -> (Array[CoreModuleTypeImport], Map[String, CoreExternType]) raise ComponentValidationError {
-  let ndecls = r.read_leb_u32()
-  let seen_imports : Map[String, Int32] = Map([])
-  let imports : Array[CoreModuleTypeImport] = []
-  let export_types : Map[String, CoreExternType] = Map([])
-  let func_types : Array[@types.FuncType?] = []
-  let mut func_type_bound = 0
-  for _i in 0..<ndecls {
-    let tag = r.read_u8()
-    match tag {
-      0x00 => {
-        let mod_name = r.read_name_ascii()
-        let name = r.read_name_ascii()
-        let mod_s = match mod_name {
-          Some(s) => s
-          None => ""
-        }
-        let name_s = match name {
-          Some(s) => s
-          None => ""
-        }
-        let key = "\{mod_s}:\{name_s}"
-        if seen_imports.get(key) is Some(_) {
-          raise SectionParseError(3, "duplicate import name")
-        }
-        seen_imports.set(key, 1)
-        let kind = r.read_u8()
-        match r.read_extern_type_sig(kind, func_types, func_type_bound) {
-          Some(ty) => imports.push({ mod_name: mod_s, name: name_s, ty, })
-          None => ()
-        }
-      }
-      0x01 => {
-        func_types.push(Some(r.read_core_functype()))
-        func_type_bound += 1
-      }
-      0x02 => {
-        // Alias declarations inside module types.
-        let sort = r.read_u8()
-        if sort == 0x10 {
-          // Aliasing a core type introduces a new function-type index (we don't
-          // currently resolve its signature here).
-          func_types.push(None)
-          func_type_bound += 1
-        }
-        let target_tag = r.read_u8()
-        match target_tag {
-          0x01 => {
-            let depth = r.read_leb_u32()
-            let idx = r.read_leb_u32()
-            if max_outer_depth >= 0 {
-              if depth > max_outer_depth {
-                raise SectionParseError(3, "outer alias depth out of bounds")
-              }
-              // wasm-tools expects out-of-bounds outer indices to be rejected
-              // even when we don't fully resolve the aliased core type.
-              if sort == 0x10 {
-                let bound = if depth <= 1 {
-                  current_core_type_bound
-                } else if depth - 2 < outer_core_type_bounds.length() {
-                  outer_core_type_bounds[depth - 2]
-                } else {
-                  raise SectionParseError(3, "outer alias depth out of bounds")
-                }
-                if idx < 0 || idx >= bound {
-                  raise SectionParseError(3, "type index out of bounds")
-                }
-              }
-            }
-          }
-          _ =>
-            raise SectionParseError(
-              3,
-              "unknown module alias target: \{target_tag}",
-            )
-        }
-      }
-      0x03 => {
-        let name = r.read_name_ascii()
-        let kind = r.read_u8()
-        let ty = r.read_extern_type_sig(kind, func_types, func_type_bound)
-        match (name, ty) {
-          (Some(s), Some(t)) =>
-            if export_types.get(s) is Some(_) {
-              raise SectionParseError(3, "duplicate export name")
-            } else {
-              export_types.set(s, t)
-            }
-          _ => ()
-        }
-      }
-      _ => raise SectionParseError(3, "unknown module type decl tag: \{tag}")
-    }
-  }
-  (imports, export_types)
 }

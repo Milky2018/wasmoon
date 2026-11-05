@@ -266,6 +266,47 @@ fn append_jit_arg_slots(
 }
 
 ///|
+/// Compare two runtime values for equality
+pub fn values_equal(actual : @types.Value, expected : @types.Value) -> Bool {
+  match (actual, expected) {
+    (I32(a), I32(e)) => a == e
+    (I64(a), I64(e)) => a == e
+    (F32(a), F32(e)) =>
+      // Handle NaN comparison
+      if a.is_nan() && e.is_nan() {
+        true
+      } else {
+        a.reinterpret_as_uint() == e.reinterpret_as_uint()
+      }
+    (F64(a), F64(e)) =>
+      // Handle NaN comparison
+      if a.is_nan() && e.is_nan() {
+        true
+      } else {
+        a.reinterpret_as_uint64() == e.reinterpret_as_uint64()
+      }
+    (Null, Null) => true
+    (FuncRef(a), FuncRef(e)) => a == e
+    (ExternRef(a), ExternRef(e)) => a == e
+    (V128(a), V128(e)) =>
+      // Compare all 16 bytes
+      if a.length() != e.length() || a.length() != 16 {
+        false
+      } else {
+        let mut equal = true
+        for i in 0..<16 {
+          if a[i] != e[i] {
+            equal = false
+            break
+          }
+        }
+        equal
+      }
+    _ => false
+  }
+}
+
+///|
 /// Compare two Value arrays for equality
 pub fn values_array_equal(
   a : Array[@types.Value],
@@ -461,20 +502,8 @@ fn run_jit_with_opt_level(
     }
     let globals_ptr = @wast.init_jit_globals_from_store(instance, store, jm)
     let use_subtype_indirect_check = true
-    @wast.init_elem_segments(
-      mod_,
-      jm,
-      instance,
-      store,
-      use_subtype_indirect_check~,
-    )
-    @wast.init_bulk_segments(
-      mod_,
-      jm,
-      instance,
-      store,
-      use_subtype_indirect_check~,
-    )
+    @wast.bind_instance_tables(instance, store, jm)
+    @wast.init_bulk_segments(mod_, jm, instance, store)
     let global_addrs : Array[Int32] = []
     for addr in instance.global_addrs {
       global_addrs.push(addr)

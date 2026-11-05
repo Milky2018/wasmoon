@@ -5,43 +5,15 @@ fn resolve_edge_moves(
   block : @vcode.Block,
   successor_index : Int32,
 ) -> @vcode.ResolvedMovePlan raise AArch64EmitError {
-  if allocation.edge_edits_at(block, successor_index).is_empty() {
-    return @vcode.ResolvedMovePlan::empty()
-  }
-  @vcode.plan_parallel_moves(
-    @vcode.allocation_edge_moves(function, allocation, block, successor_index),
+  @vcode.resolve_edge_moves(
+    function,
+    allocation,
+    block,
+    successor_index,
     int_transfer_scratch(),
     fp_transfer_scratch(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
-  }
-}
-
-///|
-fn emit_location_move(
-  buffer : CodeBuffer,
-  frame : AArch64Frame,
-  transfer : @vcode.ParallelMove,
-) -> Unit raise AArch64EmitError {
-  match (transfer.from, transfer.to) {
-    (Register(from), Register(to)) => emit_move(buffer, transfer.ty, to, from)
-    (Stack(slot), Register(to)) =>
-      emit_stack_access(
-        buffer,
-        true,
-        transfer.ty,
-        to,
-        frame.slot_offset(slot).unwrap(),
-      )
-    (Register(from), Stack(slot)) =>
-      emit_stack_access(
-        buffer,
-        false,
-        transfer.ty,
-        from,
-        frame.slot_offset(slot).unwrap(),
-      )
-    (Stack(_), Stack(_)) => raise UnresolvedStackMove
   }
 }
 
@@ -51,75 +23,35 @@ fn emit_resolved_moves(
   frame : AArch64Frame,
   plan : @vcode.ResolvedMovePlan,
 ) -> Unit raise AArch64EmitError {
-  for step in plan.steps {
-    match step {
-      Transfer(transfer) => emit_location_move(buffer, frame, transfer)
-      SpillScratchToEmergency(ty~, scratch~) => {
-        guard frame.emergency_move_offset() is Some(offset) else {
-          raise MissingEmergencyMoveArea
-        }
-        emit_stack_access(buffer, false, ty, scratch, offset)
-      }
-      ReloadScratchFromEmergency(ty~, scratch~) => {
-        guard frame.emergency_move_offset() is Some(offset) else {
-          raise MissingEmergencyMoveArea
-        }
-        emit_stack_access(buffer, true, ty, scratch, offset)
-      }
-    }
-  }
+  @vcode.emit_resolved_moves(
+    plan,
+    buffer,
+    frame,
+    AArch64Frame::slot_offset,
+    AArch64Frame::emergency_move_offset,
+    emit_move,
+    emit_stack_access,
+    UnresolvedStackMove,
+    MissingEmergencyMoveArea,
+  )
 }
 
 ///|
-/// Chase a branch target through empty forwarding blocks.
-///
-/// Lowering splits critical edges, so a branch frequently targets a block
-/// whose only content is an unconditional jump carrying the edge arguments.
-/// When allocation gives those arguments and the destination parameters the
-/// same locations, the block emits as a single `b`, and a loop back edge then
-/// pays two taken branches per iteration instead of one. Branching straight
-/// to the final destination removes the hop.
-///
-/// A block is skipped only when nothing observable happens in it: no body
-/// instructions, no allocation edits anchored on its terminator, and an edge
-/// whose parallel moves resolve to nothing. The forwarding block itself is
-/// still emitted, so predecessors that do need its moves keep their path.
-///
-/// Threading can lengthen a conditional branch's displacement, and imm19
-/// reaches only ±1MB with no intra-function veneer support. That exposure
-/// predates threading — every moveless edge already aims imm19 branches at
-/// arbitrary blocks — and an overflow raises a structured BranchOutOfRange
-/// at patch time rather than emitting a wrong offset.
 fn threaded_branch_target(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   target : @vcode.Block,
 ) -> @vcode.Block raise AArch64EmitError {
-  let mut current = target
-  // Forwarding chains longer than a few hops do not occur in practice; the
-  // bound also terminates on a cycle of empty blocks.
-  for _hop in 0..<4 {
-    if !function.block_body(current).is_empty() {
-      break
-    }
-    guard function.block_terminator(current) is Some(terminator) else { break }
-    guard function.instruction(terminator) is Some(Jump) else { break }
-    if !allocation.edits_at(terminator, Before).is_empty() ||
-      !allocation.edits_at(terminator, After).is_empty() {
-      break
-    }
-    if !resolve_edge_moves(function, allocation, current, 0).steps.is_empty() {
-      break
-    }
-    guard function.instruction_successor_at(terminator, 0) is Some(edge) else {
-      break
-    }
-    if edge.target == current {
-      break
-    }
-    current = edge.target
+  @vcode.threaded_branch_target(
+    function,
+    allocation,
+    target,
+    Jump,
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
+  ) catch {
+    error => raise InvalidParallelMove(cause=error)
   }
-  current
 }
 
 ///|
@@ -150,53 +82,42 @@ fn emit_two_way_edges(
   false_branch_base : UInt32,
   next_block : @vcode.Block?,
 ) -> Unit raise AArch64EmitError {
-  let when_true = function.instruction_successor_at(instruction, 0).unwrap().target
-  let when_false = function.instruction_successor_at(instruction, 1).unwrap().target
-  let true_moves = resolve_edge_moves(function, allocation, block, 0)
-  let false_moves = resolve_edge_moves(function, allocation, block, 1)
-  // Fallthrough decisions compare the original successors; emitted branches
-  // go to the threaded targets. The edge's own moves are emitted here either
-  // way, so threading only skips blocks that contribute nothing.
-  let threaded_true = threaded_branch_target(function, allocation, when_true)
-  let threaded_false = threaded_branch_target(function, allocation, when_false)
-  if next_block == Some(when_false) {
-    if true_moves.steps.is_empty() {
-      buffer.emit_branch(threaded_true, 19, true_branch_base)
-      emit_resolved_moves(buffer, frame, false_moves)
-    } else {
-      // Skips the true edge's moves. The span is the size of those moves, so
-      // it is data-dependent and has to be able to widen.
-      let past_true_moves = buffer.new_label()
-      buffer.emit_label_branch(past_true_moves, 19, false_branch_base)
-      emit_resolved_moves(buffer, frame, true_moves)
-      buffer.emit_branch(threaded_true, 26, 0x14000000U)
-      buffer.bind_label(past_true_moves)
-      emit_resolved_moves(buffer, frame, false_moves)
-    }
-  } else if next_block == Some(when_true) {
-    if false_moves.steps.is_empty() {
-      buffer.emit_branch(threaded_false, 19, false_branch_base)
-      emit_resolved_moves(buffer, frame, true_moves)
-    } else {
-      let past_false_moves = buffer.new_label()
-      buffer.emit_label_branch(past_false_moves, 19, true_branch_base)
-      emit_resolved_moves(buffer, frame, false_moves)
-      buffer.emit_branch(threaded_false, 26, 0x14000000U)
-      buffer.bind_label(past_false_moves)
-      emit_resolved_moves(buffer, frame, true_moves)
-    }
-  } else if true_moves.steps.is_empty() {
-    buffer.emit_branch(threaded_true, 19, true_branch_base)
-    emit_resolved_moves(buffer, frame, false_moves)
-    buffer.emit_branch(threaded_false, 26, 0x14000000U)
+  let layout = @vcode.plan_conditional_edges(
+    function,
+    allocation,
+    block,
+    instruction,
+    next_block,
+    Jump,
+    int_transfer_scratch(),
+    fp_transfer_scratch(),
+    split_false_first=true,
+  ) catch {
+    error => raise InvalidParallelMove(cause=error)
+  }
+  let first_branch = if layout.first_when_true {
+    true_branch_base
   } else {
-    let past_false_moves = buffer.new_label()
-    buffer.emit_label_branch(past_false_moves, 19, true_branch_base)
-    emit_resolved_moves(buffer, frame, false_moves)
-    buffer.emit_branch(threaded_false, 26, 0x14000000U)
-    buffer.bind_label(past_false_moves)
-    emit_resolved_moves(buffer, frame, true_moves)
-    buffer.emit_branch(threaded_true, 26, 0x14000000U)
+    false_branch_base
+  }
+  if layout.direct_branch {
+    buffer.emit_branch(layout.first_target, 19, first_branch)
+  } else {
+    // The span over the first edge's moves is data-dependent and can widen.
+    let second_branch = if layout.first_when_true {
+      false_branch_base
+    } else {
+      true_branch_base
+    }
+    let past_moves = buffer.new_label()
+    buffer.emit_label_branch(past_moves, 19, second_branch)
+    emit_resolved_moves(buffer, frame, layout.first_moves)
+    buffer.emit_branch(layout.first_target, 26, 0x14000000U)
+    buffer.bind_label(past_moves)
+  }
+  emit_resolved_moves(buffer, frame, layout.second_moves)
+  if !layout.second_falls_through {
+    buffer.emit_branch(layout.second_target, 26, 0x14000000U)
   }
 }
 
@@ -276,14 +197,24 @@ fn emit_switch_edges(
     )
     return
   }
-  let mut dense_zero_based = true
-  for expected in 0..<cases.length() {
-    if !cases.contains(expected.to_uint64()) {
-      dense_zero_based = false
-      break
+  // Directly index a permutation of 0..<case_count. Sparse keys and
+  // duplicates use comparisons, even when emission is called directly.
+  let case_count = cases.length()
+  let dense_order = if cases.iter().all(bits => bits < case_count.to_uint64()) {
+    let order = Array::make(case_count, -1)
+    for successor_index, bits in cases {
+      let key = bits.to_int()
+      if order[key] != -1 {
+        break None
+      }
+      order[key] = successor_index
+    } nobreak {
+      Some(order)
     }
+  } else {
+    None
   }
-  if dense_zero_based {
+  if dense_order is Some(dense_order) {
     emit_switch_compare(buffer, width, index, cases.length().to_uint64())
     let default_index = cases.length()
     let default_moves = resolve_edge_moves(
@@ -316,13 +247,7 @@ fn emit_switch_edges(
     )
     buffer.emit_word(0xD61F0200U)
     let stubs : Array[(Int32, Int32)] = []
-    for key in 0..<cases.length() {
-      let mut successor_index = 0
-      for index, bits in cases {
-        if bits == key.to_uint64() {
-          successor_index = index
-        }
-      }
+    for successor_index in dense_order {
       if allocation.edge_edits_at(block, successor_index).is_empty() {
         buffer.emit_branch(
           threaded_branch_target(

@@ -308,238 +308,130 @@ fn validate_leaf_instr(
     // Memory operations - validate memory index exists
     // Natural alignment: 8-bit=0, 16-bit=1, 32-bit=2, 64-bit=3
     I32Load(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "i32.load alignment \{align} exceeds natural alignment 2",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 2, "i32.load")
+      stack.pop(mem.addr_type()) // address
       stack.push(I32)
     }
     I32Load8S(memidx, align, offset) | I32Load8U(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 0 {
-        raise InvalidAlignment(
-          "i32.load8 alignment \{align} exceeds natural alignment 0",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 0, "i32.load8")
+      stack.pop(mem.addr_type()) // address
       stack.push(I32)
     }
     I32Load16S(memidx, align, offset) | I32Load16U(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 1 {
-        raise InvalidAlignment(
-          "i32.load16 alignment \{align} exceeds natural alignment 1",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 1, "i32.load16")
+      stack.pop(mem.addr_type()) // address
       stack.push(I32)
     }
     I64Load(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 3 {
-        raise InvalidAlignment(
-          "i64.load alignment \{align} exceeds natural alignment 3",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 3, "i64.load")
+      stack.pop(mem.addr_type()) // address
       stack.push(I64)
     }
     I64Load8S(memidx, align, offset) | I64Load8U(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 0 {
-        raise InvalidAlignment(
-          "i64.load8 alignment \{align} exceeds natural alignment 0",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 0, "i64.load8")
+      stack.pop(mem.addr_type()) // address
       stack.push(I64)
     }
     I64Load16S(memidx, align, offset) | I64Load16U(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 1 {
-        raise InvalidAlignment(
-          "i64.load16 alignment \{align} exceeds natural alignment 1",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 1, "i64.load16")
+      stack.pop(mem.addr_type()) // address
       stack.push(I64)
     }
     I64Load32S(memidx, align, offset) | I64Load32U(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "i64.load32 alignment \{align} exceeds natural alignment 2",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 2, "i64.load32")
+      stack.pop(mem.addr_type()) // address
       stack.push(I64)
     }
     F32Load(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "f32.load alignment \{align} exceeds natural alignment 2",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 2, "f32.load")
+      stack.pop(mem.addr_type()) // address
       stack.push(F32)
     }
     F64Load(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 3 {
-        raise InvalidAlignment(
-          "f64.load alignment \{align} exceeds natural alignment 3",
-        )
-      }
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 3, "f64.load")
+      stack.pop(mem.addr_type()) // address
       stack.push(F64)
     }
     I32Store(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "i32.store alignment \{align} exceeds natural alignment 2",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 2, "i32.store")
       stack.pop(I32) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     I32Store8(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 0 {
-        raise InvalidAlignment(
-          "i32.store8 alignment \{align} exceeds natural alignment 0",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 0, "i32.store8")
       stack.pop(I32) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     I32Store16(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 1 {
-        raise InvalidAlignment(
-          "i32.store16 alignment \{align} exceeds natural alignment 1",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 1, "i32.store16")
       stack.pop(I32) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     I64Store(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 3 {
-        raise InvalidAlignment(
-          "i64.store alignment \{align} exceeds natural alignment 3",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 3, "i64.store")
       stack.pop(I64) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     I64Store8(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 0 {
-        raise InvalidAlignment(
-          "i64.store8 alignment \{align} exceeds natural alignment 0",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 0, "i64.store8")
       stack.pop(I64) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     I64Store16(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 1 {
-        raise InvalidAlignment(
-          "i64.store16 alignment \{align} exceeds natural alignment 1",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 1, "i64.store16")
       stack.pop(I64) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     I64Store32(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "i64.store32 alignment \{align} exceeds natural alignment 2",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 2, "i64.store32")
       stack.pop(I64) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     F32Store(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "f32.store alignment \{align} exceeds natural alignment 2",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 2, "f32.store")
       stack.pop(F32) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     F64Store(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      if align < 0 || align > 3 {
-        raise InvalidAlignment(
-          "f64.store alignment \{align} exceeds natural alignment 3",
-        )
-      }
+      let mem = ctx.memory_type(memidx)
+      validate_mem_offset(mem, offset)
+      validate_memory_alignment(align, 3, "f64.store")
       stack.pop(F64) // value
-      stack.pop(ctx.mems[memidx].addr_type()) // address
+      stack.pop(mem.addr_type()) // address
     }
     MemorySize(memidx) | MemoryGrow(memidx) => {
       if memidx < 0 || memidx >= ctx.mems.length() {
@@ -595,232 +487,8 @@ fn validate_leaf_instr(
       stack.pop(I32) // val (always i32)
       stack.pop(addr_type) // d
     }
-    Atomic(subop, memidx, align, offset) => {
-      // Atomics use memarg except atomic.fence (subop=3).
-      if subop != 3 {
-        if memidx < 0 || memidx >= ctx.mems.length() {
-          raise InvalidMemoryIndex(memidx)
-        }
-        validate_mem_offset(ctx.mems[memidx], offset)
-      }
-      let addr_type = if memidx < ctx.mems.length() {
-        ctx.mems[memidx].addr_type()
-      } else {
-        I32
-      }
-      fn check_align(
-        natural : Int32,
-        name : String,
-      ) -> Unit raise ValidationError {
-        if align != natural {
-          raise InvalidAlignment(
-            "\{name} alignment \{align} must equal natural alignment \{natural}",
-          )
-        }
-      }
-
-      // Reject the legacy/reserved encoding range [4, 0x10).
-      // In the standard encoding, atomics (except notify/wait/fence) start at 0x10.
-      if subop >= 4 && subop < 0x10 {
-        raise TypeMismatch("unsupported atomic subopcode \{subop}")
-      }
-
-      // Normalize subopcode encoding: in the standard encoding most ops start at 0x10.
-      let op = if subop >= 0x10 { subop - 12 } else { subop }
-      match op {
-        0 => {
-          check_align(2, "memory.atomic.notify")
-          stack.pop(I32) // count
-          stack.pop(addr_type) // addr
-          stack.push(I32)
-        }
-        1 => {
-          check_align(2, "memory.atomic.wait32")
-          stack.pop(I64) // timeout
-          stack.pop(I32) // expected
-          stack.pop(addr_type) // addr
-          stack.push(I32)
-        }
-        2 => {
-          check_align(3, "memory.atomic.wait64")
-          stack.pop(I64) // timeout
-          stack.pop(I64) // expected
-          stack.pop(addr_type) // addr
-          stack.push(I32)
-        }
-        3 => () // atomic.fence
-        4 | 6 | 7 => {
-          // i32.atomic.load / load8_u / load16_u
-          let natural = if op == 4 { 2 } else if op == 6 { 0 } else { 1 }
-          check_align(natural, "i32.atomic.load")
-          stack.pop(addr_type)
-          stack.push(I32)
-        }
-        5 | 8 | 9 | 10 => {
-          // i64.atomic.load / load8_u / load16_u / load32_u
-          let natural = if op == 5 {
-            3
-          } else if op == 8 {
-            0
-          } else if op == 9 {
-            1
-          } else {
-            2
-          }
-          check_align(natural, "i64.atomic.load")
-          stack.pop(addr_type)
-          stack.push(I64)
-        }
-        11 | 13 | 14 => {
-          // i32.atomic.store / store8 / store16
-          let natural = if op == 11 { 2 } else if op == 13 { 0 } else { 1 }
-          check_align(natural, "i32.atomic.store")
-          stack.pop(I32)
-          stack.pop(addr_type)
-        }
-        12 | 15 | 16 | 17 => {
-          // i64.atomic.store / store8 / store16 / store32
-          let natural = if op == 12 {
-            3
-          } else if op == 15 {
-            0
-          } else if op == 16 {
-            1
-          } else {
-            2
-          }
-          check_align(natural, "i64.atomic.store")
-          stack.pop(I64)
-          stack.pop(addr_type)
-        }
-
-        // RMW add/sub/and/or/xor/xchg
-        18
-        | 20
-        | 21
-        | 25
-        | 27
-        | 28
-        | 32
-        | 34
-        | 35
-        | 39
-        | 41
-        | 42
-        | 46
-        | 48
-        | 49
-        | 53
-        | 55
-        | 56 => {
-          // i32 variants (32/8/16)
-          let natural = if op == 18 ||
-            op == 25 ||
-            op == 32 ||
-            op == 39 ||
-            op == 46 ||
-            op == 53 {
-            2
-          } else if op == 20 ||
-            op == 27 ||
-            op == 34 ||
-            op == 41 ||
-            op == 48 ||
-            op == 55 {
-            0
-          } else {
-            1
-          }
-          check_align(natural, "i32.atomic.rmw")
-          stack.pop(I32)
-          stack.pop(addr_type)
-          stack.push(I32)
-        }
-        19
-        | 22
-        | 23
-        | 24
-        | 26
-        | 29
-        | 30
-        | 31
-        | 33
-        | 36
-        | 37
-        | 38
-        | 40
-        | 43
-        | 44
-        | 45
-        | 47
-        | 50
-        | 51
-        | 52
-        | 54
-        | 57
-        | 58
-        | 59 => {
-          // i64 variants (64/8/16/32)
-          let natural = if op == 19 ||
-            op == 26 ||
-            op == 33 ||
-            op == 40 ||
-            op == 47 ||
-            op == 54 {
-            3
-          } else if op == 22 ||
-            op == 29 ||
-            op == 36 ||
-            op == 43 ||
-            op == 50 ||
-            op == 57 {
-            0
-          } else if op == 23 ||
-            op == 30 ||
-            op == 37 ||
-            op == 44 ||
-            op == 51 ||
-            op == 58 {
-            1
-          } else {
-            2
-          }
-          check_align(natural, "i64.atomic.rmw")
-          stack.pop(I64)
-          stack.pop(addr_type)
-          stack.push(I64)
-        }
-
-        // cmpxchg
-        60 | 62 | 63 => {
-          // i32 cmpxchg + 8/16
-          let natural = if op == 60 { 2 } else if op == 62 { 0 } else { 1 }
-          check_align(natural, "i32.atomic.rmw.cmpxchg")
-          stack.pop(I32) // replacement
-          stack.pop(I32) // expected
-          stack.pop(addr_type)
-          stack.push(I32)
-        }
-        61 | 64 | 65 | 66 => {
-          // i64 cmpxchg + 8/16/32
-          let natural = if op == 61 {
-            3
-          } else if op == 64 {
-            0
-          } else if op == 65 {
-            1
-          } else {
-            2
-          }
-          check_align(natural, "i64.atomic.rmw.cmpxchg")
-          stack.pop(I64) // replacement
-          stack.pop(I64) // expected
-          stack.pop(addr_type)
-          stack.push(I64)
-        }
-        _ => raise TypeMismatch("unsupported atomic subopcode \{subop}")
-      }
-    }
+    Atomic(subop, memidx, align, offset) =>
+      validate_atomic(ctx, stack, subop, memidx, align, offset)
 
     // Table operations
     TableGet(idx) => {

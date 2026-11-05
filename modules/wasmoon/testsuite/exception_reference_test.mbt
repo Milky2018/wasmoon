@@ -29,7 +29,7 @@ test "native exception references preserve GC payloads across calls and collecti
   let result = @wast.WastResult()
   for entry in @wast.parse(source).commands {
     let (command, line) = entry
-    @wast.run_wast_command(context, command, line, result, ".", false)
+    @wast.run_wast_command(context, command, line, result, false)
   }
   assert_eq(result.failed, 0, msg=result.failures.join("\n"))
   guard context.get_store().native_heap() is Some(_) else {
@@ -39,7 +39,7 @@ test "native exception references preserve GC payloads across calls and collecti
   for
     entry in @wast.parse("(assert_return (invoke \"restore\") (i32.const 42))").commands {
     let (command, line) = entry
-    @wast.run_wast_command(context, command, line, result, ".", false)
+    @wast.run_wast_command(context, command, line, result, false)
   }
   assert_eq(result.failed, 0, msg=result.failures.join("\n"))
   inspect(result.passed, content="2")

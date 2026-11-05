@@ -95,10 +95,7 @@ fn instantiate_canon_task_return(
     let (_, _, task_id, _) = current_thread_info(
       async_state, owner_component_id,
     ) catch {
-      e => {
-        trap_canon(canon_err_message(e))
-        return []
-      }
+      e => trap_canon(canon_err_message(e))
     }
     guard async_state.tasks.read_task_return_contracts(task_id)
       is Some(contract) &&
@@ -118,15 +115,12 @@ fn instantiate_canon_task_return(
       trap_canon(
         "invalid `task.return` signature and/or options for current task",
       )
-      return []
     }
     if async_state.tasks.read_task_borrows(task_id) is Some(count) && count > 0 {
       trap_canon("borrow handles still remain at the end of the call")
-      return []
     }
     if async_state.tasks.read_task_returned(task_id) is Some(_) {
       trap_canon("task.return called more than once")
-      return []
     }
     async_state.tasks.write_task_returned(task_id, true)
     let vals : Array[ComponentValue] = match result {
@@ -140,20 +134,14 @@ fn instantiate_canon_task_return(
           state.resource_table,
           store,
         ) catch {
-          e => {
-            trap_canon(canon_err_message(e))
-            return []
-          }
+          e => trap_canon(canon_err_message(e))
         }
         // `canon task.return` lifts core values into the component result; apply the
         // same stream/future handle validation as `canon lift`.
         validate_lifted_stream_future(
           vt, v, types, async_state, owner_component_id,
         ) catch {
-          e => {
-            trap_canon(canon_err_message(e))
-            return []
-          }
+          e => trap_canon(canon_err_message(e))
         }
         [v]
       }
@@ -182,14 +170,10 @@ fn instantiate_canon_task_cancel(
     let (_, _, task_id, _) = current_thread_info(
       async_state, owner_component_id,
     ) catch {
-      e => {
-        trap_canon(canon_err_message(e))
-        return []
-      }
+      e => trap_canon(canon_err_message(e))
     }
     if async_state.tasks.read_task_borrows(task_id) is Some(count) && count > 0 {
       trap_canon("borrow handles still remain at the end of the call")
-      return []
     }
     async_state.tasks.write_task_self_cancelled(task_id, true)
     async_state.tasks.write_task_cancelled(task_id, true)

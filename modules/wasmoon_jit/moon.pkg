@@ -25,7 +25,6 @@ import {
   "Milky2018/wasmoon_jit/perf",
   "moonbitlang/x/crypto",
   "moonbitlang/core/env",
-  "moonbitlang/core/hashset",
 }
 
 import {

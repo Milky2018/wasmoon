@@ -53,17 +53,13 @@ priv enum CoreExternType {
 
 ///|
 priv struct CoreModuleTypeSpec {
-  imports : Map[String, CoreExternType] // key: "<module>::<name>"
+  imports : Map[(String, String), CoreExternType]
   exports : Map[String, CoreExternType] // key: "<name>"
 }
 
 ///|
 fn bytes_sub(bytes : Bytes, start : Int32, end : Int32) -> Bytes {
-  let out : Array[Byte] = []
-  for i in start..<end {
-    out.push(bytes[i])
-  }
-  Bytes::from_array(out)
+  bytes[start:end].to_owned()
 }
 
 ///|
@@ -79,25 +75,9 @@ fn parse_core_valtype(
     0x7b => V128
     _ => {
       let heap = if op == 0x63 || op == 0x64 {
-        let mut heap = 0L
-        let mut shift = 0
-        while true {
-          let byte = reader.read_u8()
-          let payload = byte & 0x7f
-          if shift == 28 &&
-            ((byte & 0x80) != 0 || (payload > 0x0f && payload < 0x70)) {
-            raise ImportTypeMismatch("heap type LEB128 out of range")
-          }
-          heap = heap | (payload.to_int64() << shift)
-          shift += 7
-          if (byte & 0x80) == 0 {
-            if (byte & 0x40) != 0 {
-              heap = heap | (-1L << shift)
-            }
-            break
-          }
-        }
-        heap
+        @binary.read_s33(reader, Reader::read_u8, () => {
+          ImportTypeMismatch("heap type LEB128 out of range")
+        })
       } else {
         (op - 128).to_int64()
       }
@@ -233,7 +213,7 @@ fn parse_core_moduletype_spec(
     e => raise ComponentParseError(e.to_string())
   }
   let func_types : Array[@types.FuncType] = []
-  let imports : Map[String, CoreExternType] = Map([])
+  let imports : Map[(String, String), CoreExternType] = Map([])
   let exports : Map[String, CoreExternType] = Map([])
   for _i in 0..<ndecls {
     let tag = reader.read_u8() catch {
@@ -251,7 +231,7 @@ fn parse_core_moduletype_spec(
           e => raise ComponentParseError(e.to_string())
         }
         let ty = parse_core_extern_type_in_moduletype(reader, kind, func_types)
-        imports.set("\{mod_name}::\{name}", ty)
+        imports.set((mod_name, name), ty)
       }
       0x01 => func_types.push(parse_core_functype(reader))
       0x02 => {
@@ -451,26 +431,6 @@ fn module_export_type(m : @types.Module, name : String) -> CoreExternType? {
 }
 
 ///|
-fn module_import_type(
-  m : @types.Module,
-  mod_name : String,
-  name : String,
-) -> CoreExternType? {
-  for imp in m.imports {
-    if imp.mod_name == mod_name && imp.name == name {
-      match imp.desc {
-        Func(tyidx) => return Some(Func(m.validated_func_type_at(tyidx)))
-        Table(tt) => return Some(Table(tt))
-        Memory(mt) => return Some(Memory(mt))
-        Global(gt) => return Some(Global(gt))
-        Tag(type_idx) => return m.func_type_at(type_idx).map(ft => Tag(ft))
-      }
-    }
-  }
-  None
-}
-
-///|
 fn table_import_compatible(
   actual : @types.TableType,
   expected : @types.TableType,
@@ -521,16 +481,22 @@ fn check_core_module_against_type(
   // Actual module imports must all be declared in the module type.
   for imp in actual.imports {
     let key = "\{imp.mod_name}::\{imp.name}"
-    match spec.imports.get(key) {
+    match spec.imports.get((imp.mod_name, imp.name)) {
       None => raise ImportTypeMismatch("module import `\{key}` not defined")
       Some(expected) => {
-        let actual_ty = match
-          module_import_type(actual, imp.mod_name, imp.name) {
-          Some(t) => t
-          None =>
-            raise ImportTypeMismatch(
-              "module import `\{key}` has the wrong type",
-            )
+        let actual_ty : CoreExternType = match imp.desc {
+          Func(index) => Func(actual.validated_func_type_at(index))
+          Tag(index) =>
+            match actual.func_type_at(index) {
+              Some(ty) => Tag(ty)
+              None =>
+                raise ImportTypeMismatch(
+                  "module import `\{key}` has the wrong type",
+                )
+            }
+          Table(ty) => Table(ty)
+          Memory(ty) => Memory(ty)
+          Global(ty) => Global(ty)
         }
         match (expected, actual_ty) {
           (Func(ft1), Func(ft2)) | (Tag(ft1), Tag(ft2)) =>

@@ -8,7 +8,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-50"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-51"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int32 = "wasmoon_jit_host_operating_system_abi"
@@ -340,8 +340,6 @@ pub fn compile_wasm_body_artifact_function(
   target : NativeTarget,
   function_index~ : Int32,
   signature~ : @native.Signature,
-  use_subtype_indirect_check~ : Bool = true,
-  canonical_type_indices~ : Array[Int32] = [],
   context_shape~ : ContextShape = Legacy,
 ) -> @artifact.FunctionCode raise JitPipelineError {
   NativeCompiler::new(target, context_shape~).compile_wasm_body_artifact_function(
@@ -349,8 +347,6 @@ pub fn compile_wasm_body_artifact_function(
     validation_context,
     function_index~,
     signature~,
-    use_subtype_indirect_check~,
-    canonical_type_indices~,
   )
 }
 
@@ -363,8 +359,6 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
   validation_context : @wasm_milkir.WasmValidationContext,
   function_index~ : Int32,
   signature~ : @native.Signature,
-  use_subtype_indirect_check~ : Bool = true,
-  canonical_type_indices~ : Array[Int32] = [],
 ) -> @artifact.FunctionCode raise JitPipelineError {
   if function_index < 0 {
     raise InvalidFunctionIndex(index=function_index)
@@ -373,8 +367,6 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
     function,
     validation_context,
     function_index~,
-    use_subtype_indirect_check~,
-    canonical_type_indices~,
     record_metrics=@perf.enabled(),
   )
   let packaging_tick = detail_metrics_tick(@perf.enabled())
@@ -394,8 +386,6 @@ fn NativeCompiler::compile_wasm_body(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   function_index~ : Int32,
-  use_subtype_indirect_check~ : Bool,
-  canonical_type_indices~ : Array[Int32],
   record_metrics~ : Bool = false,
   on_diagnostics~ : ((String, String) -> Unit)? = None,
 ) -> (@code_object.UnlinkedCodeObject, Int32) raise JitPipelineError {
@@ -404,8 +394,6 @@ fn NativeCompiler::compile_wasm_body(
       let compiled = compile_wasm_body_aarch64_target(
         function,
         validation_context,
-        use_subtype_indirect_check,
-        canonical_type_indices,
         record_metrics~,
         function_index~,
         context_layout=self.context_layout,
@@ -418,8 +406,6 @@ fn NativeCompiler::compile_wasm_body(
       let compiled = compile_wasm_body_x64_target(
         function,
         validation_context,
-        use_subtype_indirect_check,
-        canonical_type_indices,
         record_metrics~,
         function_index~,
         context_layout=self.context_layout,

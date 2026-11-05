@@ -5,3 +5,7 @@ import {
   "Milky2018/vcode/code_object",
   "Milky2018/vcode_regalloc",
 }
+
+import {
+  "moonbitlang/core/encoding/hex",
+} for "wbtest"

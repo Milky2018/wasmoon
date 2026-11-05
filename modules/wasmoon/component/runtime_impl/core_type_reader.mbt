@@ -32,81 +32,20 @@ fn Reader::read_bytes(
   self : Reader,
   n : Int32,
 ) -> Bytes raise ComponentRuntimeError {
-  if self.pos + n > self.data.length() {
+  let start = self.pos
+  if n < 0 || n > self.data.length() - start {
     raise ComponentParseError("unexpected end of input")
   }
-  let bytes : Array[Byte] = []
-  for i in 0..<n {
-    bytes.push(self.data[self.pos + i])
-  }
+  let bytes = self.data[start:start + n].to_owned()
   self.pos += n
-  Bytes::from_array(bytes)
+  bytes
 }
 
 ///|
 fn decode_utf8_validated(bytes : Bytes) -> String raise ComponentRuntimeError {
-  let buf = StringBuilder::StringBuilder()
-  let mut i = 0
-  while i < bytes.length() {
-    let b = bytes[i].to_int()
-    if b < 0x80 {
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xC0 {
-      raise ComponentParseError("invalid utf-8")
-    } else if b < 0xE0 {
-      if i + 1 >= bytes.length() {
-        raise ComponentParseError("invalid utf-8")
-      }
-      let b2 = bytes[i + 1].to_int()
-      if (b2 & 0xC0) != 0x80 {
-        raise ComponentParseError("invalid utf-8")
-      }
-      let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
-      if cp < 0x80 {
-        raise ComponentParseError("invalid utf-8")
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 2
-    } else if b < 0xF0 {
-      if i + 2 >= bytes.length() {
-        raise ComponentParseError("invalid utf-8")
-      }
-      let b2 = bytes[i + 1].to_int()
-      let b3 = bytes[i + 2].to_int()
-      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 {
-        raise ComponentParseError("invalid utf-8")
-      }
-      let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
-      if cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF) {
-        raise ComponentParseError("invalid utf-8")
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 3
-    } else if b < 0xF8 {
-      if i + 3 >= bytes.length() {
-        raise ComponentParseError("invalid utf-8")
-      }
-      let b2 = bytes[i + 1].to_int()
-      let b3 = bytes[i + 2].to_int()
-      let b4 = bytes[i + 3].to_int()
-      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 || (b4 & 0xC0) != 0x80 {
-        raise ComponentParseError("invalid utf-8")
-      }
-      let cp = ((b & 0x07) << 18) |
-        ((b2 & 0x3F) << 12) |
-        ((b3 & 0x3F) << 6) |
-        (b4 & 0x3F)
-      if cp < 0x10000 || cp > 0x10FFFF {
-        raise ComponentParseError("invalid utf-8")
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 4
-    } else {
-      raise ComponentParseError("invalid utf-8")
-    }
+  @utf8.decode(bytes, ignore_bom=false) catch {
+    _ => raise ComponentParseError("invalid utf-8")
   }
-  buf.to_string()
 }
 
 ///|
@@ -123,21 +62,9 @@ fn Reader::read_label(self : Reader) -> String raise ComponentRuntimeError {
 
 ///|
 fn Reader::read_leb_u32(self : Reader) -> Int32 raise ComponentRuntimeError {
-  for result = 0, shift = 0 {
-    if shift > 28 {
-      raise ComponentParseError("invalid leb128")
-    }
-    let byte = self.read_u8()
-    if shift == 28 && (byte & 0x7F) > 0x0F {
-      raise ComponentParseError("invalid leb128")
-    }
-    let new_result = result | ((byte & 0x7F) << shift)
-    if (byte & 0x80) == 0 {
-      break new_result
-    } else {
-      continue new_result, shift + 7
-    }
-  }
+  @binary.read_u32(self, Reader::read_u8, () => {
+    ComponentParseError("invalid leb128")
+  })
 }
 
 ///|

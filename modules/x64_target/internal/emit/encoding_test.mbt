@@ -2,7 +2,7 @@
 test "x64 pairwise i16 add uses horizontal lane semantics" {
   let code : Array[Byte] = []
   let buffer = @emit.CodeBuffer::new(code)
-  buffer.x86_emit_phaddw_xmm_xmm(2, 1)
+  buffer.x86_emit_xmm(Phaddw, 2, 1)
   debug_inspect(
     code,
     content=(

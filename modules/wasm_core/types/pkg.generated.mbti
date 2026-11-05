@@ -48,6 +48,10 @@ pub const U8_MAX : Int32 = 0xFF
 
 pub const WASM_PAGE_SIZE_BYTES : Int64 = 0x10000
 
+pub fn atomic_opcode(Int32) -> AtomicOpcode?
+
+pub fn atomic_subopcode(String) -> Int32?
+
 pub fn bytes_to_int64_le(Bytes, Int32) -> Int64
 
 pub fn compact_show_repr(String) -> String
@@ -66,11 +70,15 @@ pub fn int64_pair_to_v128_le(Int64, Int64) -> Bytes
 
 pub fn int_to_hex(Int32) -> String
 
+pub fn simd_plain_opcodes() -> ReadOnlyArray[(Int32, Instruction)]
+
 pub fn to_hex_byte(Int32) -> String
 
 pub fn to_hex_u16(Int32) -> String
 
 pub fn validate_instruction_sources(ArrayView[Instruction], ArrayView[InstructionSource]) -> Bool
+
+pub fn value_type_subtype_without_context(ValueType, ValueType) -> Bool
 
 // Errors
 
@@ -83,7 +91,35 @@ pub fn ArrayType::equal(Self, Self) -> Bool
 pub fn ArrayType::not_equal(Self, Self) -> Bool
 pub fn ArrayType::to_repr(Self) -> @debug.Repr
 
-#derive(Eq, @debug.Debug)
+pub struct AtomicOpcode {
+  operation : AtomicOperation
+  value_type : ValueType
+  width : Int32
+  natural_alignment : Int32
+  name : String
+}
+pub fn AtomicOpcode::validation_name(Self) -> String
+
+pub(all) enum AtomicOperation {
+  Notify
+  Wait
+  Fence
+  Load
+  Store
+  Rmw(AtomicRmwOp)
+  CompareExchange
+}
+
+pub(all) enum AtomicRmwOp {
+  Add
+  Sub
+  And
+  Or
+  Xor
+  Exchange
+}
+
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum BlockType {
   Empty
   Value(ValueType)
@@ -92,10 +128,12 @@ pub(all) enum BlockType {
   TypeIndex(Int32)
 }
 pub fn BlockType::equal(Self, Self) -> Bool
+pub fn BlockType::hash(Self) -> Int32
+pub fn BlockType::hash_combine(Self, Hasher) -> Unit
 pub fn BlockType::not_equal(Self, Self) -> Bool
 pub fn BlockType::to_repr(Self) -> @debug.Repr
 
-#derive(Eq, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum CatchHandler {
   Catch(Int32, Int32)
   CatchRef(Int32, Int32)
@@ -103,6 +141,8 @@ pub(all) enum CatchHandler {
   CatchAllRef(Int32)
 }
 pub fn CatchHandler::equal(Self, Self) -> Bool
+pub fn CatchHandler::hash(Self) -> Int32
+pub fn CatchHandler::hash_combine(Self, Hasher) -> Unit
 pub fn CatchHandler::not_equal(Self, Self) -> Bool
 pub fn CatchHandler::to_repr(Self) -> @debug.Repr
 
@@ -188,8 +228,6 @@ pub(all) struct FuncType {
 pub fn FuncType::equal(Self, Self) -> Bool
 pub fn FuncType::not_equal(Self, Self) -> Bool
 pub fn FuncType::output(Self, &Logger) -> Unit
-pub fn FuncType::structural_hash(Self) -> Int32
-pub fn FuncType::structurally_equal(Self, Self, Int32, Int32) -> Bool
 pub fn FuncType::to_repr(Self) -> @debug.Repr
 pub fn FuncType::to_string(Self) -> String
 pub impl Show for FuncType
@@ -249,7 +287,13 @@ pub fn ImportDesc::equal(Self, Self) -> Bool
 pub fn ImportDesc::not_equal(Self, Self) -> Bool
 pub fn ImportDesc::to_repr(Self) -> @debug.Repr
 
-#derive(Eq, @debug.Debug)
+pub(all) enum ImportLimitMismatch {
+  MinimumTooSmall
+  MaximumTooLarge
+  MissingMaximum
+}
+
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum Instruction {
   Unreachable
   Nop
@@ -762,6 +806,8 @@ pub(all) enum Instruction {
   I32x4RelaxedDotI8x16I7x16AddS
 }
 pub fn Instruction::equal(Self, Self) -> Bool
+pub fn Instruction::hash(Self) -> Int32
+pub fn Instruction::hash_combine(Self, Hasher) -> Unit
 pub fn Instruction::not_equal(Self, Self) -> Bool
 pub fn Instruction::output(Self, &Logger) -> Unit
 pub fn Instruction::to_repr(Self) -> @debug.Repr
@@ -783,6 +829,7 @@ pub(all) struct Limits {
   max : Int64?
 }
 pub fn Limits::equal(Self, Self) -> Bool
+pub fn Limits::import_mismatch(Self, (Int64, Int64?)) -> ImportLimitMismatch?
 pub fn Limits::not_equal(Self, Self) -> Bool
 pub fn Limits::to_repr(Self) -> @debug.Repr
 
@@ -845,12 +892,14 @@ pub fn PackedType::equal(Self, Self) -> Bool
 pub fn PackedType::not_equal(Self, Self) -> Bool
 pub fn PackedType::to_repr(Self) -> @debug.Repr
 
-#derive(Eq, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum ResumeHandler {
   OnLabel(Int32, Int32)
   OnSwitch(Int32)
 }
 pub fn ResumeHandler::equal(Self, Self) -> Bool
+pub fn ResumeHandler::hash(Self) -> Int32
+pub fn ResumeHandler::hash_combine(Self, Hasher) -> Unit
 pub fn ResumeHandler::not_equal(Self, Self) -> Bool
 pub fn ResumeHandler::to_repr(Self) -> @debug.Repr
 
@@ -964,7 +1013,7 @@ pub fn Value::to_repr(Self) -> @debug.Repr
 pub fn Value::to_string(Self) -> String
 pub impl Show for Value
 
-#derive(Eq, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum ValueType {
   I32
   I64
@@ -1006,8 +1055,11 @@ pub(all) enum ValueType {
 }
 pub fn ValueType::equal(Self, Self) -> Bool
 pub fn ValueType::from_abstract_heap_type(Int32, Bool) -> Self?
+pub fn ValueType::hash(Self) -> Int32
+pub fn ValueType::hash_combine(Self, Hasher) -> Unit
 pub fn ValueType::is_continuation_ref(Self) -> Bool
 pub fn ValueType::is_nullable(Self) -> Bool
+pub fn ValueType::is_reference(Self) -> Bool
 pub fn ValueType::not_equal(Self, Self) -> Bool
 pub fn ValueType::output(Self, &Logger) -> Unit
 pub fn ValueType::to_repr(Self) -> @debug.Repr

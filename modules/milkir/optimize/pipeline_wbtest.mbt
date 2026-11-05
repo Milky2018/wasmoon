@@ -437,6 +437,10 @@ test "optimizer canonicalizes branch args without crossing sibling dominance" {
   let sum = builder.iadd(join_param, one)
   builder.return_([sum])
   let func = builder.get_function()
+  let entry = func.blocks[0]
+  entry.set_terminator(entry.terminator.unwrap(), metadata=[
+    Comment("branch provenance"),
+  ])
   let result = canonicalize_aliases(func)
   inspect(result.changed, content="true")
   inspect(
@@ -457,6 +461,10 @@ test "optimizer canonicalizes branch args without crossing sibling dominance" {
       #|}
       #|
     ),
+  )
+  debug_inspect(
+    entry.terminator_metadata(),
+    content="[Comment(\"branch provenance\")]",
   )
   inspect(func.verify(), content="()")
 }
@@ -586,7 +594,9 @@ test "optimizer removes constant branch block params" {
   let cond = builder.iconst_i32(1)
   let arg = builder.iconst_i32(7)
   let block = builder.current_block()
-  block.set_terminator(Branch(cond, join.id, [arg], join.id, [arg]))
+  block.set_terminator(Branch(cond, join.id, [arg], join.id, [arg]), metadata=[
+    Comment("phi provenance"),
+  ])
   let param = builder.add_block_param(join, I32)
   builder.switch_to_block(join)
   builder.return_([param])
@@ -606,6 +616,10 @@ test "optimizer removes constant branch block params" {
       #|}
       #|
     ),
+  )
+  debug_inspect(
+    block.terminator_metadata(),
+    content="[Comment(\"phi provenance\")]",
   )
   inspect(func.verify(), content="()")
 }

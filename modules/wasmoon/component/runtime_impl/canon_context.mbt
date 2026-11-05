@@ -26,10 +26,7 @@ fn instantiate_canon_context_get(
               I64 => [I64(0L)]
               F32 => [F32(0.0)]
               F64 => [F64(0.0)]
-              _ => {
-                trap_canon("unsupported context type")
-                []
-              }
+              _ => trap_canon("unsupported context type")
             }
         }
       None =>
@@ -38,10 +35,7 @@ fn instantiate_canon_context_get(
           I64 => [I64(0L)]
           F32 => [F32(0.0)]
           F64 => [F64(0.0)]
-          _ => {
-            trap_canon("unsupported context type")
-            []
-          }
+          _ => trap_canon("unsupported context type")
         }
     }
   }
@@ -62,7 +56,6 @@ fn instantiate_canon_context_set(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if args.length() != 1 {
       trap_canon("type mismatch")
-      return []
     }
     let task_id = current_task_id(async_state)
     let m = match async_state.tasks.read_task_contexts(task_id) {

@@ -9,7 +9,6 @@ pub struct GuestException {
 ///|
 priv struct HostExceptionState {
   binding : ResourceBinding
-  tag : Int32
   values : Array[@types.Value]
   roots : GcRootLease
   owned : Ref[Bool]
@@ -93,8 +92,7 @@ pub fn Store::guest_exception(
   self.on_instantiation_rollback(fn() { if owned.val { cleanup.close() } })
   {
     state: Some({
-      binding: { store: self.closed, active, },
-      tag,
+      binding: { store: self.closed, active, index: tag, type_instance: None, },
       values,
       roots,
       owned,
@@ -173,11 +171,11 @@ pub fn Store::take_guest_exception(
   }
   check_resource_open(Some(state.binding))
   guard state.roots.active.val else { raise InvalidHandle }
-  self.get_tag_type(state.tag) |> ignore
+  self.get_tag_type(state.binding.index) |> ignore
   exception.state = None
   state.owned.val = false
   state.cleanup.close()
-  (state.tag, state.values, state.roots)
+  (state.binding.index, state.values, state.roots)
 }
 
 ///|

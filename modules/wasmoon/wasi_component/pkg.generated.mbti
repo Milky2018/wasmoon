@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/wasi_component"
 
 import {
+  "Milky2018/wasm_component/model",
   "Milky2018/wasmoon/component/runtime_impl",
   "Milky2018/wasmoon/component/runtime_impl/core",
 }
@@ -16,6 +17,12 @@ pub fn preview2_wit_sha256() -> String
 pub let preview3_version : String
 
 pub fn preview3_wit_sha256() -> String
+
+pub fn wasi_preview3_exported_types(String) -> Array[(String, Int32)]
+
+pub fn wasi_preview3_func_type(String, String) -> @model.FuncType?
+
+pub fn wasi_preview3_type_space((String) -> @model.TypeDef?) -> Array[@model.TypeDef?]
 
 // Errors
 

@@ -72,6 +72,36 @@ fn inline_cached_struct_projection(
 ) -> Unit {
   let slow = context.create_block([])
   let ready = context.create_block([Ptr64])
+  let view = checked_cached_struct_view(
+    context,
+    environment,
+    layout,
+    type_index,
+    shape,
+    fields,
+    slow,
+    exact_type~,
+  )
+  context.jump(ready, [view])
+  context.switch_to_block(slow)
+  let result = emit_struct_data(context, environment, type_index, shape, fields)
+  context.jump(ready, [result])
+  context.switch_to_block(ready)
+  context.forward_results(context.block_parameters(ready))
+}
+
+///|
+fn checked_cached_struct_view(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  layout : StructViewLayout,
+  type_index : Int32,
+  shape : UInt64,
+  fields : Int32,
+  slow : @lowering.Block,
+  exact_type~ : Bool,
+  cast_exact~ : Bool = false,
+) -> @lowering.Value {
   let heap = context.emit(
       EnvironmentField(environment.gc_heap_field.unwrap(), Mutable),
       context.environment(),
@@ -161,6 +191,34 @@ fn inline_cached_struct_projection(
   let actual = heap_load(context, entry, layout.view_identity, I32)
   let admitted = context.create_block([])
   if exact_type {
+    if cast_exact {
+      // ref.cast consults the current registry even when the identities
+      // match. A cleared registry or a rebound out-of-range ID must miss.
+      let registry = heap_load(
+        context,
+        context.environment()[0],
+        layout.registry_offset,
+        Ptr64,
+      )
+      view_guard_nonzero(context, registry, slow)
+      let type_count = heap_load(
+        context,
+        registry,
+        layout.registry_type_count,
+        I32,
+      )
+      let live = context.create_block([])
+      context.branch_int_compare(
+        UnsignedLessThan,
+        identity,
+        type_count,
+        live,
+        [],
+        slow,
+        [],
+      )
+      context.switch_to_block(live)
+    }
     context.branch_int_compare(Equal, identity, actual, admitted, [], slow, [])
   } else {
     let subtype = context.create_block([])
@@ -214,25 +272,31 @@ fn inline_cached_struct_projection(
     context.branch_int_compare(Equal, identity, parent, admitted, [], slow, [])
   }
   context.switch_to_block(admitted)
-  context.jump(ready, [heap_load(context, entry, layout.view_payload, Ptr64)])
-  context.switch_to_block(slow)
-  let result = context.emit_call_without_roots(
-      @native_types.NativeCall::new(
-        External((environment.runtime_symbol)(GcStructData)),
-        @native_types.Signature::new([Ptr64, GcRef64, I32, I64, I32], [Ptr64]),
-        Platform,
-        @native_types.CallBehavior::new(Read, true, false, false, false),
-      ),
-      [
-        context.environment()[0],
-        context.operands()[0],
-        i32_immediate(context, type_index),
-        context.emit(I64Const(shape), [], [I64])[0],
-        i32_immediate(context, fields),
-      ],
-      [Ptr64],
-    )[0]
-  context.jump(ready, [result])
-  context.switch_to_block(ready)
-  context.forward_results(context.block_parameters(ready))
+  heap_load(context, entry, layout.view_payload, Ptr64)
+}
+
+///|
+fn emit_struct_data(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  type_index : Int32,
+  shape : UInt64,
+  fields : Int32,
+) -> @lowering.Value {
+  context.emit_call_without_roots(
+    @native_types.NativeCall::new(
+      External((environment.runtime_symbol)(GcStructData)),
+      @native_types.Signature::new([Ptr64, GcRef64, I32, I64, I32], [Ptr64]),
+      Platform,
+      @native_types.CallBehavior::new(Read, true, false, false, false),
+    ),
+    [
+      context.environment()[0],
+      context.operands()[0],
+      i32_immediate(context, type_index),
+      context.emit(I64Const(shape), [], [I64])[0],
+      i32_immediate(context, fields),
+    ],
+    [Ptr64],
+  )[0]
 }

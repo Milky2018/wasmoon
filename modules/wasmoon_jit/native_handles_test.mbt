@@ -602,8 +602,8 @@ test "guarded and shared descriptor access uses committed length rather than res
 test "Store callable registry updates are shared and preserve instance isolation" {
   let first = @wasmoon_jit.NativeCallableRegistry::new()
   let second = @wasmoon_jit.NativeCallableRegistry::new()
-  assert_true(first.replace([-1, 0], [(16777216L, 1)]))
-  assert_true(second.replace([-1, 0], [(16777216L, 0)]))
+  first.replace([-1, 0], [(16777216L, 1)])
+  second.replace([-1, 0], [(16777216L, 0)])
   let a = @jit_ffi.JITContext::new(1)
   let b = @jit_ffi.JITContext::new(1)
   let c = @jit_ffi.JITContext::new(1)
@@ -624,12 +624,12 @@ test "Store callable registry updates are shared and preserve instance isolation
     @native_test_support.context_callable_subtype(a, 16777216L, 0),
     content="1",
   )
-  assert_true(first.replace([-1, -1], [(16777216L, 1)]))
+  first.replace([-1, -1], [(16777216L, 1)])
   inspect(
     @native_test_support.context_callable_subtype(a, 16777216L, 0),
     content="0",
   )
-  assert_true(first.replace([-1, 0], [(16777216L, 0)]))
+  first.replace([-1, 0], [(16777216L, 0)])
   inspect(
     @native_test_support.context_callable_lookup(b, 16777216L),
     content="0",
@@ -653,7 +653,7 @@ test "Store callable registry updates are shared and preserve instance isolation
     @native_test_support.context_callable_lookup(a, 16777216L),
     content="0",
   )
-  assert_true(second.replace([-1, 0], [(16777216L, 1)]))
+  second.replace([-1, 0], [(16777216L, 1)])
   inspect(
     @native_test_support.context_callable_lookup(a, 16777216L),
     content="1",
@@ -664,14 +664,7 @@ test "Store callable registry updates are shared and preserve instance isolation
 ///|
 fn context_outliving_registry() -> @jit_ffi.JITContext {
   let registry = @wasmoon_jit.NativeCallableRegistry::new()
-  assert_true(
-    registry.replace([-1], [
-      (16L, 0),
-      (@wasmoon_jit.encode_store_funcref(54), 0),
-    ]),
-  ) catch {
-    _ => abort("registry setup failed")
-  }
+  registry.replace([-1], [(16L, 0), (@wasmoon_jit.encode_store_funcref(54), 0)])
   registry.replace_functions([(54, 16L)], [])
   let context = @jit_ffi.JITContext::new(1)
   context.bind_callable_registry(registry, [0], [7])
@@ -707,17 +700,17 @@ test "safepoint tables own copied metadata through replacement and teardown" {
 test "callable lookup sorts privately and preserves the first duplicate" {
   let registry = @wasmoon_jit.NativeCallableRegistry::new()
   let entries = [(48L, 2), (16L, 1), (32L, 0), (16L, 9)]
-  assert_true(registry.replace([-1, 0, 0], entries))
+  registry.replace([-1, 0, 0], entries)
   assert_eq(entries, [(48L, 2), (16L, 1), (32L, 0), (16L, 9)])
   for
     (pointer, expected) in [(16L, 1), (32L, 0), (48L, 2), (24L, -1), (64L, -1)] {
     assert_eq(@native_test_support.callable_lookup(registry, pointer), expected)
   }
   entries[1] = (16L, 7)
-  assert_true(registry.replace([-1, 0, 0], entries))
+  registry.replace([-1, 0, 0], entries)
   inspect(@native_test_support.callable_lookup(registry, 16L), content="7")
   let many = Array::makei(1024, i => ((1024 - i).to_int64() * 16, i))
-  assert_true(registry.replace([], many))
+  registry.replace([], many)
   for i in 0..<1024 {
     assert_eq(
       @native_test_support.callable_lookup(registry, (1024 - i).to_int64() * 16),
@@ -735,21 +728,21 @@ test "Store callable ordinal index preserves holes duplicates and replacement" {
   let hole = @wasmoon_jit.encode_store_funcref(55)
   let b = @wasmoon_jit.encode_store_funcref(56)
   let entries = [(16L, 2), (a, 1), (b, 2), (b, 0)]
-  assert_true(registry.replace([-1, -1, -1], entries))
+  registry.replace([-1, -1, -1], entries)
   assert_eq(@native_test_support.callable_lookup(registry, a), 1)
   assert_eq(@native_test_support.callable_lookup(registry, hole), -1)
   assert_eq(@native_test_support.callable_lookup(registry, b), 2)
   // Same addresses update the identity array without republishing its storage.
   entries[2] = (b, 0)
-  assert_true(registry.replace([-1, -1, -1], entries))
+  registry.replace([-1, -1, -1], entries)
   assert_eq(@native_test_support.callable_lookup(registry, b), 0)
   let maximum = @wasmoon_jit.encode_store_funcref(2147483647)
   // A huge span must use the bounded-memory fallback, including unsigned keys.
-  assert_true(registry.replace([-1, -1], [(maximum, 1), (a, 0), (-1L, 1)]))
+  registry.replace([-1, -1], [(maximum, 1), (a, 0), (-1L, 1)])
   assert_eq(@native_test_support.callable_lookup(registry, a), 0)
   assert_eq(@native_test_support.callable_lookup(registry, maximum), 1)
   assert_eq(@native_test_support.callable_lookup(registry, b), -1)
-  assert_true(registry.replace([-1], [(b, 0), (hole, 0)]))
+  registry.replace([-1], [(b, 0), (hole, 0)])
   assert_eq(@native_test_support.callable_lookup(registry, hole), 0)
   assert_eq(@native_test_support.callable_lookup(registry, a), -1)
   registry.clear()
@@ -1564,7 +1557,7 @@ test "exact Store call slots reflect identity and executable changes" {
   let first = @wasmoon_jit.encode_store_funcref(54)
   let hole = @wasmoon_jit.encode_store_funcref(55)
   let last = @wasmoon_jit.encode_store_funcref(56)
-  assert_true(registry.replace([-1, -1], [(first, 1), (last, 0), (last, 1)]))
+  registry.replace([-1, -1], [(first, 1), (last, 0), (last, 1)])
   registry.replace_functions([(54, 16L), (56, 32L)], [])
   let context = @jit_ffi.JITContext::new(1)
   context.bind_callable_registry(registry, [1, 0], [7, 8])
@@ -1582,7 +1575,7 @@ test "exact Store call slots reflect identity and executable changes" {
   assert_eq(lookup(first, 2), 0L)
   assert_eq(lookup(0L, 0), 0L)
   // Same sorted keys and parent graph: only the identity value changes.
-  assert_true(registry.replace([-1, -1], [(first, 0), (last, 0), (last, 1)]))
+  registry.replace([-1, -1], [(first, 0), (last, 0), (last, 1)])
   assert_eq(lookup(first, 0), 0L)
   assert_eq(lookup(first, 1), 16L)
   registry.replace_functions([(55, 64L), (56, 0x3000000000000010L)], [])

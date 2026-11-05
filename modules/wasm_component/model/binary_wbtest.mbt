@@ -66,6 +66,38 @@ test "component binary preamble requires version 0x0d and layer 1" {
 }
 
 ///|
+test "component section sizes cannot overflow the cursor" {
+  inspect(
+    parse_component_for_test(b"\x00asm\x0d\x00\x01\x00\x00\xff\xff\xff\xff\x07"),
+    content="unexpected end of input",
+  )
+}
+
+///|
+test "component value type rejects malformed signed LEB padding" {
+  let invalid = b"\x00asm\x0d\x00\x01\x00\x07\x07\x01\x70\xff\xff\xff\xff\x6f"
+  let result = try {
+    parse_component(invalid) |> ignore
+    "accepted"
+  } catch {
+    error => error.to_string()
+  }
+  inspect(result, content="leb128 value too large")
+}
+
+///|
+test "component type vectors cannot wrap to empty" {
+  let invalid = b"\x00asm\x0d\x00\x01\x00\x07\x05\x80\x80\x80\x80\x08"
+  let result = try {
+    parse_component(invalid) |> ignore
+    "accepted"
+  } catch {
+    error => error.to_string()
+  }
+  inspect(result, content="unexpected end of input")
+}
+
+///|
 test "core module types consume complete tag and typed-reference descriptors" {
   // Encoded by wasm-tools 1.254.0 from instance types exporting core modules.
   for

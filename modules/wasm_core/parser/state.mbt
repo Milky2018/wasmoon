@@ -101,14 +101,7 @@ fn Parser::skip(self : Parser, n : Int32) -> Unit raise ParserError {
 ///|
 /// Read n bytes
 fn Parser::read_bytes(self : Parser, n : Int32) -> Bytes raise ParserError {
-  if n < 0 || n > self.data.length() - self.pos {
-    raise UnexpectedEndOfInput
-  }
-  self.charge(n.to_int64())
-  let bytes : Array[Byte] = []
-  for i in 0..<n {
-    bytes.push(self.data[self.pos + i])
-  }
-  self.pos += n
-  Bytes::from_array(bytes)
+  let start = self.pos
+  self.skip(n)
+  self.data[start:self.pos].to_owned()
 }

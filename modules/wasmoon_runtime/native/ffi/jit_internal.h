@@ -416,7 +416,8 @@ int32_t exception_get_tag_impl(jit_context_t *ctx);
 int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
 int32_t exception_get_value_count_impl(jit_context_t *ctx);
 void exception_mark_activation_roots(GcHeap *heap, jit_context_t *ctx, const jit_execution_state_t *state);
-int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_state_t *state, int64_t *roots);
+int32_t exception_copy_activation_roots(jit_context_t *ctx, const jit_execution_state_t *state,
+    int64_t *roots, int32_t capacity);
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count);
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);
 
@@ -427,8 +428,8 @@ static inline jit_context_t *get_current_jit_context_fast(void) {
     return activation->active ? activation->context : NULL;
 }
 
-// Enumerate stack-owned precise function roots for GC, parking and rollback.
-int32_t jit_copy_function_frame_roots(const jit_execution_state_t *state, int64_t *destination);
+// Count or copy precise function-frame and explicit-scope roots.
+int32_t jit_copy_root_scopes(const jit_execution_state_t *state, int64_t *destination, int32_t capacity);
 void WASMOON_GUEST_ABI gc_function_frame_enter_impl(jit_context_t *ctx, wasmoon_gc_function_frame_t *frame,
     const int64_t *roots, const uint64_t *mask, int32_t slot_count);
 void WASMOON_GUEST_ABI gc_function_frame_leave_impl(jit_context_t *ctx, wasmoon_gc_function_frame_t *frame);

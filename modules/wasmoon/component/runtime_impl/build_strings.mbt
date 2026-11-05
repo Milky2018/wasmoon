@@ -98,92 +98,36 @@ fn BuildState::BuildState(
 
 ///|
 fn decode_utf8_runtime(bytes : Bytes) -> String raise ComponentRuntimeError {
-  let buf = StringBuilder::StringBuilder()
-  let mut i = 0
-  while i < bytes.length() {
-    let b = bytes[i].to_int()
-    if b < 0x80 {
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xC0 {
-      raise CanonCallError("invalid utf-8")
-    } else if b < 0xE0 {
-      if i + 1 >= bytes.length() {
-        raise CanonCallError("incomplete utf-8 byte sequence")
+  @utf8.decode(bytes, ignore_bom=false) catch {
+    Malformed(rest) => {
+      let first = rest[0].to_int()
+      let width = if first >= 0xC0 && first < 0xE0 {
+        2
+      } else if first >= 0xE0 && first < 0xF0 {
+        3
+      } else if first >= 0xF0 && first < 0xF8 {
+        4
+      } else {
+        1
       }
-      let b2 = bytes[i + 1].to_int()
-      if (b2 & 0xC0) != 0x80 {
-        raise CanonCallError("invalid utf-8")
-      }
-      let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
-      if cp < 0x80 {
-        raise CanonCallError("invalid utf-8")
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 2
-    } else if b < 0xF0 {
-      if i + 2 >= bytes.length() {
-        raise CanonCallError("incomplete utf-8 byte sequence")
-      }
-      let b2 = bytes[i + 1].to_int()
-      let b3 = bytes[i + 2].to_int()
-      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 {
-        raise CanonCallError("invalid utf-8")
-      }
-      let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
-      if cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF) {
-        raise CanonCallError("invalid utf-8")
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 3
-    } else if b < 0xF8 {
-      if i + 3 >= bytes.length() {
-        raise CanonCallError("incomplete utf-8 byte sequence")
-      }
-      let b2 = bytes[i + 1].to_int()
-      let b3 = bytes[i + 2].to_int()
-      let b4 = bytes[i + 3].to_int()
-      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 || (b4 & 0xC0) != 0x80 {
-        raise CanonCallError("invalid utf-8")
-      }
-      let cp = ((b & 0x07) << 18) |
-        ((b2 & 0x3F) << 12) |
-        ((b3 & 0x3F) << 6) |
-        (b4 & 0x3F)
-      if cp < 0x10000 || cp > 0x10FFFF {
-        raise CanonCallError("invalid utf-8")
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 4
-    } else {
-      raise CanonCallError("invalid utf-8")
+      raise CanonCallError(
+        if rest.length() < width {
+          "incomplete utf-8 byte sequence"
+        } else {
+          "invalid utf-8"
+        },
+      )
     }
   }
-  buf.to_string()
 }
 
 ///|
 fn encode_utf8_string(s : String) -> Bytes {
-  let bytes : Array[Byte] = []
-  for c in s {
-    let cp = c.to_int()
-    if cp < 0x80 {
-      bytes.push(cp.to_byte())
-    } else if cp < 0x800 {
-      bytes.push((0xC0 | (cp >> 6)).to_byte())
-      bytes.push((0x80 | (cp & 0x3F)).to_byte())
-    } else if cp < 0x10000 {
-      bytes.push((0xE0 | (cp >> 12)).to_byte())
-      bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
-      bytes.push((0x80 | (cp & 0x3F)).to_byte())
-    } else {
-      bytes.push((0xF0 | (cp >> 18)).to_byte())
-      bytes.push((0x80 | ((cp >> 12) & 0x3F)).to_byte())
-      bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
-      bytes.push((0x80 | (cp & 0x3F)).to_byte())
-    }
+  let bytes = @buffer.Buffer(size_hint=s.length())
+  for char in s {
+    bytes.write_char_utf8(char)
   }
-  Bytes::from_array(bytes)
+  bytes.to_bytes()
 }
 
 ///|

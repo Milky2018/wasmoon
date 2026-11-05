@@ -14,6 +14,8 @@ pub fn classify_runtime_failure(@runtime.RuntimeError) -> WastRunnerError
 
 pub fn format_action(@parser.WastAction) -> String
 
+pub fn parse_module_source(@parser.WastModuleSource) -> @types.Module raise WastRunnerError
+
 pub fn validate_module_source(@parser.WastModuleSource, bulk_memory~ : Bool, stack_switching~ : Bool) -> @types.Module? raise WastRunnerError
 
 pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : ArrayView[Int32]) -> Bool

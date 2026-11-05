@@ -4,6 +4,8 @@
 priv struct ResourceBinding {
   store : Ref[Bool]
   active : Ref[Bool]
+  index : Int32
+  mut type_instance : Int32?
 }
 
 ///|
@@ -22,13 +24,14 @@ fn check_resource_open(binding : ResourceBinding?) -> Unit raise RuntimeError {
 fn resource_binding(
   owner : ResourceBinding?,
   store : Ref[Bool],
+  index : Int32,
 ) -> ResourceBinding raise RuntimeError {
   check_resource_open(owner)
   if owner is Some(owner) {
     guard physical_equal(owner.store, store) else { raise ForeignStore }
     owner
   } else {
-    { store, active: Ref(true), }
+    { store, active: Ref(true), index, type_instance: None, }
   }
 }
 

@@ -69,7 +69,6 @@ test "memory64 unsigned offsets trap before accessing wrapped addresses" {
   for jit in [false, true] {
     let result = @wast.run_wast_commands(
       @wast.parse(source),
-      ".",
       jit,
       false,
       jit_compiler=Some(compiler),

@@ -121,3 +121,44 @@ test "wit: resolve flattens world include + adds transitive interface imports" {
       "}\n",
   )
 }
+
+///|
+test "wit: inline interfaces and worlds enforce declaration namespaces" {
+  for
+    body in [
+      "world w { export x: interface { type t = u32; type t = u64; } }", "world w { import x: interface { f: func(); f: func(); } }",
+      "world w { type t = u32; record t { x: u32 } }", "world w { export x: interface { type t = list<t>; } }",
+    ] {
+    let package_ = @wit.parse_package("package sample:namespace; " + body)
+    assert_false(wit_succeeds(() => @wit.resolve_package(package_, [])))
+  }
+  let valid = @wit.parse_package(
+    "package sample:namespace; world w { export x: interface { " +
+    "type t = u32; type u = u64; f: func(a: t) -> u; } }",
+  )
+  @wit.resolve_package(valid, []) |> ignore
+}
+
+///|
+test "wit: world imports and exports have separate checked namespaces" {
+  for
+    body in [
+      "import f: func(); import f: func();", "export f: func(); export f: func();",
+      "type t = u32; import t: func();", "import f: interface {} import f: func();",
+      "export f: interface {} export f: func();",
+    ] {
+    let package_ = @wit.parse_package(
+      "package sample:namespace; world w { " + body + " }",
+    )
+    assert_false(wit_succeeds(() => @wit.resolve_package(package_, [])))
+  }
+  for
+    body in [
+      "import f: func(); export f: func();", "type t = u32; export t: func();", "import f: interface {} export f: func();",
+    ] {
+    let package_ = @wit.parse_package(
+      "package sample:namespace; world w { " + body + " }",
+    )
+    @wit.resolve_package(package_, []) |> ignore
+  }
+}

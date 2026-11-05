@@ -49,18 +49,27 @@ _Static_assert(offsetof(wasmoon_gc_function_frame_t, mask) == 16, "root frame ma
 _Static_assert(offsetof(wasmoon_gc_function_frame_t, slot_count) == 24, "root frame count offset");
 _Static_assert(offsetof(wasmoon_gc_function_frame_t, reserved) == 28, "root frame reserved offset");
 
-int32_t jit_copy_function_frame_roots(const jit_execution_state_t *state, int64_t *destination) {
+int32_t jit_copy_root_scopes(const jit_execution_state_t *state, int64_t *destination, int32_t capacity) {
     int64_t total = 0;
     for (const wasmoon_gc_function_frame_t *frame = state ? state->gc_function_frame_head : NULL;
          frame; frame = frame->prev) {
         if (frame->slot_count < 0 || !frame->roots || !frame->mask) return -1;
         for (int32_t slot = 0; slot < frame->slot_count; ++slot) {
             if ((frame->mask[(uint32_t)slot / 64] >> ((uint32_t)slot % 64)) & 1) {
-                if (total == INT32_MAX) return -1;
+                if (total == capacity) return -1;
                 if (destination) destination[total] = frame->roots[slot];
                 ++total;
             }
         }
+    }
+    for (const wasmoon_gc_root_scope_t *scope = state ? state->gc_root_scope_head : NULL;
+         scope; scope = scope->prev) {
+        int32_t count = scope->root_count;
+        if (count < 0 || count > capacity - total || (count > 0 && !scope->roots)) return -1;
+        if (destination && count > 0) {
+            memcpy(destination + total, scope->roots, (size_t)count * sizeof(int64_t));
+        }
+        total += count;
     }
     return (int32_t)total;
 }
@@ -93,97 +102,24 @@ void WASMOON_GUEST_ABI gc_function_frame_leave_impl(jit_context_t *ctx, wasmoon_
     state->gc_function_frame_head = frame->prev;
 }
 
-static int32_t gc_root_scope_count(const jit_context_t *ctx) {
-    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
-    if (!state) return 0;
-    if (!ctx) {
-        return 0;
-    }
-    int64_t total = jit_copy_function_frame_roots(state, NULL);
-    if (total < 0) return -1;
-    const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
-    while (scope) {
-        if (scope->root_count > 0) {
-            total += scope->root_count;
-            if (total > INT32_MAX) {
-                return INT32_MAX;
-            }
-        }
-        scope = scope->prev;
-    }
-    return (int32_t)total;
-}
-
-static int32_t gc_copy_root_scopes(
-    const jit_context_t *ctx,
-    int64_t *dst
-) {
-    jit_execution_state_t *state = ctx ? ctx_runtime(ctx)->execution : NULL;
-    if (!state) return 0;
-    if (!ctx || !dst) {
-        return 0;
-    }
-    int32_t at = jit_copy_function_frame_roots(state, dst);
-    if (at < 0) return -1;
-    const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
-    while (scope) {
-        if (scope->root_count > 0 && scope->roots) {
-            memcpy(
-                &dst[at],
-                scope->roots,
-                (size_t)scope->root_count * sizeof(int64_t)
-            );
-            at += scope->root_count;
-        }
-        scope = scope->prev;
-    }
-    return at;
-}
-
-static int32_t gc_count_table_roots(const jit_context_t *ctx) {
-    if (!ctx) {
-        return 0;
-    }
+static int32_t gc_table_roots(const jit_context_t *ctx, int64_t *destination, int32_t capacity) {
     size_t total = 0;
-    if (ctx_table0_base(ctx) && ctx_table0_elements(ctx) > 0) {
-        total += ctx_table0_elements(ctx);
-    }
-    if (ctx_tables(ctx) && ctx_table_sizes(ctx) && ctx_table_count(ctx) > 1) {
-        for (int i = 1; i < ctx_table_count(ctx); i++) {
-            if (ctx_tables(ctx)[i] && ctx_table_sizes(ctx)[i] > 0) {
-                total += ctx_table_sizes(ctx)[i];
+    void ***tables = ctx_tables(ctx);
+    const size_t *sizes = ctx_table_sizes(ctx);
+    int32_t table_count = tables && sizes && ctx_table_count(ctx) > 1 ? ctx_table_count(ctx) : 1;
+    for (int32_t table = 0; table < table_count; ++table) {
+        void **entries = table == 0 ? ctx_table0_base(ctx) : tables[table];
+        size_t size = table == 0 ? ctx_table0_elements(ctx) : sizes[table];
+        if (!entries || size == 0) continue;
+        if (size > (size_t)capacity - total) return -1;
+        if (destination) {
+            for (size_t i = 0; i < size; ++i) {
+                destination[total + i] = (int64_t)(uintptr_t)entries[i * 2];
             }
         }
-    }
-    if (total > (size_t)INT32_MAX) {
-        return INT32_MAX;
+        total += size;
     }
     return (int32_t)total;
-}
-
-static int32_t gc_copy_table_roots(const jit_context_t *ctx, int64_t *dst) {
-    if (!ctx || !dst) {
-        return 0;
-    }
-    int32_t at = 0;
-    if (ctx_table0_base(ctx) && ctx_table0_elements(ctx) > 0) {
-        for (size_t i = 0; i < ctx_table0_elements(ctx); i++) {
-            dst[at++] = (int64_t)(uintptr_t)ctx_table0_base(ctx)[i * 2];
-        }
-    }
-    if (ctx_tables(ctx) && ctx_table_sizes(ctx) && ctx_table_count(ctx) > 1) {
-        for (int table_idx = 1; table_idx < ctx_table_count(ctx); table_idx++) {
-            void **table_ptr = ctx_tables(ctx)[table_idx];
-            size_t table_size = ctx_table_sizes(ctx)[table_idx];
-            if (!table_ptr || table_size == 0) {
-                continue;
-            }
-            for (size_t i = 0; i < table_size; i++) {
-                dst[at++] = (int64_t)(uintptr_t)table_ptr[i * 2];
-            }
-        }
-    }
-    return at;
 }
 
 // ============ Context Allocation ============
@@ -852,11 +788,18 @@ static int32_t collect_gc_with_root_indices(
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
     int32_t safe_root_count = root_count > 0 ? root_count : 0;
     int32_t scratch_count = state->gc_root_scratch_len > 0 ? state->gc_root_scratch_len : 0;
-    int32_t caller_root_count = gc_root_scope_count(ctx);
+    int32_t caller_root_count = jit_copy_root_scopes(state, NULL, INT32_MAX);
     if (caller_root_count < 0) return -1;
-    int32_t exception_root_count = exception_copy_activation_roots(ctx, state, NULL);
+    int32_t exception_root_count = exception_copy_activation_roots(ctx, state, NULL, INT32_MAX);
+    if (exception_root_count < 0) return -1;
     int32_t spilled_root_count = state->spilled_locals_count > 0 ? state->spilled_locals_count : 0;
-    int32_t table_root_count = gc_count_table_roots(ctx);
+    int32_t table_root_count = gc_table_roots(ctx, NULL, INT32_MAX);
+    if (table_root_count < 0 ||
+        (safe_root_count > 0 && !roots) ||
+        (scratch_count > 0 && !state->gc_root_scratch) ||
+        (spilled_root_count > 0 && !state->spilled_locals)) {
+        return -1;
+    }
     int64_t stack_root_count64 =
         (int64_t)safe_root_count +
         scratch_count +
@@ -885,15 +828,12 @@ static int32_t collect_gc_with_root_indices(
     state->gc_collect_requested = 1;
     state->gc_in_collect = 1;
 
+    int64_t *merged = NULL;
     if (total_roots > 0) {
-        int64_t *merged = (int64_t *)wasmoon_native_malloc((size_t)total_roots * sizeof(int64_t));
-        if (!merged) {
-            state->gc_in_collect = 0;
-            state->gc_collect_requested = 0;
-            return -1;
-        }
+        merged = (int64_t *)wasmoon_native_malloc((size_t)total_roots * sizeof(int64_t));
+        if (!merged) goto snapshot_failed;
         int32_t at = 0;
-        if (safe_root_count > 0 && roots) {
+        if (safe_root_count > 0) {
             if (operand_layout) {
                 // Allocation descriptors address staged payload words. Numeric
                 // fields are not roots even when their bits resemble a native
@@ -914,38 +854,36 @@ static int32_t collect_gc_with_root_indices(
                 at += safe_root_count;
             }
         }
-        if (scratch_count > 0 && state->gc_root_scratch) {
+        if (scratch_count > 0) {
             memcpy(&merged[at], state->gc_root_scratch, (size_t)scratch_count * sizeof(int64_t));
             at += scratch_count;
         }
         if (caller_root_count > 0) {
-            at += gc_copy_root_scopes(ctx, &merged[at]);
+            if (jit_copy_root_scopes(state, merged + at, caller_root_count) != caller_root_count) goto snapshot_failed;
+            at += caller_root_count;
         }
-        at += exception_copy_activation_roots(ctx, state, merged + at);
-        if (spilled_root_count > 0 && state->spilled_locals) {
-            memcpy(&merged[at], state->spilled_locals + spilled_root_count, (size_t)spilled_root_count * sizeof(int64_t));
+        if (exception_copy_activation_roots(ctx, state, merged + at, exception_root_count) != exception_root_count)
+            goto snapshot_failed;
+        at += exception_root_count;
+        if (spilled_root_count > 0) {
+            memcpy(merged + at, state->spilled_locals + spilled_root_count,
+                (size_t)spilled_root_count * sizeof(int64_t));
             at += spilled_root_count;
         }
         if (table_root_count > 0) {
-            at += gc_copy_table_roots(ctx, &merged[at]);
+            if (gc_table_roots(ctx, merged + at, table_root_count) != table_root_count)
+                goto snapshot_failed;
         }
-        // The precise coordinator copies active roots before tracing. Premarking
-        // them here would require a second discovery pass over the whole heap.
-        if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
-        collected = allocation_collection == GC_COLLECTION_PACKED_SEGMENT
-            ? gc_heap_collect_for_packed_segment(heap, merged, total_roots)
-            : allocation_collection == GC_COLLECTION_ALLOCATION
-                ? gc_heap_collect_for_allocation(heap, merged, total_roots)
-                : gc_heap_collect(heap, merged, total_roots);
-        free(merged);
-    } else {
-        if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
-        collected = allocation_collection == GC_COLLECTION_PACKED_SEGMENT
-            ? gc_heap_collect_for_packed_segment(heap, NULL, 0)
-            : allocation_collection == GC_COLLECTION_ALLOCATION
-                ? gc_heap_collect_for_allocation(heap, NULL, 0)
-                : gc_heap_collect(heap, NULL, 0);
     }
+    // The precise coordinator copies active roots before tracing. Premarking
+    // them here would require a second discovery pass over the whole heap.
+    if (!heap->precise_roots) jit_mark_active_gc_roots(heap);
+    collected = allocation_collection == GC_COLLECTION_PACKED_SEGMENT
+        ? gc_heap_collect_for_packed_segment(heap, merged, total_roots)
+        : allocation_collection == GC_COLLECTION_ALLOCATION
+            ? gc_heap_collect_for_allocation(heap, merged, total_roots)
+            : gc_heap_collect(heap, merged, total_roots);
+    free(merged);
 
     if (gc_collect_debug_enabled()) {
         fprintf(
@@ -980,6 +918,12 @@ static int32_t collect_gc_with_root_indices(
     state->gc_collect_requested = 0;
     ctx_update_gc_heap_ptr_internal(ctx);
     return collected;
+
+snapshot_failed:
+    free(merged);
+    state->gc_in_collect = 0;
+    state->gc_collect_requested = 0;
+    return -1;
 }
 
 void ctx_clear_table_bindings(jit_context_t *ctx) {

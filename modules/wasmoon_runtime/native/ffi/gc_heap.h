@@ -399,7 +399,7 @@ int32_t gc_heap_try_array(GcHeap *heap, int32_t identity, int32_t local_type,
 void gc_heap_maybe_verify(GcHeap *heap, const char *op_name);
 int gc_should_fail_allocation(void);
 int gc_heap_admit(GcHeap *heap, size_t size);
-void gc_heap_undo_admission(GcHeap *heap);
+int gc_heap_reserve_storage(GcHeap *heap, size_t size);
 int gc_heap_ensure_payload_capacity(GcHeap *heap, size_t needed);
 
 // Budgeted heaps enter the common allocator before any guest payload write.

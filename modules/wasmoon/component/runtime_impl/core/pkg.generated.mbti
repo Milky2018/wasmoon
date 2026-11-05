@@ -45,7 +45,7 @@ pub fn suspension() -> CanonSuspend?
 
 pub fn take_core_suspension() -> CoreSuspension?
 
-pub fn trap_canon(String) -> Unit raise @runtime.RuntimeError
+pub fn[T] trap_canon(String) -> T raise @runtime.RuntimeError
 
 pub fn trap_message() -> String?
 
