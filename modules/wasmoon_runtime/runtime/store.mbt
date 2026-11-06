@@ -83,16 +83,7 @@ fn Store::register_rollback(
   self : Store,
   registrar : RollbackRegistrar,
 ) -> Unit {
-  self.instantiation = Some(registrar)
-  self.references.instantiation = Some(registrar)
-  registrar.on_finish(fn() {
-    self.instantiation = None
-    self.references.instantiation = None
-  })
-  // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
-  registrar.on_rollback(
-    self.heap.make_allocation_rollback(() => self.collect_roots([])),
-  )
+  self.register_managed_rollback(registrar)
   if self.references.native.c_heap is Some(heap) {
     registrar.on_rollback(
       heap.make_allocation_rollback(() => self.collect_roots([])),
@@ -168,80 +159,12 @@ pub fn Store::Store(
   interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
   resource_budget~ : ResourceBudget? = None,
 ) -> Store raise RuntimeError {
-  let native_execution = @native_bridge.NativeExecutionState() catch {
-    _ => raise OutOfMemory
-  }
-  if resource_budget is Some(budget) {
-    guard native_execution
-      .continuations()
-      .bind_quota(budget.native_quota(PendingWork)) &&
-      native_execution
-      .exceptions()
-      .bind_quotas(budget.native_quota(GcBytes), budget.native_quota(GcObjects)) else {
-      raise InvalidHandle
-    }
-  }
-
-  let closed = Ref(false)
-  let tags : Array[@types.FuncType] = []
-  let managed_heap = MarkSweepHeap(resource_budget~)
-  let funcref_registry = StoreFuncrefRegistry::new()
-  let references = StoreReferences::new(
-    resource_budget,
-    closed,
-    tags,
-    managed_heap,
-    funcref_registry,
-    {
-      native_execution,
-      c_heap: None,
-      exception_allocations: None,
-      native_exception_to_store: Map([]),
-      store_exception_to_native: Map([]),
-    },
-  )
-  {
+  new_native_store(
     nan_canonicalization,
     interpreter_limits,
     resource_budget,
-    execution_scope: None,
-    instance_leases: [],
-    interpreter_reentry_depth: 0,
-    gc_tracing_depth: 0,
-    gc_in_collect: false,
-    gc_trace: None,
-    funcs: [],
-    func_types: [],
-    func_type_indices: [],
-    tables: [],
-    mems: [],
-    globals: [],
-    tags,
-    tag_lifetimes: [],
-    tag_type_indices: [],
-    tag_owners: [],
-    heap: managed_heap,
-    module_types: [],
-    module_rec_groups: [],
-    func_owners: [],
-    instances: [],
-    jit_tables: [],
-    jit_table_owners: [],
-    wasi_mem_addr: None,
-    wasi_ctx_handle: 0,
-    native_execution,
-    funcref_registry,
-    native_types: StoreTypeRegistry::new(),
-    suspended_executions: Map([]),
-    next_suspended_execution_id: 0L,
-    guest_continuations: Map([]),
-    next_guest_continuation: 0L,
-    pinned_gc_roots: Map([]),
-    next_pinned_gc_roots_id: 0L,
-    instantiation: None,
-    closed,
-    references,
-  }
+    with_c_heap=false,
+  )
 }
 
 ///|
@@ -251,6 +174,22 @@ pub fn Store::with_c_heap(
   nan_canonicalization~ : Bool = false,
   interpreter_limits~ : InterpreterLimits = InterpreterLimits::default(),
   resource_budget~ : ResourceBudget? = None,
+) -> Store raise RuntimeError {
+  new_native_store(
+    nan_canonicalization,
+    interpreter_limits,
+    resource_budget,
+    with_c_heap=true,
+  )
+}
+
+///|
+#cfg(target="native")
+fn new_native_store(
+  nan_canonicalization : Bool,
+  interpreter_limits : InterpreterLimits,
+  resource_budget : ResourceBudget?,
+  with_c_heap~ : Bool,
 ) -> Store raise RuntimeError {
   let native_execution = @native_bridge.NativeExecutionState() catch {
     _ => raise OutOfMemory
@@ -265,9 +204,16 @@ pub fn Store::with_c_heap(
       raise InvalidHandle
     }
   }
-  let initial_capacity = c_heap_initial_capacity()
-  let heap = @native_bridge.CHeap(capacity=initial_capacity) catch {
-    _ => raise OutOfMemory
+
+  let c_heap = if with_c_heap {
+    let initial_capacity = c_heap_initial_capacity()
+    Some(
+      @native_bridge.CHeap(capacity=initial_capacity) catch {
+        _ => raise OutOfMemory
+      },
+    )
+  } else {
+    None
   }
   let closed = Ref(false)
   let tags : Array[@types.FuncType] = []
@@ -281,7 +227,7 @@ pub fn Store::with_c_heap(
     funcref_registry,
     {
       native_execution,
-      c_heap: Some(heap),
+      c_heap,
       exception_allocations: None,
       native_exception_to_store: Map([]),
       store_exception_to_native: Map([]),
@@ -329,8 +275,10 @@ pub fn Store::with_c_heap(
     closed,
     references,
   }
-  store.bind_gc_budget(heap)
-  store.native_execution.exceptions().enable_reclamation()
+  if c_heap is Some(heap) {
+    store.bind_gc_budget(heap)
+    store.native_execution.exceptions().enable_reclamation()
+  }
   store
 }
 
@@ -342,88 +290,11 @@ pub fn Store::with_c_heap(
 /// have returned or been cancelled before the store is closed.
 #cfg(target="native")
 pub fn Store::close(self : Store) -> Unit {
-  if self.closed.val {
-    return
-  }
-  self.closed.val = true
-  let suspended = self.suspended_executions.values().to_array()
-  self.suspended_executions.clear()
-  for cleanup in suspended {
-    if cleanup.lease is Some(lease) {
-      lease.release()
-    }
-    (cleanup.run)()
-  }
-  let guest_bodies = self.guest_continuations.values().to_array()
-  self.guest_continuations.clear()
-  for body in guest_bodies {
-    (body.cancel)()
-  }
-  // Clear logical contents and release retained backing slots to break cycles.
-  // Array.clear alone can retain references beyond the new length.
-  self.guest_continuations.clear()
+  guard self.begin_close() else { return }
   self.native_execution.seal()
-  for roots in self.pinned_gc_roots.values() {
-    roots.active.val = false
-    if roots.lease is Some(lease) {
-      lease.release()
-    }
-  }
-  self.pinned_gc_roots.clear()
-  self.funcref_registry.clear()
-  self.native_types.representatives.clear()
-  self.native_types.representatives.shrink_to_fit()
-  self.native_types.group_buckets.clear()
-  self.native_types.mappings.clear()
-  self.native_types.initialization_graph = None
-  self.native_types.parents.clear()
-  self.native_types.parents.shrink_to_fit()
-  self.native_types.views.clear()
-  self.native_types.views.shrink_to_fit()
-  self.native_types.entries.clear()
-  if self.native_types.native_registry is Some(registry) {
-    registry.clear()
-    self.native_types.native_registry = None
-  }
-  self.native_types.heap_types.clear()
-  for function in self.funcs {
-    function.lifetime.active.val = false
-  }
-  self.funcs.clear()
-  self.funcs.shrink_to_fit()
-  self.func_types.clear()
-  self.func_types.shrink_to_fit()
-  self.func_type_indices.clear()
-  self.func_type_indices.shrink_to_fit()
-  self.func_owners.clear()
-  self.func_owners.shrink_to_fit()
-  self.instance_leases.clear()
-  self.instance_leases.shrink_to_fit()
-  self.instances.clear()
-  self.instances.shrink_to_fit()
-  for table in self.tables {
-    table.close()
-  }
-  self.tables.clear()
-  self.tables.shrink_to_fit()
-  for memory in self.mems {
-    memory.close()
-  }
-  self.mems.clear()
-  self.mems.shrink_to_fit()
-  for global in self.globals {
-    global.close()
-  }
-  self.globals.clear()
-  self.globals.shrink_to_fit()
-  self.tag_lifetimes.clear()
-  self.tag_lifetimes.shrink_to_fit()
-  self.tags.clear()
-  self.tags.shrink_to_fit()
-  self.tag_type_indices.clear()
-  self.tag_type_indices.shrink_to_fit()
-  self.tag_owners.clear()
-  self.tag_owners.shrink_to_fit()
+  self.close_roots_and_types()
+  self.invalidate_functions()
+  self.close_instances()
   self.references.native.native_exception_to_store.clear()
   self.references.native.store_exception_to_native.clear()
   self.references.exns.clear()
@@ -433,11 +304,7 @@ pub fn Store::close(self : Store) -> Unit {
     heap.free()
     self.references.native.c_heap = None
   }
-  // These arrays are borrowed from the parsed module and may be reused by
-  // other stores. Closing a store must only drop its own references.
-  self.module_types = []
-  self.module_rec_groups = []
-  self.references.wrapped_externs.clear()
+  self.clear_module_references()
   for owner in self.jit_table_owners {
     match owner {
       Some(owner) => owner.close()
@@ -448,9 +315,7 @@ pub fn Store::close(self : Store) -> Unit {
   self.jit_table_owners.shrink_to_fit()
   self.jit_tables.clear()
   self.jit_tables.shrink_to_fit()
-  self.wasi_mem_addr = None
-  self.wasi_ctx_handle = 0
-  self.instantiation = None
+  self.finish_close()
 }
 
 ///|
@@ -727,92 +592,17 @@ pub fn Store::alloc_async_host_func_with_caller(
 }
 
 ///|
-/// Allocate a table in the store
-/// Always creates a corresponding JIT table for cross-module sharing
-#cfg(target="native")
-pub fn Store::alloc_table(
-  self : Store,
-  table : Table,
-  use_jit~ : Bool = true,
-) -> Int32 raise RuntimeError {
-  self.ensure_open()
-  table.ensure_open()
-  let binding = resource_binding(table.binding, self.closed)
-  for index, existing in self.tables {
-    if physical_equal(existing, table) {
-      return index
-    }
-  }
-  let previous_reservation = table.reservation
-  errdefer {
-    table.reservation = previous_reservation
-  }
-  if self.resource_budget is Some(budget) {
-    table.bind_budget(budget)
-  }
-  let owner = if use_jit {
-    match
-      @native_bridge.JITTableOwner::try_alloc(
-        table.size(),
-        table.get_limits64().1,
-      ) {
-      Some(owner) => {
-        if table.reservation is Some(reservation) {
-          guard owner.table().raw_ptr().bind_reservation(reservation) else {
-            owner.close()
-            raise InvalidHandle
-          }
-        }
-        Some(owner)
-      }
-      None => raise TableAllocationFailed
-    }
-  } else {
-    None
-  }
-  let idx = self.tables.length()
-  if owner is Some(owner) {
-    errdefer owner.close()
-    self.bind_table_storage(table, owner.table())
-  }
-  table.binding = Some(binding)
-  self.on_instantiation_rollback(fn() {
-    binding.active.val = false
-    if idx < self.jit_table_owners.length() {
-      match self.jit_table_owners[idx] {
-        Some(owner) => owner.close()
-        None => ()
-      }
-    }
-    table.close()
-    self.tables.truncate(idx)
-    self.tables.shrink_to_fit()
-    self.jit_tables.truncate(idx)
-    self.jit_tables.shrink_to_fit()
-    self.jit_table_owners.truncate(idx)
-    self.jit_table_owners.shrink_to_fit()
-  })
-  self.tables.push(table)
-
-  self.jit_tables.push(owner.map(fn(owner) { owner.table() }))
-  self.jit_table_owners.push(owner)
-  idx
-}
-
-///|
 pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int32 raise RuntimeError {
   self.ensure_open()
-  let binding = resource_binding(mem.binding, self.closed)
-  for index, existing in self.mems {
-    if physical_equal(existing, mem) {
-      return index
-    }
+  let idx = self.mems.length()
+  let binding = resource_binding(mem.binding, self.closed, idx)
+  if mem.binding is Some(_) {
+    return binding.index
   }
   mem.ensure_memory_open()
   if self.resource_budget is Some(budget) {
     mem.bind_budget(budget)
   }
-  let idx = self.mems.length()
   mem.binding = Some(binding)
   self.on_instantiation_rollback(fn() {
     binding.active.val = false
@@ -832,14 +622,16 @@ pub fn Store::alloc_global(
   global : GlobalInstance,
 ) -> Int32 raise RuntimeError {
   self.ensure_open()
-  let binding = resource_binding(global.binding, self.closed)
+  let binding = resource_binding(
+    global.binding,
+    self.closed,
+    self.globals.length(),
+  )
   guard value_fits_kind(global.value, global.type_.value_type) else {
     raise TypeMismatch
   }
-  for index, existing in self.globals {
-    if physical_equal(existing, global) {
-      return index
-    }
+  if global.binding is Some(_) {
+    return binding.index
   }
   global.binding = Some(binding)
   self.on_instantiation_rollback(fn() { binding.active.val = false })

@@ -12,6 +12,17 @@ pub struct FunctionAnalysis {
 pub fn FunctionAnalysis::build(func : @milkir.Function) -> FunctionAnalysis {
   let cfg = @milkir.CFG::build(func)
   let dominance = cfg.compute_dominance()
+  FunctionAnalysis::from_control_flow(func, cfg, dominance)
+}
+
+///|
+/// Complete the optimizer analysis from control flow known to still describe
+/// this function. Instruction-only transforms preserve these facts.
+pub fn FunctionAnalysis::from_control_flow(
+  func : @milkir.Function,
+  cfg : @milkir.CFG,
+  dominance : @milkir.Dominance,
+) -> FunctionAnalysis {
   let block_idx = Array::make(func.next_block_id, -1)
   for index, block in func.blocks {
     block_idx[block.id] = index

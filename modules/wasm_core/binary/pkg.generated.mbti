@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_core/binary"
+
+// Values
+pub fn[R, E : Error] read_s32(R, (R) -> Int32 raise E, () -> E) -> Int32 raise E
+
+pub fn[R, E : Error] read_s33(R, (R) -> Int32 raise E, () -> E) -> Int64 raise E
+
+pub fn[R, E : Error] read_s64(R, (R) -> Int32 raise E, () -> E) -> Int64 raise E
+
+pub fn[R, E : Error] read_u32(R, (R) -> Int32 raise E, () -> E) -> Int32 raise E
+
+pub fn[R, E : Error] read_u64(R, (R) -> Int32 raise E, () -> E) -> Int64 raise E
+
+// Errors
+
+// Types and methods
+pub struct Writer {
+  // private fields
+}
+pub fn Writer::Writer() -> Self
+pub fn Writer::length(Self) -> Int32
+pub fn Writer::to_bytes(Self) -> Bytes
+pub fn Writer::write_buffer(Self, Self) -> Unit
+pub fn Writer::write_byte(Self, Int32) -> Unit
+pub fn Writer::write_bytes(Self, BytesView) -> Unit
+pub fn Writer::write_f32(Self, Float) -> Unit
+pub fn Writer::write_f64(Self, Double) -> Unit
+pub fn Writer::write_name(Self, String) -> Unit
+pub fn Writer::write_s32(Self, Int32) -> Unit
+pub fn Writer::write_s64(Self, Int64) -> Unit
+pub fn Writer::write_u32(Self, Int32) -> Unit
+pub fn Writer::write_u64(Self, Int64) -> Unit
+
+// Type aliases
+
+// Traits

@@ -707,11 +707,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
 
   // First pass: collect all names (to support forward references)
   // Save lexer state
-  let saved_pos = self.lexer.pos
-  let saved_line = self.lexer.line
-  let saved_column = self.lexer.column
-  let saved_token_start_line = self.lexer.token_start_line
-  let saved_token_start_column = self.lexer.token_start_column
+  let saved_pos = self.lexer.checkpoint()
   let saved_current = self.current
 
   // Scan for definitions to collect names (to support forward references for non-type fields)
@@ -945,11 +941,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   }
 
   // Restore lexer state for type definition pass
-  self.lexer.pos = saved_pos
-  self.lexer.line = saved_line
-  self.lexer.column = saved_column
-  self.lexer.token_start_line = saved_token_start_line
-  self.lexer.token_start_column = saved_token_start_column
+  self.lexer.restore(saved_pos)
   self.current = saved_current
 
   // Share types array with parser BEFORE parsing types
@@ -966,22 +958,14 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
         match self.current.token {
           Keyword("type") => {
             let type_idx = mod_.types.length()
-            let saved_type_pos = self.lexer.pos
-            let saved_type_line = self.lexer.line
-            let saved_type_column = self.lexer.column
-            let saved_type_token_line = self.lexer.token_start_line
-            let saved_type_token_column = self.lexer.token_start_column
+            let saved_type_pos = self.lexer.checkpoint()
             let saved_type_current = self.current
             self.advance()
             if self.current.token is Id(_) {
               self.advance()
             }
             let type_kind = self.peek_rec_type_kind()
-            self.lexer.pos = saved_type_pos
-            self.lexer.line = saved_type_line
-            self.lexer.column = saved_type_column
-            self.lexer.token_start_line = saved_type_token_line
-            self.lexer.token_start_column = saved_type_token_column
+            self.lexer.restore(saved_type_pos)
             self.current = saved_type_current
             mod_.types.push(placeholder_subtype_for_rec_kind(type_kind))
             mod_.type_rec_groups.push(type_idx)
@@ -1006,11 +990,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   }
 
   // Restore lexer state for main parsing pass
-  self.lexer.pos = saved_pos
-  self.lexer.line = saved_line
-  self.lexer.column = saved_column
-  self.lexer.token_start_line = saved_token_start_line
-  self.lexer.token_start_column = saved_token_start_column
+  self.lexer.restore(saved_pos)
   self.current = saved_current
 
   // Main pass: parse everything except types (already parsed)

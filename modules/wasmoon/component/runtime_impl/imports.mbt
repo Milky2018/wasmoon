@@ -32,6 +32,13 @@ fn resolve_import(
         | (ComponentType(_), Component(_))
         | (InstanceType(_), Instance(_)) =>
           match (desc, ext) {
+            (CoreModuleType(index), CoreModule(module_)) => {
+              if index < 0 || index >= core_types.length() {
+                raise ImportTypeMismatch("invalid core module type index")
+              }
+              check_core_module_against_type(module_, core_types[index])
+              ext
+            }
             (InstanceType(tyidx), Instance(inst)) => {
               validate_instance_import_type(
                 key, tyidx, inst, types, core_types, outer_stack,

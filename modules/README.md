@@ -26,8 +26,14 @@ Wasmoon runtime integration packages. The main public packages are:
 | `Milky2018/x64_target` | x64 streaming instruction selection, ABI, allocation, frame layout, emission, and linking. | `DirectLoweringSession`, `compile_selected`, `allocate`, `plan_frame`, `emit`, and `prepare_x64_link`. |
 | `Milky2018/aarch64_target` | AArch64 streaming instruction selection, ABI, allocation, frame layout, emission, and linking. | `DirectLoweringSession`, `compile_selected`, `allocate`, `plan_frame`, `emit`, and `prepare_aarch64_link`. |
 | `Milky2018/wasmoon_jit` | Native runtime and JIT integration for Wasmoon. | Artifact production, bounded loading, transactional installation, Wasm entry/hostcall trampolines, VMContext layout, runtime symbols, and integration planning. |
+| `Milky2018/wasmoon/jit/execution` | Store-bound native Core execution shared by the CLI, Component runtime, and WAST runner. | `JITModuleContext`, checked entry codecs, `bind_instance_tables`, callable registration, and resumable calls. The `wasmoon/wast/jit` import forwards here. |
 | `Milky2018/wasmoon/component` | Stable Component Model runtime facade. | `ComponentRuntime`, opaque instances/functions, WIT-shaped `ComponentValue`, typed JSON codecs, checked export binding and invocation. |
 | `Milky2018/wasmoon/wit_binding` | Runtime adapter from resolved WIT worlds to component instances. | `bind_world` and checked `WitBindings`. |
+
+Native execution binds existing Store tables through `bind_instance_tables`;
+instantiation owns element initialization. The old `init_elem_segments` adapter,
+empty memory-sync operation, and ignored subtype options on bulk/table setup
+have been retired. Subtype checking remains part of compilation and execution.
 
 ## Tested READMEs
 

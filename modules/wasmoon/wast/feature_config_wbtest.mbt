@@ -30,15 +30,9 @@ test "bulk memory feature rejects instructions and passive segments" {
     let script = parse(
       "(assert_invalid " + source + " \"bulk memory support is not enabled\")",
     )
-    let disabled = run_wast_commands(
-      script,
-      ".",
-      false,
-      false,
-      bulk_memory=false,
-    )
+    let disabled = run_wast_commands(script, false, false, bulk_memory=false)
     assert_eq((disabled.passed, disabled.failed), (1, 0))
-    let enabled = run_wast_commands(script, ".", false, false)
+    let enabled = run_wast_commands(script, false, false)
     assert_eq((enabled.passed, enabled.failed), (0, 1))
   }
 }
@@ -55,13 +49,7 @@ test "disabled bulk memory retains active table64 elements and reference table o
     #|    ref.null func i64.const 0 table.grow drop
     #|    table.size))
     #|(assert_return (invoke "check") (i64.const 1))
-  let result = run_wast_commands(
-    parse(source),
-    ".",
-    false,
-    false,
-    bulk_memory=false,
-  )
+  let result = run_wast_commands(parse(source), false, false, bulk_memory=false)
   assert_eq((result.passed, result.failed), (1, 0))
 }
 
@@ -78,7 +66,6 @@ test "Wasmtime invalidity profile checks only the typed engine build restriction
   for use_jit in [false, true] {
     let strict = run_wast_commands(
       parse(assertion),
-      ".",
       use_jit,
       false,
       stack_switching=true,
@@ -86,7 +73,6 @@ test "Wasmtime invalidity profile checks only the typed engine build restriction
     assert_eq((strict.passed, strict.failed), (0, 1))
     let compatible = run_wast_commands(
       parse(assertion),
-      ".",
       use_jit,
       false,
       stack_switching=true,
@@ -101,7 +87,6 @@ test "Wasmtime invalidity profile checks only the typed engine build restriction
       ] {
       let result = run_wast_commands(
         parse(source),
-        ".",
         use_jit,
         false,
         stack_switching=true,
@@ -111,7 +96,6 @@ test "Wasmtime invalidity profile checks only the typed engine build restriction
     }
     let nested = run_wast_commands(
       parse("(thread $child " + assertion + ") (wait $child)"),
-      ".",
       use_jit,
       false,
       stack_switching=true,

@@ -257,7 +257,7 @@ fn emit_constant(
   bits : UInt64,
 ) -> Unit {
   // W-register writes clear the upper half even when the result is i64.
-  let width = if bits >> 32 == 0UL { W32 } else { width }
+  let width : GprWidth = if bits >> 32 == 0UL { W32 } else { width }
   let halfword_count = if width == W32 { 2 } else { 4 }
   let mut nonzero = 0
   let mut nonones = 0
@@ -383,16 +383,6 @@ fn emit_result_area_access(
     (reg_bits(base) << 5) |
     reg_bits(value),
   )
-}
-
-///|
-fn result_area_register(plan : InternalCallPlan) -> @vcode.PhysicalReg? {
-  for result in plan.results {
-    if result is CallResultArea(_, reg) {
-      return Some(reg)
-    }
-  }
-  None
 }
 
 ///|
@@ -2205,14 +2195,14 @@ fn float_ternary_base(
   operation : AArch64FloatTernary,
 ) -> UInt32? {
   match (ty, operation) {
-    (F32, Fmadd) => Some(0x1F000000U)
-    (F64, Fmadd) => Some(0x1F400000U)
-    (F32, Fmsub) => Some(0x1F008000U)
-    (F64, Fmsub) => Some(0x1F408000U)
-    (F32, Fnmadd) => Some(0x1F200000U)
-    (F64, Fnmadd) => Some(0x1F600000U)
-    (F32, Fnmsub) => Some(0x1F208000U)
-    (F64, Fnmsub) => Some(0x1F608000U)
+    (F32, FusedMultiplyAdd) => Some(0x1F000000U)
+    (F64, FusedMultiplyAdd) => Some(0x1F400000U)
+    (F32, FusedNegatedMultiplyAdd) => Some(0x1F008000U)
+    (F64, FusedNegatedMultiplyAdd) => Some(0x1F408000U)
+    (F32, FusedNegatedMultiplySubtract) => Some(0x1F200000U)
+    (F64, FusedNegatedMultiplySubtract) => Some(0x1F600000U)
+    (F32, FusedMultiplySubtract) => Some(0x1F208000U)
+    (F64, FusedMultiplySubtract) => Some(0x1F608000U)
     _ => None
   }
 }
@@ -2506,46 +2496,6 @@ fn emit_epilogue(
 }
 
 ///|
-fn[Inst] edit_parallel_moves(
-  function : @vcode.Function[Inst],
-  allocation : @vcode.Allocation,
-  instruction : @vcode.Instruction,
-  placement : @vcode.PointPlacement,
-) -> Array[@vcode.ParallelMove] {
-  let moves : Array[@vcode.ParallelMove] = []
-  for edit in allocation.edits_at(instruction, placement) {
-    match edit.kind() {
-      Spill(value~, reg~, slot~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Register(reg),
-            Stack(slot),
-          ),
-        )
-      Reload(value~, slot~, reg~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Stack(slot),
-            Register(reg),
-          ),
-        )
-      Move(value~, from~, to~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Register(from),
-            Register(to),
-          ),
-        )
-      EdgeMove(..) => ()
-    }
-  }
-  moves
-}
-
-///|
 fn[Inst] emit_edits_at(
   buffer : CodeBuffer,
   function : @vcode.Function[Inst],
@@ -2558,7 +2508,7 @@ fn[Inst] emit_edits_at(
     return
   }
   let resolved = @vcode.plan_parallel_moves(
-    edit_parallel_moves(function, allocation, instruction, placement),
+    @vcode.allocation_edit_moves(function, allocation, instruction, placement),
     int_transfer_scratch(),
     fp_transfer_scratch(),
   ) catch {
@@ -2568,61 +2518,13 @@ fn[Inst] emit_edits_at(
 }
 
 ///|
-fn call_argument_transfers(
-  allocation : @vcode.Allocation,
-  instruction : @vcode.Instruction,
-  types : Array[@native.ValueType],
-  locations : Array[CallArgumentLocation],
-  operand_start~ : Int32 = 0,
-  stack_base~ : Int32 = 0,
-  callee? : (Int32, @vcode.PhysicalReg),
-  result_area? : (Int32, @vcode.PhysicalReg),
-) -> Array[@vcode.CallTransfer] {
-  let transfers : Array[@vcode.CallTransfer] = []
-  for index, ty in types {
-    let source = allocation
-      .operand_location(instruction, operand_start + index)
-      .unwrap()
-    match locations[index] {
-      CallRegister(destination) =>
-        transfers.push(
-          @vcode.CallTransfer::to_register(ty, source, destination),
-        )
-      CallStack(offset) =>
-        transfers.push(
-          @vcode.CallTransfer::to_stack(ty, source, stack_base + offset),
-        )
-    }
-  }
-  if callee is Some((operand_index, destination)) {
-    transfers.push(
-      @vcode.CallTransfer::to_register(
-        Ptr64,
-        allocation.operand_location(instruction, operand_index).unwrap(),
-        destination,
-      ),
-    )
-  }
-  if result_area is Some((operand_index, destination)) {
-    transfers.push(
-      @vcode.CallTransfer::to_register(
-        Ptr64,
-        allocation.operand_location(instruction, operand_index).unwrap(),
-        destination,
-      ),
-    )
-  }
-  transfers
-}
-
-///|
 fn emit_call_arguments(
   buffer : CodeBuffer,
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   instruction : @vcode.Instruction,
   types : Array[@native.ValueType],
-  locations : Array[CallArgumentLocation],
+  locations : ArrayView[CallArgumentLocation],
   stack_size : Int32,
   operand_start~ : Int32 = 0,
   stack_base~ : Int32 = 0,
@@ -2631,7 +2533,7 @@ fn emit_call_arguments(
 ) -> Unit raise AArch64EmitError {
   let plan = @vcode.plan_resolved_call_transfers(
     allocation,
-    call_argument_transfers(
+    @vcode.call_argument_transfers(
       allocation,
       instruction,
       types,
@@ -2651,30 +2553,13 @@ fn emit_call_arguments(
   ) catch {
     error => raise InvalidCallTransfer(cause=error)
   }
-  for transfer in plan.stack_transfers {
-    let source = match transfer.source {
-      Register(reg) => reg
-      Stack(slot) => {
-        let scratch = transfer.scratch.unwrap()
-        emit_stack_access(
-          buffer,
-          true,
-          transfer.ty,
-          scratch,
-          frame.slot_offset(slot).unwrap(),
-        )
-        scratch
-      }
-    }
-    // Integer call slots are eight bytes. Write the full slot so its upper
-    // half is canonical for callees that consume the native-width value.
-    let stack_type : @native.ValueType = if transfer.ty == I32 {
-      I64
-    } else {
-      transfer.ty
-    }
-    emit_stack_access(buffer, false, stack_type, source, transfer.offset)
-  }
+  @vcode.emit_call_stack_transfers(
+    plan,
+    buffer,
+    frame,
+    AArch64Frame::slot_offset,
+    emit_stack_access,
+  )
   emit_resolved_moves(buffer, frame, plan.register_moves)
 }
 
@@ -3675,7 +3560,7 @@ fn emit_instruction(
         plan.arguments,
         plan.stack_size,
       )
-      if result_area_register(plan) is Some(destination) {
+      if plan.result_area_register() is Some(destination) {
         guard frame.result_area_offset() is Some(offset) else {
           raise MissingResultArea
         }
@@ -3704,7 +3589,7 @@ fn emit_instruction(
         operand_start=1,
         callee=(0, callee_register),
       )
-      if result_area_register(plan) is Some(destination) {
+      if plan.result_area_register() is Some(destination) {
         guard frame.result_area_offset() is Some(offset) else {
           raise MissingResultArea
         }
@@ -3714,9 +3599,9 @@ fn emit_instruction(
       buffer.emit_word(0xD63F0000U | (reg_bits(callee_register) << 5))
     }
     TailCallDirect(target, signature, plan) => {
-      let result_area = result_area_register(plan).map(destination => {
-        (signature.params.length(), destination)
-      })
+      let result_area = plan
+        .result_area_register()
+        .map(destination => (signature.params.length(), destination))
       emit_call_arguments(
         buffer,
         allocation,
@@ -3743,9 +3628,9 @@ fn emit_instruction(
     }
     TailCallIndirect(signature, plan) => {
       let callee_register = @vcode.PhysicalReg::new(17, Int)
-      let result_area = result_area_register(plan).map(destination => {
-        (signature.params.length() + 1, destination)
-      })
+      let result_area = plan
+        .result_area_register()
+        .map(destination => (signature.params.length() + 1, destination))
       emit_call_arguments(
         buffer,
         allocation,
@@ -3983,9 +3868,7 @@ fn emit_single_pass(
 ) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
   let buffer = CodeBuffer::new(long_branches~, lse_atomic_add~)
   let block_offsets = Array::make(function.block_count(), -1)
-  let sources : Array[@code_object.SourceSite] = []
-  let traps : Array[@code_object.TrapSite] = []
-  let safepoints : Array[@code_object.SafepointSite] = []
+  let sites = @vcode.CodeSites::new()
   let unwind : Array[@code_object.UnwindDirective] = []
   emit_prologue(buffer, frame, unwind)
   let layout = function.layout()
@@ -4013,8 +3896,7 @@ fn emit_single_pass(
         None,
       )
       record_instruction_metadata(
-        buffer, function, allocation, frame, instruction, instruction_offset, sources,
-        traps, safepoints,
+        buffer, function, allocation, frame, instruction, instruction_offset, sites,
       )
       if !abi_materialization {
         emit_edits_at(buffer, function, allocation, frame, instruction, After)
@@ -4035,22 +3917,12 @@ fn emit_single_pass(
       next_block,
     )
     record_instruction_metadata(
-      buffer, function, allocation, frame, terminator, terminator_offset, sources,
-      traps, safepoints,
+      buffer, function, allocation, frame, terminator, terminator_offset, sites,
     )
     emit_edits_at(buffer, function, allocation, frame, terminator, After)
   }
   patch_branches(buffer, function, block_offsets)
-  let relocations = buffer.relocations
-  @code_object.build(
-    AArch64,
-    buffer.code,
-    relocations~,
-    sources~,
-    traps~,
-    safepoints~,
-    unwind~,
-  ) catch {
+  sites.build(AArch64, buffer.code, buffer.relocations, unwind) catch {
     error => raise InvalidCodeObject(cause=error)
   }
 }

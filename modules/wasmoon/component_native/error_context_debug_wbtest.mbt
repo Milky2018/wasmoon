@@ -52,8 +52,8 @@ test "error context debug output validates its complete descriptor before storin
         )
         // Read guest memory directly after the trapping component entry is poisoned.
         let memory = instance.store.get_mem(instance.core_mems[0])
-        inspect(memory.load_i32(65532), content="123")
-        inspect(memory.load_i32(96), content="1")
+        inspect(memory.load_i32_at(65532L), content="123")
+        inspect(memory.load_i32_at(96L), content="1")
       } else {
         inspect(message, content="returned")
       }

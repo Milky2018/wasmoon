@@ -1,253 +1,190 @@
 ///|
+fn Parser::parse_link_name(
+  self : Parser,
+  expected : String,
+) -> String raise WatError {
+  guard self.current.token is String_(bytes) else {
+    raise UnexpectedToken(expected, self.loc())
+  }
+  self.advance()
+  decode_text(bytes)
+}
+
+///|
+fn Parser::parse_import_names(self : Parser) -> (String, String) raise WatError {
+  let module_name = self.parse_link_name("expected module name")
+  let import_name = self.parse_link_name("expected import name")
+  (module_name, import_name)
+}
+
+///|
+fn Parser::parse_inline_import(
+  self : Parser,
+) -> (String, String) raise WatError {
+  self.advance()
+  let names = self.parse_import_names()
+  self.expect_rparen()
+  names
+}
+
+///|
+fn Parser::parse_inline_export(self : Parser) -> String raise WatError {
+  guard self.current.token is String_(bytes) else {
+    raise UnexpectedToken("expected export name", self.loc())
+  }
+  let name = decode_text(bytes)
+  self.advance()
+  self.expect_rparen()
+  name
+}
+
+///|
+fn Parser::parse_inline_links(
+  self : Parser,
+  exports : Array[String],
+) -> (String, String)? raise WatError {
+  let mut import_names = None
+  while self.current.token == LParen {
+    let saved = self.lexer.checkpoint()
+    self.advance()
+    match self.current.token {
+      Keyword("export") => {
+        self.advance()
+        exports.push(self.parse_inline_export())
+      }
+      Keyword("import") if import_names is None =>
+        import_names = Some(self.parse_inline_import())
+      _ => {
+        self.lexer.restore(saved)
+        self.current = LocatedToken::synthetic(LParen)
+        break
+      }
+    }
+  }
+  import_names
+}
+
+///|
 fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
   self.advance() // skip "memory"
   let export_names : Array[String] = []
-
-  // Optional name (already registered during first pass, just skip it)
   if self.current.token is Id(_) {
     self.advance()
   }
 
-  // Check for inline import: (memory (import "mod" "name") MIN [MAX])
   if self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
+    let saved = self.lexer.checkpoint()
     self.advance()
     match self.current.token {
       Keyword("import") => {
-        self.advance()
-        // Parse module name and import name
-        let mod_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected module name", self.loc())
-        }
-        let import_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected import name", self.loc())
-        }
-        self.expect_rparen() // close import
-
-        // Check for inline exports after import (can have multiple)
+        let names = self.parse_inline_import()
         while self.current.token == LParen {
-          let saved2 = self.lexer.pos
+          let saved = self.lexer.pos
           self.advance()
-          match self.current.token {
-            Keyword("export") => {
-              self.advance()
-              match self.current.token {
-                String_(s) => {
-                  export_names.push(decode_text(s))
-                  self.advance()
-                }
-                _ => raise UnexpectedToken("expected export name", self.loc())
-              }
-              self.expect_rparen()
-            }
-            _ => {
-              self.lexer.pos = saved2
-              self.current = LocatedToken::synthetic(LParen)
-              break
-            }
-          }
-        }
-
-        // Check for i64 keyword (memory64)
-        let is_memory64 = match self.current.token {
-          Keyword("i32") => {
+          if self.current.token == Keyword("export") {
             self.advance()
-            false
+            export_names.push(self.parse_inline_export())
+          } else {
+            self.lexer.pos = saved
+            self.current = LocatedToken::synthetic(LParen)
+            break
           }
-          Keyword("i64") => {
-            self.advance()
-            true
-          }
-          _ => false
         }
-
-        // Parse unsigned 64-bit limits; the validator checks address-type bounds
-        let min = self.parse_u64()
-        let max = match self.current.token {
-          Number(_) => Some(self.parse_u64())
-          _ => None
-        }
-        let is_shared = self.current.token == Keyword("shared")
-        if is_shared {
-          self.advance()
-        }
-        let page_size_log2 = self.parse_optional_page_size_log2()
-        self.expect_rparen() // close memory
-        let imp : @types.Import = {
-          mod_name,
-          name: import_name,
-          desc: Memory({
-            limits: { min, max, },
-            is_memory64,
-            is_shared,
-            page_size_log2,
-          }),
-        }
-        return MemoryImport(imp, export_names)
+        return self.parse_memory_import(names, export_names)
       }
       Keyword("export") => {
-        export_names.push(
-          match self.current.token {
-            _ => {
-              self.advance()
-              match self.current.token {
-                String_(s) => {
-                  self.advance()
-                  decode_text(s)
-                }
-                _ => raise UnexpectedToken("expected export name", self.loc())
-              }
-            }
-          },
-        )
+        self.advance()
+        export_names.push(self.parse_link_name("expected export name"))
         self.expect_rparen()
-        // Check for more exports or import
         while self.current.token == LParen {
-          let saved2 = self.lexer.pos
-          let saved2_line = self.lexer.line
-          let saved2_column = self.lexer.column
-          let saved2_token_start_line = self.lexer.token_start_line
-          let saved2_token_start_column = self.lexer.token_start_column
+          let saved = self.lexer.checkpoint()
           self.advance()
           match self.current.token {
             Keyword("export") => {
               self.advance()
-              match self.current.token {
-                String_(s) => {
-                  export_names.push(decode_text(s))
-                  self.advance()
-                }
-                _ => raise UnexpectedToken("expected export name", self.loc())
-              }
-              self.expect_rparen()
+              export_names.push(self.parse_inline_export())
             }
             Keyword("import") => {
-              // Handle (memory (export ...) (import "mod" "name") limits) syntax
-              self.advance()
-              let mod_name = match self.current.token {
-                String_(s) => {
-                  self.advance()
-                  decode_text(s)
-                }
-                _ => raise UnexpectedToken("expected module name", self.loc())
-              }
-              let import_name = match self.current.token {
-                String_(s) => {
-                  self.advance()
-                  decode_text(s)
-                }
-                _ => raise UnexpectedToken("expected import name", self.loc())
-              }
-              self.expect_rparen() // close import
-              // Check for i64 keyword (memory64)
-              let is_memory64 = match self.current.token {
-                Keyword("i32") => {
-                  self.advance()
-                  false
-                }
-                Keyword("i64") => {
-                  self.advance()
-                  true
-                }
-                _ => false
-              }
-              // Parse unsigned 64-bit limits; the validator checks address-type bounds
-              let min = self.parse_u64()
-              let max = match self.current.token {
-                Number(_) => Some(self.parse_u64())
-                _ => None
-              }
-              let is_shared = self.current.token == Keyword("shared")
-              if is_shared {
-                self.advance()
-              }
-              let page_size_log2 = self.parse_optional_page_size_log2()
-              self.expect_rparen() // close memory
-              let imp : @types.Import = {
-                mod_name,
-                name: import_name,
-                desc: Memory({
-                  limits: { min, max, },
-                  is_memory64,
-                  is_shared,
-                  page_size_log2,
-                }),
-              }
-              return MemoryImport(imp, export_names)
+              let names = self.parse_inline_import()
+              return self.parse_memory_import(names, export_names)
             }
             _ => {
-              self.lexer.pos = saved2
-              self.lexer.line = saved2_line
-              self.lexer.column = saved2_column
-              self.lexer.token_start_line = saved2_token_start_line
-              self.lexer.token_start_column = saved2_token_start_column
+              self.lexer.restore(saved)
               self.current = LocatedToken::synthetic(LParen)
               break
             }
           }
         }
       }
-      Keyword("data") => {
-        // Inline data syntax: (memory (data "..."))
-        // The memory size is automatically calculated from the data size
-        self.advance() // skip "data"
-        let init_bytes : Array[Byte] = []
-        while self.current.token is String_(_) {
-          if self.current.token is String_(s) {
-            for i in 0..<s.length() {
-              init_bytes.push(s.code_unit_at(i).to_byte())
-            }
-            self.advance()
-          }
-        }
-        self.expect_rparen() // close data
-        self.expect_rparen() // close memory
-        // Calculate minimum pages needed (64KB per page)
-        let page_size = 65536
-        let data_len = init_bytes.length()
-        let min_pages = (data_len + page_size - 1) / page_size
-        // Ensure at least 1 page if there's any data
-        let min : Int64 = (if data_len > 0 && min_pages == 0 {
-          1
-        } else {
-          min_pages
-        }).to_int64()
-        return MemoryWithData(
-          {
-            limits: { min, max: Some(min), },
-            is_memory64: false,
-            is_shared: false,
-            page_size_log2: 16,
-          },
-          export_names,
-          Bytes::from_array(init_bytes),
-        )
-      }
+      Keyword("data") =>
+        return self.parse_inline_memory_data(false, export_names)
       _ => {
-        self.lexer.pos = saved
-        self.lexer.line = saved_line
-        self.lexer.column = saved_column
-        self.lexer.token_start_line = saved_token_start_line
-        self.lexer.token_start_column = saved_token_start_column
+        self.lexer.restore(saved)
         self.current = LocatedToken::synthetic(LParen)
       }
     }
   }
 
-  // Check for i64 keyword (memory64)
-  let is_memory64 = match self.current.token {
+  let is_memory64 = self.parse_memory_address_type()
+  if self.current.token == LParen {
+    let saved = self.lexer.checkpoint()
+    self.advance()
+    if self.current.token == Keyword("data") {
+      return self.parse_inline_memory_data(is_memory64, export_names)
+    }
+    self.lexer.restore(saved)
+    self.current = LocatedToken::synthetic(LParen)
+  }
+  let type_ = self.parse_memory_type_tail(is_memory64)
+  self.expect_rparen()
+  MemoryDef(type_, export_names)
+}
+
+///|
+fn Parser::parse_memory_import(
+  self : Parser,
+  names : (String, String),
+  export_names : Array[String],
+) -> MemoryDefResult raise WatError {
+  let (mod_name, name) = names
+  let is_memory64 = self.parse_memory_address_type()
+  let type_ = self.parse_memory_type_tail(is_memory64)
+  self.expect_rparen()
+  MemoryImport({ mod_name, name, desc: Memory(type_), }, export_names)
+}
+
+///|
+fn Parser::parse_inline_memory_data(
+  self : Parser,
+  is_memory64 : Bool,
+  export_names : Array[String],
+) -> MemoryDefResult raise WatError {
+  self.advance()
+  let init_bytes : Array[Byte] = []
+  while self.current.token is String_(s) {
+    for i in 0..<s.length() {
+      init_bytes.push(s.code_unit_at(i).to_byte())
+    }
+    self.advance()
+  }
+  self.expect_rparen()
+  self.expect_rparen()
+  let min = ((init_bytes.length() + 65535) / 65536).to_int64()
+  MemoryWithData(
+    {
+      limits: { min, max: Some(min), },
+      is_memory64,
+      is_shared: false,
+      page_size_log2: 16,
+    },
+    export_names,
+    Bytes::from_array(init_bytes),
+  )
+}
+
+///|
+fn Parser::parse_memory_address_type(self : Parser) -> Bool raise WatError {
+  match self.current.token {
     Keyword("i32") => {
       self.advance()
       false
@@ -258,61 +195,13 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
     }
     _ => false
   }
+}
 
-  // Check for (data) inline syntax after i64 keyword
-  if self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
-    self.advance()
-    if self.current.token == Keyword("data") {
-      // Inline data syntax: (memory [i64] (data "..."))
-      self.advance() // skip "data"
-      let init_bytes : Array[Byte] = []
-      while self.current.token is String_(_) {
-        if self.current.token is String_(s) {
-          for i in 0..<s.length() {
-            init_bytes.push(s.code_unit_at(i).to_byte())
-          }
-          self.advance()
-        }
-      }
-      self.expect_rparen() // close data
-      self.expect_rparen() // close memory
-      // Calculate minimum pages needed (64KB per page)
-      let page_size = 65536
-      let data_len = init_bytes.length()
-      let min_pages = (data_len + page_size - 1) / page_size
-      // Ensure at least 1 page if there's any data
-      let min : Int64 = (if data_len > 0 && min_pages == 0 {
-        1
-      } else {
-        min_pages
-      }).to_int64()
-      return MemoryWithData(
-        {
-          limits: { min, max: Some(min), },
-          is_memory64,
-          is_shared: false,
-          page_size_log2: 16,
-        },
-        export_names,
-        Bytes::from_array(init_bytes),
-      )
-    } else {
-      // Not (data), restore and continue to limits parsing
-      self.lexer.pos = saved
-      self.lexer.line = saved_line
-      self.lexer.column = saved_column
-      self.lexer.token_start_line = saved_token_start_line
-      self.lexer.token_start_column = saved_token_start_column
-      self.current = LocatedToken::synthetic(LParen)
-    }
-  }
-
-  // Parse unsigned 64-bit limits; the validator checks address-type bounds
+///|
+fn Parser::parse_memory_type_tail(
+  self : Parser,
+  is_memory64 : Bool,
+) -> @types.MemoryType raise WatError {
   let min = self.parse_u64()
   let max = match self.current.token {
     Number(_) => Some(self.parse_u64())
@@ -323,11 +212,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
     self.advance()
   }
   let page_size_log2 = self.parse_optional_page_size_log2()
-  self.expect_rparen()
-  MemoryDef(
-    { limits: { min, max, }, is_memory64, is_shared, page_size_log2, },
-    export_names,
-  )
+  { limits: { min, max, }, is_memory64, is_shared, page_size_log2, }
 }
 
 ///|
@@ -335,18 +220,10 @@ fn Parser::parse_optional_page_size_log2(self : Parser) -> Int32 raise WatError 
   if self.current.token != LParen {
     return 16
   }
-  let saved = self.lexer.pos
-  let saved_line = self.lexer.line
-  let saved_column = self.lexer.column
-  let saved_token_start_line = self.lexer.token_start_line
-  let saved_token_start_column = self.lexer.token_start_column
+  let saved = self.lexer.checkpoint()
   self.advance()
   if self.current.token != Keyword("pagesize") {
-    self.lexer.pos = saved
-    self.lexer.line = saved_line
-    self.lexer.column = saved_column
-    self.lexer.token_start_line = saved_token_start_line
-    self.lexer.token_start_column = saved_token_start_column
+    self.lexer.restore(saved)
     self.current = LocatedToken::synthetic(LParen)
     return 16
   }
@@ -366,249 +243,37 @@ fn Parser::parse_optional_page_size_log2(self : Parser) -> Int32 raise WatError 
 fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   self.advance() // skip "global"
   let export_names : Array[String] = []
-
-  // Optional name - skip it (already registered in first pass)
   if self.current.token is Id(_) {
     self.advance()
   }
 
-  // Check for inline import: (global $x (import "mod" "name") i32)
+  let import_names = self.parse_inline_links(export_names)
+  let type_ = self.parse_global_type()
+  if import_names is Some((mod_name, name)) {
+    self.expect_rparen()
+    return GlobalImport({ mod_name, name, desc: Global(type_), }, export_names)
+  }
+
+  let init = self.parse_instructions()
+  self.expect_rparen()
+  GlobalDef({ type_, init: ReadOnlyArray::from_array(init), }, export_names)
+}
+
+///|
+fn Parser::parse_global_type(self : Parser) -> @types.GlobalType raise WatError {
   if self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
-    self.advance()
-    match self.current.token {
-      Keyword("import") => {
-        self.advance()
-        // Parse module name and import name
-        let mod_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected module name", self.loc())
-        }
-        let import_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected import name", self.loc())
-        }
-        self.expect_rparen() // close import
-
-        // Check for inline exports after import (can have multiple)
-        while self.current.token == LParen {
-          let saved2 = self.lexer.pos
-          self.advance()
-          match self.current.token {
-            Keyword("export") => {
-              self.advance()
-              match self.current.token {
-                String_(s) => {
-                  export_names.push(decode_text(s))
-                  self.advance()
-                }
-                _ => raise UnexpectedToken("expected export name", self.loc())
-              }
-              self.expect_rparen()
-            }
-            _ => {
-              self.lexer.pos = saved2
-              self.current = LocatedToken::synthetic(LParen)
-              break
-            }
-          }
-        }
-
-        // Parse global type (mut i32) or i32 or (ref ...)
-        let (value_type, mutable) = if self.current.token == LParen {
-          let saved3 = self.lexer.pos
-          let saved3_line = self.lexer.line
-          let saved3_column = self.lexer.column
-          let saved3_token_start_line = self.lexer.token_start_line
-          let saved3_token_start_column = self.lexer.token_start_column
-          self.advance()
-          if self.current.token == Keyword("mut") {
-            self.advance()
-            let vt = self.parse_value_type()
-            self.expect_rparen()
-            (vt, true)
-          } else {
-            // Not (mut ...), restore and parse as ref type
-            self.lexer.pos = saved3
-            self.lexer.line = saved3_line
-            self.lexer.column = saved3_column
-            self.lexer.token_start_line = saved3_token_start_line
-            self.lexer.token_start_column = saved3_token_start_column
-            self.current = LocatedToken::synthetic(LParen)
-            (self.parse_value_type(), false)
-          }
-        } else {
-          (self.parse_value_type(), false)
-        }
-        self.expect_rparen() // close global
-
-        // Note: global name is already registered in first pass, no need to set again
-        let imp : @types.Import = {
-          mod_name,
-          name: import_name,
-          desc: Global({ value_type, mutable, }),
-        }
-        return GlobalImport(imp, export_names)
-      }
-      _ => {
-        // Not an inline import, restore state
-        self.lexer.pos = saved
-        self.lexer.line = saved_line
-        self.lexer.column = saved_column
-        self.lexer.token_start_line = saved_token_start_line
-        self.lexer.token_start_column = saved_token_start_column
-        self.current = LocatedToken::synthetic(LParen)
-      }
-    }
-  }
-
-  // Note: global name is already registered in first pass, no need to set again
-
-  // Check for inline exports and imports (can have multiple exports, at most one import)
-  // Exports can come before or after import
-  while self.current.token == LParen {
-    let saved = self.lexer.pos
-    self.advance()
-    match self.current.token {
-      Keyword("export") => {
-        self.advance()
-        match self.current.token {
-          String_(s) => {
-            export_names.push(decode_text(s))
-            self.advance()
-          }
-          _ => raise UnexpectedToken("expected export name", self.loc())
-        }
-        self.expect_rparen()
-      }
-      Keyword("import") => {
-        // Inline import after exports
-        self.advance()
-        let mod_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected module name", self.loc())
-        }
-        let import_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected import name", self.loc())
-        }
-        self.expect_rparen() // close import
-
-        // Continue checking for more exports after import
-        while self.current.token == LParen {
-          let saved2 = self.lexer.pos
-          self.advance()
-          match self.current.token {
-            Keyword("export") => {
-              self.advance()
-              match self.current.token {
-                String_(s) => {
-                  export_names.push(decode_text(s))
-                  self.advance()
-                }
-                _ => raise UnexpectedToken("expected export name", self.loc())
-              }
-              self.expect_rparen()
-            }
-            _ => {
-              self.lexer.pos = saved2
-              self.current = LocatedToken::synthetic(LParen)
-              break
-            }
-          }
-        }
-
-        // Parse global type
-        let (value_type, mutable) = if self.current.token == LParen {
-          let saved3 = self.lexer.pos
-          let saved3_line = self.lexer.line
-          let saved3_column = self.lexer.column
-          let saved3_token_start_line = self.lexer.token_start_line
-          let saved3_token_start_column = self.lexer.token_start_column
-          self.advance()
-          if self.current.token == Keyword("mut") {
-            self.advance()
-            let vt = self.parse_value_type()
-            self.expect_rparen()
-            (vt, true)
-          } else {
-            self.lexer.pos = saved3
-            self.lexer.line = saved3_line
-            self.lexer.column = saved3_column
-            self.lexer.token_start_line = saved3_token_start_line
-            self.lexer.token_start_column = saved3_token_start_column
-            self.current = LocatedToken::synthetic(LParen)
-            (self.parse_value_type(), false)
-          }
-        } else {
-          (self.parse_value_type(), false)
-        }
-        self.expect_rparen() // close global
-        let imp : @types.Import = {
-          mod_name,
-          name: import_name,
-          desc: Global({ value_type, mutable, }),
-        }
-        return GlobalImport(imp, export_names)
-      }
-      _ => {
-        self.lexer.pos = saved
-        self.current = LocatedToken::synthetic(LParen)
-        break
-      }
-    }
-  }
-
-  // Parse global type (mut i32) or i32 or (ref ...)
-  let (value_type, mutable) = if self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
+    let saved = self.lexer.checkpoint()
     self.advance()
     if self.current.token == Keyword("mut") {
       self.advance()
-      let vt = self.parse_value_type()
+      let value_type = self.parse_value_type()
       self.expect_rparen()
-      (vt, true)
-    } else {
-      // Not (mut ...), restore and parse as ref type
-      self.lexer.pos = saved
-      self.lexer.line = saved_line
-      self.lexer.column = saved_column
-      self.lexer.token_start_line = saved_token_start_line
-      self.lexer.token_start_column = saved_token_start_column
-      self.current = LocatedToken::synthetic(LParen)
-      (self.parse_value_type(), false)
+      return { value_type, mutable: true, }
     }
-  } else {
-    (self.parse_value_type(), false)
+    self.lexer.restore(saved)
+    self.current = LocatedToken::synthetic(LParen)
   }
-
-  // Parse init expression
-  let init = self.parse_instructions()
-  self.expect_rparen()
-  GlobalDef(
-    { type_: { value_type, mutable, }, init: ReadOnlyArray::from_array(init), },
-    export_names,
-  )
+  { value_type: self.parse_value_type(), mutable: false, }
 }
 
 ///|
@@ -630,31 +295,16 @@ fn Parser::parse_table_def(
 
   // Collect every inline export before the optional import.
   while self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
+    let saved = self.lexer.checkpoint()
     let saved_current = self.current
     self.advance()
     match self.current.token {
       Keyword("export") => {
         self.advance()
-        match self.current.token {
-          String_(s) => {
-            export_names.push(decode_text(s))
-            self.advance()
-          }
-          _ => raise UnexpectedToken("expected export name", self.loc())
-        }
-        self.expect_rparen()
+        export_names.push(self.parse_inline_export())
       }
       _ => {
-        self.lexer.pos = saved
-        self.lexer.line = saved_line
-        self.lexer.column = saved_column
-        self.lexer.token_start_line = saved_token_start_line
-        self.lexer.token_start_column = saved_token_start_column
+        self.lexer.restore(saved)
         self.current = saved_current
         break
       }
@@ -663,43 +313,16 @@ fn Parser::parse_table_def(
 
   // Check for inline import: (table (import "mod" "name") MIN [MAX] elemtype)
   if self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
+    let saved = self.lexer.checkpoint()
     self.advance()
     match self.current.token {
       Keyword("import") => {
-        self.advance()
-        // Parse module name and import name
-        let mod_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected module name", self.loc())
-        }
-        let import_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected import name", self.loc())
-        }
-        self.expect_rparen() // close import
+        let (mod_name, import_name) = self.parse_inline_import()
 
         while self.current.token == LParen {
           self.expect_lparen()
           self.expect_keyword("export")
-          match self.current.token {
-            String_(name) => {
-              export_names.push(decode_text(name))
-              self.advance()
-            }
-            _ => raise UnexpectedToken("expected export name", self.loc())
-          }
-          self.expect_rparen()
+          export_names.push(self.parse_inline_export())
         }
 
         // Check for table64 (i64 keyword before limits)
@@ -730,11 +353,7 @@ fn Parser::parse_table_def(
       }
       _ => {
         // Not an inline import, restore state
-        self.lexer.pos = saved
-        self.lexer.line = saved_line
-        self.lexer.column = saved_column
-        self.lexer.token_start_line = saved_token_start_line
-        self.lexer.token_start_column = saved_token_start_column
+        self.lexer.restore(saved)
         self.current = LocatedToken::synthetic(LParen)
       }
     }
@@ -758,11 +377,7 @@ fn Parser::parse_table_def(
       let elem_type = self.parse_value_type()
       // Check if followed by inline elem
       if self.current.token == LParen {
-        let saved = self.lexer.pos
-        let saved_line = self.lexer.line
-        let saved_column = self.lexer.column
-        let saved_token_start_line = self.lexer.token_start_line
-        let saved_token_start_column = self.lexer.token_start_column
+        let saved = self.lexer.checkpoint()
         self.advance()
         match self.current.token {
           Keyword("elem") => {
@@ -851,11 +466,7 @@ fn Parser::parse_table_def(
             // Not an inline elem, restore state and fall through to standard syntax
             // But we already parsed elem_type, so we need a different approach
             // This case shouldn't happen for valid WAT - (ref null $t) followed by something other than (elem ...)
-            self.lexer.pos = saved
-            self.lexer.line = saved_line
-            self.lexer.column = saved_column
-            self.lexer.token_start_line = saved_token_start_line
-            self.lexer.token_start_column = saved_token_start_column
+            self.lexer.restore(saved)
             self.current = LocatedToken::synthetic(LParen)
             raise UnexpectedToken("expected elem in inline table", self.loc())
           }
@@ -1073,13 +684,7 @@ fn Parser::parse_export_def(
   mod_ : @types.Module,
 ) -> @types.Export raise WatError {
   self.advance() // skip "export"
-  let name = match self.current.token {
-    String_(s) => {
-      self.advance()
-      decode_text(s)
-    }
-    _ => raise UnexpectedToken("expected export name", self.loc())
-  }
+  let name = self.parse_link_name("expected export name")
   self.expect_lparen()
   let desc = match self.current.token {
     Keyword("func") => {
@@ -1143,20 +748,7 @@ fn Parser::parse_import_def(
   mod_ : @types.Module,
 ) -> @types.Import raise WatError {
   self.advance() // skip "import"
-  let mod_name = match self.current.token {
-    String_(s) => {
-      self.advance()
-      decode_text(s)
-    }
-    _ => raise UnexpectedToken("expected module name", self.loc())
-  }
-  let name = match self.current.token {
-    String_(s) => {
-      self.advance()
-      decode_text(s)
-    }
-    _ => raise UnexpectedToken("expected import name", self.loc())
-  }
+  let (mod_name, name) = self.parse_import_names()
   self.expect_lparen()
   let desc = match self.current.token {
     Keyword("func") => {
@@ -1209,30 +801,8 @@ fn Parser::parse_import_def(
         self.memory_names.set(mname, count_memory_imports(mod_.imports))
         self.advance()
       }
-      // Check for i64 keyword (memory64)
-      let is_memory64 = match self.current.token {
-        Keyword("i32") => {
-          self.advance()
-          false
-        }
-        Keyword("i64") => {
-          self.advance()
-          true
-        }
-        _ => false
-      }
-      // Parse unsigned 64-bit limits; the validator checks address-type bounds
-      let min = self.parse_u64()
-      let max = match self.current.token {
-        Number(_) => Some(self.parse_u64())
-        _ => None
-      }
-      let is_shared = self.current.token == Keyword("shared")
-      if is_shared {
-        self.advance()
-      }
-      let page_size_log2 = self.parse_optional_page_size_log2()
-      Memory({ limits: { min, max, }, is_memory64, is_shared, page_size_log2, })
+      let is_memory64 = self.parse_memory_address_type()
+      Memory(self.parse_memory_type_tail(is_memory64))
     }
     Keyword("table") => {
       self.advance()
@@ -1263,32 +833,7 @@ fn Parser::parse_import_def(
         self.global_names.set(gname, count_global_imports(mod_.imports))
         self.advance()
       }
-      let (value_type, mutable) = if self.current.token == LParen {
-        let saved_pos = self.lexer.pos
-        let saved_line = self.lexer.line
-        let saved_column = self.lexer.column
-        let saved_token_start_line = self.lexer.token_start_line
-        let saved_token_start_column = self.lexer.token_start_column
-        self.advance()
-        if self.current.token == Keyword("mut") {
-          self.advance()
-          let vt = self.parse_value_type()
-          self.expect_rparen()
-          (vt, true)
-        } else {
-          // Not (mut ...), restore and parse as ref type
-          self.lexer.pos = saved_pos
-          self.lexer.line = saved_line
-          self.lexer.column = saved_column
-          self.lexer.token_start_line = saved_token_start_line
-          self.lexer.token_start_column = saved_token_start_column
-          self.current = LocatedToken::synthetic(LParen)
-          (self.parse_value_type(), false)
-        }
-      } else {
-        (self.parse_value_type(), false)
-      }
-      Global({ value_type, mutable, })
+      Global(self.parse_global_type())
     }
     Keyword("tag") => {
       self.advance()
@@ -1299,11 +844,7 @@ fn Parser::parse_import_def(
       }
       // Parse type - either (type $idx) or inline (param ...)
       let type_idx = if self.current.token == LParen {
-        let saved_pos = self.lexer.pos
-        let saved_line = self.lexer.line
-        let saved_column = self.lexer.column
-        let saved_token_start_line = self.lexer.token_start_line
-        let saved_token_start_column = self.lexer.token_start_column
+        let saved_pos = self.lexer.checkpoint()
         self.advance()
         if self.current.token == Keyword("type") {
           // (type $idx) syntax
@@ -1313,11 +854,7 @@ fn Parser::parse_import_def(
           idx
         } else {
           // Inline signature - restore position and parse func type
-          self.lexer.pos = saved_pos
-          self.lexer.line = saved_line
-          self.lexer.column = saved_column
-          self.lexer.token_start_line = saved_token_start_line
-          self.lexer.token_start_column = saved_token_start_column
+          self.lexer.restore(saved_pos)
           self.current = LocatedToken::synthetic(LParen)
           let func_type = self.parse_func_type()
           // Add this type to the module and get its index
@@ -1378,11 +915,7 @@ fn Parser::parse_data_def(
 
   // Check what comes next
   if self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
+    let saved = self.lexer.checkpoint()
     self.advance()
     match self.current.token {
       Keyword("memory") => {
@@ -1425,11 +958,7 @@ fn Parser::parse_data_def(
       }
       _ => {
         // Restore - this might be something else or passive data
-        self.lexer.pos = saved
-        self.lexer.line = saved_line
-        self.lexer.column = saved_column
-        self.lexer.token_start_line = saved_token_start_line
-        self.lexer.token_start_column = saved_token_start_column
+        self.lexer.restore(saved)
         self.current = LocatedToken::synthetic(LParen)
       }
     }
@@ -1497,20 +1026,12 @@ fn Parser::parse_elem_def(
       self.parse_elem_items_and_finish(Passive)
     LParen => {
       // Could be active segment with (table ...), (offset ...), (i32.const ...), or (ref ...)
-      let saved = self.lexer.pos
-      let saved_line = self.lexer.line
-      let saved_column = self.lexer.column
-      let saved_token_start_line = self.lexer.token_start_line
-      let saved_token_start_column = self.lexer.token_start_column
+      let saved = self.lexer.checkpoint()
       self.advance()
       match self.current.token {
         Keyword("ref") => {
           // Passive segment with (ref null func) type
-          self.lexer.pos = saved
-          self.lexer.line = saved_line
-          self.lexer.column = saved_column
-          self.lexer.token_start_line = saved_token_start_line
-          self.lexer.token_start_column = saved_token_start_column
+          self.lexer.restore(saved)
           self.current = LocatedToken::synthetic(LParen)
           self.parse_elem_items_and_finish(Passive)
         }
@@ -1728,42 +1249,15 @@ fn Parser::parse_tag_def(
 
   // Check for inline export or import
   while self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
+    let saved = self.lexer.checkpoint()
     self.advance()
     match self.current.token {
       Keyword("export") => {
         self.advance()
-        match self.current.token {
-          String_(s) => {
-            export_names.push(decode_text(s))
-            self.advance()
-          }
-          _ => raise UnexpectedToken("expected export name", self.loc())
-        }
-        self.expect_rparen()
+        export_names.push(self.parse_inline_export())
       }
       Keyword("import") => {
-        self.advance()
-        // Parse module name and import name
-        let mod_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected module name", self.loc())
-        }
-        let import_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected import name", self.loc())
-        }
-        self.expect_rparen() // close import
+        let (mod_name, import_name) = self.parse_inline_import()
 
         // Parse type after import
         let type_idx = self.parse_tag_type_spec(mod_)
@@ -1777,11 +1271,7 @@ fn Parser::parse_tag_def(
       }
       _ => {
         // Not export/import, restore and continue to parse type
-        self.lexer.pos = saved
-        self.lexer.line = saved_line
-        self.lexer.column = saved_column
-        self.lexer.token_start_line = saved_token_start_line
-        self.lexer.token_start_column = saved_token_start_column
+        self.lexer.restore(saved)
         self.current = LocatedToken::synthetic(LParen)
         break
       }
@@ -1801,11 +1291,7 @@ fn Parser::parse_tag_type_spec(
   mod_ : @types.Module,
 ) -> Int32 raise WatError {
   if self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
+    let saved = self.lexer.checkpoint()
     self.advance()
     if self.current.token == Keyword("type") {
       // (type $idx) syntax
@@ -1815,11 +1301,7 @@ fn Parser::parse_tag_type_spec(
       idx
     } else {
       // Inline signature - restore position and parse func type
-      self.lexer.pos = saved
-      self.lexer.line = saved_line
-      self.lexer.column = saved_column
-      self.lexer.token_start_line = saved_token_start_line
-      self.lexer.token_start_column = saved_token_start_column
+      self.lexer.restore(saved)
       self.current = LocatedToken::synthetic(LParen)
       let func_type = self.parse_func_type()
       // Add this type to the module and get its index

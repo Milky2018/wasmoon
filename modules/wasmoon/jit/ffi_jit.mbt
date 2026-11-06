@@ -27,10 +27,6 @@ pub impl Show for JITTrap with fn output(self, logger) {
 
 ///|
 /// JIT execution context (JIT ABI) - GC managed
-/// TODO(wasmoon_jit): move entry trampoline generation to
-/// `wasmoon_jit.plan_entry_trampoline_for_target` after the reusable
-/// trampoline passes the full WAST/testsuite production gate, then move this
-/// context into `wasmoon_jit`.
 /// Uses Standard on-demand loading from vmctx:
 /// Module-shaped offsets are selected before compilation and retained by the
 /// loaded artifact for instance allocation.
@@ -101,12 +97,6 @@ fn JITContext::set_memory(
   mem0_ptr : @wasmoon_jit.MemoryDescriptor,
 ) -> Unit {
   self.ctx.set_memory(mem0_ptr)
-}
-
-///|
-/// Set globals array in the context
-fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
-  self.ctx.set_globals(globals_ptr)
 }
 
 ///|

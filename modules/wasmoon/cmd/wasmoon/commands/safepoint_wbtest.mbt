@@ -61,72 +61,6 @@ test "polled leaf inlining cross compiles with precise safepoints on both target
 }
 
 ///|
-test "guarded transitive direct calls cross compile with full slow paths" {
-  let module_ = @core_wat.parse(
-    (
-      #|(module
-      #| (type $n (struct (field i64) (field i64)))
-      #| (func $leaf (param (ref $n)) (result i64)
-      #|  local.get 0 struct.get $n 0 i64.const 3 i64.div_s i64.const 5 i64.div_s)
-      #| (func $wrapper (param (ref $n)) (result i64) local.get 0 call $leaf)
-      #| (func (param (ref $n)) (result i64)
-      #|  local.get 0 struct.get $n 0 local.get 0 call $wrapper i64.add
-      #|  local.get 0 struct.get $n 1 i64.add))
-    ),
-  )
-  @validator.validate_module(module_)
-  let shape = @wasmoon_jit.context_shape(module_)
-  let context = @wasm_frontend.translation_context_from_module(
-    module_,
-    @wasmoon.wasm_frontend_embedding_environment(
-      context_shape=shape,
-      cancellation_safepoints=true,
-    ),
-  )
-  let plain = @wasm_frontend.wasm_validation_context(context)
-  let scalar_callees = @wasm_frontend.scalar_callees(context, module_)
-  let summarized = @wasm_optimize.with_read_only_calls(plain, scalar_callees)
-  assert_eq(summarized.read_only_call_contract(1).map(c => c.polls), Some(2))
-  for target in [@wasmoon_jit.NativeTarget::X64, AArch64] {
-    for level in [0, 2, 3] {
-      let validation = if level == 0 { plain } else { summarized }
-      let compiler = @wasmoon_jit.NativeCompiler::new(
-        target,
-        context_shape=shape,
-      )
-      let ty = module_.validated_func_type_at(module_.funcs[2])
-      let function = @wasm_frontend.translate_function_body(
-        context,
-        "cross_call_object_reads",
-        ty,
-        module_.codes[2].locals,
-        module_.codes[2].body,
-      )
-      @wasm_optimize.optimize_with_level(
-        function,
-        validation,
-        @optimize.OptLevel::from_int(level),
-        scalar_callees~,
-      )
-      |> ignore
-      let compiled = compiler.compile_wasm_body_artifact_function(
-        function,
-        validation,
-        function_index=2,
-        signature=@wasmoon_jit.wasm_function_signature(ty),
-      )
-      assert_eq(
-        function.print().contains("native_guarded_read_only_call"),
-        level >= 2,
-      )
-      assert_true(function.print().contains("ext.wasm.call"))
-      assert_false(compiled.code.is_empty())
-      assert_false(compiled.safepoints.is_empty())
-    }
-  }
-}
-
-///|
 test "both targets retain logical reference carriers in checked physical loads" {
   let module_ = @core_wat.parse(
     (
@@ -176,7 +110,7 @@ test "both targets retain logical reference carriers in checked physical loads" 
 }
 
 ///|
-test "partial native artifacts do not trust the effects of unavailable source bodies" {
+test "full and partial native artifacts emit one direct call" {
   let source =
     #|(module (type $n (struct (field i64) (field i64)))
     #| (func $leaf (param (ref $n)) (result i64)
@@ -212,14 +146,12 @@ test "partial native artifacts do not trust the effects of unavailable source bo
         relocation.target is Code(symbol) && symbol.name == "wasm.func.1"
       })
       .length()
-    // Full compilation emits a proved fast call and its conservative fallback.
-    // The missing target cannot acquire that additional proof-based entry.
-    assert_eq(calls, if partial { 1 } else { 2 })
+    assert_eq(calls, 1)
   }
 }
 
 ///|
-test "progress reentry cannot replace a body after its call effects were proved" {
+test "progress reentry cannot replace a snapshotted compilation body" {
   let source =
     #|(module (type $n (struct (field i64) (field i64)))
     #| (func $caller (param (ref $n)) (result i64)

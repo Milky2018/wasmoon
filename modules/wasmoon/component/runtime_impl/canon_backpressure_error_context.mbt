@@ -24,7 +24,6 @@ fn instantiate_canon_backpressure_inc(
     let old = backpressure_value_for_instance(async_state, owner_component_id)
     if old >= 65535 {
       trap_canon("backpressure counter overflow")
-      return []
     }
     set_backpressure_value_for_instance(
       async_state,
@@ -50,7 +49,6 @@ fn instantiate_canon_backpressure_dec(
     let old = backpressure_value_for_instance(async_state, owner_component_id)
     if old <= 0 {
       trap_canon("backpressure counter overflow")
-      return []
     }
     set_backpressure_value_for_instance(
       async_state,
@@ -80,17 +78,9 @@ fn instantiate_canon_error_context_new(
     }
     let mem_addr = match resources.mem_addr {
       Some(addr) => addr
-      None => {
-        trap_canon(canon_err_message(MissingCanonMemory))
-        return []
-      }
+      None => trap_canon(canon_err_message(MissingCanonMemory))
     }
-    let mem = store.get_mem(mem_addr) catch {
-      e => {
-        trap_canon(e.to_string())
-        return []
-      }
-    }
+    let mem = store.get_mem(mem_addr) catch { e => trap_canon(e.to_string()) }
     let lifted = lift_component_value_from_flat(
       Prim(String),
       args,
@@ -100,17 +90,11 @@ fn instantiate_canon_error_context_new(
       resources.encoding,
       resource_table,
     ) catch {
-      e => {
-        trap_canon(canon_err_message(e))
-        return []
-      }
+      e => trap_canon(canon_err_message(e))
     }
     let debug_message = match lifted {
       String(s) | EncodedString(s, _, _) => s
-      _ => {
-        trap_canon("type mismatch")
-        return []
-      }
+      _ => trap_canon("type mismatch")
     }
     let handle = resource_table.alloc_error_context(debug_message) catch {
       error => {
@@ -140,49 +124,28 @@ fn instantiate_canon_error_context_debug_message(
     }
     if args.length() != 2 {
       trap_canon("type mismatch")
-      return []
     }
     let handle = match parse_i32_like_arg(args[0]) {
       Some(h) => h
-      None => {
-        trap_canon("type mismatch")
-        return []
-      }
+      None => trap_canon("type mismatch")
     }
     let retptr = match parse_i32_like_arg(args[1]) {
       Some(p) => p.to_int64() & 0xffffffffL
-      None => {
-        trap_canon("type mismatch")
-        return []
-      }
+      None => trap_canon("type mismatch")
     }
     let debug_message = match resource_table.error_contexts.get(handle) {
       Some(s) => s
-      None => {
-        trap_canon("unknown handle index \{handle}")
-        return []
-      }
+      None => trap_canon("unknown handle index \{handle}")
     }
     let mem_addr = match resources.mem_addr {
       Some(addr) => addr
-      None => {
-        trap_canon(canon_err_message(MissingCanonMemory))
-        return []
-      }
+      None => trap_canon(canon_err_message(MissingCanonMemory))
     }
     let realloc = match resources.realloc {
       Some(f) => f
-      None => {
-        trap_canon(canon_err_message(MissingCanonRealloc))
-        return []
-      }
+      None => trap_canon(canon_err_message(MissingCanonRealloc))
     }
-    let mem = store.get_mem(mem_addr) catch {
-      e => {
-        trap_canon(e.to_string())
-        return []
-      }
-    }
+    let mem = store.get_mem(mem_addr) catch { e => trap_canon(e.to_string()) }
     let mem_is_64 = mem.is_memory64()
     let (bytes, canon_len, align) = encode_string_for_canon(
       debug_message,
@@ -191,10 +154,7 @@ fn instantiate_canon_error_context_debug_message(
     let ptr = write_bytes_to_memory_with_align(
       store, mem, realloc, mem_is_64, bytes, align,
     ) catch {
-      e => {
-        trap_canon(canon_err_message(e))
-        return []
-      }
+      e => trap_canon(canon_err_message(e))
     }
     // Allocation precedes descriptor validation, but no descriptor field may be
     // stored until the entire return area fits in memory.
@@ -204,33 +164,20 @@ fn instantiate_canon_error_context_debug_message(
       descriptor_base > mem.byte_len() ||
       descriptor_size > mem.byte_len() - descriptor_base {
       trap_canon("invalid debug message pointer")
-      return []
     }
     if mem_is_64 {
       mem.store_i64_at(retptr, ptr) catch {
-        e => {
-          trap_canon(e.to_string())
-          return []
-        }
+        e => trap_canon(e.to_string())
       }
       mem.store_i64_at(retptr + 8, canon_len.to_int64() & 0xffffffffL) catch {
-        e => {
-          trap_canon(e.to_string())
-          return []
-        }
+        e => trap_canon(e.to_string())
       }
     } else {
       mem.store_i32_at(retptr, ptr.to_int()) catch {
-        e => {
-          trap_canon(e.to_string())
-          return []
-        }
+        e => trap_canon(e.to_string())
       }
       mem.store_i32_at(retptr + 4, canon_len) catch {
-        e => {
-          trap_canon(e.to_string())
-          return []
-        }
+        e => trap_canon(e.to_string())
       }
     }
     []
@@ -253,18 +200,13 @@ fn instantiate_canon_error_context_drop(
     }
     if args.length() != 1 {
       trap_canon("type mismatch")
-      return []
     }
     let handle = match parse_i32_like_arg(args[0]) {
       Some(h) => h
-      None => {
-        trap_canon("type mismatch")
-        return []
-      }
+      None => trap_canon("type mismatch")
     }
     if !resource_table.drop_error_context(handle) {
       trap_canon("unknown handle index \{handle}")
-      return []
     }
     []
   }

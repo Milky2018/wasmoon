@@ -283,15 +283,13 @@ fn decode_interface_from_componenttype(
   export_short_name : String,
 ) -> (String, String?, Interface) raise WitError {
   // Find the exported instance under the full interface name.
-  let mut full_name : String? = None
-  let mut inst_tyidx : Int32? = None
+  let mut exported : (String, Int32)? = None
   for d in decls {
     if d is Export(name, _attributes, InstanceType(ti)) {
-      full_name = Some(name)
-      inst_tyidx = Some(ti)
+      exported = Some((name, ti))
     }
   }
-  let full = full_name.unwrap_or_else(() => {
+  let (full, inst_tyidx) = exported.unwrap_or_else(() => {
     raise WitError::Error(
       "not an interface wrapper: `" + export_short_name + "`",
     )
@@ -324,14 +322,9 @@ fn decode_interface_from_componenttype(
       _ => ()
     }
   }
-  let inst_td = match inst_tyidx {
-    Some(i) =>
-      match type_space[i] {
-        Some(td) => td
-        None => raise Error("missing instancetype for `" + full + "`")
-      }
-    None => raise Error("missing instancetype export for `" + full + "`")
-  }
+  let inst_td = type_space[inst_tyidx].unwrap_or_else(() => {
+    raise WitError::Error("missing instancetype for `" + full + "`")
+  })
   let inst_decls = match inst_td {
     InstanceType(xs) => xs
     InstanceTypeEmpty => []
@@ -399,125 +392,109 @@ fn decode_interface_from_componenttype(
     resources.set(rname, { name: rname, methods: [], })
   }
 
-  // Collect named types.
+  // Resolve local definitions and outer aliases before decoding their shared shape.
   let type_items : Array[InterfaceItem] = []
   for d in inst_decls {
-    if d is Export(tname, _attributes, Type(bound)) && bound is Eq(ti) {
-      // If this is an alias to an outer type, try to resolve it through
-      // the imported instance signature.
-      match slots[ti] {
-        AliasOuter(count, outer_idx) =>
-          if count == 1 {
-            match
-              resolve_outer_export_typedef(
-                type_space, inst_sig_typeidx_by_inst, alias_export_by_typeidx, outer_idx,
-              ) {
-              Some((None, Some(SubResource))) => {
-                // Treat as a re-exported resource.
-                resources.set(tname, { name: tname, methods: [], })
-                // Also treat this exported nominal type index as a resource for own/borrow decoding.
-                match idx_by_name.get(tname) {
-                  Some(exp_idx) => resource_by_idx.set(exp_idx, tname)
-                  None => ()
-                }
+    if d is Export(tname, _attributes, Type(Eq(ti))) {
+      let definition : @component.TypeDef? = match slots[ti] {
+        AliasOuter(1, outer_idx) =>
+          match
+            resolve_outer_export_typedef(
+              type_space, inst_sig_typeidx_by_inst, alias_export_by_typeidx, outer_idx,
+            ) {
+            Some((None, Some(SubResource))) => {
+              resources.set(tname, { name: tname, methods: [], })
+              if idx_by_name.get(tname) is Some(exp_idx) {
+                resource_by_idx.set(exp_idx, tname)
               }
-              Some((Some(td2), _b)) =>
-                match td2 {
-                  Record(fields) => {
-                    let fs : Array[(String, TypeExpr)] = []
-                    for f in fields {
-                      fs.push(
-                        (
-                          f.label,
-                          typeexpr_of_valtype(
-                            slots,
-                            f.ty,
-                            export_name_by_idx,
-                            resource_by_idx,
-                          ),
-                        ),
-                      )
-                    }
-                    type_items.push(Record({ name: tname, fields: fs, }))
-                  }
-                  Flags(xs) =>
-                    type_items.push(Flags({ name: tname, flags: xs, }))
-                  Enum(xs) => type_items.push(Enum({ name: tname, cases: xs, }))
-                  Variant(cases) => {
-                    let cs : Array[VariantCase] = []
-                    for c in cases {
-                      let payload = match c.ty {
-                        None => None
-                        Some(v) =>
-                          Some(
-                            typeexpr_of_valtype(
-                              slots, v, export_name_by_idx, resource_by_idx,
-                            ),
-                          )
-                      }
-                      cs.push({ name: c.label, payload, })
-                    }
-                    type_items.push(Variant({ name: tname, cases: cs, }))
-                  }
-                  _ => {
-                    let ty = typeexpr_of_typedef(
-                      slots, td2, export_name_by_idx, resource_by_idx,
-                    )
-                    type_items.push(TypeAlias({ name: tname, ty, }))
-                  }
-                }
-              _ => type_items.push(TypeAlias({ name: tname, ty: Id("other"), }))
+              continue
             }
-          } else {
-            type_items.push(TypeAlias({ name: tname, ty: Id("other"), }))
+            Some((definition, _)) => definition
+            None => None
           }
-        Def(td2) =>
-          match td2 {
-            Record(fields) => {
-              let fs : Array[(String, TypeExpr)] = []
-              for f in fields {
-                fs.push(
-                  (
-                    f.label,
-                    typeexpr_of_valtype(
-                      slots,
-                      f.ty,
-                      export_name_by_idx,
-                      resource_by_idx,
-                    ),
-                  ),
-                )
-              }
-              type_items.push(Record({ name: tname, fields: fs, }))
-            }
-            Flags(xs) => type_items.push(Flags({ name: tname, flags: xs, }))
-            Enum(xs) => type_items.push(Enum({ name: tname, cases: xs, }))
-            Variant(cases) => {
-              let cs : Array[VariantCase] = []
-              for c in cases {
-                let payload = match c.ty {
-                  None => None
-                  Some(v) =>
-                    Some(
-                      typeexpr_of_valtype(
-                        slots, v, export_name_by_idx, resource_by_idx,
-                      ),
-                    )
-                }
-                cs.push({ name: c.label, payload, })
-              }
-              type_items.push(Variant({ name: tname, cases: cs, }))
-            }
-            _ => {
-              let ty = typeexpr_of_typedef(
-                slots, td2, export_name_by_idx, resource_by_idx,
-              )
-              type_items.push(TypeAlias({ name: tname, ty, }))
-            }
-          }
-        _ => type_items.push(TypeAlias({ name: tname, ty: Id("other"), }))
+        Def(definition) => Some(definition)
+        _ => None
       }
+      type_items.push(
+        match definition {
+          Some(Record(fields)) => {
+            let decoded : Array[(String, TypeExpr)] = []
+            for field in fields {
+              decoded.push(
+                (
+                  field.label,
+                  typeexpr_of_valtype(
+                    slots,
+                    field.ty,
+                    export_name_by_idx,
+                    resource_by_idx,
+                  ),
+                ),
+              )
+            }
+            Record({ name: tname, fields: decoded, })
+          }
+          Some(Flags(flags)) => Flags({ name: tname, flags, })
+          Some(Enum(cases)) => Enum({ name: tname, cases, })
+          Some(Variant(cases)) => {
+            let decoded : Array[VariantCase] = []
+            for case_ in cases {
+              let payload = match case_.ty {
+                Some(ty) =>
+                  Some(
+                    typeexpr_of_valtype(
+                      slots, ty, export_name_by_idx, resource_by_idx,
+                    ),
+                  )
+                None => None
+              }
+              decoded.push({ name: case_.label, payload, })
+            }
+            Variant({ name: tname, cases: decoded, })
+          }
+          Some(definition) =>
+            TypeAlias({
+              name: tname,
+              ty: typeexpr_of_typedef(
+                slots, definition, export_name_by_idx, resource_by_idx,
+              ),
+            })
+          None => TypeAlias({ name: tname, ty: Id("other"), })
+        },
+      )
     }
+  }
+
+  fn decode_function(
+    name : String,
+    ft : @component.FuncType,
+    start : Int32,
+  ) -> FuncDecl raise WitError {
+    let params : Array[(String, TypeExpr)] = []
+    for i in start..<ft.params.length() {
+      let param = ft.params[i]
+      params.push(
+        (
+          param.label,
+          typeexpr_of_valtype(
+            slots,
+            param.ty,
+            export_name_by_idx,
+            resource_by_idx,
+          ),
+        ),
+      )
+    }
+    let results : Array[(String?, TypeExpr)] = []
+    if ft.result is Some(ty) {
+      results.push(
+        (
+          None,
+          typeexpr_of_valtype(slots, ty, export_name_by_idx, resource_by_idx),
+        ),
+      )
+    }
+    { name, is_async: ft.is_async, params, results, }
   }
 
   // Collect exported funcs and resource methods.
@@ -530,97 +507,29 @@ fn decode_interface_from_componenttype(
         if find_last_code_unit(rest, 46) is Some(dot) { // '.'
           let rname = slice_ascii(rest, 0, dot)
           let mname = slice_ascii(rest, dot + 1, rest.length())
-          if resources.get(rname) is Some(r0) {
-            let r = r0
-            let params : Array[(String, TypeExpr)] = []
-            // Drop implicit self param when present.
-            let mut start = 0
-            if ft.params.length() > 0 && ft.params[0].label == "self" {
-              start = 1
+          if resources.get(rname) is Some(resource) {
+            let start = if ft.params.length() > 0 &&
+              ft.params[0].label == "self" {
+              1
+            } else {
+              0
             }
-            for i in start..<ft.params.length() {
-              let p = ft.params[i]
-              params.push(
-                (
-                  p.label,
-                  typeexpr_of_valtype(
-                    slots,
-                    p.ty,
-                    export_name_by_idx,
-                    resource_by_idx,
-                  ),
-                ),
-              )
-            }
-            let results : Array[(String?, TypeExpr)] = []
-            match ft.result {
-              None => ()
-              Some(v) =>
-                results.push(
-                  (
-                    None,
-                    typeexpr_of_valtype(
-                      slots, v, export_name_by_idx, resource_by_idx,
-                    ),
-                  ),
-                )
-            }
-            r.methods.push({
-              name: mname,
-              is_async: ft.is_async,
-              params,
-              results,
-            })
-            resources.set(rname, r)
+            resource.methods.push(decode_function(mname, ft, start))
           }
         }
       } else {
-        let params : Array[(String, TypeExpr)] = []
-        for p in ft.params {
-          params.push(
-            (
-              p.label,
-              typeexpr_of_valtype(
-                slots,
-                p.ty,
-                export_name_by_idx,
-                resource_by_idx,
-              ),
-            ),
-          )
-        }
-        let results : Array[(String?, TypeExpr)] = []
-        match ft.result {
-          None => ()
-          Some(v) =>
-            results.push(
-              (
-                None,
-                typeexpr_of_valtype(
-                  slots, v, export_name_by_idx, resource_by_idx,
-                ),
-              ),
-            )
-        }
-        func_items.push(
-          Func({ name: fname, is_async: ft.is_async, params, results, }),
-        )
+        func_items.push(Func(decode_function(fname, ft, 0)))
       }
     }
   }
 
   // Assemble interface items: types, resources, funcs.
-  let items : Array[InterfaceItem] = []
-  for it in type_items {
-    items.push(it)
-  }
+  let items = type_items
   for kv in resources.iter() {
     let (_k, r) = kv
     items.push(Resource(r))
   }
-  for it in func_items {
-    items.push(it)
-  }
+  items.append(func_items)
   (pkg, ver, { name, items, })
 }
 
@@ -629,15 +538,13 @@ fn decode_world_from_componenttype(
   decls : Array[@component.ComponentDecl],
   export_short_name : String,
 ) -> (String, String?, World) raise WitError {
-  let mut full_name : String? = None
-  let mut comp_tyidx : Int32? = None
+  let mut exported : (String, Int32)? = None
   for d in decls {
     if d is Export(name, _attributes, ComponentType(ti)) {
-      full_name = Some(name)
-      comp_tyidx = Some(ti)
+      exported = Some((name, ti))
     }
   }
-  let full = full_name.unwrap_or_else(() => {
+  let (full, comp_tyidx) = exported.unwrap_or_else(() => {
     raise WitError::Error("not a world wrapper: `" + export_short_name + "`")
   })
   let (pkg, name, ver) = decode_full_name(full)
@@ -651,14 +558,9 @@ fn decode_world_from_componenttype(
     }
   }
 
-  let inner_td = match comp_tyidx {
-    Some(i) =>
-      match type_space[i] {
-        Some(td) => td
-        None => raise Error("missing componenttype for `" + full + "`")
-      }
-    None => raise Error("missing componenttype export for `" + full + "`")
-  }
+  let inner_td = type_space[comp_tyidx].unwrap_or_else(() => {
+    raise WitError::Error("missing componenttype for `" + full + "`")
+  })
   let inner_decls = match inner_td {
     ComponentType(xs) => xs
     _ => raise Error("expected componenttype for `" + full + "`")
@@ -691,15 +593,7 @@ pub fn decode_wit_package_from_component(
       continue
     }
     let short = match e.name {
-      Plain(b) => {
-        // ASCII
-        let sb = StringBuilder::StringBuilder()
-        for i in 0..<b.length() {
-          sb.write_char(b[i].to_int().unsafe_to_char())
-        }
-        sb.to_string()
-      }
-      WithVersion(b, _vs) => {
+      Plain(b) | WithVersion(b, _) => {
         let sb = StringBuilder::StringBuilder()
         for i in 0..<b.length() {
           sb.write_char(b[i].to_int().unsafe_to_char())

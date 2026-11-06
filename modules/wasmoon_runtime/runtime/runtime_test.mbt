@@ -18,13 +18,13 @@ test "Stack operations with type conversion" {
 test "Memory store and load roundtrip" {
   let mem = @runtime.Memory::Memory(1, None)
   // Store various types at different offsets
-  mem.store_i32(0, 0x12345678)
-  mem.store_i64(8, 0x123456789ABCDEF0L)
-  mem.store_f64(16, 3.141592653589793)
+  mem.store_i32_at(0L, 0x12345678)
+  mem.store_i64_at(8L, 0x123456789ABCDEF0L)
+  mem.store_f64_at(16L, 3.141592653589793)
   // Verify roundtrip
-  inspect(mem.load_i32(0), content="305419896")
-  inspect(mem.load_i64(8), content="1311768467463790320")
-  let pi = mem.load_f64(16)
+  inspect(mem.load_i32_at(0L), content="305419896")
+  inspect(mem.load_i64_at(8L), content="1311768467463790320")
+  let pi = mem.load_f64_at(16L)
   inspect(pi > 3.14 && pi < 3.15, content="true")
 }
 

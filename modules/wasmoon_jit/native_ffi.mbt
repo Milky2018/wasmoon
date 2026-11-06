@@ -555,13 +555,6 @@ extern "c" fn c_jit_ctx_set_memory_managed(
 
 ///|
 #borrow(jit_context)
-extern "c" fn c_jit_ctx_set_globals_managed(
-  jit_context : JITContext,
-  globals_ptr : Int64,
-) -> Unit = "wasmoon_jit_ctx_set_globals_managed"
-
-///|
-#borrow(jit_context)
 extern "c" fn c_jit_ctx_get_func_table_managed(
   jit_context : JITContext,
 ) -> Int64 = "wasmoon_jit_ctx_get_func_table_managed"

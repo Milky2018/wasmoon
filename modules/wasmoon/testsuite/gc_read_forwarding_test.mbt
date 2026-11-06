@@ -78,3 +78,54 @@ test "large struct declarations keep checked access beyond the exact view prefix
     )
   }
 }
+
+///|
+test "adjacent cast and field read retain subtype, packed load and trap behavior" {
+  let source =
+    #|(module
+    #| (type $base (sub (struct (field i8) (field i64))))
+    #| (type $child (sub $base (struct (field i8) (field i64) (field i32))))
+    #| (func $read (export "read") (param $object (ref null any)) (result i32)
+    #|   local.get $object ref.cast (ref $base) struct.get_s $base 0)
+    #| (func (export "test") (param $mode i32) (result i32)
+    #|   (local $value (ref $base))
+    #|   i32.const 254 i64.const 42 struct.new $base local.set $value
+    #|   local.get $value call $read drop
+    #|   local.get $value call $read drop
+    #|   local.get $mode
+    #|   if (result (ref null any))
+    #|     local.get $mode i32.const 1 i32.eq
+    #|     if (result (ref null any)) ref.null any
+    #|     else i32.const 42 ref.i31
+    #|     end
+    #|   else i32.const 254 i64.const 42 i32.const 0 struct.new $child
+    #|   end
+    #|   call $read))
+  for level in [0, 2, 3] {
+    assert_true(
+      @testsuite.compare_jit_interp_with_opt_level(
+        source,
+        "test",
+        [I32(0)],
+        level,
+      ).matched(),
+    )
+    assert_eq(
+      @testsuite.run_interp_only(source, "test", [I32(0)]),
+      Ok([I32(-2)]),
+    )
+    for mode in [1, 2] {
+      assert_true(
+        @testsuite.compare_result_errors_contain(
+          @testsuite.compare_jit_interp_with_opt_level(
+            source,
+            "test",
+            [I32(mode)],
+            level,
+          ),
+          "cast failure",
+        ),
+      )
+    }
+  }
+}

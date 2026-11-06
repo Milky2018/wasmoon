@@ -1,6 +1,6 @@
 ///|
 /// JIT Execution Runtime
-/// Loads and executes verified v9 JIT artifacts.
+/// Loads and executes verified JIT artifacts.
 
 ///|
 /// JIT-compiled function ready for execution
@@ -1111,15 +1111,6 @@ pub fn JITModule::bind_globals(
   match self.context {
     Some(ctx) => ctx.ctx.bind_globals(globals)
     None => 0L
-  }
-}
-
-///|
-/// Transfer a malloc-owned table of borrowed global-cell addresses.
-/// Prefer bind_globals for MoonBit-owned input.
-pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
-  if self.context is Some(ctx) {
-    ctx.set_globals(globals_ptr)
   }
 }
 

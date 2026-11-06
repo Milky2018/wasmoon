@@ -19,7 +19,6 @@ fn take_subtask_terminal_status(
     }
   }
   trap_canon("`subtask.cancel` called after terminal status delivered")
-  0
 }
 
 ///|
@@ -37,10 +36,7 @@ fn instantiate_canon_subtask_cancel(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    guard args is [I32(id)] else {
-      trap_canon("type mismatch")
-      return []
-    }
+    guard args is [I32(id)] else { trap_canon("type mismatch") }
     let caller_task = current_task_id(async_state)
     if !is_async_cancel {
       resume_sync_waitable_use(async_state, owner_component_id, id, caller_task)
@@ -57,7 +53,6 @@ fn instantiate_canon_subtask_cancel(
     let key = handle_key(owner_component_id, id)
     guard async_state.tasks.read_subtasks(key) is Some(subtask) else {
       trap_canon("unknown subtask handle index \{id}")
-      return []
     }
     if subtask.phase[0] == Returned {
       return [
@@ -97,18 +92,12 @@ fn instantiate_canon_subtask_cancel(
       push_canon_task(async_state, key, true)
       defer pop_task(async_state)
       step_task_once(task, store, subtask.caller_table, async_state) catch {
-        error => {
-          trap_canon(canon_err_message(error))
-          return []
-        }
+        error => trap_canon(canon_err_message(error))
       }
     }
     if step == Done {
       complete_subtask(async_state, store, key, subtask) catch {
-        error => {
-          trap_canon(canon_err_message(error))
-          return []
-        }
+        error => trap_canon(canon_err_message(error))
       }
       return [
         I32(take_subtask_terminal_status(async_state, owner_component_id, id)),

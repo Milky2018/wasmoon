@@ -154,22 +154,7 @@ fn rewrite_component_alias_indices(
       init: segment.init,
     })
   }
-  {
-    types: module_.types,
-    type_rec_groups: module_.type_rec_groups,
-    imports: module_.imports,
-    funcs: module_.funcs,
-    tables: module_.tables,
-    memories: module_.memories,
-    globals,
-    exports: module_.exports,
-    start: module_.start,
-    elems: elements,
-    codes,
-    datas: data,
-    tags: module_.tags,
-    func_names: module_.func_names,
-  }
+  { ..module_, globals, elems: elements, codes, datas: data, }
 }
 
 ///|
@@ -215,13 +200,6 @@ fn component_semantic_features(actual_memory_max : Int32?) -> Bytes {
 }
 
 ///|
-fn encoded_component_module(module_ : @types.Module) -> Bytes {
-  Bytes::from_array(
-    @encoder.encode(module_).map(fn(value) { (value & 0xFF).to_byte() }),
-  )
-}
-
-///|
 fn compile_component_artifact(
   module_ : @types.Module,
   target : @wasmoon_jit.NativeTarget,
@@ -234,10 +212,6 @@ fn compile_component_artifact(
     error =>
       raise NativeCompilationFailed("core module validation failed: \{error}")
   }
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    module_.types,
-    type_rec_groups=module_.type_rec_groups,
-  )
   let translation_context = @wasm_frontend.translation_context_from_module(
     module_,
     @wasmoon.wasm_frontend_embedding_environment(
@@ -254,9 +228,6 @@ fn compile_component_artifact(
   } else {
     Map([])
   }
-  let validation_context = @wasm_optimize.with_read_only_calls(
-    validation_context, scalar_callees,
-  )
   let imports : Array[@artifact.ImportIdentity] = []
   let mut imported_function_index = 0
   for import_ in module_.imports {
@@ -286,7 +257,7 @@ fn compile_component_artifact(
     @wasmoon_jit.host_operating_system_abi(),
     module_identity=@wasmoon_jit.artifact_module_identity(
       "component-core-module",
-      encoded_component_module(module_),
+      @encoder.encode_bytes(module_),
       component_semantic_features(actual_memory_max),
     ),
     policy~,
@@ -325,8 +296,6 @@ fn compile_component_artifact(
       validation_context,
       function_index~,
       signature=@wasmoon_jit.wasm_function_signature(function_type),
-      use_subtype_indirect_check=true,
-      canonical_type_indices~,
     ) catch {
       error =>
         raise NativeCompilationFailed(
@@ -379,7 +348,7 @@ fn load_component_jit_context(
   let prepared = match prepared_code {
     Some(code) if code.target == target && code.opt_level == opt_level =>
       code.artifacts.get(
-        (encoded_component_module(lowered_module), actual_memory_max),
+        (@encoder.encode_bytes(lowered_module), actual_memory_max),
       )
     _ => None
   }
@@ -457,35 +426,23 @@ fn load_component_jit_context(
     error =>
       raise NativeCompilationFailed("reference transfer failed: \{error}")
   }
-  @core_jit.init_elem_segments(
-    lowered_module,
-    jit_module,
-    instance,
-    store,
-    use_subtype_indirect_check=true,
-  ) catch {
+  @core_jit.bind_instance_tables(instance, store, jit_module) catch {
     error => raise @runtime_impl.ComponentRuntimeError::from_core(error)
   }
-  @core_jit.init_bulk_segments(
-    lowered_module,
-    jit_module,
-    instance,
-    store,
-    use_subtype_indirect_check=true,
-  ) catch {
+  @core_jit.init_bulk_segments(lowered_module, jit_module, instance, store) catch {
     error =>
       raise NativeCompilationFailed("reference transfer failed: \{error}")
   }
   let context = @core_jit.JITModuleContext(
     jit_module,
     globals_pointer,
-    instance.global_addrs[:].to_owned(),
-    instance.table_addrs[:].to_owned(),
-    instance.func_addrs[:].to_owned(),
-    instance.func_type_indices[:].to_owned(),
-    instance.canonical_type_indices[:].to_owned(),
-    lowered_module.types.copy(),
-    lowered_module.type_rec_groups.copy(),
+    instance.global_addrs,
+    instance.table_addrs,
+    instance.func_addrs,
+    instance.func_type_indices,
+    instance.canonical_type_indices,
+    lowered_module.types,
+    lowered_module.type_rec_groups,
     true,
   )
   context.install_hostcall_dispatcher(store, instance, classify_suspension~) catch {

@@ -388,10 +388,7 @@ fn execute_thread_suspension_intrinsic(
   let (task_id, current_handle, root_task_id, is_explicit) = current_thread_info(
     async_state, owner_component_id,
   ) catch {
-    e => {
-      trap_canon(canon_err_message(e))
-      return [I32(0)]
-    }
+    e => trap_canon(canon_err_message(e))
   }
 
   let suspension = async_state.tasks.read_task_suspensions(task_id)
@@ -406,10 +403,7 @@ fn execute_thread_suspension_intrinsic(
     require_suspended_thread(
       async_state, owner_component_id, root_task_id, handle,
     ) catch {
-      error => {
-        trap_canon(canon_err_message(error))
-        return [I32(0)]
-      }
+      error => trap_canon(canon_err_message(error))
     }
   }
 
@@ -425,7 +419,6 @@ fn execute_thread_suspension_intrinsic(
             async_state, owner_component_id, root_task_id, h,
           ) {
           trap_canon("unknown thread handle index \{h}")
-          return [I32(0)]
         }
       None => ()
     }
@@ -456,10 +449,7 @@ fn execute_thread_suspension_intrinsic(
       let resumed = dispatch_until_main_scheduled(
         async_state, store, owner_component_id, root_task_id,
       ) catch {
-        error => {
-          trap_canon(canon_err_message(error))
-          return [I32(0)]
-        }
+        error => trap_canon(canon_err_message(error))
       }
       if !resumed {
         @core.set_suspension(Some(Yield))
@@ -479,10 +469,7 @@ fn execute_thread_suspension_intrinsic(
       run_main_target_once(
         async_state, store, owner_component_id, root_task_id, h,
       ) catch {
-        e => {
-          trap_canon(canon_err_message(e))
-          return [I32(0)]
-        }
+        e => trap_canon(canon_err_message(e))
       }
       if schedule_current {
         consume_main_scheduled(async_state, root_task_id) |> ignore
@@ -491,10 +478,7 @@ fn execute_thread_suspension_intrinsic(
       let resumed = dispatch_until_main_scheduled(
         async_state, store, owner_component_id, root_task_id,
       ) catch {
-        e => {
-          trap_canon(canon_err_message(e))
-          return [I32(0)]
-        }
+        e => trap_canon(canon_err_message(e))
       }
       if !resumed {
         if !async_state.task_can_block[0] {
@@ -525,10 +509,7 @@ fn execute_thread_suspension_intrinsic(
             run_explicit_thread_once(
               async_state, store, owner_component_id, root_task_id, h,
             ) catch {
-              e => {
-                trap_canon(canon_err_message(e))
-                return [I32(0)]
-              }
+              e => trap_canon(canon_err_message(e))
             }
             ran_explicit = true
           }
@@ -555,10 +536,7 @@ fn execute_thread_suspension_intrinsic(
       let resumed = dispatch_until_main_scheduled(
         async_state, store, owner_component_id, root_task_id,
       ) catch {
-        e => {
-          trap_canon(canon_err_message(e))
-          return [I32(0)]
-        }
+        e => trap_canon(canon_err_message(e))
       }
       if !resumed {
         if !async_state.task_can_block[0] {
@@ -638,10 +616,7 @@ fn instantiate_canon_thread_index(
     ensure_task_thread(async_state, owner_component_id, task_id)
     match current_thread_handle_opt(async_state, owner_component_id, task_id) {
       Some(h) => [I32(h)]
-      None => {
-        trap_canon("no current thread")
-        [I32(0)]
-      }
+      None => trap_canon("no current thread")
     }
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
@@ -693,10 +668,7 @@ fn instantiate_canon_thread_yield_then_resume(
     }
     let target = match args {
       [I32(handle)] => handle
-      _ => {
-        trap_canon("type mismatch")
-        return [I32(0)]
-      }
+      _ => trap_canon("type mismatch")
     }
     execute_thread_suspension_intrinsic(
       cancellable,
@@ -729,10 +701,7 @@ fn instantiate_canon_thread_suspend_then_resume(
     }
     let target = match args {
       [I32(handle)] => handle
-      _ => {
-        trap_canon("type mismatch")
-        return [I32(0)]
-      }
+      _ => trap_canon("type mismatch")
     }
     execute_thread_suspension_intrinsic(
       cancellable,
@@ -762,7 +731,6 @@ fn instantiate_unsupported_thread_promotion(
       trap_canon("cannot leave component instance")
     }
     trap_canon("\{operation} is not implemented")
-    [I32(0)]
   }
   state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
@@ -805,32 +773,22 @@ fn instantiate_canon_thread_resume_later(
     }
     let target = match args {
       [I32(h)] => h
-      _ => {
-        trap_canon("type mismatch")
-        return []
-      }
+      _ => trap_canon("type mismatch")
     }
     let (_task_id, _current_handle, root_task_id, _is_explicit) = current_thread_info(
       async_state, owner_component_id,
     ) catch {
-      e => {
-        trap_canon(canon_err_message(e))
-        return []
-      }
+      e => trap_canon(canon_err_message(e))
     }
     require_suspended_thread(
       async_state, owner_component_id, root_task_id, target,
     ) catch {
-      error => {
-        trap_canon(canon_err_message(error))
-        return []
-      }
+      error => trap_canon(canon_err_message(error))
     }
     if !schedule_thread_or_main(
         async_state, owner_component_id, root_task_id, target,
       ) {
       trap_canon("unknown thread handle index \{target}")
-      return []
     }
     []
   }
@@ -889,17 +847,11 @@ fn instantiate_canon_thread_new_indirect(
     }
     let (start_idx, context) = match args {
       [I32(fi), I32(ctx)] => (fi, ctx)
-      _ => {
-        trap_canon("type mismatch")
-        return [I32(0)]
-      }
+      _ => trap_canon("type mismatch")
     }
     let table_addr = match table_addr {
       Some(addr) => addr
-      None => {
-        trap_canon("invalid core table index \{table_idx}")
-        return [I32(0)]
-      }
+      None => trap_canon("invalid core table index \{table_idx}")
     }
     let start_func = resolve_start_core_func(
       store,
@@ -907,19 +859,13 @@ fn instantiate_canon_thread_new_indirect(
       start_idx,
       async_state.core_engine,
     ) catch {
-      e => {
-        trap_canon(canon_err_message(e))
-        return [I32(0)]
-      }
+      e => trap_canon(canon_err_message(e))
     }
 
     let (_task_id, _current_handle, root_task_id, _is_explicit) = current_thread_info(
       async_state, owner_component_id,
     ) catch {
-      e => {
-        trap_canon(canon_err_message(e))
-        return [I32(0)]
-      }
+      e => trap_canon(canon_err_message(e))
     }
 
     let id = alloc_shared_handle(async_state, owner_component_id)

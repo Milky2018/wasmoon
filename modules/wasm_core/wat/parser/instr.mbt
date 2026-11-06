@@ -161,46 +161,7 @@ fn Parser::parse_folded_instructions(
           _ => None
         }
         let bt = self.parse_block_type()
-        let handlers : Array[@types.CatchHandler] = []
-        // Parse catch handlers until we hit an instruction or )
-        while self.current.token == LParen {
-          let saved_pos = self.lexer.pos
-          self.advance() // skip (
-          match self.current.token {
-            Keyword("catch") => {
-              self.advance() // skip "catch"
-              let tag_idx = self.parse_tag_idx()
-              let label_idx = self.parse_label_idx()
-              handlers.push(Catch(tag_idx, label_idx))
-              self.expect_rparen()
-            }
-            Keyword("catch_ref") => {
-              self.advance() // skip "catch_ref"
-              let tag_idx = self.parse_tag_idx()
-              let label_idx = self.parse_label_idx()
-              handlers.push(CatchRef(tag_idx, label_idx))
-              self.expect_rparen()
-            }
-            Keyword("catch_all") => {
-              self.advance() // skip "catch_all"
-              let label_idx = self.parse_label_idx()
-              handlers.push(CatchAll(label_idx))
-              self.expect_rparen()
-            }
-            Keyword("catch_all_ref") => {
-              self.advance() // skip "catch_all_ref"
-              let label_idx = self.parse_label_idx()
-              handlers.push(CatchAllRef(label_idx))
-              self.expect_rparen()
-            }
-            _ => {
-              // Not a catch handler, restore and break
-              self.lexer.pos = saved_pos
-              self.current = LocatedToken::synthetic(LParen)
-              break
-            }
-          }
-        }
+        let handlers = self.parse_try_table_handlers()
         self.push_label(label)
         let body = self.parse_instructions()
         self.pop_label()
@@ -386,46 +347,7 @@ fn Parser::parse_plain_instruction(
       // try_table has a block type followed by catch handlers and a body
       // (try_table (result i32) (catch $tag $label) ... instructions end)
       let bt = self.parse_block_type()
-      let handlers : Array[@types.CatchHandler] = []
-      // Parse catch handlers until we hit an instruction or end
-      while self.current.token == LParen {
-        let saved_pos = self.lexer.pos
-        self.advance() // skip (
-        match self.current.token {
-          Keyword("catch") => {
-            self.advance() // skip "catch"
-            let tag_idx = self.parse_tag_idx()
-            let label_idx = self.parse_label_idx()
-            handlers.push(Catch(tag_idx, label_idx))
-            self.expect_rparen()
-          }
-          Keyword("catch_ref") => {
-            self.advance() // skip "catch_ref"
-            let tag_idx = self.parse_tag_idx()
-            let label_idx = self.parse_label_idx()
-            handlers.push(CatchRef(tag_idx, label_idx))
-            self.expect_rparen()
-          }
-          Keyword("catch_all") => {
-            self.advance() // skip "catch_all"
-            let label_idx = self.parse_label_idx()
-            handlers.push(CatchAll(label_idx))
-            self.expect_rparen()
-          }
-          Keyword("catch_all_ref") => {
-            self.advance() // skip "catch_all_ref"
-            let label_idx = self.parse_label_idx()
-            handlers.push(CatchAllRef(label_idx))
-            self.expect_rparen()
-          }
-          _ => {
-            // Not a catch handler, restore and break
-            self.lexer.pos = saved_pos
-            self.current = LocatedToken::synthetic(LParen)
-            break
-          }
-        }
-      }
+      let handlers = self.parse_try_table_handlers()
       let body = self.parse_instructions()
       self.expect_keyword("end")
       self.skip_optional_id()
@@ -441,199 +363,13 @@ fn Parser::parse_plain_instruction(
       let type_idx = self.parse_type_idx()
       CallRef(type_idx)
     }
-    "call_indirect" => {
-      // call_indirect can have various forms:
-      // (call_indirect $table (type $t) ...)
-      // (call_indirect (type $t) ...)
-      // (call_indirect (param ...) (result ...) ...)
-      // (call_indirect ...)  - empty type
-      let mut table_idx = 0
-      let mut type_idx : Int32? = None
-      let mut annotation_phase = 0
-      let inline_params : Array[@types.ValueType] = []
-      let inline_results : Array[@types.ValueType] = []
-
-      // Check for optional table index/name before the type
-      match self.current.token {
-        Id(name) =>
-          match self.table_names.get(name) {
-            Some(idx) => {
-              table_idx = idx
-              self.advance()
-            }
-            None => () // Not a table name, might be something else
-          }
-        Number(_) => table_idx = self.parse_u32()
-        _ => ()
-      }
-
-      // Parse optional type/param/result annotations
-      while self.current.token == LParen {
-        let saved = self.lexer.pos
-        let saved_line = self.lexer.line
-        let saved_column = self.lexer.column
-        let saved_token_start_line = self.lexer.token_start_line
-        let saved_token_start_column = self.lexer.token_start_column
-        self.advance()
-        match self.current.token {
-          Keyword("type") => {
-            if annotation_phase > 0 {
-              raise ParseError("Misplaced type annotation", self.loc())
-            }
-            annotation_phase = 1
-            self.advance()
-            let idx = self.parse_type_idx()
-            type_idx = Some(idx)
-            self.expect_rparen()
-          }
-          Keyword("param") => {
-            if annotation_phase > 2 {
-              raise ParseError("Misplaced param annotation", self.loc())
-            }
-            annotation_phase = 2
-            // Parse inline param types
-            self.advance()
-            // Skip optional name
-            if self.current.token is Id(_) {
-              raise ParseError("Named instruction parameter", self.loc())
-            }
-            while self.current.token != RParen {
-              inline_params.push(self.parse_value_type())
-            }
-            self.expect_rparen()
-          }
-          Keyword("result") => {
-            annotation_phase = 3
-            // Parse inline result types
-            self.advance()
-            while self.current.token != RParen {
-              inline_results.push(self.parse_value_type())
-            }
-            self.expect_rparen()
-          }
-          _ => {
-            // Not a type annotation, restore state (this is an operand)
-            self.lexer.pos = saved
-            self.lexer.line = saved_line
-            self.lexer.column = saved_column
-            self.lexer.token_start_line = saved_token_start_line
-            self.lexer.token_start_column = saved_token_start_column
-            self.current = LocatedToken::synthetic(LParen)
-            break
-          }
-        }
-      }
-      let final_type_idx = match type_idx {
-        Some(idx) => {
-          self.check_inline_type(
-            idx,
-            inline_params,
-            inline_results,
-            annotation_phase >= 2,
-          )
-          idx
-        }
-        None =>
-          // No explicit (type $t), find or create type from inline annotations
-          self.find_or_create_func_type(inline_params, inline_results)
-      }
-      CallIndirect(final_type_idx, table_idx)
-    }
+    "call_indirect" => self.parse_indirect_call(tail=false)
+    "return_call_indirect" => self.parse_indirect_call(tail=true)
     "return_call" => ReturnCall(self.parse_func_idx())
     "return_call_ref" => {
       // return_call_ref $type - tail calls a function reference with the given type
       let type_idx = self.parse_type_idx()
       ReturnCallRef(type_idx)
-    }
-    "return_call_indirect" => {
-      // return_call_indirect follows the same parsing as call_indirect
-      let mut table_idx = 0
-      let mut type_idx : Int32? = None
-      let mut annotation_phase = 0
-      let inline_params : Array[@types.ValueType] = []
-      let inline_results : Array[@types.ValueType] = []
-
-      // Check for optional table index/name before the type
-      match self.current.token {
-        Id(name) =>
-          match self.table_names.get(name) {
-            Some(idx) => {
-              table_idx = idx
-              self.advance()
-            }
-            None => () // Not a table name, might be something else
-          }
-        Number(_) => table_idx = self.parse_u32()
-        _ => ()
-      }
-
-      // Parse optional type/param/result annotations
-      while self.current.token == LParen {
-        let saved = self.lexer.pos
-        let saved_line = self.lexer.line
-        let saved_column = self.lexer.column
-        let saved_token_start_line = self.lexer.token_start_line
-        let saved_token_start_column = self.lexer.token_start_column
-        self.advance()
-        match self.current.token {
-          Keyword("type") => {
-            if annotation_phase > 0 {
-              raise ParseError("Misplaced type annotation", self.loc())
-            }
-            annotation_phase = 1
-            self.advance()
-            let idx = self.parse_type_idx()
-            type_idx = Some(idx)
-            self.expect_rparen()
-          }
-          Keyword("param") => {
-            if annotation_phase > 2 {
-              raise ParseError("Misplaced param annotation", self.loc())
-            }
-            annotation_phase = 2
-            self.advance() // skip "param"
-            // Parse parameter types until we hit ')'
-            while self.current.token != RParen {
-              inline_params.push(self.parse_value_type())
-            }
-            self.expect_rparen()
-          }
-          Keyword("result") => {
-            annotation_phase = 3
-            self.advance() // skip "result"
-            // Parse result types until we hit ')'
-            while self.current.token != RParen {
-              inline_results.push(self.parse_value_type())
-            }
-            self.expect_rparen()
-          }
-          _ => {
-            // Not a type annotation, restore state (this is an operand)
-            self.lexer.pos = saved
-            self.lexer.line = saved_line
-            self.lexer.column = saved_column
-            self.lexer.token_start_line = saved_token_start_line
-            self.lexer.token_start_column = saved_token_start_column
-            self.current = LocatedToken::synthetic(LParen)
-            break
-          }
-        }
-      }
-      let final_type_idx = match type_idx {
-        Some(idx) => {
-          self.check_inline_type(
-            idx,
-            inline_params,
-            inline_results,
-            annotation_phase >= 2,
-          )
-          idx
-        }
-        None =>
-          // No explicit (type $t), find or create type from inline annotations
-          self.find_or_create_func_type(inline_params, inline_results)
-      }
-      ReturnCallIndirect(final_type_idx, table_idx)
     }
 
     // Parametric
@@ -642,11 +378,7 @@ fn Parser::parse_plain_instruction(
       // select can have optional (result type) annotations
       let result_types : Array[@types.ValueType] = []
       while self.current.token == LParen {
-        let saved = self.lexer.pos
-        let saved_line = self.lexer.line
-        let saved_column = self.lexer.column
-        let saved_token_start_line = self.lexer.token_start_line
-        let saved_token_start_column = self.lexer.token_start_column
+        let saved = self.lexer.checkpoint()
         self.advance()
         match self.current.token {
           Keyword("result") => {
@@ -659,11 +391,7 @@ fn Parser::parse_plain_instruction(
           }
           _ => {
             // Not a type annotation, restore state
-            self.lexer.pos = saved
-            self.lexer.line = saved_line
-            self.lexer.column = saved_column
-            self.lexer.token_start_line = saved_token_start_line
-            self.lexer.token_start_column = saved_token_start_column
+            self.lexer.restore(saved)
             self.current = LocatedToken::synthetic(LParen)
             break
           }
@@ -907,95 +635,15 @@ fn Parser::parse_atomic_instruction(
   self : Parser,
   kw : String,
 ) -> @types.Instruction raise WatError {
-  match atomic_subopcode(kw) {
+  match @types.atomic_subopcode(kw) {
     Some(3) => Atomic(3, 0, 0, 0L)
     Some(subopcode) =>
       parse_mem_arg(
         self,
         fn(memory, align, offset) { Atomic(subopcode, memory, align, offset) },
-        default_align=if subopcode == 2 {
-          3
-        } else if subopcode < 3 {
-          2
-        } else {
-          [2, 3, 0, 1, 0, 1, 2][(subopcode - 0x10) % 7]
-        },
+        default_align=@types.atomic_opcode(subopcode).unwrap().natural_alignment,
       )
     None => raise InvalidInstruction(kw, self.loc())
-  }
-}
-
-///|
-fn atomic_subopcode(keyword : String) -> Int32? {
-  match keyword {
-    "memory.atomic.notify" => Some(0)
-    "memory.atomic.wait32" => Some(1)
-    "memory.atomic.wait64" => Some(2)
-    "atomic.fence" => Some(3)
-    "i32.atomic.load" => Some(16)
-    "i64.atomic.load" => Some(17)
-    "i32.atomic.load8_u" => Some(18)
-    "i32.atomic.load16_u" => Some(19)
-    "i64.atomic.load8_u" => Some(20)
-    "i64.atomic.load16_u" => Some(21)
-    "i64.atomic.load32_u" => Some(22)
-    "i32.atomic.store" => Some(23)
-    "i64.atomic.store" => Some(24)
-    "i32.atomic.store8" => Some(25)
-    "i32.atomic.store16" => Some(26)
-    "i64.atomic.store8" => Some(27)
-    "i64.atomic.store16" => Some(28)
-    "i64.atomic.store32" => Some(29)
-    "i32.atomic.rmw.add" => Some(30)
-    "i64.atomic.rmw.add" => Some(31)
-    "i32.atomic.rmw8.add_u" => Some(32)
-    "i32.atomic.rmw16.add_u" => Some(33)
-    "i64.atomic.rmw8.add_u" => Some(34)
-    "i64.atomic.rmw16.add_u" => Some(35)
-    "i64.atomic.rmw32.add_u" => Some(36)
-    "i32.atomic.rmw.sub" => Some(37)
-    "i64.atomic.rmw.sub" => Some(38)
-    "i32.atomic.rmw8.sub_u" => Some(39)
-    "i32.atomic.rmw16.sub_u" => Some(40)
-    "i64.atomic.rmw8.sub_u" => Some(41)
-    "i64.atomic.rmw16.sub_u" => Some(42)
-    "i64.atomic.rmw32.sub_u" => Some(43)
-    "i32.atomic.rmw.and" => Some(44)
-    "i64.atomic.rmw.and" => Some(45)
-    "i32.atomic.rmw8.and_u" => Some(46)
-    "i32.atomic.rmw16.and_u" => Some(47)
-    "i64.atomic.rmw8.and_u" => Some(48)
-    "i64.atomic.rmw16.and_u" => Some(49)
-    "i64.atomic.rmw32.and_u" => Some(50)
-    "i32.atomic.rmw.or" => Some(51)
-    "i64.atomic.rmw.or" => Some(52)
-    "i32.atomic.rmw8.or_u" => Some(53)
-    "i32.atomic.rmw16.or_u" => Some(54)
-    "i64.atomic.rmw8.or_u" => Some(55)
-    "i64.atomic.rmw16.or_u" => Some(56)
-    "i64.atomic.rmw32.or_u" => Some(57)
-    "i32.atomic.rmw.xor" => Some(58)
-    "i64.atomic.rmw.xor" => Some(59)
-    "i32.atomic.rmw8.xor_u" => Some(60)
-    "i32.atomic.rmw16.xor_u" => Some(61)
-    "i64.atomic.rmw8.xor_u" => Some(62)
-    "i64.atomic.rmw16.xor_u" => Some(63)
-    "i64.atomic.rmw32.xor_u" => Some(64)
-    "i32.atomic.rmw.xchg" => Some(65)
-    "i64.atomic.rmw.xchg" => Some(66)
-    "i32.atomic.rmw8.xchg_u" => Some(67)
-    "i32.atomic.rmw16.xchg_u" => Some(68)
-    "i64.atomic.rmw8.xchg_u" => Some(69)
-    "i64.atomic.rmw16.xchg_u" => Some(70)
-    "i64.atomic.rmw32.xchg_u" => Some(71)
-    "i32.atomic.rmw.cmpxchg" => Some(72)
-    "i64.atomic.rmw.cmpxchg" => Some(73)
-    "i32.atomic.rmw8.cmpxchg_u" => Some(74)
-    "i32.atomic.rmw16.cmpxchg_u" => Some(75)
-    "i64.atomic.rmw8.cmpxchg_u" => Some(76)
-    "i64.atomic.rmw16.cmpxchg_u" => Some(77)
-    "i64.atomic.rmw32.cmpxchg_u" => Some(78)
-    _ => None
   }
 }
 
@@ -1139,71 +787,12 @@ fn log2(n : UInt64) -> Int32 {
 
 ///|
 fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
-  let params : Array[@types.ValueType] = []
-  let results : Array[@types.ValueType] = []
-  let mut type_idx : Int32? = None
-  let mut annotation_phase = 0
-
-  // Parse optional (type $idx) and/or (param ...) (result ...)
-  while self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
-    self.advance()
-    match self.current.token {
-      Keyword("type") => {
-        if annotation_phase > 0 {
-          raise ParseError("Misplaced type annotation", self.loc())
-        }
-        annotation_phase = 1
-        // (type $idx) - explicit type reference
-        self.advance()
-        type_idx = Some(self.parse_type_idx())
-        self.expect_rparen()
-        // Continue to parse any inline param/result annotations (they are optional redundant info)
-      }
-      Keyword("param") => {
-        if annotation_phase > 2 {
-          raise ParseError("Misplaced param annotation", self.loc())
-        }
-        annotation_phase = 2
-        self.advance()
-        // Skip optional name
-        if self.current.token is Id(_) {
-          raise ParseError("Named instruction parameter", self.loc())
-        }
-        while self.current.token != RParen {
-          params.push(self.parse_value_type())
-        }
-        self.expect_rparen()
-      }
-      Keyword("result") => {
-        annotation_phase = 3
-        self.advance()
-        while self.current.token != RParen {
-          results.push(self.parse_value_type())
-        }
-        self.expect_rparen()
-      }
-      _ => {
-        // Not a block type annotation, restore state
-        self.lexer.pos = saved
-        self.lexer.line = saved_line
-        self.lexer.column = saved_column
-        self.lexer.token_start_line = saved_token_start_line
-        self.lexer.token_start_column = saved_token_start_column
-        self.current = LocatedToken::synthetic(LParen)
-        break
-      }
-    }
-  }
-
+  let (type_idx, params, results) = self.parse_instruction_type_use(
+    reject_named_params=true,
+  )
   // Determine the block type variant
   // If we have explicit type index, use it (param/result are just annotations)
   if type_idx is Some(idx) {
-    self.check_inline_type(idx, params, results, annotation_phase >= 2)
     return TypeIndex(idx)
   }
   if params.length() > 0 {
@@ -1274,19 +863,9 @@ fn Parser::parse_resume_handlers(
 ) -> Array[@types.ResumeHandler] raise WatError {
   let handlers : Array[@types.ResumeHandler] = []
   while self.current.token == LParen {
-    let saved = (
-      self.lexer.pos,
-      self.lexer.line,
-      self.lexer.column,
-      self.lexer.token_start_line,
-      self.lexer.token_start_column,
-    )
+    let saved = self.lexer.checkpoint()
     let next = self.lexer.next_token()
-    self.lexer.pos = saved.0
-    self.lexer.line = saved.1
-    self.lexer.column = saved.2
-    self.lexer.token_start_line = saved.3
-    self.lexer.token_start_column = saved.4
+    self.lexer.restore(saved)
     if next.token != Keyword("on") {
       break
     }
@@ -1302,4 +881,150 @@ fn Parser::parse_resume_handlers(
     self.expect_rparen()
   }
   handlers
+}
+
+///|
+fn Parser::parse_try_table_handlers(
+  self : Parser,
+) -> Array[@types.CatchHandler] raise WatError {
+  let handlers : Array[@types.CatchHandler] = []
+  // Parse catch handlers until we hit an instruction or end
+  while self.current.token == LParen {
+    let saved_pos = self.lexer.pos
+    self.advance() // skip (
+    match self.current.token {
+      Keyword("catch") => {
+        self.advance() // skip "catch"
+        let tag_idx = self.parse_tag_idx()
+        let label_idx = self.parse_label_idx()
+        handlers.push(Catch(tag_idx, label_idx))
+        self.expect_rparen()
+      }
+      Keyword("catch_ref") => {
+        self.advance() // skip "catch_ref"
+        let tag_idx = self.parse_tag_idx()
+        let label_idx = self.parse_label_idx()
+        handlers.push(CatchRef(tag_idx, label_idx))
+        self.expect_rparen()
+      }
+      Keyword("catch_all") => {
+        self.advance() // skip "catch_all"
+        let label_idx = self.parse_label_idx()
+        handlers.push(CatchAll(label_idx))
+        self.expect_rparen()
+      }
+      Keyword("catch_all_ref") => {
+        self.advance() // skip "catch_all_ref"
+        let label_idx = self.parse_label_idx()
+        handlers.push(CatchAllRef(label_idx))
+        self.expect_rparen()
+      }
+      _ => {
+        // Not a catch handler, restore and break
+        self.lexer.pos = saved_pos
+        self.current = LocatedToken::synthetic(LParen)
+        break
+      }
+    }
+  }
+  handlers
+}
+
+///|
+fn Parser::parse_indirect_call(
+  self : Parser,
+  tail~ : Bool,
+) -> @types.Instruction raise WatError {
+  let mut table_idx = 0
+
+  // Check for optional table index/name before the type
+  match self.current.token {
+    Id(name) =>
+      match self.table_names.get(name) {
+        Some(idx) => {
+          table_idx = idx
+          self.advance()
+        }
+        None => () // Not a table name, might be something else
+      }
+    Number(_) => table_idx = self.parse_u32()
+    _ => ()
+  }
+
+  let (type_idx, params, results) = self.parse_instruction_type_use(
+    reject_named_params=!tail,
+  )
+  let type_idx = match type_idx {
+    Some(idx) => idx
+    None => self.find_or_create_func_type(params, results)
+  }
+  if tail {
+    ReturnCallIndirect(type_idx, table_idx)
+  } else {
+    CallIndirect(type_idx, table_idx)
+  }
+}
+
+///|
+fn Parser::parse_instruction_type_use(
+  self : Parser,
+  reject_named_params~ : Bool,
+) -> (Int32?, Array[@types.ValueType], Array[@types.ValueType]) raise WatError {
+  let params : Array[@types.ValueType] = []
+  let results : Array[@types.ValueType] = []
+  let mut type_idx : Int32? = None
+  let mut annotation_phase = 0
+
+  // Parse optional (type $idx) and/or (param ...) (result ...)
+  while self.current.token == LParen {
+    let saved = self.lexer.checkpoint()
+    self.advance()
+    match self.current.token {
+      Keyword("type") => {
+        if annotation_phase > 0 {
+          raise ParseError("Misplaced type annotation", self.loc())
+        }
+        annotation_phase = 1
+        // (type $idx) - explicit type reference
+        self.advance()
+        type_idx = Some(self.parse_type_idx())
+        self.expect_rparen()
+        // Continue to parse any inline param/result annotations (they are optional redundant info)
+      }
+      Keyword("param") => {
+        if annotation_phase > 2 {
+          raise ParseError("Misplaced param annotation", self.loc())
+        }
+        annotation_phase = 2
+        self.advance()
+        // Skip optional name
+        if reject_named_params && self.current.token is Id(_) {
+          raise ParseError("Named instruction parameter", self.loc())
+        }
+        while self.current.token != RParen {
+          params.push(self.parse_value_type())
+        }
+        self.expect_rparen()
+      }
+      Keyword("result") => {
+        annotation_phase = 3
+        self.advance()
+        while self.current.token != RParen {
+          results.push(self.parse_value_type())
+        }
+        self.expect_rparen()
+      }
+      _ => {
+        // Not a block type annotation, restore state
+        self.lexer.restore(saved)
+        self.current = LocatedToken::synthetic(LParen)
+        break
+      }
+    }
+  }
+
+  if type_idx is Some(idx) {
+    self.check_inline_type(idx, params, results, annotation_phase >= 2)
+  }
+  (type_idx, params, results)
 }

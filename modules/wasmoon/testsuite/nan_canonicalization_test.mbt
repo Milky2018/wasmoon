@@ -42,7 +42,6 @@ test "canonical NaNs are visible inside guest execution and sign operations reta
   for use_jit in [false, true] {
     let result = @wast.run_wast_commands(
       @wast.parse(source),
-      ".",
       use_jit,
       false,
       nan_canonicalization=true,

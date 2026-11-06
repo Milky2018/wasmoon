@@ -53,3 +53,7 @@ the allocator's spill/edit scratches; R11 is a declared fixed-operand-only
 instruction temporary, and XMM15 remains reserved for emitter-local expansion.
 The frame reserves a raw 16-byte emergency area only for move groups that
 require it.
+
+Frame planning includes writes made by late parallel transfers to the reserved
+R15 temporary. The same call transfer planner is used for emission and this
+register footprint; a function saves R15 only when its emitted transfers need it.

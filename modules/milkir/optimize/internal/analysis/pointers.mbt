@@ -20,10 +20,10 @@ pub fn invalidates_addresses(inst : @milkir.Inst) -> Bool {
 ///|
 fn collect_iconst_values(
   func : @milkir.Function,
-  instructions? : Array[@milkir.Inst],
+  instructions : Array[@milkir.Inst],
 ) -> Array[Int64?] {
   let result : Array[Int64?] = Array::make(func.next_value_id, None)
-  let record = fn(inst : @milkir.Inst) {
+  for inst in instructions {
     if inst.first_result() is Some(v) {
       match inst.opcode {
         Scalar(IntConst(value)) => result[v.id] = Some(value)
@@ -36,19 +36,65 @@ fn collect_iconst_values(
       }
     }
   }
-  match instructions {
-    Some(prefix) =>
-      for inst in prefix {
-        record(inst)
-      }
-    None =>
-      for block in func.blocks {
-        for inst_id in block.instruction_ids() {
-          record(func.instruction_by_id(inst_id).unwrap())
-        }
-      }
-  }
   result
+}
+
+///|
+/// One flat use index over the active layout or the original budget prefix.
+/// Links preserve use discovery order. Only operations that can propagate a
+/// pointer fact have incoming links.
+priv struct PointerUses {
+  instructions : Array[@milkir.Inst]
+  first_use : Array[Int32]
+  users : Array[Int32]
+  next_use : Array[Int32]
+}
+
+///|
+fn PointerUses::new(
+  func : @milkir.Function,
+  instructions : Array[@milkir.Inst],
+) -> PointerUses {
+  let first_use = Array::make(func.next_value_id, -1)
+  let last_use = Array::make(func.next_value_id, -1)
+  let users : Array[Int32] = []
+  let next_use : Array[Int32] = []
+  for index, inst in instructions {
+    if inst.results.is_empty() ||
+      !(inst.opcode
+      is Scalar(
+        Copy
+        | Convert(Bitcast | UnsignedExtend | SignedExtend | IntReduce)
+        | IntBinary(Add | Sub)
+        | Select
+      )) {
+      continue
+    }
+    for operand in inst.operands {
+      let previous = last_use[operand.id]
+      let edge = users.length()
+      users.push(index)
+      next_use.push(-1)
+      if previous < 0 {
+        first_use[operand.id] = edge
+      } else {
+        next_use[previous] = edge
+      }
+      last_use[operand.id] = edge
+    }
+  }
+  { instructions, first_use, users, next_use, }
+}
+
+///|
+fn active_pointer_instructions(func : @milkir.Function) -> Array[@milkir.Inst] {
+  let instructions : Array[@milkir.Inst] = []
+  for block in func.blocks {
+    for id in func.block_instruction_ids(block) {
+      instructions.push(func.instruction_by_id(id).unwrap())
+    }
+  }
+  instructions
 }
 
 ///|
@@ -56,7 +102,21 @@ pub fn pointer_regions(
   func : @milkir.Function,
   instructions? : Array[@milkir.Inst],
 ) -> Array[@milkir.AliasRegion?] {
-  let iconst_values = collect_iconst_values(func, instructions?)
+  let instructions = match instructions {
+    Some(source) => source
+    None => active_pointer_instructions(func)
+  }
+  let uses = PointerUses::new(func, instructions)
+  let constants = collect_iconst_values(func, instructions)
+  infer_pointer_regions(func, uses, constants)
+}
+
+///|
+fn infer_pointer_regions(
+  func : @milkir.Function,
+  uses : PointerUses,
+  iconst_values : Array[Int64?],
+) -> Array[@milkir.AliasRegion?] {
   let result : Array[@milkir.AliasRegion?] = Array::make(
     func.next_value_id,
     None,
@@ -73,34 +133,19 @@ pub fn pointer_regions(
       }
     }
   }
-  let dependents : Array[Array[@milkir.Inst]] = Array::makei(
-    func.next_value_id,
-    _ => [],
-  )
-  let worklist : Array[@milkir.Inst] = []
+  let worklist : Array[Int32] = []
   let queued = Array::make(func.next_inst_id, false)
-  let enqueue = fn(inst : @milkir.Inst) {
-    worklist.push(inst)
+  for inst in uses.instructions {
     queued[inst.id] = true
-    for operand in inst.operands {
-      dependents[operand.id].push(inst)
-    }
   }
-  match instructions {
-    Some(prefix) =>
-      for inst in prefix {
-        enqueue(inst)
-      }
-    None =>
-      for block in func.blocks {
-        for inst_id in block.instruction_ids() {
-          enqueue(func.instruction_by_id(inst_id).unwrap())
-        }
-      }
-  }
+  let initial_count = uses.instructions.length()
   let mut cursor = 0
-  while cursor < worklist.length() {
-    let inst = worklist[cursor]
+  while cursor < initial_count + worklist.length() {
+    let inst = uses.instructions[if cursor < initial_count {
+        cursor
+      } else {
+        worklist[cursor - initial_count]
+      }]
     cursor = cursor + 1
     queued[inst.id] = false
     if inst.first_result() is Some(v) && result[v.id] is None {
@@ -173,11 +218,15 @@ pub fn pointer_regions(
       }
       if inferred is Some(base) {
         result[v.id] = Some(base)
-        for dependent in dependents[v.id] {
-          if !queued[dependent.id] {
+        let mut edge = uses.first_use[v.id]
+        while edge >= 0 {
+          let dependent = uses.users[edge]
+          let id = uses.instructions[dependent].id
+          if !queued[id] {
             worklist.push(dependent)
-            queued[dependent.id] = true
+            queued[id] = true
           }
+          edge = uses.next_use[edge]
         }
       }
     }
@@ -193,63 +242,76 @@ fn is_known_iconst(value_id : Int32, iconst_values : Array[Int64?]) -> Bool {
 }
 
 ///|
-/// Whether this instruction can invalidate a read in the requested region.
-/// Unknown stores and calls include metadata and all payload regions.
-pub fn may_write_region(
+/// A raw store through a known pointer writes one exact region. A dialect
+/// write also invalidates an unclassified read. Keep that distinction when
+/// accumulating effects for a loop.
+pub(all) enum RegionWrite {
+  NoWrite
+  AllRegions
+  ExactRegion(@milkir.AliasRegion)
+  RegionOrUnknownRead(@milkir.AliasRegion)
+}
+
+///|
+pub fn region_write(
   inst : @milkir.Inst,
   pointers : Array[@milkir.AliasRegion?],
-  region : @milkir.AliasRegion,
-) -> Bool {
+) -> RegionWrite {
   if inst.opcode is Ext(extension, _) && extension.effects is Some(effects) {
     return match effects.write {
-      Some(Other) => true
-      Some(written) => region == Other || written == region
-      None => false
+      Some(Other) => AllRegions
+      Some(written) => RegionOrUnknownRead(written)
+      None => NoWrite
     }
   }
   if inst.opcode is Memory(Store(_) | StoreNarrow(_) | Vector(StoreLane(_, _))) &&
     inst.args.get(0) is Some(base) {
     return match pointers.get(base.id) {
-      Some(Some(Other)) | Some(None) | None => true
-      Some(Some(written)) => written == region
+      Some(Some(Other)) | Some(None) | None => AllRegions
+      Some(Some(written)) => ExactRegion(written)
     }
   }
-  opcode_semantics(inst.opcode).memory.may_write_memory()
+  if opcode_semantics(inst.opcode).memory.may_write_memory() {
+    AllRegions
+  } else {
+    NoWrite
+  }
 }
 
 ///|
 /// Bytes a checked producer guarantees can be read without a memory trap.
 /// These facts do not extend physical lifetime: writes/calls still invalidate
 /// the associated memory region before any read may move across them.
-fn readable_pointer_bytes(func : @milkir.Function) -> Array[Int32] {
+fn readable_pointer_bytes(
+  func : @milkir.Function,
+  uses : PointerUses,
+) -> Array[Int32] {
   let bytes = Array::make(func.next_value_id, 0)
-  let mut changed = true
-  while changed {
-    changed = false
-    for block in func.blocks {
-      for id in func.block_instruction_ids(block) {
-        let inst = func.instruction_by_id(id).unwrap()
-        if inst.results is [value] && bytes[value.id] == 0 {
-          let count = match inst.opcode {
-            Ext(extension, _) =>
-              match extension.effects {
-                Some(effects) => effects.pointer_bytes
-                None => 0
-              }
-            Scalar(Copy | Convert(Bitcast)) =>
-              if inst.args is [source] {
-                bytes[source.id]
-              } else {
-                0
-              }
-            _ => 0
-          }
-          if count > 0 {
-            bytes[value.id] = count
-            changed = true
-          }
-        }
+  let pending : Array[Int32] = []
+  for inst in uses.instructions {
+    if inst.results is [value] &&
+      inst.opcode is Ext(extension, _) &&
+      extension.effects is Some(effects) &&
+      effects.pointer_bytes > 0 {
+      bytes[value.id] = effects.pointer_bytes
+      pending.push(value.id)
+    }
+  }
+  let mut cursor = 0
+  while cursor < pending.length() {
+    let value = pending[cursor]
+    cursor += 1
+    let mut edge = uses.first_use[value]
+    while edge >= 0 {
+      let inst = uses.instructions[uses.users[edge]]
+      if inst.opcode is Scalar(Copy | Convert(Bitcast)) &&
+        inst.args.length() == 1 &&
+        inst.results is [result] &&
+        bytes[result.id] == 0 {
+        bytes[result.id] = bytes[value]
+        pending.push(result.id)
       }
+      edge = uses.next_use[edge]
     }
   }
   bytes
@@ -280,18 +342,18 @@ fn is_nontrapping_load(
 }
 
 ///|
-pub fn nontrapping_loads(func : @milkir.Function) -> Array[Bool] {
-  let bytes = readable_pointer_bytes(func)
-  let constants = collect_iconst_values(func)
+/// Compute the region and bounded-read facts over the same active definitions.
+pub fn loop_pointer_facts(
+  func : @milkir.Function,
+) -> (Array[@milkir.AliasRegion?], Array[Bool]) {
+  let instructions = active_pointer_instructions(func)
+  let uses = PointerUses::new(func, instructions)
+  let constants = collect_iconst_values(func, instructions)
+  let regions = infer_pointer_regions(func, uses, constants)
+  let bytes = readable_pointer_bytes(func, uses)
   let result = Array::make(func.next_inst_id, false)
-  for block in func.blocks {
-    for id in func.block_instruction_ids(block) {
-      result[id] = is_nontrapping_load(
-        func.instruction_by_id(id).unwrap(),
-        bytes,
-        constants,
-      )
-    }
+  for inst in instructions {
+    result[inst.id] = is_nontrapping_load(inst, bytes, constants)
   }
-  result
+  (regions, result)
 }

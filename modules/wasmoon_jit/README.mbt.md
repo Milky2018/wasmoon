@@ -23,8 +23,9 @@ artifacts, and installed-code lifecycle management.
 ### Migration from legacy planning APIs
 
 The unused `CompilationMode`, `CompilationRequest`, `CompilationQueue`,
-`TieredConfig`, `CompilationDecision`, and `CompilationStrategy` APIs have
-been removed. Callers migrating from older releases must replace these
+`TieredConfig`, `CompilationDecision`, `CompilationStrategy`, `Profiler`,
+`CallCounter`, `HotThreshold`, `FunctionTemperature`, and `get_temperature`
+APIs have been removed. Callers migrating from older releases must replace these
 source-level APIs. Repository consumer inspection cannot rule out external
 callers.
 
@@ -32,7 +33,8 @@ These APIs maintained standalone decisions and queues; the runtime never
 consumed them to implement lazy or tiered compilation. Use `NativeCompiler`
 for explicit compilation and the runtime's interpreter/JIT selection for
 execution. The CLI selects JIT by default and provides `--no-jit` for the
-interpreter. `Profiler` and its independent call-counting APIs remain available.
+interpreter. The independent call-counting prototype was also unused;
+`Milky2018/wasmoon_jit/perf` remains the metrics API used by compilation.
 
 `load_artifact` keeps loading separate from installation: it performs bounded
 decoding, exact manifest and CPU-feature compatibility checks, symbolic target
@@ -60,6 +62,18 @@ test "plan a small MilkIR function for x64 JIT integration" {
   inspect(plan.object.get_bytes().length() > 0, content="true")
 }
 ```
+
+## Native bridge layout
+
+The compiler, hostcall trampolines, and entry trampolines share the same
+Wasm-internal call planner. Overflow integer slots precede aligned floating
+point and vector slots for both arguments and result areas. Platform C register
+assignments and stack alignment remain target-specific.
+
+`plan_hostcall_import_trampoline_layout` now takes only parameter and result
+types and describes the values buffer. Its unused register-limit parameters,
+`int_overflow_count`, and `float_overflow_types` fields have been removed;
+physical register placement belongs to the internal call planner.
 
 ## Persisted artifacts
 

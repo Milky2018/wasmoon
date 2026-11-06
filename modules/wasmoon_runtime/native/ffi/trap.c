@@ -132,83 +132,49 @@ static void restore_activation_context(jit_trap_activation_t *activation) {
     activation->context_detached = 0;
 }
 
-static int32_t activation_root_count(
-    const jit_trap_activation_t *activation
-) {
-    if (!activation) return 0;
-    int64_t total = jit_copy_function_frame_roots(&activation->execution, NULL);
-    if (total < 0) return -1;
-    const wasmoon_gc_root_scope_t *scope =
-        activation->execution.gc_root_scope_head;
-    while (scope) {
-        if (scope->root_count > 0) {
-            total += scope->root_count;
-        }
-        scope = scope->prev;
-    }
-    total += exception_copy_activation_roots(activation->context, &activation->execution, NULL);
-    if (activation->execution.spilled_locals_count > 0) {
-        total += activation->execution.spilled_locals_count;
-    }
-    if (activation->execution.gc_root_scratch_len > 0) {
-        total += activation->execution.gc_root_scratch_len;
-    }
-    return total > INT32_MAX ? -1 : (int32_t)total;
-}
-
 static int32_t copy_activation_roots(
-    const jit_trap_activation_t *activation,
-    int64_t *destination
+    const jit_trap_activation_t *activation, int64_t *destination, int32_t capacity
 ) {
-    if (!activation || !destination) return 0;
-    int32_t at = jit_copy_function_frame_roots(&activation->execution, destination);
-    if (at < 0) return -1;
-    const wasmoon_gc_root_scope_t *scope =
-        activation->execution.gc_root_scope_head;
-    while (scope) {
-        if (scope->root_count > 0 && scope->roots) {
-            memcpy(
-                &destination[at],
-                scope->roots,
-                (size_t)scope->root_count * sizeof(int64_t)
-            );
-            at += scope->root_count;
+    const jit_execution_state_t *state = &activation->execution;
+    int32_t scoped = jit_copy_root_scopes(state, destination, capacity);
+    if (scoped < 0) return -1;
+    int32_t exception = exception_copy_activation_roots(activation->context, state,
+        destination ? destination + scoped : NULL, capacity - scoped);
+    if (exception < 0) return -1;
+    int32_t at = scoped + exception;
+    int32_t spilled = state->spilled_locals_count > 0 ? state->spilled_locals_count : 0;
+    int32_t scratch = state->gc_root_scratch_len > 0 ? state->gc_root_scratch_len : 0;
+    if (spilled > capacity - at || scratch > capacity - at - spilled ||
+        (spilled && !state->spilled_locals) || (scratch && !state->gc_root_scratch)) {
+        return -1;
+    }
+    if (destination) {
+        if (spilled) {
+            memcpy(destination + at, state->spilled_locals + spilled,
+                (size_t)spilled * sizeof(int64_t));
         }
-        scope = scope->prev;
+        if (scratch) {
+            memcpy(destination + at + spilled, state->gc_root_scratch,
+                (size_t)scratch * sizeof(int64_t));
+        }
     }
-    at += exception_copy_activation_roots(activation->context, &activation->execution, destination + at);
-    if (activation->execution.spilled_locals_count > 0 &&
-        activation->execution.spilled_locals) {
-        memcpy(
-            &destination[at],
-            activation->execution.spilled_locals + activation->execution.spilled_locals_count,
-            (size_t)activation->execution.spilled_locals_count * sizeof(int64_t)
-        );
-        at += activation->execution.spilled_locals_count;
-    }
-    if (activation->execution.gc_root_scratch_len > 0) {
-        memcpy(&destination[at], activation->execution.gc_root_scratch,
-            (size_t)activation->execution.gc_root_scratch_len * sizeof(int64_t));
-        at += activation->execution.gc_root_scratch_len;
-    }
-    return at;
+    return at + spilled + scratch;
 }
 
 // Snapshot the same activation roots for GC and transaction liveness checks.
 // A null destination counts without allocating or mutating mark state.
 int32_t jit_copy_active_gc_roots(GcHeap *heap, int64_t *destination) {
-    int64_t total = 0;
+    int32_t total = 0;
     for (jit_trap_activation_t *activation = current_activation;
          activation; activation = activation->previous) {
         if (!activation->active || !activation->context ||
             ctx_gc_heap(activation->context) != heap) continue;
-        int32_t count = activation_root_count(activation);
-        if (count < 0 || total + count > INT32_MAX) return -1;
-        if (destination && copy_activation_roots(activation, destination + total) != count)
-            return -1;
+        int32_t count = copy_activation_roots(activation,
+            destination ? destination + total : NULL, INT32_MAX - total);
+        if (count < 0) return -1;
         total += count;
     }
-    return (int32_t)total;
+    return total;
 }
 
 static void mark_activation_gc_roots(void *source, GcHeap *heap) {
@@ -243,9 +209,7 @@ void jit_mark_active_gc_roots(GcHeap *heap) {
 }
 
 static int32_t copy_parked_activation_roots(void *source, int64_t *roots) {
-    jit_trap_activation_t *activation = source;
-    return roots ? copy_activation_roots(activation, roots)
-                 : activation_root_count(activation);
+    return copy_activation_roots(source, roots, INT32_MAX);
 }
 
 int jit_parked_gc_roots_register(
@@ -256,7 +220,7 @@ int jit_parked_gc_roots_register(
     *registration = NULL;
     if (!activation || !activation->context) return 1;
     GcHeap *heap = (GcHeap *)ctx_gc_heap(activation->context);
-    if (!heap) return activation_root_count(activation) == 0;
+    if (!heap) return copy_activation_roots(activation, NULL, INT32_MAX) == 0;
     if (!activation->active || !activation->context_detached) return 0;
     if (!gc_heap_register_parked_source(heap, &activation->parked_roots,
             activation, copy_parked_activation_roots, mark_activation_gc_roots)) return 0;
@@ -681,6 +645,85 @@ static void finish_trap_signal(void *ucontext) {
 #endif
 }
 
+static void prepare_trap_diagnostics(jit_context_t *ctx) {
+    g_trap_func_idx = ctx ? (sig_atomic_t)ctx_debug_current_func_idx(ctx) : -1;
+    g_trap_x0 = 0;
+    g_trap_x1 = 0;
+    g_trap_x2 = 0;
+    g_trap_x3 = 0;
+    g_trap_x6 = 0;
+    g_trap_x7 = 0;
+    g_trap_x8 = 0;
+    g_trap_x9 = 0;
+    g_trap_x10 = 0;
+    g_trap_x11 = 0;
+    g_trap_x15 = 0;
+}
+
+// Signal handlers only read the supplied context and write thread-local
+// diagnostics here. Frame unwinding still runs before recovery changes stacks.
+static uintptr_t capture_trap_context(void *ucontext) {
+    if (!ucontext) return 0;
+#if defined(__APPLE__) && defined(__aarch64__)
+    // On macOS ARM64, extract PC from ucontext and read BRK immediate
+    ucontext_t *uc = (ucontext_t *)ucontext;
+    uint64_t pc = uc->uc_mcontext->__ss.__pc;
+    g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
+    g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+    g_trap_frame_lr = 0;
+    return (uintptr_t)pc;
+#elif defined(__linux__) && defined(__aarch64__)
+    // On Linux ARM64
+    ucontext_t *uc = (ucontext_t *)ucontext;
+    uint64_t pc = uc->uc_mcontext.pc;
+    g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
+    g_trap_fp = (uintptr_t)uc->uc_mcontext.regs[29];
+    g_trap_frame_lr = 0;
+    return (uintptr_t)pc;
+#elif defined(__APPLE__) && defined(__x86_64__)
+    // macOS x86_64: INT3 payload.
+    ucontext_t *uc = (ucontext_t *)ucontext;
+    uintptr_t pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
+    g_trap_x0 = (uintptr_t)uc->uc_mcontext->__ss.__rax;
+    g_trap_x1 = (uintptr_t)uc->uc_mcontext->__ss.__rcx;
+    g_trap_x2 = (uintptr_t)uc->uc_mcontext->__ss.__rdx;
+    g_trap_x3 = (uintptr_t)uc->uc_mcontext->__ss.__rbx;
+    g_trap_x6 = (uintptr_t)uc->uc_mcontext->__ss.__rsi;
+    g_trap_x7 = (uintptr_t)uc->uc_mcontext->__ss.__rdi;
+    g_trap_x8 = (uintptr_t)uc->uc_mcontext->__ss.__r8;
+    g_trap_x9 = (uintptr_t)uc->uc_mcontext->__ss.__r9;
+    g_trap_x10 = (uintptr_t)uc->uc_mcontext->__ss.__r10;
+    g_trap_x11 = (uintptr_t)uc->uc_mcontext->__ss.__r11;
+    g_trap_x15 = (uintptr_t)uc->uc_mcontext->__ss.__r15;
+    g_trap_lr = 0;
+    g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
+    g_trap_frame_lr = 0;
+    return (uintptr_t)pc;
+#elif defined(__linux__) && defined(__x86_64__)
+    // Linux x86_64: INT3 payload.
+    ucontext_t *uc = (ucontext_t *)ucontext;
+    uintptr_t pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+    g_trap_x0 = (uintptr_t)uc->uc_mcontext.gregs[REG_RAX];
+    g_trap_x1 = (uintptr_t)uc->uc_mcontext.gregs[REG_RCX];
+    g_trap_x2 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDX];
+    g_trap_x3 = (uintptr_t)uc->uc_mcontext.gregs[REG_RBX];
+    g_trap_x6 = (uintptr_t)uc->uc_mcontext.gregs[REG_RSI];
+    g_trap_x7 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDI];
+    g_trap_x8 = (uintptr_t)uc->uc_mcontext.gregs[REG_R8];
+    g_trap_x9 = (uintptr_t)uc->uc_mcontext.gregs[REG_R9];
+    g_trap_x10 = (uintptr_t)uc->uc_mcontext.gregs[REG_R10];
+    g_trap_x11 = (uintptr_t)uc->uc_mcontext.gregs[REG_R11];
+    g_trap_x15 = (uintptr_t)uc->uc_mcontext.gregs[REG_R15];
+    g_trap_lr = 0;
+    g_trap_fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
+    g_trap_frame_lr = 0;
+    return (uintptr_t)pc;
+#else
+    (void)ucontext;
+    return 0;
+#endif
+}
+
 // Signal handler for SIGTRAP (BRK/INT3); SA_SIGINFO supplies the fault context.
 static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
     (void)info;
@@ -699,94 +742,16 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_fp = 0;
         g_trap_frame_lr = 0;
         g_trap_brk_imm = -1;
-        g_trap_func_idx = -1;
-        g_trap_x0 = 0;
-        g_trap_x1 = 0;
-        g_trap_x2 = 0;
-        g_trap_x3 = 0;
-        g_trap_x6 = 0;
-        g_trap_x7 = 0;
-        g_trap_x8 = 0;
-        g_trap_x9 = 0;
-        g_trap_x10 = 0;
-        g_trap_x11 = 0;
-        g_trap_x15 = 0;
-        if (ctx) {
-            g_trap_func_idx = (sig_atomic_t)ctx_debug_current_func_idx(ctx);
-        }
+        prepare_trap_diagnostics(ctx);
 
-#if defined(__APPLE__) && defined(__aarch64__)
-        // On macOS ARM64, extract PC from ucontext and read BRK immediate
-        ucontext_t *uc = (ucontext_t *)ucontext;
-        uint64_t pc = uc->uc_mcontext->__ss.__pc;
-        g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
-        g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
-        g_trap_frame_lr = 0;
-        if (!decode_trap_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
-            trap_pc = (uintptr_t)pc;
-        }
-
-        // Map BRK immediate to trap code
-        trap_code = wasmoon_decode_native_trap(brk_imm);
-#elif defined(__linux__) && defined(__aarch64__)
-        // On Linux ARM64
-        ucontext_t *uc = (ucontext_t *)ucontext;
-        uint64_t pc = uc->uc_mcontext.pc;
-        g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
-        g_trap_fp = (uintptr_t)uc->uc_mcontext.regs[29];
-        g_trap_frame_lr = 0;
-        if (!decode_trap_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
-            trap_pc = (uintptr_t)pc;
-        }
-
-        trap_code = wasmoon_decode_native_trap(brk_imm);
-#elif defined(__APPLE__) && defined(__x86_64__)
-        // macOS x86_64: INT3 payload.
-        ucontext_t *uc = (ucontext_t *)ucontext;
-        uintptr_t pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
-        g_trap_x0 = (uintptr_t)uc->uc_mcontext->__ss.__rax;
-        g_trap_x1 = (uintptr_t)uc->uc_mcontext->__ss.__rcx;
-        g_trap_x2 = (uintptr_t)uc->uc_mcontext->__ss.__rdx;
-        g_trap_x3 = (uintptr_t)uc->uc_mcontext->__ss.__rbx;
-        g_trap_x6 = (uintptr_t)uc->uc_mcontext->__ss.__rsi;
-        g_trap_x7 = (uintptr_t)uc->uc_mcontext->__ss.__rdi;
-        g_trap_x8 = (uintptr_t)uc->uc_mcontext->__ss.__r8;
-        g_trap_x9 = (uintptr_t)uc->uc_mcontext->__ss.__r9;
-        g_trap_x10 = (uintptr_t)uc->uc_mcontext->__ss.__r10;
-        g_trap_x11 = (uintptr_t)uc->uc_mcontext->__ss.__r11;
-        g_trap_x15 = (uintptr_t)uc->uc_mcontext->__ss.__r15;
-        g_trap_lr = 0;
-        g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
-        g_trap_frame_lr = 0;
-        if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
-            trap_pc = pc;
-        }
-        trap_code = wasmoon_decode_native_trap(brk_imm);
-#elif defined(__linux__) && defined(__x86_64__)
-        // Linux x86_64: INT3 payload.
-        ucontext_t *uc = (ucontext_t *)ucontext;
-        uintptr_t pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
-        g_trap_x0 = (uintptr_t)uc->uc_mcontext.gregs[REG_RAX];
-        g_trap_x1 = (uintptr_t)uc->uc_mcontext.gregs[REG_RCX];
-        g_trap_x2 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDX];
-        g_trap_x3 = (uintptr_t)uc->uc_mcontext.gregs[REG_RBX];
-        g_trap_x6 = (uintptr_t)uc->uc_mcontext.gregs[REG_RSI];
-        g_trap_x7 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDI];
-        g_trap_x8 = (uintptr_t)uc->uc_mcontext.gregs[REG_R8];
-        g_trap_x9 = (uintptr_t)uc->uc_mcontext.gregs[REG_R9];
-        g_trap_x10 = (uintptr_t)uc->uc_mcontext.gregs[REG_R10];
-        g_trap_x11 = (uintptr_t)uc->uc_mcontext.gregs[REG_R11];
-        g_trap_x15 = (uintptr_t)uc->uc_mcontext.gregs[REG_R15];
-        g_trap_lr = 0;
-        g_trap_fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
-        g_trap_frame_lr = 0;
+#if (defined(__APPLE__) || defined(__linux__)) && (defined(__aarch64__) || defined(__x86_64__))
+        uintptr_t pc = capture_trap_context(ucontext);
         if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
             trap_pc = pc;
         }
         trap_code = wasmoon_decode_native_trap(brk_imm);
 #else
         (void)ucontext;
-        trap_code = 99;  // Unknown on unsupported platforms
 #endif
 
         g_trap_code = trap_code;
@@ -810,78 +775,9 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_signal = sig;
         g_trap_fault_addr = (uintptr_t)fault_addr;
         g_trap_brk_imm = -1;
-        g_trap_func_idx = -1;
-        g_trap_x0 = 0;
-        g_trap_x1 = 0;
-        g_trap_x2 = 0;
-        g_trap_x3 = 0;
-        g_trap_x6 = 0;
-        g_trap_x7 = 0;
-        g_trap_x8 = 0;
-        g_trap_x9 = 0;
-        g_trap_x10 = 0;
-        g_trap_x11 = 0;
-        g_trap_x15 = 0;
-        if (ctx) {
-            g_trap_func_idx = (sig_atomic_t)ctx_debug_current_func_idx(ctx);
-        }
+        prepare_trap_diagnostics(ctx);
 
-#if defined(__APPLE__) && defined(__aarch64__)
-        if (ucontext) {
-            ucontext_t *uc = (ucontext_t *)ucontext;
-            pc = (uintptr_t)uc->uc_mcontext->__ss.__pc;
-            g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
-            g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
-            g_trap_frame_lr = 0;
-        }
-#elif defined(__APPLE__) && defined(__x86_64__)
-        if (ucontext) {
-            ucontext_t *uc = (ucontext_t *)ucontext;
-            pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
-            g_trap_x0 = (uintptr_t)uc->uc_mcontext->__ss.__rax;
-            g_trap_x1 = (uintptr_t)uc->uc_mcontext->__ss.__rcx;
-            g_trap_x2 = (uintptr_t)uc->uc_mcontext->__ss.__rdx;
-            g_trap_x3 = (uintptr_t)uc->uc_mcontext->__ss.__rbx;
-            g_trap_x6 = (uintptr_t)uc->uc_mcontext->__ss.__rsi;
-            g_trap_x7 = (uintptr_t)uc->uc_mcontext->__ss.__rdi;
-            g_trap_x8 = (uintptr_t)uc->uc_mcontext->__ss.__r8;
-            g_trap_x9 = (uintptr_t)uc->uc_mcontext->__ss.__r9;
-            g_trap_x10 = (uintptr_t)uc->uc_mcontext->__ss.__r10;
-            g_trap_x11 = (uintptr_t)uc->uc_mcontext->__ss.__r11;
-            g_trap_x15 = (uintptr_t)uc->uc_mcontext->__ss.__r15;
-            // amd64 has no link register; keep LR at 0.
-            g_trap_lr = 0;
-            g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
-            g_trap_frame_lr = 0;
-        }
-#elif defined(__linux__) && defined(__aarch64__)
-        if (ucontext) {
-            ucontext_t *uc = (ucontext_t *)ucontext;
-            pc = (uintptr_t)uc->uc_mcontext.pc;
-            g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
-            g_trap_fp = (uintptr_t)uc->uc_mcontext.regs[29];
-            g_trap_frame_lr = 0;
-        }
-#elif defined(__linux__) && defined(__x86_64__)
-        if (ucontext) {
-            ucontext_t *uc = (ucontext_t *)ucontext;
-            pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
-            g_trap_x0 = (uintptr_t)uc->uc_mcontext.gregs[REG_RAX];
-            g_trap_x1 = (uintptr_t)uc->uc_mcontext.gregs[REG_RCX];
-            g_trap_x2 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDX];
-            g_trap_x3 = (uintptr_t)uc->uc_mcontext.gregs[REG_RBX];
-            g_trap_x6 = (uintptr_t)uc->uc_mcontext.gregs[REG_RSI];
-            g_trap_x7 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDI];
-            g_trap_x8 = (uintptr_t)uc->uc_mcontext.gregs[REG_R8];
-            g_trap_x9 = (uintptr_t)uc->uc_mcontext.gregs[REG_R9];
-            g_trap_x10 = (uintptr_t)uc->uc_mcontext.gregs[REG_R10];
-            g_trap_x11 = (uintptr_t)uc->uc_mcontext.gregs[REG_R11];
-            g_trap_x15 = (uintptr_t)uc->uc_mcontext.gregs[REG_R15];
-            g_trap_lr = 0;
-            g_trap_fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
-            g_trap_frame_lr = 0;
-        }
-#endif
+        pc = capture_trap_context(ucontext);
         g_trap_pc = pc;
 
         g_trap_frame_count = 0;

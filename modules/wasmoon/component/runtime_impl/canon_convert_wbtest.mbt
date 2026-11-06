@@ -64,9 +64,19 @@ test "canon convert: lower non-empty list stores elements" {
   }
   inspect(len, content="3")
   let mem = store.get_mem(mem_addr) catch { _ => return fail("missing memory") }
-  inspect(mem.load_i32(ptr) catch { _ => -1 }, content="10")
-  inspect(mem.load_i32(ptr + 4) catch { _ => -1 }, content="20")
-  inspect(mem.load_i32(ptr + 8) catch { _ => -1 }, content="30")
+  inspect(mem.load_i32_at(mem.offset32(ptr)) catch { _ => -1 }, content="10")
+  inspect(
+    mem.load_i32_at(mem.offset32(ptr + 4)) catch {
+      _ => -1
+    },
+    content="20",
+  )
+  inspect(
+    mem.load_i32_at(mem.offset32(ptr + 8)) catch {
+      _ => -1
+    },
+    content="30",
+  )
 }
 
 ///|
@@ -126,17 +136,17 @@ test "canon convert: lower indirect list result stores compound elements" {
   }
   debug_inspect(core_results, content="[]")
   let mem = store.get_mem(mem_addr) catch { _ => return fail("missing memory") }
-  let list_ptr = mem.load_i32(0) catch { _ => -1 }
-  let string_ptr = mem.load_i32(list_ptr + 4) catch { _ => -1 }
+  let list_ptr = mem.load_i32_at(0L) catch { _ => -1 }
+  let string_ptr = mem.load_i32_at(mem.offset32(list_ptr + 4)) catch { _ => -1 }
   debug_inspect(
     (
-      mem.load_i32(4) catch {
+      mem.load_i32_at(4L) catch {
         _ => -1
       },
-      mem.load_i32(list_ptr) catch {
+      mem.load_i32_at(mem.offset32(list_ptr)) catch {
         _ => -1
       },
-      mem.load_i32(list_ptr + 8) catch {
+      mem.load_i32_at(mem.offset32(list_ptr + 8)) catch {
         _ => -1
       },
       read_string_from_memory_with_encoding(
@@ -208,27 +218,27 @@ test "typed host stream values lower strings into reader memory" {
     e => return fail("typed host stream lowering failed: \{e}")
   }
   let mem = store.get_mem(mem_addr) catch { _ => return fail("missing memory") }
-  let string_ptr = mem.load_i32(68) catch { _ => -1 }
+  let string_ptr = mem.load_i32_at(68L) catch { _ => -1 }
   debug_inspect(
     (
-      mem.load_i32(64) catch {
+      mem.load_i32_at(64L) catch {
         _ => -1
       },
       string_ptr,
-      mem.load_i32(72) catch {
+      mem.load_i32_at(72L) catch {
         _ => -1
       },
       [
-        mem.load_byte(string_ptr) catch {
+        mem.load_byte_at(mem.offset32(string_ptr)) catch {
           _ => b'\x00'
         },
-        mem.load_byte(string_ptr + 1) catch {
+        mem.load_byte_at(mem.offset32(string_ptr + 1)) catch {
           _ => b'\x00'
         },
-        mem.load_byte(string_ptr + 2) catch {
+        mem.load_byte_at(mem.offset32(string_ptr + 2)) catch {
           _ => b'\x00'
         },
-        mem.load_byte(string_ptr + 3) catch {
+        mem.load_byte_at(mem.offset32(string_ptr + 3)) catch {
           _ => b'\x00'
         },
       ],
@@ -265,10 +275,10 @@ test "typed host future results lower enum error payloads" {
   let mem = store.get_mem(mem_addr) catch { _ => return fail("missing memory") }
   debug_inspect(
     (
-      mem.load_byte(64) catch {
+      mem.load_byte_at(64L) catch {
         _ => b'\xff'
       },
-      mem.load_byte(65) catch {
+      mem.load_byte_at(65L) catch {
         _ => b'\xff'
       },
     ),

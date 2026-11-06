@@ -400,11 +400,7 @@ fn placeholder_subtype_for_rec_kind(kind : Int32) -> @types.SubType {
 /// Returns: 0=func, 1=struct, 2=array, 3=cont.
 fn Parser::peek_rec_type_kind(self : Parser) -> Int32 raise WatError {
   // Save lexer state
-  let saved_pos = self.lexer.pos
-  let saved_line = self.lexer.line
-  let saved_column = self.lexer.column
-  let saved_token_start_line = self.lexer.token_start_line
-  let saved_token_start_column = self.lexer.token_start_column
+  let saved_pos = self.lexer.checkpoint()
   let saved_current = self.current
 
   let mut kind = 0
@@ -442,11 +438,7 @@ fn Parser::peek_rec_type_kind(self : Parser) -> Int32 raise WatError {
   }
 
   // Restore lexer state
-  self.lexer.pos = saved_pos
-  self.lexer.line = saved_line
-  self.lexer.column = saved_column
-  self.lexer.token_start_line = saved_token_start_line
-  self.lexer.token_start_column = saved_token_start_column
+  self.lexer.restore(saved_pos)
   self.current = saved_current
   kind
 }
@@ -462,11 +454,7 @@ fn Parser::parse_rec_group(
 
   // First pass: pre-register all type names so forward references work
   // Save lexer state
-  let saved_pos = self.lexer.pos
-  let saved_line = self.lexer.line
-  let saved_column = self.lexer.column
-  let saved_token_start_line = self.lexer.token_start_line
-  let saved_token_start_column = self.lexer.token_start_column
+  let saved_pos = self.lexer.checkpoint()
   let saved_current = self.current
 
   // Scan through all type definitions in this rec group to register names
@@ -494,11 +482,7 @@ fn Parser::parse_rec_group(
   }
 
   // Restore lexer state for second pass
-  self.lexer.pos = saved_pos
-  self.lexer.line = saved_line
-  self.lexer.column = saved_column
-  self.lexer.token_start_line = saved_token_start_line
-  self.lexer.token_start_column = saved_token_start_column
+  self.lexer.restore(saved_pos)
   self.current = saved_current
 
   // Pre-allocate same-kind placeholders so forward refs in this rec group
@@ -581,6 +565,24 @@ fn Parser::parse_func_type(self : Parser) -> @types.FuncType raise WatError {
 }
 
 ///|
+fn intern_func_signature(
+  mod_ : @types.Module,
+  signature : @types.FuncType,
+) -> Int32 {
+  for i, subtype in mod_.types {
+    if subtype.composite is Func(existing) &&
+      existing == signature &&
+      is_singleton_rec_group(mod_.type_rec_groups, i) {
+      return i
+    }
+  }
+  let index = mod_.types.length()
+  mod_.types.push(@types.SubType::from_func(signature))
+  mod_.type_rec_groups.push(index)
+  index
+}
+
+///|
 fn Parser::parse_func_def(
   self : Parser,
   mod_ : @types.Module,
@@ -598,210 +600,12 @@ fn Parser::parse_func_def(
   // Clear local names for this function
   self.local_names.clear()
 
-  // Check for inline exports and imports (exports can come before or after import)
-  // Pattern: (func $name (export "e1") (export "e2") (import "mod" "name") ...)
-  // or:      (func $name (import "mod" "name") (export "e1") ...)
-  while self.current.token == LParen {
-    let saved = self.lexer.pos
-    let saved_line = self.lexer.line
-    let saved_column = self.lexer.column
-    let saved_token_start_line = self.lexer.token_start_line
-    let saved_token_start_column = self.lexer.token_start_column
-    self.advance()
-    match self.current.token {
-      Keyword("export") => {
-        self.advance()
-        match self.current.token {
-          String_(s) => {
-            export_names.push(decode_text(s))
-            self.advance()
-          }
-          _ => raise UnexpectedToken("expected export name", self.loc())
-        }
-        self.expect_rparen()
-      }
-      Keyword("import") => {
-        self.advance()
-        // Parse module name and import name
-        let mod_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected module name", self.loc())
-        }
-        let import_name = match self.current.token {
-          String_(s) => {
-            self.advance()
-            decode_text(s)
-          }
-          _ => raise UnexpectedToken("expected import name", self.loc())
-        }
-        self.expect_rparen() // close import
-
-        // Check for more inline exports after import
-        while self.current.token == LParen {
-          let saved2 = self.lexer.pos
-          self.advance()
-          match self.current.token {
-            Keyword("export") => {
-              self.advance()
-              match self.current.token {
-                String_(s) => {
-                  export_names.push(decode_text(s))
-                  self.advance()
-                }
-                _ => raise UnexpectedToken("expected export name", self.loc())
-              }
-              self.expect_rparen()
-            }
-            _ => {
-              self.lexer.pos = saved2
-              self.current = LocatedToken::synthetic(LParen)
-              break
-            }
-          }
-        }
-
-        // Parse type reference or inline type for the import
-        let mut type_idx = -1
-        let inline_params : Array[@types.ValueType] = []
-        let inline_results : Array[@types.ValueType] = []
-        let mut annotation_phase = 0
-        while self.current.token == LParen {
-          let saved2 = self.lexer.pos
-          self.advance()
-          match self.current.token {
-            Keyword("type") => {
-              if annotation_phase > 0 {
-                raise ParseError("Misplaced type annotation", self.loc())
-              }
-              annotation_phase = 1
-              self.advance()
-              type_idx = self.parse_type_idx()
-              self.expect_rparen()
-            }
-            Keyword("param") => {
-              if annotation_phase > 2 {
-                raise ParseError("Misplaced param annotation", self.loc())
-              }
-              annotation_phase = 2
-              self.advance()
-              // Optional name
-              if self.current.token is Id(name) {
-                check_new_name(self.local_names, name, self.loc())
-                self.local_names.set(name, inline_params.length())
-                self.advance()
-              }
-              while self.current.token != RParen {
-                inline_params.push(self.parse_value_type())
-              }
-              self.expect_rparen()
-            }
-            Keyword("result") => {
-              annotation_phase = 3
-              self.advance()
-              while self.current.token != RParen {
-                inline_results.push(self.parse_value_type())
-              }
-              self.expect_rparen()
-            }
-            _ => {
-              self.lexer.pos = saved2
-              self.current = LocatedToken::synthetic(LParen)
-              break
-            }
-          }
-        }
-
-        if type_idx >= 0 {
-          self.check_inline_type(
-            type_idx,
-            inline_params,
-            inline_results,
-            annotation_phase >= 2,
-          )
-        }
-        // Create type if needed
-        if type_idx < 0 {
-          let ft : @types.FuncType = {
-            params: ReadOnlyArray::from_array(inline_params),
-            results: ReadOnlyArray::from_array(inline_results),
-          }
-          // Check if this type already exists
-          let mut found = -1
-          for i, subtype in mod_.types {
-            // Only match against function types
-            match subtype.composite {
-              Func(t) =>
-                if t.params.length() == ft.params.length() &&
-                  t.results.length() == ft.results.length() {
-                  let mut match_ = true
-                  for j, p in t.params {
-                    if p != ft.params[j] {
-                      match_ = false
-                      break
-                    }
-                  }
-                  if match_ {
-                    for j, r in t.results {
-                      if r != ft.results[j] {
-                        match_ = false
-                        break
-                      }
-                    }
-                  }
-                  // Implicit types should only match singleton rec groups
-                  if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
-                    found = i
-                    break
-                  }
-                }
-              _ => ()
-            }
-          }
-          if found >= 0 {
-            type_idx = found
-          } else {
-            type_idx = mod_.types.length()
-            mod_.types.push(@types.SubType::from_func(ft))
-            // Implicit type is its own rec group
-            mod_.type_rec_groups.push(type_idx)
-          }
-        }
-        self.expect_rparen() // close func
-
-        // Register function name with index (will be assigned when import is added)
-        // The func_idx for imports needs to be the count of existing function imports
-        let import_func_idx = count_func_imports(mod_.imports)
-        if func_name is Some(name) {
-          self.func_names.set(name, import_func_idx)
-        }
-        let imp : @types.Import = {
-          mod_name,
-          name: import_name,
-          desc: Func(type_idx),
-        }
-        return InlineImport(imp, export_names)
-      }
-      _ => {
-        // Not export or import, restore state and break
-        self.lexer.pos = saved
-        self.lexer.line = saved_line
-        self.lexer.column = saved_column
-        self.lexer.token_start_line = saved_token_start_line
-        self.lexer.token_start_column = saved_token_start_column
-        self.current = LocatedToken::synthetic(LParen)
-        break
-      }
-    }
-  }
-
-  // Regular function definition - register the name now
-  // func_idx must account for imported functions
-  let func_idx = count_func_imports(mod_.imports) + mod_.funcs.length()
-  if func_name is Some(name) {
-    self.func_names.set(name, func_idx)
+  let import_names = self.parse_inline_links(export_names)
+  if import_names is None && func_name is Some(name) {
+    self.func_names.set(
+      name,
+      count_func_imports(mod_.imports) + mod_.funcs.length(),
+    )
   }
 
   // Parse type reference or inline type
@@ -867,50 +671,20 @@ fn Parser::parse_func_def(
       inline_results,
       annotation_phase >= 2,
     )
-  }
-  // If no type reference, create inline type
-  if type_idx < 0 {
-    let ft : @types.FuncType = {
+  } else {
+    let signature : @types.FuncType = {
       params: ReadOnlyArray::from_array(inline_params),
       results: ReadOnlyArray::from_array(inline_results),
     }
-    // Check if this type already exists
-    let mut found = -1
-    for i, subtype in mod_.types {
-      // Only if against function types
-      if subtype.composite is Func(t) &&
-        t.params.length() == ft.params.length() &&
-        t.results.length() == ft.results.length() {
-        let mut match_ = true
-        for j, p in t.params {
-          if p != ft.params[j] {
-            match_ = false
-            break
-          }
-        }
-        if match_ {
-          for j, r in t.results {
-            if r != ft.results[j] {
-              match_ = false
-              break
-            }
-          }
-        }
-        // Implicit types should only match singleton rec groups
-        if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
-          found = i
-          break
-        }
-      }
+    type_idx = intern_func_signature(mod_, signature)
+  }
+
+  if import_names is Some((mod_name, name)) {
+    self.expect_rparen()
+    if func_name is Some(local_name) {
+      self.func_names.set(local_name, count_func_imports(mod_.imports))
     }
-    if found >= 0 {
-      type_idx = found
-    } else {
-      type_idx = mod_.types.length()
-      mod_.types.push(@types.SubType::from_func(ft))
-      // Implicit type is its own rec group
-      mod_.type_rec_groups.push(type_idx)
-    }
+    return InlineImport({ mod_name, name, desc: Func(type_idx), }, export_names)
   }
 
   // Calculate actual param count - if type_idx was used, get params from type
@@ -1189,99 +963,19 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       if is_nullable {
         self.advance()
       }
-      // Parse the heap type
       let result = match self.current.token {
-        Keyword("func") => {
-          self.advance()
-          if is_nullable {
-            @types.ValueType::FuncRef
-          } else {
-            RefFunc
-          }
-        }
-        Keyword("extern") => {
-          self.advance()
-          if is_nullable {
-            ExternRef
-          } else {
-            RefExtern
-          }
-        }
-        Keyword("any") => {
-          self.advance()
-          if is_nullable {
-            AnyRef
-          } else {
-            RefAny
-          }
-        }
-        Keyword("eq") => {
-          self.advance()
-          if is_nullable {
-            RefNullEq
-          } else {
-            RefEq
-          }
-        }
-        Keyword("i31") => {
-          self.advance()
-          if is_nullable {
-            RefNullI31
-          } else {
-            RefI31
-          }
-        }
-        Keyword("struct") => {
-          self.advance()
-          if is_nullable {
-            RefNullStruct(-1)
-          } else {
-            RefStruct(-1)
-          }
-        }
-        Keyword("array") => {
-          self.advance()
-          if is_nullable {
-            RefNullArray(-1)
-          } else {
-            RefArray(-1)
-          }
-        }
-        Keyword("cont") => {
-          self.advance()
-          if is_nullable {
-            ContRef
-          } else {
-            RefCont
-          }
-        }
-        Keyword("nocont") => {
-          self.advance()
-          if is_nullable {
-            NullContRef
-          } else {
-            RefNoCont
-          }
-        }
-        Keyword("none") => {
-          self.advance()
-          RefNone // bottom type (always non-null when specified as ref none)
-        }
-        Id(name) =>
-          match self.type_names.get(name) {
-            Some(idx) => {
-              self.advance()
-              // Check what kind of type this is
-              self.get_typed_ref(idx, is_nullable)
-            }
-            None => raise UnexpectedToken("unknown type \{name}", self.loc())
-          }
-        Number(s) => {
-          let idx = parse_int(s)
-          self.advance()
-          // Check what kind of type this is
-          self.get_typed_ref(idx, is_nullable)
-        }
+        Keyword("func")
+        | Keyword("extern")
+        | Keyword("any")
+        | Keyword("eq")
+        | Keyword("i31")
+        | Keyword("struct")
+        | Keyword("array")
+        | Keyword("cont")
+        | Keyword("nocont")
+        | Keyword("none")
+        | Id(_)
+        | Number(_) => self.parse_heap_type(is_nullable)
         _ => raise UnexpectedToken("expected heap type", self.loc())
       }
       self.expect_rparen()

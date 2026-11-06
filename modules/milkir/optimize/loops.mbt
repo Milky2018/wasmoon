@@ -12,7 +12,18 @@ pub fn hoist_loop_invariants(
   // scalar pipeline between placements can sink the same cheap constants
   // back into the loop and make instruction motion oscillate indefinitely.
   for _ in 0..<(if guard_entries { 16 } else { 1 }) {
-    let (placement, rebuild) = hoist_loop_invariants_once(func, guard_entries~)
+    let cfg = @milkir.CFG::build(func)
+    let loops = cfg.find_loops()
+    if loops.is_empty() {
+      break
+    }
+    let (placement, rebuild) = hoist_loop_invariants_once(
+      func,
+      cfg,
+      loops,
+      loop_definition_blocks(func),
+      guard_entries~,
+    )
     if placement.changed {
       result.mark_changed()
     }
@@ -26,33 +37,12 @@ pub fn hoist_loop_invariants(
 ///|
 fn hoist_loop_invariants_once(
   func : @milkir.Function,
+  cfg : @milkir.CFG,
+  loops : Array[@milkir.Loop],
+  value_to_block : Array[Int32],
   guard_entries~ : Bool,
 ) -> (OptResult, Bool) {
   let result = OptResult::OptResult()
-  let cfg = @milkir.CFG::build(func)
-  let loops = cfg.find_loops()
-
-  // Build a map from value id to the block where it's defined
-  let value_to_block : @hashmap.HashMap[Int32, Int32] = HashMap([])
-  for block in func.blocks {
-    // Function parameters are defined in entry block
-    for param in func.params {
-      let (v, _) = param
-      value_to_block.set(v.id, 0)
-    }
-    // Block parameters
-    for param in block.params {
-      let (v, _) = param
-      value_to_block.set(v.id, block.id)
-    }
-    // Instruction results
-    for inst_id in block.instruction_ids() {
-      let inst = func.instruction_by_id(inst_id).unwrap()
-      for value in inst.results {
-        value_to_block.set(value.id, block.id)
-      }
-    }
-  }
 
   // Process each loop
   for loop_ in loops {
@@ -112,11 +102,12 @@ fn hoist_loop_invariants_once(
 fn is_defined_outside_loop(
   value_id : Int32,
   loop_ : @milkir.Loop,
-  value_to_block : @hashmap.HashMap[Int32, Int32],
+  value_to_block : Array[Int32],
 ) -> Bool {
-  match value_to_block.get(value_id) {
-    Some(block_id) => !loop_.contains(block_id)
-    None => true // Unknown values (like constants) are considered outside
+  match value_to_block.get(value_id).unwrap_or(-1) {
+    -2 => !loop_.contains(0)
+    -1 => true
+    block_id => !loop_.contains(block_id)
   }
 }
 
@@ -128,15 +119,14 @@ fn is_defined_outside_loop(
 fn is_loop_invariant(
   inst : @milkir.Inst,
   loop_ : @milkir.Loop,
-  value_to_block : @hashmap.HashMap[Int32, Int32],
+  value_to_block : Array[Int32],
   invariant_values : @hashmap.HashMap[Int32, Bool],
-  pointers : Array[@milkir.AliasRegion?],
-  readable : Array[Bool],
+  memory : LoopMemoryFacts,
   func : @milkir.Function,
   first_iteration~ : Bool = false,
 ) -> Bool {
   // Instructions with observable effects or traps cannot be hoisted.
-  let admitted_load = readable[inst.id]
+  let admitted_load = memory.readable[inst.id]
   let semantics = opcode_semantics(inst.opcode)
   let first_read = first_iteration &&
     semantics.memory is Read &&
@@ -150,7 +140,7 @@ fn is_loop_invariant(
 
   let read_region = if admitted_load {
     match inst.args.get(0) {
-      Some(base) => pointers[base.id]
+      Some(base) => memory.pointers[base.id]
       None => None
     }
   } else {
@@ -161,7 +151,7 @@ fn is_loop_invariant(
           None => None
         }
       Memory(Load(_) | LoadNarrow(_, _, _)) =>
-        inst.args.get(0).map(base => pointers[base.id].unwrap_or(Other))
+        inst.args.get(0).map(base => memory.pointers[base.id].unwrap_or(Other))
       _ => None
     }
   }
@@ -170,19 +160,10 @@ fn is_loop_invariant(
   }
   let address_dependent = @analysis.depends_on_addresses(inst)
   if read_region is Some(_) || address_dependent {
-    for block in func.blocks {
-      if loop_.contains(block.id) {
-        for id in func.block_instruction_ids(block) {
-          let other = func.instruction_by_id(id).unwrap()
-          if (address_dependent && @analysis.invalidates_addresses(other)) ||
-            (
-              read_region is Some(region) &&
-              @analysis.may_write_region(other, pointers, region)
-            ) {
-            return false
-          }
-        }
-      }
+    let effects = memory.effects_in_loop(func, loop_)
+    if (address_dependent && effects.invalidates_addresses) ||
+      (read_region is Some(region) && effects.blocks_read(region)) {
+      return false
     }
   }
 
@@ -204,12 +185,11 @@ fn hoist_from_loop(
   func : @milkir.Function,
   loop_ : @milkir.Loop,
   preheader : @milkir.Block,
-  value_to_block : @hashmap.HashMap[Int32, Int32],
+  value_to_block : Array[Int32],
   first_iteration : Map[Int32, Bool],
 ) -> Bool {
   let mut any_hoisted = false
-  let pointers = @analysis.pointer_regions(func)
-  let readable = @analysis.nontrapping_loads(func)
+  let memory = LoopMemoryFacts::new(func)
   let invariant_values : @hashmap.HashMap[Int32, Bool] = HashMap([])
 
   // Iterate until no more invariants found
@@ -240,8 +220,7 @@ fn hoist_from_loop(
                 loop_,
                 value_to_block,
                 invariant_values,
-                pointers,
-                readable,
+                memory,
                 func,
                 first_iteration=first_iteration.contains(inst.id),
               ) {
@@ -255,8 +234,8 @@ fn hoist_from_loop(
               preheader.append_inst(inst)
 
               // Update value_to_block
-              if inst.first_result() is Some(v) {
-                value_to_block.set(v.id, preheader.id)
+              for value in inst.results {
+                value_to_block[value.id] = preheader.id
               }
               any_hoisted = true
               changed = true

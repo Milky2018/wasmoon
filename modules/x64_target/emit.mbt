@@ -112,11 +112,12 @@ fn emit_move(
     return
   }
   match ty {
-    I32 => buffer.encoder.x86_emit_mov_rr32(to.id, from.id)
-    I64 | Ptr64 | GcRef64 => buffer.encoder.x86_emit_mov_rr(to.id, from.id)
-    F32 => buffer.encoder.x86_emit_movss_xmm_xmm(to.id, from.id)
-    F64 => buffer.encoder.x86_emit_movsd_xmm_xmm(to.id, from.id)
-    V128 => buffer.encoder.x86_emit_movaps_xmm_xmm(to.id, from.id)
+    I32 => buffer.encoder.x86_emit_gpr(Mov, R32, to.id, from.id)
+    I64 | Ptr64 | GcRef64 =>
+      buffer.encoder.x86_emit_gpr(Mov, R64, to.id, from.id)
+    F32 => buffer.encoder.x86_emit_xmm(Movss, to.id, from.id)
+    F64 => buffer.encoder.x86_emit_xmm(Movsd, to.id, from.id)
+    V128 => buffer.encoder.x86_emit_xmm(Movaps, to.id, from.id)
   }
 }
 
@@ -212,8 +213,8 @@ fn scalar_memory_address(
   let immediate = @vcode.PhysicalReg::new(10, Int)
   let scratch = @vcode.PhysicalReg::new(11, Int)
   emit_constant(buffer, W64, immediate, offset)
-  buffer.encoder.x86_emit_mov_rr(scratch.id, address.id)
-  buffer.encoder.x86_emit_add_rr(scratch.id, immediate.id)
+  buffer.encoder.x86_emit_gpr(Mov, R64, scratch.id, address.id)
+  buffer.encoder.x86_emit_gpr(Add, R64, scratch.id, immediate.id)
   (scratch, 0)
 }
 
@@ -318,9 +319,9 @@ fn emit_atomic_rmw(
       }
       if operation == Sub {
         if operation_width == W64 {
-          buffer.encoder.x86_emit_neg_r64(working.id)
+          buffer.encoder.x86_emit_gpr_unary(Neg, R64, working.id)
         } else {
-          buffer.encoder.x86_emit_neg_r32(working.id)
+          buffer.encoder.x86_emit_gpr_unary(Neg, R32, working.id)
         }
       }
       let offset = buffer.position()
@@ -363,12 +364,16 @@ fn emit_atomic_rmw(
         result,
       )
       match (operation_width, operation) {
-        (W32, And) => buffer.encoder.x86_emit_and_rr32(desired.id, value.id)
-        (W64, And) => buffer.encoder.x86_emit_and_rr(desired.id, value.id)
-        (W32, Or) => buffer.encoder.x86_emit_or_rr32(desired.id, value.id)
-        (W64, Or) => buffer.encoder.x86_emit_or_rr(desired.id, value.id)
-        (W32, Xor) => buffer.encoder.x86_emit_xor_rr32(desired.id, value.id)
-        (W64, Xor) => buffer.encoder.x86_emit_xor_rr(desired.id, value.id)
+        (W32, And) =>
+          buffer.encoder.x86_emit_gpr(And, R32, desired.id, value.id)
+        (W64, And) =>
+          buffer.encoder.x86_emit_gpr(And, R64, desired.id, value.id)
+        (W32, Or) => buffer.encoder.x86_emit_gpr(Or, R32, desired.id, value.id)
+        (W64, Or) => buffer.encoder.x86_emit_gpr(Or, R64, desired.id, value.id)
+        (W32, Xor) =>
+          buffer.encoder.x86_emit_gpr(Xor, R32, desired.id, value.id)
+        (W64, Xor) =>
+          buffer.encoder.x86_emit_gpr(Xor, R64, desired.id, value.id)
         _ => abort("matched atomic bitwise operation")
       }
       buffer.encoder.x86_emit_lock_cmpxchg(width, address.id, desired.id)
@@ -390,7 +395,7 @@ fn emit_atomic_result(
     W16 => buffer.encoder.x86_emit_movzx_r32_r16(result.id, result.id)
     // A successful CMPXCHG does not necessarily write EAX. Emit the
     // zero-extension even when the input and output use the same register.
-    W32 => buffer.encoder.x86_emit_mov_rr32(result.id, result.id)
+    W32 => buffer.encoder.x86_emit_gpr(Mov, R32, result.id, result.id)
     W64 | W128 => ()
   }
 }
@@ -467,7 +472,7 @@ fn emit_stack_address(
   destination : @vcode.PhysicalReg,
   offset : Int32,
 ) -> Unit {
-  buffer.encoder.x86_emit_mov_rr(destination.id, 4)
+  buffer.encoder.x86_emit_gpr(Mov, R64, destination.id, 4)
   if offset == 0 {
     return
   }
@@ -476,7 +481,7 @@ fn emit_stack_address(
   } else {
     let scratch = @vcode.PhysicalReg::new(10, Int)
     emit_constant(buffer, W64, scratch, offset.to_uint64())
-    buffer.encoder.x86_emit_add_rr(destination.id, scratch.id)
+    buffer.encoder.x86_emit_gpr(Add, R64, destination.id, scratch.id)
   }
 }
 
@@ -577,19 +582,19 @@ fn emit_reverse_bits(
     let (shift, mask) = stage
     emit_move(buffer, integer_type(width), temporary, value)
     if width == W32 {
-      buffer.encoder.x86_emit_shr_r32_imm8(temporary.id, shift)
+      buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R32, temporary.id, shift)
       emit_constant(buffer, W32, destination, mask)
-      buffer.encoder.x86_emit_and_rr32(temporary.id, destination.id)
-      buffer.encoder.x86_emit_and_rr32(value.id, destination.id)
-      buffer.encoder.x86_emit_shl_r32_imm8(value.id, shift)
-      buffer.encoder.x86_emit_or_rr32(value.id, temporary.id)
+      buffer.encoder.x86_emit_gpr(And, R32, temporary.id, destination.id)
+      buffer.encoder.x86_emit_gpr(And, R32, value.id, destination.id)
+      buffer.encoder.x86_emit_gpr_shift_imm8(Shl, R32, value.id, shift)
+      buffer.encoder.x86_emit_gpr(Or, R32, value.id, temporary.id)
     } else {
-      buffer.encoder.x86_emit_shr_r_imm8(temporary.id, shift)
+      buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R64, temporary.id, shift)
       emit_constant(buffer, W64, destination, mask)
-      buffer.encoder.x86_emit_and_rr(temporary.id, destination.id)
-      buffer.encoder.x86_emit_and_rr(value.id, destination.id)
-      buffer.encoder.x86_emit_shl_r_imm8(value.id, shift)
-      buffer.encoder.x86_emit_or_rr(value.id, temporary.id)
+      buffer.encoder.x86_emit_gpr(And, R64, temporary.id, destination.id)
+      buffer.encoder.x86_emit_gpr(And, R64, value.id, destination.id)
+      buffer.encoder.x86_emit_gpr_shift_imm8(Shl, R64, value.id, shift)
+      buffer.encoder.x86_emit_gpr(Or, R64, value.id, temporary.id)
     }
   }
   emit_move(buffer, integer_type(width), destination, value)
@@ -607,53 +612,53 @@ fn emit_population_count(
   emit_move(buffer, integer_type(width), value, source)
   emit_move(buffer, integer_type(width), temporary, value)
   if width == W32 {
-    buffer.encoder.x86_emit_shr_r32_imm8(temporary.id, 1)
+    buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R32, temporary.id, 1)
     emit_constant(buffer, W32, destination, 0x55555555UL)
-    buffer.encoder.x86_emit_and_rr32(temporary.id, destination.id)
-    buffer.encoder.x86_emit_sub_rr32(value.id, temporary.id)
+    buffer.encoder.x86_emit_gpr(And, R32, temporary.id, destination.id)
+    buffer.encoder.x86_emit_gpr(Sub, R32, value.id, temporary.id)
     emit_move(buffer, I32, temporary, value)
-    buffer.encoder.x86_emit_shr_r32_imm8(temporary.id, 2)
+    buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R32, temporary.id, 2)
     emit_constant(buffer, W32, destination, 0x33333333UL)
-    buffer.encoder.x86_emit_and_rr32(value.id, destination.id)
-    buffer.encoder.x86_emit_and_rr32(temporary.id, destination.id)
-    buffer.encoder.x86_emit_add_rr32(value.id, temporary.id)
+    buffer.encoder.x86_emit_gpr(And, R32, value.id, destination.id)
+    buffer.encoder.x86_emit_gpr(And, R32, temporary.id, destination.id)
+    buffer.encoder.x86_emit_gpr(Add, R32, value.id, temporary.id)
     emit_move(buffer, I32, temporary, value)
-    buffer.encoder.x86_emit_shr_r32_imm8(temporary.id, 4)
-    buffer.encoder.x86_emit_add_rr32(value.id, temporary.id)
+    buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R32, temporary.id, 4)
+    buffer.encoder.x86_emit_gpr(Add, R32, value.id, temporary.id)
     emit_constant(buffer, W32, destination, 0x0F0F0F0FUL)
-    buffer.encoder.x86_emit_and_rr32(value.id, destination.id)
+    buffer.encoder.x86_emit_gpr(And, R32, value.id, destination.id)
     for shift in [8, 16] {
       emit_move(buffer, I32, temporary, value)
-      buffer.encoder.x86_emit_shr_r32_imm8(temporary.id, shift)
-      buffer.encoder.x86_emit_add_rr32(value.id, temporary.id)
+      buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R32, temporary.id, shift)
+      buffer.encoder.x86_emit_gpr(Add, R32, value.id, temporary.id)
     }
     emit_constant(buffer, W32, destination, 0x3FUL)
-    buffer.encoder.x86_emit_and_rr32(value.id, destination.id)
-    buffer.encoder.x86_emit_mov_rr32(destination.id, value.id)
+    buffer.encoder.x86_emit_gpr(And, R32, value.id, destination.id)
+    buffer.encoder.x86_emit_gpr(Mov, R32, destination.id, value.id)
   } else {
-    buffer.encoder.x86_emit_shr_r_imm8(temporary.id, 1)
+    buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R64, temporary.id, 1)
     emit_constant(buffer, W64, destination, 0x5555555555555555UL)
-    buffer.encoder.x86_emit_and_rr(temporary.id, destination.id)
-    buffer.encoder.x86_emit_sub_rr(value.id, temporary.id)
+    buffer.encoder.x86_emit_gpr(And, R64, temporary.id, destination.id)
+    buffer.encoder.x86_emit_gpr(Sub, R64, value.id, temporary.id)
     emit_move(buffer, I64, temporary, value)
-    buffer.encoder.x86_emit_shr_r_imm8(temporary.id, 2)
+    buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R64, temporary.id, 2)
     emit_constant(buffer, W64, destination, 0x3333333333333333UL)
-    buffer.encoder.x86_emit_and_rr(value.id, destination.id)
-    buffer.encoder.x86_emit_and_rr(temporary.id, destination.id)
-    buffer.encoder.x86_emit_add_rr(value.id, temporary.id)
+    buffer.encoder.x86_emit_gpr(And, R64, value.id, destination.id)
+    buffer.encoder.x86_emit_gpr(And, R64, temporary.id, destination.id)
+    buffer.encoder.x86_emit_gpr(Add, R64, value.id, temporary.id)
     emit_move(buffer, I64, temporary, value)
-    buffer.encoder.x86_emit_shr_r_imm8(temporary.id, 4)
-    buffer.encoder.x86_emit_add_rr(value.id, temporary.id)
+    buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R64, temporary.id, 4)
+    buffer.encoder.x86_emit_gpr(Add, R64, value.id, temporary.id)
     emit_constant(buffer, W64, destination, 0x0F0F0F0F0F0F0F0FUL)
-    buffer.encoder.x86_emit_and_rr(value.id, destination.id)
+    buffer.encoder.x86_emit_gpr(And, R64, value.id, destination.id)
     for shift in [8, 16, 32] {
       emit_move(buffer, I64, temporary, value)
-      buffer.encoder.x86_emit_shr_r_imm8(temporary.id, shift)
-      buffer.encoder.x86_emit_add_rr(value.id, temporary.id)
+      buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R64, temporary.id, shift)
+      buffer.encoder.x86_emit_gpr(Add, R64, value.id, temporary.id)
     }
     emit_constant(buffer, W64, destination, 0x7FUL)
-    buffer.encoder.x86_emit_and_rr(value.id, destination.id)
-    buffer.encoder.x86_emit_mov_rr32(destination.id, value.id)
+    buffer.encoder.x86_emit_gpr(And, R64, value.id, destination.id)
+    buffer.encoder.x86_emit_gpr(Mov, R32, destination.id, value.id)
   }
 }
 
@@ -669,17 +674,17 @@ fn emit_int_unary(
     Mvn => {
       emit_move(buffer, integer_type(width), destination, source)
       if width == W32 {
-        buffer.encoder.x86_emit_not_r32(destination.id)
+        buffer.encoder.x86_emit_gpr_unary(Not, R32, destination.id)
       } else {
-        buffer.encoder.x86_emit_not_r64(destination.id)
+        buffer.encoder.x86_emit_gpr_unary(Not, R64, destination.id)
       }
     }
     Neg => {
       emit_move(buffer, integer_type(width), destination, source)
       if width == W32 {
-        buffer.encoder.x86_emit_neg_r32(destination.id)
+        buffer.encoder.x86_emit_gpr_unary(Neg, R32, destination.id)
       } else {
-        buffer.encoder.x86_emit_neg_r64(destination.id)
+        buffer.encoder.x86_emit_gpr_unary(Neg, R64, destination.id)
       }
     }
     Clz => {
@@ -690,14 +695,14 @@ fn emit_int_unary(
         buffer.encoder.x86_emit_bsr_r32_r32(destination.id, source.id)
         buffer.encoder.x86_emit_cmovcc_rr32(RawEq, destination.id, fallback.id)
         emit_constant(buffer, W32, maximum, 31UL)
-        buffer.encoder.x86_emit_sub_rr32(maximum.id, destination.id)
-        buffer.encoder.x86_emit_mov_rr32(destination.id, maximum.id)
+        buffer.encoder.x86_emit_gpr(Sub, R32, maximum.id, destination.id)
+        buffer.encoder.x86_emit_gpr(Mov, R32, destination.id, maximum.id)
       } else {
         buffer.encoder.x86_emit_bsr_r64_r64(destination.id, source.id)
         buffer.encoder.x86_emit_cmovcc_rr(RawEq, destination.id, fallback.id)
         emit_constant(buffer, W64, maximum, 63UL)
-        buffer.encoder.x86_emit_sub_rr(maximum.id, destination.id)
-        buffer.encoder.x86_emit_mov_rr(destination.id, maximum.id)
+        buffer.encoder.x86_emit_gpr(Sub, R64, maximum.id, destination.id)
+        buffer.encoder.x86_emit_gpr(Mov, R64, destination.id, maximum.id)
       }
     }
     Rbit => emit_reverse_bits(width, buffer, destination, source)
@@ -719,17 +724,22 @@ fn emit_int_binary(
         buffer.encoder.x86_emit_cdq()
         buffer.encoder.x86_emit_idiv_r32(right.id)
       } else {
-        buffer.encoder.x86_emit_xor_rr32(2, 2)
+        buffer.encoder.x86_emit_gpr(Xor, R32, 2, 2)
         buffer.encoder.x86_emit_div_r32(right.id)
       }
     } else if operation == Sdiv {
       buffer.encoder.x86_emit_cqo()
       buffer.encoder.x86_emit_idiv_r64(right.id)
     } else {
-      buffer.encoder.x86_emit_xor_rr(2, 2)
+      buffer.encoder.x86_emit_gpr(Xor, R64, 2, 2)
       buffer.encoder.x86_emit_div_r64(right.id)
     }
     return
+  }
+  let encoding_width : @encoding.GprEncodingWidth = if width == W32 {
+    R32
+  } else {
+    R64
   }
   if operation is (Lsl | Asr | Lsr | Ror) {
     let working = if destination.id == 1 ||
@@ -745,17 +755,14 @@ fn emit_int_binary(
       @vcode.PhysicalReg::new(1, Int),
       right,
     )
-    match (width, operation) {
-      (W32, Lsl) => buffer.encoder.x86_emit_shl_r32_cl(working.id)
-      (W64, Lsl) => buffer.encoder.x86_emit_shl_r_cl(working.id)
-      (W32, Asr) => buffer.encoder.x86_emit_sar_r32_cl(working.id)
-      (W64, Asr) => buffer.encoder.x86_emit_sar_r_cl(working.id)
-      (W32, Lsr) => buffer.encoder.x86_emit_shr_r32_cl(working.id)
-      (W64, Lsr) => buffer.encoder.x86_emit_shr_r_cl(working.id)
-      (W32, Ror) => buffer.encoder.x86_emit_ror_r32_cl(working.id)
-      (W64, Ror) => buffer.encoder.x86_emit_ror_r_cl(working.id)
-      _ => ()
+    let shift : @encoding.GprShiftOp = match operation {
+      Lsl => Shl
+      Asr => Sar
+      Lsr => Shr
+      Ror => Ror
+      _ => abort("non-shift operation in x64 shift emission")
     }
+    buffer.encoder.x86_emit_gpr_shift_cl(shift, encoding_width, working.id)
     emit_move(buffer, integer_type(width), destination, working)
     return
   }
@@ -765,21 +772,17 @@ fn emit_int_binary(
     destination
   }
   emit_move(buffer, integer_type(width), working, left)
-  match (width, operation) {
-    (W32, Add) => buffer.encoder.x86_emit_add_rr32(working.id, right.id)
-    (W64, Add) => buffer.encoder.x86_emit_add_rr(working.id, right.id)
-    (W32, Sub) => buffer.encoder.x86_emit_sub_rr32(working.id, right.id)
-    (W64, Sub) => buffer.encoder.x86_emit_sub_rr(working.id, right.id)
-    (W32, Mul) => buffer.encoder.x86_emit_imul_rr32(working.id, right.id)
-    (W64, Mul) => buffer.encoder.x86_emit_imul_rr(working.id, right.id)
-    (W32, And) => buffer.encoder.x86_emit_and_rr32(working.id, right.id)
-    (W64, And) => buffer.encoder.x86_emit_and_rr(working.id, right.id)
-    (W32, Orr) => buffer.encoder.x86_emit_or_rr32(working.id, right.id)
-    (W64, Orr) => buffer.encoder.x86_emit_or_rr(working.id, right.id)
-    (W32, Eor) => buffer.encoder.x86_emit_xor_rr32(working.id, right.id)
-    (W64, Eor) => buffer.encoder.x86_emit_xor_rr(working.id, right.id)
-    (_, Lsl | Asr | Lsr | Ror | Sdiv | Udiv) => ()
+  let instruction : @encoding.GprRegisterOp = match operation {
+    Add => Add
+    Sub => Sub
+    Mul => Imul
+    And => And
+    Orr => Or
+    Eor => Xor
+    Lsl | Asr | Lsr | Ror | Sdiv | Udiv =>
+      abort("non-binary-register operation in x64 arithmetic emission")
   }
+  buffer.encoder.x86_emit_gpr(instruction, encoding_width, working.id, right.id)
   emit_move(buffer, integer_type(width), destination, working)
 }
 
@@ -802,9 +805,9 @@ fn emit_int_with_overflow(
       }
       emit_move(buffer, integer_type(width), working, left)
       if width == W32 {
-        buffer.encoder.x86_emit_add_rr32(working.id, right.id)
+        buffer.encoder.x86_emit_gpr(Add, R32, working.id, right.id)
       } else {
-        buffer.encoder.x86_emit_add_rr(working.id, right.id)
+        buffer.encoder.x86_emit_gpr(Add, R64, working.id, right.id)
       }
       buffer.encoder.x86_emit_setcc_r8(
         if signedness == Signed {
@@ -825,9 +828,9 @@ fn emit_int_with_overflow(
       }
       emit_move(buffer, integer_type(width), working, left)
       if width == W32 {
-        buffer.encoder.x86_emit_sub_rr32(working.id, right.id)
+        buffer.encoder.x86_emit_gpr(Sub, R32, working.id, right.id)
       } else {
-        buffer.encoder.x86_emit_sub_rr(working.id, right.id)
+        buffer.encoder.x86_emit_gpr(Sub, R64, working.id, right.id)
       }
       buffer.encoder.x86_emit_setcc_r8(
         if signedness == Signed {
@@ -882,7 +885,7 @@ fn emit_vector_select(
   when_false : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
-  buffer.encoder.x86_emit_test_rr32(condition.id, condition.id)
+  buffer.encoder.x86_emit_gpr(Test, R32, condition.id, condition.id)
   let false_branch = buffer.emit_local_jcc(RawEq)
   emit_move(buffer, V128, destination, when_true)
   let done = buffer.emit_local_jmp()
@@ -899,11 +902,11 @@ fn emit_spectre_guard(
   false_address : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit {
-  buffer.encoder.x86_emit_test_rr32(condition.id, condition.id)
+  buffer.encoder.x86_emit_gpr(Test, R32, condition.id, condition.id)
   if destination == true_address {
     buffer.encoder.x86_emit_cmovcc_rr(RawEq, destination.id, false_address.id)
   } else {
-    buffer.encoder.x86_emit_mov_rr(destination.id, false_address.id)
+    buffer.encoder.x86_emit_gpr(Mov, R64, destination.id, false_address.id)
     buffer.encoder.x86_emit_cmovcc_rr(RawNe, destination.id, true_address.id)
   }
 }
@@ -918,7 +921,7 @@ fn emit_vector_splat(
   match lane {
     I8x16 => {
       buffer.encoder.x86_emit_movd_xmm_r32(destination.id, source.id)
-      buffer.encoder.x86_emit_punpcklbw_xmm_xmm(destination.id, destination.id)
+      buffer.encoder.x86_emit_xmm(Punpcklbw, destination.id, destination.id)
       buffer.encoder.x86_emit_pshuflw_xmm_xmm_imm8(
         destination.id,
         destination.id,
@@ -1084,9 +1087,9 @@ fn emit_vector_replace_lane(
       )
     F64x2 =>
       if index == 0 {
-        buffer.encoder.x86_emit_movsd_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Movsd, destination.id, source.id)
       } else {
-        buffer.encoder.x86_emit_movlhps_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Movlhps, destination.id, source.id)
       }
   }
 }
@@ -1105,8 +1108,8 @@ fn emit_vector_table_lookup(
   emit_vector_constant(
     buffer, constant, 0x7070707070707070UL, 0x7070707070707070UL,
   )
-  buffer.encoder.x86_emit_paddusb_xmm_xmm(mask.id, constant.id)
-  buffer.encoder.x86_emit_pshufb_xmm_xmm(destination.id, mask.id)
+  buffer.encoder.x86_emit_xmm(Paddusb, mask.id, constant.id)
+  buffer.encoder.x86_emit_xmm(Pshufb, destination.id, mask.id)
 }
 
 ///|
@@ -1139,11 +1142,11 @@ fn emit_vector_shuffle(
   emit_move(buffer, V128, first_copy, first)
   emit_move(buffer, V128, second_copy, second)
   emit_vector_constant(buffer, destination, first_low, first_high)
-  buffer.encoder.x86_emit_pshufb_xmm_xmm(first_copy.id, destination.id)
+  buffer.encoder.x86_emit_xmm(Pshufb, first_copy.id, destination.id)
   emit_vector_constant(buffer, destination, second_low, second_high)
-  buffer.encoder.x86_emit_pshufb_xmm_xmm(second_copy.id, destination.id)
+  buffer.encoder.x86_emit_xmm(Pshufb, second_copy.id, destination.id)
   emit_move(buffer, V128, destination, first_copy)
-  buffer.encoder.x86_emit_por_xmm_xmm(destination.id, second_copy.id)
+  buffer.encoder.x86_emit_xmm(Por, destination.id, second_copy.id)
 }
 
 ///|
@@ -1171,19 +1174,16 @@ fn emit_vector_int_unary(
   match operation {
     Absolute =>
       match lane {
-        I8x16 =>
-          buffer.encoder.x86_emit_pabsb_xmm_xmm(destination.id, source.id)
-        I16x8 =>
-          buffer.encoder.x86_emit_pabsw_xmm_xmm(destination.id, source.id)
-        I32x4 =>
-          buffer.encoder.x86_emit_pabsd_xmm_xmm(destination.id, source.id)
+        I8x16 => buffer.encoder.x86_emit_xmm(Pabsb, destination.id, source.id)
+        I16x8 => buffer.encoder.x86_emit_xmm(Pabsw, destination.id, source.id)
+        I32x4 => buffer.encoder.x86_emit_xmm(Pabsd, destination.id, source.id)
         I64x2 => {
           let sign = @vcode.PhysicalReg::new(14, FpVector)
           emit_move(buffer, V128, destination, source)
           emit_move(buffer, V128, sign, source)
           buffer.encoder.x86_emit_psrad_xmm_imm8(sign.id, 31)
           buffer.encoder.x86_emit_pshufd_xmm_xmm_imm8(sign.id, sign.id, 0xF5)
-          buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, sign.id)
+          buffer.encoder.x86_emit_xmm(Pxor, destination.id, sign.id)
           buffer.encoder.x86_emit_psub_xmm_xmm(D64, destination.id, sign.id)
         }
         _ => raise InvalidVectorInstruction
@@ -1196,7 +1196,7 @@ fn emit_vector_int_unary(
       } else {
         source
       }
-      buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, destination.id)
+      buffer.encoder.x86_emit_xmm(Pxor, destination.id, destination.id)
       buffer.encoder.x86_emit_psub_xmm_xmm(
         raw_lane,
         destination.id,
@@ -1213,21 +1213,21 @@ fn emit_vector_int_unary(
       emit_vector_constant(
         buffer, destination, 0x0F0F0F0F0F0F0F0FUL, 0x0F0F0F0F0F0F0F0FUL,
       )
-      buffer.encoder.x86_emit_pand_xmm_xmm(destination.id, source_copy.id)
+      buffer.encoder.x86_emit_xmm(Pand, destination.id, source_copy.id)
       emit_vector_constant(
         buffer, table, 0x0302020102010100UL, 0x0403030203020201UL,
       )
-      buffer.encoder.x86_emit_pshufb_xmm_xmm(table.id, destination.id)
+      buffer.encoder.x86_emit_xmm(Pshufb, table.id, destination.id)
       emit_move(buffer, V128, destination, source_copy)
       buffer.encoder.x86_emit_psrlw_xmm_imm8(destination.id, 4)
       emit_vector_constant(
         buffer, source_copy, 0x0F0F0F0F0F0F0F0FUL, 0x0F0F0F0F0F0F0F0FUL,
       )
-      buffer.encoder.x86_emit_pand_xmm_xmm(destination.id, source_copy.id)
+      buffer.encoder.x86_emit_xmm(Pand, destination.id, source_copy.id)
       emit_vector_constant(
         buffer, source_copy, 0x0302020102010100UL, 0x0403030203020201UL,
       )
-      buffer.encoder.x86_emit_pshufb_xmm_xmm(source_copy.id, destination.id)
+      buffer.encoder.x86_emit_xmm(Pshufb, source_copy.id, destination.id)
       buffer.encoder.x86_emit_padd_xmm_xmm(B8, table.id, source_copy.id)
       emit_move(buffer, V128, destination, table)
     }
@@ -1247,10 +1247,10 @@ fn emit_vector_int_unary(
           )
           if signedness == Signed {
             emit_move(buffer, V128, destination, ones)
-            buffer.encoder.x86_emit_pmaddubsw_xmm_xmm(destination.id, input.id)
+            buffer.encoder.x86_emit_xmm(Pmaddubsw, destination.id, input.id)
           } else {
             emit_move(buffer, V128, destination, source)
-            buffer.encoder.x86_emit_pmaddubsw_xmm_xmm(destination.id, ones.id)
+            buffer.encoder.x86_emit_xmm(Pmaddubsw, destination.id, ones.id)
           }
         }
         I32x4 => {
@@ -1260,12 +1260,12 @@ fn emit_vector_int_unary(
             emit_vector_constant(
               buffer, ones, 0x8000800080008000UL, 0x8000800080008000UL,
             )
-            buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, ones.id)
+            buffer.encoder.x86_emit_xmm(Pxor, destination.id, ones.id)
           }
           emit_vector_constant(
             buffer, ones, 0x0001000100010001UL, 0x0001000100010001UL,
           )
-          buffer.encoder.x86_emit_pmaddwd_xmm_xmm(destination.id, ones.id)
+          buffer.encoder.x86_emit_xmm(Pmaddwd, destination.id, ones.id)
           if signedness == Unsigned {
             emit_vector_constant(
               buffer, ones, 0x0001000000010000UL, 0x0001000000010000UL,
@@ -1279,11 +1279,11 @@ fn emit_vector_int_unary(
           buffer.encoder.x86_emit_pshufd_xmm_xmm_imm8(even.id, source.id, 0x88)
           buffer.encoder.x86_emit_pshufd_xmm_xmm_imm8(odd.id, source.id, 0xDD)
           if signedness == Signed {
-            buffer.encoder.x86_emit_pmovsxdq_xmm_xmm(even.id, even.id)
-            buffer.encoder.x86_emit_pmovsxdq_xmm_xmm(odd.id, odd.id)
+            buffer.encoder.x86_emit_xmm(Pmovsxdq, even.id, even.id)
+            buffer.encoder.x86_emit_xmm(Pmovsxdq, odd.id, odd.id)
           } else {
-            buffer.encoder.x86_emit_pmovzxdq_xmm_xmm(even.id, even.id)
-            buffer.encoder.x86_emit_pmovzxdq_xmm_xmm(odd.id, odd.id)
+            buffer.encoder.x86_emit_xmm(Pmovzxdq, even.id, even.id)
+            buffer.encoder.x86_emit_xmm(Pmovzxdq, odd.id, odd.id)
           }
           buffer.encoder.x86_emit_padd_xmm_xmm(D64, even.id, odd.id)
           emit_move(buffer, V128, destination, even)
@@ -1329,26 +1329,26 @@ fn emit_vector_int_binary(
         emit_vector_constant(
           buffer, high, 0x00FF00FF00FF00FFUL, 0x00FF00FF00FF00FFUL,
         )
-        buffer.encoder.x86_emit_pand_xmm_xmm(destination.id, high.id)
-        buffer.encoder.x86_emit_pand_xmm_xmm(right_copy.id, high.id)
-        buffer.encoder.x86_emit_pmullw_xmm_xmm(destination.id, right_copy.id)
+        buffer.encoder.x86_emit_xmm(Pand, destination.id, high.id)
+        buffer.encoder.x86_emit_xmm(Pand, right_copy.id, high.id)
+        buffer.encoder.x86_emit_xmm(Pmullw, destination.id, right_copy.id)
         emit_move(buffer, V128, right_copy, left)
         buffer.encoder.x86_emit_psrlw_xmm_imm8(right_copy.id, 8)
         emit_move(buffer, V128, high, right)
         buffer.encoder.x86_emit_psrlw_xmm_imm8(high.id, 8)
-        buffer.encoder.x86_emit_pmullw_xmm_xmm(right_copy.id, high.id)
+        buffer.encoder.x86_emit_xmm(Pmullw, right_copy.id, high.id)
         buffer.encoder.x86_emit_psllw_xmm_imm8(right_copy.id, 8)
         emit_vector_constant(
           buffer, high, 0x00FF00FF00FF00FFUL, 0x00FF00FF00FF00FFUL,
         )
-        buffer.encoder.x86_emit_pand_xmm_xmm(destination.id, high.id)
-        buffer.encoder.x86_emit_por_xmm_xmm(destination.id, right_copy.id)
+        buffer.encoder.x86_emit_xmm(Pand, destination.id, high.id)
+        buffer.encoder.x86_emit_xmm(Por, destination.id, right_copy.id)
       } else if lane == I16x8 || lane == I32x4 {
         let source = prepare_xmm_two_operand(buffer, destination, left, right)
         if lane == I16x8 {
-          buffer.encoder.x86_emit_pmullw_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Pmullw, destination.id, source.id)
         } else {
-          buffer.encoder.x86_emit_pmulld_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Pmulld, destination.id, source.id)
         }
       } else if lane == I64x2 {
         let left_source = if destination == left {
@@ -1376,7 +1376,7 @@ fn emit_vector_int_binary(
             right_source.id,
             index,
           )
-          buffer.encoder.x86_emit_imul_rr(10, 11)
+          buffer.encoder.x86_emit_gpr(Imul, R64, 10, 11)
           if index == 0 {
             buffer.encoder.x86_emit_movq_xmm_r64(destination.id, 10)
           } else {
@@ -1389,9 +1389,9 @@ fn emit_vector_int_binary(
     AverageUnsigned => {
       let source = prepare_xmm_two_operand(buffer, destination, left, right)
       if lane == I8x16 {
-        buffer.encoder.x86_emit_pavgb_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Pavgb, destination.id, source.id)
       } else if lane == I16x8 {
-        buffer.encoder.x86_emit_pavgw_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Pavgw, destination.id, source.id)
       } else {
         raise InvalidVectorInstruction
       }
@@ -1430,7 +1430,7 @@ fn emit_vector_int_binary(
             right_source.id,
             index,
           )
-          buffer.encoder.x86_emit_cmp_rr(10, 11)
+          buffer.encoder.x86_emit_gpr(Cmp, R64, 10, 11)
           buffer.encoder.x86_emit_cmovcc_rr(choose_right, 10, 11)
           if index == 0 {
             buffer.encoder.x86_emit_movq_xmm_r64(destination.id, 10)
@@ -1442,29 +1442,29 @@ fn emit_vector_int_binary(
         let source = prepare_xmm_two_operand(buffer, destination, left, right)
         match (operation, signedness, lane) {
           (Min(_), Signed, I8x16) =>
-            buffer.encoder.x86_emit_pminsb_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pminsb, destination.id, source.id)
           (Min(_), Signed, I16x8) =>
-            buffer.encoder.x86_emit_pminsw_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pminsw, destination.id, source.id)
           (Min(_), Signed, I32x4) =>
-            buffer.encoder.x86_emit_pminsd_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pminsd, destination.id, source.id)
           (Min(_), Unsigned, I8x16) =>
-            buffer.encoder.x86_emit_pminub_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pminub, destination.id, source.id)
           (Min(_), Unsigned, I16x8) =>
-            buffer.encoder.x86_emit_pminuw_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pminuw, destination.id, source.id)
           (Min(_), Unsigned, I32x4) =>
-            buffer.encoder.x86_emit_pminud_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pminud, destination.id, source.id)
           (Max(_), Signed, I8x16) =>
-            buffer.encoder.x86_emit_pmaxsb_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pmaxsb, destination.id, source.id)
           (Max(_), Signed, I16x8) =>
-            buffer.encoder.x86_emit_pmaxsw_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pmaxsw, destination.id, source.id)
           (Max(_), Signed, I32x4) =>
-            buffer.encoder.x86_emit_pmaxsd_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pmaxsd, destination.id, source.id)
           (Max(_), Unsigned, I8x16) =>
-            buffer.encoder.x86_emit_pmaxub_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pmaxub, destination.id, source.id)
           (Max(_), Unsigned, I16x8) =>
-            buffer.encoder.x86_emit_pmaxuw_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pmaxuw, destination.id, source.id)
           (Max(_), Unsigned, I32x4) =>
-            buffer.encoder.x86_emit_pmaxud_xmm_xmm(destination.id, source.id)
+            buffer.encoder.x86_emit_xmm(Pmaxud, destination.id, source.id)
           _ => raise InvalidVectorInstruction
         }
       }
@@ -1472,21 +1472,21 @@ fn emit_vector_int_binary(
       let source = prepare_xmm_two_operand(buffer, destination, left, right)
       match (operation, signedness, lane) {
         (SaturatingAdd(_), Signed, I8x16) =>
-          buffer.encoder.x86_emit_paddsb_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Paddsb, destination.id, source.id)
         (SaturatingAdd(_), Signed, I16x8) =>
-          buffer.encoder.x86_emit_paddsw_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Paddsw, destination.id, source.id)
         (SaturatingAdd(_), Unsigned, I8x16) =>
-          buffer.encoder.x86_emit_paddusb_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Paddusb, destination.id, source.id)
         (SaturatingAdd(_), Unsigned, I16x8) =>
-          buffer.encoder.x86_emit_paddusw_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Paddusw, destination.id, source.id)
         (SaturatingSub(_), Signed, I8x16) =>
-          buffer.encoder.x86_emit_psubsb_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Psubsb, destination.id, source.id)
         (SaturatingSub(_), Signed, I16x8) =>
-          buffer.encoder.x86_emit_psubsw_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Psubsw, destination.id, source.id)
         (SaturatingSub(_), Unsigned, I8x16) =>
-          buffer.encoder.x86_emit_psubusb_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Psubusb, destination.id, source.id)
         (SaturatingSub(_), Unsigned, I16x8) =>
-          buffer.encoder.x86_emit_psubusw_xmm_xmm(destination.id, source.id)
+          buffer.encoder.x86_emit_xmm(Psubusw, destination.id, source.id)
         _ => raise InvalidVectorInstruction
       }
     }
@@ -1506,11 +1506,11 @@ fn emit_vector_int_binary(
     }
     Dot16To32Signed => {
       let source = prepare_xmm_two_operand(buffer, destination, left, right)
-      buffer.encoder.x86_emit_pmaddwd_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Pmaddwd, destination.id, source.id)
     }
     Q15MultiplyRoundedSaturating => {
       let source = prepare_xmm_two_operand(buffer, destination, left, right)
-      buffer.encoder.x86_emit_pmulhrsw_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Pmulhrsw, destination.id, source.id)
       let minimum = @vcode.PhysicalReg::new(14, FpVector)
       let mask = @vcode.PhysicalReg::new(15, FpVector)
       emit_vector_constant(
@@ -1518,7 +1518,7 @@ fn emit_vector_int_binary(
       )
       emit_move(buffer, V128, mask, destination)
       buffer.encoder.x86_emit_pcmpeq_xmm_xmm(H16, mask.id, minimum.id)
-      buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, mask.id)
+      buffer.encoder.x86_emit_xmm(Pxor, destination.id, mask.id)
     }
   }
 }
@@ -1553,17 +1553,17 @@ fn emit_vector_extension(
   }
   match (lane, signedness) {
     (I16x8, Signed) =>
-      buffer.encoder.x86_emit_pmovsxbw_xmm_xmm(destination.id, input.id)
+      buffer.encoder.x86_emit_xmm(Pmovsxbw, destination.id, input.id)
     (I16x8, Unsigned) =>
-      buffer.encoder.x86_emit_pmovzxbw_xmm_xmm(destination.id, input.id)
+      buffer.encoder.x86_emit_xmm(Pmovzxbw, destination.id, input.id)
     (I32x4, Signed) =>
-      buffer.encoder.x86_emit_pmovsxwd_xmm_xmm(destination.id, input.id)
+      buffer.encoder.x86_emit_xmm(Pmovsxwd, destination.id, input.id)
     (I32x4, Unsigned) =>
-      buffer.encoder.x86_emit_pmovzxwd_xmm_xmm(destination.id, input.id)
+      buffer.encoder.x86_emit_xmm(Pmovzxwd, destination.id, input.id)
     (I64x2, Signed) =>
-      buffer.encoder.x86_emit_pmovsxdq_xmm_xmm(destination.id, input.id)
+      buffer.encoder.x86_emit_xmm(Pmovsxdq, destination.id, input.id)
     (I64x2, Unsigned) =>
-      buffer.encoder.x86_emit_pmovzxdq_xmm_xmm(destination.id, input.id)
+      buffer.encoder.x86_emit_xmm(Pmovzxdq, destination.id, input.id)
     _ => raise InvalidVectorInstruction
   }
 }
@@ -1580,13 +1580,13 @@ fn emit_vector_narrow(
   let high_source = prepare_xmm_two_operand(buffer, destination, low, high)
   match (lane, signedness) {
     (I8x16, Signed) =>
-      buffer.encoder.x86_emit_packsswb_xmm_xmm(destination.id, high_source.id)
+      buffer.encoder.x86_emit_xmm(Packsswb, destination.id, high_source.id)
     (I8x16, Unsigned) =>
-      buffer.encoder.x86_emit_packuswb_xmm_xmm(destination.id, high_source.id)
+      buffer.encoder.x86_emit_xmm(Packuswb, destination.id, high_source.id)
     (I16x8, Signed) =>
-      buffer.encoder.x86_emit_packssdw_xmm_xmm(destination.id, high_source.id)
+      buffer.encoder.x86_emit_xmm(Packssdw, destination.id, high_source.id)
     (I16x8, Unsigned) =>
-      buffer.encoder.x86_emit_packusdw_xmm_xmm(destination.id, high_source.id)
+      buffer.encoder.x86_emit_xmm(Packusdw, destination.id, high_source.id)
     _ => raise InvalidVectorInstruction
   }
 }
@@ -1606,33 +1606,27 @@ fn emit_vector_conversion(
         emit_move(buffer, V128, first, source)
         buffer.encoder.x86_emit_cmpps_xmm_xmm_imm8(first.id, first.id, 0)
         emit_move(buffer, V128, destination, source)
-        buffer.encoder.x86_emit_andps_xmm_xmm(destination.id, first.id)
-        buffer.encoder.x86_emit_pxor_xmm_xmm(first.id, destination.id)
-        buffer.encoder.x86_emit_cvttps2dq_xmm_xmm(
-          destination.id,
-          destination.id,
-        )
-        buffer.encoder.x86_emit_pand_xmm_xmm(first.id, destination.id)
+        buffer.encoder.x86_emit_xmm(Andps, destination.id, first.id)
+        buffer.encoder.x86_emit_xmm(Pxor, first.id, destination.id)
+        buffer.encoder.x86_emit_xmm(Cvttps2dq, destination.id, destination.id)
+        buffer.encoder.x86_emit_xmm(Pand, first.id, destination.id)
         buffer.encoder.x86_emit_psrad_xmm_imm8(first.id, 31)
-        buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, first.id)
+        buffer.encoder.x86_emit_xmm(Pxor, destination.id, first.id)
       } else {
-        buffer.encoder.x86_emit_pxor_xmm_xmm(second.id, second.id)
+        buffer.encoder.x86_emit_xmm(Pxor, second.id, second.id)
         emit_move(buffer, V128, destination, source)
-        buffer.encoder.x86_emit_maxps_xmm_xmm(destination.id, second.id)
-        buffer.encoder.x86_emit_pcmpeqd_xmm_xmm(second.id, second.id)
+        buffer.encoder.x86_emit_xmm(Maxps, destination.id, second.id)
+        buffer.encoder.x86_emit_xmm(Pcmpeqd, second.id, second.id)
         buffer.encoder.x86_emit_psrld_xmm_imm8(second.id, 1)
-        buffer.encoder.x86_emit_cvtdq2ps_xmm_xmm(second.id, second.id)
+        buffer.encoder.x86_emit_xmm(Cvtdq2ps, second.id, second.id)
         emit_move(buffer, V128, first, destination)
-        buffer.encoder.x86_emit_cvttps2dq_xmm_xmm(
-          destination.id,
-          destination.id,
-        )
-        buffer.encoder.x86_emit_subps_xmm_xmm(first.id, second.id)
+        buffer.encoder.x86_emit_xmm(Cvttps2dq, destination.id, destination.id)
+        buffer.encoder.x86_emit_xmm(Subps, first.id, second.id)
         buffer.encoder.x86_emit_cmpps_xmm_xmm_imm8(second.id, first.id, 2)
-        buffer.encoder.x86_emit_cvttps2dq_xmm_xmm(first.id, first.id)
-        buffer.encoder.x86_emit_pxor_xmm_xmm(first.id, second.id)
-        buffer.encoder.x86_emit_pxor_xmm_xmm(second.id, second.id)
-        buffer.encoder.x86_emit_pmaxsd_xmm_xmm(first.id, second.id)
+        buffer.encoder.x86_emit_xmm(Cvttps2dq, first.id, first.id)
+        buffer.encoder.x86_emit_xmm(Pxor, first.id, second.id)
+        buffer.encoder.x86_emit_xmm(Pxor, second.id, second.id)
+        buffer.encoder.x86_emit_xmm(Pmaxsd, first.id, second.id)
         buffer.encoder.x86_emit_padd_xmm_xmm(S32, destination.id, first.id)
       }
     FloatToInt(F64x2, signedness) =>
@@ -1642,21 +1636,18 @@ fn emit_vector_conversion(
         emit_vector_constant(
           buffer, second, 0x41DFFFFFFFC00000UL, 0x41DFFFFFFFC00000UL,
         )
-        buffer.encoder.x86_emit_andpd_xmm_xmm(first.id, second.id)
+        buffer.encoder.x86_emit_xmm(Andpd, first.id, second.id)
         emit_move(buffer, V128, destination, source)
-        buffer.encoder.x86_emit_minpd_xmm_xmm(destination.id, first.id)
-        buffer.encoder.x86_emit_cvttpd2dq_xmm_xmm(
-          destination.id,
-          destination.id,
-        )
+        buffer.encoder.x86_emit_xmm(Minpd, destination.id, first.id)
+        buffer.encoder.x86_emit_xmm(Cvttpd2dq, destination.id, destination.id)
       } else {
-        buffer.encoder.x86_emit_xorpd_xmm_xmm(second.id, second.id)
+        buffer.encoder.x86_emit_xmm(Xorpd, second.id, second.id)
         emit_move(buffer, V128, destination, source)
-        buffer.encoder.x86_emit_maxpd_xmm_xmm(destination.id, second.id)
+        buffer.encoder.x86_emit_xmm(Maxpd, destination.id, second.id)
         emit_vector_constant(
           buffer, first, 0x41EFFFFFFFE00000UL, 0x41EFFFFFFFE00000UL,
         )
-        buffer.encoder.x86_emit_minpd_xmm_xmm(destination.id, first.id)
+        buffer.encoder.x86_emit_xmm(Minpd, destination.id, first.id)
         buffer.encoder.x86_emit_roundpd_xmm_xmm_imm8(
           destination.id,
           destination.id,
@@ -1665,7 +1656,7 @@ fn emit_vector_conversion(
         emit_vector_constant(
           buffer, first, 0x4330000000000000UL, 0x4330000000000000UL,
         )
-        buffer.encoder.x86_emit_addpd_xmm_xmm(destination.id, first.id)
+        buffer.encoder.x86_emit_xmm(Addpd, destination.id, first.id)
         buffer.encoder.x86_emit_shufps_xmm_xmm_imm8(
           destination.id,
           second.id,
@@ -1674,34 +1665,34 @@ fn emit_vector_conversion(
       }
     IntToFloat(F32x4, signedness) =>
       if signedness == Signed {
-        buffer.encoder.x86_emit_cvtdq2ps_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Cvtdq2ps, destination.id, source.id)
       } else {
         emit_move(buffer, V128, first, source)
         buffer.encoder.x86_emit_pslld_xmm_imm8(first.id, 16)
         buffer.encoder.x86_emit_psrld_xmm_imm8(first.id, 16)
         emit_move(buffer, V128, second, source)
         buffer.encoder.x86_emit_psub_xmm_xmm(S32, second.id, first.id)
-        buffer.encoder.x86_emit_cvtdq2ps_xmm_xmm(first.id, first.id)
+        buffer.encoder.x86_emit_xmm(Cvtdq2ps, first.id, first.id)
         buffer.encoder.x86_emit_psrld_xmm_imm8(second.id, 1)
-        buffer.encoder.x86_emit_cvtdq2ps_xmm_xmm(second.id, second.id)
-        buffer.encoder.x86_emit_addps_xmm_xmm(second.id, second.id)
+        buffer.encoder.x86_emit_xmm(Cvtdq2ps, second.id, second.id)
+        buffer.encoder.x86_emit_xmm(Addps, second.id, second.id)
         emit_move(buffer, V128, destination, second)
-        buffer.encoder.x86_emit_addps_xmm_xmm(destination.id, first.id)
+        buffer.encoder.x86_emit_xmm(Addps, destination.id, first.id)
       }
     IntToFloat(F64x2, signedness) =>
       if signedness == Signed {
-        buffer.encoder.x86_emit_cvtdq2pd_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Cvtdq2pd, destination.id, source.id)
       } else {
         emit_vector_constant(buffer, first, 0x4330000043300000UL, 0UL)
         emit_move(buffer, V128, destination, source)
-        buffer.encoder.x86_emit_unpcklps_xmm_xmm(destination.id, first.id)
+        buffer.encoder.x86_emit_xmm(Unpcklps, destination.id, first.id)
         emit_vector_constant(
           buffer, first, 0x4330000000000000UL, 0x4330000000000000UL,
         )
-        buffer.encoder.x86_emit_subpd_xmm_xmm(destination.id, first.id)
+        buffer.encoder.x86_emit_xmm(Subpd, destination.id, first.id)
       }
     PromoteLowF32x4 =>
-      buffer.encoder.x86_emit_cvtps2pd_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Cvtps2pd, destination.id, source.id)
     DemoteZeroF64x2 => {
       let input = if destination == source {
         emit_move(buffer, V128, first, source)
@@ -1709,8 +1700,8 @@ fn emit_vector_conversion(
       } else {
         source
       }
-      buffer.encoder.x86_emit_xorps_xmm_xmm(destination.id, destination.id)
-      buffer.encoder.x86_emit_cvtpd2ps_xmm_xmm(destination.id, input.id)
+      buffer.encoder.x86_emit_xmm(Xorps, destination.id, destination.id)
+      buffer.encoder.x86_emit_xmm(Cvtpd2ps, destination.id, input.id)
     }
     ExtendLow(_, _) | ExtendHigh(_, _) | Narrow(_, _) =>
       raise InvalidVectorInstruction
@@ -1733,7 +1724,7 @@ fn emit_vector_predicate(
   }
   let zero = @vcode.PhysicalReg::new(14, FpVector)
   let work = @vcode.PhysicalReg::new(15, FpVector)
-  buffer.encoder.x86_emit_pxor_xmm_xmm(zero.id, zero.id)
+  buffer.encoder.x86_emit_xmm(Pxor, zero.id, zero.id)
   emit_move(buffer, V128, work, source)
   match predicate {
     AnyTrue => buffer.encoder.x86_emit_pcmpeq_xmm_xmm(B8, work.id, zero.id)
@@ -1746,7 +1737,7 @@ fn emit_vector_predicate(
     AllTrue(I64x2) => {
       buffer.encoder.x86_emit_pcmpeq_xmm_xmm(S32, work.id, zero.id)
       buffer.encoder.x86_emit_pshufd_xmm_xmm_imm8(zero.id, work.id, 0xB1)
-      buffer.encoder.x86_emit_pand_xmm_xmm(work.id, zero.id)
+      buffer.encoder.x86_emit_xmm(Pand, work.id, zero.id)
     }
     AllTrue(F32x4 | F64x2) => raise InvalidVectorInstruction
     BitMask(_) => raise InvalidVectorInstruction
@@ -1788,13 +1779,13 @@ fn emit_vector_bitmask(
       buffer.encoder.x86_emit_pmovmskb_r32_xmm(packed.id, source.id)
       emit_constant(buffer, W32, destination, 0UL)
       for index in 0..<8 {
-        buffer.encoder.x86_emit_mov_rr32(bit.id, packed.id)
-        buffer.encoder.x86_emit_shr_r32_imm8(bit.id, index * 2 + 1)
+        buffer.encoder.x86_emit_gpr(Mov, R32, bit.id, packed.id)
+        buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R32, bit.id, index * 2 + 1)
         buffer.encoder.x86_emit_and_r_imm8_sxb64(bit.id, 1)
         if index > 0 {
-          buffer.encoder.x86_emit_shl_r32_imm8(bit.id, index)
+          buffer.encoder.x86_emit_gpr_shift_imm8(Shl, R32, bit.id, index)
         }
-        buffer.encoder.x86_emit_or_rr32(destination.id, bit.id)
+        buffer.encoder.x86_emit_gpr(Or, R32, destination.id, bit.id)
       }
     }
     F32x4 | F64x2 => raise InvalidVectorInstruction
@@ -1818,7 +1809,7 @@ fn emit_vector_int_shift(
     I64x2 => 63
     _ => raise InvalidVectorInstruction
   }
-  buffer.encoder.x86_emit_mov_rr32(10, amount.id)
+  buffer.encoder.x86_emit_gpr(Mov, R32, 10, amount.id)
   buffer.encoder.x86_emit_and_r_imm8_sxb64(10, mask)
   buffer.encoder.x86_emit_movd_xmm_r32(15, 10)
   emit_move(buffer, V128, destination, source)
@@ -1827,9 +1818,9 @@ fn emit_vector_int_shift(
       if lane == I8x16 {
         let low = @vcode.PhysicalReg::new(14, FpVector)
         emit_move(buffer, V128, low, source)
-        buffer.encoder.x86_emit_pxor_xmm_xmm(15, 15)
-        buffer.encoder.x86_emit_punpcklbw_xmm_xmm(low.id, 15)
-        buffer.encoder.x86_emit_punpckhbw_xmm_xmm(destination.id, 15)
+        buffer.encoder.x86_emit_xmm(Pxor, 15, 15)
+        buffer.encoder.x86_emit_xmm(Punpcklbw, low.id, 15)
+        buffer.encoder.x86_emit_xmm(Punpckhbw, destination.id, 15)
         buffer.encoder.x86_emit_movd_xmm_r32(15, 10)
         buffer.encoder.x86_emit_psll_xmm_xmm(H16, low.id, 15)
         buffer.encoder.x86_emit_psll_xmm_xmm(H16, destination.id, 15)
@@ -1839,9 +1830,9 @@ fn emit_vector_int_shift(
           0x00FF00FF00FF00FFUL,
           0x00FF00FF00FF00FFUL,
         )
-        buffer.encoder.x86_emit_pand_xmm_xmm(low.id, 15)
-        buffer.encoder.x86_emit_pand_xmm_xmm(destination.id, 15)
-        buffer.encoder.x86_emit_packuswb_xmm_xmm(low.id, destination.id)
+        buffer.encoder.x86_emit_xmm(Pand, low.id, 15)
+        buffer.encoder.x86_emit_xmm(Pand, destination.id, 15)
+        buffer.encoder.x86_emit_xmm(Packuswb, low.id, destination.id)
         emit_move(buffer, V128, destination, low)
       } else {
         buffer.encoder.x86_emit_psll_xmm_xmm(raw_lane, destination.id, 15)
@@ -1850,13 +1841,13 @@ fn emit_vector_int_shift(
       if lane == I8x16 {
         let low = @vcode.PhysicalReg::new(14, FpVector)
         emit_move(buffer, V128, low, source)
-        buffer.encoder.x86_emit_pxor_xmm_xmm(15, 15)
-        buffer.encoder.x86_emit_punpcklbw_xmm_xmm(low.id, 15)
-        buffer.encoder.x86_emit_punpckhbw_xmm_xmm(destination.id, 15)
+        buffer.encoder.x86_emit_xmm(Pxor, 15, 15)
+        buffer.encoder.x86_emit_xmm(Punpcklbw, low.id, 15)
+        buffer.encoder.x86_emit_xmm(Punpckhbw, destination.id, 15)
         buffer.encoder.x86_emit_movd_xmm_r32(15, 10)
         buffer.encoder.x86_emit_psrl_xmm_xmm(H16, low.id, 15)
         buffer.encoder.x86_emit_psrl_xmm_xmm(H16, destination.id, 15)
-        buffer.encoder.x86_emit_packuswb_xmm_xmm(low.id, destination.id)
+        buffer.encoder.x86_emit_xmm(Packuswb, low.id, destination.id)
         emit_move(buffer, V128, destination, low)
       } else {
         buffer.encoder.x86_emit_psrl_xmm_xmm(raw_lane, destination.id, 15)
@@ -1866,16 +1857,13 @@ fn emit_vector_int_shift(
         I8x16 => {
           let low = @vcode.PhysicalReg::new(14, FpVector)
           emit_move(buffer, V128, low, source)
-          buffer.encoder.x86_emit_punpcklbw_xmm_xmm(low.id, low.id)
-          buffer.encoder.x86_emit_punpckhbw_xmm_xmm(
-            destination.id,
-            destination.id,
-          )
+          buffer.encoder.x86_emit_xmm(Punpcklbw, low.id, low.id)
+          buffer.encoder.x86_emit_xmm(Punpckhbw, destination.id, destination.id)
           buffer.encoder.x86_emit_add_r_imm8(10, 8)
           buffer.encoder.x86_emit_movd_xmm_r32(15, 10)
           buffer.encoder.x86_emit_psra_xmm_xmm(H16, low.id, 15)
           buffer.encoder.x86_emit_psra_xmm_xmm(H16, destination.id, 15)
-          buffer.encoder.x86_emit_packsswb_xmm_xmm(low.id, destination.id)
+          buffer.encoder.x86_emit_xmm(Packsswb, low.id, destination.id)
           emit_move(buffer, V128, destination, low)
         }
         I16x8 | I32x4 =>
@@ -1887,7 +1875,7 @@ fn emit_vector_int_shift(
           )
           buffer.encoder.x86_emit_psrl_xmm_xmm(D64, sign.id, 15)
           buffer.encoder.x86_emit_psrl_xmm_xmm(D64, destination.id, 15)
-          buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, sign.id)
+          buffer.encoder.x86_emit_xmm(Pxor, destination.id, sign.id)
           buffer.encoder.x86_emit_psub_xmm_xmm(D64, destination.id, sign.id)
         }
         _ => raise InvalidVectorInstruction
@@ -1939,10 +1927,10 @@ fn emit_vector_int_compare(
     for index in 0..<2 {
       buffer.encoder.x86_emit_pextrq_r64_xmm_imm8(10, left_source.id, index)
       buffer.encoder.x86_emit_pextrq_r64_xmm_imm8(11, right_source.id, index)
-      buffer.encoder.x86_emit_cmp_rr(10, 11)
+      buffer.encoder.x86_emit_gpr(Cmp, R64, 10, 11)
       buffer.encoder.x86_emit_setcc_r8(condition, 10)
       buffer.encoder.x86_emit_movzx_r32_r8(10, 10)
-      buffer.encoder.x86_emit_neg_r64(10)
+      buffer.encoder.x86_emit_gpr_unary(Neg, R64, 10)
       if index == 0 {
         buffer.encoder.x86_emit_movq_xmm_r64(destination.id, 10)
       } else {
@@ -1956,8 +1944,8 @@ fn emit_vector_int_compare(
     buffer.encoder.x86_emit_pcmpeq_xmm_xmm(raw_lane, destination.id, source.id)
     if comparison == NotEqual {
       let ones = @vcode.PhysicalReg::new(14, FpVector)
-      buffer.encoder.x86_emit_pcmpeqd_xmm_xmm(ones.id, ones.id)
-      buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, ones.id)
+      buffer.encoder.x86_emit_xmm(Pcmpeqd, ones.id, ones.id)
+      buffer.encoder.x86_emit_xmm(Pxor, destination.id, ones.id)
     }
     return
   }
@@ -1983,8 +1971,8 @@ fn emit_vector_int_compare(
     emit_vector_constant(buffer, mask, pattern, pattern)
     emit_move(buffer, V128, second_copy, second)
     emit_move(buffer, V128, destination, first)
-    buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, mask.id)
-    buffer.encoder.x86_emit_pxor_xmm_xmm(second_copy.id, mask.id)
+    buffer.encoder.x86_emit_xmm(Pxor, destination.id, mask.id)
+    buffer.encoder.x86_emit_xmm(Pxor, second_copy.id, mask.id)
     buffer.encoder.x86_emit_pcmpgt_xmm_xmm(
       raw_lane,
       destination.id,
@@ -1993,8 +1981,8 @@ fn emit_vector_int_compare(
   }
   if invert {
     let ones = @vcode.PhysicalReg::new(14, FpVector)
-    buffer.encoder.x86_emit_pcmpeqd_xmm_xmm(ones.id, ones.id)
-    buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, ones.id)
+    buffer.encoder.x86_emit_xmm(Pcmpeqd, ones.id, ones.id)
+    buffer.encoder.x86_emit_xmm(Pxor, destination.id, ones.id)
   }
 }
 
@@ -2014,28 +2002,28 @@ fn emit_vector_float_unary(
     Absolute | Negate => {
       emit_move(buffer, V128, destination, source)
       let mask = @vcode.PhysicalReg::new(14, FpVector)
-      buffer.encoder.x86_emit_pcmpeqd_xmm_xmm(mask.id, mask.id)
+      buffer.encoder.x86_emit_xmm(Pcmpeqd, mask.id, mask.id)
       if operation == Absolute {
         if f32 {
           buffer.encoder.x86_emit_psrld_xmm_imm8(mask.id, 1)
         } else {
           buffer.encoder.x86_emit_psrlq_xmm_imm8(mask.id, 1)
         }
-        buffer.encoder.x86_emit_pand_xmm_xmm(destination.id, mask.id)
+        buffer.encoder.x86_emit_xmm(Pand, destination.id, mask.id)
       } else {
         if f32 {
           buffer.encoder.x86_emit_pslld_xmm_imm8(mask.id, 31)
         } else {
           buffer.encoder.x86_emit_psllq_xmm_imm8(mask.id, 63)
         }
-        buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, mask.id)
+        buffer.encoder.x86_emit_xmm(Pxor, destination.id, mask.id)
       }
     }
     SquareRoot =>
       if f32 {
-        buffer.encoder.x86_emit_sqrtps_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Sqrtps, destination.id, source.id)
       } else {
-        buffer.encoder.x86_emit_sqrtpd_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Sqrtpd, destination.id, source.id)
       }
     Ceil | Floor | Truncate | Nearest => {
       let mode = match operation {
@@ -2082,40 +2070,40 @@ fn emit_vector_float_binary(
     emit_move(buffer, V128, second, right)
     if operation == Min {
       if f32 {
-        buffer.encoder.x86_emit_minps_xmm_xmm(first.id, right.id)
-        buffer.encoder.x86_emit_minps_xmm_xmm(second.id, left.id)
+        buffer.encoder.x86_emit_xmm(Minps, first.id, right.id)
+        buffer.encoder.x86_emit_xmm(Minps, second.id, left.id)
       } else {
-        buffer.encoder.x86_emit_minpd_xmm_xmm(first.id, right.id)
-        buffer.encoder.x86_emit_minpd_xmm_xmm(second.id, left.id)
+        buffer.encoder.x86_emit_xmm(Minpd, first.id, right.id)
+        buffer.encoder.x86_emit_xmm(Minpd, second.id, left.id)
       }
-      buffer.encoder.x86_emit_por_xmm_xmm(first.id, second.id)
+      buffer.encoder.x86_emit_xmm(Por, first.id, second.id)
       if f32 {
         buffer.encoder.x86_emit_cmpps_xmm_xmm_imm8(second.id, first.id, 3)
       } else {
         buffer.encoder.x86_emit_cmppd_xmm_xmm_imm8(second.id, first.id, 3)
       }
-      buffer.encoder.x86_emit_por_xmm_xmm(first.id, second.id)
+      buffer.encoder.x86_emit_xmm(Por, first.id, second.id)
       if f32 {
         buffer.encoder.x86_emit_psrld_xmm_imm8(second.id, 10)
       } else {
         buffer.encoder.x86_emit_psrlq_xmm_imm8(second.id, 13)
       }
-      buffer.encoder.x86_emit_pandn_xmm_xmm(second.id, first.id)
+      buffer.encoder.x86_emit_xmm(Pandn, second.id, first.id)
       emit_move(buffer, V128, destination, second)
     } else {
       if f32 {
-        buffer.encoder.x86_emit_maxps_xmm_xmm(first.id, right.id)
-        buffer.encoder.x86_emit_maxps_xmm_xmm(second.id, left.id)
+        buffer.encoder.x86_emit_xmm(Maxps, first.id, right.id)
+        buffer.encoder.x86_emit_xmm(Maxps, second.id, left.id)
       } else {
-        buffer.encoder.x86_emit_maxpd_xmm_xmm(first.id, right.id)
-        buffer.encoder.x86_emit_maxpd_xmm_xmm(second.id, left.id)
+        buffer.encoder.x86_emit_xmm(Maxpd, first.id, right.id)
+        buffer.encoder.x86_emit_xmm(Maxpd, second.id, left.id)
       }
-      buffer.encoder.x86_emit_pxor_xmm_xmm(second.id, first.id)
-      buffer.encoder.x86_emit_por_xmm_xmm(first.id, second.id)
+      buffer.encoder.x86_emit_xmm(Pxor, second.id, first.id)
+      buffer.encoder.x86_emit_xmm(Por, first.id, second.id)
       if f32 {
-        buffer.encoder.x86_emit_subps_xmm_xmm(first.id, second.id)
+        buffer.encoder.x86_emit_xmm(Subps, first.id, second.id)
       } else {
-        buffer.encoder.x86_emit_subpd_xmm_xmm(first.id, second.id)
+        buffer.encoder.x86_emit_xmm(Subpd, first.id, second.id)
       }
       emit_move(buffer, V128, second, first)
       if f32 {
@@ -2125,7 +2113,7 @@ fn emit_vector_float_binary(
         buffer.encoder.x86_emit_cmppd_xmm_xmm_imm8(second.id, second.id, 3)
         buffer.encoder.x86_emit_psrlq_xmm_imm8(second.id, 13)
       }
-      buffer.encoder.x86_emit_pandn_xmm_xmm(second.id, first.id)
+      buffer.encoder.x86_emit_xmm(Pandn, second.id, first.id)
       emit_move(buffer, V128, destination, second)
     }
     return
@@ -2134,35 +2122,31 @@ fn emit_vector_float_binary(
     let source = prepare_xmm_two_operand(buffer, destination, right, left)
     if f32 {
       if operation == PseudoMin {
-        buffer.encoder.x86_emit_minps_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Minps, destination.id, source.id)
       } else {
-        buffer.encoder.x86_emit_maxps_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Maxps, destination.id, source.id)
       }
     } else if operation == PseudoMin {
-      buffer.encoder.x86_emit_minpd_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Minpd, destination.id, source.id)
     } else {
-      buffer.encoder.x86_emit_maxpd_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Maxpd, destination.id, source.id)
     }
     return
   }
   let source = prepare_xmm_two_operand(buffer, destination, left, right)
   match (f32, operation) {
-    (true, Add) =>
-      buffer.encoder.x86_emit_addps_xmm_xmm(destination.id, source.id)
+    (true, Add) => buffer.encoder.x86_emit_xmm(Addps, destination.id, source.id)
     (false, Add) =>
-      buffer.encoder.x86_emit_addpd_xmm_xmm(destination.id, source.id)
-    (true, Sub) =>
-      buffer.encoder.x86_emit_subps_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Addpd, destination.id, source.id)
+    (true, Sub) => buffer.encoder.x86_emit_xmm(Subps, destination.id, source.id)
     (false, Sub) =>
-      buffer.encoder.x86_emit_subpd_xmm_xmm(destination.id, source.id)
-    (true, Mul) =>
-      buffer.encoder.x86_emit_mulps_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Subpd, destination.id, source.id)
+    (true, Mul) => buffer.encoder.x86_emit_xmm(Mulps, destination.id, source.id)
     (false, Mul) =>
-      buffer.encoder.x86_emit_mulpd_xmm_xmm(destination.id, source.id)
-    (true, Div) =>
-      buffer.encoder.x86_emit_divps_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Mulpd, destination.id, source.id)
+    (true, Div) => buffer.encoder.x86_emit_xmm(Divps, destination.id, source.id)
     (false, Div) =>
-      buffer.encoder.x86_emit_divpd_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Divpd, destination.id, source.id)
     _ => raise InvalidVectorInstruction
   }
 }
@@ -2221,12 +2205,6 @@ fn emit_vector_float_ternary(
   } else {
     raise InvalidVectorInstruction
   }
-  let selected = match operation {
-    FusedMultiplyAdd => Fmadd
-    FusedMultiplySubtract => Fmsub
-    FusedNegatedMultiplyAdd => Fnmadd
-    FusedNegatedMultiplySubtract => Fnmsub
-  }
   let right_reg = if destination == right {
     let scratch = @vcode.PhysicalReg::new(14, FpVector)
     emit_move(buffer, V128, scratch, right)
@@ -2245,7 +2223,7 @@ fn emit_vector_float_ternary(
   buffer.x86_emit_fma213(
     false,
     f64,
-    selected,
+    operation,
     destination.id,
     right_reg.id,
     addend_reg.id,
@@ -2260,7 +2238,7 @@ fn emit_vector_relaxed_dot8_to16(
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
   let source = prepare_xmm_two_operand(buffer, destination, right, left)
-  buffer.encoder.x86_emit_pmaddubsw_xmm_xmm(destination.id, source.id)
+  buffer.encoder.x86_emit_xmm(Pmaddubsw, destination.id, source.id)
 }
 
 ///|
@@ -2276,22 +2254,22 @@ fn emit_vector_bitwise(
     Not => {
       emit_move(buffer, V128, destination, first)
       let ones = @vcode.PhysicalReg::new(14, FpVector)
-      buffer.encoder.x86_emit_pcmpeqd_xmm_xmm(ones.id, ones.id)
-      buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, ones.id)
+      buffer.encoder.x86_emit_xmm(Pcmpeqd, ones.id, ones.id)
+      buffer.encoder.x86_emit_xmm(Pxor, destination.id, ones.id)
     }
     And | Or | Xor => {
       let source = prepare_xmm_two_operand(buffer, destination, first, second)
       match operation {
-        And => buffer.encoder.x86_emit_pand_xmm_xmm(destination.id, source.id)
-        Or => buffer.encoder.x86_emit_por_xmm_xmm(destination.id, source.id)
-        Xor => buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, source.id)
+        And => buffer.encoder.x86_emit_xmm(Pand, destination.id, source.id)
+        Or => buffer.encoder.x86_emit_xmm(Por, destination.id, source.id)
+        Xor => buffer.encoder.x86_emit_xmm(Pxor, destination.id, source.id)
         _ => ()
       }
     }
     AndNot => {
       let scratch = @vcode.PhysicalReg::new(14, FpVector)
       emit_move(buffer, V128, scratch, second)
-      buffer.encoder.x86_emit_pandn_xmm_xmm(scratch.id, first.id)
+      buffer.encoder.x86_emit_xmm(Pandn, scratch.id, first.id)
       emit_move(buffer, V128, destination, scratch)
     }
     BitSelect => {
@@ -2300,9 +2278,9 @@ fn emit_vector_bitwise(
       emit_move(buffer, V128, second_copy, second)
       emit_move(buffer, V128, mask_copy, mask)
       emit_move(buffer, V128, destination, first)
-      buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, second_copy.id)
-      buffer.encoder.x86_emit_pand_xmm_xmm(destination.id, mask_copy.id)
-      buffer.encoder.x86_emit_pxor_xmm_xmm(destination.id, second_copy.id)
+      buffer.encoder.x86_emit_xmm(Pxor, destination.id, second_copy.id)
+      buffer.encoder.x86_emit_xmm(Pand, destination.id, mask_copy.id)
+      buffer.encoder.x86_emit_xmm(Pxor, destination.id, second_copy.id)
     }
   }
 }
@@ -2325,11 +2303,11 @@ fn prepare_xmm_two_operand(
     } else {
       raise ScratchRegisterUnavailable
     }
-    buffer.encoder.x86_emit_movaps_xmm_xmm(scratch.id, right.id)
-    buffer.encoder.x86_emit_movaps_xmm_xmm(destination.id, left.id)
+    buffer.encoder.x86_emit_xmm(Movaps, scratch.id, right.id)
+    buffer.encoder.x86_emit_xmm(Movaps, destination.id, left.id)
     return scratch
   }
-  buffer.encoder.x86_emit_movaps_xmm_xmm(destination.id, left.id)
+  buffer.encoder.x86_emit_xmm(Movaps, destination.id, left.id)
   right
 }
 
@@ -2365,9 +2343,9 @@ fn emit_float_unary(
   match operation {
     SquareRoot =>
       if ty == F32 {
-        buffer.encoder.x86_emit_sqrtss_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Sqrtss, destination.id, source.id)
       } else if ty == F64 {
-        buffer.encoder.x86_emit_sqrtsd_xmm_xmm(destination.id, source.id)
+        buffer.encoder.x86_emit_xmm(Sqrtsd, destination.id, source.id)
       } else {
         raise InvalidFloatInstruction
       }
@@ -2415,13 +2393,13 @@ fn emit_float_unary(
       materialize_scalar_mask(buffer, ty, bits, mask)
       match (ty, operation) {
         (F32, Negate) =>
-          buffer.encoder.x86_emit_xorps_xmm_xmm(destination.id, mask.id)
+          buffer.encoder.x86_emit_xmm(Xorps, destination.id, mask.id)
         (F64, Negate) =>
-          buffer.encoder.x86_emit_xorpd_xmm_xmm(destination.id, mask.id)
+          buffer.encoder.x86_emit_xmm(Xorpd, destination.id, mask.id)
         (F32, Absolute) =>
-          buffer.encoder.x86_emit_andps_xmm_xmm(destination.id, mask.id)
+          buffer.encoder.x86_emit_xmm(Andps, destination.id, mask.id)
         (F64, Absolute) =>
-          buffer.encoder.x86_emit_andpd_xmm_xmm(destination.id, mask.id)
+          buffer.encoder.x86_emit_xmm(Andpd, destination.id, mask.id)
         _ => raise InvalidFloatInstruction
       }
     }
@@ -2448,17 +2426,17 @@ fn emit_scalar_min_max(
   let left_reg = if destination == right {
     left
   } else if destination == left {
-    buffer.encoder.x86_emit_movaps_xmm_xmm(scratch.id, left.id)
-    buffer.encoder.x86_emit_movaps_xmm_xmm(destination.id, right.id)
+    buffer.encoder.x86_emit_xmm(Movaps, scratch.id, left.id)
+    buffer.encoder.x86_emit_xmm(Movaps, destination.id, right.id)
     scratch
   } else {
-    buffer.encoder.x86_emit_movaps_xmm_xmm(destination.id, right.id)
+    buffer.encoder.x86_emit_xmm(Movaps, destination.id, right.id)
     left
   }
   if ty == F32 {
-    buffer.encoder.x86_emit_ucomiss_xmm_xmm(destination.id, left_reg.id)
+    buffer.encoder.x86_emit_xmm(Ucomiss, destination.id, left_reg.id)
   } else if ty == F64 {
-    buffer.encoder.x86_emit_ucomisd_xmm_xmm(destination.id, left_reg.id)
+    buffer.encoder.x86_emit_xmm(Ucomisd, destination.id, left_reg.id)
   } else {
     raise InvalidFloatInstruction
   }
@@ -2466,33 +2444,33 @@ fn emit_scalar_min_max(
   let propagate_nan = buffer.emit_local_jcc(RawPs)
   match (ty, minimum) {
     (F32, true) =>
-      buffer.encoder.x86_emit_orps_xmm_xmm(destination.id, left_reg.id)
+      buffer.encoder.x86_emit_xmm(Orps, destination.id, left_reg.id)
     (F32, false) =>
-      buffer.encoder.x86_emit_andps_xmm_xmm(destination.id, left_reg.id)
+      buffer.encoder.x86_emit_xmm(Andps, destination.id, left_reg.id)
     (F64, true) =>
-      buffer.encoder.x86_emit_orpd_xmm_xmm(destination.id, left_reg.id)
+      buffer.encoder.x86_emit_xmm(Orpd, destination.id, left_reg.id)
     (F64, false) =>
-      buffer.encoder.x86_emit_andpd_xmm_xmm(destination.id, left_reg.id)
+      buffer.encoder.x86_emit_xmm(Andpd, destination.id, left_reg.id)
     _ => raise InvalidFloatInstruction
   }
   let ordered_done = buffer.emit_local_jmp()
   buffer.patch_local_rel32(propagate_nan, buffer.position())
   if ty == F32 {
-    buffer.encoder.x86_emit_addss_xmm_xmm(destination.id, left_reg.id)
+    buffer.encoder.x86_emit_xmm(Addss, destination.id, left_reg.id)
   } else {
-    buffer.encoder.x86_emit_addsd_xmm_xmm(destination.id, left_reg.id)
+    buffer.encoder.x86_emit_xmm(Addsd, destination.id, left_reg.id)
   }
   let nan_done = buffer.emit_local_jmp()
   buffer.patch_local_rel32(do_native, buffer.position())
   match (ty, minimum) {
     (F32, true) =>
-      buffer.encoder.x86_emit_minss_xmm_xmm(destination.id, left_reg.id)
+      buffer.encoder.x86_emit_xmm(Minss, destination.id, left_reg.id)
     (F32, false) =>
-      buffer.encoder.x86_emit_maxss_xmm_xmm(destination.id, left_reg.id)
+      buffer.encoder.x86_emit_xmm(Maxss, destination.id, left_reg.id)
     (F64, true) =>
-      buffer.encoder.x86_emit_minsd_xmm_xmm(destination.id, left_reg.id)
+      buffer.encoder.x86_emit_xmm(Minsd, destination.id, left_reg.id)
     (F64, false) =>
-      buffer.encoder.x86_emit_maxsd_xmm_xmm(destination.id, left_reg.id)
+      buffer.encoder.x86_emit_xmm(Maxsd, destination.id, left_reg.id)
     _ => raise InvalidFloatInstruction
   }
   buffer.patch_local_rel32(ordered_done, buffer.position())
@@ -2514,22 +2492,14 @@ fn emit_float_binary(
   }
   let source = prepare_xmm_two_operand(buffer, destination, left, right)
   match (ty, operation) {
-    (F32, Add) =>
-      buffer.encoder.x86_emit_addss_xmm_xmm(destination.id, source.id)
-    (F64, Add) =>
-      buffer.encoder.x86_emit_addsd_xmm_xmm(destination.id, source.id)
-    (F32, Sub) =>
-      buffer.encoder.x86_emit_subss_xmm_xmm(destination.id, source.id)
-    (F64, Sub) =>
-      buffer.encoder.x86_emit_subsd_xmm_xmm(destination.id, source.id)
-    (F32, Mul) =>
-      buffer.encoder.x86_emit_mulss_xmm_xmm(destination.id, source.id)
-    (F64, Mul) =>
-      buffer.encoder.x86_emit_mulsd_xmm_xmm(destination.id, source.id)
-    (F32, Div) =>
-      buffer.encoder.x86_emit_divss_xmm_xmm(destination.id, source.id)
-    (F64, Div) =>
-      buffer.encoder.x86_emit_divsd_xmm_xmm(destination.id, source.id)
+    (F32, Add) => buffer.encoder.x86_emit_xmm(Addss, destination.id, source.id)
+    (F64, Add) => buffer.encoder.x86_emit_xmm(Addsd, destination.id, source.id)
+    (F32, Sub) => buffer.encoder.x86_emit_xmm(Subss, destination.id, source.id)
+    (F64, Sub) => buffer.encoder.x86_emit_xmm(Subsd, destination.id, source.id)
+    (F32, Mul) => buffer.encoder.x86_emit_xmm(Mulss, destination.id, source.id)
+    (F64, Mul) => buffer.encoder.x86_emit_xmm(Mulsd, destination.id, source.id)
+    (F32, Div) => buffer.encoder.x86_emit_xmm(Divss, destination.id, source.id)
+    (F64, Div) => buffer.encoder.x86_emit_xmm(Divsd, destination.id, source.id)
     _ => raise InvalidFloatInstruction
   }
 }
@@ -2565,7 +2535,7 @@ fn emit_float_copy_sign(
   emit_move(buffer, ty, destination, magnitude)
   match ty {
     F32 => {
-      buffer.encoder.x86_emit_andps_xmm_xmm(fp_scratch.id, sign.id)
+      buffer.encoder.x86_emit_xmm(Andps, fp_scratch.id, sign.id)
       let clear = @vcode.PhysicalReg::new(
         if fp_scratch.id == 14 {
           15
@@ -2575,11 +2545,11 @@ fn emit_float_copy_sign(
         FpVector,
       )
       materialize_scalar_mask(buffer, F32, 0x7FFFFFFFUL, clear)
-      buffer.encoder.x86_emit_andps_xmm_xmm(destination.id, clear.id)
-      buffer.encoder.x86_emit_orps_xmm_xmm(destination.id, fp_scratch.id)
+      buffer.encoder.x86_emit_xmm(Andps, destination.id, clear.id)
+      buffer.encoder.x86_emit_xmm(Orps, destination.id, fp_scratch.id)
     }
     F64 => {
-      buffer.encoder.x86_emit_andpd_xmm_xmm(fp_scratch.id, sign.id)
+      buffer.encoder.x86_emit_xmm(Andpd, fp_scratch.id, sign.id)
       let clear = @vcode.PhysicalReg::new(
         if fp_scratch.id == 14 {
           15
@@ -2589,8 +2559,8 @@ fn emit_float_copy_sign(
         FpVector,
       )
       materialize_scalar_mask(buffer, F64, 0x7FFFFFFFFFFFFFFFUL, clear)
-      buffer.encoder.x86_emit_andpd_xmm_xmm(destination.id, clear.id)
-      buffer.encoder.x86_emit_orpd_xmm_xmm(destination.id, fp_scratch.id)
+      buffer.encoder.x86_emit_xmm(Andpd, destination.id, clear.id)
+      buffer.encoder.x86_emit_xmm(Orpd, destination.id, fp_scratch.id)
     }
     _ => raise InvalidFloatInstruction
   }
@@ -2609,9 +2579,9 @@ fn emit_float_compare(
   let first = if swapped { right } else { left }
   let second = if swapped { left } else { right }
   if ty == F32 {
-    buffer.encoder.x86_emit_ucomiss_xmm_xmm(first.id, second.id)
+    buffer.encoder.x86_emit_xmm(Ucomiss, first.id, second.id)
   } else if ty == F64 {
-    buffer.encoder.x86_emit_ucomisd_xmm_xmm(first.id, second.id)
+    buffer.encoder.x86_emit_xmm(Ucomisd, first.id, second.id)
   } else {
     raise InvalidFloatInstruction
   }
@@ -2623,14 +2593,14 @@ fn emit_float_compare(
       buffer.encoder.x86_emit_setcc_r8(RawPc, scratch)
       buffer.encoder.x86_emit_movzx_r32_r8(result, result)
       buffer.encoder.x86_emit_movzx_r32_r8(scratch, scratch)
-      buffer.encoder.x86_emit_and_rr32(result, scratch)
+      buffer.encoder.x86_emit_gpr(And, R32, result, scratch)
     }
     NotEqual => {
       buffer.encoder.x86_emit_setcc_r8(RawNe, result)
       buffer.encoder.x86_emit_setcc_r8(RawPs, scratch)
       buffer.encoder.x86_emit_movzx_r32_r8(result, result)
       buffer.encoder.x86_emit_movzx_r32_r8(scratch, scratch)
-      buffer.encoder.x86_emit_or_rr32(result, scratch)
+      buffer.encoder.x86_emit_gpr(Or, R32, result, scratch)
     }
     LessThan | GreaterThan => {
       buffer.encoder.x86_emit_setcc_r8(RawHi, result)
@@ -2661,9 +2631,9 @@ fn emit_float_trap(
 ) -> Int32 raise X64EmitError {
   let second = if condition == Unordered { left } else { right }
   if ty == F32 {
-    buffer.encoder.x86_emit_ucomiss_xmm_xmm(left.id, second.id)
+    buffer.encoder.x86_emit_xmm(Ucomiss, left.id, second.id)
   } else if ty == F64 {
-    buffer.encoder.x86_emit_ucomisd_xmm_xmm(left.id, second.id)
+    buffer.encoder.x86_emit_xmm(Ucomisd, left.id, second.id)
   } else {
     raise InvalidFloatInstruction
   }
@@ -2734,17 +2704,17 @@ fn emit_unchecked_float_to_int(
       threshold,
     )
     if float == F32 {
-      buffer.encoder.x86_emit_ucomiss_xmm_xmm(source.id, threshold.id)
+      buffer.encoder.x86_emit_xmm(Ucomiss, source.id, threshold.id)
     } else {
-      buffer.encoder.x86_emit_ucomisd_xmm_xmm(source.id, threshold.id)
+      buffer.encoder.x86_emit_xmm(Ucomisd, source.id, threshold.id)
     }
     let below = buffer.emit_local_jcc(RawLo)
     emit_move(buffer, scalar_type, adjusted, source)
     if float == F32 {
-      buffer.encoder.x86_emit_subss_xmm_xmm(adjusted.id, threshold.id)
+      buffer.encoder.x86_emit_xmm(Subss, adjusted.id, threshold.id)
       buffer.encoder.x86_emit_cvttss2si_r64_xmm(destination.id, adjusted.id)
     } else {
-      buffer.encoder.x86_emit_subsd_xmm_xmm(adjusted.id, threshold.id)
+      buffer.encoder.x86_emit_xmm(Subsd, adjusted.id, threshold.id)
       buffer.encoder.x86_emit_cvttsd2si_r64_xmm(destination.id, adjusted.id)
     }
     emit_constant(
@@ -2753,7 +2723,7 @@ fn emit_unchecked_float_to_int(
       @vcode.PhysicalReg::new(10, Int),
       0x8000000000000000UL,
     )
-    buffer.encoder.x86_emit_or_rr(destination.id, 10)
+    buffer.encoder.x86_emit_gpr(Or, R64, destination.id, 10)
     let done = buffer.emit_local_jmp()
     buffer.patch_local_rel32(below, buffer.position())
     if float == F32 {
@@ -2775,7 +2745,7 @@ fn emit_saturating_float_to_int(
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
   let scalar_type : @native.ValueType = if float == F32 { F32 } else { F64 }
-  let width = if integer == I32 { W32 } else { W64 }
+  let width : GprWidth = if integer == I32 { W32 } else { W64 }
   let (lower_bits, upper_bits, minimum, maximum) = match
     (float, integer, signedness) {
     (F32, I32, Signed) =>
@@ -2795,17 +2765,17 @@ fn emit_saturating_float_to_int(
       (0UL, 0x43F0000000000000UL, 0UL, 0xFFFFFFFFFFFFFFFFUL)
   }
   if float == F32 {
-    buffer.encoder.x86_emit_ucomiss_xmm_xmm(source.id, source.id)
+    buffer.encoder.x86_emit_xmm(Ucomiss, source.id, source.id)
   } else {
-    buffer.encoder.x86_emit_ucomisd_xmm_xmm(source.id, source.id)
+    buffer.encoder.x86_emit_xmm(Ucomisd, source.id, source.id)
   }
   let nan = buffer.emit_local_jcc(RawPs)
   let threshold = @vcode.PhysicalReg::new(15, FpVector)
   materialize_scalar_mask(buffer, scalar_type, lower_bits, threshold)
   if float == F32 {
-    buffer.encoder.x86_emit_ucomiss_xmm_xmm(source.id, threshold.id)
+    buffer.encoder.x86_emit_xmm(Ucomiss, source.id, threshold.id)
   } else {
-    buffer.encoder.x86_emit_ucomisd_xmm_xmm(source.id, threshold.id)
+    buffer.encoder.x86_emit_xmm(Ucomisd, source.id, threshold.id)
   }
   let below = buffer.emit_local_jcc(
     if signedness == Signed {
@@ -2816,9 +2786,9 @@ fn emit_saturating_float_to_int(
   )
   materialize_scalar_mask(buffer, scalar_type, upper_bits, threshold)
   if float == F32 {
-    buffer.encoder.x86_emit_ucomiss_xmm_xmm(source.id, threshold.id)
+    buffer.encoder.x86_emit_xmm(Ucomiss, source.id, threshold.id)
   } else {
-    buffer.encoder.x86_emit_ucomisd_xmm_xmm(source.id, threshold.id)
+    buffer.encoder.x86_emit_xmm(Ucomisd, source.id, threshold.id)
   }
   let above = buffer.emit_local_jcc(RawHs)
   emit_unchecked_float_to_int(
@@ -2858,7 +2828,7 @@ fn emit_conversion(
   match conversion {
     WrapI64ToI32 => emit_move(buffer, I32, destination, source)
     ExtendI32ToI64(Unsigned) =>
-      buffer.encoder.x86_emit_mov_rr32(destination.id, source.id)
+      buffer.encoder.x86_emit_gpr(Mov, R32, destination.id, source.id)
     ExtendI32ToI64(Signed) =>
       buffer.encoder.x86_emit_movsxd_r64_r32(destination.id, source.id)
     SignExtend(integer, width) =>
@@ -2876,9 +2846,9 @@ fn emit_conversion(
         _ => raise InvalidConversionInstruction
       }
     DemoteF64ToF32 =>
-      buffer.encoder.x86_emit_cvtsd2ss_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Cvtsd2ss, destination.id, source.id)
     PromoteF32ToF64 =>
-      buffer.encoder.x86_emit_cvtss2sd_xmm_xmm(destination.id, source.id)
+      buffer.encoder.x86_emit_xmm(Cvtss2sd, destination.id, source.id)
     Bitcast(from, to) =>
       match (from, to) {
         (I32, F32) =>
@@ -2909,7 +2879,7 @@ fn emit_conversion(
           buffer.encoder.x86_emit_cvtsi2sd_xmm_r64(destination.id, source.id)
         (I32, F32, Unsigned) => {
           let zero_extended = @vcode.PhysicalReg::new(10, Int)
-          buffer.encoder.x86_emit_mov_rr32(zero_extended.id, source.id)
+          buffer.encoder.x86_emit_gpr(Mov, R32, zero_extended.id, source.id)
           buffer.encoder.x86_emit_cvtsi2ss_xmm_r64(
             destination.id,
             zero_extended.id,
@@ -2917,34 +2887,28 @@ fn emit_conversion(
         }
         (I32, F64, Unsigned) => {
           let zero_extended = @vcode.PhysicalReg::new(10, Int)
-          buffer.encoder.x86_emit_mov_rr32(zero_extended.id, source.id)
+          buffer.encoder.x86_emit_gpr(Mov, R32, zero_extended.id, source.id)
           buffer.encoder.x86_emit_cvtsi2sd_xmm_r64(
             destination.id,
             zero_extended.id,
           )
         }
         (I64, F32 | F64, Unsigned) => {
-          buffer.encoder.x86_emit_test_rr(source.id, source.id)
+          buffer.encoder.x86_emit_gpr(Test, R64, source.id, source.id)
           let nonnegative = buffer.emit_local_jcc(RawPl)
           let first = @vcode.PhysicalReg::new(10, Int)
           let second = @vcode.PhysicalReg::new(11, Int)
-          buffer.encoder.x86_emit_mov_rr(first.id, source.id)
-          buffer.encoder.x86_emit_shr_r_imm8(first.id, 1)
-          buffer.encoder.x86_emit_mov_rr(second.id, source.id)
+          buffer.encoder.x86_emit_gpr(Mov, R64, first.id, source.id)
+          buffer.encoder.x86_emit_gpr_shift_imm8(Shr, R64, first.id, 1)
+          buffer.encoder.x86_emit_gpr(Mov, R64, second.id, source.id)
           buffer.encoder.x86_emit_and_r_imm8_sxb64(second.id, 1)
-          buffer.encoder.x86_emit_or_rr(second.id, first.id)
+          buffer.encoder.x86_emit_gpr(Or, R64, second.id, first.id)
           if float == F32 {
             buffer.encoder.x86_emit_cvtsi2ss_xmm_r64(destination.id, second.id)
-            buffer.encoder.x86_emit_addss_xmm_xmm(
-              destination.id,
-              destination.id,
-            )
+            buffer.encoder.x86_emit_xmm(Addss, destination.id, destination.id)
           } else {
             buffer.encoder.x86_emit_cvtsi2sd_xmm_r64(destination.id, second.id)
-            buffer.encoder.x86_emit_addsd_xmm_xmm(
-              destination.id,
-              destination.id,
-            )
+            buffer.encoder.x86_emit_xmm(Addsd, destination.id, destination.id)
           }
           let done = buffer.emit_local_jmp()
           buffer.patch_local_rel32(nonnegative, buffer.position())
@@ -2998,7 +2962,7 @@ fn emit_prologue(
         SaveRegister(Int, 5, cfa_offset=-16),
       ),
     )
-    buffer.encoder.x86_emit_mov_rr(5, 4)
+    buffer.encoder.x86_emit_gpr(Mov, R64, 5, 4)
     unwind.push(
       @code_object.UnwindDirective::new(
         buffer.position(),
@@ -3044,46 +3008,6 @@ fn emit_epilogue(
 }
 
 ///|
-fn[Inst] edit_parallel_moves(
-  function : @vcode.Function[Inst],
-  allocation : @vcode.Allocation,
-  instruction : @vcode.Instruction,
-  placement : @vcode.PointPlacement,
-) -> Array[@vcode.ParallelMove] {
-  let moves : Array[@vcode.ParallelMove] = []
-  for edit in allocation.edits_at(instruction, placement) {
-    match edit.kind() {
-      Spill(value~, reg~, slot~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Register(reg),
-            Stack(slot),
-          ),
-        )
-      Reload(value~, slot~, reg~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Stack(slot),
-            Register(reg),
-          ),
-        )
-      Move(value~, from~, to~) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            function.value_type(value).unwrap(),
-            Register(from),
-            Register(to),
-          ),
-        )
-      EdgeMove(..) => ()
-    }
-  }
-  moves
-}
-
-///|
 fn[Inst] emit_edits_at(
   buffer : CodeBuffer,
   function : @vcode.Function[Inst],
@@ -3096,7 +3020,7 @@ fn[Inst] emit_edits_at(
     return
   }
   let resolved = @vcode.plan_parallel_moves(
-    edit_parallel_moves(function, allocation, instruction, placement),
+    @vcode.allocation_edit_moves(function, allocation, instruction, placement),
     int_transfer_scratch(),
     fp_transfer_scratch(),
   ) catch {
@@ -3111,98 +3035,26 @@ fn emit_call_arguments(
   allocation : @vcode.Allocation,
   frame : X64Frame,
   instruction : @vcode.Instruction,
-  types : Array[@native.ValueType],
-  locations : Array[CallArgumentLocation],
-  stack_size : Int32,
-  operand_start~ : Int32 = 0,
-  stack_base~ : Int32 = 0,
-  callee? : (Int32, @vcode.PhysicalReg),
-  result_area? : (Int32, @vcode.PhysicalReg),
+  inst : X64Inst,
 ) -> Unit raise X64EmitError {
-  let transfers : Array[@vcode.CallTransfer] = []
-  for index, ty in types {
-    let source = allocation
-      .operand_location(instruction, operand_start + index)
-      .unwrap()
-    match locations[index] {
-      CallRegister(destination) =>
-        transfers.push(
-          @vcode.CallTransfer::to_register(ty, source, destination),
-        )
-      CallStack(offset) =>
-        transfers.push(
-          @vcode.CallTransfer::to_stack(ty, source, stack_base + offset),
-        )
-    }
+  let stack_base = match inst {
+    TailCallDirect(_, _, plan) | TailCallIndirect(_, plan) =>
+      frame.tail_call_plan(plan.stack_size).stack_argument_base
+    _ => 0
   }
-  if callee is Some((operand_index, destination)) {
-    transfers.push(
-      @vcode.CallTransfer::to_register(
-        Ptr64,
-        allocation.operand_location(instruction, operand_index).unwrap(),
-        destination,
-      ),
-    )
+  guard (instruction_call_plan(inst, allocation, instruction, stack_base~) catch {
+      error => raise InvalidCallTransfer(cause=error)
+    })
+    is Some(plan) else {
+    return
   }
-  if result_area is Some((operand_index, destination)) {
-    transfers.push(
-      @vcode.CallTransfer::to_register(
-        Ptr64,
-        allocation.operand_location(instruction, operand_index).unwrap(),
-        destination,
-      ),
-    )
-  }
-  let int_scratch : Array[@vcode.PhysicalReg] = []
-  for id in [10, 11, 0] {
-    let used_by_callee = callee is Some((_, destination)) &&
-      destination.id == id
-    let used_by_result_area = result_area is Some((_, destination)) &&
-      destination.id == id
-    if !used_by_callee && !used_by_result_area {
-      int_scratch.push(@vcode.PhysicalReg::new(id, Int))
-    }
-  }
-  let plan = @vcode.plan_resolved_call_transfers(
-    allocation,
-    transfers,
-    stack_base,
-    stack_size,
-    int_scratch,
-    [
-      @vcode.PhysicalReg::new(14, FpVector),
-      @vcode.PhysicalReg::new(15, FpVector),
-    ],
-    int_transfer_scratch(),
-    fp_transfer_scratch(),
-    allocation.safepoint_roots(instruction).map(entry => entry.1),
-  ) catch {
-    error => raise InvalidCallTransfer(cause=error)
-  }
-  for transfer in plan.stack_transfers {
-    let source = match transfer.source {
-      Register(reg) => reg
-      Stack(slot) => {
-        let scratch = transfer.scratch.unwrap()
-        emit_stack_access(
-          buffer,
-          true,
-          transfer.ty,
-          scratch,
-          frame.slot_offset(slot).unwrap(),
-        )
-        scratch
-      }
-    }
-    // Integer call slots are eight bytes. Write the full slot so its upper
-    // half is canonical for callees that consume the native-width value.
-    let stack_type : @native.ValueType = if transfer.ty == I32 {
-      I64
-    } else {
-      transfer.ty
-    }
-    emit_stack_access(buffer, false, stack_type, source, transfer.offset)
-  }
+  @vcode.emit_call_stack_transfers(
+    plan,
+    buffer,
+    frame,
+    X64Frame::slot_offset,
+    emit_stack_access,
+  )
   emit_resolved_moves(buffer, frame, plan.register_moves)
 }
 
@@ -3606,20 +3458,20 @@ fn emit_instruction(
     Move(ty) => emit_move(buffer, ty, reg(1), reg(0))
     CarrierMove(_, to) => emit_move(buffer, to, reg(1), reg(0))
     Select(ty) => {
-      buffer.encoder.x86_emit_test_rr32(reg(0).id, reg(0).id)
+      buffer.encoder.x86_emit_gpr(Test, R32, reg(0).id, reg(0).id)
       match ty {
         I32 =>
           if reg(3) == reg(1) {
             buffer.encoder.x86_emit_cmovcc_rr32(RawEq, reg(3).id, reg(2).id)
           } else {
-            buffer.encoder.x86_emit_mov_rr32(reg(3).id, reg(2).id)
+            buffer.encoder.x86_emit_gpr(Mov, R32, reg(3).id, reg(2).id)
             buffer.encoder.x86_emit_cmovcc_rr32(RawNe, reg(3).id, reg(1).id)
           }
         I64 | Ptr64 | GcRef64 =>
           if reg(3) == reg(1) {
             buffer.encoder.x86_emit_cmovcc_rr(RawEq, reg(3).id, reg(2).id)
           } else {
-            buffer.encoder.x86_emit_mov_rr(reg(3).id, reg(2).id)
+            buffer.encoder.x86_emit_gpr(Mov, R64, reg(3).id, reg(2).id)
             buffer.encoder.x86_emit_cmovcc_rr(RawNe, reg(3).id, reg(1).id)
           }
         F32 => {
@@ -3710,7 +3562,7 @@ fn emit_instruction(
       )
     VectorPairwiseAddI16x8 => {
       let source = prepare_xmm_two_operand(buffer, reg(2), reg(0), reg(1))
-      buffer.encoder.x86_emit_phaddw_xmm_xmm(reg(2).id, source.id)
+      buffer.encoder.x86_emit_xmm(Phaddw, reg(2).id, source.id)
     }
     VectorRelaxedDot8To16 =>
       emit_vector_relaxed_dot8_to16(buffer, reg(0), reg(1), reg(2))
@@ -3759,9 +3611,9 @@ fn emit_instruction(
         }
         let divide = buffer.emit_local_jcc(RawNe)
         if width == W32 {
-          buffer.encoder.x86_emit_xor_rr32(reg(2).id, reg(2).id)
+          buffer.encoder.x86_emit_gpr(Xor, R32, reg(2).id, reg(2).id)
         } else {
-          buffer.encoder.x86_emit_xor_rr(reg(2).id, reg(2).id)
+          buffer.encoder.x86_emit_gpr(Xor, R64, reg(2).id, reg(2).id)
         }
         let done = buffer.emit_local_jmp()
         buffer.patch_local_rel32(divide, buffer.position())
@@ -3772,9 +3624,9 @@ fn emit_instruction(
       }
     TrapIfZero(width) => {
       if width == W32 {
-        buffer.encoder.x86_emit_test_rr32(reg(0).id, reg(0).id)
+        buffer.encoder.x86_emit_gpr(Test, R32, reg(0).id, reg(0).id)
       } else {
-        buffer.encoder.x86_emit_test_rr(reg(0).id, reg(0).id)
+        buffer.encoder.x86_emit_gpr(Test, R64, reg(0).id, reg(0).id)
       }
       let nonzero = buffer.emit_local_jcc(RawNe)
       metadata_offset = buffer.position()
@@ -3802,9 +3654,9 @@ fn emit_instruction(
         },
       )
       if width == W32 {
-        buffer.encoder.x86_emit_cmp_rr32(reg(0).id, minimum.id)
+        buffer.encoder.x86_emit_gpr(Cmp, R32, reg(0).id, minimum.id)
       } else {
-        buffer.encoder.x86_emit_cmp_rr(reg(0).id, minimum.id)
+        buffer.encoder.x86_emit_gpr(Cmp, R64, reg(0).id, minimum.id)
       }
       let dividend_is_safe = buffer.emit_local_jcc(RawNe)
       metadata_offset = buffer.position()
@@ -3816,15 +3668,15 @@ fn emit_instruction(
     }
     CompareSet(width, condition) => {
       if width == W32 {
-        buffer.encoder.x86_emit_cmp_rr32(reg(0).id, reg(1).id)
+        buffer.encoder.x86_emit_gpr(Cmp, R32, reg(0).id, reg(1).id)
       } else {
-        buffer.encoder.x86_emit_cmp_rr(reg(0).id, reg(1).id)
+        buffer.encoder.x86_emit_gpr(Cmp, R64, reg(0).id, reg(1).id)
       }
       buffer.encoder.x86_emit_setcc_r8(raw_condition(condition), reg(2).id)
       buffer.encoder.x86_emit_movzx_r32_r8(reg(2).id, reg(2).id)
     }
     ReferenceCompareSet(_, condition) => {
-      buffer.encoder.x86_emit_cmp_rr(reg(0).id, reg(1).id)
+      buffer.encoder.x86_emit_gpr(Cmp, R64, reg(0).id, reg(1).id)
       buffer.encoder.x86_emit_setcc_r8(raw_condition(condition), reg(2).id)
       buffer.encoder.x86_emit_movzx_r32_r8(reg(2).id, reg(2).id)
     }
@@ -3899,7 +3751,7 @@ fn emit_instruction(
         }
       } else {
         emit_constant(buffer, W64, address, offset)
-        buffer.encoder.x86_emit_add_rr(address.id, reg(0).id)
+        buffer.encoder.x86_emit_gpr(Add, R64, address.id, reg(0).id)
       }
       emit_constant(buffer, W64, remaining, count.to_uint64())
       emit_constant(buffer, W64, pattern, bits)
@@ -4133,17 +3985,13 @@ fn emit_instruction(
       metadata_offset = buffer.position()
       buffer.emit_byte(0x90)
     }
-    PlatformCall(target, signature)
-    | ReturnsTwicePlatformCall(target, signature) => {
-      let layout = platform_call_layout(signature.params)
+    PlatformCall(target, _) | ReturnsTwicePlatformCall(target, _) => {
       emit_call_arguments(
         buffer,
         allocation,
         frame,
         instruction,
-        signature.params,
-        layout.arguments,
-        layout.stack_size,
+        function.instruction(instruction).unwrap(),
       )
       metadata_offset = buffer.position()
       buffer.emit_byte(0xE8)
@@ -4157,17 +4005,15 @@ fn emit_instruction(
         ),
       )
     }
-    InternalCall(target, signature, plan) => {
+    InternalCall(target, _, plan) => {
       emit_call_arguments(
         buffer,
         allocation,
         frame,
         instruction,
-        signature.params,
-        plan.arguments,
-        plan.stack_size,
+        function.instruction(instruction).unwrap(),
       )
-      if result_area_register(plan) is Some(destination) {
+      if plan.result_area_register() is Some(destination) {
         guard frame.result_area_offset() is Some(offset) else {
           raise MissingResultArea
         }
@@ -4185,20 +4031,16 @@ fn emit_instruction(
         ),
       )
     }
-    InternalCallIndirect(signature, plan) => {
+    InternalCallIndirect(_, plan) => {
       let callee_register = @vcode.PhysicalReg::new(0, Int)
       emit_call_arguments(
         buffer,
         allocation,
         frame,
         instruction,
-        signature.params,
-        plan.arguments,
-        plan.stack_size,
-        operand_start=1,
-        callee=(0, callee_register),
+        function.instruction(instruction).unwrap(),
       )
-      if result_area_register(plan) is Some(destination) {
+      if plan.result_area_register() is Some(destination) {
         guard frame.result_area_offset() is Some(offset) else {
           raise MissingResultArea
         }
@@ -4207,21 +4049,14 @@ fn emit_instruction(
       metadata_offset = buffer.position()
       buffer.encoder.x86_emit_call_r64(callee_register.id)
     }
-    TailCallDirect(target, signature, plan) => {
+    TailCallDirect(target, _, plan) => {
       let tail_frame = frame.tail_call_plan(plan.stack_size)
-      let result_area = result_area_register(plan).map(destination => {
-        (signature.params.length(), destination)
-      })
       emit_call_arguments(
         buffer,
         allocation,
         frame,
         instruction,
-        signature.params,
-        plan.arguments,
-        plan.stack_size,
-        stack_base=tail_frame.stack_argument_base,
-        result_area?,
+        function.instruction(instruction).unwrap(),
       )
       emit_epilogue(buffer, frame)
       let thunk_address = emit_tail_return_thunk_setup(buffer, tail_frame)
@@ -4238,24 +4073,15 @@ fn emit_instruction(
       )
       emit_tail_return_thunk(buffer, tail_frame, thunk_address)
     }
-    TailCallIndirect(signature, plan) => {
+    TailCallIndirect(_, plan) => {
       let tail_frame = frame.tail_call_plan(plan.stack_size)
       let callee_register = @vcode.PhysicalReg::new(0, Int)
-      let result_area = result_area_register(plan).map(destination => {
-        (signature.params.length() + 1, destination)
-      })
       emit_call_arguments(
         buffer,
         allocation,
         frame,
         instruction,
-        signature.params,
-        plan.arguments,
-        plan.stack_size,
-        operand_start=1,
-        stack_base=tail_frame.stack_argument_base,
-        callee=(0, callee_register),
-        result_area?,
+        function.instruction(instruction).unwrap(),
       )
       emit_epilogue(buffer, frame)
       let thunk_address = emit_tail_return_thunk_setup(buffer, tail_frame)
@@ -4275,7 +4101,7 @@ fn emit_instruction(
       }
     }
     BranchNonZero32 => {
-      buffer.encoder.x86_emit_test_rr32(reg(0).id, reg(0).id)
+      buffer.encoder.x86_emit_gpr(Test, R32, reg(0).id, reg(0).id)
       emit_conditional_edges(
         buffer,
         function,
@@ -4289,9 +4115,9 @@ fn emit_instruction(
     }
     BranchCompare(width, condition) => {
       if width == W32 {
-        buffer.encoder.x86_emit_cmp_rr32(reg(0).id, reg(1).id)
+        buffer.encoder.x86_emit_gpr(Cmp, R32, reg(0).id, reg(1).id)
       } else {
-        buffer.encoder.x86_emit_cmp_rr(reg(0).id, reg(1).id)
+        buffer.encoder.x86_emit_gpr(Cmp, R64, reg(0).id, reg(1).id)
       }
       emit_conditional_edges(
         buffer, function, allocation, frame, block, instruction, condition, next_block,
@@ -4370,9 +4196,7 @@ fn emit_verified(
 ) -> @code_object.UnlinkedCodeObject raise X64EmitError {
   let buffer = CodeBuffer::new()
   let block_offsets = Array::make(function.block_count(), -1)
-  let sources : Array[@code_object.SourceSite] = []
-  let traps : Array[@code_object.TrapSite] = []
-  let safepoints : Array[@code_object.SafepointSite] = []
+  let sites = @vcode.CodeSites::new()
   let unwind : Array[@code_object.UnwindDirective] = []
   emit_prologue(buffer, frame, unwind)
   let layout = function.layout()
@@ -4400,8 +4224,7 @@ fn emit_verified(
         None,
       )
       record_instruction_metadata(
-        buffer, function, allocation, frame, instruction, instruction_offset, sources,
-        traps, safepoints,
+        buffer, function, allocation, frame, instruction, instruction_offset, sites,
       )
       if !abi_materialization {
         emit_edits_at(buffer, function, allocation, frame, instruction, After)
@@ -4422,22 +4245,12 @@ fn emit_verified(
       next_block,
     )
     record_instruction_metadata(
-      buffer, function, allocation, frame, terminator, terminator_offset, sources,
-      traps, safepoints,
+      buffer, function, allocation, frame, terminator, terminator_offset, sites,
     )
     emit_edits_at(buffer, function, allocation, frame, terminator, After)
   }
   patch_branches(buffer, function, block_offsets)
-  let relocations = buffer.relocations
-  @code_object.build(
-    X64,
-    buffer.code,
-    relocations~,
-    sources~,
-    traps~,
-    safepoints~,
-    unwind~,
-  ) catch {
+  sites.build(X64, buffer.code, buffer.relocations, unwind) catch {
     error => raise InvalidCodeObject(cause=error)
   }
 }
@@ -4472,14 +4285,14 @@ fn CodeBuffer::x86_emit_fma213(
     (if f64 { 0x80 } else { 0 }) | (((multiplier & 15) ^ 15) << 3) | 0x01,
   )
   let opcode = match (operation, scalar) {
-    (Fmadd, true) => 0xA9
-    (Fmadd, false) => 0xA8
-    (Fmsub, true) => 0xAB
-    (Fmsub, false) => 0xAA
-    (Fnmadd, true) => 0xAD
-    (Fnmadd, false) => 0xAC
-    (Fnmsub, true) => 0xAF
-    (Fnmsub, false) => 0xAE
+    (FusedMultiplyAdd, true) => 0xA9
+    (FusedMultiplyAdd, false) => 0xA8
+    (FusedMultiplySubtract, true) => 0xAB
+    (FusedMultiplySubtract, false) => 0xAA
+    (FusedNegatedMultiplyAdd, true) => 0xAD
+    (FusedNegatedMultiplyAdd, false) => 0xAC
+    (FusedNegatedMultiplySubtract, true) => 0xAF
+    (FusedNegatedMultiplySubtract, false) => 0xAE
   }
   self.emit_byte(opcode)
   emit_modrm(self.encoder, 3, destination, addend)

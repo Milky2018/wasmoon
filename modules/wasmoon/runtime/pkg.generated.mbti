@@ -63,7 +63,7 @@ pub type AsyncHostFunction = async (@Milky2018/wasmoon_runtime/runtime.Caller, A
 
 pub using @Milky2018/wasmoon_runtime/runtime {type AsyncHostPoll}
 
-pub using @Milky2018/wasmoon_runtime/runtime {type AtomicRmwOp}
+pub using @types {type AtomicRmwOp}
 
 pub using @Milky2018/wasmoon_runtime/runtime {type CallStackEntry}
 

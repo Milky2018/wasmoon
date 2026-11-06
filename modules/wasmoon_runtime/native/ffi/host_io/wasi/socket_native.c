@@ -24,11 +24,7 @@ typedef int socklen_t;
 #endif
 
 static int wasmoon_wasi_socket_family(int family) {
-#ifdef _WIN32
   return family == 4 ? AF_INET : family == 6 ? AF_INET6 : -1;
-#else
-  return family == 4 ? AF_INET : family == 6 ? AF_INET6 : -1;
-#endif
 }
 
 static int wasmoon_wasi_socket_address(
@@ -39,49 +35,62 @@ static int wasmoon_wasi_socket_address(
   struct sockaddr_storage *storage,
   socklen_t *length
 ) {
+  memset(storage, 0, sizeof(*storage));
+  if (family == 4) {
+    struct sockaddr_in *addr = (struct sockaddr_in *)storage;
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons((uint16_t)port);
+    memcpy(&addr->sin_addr, address, 4);
+    *length = sizeof(*addr);
+    return 1;
+  }
+  if (family == 6) {
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)storage;
+    addr->sin6_family = AF_INET6;
+    addr->sin6_port = htons((uint16_t)port);
+    addr->sin6_scope_id = (uint32_t)scope_id;
+    memcpy(&addr->sin6_addr, address, 16);
+    *length = sizeof(*addr);
+    return 1;
+  }
+  errno = EAFNOSUPPORT;
+  return 0;
+}
+
+static int wasmoon_wasi_decode_socket_address(
+  const struct sockaddr_storage *storage,
+  socklen_t length,
+  uint8_t *family,
+  uint8_t *address,
+  uint16_t *port,
+  uint32_t *scope_id
+) {
+  memset(address, 0, 16);
+  if (length >= (socklen_t)sizeof(struct sockaddr_in) && storage->ss_family == AF_INET) {
+    const struct sockaddr_in *addr = (const struct sockaddr_in *)storage;
+    *family = 4;
+    *port = ntohs(addr->sin_port);
+    *scope_id = 0;
+    memcpy(address, &addr->sin_addr, 4);
+    return 0;
+  }
+  if (length >= (socklen_t)sizeof(struct sockaddr_in6) && storage->ss_family == AF_INET6) {
+    const struct sockaddr_in6 *addr = (const struct sockaddr_in6 *)storage;
+    *family = 6;
+    *port = ntohs(addr->sin6_port);
+    *scope_id = addr->sin6_scope_id;
+    memcpy(address, &addr->sin6_addr, 16);
+    return 0;
+  }
+  errno = EAFNOSUPPORT;
+  return -1;
+}
+
+static int64_t wasmoon_wasi_socket_result(int64_t result) {
 #ifdef _WIN32
-  memset(storage, 0, sizeof(*storage));
-  if (family == 4) {
-    struct sockaddr_in *addr = (struct sockaddr_in *)storage;
-    addr->sin_family = AF_INET;
-    addr->sin_port = htons((uint16_t)port);
-    memcpy(&addr->sin_addr, address, 4);
-    *length = sizeof(*addr);
-    return 1;
-  }
-  if (family == 6) {
-    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)storage;
-    addr->sin6_family = AF_INET6;
-    addr->sin6_port = htons((uint16_t)port);
-    addr->sin6_scope_id = (uint32_t)scope_id;
-    memcpy(&addr->sin6_addr, address, 16);
-    *length = sizeof(*addr);
-    return 1;
-  }
-  errno = EAFNOSUPPORT;
-  return 0;
-#else
-  memset(storage, 0, sizeof(*storage));
-  if (family == 4) {
-    struct sockaddr_in *addr = (struct sockaddr_in *)storage;
-    addr->sin_family = AF_INET;
-    addr->sin_port = htons((uint16_t)port);
-    memcpy(&addr->sin_addr, address, 4);
-    *length = sizeof(*addr);
-    return 1;
-  }
-  if (family == 6) {
-    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)storage;
-    addr->sin6_family = AF_INET6;
-    addr->sin6_port = htons((uint16_t)port);
-    addr->sin6_scope_id = (uint32_t)scope_id;
-    memcpy(&addr->sin6_addr, address, 16);
-    *length = sizeof(*addr);
-    return 1;
-  }
-  errno = EAFNOSUPPORT;
-  return 0;
+  if (result == SOCKET_ERROR) return wasmoon_windows_socket_error(WSAGetLastError());
 #endif
+  return result;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_create(int family, int kind) {
@@ -151,31 +160,13 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_bind(
 #ifdef _WIN32
   SOCKET socket = wasmoon_windows_socket_get(fd);
   if (socket == INVALID_SOCKET) return -1;
-  struct sockaddr_storage storage;
-  socklen_t length;
-  if (!wasmoon_wasi_socket_address(
-    family,
-    address,
-    port,
-    scope_id,
-    &storage,
-    &length
-  )) return -1;
-  int result = bind(socket, (struct sockaddr *)&storage, length);
-  return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
 #else
+  int socket = fd;
+#endif
   struct sockaddr_storage storage;
   socklen_t length;
-  if (!wasmoon_wasi_socket_address(
-    family,
-    address,
-    port,
-    scope_id,
-    &storage,
-    &length
-  )) return -1;
-  return bind(fd, (struct sockaddr *)&storage, length);
-#endif
+  if (!wasmoon_wasi_socket_address(family, address, port, scope_id, &storage, &length)) return -1;
+  return (int)wasmoon_wasi_socket_result(bind(socket, (struct sockaddr *)&storage, length));
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_connect(
@@ -188,32 +179,18 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_connect(
 #ifdef _WIN32
   SOCKET socket = wasmoon_windows_socket_get(fd);
   if (socket == INVALID_SOCKET) return -1;
+#else
+  int socket = fd;
+#endif
   struct sockaddr_storage storage;
   socklen_t length;
-  if (!wasmoon_wasi_socket_address(
-    family,
-    address,
-    port,
-    scope_id,
-    &storage,
-    &length
-  )) return -1;
+  if (!wasmoon_wasi_socket_address(family, address, port, scope_id, &storage, &length)) return -1;
   if (connect(socket, (struct sockaddr *)&storage, length) == 0) return 0;
+#ifdef _WIN32
   int error = WSAGetLastError();
   if (error == WSAEWOULDBLOCK || error == WSAEINPROGRESS) return 1;
   return wasmoon_windows_socket_error(error);
 #else
-  struct sockaddr_storage storage;
-  socklen_t length;
-  if (!wasmoon_wasi_socket_address(
-    family,
-    address,
-    port,
-    scope_id,
-    &storage,
-    &length
-  )) return -1;
-  if (connect(fd, (struct sockaddr *)&storage, length) == 0) return 0;
   if (errno == EINPROGRESS || errno == EWOULDBLOCK) return 1;
   return -1;
 #endif
@@ -223,29 +200,25 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_disconnect(int fd) {
 #ifdef _WIN32
   SOCKET socket = wasmoon_windows_socket_get(fd);
   if (socket == INVALID_SOCKET) return -1;
+#else
+  int socket = fd;
+#endif
   struct sockaddr_storage storage;
   memset(&storage, 0, sizeof(storage));
   storage.ss_family = AF_UNSPEC;
   int result = connect(socket, (struct sockaddr *)&storage, sizeof(storage));
-  return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
-#else
-  struct sockaddr_storage storage;
-  memset(&storage, 0, sizeof(storage));
-  storage.ss_family = AF_UNSPEC;
-  int result = connect(fd, (struct sockaddr *)&storage, sizeof(storage));
 #ifdef __APPLE__
   // Darwin disconnects the datagram socket before rejecting AF_UNSPEC.
   // Confirm the resulting state instead of treating any EINVAL as success.
   if (result < 0 && (errno == EAFNOSUPPORT || errno == EINVAL)) {
     int saved = errno;
     socklen_t length = sizeof(storage);
-    if (getpeername(fd, (struct sockaddr *)&storage, &length) < 0 &&
+    if (getpeername(socket, (struct sockaddr *)&storage, &length) < 0 &&
         errno == ENOTCONN) return 0;
     errno = saved;
   }
 #endif
-  return result;
-#endif
+  return (int)wasmoon_wasi_socket_result(result);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_recv_from(
@@ -260,66 +233,17 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_recv_from(
 #ifdef _WIN32
   SOCKET socket = wasmoon_windows_socket_get(fd);
   if (socket == INVALID_SOCKET) return -1;
-  struct sockaddr_storage storage;
-  socklen_t storage_length = sizeof(storage);
-  int received = recvfrom(
-    socket,
-    (char *)data,
-    length,
-    0,
-    (struct sockaddr *)&storage,
-    &storage_length
-  );
-  if (received < 0) return wasmoon_windows_socket_error(WSAGetLastError());
-  memset(address, 0, 16);
-  if (storage.ss_family == AF_INET) {
-    struct sockaddr_in *addr = (struct sockaddr_in *)&storage;
-    *family = 4;
-    *port = ntohs(addr->sin_port);
-    *scope_id = 0;
-    memcpy(address, &addr->sin_addr, 4);
-  } else if (storage.ss_family == AF_INET6) {
-    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)&storage;
-    *family = 6;
-    *port = ntohs(addr->sin6_port);
-    *scope_id = addr->sin6_scope_id;
-    memcpy(address, &addr->sin6_addr, 16);
-  } else {
-    errno = EAFNOSUPPORT;
-    return -1;
-  }
-  return (int64_t)received;
 #else
+  int socket = fd;
+#endif
   struct sockaddr_storage storage;
   socklen_t storage_length = sizeof(storage);
-  ssize_t received = recvfrom(
-    fd,
-    data,
-    (size_t)length,
-    0,
-    (struct sockaddr *)&storage,
-    &storage_length
+  int64_t received = recvfrom(
+    socket, (char *)data, length, 0, (struct sockaddr *)&storage, &storage_length
   );
-  if (received < 0) return -1;
-  memset(address, 0, 16);
-  if (storage.ss_family == AF_INET) {
-    struct sockaddr_in *addr = (struct sockaddr_in *)&storage;
-    *family = 4;
-    *port = ntohs(addr->sin_port);
-    *scope_id = 0;
-    memcpy(address, &addr->sin_addr, 4);
-  } else if (storage.ss_family == AF_INET6) {
-    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)&storage;
-    *family = 6;
-    *port = ntohs(addr->sin6_port);
-    *scope_id = addr->sin6_scope_id;
-    memcpy(address, &addr->sin6_addr, 16);
-  } else {
-    errno = EAFNOSUPPORT;
-    return -1;
-  }
-  return (int64_t)received;
-#endif
+  if (received < 0) return wasmoon_wasi_socket_result(received);
+  return wasmoon_wasi_decode_socket_address(&storage, storage_length, family, address, port, scope_id)
+    == 0 ? received : -1;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_send_to(
@@ -335,52 +259,16 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_send_to(
 #ifdef _WIN32
   SOCKET socket = wasmoon_windows_socket_get(fd);
   if (socket == INVALID_SOCKET) return -1;
-  if (!has_address) {
-    int result = send(socket, (const char *)data, length, 0);
-    return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
-  }
-  struct sockaddr_storage storage;
-  socklen_t storage_length;
-  if (!wasmoon_wasi_socket_address(
-    family,
-    address,
-    port,
-    scope_id,
-    &storage,
-    &storage_length
-  )) return -1;
-  int result = sendto(
-    socket,
-    (const char *)data,
-    length,
-    0,
-    (struct sockaddr *)&storage,
-    storage_length
-  );
-  return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
 #else
-  if (!has_address) {
-    return (int64_t)send(fd, data, (size_t)length, 0);
-  }
-  struct sockaddr_storage storage;
-  socklen_t storage_length;
-  if (!wasmoon_wasi_socket_address(
-    family,
-    address,
-    port,
-    scope_id,
-    &storage,
-    &storage_length
-  )) return -1;
-  return (int64_t)sendto(
-    fd,
-    data,
-    (size_t)length,
-    0,
-    (struct sockaddr *)&storage,
-    storage_length
-  );
+  int socket = fd;
 #endif
+  if (!has_address) return wasmoon_wasi_socket_result(send(socket, (const char *)data, length, 0));
+  struct sockaddr_storage storage;
+  socklen_t address_length;
+  if (!wasmoon_wasi_socket_address(family, address, port, scope_id, &storage, &address_length)) return -1;
+  return wasmoon_wasi_socket_result(sendto(
+    socket, (const char *)data, length, 0, (struct sockaddr *)&storage, address_length
+  ));
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_listen(int fd, int backlog) {
@@ -424,58 +312,44 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_address_get(
 #ifdef _WIN32
   SOCKET socket = wasmoon_windows_socket_get(fd);
   if (socket == INVALID_SOCKET) return -1;
+#else
+  int socket = fd;
+#endif
   struct sockaddr_storage storage;
   socklen_t length = sizeof(storage);
   int result = peer
     ? getpeername(socket, (struct sockaddr *)&storage, &length)
     : getsockname(socket, (struct sockaddr *)&storage, &length);
-  if (result != 0) return wasmoon_windows_socket_error(WSAGetLastError());
-  memset(address, 0, 16);
-  if (storage.ss_family == AF_INET) {
-    struct sockaddr_in *addr = (struct sockaddr_in *)&storage;
-    *family = 4;
-    *port = ntohs(addr->sin_port);
-    *scope_id = 0;
-    memcpy(address, &addr->sin_addr, 4);
-    return 0;
-  }
-  if (storage.ss_family == AF_INET6) {
-    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)&storage;
-    *family = 6;
-    *port = ntohs(addr->sin6_port);
-    *scope_id = addr->sin6_scope_id;
-    memcpy(address, &addr->sin6_addr, 16);
-    return 0;
-  }
-  errno = EAFNOSUPPORT;
-  return -1;
+  if (result != 0) return (int)wasmoon_wasi_socket_result(-1);
+  return wasmoon_wasi_decode_socket_address(&storage, length, family, address, port, scope_id);
+}
+
+static int wasmoon_wasi_native_socket_option(
+  int family, int option, int *level, int *native_option
+) {
+  *level = SOL_SOCKET;
+  switch (option) {
+    case 0: *native_option = SO_KEEPALIVE; break;
+    case 1:
+      *level = IPPROTO_TCP;
+#if defined(__APPLE__)
+      *native_option = TCP_KEEPALIVE;
 #else
-  struct sockaddr_storage storage;
-  socklen_t length = sizeof(storage);
-  int result = peer
-    ? getpeername(fd, (struct sockaddr *)&storage, &length)
-    : getsockname(fd, (struct sockaddr *)&storage, &length);
-  if (result != 0) return -1;
-  memset(address, 0, 16);
-  if (storage.ss_family == AF_INET) {
-    struct sockaddr_in *addr = (struct sockaddr_in *)&storage;
-    *family = 4;
-    *port = ntohs(addr->sin_port);
-    *scope_id = 0;
-    memcpy(address, &addr->sin_addr, 4);
-    return 0;
-  }
-  if (storage.ss_family == AF_INET6) {
-    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)&storage;
-    *family = 6;
-    *port = ntohs(addr->sin6_port);
-    *scope_id = addr->sin6_scope_id;
-    memcpy(address, &addr->sin6_addr, 16);
-    return 0;
-  }
-  errno = EAFNOSUPPORT;
-  return -1;
+      *native_option = TCP_KEEPIDLE;
 #endif
+      break;
+    case 2: *level = IPPROTO_TCP; *native_option = TCP_KEEPINTVL; break;
+    case 3: *level = IPPROTO_TCP; *native_option = TCP_KEEPCNT; break;
+    case 4:
+      *level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
+      *native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
+      break;
+    case 5: *native_option = SO_RCVBUF; break;
+    case 6: *native_option = SO_SNDBUF; break;
+    case 7: *native_option = SO_REUSEADDR; break;
+    default: errno = EINVAL; return 0;
+  }
+  return 1;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_get(
@@ -486,68 +360,21 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_get(
 #ifdef _WIN32
   SOCKET socket = wasmoon_windows_socket_get(fd);
   if (socket == INVALID_SOCKET) return -1;
-  int level = SOL_SOCKET;
-  int native_option = 0;
-  switch (option) {
-    case 0: native_option = SO_KEEPALIVE; break;
-    case 1:
-      level = IPPROTO_TCP;
-#if defined(__APPLE__)
-      native_option = TCP_KEEPALIVE;
 #else
-      native_option = TCP_KEEPIDLE;
+  int socket = fd;
 #endif
-      break;
-    case 2: level = IPPROTO_TCP; native_option = TCP_KEEPINTVL; break;
-    case 3: level = IPPROTO_TCP; native_option = TCP_KEEPCNT; break;
-    case 4:
-      level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
-      native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
-      break;
-    case 5: native_option = SO_RCVBUF; break;
-    case 6: native_option = SO_SNDBUF; break;
-    case 7: native_option = SO_REUSEADDR; break;
-    default: errno = EINVAL; return -1;
-  }
+  int level, native_option;
+  if (!wasmoon_wasi_native_socket_option(family, option, &level, &native_option)) return -1;
   int value = 0;
   socklen_t length = sizeof(value);
   if (getsockopt(socket, level, native_option, (char *)&value, &length) != 0)
-    return wasmoon_windows_socket_error(WSAGetLastError());
-  return value;
-#else
-  int level = SOL_SOCKET;
-  int native_option = 0;
-  switch (option) {
-    case 0: native_option = SO_KEEPALIVE; break;
-    case 1:
-      level = IPPROTO_TCP;
-#if defined(__APPLE__)
-      native_option = TCP_KEEPALIVE;
-#else
-      native_option = TCP_KEEPIDLE;
-#endif
-      break;
-    case 2: level = IPPROTO_TCP; native_option = TCP_KEEPINTVL; break;
-    case 3: level = IPPROTO_TCP; native_option = TCP_KEEPCNT; break;
-    case 4:
-      level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
-      native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
-      break;
-    case 5: native_option = SO_RCVBUF; break;
-    case 6: native_option = SO_SNDBUF; break;
-    case 7: native_option = SO_REUSEADDR; break;
-    default: errno = EINVAL; return -1;
-  }
-  int value = 0;
-  socklen_t length = sizeof(value);
-  if (getsockopt(fd, level, native_option, &value, &length) != 0) return -1;
+    return (int)wasmoon_wasi_socket_result(-1);
 #ifdef __linux__
   // Linux includes doubled bookkeeping space in the returned buffer size.
   // Expose the same application units accepted by setsockopt, as Wasmtime does.
   if (option == 5 || option == 6) value /= 2;
 #endif
   return value;
-#endif
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_set(
@@ -559,57 +386,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_set(
 #ifdef _WIN32
   SOCKET socket = wasmoon_windows_socket_get(fd);
   if (socket == INVALID_SOCKET) return -1;
-  int level = SOL_SOCKET;
-  int native_option = 0;
-  switch (option) {
-    case 0: native_option = SO_KEEPALIVE; break;
-    case 1:
-      level = IPPROTO_TCP;
-#if defined(__APPLE__)
-      native_option = TCP_KEEPALIVE;
 #else
-      native_option = TCP_KEEPIDLE;
+  int socket = fd;
 #endif
-      break;
-    case 2: level = IPPROTO_TCP; native_option = TCP_KEEPINTVL; break;
-    case 3: level = IPPROTO_TCP; native_option = TCP_KEEPCNT; break;
-    case 4:
-      level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
-      native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
-      break;
-    case 5: native_option = SO_RCVBUF; break;
-    case 6: native_option = SO_SNDBUF; break;
-    case 7: native_option = SO_REUSEADDR; break;
-    default: errno = EINVAL; return -1;
-  }
-  int result = setsockopt(socket, level, native_option, (char *)&value, sizeof(value));
-  return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
-#else
-  int level = SOL_SOCKET;
-  int native_option = 0;
-  switch (option) {
-    case 0: native_option = SO_KEEPALIVE; break;
-    case 1:
-      level = IPPROTO_TCP;
-#if defined(__APPLE__)
-      native_option = TCP_KEEPALIVE;
-#else
-      native_option = TCP_KEEPIDLE;
-#endif
-      break;
-    case 2: level = IPPROTO_TCP; native_option = TCP_KEEPINTVL; break;
-    case 3: level = IPPROTO_TCP; native_option = TCP_KEEPCNT; break;
-    case 4:
-      level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
-      native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
-      break;
-    case 5: native_option = SO_RCVBUF; break;
-    case 6: native_option = SO_SNDBUF; break;
-    case 7: native_option = SO_REUSEADDR; break;
-    default: errno = EINVAL; return -1;
-  }
-  return setsockopt(fd, level, native_option, &value, sizeof(value));
-#endif
+  int level, native_option;
+  if (!wasmoon_wasi_native_socket_option(family, option, &level, &native_option)) return -1;
+  return (int)wasmoon_wasi_socket_result(
+    setsockopt(socket, level, native_option, (const char *)&value, sizeof(value))
+  );
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_bytes_available(int fd) {

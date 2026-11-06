@@ -326,9 +326,7 @@ fn StoreTypeRegistry::publish(self : StoreTypeRegistry) -> Unit {
     entries.push((pointer, identity))
   }
   if self.native_registry is Some(registry) {
-    if !registry.replace(self.parents, entries) {
-      abort("failed to publish native callable identities")
-    }
+    registry.replace(self.parents, entries)
   }
   if self.views.is_empty() {
     return

@@ -1,35 +1,17 @@
 # Checked call and access contracts
 
-Tracking: [ISS-726](../../issues/ISS-726.md).
+Tracking: [#598](https://github.com/Milky2018/wasmoon/issues/598).
 
-## Module facts and invocation proofs
-
-The module compiler derives bounded read-only summaries from its existing small
-translated bodies once. Each template crosses semantic verification and its own
-linked function signature check. A dependency worklist counts repeated edges,
-propagates transitive source-poll costs and rejects recursive cycles, unknown
-callees, imports, writes, allocation and incompatible control layouts. The
-validation context snapshots these immutable summaries. A summary alone never
-changes a call's collecting behavior.
+## Direct calls
 
 The decoded module's mutable section containers and the optional compilation
 mask are copied before progress callbacks run. A callback may mutate its caller's
-inputs, but cannot replace a future target body after its effects were proved.
+inputs, but compilation uses the admitted body snapshot. Direct calls use the
+same conservative effects in full and partial artifacts. Polls keep their
+original charges, and physical borrows end at call and poll boundaries.
 
-A successful exclusive-controls guard must cover every original poll and every
-nested callee poll in the selected region. Its SSA control token cannot come
-from a foreign guard or a phi. The independent credit verifier subtracts each
-callee's complete upper bound on every CFG route. Unknown calls and control
-mutations revoke the proof. Loop backedges revisit their guard. The original
-callee polls remain at their original positions; they still charge fuel and
-quantum, and the complete callback/suspension path remains available.
-
-Only that proved call may preserve physical addresses at native lowering. The
-real target, arguments, results, traps and unwind behavior remain unchanged; the
-proof token is removed before guest ABI argument placement. A partial native
-artifact keeps conservative calls because an absent target body may bind to a
-host or interpreter adapter with different effects. Mutable and indirect targets
-are outside this contract.
+The [PR #582 checkpoint](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/docs/perf/checked-call-access-contracts.md)
+records the retired region guards and transitive call summaries.
 
 ## Logical carriers and physical storage
 

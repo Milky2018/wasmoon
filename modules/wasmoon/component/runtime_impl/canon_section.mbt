@@ -65,13 +65,19 @@ fn process_canon_section(
         instantiate_canon_stream_read(_tyidx, opts, state, store)
       StreamWrite(_tyidx, opts) =>
         instantiate_canon_stream_write(_tyidx, opts, state, store)
-      StreamCancelRead(_tyidx, is_async_cancel) =>
-        instantiate_canon_stream_cancel_read(
-          _tyidx, is_async_cancel, state, store,
+      StreamCancelRead(_, is_async_cancel) =>
+        instantiate_canon_stream_cancel(
+          is_async_cancel,
+          state,
+          store,
+          readable=true,
         )
-      StreamCancelWrite(_tyidx, is_async_cancel) =>
-        instantiate_canon_stream_cancel_write(
-          _tyidx, is_async_cancel, state, store,
+      StreamCancelWrite(_, is_async_cancel) =>
+        instantiate_canon_stream_cancel(
+          is_async_cancel,
+          state,
+          store,
+          readable=false,
         )
       StreamDropReadable(_tyidx) =>
         instantiate_canon_stream_drop_readable(_tyidx, state, store)
@@ -82,10 +88,10 @@ fn process_canon_section(
         instantiate_canon_future_read(_tyidx, _opts, state, store)
       FutureWrite(_tyidx, _opts) =>
         instantiate_canon_future_write(_tyidx, _opts, state, store)
-      FutureCancelRead(_tyidx, _is_async) =>
-        instantiate_canon_future_cancel_read(_tyidx, _is_async, state, store)
-      FutureCancelWrite(_tyidx, _is_async) =>
-        instantiate_canon_future_cancel_write(_tyidx, _is_async, state, store)
+      FutureCancelRead(_, _is_async) =>
+        instantiate_canon_future_cancel(_is_async, state, store, readable=true)
+      FutureCancelWrite(_, _is_async) =>
+        instantiate_canon_future_cancel(_is_async, state, store, readable=false)
       FutureDropReadable(_tyidx) =>
         instantiate_canon_future_drop_readable(_tyidx, state, store)
       FutureDropWritable(_tyidx) =>

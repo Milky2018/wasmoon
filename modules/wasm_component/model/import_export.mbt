@@ -97,73 +97,32 @@ pub(all) struct Export {
 }
 
 ///|
-fn parse_name_annot(reader : Reader) -> Bytes raise ComponentParseError {
-  let len = reader.read_leb_u32()
-  reader.read_bytes(len)
-}
-
-///|
-fn parse_versionsuffix(reader : Reader) -> Bytes raise ComponentParseError {
-  let len = reader.read_leb_u32()
-  reader.read_bytes(len)
-}
-
-///|
 fn parse_attribute(reader : Reader) -> NameAttribute raise ComponentParseError {
-  let tag = reader.read_u8()
-  if tag == 0x00 {
-    Implements(parse_name_annot(reader))
-  } else if tag == 0x01 {
-    VersionSuffix(parse_versionsuffix(reader))
-  } else if tag == 0x02 {
-    ExternalId(parse_name_annot(reader))
-  } else {
-    raise InvalidTypeSection
+  match reader.read_u8() {
+    0 => Implements(reader.read_blob())
+    1 => VersionSuffix(reader.read_blob())
+    2 => ExternalId(reader.read_blob())
+    _ => raise InvalidTypeSection
   }
 }
 
 ///|
-fn parse_attributes(
+fn[A] parse_annotated_name(
   reader : Reader,
-) -> Array[NameAttribute] raise ComponentParseError {
-  let count = reader.read_leb_u32()
-  let attributes : Array[NameAttribute] = []
-  for _ in 0..<count {
-    attributes.push(parse_attribute(reader))
-  }
-  attributes
-}
-
-///|
-fn parse_importname(
-  reader : Reader,
-) -> (ImportName, Array[NameAttribute]) raise ComponentParseError {
+  read_name : (Reader) -> A raise ComponentParseError,
+  invalid : ComponentParseError,
+) -> (A, Array[NameAttribute]) raise ComponentParseError {
   let tag = reader.read_u8()
-  if tag == 0x00 {
-    (Plain(parse_name_annot(reader)), [])
-  } else if tag == 0x01 {
-    (Plain(parse_name_annot(reader)), [])
-  } else if tag == 0x02 {
-    (Plain(parse_name_annot(reader)), parse_attributes(reader))
-  } else {
-    raise InvalidTypeSection
+  if tag > 2 {
+    raise invalid
   }
-}
-
-///|
-fn parse_exportname(
-  reader : Reader,
-) -> (ExportName, Array[NameAttribute]) raise ComponentParseError {
-  let tag = reader.read_u8()
-  if tag == 0x00 {
-    (Plain(parse_name_annot(reader)), [])
-  } else if tag == 0x01 {
-    (Plain(parse_name_annot(reader)), [])
-  } else if tag == 0x02 {
-    (Plain(parse_name_annot(reader)), parse_attributes(reader))
+  let name = read_name(reader)
+  let attributes = if tag == 2 {
+    reader.read_vector(parse_attribute)
   } else {
-    raise InvalidTypeSection
+    []
   }
+  (name, attributes)
 }
 
 ///|
@@ -243,52 +202,39 @@ fn parse_externdesc(reader : Reader) -> ExternDesc raise ComponentParseError {
 }
 
 ///|
-fn parse_opt_externdesc(
-  reader : Reader,
-) -> ExternDesc? raise ComponentParseError {
-  let tag = reader.read_u8()
-  if tag == 0x00 {
-    None
-  } else if tag == 0x01 {
-    Some(parse_externdesc(reader))
-  } else {
-    raise InvalidTypeSection
-  }
-}
-
-///|
 pub fn parse_import_section(
   payload : Bytes,
 ) -> Array[Import] raise ComponentParseError {
-  let reader = Reader::Reader(payload)
-  let n = reader.read_leb_u32()
-  let imports : Array[Import] = []
-  for _i in 0..<n {
-    let (name, attributes) = parse_importname(reader)
-    let desc = parse_externdesc(reader)
-    imports.push({ name, attributes, desc, })
-  }
-  if !reader.is_eof() {
-    raise InvalidTypeSection
-  }
-  imports
+  parse_vector_section(
+    payload,
+    reader => {
+      let (name, attributes) = parse_annotated_name(
+        reader,
+        Reader::read_blob,
+        InvalidTypeSection,
+      )
+      { name: Plain(name), attributes, desc: parse_externdesc(reader), }
+    },
+    InvalidTypeSection,
+  )
 }
 
 ///|
 pub fn parse_export_section(
   payload : Bytes,
 ) -> Array[Export] raise ComponentParseError {
-  let reader = Reader::Reader(payload)
-  let n = reader.read_leb_u32()
-  let exports : Array[Export] = []
-  for _ in 0..<n {
-    let (name, attributes) = parse_exportname(reader)
-    let sortidx = parse_sortidx(reader)
-    let desc = parse_opt_externdesc(reader)
-    exports.push({ name, attributes, sortidx, desc, })
-  }
-  if !reader.is_eof() {
-    raise InvalidTypeSection
-  }
-  exports
+  parse_vector_section(
+    payload,
+    reader => {
+      let (name, attributes) = parse_annotated_name(
+        reader,
+        Reader::read_blob,
+        InvalidTypeSection,
+      )
+      let sortidx = parse_sortidx(reader)
+      let desc = reader.read_optional(parse_externdesc)
+      { name: Plain(name), attributes, sortidx, desc, }
+    },
+    InvalidTypeSection,
+  )
 }

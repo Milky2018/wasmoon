@@ -43,27 +43,17 @@ pub fn context_function_array(@ffi.JITContext) -> Int32
 
 pub fn context_gc_funcref_subtype(@ffi.JITContext, Int32, Int32) -> Int32
 
-pub fn context_gc_legacy_rebind(@ffi.JITContext) -> Int32
-
 pub fn context_gc_metadata_shares(@ffi.JITContext, FixedArray[Int32], FixedArray[Int32], FixedArray[Int32]) -> Int32
 
 pub fn context_gc_payload_empty(@ffi.JITContext) -> Int32
-
-pub fn context_gc_payload_legacy(@ffi.JITContext) -> Int32
 
 pub fn context_gc_payload_shares(@ffi.JITContext, Bytes, FixedArray[Int32], FixedArray[Int64]) -> Int32
 
 pub fn context_gc_payload_valid(@ffi.JITContext) -> Int32
 
-pub fn context_globals_ownership() -> Int32
-
 pub fn context_layout_shared(@ffi.JITContext, @ffi.JITContext) -> Int32
 
-pub fn context_optional_state() -> Int32
-
 pub fn context_segments_empty(@ffi.JITContext) -> Int32
-
-pub fn context_segments_legacy(@ffi.JITContext) -> Int32
 
 pub fn context_segments_share_data(@ffi.JITContext, Bytes) -> Int32
 

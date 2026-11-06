@@ -50,107 +50,37 @@ pub fn instantiate_module(
 pub fn instantiate_validated_module(
   validated : @validator.ValidatedModule,
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
+  instantiate_fresh_module(validated, Bare)
+}
+
+///|
+fn instantiate_fresh_module(
+  validated : @validator.ValidatedModule,
+  setup : CoreInstanceSetup,
+) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
   let mod = validated.snapshot()
   let store = @runtime.Store::Store()
   errdefer store.close()
   let admission = store.reserve_instance(module_=mod)
   defer admission.cancel()
   validate_continuation_gc_storage(mod)
-  // Set module types for GC support
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
-
-  // Allocate functions with their types
-  let func_addrs : Array[Int32] = []
-  for i, _code in mod.codes {
-    let addr = store.alloc_func(validated, i)
-    func_addrs.push(addr)
-  }
-
-  // Allocate memories
-  let mem_addrs : Array[Int32] = []
-  for mem_type in mod.memories {
-    let mem = @runtime.Memory::from_type(
-      mem_type,
-      resource_budget=store.resource_budget,
-    )
-    let addr = store.alloc_mem(mem)
-    mem_addrs.push(addr)
-  }
-
-  // Allocate tables
-  // Note: table init expressions can reference imported globals, so we need to
-  // create imported global instances first if we have any table init expressions.
-  // For simplicity, we'll evaluate table init expressions with an empty globals array
-  // since the validator already ensures only imported globals can be referenced.
-  let table_addrs : Array[Int32] = []
-  for table_def in mod.tables {
-    // Evaluate table init expression if present
-    let init_value : @types.Value = if table_def.init is Some(init_expr) {
-      eval_const_expr(
-        init_expr,
-        func_addrs~,
-        globals=[],
-        store=Some(store),
-        types=mod.types,
-      )
-    } else {
-      Null
-    }
-    let table = @runtime.Table::from_type(
-      table_def.type_,
-      init_value~,
-      resource_budget=store.resource_budget,
-    )
-    let addr = store.alloc_table(table)
-    table_addrs.push(addr)
-  }
-
-  // Allocate globals with initialization
-  let global_addrs : Array[Int32] = []
-  let global_instances : Array[@runtime.GlobalInstance] = []
-  for global in mod.globals {
-    // Evaluate init expression with access to already-initialized globals
-    // Pass store and types for GC const expr support (array.new_default, struct.new, etc.)
-    let init_value = eval_const_expr(
-      global.init,
-      func_addrs~,
-      globals=global_instances,
-      store=Some(store),
-      types=mod.types,
-    )
-    let global_inst = @runtime.GlobalInstance::GlobalInstance(
-      global.type_,
-      init_value,
-    )
-    let addr = store.alloc_global(global_inst)
-    global_addrs.push(addr)
-    global_instances.push(global_inst)
-  }
-
-  // Allocate tags
-  let tag_addrs : Array[Int32] = []
-  for tag in mod.tags {
-    let tag_type = mod.validated_func_type_at(tag.type_idx)
-    let addr = store.alloc_tag(tag_type, type_idx=tag.type_idx)
-    tag_addrs.push(addr)
-  }
-
-  // func_addrs: indices into store.funcs
-  // func_type_indices: type index for each function (from mod.funcs)
-  let elem_values = evaluate_element_segments(
-    mod, store, func_addrs, global_addrs,
-  )
-  let instance = store.new_instance(
+  let instance = allocate_core_instance(
+    store,
     validated,
-    admission~,
-    func_addrs~,
-    table_addrs~,
-    mem_addrs~,
-    global_addrs~,
-    tag_addrs~,
-    elem_values~,
+    mod,
+    admission,
+    CoreAddresses(),
+    setup,
   )
-
+  if setup is Initialize && mod.start is Some(start) {
+    let ctx = ExecContext::ExecContext(store, instance)
+    (ctx.call_func(start, []) catch {
+      BranchWith(_, _) | Return => raise Unreachable
+      error => raise normalize_runtime_error(error)
+    })
+    |> ignore
+  }
   (store, instance)
 }
 
@@ -511,26 +441,12 @@ fn eval_extended_const_expr(
 }
 
 ///|
-/// Helper to get global instances from a store given global addresses
-fn get_global_instances(
-  store : @runtime.Store,
-  global_addrs : ArrayView[Int32],
-) -> Array[@runtime.GlobalInstance] raise @runtime.RuntimeError {
-  let globals : Array[@runtime.GlobalInstance] = []
-  for addr in global_addrs {
-    globals.push(store.get_global(addr))
-  }
-  globals
-}
-
-///|
 fn evaluate_element_segments(
   mod : @types.Module,
   store : @runtime.Store,
   func_addrs : Array[Int32],
-  global_addrs : ArrayView[Int32],
+  globals : Array[@runtime.GlobalInstance],
 ) -> Array[Array[@types.Value]] raise @runtime.RuntimeError {
-  let globals = get_global_instances(store, global_addrs)
   let segments : Array[Array[@types.Value]] = []
   for elem in mod.elems {
     let values : Array[@types.Value] = []
@@ -562,70 +478,7 @@ pub fn instantiate_module_with_init(
 pub fn instantiate_validated_module_with_init(
   validated : @validator.ValidatedModule,
 ) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError {
-  let mod = validated.snapshot()
-  let (store, instance) = instantiate_validated_module(validated)
-  errdefer store.close()
-
-  // Per WebAssembly spec: element segments are initialized BEFORE data segments
-  // This ensures that if data segment initialization traps, the element segment
-  // modifications to shared tables are already visible.
-
-  // Initialize element segments (populate tables with function references)
-  for elem_idx, elem in mod.elems {
-    // Only process active element segments
-    if elem.mode is Active(table_idx, offset_expr) {
-      if instance.table_addrs.length() > table_idx {
-        let table = store.get_table(instance.table_addrs[table_idx])
-
-        // Evaluate offset expression using extended const expr evaluator
-        let globals = get_global_instances(store, instance.global_addrs)
-        let offset = eval_extended_const_expr(offset_expr, globals)
-
-        // Check bounds before initializing
-        // offset + num_elements must not exceed table size
-        if offset < 0L ||
-          offset > table.size().to_int64() - elem.init.length().to_int64() {
-          raise OutOfBoundsTableAccess
-        }
-
-        // Set table entries - evaluate init expression to get value
-        for i in 0..<elem.init.length() {
-          table.set(offset.to_int() + i, instance.element_value(elem_idx, i))
-        }
-      }
-      // Active elem segments are implicitly dropped after initialization
-      instance.drop_element(elem_idx)
-    }
-  }
-
-  // Initialize data segments (copy data to memory)
-  // Get global instances for evaluating offset expressions
-  let globals_for_data = get_global_instances(store, instance.global_addrs)
-  for data_idx, data in mod.datas {
-    if data.memory_idx >= 0 &&
-      data.offset.length() > 0 &&
-      instance.mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
-
-      // Evaluate offset expression using extended const expr evaluator
-      let offset = eval_extended_const_expr(data.offset, globals_for_data)
-
-      // Copy data to memory
-      mem.init_data_at(offset, data.init)
-      instance.drop_data(data_idx)
-    }
-  }
-
-  // Execute start function if present
-  if mod.start is Some(start_func_idx) {
-    let ctx = ExecContext::ExecContext(store, instance)
-    (ctx.call_func(start_func_idx, []) catch {
-      BranchWith(_, _) | Return => raise Unreachable
-      e => raise normalize_runtime_error(e)
-    })
-    |> ignore
-  }
-  (store, instance)
+  instantiate_fresh_module(validated, Initialize)
 }
 
 ///|
@@ -727,10 +580,6 @@ pub fn validate_imports_with_diagnostics(
   let validated = validate_execution_module(mod)
   let mod = validated.snapshot()
   let result = ImportDiagnosticsResult::ImportDiagnosticsResult()
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    mod.types,
-    type_rec_groups=mod.type_rec_groups,
-  )
   for import_index, imp in mod.imports {
     let expected_kind = import_desc_kind(imp.desc)
     let resolved = imports.resolve(imp.mod_name, imp.name)
@@ -762,443 +611,17 @@ pub fn validate_imports_with_diagnostics(
       continue
     }
 
-    match imp.desc {
-      Func(type_idx) =>
-        match extern_val {
-          Func(addr) => {
-            let expected_type = mod.validated_func_type_at(type_idx)
-            let actual_type = match store.get_func_type_opt(addr) {
-              Some(type_) => type_
-              None => {
-                push_import_diagnostic(
-                  result,
-                  import_index,
-                  imp.mod_name,
-                  imp.name,
-                  ImportTypeMismatch,
-                  expected_type.to_string(),
-                  None,
-                  "import \{imp.mod_name}.\{imp.name} refers to invalid function address \{addr}",
-                )
-                continue
-              }
-            }
-            match store.get_func_owner(addr) {
-              Some(owner) => {
-                let actual_type_idx = store.get_func_type_idx(addr)
-                let canonical_export = @types.compute_canonical_type_indices(
-                  owner.types,
-                  type_rec_groups=owner.type_rec_groups,
-                )
-                let ctx = @types.SubtypingContext::cross_module(
-                  owner.types,
-                  mod.types,
-                  rec_groups1=owner.type_rec_groups,
-                  rec_groups2=mod.type_rec_groups,
-                  canonical1=canonical_export,
-                  canonical2=canonical_type_indices,
-                )
-                if !ctx.is_subtype(actual_type_idx, type_idx) {
-                  push_import_diagnostic(
-                    result,
-                    import_index,
-                    imp.mod_name,
-                    imp.name,
-                    ImportTypeMismatch,
-                    expected_type.to_string(),
-                    Some(actual_type.to_string()),
-                    "import \{imp.mod_name}.\{imp.name} function type mismatch (cross-module subtype check failed)",
-                  )
-                }
-              }
-              None => {
-                let expected_rec_info = @types.get_rec_group_info(
-                  mod.type_rec_groups,
-                  type_idx,
-                )
-                if expected_rec_info != (0, 1) {
-                  push_import_diagnostic(
-                    result,
-                    import_index,
-                    imp.mod_name,
-                    imp.name,
-                    ImportTypeMismatch,
-                    expected_type.to_string(),
-                    Some(actual_type.to_string()),
-                    "import \{imp.mod_name}.\{imp.name} expects singleton rec group type, got \{Repr(expected_rec_info)}",
-                  )
-                  continue
-                }
-                if !@types.func_types_equal(expected_type, actual_type) {
-                  push_import_diagnostic(
-                    result,
-                    import_index,
-                    imp.mod_name,
-                    imp.name,
-                    ImportTypeMismatch,
-                    expected_type.to_string(),
-                    Some(actual_type.to_string()),
-                    "import \{imp.mod_name}.\{imp.name} function type mismatch",
-                  )
-                }
-              }
-            }
-          }
-          _ => continue
-        }
-      Memory(expected_mem_type) =>
-        match extern_val {
-          Memory(addr) => {
-            let actual_mem = try store.get_mem(addr) catch {
-              _ => {
-                push_import_diagnostic(
-                  result,
-                  import_index,
-                  imp.mod_name,
-                  imp.name,
-                  ImportTypeMismatch,
-                  expected_mem_type.to_string(),
-                  None,
-                  "import \{imp.mod_name}.\{imp.name} refers to invalid memory address \{addr}",
-                )
-                continue
-              }
-            } noraise {
-              mem => mem
-            }
-            let actual_limits = actual_mem.get_limits64()
-            if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
-              actual_mem.is_shared() != expected_mem_type.is_shared ||
-              actual_mem.page_size_bytes() !=
-              1L << expected_mem_type.page_size_log2 {
-              push_import_diagnostic(
-                result,
-                import_index,
-                imp.mod_name,
-                imp.name,
-                ImportTypeMismatch,
-                expected_mem_type.to_string(),
-                Some(
-                  "memory64=\{actual_mem.is_memory64()}, limits=\{format_limits_pair(actual_limits)}",
-                ),
-                "import \{imp.mod_name}.\{imp.name} memory64 mismatch",
-              )
-              continue
-            }
-            if actual_limits.0.reinterpret_as_uint64() <
-              expected_mem_type.limits.min.reinterpret_as_uint64() {
-              push_import_diagnostic(
-                result,
-                import_index,
-                imp.mod_name,
-                imp.name,
-                ImportTypeMismatch,
-                expected_mem_type.to_string(),
-                Some(
-                  "memory64=\{actual_mem.is_memory64()}, limits=\{format_limits_pair(actual_limits)}",
-                ),
-                "import \{imp.mod_name}.\{imp.name} memory minimum is smaller than required",
-              )
-              continue
-            }
-            if expected_mem_type.limits.max is Some(expected_max) {
-              match actual_limits.1 {
-                Some(actual_max) =>
-                  if actual_max.reinterpret_as_uint64() >
-                    expected_max.reinterpret_as_uint64() {
-                    push_import_diagnostic(
-                      result,
-                      import_index,
-                      imp.mod_name,
-                      imp.name,
-                      ImportTypeMismatch,
-                      expected_mem_type.to_string(),
-                      Some(
-                        "memory64=\{actual_mem.is_memory64()}, limits=\{format_limits_pair(actual_limits)}",
-                      ),
-                      "import \{imp.mod_name}.\{imp.name} memory maximum exceeds requirement",
-                    )
-                  }
-                None =>
-                  push_import_diagnostic(
-                    result,
-                    import_index,
-                    imp.mod_name,
-                    imp.name,
-                    ImportTypeMismatch,
-                    expected_mem_type.to_string(),
-                    Some(
-                      "memory64=\{actual_mem.is_memory64()}, limits=\{format_limits_pair(actual_limits)}",
-                    ),
-                    "import \{imp.mod_name}.\{imp.name} memory maximum is required but missing",
-                  )
-              }
-            }
-          }
-          _ => continue
-        }
-      Table(expected_table_type) =>
-        match extern_val {
-          Table(addr) => {
-            let actual_table = try store.get_table(addr) catch {
-              _ => {
-                push_import_diagnostic(
-                  result,
-                  import_index,
-                  imp.mod_name,
-                  imp.name,
-                  ImportTypeMismatch,
-                  expected_table_type.to_string(),
-                  None,
-                  "import \{imp.mod_name}.\{imp.name} refers to invalid table address \{addr}",
-                )
-                continue
-              }
-            } noraise {
-              table => table
-            }
-            let actual_limits = actual_table.get_limits64()
-            if actual_table.get_elem_type() != expected_table_type.elem_type {
-              push_import_diagnostic(
-                result,
-                import_index,
-                imp.mod_name,
-                imp.name,
-                ImportTypeMismatch,
-                expected_table_type.to_string(),
-                Some(
-                  "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
-                ),
-                "import \{imp.mod_name}.\{imp.name} table element type mismatch",
-              )
-              continue
-            }
-            if actual_table.is_table64() != expected_table_type.is_table64 {
-              push_import_diagnostic(
-                result,
-                import_index,
-                imp.mod_name,
-                imp.name,
-                ImportTypeMismatch,
-                expected_table_type.to_string(),
-                Some(
-                  "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
-                ),
-                "import \{imp.mod_name}.\{imp.name} table64 mismatch",
-              )
-              continue
-            }
-            if actual_limits.0.reinterpret_as_uint64() <
-              expected_table_type.limits.min.reinterpret_as_uint64() {
-              push_import_diagnostic(
-                result,
-                import_index,
-                imp.mod_name,
-                imp.name,
-                ImportTypeMismatch,
-                expected_table_type.to_string(),
-                Some(
-                  "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
-                ),
-                "import \{imp.mod_name}.\{imp.name} table minimum is smaller than required",
-              )
-              continue
-            }
-            if expected_table_type.limits.max is Some(expected_max) {
-              match actual_limits.1 {
-                Some(actual_max) =>
-                  if actual_max.reinterpret_as_uint64() >
-                    expected_max.reinterpret_as_uint64() {
-                    push_import_diagnostic(
-                      result,
-                      import_index,
-                      imp.mod_name,
-                      imp.name,
-                      ImportTypeMismatch,
-                      expected_table_type.to_string(),
-                      Some(
-                        "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
-                      ),
-                      "import \{imp.mod_name}.\{imp.name} table maximum exceeds requirement",
-                    )
-                  }
-                None =>
-                  push_import_diagnostic(
-                    result,
-                    import_index,
-                    imp.mod_name,
-                    imp.name,
-                    ImportTypeMismatch,
-                    expected_table_type.to_string(),
-                    Some(
-                      "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
-                    ),
-                    "import \{imp.mod_name}.\{imp.name} table maximum is required but missing",
-                  )
-              }
-            }
-          }
-          _ => continue
-        }
-      Global(expected_global_type) =>
-        match extern_val {
-          Global(addr) => {
-            let actual_global = try store.get_global(addr) catch {
-              _ => {
-                push_import_diagnostic(
-                  result,
-                  import_index,
-                  imp.mod_name,
-                  imp.name,
-                  ImportTypeMismatch,
-                  expected_global_type.to_string(),
-                  None,
-                  "import \{imp.mod_name}.\{imp.name} refers to invalid global address \{addr}",
-                )
-                continue
-              }
-            } noraise {
-              global => global
-            }
-            let actual_type = actual_global.get_type()
-            if actual_type.mutable {
-              if actual_type.value_type != expected_global_type.value_type ||
-                actual_type.mutable != expected_global_type.mutable {
-                push_import_diagnostic(
-                  result,
-                  import_index,
-                  imp.mod_name,
-                  imp.name,
-                  ImportTypeMismatch,
-                  expected_global_type.to_string(),
-                  Some(actual_type.to_string()),
-                  "import \{imp.mod_name}.\{imp.name} mutable global type mismatch",
-                )
-              }
-            } else {
-              if !is_value_type_subtype(
-                  actual_type.value_type,
-                  expected_global_type.value_type,
-                ) {
-                push_import_diagnostic(
-                  result,
-                  import_index,
-                  imp.mod_name,
-                  imp.name,
-                  ImportTypeMismatch,
-                  expected_global_type.to_string(),
-                  Some(actual_type.to_string()),
-                  "import \{imp.mod_name}.\{imp.name} immutable global type mismatch",
-                )
-                continue
-              }
-              if expected_global_type.mutable {
-                push_import_diagnostic(
-                  result,
-                  import_index,
-                  imp.mod_name,
-                  imp.name,
-                  ImportTypeMismatch,
-                  expected_global_type.to_string(),
-                  Some(actual_type.to_string()),
-                  "import \{imp.mod_name}.\{imp.name} expected mutable global but actual is immutable",
-                )
-              }
-            }
-          }
-          _ => continue
-        }
-      Tag(expected_type_idx) =>
-        match extern_val {
-          Tag(addr) => {
-            let actual_type = try store.get_tag_type(addr) catch {
-              _ => {
-                push_import_diagnostic(
-                  result,
-                  import_index,
-                  imp.mod_name,
-                  imp.name,
-                  ImportTypeMismatch,
-                  mod.validated_func_type_at(expected_type_idx).to_string(),
-                  None,
-                  "import \{imp.mod_name}.\{imp.name} refers to invalid tag address \{addr}",
-                )
-                continue
-              }
-            } noraise {
-              type_ => type_
-            }
-            let expected_type = mod.validated_func_type_at(expected_type_idx)
-            let owner = store.get_tag_owner(addr)
-            let actual_type_idx = store.get_tag_type_idx(addr)
-            match owner {
-              Some(owner_instance) => {
-                let expected_rec_info = @types.get_rec_group_info(
-                  mod.type_rec_groups,
-                  expected_type_idx,
-                )
-                let actual_rec_info = @types.get_rec_group_info(
-                  owner_instance.type_rec_groups,
-                  actual_type_idx,
-                )
-                if expected_rec_info.1 == 1 && actual_rec_info.1 == 1 {
-                  if expected_type.params != actual_type.params {
-                    push_import_diagnostic(
-                      result,
-                      import_index,
-                      imp.mod_name,
-                      imp.name,
-                      ImportTypeMismatch,
-                      expected_type.to_string(),
-                      Some(actual_type.to_string()),
-                      "import \{imp.mod_name}.\{imp.name} tag parameter mismatch",
-                    )
-                  }
-                } else {
-                  let canonical_export = @types.compute_canonical_type_indices(
-                    owner_instance.types,
-                    type_rec_groups=owner_instance.type_rec_groups,
-                  )
-                  let ctx = @types.SubtypingContext::cross_module(
-                    owner_instance.types,
-                    mod.types,
-                    rec_groups1=owner_instance.type_rec_groups,
-                    rec_groups2=mod.type_rec_groups,
-                    canonical1=canonical_export,
-                    canonical2=canonical_type_indices,
-                  )
-                  if !(ctx.is_subtype(actual_type_idx, expected_type_idx) &&
-                    ctx.is_subtype(expected_type_idx, actual_type_idx)) {
-                    push_import_diagnostic(
-                      result,
-                      import_index,
-                      imp.mod_name,
-                      imp.name,
-                      ImportTypeMismatch,
-                      expected_type.to_string(),
-                      Some(actual_type.to_string()),
-                      "import \{imp.mod_name}.\{imp.name} tag type mismatch",
-                    )
-                  }
-                }
-              }
-              None =>
-                if expected_type.params != actual_type.params {
-                  push_import_diagnostic(
-                    result,
-                    import_index,
-                    imp.mod_name,
-                    imp.name,
-                    ImportTypeMismatch,
-                    expected_type.to_string(),
-                    Some(actual_type.to_string()),
-                    "import \{imp.mod_name}.\{imp.name} tag parameter mismatch",
-                  )
-                }
-            }
-          }
-          _ => continue
-        }
+    if check_import_type(store, mod, imp, extern_val) is Some(mismatch) {
+      push_import_diagnostic(
+        result,
+        import_index,
+        imp.mod_name,
+        imp.name,
+        ImportTypeMismatch,
+        mismatch.expected,
+        mismatch.actual,
+        "import \{imp.mod_name}.\{imp.name} \{mismatch.message}",
+      )
     }
   }
   result
@@ -1285,408 +708,173 @@ fn instantiate_validated_module_with_imports_impl(
   // Set module types for GC support
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 
-  // Compute canonical type indices early (needed for import type checking)
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    mod.types,
-    type_rec_groups=mod.type_rec_groups,
-  )
-
-  // Process imports first
-  let func_addrs : Array[Int32] = []
-  let func_type_indices : Array[Int32] = []
-  let mem_addrs : Array[Int32] = []
-  let table_addrs : Array[Int32] = []
-  let global_addrs : Array[Int32] = []
-  let tag_addrs : Array[Int32] = []
-
-  // Import functions and memories first (they come before module definitions in the index space)
+  let addresses = CoreAddresses()
   for imp in mod.imports {
-    match imp.desc {
-      Func(type_idx) =>
-        match imports.resolve(imp.mod_name, imp.name) {
-          Some(Func(addr)) => {
-            // Check that imported function type matches expected type
-            let owner = store.get_func_owner(addr)
-            let expected_type = mod.validated_func_type_at(type_idx)
-            let actual_type = store.get_func_type(addr)
-            match owner {
-              Some(o) => {
-                // Cross-module function: the exported type must be a subtype
-                // of the imported type (T_export <: T_import).
-                // For GC types, this means checking declared supertype chains
-                // and structural compatibility across modules.
-                let actual_type_idx = store.get_func_type_idx(addr)
-
-                // Compute canonical indices for both modules
-                let canonical_import = canonical_type_indices
-                let canonical_export = @types.compute_canonical_type_indices(
-                  o.types,
-                  type_rec_groups=o.type_rec_groups,
-                )
-
-                // Use subtyping context for cross-module comparison
-                let ctx = @types.SubtypingContext::cross_module(
-                  o.types,
-                  mod.types,
-                  rec_groups1=o.type_rec_groups,
-                  rec_groups2=mod.type_rec_groups,
-                  canonical1=canonical_export,
-                  canonical2=canonical_import,
-                )
-                // Check if T_export <: T_import
-                if !ctx.is_subtype(actual_type_idx, type_idx) {
-                  raise LinkErrorDetail(
-                    "import \{imp.mod_name}.\{imp.name}: exported type is not a subtype of imported type",
-                  )
-                }
-              }
-              None => {
-                // Host function: direct type comparison (no rec groups)
-                // Host functions are always considered singleton rec groups
-                let expected_rec_info = @types.get_rec_group_info(
-                  mod.type_rec_groups,
-                  type_idx,
-                )
-                // Host functions must be imported by singleton rec group types
-                if expected_rec_info != (0, 1) {
-                  raise LinkErrorDetail(
-                    "import \{imp.mod_name}.\{imp.name}: expected singleton rec group type, got \{Repr(expected_rec_info)}",
-                  )
-                }
-                // Compare types structurally
-                if !@types.func_types_equal(expected_type, actual_type) {
-                  raise LinkErrorDetail(
-                    "import \{imp.mod_name}.\{imp.name}: type mismatch; expected=\{expected_type} actual=\{actual_type}",
-                  )
-                }
-              }
-            }
-            func_addrs.push(addr)
-            func_type_indices.push(type_idx)
-          }
-          _ => raise UnknownImport(imp.mod_name, imp.name)
-        }
-      Memory(expected_mem_type) =>
-        match imports.resolve(imp.mod_name, imp.name) {
-          Some(Memory(addr)) => {
-            // Check memory type compatibility
-            let actual_mem = store.get_mem(addr)
-            let actual_limits = actual_mem.get_limits64()
-            // Memory64 status must match
-            if actual_mem.is_memory64() != expected_mem_type.is_memory64 ||
-              actual_mem.is_shared() != expected_mem_type.is_shared ||
-              actual_mem.page_size_bytes() !=
-              1L << expected_mem_type.page_size_log2 {
-              raise LinkError
-            }
-            // Import memory limits must be compatible:
-            // - actual min >= expected min
-            // - if expected has max, actual must have max <= expected max
-            if actual_limits.0.reinterpret_as_uint64() <
-              expected_mem_type.limits.min.reinterpret_as_uint64() {
-              raise LinkError
-            }
-            if expected_mem_type.limits.max is Some(expected_max) {
-              match actual_limits.1 {
-                Some(actual_max) =>
-                  if actual_max.reinterpret_as_uint64() >
-                    expected_max.reinterpret_as_uint64() {
-                    raise LinkError
-                  }
-                None => raise LinkError
-              }
-            } // actual has no max but expected does
-            mem_addrs.push(addr)
-          }
-          _ => raise UnknownImport(imp.mod_name, imp.name)
-        }
-      Table(expected_table_type) =>
-        match imports.resolve(imp.mod_name, imp.name) {
-          Some(Table(addr)) => {
-            // Check table type compatibility
-            let actual_table = store.get_table(addr)
-            let actual_elem_type = actual_table.get_elem_type()
-            let actual_limits = actual_table.get_limits64()
-            // Element types must match
-            if actual_elem_type != expected_table_type.elem_type {
-              raise LinkError
-            }
-            // Table64 status must match
-            if actual_table.is_table64() != expected_table_type.is_table64 {
-              raise LinkError
-            }
-            // Limits must be compatible:
-            // - actual min >= expected min
-            // - if expected has max, actual must have max <= expected max
-            if actual_limits.0.reinterpret_as_uint64() <
-              expected_table_type.limits.min.reinterpret_as_uint64() {
-              raise LinkError
-            }
-            if expected_table_type.limits.max is Some(expected_max) {
-              match actual_limits.1 {
-                Some(actual_max) =>
-                  if actual_max.reinterpret_as_uint64() >
-                    expected_max.reinterpret_as_uint64() {
-                    raise LinkError
-                  }
-                None => raise LinkError
-              }
-            }
-            table_addrs.push(addr)
-          }
-          _ => raise UnknownImport(imp.mod_name, imp.name)
-        }
-      Global(expected_global_type) =>
-        match imports.resolve(imp.mod_name, imp.name) {
-          Some(Global(addr)) => {
-            // Check global type compatibility
-            let actual_global = store.get_global(addr)
-            let actual_type = actual_global.get_type()
-            // For mutable globals: types must match exactly (invariant)
-            // For immutable globals: expected type must be supertype of actual type
-            if actual_type.mutable {
-              // Mutable globals: exact match required
-              if actual_type.value_type != expected_global_type.value_type {
-                raise LinkError
-              }
-              if actual_type.mutable != expected_global_type.mutable {
-                raise LinkError
-              }
-            } else {
-              // Immutable globals: expected must be supertype of actual
-              // (i.e., actual is subtype of expected)
-              if !is_value_type_subtype(
-                  actual_type.value_type,
-                  expected_global_type.value_type,
-                ) {
-                raise LinkError
-              }
-              // Import must also be immutable for immutable export
-              if expected_global_type.mutable {
-                raise LinkError
-              }
-            }
-            global_addrs.push(addr)
-          }
-          _ => raise UnknownImport(imp.mod_name, imp.name)
-        }
-      Tag(expected_type_idx) =>
-        match imports.resolve(imp.mod_name, imp.name) {
-          Some(Tag(addr)) => {
-            // Check that imported tag type matches expected type
-            let owner = store.get_tag_owner(addr)
-            let actual_type_idx = store.get_tag_type_idx(addr)
-            let expected_type = mod.validated_func_type_at(expected_type_idx)
-            let actual_type = store.get_tag_type(addr)
-            match owner {
-              Some(o) => {
-                // Cross-module tag: check rec group membership
-                let expected_rec_info = @types.get_rec_group_info(
-                  mod.type_rec_groups,
-                  expected_type_idx,
-                )
-                let actual_rec_info = @types.get_rec_group_info(
-                  o.type_rec_groups,
-                  actual_type_idx,
-                )
-
-                // If both are singleton rec groups, compare structurally
-                if expected_rec_info.1 == 1 && actual_rec_info.1 == 1 {
-                  // Both are singleton - structural comparison
-                  if expected_type.params != actual_type.params {
-                    raise LinkError
-                  }
-                } else {
-                  // At least one is in a multi-type rec group - use canonical comparison
-                  let canonical_import = canonical_type_indices
-                  let canonical_export = @types.compute_canonical_type_indices(
-                    o.types,
-                    type_rec_groups=o.type_rec_groups,
-                  )
-
-                  // Use subtyping context for cross-module comparison
-                  let ctx = @types.SubtypingContext::cross_module(
-                    o.types,
-                    mod.types,
-                    rec_groups1=o.type_rec_groups,
-                    rec_groups2=mod.type_rec_groups,
-                    canonical1=canonical_export,
-                    canonical2=canonical_import,
-                  )
-                  // For tags in rec groups, types must match via canonical indices
-                  // Check bidirectional subtyping for equality
-                  if !(ctx.is_subtype(actual_type_idx, expected_type_idx) &&
-                    ctx.is_subtype(expected_type_idx, actual_type_idx)) {
-                    raise LinkError
-                  }
-                }
-              }
-              None =>
-                // No owner - fallback to structural comparison
-                if expected_type.params != actual_type.params {
-                  raise LinkError
-                }
-            }
-            tag_addrs.push(addr)
-          }
-          _ => raise UnknownImport(imp.mod_name, imp.name)
-        }
+    guard imports.resolve(imp.mod_name, imp.name) is Some(value) &&
+      extern_val_kind(value) == import_desc_kind(imp.desc) else {
+      raise UnknownImport(imp.mod_name, imp.name)
+    }
+    if check_import_type(store, mod, imp, value) is Some(mismatch) {
+      raise mismatch.runtime_error
+    }
+    match value {
+      Func(addr) => addresses.functions.push(addr)
+      Memory(addr) => addresses.memories.push(addr)
+      Table(addr) => addresses.tables.push(addr)
+      Global(addr) => addresses.globals.push(addr)
+      Tag(addr) => addresses.tags.push(addr)
     }
   }
+  allocate_core_instance(store, validated, mod, admission, addresses, Linked)
+}
 
-  // Allocate module functions with their types
-  for i, _code in mod.codes {
-    let type_idx = mod.funcs[i]
-    let addr = store.alloc_func(validated, i)
-    func_addrs.push(addr)
-    func_type_indices.push(type_idx)
+///|
+priv enum CoreInstanceSetup {
+  Bare
+  Initialize
+  Linked
+}
+
+///|
+#valtype
+priv struct CoreAddresses {
+  functions : Array[Int32]
+  tables : Array[Int32]
+  memories : Array[Int32]
+  globals : Array[Int32]
+  tags : Array[Int32]
+}
+
+///|
+fn CoreAddresses::CoreAddresses() -> CoreAddresses {
+  { functions: [], tables: [], memories: [], globals: [], tags: [], }
+}
+
+///|
+fn allocate_core_instance(
+  store : @runtime.Store,
+  validated : @validator.ValidatedModule,
+  mod : @types.Module,
+  admission : @runtime.InstanceAdmission,
+  addresses : CoreAddresses,
+  setup : CoreInstanceSetup,
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
+  for i in 0..<mod.codes.length() {
+    addresses.functions.push(store.alloc_func(validated, i))
   }
-
-  // Allocate memories (after imported memories)
-  for mem_type in mod.memories {
-    let mem = @runtime.Memory::from_type(
-      mem_type,
-      resource_budget=store.resource_budget,
+  for memory in mod.memories {
+    addresses.memories.push(
+      store.alloc_mem(
+        @runtime.Memory::from_type(
+          memory,
+          resource_budget=store.resource_budget,
+        ),
+      ),
     )
-    let addr = store.alloc_mem(mem)
-    mem_addrs.push(addr)
   }
-
-  // Set WASI memory address for interpreter mode WASI callbacks
-  // This allows WASI functions to access the correct memory instead of hardcoded index 0
-  if mem_addrs.length() > 0 {
-    store.set_wasi_mem_addr(mem_addrs[0])
+  if setup is Linked && addresses.memories.get(0) is Some(memory) {
+    store.set_wasi_mem_addr(memory)
   }
-
-  // First, collect instances for already-allocated globals (imports)
-  // This is needed for table init expressions that reference imported globals
-  let global_instances : Array[@runtime.GlobalInstance] = []
-  for addr in global_addrs {
-    global_instances.push(store.get_global(addr))
+  let globals : Array[@runtime.GlobalInstance] = []
+  for addr in addresses.globals {
+    globals.push(store.get_global(addr))
   }
-
-  // Allocate tables (after imported tables and globals)
-  // Table init expressions can reference imported globals
-  for table_def in mod.tables {
-    // Evaluate table init expression if present
-    let init_value : @types.Value = match table_def.init {
-      Some(init_expr) =>
+  for table in mod.tables {
+    let init_value = match table.init {
+      Some(expr) =>
         eval_const_expr(
-          init_expr,
-          func_addrs~,
-          globals=global_instances,
+          expr,
+          func_addrs=addresses.functions,
+          globals~,
           store=Some(store),
           types=mod.types,
         )
       None => Null
     }
-    let table = @runtime.Table::from_type(
-      table_def.type_,
-      init_value~,
-      resource_budget=store.resource_budget,
+    addresses.tables.push(
+      store.alloc_table(
+        @runtime.Table::from_type(
+          table.type_,
+          init_value~,
+          resource_budget=store.resource_budget,
+        ),
+      ),
     )
-    let addr = store.alloc_table(table)
-    table_addrs.push(addr)
   }
-
-  // Allocate globals (after imported globals)
   for global in mod.globals {
     let init_value = eval_const_expr(
       global.init,
-      func_addrs~,
-      globals=global_instances,
+      func_addrs=addresses.functions,
+      globals~,
       store=Some(store),
       types=mod.types,
     )
-    let global_inst = @runtime.GlobalInstance::GlobalInstance(
+    let global = @runtime.GlobalInstance::GlobalInstance(
       global.type_,
       init_value,
     )
-    let addr = store.alloc_global(global_inst)
-    global_addrs.push(addr)
-    global_instances.push(global_inst)
+    addresses.globals.push(store.alloc_global(global))
+    globals.push(global)
   }
-
-  // Allocate tags (after imported tags)
   for tag in mod.tags {
-    let tag_type = mod.validated_func_type_at(tag.type_idx)
-    let addr = store.alloc_tag(tag_type, type_idx=tag.type_idx)
-    tag_addrs.push(addr)
+    addresses.tags.push(
+      store.alloc_tag(
+        mod.validated_func_type_at(tag.type_idx),
+        type_idx=tag.type_idx,
+      ),
+    )
   }
-
   let elem_values = evaluate_element_segments(
-    mod, store, func_addrs, global_addrs,
+    mod,
+    store,
+    addresses.functions,
+    globals,
   )
-
-  // Per WebAssembly spec: element segments are initialized BEFORE data segments
-  // This ensures that if data segment initialization traps, the element segment
-  // modifications to shared tables are already visible.
-
-  // Initialize active element segments (populate tables with function references)
-  // canonical_type_indices was computed at the start of the function (for import type checking)
   let instance = store.new_instance(
     validated,
     admission~,
-    func_addrs~,
-    table_addrs~,
-    mem_addrs~,
-    global_addrs~,
-    tag_addrs~,
+    func_addrs=addresses.functions,
+    table_addrs=addresses.tables,
+    mem_addrs=addresses.memories,
+    global_addrs=addresses.globals,
+    tag_addrs=addresses.tags,
     elem_values~,
   )
-
+  if setup is Bare {
+    return instance
+  }
+  // From this point initialization can publish function references into
+  // imported tables. Core traps preserve prior writes and their owner.
+  if setup is Linked {
+    store.publish_core_instance()
+  }
+  // WebAssembly initializes element segments before data segments.
   for index, elem in mod.elems {
-    if elem.mode is Declarative {
+    if elem.mode is Active(table_index, offset_expr) {
+      if addresses.tables.get(table_index) is Some(addr) {
+        let table = store.get_table(addr)
+        let offset = eval_extended_const_expr(offset_expr, globals)
+        let values = elem_values[index]
+        if offset < 0L ||
+          offset > table.size().to_int64() - values.length().to_int64() {
+          raise OutOfBoundsTableAccess
+        }
+        for element, value in values {
+          table.set(offset.to_int() + element, value)
+        }
+      }
       instance.drop_element(index)
     }
   }
-
-  // From this point initialization may publish function references into imported
-  // tables. Core traps preserve those writes and their owning instance.
-  store.publish_core_instance()
-
-  for elem_idx, elem in mod.elems {
-    // Only process active element segments
-    if elem.mode is Active(table_idx, offset_expr) {
-      if table_addrs.length() > table_idx {
-        let table = store.get_table(table_addrs[table_idx])
-        // Evaluate offset expression using extended const expr evaluator
-        let globals = get_global_instances(store, global_addrs)
-        let offset = eval_extended_const_expr(offset_expr, globals)
-
-        // Check bounds before initializing
-        // offset + num_elements must not exceed table size
-        if offset < 0L ||
-          offset > table.size().to_int64() - elem.init.length().to_int64() {
-          raise OutOfBoundsTableAccess
-        }
-
-        // Set table entries - evaluate init expression to get value
-        for i in 0..<elem.init.length() {
-          table.set(offset.to_int() + i, elem_values[elem_idx][i])
-        }
-      }
-      // Active elem segments are implicitly dropped after initialization
-      instance.drop_element(elem_idx)
+  for index, data in mod.datas {
+    if data.offset.length() > 0 &&
+      addresses.memories.get(data.memory_idx) is Some(addr) {
+      let memory = store.get_mem(addr)
+      let offset = eval_extended_const_expr(data.offset, globals)
+      memory.init_data_at(offset, data.init)
+      instance.drop_data(index)
     }
   }
-
-  // Initialize active data segments (copy data to memory)
-  let globals_for_data_init = get_global_instances(store, global_addrs)
-  for data_idx, data in mod.datas {
-    // Active data segments have a non-empty offset expression
-    if data.memory_idx >= 0 &&
-      data.offset.length() > 0 &&
-      mem_addrs.length() > data.memory_idx {
-      let mem = store.get_mem(mem_addrs[data.memory_idx])
-      // Evaluate offset expression using extended const expr evaluator
-      let offset = eval_extended_const_expr(data.offset, globals_for_data_init)
-      // Copy data to memory
-      mem.init_data_at(offset, data.init)
-      instance.drop_data(data_idx)
-    }
-  }
-
   instance
 }
 

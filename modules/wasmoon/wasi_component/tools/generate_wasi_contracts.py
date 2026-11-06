@@ -193,12 +193,52 @@ def interface_name(resolution: dict[str, Any], interface: dict[str, Any]) -> str
     return f"{package}/{interface['name']}"
 
 
+def wasi_interfaces(resolution: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    interfaces = {}
+    for interface in resolution["interfaces"]:
+        full_name = interface_name(resolution, interface)
+        if full_name.startswith("wasi:"):
+            # Import and export views can repeat one interface with distinct
+            # local indices. Its first view supplies the shared host contract.
+            interfaces.setdefault(full_name, interface)
+    return interfaces
+
+
 def emit_snapshot(
     label: str,
     resolution: dict[str, Any],
     digest: str,
+    shared_preview3: dict[str, Any] | None = None,
 ) -> list[str]:
     prefix = f"wasi_{label}"
+    interfaces = wasi_interfaces(resolution)
+    shared_interfaces = (
+        wasi_interfaces(shared_preview3) if shared_preview3 is not None else {}
+    )
+    shared_type_count = 0
+    if shared_preview3 is not None:
+        shared_type_count = len(shared_preview3["types"])
+        if len(resolution["types"]) < shared_type_count or any(
+            type_def(resolution, index) != type_def(shared_preview3, index)
+            for index in range(shared_type_count)
+        ):
+            raise ValueError("HTTP and Preview 3 nominal type prefixes differ")
+        for name, shared in shared_interfaces.items():
+            actual = interfaces.get(name)
+            if actual is None or actual["types"] != shared["types"]:
+                raise ValueError(f"HTTP shared exports differ for {name}")
+            expected_functions = {
+                key: func_type(value) for key, value in shared["functions"].items()
+            }
+            actual_functions = {
+                key: func_type(value) for key, value in actual["functions"].items()
+            }
+            if actual_functions != expected_functions:
+                raise ValueError(f"HTTP shared functions differ for {name}")
+
+    # HTTP extends this exact nominal graph. Export only the three tables it
+    # needs; resource registration still follows each host world's own order.
+    visibility = "pub " if label == "preview3" else ""
     lines = [
         "///|",
         f"let {prefix}_wit_sha256 : String = {moon_string(digest)}",
@@ -215,63 +255,73 @@ def emit_snapshot(
         }
     )
     lines.extend(f"    {moon_string(name)}," for name in resources)
-    lines.extend(["  ]", "}", "", "///|"])
     lines.extend(
         [
-            f"fn {prefix}_type_space(",
+            "  ]", "}", "", "///|",
+            f"{visibility}fn {prefix}_type_space(",
             "  resolve_resource : (String) -> @component.TypeDef?,",
             ") -> Array[@component.TypeDef?] {",
-            "  [",
         ]
     )
+    if shared_preview3 is None:
+        lines.append("  [")
+    else:
+        lines.extend(
+            [
+                "  let types = @wasi_component.wasi_preview3_type_space(resolve_resource)",
+                "  types.append([",
+            ]
+        )
     lines.extend(
         f"    {type_def(resolution, index)},"
-        for index in range(len(resolution["types"]))
+        for index in range(shared_type_count, len(resolution["types"]))
     )
-    lines.extend(["  ]", "}", "", "///|"])
+    if shared_preview3 is None:
+        lines.append("  ]")
+    else:
+        lines.extend(["  ])", "  types"])
     lines.extend(
         [
-            f"fn {prefix}_func_type(",
+            "}", "", "///|",
+            f"{visibility}fn {prefix}_func_type(",
             "  interface : String,",
             "  function : String,",
             ") -> @component.FuncType? {",
-            '  match "\\{interface}#\\{function}" {',
+            r'  match "\{interface}#\{function}" {',
         ]
     )
-    seen_interfaces: set[str] = set()
-    for interface in resolution["interfaces"]:
-        full_name = interface_name(resolution, interface)
-        if not full_name.startswith("wasi:") or full_name in seen_interfaces:
+    for full_name, interface in interfaces.items():
+        if full_name in shared_interfaces:
             continue
-        # Import and export views may repeat one interface with distinct local
-        # type indices. Its first view supplies the shared host contract.
-        seen_interfaces.add(full_name)
         for name, function in interface["functions"].items():
             key = f"{full_name}#{name}"
             lines.append(f"    {moon_string(key)} => {func_type(function)}")
-    lines.extend(["    _ => None", "  }", "}", "", "///|"])
+    fallback = (
+        "None" if shared_preview3 is None
+        else "@wasi_component.wasi_preview3_func_type(interface, function)"
+    )
     lines.extend(
         [
-            f"fn {prefix}_exported_types(",
+            f"    _ => {fallback}", "  }", "}", "", "///|",
+            f"{visibility}fn {prefix}_exported_types(",
             "  interface : String,",
             ") -> Array[(String, Int)] {",
             "  match interface {",
         ]
     )
-    seen_interfaces: set[str] = set()
-    for interface in resolution["interfaces"]:
-        full_name = interface_name(resolution, interface)
-        if not full_name.startswith("wasi:") or full_name in seen_interfaces:
+    for full_name, interface in interfaces.items():
+        if full_name in shared_interfaces:
             continue
-        # Import and export views may repeat one interface with distinct local
-        # type indices. Its first view supplies the shared host contract.
-        seen_interfaces.add(full_name)
         exports = ", ".join(
             f"({moon_string(name)}, {index})"
             for name, index in interface["types"].items()
         )
         lines.append(f"    {moon_string(full_name)} => [{exports}]")
-    lines.extend(["    _ => []", "  }", "}", ""])
+    fallback = (
+        "[]" if shared_preview3 is None
+        else "@wasi_component.wasi_preview3_exported_types(interface)"
+    )
+    lines.extend([f"    _ => {fallback}", "  }", "}", ""])
     return lines
 
 

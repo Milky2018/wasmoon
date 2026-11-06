@@ -3,20 +3,76 @@ package "Milky2018/vcode"
 
 import {
   "Milky2018/vcode/allocation_types",
+  "Milky2018/vcode/code_object",
+  "Milky2018/vcode/native_lowering",
   "Milky2018/vcode/native_types",
   "moonbitlang/core/debug",
 }
 
 // Values
+pub fn[Inst] allocation_edge_moves(Function[Inst], Allocation, Block, Int32) -> Array[ParallelMove]
+
+pub fn[Inst] allocation_edit_moves(Function[Inst], Allocation, Instruction, PointPlacement) -> Array[ParallelMove]
+
+pub fn call_argument_inputs(Array[Value], ArrayView[CallArgumentLocation], (@allocation_types.PhysicalReg) -> Bool) -> Array[Input]
+
+pub fn call_argument_transfers(Allocation, Instruction, Array[@native_types.ValueType], ArrayView[CallArgumentLocation], operand_start? : Int32, stack_base? : Int32, callee? : (Int32, @allocation_types.PhysicalReg), result_area? : (Int32, @allocation_types.PhysicalReg)) -> Array[CallTransfer]
+
+pub fn call_stack_size(@native_types.ValueType) -> Int32
+
+pub fn[Inst] collect_frame_requirements(Function[Inst], (Inst) -> FrameUse?) -> Result[FrameRequirements, String]
+
+pub fn direct_source_metadata(@native_types.SourceLocation?, @native_types.StackMapMetadata?, Array[Value], @native_types.OperationSemantics, trap? : @native_types.TrapReason) -> InstructionMetadata
+
+pub fn[Buffer, Frame, E : Error] emit_call_stack_transfers(ResolvedCallTransferPlan, Buffer, Frame, (Frame, StackSlot) -> Int32?, (Buffer, Bool, @native_types.ValueType, @allocation_types.PhysicalReg, Int32) -> Unit raise E) -> Unit raise E
+
+pub fn[Buffer, Frame, E : Error] emit_resolved_moves(ResolvedMovePlan, Buffer, Frame, (Frame, StackSlot) -> Int32?, (Frame) -> Int32?, (Buffer, @native_types.ValueType, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Unit, (Buffer, Bool, @native_types.ValueType, @allocation_types.PhysicalReg, Int32) -> Unit raise E, E, E) -> Unit raise E
+
+pub fn[Inst] materialize_call_results(CheckedBuilder[Inst], Block, Array[@native_types.ValueType], ArrayView[CallResultLocation], Array[Value], (@native_types.ValueType, @allocation_types.PhysicalReg) -> Inst, (@native_types.ValueType, Int32) -> Inst, Inst, (@allocation_types.PhysicalReg) -> Bool) -> Array[Value] raise VCodeBuildError
+
+pub fn[Inst] materialize_entry_arguments(CheckedBuilder[Inst], Array[@native_types.ValueType], ArrayView[CallArgumentLocation], @allocation_types.PhysicalReg?, (@native_types.ValueType, @allocation_types.PhysicalReg) -> Inst, (@native_types.ValueType, Int32) -> Inst, (@allocation_types.PhysicalReg) -> Inst, (@allocation_types.PhysicalReg) -> Bool) -> (Array[Value], Value?) raise VCodeBuildError
+
 pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int32, Int32, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
+
+pub fn[Inst : Eq] plan_conditional_edges(Function[Inst], Allocation, Block, Instruction, Block?, Inst, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, split_false_first~ : Bool) -> ConditionalEdgeLayout raise MoveResolveError
 
 pub fn plan_parallel_moves(Array[ParallelMove], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
 
 pub fn plan_resolved_call_transfers(Allocation, Array[CallTransfer], Int32, Int32, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, Array[Location]) -> ResolvedCallTransferPlan raise CallTransferError
 
+pub fn platform_call_layout(Array[@native_types.ValueType], ArrayView[Int32]) -> CallLayout
+
+pub fn platform_result_registers(Array[@native_types.ValueType], integer_registers? : ArrayView[Int32]) -> Array[@allocation_types.PhysicalReg]
+
 pub fn reg_class_for_value_type(@native_types.ValueType) -> @allocation_types.RegClass
 
+pub fn[Inst] require_call_argument_inputs(Function[Inst], Instruction, Int32, ArrayView[CallArgumentLocation], (@allocation_types.PhysicalReg) -> Bool) -> Unit raise TargetVCodeVerifyError
+
+pub fn[Inst] require_fixed_use(Function[Inst], Instruction, Int32, @allocation_types.PhysicalReg) -> Unit raise TargetVCodeVerifyError
+
+pub fn[Inst] require_home_def(Function[Inst], Instruction, Int32) -> Unit raise TargetVCodeVerifyError
+
+pub fn[Inst] require_instruction_shape(Function[Inst], Instruction, Array[@native_types.ValueType], Array[@native_types.ValueType], Bool, Int32) -> Unit raise TargetVCodeVerifyError
+
+pub fn[Inst] require_tail_call_plan(Function[Inst], Instruction, @native_types.Signature, InternalCallPlan, Bool, (@allocation_types.PhysicalReg) -> Bool, Array[@allocation_types.PhysicalReg]) -> Unit raise TargetVCodeVerifyError
+
+pub fn[Inst] requires_emergency_move_area(Function[Inst], Allocation, (Inst) -> Bool, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Bool raise MoveResolveError
+
+pub fn[Inst] resolve_edge_moves(Function[Inst], Allocation, Block, Int32, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
+
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
+
+pub fn select_condition(@native_lowering.IntComparison) -> IntegerCondition
+
+pub fn select_reference_condition(@native_lowering.ReferenceComparison) -> IntegerCondition
+
+pub fn select_vector_conversion(@native_lowering.VectorConversionOp) -> VectorConversion?
+
+pub fn[Inst : Eq] threaded_branch_target(Function[Inst], Allocation, Block, Inst, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Block raise MoveResolveError
+
+pub fn[Inst] used_callee_saved_registers(Function[Inst], Allocation, (@allocation_types.PhysicalReg) -> Bool, link_register? : @allocation_types.PhysicalReg?) -> Array[@allocation_types.PhysicalReg]
+
+pub fn[Inst] verify_abi_materialization(Function[Inst], (Inst) -> AbiMaterialization, (Array[@native_types.ValueType]) -> Array[@allocation_types.PhysicalReg]) -> Unit raise TargetVCodeVerifyError
 
 pub fn[Inst] verify_allocated(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
 
@@ -58,6 +114,11 @@ pub fn AllocationVerifyError::to_repr(Self) -> @debug.Repr
 pub fn AllocationVerifyError::to_string(Self) -> String
 pub impl Show for AllocationVerifyError
 
+pub(all) suberror CallMaterializationError {
+  UnsupportedAbi(String)
+  BuildFailure(VCodeBuildError)
+}
+
 #derive(Eq, @debug.Debug)
 pub suberror CallTransferError {
   InvalidSourceClass(index~ : Int32)
@@ -88,6 +149,15 @@ pub fn EmissionVerifyError::to_repr(Self) -> @debug.Repr
 pub fn EmissionVerifyError::to_string(Self) -> String
 pub impl Show for EmissionVerifyError
 
+pub(all) suberror FrameStorageError {
+  InvalidSavedRegister(reg~ : @allocation_types.PhysicalReg, offset~ : Int32)
+  InvalidStackSlot(slot~ : StackSlot)
+  ResultAreaMismatch(expected~ : Int32, actual~ : Int32)
+  InvalidStackObjectArea(message~ : String)
+  InvalidEmergencyMoveArea(offset~ : Int32?)
+  SavedRegisterSetMismatch
+}
+
 #derive(Eq, @debug.Debug)
 pub suberror FrameVerifyError {
   AllocationFailure(cause~ : AllocationVerifyError)
@@ -107,6 +177,21 @@ pub fn FrameVerifyError::to_string(Self) -> String
 pub impl Show for FrameVerifyError
 
 #derive(Eq, @debug.Debug)
+pub suberror InternalAbiError {
+  InvalidRegister(role~ : String, index~ : Int32)
+  DuplicateRegister(role~ : String, index~ : Int32)
+  ContextRegisterReused(index~ : Int32)
+  ResultAreaRegisterReused(index~ : Int32)
+  InvalidSignature(message~ : String)
+}
+pub fn InternalAbiError::equal(Self, Self) -> Bool
+pub fn InternalAbiError::not_equal(Self, Self) -> Bool
+pub fn InternalAbiError::output(Self, &Logger) -> Unit
+pub fn InternalAbiError::to_repr(Self) -> @debug.Repr
+pub fn InternalAbiError::to_string(Self) -> String
+pub impl Show for InternalAbiError
+
+#derive(Eq, @debug.Debug)
 pub suberror MoveResolveError {
   MissingScratch(class~ : @allocation_types.RegClass)
   InvalidScratch(reg~ : @allocation_types.PhysicalReg, expected~ : @allocation_types.RegClass)
@@ -119,6 +204,18 @@ pub fn MoveResolveError::output(Self, &Logger) -> Unit
 pub fn MoveResolveError::to_repr(Self) -> @debug.Repr
 pub fn MoveResolveError::to_string(Self) -> String
 pub impl Show for MoveResolveError
+
+#derive(Eq, @debug.Debug)
+pub(all) suberror TargetVCodeVerifyError {
+  CommonFailure(cause~ : VCodeVerifyError)
+  InvalidInstruction(instruction~ : Instruction, message~ : String)
+}
+pub fn TargetVCodeVerifyError::equal(Self, Self) -> Bool
+pub fn TargetVCodeVerifyError::not_equal(Self, Self) -> Bool
+pub fn TargetVCodeVerifyError::output(Self, &Logger) -> Unit
+pub fn TargetVCodeVerifyError::to_repr(Self) -> @debug.Repr
+pub fn TargetVCodeVerifyError::to_string(Self) -> String
+pub impl Show for TargetVCodeVerifyError
 
 #derive(Eq, @debug.Debug)
 pub suberror VCodeBuildError {
@@ -171,6 +268,19 @@ pub fn VCodeVerifyError::to_string(Self) -> String
 pub impl Show for VCodeVerifyError
 
 // Types and methods
+pub(all) enum AbiMaterialization {
+  Ordinary
+  PlatformResults(@native_types.Signature)
+  InternalResults(@native_types.Signature, InternalCallPlan)
+  ForwardResultArea(Int32, indirect~ : Bool)
+  ReceiveResultArea
+  ReceiveRegisterResult(@native_types.ValueType, @allocation_types.PhysicalReg)
+  ReceiveAreaResult(@native_types.ValueType, Int32)
+  ReturnRegisterResult(@native_types.ValueType)
+  ReturnAreaResult(@native_types.ValueType)
+  Return
+}
+
 pub struct Allocation {
   // private fields
 }
@@ -256,6 +366,33 @@ pub fn[Inst] Builder::new_with_results(String, Array[@native_types.ValueType], A
 pub fn[Inst] Builder::parameter(Self[Inst], Int32) -> Value raise VCodeBuildError
 pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 
+#derive(Eq, @debug.Debug)
+pub(all) enum CallArgumentLocation {
+  CallRegister(@allocation_types.PhysicalReg)
+  CallStack(Int32)
+}
+pub fn CallArgumentLocation::equal(Self, Self) -> Bool
+pub fn CallArgumentLocation::not_equal(Self, Self) -> Bool
+pub fn CallArgumentLocation::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub struct CallLayout {
+  arguments : ArrayView[CallArgumentLocation]
+  stack_size : Int32
+}
+pub fn CallLayout::equal(Self, Self) -> Bool
+pub fn CallLayout::not_equal(Self, Self) -> Bool
+pub fn CallLayout::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) enum CallResultLocation {
+  CallResultRegister(@allocation_types.PhysicalReg)
+  CallResultArea(Int32, @allocation_types.PhysicalReg)
+}
+pub fn CallResultLocation::equal(Self, Self) -> Bool
+pub fn CallResultLocation::not_equal(Self, Self) -> Bool
+pub fn CallResultLocation::to_repr(Self) -> @debug.Repr
+
 pub struct CallTransfer {
   // private fields
 }
@@ -276,16 +413,74 @@ pub struct CheckedBuilder[Inst] {
 }
 pub fn[Inst] CheckedBuilder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::append_body_unconstrained(Self[Inst], Block, Inst, Array[Value], Array[@native_types.ValueType], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::append_float_to_int_checks(Self[Inst], Block, Value, @native_types.FloatType, @native_types.IntegerType, @native_types.Signedness, DirectOperationSource, (@native_types.ValueType, UInt64) -> Inst, (@native_types.ValueType) -> Inst, (@native_types.ValueType, Bool) -> Inst, (@native_types.ValueType) -> Inst) -> Unit raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int32) -> Value raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
 pub fn[Inst] CheckedBuilder::entry_block(Self[Inst]) -> Block
 pub fn[Inst] CheckedBuilder::finish(Self[Inst]) -> Function[Inst] raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::materialize_atomic_address(Self[Inst], Block, @native_lowering.Operation, Array[Value], (UInt64) -> Inst, Inst) -> Array[Value] raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::new(String, Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::new_with_protocol(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::new_with_results(String, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::parameter(Self[Inst], Int32) -> Value raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[@allocation_types.PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::value_type(Self[Inst], Value) -> @native_types.ValueType?
+
+pub struct CodeSites {
+  // private fields
+}
+pub fn CodeSites::build(Self, @code_object.Architecture, Array[Byte], Array[@code_object.Relocation], Array[@code_object.UnwindDirective]) -> @code_object.UnlinkedCodeObject raise @code_object.CodeObjectVerifyError
+pub fn CodeSites::new() -> Self
+pub fn[Inst] CodeSites::record(Self, Function[Inst], Allocation, FrameLayout, Instruction, InstructionAnnotations, Int32, Int32) -> Unit
+
+pub struct ConditionalEdgeLayout {
+  first_target : Block
+  first_moves : ResolvedMovePlan
+  second_target : Block
+  second_moves : ResolvedMovePlan
+  first_when_true : Bool
+  direct_branch : Bool
+  second_falls_through : Bool
+}
+
+pub struct DirectLoweringState[Inst, Failure] {
+  builder : CheckedBuilder[Inst]
+  context : LoweringContext
+  protocol : @native_types.CallProtocol
+  signature : @native_types.Signature
+  result_area : Value?
+  on_event : (TargetCompileEvent) -> Unit
+  // private fields
+}
+pub fn[Inst, Failure] DirectLoweringState::alias_word_bitcast(Self[Inst, Failure], Array[Int32], Array[@native_types.ValueType], @native_types.ValueType, @native_types.ValueType) -> Int32?
+pub fn[Inst, Failure] DirectLoweringState::block(Self[Inst, Failure], Int32) -> Block
+pub fn[Inst, Failure] DirectLoweringState::constructed_function(Self[Inst, Failure]) -> Function[Inst]?
+pub fn[Inst, Failure] DirectLoweringState::create_block(Self[Inst, Failure], Array[@native_types.ValueType]) -> (Int32, Array[Int32])
+pub fn[Inst, Failure] DirectLoweringState::create_stack_object(Self[Inst, Failure], Int32, Int32) -> Int32
+pub fn[Inst, Failure] DirectLoweringState::edge(Self[Inst, Failure], Block, Int32, Array[Int32], (@native_types.ValueType) -> Inst) -> Edge raise VCodeBuildError
+pub fn[Inst, Failure] DirectLoweringState::finish_construction(Self[Inst, Failure], (VCodeBuildError) -> Failure) -> Unit
+pub fn[Inst, Failure] DirectLoweringState::first_error(Self[Inst, Failure]) -> Failure?
+pub fn[Inst, Failure] DirectLoweringState::instruction_index(Self[Inst, Failure]) -> Int32
+pub fn[Inst, Failure] DirectLoweringState::instruction_operands(Self[Inst, Failure], Array[Int32], Array[Int32]) -> (Array[Value], Array[@native_types.ValueType], Array[Value])
+pub fn[Inst, Failure] DirectLoweringState::materialize_return_values(Self[Inst, Failure], Block, Array[Value], (Array[@native_types.ValueType]) -> Array[@allocation_types.PhysicalReg], (@native_types.ValueType, @allocation_types.PhysicalReg) -> Inst, (@native_types.ValueType, Int32) -> Inst) -> Unit raise CallMaterializationError
+pub fn[Inst, Failure] DirectLoweringState::new(CheckedBuilder[Inst], LoweringContext, @native_types.CallProtocol, @native_types.Signature, Array[Value], Value?, (TargetCompileEvent) -> Unit) -> Self[Inst, Failure]
+pub fn[Inst, Failure] DirectLoweringState::record_error(Self[Inst, Failure], Failure) -> Unit
+pub fn[Inst, Failure] DirectLoweringState::record_results(Self[Inst, Failure], Array[Value], Array[@native_types.ValueType]) -> Array[Int32]
+pub fn[Inst, Failure] DirectLoweringState::stack_object(Self[Inst, Failure], Int32) -> (Int32, Int32)
+pub fn[Inst, Failure] DirectLoweringState::switch_targets(Self[Inst, Failure], Block, Array[@native_lowering.TargetSwitchCase], Int32, Array[Int32], (@native_types.ValueType) -> Inst) -> (Array[UInt64], Array[Edge]) raise VCodeBuildError
+pub fn[Inst, Failure] DirectLoweringState::switch_to_block(Self[Inst, Failure], Int32) -> Unit
+pub fn[Inst, Failure] DirectLoweringState::tail_call_inputs(Self[Inst, Failure], @native_types.NativeCall, Array[Value], (@allocation_types.PhysicalReg) -> Bool) -> (InternalCallPlan, Array[Input]) raise CallMaterializationError
+pub fn[Inst, Failure] DirectLoweringState::target_value(Self[Inst, Failure], Int32) -> Value
+pub fn[Inst, Failure] DirectLoweringState::target_values(Self[Inst, Failure], Array[Int32]) -> Array[Value]
+pub fn[Inst, Failure] DirectLoweringState::terminator_metadata(Self[Inst, Failure], @native_types.SourceLocation?, Array[Int32]) -> InstructionMetadata
+pub fn[Inst, Failure] DirectLoweringState::value_type(Self[Inst, Failure], Int32) -> @native_types.ValueType
+
+pub struct DirectOperationSource {
+  // private fields
+}
+pub fn DirectOperationSource::metadata(Self, trap? : @native_types.TrapReason) -> InstructionMetadata
+pub fn DirectOperationSource::new(@native_types.SourceLocation?, @native_types.StackMapMetadata?, Array[Value], @native_types.OperationSemantics) -> Self
+pub fn DirectOperationSource::selected_metadata(Self, @native_lowering.Operation) -> InstructionMetadata
 
 pub struct Edge {
   target : Block
@@ -315,6 +510,17 @@ pub fn EditKind::equal(Self, Self) -> Bool
 pub fn EditKind::not_equal(Self, Self) -> Bool
 pub fn EditKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
+pub(all) enum FloatTrapCondition {
+  Unordered
+  LessThan
+  LessOrEqual
+  GreaterOrEqual
+}
+pub fn FloatTrapCondition::equal(Self, Self) -> Bool
+pub fn FloatTrapCondition::not_equal(Self, Self) -> Bool
+pub fn FloatTrapCondition::to_repr(Self) -> @debug.Repr
+
 pub struct FrameLayout {
   // private fields
 }
@@ -323,6 +529,35 @@ pub fn FrameLayout::frame_size(Self) -> Int32
 pub fn[Inst] FrameLayout::new(Function[Inst], Allocation, Int32, Int32) -> Self
 pub fn FrameLayout::place_slot(Self, StackSlot, Int32) -> Bool
 pub fn FrameLayout::slot_offset(Self, StackSlot) -> Int32?
+
+pub(all) struct FrameRequirements {
+  outgoing_args_size : Int32
+  incoming_args_size : Int32
+  tail_args_size : Int32
+  result_area_size : Int32
+  has_calls : Bool
+  stack_objects : StackObjectRequirements?
+}
+
+pub struct FrameStorage {
+  // private fields
+}
+pub fn FrameStorage::emergency_move_offset(Self) -> Int32?
+pub fn FrameStorage::local_size(Self) -> Int32
+pub fn FrameStorage::place_slots(Self, FrameLayout) -> Unit
+pub fn FrameStorage::plan(FrameRequirements, Allocation, Bool, Array[@allocation_types.PhysicalReg]) -> Self
+pub fn FrameStorage::result_area_offset(Self) -> Int32?
+pub fn FrameStorage::saved_registers(Self) -> Array[(@allocation_types.PhysicalReg, Int32)]
+pub fn FrameStorage::stack_object_offset(Self, Int32) -> Int32?
+pub fn FrameStorage::summary(Self, Int32) -> String
+pub fn FrameStorage::verify(Self, FrameLayout, Allocation, FrameRequirements, Array[@allocation_types.PhysicalReg]) -> Unit raise FrameStorageError
+
+pub(all) enum FrameUse {
+  Call(Int32, Int32)
+  Incoming(Int32)
+  Tail(Int32)
+  LocalObject(Int32, Int32, Int32)
+}
 
 pub struct Function[Inst] {
   // private fields
@@ -434,6 +669,45 @@ pub fn InstructionMetadata::empty() -> Self
 pub fn InstructionMetadata::new(source? : @native_types.SourceLocation, trap? : @native_types.TrapReason, safepoint? : @native_types.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference, stack_map? : @native_types.StackMapMetadata) -> Self
 pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
 
+#derive(Eq, @debug.Debug)
+pub(all) enum IntegerCondition {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  Lo
+  Ls
+  Hi
+  Hs
+}
+pub fn IntegerCondition::equal(Self, Self) -> Bool
+pub fn IntegerCondition::not_equal(Self, Self) -> Bool
+pub fn IntegerCondition::to_repr(Self) -> @debug.Repr
+
+pub struct InternalAbi {
+  result_area_argument : @allocation_types.PhysicalReg
+  // private fields
+}
+pub fn InternalAbi::call_layout(Self, @native_types.Signature) -> CallLayout raise InternalAbiError
+pub fn InternalAbi::call_plan(Self, @native_types.Signature) -> InternalCallPlan raise InternalAbiError
+pub fn InternalAbi::new(Int32, Int32, Array[Int32], Array[Int32], Array[Int32], Array[Int32]) -> Self raise InternalAbiError
+pub fn InternalAbi::result_layout(Self, Array[@native_types.ValueType]) -> (ArrayView[CallResultLocation], Int32)
+
+#derive(Eq, @debug.Debug)
+pub struct InternalCallPlan {
+  arguments : ArrayView[CallArgumentLocation]
+  results : ArrayView[CallResultLocation]
+  stack_size : Int32
+  result_area_size : Int32
+}
+pub fn InternalCallPlan::equal(Self, Self) -> Bool
+pub fn InternalCallPlan::not_equal(Self, Self) -> Bool
+pub fn InternalCallPlan::result_area_register(Self) -> @allocation_types.PhysicalReg?
+pub fn InternalCallPlan::to_repr(Self) -> @debug.Repr
+pub fn InternalCallPlan::valid_results(Self, Array[@native_types.ValueType]) -> Bool
+
 #derive(Eq)
 pub(all) enum Location {
   Register(@allocation_types.PhysicalReg)
@@ -443,6 +717,15 @@ pub fn Location::equal(Self, Self) -> Bool
 pub fn Location::not_equal(Self, Self) -> Bool
 pub fn Location::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Location
+
+pub struct LoweringContext {
+  internal_abi : InternalAbi
+  // private fields
+}
+pub fn LoweringContext::environment_field_offsets(Self, @native_types.EnvironmentField) -> Array[Int32]?
+pub fn LoweringContext::new(InternalAbi) -> Self
+pub fn LoweringContext::with_environment_field(Self, @native_types.EnvironmentField, Array[Int32]) -> Self
+pub fn LoweringContext::with_environment_field_resolver(Self, (@native_types.EnvironmentField) -> Array[Int32]?) -> Self
 
 #derive(Eq, @debug.Debug)
 pub struct Operand {
@@ -528,6 +811,15 @@ pub fn RegallocLoopStatistics::not_equal(Self, Self) -> Bool
 pub fn RegallocLoopStatistics::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
+pub(all) enum RegisterWidth {
+  W32
+  W64
+}
+pub fn RegisterWidth::equal(Self, Self) -> Bool
+pub fn RegisterWidth::not_equal(Self, Self) -> Bool
+pub fn RegisterWidth::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
 pub struct ResolvedCallTransferPlan {
   stack_transfers : Array[StackArgumentTransfer]
   register_moves : ResolvedMovePlan
@@ -557,6 +849,29 @@ pub fn ResolvedMoveStep::not_equal(Self, Self) -> Bool
 pub fn ResolvedMoveStep::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
+pub(all) enum ScalarIntUnary {
+  Mvn
+  Clz
+  Rbit
+  Neg
+}
+pub fn ScalarIntUnary::equal(Self, Self) -> Bool
+pub fn ScalarIntUnary::not_equal(Self, Self) -> Bool
+pub fn ScalarIntUnary::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub struct SizedStackObject {
+  id : Int32
+  size : Int32
+  alignment : Int32
+}
+pub fn SizedStackObject::equal(Self, Self) -> Bool
+pub fn SizedStackObject::is_valid(Self) -> Bool
+pub fn SizedStackObject::new(Int32, Int32, Int32) -> Self
+pub fn SizedStackObject::not_equal(Self, Self) -> Bool
+pub fn SizedStackObject::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
 pub struct StackArgumentTransfer {
   ty : @native_types.ValueType
   source : Location
@@ -566,6 +881,12 @@ pub struct StackArgumentTransfer {
 pub fn StackArgumentTransfer::equal(Self, Self) -> Bool
 pub fn StackArgumentTransfer::not_equal(Self, Self) -> Bool
 pub fn StackArgumentTransfer::to_repr(Self) -> @debug.Repr
+
+pub(all) struct StackObjectRequirements {
+  size : Int32
+  alignment : Int32
+  offsets : Array[Int32]
+}
 
 pub struct StackSlot {
   // private fields
@@ -585,6 +906,16 @@ pub(all) enum SymbolReference {
 pub fn SymbolReference::equal(Self, Self) -> Bool
 pub fn SymbolReference::not_equal(Self, Self) -> Bool
 pub fn SymbolReference::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) enum SymbolicAddress {
+  Code(@native_types.CodeSymbol)
+  External(@native_types.ExternalSymbol)
+  Data(@native_types.DataSymbol)
+}
+pub fn SymbolicAddress::equal(Self, Self) -> Bool
+pub fn SymbolicAddress::not_equal(Self, Self) -> Bool
+pub fn SymbolicAddress::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
 pub(all) enum TargetCompileEvent {
@@ -609,6 +940,65 @@ pub fn TargetCompileEvent::equal(Self, Self) -> Bool
 pub fn TargetCompileEvent::not_equal(Self, Self) -> Bool
 pub fn TargetCompileEvent::to_repr(Self) -> @debug.Repr
 
+pub struct TargetInstructionVerifier[Inst] {
+  // private fields
+}
+pub fn[Inst] TargetInstructionVerifier::atomic_compare_exchange(Self[Inst], @native_types.AccessWidth, @native_types.ValueType, target~ : String) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::atomic_early_def(Self[Inst], String) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::atomic_load(Self[Inst], @native_types.AccessWidth, @native_types.ValueType, target~ : String) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::atomic_rmw(Self[Inst], @native_types.AccessWidth, @native_types.ValueType, target~ : String) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::atomic_store(Self[Inst], @native_types.AccessWidth, @native_types.ValueType, target~ : String) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::carrier_move(Self[Inst], @native_types.ValueType, @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::conversion(Self[Inst], (@native_types.ValueType, @native_types.ValueType)?, Bool, target~ : String) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::float_binary(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::float_compare(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::float_ternary(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::float_unary(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::incoming_call_area_result(Self[Inst], @native_types.ValueType, Int32) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::incoming_call_result(Self[Inst], @native_types.ValueType, @allocation_types.PhysicalReg) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::incoming_reg(Self[Inst], @native_types.ValueType, @allocation_types.PhysicalReg) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::incoming_result_area(Self[Inst], @allocation_types.PhysicalReg) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::incoming_stack(Self[Inst], @native_types.ValueType, Int32) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::internal_call(Self[Inst], @native_types.Signature, InternalCallPlan, indirect~ : Bool, (@allocation_types.PhysicalReg) -> Bool, (InternalCallPlan) -> Array[@allocation_types.PhysicalReg]) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::load_constant(Self[Inst], @native_types.ValueType, UInt64) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::load_float_constant(Self[Inst], @native_types.ValueType, UInt64) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::load_null(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::new(Function[Inst], Instruction) -> Self[Inst]
+pub fn[Inst] TargetInstructionVerifier::outgoing_area_result(Self[Inst], @native_types.ValueType, Int32) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::outgoing_reg(Self[Inst], @native_types.ValueType, @allocation_types.PhysicalReg) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::platform_call(Self[Inst], @native_types.Signature, (Array[@native_types.ValueType]) -> CallLayout, (@allocation_types.PhysicalReg) -> Bool, () -> Array[@allocation_types.PhysicalReg]) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::reference_compare(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::return_shape(Self[Inst]) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::safepoint_marker(Self[Inst]) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::scalar_load(Self[Inst], @native_types.AccessWidth, @native_types.LoadExtension, @native_types.ValueType, target~ : String) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::scalar_select(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::scalar_store(Self[Inst], @native_types.AccessWidth, @native_types.ValueType, target~ : String) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::shape(Self[Inst], Array[@native_types.ValueType], Array[@native_types.ValueType], successors? : Int32) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::stack_address(Self[Inst], Bool) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::store_repeated64(Self[Inst], UInt64, UInt32) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::switch_shape(Self[Inst], @native_types.ValueType, Array[UInt64]) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::trap(Self[Inst], @native_types.TrapReason) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::trap_if_float(Self[Inst], @native_types.ValueType, Bool) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::trap_if_signed_div_overflow(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::trap_if_zero(Self[Inst], @native_types.ValueType) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_bitwise(Self[Inst], @native_lowering.VectorBitwiseOp) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_conversion(Self[Inst], VectorConversion) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_extract_lane(Self[Inst], @native_lowering.VectorLane, Int32, Bool) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_float_binary(Self[Inst], @native_lowering.VectorLane) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_float_ternary(Self[Inst], @native_lowering.VectorLane) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_float_unary(Self[Inst], @native_lowering.VectorLane) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_int_binary(Self[Inst], @native_lowering.VectorLane, @native_lowering.VectorIntBinaryOp) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_int_compare(Self[Inst], @native_lowering.VectorLane) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_int_shift(Self[Inst], @native_lowering.VectorLane) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_int_unary(Self[Inst], @native_lowering.VectorLane, @native_lowering.VectorIntUnaryOp) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_load_extend(Self[Inst], @native_lowering.VectorLane) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_load_lane(Self[Inst], @native_lowering.VectorLane, Int32) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_load_zero(Self[Inst], @native_types.AccessWidth) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_predicate(Self[Inst], @native_lowering.VectorPredicateOp) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_replace_lane(Self[Inst], @native_lowering.VectorLane, Int32) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_shuffle(Self[Inst], FixedArray[Int32]) -> Unit raise TargetVCodeVerifyError
+pub fn[Inst] TargetInstructionVerifier::vector_store_lane(Self[Inst], @native_lowering.VectorLane, Int32) -> Unit raise TargetVCodeVerifyError
+
 pub struct Value {
   // private fields
 }
@@ -620,6 +1010,20 @@ pub fn Value::to_string(Self) -> String
 pub impl Eq for Value
 pub impl Show for Value
 pub impl @debug.Debug for Value
+
+#derive(Eq, @debug.Debug)
+pub(all) enum VectorConversion {
+  ExtendLow(@native_lowering.VectorLane, @native_types.Signedness)
+  ExtendHigh(@native_lowering.VectorLane, @native_types.Signedness)
+  Narrow(@native_lowering.VectorLane, @native_types.Signedness)
+  FloatToInt(@native_lowering.VectorLane, @native_types.Signedness)
+  IntToFloat(@native_lowering.VectorLane, @native_types.Signedness)
+  PromoteLowF32x4
+  DemoteZeroF64x2
+}
+pub fn VectorConversion::equal(Self, Self) -> Bool
+pub fn VectorConversion::not_equal(Self, Self) -> Bool
+pub fn VectorConversion::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 pub using @allocation_types {type AllocationConstraint}

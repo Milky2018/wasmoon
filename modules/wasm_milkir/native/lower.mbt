@@ -94,25 +94,21 @@ fn direct_call_contract(
   function_index : Int32,
   environment : Environment,
   result_types : Array[@native_types.ValueType],
-  argument_start~ : Int32 = 0,
-  behavior~ : @native_types.CallBehavior = @native_types.CallBehavior::conservative(),
 ) -> (@native_types.NativeCall, Array[@lowering.Value]) {
   let parameter_types : Array[@native_types.ValueType] = [Ptr64]
-  let types = context.operand_types()
-  let arguments = context.operands()
-  for i in argument_start..<types.length() {
-    parameter_types.push(types[i])
+  for type_ in context.operand_types() {
+    parameter_types.push(type_)
   }
   let operands = context.environment()
-  for i in argument_start..<arguments.length() {
-    operands.push(arguments[i])
+  for argument in context.operands() {
+    operands.push(argument)
   }
   (
     @native_types.NativeCall::new(
       Internal((environment.function_symbol)(function_index)),
       @native_types.Signature::new(parameter_types, result_types),
       Internal,
-      behavior,
+      @native_types.CallBehavior::conservative(),
     ),
     operands,
   )
@@ -413,20 +409,33 @@ fn lower_ref_cast(
   type_index : Int32,
   nullable : Bool,
 ) -> Unit {
-  let operands = context.environment()
-  for operand in context.operands() {
-    operands.push(operand)
-  }
-  operands.push(i32_immediate(context, type_index))
-  operands.push(bool_immediate(context, nullable))
-  finish_runtime_call(
-    context,
-    environment,
-    GcRefCast,
-    operands,
-    [Ptr64, GcRef64, I32, I32],
-    @native_types.CallBehavior::new(Read, true, false, false, false),
-  )
+  context.forward_results([
+    emit_ref_cast(context, environment, type_index, nullable),
+  ])
+}
+
+///|
+fn emit_ref_cast(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  type_index : Int32,
+  nullable : Bool,
+) -> @lowering.Value {
+  context.emit_call_without_roots(
+    @native_types.NativeCall::new(
+      External((environment.runtime_symbol)(GcRefCast)),
+      @native_types.Signature::new([Ptr64, GcRef64, I32, I32], [GcRef64]),
+      Platform,
+      @native_types.CallBehavior::new(Read, true, false, false, false),
+    ),
+    [
+      context.environment()[0],
+      context.operands()[0],
+      i32_immediate(context, type_index),
+      bool_immediate(context, nullable),
+    ],
+    [GcRef64],
+  )[0]
 }
 
 ///|
@@ -1404,34 +1413,6 @@ fn lower_extension(
   environment : Environment,
   validation_context : @wasm_milkir.WasmValidationContext,
 ) -> String? {
-  if decode_guarded_call(extension) is Some(guarded) {
-    if !environment.exclusive_poll_controls {
-      return Some("guarded calls require exclusive invocation controls")
-    }
-    let (call, operands) = direct_call_contract(
-      context,
-      guarded.target,
-      environment,
-      context.result_types(),
-      argument_start=1,
-      behavior=@native_types.CallBehavior::new(
-        ReadWrite,
-        true,
-        true,
-        false,
-        false,
-      ),
-    )
-    context.finish_call(call, operands)
-    return None
-  }
-  if decode_poll_region(extension) is Some((region, guard_)) {
-    if !environment.exclusive_poll_controls {
-      return Some("native poll regions require exclusive invocation controls")
-    }
-    lower_poll_region(context, region, guard_)
-    return None
-  }
   if decode_projection(extension) is Some(projection) {
     if environment.gc_heap_field is None {
       return Some("GC projection requires an explicit heap environment")
@@ -1772,28 +1753,9 @@ pub fn lower_to_sink(
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
   if environment.gc_array_regions && environment.gc_heap_field is Some(_) {
-    prepare_gc_memory(
-      function,
-      validation_context,
-      exclusive_poll_controls=environment.exclusive_poll_controls,
-      on_event~,
-    ) catch {
+    prepare_gc_memory(function, validation_context, on_event~) catch {
       error =>
         raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
-    }
-  } else if function.blocks.any(block => {
-      function
-      .block_instruction_ids(block)
-      .any(id => {
-        function.instruction_by_id(id).unwrap().opcode is Ext(op, _) &&
-        (
-          decode_poll_region(op) is Some(_) ||
-          decode_guarded_call(op) is Some(_)
-        )
-      })
-    }) {
-    if gc_borrow_error(function) is Some(error) {
-      raise @milkir_native.NativeLowerError::invalid_milkir(error)
     }
   }
   let poll_cache = if environment.exclusive_poll_controls &&
@@ -1868,6 +1830,8 @@ pub fn lower_to_sink(
     }
     validate_memory_extension(view, validation_context, function.results)
   }
+  let cast_views = adjacent_cast_views(function, environment)
+  let pending_view : Ref[(Int32, @lowering.Value)?] = Ref(None)
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
@@ -1879,6 +1843,28 @@ pub fn lower_to_sink(
         )
       }
       lower_cached_poll(context, poll, environment)
+      return None
+    }
+    if pending_view.val is Some((projection, view)) {
+      pending_view.val = None
+      guard context.instruction_id() == projection &&
+        decode_projection(extension) is Some(StructData(type_index)) &&
+        struct_view_shape(validation_context, type_index)
+        is Some((shape, fields)) else {
+        return Some(
+          "checked cast view was not consumed by its adjacent projection",
+        )
+      }
+      lower_cast_view_use(context, environment, type_index, shape, fields, view)
+      return None
+    }
+    if cast_views.get(context.instruction_id()) is Some(projection) &&
+      @wasm_milkir.decode(extension) is Some(RefCast(type_index, false)) &&
+      struct_view_shape(validation_context, type_index) is Some((shape, fields)) {
+      let view = lower_cast_with_view(
+        context, environment, type_index, shape, fields,
+      )
+      pending_view.val = Some((projection, view))
       return None
     }
     lower_extension(context, extension, environment, validation_context)
@@ -1905,13 +1891,8 @@ pub fn lower_to_sink(
     sink,
     call_abi?,
     verify_input=verify_input || !cached_polls.is_empty(),
-    root_free_extension=op => {
-      decode_poll_region(op) is Some(_) ||
-      decode_guarded_call(op) is Some(_) ||
-      decode_cached_poll(op) is Some(Publish(_))
-    },
+    root_free_extension=op => decode_cached_poll(op) is Some(Publish(_)),
     prefer_scoped_root_site=op => {
-      decode_poll_region(op) is Some(_) ||
       decode_cached_poll(op) is Some(Step(_, _)) ||
       @wasm_milkir.decode(op) is Some(SafepointPoll(_, _, _, _)) ||
       (op.effects is Some(effects) && !effects.invalidates_addresses)

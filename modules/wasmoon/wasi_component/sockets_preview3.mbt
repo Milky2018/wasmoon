@@ -53,18 +53,6 @@ fn preview3_socket_error_code(index : Int32) -> @runtime_impl.ComponentValue {
 }
 
 ///|
-fn preview3_socket_ok_void() -> @runtime_impl.ComponentValue {
-  Variant(0, None)
-}
-
-///|
-fn preview3_socket_ok(
-  value : @runtime_impl.ComponentValue,
-) -> @runtime_impl.ComponentValue {
-  Variant(0, Some(value))
-}
-
-///|
 fn preview3_socket_family(
   value : @runtime_impl.ComponentValue,
 ) -> Int32 raise @runtime_impl.ComponentRuntimeError {
@@ -329,7 +317,7 @@ fn preview3_tcp_connect_future(
         let result = @wasi.native_socket_connect(state.fd, address.native)
         if result == 0 {
           state.phase.val = Connected
-          return Some(preview3_socket_ok_void())
+          return Some(socket_ok_void())
         }
         if result != 1 {
           state.phase.val = Closed
@@ -343,7 +331,7 @@ fn preview3_tcp_connect_future(
       match @wasi.native_socket_error(state.fd) {
         Some(0) => {
           state.phase.val = Connected
-          Some(preview3_socket_ok_void())
+          Some(socket_ok_void())
         }
         Some(error) => {
           state.phase.val = Closed
@@ -435,7 +423,7 @@ fn preview3_tcp_listen_stream(
       operation.val = None
     },
   )
-  preview3_socket_ok(U32(stream))
+  socket_ok(U32(stream))
 }
 
 ///|
@@ -478,7 +466,7 @@ fn preview3_tcp_send_future(
   HostFuture(
     () => {
       if done.val {
-        return Ready([preview3_socket_ok_void()])
+        return Ready([socket_ok_void()])
       }
       match operation.val {
         Some(id) =>
@@ -509,7 +497,7 @@ fn preview3_tcp_send_future(
         match host.runtime.read_host_byte_stream(table, readable) {
           Closed => {
             cleanup()
-            return Ready([preview3_socket_ok_void()])
+            return Ready([socket_ok_void()])
           }
           Pending => return Pending
           Data(bytes) => {
@@ -582,7 +570,7 @@ fn preview3_tcp_receive(
     let count = if capacity <= 0 { 65536 } else { capacity }
     let buffer = FixedArray::make(count, b'\x00')
     match @wasi.native_read(state.fd, buffer, count) {
-      Some(0) => completion.val = Some(preview3_socket_ok_void())
+      Some(0) => completion.val = Some(socket_ok_void())
       Some(read) => {
         for i in 0..<read {
           buffered.push(buffer[i])
@@ -628,7 +616,7 @@ fn preview3_tcp_receive(
     () => {
       if owns_receive {
         @wasi.native_shutdown(state.fd, 0) |> ignore
-        completion.val = Some(preview3_socket_ok_void())
+        completion.val = Some(socket_ok_void())
         match operation.val {
           Some(id) => host.ctx.cancel_async_operation(id)
           None => ()
@@ -662,7 +650,7 @@ fn preview3_socket_option(
   convert : (Int32) -> @runtime_impl.ComponentValue,
 ) -> @runtime_impl.ComponentValue {
   match @wasi.native_socket_option_get(fd, family, option) {
-    Some(value) => preview3_socket_ok(convert(value))
+    Some(value) => socket_ok(convert(value))
     None => preview3_socket_error()
   }
 }
@@ -676,7 +664,7 @@ fn preview3_set_socket_option(
 ) -> @runtime_impl.ComponentValue {
   for clamped = value {
     if @wasi.native_socket_option_set(fd, family, option, clamped) {
-      break preview3_socket_ok_void()
+      break socket_ok_void()
     }
     let error = @wasi.native_last_errno_to_wasi()
     // The WIT accepts every positive value for these settings. Kernel limits
@@ -692,229 +680,157 @@ fn preview3_set_socket_option(
 }
 
 ///|
-fn add_preview3_tcp_options(
-  host : WasiComponentHost,
-  builder : @runtime_impl.HostInstanceBuilder,
-) -> Unit raise @runtime_impl.ComponentRuntimeError {
-  fn state(
-    args : Array[@runtime_impl.ComponentValue],
-    table : @runtime_impl.ResourceTable,
-  ) -> TcpSocketState raise @runtime_impl.ComponentRuntimeError {
-    preview3_tcp_socket_state(host, table, args, 0)
+priv enum Preview3SocketOptionValue {
+  Toggle
+  Duration
+  Count
+  HopLimit
+  BufferSize
+}
+
+///|
+fn Preview3SocketOptionValue::encode(
+  self : Preview3SocketOptionValue,
+  value : Int32,
+) -> @runtime_impl.ComponentValue {
+  match self {
+    Toggle => Bool(value != 0)
+    Duration => U64(value.to_int64() * 1_000_000_000L)
+    Count => U32(value)
+    HopLimit => U8(value)
+    BufferSize => U64(value.to_int64())
   }
-  fn add_bool(
-    getter : String,
-    setter : String,
-    option : Int32,
-  ) -> Unit raise @runtime_impl.ComponentRuntimeError {
-    builder.add_func(
-      getter,
-      preview3_func(preview3_sockets_interface, getter),
-      (args, table) => {
-        let socket = state(args, table)
-        [
-          preview3_socket_option(socket.fd, socket.family, option, n => {
-            Bool(n != 0)
-          }),
-        ]
-      },
-    )
-    builder.add_func(
-      setter,
-      preview3_func(preview3_sockets_interface, setter),
-      (args, table) => {
-        guard args[1] is Bool(value) else {
-          raise HostCallError("expected socket boolean option")
-        }
-        let socket = state(args, table)
-        [
-          preview3_set_socket_option(
-            socket.fd,
-            socket.family,
-            option,
-            if value {
-              1
-            } else {
-              0
-            },
-          ),
-        ]
-      },
-    )
-  }
-  fn add_u64(
-    getter : String,
-    setter : String,
-    option : Int32,
-  ) -> Unit raise @runtime_impl.ComponentRuntimeError {
-    builder.add_func(
-      getter,
-      preview3_func(preview3_sockets_interface, getter),
-      (args, table) => {
-        let socket = state(args, table)
-        [
-          preview3_socket_option(socket.fd, socket.family, option, n => {
-            U64(n.to_int64())
-          }),
-        ]
-      },
-    )
-    builder.add_func(
-      setter,
-      preview3_func(preview3_sockets_interface, setter),
-      (args, table) => {
-        let value = socket_u64_arg(args, 1)
-        let socket = state(args, table)
-        [
-          if value == 0L {
-            preview3_socket_error_code(2)
-          } else {
-            preview3_set_socket_option(
-              socket.fd,
-              socket.family,
-              option,
-              preview3_positive_socket_size(value),
-            )
-          },
-        ]
-      },
-    )
-  }
-  add_bool(
-    "[method]tcp-socket.get-keep-alive-enabled", "[method]tcp-socket.set-keep-alive-enabled",
-    0,
-  )
-  for
-    entry in [
-      (
-        "[method]tcp-socket.get-keep-alive-idle-time", "[method]tcp-socket.set-keep-alive-idle-time",
-        1,
-      ),
-      (
-        "[method]tcp-socket.get-keep-alive-interval", "[method]tcp-socket.set-keep-alive-interval",
-        2,
-      ),
-    ] {
-    let (getter, setter, option) = entry
-    builder.add_func(
-      getter,
-      preview3_func(preview3_sockets_interface, getter),
-      (args, table) => {
-        let socket = state(args, table)
-        [
-          preview3_socket_option(socket.fd, socket.family, option, n => {
-            U64(n.to_int64() * 1_000_000_000L)
-          }),
-        ]
-      },
-    )
-    builder.add_func(
-      setter,
-      preview3_func(preview3_sockets_interface, setter),
-      (args, table) => {
-        let socket = state(args, table)
-        let duration = socket_u64_arg(args, 1)
-        let seconds = if duration == 0L {
-          None
-        } else if duration < 0L {
-          Some(0x7fffffff)
+}
+
+///|
+fn Preview3SocketOptionValue::decode(
+  self : Preview3SocketOptionValue,
+  args : Array[@runtime_impl.ComponentValue],
+  udp : Bool,
+) -> Int32? raise @runtime_impl.ComponentRuntimeError {
+  match self {
+    Toggle => {
+      guard args[1] is Bool(value) else {
+        raise HostCallError("expected socket boolean option")
+      }
+      Some(if value { 1 } else { 0 })
+    }
+    Duration => {
+      let duration = socket_u64_arg(args, 1)
+      if duration == 0L {
+        None
+      } else if duration < 0L {
+        Some(0x7fffffff)
+      } else {
+        Some(
+          preview3_positive_socket_size((duration - 1L) / 1_000_000_000L + 1L),
+        )
+      }
+    }
+    Count => {
+      let value = socket_u32_arg(args, 1)
+      if value == 0 {
+        None
+      } else {
+        Some(if value < 0 { 0x7fffffff } else { value })
+      }
+    }
+    HopLimit => {
+      guard args[1] is U8(value) else {
+        let message = if udp {
+          "expected UDP hop limit"
         } else {
-          Some(
-            preview3_positive_socket_size((duration - 1L) / 1_000_000_000L + 1L),
-          )
+          "expected socket hop limit"
         }
-        match seconds {
-          Some(value) =>
-            [
-              preview3_set_socket_option(
-                socket.fd,
-                socket.family,
-                option,
-                value,
-              ),
-            ]
+        raise HostCallError(message)
+      }
+      if value <= 0 {
+        None
+      } else {
+        Some(value)
+      }
+    }
+    BufferSize => {
+      let value = socket_u64_arg(args, 1)
+      if value == 0L {
+        None
+      } else {
+        Some(preview3_positive_socket_size(value))
+      }
+    }
+  }
+}
+
+///|
+fn add_preview3_socket_options(
+  builder : @runtime_impl.HostInstanceBuilder,
+  resource : String,
+  state : (Array[@runtime_impl.ComponentValue], @runtime_impl.ResourceTable) -> (
+    Int32,
+    Int32,
+  ) raise @runtime_impl.ComponentRuntimeError,
+  options : Array[(String, Int32, Preview3SocketOptionValue)],
+) -> Unit raise @runtime_impl.ComponentRuntimeError {
+  let udp = resource == "udp-socket"
+  for entry in options {
+    let (name, option, value_type) = entry
+    let getter = "[method]\{resource}.get-\{name}"
+    let setter = "[method]\{resource}.set-\{name}"
+    builder.add_func(
+      getter,
+      preview3_func(preview3_sockets_interface, getter),
+      (args, table) => {
+        let (fd, family) = state(args, table)
+        [
+          preview3_socket_option(fd, family, option, value => {
+            value_type.encode(value)
+          }),
+        ]
+      },
+    )
+    builder.add_func(
+      setter,
+      preview3_func(preview3_sockets_interface, setter),
+      (args, table) => {
+        let (fd, family, value) = if value_type is Duration ||
+          (udp && value_type is BufferSize) {
+          let (fd, family) = state(args, table)
+          (fd, family, value_type.decode(args, udp))
+        } else {
+          let value = value_type.decode(args, udp)
+          let (fd, family) = state(args, table)
+          (fd, family, value)
+        }
+        match value {
+          Some(value) => [preview3_set_socket_option(fd, family, option, value)]
           None => [preview3_socket_error_code(2)]
         }
       },
     )
   }
-  for
-    entry in [
-      (
-        "[method]tcp-socket.get-keep-alive-count", "[method]tcp-socket.set-keep-alive-count",
-        3,
-      ),
-    ] {
-    let (getter, setter, option) = entry
-    builder.add_func(
-      getter,
-      preview3_func(preview3_sockets_interface, getter),
-      (args, table) => {
-        let socket = state(args, table)
-        [preview3_socket_option(socket.fd, socket.family, option, n => U32(n))]
-      },
-    )
-    builder.add_func(
-      setter,
-      preview3_func(preview3_sockets_interface, setter),
-      (args, table) => {
-        let value = socket_u32_arg(args, 1)
-        let socket = state(args, table)
-        [
-          if value == 0 {
-            preview3_socket_error_code(2)
-          } else {
-            preview3_set_socket_option(
-              socket.fd,
-              socket.family,
-              option,
-              if value < 0 {
-                0x7fffffff
-              } else {
-                value
-              },
-            )
-          },
-        ]
-      },
-    )
-  }
-  builder.add_func(
-    "[method]tcp-socket.get-hop-limit",
-    preview3_func(
-      preview3_sockets_interface, "[method]tcp-socket.get-hop-limit",
-    ),
+}
+
+///|
+fn add_preview3_tcp_options(
+  host : WasiComponentHost,
+  builder : @runtime_impl.HostInstanceBuilder,
+) -> Unit raise @runtime_impl.ComponentRuntimeError {
+  add_preview3_socket_options(
+    builder,
+    "tcp-socket",
     (args, table) => {
-      let socket = state(args, table)
-      [preview3_socket_option(socket.fd, socket.family, 4, n => U8(n))]
+      let socket = preview3_tcp_socket_state(host, table, args, 0)
+      (socket.fd, socket.family)
     },
-  )
-  builder.add_func(
-    "[method]tcp-socket.set-hop-limit",
-    preview3_func(
-      preview3_sockets_interface, "[method]tcp-socket.set-hop-limit",
-    ),
-    (args, table) => {
-      guard args[1] is U8(value) else {
-        raise HostCallError("expected socket hop limit")
-      }
-      let socket = state(args, table)
-      [
-        if value <= 0 {
-          preview3_socket_error_code(2)
-        } else {
-          preview3_set_socket_option(socket.fd, socket.family, 4, value)
-        },
-      ]
-    },
-  )
-  add_u64(
-    "[method]tcp-socket.get-receive-buffer-size", "[method]tcp-socket.set-receive-buffer-size",
-    5,
-  )
-  add_u64(
-    "[method]tcp-socket.get-send-buffer-size", "[method]tcp-socket.set-send-buffer-size",
-    6,
+    [
+      ("keep-alive-enabled", 0, Toggle),
+      ("keep-alive-idle-time", 1, Duration),
+      ("keep-alive-interval", 2, Duration),
+      ("keep-alive-count", 3, Count),
+      ("hop-limit", 4, HopLimit),
+      ("receive-buffer-size", 5, BufferSize),
+      ("send-buffer-size", 6, BufferSize),
+    ],
   )
 }
 
@@ -934,7 +850,7 @@ fn add_preview3_tcp(
       match @wasi.native_socket_create(family, 1) {
         Some(fd) =>
           [
-            preview3_socket_ok(
+            socket_ok(
               U32(preview3_new_tcp_socket(host, table, fd, family, Unbound)),
             ),
           ]
@@ -962,7 +878,7 @@ fn add_preview3_tcp(
       }
       if @wasi.native_socket_bind(state.fd, address.native) {
         state.phase.val = Bound
-        [preview3_socket_ok_void()]
+        [socket_ok_void()]
       } else {
         [preview3_socket_error()]
       }
@@ -1037,7 +953,7 @@ fn add_preview3_tcp(
       }
       [
         match @wasi.native_socket_address(state.fd, peer) {
-          Some(address) => preview3_socket_ok(encode_socket_address(address))
+          Some(address) => socket_ok(encode_socket_address(address))
           None => preview3_socket_error()
         },
       ]
@@ -1095,7 +1011,7 @@ fn add_preview3_tcp(
         } else {
           value.to_int()
         }
-        [preview3_socket_ok_void()]
+        [socket_ok_void()]
       }
     },
   )
@@ -1117,80 +1033,18 @@ fn add_preview3_udp_options(
   host : WasiComponentHost,
   builder : @runtime_impl.HostInstanceBuilder,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
-  fn add_u64(
-    getter : String,
-    setter : String,
-    option : Int32,
-  ) -> Unit raise @runtime_impl.ComponentRuntimeError {
-    builder.add_func(
-      getter,
-      preview3_func(preview3_sockets_interface, getter),
-      (args, table) => {
-        let socket = preview3_udp_socket_state(host, table, args, 0)
-        [
-          preview3_socket_option(socket.fd, socket.family, option, n => {
-            U64(n.to_int64())
-          }),
-        ]
-      },
-    )
-    builder.add_func(
-      setter,
-      preview3_func(preview3_sockets_interface, setter),
-      (args, table) => {
-        let socket = preview3_udp_socket_state(host, table, args, 0)
-        let value = socket_u64_arg(args, 1)
-        [
-          if value == 0L {
-            preview3_socket_error_code(2)
-          } else {
-            preview3_set_socket_option(
-              socket.fd,
-              socket.family,
-              option,
-              preview3_positive_socket_size(value),
-            )
-          },
-        ]
-      },
-    )
-  }
-  builder.add_func(
-    "[method]udp-socket.get-unicast-hop-limit",
-    preview3_func(
-      preview3_sockets_interface, "[method]udp-socket.get-unicast-hop-limit",
-    ),
+  add_preview3_socket_options(
+    builder,
+    "udp-socket",
     (args, table) => {
       let socket = preview3_udp_socket_state(host, table, args, 0)
-      [preview3_socket_option(socket.fd, socket.family, 4, n => U8(n))]
+      (socket.fd, socket.family)
     },
-  )
-  builder.add_func(
-    "[method]udp-socket.set-unicast-hop-limit",
-    preview3_func(
-      preview3_sockets_interface, "[method]udp-socket.set-unicast-hop-limit",
-    ),
-    (args, table) => {
-      guard args[1] is U8(value) else {
-        raise HostCallError("expected UDP hop limit")
-      }
-      let socket = preview3_udp_socket_state(host, table, args, 0)
-      [
-        if value <= 0 {
-          preview3_socket_error_code(2)
-        } else {
-          preview3_set_socket_option(socket.fd, socket.family, 4, value)
-        },
-      ]
-    },
-  )
-  add_u64(
-    "[method]udp-socket.get-receive-buffer-size", "[method]udp-socket.set-receive-buffer-size",
-    5,
-  )
-  add_u64(
-    "[method]udp-socket.get-send-buffer-size", "[method]udp-socket.set-send-buffer-size",
-    6,
+    [
+      ("unicast-hop-limit", 4, HopLimit),
+      ("receive-buffer-size", 5, BufferSize),
+      ("send-buffer-size", 6, BufferSize),
+    ],
   )
 }
 
@@ -1209,11 +1063,7 @@ fn add_preview3_udp(
       let family = preview3_socket_family(family_value)
       match @wasi.native_socket_create(family, 2) {
         Some(fd) =>
-          [
-            preview3_socket_ok(
-              U32(preview3_new_udp_socket(host, table, fd, family)),
-            ),
-          ]
+          [socket_ok(U32(preview3_new_udp_socket(host, table, fd, family)))]
         None => [preview3_socket_error()]
       }
     },
@@ -1238,7 +1088,7 @@ fn add_preview3_udp(
       }
       if @wasi.native_socket_bind(state.fd, address.native) {
         state.phase.val = UdpBound
-        [preview3_socket_ok_void()]
+        [socket_ok_void()]
       } else {
         [preview3_socket_error()]
       }
@@ -1262,7 +1112,7 @@ fn add_preview3_udp(
       if @wasi.native_socket_connect(state.fd, address.native) == 0 {
         state.phase.val = UdpBound
         state.remote.val = Some(address.native)
-        [preview3_socket_ok_void()]
+        [socket_ok_void()]
       } else {
         [preview3_socket_error()]
       }
@@ -1278,7 +1128,7 @@ fn add_preview3_udp(
       }
       if @wasi.native_socket_disconnect(state.fd) {
         state.remote.val = None
-        [preview3_socket_ok_void()]
+        [socket_ok_void()]
       } else {
         [preview3_socket_error()]
       }
@@ -1319,7 +1169,7 @@ fn add_preview3_udp(
         let sent = @wasi.native_socket_send_to(state.fd, data, destination)
         if sent == data.length().to_int64() {
           state.phase.val = UdpBound
-          Some(preview3_socket_ok_void())
+          Some(socket_ok_void())
         } else if sent < 0L && @wasi.native_last_errno_to_wasi() == 6 {
           None
         } else {
@@ -1340,7 +1190,7 @@ fn add_preview3_udp(
         match @wasi.native_socket_recv_from(state.fd, 65535) {
           Some(datagram) =>
             Some(
-              preview3_socket_ok(
+              socket_ok(
                 Tuple([
                   encode_component_bytes(datagram.data),
                   encode_socket_address(datagram.address),
@@ -1371,7 +1221,7 @@ fn add_preview3_udp(
       }
       [
         match @wasi.native_socket_address(state.fd, peer) {
-          Some(address) => preview3_socket_ok(encode_socket_address(address))
+          Some(address) => socket_ok(encode_socket_address(address))
           None => preview3_socket_error()
         },
       ]
@@ -1473,7 +1323,7 @@ fn preview3_resolve_addresses_future(
           }
           Finished => {
             cleanup()
-            return Ready([preview3_socket_ok(List(addresses.copy()))])
+            return Ready([socket_ok(List(addresses.copy()))])
           }
           NameUnresolvable => {
             cleanup()

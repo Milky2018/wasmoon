@@ -118,10 +118,6 @@ fn annotate_semantic(
   extension : @milkir.ExtOp,
   signature : @milkir.Signature,
 ) -> @milkir.ExtOp {
-  if decode_poll_region(extension) is Some(_) ||
-    decode_guarded_call(extension) is Some(_) {
-    return extension
-  }
   let plain = @milkir.ExtOp(
     extension.dialect,
     extension.opcode,
@@ -157,24 +153,6 @@ fn validate_memory_extension(
   context : @wasm_milkir.WasmValidationContext,
   results : Array[@milkir.Type],
 ) -> String? {
-  if decode_guarded_call(view.op) is Some(call) {
-    return validate_guarded_call(view, call, context)
-  }
-  if decode_poll_region(view.op) is Some((_, guard_)) {
-    if (if guard_ {
-        !view.operand_types.is_empty() ||
-        view.result_types.length() != 2 ||
-        view.result_types[0] != I32 ||
-        view.result_types[1] != Ptr
-      } else {
-        view.operand_types.length() != 1 ||
-        view.operand_types[0] != Ptr ||
-        !view.result_types.is_empty()
-      }) {
-      return Some("invalid native poll region signature")
-    }
-    return None
-  }
   if decode_projection(view.op) is Some(projection) {
     if view.op != projection_opcode(projection) {
       return Some("invalid projection memory effects")
@@ -206,9 +184,10 @@ fn validate_memory_extension(
       return Some("invalid struct projection contract")
     }
     if projection is FieldData(type_, field, width, reference, _) {
-      guard context.struct_field(type_, field) is Some(contract) &&
+      guard context.struct_fields(type_) is Some(fields) &&
+        fields.get(field) is Some(contract) &&
         field_width(contract) == Some(width) &&
-        struct_view_shape(context, type_)
+        struct_view_prefix(fields)
         .map(shape => field < shape.1)
         .unwrap_or(false) else {
         return Some("invalid field projection contract")
@@ -479,14 +458,23 @@ fn struct_view_shape(
   context : @wasm_milkir.WasmValidationContext,
   type_ : Int32,
 ) -> (UInt64, Int32)? {
+  guard context.struct_fields(type_) is Some(fields) else { return None }
+  struct_view_prefix(fields)
+}
+
+///|
+fn struct_view_prefix(
+  fields : ArrayView[@wasm_milkir.WasmFieldContract],
+) -> (UInt64, Int32)? {
+  let count = fields.length().min(16)
+  if count == 0 {
+    return None
+  }
   let mut shape = 0UL
-  let mut count = 0
-  while context.struct_field(type_, count) is Some(field) {
-    if count == 16 {
-      // This proves the complete physical prefix used by its field projections.
-      // Larger suffixes keep checked accessors; they are not admitted by type.
-      return Some((shape, count))
-    }
+  // Larger suffixes keep checked accessors. The encoded prefix still verifies
+  // every admitted field, including fields with distinct logical carriers.
+  for index in 0..<count {
+    let field = fields[index]
     let code = match field.storage {
       Packed8 => 1UL
       Packed16 => 2UL
@@ -496,12 +484,7 @@ fn struct_view_shape(
       Value(Ref | CallableRef | OpaqueRef) => 12UL
       _ => return None
     }
-    shape = shape | (code << (count * 4))
-    count += 1
+    shape = shape | (code << (index * 4))
   }
-  if count == 0 {
-    None
-  } else {
-    Some((shape, count))
-  }
+  Some((shape, count))
 }

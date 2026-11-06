@@ -4,7 +4,7 @@ test "UTF-16 rejects unpaired surrogates and overflowing lengths" {
   defer store.close()
   let memory = store.get_mem(store.alloc_mem(Memory(1, None)))
   for unit in [0xd800, 0xdc00, 0xdbff, 0xdfff] {
-    memory.store_i32(0, unit)
+    memory.store_i32_at(0L, unit)
     for encoding in [StringEncoding::Utf16, Latin1Utf16] {
       let length = if encoding == Utf16 { 1 } else { -2147483647 }
       let error = try {
@@ -38,7 +38,7 @@ test "UTF-16 rejects unpaired surrogates and overflowing lengths" {
     }
     inspect(error.contains("out-of-bounds"), content="true")
   }
-  memory.store_i32(0, -566044611)
+  memory.store_i32_at(0L, -566044611)
   inspect(
     read_string_from_memory_with_encoding(memory, 0, 2, Utf16),
     content="🙂",

@@ -186,11 +186,10 @@ test "Wasmtime named module imports are opt-in" {
     #|  (func (export "size") (result i32) memory.size))
     #|(assert_return (invoke "size") (i32.const 1))
   let script = parse(source) catch { e => fail("Parse error: \{e}") }
-  let original = run_wast_commands(script, ".", false, false)
+  let original = run_wast_commands(script, false, false)
   inspect(original.failed > 0, content="true")
   let compatible = run_wast_commands(
     script,
-    ".",
     false,
     false,
     register_named_modules=true,
@@ -206,7 +205,7 @@ test "bare invoke traps fail the script" {
     #|(module (func (export "trap") unreachable))
     #|(invoke "trap")
   let script = parse(source) catch { e => fail("Parse error: \{e}") }
-  let result = run_wast_commands(script, ".", false, false)
+  let result = run_wast_commands(script, false, false)
   inspect(result.failed, content="1")
   inspect(result.passed, content="0")
 }
@@ -223,7 +222,7 @@ test "active data segments are dropped after initialization" {
     #|(assert_trap (invoke "init" (i32.const 0) (i32.const 1)) "out of bounds")
     #|(assert_trap (invoke "init" (i32.const 1) (i32.const 0)) "out of bounds")
   let script = parse(source) catch { e => fail("Parse error: \{e}") }
-  let result = run_wast_commands(script, ".", false, false)
+  let result = run_wast_commands(script, false, false)
   inspect(result.failed, content="0")
   inspect(result.passed, content="4")
 }
@@ -239,7 +238,7 @@ test "indexed ref.func expectations compare function identity" {
     #|(assert_return (invoke "get") (ref.func 0))
     #|(assert_return (invoke "get") (either (ref.func 0) (ref.func 1)))
   let script = parse(source) catch { e => fail("Parse error: \{e}") }
-  let result = run_wast_commands(script, ".", false, false)
+  let result = run_wast_commands(script, false, false)
   inspect(result.failed, content="1")
   inspect(result.passed, content="2")
 }
@@ -261,7 +260,7 @@ test "table imports share the index space with local definitions" {
     #|  (func (export "size") (result i32) table.size))
     #|(assert_return (invoke "size") (i32.const 2))
   let script = parse(source) catch { e => fail("Parse error: \{e}") }
-  let result = run_wast_commands(script, ".", false, false)
+  let result = run_wast_commands(script, false, false)
   inspect(result.failed, content="0")
   inspect(result.passed, content="3")
 }
@@ -273,7 +272,7 @@ test "anonymous module definitions can be instantiated" {
     #|(module instance)
     #|(assert_return (invoke "f") (i32.const 7))
   let script = parse(source) catch { e => fail("Parse error: \{e}") }
-  let result = run_wast_commands(script, ".", false, false)
+  let result = run_wast_commands(script, false, false)
   inspect(result.failed, content="0")
   inspect(result.passed, content="2")
 }
@@ -291,7 +290,7 @@ test "shared memory flags participate in import compatibility" {
     #|(assert_unlinkable
     #|  (module (import "private" "memory" (memory 1 2 shared))) "incompatible import type")
   let script = parse(source) catch { e => fail("Parse error: \{e}") }
-  let result = run_wast_commands(script, ".", false, false)
+  let result = run_wast_commands(script, false, false)
   inspect(result.failed, content="0")
   inspect(result.passed, content="2")
 }
@@ -312,7 +311,7 @@ test "WAST assertions reject wrong trap kinds and missing actions" {
     #| (assert_trap (invoke "trap") "unreachable")
     #| (assert_exception (invoke "throw"))
     #| (assert_trap (module (func $start unreachable) (start $start)) "unreachable")
-  let result = run_wast_commands(parse(source), ".", false, false)
+  let result = run_wast_commands(parse(source), false, false)
   inspect(result.passed, content="3")
   inspect(result.failed, content="8")
 }
@@ -327,7 +326,7 @@ test "WAST assertions do not accept host errors as guest failures" {
   linker.add_host_func("host", "throw", fn(_args) raise @runtime.RuntimeError {
     raise UncaughtException
   })
-  ctx.registered_modules.set("host", linker.get_module("host").unwrap())
+  ctx.modules.register("host", linker.get_module("host").unwrap())
   let source =
     #| (module (import "host" "trap" (func $trap))
     #|   (import "host" "throw" (func $throw))
@@ -340,7 +339,7 @@ test "WAST assertions do not accept host errors as guest failures" {
   let result = WastResult()
   for item in parse(source).commands {
     let (command, line) = item
-    run_wast_command(ctx, command, line, result, ".", false)
+    run_wast_command(ctx, command, line, result, false)
   }
   inspect(result.passed, content="0")
   inspect(result.failed, content="4")

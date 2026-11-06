@@ -14,7 +14,6 @@ pub suberror LowerError {
   TypeIndexOutOfRange(index~ : Int32)
   NonFunctionType(index~ : Int32)
   MissingCode(index~ : Int32)
-  UnsupportedNativeLowering(index~ : Int32, reason~ : String)
 }
 
 ///|

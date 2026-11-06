@@ -1,222 +1,46 @@
 ///|
-fn componenttype_import_func_sigs_of_decls(
-  decls : Array[@component.ComponentDecl],
-  global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int32?],
-) -> Map[String, FuncSigShape] {
-  let out : Map[String, FuncSigShape] = Map([])
-  let local_types : Array[@component.TypeDef] = []
-  let local_resource_ids : Array[Int32?] = []
-  // Avoid collisions with the enclosing component's nominal resource ids.
-  let mut next_rid = 0
-  for rid in global_resource_ids {
-    if rid is Some(v) && v >= next_rid {
-      next_rid = v + 1
-    }
-  }
-  fn record_type_slot() -> Unit {
-    local_types.push(InstanceTypeEmpty)
-    local_resource_ids.push(None)
-  }
-
-  fn record_type_slot_for_bound(b : @component.TypeBound) -> Unit {
-    match b {
-      SubResource => {
-        local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
-        local_resource_ids.push(Some(next_rid))
-        next_rid += 1
-      }
-      Eq(_idx) => record_type_slot()
-    }
-  }
-
-  for d in decls {
-    match d {
-      Type(t) => {
-        local_types.push(t)
-        match t {
-          ResourceType(_, _, _, _) => {
-            local_resource_ids.push(Some(next_rid))
-            next_rid += 1
-          }
-          _ => local_resource_ids.push(None)
-        }
-      }
-      AliasOuter(kind, _count, _idx) => if kind == 0x03 { record_type_slot() }
-      AliasInstanceExport(kind, _inst, _name) =>
-        if kind == 0x03 {
-          record_type_slot()
-        }
-      Import(name, _attributes, desc) => {
-        match desc {
-          FuncType(tyidx) =>
-            if tyidx >= 0 && tyidx < local_types.length() {
-              match local_types[tyidx] {
-                FuncType(ft) =>
-                  out.set(
-                    name,
-                    funcsig_of_functype_lg(
-                      ft, local_types, local_resource_ids, global_types, global_resource_ids,
-                    ),
-                  )
-                _ => ()
-              }
-            } else if tyidx >= 0 && tyidx < global_types.length() {
-              match global_types[tyidx] {
-                Some(FuncType(ft)) =>
-                  out.set(
-                    name,
-                    funcsig_of_functype_lg(
-                      ft,
-                      [],
-                      [],
-                      global_types,
-                      global_resource_ids,
-                    ),
-                  )
-                _ => ()
-              }
-            }
-          _ => ()
-        }
-        match desc {
-          Type(b) => record_type_slot_for_bound(b)
-          _ => ()
-        }
-      }
-      Export(_name, _attributes, desc) =>
-        match desc {
-          Type(b) => record_type_slot_for_bound(b)
-          _ => ()
-        }
-      CoreType(_) => ()
-    }
-  }
-  out
+priv struct ComponentTypeSignatures {
+  import_functions : Map[String, FuncSigShape]
+  export_functions : Map[String, FuncSigShape]
+  import_types : Map[String, TypeSig]
+  import_bounds : Map[String, @component.TypeBound]
+  export_types : Map[String, TypeSig]
 }
 
 ///|
-fn componenttype_import_type_sigs_of_decls(
+fn componenttype_signatures_of_decls(
   decls : Array[@component.ComponentDecl],
   global_types : Array[@component.TypeDef?],
   global_resource_ids : Array[Int32?],
-) -> Map[String, TypeSig] {
-  let out : Map[String, TypeSig] = Map([])
+) -> ComponentTypeSignatures {
+  let signatures : ComponentTypeSignatures = {
+    import_functions: Map([]),
+    export_functions: Map([]),
+    import_types: Map([]),
+    import_bounds: Map([]),
+    export_types: Map([]),
+  }
   let local_types : Array[@component.TypeDef] = []
-  let local_resource_ids : Array[Int32?] = []
-  // Avoid collisions with the enclosing component's nominal resource ids.
-  let mut next_rid = 0
-  for rid in global_resource_ids {
-    if rid is Some(v) && v >= next_rid {
-      next_rid = v + 1
-    }
+  let local_ids : Array[Int32?] = []
+  // Export type signatures carry definitions through eq slots. Function and
+  // import type signatures use placeholder slots for the same declarations.
+  let export_types : Array[@component.TypeDef] = []
+  let export_ids : Array[Int32?] = []
+  let global_resolver : TypeSigResolver = {
+    locals: None,
+    global_types,
+    global_resource_ids,
+    known_sigs: None,
+    visiting: Map([]),
   }
-  fn record_type_slot(as_resource : Bool) -> Int32 {
-    let idx = local_types.length()
-    if as_resource {
-      local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
-      local_resource_ids.push(Some(next_rid))
-      next_rid += 1
-    } else {
-      local_types.push(InstanceTypeEmpty)
-      local_resource_ids.push(None)
-    }
-    idx
+  let local_resolver = {
+    ..global_resolver,
+    locals: Some((local_types, local_ids)),
   }
-
-  for d in decls {
-    match d {
-      Type(t) => {
-        local_types.push(t)
-        match t {
-          ResourceType(_, _, _, _) => {
-            local_resource_ids.push(Some(next_rid))
-            next_rid += 1
-          }
-          _ => local_resource_ids.push(None)
-        }
-      }
-      AliasOuter(kind, _count, _idx) =>
-        if kind == 0x03 {
-          record_type_slot(false) |> ignore
-        }
-      AliasInstanceExport(kind, _inst, _name) =>
-        if kind == 0x03 {
-          record_type_slot(false) |> ignore
-        }
-      Import(name, _attributes, desc) =>
-        match desc {
-          Type(bound) =>
-            match bound {
-              Eq(tyidx) => {
-                // Compute the bound signature in the current local/global environment.
-                out.set(
-                  name,
-                  type_sig_of_valtype_lg(
-                    TypeIdx(tyidx),
-                    local_types,
-                    local_resource_ids,
-                    global_types,
-                    global_resource_ids,
-                    Map([]),
-                  ),
-                )
-                record_type_slot(false) |> ignore
-              }
-              SubResource => {
-                let new_idx = record_type_slot(true)
-                out.set(
-                  name,
-                  type_sig_of_valtype_lg(
-                    TypeIdx(new_idx),
-                    local_types,
-                    local_resource_ids,
-                    global_types,
-                    global_resource_ids,
-                    Map([]),
-                  ),
-                )
-              }
-            }
-          _ => if desc is Type(_) { record_type_slot(false) |> ignore }
-        }
-      Export(_name, _attributes, desc) =>
-        match desc {
-          Type(bound) =>
-            match bound {
-              SubResource => record_type_slot(true) |> ignore
-              Eq(_tyidx) => record_type_slot(false) |> ignore
-            }
-          _ => ()
-        }
-      CoreType(_) => ()
-    }
+  let export_resolver = {
+    ..global_resolver,
+    locals: Some((export_types, export_ids)),
   }
-  out
-}
-
-///|
-fn componenttype_import_type_bounds_of_decls(
-  decls : Array[@component.ComponentDecl],
-) -> Map[String, @component.TypeBound] {
-  let out : Map[String, @component.TypeBound] = Map([])
-  for d in decls {
-    if d is Import(name, _attributes, Type(b)) {
-      out.set(name, b)
-    }
-  }
-  out
-}
-
-///|
-fn componenttype_export_type_sigs_of_decls(
-  decls : Array[@component.ComponentDecl],
-  global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int32?],
-) -> Map[String, TypeSig] {
-  let out : Map[String, TypeSig] = Map([])
-  let local_types : Array[@component.TypeDef] = []
-  let local_resource_ids : Array[Int32?] = []
   let mut next_rid = 0
   for rid in global_resource_ids {
     if rid is Some(value) && value >= next_rid {
@@ -224,318 +48,138 @@ fn componenttype_export_type_sigs_of_decls(
     }
   }
 
-  fn push_placeholder() -> Unit {
-    local_types.push(InstanceTypeEmpty)
-    local_resource_ids.push(None)
-  }
-
-  fn push_resource() -> Int32 {
-    let idx = local_types.length()
-    local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
-    local_resource_ids.push(Some(next_rid))
-    next_rid += 1
-    idx
-  }
-
-  fn push_eq(idx : Int32) -> Unit {
-    if idx >= 0 && idx < local_types.length() {
-      local_types.push(local_types[idx])
-      local_resource_ids.push(local_resource_ids[idx])
+  fn push_type(t : @component.TypeDef) -> Unit {
+    let rid = if t is ResourceType(_, _, _, _) {
+      let rid = next_rid
+      next_rid += 1
+      Some(rid)
     } else {
-      push_placeholder()
+      None
     }
+    local_types.push(t)
+    local_ids.push(rid)
+    export_types.push(t)
+    export_ids.push(rid)
   }
 
-  for d in decls {
-    match d {
-      Type(t) => {
-        local_types.push(t)
-        if t is ResourceType(_, _, _, _) {
-          local_resource_ids.push(Some(next_rid))
-          next_rid += 1
+  fn record_extern(
+    name : String,
+    desc : @component.ExternDesc,
+    imported : Bool,
+  ) -> Unit {
+    match desc {
+      Type(bound) => {
+        let resolver = if imported { local_resolver } else { export_resolver }
+        let out = if imported {
+          signatures.import_types
         } else {
-          local_resource_ids.push(None)
+          signatures.export_types
         }
-      }
-      AliasOuter(kind, _, _) | AliasInstanceExport(kind, _, _) =>
-        if kind == 0x03 {
-          push_placeholder()
+        if imported {
+          signatures.import_bounds.set(name, bound)
         }
-      Import(_name, _attributes, desc) =>
-        match desc {
-          Type(SubResource) => push_resource() |> ignore
-          Type(Eq(idx)) => push_eq(idx)
-          _ => ()
-        }
-      Export(name, _attributes, desc) =>
-        match desc {
-          Type(SubResource) => {
-            let idx = push_resource()
-            out.set(
-              name,
-              type_sig_of_valtype_lg(
-                TypeIdx(idx),
-                local_types,
-                local_resource_ids,
-                global_types,
-                global_resource_ids,
-                Map([]),
-              ),
-            )
+        match bound {
+          SubResource => {
+            let idx = local_types.length()
+            push_type(ResourceType(-1, 0x7f, None, HostDefined))
+            out.set(name, resolver.resolve(TypeIdx(idx)))
           }
-          Type(Eq(idx)) => {
-            out.set(
-              name,
-              type_sig_of_valtype_lg(
-                TypeIdx(idx),
-                local_types,
-                local_resource_ids,
-                global_types,
-                global_resource_ids,
-                Map([]),
-              ),
-            )
-            push_eq(idx)
-          }
-          _ => ()
-        }
-      CoreType(_) => ()
-    }
-  }
-  out
-}
-
-///|
-fn componenttype_export_func_sigs_of_decls(
-  decls : Array[@component.ComponentDecl],
-  global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int32?],
-) -> Map[String, FuncSigShape] {
-  let out : Map[String, FuncSigShape] = Map([])
-  let local_types : Array[@component.TypeDef] = []
-  let local_resource_ids : Array[Int32?] = []
-  // Avoid collisions with the enclosing component's nominal resource ids.
-  let mut next_rid = 0
-  for rid in global_resource_ids {
-    if rid is Some(v) && v >= next_rid {
-      next_rid = v + 1
-    }
-  }
-  fn record_type_slot() -> Unit {
-    local_types.push(InstanceTypeEmpty)
-    local_resource_ids.push(None)
-  }
-
-  fn record_type_slot_for_bound(b : @component.TypeBound) -> Unit {
-    match b {
-      SubResource => {
-        local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
-        local_resource_ids.push(Some(next_rid))
-        next_rid += 1
-      }
-      Eq(_idx) => record_type_slot()
-    }
-  }
-
-  fn record_type_slots_for_desc(desc : @component.ExternDesc) -> Unit {
-    if desc is Type(b) {
-      record_type_slot_for_bound(b)
-    }
-  }
-
-  for d in decls {
-    match d {
-      Type(t) => {
-        local_types.push(t)
-        match t {
-          ResourceType(_, _, _, _) => {
-            local_resource_ids.push(Some(next_rid))
-            next_rid += 1
-          }
-          _ => local_resource_ids.push(None)
-        }
-      }
-      AliasOuter(kind, _count, _idx) => if kind == 0x03 { record_type_slot() }
-      AliasInstanceExport(kind, _inst, _name) =>
-        if kind == 0x03 {
-          record_type_slot()
-        }
-      Import(_name, _attributes, desc) => record_type_slots_for_desc(desc)
-      Export(name, _attributes, desc) => {
-        match desc {
-          FuncType(tyidx) =>
-            if tyidx >= 0 && tyidx < local_types.length() {
-              match local_types[tyidx] {
-                FuncType(ft) =>
-                  out.set(
-                    name,
-                    funcsig_of_functype_lg(
-                      ft, local_types, local_resource_ids, global_types, global_resource_ids,
-                    ),
-                  )
-                _ => ()
-              }
-            } else if tyidx >= 0 && tyidx < global_types.length() {
-              match global_types[tyidx] {
-                Some(FuncType(ft)) =>
-                  out.set(
-                    name,
-                    funcsig_of_functype_lg(
-                      ft,
-                      [],
-                      [],
-                      global_types,
-                      global_resource_ids,
-                    ),
-                  )
-                _ => ()
-              }
+          Eq(idx) => {
+            out.set(name, resolver.resolve(TypeIdx(idx)))
+            local_types.push(InstanceTypeEmpty)
+            local_ids.push(None)
+            if idx >= 0 && idx < export_types.length() {
+              export_types.push(export_types[idx])
+              export_ids.push(export_ids[idx])
+            } else {
+              export_types.push(InstanceTypeEmpty)
+              export_ids.push(None)
             }
-          _ => ()
+          }
         }
-        record_type_slots_for_desc(desc)
       }
-      CoreType(_) => ()
-    }
-  }
-  out
-}
-
-///|
-/// For a given component, extract the expected export-kinds of any core-module
-/// imports, keyed by the component import name.
-fn component_import_core_module_exports_of(
-  c : @component.Component,
-) -> Map[String, Map[String, Int32]] raise ComponentValidationError {
-  let core_type_exports : Array[Map[String, Int32]?] = []
-  for payload in c.core_types {
-    let exports = parse_core_type_section(payload, -1, 0, [])
-    for e in exports {
-      core_type_exports.push(e)
-    }
-  }
-  let result : Map[String, Map[String, Int32]] = Map([])
-  for i in c.imports {
-    if (importname_to_string(i.name), i.desc)
-      is (Some(name), CoreModuleType(tyidx)) &&
-      tyidx >= 0 &&
-      tyidx < core_type_exports.length() &&
-      core_type_exports[tyidx] is Some(map) {
-      result.set(name, map)
-    }
-  }
-  result
-}
-
-///|
-fn component_import_core_module_import_sigs_of(
-  c : @component.Component,
-) -> Map[String, Map[String, CoreExternType]] raise ComponentValidationError {
-  let core_type_imports : Array[Array[CoreModuleTypeImport]?] = []
-  let mut base_bound = 0
-  for payload in c.core_types {
-    let (imports, _export_types) = parse_core_type_section_module_sigs(
-      payload,
-      -1,
-      base_bound,
-      [],
-    )
-    for imps in imports {
-      core_type_imports.push(imps)
-    }
-    base_bound += imports.length()
-  }
-  let result : Map[String, Map[String, CoreExternType]] = Map([])
-  for i in c.imports {
-    if (importname_to_string(i.name), i.desc)
-      is (Some(name), CoreModuleType(tyidx)) &&
-      tyidx >= 0 &&
-      tyidx < core_type_imports.length() &&
-      core_type_imports[tyidx] is Some(imps) {
-      let map : Map[String, CoreExternType] = Map([])
-      for imp in imps {
-        map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
-      }
-      result.set(name, map)
-    }
-  }
-  result
-}
-
-///|
-fn componenttype_import_core_module_sigs_of_decls(
-  decls : Array[@component.ComponentDecl],
-) -> (Map[String, Map[String, CoreExternType]], Map[String, Map[String, Int32]]) raise ComponentValidationError {
-  let local_core_import_sigs : Array[Map[String, CoreExternType]?] = []
-  let local_core_export_kinds : Array[Map[String, Int32]?] = []
-  let mut core_type_bound = 0
-  for d in decls {
-    match d {
-      CoreType(bytes) => {
-        let r = CoreTypeReader::CoreTypeReader(bytes)
-        let op = r.read_u8()
-        if op == 0x50 {
-          let (imps, exps) = parse_core_type_module_sig(
-            r,
-            -1,
-            core_type_bound,
-            [],
-          )
-          let imp_map : Map[String, CoreExternType] = Map([])
-          for imp in imps {
-            imp_map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
-          }
-          let exp_kinds : Map[String, Int32] = Map([])
-          for kv in exps.iter() {
-            let (nm, ty) = kv
-            exp_kinds.set(nm, core_kind_of_extern_type(ty))
-          }
-          local_core_import_sigs.push(Some(imp_map))
-          local_core_export_kinds.push(Some(exp_kinds))
-        } else if op == 0x60 {
-          r.skip_func_type_body()
-          local_core_import_sigs.push(None)
-          local_core_export_kinds.push(None)
+      FuncType(idx) => {
+        let (definition, resolver) = if idx >= 0 && idx < local_types.length() {
+          (Some(local_types[idx]), local_resolver)
         } else {
-          raise SectionParseError(3, "unsupported core type opcode: \{op}")
+          (global_types.get(idx).bind(value => value), global_resolver)
         }
-        if !r.is_eof() {
-          raise SectionParseError(3, "trailing bytes in core type payload")
+        if definition is Some(FuncType(ft)) {
+          let out = if imported {
+            signatures.import_functions
+          } else {
+            signatures.export_functions
+          }
+          out.set(name, resolver.resolve_function(ft))
         }
-        core_type_bound += 1
       }
-      AliasOuter(kind, _count, _idx) =>
+      _ => ()
+    }
+  }
+
+  for decl in decls {
+    match decl {
+      Type(t) => push_type(t)
+      AliasOuter(0x03, _, _) | AliasInstanceExport(0x03, _, _) =>
+        push_type(InstanceTypeEmpty)
+      Import(name, _, desc) => record_extern(name, desc, true)
+      Export(name, _, desc) => record_extern(name, desc, false)
+      _ => ()
+    }
+  }
+  signatures
+}
+
+///|
+priv struct CoreModuleRequirement {
+  imports : Map[String, CoreExternType]
+  exports : Map[String, Int32]
+}
+
+///|
+fn CoreModuleTypeSignature::requirement(
+  self : CoreModuleTypeSignature,
+) -> CoreModuleRequirement {
+  {
+    imports: core_module_import_sig_of_type(self.imports),
+    exports: self.export_kinds,
+  }
+}
+
+///|
+fn componenttype_import_core_modules(
+  decls : Array[@component.ComponentDecl],
+) -> Map[String, CoreModuleRequirement] raise ComponentValidationError {
+  let core_types : Array[CoreModuleTypeSignature?] = []
+  for decl in decls {
+    match decl {
+      CoreType(bytes) =>
+        core_types.push(
+          parse_single_component_core_type(
+            bytes,
+            -1,
+            core_types.length(),
+            [],
+            SignaturesOnly,
+            allow_prefixed=false,
+          ),
+        )
+      AliasOuter(kind, _, _) | AliasInstanceExport(kind, _, _) =>
         if kind != 0x03 {
-          // Core-type aliases consume a core-type index.
-          local_core_import_sigs.push(None)
-          local_core_export_kinds.push(None)
-          core_type_bound += 1
-        }
-      AliasInstanceExport(kind, _inst, _name) =>
-        if kind != 0x03 {
-          local_core_import_sigs.push(None)
-          local_core_export_kinds.push(None)
-          core_type_bound += 1
+          // Keep the index of the alias even when its signature is unavailable.
+          core_types.push(None)
         }
       _ => ()
     }
   }
-  let import_sigs : Map[String, Map[String, CoreExternType]] = Map([])
-  let export_kinds : Map[String, Map[String, Int32]] = Map([])
-  for d in decls {
-    if d is Import(name, _attributes, desc) &&
-      desc is CoreModuleType(tyidx) &&
-      tyidx >= 0 &&
-      tyidx < local_core_import_sigs.length() {
-      if local_core_import_sigs[tyidx] is Some(map) {
-        import_sigs.set(name, map)
-      }
-      if local_core_export_kinds[tyidx] is Some(map) {
-        export_kinds.set(name, map)
-      }
+  let requirements : Map[String, CoreModuleRequirement] = Map([])
+  for decl in decls {
+    if decl is Import(name, _, CoreModuleType(index)) &&
+      core_types.get(index) is Some(Some(signature)) {
+      requirements.set(name, signature.requirement())
     }
   }
-  (import_sigs, export_kinds)
+  requirements
 }
 
 ///|
@@ -711,10 +355,10 @@ fn outer_type_of_alias(
 
 ///|
 fn outer_core_type_of_alias(
-  core_type_outers : Array[Array[Map[String, Int32]?]],
+  core_type_outers : Array[Array[CoreModuleTypeSignature?]],
   count : Int32,
   idx : Int32,
-) -> Map[String, Int32]? raise ComponentValidationError {
+) -> CoreModuleTypeSignature? raise ComponentValidationError {
   if count <= 0 || count > core_type_outers.length() {
     raise InvalidCoreTypeIndex(idx)
   }
@@ -839,27 +483,29 @@ fn is_map_key_type(
 }
 
 ///|
-fn validate_typedef(
+priv struct TypeValidationScope {
+  cfg : ComponentValidationConfig
+  type_outers : Array[Array[@component.TypeDef?]]
+  type_outer_depths : Array[Int32]
+  component_depth : Int32
+  core_type_outers : Array[Array[CoreModuleTypeSignature?]]
+}
+
+///|
+fn TypeValidationScope::validate_typedef(
+  self : TypeValidationScope,
   td : @component.TypeDef,
-  cfg : ComponentValidationConfig,
-  type_outers : Array[Array[@component.TypeDef?]],
-  type_outer_depths : Array[Int32],
-  component_depth : Int32,
-  core_type_outers : Array[Array[Map[String, Int32]?]],
-  allow_resource_defs : Bool,
+  allow_resource_defs~ : Bool,
 ) -> Unit raise ComponentValidationError {
-  if type_outers.length() == 0 ||
-    type_outer_depths.length() != type_outers.length() ||
-    core_type_outers.length() == 0 {
+  if self.type_outers.length() == 0 ||
+    self.type_outer_depths.length() != self.type_outers.length() ||
+    self.core_type_outers.length() == 0 {
     raise SectionParseError(
       7, "missing outer environment for typedef validation",
     )
   }
-  let type_table = type_outers[0]
-  let outer_core_type_bounds : Array[Int32] = []
-  for i in 0..<core_type_outers.length() {
-    outer_core_type_bounds.push(core_type_outers[i].length())
-  }
+  let type_table = self.type_outers[0]
+  let cfg = self.cfg
   match td {
     DefValType(_) => ()
     List(v) => validate_valtype(v, type_table)
@@ -1017,392 +663,14 @@ fn validate_typedef(
         raise SectionParseError(7, "resources can only be represented by `i32`")
       }
     }
-    ComponentType(decls) => {
-      // Component type declarations define their own internal type/core-type
-      // index spaces referenced by later imports/exports within the same type.
-      let local_type_table : Array[@component.TypeDef?] = []
-      let local_resource_ids : Array[Int32?] = []
-      let mut local_core_type_bound = 0
-      let seen_imports : Map[String, String] = Map([])
-      let seen_exports : Map[String, String] = Map([])
-      let local_named_types : Map[Int32, Int32] = Map([])
-      let local_import_resource_names : Map[String, Int32] = Map([])
-      let local_export_resource_names : Map[String, Int32] = Map([])
-      let local_import_resource_type_idxs : Map[Int32, Int32] = Map([])
-      let local_export_resource_type_idxs : Map[Int32, Int32] = Map([])
-      let local_core_type_exports : Array[Map[String, Int32]?] = []
-      for d in decls {
-        match d {
-          CoreType(bytes) => {
-            local_core_type_exports.push(
-              validate_single_core_type(
-                bytes, local_core_type_bound, outer_core_type_bounds,
-              ),
-            )
-            local_core_type_bound += 1
-          }
-          AliasOuter(kind, count, idx) =>
-            if kind == 0x03 {
-              let outer = outer_type_of_alias(type_outers, count, idx)
-              if type_outer_depths[count - 1] < component_depth {
-                match outer {
-                  Some(td) =>
-                    if typedef_refers_to_resource(
-                        td,
-                        type_outers[count - 1],
-                        Map([]),
-                      ) {
-                      raise SectionParseError(
-                        7, "transitively refers to resources",
-                      )
-                    }
-                  None => ()
-                }
-              }
-              local_type_table.push(outer)
-              local_resource_ids.push(None)
-            } else if kind == 0x110 {
-              local_core_type_exports.push(
-                outer_core_type_of_alias(core_type_outers, count, idx),
-              )
-              local_core_type_bound += 1
-            } else {
-              raise SectionParseError(7, "outer alias may only refer to types")
-            }
-          AliasInstanceExport(kind, _instance_idx, _name) =>
-            if kind == 0x03 {
-              local_type_table.push(None)
-              local_resource_ids.push(None)
-            } else if kind != 0x05 {
-              raise SectionParseError(
-                7, "alias export may only refer to types or instances",
-              )
-            }
-          Type(t) => {
-            validate_typedef(
-              t,
-              cfg,
-              [local_type_table] + type_outers,
-              [component_depth] + type_outer_depths,
-              component_depth,
-              [local_core_type_exports] + core_type_outers,
-              false,
-            )
-            local_type_table.push(Some(t))
-            local_resource_ids.push(None)
-          }
-          Import(name, attributes, desc) => {
-            validate_extern_name_string(name, cfg)
-            validate_name_attributes_string(
-              7,
-              name,
-              attributes,
-              sort_of_externdesc(desc),
-              cfg,
-            )
-            let key = ascii_lower_key(name)
-            match seen_imports.get(key) {
-              Some(prev) =>
-                if prev == name {
-                  raise DuplicateImportName(name)
-                } else {
-                  raise SectionParseError(
-                    7,
-                    "import name `\{name}` conflicts with previous name `\{prev}`",
-                  )
-                }
-              None => seen_imports.set(key, name)
-            }
-            validate_externdesc(desc, local_type_table, local_core_type_bound)
-            match desc {
-              CoreModuleType(tyidx) =>
-                if tyidx < 0 ||
-                  tyidx >= local_core_type_exports.length() ||
-                  local_core_type_exports[tyidx] is None {
-                  raise CoreTypeIndexNotModuleType(tyidx)
-                }
-              _ => ()
-            }
-            match desc {
-              Type(bound) => {
-                let new_idx = local_type_table.length()
-                match bound {
-                  Eq(tyidx) =>
-                    if tyidx >= 0 && tyidx < local_type_table.length() {
-                      local_type_table.push(local_type_table[tyidx])
-                      local_resource_ids.push(local_resource_ids[tyidx])
-                    } else {
-                      local_type_table.push(None)
-                      local_resource_ids.push(None)
-                    }
-                  SubResource => {
-                    local_type_table.push(
-                      Some(ResourceType(-1, 0x7f, None, HostDefined)),
-                    )
-                    local_resource_ids.push(None)
-                  }
-                }
-                local_named_types.set(new_idx, 1)
-                match bound {
-                  SubResource => {
-                    local_import_resource_names.set(name, new_idx)
-                    local_import_resource_type_idxs.set(new_idx, 1)
-                  }
-                  _ => ()
-                }
-                if !valtype_valid_for_type_import_export(
-                    TypeIdx(new_idx),
-                    local_type_table,
-                    local_resource_ids,
-                    local_named_types,
-                    Map([]),
-                  ) {
-                  raise SectionParseError(
-                    7, "type not valid to be used as import",
-                  )
-                }
-              }
-              FuncType(tyidx) =>
-                if tyidx >= 0 && tyidx < local_type_table.length() {
-                  match local_type_table[tyidx] {
-                    Some(FuncType(ft)) => {
-                      validate_bracketed_func_name(
-                        7, name, ft, local_type_table, local_resource_ids, local_import_resource_names,
-                      )
-                      if functype_uses_disallowed_resources(
-                          ft, local_type_table, local_import_resource_type_idxs,
-                        ) {
-                        raise SectionParseError(
-                          7, "func not valid to be used as import",
-                        )
-                      }
-                      if !functype_valid_in_interface(
-                          ft, local_type_table, local_resource_ids, local_named_types,
-                        ) {
-                        raise SectionParseError(
-                          7, "func not valid to be used as import",
-                        )
-                      }
-                    }
-                    _ => ()
-                  }
-                }
-              _ => ()
-            }
-          }
-          Export(name, attributes, desc) => {
-            validate_extern_name_string(name, cfg)
-            validate_name_attributes_string(
-              7,
-              name,
-              attributes,
-              sort_of_externdesc(desc),
-              cfg,
-            )
-            let key = ascii_lower_key(name)
-            match seen_exports.get(key) {
-              Some(prev) =>
-                if prev == name {
-                  raise DuplicateExportName(name)
-                } else {
-                  raise SectionParseError(
-                    7,
-                    "export name `\{name}` conflicts with previous name `\{prev}`",
-                  )
-                }
-              None => seen_exports.set(key, name)
-            }
-            validate_externdesc(desc, local_type_table, local_core_type_bound)
-            match desc {
-              CoreModuleType(tyidx) =>
-                if tyidx < 0 ||
-                  tyidx >= local_core_type_exports.length() ||
-                  local_core_type_exports[tyidx] is None {
-                  raise CoreTypeIndexNotModuleType(tyidx)
-                }
-              _ => ()
-            }
-            match desc {
-              Type(bound) => {
-                let new_idx = local_type_table.length()
-                match bound {
-                  Eq(tyidx) =>
-                    if tyidx >= 0 && tyidx < local_type_table.length() {
-                      local_type_table.push(local_type_table[tyidx])
-                      local_resource_ids.push(local_resource_ids[tyidx])
-                    } else {
-                      local_type_table.push(None)
-                      local_resource_ids.push(None)
-                    }
-                  SubResource => {
-                    local_type_table.push(
-                      Some(ResourceType(-1, 0x7f, None, HostDefined)),
-                    )
-                    local_resource_ids.push(None)
-                  }
-                }
-                local_named_types.set(new_idx, 1)
-                match bound {
-                  SubResource => {
-                    local_export_resource_names.set(name, new_idx)
-                    local_export_resource_type_idxs.set(new_idx, 1)
-                  }
-                  _ => ()
-                }
-                if !valtype_valid_for_type_import_export(
-                    TypeIdx(new_idx),
-                    local_type_table,
-                    local_resource_ids,
-                    local_named_types,
-                    Map([]),
-                  ) {
-                  raise SectionParseError(
-                    7, "type not valid to be used as export",
-                  )
-                }
-              }
-              FuncType(tyidx) =>
-                if tyidx >= 0 && tyidx < local_type_table.length() {
-                  match local_type_table[tyidx] {
-                    Some(FuncType(ft)) => {
-                      validate_bracketed_func_name(
-                        7, name, ft, local_type_table, local_resource_ids, local_export_resource_names,
-                      )
-                      if !functype_valid_in_interface(
-                          ft, local_type_table, local_resource_ids, local_named_types,
-                        ) {
-                        raise SectionParseError(
-                          7, "func not valid to be used as export",
-                        )
-                      }
-                    }
-                    _ => ()
-                  }
-                }
-              _ => ()
-            }
-          }
-        }
-      }
-    }
+    ComponentType(decls) =>
+      self.validate_declarations(decls.iter(), component=true)
     InstanceTypeEmpty => ()
-    InstanceType(decls) => {
-      // Instance type declarations define their own internal type index space
-      // which is referenced by later exports within the same instance type.
-      let local_type_table : Array[@component.TypeDef?] = []
-      let mut local_core_type_bound = 0
-      let seen_exports : Map[String, String] = Map([])
-      let local_core_type_exports : Array[Map[String, Int32]?] = []
-      for d in decls {
-        match d {
-          CoreType(bytes) => {
-            let r = CoreTypeReader::CoreTypeReader(bytes)
-            let op = r.read_u8()
-            if op == 0x50 {
-              local_core_type_exports.push(
-                Some(
-                  parse_core_type_module_exports(r, -1, local_core_type_bound, []),
-                ),
-              )
-            } else if op == 0x60 {
-              r.skip_func_type_body()
-              local_core_type_exports.push(None)
-            } else {
-              raise SectionParseError(3, "unsupported core type opcode: \{op}")
-            }
-            if !r.is_eof() {
-              raise SectionParseError(3, "trailing bytes in core type payload")
-            }
-            local_core_type_bound += 1
-          }
-          AliasOuter(kind, count, idx) =>
-            if kind == 0x03 {
-              let outer = outer_type_of_alias(type_outers, count, idx)
-              if type_outer_depths[count - 1] < component_depth {
-                match outer {
-                  Some(td) =>
-                    if typedef_refers_to_resource(
-                        td,
-                        type_outers[count - 1],
-                        Map([]),
-                      ) {
-                      raise SectionParseError(
-                        7, "transitively refers to resources",
-                      )
-                    }
-                  None => ()
-                }
-              }
-              local_type_table.push(outer)
-            } else if kind == 0x110 {
-              local_core_type_exports.push(
-                outer_core_type_of_alias(core_type_outers, count, idx),
-              )
-              local_core_type_bound += 1
-            } else {
-              raise SectionParseError(7, "outer alias may only refer to types")
-            }
-          AliasInstanceExport(kind, _instance_idx, _name) =>
-            if kind == 0x03 {
-              local_type_table.push(None)
-            } else if kind != 0x05 {
-              raise SectionParseError(
-                7, "alias export may only refer to types or instances",
-              )
-            }
-          Type(t) => {
-            validate_typedef(
-              t,
-              cfg,
-              [local_type_table] + type_outers,
-              [component_depth] + type_outer_depths,
-              component_depth,
-              [local_core_type_exports] + core_type_outers,
-              false,
-            )
-            local_type_table.push(Some(t))
-          }
-          Export(name, attributes, desc) => {
-            validate_extern_name_string(name, cfg)
-            validate_name_attributes_string(
-              7,
-              name,
-              attributes,
-              sort_of_externdesc(desc),
-              cfg,
-            )
-            let key = ascii_lower_key(name)
-            match seen_exports.get(key) {
-              Some(prev) =>
-                if prev == name {
-                  raise DuplicateExportName(name)
-                } else {
-                  raise SectionParseError(
-                    7,
-                    "export name `\{name}` conflicts with previous name `\{prev}`",
-                  )
-                }
-              None => seen_exports.set(key, name)
-            }
-            validate_externdesc(desc, local_type_table, local_core_type_bound)
-            match desc {
-              CoreModuleType(tyidx) =>
-                if tyidx < 0 ||
-                  tyidx >= local_core_type_exports.length() ||
-                  local_core_type_exports[tyidx] is None {
-                  raise CoreTypeIndexNotModuleType(tyidx)
-                }
-              _ => ()
-            }
-            // Like the component export section, exporting a type introduces
-            // a fresh type index in this instance type's local type space.
-            if desc is Type(_) {
-              local_type_table.push(None)
-            }
-          }
-        }
-      }
-    }
+    InstanceType(decls) =>
+      self.validate_declarations(
+        decls.iter().map(instance_declaration),
+        component=false,
+      )
     FuncType(ft) => {
       let seen_params : Map[String, String] = Map([])
       for p in ft.params {
@@ -1424,6 +692,202 @@ fn validate_typedef(
           }
         }
         None => ()
+      }
+    }
+  }
+}
+
+///|
+fn instance_declaration(
+  decl : @component.InstanceDecl,
+) -> @component.ComponentDecl {
+  match decl {
+    CoreType(bytes) => CoreType(bytes)
+    Type(td) => Type(td)
+    AliasOuter(kind, count, idx) => AliasOuter(kind, count, idx)
+    AliasInstanceExport(kind, idx, name) => AliasInstanceExport(kind, idx, name)
+    Export(name, attributes, desc) => Export(name, attributes, desc)
+  }
+}
+
+///|
+priv struct TypeInterfaceNames {
+  seen : Map[String, String]
+  resources : Map[String, Int32]
+  resource_types : Map[Int32, Int32]
+}
+
+///|
+fn TypeInterfaceNames::TypeInterfaceNames() -> TypeInterfaceNames {
+  { seen: Map([]), resources: Map([]), resource_types: Map([]), }
+}
+
+///|
+fn TypeValidationScope::validate_declarations(
+  self : TypeValidationScope,
+  decls : Iter[@component.ComponentDecl],
+  component~ : Bool,
+) -> Unit raise ComponentValidationError {
+  let types : Array[@component.TypeDef?] = []
+  let core_types : Array[CoreModuleTypeSignature?] = []
+  let nested_scope : TypeValidationScope = {
+    cfg: self.cfg,
+    type_outers: [types] + self.type_outers,
+    type_outer_depths: [self.component_depth] + self.type_outer_depths,
+    component_depth: self.component_depth,
+    core_type_outers: [core_types] + self.core_type_outers,
+  }
+  let outer_core_type_bounds = self.core_type_outers.map(scope => scope.length())
+  let resource_ids : Array[Int32?] = []
+  let named_types : Map[Int32, Int32] = Map([])
+  let imports = TypeInterfaceNames()
+  let exports = TypeInterfaceNames()
+  for decl in decls {
+    match decl {
+      CoreType(bytes) => {
+        let bound = core_types.length()
+        let kinds = if component {
+          validate_single_core_type(bytes, bound, outer_core_type_bounds)
+        } else {
+          parse_single_component_core_type(
+            bytes,
+            -1,
+            bound,
+            [],
+            KindsOnly,
+            allow_prefixed=false,
+          )
+        }
+        core_types.push(kinds)
+      }
+      AliasOuter(kind, count, idx) =>
+        if kind == 0x03 {
+          let outer = outer_type_of_alias(self.type_outers, count, idx)
+          if self.type_outer_depths[count - 1] < self.component_depth &&
+            outer is Some(td) &&
+            typedef_refers_to_resource(td, self.type_outers[count - 1], Map([])) {
+            raise SectionParseError(7, "transitively refers to resources")
+          }
+          types.push(outer)
+          resource_ids.push(None)
+        } else if kind == 0x110 {
+          core_types.push(
+            outer_core_type_of_alias(self.core_type_outers, count, idx),
+          )
+        } else {
+          raise SectionParseError(7, "outer alias may only refer to types")
+        }
+      AliasInstanceExport(kind, _, _) =>
+        if kind == 0x03 {
+          types.push(None)
+          resource_ids.push(None)
+        } else if kind != 0x05 {
+          raise SectionParseError(
+            7, "alias export may only refer to types or instances",
+          )
+        }
+      Type(td) => {
+        nested_scope.validate_typedef(td, allow_resource_defs=false)
+        types.push(Some(td))
+        resource_ids.push(None)
+      }
+      Import(name, attributes, desc) | Export(name, attributes, desc) => {
+        let importing = decl is Import(_, _, _)
+        let direction = if importing { "import" } else { "export" }
+        let names = if importing { imports } else { exports }
+        validate_extern_name_string(name, self.cfg)
+        validate_name_attributes_string(
+          7,
+          name,
+          attributes,
+          sort_of_externdesc(desc),
+          self.cfg,
+        )
+        let key = ascii_lower_key(name)
+        match names.seen.get(key) {
+          Some(prev) =>
+            if prev == name {
+              if importing {
+                raise DuplicateImportName(name)
+              }
+              raise DuplicateExportName(name)
+            } else {
+              raise SectionParseError(
+                7,
+                "\{direction} name `\{name}` conflicts with previous name `\{prev}`",
+              )
+            }
+          None => names.seen.set(key, name)
+        }
+        validate_externdesc(desc, types, core_types.length())
+        if desc is CoreModuleType(tyidx) && core_types[tyidx] is None {
+          raise CoreTypeIndexNotModuleType(tyidx)
+        }
+        if !component {
+          // An instance export introduces a fresh local type index.
+          if desc is Type(_) {
+            types.push(None)
+            resource_ids.push(None)
+          }
+          continue
+        }
+        match desc {
+          Type(bound) => {
+            let new_idx = types.length()
+            match bound {
+              Eq(idx) => {
+                types.push(types[idx])
+                resource_ids.push(resource_ids[idx])
+              }
+              SubResource => {
+                types.push(Some(ResourceType(-1, 0x7f, None, HostDefined)))
+                resource_ids.push(None)
+                names.resources.set(name, new_idx)
+                names.resource_types.set(new_idx, 1)
+              }
+            }
+            named_types.set(new_idx, 1)
+            if !valtype_valid_for_type_import_export(
+                TypeIdx(new_idx),
+                types,
+                resource_ids,
+                named_types,
+                Map([]),
+              ) {
+              raise SectionParseError(
+                7,
+                "type not valid to be used as \{direction}",
+              )
+            }
+          }
+          FuncType(idx) => {
+            // The external descriptor check has already checked this type.
+            guard types[idx] is Some(FuncType(ft)) else { continue }
+            validate_bracketed_func_name(
+              7,
+              name,
+              ft,
+              types,
+              resource_ids,
+              names.resources,
+            )
+            if (
+                importing &&
+                functype_uses_disallowed_resources(
+                  ft,
+                  types,
+                  names.resource_types,
+                )
+              ) ||
+              !functype_valid_in_interface(ft, types, resource_ids, named_types) {
+              raise SectionParseError(
+                7,
+                "func not valid to be used as \{direction}",
+              )
+            }
+          }
+          _ => ()
+        }
       }
     }
   }
@@ -1469,142 +933,6 @@ fn validate_externdesc(
         Type(vt) => validate_valtype(vt, type_table)
       }
   }
-}
-
-///|
-fn validate_canon_opts(
-  opts : Array[@component.CanonOpt],
-) -> Unit raise ComponentValidationError {
-  let mut seen_encoding = false
-  let mut seen_memory = false
-  let mut seen_realloc = false
-  let mut seen_post_return = false
-  let mut seen_core_type = false
-  let mut seen_gc = false
-  let mut seen_callback = false
-  let mut seen_async = false
-  for o in opts {
-    match o {
-      StringEncoding(_) =>
-        if seen_encoding {
-          raise DuplicateCanonOption("string-encoding")
-        } else {
-          seen_encoding = true
-        }
-      Memory(_) =>
-        if seen_memory {
-          raise DuplicateCanonOption("memory")
-        } else {
-          seen_memory = true
-        }
-      Realloc(_) =>
-        if seen_realloc {
-          raise DuplicateCanonOption("realloc")
-        } else {
-          seen_realloc = true
-        }
-      PostReturn(_) =>
-        if seen_post_return {
-          raise DuplicateCanonOption("post-return")
-        } else {
-          seen_post_return = true
-        }
-      CoreType(_) =>
-        if seen_core_type {
-          raise DuplicateCanonOption("core-type")
-        } else {
-          seen_core_type = true
-        }
-      Gc =>
-        if seen_gc {
-          raise DuplicateCanonOption("gc")
-        } else {
-          seen_gc = true
-        }
-      Callback(_) =>
-        if seen_callback {
-          raise DuplicateCanonOption("callback")
-        } else {
-          seen_callback = true
-        }
-      Async =>
-        if seen_async {
-          raise DuplicateCanonOption("async")
-        } else {
-          seen_async = true
-        }
-    }
-  }
-}
-
-///|
-fn canon_has_memory(opts : Array[@component.CanonOpt]) -> Bool {
-  for o in opts {
-    if o is Memory(_) {
-      return true
-    }
-  }
-  false
-}
-
-///|
-fn canon_has_realloc(opts : Array[@component.CanonOpt]) -> Bool {
-  for o in opts {
-    if o is Realloc(_) {
-      return true
-    }
-  }
-  false
-}
-
-///|
-fn canon_has_async(opts : Array[@component.CanonOpt]) -> Bool {
-  for o in opts {
-    if o is Async {
-      return true
-    }
-  }
-  false
-}
-
-///|
-fn canon_has_post_return(opts : Array[@component.CanonOpt]) -> Bool {
-  for o in opts {
-    if o is PostReturn(_) {
-      return true
-    }
-  }
-  false
-}
-
-///|
-fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int32? {
-  for o in opts {
-    if o is Memory(idx) {
-      return Some(idx)
-    }
-  }
-  None
-}
-
-///|
-fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int32? {
-  for o in opts {
-    if o is Realloc(idx) {
-      return Some(idx)
-    }
-  }
-  None
-}
-
-///|
-fn canon_post_return_idx(opts : Array[@component.CanonOpt]) -> Int32? {
-  for o in opts {
-    if o is PostReturn(idx) {
-      return Some(idx)
-    }
-  }
-  None
 }
 
 ///|

@@ -10,55 +10,18 @@ fn validate_component_section_import(
   resource_ids : Array[Int32?],
   type_sizes : Array[Int32],
   type_depths : Array[Int32],
-  component_sizes : Array[Int32],
-  instance_sizes : Array[Int32],
+  components : Array[ComponentIndexEntry],
+  instances : Array[InstanceIndexEntry],
   named_types : Map[Int32, Int32],
   import_named_types : Map[Int32, Int32],
-  core_type_exports : Array[Map[String, Int32]?],
-  core_type_module_imports : Array[Array[CoreModuleTypeImport]?],
-  core_type_module_export_types : Array[Map[String, CoreExternType]?],
-  core_module_exports : Array[Map[String, Int32]?],
-  core_module_defs : Array[@types.Module?],
-  core_module_export_types : Array[Map[String, CoreExternType]?],
-  core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
-  component_import_sorts : Array[Map[String, @component.Sort]?],
-  component_import_instance_sigs : Array[Map[String, InstanceSig]?],
-  component_import_func_sigs : Array[Map[String, FuncSigShape]?],
-  component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int32]]?,
-  ],
-  component_import_core_module_exports : Array[Map[String, Map[String, Int32]]?],
-  component_import_core_module_import_sigs : Array[
-    Map[String, Map[String, CoreExternType]]?,
-  ],
-  component_import_type_bounds : Array[Map[String, @component.TypeBound]?],
-  component_import_type_sigs : Array[Map[String, TypeSig]?],
-  component_export_sorts : Array[Map[String, @component.Sort]?],
-  component_export_instance_sigs : Array[Map[String, InstanceSig]?],
-  component_export_instance_type_sigs : Array[
-    Map[String, Map[String, TypeSig]]?,
-  ],
-  component_export_instance_func_sigs : Array[
-    Map[String, Map[String, FuncSigShape]]?,
-  ],
-  component_export_type_sigs : Array[Map[String, TypeSig]?],
-  component_export_func_sigs : Array[Map[String, FuncSigShape]?],
-  instance_sigs : Array[InstanceSig?],
-  interface_instance_idxs : Map[Int32, Int32],
-  instance_export_type_idxs : Array[Array[Int32]?],
-  instance_export_func_idxs : Array[Array[Int32]?],
-  instance_export_type_map : Array[Map[String, ExportedTypeInfo]?],
-  instance_export_type_sigs : Array[Map[String, TypeSig]?],
-  instance_export_func_sigs : Array[Map[String, FuncSigShape]?],
-  instance_nested_instance_type_sigs : Array[Map[String, Map[String, TypeSig]]?],
-  instance_nested_instance_func_sigs : Array[
-    Map[String, Map[String, FuncSigShape]]?,
-  ],
+  core_types : Array[CoreModuleTypeSignature?],
+  core_modules : Array[CoreModuleIndexEntry],
   func_types : Array[@component.FuncType?],
   func_sig_shapes : Array[FuncSigShape?],
   seen_import_names : Map[String, String],
   import_resource_names : Map[String, Int32],
   my_import_sorts : Map[String, @component.Sort],
+  my_import_core_modules : Map[String, CoreModuleRequirement],
   my_import_instance_sigs : Map[String, InstanceSig],
   my_import_func_sigs : Map[String, FuncSigShape],
   my_import_instance_resource_exports : Map[String, Map[String, Int32]],
@@ -160,31 +123,23 @@ fn validate_component_section_import(
         }
       }
     }
-    if i.desc is CoreModuleType(tyidx) {
-      if tyidx >= 0 && tyidx < core_type_exports.length() {
-        match core_type_exports[tyidx] {
-          Some(map) => core_module_exports.push(Some(map))
-          None => raise CoreTypeIndexNotModuleType(tyidx)
-        }
-      } else {
-        core_module_exports.push(None)
-      }
-    }
     match i.desc {
       CoreModuleType(tyidx) => {
-        core_module_defs.push(None)
-        if tyidx >= 0 && tyidx < core_type_module_export_types.length() {
-          core_module_export_types.push(core_type_module_export_types[tyidx])
-        } else {
-          core_module_export_types.push(None)
+        guard core_types[tyidx] is Some(signature) else {
+          raise CoreTypeIndexNotModuleType(tyidx)
         }
-        if tyidx >= 0 && tyidx < core_type_module_imports.length() {
-          core_module_type_imports.push(core_type_module_imports[tyidx])
-        } else {
-          core_module_type_imports.push(None)
+        core_modules.push({
+          definition: None,
+          export_kinds: Some(signature.export_kinds),
+          export_types: Some(signature.export_types),
+          import_types: Some(signature.imports),
+        })
+        if importname_to_string(i.name) is Some(name) {
+          my_import_core_modules.set(name, signature.requirement())
         }
       }
       InstanceType(tyidx) => {
+        let mut instance_signature = None
         let mut type_map : Map[String, ExportedTypeInfo]? = None
         let mut type_sig_map : Map[String, TypeSig]? = None
         let mut resource_exports : Map[String, Int32]? = None
@@ -192,7 +147,7 @@ fn validate_component_section_import(
         match type_table[tyidx] {
           Some(td) => {
             let sig = instancetype_sig_of_typedef(td, type_table, Map([]))
-            instance_sigs.push(Some(sig))
+            instance_signature = Some(sig)
             if importname_to_string(i.name) is Some(name) {
               my_import_instance_sigs.set(name, sig)
             }
@@ -330,19 +285,17 @@ fn validate_component_section_import(
               )
             }
           }
-          None => instance_sigs.push(None)
+          None => ()
         }
-        instance_export_type_idxs.push(None)
-        instance_export_func_idxs.push(None)
-        instance_export_type_map.push(type_map)
-        instance_export_type_sigs.push(type_sig_map)
-        instance_export_func_sigs.push(func_export_sigs)
-        instance_nested_instance_type_sigs.push(None)
-        instance_nested_instance_func_sigs.push(None)
-        // Imported instances contribute an entry to the instance index space.
-        // We don't have a precise effective-size model here; treat as 1.
-        instance_sizes.push(1)
-        interface_instance_idxs.set(instance_sigs.length() - 1, 1)
+        // An imported instance has unknown effective size.
+        instances.push({
+          ..InstanceIndexEntry::unknown(),
+          signature: instance_signature,
+          exported_types: type_map,
+          type_signatures: type_sig_map,
+          function_signatures: func_export_sigs,
+          in_interface: true,
+        })
       }
       _ => ()
     }
@@ -350,77 +303,31 @@ fn validate_component_section_import(
       imported_funcs += 1
     }
     if i.desc is ComponentType(tyidx) {
-      let mut import_sorts : Map[String, @component.Sort]? = None
-      let mut import_instance_sigs : Map[String, InstanceSig]? = None
-      let mut import_func_sigs : Map[String, FuncSigShape]? = None
-      let mut import_core_module_import_sigs : Map[
-        String,
-        Map[String, CoreExternType],
-      ]? = None
-      let mut import_core_module_exports : Map[String, Map[String, Int32]]? = None
-      let mut import_type_sigs : Map[String, TypeSig]? = None
-      let mut import_type_bounds : Map[String, @component.TypeBound]? = None
-      let mut export_sorts : Map[String, @component.Sort]? = None
-      let mut export_instance_sigs : Map[String, InstanceSig]? = None
-      let mut export_type_sigs : Map[String, TypeSig]? = None
-      let mut export_func_sigs : Map[String, FuncSigShape]? = None
-      if tyidx >= 0 && tyidx < type_table.length() {
-        if type_table[tyidx] is Some(ComponentType(decls)) {
-          let (imp_sorts, imp_inst_sigs, exp_sorts, exp_inst_sigs) = componenttype_signature_of_decls(
-            decls, type_table,
-          )
-          import_sorts = Some(imp_sorts)
-          import_instance_sigs = Some(imp_inst_sigs)
-          import_func_sigs = Some(
-            componenttype_import_func_sigs_of_decls(
-              decls, type_table, resource_ids,
-            ),
-          )
-          let (core_imports, core_exports) = componenttype_import_core_module_sigs_of_decls(
-            decls,
-          )
-          import_core_module_import_sigs = Some(core_imports)
-          import_core_module_exports = Some(core_exports)
-          import_type_sigs = Some(
-            componenttype_import_type_sigs_of_decls(
-              decls, type_table, resource_ids,
-            ),
-          )
-          import_type_bounds = Some(
-            componenttype_import_type_bounds_of_decls(decls),
-          )
-          export_sorts = Some(exp_sorts)
-          export_instance_sigs = Some(exp_inst_sigs)
-          export_type_sigs = Some(
-            componenttype_export_type_sigs_of_decls(
-              decls, type_table, resource_ids,
-            ),
-          )
-          export_func_sigs = Some(
-            componenttype_export_func_sigs_of_decls(
-              decls, type_table, resource_ids,
-            ),
-          )
-        }
+      let entry = ComponentIndexEntry::unknown(1)
+      if type_table.get(tyidx) is Some(Some(ComponentType(decls))) {
+        let (import_sorts, import_instances, export_sorts, export_instances) = componenttype_signature_of_decls(
+          decls, type_table,
+        )
+        let signatures = componenttype_signatures_of_decls(
+          decls, type_table, resource_ids,
+        )
+        let core_requirements = componenttype_import_core_modules(decls)
+        components.push({
+          ..entry,
+          import_sorts: Some(import_sorts),
+          import_instance_sigs: Some(import_instances),
+          import_func_sigs: Some(signatures.import_functions),
+          import_core_modules: Some(core_requirements),
+          import_type_bounds: Some(signatures.import_bounds),
+          import_type_sigs: Some(signatures.import_types),
+          export_sorts: Some(export_sorts),
+          export_instance_sigs: Some(export_instances),
+          export_type_sigs: Some(signatures.export_types),
+          export_func_sigs: Some(signatures.export_functions),
+        })
+      } else {
+        components.push(entry)
       }
-      component_import_sorts.push(import_sorts)
-      component_import_instance_sigs.push(import_instance_sigs)
-      component_import_func_sigs.push(import_func_sigs)
-      component_import_instance_resource_exports.push(None)
-      component_import_core_module_exports.push(import_core_module_exports)
-      component_import_core_module_import_sigs.push(
-        import_core_module_import_sigs,
-      )
-      component_import_type_bounds.push(import_type_bounds)
-      component_import_type_sigs.push(import_type_sigs)
-      component_export_sorts.push(export_sorts)
-      component_export_instance_sigs.push(export_instance_sigs)
-      component_export_instance_type_sigs.push(None)
-      component_export_instance_func_sigs.push(None)
-      component_export_type_sigs.push(export_type_sigs)
-      component_export_func_sigs.push(export_func_sigs)
-      // Imported component size is unknown; treat as 1.
-      component_sizes.push(1)
     }
     if i.desc is Type(b) {
       // Type imports extend the type index space.

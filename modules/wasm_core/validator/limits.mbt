@@ -165,3 +165,37 @@ fn count_tag_imports(imports : Array[@types.Import]) -> Int32 {
   }
   count
 }
+
+///|
+fn ValidationContext::memory_type(
+  self : ValidationContext,
+  index : Int32,
+) -> @types.MemoryType raise ValidationError {
+  if index < 0 || index >= self.mems.length() {
+    raise InvalidMemoryIndex(index)
+  }
+  self.mems[index]
+}
+
+///|
+fn validate_memory_alignment(
+  alignment : Int32,
+  natural : Int32,
+  name : String,
+) -> Unit raise ValidationError {
+  if alignment < 0 || alignment > natural {
+    raise InvalidAlignment(
+      "\{name} alignment \{alignment} exceeds natural alignment \{natural}",
+    )
+  }
+}
+
+///|
+fn validate_lane_index(
+  index : Int32,
+  count : Int32,
+) -> Unit raise ValidationError {
+  if index < 0 || index >= count {
+    raise InvalidLaneIndex(index, count)
+  }
+}

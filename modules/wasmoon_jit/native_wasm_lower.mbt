@@ -30,8 +30,6 @@ priv struct WasmoonNativeEnvironment {
 
 ///|
 fn wasmoon_native_environment(
-  use_subtype_indirect_check : Bool,
-  canonical_type_indices : Array[Int32],
   layout : VMContextLayout,
 ) -> WasmoonNativeEnvironment {
   let field_paths : Map[String, Array[Int32]] = Map([])
@@ -41,8 +39,7 @@ fn wasmoon_native_environment(
     Ptr64,
   )
   field_paths.set(function_table_field.name, [layout.func_table_offset])
-  use_subtype_indirect_check |> ignore
-  canonical_type_indices |> ignore
+
   let gc_heap_field = @native.EnvironmentField::new(
     "wasmoon.vmctx.gc_heap",
     Ptr64,
@@ -207,14 +204,7 @@ fn wasmoon_call_abi(
 fn wasm_x64_context(
   environment : WasmoonNativeEnvironment,
 ) -> @x64_target.LoweringContext raise JitPipelineError {
-  let abi = @x64_target.InternalAbi::new(
-    7,
-    12,
-    [6, 2, 1, 8, 9],
-    [0, 1, 2, 3, 4, 5, 6, 7],
-    [0, 2, 1, 8, 9, 6, 7, 10],
-    [0, 1, 2, 3, 4, 5, 6, 7],
-  ) catch {
+  let abi = wasm_internal_abi(X64) catch {
     error => raise X64AbiInvalid(cause=error)
   }
   @x64_target.LoweringContext::new(abi).with_environment_field_resolver(field => {
@@ -226,14 +216,7 @@ fn wasm_x64_context(
 fn wasm_aarch64_context(
   environment : WasmoonNativeEnvironment,
 ) -> @aarch64_target.LoweringContext raise JitPipelineError {
-  let abi = @aarch64_target.InternalAbi::new(
-    0,
-    8,
-    [1, 2, 3, 4, 5, 6, 7],
-    [0, 1, 2, 3, 4, 5, 6, 7],
-    [0, 1, 2, 3, 4, 5, 6, 7],
-    [0, 1, 2, 3, 4, 5, 6, 7],
-  ) catch {
+  let abi = wasm_internal_abi(AArch64) catch {
     error => raise AArch64AbiInvalid(cause=error)
   }
   @aarch64_target.LoweringContext::new(abi).with_environment_field_resolver(field => {
@@ -242,61 +225,20 @@ fn wasm_aarch64_context(
 }
 
 ///|
-fn compile_wasm_body_x64_target(
+fn lower_wasm_body_to_sink(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  use_subtype_indirect_check : Bool,
-  canonical_type_indices : Array[Int32],
-  context_layout~ : VMContextLayout = vmcontext_layout(),
-  function_index~ : Int32 = -1,
-  record_metrics~ : Bool = false,
-  on_diagnostics~ : ((String, String) -> Unit)? = None,
-  compilation_session~ : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
-) -> X64TargetCompilation raise JitPipelineError {
-  let environment_tick = detail_metrics_tick(record_metrics)
-  let environment = wasmoon_native_environment(
-    use_subtype_indirect_check, canonical_type_indices, context_layout,
-  )
-  let context = wasm_x64_context(environment)
-  record_compile_subphase("native_environment", environment_tick)
-  let signature = @milkir_native.function_signature(function, environment_parameters=[
-    (0, Ptr64),
-  ])
-  let target_lower_tick : Ref[@perf.PerfTick?] = { val: None, }
-  let observer = if record_metrics {
-    Some(target_compile_metrics_observer(target_lower_tick))
-  } else {
-    None
-  }
-  let session = try {
-    match observer {
-      Some(observe) =>
-        @x64_target.DirectLoweringSession::new(
-          function.name,
-          Internal,
-          signature.params,
-          signature.results,
-          context,
-          on_event=observe,
-        )
-      None =>
-        @x64_target.DirectLoweringSession::new(
-          function.name,
-          Internal,
-          signature.params,
-          signature.results,
-          context,
-        )
-    }
-  } catch {
-    error => raise X64LoweringFailed(cause=error)
-  }
-  let native_lower_tick = target_metrics_tick(record_metrics)
+  environment : WasmoonNativeEnvironment,
+  sink : @native_lowering.TargetSink,
+  function_index : Int32,
+  record_metrics : Bool,
+) -> Unit raise JitPipelineError {
+  let tick = target_metrics_tick(record_metrics)
   @wasm_native.lower_to_sink(
     function,
     validation_context,
     environment.wasm,
-    session.sink(),
+    sink,
     call_abi=wasmoon_call_abi(environment, function_index),
     verify_input=compiler_validation(),
     on_event=if record_metrics && @perf.detail_enabled() {
@@ -307,28 +249,60 @@ fn compile_wasm_body_x64_target(
   ) catch {
     error => raise NativeLoweringFailed(cause=error)
   }
-  record_target_stage(NativeLowering, native_lower_tick) |> ignore
+  record_target_stage(NativeLowering, tick) |> ignore
+}
+
+///|
+fn compile_wasm_body_x64_target(
+  function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
+  context_layout~ : VMContextLayout = vmcontext_layout(),
+  function_index~ : Int32 = -1,
+  record_metrics~ : Bool = false,
+  on_diagnostics~ : ((String, String) -> Unit)? = None,
+  compilation_session~ : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
+) -> X64TargetCompilation raise JitPipelineError {
+  let environment_tick = detail_metrics_tick(record_metrics)
+  let environment = wasmoon_native_environment(context_layout)
+  let context = wasm_x64_context(environment)
+  record_compile_subphase("native_environment", environment_tick)
+  let signature = @milkir_native.function_signature(function, environment_parameters=[
+    (0, Ptr64),
+  ])
+  let target_lower_tick : Ref[@perf.PerfTick?] = { val: None, }
+  let observer = if record_metrics {
+    target_compile_metrics_observer(target_lower_tick)
+  } else {
+    fn(_) { () }
+  }
+  let session = @x64_target.DirectLoweringSession::new(
+    function.name,
+    Internal,
+    signature.params,
+    signature.results,
+    context,
+    on_event=observer,
+  ) catch {
+    error => raise X64LoweringFailed(cause=error)
+  }
+  lower_wasm_body_to_sink(
+    function,
+    validation_context,
+    environment,
+    session.sink(),
+    function_index,
+    record_metrics,
+  )
   target_lower_tick.val = target_metrics_tick(record_metrics)
   let selected = session.finish_selected(verify_selected=compiler_validation()) catch {
     error => raise X64LoweringFailed(cause=error)
   }
-  let compiled = try {
-    match observer {
-      Some(observe) =>
-        compilation_session.compile_selected(
-          selected,
-          on_event=observe,
-          verify_allocation=compiler_validation(),
-          on_diagnostics~,
-        )
-      None =>
-        compilation_session.compile_selected(
-          selected,
-          verify_allocation=compiler_validation(),
-          on_diagnostics~,
-        )
-    }
-  } catch {
+  let compiled = compilation_session.compile_selected(
+    selected,
+    on_event=observer,
+    verify_allocation=compiler_validation(),
+    on_diagnostics~,
+  ) catch {
     error => raise X64CompilationFailed(cause=error)
   }
   let (object, frame_size) = compiled
@@ -339,8 +313,6 @@ fn compile_wasm_body_x64_target(
 fn compile_wasm_body_aarch64_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  use_subtype_indirect_check : Bool,
-  canonical_type_indices : Array[Int32],
   context_layout~ : VMContextLayout = vmcontext_layout(),
   function_index~ : Int32 = -1,
   record_metrics~ : Bool = false,
@@ -348,9 +320,7 @@ fn compile_wasm_body_aarch64_target(
   compilation_session~ : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
 ) -> AArch64TargetCompilation raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
-  let environment = wasmoon_native_environment(
-    use_subtype_indirect_check, canonical_type_indices, context_layout,
-  )
+  let environment = wasmoon_native_environment(context_layout)
   let context = wasm_aarch64_context(environment)
   record_compile_subphase("native_environment", environment_tick)
   let signature = @milkir_native.function_signature(function, environment_parameters=[
@@ -358,71 +328,38 @@ fn compile_wasm_body_aarch64_target(
   ])
   let target_lower_tick : Ref[@perf.PerfTick?] = { val: None, }
   let observer = if record_metrics {
-    Some(target_compile_metrics_observer(target_lower_tick))
+    target_compile_metrics_observer(target_lower_tick)
   } else {
-    None
+    fn(_) { () }
   }
-  let session = try {
-    match observer {
-      Some(observe) =>
-        @aarch64_target.DirectLoweringSession::new(
-          function.name,
-          Internal,
-          signature.params,
-          signature.results,
-          context,
-          on_event=observe,
-        )
-      None =>
-        @aarch64_target.DirectLoweringSession::new(
-          function.name,
-          Internal,
-          signature.params,
-          signature.results,
-          context,
-        )
-    }
-  } catch {
+  let session = @aarch64_target.DirectLoweringSession::new(
+    function.name,
+    Internal,
+    signature.params,
+    signature.results,
+    context,
+    on_event=observer,
+  ) catch {
     error => raise AArch64LoweringFailed(cause=error)
   }
-  let native_lower_tick = target_metrics_tick(record_metrics)
-  @wasm_native.lower_to_sink(
+  lower_wasm_body_to_sink(
     function,
     validation_context,
-    environment.wasm,
+    environment,
     session.sink(),
-    call_abi=wasmoon_call_abi(environment, function_index),
-    verify_input=compiler_validation(),
-    on_event=if record_metrics && @perf.detail_enabled() {
-      native_lower_metrics_observer()
-    } else {
-      fn(_) { () }
-    },
-  ) catch {
-    error => raise NativeLoweringFailed(cause=error)
-  }
-  record_target_stage(NativeLowering, native_lower_tick) |> ignore
+    function_index,
+    record_metrics,
+  )
   target_lower_tick.val = target_metrics_tick(record_metrics)
   let selected = session.finish_selected(verify_selected=compiler_validation()) catch {
     error => raise AArch64LoweringFailed(cause=error)
   }
-  let compiled = try {
-    match observer {
-      Some(observe) =>
-        compilation_session.compile_selected(
-          selected,
-          on_event=observe,
-          verify_allocation=compiler_validation(),
-          on_diagnostics~,
-        )
-      None =>
-        compilation_session.compile_selected(
-          selected,
-          verify_allocation=compiler_validation(),
-          on_diagnostics~,
-        )
-    }
-  } catch {
+  let compiled = compilation_session.compile_selected(
+    selected,
+    on_event=observer,
+    verify_allocation=compiler_validation(),
+    on_diagnostics~,
+  ) catch {
     error => raise AArch64CompilationFailed(cause=error)
   }
   let (object, frame_size) = compiled
@@ -437,8 +374,6 @@ pub fn compile_wasm_body_diagnostics_for_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   target : NativeTarget,
-  use_subtype_indirect_check~ : Bool = true,
-  canonical_type_indices~ : Array[Int32] = [],
   context_shape~ : ContextShape = Legacy,
   function_index~ : Int32 = -1,
 ) -> JitPipelineDiagnostics raise JitPipelineError {
@@ -446,8 +381,6 @@ pub fn compile_wasm_body_diagnostics_for_target(
     function,
     validation_context,
     function_index~,
-    use_subtype_indirect_check~,
-    canonical_type_indices~,
   )
 }
 
@@ -458,16 +391,12 @@ pub fn NativeCompiler::diagnose_wasm_body(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
   function_index~ : Int32,
-  use_subtype_indirect_check~ : Bool = true,
-  canonical_type_indices~ : Array[Int32] = [],
 ) -> JitPipelineDiagnostics raise JitPipelineError {
   let renderings : Ref[(String, String)] = { val: ("", ""), }
   let (object, _) = self.compile_wasm_body(
     function,
     validation_context,
     function_index~,
-    use_subtype_indirect_check~,
-    canonical_type_indices~,
     on_diagnostics=Some(fn(target_vcode, allocated_vcode) {
       renderings.val = (target_vcode, allocated_vcode)
     }),
@@ -487,22 +416,14 @@ pub fn NativeCompiler::diagnose_wasm_body(
 pub fn plan_wasm_body_aarch64_code_object(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  use_subtype_indirect_check~ : Bool = true,
-  canonical_type_indices~ : Array[Int32] = [],
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
-  compile_wasm_body_aarch64_target(
-    function, validation_context, use_subtype_indirect_check, canonical_type_indices,
-  ).object
+  compile_wasm_body_aarch64_target(function, validation_context).object
 }
 
 ///|
 pub fn plan_wasm_body_x64_code_object(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  use_subtype_indirect_check~ : Bool = true,
-  canonical_type_indices~ : Array[Int32] = [],
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
-  compile_wasm_body_x64_target(
-    function, validation_context, use_subtype_indirect_check, canonical_type_indices,
-  ).object
+  compile_wasm_body_x64_target(function, validation_context).object
 }

@@ -40,33 +40,18 @@ pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {
 /// `Bytes` is immutable, so validation evidence can retain and expose this
 /// value without granting mutation access to the parsed component graph.
 pub fn Component::snapshot_bytes(self : Component) -> Bytes {
-  let bytes : Array[Byte] = [b'\x00', b'a', b's', b'm']
-  bytes.push((self.binary.version & 0xFF).to_byte())
-  bytes.push(((self.binary.version >> 8) & 0xFF).to_byte())
-  bytes.push((self.binary.layer & 0xFF).to_byte())
-  bytes.push(((self.binary.layer >> 8) & 0xFF).to_byte())
+  let output = @binary.Writer()
+  output.write_bytes(b"\x00asm")
+  output.write_byte(self.binary.version)
+  output.write_byte(self.binary.version >> 8)
+  output.write_byte(self.binary.layer)
+  output.write_byte(self.binary.layer >> 8)
   for section in self.binary.sections {
-    bytes.push(section.id.to_byte())
-    append_component_leb_u32(bytes, section.payload.length())
-    for byte in section.payload {
-      bytes.push(byte)
-    }
+    output.write_byte(section.id)
+    output.write_u32(section.payload.length())
+    output.write_bytes(section.payload)
   }
-  Bytes::from_array(bytes)
-}
-
-///|
-fn append_component_leb_u32(bytes : Array[Byte], value : Int32) -> Unit {
-  for remaining = value {
-    let byte = remaining & 0x7F
-    let next = remaining >> 7
-    if next == 0 {
-      bytes.push(byte.to_byte())
-      break
-    }
-    bytes.push((byte | 0x80).to_byte())
-    continue next
-  }
+  output.to_bytes()
 }
 
 ///|

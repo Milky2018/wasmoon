@@ -6,7 +6,7 @@
 
 ///|
 /// WebAssembly value types
-#derive(Eq, Debug)
+#derive(Eq, Debug, Hash)
 pub(all) enum ValueType {
   I32
   I64
@@ -51,6 +51,9 @@ pub(all) enum ValueType {
   NullExnRef // bottom type for exn (ref null noexn)
   NullExternRef // bottom type for extern (ref null noextern)
 }
+
+///|
+pub extend ValueType with Hash::{hash, hash_combine}
 
 ///|
 /// Check if a reference type is nullable
@@ -200,7 +203,7 @@ pub(all) enum Value {
 
 ///|
 /// WebAssembly instructions
-#derive(Eq, Debug)
+#derive(Eq, Debug, Hash)
 pub(all) enum Instruction {
   // Control instructions
   Unreachable
@@ -806,8 +809,11 @@ pub(all) enum Instruction {
 }
 
 ///|
+pub extend Instruction with Hash::{hash, hash_combine}
+
+///|
 /// Block type
-#derive(Eq, Debug)
+#derive(Eq, Debug, Hash)
 pub(all) enum BlockType {
   Empty
   Value(ValueType)
@@ -817,8 +823,11 @@ pub(all) enum BlockType {
 }
 
 ///|
+pub extend BlockType with Hash::{hash, hash_combine}
+
+///|
 /// Catch handler for try_table instruction
-#derive(Eq, Debug)
+#derive(Eq, Debug, Hash)
 pub(all) enum CatchHandler {
   Catch(Int32, Int32) // (tag_idx, label_idx) - catch specific tag
   CatchRef(Int32, Int32) // (tag_idx, label_idx) - catch specific tag with exnref
@@ -827,11 +836,17 @@ pub(all) enum CatchHandler {
 }
 
 ///|
-#derive(Eq, Debug)
+pub extend CatchHandler with Hash::{hash, hash_combine}
+
+///|
+#derive(Eq, Debug, Hash)
 pub(all) enum ResumeHandler {
   OnLabel(Int32, Int32) // tag index and branch label
   OnSwitch(Int32) // switch tag index
 }
+
+///|
+pub extend ResumeHandler with Hash::{hash, hash_combine}
 
 // ============================================================
 // Module Structures
@@ -846,178 +861,37 @@ pub(all) struct FuncType {
 }
 
 ///|
-/// Compute a hash for structural type equivalence.
-/// Two FuncTypes with the same params and results will have the same hash.
-pub fn FuncType::structural_hash(self : FuncType) -> Int32 {
-  let mut h = 0
-  // Encode params
-  for param in self.params {
-    h = h * 31 + param.type_code()
-  }
-  // Separator between params and results
-  h = h * 31 + 0xFF
-  // Encode results
-  for result in self.results {
-    h = h * 31 + result.type_code()
-  }
-  // Ensure non-negative
-  if h < 0 {
-    -h
-  } else {
-    h
-  }
-}
-
-///|
-/// Get a numeric code for a value type (for hashing)
-fn ValueType::type_code(self : ValueType) -> Int32 {
-  match self {
-    I32 => 0
-    I64 => 1
-    F32 => 2
-    F64 => 3
-    V128 => 4
-    FuncRef => 5
-    ExternRef => 6
-    RefFunc => 7
-    RefExtern => 8
-    RefFuncTyped(idx) => 100 + idx
-    RefNullFuncTyped(idx) => 200 + idx
-    AnyRef => 9
-    ExnRef => 10
-    NullRef => 11
-    NullFuncRef => 12
-    NullExnRef => 13
-    NullExternRef => 14
-    // GC types
-    RefStruct(idx) => 300 + idx
-    RefNullStruct(idx) => 400 + idx
-    RefArray(idx) => 500 + idx
-    RefNullArray(idx) => 600 + idx
-    RefAny => 15
-    RefEq => 16
-    RefNullEq => 17
-    RefI31 => 18
-    RefNullI31 => 19
-    RefNone => 20
-    StructRef => 21
-    ArrayRef => 22
-    RefStructAbs => 23
-    RefArrayAbs => 24
-    ContRef => 25
-    RefCont => 26
-    NullContRef => 27
-    RefNoCont => 28
-    RefContTyped(idx) => 700 + idx
-    RefNullContTyped(idx) => 800 + idx
-  }
-}
-
-///|
-/// Check if two FuncTypes are structurally equivalent.
-/// This handles recursive types by comparing the structure rather than indices.
-/// type1_idx and type2_idx are the indices of the types being compared.
-pub fn FuncType::structurally_equal(
-  self : FuncType,
-  other : FuncType,
-  self_idx : Int32,
-  other_idx : Int32,
-) -> Bool {
-  // Check param count
-  if self.params.length() != other.params.length() {
-    return false
-  }
-  // Check result count
-  if self.results.length() != other.results.length() {
-    return false
-  }
-  // Check each param
-  for i, p1 in self.params {
-    let p2 = other.params[i]
-    if !p1.structurally_equal(p2, self_idx, other_idx) {
-      return false
-    }
-  }
-  // Check each result
-  for i, r1 in self.results {
-    let r2 = other.results[i]
-    if !r1.structurally_equal(r2, self_idx, other_idx) {
-      return false
-    }
-  }
-  true
-}
-
-///|
-/// Check if two ValueTypes are structurally equivalent.
-/// self_idx and other_idx are the indices of the containing types being compared.
-fn ValueType::structurally_equal(
-  self : ValueType,
-  other : ValueType,
-  self_idx : Int32,
-  other_idx : Int32,
-) -> Bool {
-  match (self, other) {
-    // Basic types must match exactly
-    (I32, I32)
-    | (I64, I64)
-    | (F32, F32)
-    | (F64, F64)
-    | (V128, V128)
-    | (FuncRef, FuncRef)
-    | (ExternRef, ExternRef)
-    | (RefFunc, RefFunc)
-    | (RefExtern, RefExtern)
-    | (AnyRef, AnyRef)
-    | (ExnRef, ExnRef)
-    | (NullRef, NullRef)
-    | (NullFuncRef, NullFuncRef)
-    | (NullExnRef, NullExnRef)
-    | (NullExternRef, NullExternRef)
-    | (RefAny, RefAny)
-    | (RefEq, RefEq)
-    | (RefNullEq, RefNullEq)
-    | (RefI31, RefI31)
-    | (RefNullI31, RefNullI31)
-    | (RefNone, RefNone)
-    | (StructRef, StructRef)
-    | (ArrayRef, ArrayRef)
-    | (RefStructAbs, RefStructAbs)
-    | (RefArrayAbs, RefArrayAbs) => true
-    // Typed function references: check if both are self-references or same external ref
-    (RefFuncTyped(idx1), RefFuncTyped(idx2)) =>
-      // Both self-references, or both reference the same external type
-      (idx1 == self_idx && idx2 == other_idx) ||
-      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
-    (RefNullFuncTyped(idx1), RefNullFuncTyped(idx2)) =>
-      // Both self-references, or both reference the same external type
-      (idx1 == self_idx && idx2 == other_idx) ||
-      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
-    // Typed struct references
-    (RefStruct(idx1), RefStruct(idx2)) =>
-      (idx1 == self_idx && idx2 == other_idx) ||
-      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
-    (RefNullStruct(idx1), RefNullStruct(idx2)) =>
-      (idx1 == self_idx && idx2 == other_idx) ||
-      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
-    // Typed array references
-    (RefArray(idx1), RefArray(idx2)) =>
-      (idx1 == self_idx && idx2 == other_idx) ||
-      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
-    (RefNullArray(idx1), RefNullArray(idx2)) =>
-      (idx1 == self_idx && idx2 == other_idx) ||
-      (idx1 != self_idx && idx2 != other_idx && idx1 == idx2)
-    _ => false
-  }
-}
-
-///|
 /// Limits for memory and tables
 /// Uses Int64 to support memory64 proposal (limits up to 2^48 pages)
 #derive(Eq, Debug)
 pub(all) struct Limits {
   min : Int64
   max : Int64?
+}
+
+///|
+pub(all) enum ImportLimitMismatch {
+  MinimumTooSmall
+  MaximumTooLarge
+  MissingMaximum
+}
+
+///|
+/// Check an imported memory or table against the required unsigned limits.
+pub fn Limits::import_mismatch(
+  self : Limits,
+  actual : (Int64, Int64?),
+) -> ImportLimitMismatch? {
+  let (minimum, maximum) = actual
+  if minimum.reinterpret_as_uint64() < self.min.reinterpret_as_uint64() {
+    return Some(MinimumTooSmall)
+  }
+  match (self.max, maximum) {
+    (Some(expected), Some(actual)) if actual.reinterpret_as_uint64() >
+      expected.reinterpret_as_uint64() => Some(MaximumTooLarge)
+    (Some(_), None) => Some(MissingMaximum)
+    _ => None
+  }
 }
 
 ///|

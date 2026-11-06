@@ -1078,41 +1078,29 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_ftruncate(int fd, int64_t size) {
 #endif
 }
 
+#ifndef _WIN32
+// Each pair of flags selects the supplied timestamp, the current time, or no change.
+static struct timespec wasmoon_wasi_timestamp(int64_t nanoseconds, int flags) {
+  if (flags & 0x02) return (struct timespec){ .tv_nsec = UTIME_NOW };
+  if (flags & 0x01) {
+    return (struct timespec){
+      .tv_sec = nanoseconds / 1000000000LL,
+      .tv_nsec = nanoseconds % 1000000000LL,
+    };
+  }
+  return (struct timespec){ .tv_nsec = UTIME_OMIT };
+}
+#endif
+
 // Set file times
 MOONBIT_FFI_EXPORT int wasmoon_wasi_futimens(int fd, int64_t atim, int64_t mtim, int fst_flags) {
 #ifdef _WIN32
   return wasmoon_windows_futimens(fd, atim, mtim, fst_flags);
 #else
-  struct timespec times[2];
-
-  // fst_flags bits:
-  // 0x01 = SET_ATIM (use atim)
-  // 0x02 = SET_ATIM_NOW (use current time)
-  // 0x04 = SET_MTIM (use mtim)
-  // 0x08 = SET_MTIM_NOW (use current time)
-
-  if (fst_flags & 0x02) {
-    times[0].tv_nsec = UTIME_NOW;
-    times[0].tv_sec = 0;
-  } else if (fst_flags & 0x01) {
-    times[0].tv_sec = atim / 1000000000LL;
-    times[0].tv_nsec = atim % 1000000000LL;
-  } else {
-    times[0].tv_nsec = UTIME_OMIT;
-    times[0].tv_sec = 0;
-  }
-
-  if (fst_flags & 0x08) {
-    times[1].tv_nsec = UTIME_NOW;
-    times[1].tv_sec = 0;
-  } else if (fst_flags & 0x04) {
-    times[1].tv_sec = mtim / 1000000000LL;
-    times[1].tv_nsec = mtim % 1000000000LL;
-  } else {
-    times[1].tv_nsec = UTIME_OMIT;
-    times[1].tv_sec = 0;
-  }
-
+  struct timespec times[2] = {
+    wasmoon_wasi_timestamp(atim, fst_flags),
+    wasmoon_wasi_timestamp(mtim, fst_flags >> 2),
+  };
   return futimens(fd, times);
 #endif
 }
@@ -1124,30 +1112,10 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_utimensat(int dirfd, moonbit_bytes_t path,
   return wasmoon_windows_utimensat(dirfd, (const char *)path, atim, mtim, fst_flags,
       (lookup_flags & WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN) == 0);
 #else
-  struct timespec times[2];
-
-  if (fst_flags & 0x02) {
-    times[0].tv_nsec = UTIME_NOW;
-    times[0].tv_sec = 0;
-  } else if (fst_flags & 0x01) {
-    times[0].tv_sec = atim / 1000000000LL;
-    times[0].tv_nsec = atim % 1000000000LL;
-  } else {
-    times[0].tv_nsec = UTIME_OMIT;
-    times[0].tv_sec = 0;
-  }
-
-  if (fst_flags & 0x08) {
-    times[1].tv_nsec = UTIME_NOW;
-    times[1].tv_sec = 0;
-  } else if (fst_flags & 0x04) {
-    times[1].tv_sec = mtim / 1000000000LL;
-    times[1].tv_nsec = mtim % 1000000000LL;
-  } else {
-    times[1].tv_nsec = UTIME_OMIT;
-    times[1].tv_sec = 0;
-  }
-
+  struct timespec times[2] = {
+    wasmoon_wasi_timestamp(atim, fst_flags),
+    wasmoon_wasi_timestamp(mtim, fst_flags >> 2),
+  };
   int native_lookup_flags = lookup_flags;
 #ifdef AT_SYMLINK_NOFOLLOW
   if (lookup_flags & WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN) {

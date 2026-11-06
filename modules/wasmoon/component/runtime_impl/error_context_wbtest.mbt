@@ -10,7 +10,7 @@ test "error-context ABI is a memory-independent i32 handle on both memory widths
     let memory = store.get_mem(
       store.alloc_mem(Memory(1, None, is_memory64=memory64)),
     )
-    memory.store_i32(4, 0x12345678)
+    memory.store_i32_at(4L, 0x12345678)
     store_flat_component_value_to_memory(
       memory,
       0,
@@ -19,7 +19,7 @@ test "error-context ABI is a memory-independent i32 handle on both memory widths
       [],
       memory64,
     )
-    inspect(memory.load_i32(4), content="305419896")
+    inspect(memory.load_i32_at(4L), content="305419896")
     debug_inspect(
       load_flat_component_value_from_memory(
         memory,
@@ -59,14 +59,14 @@ test "error-context payload snapshots survive source drops and use the destinati
     64,
   )
   let pending = payload_type.load(src, store, 64, 1, source)
-  let handle = require_memory(src, store).load_i32(68)
+  let handle = require_memory(src, store).load_i32_at(68L)
   inspect(source.drop_error_context(handle), content="true")
   let other = target.alloc_error_context("other")
   pending.store(0, 1, source, payload_type, dst, store, target, state, 128)
   let output = payload_type.load(dst, store, 128, 1, target)
   inspect(output.values == [input], content="true")
   debug_inspect(target.error_contexts.get(other), content="Some(\"other\")")
-  inspect(require_memory(dst, store).load_i32(136), content="99")
+  inspect(require_memory(dst, store).load_i32_at(136L), content="99")
 }
 
 ///|

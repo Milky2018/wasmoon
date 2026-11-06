@@ -56,7 +56,7 @@ pub fn prepare_native_component_code(
         error => raise NativeCompilationFailed(error.to_string())
       }
       let memory_max = declared_component_memory_max(module_)
-      let key = (encoded_component_module(module_), memory_max)
+      let key = (@encoder.encode_bytes(module_), memory_max)
       if !artifacts.contains(key) {
         artifacts[key] = compile_component_artifact(
           module_,

@@ -679,65 +679,66 @@ int gc_heap_admit(GcHeap *heap, size_t needed) {
     return 1;
 }
 
-void gc_heap_undo_admission(GcHeap *heap) {
+static void gc_heap_undo_admission(GcHeap *heap) {
     if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)heap->size);
     if (heap->object_reservation) wasmoon_reservation_resize(heap->object_reservation, heap->object_count);
 }
 
-// ============ Struct Operations ============
-
-static int32_t alloc_struct_slots(GcHeap* heap, int32_t type_idx,
-                                  const GcSlot* fields, int32_t num_fields) {
-    if (!heap) {
-        return 0;
-    }
-    heap->quota_denied = 0;
-    if (gc_should_fail_allocation()) {
-        return 0;
-    }
-
-    // Calculate object size: header + fields
-    size_t data_size = (size_t)num_fields * GC_VALUE_SLOT_SIZE;
-    size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
-
-    if (!gc_heap_admit(heap, total_size)) return 0;
-    if (!gc_heap_ensure_payload_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
+int gc_heap_reserve_storage(GcHeap *heap, size_t size) {
+    if (!gc_heap_admit(heap, size)) return 0;
+    if (!gc_heap_ensure_payload_capacity(heap, size) || !gc_heap_ensure_object_capacity(heap)) {
         gc_heap_undo_admission(heap);
         return 0;
     }
+    return 1;
+}
 
-    // Allocate object
+static int32_t allocate_slots(GcHeap *heap, uint8_t kind, int32_t type_idx,
+    int32_t count, const GcSlot *values, const GcSlot *repeated, const char *verify_site) {
+    if (!heap || count < 0) return 0;
+    heap->quota_denied = 0;
+    if (gc_should_fail_allocation()) return 0;
+
+    int is_array = kind == GC_KIND_ARRAY;
+    size_t prefix = GC_HEADER_SIZE + (is_array ? GC_ARRAY_DATA_OFFSET : 0);
+    if ((size_t)count > (INT32_MAX - prefix) / GC_VALUE_SLOT_SIZE) return 0;
+    size_t value_bytes = (size_t)count * GC_VALUE_SLOT_SIZE;
+    size_t size = ALIGN_UP(prefix + value_bytes, 16);
+    if (!gc_heap_reserve_storage(heap, size)) return 0;
+
     int32_t offset = (int32_t)heap->size;
-    GcHeader* header = (GcHeader*)(heap->data + offset);
-
-    // Zero entire allocation to avoid uninitialized padding being scanned as refs
-    memset(header, 0, total_size);
-
-    header->kind = GC_KIND_STRUCT;
-    header->flags = 0;
+    GcHeader *header = (GcHeader *)(heap->data + offset);
+    // Untyped payloads and padding must be initialized before tracing can see them.
+    memset(header, 0, size);
+    header->kind = kind;
     header->type_idx = (uint16_t)type_idx;
-    header->size = (uint32_t)total_size;
-    header->reserved = num_fields;  // Store actual field count for GC
-
-    // Copy field values
-    GcSlot* field_data = (GcSlot*)(heap->data + offset + GC_HEADER_SIZE);
-    if (fields && num_fields > 0) {
-        memcpy(field_data, fields, (size_t)num_fields * GC_VALUE_SLOT_SIZE);
+    header->size = (uint32_t)size;
+    if (is_array) {
+        *(int32_t *)((uint8_t *)header + GC_HEADER_SIZE) = count;
+    } else {
+        header->reserved = (uint32_t)count;
     }
 
-    // Update heap state
-    heap->size += total_size;
-    heap->generation.has_untyped_allocations = 1;
-    int32_t gc_ref = gc_heap_register_object(heap, offset);
+    GcSlot *slots = (GcSlot *)((uint8_t *)header + prefix);
+    if (repeated) {
+        for (int32_t i = 0; i < count; i++) slots[i] = *repeated;
+    } else if (values && count > 0) {
+        memcpy(slots, values, value_bytes);
+    }
 
-    gc_heap_maybe_verify(heap, "alloc_struct");
-    return gc_ref;
+    heap->size += size;
+    heap->generation.has_untyped_allocations = 1;
+    int32_t ref = gc_heap_register_object(heap, offset);
+    gc_heap_maybe_verify(heap, verify_site);
+    return ref;
 }
+
+// ============ Struct Operations ============
 
 int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
                               const int64_t* fields, int32_t num_fields) {
     if (!fields || num_fields <= 0) {
-        return alloc_struct_slots(heap, type_idx, NULL, num_fields);
+        return gc_heap_alloc_struct_wide(heap, type_idx, NULL, num_fields);
     }
     // Widen the caller's runtime words in place of a second allocation path.
     // The high word of every non-v128 value is zero, which is what a fresh
@@ -749,14 +750,14 @@ int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
     for (int32_t i = 0; i < num_fields; i++) {
         slots[i].lo = fields[i];
     }
-    int32_t gc_ref = alloc_struct_slots(heap, type_idx, slots, num_fields);
+    int32_t gc_ref = gc_heap_alloc_struct_wide(heap, type_idx, slots, num_fields);
     free(slots);
     return gc_ref;
 }
 
 int32_t gc_heap_alloc_struct_wide(GcHeap* heap, int32_t type_idx,
                                    const GcSlot* fields, int32_t num_fields) {
-    return alloc_struct_slots(heap, type_idx, fields, num_fields);
+    return allocate_slots(heap, GC_KIND_STRUCT, type_idx, num_fields, fields, NULL, "alloc_struct");
 }
 
 int64_t gc_heap_struct_get(GcHeap* heap, int32_t gc_ref, int32_t field_idx) {
@@ -781,56 +782,7 @@ void gc_heap_struct_set_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx,
 
 int32_t gc_heap_alloc_array_wide(GcHeap* heap, int32_t type_idx,
                                   int32_t len, GcSlot init_value) {
-    if (!heap || len < 0) {
-        return 0;
-    }
-    heap->quota_denied = 0;
-    if (gc_should_fail_allocation()) {
-        return 0;
-    }
-
-    // Calculate object size: header + length block + elements
-    // Array layout: [header][length:i32][padding:12][elem0:16][elem1:16]...
-    size_t data_size = GC_ARRAY_DATA_OFFSET + (size_t)len * GC_VALUE_SLOT_SIZE;
-    size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
-
-    if (!gc_heap_admit(heap, total_size)) return 0;
-    if (!gc_heap_ensure_payload_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
-        gc_heap_undo_admission(heap);
-        return 0;
-    }
-
-    // Allocate object
-    int32_t offset = (int32_t)heap->size;
-    GcHeader* header = (GcHeader*)(heap->data + offset);
-
-    // Zero entire allocation to avoid uninitialized padding being scanned as refs
-    memset(header, 0, total_size);
-
-    header->kind = GC_KIND_ARRAY;
-    header->flags = 0;
-    header->type_idx = (uint16_t)type_idx;
-    header->size = (uint32_t)total_size;
-    header->reserved = 0;
-
-    // Set array length
-    uint8_t* data = heap->data + offset + GC_HEADER_SIZE;
-    int32_t* len_ptr = (int32_t*)data;
-    len_ptr[0] = len;
-
-    // Initialize elements
-    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
-    for (int32_t i = 0; i < len; i++) {
-        elements[i] = init_value;
-    }
-
-    // Update heap state
-    heap->size += total_size;
-    heap->generation.has_untyped_allocations = 1;
-    int32_t gc_ref = gc_heap_register_object(heap, offset);
-
-    gc_heap_maybe_verify(heap, "alloc_array");
-    return gc_ref;
+    return allocate_slots(heap, GC_KIND_ARRAY, type_idx, len, NULL, &init_value, "alloc_array");
 }
 
 int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
@@ -998,55 +950,7 @@ void gc_heap_write_barrier(GcHeap *heap, int32_t owner, int64_t value) {
 
 int32_t gc_heap_alloc_array_from_slots(GcHeap* heap, int32_t type_idx,
                                         const GcSlot* values, int32_t len) {
-    if (!heap || len < 0) {
-        return 0;
-    }
-    heap->quota_denied = 0;
-    if (gc_should_fail_allocation()) {
-        return 0;
-    }
-
-    // Calculate object size: header + length block + elements
-    size_t data_size = GC_ARRAY_DATA_OFFSET + (size_t)len * GC_VALUE_SLOT_SIZE;
-    size_t total_size = ALIGN_UP(GC_HEADER_SIZE + data_size, 16);
-
-    if (!gc_heap_admit(heap, total_size)) return 0;
-    if (!gc_heap_ensure_payload_capacity(heap, total_size) || !gc_heap_ensure_object_capacity(heap)) {
-        gc_heap_undo_admission(heap);
-        return 0;
-    }
-
-    // Allocate object
-    int32_t offset = (int32_t)heap->size;
-    GcHeader* header = (GcHeader*)(heap->data + offset);
-
-    // Zero entire allocation to avoid uninitialized padding being scanned as refs
-    memset(header, 0, total_size);
-
-    header->kind = GC_KIND_ARRAY;
-    header->flags = 0;
-    header->type_idx = (uint16_t)type_idx;
-    header->size = (uint32_t)total_size;
-    header->reserved = 0;
-
-    // Set array length
-    uint8_t* data = heap->data + offset + GC_HEADER_SIZE;
-    int32_t* len_ptr = (int32_t*)data;
-    len_ptr[0] = len;
-
-    // Copy element values
-    GcSlot* elements = (GcSlot*)(data + GC_ARRAY_DATA_OFFSET);
-    if (values && len > 0) {
-        memcpy(elements, values, (size_t)len * GC_VALUE_SLOT_SIZE);
-    }
-
-    // Update heap state
-    heap->size += total_size;
-    heap->generation.has_untyped_allocations = 1;
-    int32_t gc_ref = gc_heap_register_object(heap, offset);
-
-    gc_heap_maybe_verify(heap, "alloc_array_from_values");
-    return gc_ref;
+    return allocate_slots(heap, GC_KIND_ARRAY, type_idx, len, values, NULL, "alloc_array_from_values");
 }
 
 int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,

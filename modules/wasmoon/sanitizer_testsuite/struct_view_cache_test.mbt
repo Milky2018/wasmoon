@@ -165,7 +165,7 @@ test "subtype struct views recheck registry replacement clear and object identit
     parents[ids[1]] = ids[0]
     parents[ids[2]] = ids[1]
     let registry = @wasmoon_jit.NativeCallableRegistry::new()
-    assert_true(registry.replace(parents, []))
+    registry.replace(parents, [])
     context.jit_module.bind_callable_registry(registry, ids[:].to_owned(), [])
     for object_type in [1, 2] {
       let object = store.alloc_struct(
@@ -198,7 +198,7 @@ test "subtype struct views recheck registry replacement clear and object identit
         [17L],
       )
       assert_eq(read(), [42L])
-      assert_true(registry.replace(Array::make(count, -1), []))
+      registry.replace(Array::make(count, -1), [])
       rejected("parent replacement")
       // A parent sentinel is not a type, even when it equals a rebound
       // local entry. The preceding child read warmed the physical prefix.
@@ -208,16 +208,16 @@ test "subtype struct views recheck registry replacement clear and object identit
       rejected("rebinding the target to a missing identity")
       let out_of_range_parents = Array::make(count, -1)
       out_of_range_parents[ids[object_type]] = count
-      assert_true(registry.replace(out_of_range_parents, []))
+      registry.replace(out_of_range_parents, [])
       missing_base[0] = count
       context.jit_module.bind_callable_registry(registry, missing_base, [])
       rejected("rebinding the target to an out-of-range identity")
       context.jit_module.bind_callable_registry(registry, ids[:].to_owned(), [])
-      assert_true(registry.replace(parents, []))
+      registry.replace(parents, [])
       assert_eq(read(), [42L])
       registry.clear()
       rejected("registry clear")
-      assert_true(registry.replace(parents, []))
+      registry.replace(parents, [])
       assert_eq(read(), [42L])
       let heap = store.native_heap().unwrap()
       heap.set_runtime_type(object, ids[3])
@@ -237,5 +237,74 @@ test "subtype struct views recheck registry replacement clear and object identit
       assert_eq(read(), [42L])
       assert_true(heap.verify())
     }
+  }
+}
+
+///|
+test "adjacent exact cast rechecks the live registry before using a warm view" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #| (type $wanted (struct (field i64)))
+      #| (type $other (struct (field f64)))
+      #| (func (param (ref null any)) (result i64)
+      #|   local.get 0 ref.cast (ref $wanted) struct.get $wanted 0))
+    ),
+  )
+  @validator.validate_module(module_)
+  for level in [0, 2, 3] {
+    let store = @runtime.Store::with_c_heap()
+    defer store.close()
+    let instance = @executor.instantiate_module_with_imports(
+      store,
+      module_,
+      Imports(store),
+    )
+    let context = build_gc_root_context(
+      module_,
+      instance,
+      store,
+      opt_level=level,
+    )
+    defer context.close()
+    let ids = instance.canonical_type_indices[:].to_owned()
+    let count = ids[0].max(ids[1]) + 1
+    let parents = Array::make(count, -1)
+    let registry = @wasmoon_jit.NativeCallableRegistry::new()
+    registry.replace(parents, [])
+    context.jit_module.bind_callable_registry(registry, ids, [])
+    let object = store.alloc_struct(0, [I64(42L)], instance~)
+    let roots = store.pin_gc_roots([StructRef(object)])
+    defer roots.release()
+    let read = fn() raise @jit.JITTrap {
+      context.jit_module.call_with_context(
+        context.jit_module.get_func(0).unwrap(),
+        [(object + 1).to_int64() << 1],
+      )
+    }
+    let rejected = fn() raise {
+      try read() catch {
+        JITTrap(message) => assert_true(message.contains("cast failure"))
+        error => fail(error.to_string())
+      } noraise {
+        _ => fail("the cast reused a view without a live type proof")
+      }
+    }
+    assert_eq(read(), [42L])
+    assert_eq(read(), [42L])
+    registry.clear()
+    rejected()
+    registry.replace(parents, [])
+    assert_eq(read(), [42L])
+    context.jit_module.bind_callable_registry(registry, [count, ids[1]], [])
+    rejected()
+    context.jit_module.bind_callable_registry(registry, ids, [])
+    assert_eq(read(), [42L])
+    let heap = store.native_heap().unwrap()
+    heap.set_runtime_type(object, ids[1])
+    rejected()
+    heap.set_runtime_type(object, ids[0])
+    assert_eq(read(), [42L])
+    assert_true(heap.verify())
   }
 }

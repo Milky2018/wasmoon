@@ -38,6 +38,10 @@ static int segment_count(const void *segments) {
     return segments ? Moonbit_array_length(segments) : 0;
 }
 
+static inline int segment_range_fits(uint64_t size, uint64_t offset, uint64_t length) {
+    return offset <= size && length <= size - offset;
+}
+
 static jit_segments_state_t *ensure_segments(jit_context_t *ctx) {
     if (!ctx_runtime(ctx)->segments)
         ctx_runtime(ctx)->segments = wasmoon_native_calloc(1, sizeof(jit_segments_state_t));
@@ -56,52 +60,6 @@ static void free_elem_segments(jit_context_t *ctx) {
     ctx_runtime(ctx)->segments->elem_segments = NULL;
 }
 
-// Legacy raw setters copy inputs into the same RC-managed representation.
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments(int64_t ctx_ptr, int count) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || (count <= 0 && !ctx_runtime(ctx)->segments) || !ensure_segments(ctx)) return;
-    uint8_t **segments = count > 0 ?
-        (uint8_t **)moonbit_make_ref_array(count, moonbit_make_bytes(0, 0)) : NULL;
-    free_data_segments(ctx);
-    ctx_runtime(ctx)->segments->data_segments = segments;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment(
-    int64_t ctx_ptr, int idx, uint8_t *data, int size, int is_dropped
-) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || idx < 0 || idx >= segment_count(ctx_segments_state(ctx)->data_segments)) return;
-    int count = !is_dropped && size > 0 ? size : 0;
-    uint8_t *copy = moonbit_make_bytes(count, 0);
-    if (count) memcpy(copy, data, (size_t)count);
-    uint8_t **segments = ctx_runtime(ctx)->segments->data_segments;
-    moonbit_decref(segments[idx]);
-    segments[idx] = copy;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_elem_segments(int64_t ctx_ptr, int count) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || (count <= 0 && !ctx_runtime(ctx)->segments) || !ensure_segments(ctx)) return;
-    int64_t **segments = count > 0 ?
-        (int64_t **)moonbit_make_ref_array(count, moonbit_make_int64_array(0, 0)) : NULL;
-    free_elem_segments(ctx);
-    ctx_runtime(ctx)->segments->elem_segments = segments;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment(
-    int64_t ctx_ptr, int idx, int64_t *data, int size, int is_dropped
-) {
-    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
-    if (!ctx || idx < 0 || idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) return;
-    if (size > INT32_MAX / 2) return;
-    int count = !is_dropped && size > 0 ? size * 2 : 0;
-    int64_t *copy = moonbit_make_int64_array(count, 0);
-    if (count) memcpy(copy, data, (size_t)count * sizeof(int64_t));
-    int64_t **segments = ctx_runtime(ctx)->segments->elem_segments;
-    moonbit_decref(segments[idx]);
-    segments[idx] = copy;
-}
-
 void ctx_clear_segments_internal(jit_context_t *ctx) {
     if (!ctx || !ctx_runtime(ctx)->segments) return;
     free_data_segments(ctx);
@@ -110,10 +68,6 @@ void ctx_clear_segments_internal(jit_context_t *ctx) {
     if (ctx_runtime(ctx)->segments->elem_dropped) moonbit_decref(ctx_runtime(ctx)->segments->elem_dropped);
     free(ctx_runtime(ctx)->segments);
     ctx_runtime(ctx)->segments = NULL;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments(int64_t ctx_ptr) {
-    ctx_clear_segments_internal((jit_context_t *)(uintptr_t)ctx_ptr);
 }
 
 extern int64_t wasmoon_jit_context_ptr(void *jit_context);
@@ -168,50 +122,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_bind_segments(
     return 1;
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments_managed(
-    void *jit_context, int count
-) {
-    wasmoon_jit_ctx_init_data_segments(
-        wasmoon_jit_context_ptr(jit_context), count
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment_managed(
-    void *jit_context,
-    int idx,
-    uint8_t *data,
-    int size,
-    int is_dropped
-) {
-    wasmoon_jit_ctx_add_data_segment(
-        wasmoon_jit_context_ptr(jit_context), idx, data, size, is_dropped
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_elem_segments_managed(
-    void *jit_context, int count
-) {
-    wasmoon_jit_ctx_init_elem_segments(
-        wasmoon_jit_context_ptr(jit_context), count
-    );
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment_managed(
-    void *jit_context,
-    int idx,
-    int64_t *data,
-    int size,
-    int is_dropped
-) {
-    wasmoon_jit_ctx_add_elem_segment(
-        wasmoon_jit_context_ptr(jit_context), idx, data, size, is_dropped
-    );
-}
-
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_clear_segments_managed(
     void *jit_context
 ) {
-    wasmoon_jit_ctx_clear_segments(wasmoon_jit_context_ptr(jit_context));
+    ctx_clear_segments_internal((jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(jit_context));
 }
 
 // ============ Memory Segment Libcalls ============
@@ -227,15 +141,13 @@ static void WASMOON_GUEST_ABI memory_init_impl(
     int64_t len
 ) {
     if (!ctx) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
         return;
     }
 
     // Bounds check data segment index
     if (data_idx < 0 || data_idx >= segment_count(ctx_segments_state(ctx)->data_segments)) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
         return;
     }
 
@@ -246,55 +158,39 @@ static void WASMOON_GUEST_ABI memory_init_impl(
     // Dropped segments are empty; both ranges must still be checked.
 
     // Bounds check source range in segment
-    if ((uint64_t)seg_size < src_u32 || (uint64_t)seg_size - src_u32 < len_u32) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    if (!segment_range_fits(seg_size, src_u32, len_u32)) {
+        jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
         return;
     }
 
-    // Get memory
-    uint8_t *mem = NULL;
-    size_t mem_size = 0;
+    wasmoon_memory_t *memory = NULL;
     if (memidx == 0) {
-        if (!ctx_memory0(ctx) || !ctx_memory0(ctx)->base) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-            return;
-        }
-        mem = ctx_memory0(ctx)->base;
-        mem_size = atomic_load_explicit(&ctx_memory0(ctx)->current_length, memory_order_relaxed);
+        memory = ctx_memory0(ctx);
     } else if (memidx > 0 && ctx_memories(ctx) && memidx < ctx_memory_count(ctx)) {
-        wasmoon_memory_t *m = ctx_memories(ctx)[memidx];
-        if (!m || !m->base) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-            return;
-        }
-        mem = m->base;
-        mem_size = atomic_load_explicit(&m->current_length, memory_order_relaxed);
-    } else {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        memory = ctx_memories(ctx)[memidx];
+    }
+    if (!memory || !memory->base) {
+        jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
         return;
     }
+    uint8_t *mem = memory->base;
+    size_t mem_size = atomic_load_explicit(&memory->current_length, memory_order_relaxed);
 
     // Bounds check destination range in memory
     // For memory32, treat dst as u32; negative values represent high addresses.
     // For memory64, negative values are invalid and trap.
     uint64_t dst_off;
-    if (memidx == 0 ? ctx_memory0(ctx)->is_memory64 : ctx_memories(ctx)[memidx]->is_memory64) {
+    if (memory->is_memory64) {
         if (dst < 0) {
-            g_trap_code = 1;
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+            jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
             return;
         }
         dst_off = (uint64_t)dst;
     } else {
         dst_off = (uint64_t)(uint32_t)dst;
     }
-    if (mem_size < dst_off || mem_size - dst_off < len_u32) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    if (!segment_range_fits(mem_size, dst_off, len_u32)) {
+        jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
         return;
     }
 
@@ -465,6 +361,23 @@ static int64_t WASMOON_GUEST_ABI table_call_target_impl(jit_context_t *ctx, int3
     return callable_entry_inline(ctx, value);
 }
 
+// Bulk operations use the VMContext table view, including zero-sized tables.
+static inline int read_bulk_table(jit_context_t *ctx, int32_t index,
+    void ***entries, size_t *size) {
+    if (!ctx || index < 0) return 0;
+    if (index == 0) {
+        *entries = ctx_table0_base(ctx);
+        *size = ctx_table0_elements(ctx);
+    } else {
+        void ***tables = ctx_tables(ctx);
+        const size_t *sizes = ctx_table_sizes(ctx);
+        if (!tables || !sizes || index >= ctx_table_count(ctx)) return 0;
+        *entries = tables[index];
+        *size = sizes[index];
+    }
+    return *entries || *size == 0;
+}
+
 // table.fill - Fill table region with a value
 static void WASMOON_GUEST_ABI table_fill_impl(
     jit_context_t *ctx,
@@ -473,32 +386,16 @@ static void WASMOON_GUEST_ABI table_fill_impl(
     int64_t val,
     int64_t len
 ) {
-    if (!ctx) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
-
-    // Get table
     void **table;
     size_t table_size;
-
-    if (table_idx == 0) {
-        table = ctx_table0_base(ctx);
-        table_size = ctx_table0_elements(ctx);
-    } else if (ctx_tables(ctx) && table_idx < ctx_table_count(ctx)) {
-        table = ctx_tables(ctx)[table_idx];
-        table_size = ctx_table_sizes(ctx)[table_idx];
-    } else {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    if (!read_bulk_table(ctx, table_idx, &table, &table_size)) {
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
     // Bounds check
     if (dst < 0 || len < 0 ||
-        (uint64_t)table_size < (uint64_t)dst ||
-        (uint64_t)table_size - (uint64_t)dst < (uint64_t)len) {
+        !segment_range_fits(table_size, (uint64_t)dst, (uint64_t)len)) {
         if (table_debug_enabled()) {
             fprintf(
                 stderr,
@@ -510,8 +407,7 @@ static void WASMOON_GUEST_ABI table_fill_impl(
                 (long long)val
             );
         }
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
@@ -573,50 +469,19 @@ static void WASMOON_GUEST_ABI table_copy_impl(
     int64_t src,
     int64_t len
 ) {
-    if (!ctx) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
-
-    // Get source table
-    void **src_table;
-    size_t src_size;
-    if (src_table_idx == 0) {
-        src_table = ctx_table0_base(ctx);
-        src_size = ctx_table0_elements(ctx);
-    } else if (ctx_tables(ctx) && src_table_idx < ctx_table_count(ctx)) {
-        src_table = ctx_tables(ctx)[src_table_idx];
-        src_size = ctx_table_sizes(ctx)[src_table_idx];
-    } else {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
-
-    // Get destination table
-    void **dst_table;
-    size_t dst_size;
-    if (dst_table_idx == 0) {
-        dst_table = ctx_table0_base(ctx);
-        dst_size = ctx_table0_elements(ctx);
-    } else if (ctx_tables(ctx) && dst_table_idx < ctx_table_count(ctx)) {
-        dst_table = ctx_tables(ctx)[dst_table_idx];
-        dst_size = ctx_table_sizes(ctx)[dst_table_idx];
-    } else {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    void **src_table, **dst_table;
+    size_t src_size, dst_size;
+    if (!read_bulk_table(ctx, src_table_idx, &src_table, &src_size) ||
+        !read_bulk_table(ctx, dst_table_idx, &dst_table, &dst_size)) {
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
     // Bounds check
     if (src < 0 || dst < 0 || len < 0 ||
-        (uint64_t)src_size < (uint64_t)src ||
-        (uint64_t)src_size - (uint64_t)src < (uint64_t)len ||
-        (uint64_t)dst_size < (uint64_t)dst ||
-        (uint64_t)dst_size - (uint64_t)dst < (uint64_t)len) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        !segment_range_fits(src_size, (uint64_t)src, (uint64_t)len) ||
+        !segment_range_fits(dst_size, (uint64_t)dst, (uint64_t)len)) {
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
@@ -638,15 +503,13 @@ static void WASMOON_GUEST_ABI table_init_impl(
     int64_t len
 ) {
     if (!ctx) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
@@ -657,34 +520,22 @@ static void WASMOON_GUEST_ABI table_init_impl(
 
     // Bounds check source range in segment
     if (src < 0 || len < 0 ||
-        (uint64_t)seg_size < (uint64_t)src ||
-        (uint64_t)seg_size - (uint64_t)src < (uint64_t)len) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        !segment_range_fits(seg_size, (uint64_t)src, (uint64_t)len)) {
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
-    // Get table
     void **table;
     size_t table_size;
-    if (table_idx == 0) {
-        table = ctx_table0_base(ctx);
-        table_size = ctx_table0_elements(ctx);
-    } else if (ctx_tables(ctx) && table_idx < ctx_table_count(ctx)) {
-        table = ctx_tables(ctx)[table_idx];
-        table_size = ctx_table_sizes(ctx)[table_idx];
-    } else {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    if (!read_bulk_table(ctx, table_idx, &table, &table_size)) {
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
     // Bounds check destination range in table
     if (dst < 0 ||
-        (uint64_t)table_size < (uint64_t)dst ||
-        (uint64_t)table_size - (uint64_t)dst < (uint64_t)len) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        !segment_range_fits(table_size, (uint64_t)dst, (uint64_t)len)) {
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
@@ -885,17 +736,13 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     int allow_collection = 1;
 check_segment:
     if (!ctx || !ctx_gc_heap(ctx)) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
     }
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check data segment index
     if (data_idx < 0 || data_idx >= segment_count(ctx_segments_state(ctx)->data_segments)) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
     }
 
     // If segment is dropped, only length=0 is valid
@@ -911,23 +758,17 @@ check_segment:
     if (elem_size == 0) {
         // Validation should prevent this (ref element types have no data byte size),
         // but trap defensively.
-        g_trap_code = 3;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_UNREACHABLE);
     }
     uint64_t total_bytes = (uint64_t)len_u32 * (uint64_t)elem_size;
 
     // Bounds check source range in segment
-    if ((uint64_t)seg_size < (uint64_t)off_u32 || (uint64_t)seg_size - (uint64_t)off_u32 < total_bytes) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+    if (!segment_range_fits(seg_size, off_u32, total_bytes)) {
+        return jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
     }
 
     if (len_u32 > (uint32_t)INT32_MAX) {
-        g_trap_code = 3;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_UNREACHABLE);
     }
 
     const uint8_t *p = seg_data ? seg_data + (size_t)off_u32 : NULL;
@@ -958,7 +799,7 @@ check_segment:
             }
             g_trap_code = WASMOON_TRAP_MISSING_ROOTS;
         } else {
-            g_trap_code = 9;
+            g_trap_code = WASMOON_TRAP_OUT_OF_MEMORY;
         }
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
@@ -985,17 +826,13 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     int64_t length
 ) {
     if (!ctx || !ctx_gc_heap(ctx)) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
     }
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
     }
 
     // If segment is dropped, only length=0 is valid
@@ -1007,24 +844,18 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
 
     // Bounds check source range in segment
     if ((uint64_t)seg_size < (uint64_t)off_u32 || (uint64_t)seg_size - (uint64_t)off_u32 < (uint64_t)len_u32) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
     }
 
     if (len_u32 > (uint32_t)INT32_MAX) {
-        g_trap_code = 3;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_UNREACHABLE);
     }
 
     int32_t identity = segment_array_identity(ctx, type_idx);
     int32_t gc_ref = allocate_segment_array(heap, gc_heap_layout(heap, identity),
         identity, type_idx, (int32_t)len_u32);
     if (gc_ref == 0) {
-        g_trap_code = 9;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
+        return jit_trap_result(WASMOON_TRAP_OUT_OF_MEMORY);
     }
 
     for (uint32_t i = 0; i < len_u32; i++) {
@@ -1047,16 +878,14 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     int64_t length
 ) {
     if (!ctx || !ctx_gc_heap(ctx)) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
         return;
     }
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check data segment index
     if (data_idx < 0 || data_idx >= segment_count(ctx_segments_state(ctx)->data_segments)) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
         return;
     }
 
@@ -1065,17 +894,15 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     uint32_t data_off_u32 = (uint32_t)data_offset;
     uint32_t arr_off_u32 = (uint32_t)arr_offset;
     if (array_ref == 0) {
-        g_trap_code = WASMOON_TRAP_NULL_REFERENCE;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_NULL_REFERENCE);
         return;
     }
 
     int32_t gc_ref = (int32_t)(array_ref >> 1);
     GcHeader *header = gc_access_object_header(heap, gc_ref);
     int32_t array_len = header ? *(const int32_t *)(header + 1) : 0;
-    if ((uint64_t)array_len < (uint64_t)arr_off_u32 || (uint64_t)array_len - (uint64_t)arr_off_u32 < (uint64_t)len_u32) {
-        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    if (!segment_range_fits((uint64_t)array_len, arr_off_u32, len_u32)) {
+        jit_trap_result(WASMOON_TRAP_ARRAY_BOUNDS);
         return;
     }
 
@@ -1085,16 +912,14 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
     size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
     int elem_tag = get_array_elem_tag(ctx, type_idx);
     if (elem_size == 0) {
-        g_trap_code = 3;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_UNREACHABLE);
         return;
     }
     uint64_t total_bytes = (uint64_t)len_u32 * (uint64_t)elem_size;
 
     // Bounds check source range in segment
-    if ((uint64_t)seg_size < (uint64_t)data_off_u32 || (uint64_t)seg_size - (uint64_t)data_off_u32 < total_bytes) {
-        g_trap_code = 1;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    if (!segment_range_fits(seg_size, data_off_u32, total_bytes)) {
+        jit_trap_result(WASMOON_TRAP_MEMORY_BOUNDS);
         return;
     }
 
@@ -1127,16 +952,14 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
 ) {
     (void)type_idx;
     if (!ctx || !ctx_gc_heap(ctx)) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
     GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= segment_count(ctx_segments_state(ctx)->elem_segments)) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 
@@ -1145,16 +968,14 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
     uint32_t elem_off_u32 = (uint32_t)elem_offset;
     uint32_t arr_off_u32 = (uint32_t)arr_offset;
     if (array_ref == 0) {
-        g_trap_code = WASMOON_TRAP_NULL_REFERENCE;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        jit_trap_result(WASMOON_TRAP_NULL_REFERENCE);
         return;
     }
 
     int32_t gc_ref = (int32_t)(array_ref >> 1);
     int32_t array_len = gc_heap_array_len(heap, gc_ref);
-    if ((uint64_t)array_len < (uint64_t)arr_off_u32 || (uint64_t)array_len - (uint64_t)arr_off_u32 < (uint64_t)len_u32) {
-        g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    if (!segment_range_fits((uint64_t)array_len, arr_off_u32, len_u32)) {
+        jit_trap_result(WASMOON_TRAP_ARRAY_BOUNDS);
         return;
     }
 
@@ -1163,9 +984,8 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
     size_t seg_size = elem_is_dropped(ctx, elem_idx) ? 0 : (size_t)Moonbit_array_length(seg_data) / 2;
 
     // Bounds check source range in segment
-    if ((uint64_t)seg_size < (uint64_t)elem_off_u32 || (uint64_t)seg_size - (uint64_t)elem_off_u32 < (uint64_t)len_u32) {
-        g_trap_code = WASMOON_TRAP_TABLE_BOUNDS;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    if (!segment_range_fits(seg_size, elem_off_u32, len_u32)) {
+        jit_trap_result(WASMOON_TRAP_TABLE_BOUNDS);
         return;
     }
 

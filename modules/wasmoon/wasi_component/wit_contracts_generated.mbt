@@ -403,7 +403,7 @@ fn wasi_preview3_resource_names() -> Array[String] {
 }
 
 ///|
-fn wasi_preview3_type_space(
+pub fn wasi_preview3_type_space(
   resolve_resource : (String) -> @component.TypeDef?,
 ) -> Array[@component.TypeDef?] {
   [
@@ -520,7 +520,7 @@ fn wasi_preview3_type_space(
 }
 
 ///|
-fn wasi_preview3_func_type(
+pub fn wasi_preview3_func_type(
   interface : String,
   function : String,
 ) -> @component.FuncType? {
@@ -620,7 +620,7 @@ fn wasi_preview3_func_type(
 }
 
 ///|
-fn wasi_preview3_exported_types(
+pub fn wasi_preview3_exported_types(
   interface : String,
 ) -> Array[(String, Int)] {
   match interface {

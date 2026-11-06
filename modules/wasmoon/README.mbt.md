@@ -458,6 +458,7 @@ test "host function" {
 
 ## Contributor Note
 
+- Report bugs and track work in [GitHub Issues](https://github.com/Milky2018/wasmoon/issues).
 - Edit `README.mbt.md` as the source of truth.
 - `README.md` is a symlink to `README.mbt.md`.
 

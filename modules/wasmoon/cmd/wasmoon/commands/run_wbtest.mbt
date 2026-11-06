@@ -311,7 +311,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
   }
   let previous : @artifact.Artifact = {
     ..current,
-    manifest: { ..current.manifest, codegen_revision: "direct-vcode-47", },
+    manifest: { ..current.manifest, codegen_revision: "direct-vcode-50", },
   }
   let path = cache_test_file("previous-codegen")
   inspect(save_run_jit_cache(path, previous) is Ok(_), content="true")
@@ -327,7 +327,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("direct-vcode-48", "direct-vcode-47", true, false)
+      #|("direct-vcode-51", "direct-vcode-50", true, false)
     ),
   )
 }
@@ -399,7 +399,7 @@ test "CLI JIT table binding preserves authoritative GC and function entries" {
   }
   let module_ = @jit.JITModule::load_artifact(
     verify_compiled_jit_artifact(artifact),
-    @wast.build_func_signatures(code),
+    @core_jit.build_func_signatures(code),
   )
   defer module_.close()
   let table = store.get_table(instance.table_addrs[0])
@@ -408,7 +408,7 @@ test "CLI JIT table binding preserves authoritative GC and function entries" {
   let native = store.get_jit_table(instance.table_addrs[0]).unwrap()
   let revision = native.raw_ptr().revision()
   for _ in 0..<2 {
-    init_jit_tables(instance, store, module_)
+    @core_jit.bind_instance_tables(instance, store, module_)
     assert_eq(table.get(0), expected)
     assert_eq(native.raw_ptr().revision(), revision)
     assert_eq(

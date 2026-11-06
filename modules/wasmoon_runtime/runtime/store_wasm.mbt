@@ -55,16 +55,7 @@ fn Store::register_rollback(
   self : Store,
   registrar : RollbackRegistrar,
 ) -> Unit {
-  self.instantiation = Some(registrar)
-  self.references.instantiation = Some(registrar)
-  registrar.on_finish(fn() {
-    self.instantiation = None
-    self.references.instantiation = None
-  })
-  // Heap cleanup runs last, after mutation-local rollbacks restore Store roots.
-  registrar.on_rollback(
-    self.heap.make_allocation_rollback(() => self.collect_roots([])),
-  )
+  self.register_managed_rollback(registrar)
 }
 
 ///|
@@ -131,91 +122,14 @@ pub fn Store::Store(
 /// This operation is idempotent and terminal. Every native invocation must
 /// have returned or been cancelled before the store is closed.
 pub fn Store::close(self : Store) -> Unit {
-  if self.closed.val {
-    return
-  }
-  self.closed.val = true
-  let suspended = self.suspended_executions.values().to_array()
-  self.suspended_executions.clear()
-  for cleanup in suspended {
-    if cleanup.lease is Some(lease) {
-      lease.release()
-    }
-    (cleanup.run)()
-  }
-  let guest_bodies = self.guest_continuations.values().to_array()
-  self.guest_continuations.clear()
-  for body in guest_bodies {
-    (body.cancel)()
-  }
-  // Clear logical contents and release retained backing slots to break cycles.
-  // Array.clear alone can retain references beyond the new length.
-  self.guest_continuations.clear()
-  for roots in self.pinned_gc_roots.values() {
-    roots.active.val = false
-    if roots.lease is Some(lease) {
-      lease.release()
-    }
-  }
-  self.pinned_gc_roots.clear()
-  self.funcref_registry.clear()
-  self.native_types.representatives.clear()
-  self.native_types.representatives.shrink_to_fit()
-  self.native_types.group_buckets.clear()
-  self.native_types.mappings.clear()
-  self.native_types.initialization_graph = None
-  self.native_types.parents.clear()
-  self.native_types.parents.shrink_to_fit()
-  self.native_types.views.clear()
-  self.native_types.views.shrink_to_fit()
-  self.native_types.entries.clear()
-  if self.native_types.native_registry is Some(registry) {
-    registry.clear()
-    self.native_types.native_registry = None
-  }
-  self.native_types.heap_types.clear()
+  guard self.begin_close() else { return }
+  self.close_roots_and_types()
   self.native_types.native_layout_count = 0
-  for function in self.funcs {
-    function.lifetime.active.val = false
-  }
-  self.funcs.clear()
-  self.funcs.shrink_to_fit()
-  self.func_types.clear()
-  self.func_types.shrink_to_fit()
-  self.func_type_indices.clear()
-  self.func_type_indices.shrink_to_fit()
-  self.func_owners.clear()
-  self.func_owners.shrink_to_fit()
+  self.invalidate_functions()
   for lease in self.instance_leases {
     lease.release()
   }
-  self.instance_leases.clear()
-  self.instance_leases.shrink_to_fit()
-  self.instances.clear()
-  self.instances.shrink_to_fit()
-  for table in self.tables {
-    table.close()
-  }
-  self.tables.clear()
-  self.tables.shrink_to_fit()
-  for memory in self.mems {
-    memory.close()
-  }
-  self.mems.clear()
-  self.mems.shrink_to_fit()
-  for global in self.globals {
-    global.close()
-  }
-  self.globals.clear()
-  self.globals.shrink_to_fit()
-  self.tag_lifetimes.clear()
-  self.tag_lifetimes.shrink_to_fit()
-  self.tags.clear()
-  self.tags.shrink_to_fit()
-  self.tag_type_indices.clear()
-  self.tag_type_indices.shrink_to_fit()
-  self.tag_owners.clear()
-  self.tag_owners.shrink_to_fit()
+  self.close_instances()
   self.references.exns.clear()
   for pair in self.references.auxiliary_leases.values() {
     pair.0.release()
@@ -224,51 +138,26 @@ pub fn Store::close(self : Store) -> Unit {
   self.references.auxiliary_leases.clear()
   self.heap.close()
 
-  // These arrays are borrowed from the parsed module and may be reused by
-  // other stores. Closing a store must only drop its own references.
-  self.module_types = []
-  self.module_rec_groups = []
-  self.references.wrapped_externs.clear()
-  self.wasi_mem_addr = None
-  self.wasi_ctx_handle = 0
-  self.instantiation = None
+  self.clear_module_references()
+  self.finish_close()
 }
 
 ///|
-/// Allocate a table in the store
-pub fn Store::alloc_table(
-  self : Store,
+fn Store::prepare_table_backing(
+  _self : Store,
+  _table : Table,
+  _use_jit : Bool,
+) -> Unit {
+  ()
+}
+
+///|
+fn Store::discard_table_backing(
+  _self : Store,
   table : Table,
-  use_jit~ : Bool = true,
-) -> Int32 raise RuntimeError {
-  self.ensure_open()
-  table.ensure_open()
-  let binding = resource_binding(table.binding, self.closed)
-  for index, existing in self.tables {
-    if physical_equal(existing, table) {
-      return index
-    }
-  }
-  let previous_reservation = table.reservation
-  errdefer {
-    if previous_reservation is None && table.reservation is Some(reservation) {
-      reservation.close()
-    }
-    table.reservation = previous_reservation
-  }
-  if self.resource_budget is Some(budget) {
-    table.bind_budget(budget)
-  }
-  ignore(use_jit)
-  let idx = self.tables.length()
-  table.binding = Some(binding)
-  self.on_instantiation_rollback(fn() {
-    table.close()
-    self.tables.truncate(idx)
-    self.tables.shrink_to_fit()
-  })
-  self.tables.push(table)
-  idx
+  _idx : Int32,
+) -> Unit {
+  table.close()
 }
 
 ///|

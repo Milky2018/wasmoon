@@ -42,20 +42,8 @@ fn build_gc_root_context(
   let globals_ptr = @wast.init_jit_globals_from_store(
     instance, store, jit_module,
   )
-  @wast.init_elem_segments(
-    mod_,
-    jit_module,
-    instance,
-    store,
-    use_subtype_indirect_check=true,
-  )
-  @wast.init_bulk_segments(
-    mod_,
-    jit_module,
-    instance,
-    store,
-    use_subtype_indirect_check=true,
-  )
+  @wast.bind_instance_tables(instance, store, jit_module)
+  @wast.init_bulk_segments(mod_, jit_module, instance, store)
   JITModuleContext(
     jit_module,
     globals_ptr,

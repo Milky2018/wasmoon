@@ -1,5 +1,5 @@
 ///|
-test "frontend validation context resolves linked and module-local contracts" {
+test "frontend validation context owns linked and module-local contracts" {
   let mod_ = @types.Module::empty()
   mod_.types.push(@types.SubType::func([I32], [I64]))
   mod_.types.push(
@@ -30,6 +30,14 @@ test "frontend validation context resolves linked and module-local contracts" {
     func_base=10,
   )
   let validation_context = translation_context.wasm_validation_context()
+
+  // A caller can still hold the translation context and its source arrays.
+  // Existing validation proofs must continue to use the owned contracts.
+  translation_context.module_types[0] = @types.SubType::func([], [])
+  translation_context.module_types[1] = @types.SubType::simple(
+    Struct({ fields: [{ storage_type: Val(F32), mutable: true, }], }),
+  )
+  translation_context.tags[0] = { type_idx: 0, }
 
   let direct = @milkir.FunctionBuilder::FunctionBuilder("linked_call")
   let direct_argument = direct.add_param(I32)

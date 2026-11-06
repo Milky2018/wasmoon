@@ -117,7 +117,7 @@ test "payload transport converts nested values across type environments and memo
     content="[([U8(7), List([String(\"hello\"), String(\"世界\")])])]",
   )
   let mem = require_memory(dst_resources, store)
-  inspect(mem.load_i64(144), content="2")
+  inspect(mem.load_i64_at(144L), content="2")
 }
 
 ///|
@@ -142,7 +142,7 @@ test "memory payloads are independent of the function flat-parameter limit" {
     64,
   )
   let memory = require_memory(resources, store)
-  inspect(memory.load_i32(64 + 19 * 4), content="19")
+  inspect(memory.load_i32_at(memory.offset32(64 + 19 * 4)), content="19")
 }
 
 ///|
@@ -310,8 +310,8 @@ test "pending string payloads remain owned after the writer mutates memory" {
   )
   let payload = payload_type.load(resources, store, 64, 1, table)
   let memory = require_memory(resources, store)
-  let ptr = memory.load_i32(64)
-  memory.store_byte(ptr, 0x58)
+  let ptr = memory.load_i32_at(64L)
+  memory.store_byte_at(memory.offset32(ptr), 0x58)
   debug_inspect(
     payload.values.map(ComponentValue::to_host_value),
     content="[String(\"before\")]",

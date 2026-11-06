@@ -36,16 +36,16 @@ test "checked memory64 storage preserves overlap growth and quota rollback" {
 test "memory32 high-bit addresses remain unsigned without wrapping" {
   let memory = @runtime.Memory::Memory(1, None)
   defer memory.close()
-  memory.store_i32(0, 42)
+  memory.store_i32_at(0L, 42)
   for address in [-1, -2147483648] {
-    try memory.store_i32(address, 0) catch {
+    try memory.store_i32_at(memory.offset32(address), 0) catch {
       OutOfBoundsMemoryAccess => ()
       error => fail(error.to_string())
     } noraise {
       _ => fail("high-bit address wrapped into small memory")
     }
   }
-  assert_eq(memory.load_i32(0), 42)
+  assert_eq(memory.load_i32_at(0L), 42)
 }
 
 ///|
@@ -143,7 +143,7 @@ test "Store close keeps retained Memory aliases terminal with the same error" {
   owner.close()
   assert_eq(memory.byte_len(), 0L)
   assert_eq(memory.grow64(1L), -1L)
-  try memory.load_i32(0) catch {
+  try memory.load_i32_at(0L) catch {
     MemoryClosed => ()
     error => fail(error.to_string())
   } noraise {

@@ -186,3 +186,45 @@ pub extend Value with Eq::{not_equal, equal}
 
 ///|
 pub extend Value with Show::{to_string, output}
+
+///|
+pub extend CallArgumentLocation with Debug::{to_repr}
+
+///|
+pub extend CallArgumentLocation with Eq::{not_equal, equal}
+
+///|
+pub extend CallLayout with Debug::{to_repr}
+
+///|
+pub extend CallLayout with Eq::{not_equal, equal}
+
+///|
+pub extend CallResultLocation with Debug::{to_repr}
+
+///|
+pub extend CallResultLocation with Eq::{not_equal, equal}
+
+///|
+pub extend InternalAbiError with Debug::{to_repr}
+
+///|
+pub extend InternalAbiError with Eq::{not_equal, equal}
+
+///|
+pub extend InternalAbiError with Show::{to_string, output}
+
+///|
+pub extend InternalCallPlan with Debug::{to_repr}
+
+///|
+pub extend InternalCallPlan with Eq::{not_equal, equal}
+
+///|
+pub extend TargetVCodeVerifyError with Debug::{to_repr}
+
+///|
+pub extend TargetVCodeVerifyError with Eq::{not_equal, equal}
+
+///|
+pub extend TargetVCodeVerifyError with Show::{to_string, output}

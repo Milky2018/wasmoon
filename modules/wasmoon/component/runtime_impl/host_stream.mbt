@@ -384,19 +384,12 @@ pub fn HostRuntimeState::read_host_byte_stream(
           )
         }
         self.stream_table.streams.replace(endpoint.stream_id, {
-          allows_intra_component: state.allows_intra_component,
-          pending_read: state.pending_read,
+          ..state,
           pending_write: Some({
-            writer_table: write.writer_table,
-            buf: write.buf,
-            count: write.count,
+            ..write,
             sent,
-            writer_handle: write.writer_handle,
             event_enqueued: complete || write.event_enqueued,
-            defer_complete: write.defer_complete,
           }),
-          readable_dropped: state.readable_dropped,
-          writable_dropped: state.writable_dropped,
         })
         Data(Bytes::from_array(bytes))
       } else if state.writable_dropped {
@@ -445,15 +438,7 @@ pub fn HostRuntimeState::drop_host_readable_stream(
           },
         )
       }
-      Some({
-        writer_table: write.writer_table,
-        buf: write.buf,
-        count: write.count,
-        sent: write.sent,
-        writer_handle: write.writer_handle,
-        event_enqueued: true,
-        defer_complete: write.defer_complete,
-      })
+      Some({ ..write, event_enqueued: true, })
     }
     None => None
   }

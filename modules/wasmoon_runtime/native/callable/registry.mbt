@@ -64,13 +64,12 @@ pub fn NativeCallableRegistry::clear(self : NativeCallableRegistry) -> Unit {
 ///|
 /// Replace Store metadata outside concurrent guest execution. Native consumers
 /// share the typed arrays; they do not own an independent copy of the metadata.
-/// The Bool result is retained for compatibility. Allocation uses MoonBit's
-/// allocator, so there is no separately recoverable native allocation failure.
+/// Metadata allocation uses MoonBit's allocator; publication retains the arrays.
 pub fn NativeCallableRegistry::replace(
   self : NativeCallableRegistry,
   parents : Array[Int32],
   entries : Array[(Int64, Int32)],
-) -> Bool {
+) -> Unit {
   let mut parents_changed = parents.length() != self.parents.length()
   if !parents_changed {
     for i, parent in parents {
@@ -144,7 +143,6 @@ pub fn NativeCallableRegistry::replace(
       self.store_positions,
     )
   }
-  true
 }
 
 ///|

@@ -86,9 +86,9 @@ fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
   }
 
   // Encode module to binary format
-  let bytes = @encoder.encode(mod)
+  let bytes = @encoder.encode_bytes(mod)
 
   // Write to file
-  write_binary_file(output_path, bytes)
+  write_bytes_file(output_path, bytes)
   println("Wrote \{bytes.length()} bytes to \{output_path}")
 }

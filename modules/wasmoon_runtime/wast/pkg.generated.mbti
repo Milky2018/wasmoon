@@ -11,11 +11,17 @@ import {
 // Values
 pub fn classify_runtime_failure(@runtime.RuntimeError) -> @assertions.WastRunnerError
 
+pub fn[E : WastEngine] execute_command(E, @parser.WastCommand, Int32, WastResult, Bool, track_unsupported? : Bool) -> Unit
+
+pub fn finish_action(WastModules, @parser.WastCommand, @parser.WastAction, Int32, WastResult, Bool, Result[Array[@types.Value], @assertions.WastRunnerError]) -> Unit
+
 pub fn invoke_action(CoreWastContext, @parser.WastAction) -> Array[@types.Value] raise @assertions.WastRunnerError
+
+pub fn invoke_script_action(@runtime.Store, WastModules, @parser.WastAction, invoke_native? : (String?, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value]? raise @assertions.WastRunnerError) -> Array[@types.Value] raise @assertions.WastRunnerError
 
 pub fn run_script(String, stack_switching? : Bool) -> WastResult raise
 
-pub fn run_wast_command(CoreWastContext, @parser.WastCommand, Int32, WastResult, String, Bool) -> Unit
+pub fn run_wast_command(CoreWastContext, @parser.WastCommand, Int32, WastResult, Bool) -> Unit
 
 pub fn values_match(@types.Value, @parser.WastValue, func_addrs? : ArrayView[Int32]) -> Bool
 
@@ -29,16 +35,24 @@ pub fn wast_value_to_runtime(@parser.WastValue, func_addrs? : ArrayView[Int32]) 
 pub struct CoreWastContext {
   store : @runtime.Store
   mut closed : Bool
-  mut current_module : @runtime.ModuleInstance?
-  named_modules : Map[String, @runtime.ModuleInstance]
-  module_definitions : Map[String, @types.Module]
-  mut current_definition : @types.Module?
-  registered_modules : Map[String, @runtime.ModuleInstance]
+  modules : WastModules
   stack_switching : Bool
 }
 pub fn CoreWastContext::build_imports(Self) -> @runtime.Imports
 pub fn CoreWastContext::close(Self) -> Unit
 pub fn CoreWastContext::new(stack_switching? : Bool) -> Self raise @runtime.RuntimeError
+
+pub struct WastModules {
+  // private fields
+}
+pub fn WastModules::build_imports(Self, @runtime.Store) -> @runtime.Imports
+pub fn WastModules::clear(Self) -> Unit
+pub fn WastModules::definition(Self, String?) -> @types.Module?
+pub fn WastModules::inherit_definitions(Self, Self) -> Unit
+pub fn WastModules::instance(Self, String?) -> @runtime.ModuleInstance?
+pub fn WastModules::new(Map[String, @runtime.ModuleInstance]) -> Self
+pub fn WastModules::publish(Self, @runtime.ModuleInstance, String?) -> Unit
+pub fn WastModules::register(Self, String, @runtime.ModuleInstance) -> Unit
 
 pub struct WastResult {
   mut passed : Int32
@@ -48,8 +62,21 @@ pub struct WastResult {
   unsupported : Array[String]
 }
 pub fn WastResult::WastResult() -> Self
+pub fn WastResult::record_failure(Self, String) -> Unit
+pub fn WastResult::record_pass(Self) -> Unit
 
 // Type aliases
 pub using @assertions {type WastRunnerError}
 
 // Traits
+pub(open) trait WastEngine {
+  fn modules(Self) -> WastModules
+  fn store(Self) -> @runtime.Store
+  fn closed(Self) -> Bool
+  fn instantiate(Self, @types.Module, String?) -> Unit raise
+  fn validate(Self, @types.Module) -> Unit raise
+  fn invoke(Self, @parser.WastAction) -> Array[@types.Value] raise @assertions.WastRunnerError
+  fn source_is_invalid(Self, @parser.WastModuleSource, String) -> Bool raise @assertions.WastRunnerError
+  fn source_traps(Self, @parser.WastModuleSource, String) -> Bool
+  fn registered(Self, String) -> Unit
+}

@@ -45,7 +45,7 @@ test "raising Memory access reports a closed handle" {
   let memory = @runtime.Memory::Memory(1, None)
   store.alloc_mem(memory) |> ignore
   store.close()
-  try memory.load_i32(0) catch {
+  try memory.load_i32_at(0L) catch {
     error => inspect(error, content="memory is closed")
   } noraise {
     _ => fail("expected closed Memory access to fail")
@@ -68,8 +68,8 @@ test "independent shared memory owners survive either Store closing" {
       )
       source.alloc_mem(original) |> ignore
       let shared = destination.get_mem(destination.alloc_shared_mem(original))
-      original.store_i32(0, 42)
-      inspect(shared.load_i32(0), content="42")
+      original.store_i32_at(0L, 42)
+      inspect(shared.load_i32_at(0L), content="42")
       inspect(shared.grow(1), content="1")
       inspect(original.byte_len(), content="131072")
       let survivor = if source_closes_first {
@@ -81,9 +81,9 @@ test "independent shared memory owners survive either Store closing" {
         inspect(shared.desc_ptr().is_null(), content="true")
         original
       }
-      inspect(survivor.load_i32(0), content="42")
-      survivor.store_i32(65536, 99)
-      inspect(survivor.load_i32(65536), content="99")
+      inspect(survivor.load_i32_at(0L), content="42")
+      survivor.store_i32_at(65536L, 99)
+      inspect(survivor.load_i32_at(65536L), content="99")
       inspect(survivor.grow(1), content="2")
       inspect(survivor.byte_len(), content="196608")
       source.close()
@@ -139,8 +139,8 @@ test "shared memory import rejects ordinary and closed handles" {
   } noraise {
     _ => fail("closed Store must not acquire memory")
   }
-  memory.store_i32(0, 7)
-  inspect(memory.load_i32(0), content="7")
+  memory.store_i32_at(0L, 7)
+  inspect(memory.load_i32_at(0L), content="7")
   source.close()
   let next = @runtime.Store::Store()
   defer next.close()

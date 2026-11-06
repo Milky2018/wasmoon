@@ -70,6 +70,15 @@ fn filesystem_ok(
 }
 
 ///|
+fn filesystem_void_result(success : Bool) -> @runtime_impl.ComponentValue {
+  if success {
+    filesystem_ok_void()
+  } else {
+    filesystem_error()
+  }
+}
+
+///|
 fn filesystem_flags_arg(
   args : Array[@runtime_impl.ComponentValue],
   index : Int32,
@@ -109,27 +118,6 @@ fn filesystem_string_arg(
     String(value) => value
     _ => raise HostCallError("expected filesystem path")
   }
-}
-
-///|
-fn capability_parent_and_leaf(path : String) -> (String, String)? {
-  if path == "" || path.has_prefix("/") {
-    return None
-  }
-  let requires_directory = path.has_suffix("/")
-  let parts : Array[String] = []
-  for part in path.split("/") {
-    if part == "" {
-      continue
-    }
-    parts.push(part.to_owned())
-  }
-  if parts.length() == 0 {
-    return None
-  }
-  let leaf = parts.pop().unwrap()
-  let leaf = if requires_directory { leaf + "/" } else { leaf }
-  Some((parts.join("/"), leaf))
 }
 
 ///|
@@ -184,41 +172,6 @@ fn descriptor_stat_value(stat : @wasi.FileStat) -> @runtime_impl.ComponentValue 
     datetime_value(stat.mtim),
     datetime_value(stat.ctim),
   ])
-}
-
-///|
-fn descriptor_flags_to_open(flags : Int32) -> Array[@wasi.OpenFlags] {
-  let open_flags : Array[@wasi.OpenFlags] = []
-  if (flags & descriptor_read) != 0 && (flags & descriptor_write) != 0 {
-    open_flags.push(ReadWrite)
-  } else if (flags & descriptor_write) != 0 {
-    open_flags.push(WriteOnly)
-  } else {
-    open_flags.push(ReadOnly)
-  }
-  open_flags
-}
-
-///|
-fn open_capability_parent(
-  state : DescriptorState,
-  path : String,
-) -> (Int32, String)? {
-  match capability_parent_and_leaf(path) {
-    None => None
-    Some((parent, leaf)) =>
-      if leaf == "." || leaf == ".." || leaf == "./" || leaf == "../" {
-        match @wasi.native_open_parent_beneath(state.fd, path) {
-          Some(fd) => Some((fd, "."))
-          None => None
-        }
-      } else {
-        match @wasi.native_open_parent_beneath(state.fd, parent) {
-          Some(parent_fd) => Some((parent_fd, leaf))
-          None => None
-        }
-      }
-  }
 }
 
 ///|
@@ -614,58 +567,6 @@ fn descriptor_set_times(
 }
 
 ///|
-fn stat_capability_path(
-  state : DescriptorState,
-  path : String,
-  follow_final : Bool,
-) -> @wasi.FileStat? {
-  match capability_parent_and_leaf(path) {
-    None => None
-    Some((parent, leaf)) =>
-      if leaf == "." || leaf == ".." || leaf == "./" || leaf == "../" {
-        match @wasi.native_open_parent_beneath(state.fd, path) {
-          None => None
-          Some(fd) => {
-            let stat = @wasi.native_fstat(fd)
-            @wasi.native_close(fd) |> ignore
-            stat
-          }
-        }
-      } else if follow_final || path.has_suffix("/") {
-        match
-          @wasi.native_openat_beneath(
-            state.fd,
-            parent,
-            leaf,
-            [ReadOnly],
-            0,
-            true,
-          ) {
-          None => None
-          Some(fd) => {
-            let stat = @wasi.native_fstat(fd)
-            @wasi.native_close(fd) |> ignore
-            stat
-          }
-        }
-      } else {
-        match @wasi.native_open_parent_beneath(state.fd, parent) {
-          None => None
-          Some(parent_fd) => {
-            let stat = @wasi.native_fstatat(
-              parent_fd,
-              leaf,
-              @wasi.AT_SYMLINK_NOFOLLOW,
-            )
-            @wasi.native_close(parent_fd) |> ignore
-            stat
-          }
-        }
-      }
-  }
-}
-
-///|
 fn add_descriptor_path_methods(
   host : WasiComponentHost,
   builder : @runtime_impl.HostInstanceBuilder,
@@ -703,14 +604,10 @@ fn add_descriptor_path_methods(
       if capability_parent_and_leaf(path) is None {
         return [filesystem_error_code(31)]
       }
-      match open_capability_parent(state, path) {
-        None => [filesystem_error()]
-        Some((parent_fd, leaf)) => {
-          let success = @wasi.native_mkdirat(parent_fd, leaf, 0o755)
-          @wasi.native_close(parent_fd) |> ignore
-          [if success { filesystem_ok_void() } else { filesystem_error() }]
-        }
-      }
+      let success = with_capability_parent(state, path, (fd, leaf) => {
+        @wasi.native_mkdirat(fd, leaf, 0o755)
+      }).unwrap_or(false)
+      [filesystem_void_result(success)]
     },
   )
   builder.add_func(
@@ -748,56 +645,18 @@ fn add_descriptor_path_methods(
           parse_new_timestamp(args[4], 0x04, 0x08),
         ) {
         (Some((atim, af)), Some((mtim, mf))) =>
-          if follow {
-            match capability_parent_and_leaf(path) {
-              None => [filesystem_error_code(31)]
-              Some((parent, leaf)) =>
-                match
-                  @wasi.native_openat_beneath(
-                    state.fd,
-                    parent,
-                    leaf,
-                    [ReadOnly],
-                    0,
-                    true,
-                  ) {
-                  None => [filesystem_error()]
-                  Some(fd) => {
-                    let success = @wasi.native_futimens(fd, atim, mtim, af | mf)
-                    @wasi.native_close(fd) |> ignore
-                    [
-                      if success {
-                        filesystem_ok_void()
-                      } else {
-                        filesystem_error()
-                      },
-                    ]
-                  }
-                }
-            }
-          } else {
-            match open_capability_parent(state, path) {
-              None => [filesystem_error()]
-              Some((parent_fd, leaf)) => {
-                let success = @wasi.native_utimensat(
-                  parent_fd,
-                  leaf,
-                  atim,
-                  mtim,
-                  af | mf,
-                  @wasi.AT_SYMLINK_NOFOLLOW,
-                )
-                @wasi.native_close(parent_fd) |> ignore
-                [
-                  if success {
-                    filesystem_ok_void()
-                  } else {
-                    filesystem_error()
-                  },
-                ]
-              }
-            }
-          }
+          [
+            filesystem_void_result(
+              set_capability_path_times(
+                state,
+                path,
+                follow,
+                atim,
+                mtim,
+                af | mf,
+              ),
+            ),
+          ]
         _ =>
           [
             filesystem_error_code(
@@ -828,19 +687,7 @@ fn add_descriptor_path_methods(
         !descriptor_has(state, descriptor_read) {
         return [filesystem_error_code(0)]
       }
-      let native_flags = descriptor_flags_to_open(requested_flags)
-      if (open_flags & 0x01) != 0 {
-        native_flags.push(Create)
-      }
-      if (open_flags & 0x02) != 0 {
-        native_flags.push(Directory)
-      }
-      if (open_flags & 0x04) != 0 {
-        native_flags.push(Exclusive)
-      }
-      if (open_flags & 0x08) != 0 {
-        native_flags.push(Truncate)
-      }
+      let native_flags = descriptor_open_flags(requested_flags, open_flags)
       match capability_parent_and_leaf(path) {
         None => [filesystem_error_code(31)]
         Some((parent, leaf)) =>
@@ -873,21 +720,13 @@ fn add_descriptor_path_methods(
       if capability_parent_and_leaf(path) is None {
         return [filesystem_error_code(31)]
       }
-      match open_capability_parent(state, path) {
+      let target = with_capability_parent(state, path, (fd, leaf) => {
+        @wasi.native_readlinkat(fd, leaf, 65536)
+      }).bind(value => value)
+      match target {
+        Some(target) if target.has_prefix("/") => [filesystem_error_code(31)]
+        Some(target) => [filesystem_ok(String(target))]
         None => [filesystem_error()]
-        Some((parent_fd, leaf)) => {
-          let target = @wasi.native_readlinkat(parent_fd, leaf, 65536)
-          @wasi.native_close(parent_fd) |> ignore
-          match target {
-            Some(target) =>
-              if target.has_prefix("/") {
-                [filesystem_error_code(31)]
-              } else {
-                [filesystem_ok(String(target))]
-              }
-            None => [filesystem_error()]
-          }
-        }
       }
     },
   )
@@ -904,14 +743,10 @@ fn add_descriptor_path_methods(
     if capability_parent_and_leaf(path) is None {
       return [filesystem_error_code(31)]
     }
-    match open_capability_parent(state, path) {
-      None => [filesystem_error()]
-      Some((parent_fd, leaf)) => {
-        let success = @wasi.native_unlinkat(parent_fd, leaf, flags)
-        @wasi.native_close(parent_fd) |> ignore
-        [if success { filesystem_ok_void() } else { filesystem_error() }]
-      }
-    }
+    let success = with_capability_parent(state, path, (fd, leaf) => {
+      @wasi.native_unlinkat(fd, leaf, flags)
+    }).unwrap_or(false)
+    [filesystem_void_result(success)]
   }
 
   builder.add_func(
@@ -940,29 +775,14 @@ fn add_descriptor_path_methods(
         capability_parent_and_leaf(new_path) is None {
         return [filesystem_error_code(31)]
       }
-      match
-        (
-          open_capability_parent(old_state, old_path),
-          open_capability_parent(new_state, new_path),
-        ) {
-        (Some((old_fd, old_leaf)), Some((new_fd, new_leaf))) => {
-          let success = @wasi.native_renameat(
-            old_fd, old_leaf, new_fd, new_leaf,
-          )
-          @wasi.native_close(old_fd) |> ignore
-          @wasi.native_close(new_fd) |> ignore
-          [if success { filesystem_ok_void() } else { filesystem_error() }]
-        }
-        (Some((old_fd, _)), None) => {
-          @wasi.native_close(old_fd) |> ignore
-          [filesystem_error()]
-        }
-        (None, Some((new_fd, _))) => {
-          @wasi.native_close(new_fd) |> ignore
-          [filesystem_error()]
-        }
-        _ => [filesystem_error()]
-      }
+      let success = operate_on_capability_pair(
+        old_state,
+        old_path,
+        new_state,
+        new_path,
+        Rename,
+      )
+      [filesystem_void_result(success)]
     },
   )
   builder.add_func(
@@ -983,29 +803,14 @@ fn add_descriptor_path_methods(
         capability_parent_and_leaf(new_path) is None {
         return [filesystem_error_code(31)]
       }
-      match
-        (
-          open_capability_parent(old_state, old_path),
-          open_capability_parent(new_state, new_path),
-        ) {
-        (Some((old_fd, old_leaf)), Some((new_fd, new_leaf))) => {
-          let success = @wasi.native_linkat(
-            old_fd, old_leaf, new_fd, new_leaf, 0,
-          )
-          @wasi.native_close(old_fd) |> ignore
-          @wasi.native_close(new_fd) |> ignore
-          [if success { filesystem_ok_void() } else { filesystem_error() }]
-        }
-        (Some((old_fd, _)), None) => {
-          @wasi.native_close(old_fd) |> ignore
-          [filesystem_error()]
-        }
-        (None, Some((new_fd, _))) => {
-          @wasi.native_close(new_fd) |> ignore
-          [filesystem_error()]
-        }
-        _ => [filesystem_error()]
-      }
+      let success = operate_on_capability_pair(
+        old_state,
+        old_path,
+        new_state,
+        new_path,
+        Link,
+      )
+      [filesystem_void_result(success)]
     },
   )
   builder.add_func(
@@ -1024,14 +829,10 @@ fn add_descriptor_path_methods(
       if capability_parent_and_leaf(path) is None {
         return [filesystem_error_code(31)]
       }
-      match open_capability_parent(state, path) {
-        None => [filesystem_error()]
-        Some((parent_fd, leaf)) => {
-          let success = @wasi.native_symlinkat(target, parent_fd, leaf)
-          @wasi.native_close(parent_fd) |> ignore
-          [if success { filesystem_ok_void() } else { filesystem_error() }]
-        }
-      }
+      let success = with_capability_parent(state, path, (fd, leaf) => {
+        @wasi.native_symlinkat(target, fd, leaf)
+      }).unwrap_or(false)
+      [filesystem_void_result(success)]
     },
   )
   builder.add_func(
@@ -1046,18 +847,7 @@ fn add_descriptor_path_methods(
       }
       match stat_capability_path(state, path, follow) {
         None => [filesystem_error()]
-        Some(stat) => {
-          let lower = stat.dev ^ stat.ino ^ stat.size
-          let upper = stat.mtim ^ stat.ctim ^ stat.nlink
-          [
-            filesystem_ok(
-              Tuple([
-                U64(lower.reinterpret_as_int64()),
-                U64(upper.reinterpret_as_int64()),
-              ]),
-            ),
-          ]
-        }
+        Some(stat) => [filesystem_ok(metadata_hash_value(stat))]
       }
     },
   )

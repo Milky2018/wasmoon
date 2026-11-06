@@ -195,9 +195,9 @@ fn run_acyclic_pipeline_after_normalization(
   func : @milkir.Function,
   needs_dce : Bool,
   level : OptLevel,
+  analysis : FunctionAnalysis,
 ) -> OptResult {
   let result = OptResult::OptResult()
-  let analysis = FunctionAnalysis::build(func)
   let (rewrite_changed, gvn_result) = run_acyclic_optimization_pass_with_analysis_at_level(
     func, analysis, level,
   )
@@ -229,7 +229,12 @@ fn optimize_o2_pipeline(func : @milkir.Function) -> OptResult {
   if pre_cleanup.changed {
     result.mark_changed()
   }
-  if run_acyclic_pipeline_after_normalization(func, false, O2).changed {
+  if run_acyclic_pipeline_after_normalization(
+      func,
+      false,
+      O2,
+      FunctionAnalysis::build(func),
+    ).changed {
     result.mark_changed()
   }
   result
@@ -295,13 +300,29 @@ fn optimize_o3(func : @milkir.Function) -> OptResult {
   if normalization.changed {
     result.mark_changed()
   }
+  let cfg = @milkir.CFG::build(func)
+  let (dominance, loops) = cfg.analyze_loops()
+  let definitions = if loops.is_empty() {
+    []
+  } else {
+    loop_definition_blocks(func)
+  }
   let licm_result = run_opt_pass(func, "loop_licm", fn(function) {
-    hoist_loop_invariants(function)
+    // Unguarded LICM only moves instructions. Unrolling can change the CFG.
+    hoist_loop_invariants_once(
+      function,
+      cfg,
+      loops,
+      definitions,
+      guard_entries=false,
+    ).0
   })
   if licm_result.changed {
     result.mark_changed()
   }
-  let unroll_result = run_opt_pass(func, "loop_unroll", unroll_counted_loops)
+  let unroll_result = run_opt_pass(func, "loop_unroll", fn(function) {
+    unroll_counted_loops(function, analysis=Some((cfg, loops, definitions)))
+  })
   if unroll_result.changed {
     result.mark_changed()
   }
@@ -312,7 +333,12 @@ fn optimize_o3(func : @milkir.Function) -> OptResult {
   let loop_changed = licm_result.changed ||
     unroll_result.changed ||
     sr_result.changed
-  if run_acyclic_pipeline_after_normalization(func, loop_changed, O3).changed {
+  let analysis = if unroll_result.changed {
+    FunctionAnalysis::build(func)
+  } else {
+    FunctionAnalysis::from_control_flow(func, cfg, dominance)
+  }
+  if run_acyclic_pipeline_after_normalization(func, loop_changed, O3, analysis).changed {
     result.mark_changed()
   }
   if run_final_materialization_sink(func).changed {

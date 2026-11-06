@@ -682,3 +682,33 @@ fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
     raw,
   }
 }
+
+///|
+#valtype
+priv struct LexerCheckpoint {
+  pos : Int32
+  line : Int32
+  column : Int32
+  token_start_line : Int32
+  token_start_column : Int32
+}
+
+///|
+fn Lexer::checkpoint(self : Lexer) -> LexerCheckpoint {
+  {
+    pos: self.pos,
+    line: self.line,
+    column: self.column,
+    token_start_line: self.token_start_line,
+    token_start_column: self.token_start_column,
+  }
+}
+
+///|
+fn Lexer::restore(self : Lexer, saved : LexerCheckpoint) -> Unit {
+  self.pos = saved.pos
+  self.line = saved.line
+  self.column = saved.column
+  self.token_start_line = saved.token_start_line
+  self.token_start_column = saved.token_start_column
+}

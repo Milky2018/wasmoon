@@ -111,6 +111,7 @@ pub struct CFG {
   predecessors : Array[Array[Int32]]
   valid : Array[Bool]
 }
+pub fn CFG::analyze_loops(Self) -> (Dominance, Array[Loop])
 pub fn CFG::build(Function) -> Self
 pub fn CFG::compute_dominance(Self) -> Dominance
 pub fn CFG::compute_dominators(Self) -> Array[Int32]

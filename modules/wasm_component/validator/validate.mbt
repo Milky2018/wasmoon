@@ -89,22 +89,102 @@ fn effective_typedef_depth(
 }
 
 ///|
-priv struct ValidatedComponentInfo {
+priv struct CoreInstanceIndexEntry {
+  export_kinds : Map[String, Int32]?
+  export_types : Map[String, CoreExternType]?
+}
+
+///|
+fn CoreInstanceIndexEntry::unknown() -> CoreInstanceIndexEntry {
+  { export_kinds: None, export_types: None, }
+}
+
+///|
+priv struct CoreModuleIndexEntry {
+  definition : @types.Module?
+  export_kinds : Map[String, Int32]?
+  export_types : Map[String, CoreExternType]?
+  import_types : Array[CoreModuleTypeImport]?
+}
+
+///|
+fn CoreModuleIndexEntry::unknown() -> CoreModuleIndexEntry {
+  {
+    definition: None,
+    export_kinds: None,
+    export_types: None,
+    import_types: None,
+  }
+}
+
+///|
+priv struct InstanceIndexEntry {
+  signature : InstanceSig?
   size : Int32
-  import_sorts : Map[String, @component.Sort]
-  import_instance_sigs : Map[String, InstanceSig]
-  import_func_sigs : Map[String, FuncSigShape]
-  import_instance_resource_exports : Map[String, Map[String, Int32]]
-  import_type_bounds : Map[String, @component.TypeBound]
-  import_type_sigs : Map[String, TypeSig]
-  import_core_module_exports : Map[String, Map[String, Int32]]
-  import_core_module_import_sigs : Map[String, Map[String, CoreExternType]]
-  export_sorts : Map[String, @component.Sort]
-  export_instance_sigs : Map[String, InstanceSig]
-  export_instance_type_sigs : Map[String, Map[String, TypeSig]]
-  export_instance_func_sigs : Map[String, Map[String, FuncSigShape]]
-  export_type_sigs : Map[String, TypeSig]
-  export_func_sigs : Map[String, FuncSigShape]
+  type_indices : Array[Int32]?
+  function_indices : Array[Int32]?
+  exported_types : Map[String, ExportedTypeInfo]?
+  type_signatures : Map[String, TypeSig]?
+  function_signatures : Map[String, FuncSigShape]?
+  nested_type_signatures : Map[String, Map[String, TypeSig]]?
+  nested_function_signatures : Map[String, Map[String, FuncSigShape]]?
+  in_interface : Bool
+}
+
+///|
+// Imports and exports add interface instances. Other entries only contribute
+// to the instance index space and do not name types in the interface.
+fn InstanceIndexEntry::unknown() -> InstanceIndexEntry {
+  {
+    signature: None,
+    size: 1,
+    type_indices: None,
+    function_indices: None,
+    exported_types: None,
+    type_signatures: None,
+    function_signatures: None,
+    nested_type_signatures: None,
+    nested_function_signatures: None,
+    in_interface: false,
+  }
+}
+
+///|
+priv struct ComponentIndexEntry {
+  size : Int32
+  import_sorts : Map[String, @component.Sort]?
+  import_instance_sigs : Map[String, InstanceSig]?
+  import_func_sigs : Map[String, FuncSigShape]?
+  import_instance_resource_exports : Map[String, Map[String, Int32]]?
+  import_type_bounds : Map[String, @component.TypeBound]?
+  import_type_sigs : Map[String, TypeSig]?
+  import_core_modules : Map[String, CoreModuleRequirement]?
+  export_sorts : Map[String, @component.Sort]?
+  export_instance_sigs : Map[String, InstanceSig]?
+  export_instance_type_sigs : Map[String, Map[String, TypeSig]]?
+  export_instance_func_sigs : Map[String, Map[String, FuncSigShape]]?
+  export_type_sigs : Map[String, TypeSig]?
+  export_func_sigs : Map[String, FuncSigShape]?
+}
+
+///|
+fn ComponentIndexEntry::unknown(size : Int32) -> ComponentIndexEntry {
+  {
+    size,
+    import_sorts: None,
+    import_instance_sigs: None,
+    import_func_sigs: None,
+    import_instance_resource_exports: None,
+    import_core_modules: None,
+    import_type_bounds: None,
+    import_type_sigs: None,
+    export_sorts: None,
+    export_instance_sigs: None,
+    export_instance_type_sigs: None,
+    export_instance_func_sigs: None,
+    export_type_sigs: None,
+    export_func_sigs: None,
+  }
 }
 
 ///|
@@ -116,9 +196,9 @@ fn validate_component_inner(
   depth : Int32,
   type_outers : Array[Array[@component.TypeDef?]],
   type_outer_depths : Array[Int32],
-  core_type_bound_outers : Array[Int32],
-  component_size_outers : Array[Array[Int32]],
-) -> ValidatedComponentInfo raise ComponentValidationError {
+  core_type_outers : Array[Array[CoreModuleTypeSignature?]],
+  component_outers : Array[Array[ComponentIndexEntry]],
+) -> ComponentIndexEntry raise ComponentValidationError {
   let counts = Counts::Counts()
   let type_table : Array[@component.TypeDef?] = []
   let known_type_sigs : Map[Int32, TypeSig] = Map([])
@@ -132,65 +212,20 @@ fn validate_component_inner(
   let type_sizes : Array[Int32] = []
   let type_depths : Array[Int32] = []
   // Approximate export-signature size (used for wasm-tools' very-nested.wast).
-  let component_sizes : Array[Int32] = []
-  let instance_sizes : Array[Int32] = []
+  let components : Array[ComponentIndexEntry] = []
   let mut export_size = 1
   // Type indices that have names in the current interface namespace (type imports/exports).
   let named_types : Map[Int32, Int32] = Map([])
   // Type indices named by imports only (used to validate imports even if the
   // component's sections are reordered).
   let import_named_types : Map[Int32, Int32] = Map([])
-  let core_type_exports : Array[Map[String, Int32]?] = []
-  let core_type_module_imports : Array[Array[CoreModuleTypeImport]?] = []
-  let core_type_module_export_types : Array[Map[String, CoreExternType]?] = []
-  let core_module_exports : Array[Map[String, Int32]?] = []
-  // Align core module definitions to the core-module index space (imports get None).
-  let core_module_defs : Array[@types.Module?] = []
+  let core_types : Array[CoreModuleTypeSignature?] = []
+  let core_type_bounds = core_type_outers.map(scope => scope.length())
+  let core_modules : Array[CoreModuleIndexEntry] = []
   let core_func_types : Array[@types.FuncType?] = []
-  let core_module_export_types : Array[Map[String, CoreExternType]?] = []
-  let core_module_type_imports : Array[Array[CoreModuleTypeImport]?] = []
-  let core_instance_exports : Array[Map[String, Int32]?] = []
-  let core_instance_export_types : Array[Map[String, CoreExternType]?] = []
+  let core_instances : Array[CoreInstanceIndexEntry] = []
   let core_memory_types : Array[@types.MemoryType?] = []
-  let component_import_sorts : Array[Map[String, @component.Sort]?] = []
-  let component_import_instance_sigs : Array[Map[String, InstanceSig]?] = []
-  let component_import_func_sigs : Array[Map[String, FuncSigShape]?] = []
-  let component_import_instance_resource_exports : Array[
-    Map[String, Map[String, Int32]]?,
-  ] = []
-  let component_import_core_module_exports : Array[
-    Map[String, Map[String, Int32]]?,
-  ] = []
-  let component_import_core_module_import_sigs : Array[
-    Map[String, Map[String, CoreExternType]]?,
-  ] = []
-  let component_import_type_bounds : Array[Map[String, @component.TypeBound]?] = []
-  let component_import_type_sigs : Array[Map[String, TypeSig]?] = []
-  let component_export_sorts : Array[Map[String, @component.Sort]?] = []
-  let component_export_instance_sigs : Array[Map[String, InstanceSig]?] = []
-  let component_export_instance_type_sigs : Array[
-    Map[String, Map[String, TypeSig]]?,
-  ] = []
-  let component_export_instance_func_sigs : Array[
-    Map[String, Map[String, FuncSigShape]]?,
-  ] = []
-  let component_export_type_sigs : Array[Map[String, TypeSig]?] = []
-  let component_export_func_sigs : Array[Map[String, FuncSigShape]?] = []
-  let instance_sigs : Array[InstanceSig?] = []
-  // Instances that are part of this component's interface namespace (imports
-  // plus export-introduced instance aliases).
-  let interface_instance_idxs : Map[Int32, Int32] = Map([])
-  let instance_export_type_idxs : Array[Array[Int32]?] = []
-  let instance_export_func_idxs : Array[Array[Int32]?] = []
-  let instance_export_type_map : Array[Map[String, ExportedTypeInfo]?] = []
-  let instance_export_type_sigs : Array[Map[String, TypeSig]?] = []
-  let instance_export_func_sigs : Array[Map[String, FuncSigShape]?] = []
-  let instance_nested_instance_type_sigs : Array[
-    Map[String, Map[String, TypeSig]]?,
-  ] = []
-  let instance_nested_instance_func_sigs : Array[
-    Map[String, Map[String, FuncSigShape]]?,
-  ] = []
+  let instances : Array[InstanceIndexEntry] = []
   let func_types : Array[@component.FuncType?] = []
   let func_sig_shapes : Array[FuncSigShape?] = []
   let mut imported_funcs = 0
@@ -202,6 +237,7 @@ fn validate_component_inner(
 
   // Signature tables for this component (returned to parent for instantiation validation).
   let my_import_sorts : Map[String, @component.Sort] = Map([])
+  let my_import_core_modules : Map[String, CoreModuleRequirement] = Map([])
   let my_import_instance_sigs : Map[String, InstanceSig] = Map([])
   let my_import_func_sigs : Map[String, FuncSigShape] = Map([])
   let my_import_instance_resource_exports : Map[String, Map[String, Int32]] = Map([],
@@ -253,17 +289,19 @@ fn validate_component_inner(
             None => ()
           }
         }
-        core_module_exports.push(Some(exports))
-        core_module_export_types.push(Some(export_types))
-        core_module_type_imports.push(None)
-        core_module_defs.push(Some(core_mod))
+        core_modules.push({
+          definition: Some(core_mod),
+          export_kinds: Some(exports),
+          export_types: Some(export_types),
+          import_types: None,
+        })
         counts.core_module += 1
       }
       2 => {
-        let core_instances = @component.parse_core_instance_section(s.payload) catch {
+        let declarations = @component.parse_core_instance_section(s.payload) catch {
           e => raise SectionParseError(2, "\{e}")
         }
-        for inst in core_instances {
+        for inst in declarations {
           let mut export_map : Map[String, Int32]? = None
           let mut export_types : Map[String, CoreExternType]? = None
           match inst.expr {
@@ -271,13 +309,11 @@ fn validate_component_inner(
               if module_idx < 0 || module_idx >= counts.core_module {
                 raise InvalidCoreModuleIndex(module_idx)
               }
-              if module_idx >= 0 && module_idx < core_module_exports.length() {
-                export_map = core_module_exports[module_idx]
-              }
-              if module_idx >= 0 &&
-                module_idx < core_module_export_types.length() {
-                export_types = core_module_export_types[module_idx]
-              }
+              let entry = core_modules
+                .get(module_idx)
+                .unwrap_or_else(CoreModuleIndexEntry::unknown)
+              export_map = entry.export_kinds
+              export_types = entry.export_types
               // Validate that instantiation args satisfy the core module's
               // imports when we have enough type information (either a full
               // core module body, or a core module type signature).
@@ -296,132 +332,28 @@ fn validate_component_inner(
                   _ => ()
                 }
               }
-              let mod_def = if module_idx >= 0 &&
-                module_idx < core_module_defs.length() {
-                core_module_defs[module_idx]
-              } else {
-                None
-              }
-              match mod_def {
-                Some(mod_) =>
-                  for imp in mod_.imports {
-                    match providers.get(imp.mod_name) {
-                      None =>
-                        raise CoreModuleError(
-                          "module import `\{imp.mod_name}::\{imp.name}` not defined",
-                        )
-                      Some(provider_idx) => {
-                        if provider_idx < 0 ||
-                          provider_idx >= core_instance_export_types.length() {
-                          raise InvalidCoreInstanceIndex(provider_idx)
-                        }
-                        let expected = core_import_type_of_module(
-                          mod_,
-                          imp.desc,
-                        )
-                        match expected {
-                          None => ()
-                          Some(exp_ty) => {
-                            let expected_kind = core_kind_of_extern_type(exp_ty)
-                            // Check presence/kind first (even if we don't have full type info).
-                            if provider_idx < 0 ||
-                              provider_idx >= core_instance_exports.length() {
-                              raise InvalidCoreInstanceIndex(provider_idx)
-                            }
-                            match core_instance_exports[provider_idx] {
-                              Some(kinds) =>
-                                match kinds.get(imp.name) {
-                                  None =>
-                                    raise CoreModuleError(
-                                      "module import `\{imp.mod_name}::\{imp.name}` not defined",
-                                    )
-                                  Some(actual_kind) =>
-                                    if actual_kind != expected_kind {
-                                      raise CoreModuleError(
-                                        "module import `\{imp.mod_name}::\{imp.name}` has the wrong type",
-                                      )
-                                    }
-                                }
-                              None => ()
-                            }
-                            // If we also know full types, enforce type compatibility.
-                            match core_instance_export_types[provider_idx] {
-                              Some(map) =>
-                                match map.get(imp.name) {
-                                  Some(prov_ty) =>
-                                    if !core_import_compatible(exp_ty, prov_ty) {
-                                      raise CoreModuleError(
-                                        "module import `\{imp.mod_name}::\{imp.name}` has the wrong type",
-                                      )
-                                    }
-                                  None => ()
-                                }
-                              None => ()
-                            }
-                          }
-                        }
-                      }
-                    }
+              match entry.definition {
+                Some(module_) =>
+                  for imp in module_.imports {
+                    check_core_module_provider(
+                      imp.mod_name,
+                      imp.name,
+                      core_import_type_of_module(module_, imp.desc),
+                      providers,
+                      core_instances,
+                    )
                   }
                 None =>
-                  match
-                    (if module_idx >= 0 &&
-                      module_idx < core_module_type_imports.length() {
-                      core_module_type_imports[module_idx]
-                    } else {
-                      None
-                    }) {
-                    Some(sigs) =>
-                      for imp in sigs {
-                        match providers.get(imp.mod_name) {
-                          None =>
-                            raise CoreModuleError(
-                              "module import `\{imp.mod_name}::\{imp.name}` not defined",
-                            )
-                          Some(provider_idx) => {
-                            if provider_idx < 0 ||
-                              provider_idx >=
-                              core_instance_export_types.length() {
-                              raise InvalidCoreInstanceIndex(provider_idx)
-                            }
-                            let expected_kind = core_kind_of_extern_type(imp.ty)
-                            if provider_idx < 0 ||
-                              provider_idx >= core_instance_exports.length() {
-                              raise InvalidCoreInstanceIndex(provider_idx)
-                            }
-                            match core_instance_exports[provider_idx] {
-                              Some(kinds) =>
-                                match kinds.get(imp.name) {
-                                  None =>
-                                    raise CoreModuleError(
-                                      "module import `\{imp.mod_name}::\{imp.name}` not defined",
-                                    )
-                                  Some(actual_kind) =>
-                                    if actual_kind != expected_kind {
-                                      raise CoreModuleError(
-                                        "module import `\{imp.mod_name}::\{imp.name}` has the wrong type",
-                                      )
-                                    }
-                                }
-                              None => ()
-                            }
-                            match core_instance_export_types[provider_idx] {
-                              Some(map) =>
-                                match map.get(imp.name) {
-                                  Some(prov_ty) =>
-                                    if !core_import_compatible(imp.ty, prov_ty) {
-                                      raise CoreModuleError(
-                                        "module import `\{imp.mod_name}::\{imp.name}` has the wrong type",
-                                      )
-                                    }
-                                  None => ()
-                                }
-                              None => ()
-                            }
-                          }
-                        }
-                      }
-                    None => ()
+                  if entry.import_types is Some(imports) {
+                    for imp in imports {
+                      check_core_module_provider(
+                        imp.mod_name,
+                        imp.name,
+                        Some(imp.ty),
+                        providers,
+                        core_instances,
+                      )
+                    }
                   }
               }
             }
@@ -463,8 +395,7 @@ fn validate_component_inner(
               export_types = Some(type_map)
             }
           }
-          core_instance_exports.push(export_map)
-          core_instance_export_types.push(export_types)
+          core_instances.push({ export_kinds: export_map, export_types, })
           counts.core_instance += 1
         }
       }
@@ -473,28 +404,14 @@ fn validate_component_inner(
         // The `outer` depth counts enclosing component scopes.
         let max_outer_depth = depth + 1
         let base_core_type_bound = counts.core_type
-        let exports = parse_core_type_section(
+        let signatures = parse_core_type_section(
           s.payload,
           max_outer_depth,
           base_core_type_bound,
-          core_type_bound_outers,
+          core_type_bounds,
         )
-        let (module_imports, module_export_types) = parse_core_type_section_module_sigs(
-          s.payload,
-          max_outer_depth,
-          base_core_type_bound,
-          core_type_bound_outers,
-        )
-        for e in exports {
-          core_type_exports.push(e)
-        }
-        for m in module_imports {
-          core_type_module_imports.push(m)
-        }
-        for t in module_export_types {
-          core_type_module_export_types.push(t)
-        }
-        counts.core_type += exports.length()
+        core_types.append(signatures)
+        counts.core_type += signatures.length()
       }
       4 => {
         // Nested component payloads are also component binaries.
@@ -508,38 +425,10 @@ fn validate_component_inner(
           depth + 1,
           [type_table] + type_outers,
           [depth] + type_outer_depths,
-          [counts.core_type] + core_type_bound_outers,
-          [component_sizes] + component_size_outers,
+          [core_types] + core_type_outers,
+          [components] + component_outers,
         )
-        component_import_sorts.push(Some(nested_info.import_sorts))
-        component_import_instance_sigs.push(
-          Some(nested_info.import_instance_sigs),
-        )
-        component_import_func_sigs.push(Some(nested_info.import_func_sigs))
-        component_import_instance_resource_exports.push(
-          Some(nested_info.import_instance_resource_exports),
-        )
-        component_import_core_module_exports.push(
-          Some(nested_info.import_core_module_exports),
-        )
-        component_import_core_module_import_sigs.push(
-          Some(nested_info.import_core_module_import_sigs),
-        )
-        component_import_type_bounds.push(Some(nested_info.import_type_bounds))
-        component_import_type_sigs.push(Some(nested_info.import_type_sigs))
-        component_export_sorts.push(Some(nested_info.export_sorts))
-        component_export_instance_sigs.push(
-          Some(nested_info.export_instance_sigs),
-        )
-        component_export_instance_type_sigs.push(
-          Some(nested_info.export_instance_type_sigs),
-        )
-        component_export_instance_func_sigs.push(
-          Some(nested_info.export_instance_func_sigs),
-        )
-        component_export_type_sigs.push(Some(nested_info.export_type_sigs))
-        component_export_func_sigs.push(Some(nested_info.export_func_sigs))
-        component_sizes.push(nested_info.size)
+        components.push(nested_info)
         // Nested component definitions contribute to the overall effective
         // size of the component graph (wasm-tools/very-nested.wast).
         export_size = add_type_size(export_size, nested_info.size)
@@ -550,17 +439,15 @@ fn validate_component_inner(
         let defs = @component.parse_type_section(s.payload) catch {
           e => raise SectionParseError(7, "\{e}")
         }
+        let scope : TypeValidationScope = {
+          cfg,
+          type_outers: [type_table] + type_outers,
+          type_outer_depths: [depth] + type_outer_depths,
+          component_depth: depth,
+          core_type_outers: [core_types],
+        }
         for d in defs {
-          // This is still a subset: we only allow referencing earlier types.
-          validate_typedef(
-            d,
-            cfg,
-            [type_table] + type_outers,
-            [depth] + type_outer_depths,
-            depth,
-            [core_type_exports],
-            true,
-          )
+          scope.validate_typedef(d, allow_resource_defs=true)
           // Resource types refer to the core-func index space for their dtor.
           // Validate bounds/signature here where we have access to the current
           // core-func types.
@@ -622,45 +509,18 @@ fn validate_component_inner(
           resource_ids,
           type_sizes,
           type_depths,
-          component_sizes,
-          instance_sizes,
+          components,
+          instances,
           named_types,
           import_named_types,
-          core_type_exports,
-          core_type_module_imports,
-          core_type_module_export_types,
-          core_module_exports,
-          core_module_defs,
-          core_module_export_types,
-          core_module_type_imports,
-          component_import_sorts,
-          component_import_instance_sigs,
-          component_import_func_sigs,
-          component_import_instance_resource_exports,
-          component_import_core_module_exports,
-          component_import_core_module_import_sigs,
-          component_import_type_bounds,
-          component_import_type_sigs,
-          component_export_sorts,
-          component_export_instance_sigs,
-          component_export_instance_type_sigs,
-          component_export_instance_func_sigs,
-          component_export_type_sigs,
-          component_export_func_sigs,
-          instance_sigs,
-          interface_instance_idxs,
-          instance_export_type_idxs,
-          instance_export_func_idxs,
-          instance_export_type_map,
-          instance_export_type_sigs,
-          instance_export_func_sigs,
-          instance_nested_instance_type_sigs,
-          instance_nested_instance_func_sigs,
+          core_types,
+          core_modules,
           func_types,
           func_sig_shapes,
           seen_import_names,
           import_resource_names,
           my_import_sorts,
+          my_import_core_modules,
           my_import_instance_sigs,
           my_import_func_sigs,
           my_import_instance_resource_exports,
@@ -685,41 +545,14 @@ fn validate_component_inner(
           resource_ids,
           type_sizes,
           type_depths,
-          component_sizes,
-          instance_sizes,
+          components,
+          instances,
           export_size,
           named_types,
-          core_module_exports,
-          core_module_defs,
+          core_modules,
           core_func_types,
-          core_module_export_types,
-          core_module_type_imports,
-          core_instance_exports,
-          core_instance_export_types,
+          core_instances,
           core_memory_types,
-          component_import_sorts,
-          component_import_instance_sigs,
-          component_import_func_sigs,
-          component_import_instance_resource_exports,
-          component_import_core_module_exports,
-          component_import_core_module_import_sigs,
-          component_import_type_bounds,
-          component_import_type_sigs,
-          component_export_sorts,
-          component_export_instance_sigs,
-          component_export_instance_type_sigs,
-          component_export_instance_func_sigs,
-          component_export_type_sigs,
-          component_export_func_sigs,
-          instance_sigs,
-          interface_instance_idxs,
-          instance_export_type_idxs,
-          instance_export_func_idxs,
-          instance_export_type_map,
-          instance_export_type_sigs,
-          instance_export_func_sigs,
-          instance_nested_instance_type_sigs,
-          instance_nested_instance_func_sigs,
           func_types,
           func_sig_shapes,
           imported_funcs,
@@ -745,33 +578,9 @@ fn validate_component_inner(
           type_table,
           known_type_sigs,
           resource_ids,
-          component_sizes,
-          instance_sizes,
-          core_module_exports,
-          core_module_defs,
-          core_module_type_imports,
-          component_import_sorts,
-          component_import_instance_sigs,
-          component_import_func_sigs,
-          component_import_instance_resource_exports,
-          component_import_core_module_exports,
-          component_import_core_module_import_sigs,
-          component_import_type_bounds,
-          component_import_type_sigs,
-          component_export_sorts,
-          component_export_instance_sigs,
-          component_export_instance_type_sigs,
-          component_export_instance_func_sigs,
-          component_export_type_sigs,
-          component_export_func_sigs,
-          instance_sigs,
-          instance_export_type_idxs,
-          instance_export_func_idxs,
-          instance_export_type_map,
-          instance_export_type_sigs,
-          instance_export_func_sigs,
-          instance_nested_instance_type_sigs,
-          instance_nested_instance_func_sigs,
+          components,
+          instances,
+          core_modules,
           func_types,
           func_sig_shapes,
           next_resource_id,
@@ -786,44 +595,19 @@ fn validate_component_inner(
           resource_ids,
           type_sizes,
           type_depths,
-          component_sizes,
-          instance_sizes,
+          components,
+          instances,
           named_types,
-          core_module_exports,
-          core_module_defs,
+          core_modules,
+          core_types,
+          core_type_outers,
           core_func_types,
-          core_module_export_types,
-          core_module_type_imports,
-          core_instance_exports,
-          core_instance_export_types,
+          core_instances,
           core_memory_types,
-          component_import_sorts,
-          component_import_instance_sigs,
-          component_import_func_sigs,
-          component_import_instance_resource_exports,
-          component_import_core_module_exports,
-          component_import_core_module_import_sigs,
-          component_import_type_bounds,
-          component_import_type_sigs,
-          component_export_sorts,
-          component_export_instance_sigs,
-          component_export_instance_type_sigs,
-          component_export_instance_func_sigs,
-          component_export_type_sigs,
-          component_export_func_sigs,
-          instance_sigs,
-          interface_instance_idxs,
-          instance_export_type_idxs,
-          instance_export_func_idxs,
-          instance_export_type_map,
-          instance_export_type_sigs,
-          instance_export_func_sigs,
-          instance_nested_instance_type_sigs,
-          instance_nested_instance_func_sigs,
           func_types,
           func_sig_shapes,
           type_outers,
-          component_size_outers,
+          component_outers,
         )
       8 => {
         let canons = @component.parse_canon_section(s.payload) catch {
@@ -887,24 +671,19 @@ fn validate_component_inner(
   }
   {
     size: export_size,
-    import_sorts: my_import_sorts,
-    import_instance_sigs: my_import_instance_sigs,
-    import_func_sigs: my_import_func_sigs,
-    import_instance_resource_exports: my_import_instance_resource_exports,
-    import_type_bounds: my_import_type_bounds,
-    import_type_sigs: my_import_type_sigs,
-    import_core_module_exports: component_import_core_module_exports_of(
-      component,
-    ),
-    import_core_module_import_sigs: component_import_core_module_import_sigs_of(
-      component,
-    ),
-    export_sorts: my_export_sorts,
-    export_instance_sigs: my_export_instance_sigs,
-    export_instance_type_sigs: my_export_instance_type_sigs,
-    export_instance_func_sigs: my_export_instance_func_sigs,
-    export_type_sigs: my_export_type_sigs,
-    export_func_sigs: my_export_func_sigs,
+    import_sorts: Some(my_import_sorts),
+    import_instance_sigs: Some(my_import_instance_sigs),
+    import_func_sigs: Some(my_import_func_sigs),
+    import_instance_resource_exports: Some(my_import_instance_resource_exports),
+    import_type_bounds: Some(my_import_type_bounds),
+    import_type_sigs: Some(my_import_type_sigs),
+    import_core_modules: Some(my_import_core_modules),
+    export_sorts: Some(my_export_sorts),
+    export_instance_sigs: Some(my_export_instance_sigs),
+    export_instance_type_sigs: Some(my_export_instance_type_sigs),
+    export_instance_func_sigs: Some(my_export_instance_func_sigs),
+    export_type_sigs: Some(my_export_type_sigs),
+    export_func_sigs: Some(my_export_func_sigs),
   }
 }
 

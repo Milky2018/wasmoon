@@ -54,23 +54,3 @@ fn validate_module_for_execution(mod_ : @types.Module) -> Unit raise CliError {
     }
   }
 }
-
-///|
-/// Find base directory from a file path
-fn find_base_dir(path : String) -> String {
-  let mut last_slash = -1
-  for i in 0..<path.length() {
-    if path.code_unit_at(i) == '/' {
-      last_slash = i
-    }
-  }
-  if last_slash >= 0 {
-    let builder = StringBuilder::StringBuilder()
-    for i in 0..<last_slash {
-      builder.write_char(path.code_unit_at(i).unsafe_to_char())
-    }
-    builder.to_string()
-  } else {
-    "."
-  }
-}

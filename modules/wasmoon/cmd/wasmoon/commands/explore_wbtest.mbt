@@ -232,3 +232,22 @@ test "explore preserves large root mask addresses across early target temporarie
     }
   }
 }
+
+///|
+test "x64 compare-exchange preserves its offset address while loading the accumulator" {
+  let path = @test_fs.temp_dir() + "/wasmoon-x64-cmpxchg-\{@env.now()}.wat"
+  @fs.write_string_to_file(
+    path,
+    (
+      #|(module
+      #|  (memory 1 1 shared)
+      #|  (func (param i32 i64 i64) (result i64)
+      #|    local.get 0 local.get 1 local.get 2 i64.atomic.rmw.cmpxchg offset=16))
+    ),
+  )
+  defer (@fs.remove_file(path) catch { _ => () })
+  inspect(
+    run_explore(path, None, 2, [], false, false, target_name="x64"),
+    content="0",
+  )
+}

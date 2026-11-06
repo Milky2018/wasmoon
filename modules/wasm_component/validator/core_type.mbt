@@ -1,50 +1,97 @@
 ///|
-fn parse_core_type_module_exports(
+priv enum CoreTypeProjection {
+  KindsOnly
+  SignaturesOnly
+  Complete
+}
+
+///|
+priv struct CoreModuleTypeSignature {
+  imports : Array[CoreModuleTypeImport]
+  export_kinds : Map[String, Int32]
+  export_types : Map[String, CoreExternType]
+  detail_error : ComponentValidationError?
+}
+
+///|
+fn CoreTypeReader::read_module_type(
   r : CoreTypeReader,
   max_outer_depth : Int32,
   current_core_type_bound : Int32,
   outer_core_type_bounds : Array[Int32],
-) -> Map[String, Int32] raise ComponentValidationError {
+  projection : CoreTypeProjection,
+) -> CoreModuleTypeSignature raise ComponentValidationError {
   let ndecls = r.read_leb_u32()
-  let exports : Map[String, Int32] = Map([])
-  let seen_imports : Map[String, Int32] = Map([])
+  let seen_imports : Map[(String, String), Int32] = Map([])
+  let imports : Array[CoreModuleTypeImport] = []
+  let export_types : Map[String, CoreExternType] = Map([])
+  let export_kinds : Map[String, Int32] = Map([])
+  let func_types : Array[@types.FuncType?] = []
+  let capture = !(projection is KindsOnly)
   let mut func_type_bound = 0
+  let mut detail_error = None
+
+  fn read_extern(
+    kind : Int32,
+    bound : Int32,
+  ) -> CoreExternType? raise ComponentValidationError {
+    let ty = r.read_extern_type_sig(kind, func_types, bound, capture)
+    let detail = match ty {
+      Some(Table(table)) =>
+        match table.elem_type {
+          I32 | I64 | F32 | F64 | V128 =>
+            Some(SectionParseError(3, "table element type must be a reference"))
+          _ => None
+        }
+      Some(Tag(ft)) if !ft.results.is_empty() =>
+        Some(SectionParseError(3, "tag type must not return values"))
+      _ => None
+    }
+    if detail is Some(error) {
+      if projection is SignaturesOnly {
+        raise error
+      }
+      if detail_error is None {
+        detail_error = Some(error)
+      }
+    }
+    ty
+  }
+
   for _i in 0..<ndecls {
     let tag = r.read_u8()
     match tag {
       0x00 => {
-        let mod_name = r.read_name_ascii()
-        let name = r.read_name_ascii()
-        let mod_s = match mod_name {
-          Some(s) => s
-          None => ""
-        }
-        let name_s = match name {
-          Some(s) => s
-          None => ""
-        }
-        let key = "\{mod_s}:\{name_s}"
+        let mod_name = r.read_name()
+        let name = r.read_name()
+        let key = (mod_name, name)
         if seen_imports.get(key) is Some(_) {
           raise SectionParseError(3, "duplicate import name")
         }
         seen_imports.set(key, 1)
         let kind = r.read_u8()
-        r.validate_extern_type(kind, func_type_bound)
+        match read_extern(kind, func_type_bound) {
+          Some(ty) => imports.push({ mod_name, name, ty, })
+          None => ()
+        }
       }
       0x01 => {
-        r.skip_func_type()
+        if capture {
+          func_types.push(Some(r.read_core_functype()))
+        } else {
+          r.skip_func_type()
+        }
         func_type_bound += 1
       }
       0x02 => {
-        // Alias declarations inside module types, e.g.:
-        //   (alias outer $C $t (type $u))
-        // We only skip the encoding here since export-kind validation doesn't
-        // depend on it.
+        // Alias declarations inside module types.
         let sort = r.read_u8()
-        // Module-type extern kinds (func/tag) reference the module type's own
-        // function-type index space. Both inline function type declarations and
-        // aliases of core types introduce new indices.
         if sort == 0x10 {
+          // Aliasing a core type introduces a new function-type index (we don't
+          // currently resolve its signature here).
+          if capture {
+            func_types.push(None)
+          }
           func_type_bound += 1
         }
         let target_tag = r.read_u8()
@@ -56,6 +103,8 @@ fn parse_core_type_module_exports(
               if depth > max_outer_depth {
                 raise SectionParseError(3, "outer alias depth out of bounds")
               }
+              // wasm-tools expects out-of-bounds outer indices to be rejected
+              // even when we don't fully resolve the aliased core type.
               if sort == 0x10 {
                 let bound = if depth <= 1 {
                   current_core_type_bound
@@ -78,23 +127,23 @@ fn parse_core_type_module_exports(
         }
       }
       0x03 => {
-        let name = r.read_name_ascii()
+        let name = r.read_name()
         let kind = r.read_u8()
-        r.validate_extern_type(kind, func_type_bound)
-        match name {
-          Some(s) =>
-            if exports.get(s) is Some(_) {
-              raise SectionParseError(3, "duplicate export name")
-            } else {
-              exports.set(s, kind)
-            }
-          None => ()
+        let ty = read_extern(kind, func_type_bound)
+        if !(projection is SignaturesOnly) || ty is Some(_) {
+          if export_kinds.get(name) is Some(_) {
+            raise SectionParseError(3, "duplicate export name")
+          }
+          export_kinds.set(name, kind)
+          if ty is Some(signature) {
+            export_types.set(name, signature)
+          }
         }
       }
       _ => raise SectionParseError(3, "unknown module type decl tag: \{tag}")
     }
   }
-  exports
+  { imports, export_kinds, export_types, detail_error, }
 }
 
 ///|
@@ -115,82 +164,88 @@ fn skip_prefixed_core_subtype(
 }
 
 ///|
+fn CoreTypeReader::read_component_core_type(
+  r : CoreTypeReader,
+  max_outer_depth : Int32,
+  current_core_type_bound : Int32,
+  outer_core_type_bounds : Array[Int32],
+  projection : CoreTypeProjection,
+  allow_prefixed~ : Bool,
+) -> CoreModuleTypeSignature? raise ComponentValidationError {
+  match r.read_u8() {
+    0x50 =>
+      Some(
+        r.read_module_type(
+          max_outer_depth, current_core_type_bound, outer_core_type_bounds, projection,
+        ),
+      )
+    0x60 => {
+      r.skip_func_type_body()
+      None
+    }
+    0x00 if allow_prefixed => {
+      skip_prefixed_core_subtype(r)
+      None
+    }
+    op => raise SectionParseError(3, "unsupported core type opcode: \{op}")
+  }
+}
+
+///|
 fn parse_core_type_section(
   payload : Bytes,
   max_outer_depth : Int32,
   base_core_type_bound : Int32,
   outer_core_type_bounds : Array[Int32],
-) -> Array[Map[String, Int32]?] raise ComponentValidationError {
+) -> Array[CoreModuleTypeSignature?] raise ComponentValidationError {
   let r = CoreTypeReader::CoreTypeReader(payload)
   let n = r.read_leb_u32()
-  let out : Array[Map[String, Int32]?] = []
+  let signatures : Array[CoreModuleTypeSignature?] = []
   for i in 0..<n {
-    let op = r.read_u8()
-    if op == 0x50 {
-      out.push(
-        Some(
-          parse_core_type_module_exports(
-            r,
-            max_outer_depth,
-            base_core_type_bound + i,
-            outer_core_type_bounds,
-          ),
-        ),
-      )
-    } else if op == 0x60 {
-      r.skip_func_type_body()
-      out.push(None)
-    } else if op == 0x00 {
-      skip_prefixed_core_subtype(r)
-      out.push(None)
-    } else {
-      raise SectionParseError(3, "unsupported core type opcode: \{op}")
-    }
-  }
-  if !r.is_eof() {
-    raise SectionParseError(3, "trailing bytes in core type section")
-  }
-  out
-}
-
-///|
-fn parse_core_type_section_module_sigs(
-  payload : Bytes,
-  max_outer_depth : Int32,
-  base_core_type_bound : Int32,
-  outer_core_type_bounds : Array[Int32],
-) -> (Array[Array[CoreModuleTypeImport]?], Array[Map[String, CoreExternType]?]) raise ComponentValidationError {
-  let r = CoreTypeReader::CoreTypeReader(payload)
-  let n = r.read_leb_u32()
-  let imports : Array[Array[CoreModuleTypeImport]?] = []
-  let export_types : Array[Map[String, CoreExternType]?] = []
-  for i in 0..<n {
-    let op = r.read_u8()
-    if op == 0x50 {
-      let (imps, exps) = parse_core_type_module_sig(
-        r,
+    signatures.push(
+      r.read_component_core_type(
         max_outer_depth,
         base_core_type_bound + i,
         outer_core_type_bounds,
-      )
-      imports.push(Some(imps))
-      export_types.push(Some(exps))
-    } else if op == 0x60 {
-      r.skip_func_type_body()
-      imports.push(None)
-      export_types.push(None)
-    } else if op == 0x00 {
-      skip_prefixed_core_subtype(r)
-      imports.push(None)
-      export_types.push(None)
-    } else {
-      raise SectionParseError(3, "unsupported core type opcode: \{op}")
-    }
+        Complete,
+        allow_prefixed=true,
+      ),
+    )
   }
   if !r.is_eof() {
     raise SectionParseError(3, "trailing bytes in core type section")
   }
-  (imports, export_types)
+  // The structural pass used to finish before detailed table/tag checks.
+  // Preserve that error ordering while decoding the section only once.
+  for signature in signatures {
+    if signature is Some(signature) && signature.detail_error is Some(error) {
+      raise error
+    }
+  }
+  signatures
+}
+
+///|
+fn parse_single_component_core_type(
+  payload : Bytes,
+  max_outer_depth : Int32,
+  current_core_type_bound : Int32,
+  outer_core_type_bounds : Array[Int32],
+  projection : CoreTypeProjection,
+  allow_prefixed~ : Bool,
+) -> CoreModuleTypeSignature? raise ComponentValidationError {
+  let r = CoreTypeReader::CoreTypeReader(payload)
+  let signature = r.read_component_core_type(
+    max_outer_depth,
+    current_core_type_bound,
+    outer_core_type_bounds,
+    projection,
+    allow_prefixed~,
+  )
+  if !r.is_eof() {
+    raise SectionParseError(3, "trailing bytes in core type payload")
+  }
+  signature
 }
 
 ///|
@@ -198,32 +253,16 @@ fn validate_single_core_type(
   payload : Bytes,
   current_core_type_bound : Int32,
   outer_core_type_bounds : Array[Int32],
-) -> Map[String, Int32]? raise ComponentValidationError {
-  let r = CoreTypeReader::CoreTypeReader(payload)
-  let op = r.read_u8()
-  // For module-type aliases, `depth` counts outward from the module:
-  // depth 0/1 target the current component core-type index space; depth >= 2
-  // targets outer component environments.
-  let max_outer_depth = outer_core_type_bounds.length() + 1
-  let exports = if op == 0x50 {
-    Some(
-      parse_core_type_module_exports(
-        r, max_outer_depth, current_core_type_bound, outer_core_type_bounds,
-      ),
-    )
-  } else if op == 0x60 {
-    r.skip_func_type_body()
-    None
-  } else if op == 0x00 {
-    skip_prefixed_core_subtype(r)
-    None
-  } else {
-    raise SectionParseError(3, "unsupported core type opcode: \{op}")
-  }
-  if !r.is_eof() {
-    raise SectionParseError(3, "trailing bytes in core type payload")
-  }
-  exports
+) -> CoreModuleTypeSignature? raise ComponentValidationError {
+  // Depths 0 and 1 target the current component's core-type space.
+  parse_single_component_core_type(
+    payload,
+    outer_core_type_bounds.length() + 1,
+    current_core_type_bound,
+    outer_core_type_bounds,
+    KindsOnly,
+    allow_prefixed=true,
+  )
 }
 
 ///|
@@ -286,26 +325,11 @@ fn exportname_to_bytes(name : @component.ExportName) -> Bytes {
 
 ///|
 fn utf8_bytes_of_string(s : String) -> Bytes {
-  let bytes : Array[Byte] = []
-  for c in s {
-    let cp = c.to_int()
-    if cp < 0x80 {
-      bytes.push(cp.to_byte())
-    } else if cp < 0x800 {
-      bytes.push((0xC0 | (cp >> 6)).to_byte())
-      bytes.push((0x80 | (cp & 0x3F)).to_byte())
-    } else if cp < 0x10000 {
-      bytes.push((0xE0 | (cp >> 12)).to_byte())
-      bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
-      bytes.push((0x80 | (cp & 0x3F)).to_byte())
-    } else {
-      bytes.push((0xF0 | (cp >> 18)).to_byte())
-      bytes.push((0x80 | ((cp >> 12) & 0x3F)).to_byte())
-      bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
-      bytes.push((0x80 | (cp & 0x3F)).to_byte())
-    }
+  let bytes = @buffer.Buffer(size_hint=s.length())
+  for char in s {
+    bytes.write_char_utf8(char)
   }
-  Bytes::from_array(bytes)
+  bytes.to_bytes()
 }
 
 ///|
@@ -823,411 +847,6 @@ fn functype_uses_disallowed_resources(
         r, type_table, allowed_resource_type_idxs, visiting,
       )
   }
-}
-
-///|
-fn funcsig_of_functype(
-  ft : @component.FuncType,
-  type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int32?],
-  known_sigs~ : Map[Int32, TypeSig] = Map([]),
-) -> FuncSigShape {
-  let visiting : Map[Int32, Int32] = Map([])
-  let params : Array[ParamShape] = []
-  for p in ft.params {
-    params.push({
-      name: p.label,
-      ty: type_sig_of_valtype(
-        p.ty,
-        type_table,
-        resource_ids,
-        visiting,
-        known_sigs~,
-      ),
-    })
-  }
-  let result : TypeSig? = match ft.result {
-    Some(v) =>
-      Some(
-        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~),
-      )
-    None => None
-  }
-  { params, result, }
-}
-
-///|
-fn type_sig_of_typedef_lg(
-  td : @component.TypeDef,
-  local_types : Array[@component.TypeDef],
-  local_resource_ids : Array[Int32?],
-  global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int32?],
-  visiting : Map[Int32, Int32],
-) -> TypeSig {
-  match td {
-    DefValType(p) => Prim(p)
-    Tuple(tys) => {
-      let out : Array[TypeSig] = []
-      for t in tys {
-        out.push(
-          type_sig_of_valtype_lg(
-            t, local_types, local_resource_ids, global_types, global_resource_ids,
-            visiting,
-          ),
-        )
-      }
-      Tuple(out)
-    }
-    Record(fields) => {
-      let out : Array[TypeFieldSig] = []
-      for f in fields {
-        out.push({
-          name: f.label,
-          ty: type_sig_of_valtype_lg(
-            f.ty,
-            local_types,
-            local_resource_ids,
-            global_types,
-            global_resource_ids,
-            visiting,
-          ),
-        })
-      }
-      Record(out)
-    }
-    Variant(cases) => {
-      let out : Array[TypeCaseSig] = []
-      for c in cases {
-        let payload = match c.ty {
-          None => None
-          Some(t) =>
-            Some(
-              type_sig_of_valtype_lg(
-                t, local_types, local_resource_ids, global_types, global_resource_ids,
-                visiting,
-              ),
-            )
-        }
-        out.push({ name: c.label, ty: payload, })
-      }
-      Variant(out)
-    }
-    Option(v) =>
-      Option(
-        type_sig_of_valtype_lg(
-          v, local_types, local_resource_ids, global_types, global_resource_ids,
-          visiting,
-        ),
-      )
-    Result(ok, err) => {
-      let ok_sig = ok.map(fn(v) {
-        type_sig_of_valtype_lg(
-          v, local_types, local_resource_ids, global_types, global_resource_ids,
-          visiting,
-        )
-      })
-      let err_sig = err.map(fn(v) {
-        type_sig_of_valtype_lg(
-          v, local_types, local_resource_ids, global_types, global_resource_ids,
-          visiting,
-        )
-      })
-      Result(ok_sig, err_sig)
-    }
-    List(v) =>
-      List(
-        type_sig_of_valtype_lg(
-          v, local_types, local_resource_ids, global_types, global_resource_ids,
-          visiting,
-        ),
-      )
-    Flags(labels) => Flags(labels)
-    Enum(labels) => Enum(labels)
-    Own(idx) => {
-      let resource = type_sig_of_valtype_lg(
-        TypeIdx(idx),
-        local_types,
-        local_resource_ids,
-        global_types,
-        global_resource_ids,
-        visiting,
-      )
-      match resource {
-        Resource(rid) => Own(rid)
-        _ => Other
-      }
-    }
-    Borrow(idx) => {
-      let resource = type_sig_of_valtype_lg(
-        TypeIdx(idx),
-        local_types,
-        local_resource_ids,
-        global_types,
-        global_resource_ids,
-        visiting,
-      )
-      match resource {
-        Resource(rid) => Borrow(rid)
-        _ => Other
-      }
-    }
-    _ => Other
-  }
-}
-
-///|
-fn type_sig_of_valtype_lg(
-  ty : @component.ValType,
-  local_types : Array[@component.TypeDef],
-  local_resource_ids : Array[Int32?],
-  global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int32?],
-  visiting : Map[Int32, Int32],
-) -> TypeSig {
-  match ty {
-    Prim(p) => Prim(p)
-    TypeIdx(idx) =>
-      if idx < 0 {
-        Other
-      } else if visiting.get(idx) is Some(_) {
-        Other
-      } else {
-        visiting.set(idx, 1)
-        let td = if idx < local_types.length() {
-          Some(local_types[idx])
-        } else if idx < global_types.length() {
-          global_types[idx]
-        } else {
-          None
-        }
-        let rid = if idx < local_resource_ids.length() {
-          local_resource_ids[idx]
-        } else if idx < global_resource_ids.length() {
-          global_resource_ids[idx]
-        } else {
-          None
-        }
-        let sig = match td {
-          Some(ResourceType(_, _, _, _)) =>
-            match rid {
-              Some(v) => TypeSig::Resource(v)
-              None => Resource(-1)
-            }
-          Some(def) =>
-            type_sig_of_typedef_lg(
-              def, local_types, local_resource_ids, global_types, global_resource_ids,
-              visiting,
-            )
-          None => Other
-        }
-        visiting.remove(idx) |> ignore
-        sig
-      }
-  }
-}
-
-///|
-fn funcsig_of_functype_lg(
-  ft : @component.FuncType,
-  local_types : Array[@component.TypeDef],
-  local_resource_ids : Array[Int32?],
-  global_types : Array[@component.TypeDef?],
-  global_resource_ids : Array[Int32?],
-) -> FuncSigShape {
-  let visiting : Map[Int32, Int32] = Map([])
-  let params : Array[ParamShape] = []
-  for p in ft.params {
-    params.push({
-      name: p.label,
-      ty: type_sig_of_valtype_lg(
-        p.ty,
-        local_types,
-        local_resource_ids,
-        global_types,
-        global_resource_ids,
-        visiting,
-      ),
-    })
-  }
-  let result : TypeSig? = match ft.result {
-    Some(v) =>
-      Some(
-        type_sig_of_valtype_lg(
-          v, local_types, local_resource_ids, global_types, global_resource_ids,
-          visiting,
-        ),
-      )
-    None => None
-  }
-  { params, result, }
-}
-
-///|
-fn type_sig_of_typedef(
-  td : @component.TypeDef,
-  type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int32?],
-  visiting : Map[Int32, Int32],
-  known_sigs~ : Map[Int32, TypeSig] = Map([]),
-) -> TypeSig {
-  match td {
-    DefValType(p) => Prim(p)
-    Tuple(tys) => {
-      let out : Array[TypeSig] = []
-      for t in tys {
-        out.push(
-          type_sig_of_valtype(
-            t,
-            type_table,
-            resource_ids,
-            visiting,
-            known_sigs~,
-          ),
-        )
-      }
-      Tuple(out)
-    }
-    Record(fields) => {
-      let out : Array[TypeFieldSig] = []
-      for f in fields {
-        out.push({
-          name: f.label,
-          ty: type_sig_of_valtype(
-            f.ty,
-            type_table,
-            resource_ids,
-            visiting,
-            known_sigs~,
-          ),
-        })
-      }
-      Record(out)
-    }
-    Variant(cases) => {
-      let out : Array[TypeCaseSig] = []
-      for c in cases {
-        let payload = match c.ty {
-          None => None
-          Some(t) =>
-            Some(
-              type_sig_of_valtype(
-                t,
-                type_table,
-                resource_ids,
-                visiting,
-                known_sigs~,
-              ),
-            )
-        }
-        out.push({ name: c.label, ty: payload, })
-      }
-      Variant(out)
-    }
-    Option(v) =>
-      Option(
-        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~),
-      )
-    Result(ok, err) => {
-      let ok_sig = ok.map(fn(v) {
-        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~)
-      })
-      let err_sig = err.map(fn(v) {
-        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~)
-      })
-      Result(ok_sig, err_sig)
-    }
-    List(v) =>
-      List(
-        type_sig_of_valtype(v, type_table, resource_ids, visiting, known_sigs~),
-      )
-    Flags(labels) => Flags(labels)
-    Enum(labels) => Enum(labels)
-    Own(idx) => {
-      let resource = type_sig_of_valtype(
-        TypeIdx(idx),
-        type_table,
-        resource_ids,
-        visiting,
-        known_sigs~,
-      )
-      match resource {
-        Resource(rid) => Own(rid)
-        _ => Other
-      }
-    }
-    Borrow(idx) => {
-      let resource = type_sig_of_valtype(
-        TypeIdx(idx),
-        type_table,
-        resource_ids,
-        visiting,
-        known_sigs~,
-      )
-      match resource {
-        Resource(rid) => Borrow(rid)
-        _ => Other
-      }
-    }
-    _ => Other
-  }
-}
-
-///|
-fn type_sig_of_valtype(
-  ty : @component.ValType,
-  type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int32?],
-  visiting : Map[Int32, Int32],
-  known_sigs~ : Map[Int32, TypeSig] = Map([]),
-) -> TypeSig {
-  match ty {
-    Prim(p) => Prim(p)
-    TypeIdx(idx) =>
-      if known_sigs.get(idx) is Some(signature) {
-        signature
-      } else if idx < 0 || idx >= type_table.length() {
-        Other
-      } else if visiting.get(idx) is Some(_) {
-        Other
-      } else {
-        visiting.set(idx, 1)
-        let sig = match type_table[idx] {
-          Some(ResourceType(_, _, _, _)) =>
-            match resource_ids.get(idx) {
-              Some(Some(rid)) => TypeSig::Resource(rid)
-              _ => Resource(-1)
-            }
-          Some(td) =>
-            type_sig_of_typedef(
-              td,
-              type_table,
-              resource_ids,
-              visiting,
-              known_sigs~,
-            )
-          None => Other
-        }
-        visiting.remove(idx) |> ignore
-        sig
-      }
-  }
-}
-
-///|
-fn type_sig_of_typeidx(
-  idx : Int32,
-  type_table : Array[@component.TypeDef?],
-  resource_ids : Array[Int32?],
-  known_sigs~ : Map[Int32, TypeSig] = Map([]),
-) -> TypeSig {
-  type_sig_of_valtype(
-    TypeIdx(idx),
-    type_table,
-    resource_ids,
-    Map([]),
-    known_sigs~,
-  )
 }
 
 ///|

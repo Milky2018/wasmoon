@@ -133,22 +133,8 @@ fn format_interface(sb : StringBuilder, it : Interface) -> Unit {
   }
   if has_use {
     for item in it.items {
-      if item is Use(u) {
-        sb.write_string("  use ")
-        sb.write_string(u.path.raw)
-        sb.write_string(".{")
-        for i in 0..<u.names.length() {
-          if i > 0 {
-            sb.write_string(", ")
-          }
-          let (n, asn) = u.names[i]
-          sb.write_string(n)
-          if asn is Some(nn) {
-            sb.write_string(" as ")
-            sb.write_string(nn)
-          }
-        }
-        sb.write_string("};\n")
+      if item is Use(_) {
+        format_interface_item(sb, item, "  ")
       }
     }
     if has_other {
@@ -156,169 +142,186 @@ fn format_interface(sb : StringBuilder, it : Interface) -> Unit {
     }
   }
   for item in it.items {
-    match item {
-      Use(_) => ()
-      Func(f) => {
-        sb.write_string("  ")
-        sb.write_string(f.name)
-        sb.write_string(": ")
-        if f.is_async {
-          sb.write_string("async ")
-        }
-        sb.write_string("func(")
-        for i in 0..<f.params.length() {
-          if i > 0 {
-            sb.write_string(", ")
-          }
-          let (n, t) = f.params[i]
-          sb.write_string(n)
-          sb.write_string(": ")
-          format_type(sb, t)
-        }
-        sb.write_char(')')
-        if f.results.length() > 0 {
-          sb.write_string(" -> ")
-          if f.results.length() == 1 && f.results[0].0 is None {
-            format_type(sb, f.results[0].1)
-          } else {
-            sb.write_char('(')
-            for i in 0..<f.results.length() {
-              if i > 0 {
-                sb.write_string(", ")
-              }
-              let (rn, rt) = f.results[i]
-              match rn {
-                Some(n) => {
-                  sb.write_string(n)
-                  sb.write_string(": ")
-                }
-                None => ()
-              }
-              format_type(sb, rt)
-            }
-            sb.write_char(')')
-          }
-        }
-        sb.write_string(";\n")
-      }
-      TypeAlias(t) => {
-        sb.write_string("  type ")
-        sb.write_string(t.name)
-        sb.write_string(" = ")
-        format_type(sb, t.ty)
-        sb.write_string(";\n")
-      }
-      Record(r) => {
-        sb.write_string("  record ")
-        sb.write_string(r.name)
-        sb.write_string(" {\n")
-        for field in r.fields {
-          let (n, t) = field
-          sb.write_string("    ")
-          sb.write_string(n)
-          sb.write_string(": ")
-          format_type(sb, t)
-          sb.write_string(",\n")
-        }
-        sb.write_string("  }\n")
-      }
-      Resource(r) => {
-        sb.write_string("  resource ")
-        sb.write_string(r.name)
-        if r.methods.length() == 0 {
-          sb.write_string(";\n")
-        } else {
-          sb.write_string(" {\n")
-          for m in r.methods {
-            sb.write_string("    ")
-            sb.write_string(m.name)
-            sb.write_string(": ")
-            if m.is_async {
-              sb.write_string("async ")
-            }
-            sb.write_string("func(")
-            for i in 0..<m.params.length() {
-              if i > 0 {
-                sb.write_string(", ")
-              }
-              let (pn, pt) = m.params[i]
-              sb.write_string(pn)
-              sb.write_string(": ")
-              format_type(sb, pt)
-            }
-            sb.write_char(')')
-            if m.results.length() > 0 {
-              sb.write_string(" -> ")
-              if m.results.length() == 1 && m.results[0].0 is None {
-                format_type(sb, m.results[0].1)
-              } else {
-                sb.write_char('(')
-                for i in 0..<m.results.length() {
-                  if i > 0 {
-                    sb.write_string(", ")
-                  }
-                  let (rn, rt) = m.results[i]
-                  match rn {
-                    Some(n) => {
-                      sb.write_string(n)
-                      sb.write_string(": ")
-                    }
-                    None => ()
-                  }
-                  format_type(sb, rt)
-                }
-                sb.write_char(')')
-              }
-            }
-            sb.write_string(";\n")
-          }
-          sb.write_string("  }\n")
-        }
-      }
-      Variant(v) => {
-        sb.write_string("  variant ")
-        sb.write_string(v.name)
-        sb.write_string(" {\n")
-        for c in v.cases {
-          sb.write_string("    ")
-          sb.write_string(c.name)
-          match c.payload {
-            Some(t) => {
-              sb.write_char('(')
-              format_type(sb, t)
-              sb.write_char(')')
-            }
-            None => ()
-          }
-          sb.write_string(",\n")
-        }
-        sb.write_string("  }\n")
-      }
-      Flags(f) => {
-        sb.write_string("  flags ")
-        sb.write_string(f.name)
-        sb.write_string(" {\n")
-        for n in f.flags {
-          sb.write_string("    ")
-          sb.write_string(n)
-          sb.write_string(",\n")
-        }
-        sb.write_string("  }\n")
-      }
-      Enum(e) => {
-        sb.write_string("  enum ")
-        sb.write_string(e.name)
-        sb.write_string(" {\n")
-        for n in e.cases {
-          sb.write_string("    ")
-          sb.write_string(n)
-          sb.write_string(",\n")
-        }
-        sb.write_string("  }\n")
-      }
+    if !(item is Use(_)) {
+      format_interface_item(sb, item, "  ")
     }
   }
   sb.write_string("}\n")
+}
+
+///|
+fn format_interface_item(
+  sb : StringBuilder,
+  item : InterfaceItem,
+  indent : String,
+  first_result_only~ : Bool = false,
+) -> Unit {
+  let child_indent = indent + "  "
+  sb.write_string(indent)
+  match item {
+    Func(f) => format_func_decl(sb, f, "", first_result_only~)
+    Use(u) => {
+      sb.write_string("use ")
+      sb.write_string(u.path.raw)
+      sb.write_string(".{")
+      for i in 0..<u.names.length() {
+        if i > 0 {
+          sb.write_string(", ")
+        }
+        let (name, renamed) = u.names[i]
+        sb.write_string(name)
+        if renamed is Some(name) {
+          sb.write_string(" as ")
+          sb.write_string(name)
+        }
+      }
+      sb.write_string("};\n")
+    }
+    TypeAlias(t) => {
+      sb.write_string("type ")
+      sb.write_string(t.name)
+      sb.write_string(" = ")
+      format_type(sb, t.ty)
+      sb.write_string(";\n")
+    }
+    Record(r) => {
+      sb.write_string("record ")
+      sb.write_string(r.name)
+      sb.write_string(" {\n")
+      for field in r.fields {
+        let (n, t) = field
+        sb.write_string(child_indent)
+        sb.write_string(n)
+        sb.write_string(": ")
+        format_type(sb, t)
+        sb.write_string(",\n")
+      }
+      sb.write_string(indent)
+      sb.write_string("}\n")
+    }
+    Resource(r) => {
+      sb.write_string("resource ")
+      sb.write_string(r.name)
+      if r.methods.length() == 0 {
+        sb.write_string(";\n")
+      } else {
+        sb.write_string(" {\n")
+        for m in r.methods {
+          format_func_decl(sb, m, child_indent, first_result_only~)
+        }
+        sb.write_string(indent)
+        sb.write_string("}\n")
+      }
+    }
+    Variant(v) => {
+      sb.write_string("variant ")
+      sb.write_string(v.name)
+      sb.write_string(" {\n")
+      for c in v.cases {
+        sb.write_string(child_indent)
+        sb.write_string(c.name)
+        match c.payload {
+          Some(t) => {
+            sb.write_char('(')
+            format_type(sb, t)
+            sb.write_char(')')
+          }
+          None => ()
+        }
+        sb.write_string(",\n")
+      }
+      sb.write_string(indent)
+      sb.write_string("}\n")
+    }
+    Flags(f) => {
+      sb.write_string("flags ")
+      sb.write_string(f.name)
+      sb.write_string(" {\n")
+      for n in f.flags {
+        sb.write_string(child_indent)
+        sb.write_string(n)
+        sb.write_string(",\n")
+      }
+      sb.write_string(indent)
+      sb.write_string("}\n")
+    }
+    Enum(e) => {
+      sb.write_string("enum ")
+      sb.write_string(e.name)
+      sb.write_string(" {\n")
+      for n in e.cases {
+        sb.write_string(child_indent)
+        sb.write_string(n)
+        sb.write_string(",\n")
+      }
+      sb.write_string(indent)
+      sb.write_string("}\n")
+    }
+  }
+}
+
+///|
+fn format_func_decl(
+  sb : StringBuilder,
+  func : FuncDecl,
+  prefix : String,
+  first_result_only~ : Bool = false,
+) -> Unit {
+  sb.write_string(prefix)
+  sb.write_string(func.name)
+  sb.write_string(": ")
+  if func.is_async {
+    sb.write_string("async ")
+  }
+  sb.write_string("func(")
+  for i, param in func.params {
+    if i > 0 {
+      sb.write_string(", ")
+    }
+    let (name, ty) = param
+    sb.write_string(name)
+    sb.write_string(": ")
+    format_type(sb, ty)
+  }
+  sb.write_char(')')
+  if func.results.length() > 0 {
+    sb.write_string(" -> ")
+    if first_result_only ||
+      (func.results.length() == 1 && func.results[0].0 is None) {
+      format_type(sb, func.results[0].1)
+    } else {
+      sb.write_char('(')
+      for i, result in func.results {
+        if i > 0 {
+          sb.write_string(", ")
+        }
+        let (name, ty) = result
+        if name is Some(name) {
+          sb.write_string(name)
+          sb.write_string(": ")
+        }
+        format_type(sb, ty)
+      }
+      sb.write_char(')')
+    }
+  }
+  sb.write_string(";\n")
+}
+
+///|
+fn format_inline_interface(
+  sb : StringBuilder,
+  prefix : String,
+  name : String,
+  iface : InlineInterface,
+) -> Unit {
+  sb.write_string(prefix)
+  sb.write_string(name)
+  sb.write_string(": interface {\n")
+  for item in iface.items {
+    format_interface_item(sb, item, "    ", first_result_only=true)
+  }
+  sb.write_string("  }\n")
 }
 
 ///|
@@ -354,394 +357,12 @@ fn format_world(sb : StringBuilder, w : World) -> Unit {
         sb.write_string(p.raw)
         sb.write_string(";\n")
       }
-      ImportFunc(f) => {
-        sb.write_string("  import ")
-        sb.write_string(f.name)
-        sb.write_string(": ")
-        if f.is_async {
-          sb.write_string("async ")
-        }
-        sb.write_string("func(")
-        for i in 0..<f.params.length() {
-          if i > 0 {
-            sb.write_string(", ")
-          }
-          let (n, t) = f.params[i]
-          sb.write_string(n)
-          sb.write_string(": ")
-          format_type(sb, t)
-        }
-        sb.write_char(')')
-        if f.results.length() > 0 {
-          sb.write_string(" -> ")
-          // WIT MVP supports a single result; this code prints the existing AST shape.
-          if f.results.length() == 1 && f.results[0].0 is None {
-            format_type(sb, f.results[0].1)
-          } else {
-            sb.write_char('(')
-            for i in 0..<f.results.length() {
-              if i > 0 {
-                sb.write_string(", ")
-              }
-              let (rn, rt) = f.results[i]
-              match rn {
-                Some(n) => {
-                  sb.write_string(n)
-                  sb.write_string(": ")
-                }
-                None => ()
-              }
-              format_type(sb, rt)
-            }
-            sb.write_char(')')
-          }
-        }
-        sb.write_string(";\n")
-      }
-      ExportFunc(f) => {
-        sb.write_string("  export ")
-        sb.write_string(f.name)
-        sb.write_string(": ")
-        if f.is_async {
-          sb.write_string("async ")
-        }
-        sb.write_string("func(")
-        for i in 0..<f.params.length() {
-          if i > 0 {
-            sb.write_string(", ")
-          }
-          let (n, t) = f.params[i]
-          sb.write_string(n)
-          sb.write_string(": ")
-          format_type(sb, t)
-        }
-        sb.write_char(')')
-        if f.results.length() > 0 {
-          sb.write_string(" -> ")
-          if f.results.length() == 1 && f.results[0].0 is None {
-            format_type(sb, f.results[0].1)
-          } else {
-            sb.write_char('(')
-            for i in 0..<f.results.length() {
-              if i > 0 {
-                sb.write_string(", ")
-              }
-              let (rn, rt) = f.results[i]
-              match rn {
-                Some(n) => {
-                  sb.write_string(n)
-                  sb.write_string(": ")
-                }
-                None => ()
-              }
-              format_type(sb, rt)
-            }
-            sb.write_char(')')
-          }
-        }
-        sb.write_string(";\n")
-      }
-      ImportInlineInterface(nm, iface) => {
-        sb.write_string("  import ")
-        sb.write_string(nm)
-        sb.write_string(": interface {\n")
-        for item in iface.items {
-          match item {
-            Func(f) => {
-              sb.write_string("    ")
-              sb.write_string(f.name)
-              sb.write_string(": ")
-              if f.is_async {
-                sb.write_string("async ")
-              }
-              sb.write_string("func(")
-              for i in 0..<f.params.length() {
-                if i > 0 {
-                  sb.write_string(", ")
-                }
-                let (pn, pt) = f.params[i]
-                sb.write_string(pn)
-                sb.write_string(": ")
-                format_type(sb, pt)
-              }
-              sb.write_char(')')
-              if f.results.length() > 0 {
-                sb.write_string(" -> ")
-                format_type(sb, f.results[0].1)
-              }
-              sb.write_string(";\n")
-            }
-            TypeAlias(t) => {
-              sb.write_string("    type ")
-              sb.write_string(t.name)
-              sb.write_string(" = ")
-              format_type(sb, t.ty)
-              sb.write_string(";\n")
-            }
-            Record(r) => {
-              sb.write_string("    record ")
-              sb.write_string(r.name)
-              sb.write_string(" {\n")
-              for field in r.fields {
-                let (n, t) = field
-                sb.write_string("      ")
-                sb.write_string(n)
-                sb.write_string(": ")
-                format_type(sb, t)
-                sb.write_string(",\n")
-              }
-              sb.write_string("    }\n")
-            }
-            Use(u) => {
-              sb.write_string("    use ")
-              sb.write_string(u.path.raw)
-              sb.write_string(".{")
-              for i in 0..<u.names.length() {
-                if i > 0 {
-                  sb.write_string(", ")
-                }
-                let (n, asn) = u.names[i]
-                sb.write_string(n)
-                match asn {
-                  Some(nn) => {
-                    sb.write_string(" as ")
-                    sb.write_string(nn)
-                  }
-                  None => ()
-                }
-              }
-              sb.write_string("};\n")
-            }
-            Resource(r) => {
-              sb.write_string("    resource ")
-              sb.write_string(r.name)
-              if r.methods.length() == 0 {
-                sb.write_string(";\n")
-              } else {
-                sb.write_string(" {\n")
-                for m in r.methods {
-                  sb.write_string("      ")
-                  sb.write_string(m.name)
-                  sb.write_string(": ")
-                  if m.is_async {
-                    sb.write_string("async ")
-                  }
-                  sb.write_string("func(")
-                  for i in 0..<m.params.length() {
-                    if i > 0 {
-                      sb.write_string(", ")
-                    }
-                    let (pn, pt) = m.params[i]
-                    sb.write_string(pn)
-                    sb.write_string(": ")
-                    format_type(sb, pt)
-                  }
-                  sb.write_char(')')
-                  if m.results.length() > 0 {
-                    sb.write_string(" -> ")
-                    format_type(sb, m.results[0].1)
-                  }
-                  sb.write_string(";\n")
-                }
-                sb.write_string("    }\n")
-              }
-            }
-            Variant(v) => {
-              sb.write_string("    variant ")
-              sb.write_string(v.name)
-              sb.write_string(" {\n")
-              for c in v.cases {
-                sb.write_string("      ")
-                sb.write_string(c.name)
-                match c.payload {
-                  Some(t) => {
-                    sb.write_char('(')
-                    format_type(sb, t)
-                    sb.write_char(')')
-                  }
-                  None => ()
-                }
-                sb.write_string(",\n")
-              }
-              sb.write_string("    }\n")
-            }
-            Flags(f) => {
-              sb.write_string("    flags ")
-              sb.write_string(f.name)
-              sb.write_string(" {\n")
-              for n in f.flags {
-                sb.write_string("      ")
-                sb.write_string(n)
-                sb.write_string(",\n")
-              }
-              sb.write_string("    }\n")
-            }
-            Enum(e) => {
-              sb.write_string("    enum ")
-              sb.write_string(e.name)
-              sb.write_string(" {\n")
-              for n in e.cases {
-                sb.write_string("      ")
-                sb.write_string(n)
-                sb.write_string(",\n")
-              }
-              sb.write_string("    }\n")
-            }
-          }
-        }
-        sb.write_string("  }\n")
-      }
-      ExportInlineInterface(nm, iface) => {
-        // Same formatting as `import name: interface { ... }`
-        sb.write_string("  export ")
-        sb.write_string(nm)
-        sb.write_string(": interface {\n")
-        for item in iface.items {
-          match item {
-            Func(f) => {
-              sb.write_string("    ")
-              sb.write_string(f.name)
-              sb.write_string(": ")
-              if f.is_async {
-                sb.write_string("async ")
-              }
-              sb.write_string("func(")
-              for i in 0..<f.params.length() {
-                if i > 0 {
-                  sb.write_string(", ")
-                }
-                let (pn, pt) = f.params[i]
-                sb.write_string(pn)
-                sb.write_string(": ")
-                format_type(sb, pt)
-              }
-              sb.write_char(')')
-              if f.results.length() > 0 {
-                sb.write_string(" -> ")
-                format_type(sb, f.results[0].1)
-              }
-              sb.write_string(";\n")
-            }
-            TypeAlias(t) => {
-              sb.write_string("    type ")
-              sb.write_string(t.name)
-              sb.write_string(" = ")
-              format_type(sb, t.ty)
-              sb.write_string(";\n")
-            }
-            Record(r) => {
-              sb.write_string("    record ")
-              sb.write_string(r.name)
-              sb.write_string(" {\n")
-              for field in r.fields {
-                let (n, t) = field
-                sb.write_string("      ")
-                sb.write_string(n)
-                sb.write_string(": ")
-                format_type(sb, t)
-                sb.write_string(",\n")
-              }
-              sb.write_string("    }\n")
-            }
-            Use(u) => {
-              sb.write_string("    use ")
-              sb.write_string(u.path.raw)
-              sb.write_string(".{")
-              for i in 0..<u.names.length() {
-                if i > 0 {
-                  sb.write_string(", ")
-                }
-                let (n, asn) = u.names[i]
-                sb.write_string(n)
-                match asn {
-                  Some(nn) => {
-                    sb.write_string(" as ")
-                    sb.write_string(nn)
-                  }
-                  None => ()
-                }
-              }
-              sb.write_string("};\n")
-            }
-            Resource(r) => {
-              sb.write_string("    resource ")
-              sb.write_string(r.name)
-              if r.methods.length() == 0 {
-                sb.write_string(";\n")
-              } else {
-                sb.write_string(" {\n")
-                for m in r.methods {
-                  sb.write_string("      ")
-                  sb.write_string(m.name)
-                  sb.write_string(": ")
-                  if m.is_async {
-                    sb.write_string("async ")
-                  }
-                  sb.write_string("func(")
-                  for i in 0..<m.params.length() {
-                    if i > 0 {
-                      sb.write_string(", ")
-                    }
-                    let (pn, pt) = m.params[i]
-                    sb.write_string(pn)
-                    sb.write_string(": ")
-                    format_type(sb, pt)
-                  }
-                  sb.write_char(')')
-                  if m.results.length() > 0 {
-                    sb.write_string(" -> ")
-                    format_type(sb, m.results[0].1)
-                  }
-                  sb.write_string(";\n")
-                }
-                sb.write_string("    }\n")
-              }
-            }
-            Variant(v) => {
-              sb.write_string("    variant ")
-              sb.write_string(v.name)
-              sb.write_string(" {\n")
-              for c in v.cases {
-                sb.write_string("      ")
-                sb.write_string(c.name)
-                match c.payload {
-                  Some(t) => {
-                    sb.write_char('(')
-                    format_type(sb, t)
-                    sb.write_char(')')
-                  }
-                  None => ()
-                }
-                sb.write_string(",\n")
-              }
-              sb.write_string("    }\n")
-            }
-            Flags(f) => {
-              sb.write_string("    flags ")
-              sb.write_string(f.name)
-              sb.write_string(" {\n")
-              for n in f.flags {
-                sb.write_string("      ")
-                sb.write_string(n)
-                sb.write_string(",\n")
-              }
-              sb.write_string("    }\n")
-            }
-            Enum(e) => {
-              sb.write_string("    enum ")
-              sb.write_string(e.name)
-              sb.write_string(" {\n")
-              for n in e.cases {
-                sb.write_string("      ")
-                sb.write_string(n)
-                sb.write_string(",\n")
-              }
-              sb.write_string("    }\n")
-            }
-          }
-        }
-        sb.write_string("  }\n")
-      }
+      ImportFunc(f) => format_func_decl(sb, f, "  import ")
+      ExportFunc(f) => format_func_decl(sb, f, "  export ")
+      ImportInlineInterface(name, iface) =>
+        format_inline_interface(sb, "  import ", name, iface)
+      ExportInlineInterface(name, iface) =>
+        format_inline_interface(sb, "  export ", name, iface)
       Include(inc) => {
         sb.write_string("  include ")
         sb.write_string(inc.path.raw)
@@ -766,122 +387,14 @@ fn format_world(sb : StringBuilder, w : World) -> Unit {
           None => sb.write_string(";\n")
         }
       }
-      Use(u) => {
-        sb.write_string("  use ")
-        sb.write_string(u.path.raw)
-        sb.write_string(".{")
-        for i in 0..<u.names.length() {
-          if i > 0 {
-            sb.write_string(", ")
-          }
-          let (n, asn) = u.names[i]
-          sb.write_string(n)
-          match asn {
-            Some(nn) => {
-              sb.write_string(" as ")
-              sb.write_string(nn)
-            }
-            None => ()
-          }
-        }
-        sb.write_string("};\n")
-      }
-      TypeAlias(t) => {
-        sb.write_string("  type ")
-        sb.write_string(t.name)
-        sb.write_string(" = ")
-        format_type(sb, t.ty)
-        sb.write_string(";\n")
-      }
-      Record(r) => {
-        sb.write_string("  record ")
-        sb.write_string(r.name)
-        sb.write_string(" {\n")
-        for field in r.fields {
-          let (n, t) = field
-          sb.write_string("    ")
-          sb.write_string(n)
-          sb.write_string(": ")
-          format_type(sb, t)
-          sb.write_string(",\n")
-        }
-        sb.write_string("  }\n")
-      }
-      Resource(r) => {
-        sb.write_string("  resource ")
-        sb.write_string(r.name)
-        if r.methods.length() == 0 {
-          sb.write_string(";\n")
-        } else {
-          sb.write_string(" {\n")
-          for m in r.methods {
-            sb.write_string("    ")
-            sb.write_string(m.name)
-            sb.write_string(": ")
-            if m.is_async {
-              sb.write_string("async ")
-            }
-            sb.write_string("func(")
-            for i in 0..<m.params.length() {
-              if i > 0 {
-                sb.write_string(", ")
-              }
-              let (pn, pt) = m.params[i]
-              sb.write_string(pn)
-              sb.write_string(": ")
-              format_type(sb, pt)
-            }
-            sb.write_char(')')
-            if m.results.length() > 0 {
-              sb.write_string(" -> ")
-              format_type(sb, m.results[0].1)
-            }
-            sb.write_string(";\n")
-          }
-          sb.write_string("  }\n")
-        }
-      }
-      Variant(v) => {
-        sb.write_string("  variant ")
-        sb.write_string(v.name)
-        sb.write_string(" {\n")
-        for c in v.cases {
-          sb.write_string("    ")
-          sb.write_string(c.name)
-          match c.payload {
-            Some(t) => {
-              sb.write_char('(')
-              format_type(sb, t)
-              sb.write_char(')')
-            }
-            None => ()
-          }
-          sb.write_string(",\n")
-        }
-        sb.write_string("  }\n")
-      }
-      Flags(f) => {
-        sb.write_string("  flags ")
-        sb.write_string(f.name)
-        sb.write_string(" {\n")
-        for n in f.flags {
-          sb.write_string("    ")
-          sb.write_string(n)
-          sb.write_string(",\n")
-        }
-        sb.write_string("  }\n")
-      }
-      Enum(e) => {
-        sb.write_string("  enum ")
-        sb.write_string(e.name)
-        sb.write_string(" {\n")
-        for n in e.cases {
-          sb.write_string("    ")
-          sb.write_string(n)
-          sb.write_string(",\n")
-        }
-        sb.write_string("  }\n")
-      }
+      Use(u) => format_interface_item(sb, Use(u), "  ")
+      TypeAlias(t) => format_interface_item(sb, TypeAlias(t), "  ")
+      Record(r) => format_interface_item(sb, Record(r), "  ")
+      Resource(r) =>
+        format_interface_item(sb, Resource(r), "  ", first_result_only=true)
+      Variant(v) => format_interface_item(sb, Variant(v), "  ")
+      Flags(f) => format_interface_item(sb, Flags(f), "  ")
+      Enum(e) => format_interface_item(sb, Enum(e), "  ")
     }
   }
 

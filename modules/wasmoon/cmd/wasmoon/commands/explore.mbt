@@ -124,12 +124,6 @@ fn run_explore_with_compiler(
       }
   }
   let compiler = @wasmoon_jit.NativeCompiler::new(target, context_shape~)
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-  let use_subtype_indirect_check = module_indirect_subtype_check_reason(mod_)
-    is Some(_)
   let wasm_validation_context = @wasm_frontend.wasm_validation_context(
     translation_context,
   )
@@ -138,9 +132,6 @@ fn run_explore_with_compiler(
   } else {
     Map([])
   }
-  let wasm_validation_context = @wasm_optimize.with_read_only_calls(
-    wasm_validation_context, scalar_callees,
-  )
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
@@ -220,8 +211,6 @@ fn run_explore_with_compiler(
         milk_result,
         wasm_validation_context,
         function_index=actual_func_idx,
-        use_subtype_indirect_check~,
-        canonical_type_indices~,
       )
     }) catch {
       err => {

@@ -17,11 +17,6 @@ pub impl Show for AArch64LowerError with fn output(self, logger) {
 }
 
 ///|
-fn align_up(value : Int32, alignment : Int32) -> Int32 {
-  (value + alignment - 1) / alignment * alignment
-}
-
-///|
 fn gpr_width(ty : @native.ValueType) -> GprWidth? {
   match ty {
     I32 => Some(W32)
@@ -90,88 +85,6 @@ fn lower_shift(operation : @lowering.IntBinaryOp) -> AArch64Shift? {
 }
 
 ///|
-fn lower_condition(comparison : @lowering.IntComparison) -> AArch64Condition {
-  match comparison {
-    Equal => Eq
-    NotEqual => Ne
-    SignedLessThan => Lt
-    SignedLessOrEqual => Le
-    SignedGreaterThan => Gt
-    SignedGreaterOrEqual => Ge
-    UnsignedLessThan => Lo
-    UnsignedLessOrEqual => Ls
-    UnsignedGreaterThan => Hi
-    UnsignedGreaterOrEqual => Hs
-  }
-}
-
-///|
-fn lower_reference_condition(
-  comparison : @lowering.ReferenceComparison,
-) -> AArch64Condition {
-  match comparison {
-    Equal => Eq
-    NotEqual => Ne
-  }
-}
-
-///|
-fn lower_float_unary(operation : @lowering.FloatUnaryOp) -> AArch64FloatUnary? {
-  match operation {
-    Negate => Some(Negate)
-    Absolute => Some(Absolute)
-    SquareRoot => Some(SquareRoot)
-    Ceil => Some(Ceil)
-    Floor => Some(Floor)
-    Truncate => Some(Truncate)
-    Nearest => Some(Nearest)
-  }
-}
-
-///|
-fn lower_float_binary(
-  operation : @lowering.FloatBinaryOp,
-) -> AArch64FloatBinary? {
-  match operation {
-    Add => Some(Add)
-    Sub => Some(Sub)
-    Mul => Some(Mul)
-    Div => Some(Div)
-    Min => Some(Min)
-    Max => Some(Max)
-    CopySign => Some(CopySign)
-  }
-}
-
-///|
-fn lower_float_ternary(
-  operation : @lowering.FloatTernaryOp,
-) -> AArch64FloatTernary {
-  match operation {
-    FusedMultiplyAdd => Fmadd
-    FusedNegatedMultiplyAdd => Fmsub
-    FusedMultiplySubtract => Fnmsub
-    FusedNegatedMultiplySubtract => Fnmadd
-  }
-}
-
-///|
-fn lower_float_condition(
-  comparison : @lowering.FloatComparison,
-) -> AArch64FloatCondition? {
-  match comparison {
-    Equal => Some(Equal)
-    NotEqual => Some(NotEqual)
-    LessThan => Some(LessThan)
-    LessOrEqual => Some(LessOrEqual)
-    GreaterThan => Some(GreaterThan)
-    GreaterOrEqual => Some(GreaterOrEqual)
-    Ordered => Some(Ordered)
-    Unordered => Some(Unordered)
-  }
-}
-
-///|
 fn lower_conversion(conversion : @lowering.ConversionOp) -> AArch64Conversion? {
   match conversion {
     I32WrapI64 => Some(WrapI64ToI32)
@@ -186,32 +99,6 @@ fn lower_conversion(conversion : @lowering.ConversionOp) -> AArch64Conversion? {
     Bitcast(from, to) => Some(Bitcast(from, to))
     IntToFloat(from, to, signedness) => Some(IntToFloat(from, to, signedness))
     FloatToInt(_, _, _, _) | SignExtend(_, _) => None
-  }
-}
-
-///|
-fn float_value_type(ty : @native.FloatType) -> @native.ValueType {
-  match ty {
-    F32 => F32
-    F64 => F64
-  }
-}
-
-///|
-fn float_to_int_bounds(
-  source : @native.FloatType,
-  result : @native.IntegerType,
-  signedness : @native.Signedness,
-) -> (UInt64, UInt64, Bool) {
-  match (source, result, signedness) {
-    (F32, I32, Signed) => (0xCF000000UL, 0x4F000000UL, false)
-    (F32, I32, Unsigned) => (0xBF800000UL, 0x4F800000UL, true)
-    (F32, I64, Signed) => (0xDF000000UL, 0x5F000000UL, false)
-    (F32, I64, Unsigned) => (0xBF800000UL, 0x5F800000UL, true)
-    (F64, I32, Signed) => (0xC1E0000000200000UL, 0x41E0000000000000UL, true)
-    (F64, I32, Unsigned) => (0xBFF0000000000000UL, 0x41F0000000000000UL, true)
-    (F64, I64, Signed) => (0xC3E0000000000000UL, 0x43E0000000000000UL, false)
-    (F64, I64, Unsigned) => (0xBFF0000000000000UL, 0x43F0000000000000UL, true)
   }
 }
 
@@ -260,58 +147,25 @@ fn append_unconstrained_body(
 }
 
 ///|
-fn terminator_call_metadata(
-  source : @native.SourceLocation?,
-  semantics : @native.OperationSemantics,
-) -> @vcode.InstructionMetadata {
-  let safepoint : @native.SafepointKind? = match
-    (semantics.gc_safepoint, semantics.cancellation_safepoint) {
-    (true, true) => Some(GcAndCancellation)
-    (true, false) => Some(Gc)
-    (false, true) => Some(Cancellation)
-    (false, false) => None
-  }
-  match source {
-    Some(source) => @vcode.InstructionMetadata::new(source~, safepoint?)
-    None => @vcode.InstructionMetadata::new(safepoint?)
-  }
-}
-
-///|
-fn terminator_trap_metadata(
-  source : @native.SourceLocation?,
-  reason : @native.TrapReason,
-) -> @vcode.InstructionMetadata {
-  match source {
-    Some(source) => @vcode.InstructionMetadata::new(source~, trap=reason)
-    None => @vcode.InstructionMetadata::new(trap=reason)
-  }
-}
-
-///|
-fn call_argument_inputs(
-  operands : Array[@vcode.Value],
-  locations : Array[CallArgumentLocation],
-) -> Array[@vcode.Input] {
-  operands.mapi((index, operand) => {
-    let input = @vcode.Input::any_location(operand)
-    match locations[index] {
-      CallRegister(reg) if is_allocatable(reg) => input.with_preference(reg)
-      CallRegister(_) | CallStack(_) => input
-    }
-  })
-}
-
-///|
-fn abi_home_output(
-  ty : @native.ValueType,
-  incoming : @vcode.PhysicalReg,
-) -> @vcode.Output {
-  let output = @vcode.Output::any_location(ty)
-  if is_allocatable(incoming) {
-    output.with_preference(incoming)
-  } else {
-    output
+fn lower_call_results(
+  builder : @vcode.CheckedBuilder[AArch64Inst],
+  block : @vcode.Block,
+  result_types : Array[@native.ValueType],
+  locations : ArrayView[CallResultLocation],
+  metadata : @vcode.InstructionMetadata,
+) -> Array[@vcode.Value] raise AArch64LowerError {
+  @vcode.materialize_call_results(
+    builder,
+    block,
+    result_types,
+    locations,
+    metadata.live_gc_roots,
+    (ty, reg) => IncomingCallResult(ty, reg),
+    (ty, offset) => IncomingCallAreaResult(ty, offset),
+    KeepAlive(GcRef64),
+    is_allocatable,
+  ) catch {
+    error => raise BuildFailure(cause=error)
   }
 }
 
@@ -340,13 +194,11 @@ fn lower_direct_platform_call(
       )
   }
   let result_registers = platform_result_registers(call.signature.results)
-  let inputs = call_argument_inputs(
+  let inputs = @vcode.call_argument_inputs(
     operands,
     platform_call_layout(call.signature.params).arguments,
+    is_allocatable,
   )
-  let outputs = Array::makei(result_types.length(), index => {
-    abi_home_output(result_types[index], result_registers[index])
-  })
   (builder.append_body(
     block,
     if call.behavior.returns_twice {
@@ -362,34 +214,8 @@ fn lower_direct_platform_call(
     error => raise BuildFailure(cause=error)
   })
   |> ignore
-  let results : Array[@vcode.Value] = []
-  for index, ty in result_types {
-    let (_, materialized) = builder.append_body(
-      block,
-      IncomingCallResult(ty, result_registers[index]),
-      [],
-      [outputs[index]],
-      [],
-      @vcode.InstructionMetadata::empty(),
-    ) catch {
-      error => raise BuildFailure(cause=error)
-    }
-    results.push(materialized[0])
-  }
-  for root in metadata.live_gc_roots {
-    (builder.append_body(
-      block,
-      KeepAlive(GcRef64),
-      [@vcode.Input::any(root)],
-      [],
-      [],
-      @vcode.InstructionMetadata::empty(),
-    ) catch {
-      error => raise BuildFailure(cause=error)
-    })
-    |> ignore
-  }
-  results
+  let locations = result_registers.map(reg => @vcode.CallResultRegister(reg))
+  lower_call_results(builder, block, result_types, locations, metadata)
 }
 
 ///|
@@ -422,11 +248,16 @@ fn lower_internal_call(
     error => raise UnsupportedAbi(message=error.to_string())
   }
   let inputs = match target {
-    Some(_) => call_argument_inputs(operands, plan.arguments)
+    Some(_) =>
+      @vcode.call_argument_inputs(operands, plan.arguments, is_allocatable)
     None =>
       [
         @vcode.Input::any_location(operands[0]),
-        ..call_argument_inputs(operands[1:].to_owned(), plan.arguments),
+        ..@vcode.call_argument_inputs(
+          operands[1:].to_owned(),
+          plan.arguments,
+          is_allocatable,
+        ),
       ]
   }
   (builder.append_body(
@@ -443,40 +274,7 @@ fn lower_internal_call(
     error => raise BuildFailure(cause=error)
   })
   |> ignore
-  let results : Array[@vcode.Value] = []
-  for index, ty in result_types {
-    let (operation, output) = match plan.results[index] {
-      CallResultRegister(reg) =>
-        (IncomingCallResult(ty, reg), abi_home_output(ty, reg))
-      CallResultArea(offset, _) =>
-        (IncomingCallAreaResult(ty, offset), @vcode.Output::any_location(ty))
-    }
-    let (_, materialized) = builder.append_body(
-      block,
-      operation,
-      [],
-      [output],
-      [],
-      @vcode.InstructionMetadata::empty(),
-    ) catch {
-      error => raise BuildFailure(cause=error)
-    }
-    results.push(materialized[0])
-  }
-  for root in metadata.live_gc_roots {
-    (builder.append_body(
-      block,
-      KeepAlive(GcRef64),
-      [@vcode.Input::any(root)],
-      [],
-      [],
-      @vcode.InstructionMetadata::empty(),
-    ) catch {
-      error => raise BuildFailure(cause=error)
-    })
-    |> ignore
-  }
-  results
+  lower_call_results(builder, block, result_types, plan.results, metadata)
 }
 
 ///|

@@ -3,10 +3,10 @@ test "canonical payload budget is shared across nested list elements" {
   let store = @runtime.Store::Store()
   defer store.close()
   let memory = store.get_mem(store.alloc_mem(Memory(1, None)))
-  memory.store_i32(0, 64)
-  memory.store_i32(4, 4)
-  memory.store_i32(8, 64)
-  memory.store_i32(12, 4)
+  memory.store_i32_at(0L, 64)
+  memory.store_i32_at(4L, 4)
+  memory.store_i32_at(8L, 64)
+  memory.store_i32_at(12L, 4)
   let types : Array[TypeDef?] = [Some(List(Prim(U8))), Some(List(TypeIdx(0)))]
   let error = try {
     lift_component_value_from_flat(

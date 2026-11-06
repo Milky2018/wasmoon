@@ -165,8 +165,8 @@ fn WastThread::finish(
       self.pending = None
       match completion {
         Action(command, action, line) =>
-          finish_wast_action(
-            self.ctx,
+          @core_wast.finish_action(
+            self.ctx.modules,
             command,
             action,
             line,
@@ -177,12 +177,10 @@ fn WastThread::finish(
         Module(prepared, line) =>
           match values {
             Ok(_) => publish_wast_module(self.ctx, prepared)
-            Err(error) => {
-              result.failed += 1
-              result.failures.push(
+            Err(error) =>
+              result.record_failure(
                 "line \{line}: module start failed: \{error}",
               )
-            }
           }
         ModuleTrap(expected, line) => {
           let matches = match values {
@@ -191,13 +189,12 @@ fn WastThread::finish(
             _ => false
           }
           if matches {
-            result.passed += 1
+            result.record_pass()
             if show_success {
               println("line \{line}: assert_trap (module): PASSED")
             }
           } else {
-            result.failed += 1
-            result.failures.push(
+            result.record_failure(
               "line \{line}: assert_trap (module): expected '\{expected}'",
             )
           }
@@ -222,10 +219,7 @@ fn start_thread_action(
         },
       )
     Invoke(name, function, arguments) => {
-      let instance = match name {
-        Some(name) => ctx.named_modules.get(name)
-        None => ctx.current_module
-      }
+      let instance = ctx.modules.instance(name)
       guard instance is Some(instance) else {
         return Completed(
           Err(
@@ -280,8 +274,7 @@ fn start_thread_module(
           show_success,
         )
       } else {
-        result.failed += 1
-        result.failures.push(
+        result.record_failure(
           "line \{line}: module instantiation failed: \{error}",
         )
       }
@@ -317,12 +310,9 @@ fn shared_thread_context(
     error => raise RuntimeError(error.to_string())
   }
   errdefer child.close()
-  for name, definition in parent.module_definitions {
-    child.module_definitions.set(name, definition)
-  }
-  child.current_definition = parent.current_definition
+  child.modules.inherit_definitions(parent.modules)
   if shared is Some(name) {
-    guard parent.named_modules.get(name) is Some(original) else {
+    guard parent.modules.instance(Some(name)) is Some(original) else {
       raise ModuleNotFound(name)
     }
     let memories : Array[Int32] = []
@@ -356,8 +346,7 @@ fn shared_thread_context(
     let instance = child.store.host_exports(exports) catch {
       error => raise classify_runtime_failure(error)
     }
-    child.named_modules.set(name, instance)
-    child.registered_modules.set(name, instance)
+    child.modules.register(name, instance)
   }
   child
 }
@@ -367,7 +356,6 @@ fn WastThread::step(
   self : WastThread,
   threads : Array[WastThread],
   result : WastResult,
-  base_dir : String,
   show_success : Bool,
 ) -> Unit {
   if self.done {
@@ -397,8 +385,7 @@ fn WastThread::step(
     Thread(name, shared, commands) => {
       let context = shared_thread_context(self.ctx, shared) catch {
         error => {
-          result.failed += 1
-          result.failures.push(
+          result.record_failure(
             "line \{line}: thread '\{name}' failed: \{error}",
           )
           return
@@ -415,10 +402,7 @@ fn WastThread::step(
           self.children.remove(name)
           self.joining = Some(index)
         }
-        None => {
-          result.failed += 1
-          result.failures.push("line \{line}: no thread named '\{name}'")
-        }
+        None => result.record_failure("line \{line}: no thread named '\{name}'")
       }
     AssertReturn(action, _)
     | AssertTrap(action, _)
@@ -435,24 +419,18 @@ fn WastThread::step(
     Module(module_, name) =>
       start_thread_module(self, module_, name, line, result, show_success)
     ModuleInstance(name, definition_name) => {
-      let definition = match definition_name {
-        Some(name) => self.ctx.module_definitions.get(name)
-        None => self.ctx.current_definition
-      }
+      let definition = self.ctx.modules.definition(definition_name)
       match definition {
         Some(module_) =>
           start_thread_module(self, module_, name, line, result, show_success)
-        None => {
-          result.failed += 1
-          result.failures.push("line \{line}: module definition not found")
-        }
+        None =>
+          result.record_failure("line \{line}: module definition not found")
       }
     }
     ModuleQuote(parts) => {
       let module_ = @wat.parse(parts.join(""), implicit_module=true) catch {
         error => {
-          result.failed += 1
-          result.failures.push(
+          result.record_failure(
             "line \{line}: quoted module parse failed: \{error}",
           )
           return
@@ -473,8 +451,7 @@ fn WastThread::step(
     AssertModuleTrap(Binary(bytes), expected) => {
       let module_ = @parser.parse_module(bytes) catch {
         error => {
-          result.failed += 1
-          result.failures.push(
+          result.record_failure(
             "line \{line}: binary parse failed before instantiation: \{error}",
           )
           return
@@ -490,8 +467,7 @@ fn WastThread::step(
         trap=Some(expected),
       )
     }
-    _ =>
-      run_wast_command(self.ctx, command, line, result, base_dir, show_success)
+    _ => run_wast_command(self.ctx, command, line, result, show_success)
   }
 }
 
@@ -500,7 +476,6 @@ fn run_threaded_wast(
   ctx : WastContext,
   script : @wat.WastScript,
   result : WastResult,
-  base_dir : String,
   show_success : Bool,
 ) -> Unit {
   let threads = [WastThread::new(ctx, script.commands)]
@@ -531,7 +506,7 @@ fn run_threaded_wast(
       } else if thread.joining is None && thread.pc < thread.commands.length() {
         runnable = true
       }
-      thread.step(threads, result, base_dir, show_success)
+      thread.step(threads, result, show_success)
     }
     if !runnable && !threads[0].done {
       @wasmoon_jit.cooperative_idle()

@@ -100,11 +100,7 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
             gc_heap_segment_needs_collection(heap)) return GC_SEGMENT_NEEDS_COLLECTION;
         heap->quota_denied = 0;
         if (gc_should_fail_allocation()) return 0;
-        if (bytes > INT32_MAX || !gc_heap_admit(heap, (size_t)bytes)) return 0;
-        if (!gc_heap_ensure_payload_capacity(heap, (size_t)bytes) || !gc_heap_ensure_object_capacity(heap)) {
-            gc_heap_undo_admission(heap);
-            return 0;
-        }
+        if (bytes > INT32_MAX || !gc_heap_reserve_storage(heap, (size_t)bytes)) return 0;
     }
     int32_t offset = (int32_t)heap->size;
     GcHeader *header = (GcHeader *)(heap->data + offset);

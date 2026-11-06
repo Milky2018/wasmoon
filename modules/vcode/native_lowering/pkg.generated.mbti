@@ -625,7 +625,10 @@ pub(all) enum VectorLane {
 pub fn VectorLane::equal(Self, Self) -> Bool
 pub fn VectorLane::hash(Self) -> Int32
 pub fn VectorLane::hash_combine(Self, Hasher) -> Unit
+pub fn VectorLane::is_integer(Self) -> Bool
+pub fn VectorLane::lane_count(Self) -> Int32
 pub fn VectorLane::not_equal(Self, Self) -> Bool
+pub fn VectorLane::scalar_type(Self) -> @native_types.ValueType
 pub fn VectorLane::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, Hash, @debug.Debug)

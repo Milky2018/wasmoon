@@ -58,86 +58,43 @@ fn ExecContext::exec_struct_new_default(
 }
 
 ///|
-/// struct.get: Get a field value from a struct
-fn ExecContext::exec_struct_get(
+fn ExecContext::read_struct_field(
   self : ExecContext,
-  _type_idx : Int32,
   field_idx : Int32,
-) -> Unit raise {
-  let ref_val = self.stack.pop()
-  match ref_val {
-    StructRef(ref_idx) => {
-      let value = self.store.struct_get(ref_idx, field_idx)
-      self.stack.push(value)
-    }
+) -> @types.Value raise {
+  match self.stack.pop() {
+    StructRef(ref_idx) => self.store.struct_get(ref_idx, field_idx)
     Null => raise @runtime.RuntimeError::NullReference
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
 }
 
 ///|
-/// struct.get_s: Get a signed packed field value from a struct
-fn ExecContext::exec_struct_get_s(
+fn ExecContext::exec_struct_get_packed(
   self : ExecContext,
   type_idx : Int32,
   field_idx : Int32,
+  signed~ : Bool,
 ) -> Unit raise {
-  let ref_val = self.stack.pop()
-  match ref_val {
-    StructRef(ref_idx) => {
-      let value = self.store.struct_get(ref_idx, field_idx)
-      // Get the field's storage type to check if it's packed
-      let struct_type = self.instance.validated_struct_type_at(type_idx)
-      let storage_type = struct_type.fields[field_idx].storage_type
-      // Sign-extend packed types
-      let extended_value = match (value, storage_type) {
-        (I32(n), Packed(I8)) => {
-          // Sign-extend 8-bit value
-          let signed = if (n & 0x80) != 0 { n | 0xFFFFFF00 } else { n & 0xFF }
-          @types.Value::I32(signed)
-        }
-        (I32(n), Packed(I16)) => {
-          // Sign-extend 16-bit value
-          let signed = if (n & 0x8000) != 0 {
-            n | 0xFFFF0000
-          } else {
-            n & 0xFFFF
-          }
-          I32(signed)
-        }
-        _ => value
-      }
-      self.stack.push(extended_value)
-    }
-    Null => raise @runtime.RuntimeError::NullReference
-    _ => raise @runtime.RuntimeError::TypeMismatch
-  }
+  let value = self.read_struct_field(field_idx)
+  let type_ = self.instance.validated_struct_type_at(type_idx)
+  self.stack.push(
+    extend_packed(value, type_.fields[field_idx].storage_type, signed~),
+  )
 }
 
 ///|
-/// struct.get_u: Get an unsigned packed field value from a struct
-fn ExecContext::exec_struct_get_u(
-  self : ExecContext,
-  type_idx : Int32,
-  field_idx : Int32,
-) -> Unit raise {
-  let ref_val = self.stack.pop()
-  match ref_val {
-    StructRef(ref_idx) => {
-      let value = self.store.struct_get(ref_idx, field_idx)
-      // Get the field's storage type to check if it's packed
-      let struct_type = self.instance.validated_struct_type_at(type_idx)
-      let storage_type = struct_type.fields[field_idx].storage_type
-      // Zero-extend packed types (mask off high bits)
-      let extended_value = match (value, storage_type) {
-        (I32(n), Packed(I8)) => @types.Value::I32(n & 0xFF)
-        (I32(n), Packed(I16)) => I32(n & 0xFFFF)
-        _ => value
-      }
-      self.stack.push(extended_value)
-    }
-    Null => raise @runtime.RuntimeError::NullReference
-    _ => raise @runtime.RuntimeError::TypeMismatch
+fn extend_packed(
+  value : @types.Value,
+  storage : @types.StorageType,
+  signed~ : Bool,
+) -> @types.Value {
+  match (value, storage) {
+    (I32(n), Packed(I8)) =>
+      I32(if signed { sign_extend_i8(n) } else { n & 0xFF })
+    (I32(n), Packed(I16)) =>
+      I32(if signed { sign_extend_i16(n) } else { n & 0xFFFF })
+    _ => value
   }
 }
 
@@ -155,12 +112,7 @@ fn ExecContext::exec_struct_set(
       // Get the field's storage type to check if it's packed
       let struct_type = self.instance.validated_struct_type_at(type_idx)
       let storage_type = struct_type.fields[field_idx].storage_type
-      // Mask packed types to their bit width
-      let masked_value = match (value, storage_type) {
-        (I32(n), Packed(I8)) => @types.Value::I32(n & 0xFF)
-        (I32(n), Packed(I16)) => I32(n & 0xFFFF)
-        _ => value
-      }
+      let masked_value = extend_packed(value, storage_type, signed=false)
       self.store.struct_set(ref_idx, field_idx, masked_value)
     }
     Null => raise @runtime.RuntimeError::NullReference
@@ -269,119 +221,26 @@ fn ExecContext::exec_array_new_fixed(
 }
 
 ///|
-/// array.get: Get an element from an array
-fn ExecContext::exec_array_get(
-  self : ExecContext,
-  _type_idx : Int32,
-) -> Unit raise {
+fn ExecContext::read_array_element(self : ExecContext) -> @types.Value raise {
   let idx_val = self.stack.pop()
   let ref_val = self.stack.pop()
-  let idx = match idx_val {
-    I32(n) => n
-    _ => raise @runtime.RuntimeError::TypeMismatch
-  }
+  guard idx_val is I32(idx) else { raise @runtime.RuntimeError::TypeMismatch }
   match ref_val {
-    ArrayRef(ref_idx) => {
-      let value = self.store.array_get(ref_idx, idx)
-      self.stack.push(value)
-    }
+    ArrayRef(ref_idx) => self.store.array_get(ref_idx, idx)
     Null => raise @runtime.RuntimeError::NullReference
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
 }
 
 ///|
-/// array.get_s: Get a signed packed element from an array
-fn ExecContext::exec_array_get_s(
+fn ExecContext::exec_array_get_packed(
   self : ExecContext,
   type_idx : Int32,
+  signed~ : Bool,
 ) -> Unit raise {
-  let idx_val = self.stack.pop()
-  let ref_val = self.stack.pop()
-  let idx = match idx_val {
-    I32(n) => n
-    _ => raise @runtime.RuntimeError::TypeMismatch
-  }
-  match ref_val {
-    ArrayRef(ref_idx) => {
-      let value = self.store.array_get(ref_idx, idx)
-      // Sign-extend the value based on the packed type
-      let array_type = self.instance.validated_array_type_at(type_idx)
-      let extended = match array_type.element.storage_type {
-        Packed(I8) =>
-          // Sign-extend from 8 bits
-          match value {
-            I32(n) => {
-              let byte_val = n & 0xff
-              if (byte_val & 0x80) != 0 {
-                // Negative: extend with 1s
-                @types.Value::I32(byte_val | -256) // 0xFFFFFF00
-              } else {
-                I32(byte_val)
-              }
-            }
-            _ => value
-          }
-        Packed(I16) =>
-          // Sign-extend from 16 bits
-          match value {
-            I32(n) => {
-              let short_val = n & 0xffff
-              if (short_val & 0x8000) != 0 {
-                // Negative: extend with 1s
-                I32(short_val | -65536) // 0xFFFF0000
-              } else {
-                I32(short_val)
-              }
-            }
-            _ => value
-          }
-        _ => value // Non-packed types don't need extension
-      }
-      self.stack.push(extended)
-    }
-    Null => raise @runtime.RuntimeError::NullReference
-    _ => raise @runtime.RuntimeError::TypeMismatch
-  }
-}
-
-///|
-/// array.get_u: Get an unsigned packed element from an array
-fn ExecContext::exec_array_get_u(
-  self : ExecContext,
-  type_idx : Int32,
-) -> Unit raise {
-  let idx_val = self.stack.pop()
-  let ref_val = self.stack.pop()
-  let idx = match idx_val {
-    I32(n) => n
-    _ => raise @runtime.RuntimeError::TypeMismatch
-  }
-  match ref_val {
-    ArrayRef(ref_idx) => {
-      let value = self.store.array_get(ref_idx, idx)
-      // Zero-extend the value based on the packed type
-      let array_type = self.instance.validated_array_type_at(type_idx)
-      let extended = match array_type.element.storage_type {
-        Packed(I8) =>
-          // Zero-extend from 8 bits (just mask, no sign extension)
-          match value {
-            I32(n) => @types.Value::I32(n & 0xff)
-            _ => value
-          }
-        Packed(I16) =>
-          // Zero-extend from 16 bits (just mask, no sign extension)
-          match value {
-            I32(n) => I32(n & 0xffff)
-            _ => value
-          }
-        _ => value // Non-packed types don't need extension
-      }
-      self.stack.push(extended)
-    }
-    Null => raise @runtime.RuntimeError::NullReference
-    _ => raise @runtime.RuntimeError::TypeMismatch
-  }
+  let value = self.read_array_element()
+  let type_ = self.instance.validated_array_type_at(type_idx)
+  self.stack.push(extend_packed(value, type_.element.storage_type, signed~))
 }
 
 ///|

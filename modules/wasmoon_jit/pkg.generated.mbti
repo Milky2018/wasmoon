@@ -5,6 +5,7 @@ import {
   "Milky2018/aarch64_target",
   "Milky2018/milkir",
   "Milky2018/milkir/native",
+  "Milky2018/vcode",
   "Milky2018/vcode/code_object",
   "Milky2018/vcode/native_types",
   "Milky2018/wasm_core/types",
@@ -21,13 +22,12 @@ import {
   "Milky2018/wasmoon_runtime/runtime",
   "Milky2018/x64_target",
   "moonbitlang/core/debug",
-  "moonbitlang/core/hashset",
 }
 
 // Values
 pub const EXCEPTION_REF_TAG : Int64 = 0x1000000000000000
 
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-48"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-51"
 
 pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 
@@ -55,15 +55,13 @@ pub fn build_host_artifact_manifest(module_identity~ : @artifact.ModuleIdentity,
 
 pub fn build_hostcall_import_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], Int32, NativeTarget) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
-pub fn can_use_reusable_entry_trampoline(ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> Bool
-
 pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
 pub fn collect_gc_root_args(Array[Int64], ArrayView[@types.ValueType]) -> Array[Int64]
 
-pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int32, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32], context_shape? : @layout.ContextShape) -> @artifact.FunctionCode raise JitPipelineError
+pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int32, signature~ : @native_types.Signature, context_shape? : @layout.ContextShape) -> @artifact.FunctionCode raise JitPipelineError
 
-pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32], context_shape? : @layout.ContextShape, function_index? : Int32) -> JitPipelineDiagnostics raise JitPipelineError
+pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, context_shape? : @layout.ContextShape, function_index? : Int32) -> JitPipelineDiagnostics raise JitPipelineError
 
 pub fn context_shape(@types.Module) -> @layout.ContextShape
 
@@ -126,8 +124,6 @@ pub fn get_import_trampoline(String, String) -> Int64?
 pub fn get_last_trap_details() -> TrapDetails
 
 pub fn get_last_trap_pcs() -> ReadOnlyArray[Int64]
-
-pub fn get_temperature(Int32, HotThreshold) -> FunctionTemperature
 
 pub fn host_cpu_features() -> Array[@artifact.CpuFeature]
 
@@ -201,17 +197,15 @@ pub fn native_value_slot_read(Int64, Int32) -> Int64
 
 pub fn native_value_slot_write(Int64, Int32, Int64) -> Unit
 
-pub fn plan_entry_trampoline_for_target(ArrayView[@types.ValueType], ArrayView[@types.ValueType], NativeTarget) -> JitIntegrationPlan raise JitPipelineError
-
-pub fn plan_hostcall_import_trampoline_layout(ArrayView[@types.ValueType], ArrayView[@types.ValueType], Int32, Int32) -> HostcallImportTrampolineLayout
+pub fn plan_hostcall_import_trampoline_layout(ArrayView[@types.ValueType], ArrayView[@types.ValueType]) -> HostcallImportTrampolineLayout
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_wasm_body_aarch64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
+pub fn plan_wasm_body_aarch64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
 pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
+pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
 pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) -> ImportFunctionResolution
 
@@ -279,8 +273,8 @@ pub impl Show for HostcallImportTrampolineError
 #derive(@debug.Debug)
 pub suberror JitPipelineError {
   NativeLoweringFailed(cause~ : @native.NativeLowerError)
-  AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
-  X64AbiInvalid(cause~ : @x64_target.InternalAbiError)
+  AArch64AbiInvalid(cause~ : @vcode.InternalAbiError)
+  X64AbiInvalid(cause~ : @vcode.InternalAbiError)
   AArch64LoweringFailed(cause~ : @aarch64_target.AArch64LowerError)
   X64LoweringFailed(cause~ : @x64_target.X64LowerError)
   AArch64CompilationFailed(cause~ : @aarch64_target.AArch64CompileError)
@@ -288,7 +282,6 @@ pub suberror JitPipelineError {
   AArch64LinkPreparationFailed(cause~ : @aarch64_target.AArch64LinkError)
   X64LinkPreparationFailed(cause~ : @x64_target.X64LinkError)
   InvalidJitRelocation(target~ : NativeTarget, index~ : Int32, message~ : String)
-  UnsupportedEntrySignature(message~ : String)
   UnsupportedHostArchitecture(tag~ : Int32)
   UnsupportedHostOsAbi(tag~ : Int32)
   InvalidFunctionIndex(index~ : Int32)
@@ -337,18 +330,6 @@ pub struct BacktraceFrame {
   func_idx : Int32
 }
 
-pub(all) struct CallCounter {
-  counts : Map[Int32, Int32]
-  mut total_calls : Int32
-}
-pub fn CallCounter::CallCounter() -> Self
-pub fn CallCounter::clear(Self) -> Unit
-pub fn CallCounter::get_count(Self, Int32) -> Int32
-pub fn CallCounter::increment(Self, Int32) -> Int32
-pub fn CallCounter::reset(Self, Int32) -> Unit
-pub fn CallCounter::total(Self) -> Int32
-pub fn CallCounter::unique_functions(Self) -> Int32
-
 pub type DWARFBuilder
 pub fn DWARFBuilder::DWARFBuilder() -> Self
 pub fn DWARFBuilder::add_function(Self, String, Int64, Int32, Int32) -> Unit
@@ -364,15 +345,6 @@ pub struct FunctionInfo {
   func_idx : Int32
   offset : Int64
 }
-
-pub(all) enum FunctionTemperature {
-  Cold
-  Warm
-  Hot
-}
-pub fn FunctionTemperature::output(Self, &Logger) -> Unit
-pub fn FunctionTemperature::to_string(Self) -> String
-pub impl Show for FunctionTemperature
 
 #derive(@debug.Debug)
 pub struct GcSafepoint {
@@ -391,17 +363,7 @@ pub(all) struct HostcallImportTrampolineLayout {
   arg_slots : Int32
   result_slots : Int32
   values_vec_bytes : Int32
-  int_overflow_count : Int32
-  float_overflow_types : Array[@types.ValueType]
 }
-
-pub(all) struct HotThreshold {
-  warm_threshold : Int32
-  hot_threshold : Int32
-}
-pub fn HotThreshold::aggressive() -> Self
-pub fn HotThreshold::conservative() -> Self
-pub fn HotThreshold::default() -> Self
 
 #derive(Eq, @debug.Debug)
 pub(all) enum ImportFunctionResolution {
@@ -480,8 +442,8 @@ pub fn NativeCallableBatch::release(Self) -> Unit
 pub struct NativeCompiler {
   // private fields
 }
-pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int32, signature~ : @native_types.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> @artifact.FunctionCode raise JitPipelineError
-pub fn NativeCompiler::diagnose_wasm_body(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int32, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int32]) -> JitPipelineDiagnostics raise JitPipelineError
+pub fn NativeCompiler::compile_wasm_body_artifact_function(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int32, signature~ : @native_types.Signature) -> @artifact.FunctionCode raise JitPipelineError
+pub fn NativeCompiler::diagnose_wasm_body(Self, @milkir.Function, @wasm_milkir.WasmValidationContext, function_index~ : Int32) -> JitPipelineDiagnostics raise JitPipelineError
 pub fn NativeCompiler::for_manifest(@artifact.CompatibilityManifest) -> Self
 pub fn NativeCompiler::new(NativeTarget, context_shape? : @layout.ContextShape) -> Self
 
@@ -571,7 +533,6 @@ pub fn NativeJITContext::set_exception_arena(Self, @ffi.NativeExceptionArena) ->
 pub fn NativeJITContext::set_func(Self, Int32, Int64) -> Unit
 pub fn NativeJITContext::set_gc_heap(Self, @bridge.CHeap) -> Unit
 pub fn NativeJITContext::set_gc_heap_ptr(Self, @ffi.GCHeapHandle) -> Unit
-pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
 pub fn NativeJITContext::set_hostcall_callback(Self, () -> NativeHostcallOutcome) -> Unit
 pub fn NativeJITContext::set_indirect(Self, Int32, Int32, Int32) -> Unit
 pub fn NativeJITContext::set_memory(Self, @ffi.MemoryDescriptor) -> Unit
@@ -637,25 +598,6 @@ pub impl @debug.Debug for NativeUncaughtException
 pub struct PreparedGCEnvironment {
   // private fields
 }
-
-pub(all) struct Profiler {
-  counter : CallCounter
-  threshold : HotThreshold
-  hot_functions : @hashset.HashSet[Int32]
-  pending_compilation : @hashset.HashSet[Int32]
-  compiled_functions : @hashset.HashSet[Int32]
-}
-pub fn Profiler::Profiler(HotThreshold) -> Self
-pub fn Profiler::get_function_temperature(Self, Int32) -> FunctionTemperature
-pub fn Profiler::get_pending(Self) -> Array[Int32]
-pub fn Profiler::is_compiled(Self, Int32) -> Bool
-pub fn Profiler::mark_compiled(Self, Int32) -> Unit
-pub fn Profiler::output(Self, &Logger) -> Unit
-pub fn Profiler::record_call(Self, Int32) -> (Int32, Bool)
-pub fn Profiler::should_use_jit(Self, Int32) -> Bool
-pub fn Profiler::stats(Self) -> (Int32, Int32, Int32, Int32)
-pub fn Profiler::to_string(Self) -> String
-pub impl Show for Profiler
 
 #derive(Eq, @debug.Debug)
 pub(all) struct RuntimeSymbol {

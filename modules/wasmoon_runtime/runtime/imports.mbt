@@ -115,6 +115,25 @@ pub fn Imports::add_tag(
 }
 
 ///|
+/// Add the exports of a module instance from the same store.
+pub fn Imports::add_instance(
+  self : Imports,
+  mod_name : String,
+  instance : ModuleInstance,
+) -> Unit {
+  for exp in instance.exports {
+    let value : ExternVal = match exp.desc {
+      Func(index) => Func(instance.func_addrs[index])
+      Table(index) => Table(instance.table_addrs[index])
+      Memory(index) => Memory(instance.mem_addrs[index])
+      Global(index) => Global(instance.global_addrs[index])
+      Tag(index) => Tag(instance.tag_addrs[index])
+    }
+    self.entries.push((mod_name, exp.name, value))
+  }
+}
+
+///|
 pub fn Imports::resolve(
   self : Imports,
   mod_name : String,

@@ -4,190 +4,11 @@
 // Reference: WebAssembly Core Specification
 // https://webassembly.github.io/spec/core/binary/
 
-// ============ Binary Writer ============
-
-///|
-/// Binary writer for encoding WASM
-priv struct BinaryWriter {
-  buf : Array[Int32]
-}
-
-///|
-fn BinaryWriter::BinaryWriter() -> BinaryWriter {
-  { buf: [], }
-}
-
-///|
-fn BinaryWriter::write_byte(self : BinaryWriter, b : Int32) -> Unit {
-  self.buf.push(b & 0xFF)
-}
-
-///|
-fn BinaryWriter::write_array(self : BinaryWriter, bytes : Array[Int32]) -> Unit {
-  for b in bytes {
-    self.buf.push(b & 0xFF)
-  }
-}
-
-///|
-/// Write unsigned LEB128
-fn BinaryWriter::write_u32(self : BinaryWriter, val : Int32) -> Unit {
-  let mut v = val & 0x7FFFFFFF // Treat as unsigned
-  if val < 0 {
-    // For negative values treated as unsigned, we need special handling
-    self.write_u64(val.to_int64() & 0xFFFFFFFFL)
-    return
-  }
-  while true {
-    let byte = v & 0x7F
-    v = v >> 7
-    if v == 0 {
-      self.buf.push(byte)
-      break
-    } else {
-      self.buf.push(byte | 0x80)
-    }
-  }
-}
-
-///|
-/// Write unsigned LEB128 for 64-bit values
-fn BinaryWriter::write_u64(self : BinaryWriter, val : Int64) -> Unit {
-  let mut v = val
-  while true {
-    let byte = v.to_int() & 0x7F
-    v = (v.reinterpret_as_uint64() >> 7).reinterpret_as_int64()
-    if v == 0L {
-      self.buf.push(byte)
-      break
-    } else {
-      self.buf.push(byte | 0x80)
-    }
-  }
-}
-
-///|
-/// Write signed LEB128 for 32-bit values
-fn BinaryWriter::write_s32(self : BinaryWriter, val : Int32) -> Unit {
-  let mut v = val
-  while true {
-    let byte = v & 0x7F
-    v = v >> 7
-    // Check if we can stop
-    let sign_bit = (byte & 0x40) != 0
-    if (v == 0 && !sign_bit) || (v == -1 && sign_bit) {
-      self.buf.push(byte)
-      break
-    } else {
-      self.buf.push(byte | 0x80)
-    }
-  }
-}
-
-///|
-/// Write signed LEB128 for 64-bit values
-fn BinaryWriter::write_s64(self : BinaryWriter, val : Int64) -> Unit {
-  let mut v = val
-  while true {
-    let byte = v.to_int() & 0x7F
-    v = v >> 7
-    let sign_bit = (byte & 0x40) != 0
-    if (v == 0L && !sign_bit) || (v == -1L && sign_bit) {
-      self.buf.push(byte)
-      break
-    } else {
-      self.buf.push(byte | 0x80)
-    }
-  }
-}
-
-///|
-/// Convert a MoonBit string to its UTF-8 byte representation.
-fn string_to_bytes(s : String) -> Array[Int32] {
-  let result : Array[Int32] = []
-  let len = s.length()
-  let mut i = 0
-  while i < len {
-    let c = s.code_unit_at(i).to_int()
-    if c < 0x80 {
-      result.push(c)
-      i += 1
-    } else if c < 0x800 {
-      result.push(0xC0 | (c >> 6))
-      result.push(0x80 | (c & 0x3F))
-      i += 1
-    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
-      let c2 = s.code_unit_at(i + 1).to_int()
-      if c2 >= 0xDC00 && c2 <= 0xDFFF {
-        let codepoint = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00)
-        result.push(0xF0 | (codepoint >> 18))
-        result.push(0x80 | ((codepoint >> 12) & 0x3F))
-        result.push(0x80 | ((codepoint >> 6) & 0x3F))
-        result.push(0x80 | (codepoint & 0x3F))
-        i += 2
-      } else {
-        result.push(0xEF)
-        result.push(0xBF)
-        result.push(0xBD)
-        i += 1
-      }
-    } else if c >= 0xDC00 && c <= 0xDFFF {
-      result.push(0xEF)
-      result.push(0xBF)
-      result.push(0xBD)
-      i += 1
-    } else {
-      result.push(0xE0 | (c >> 12))
-      result.push(0x80 | ((c >> 6) & 0x3F))
-      result.push(0x80 | (c & 0x3F))
-      i += 1
-    }
-  }
-  result
-}
-
-///|
-/// Write a UTF-8 string with length prefix
-fn BinaryWriter::write_name(self : BinaryWriter, name : String) -> Unit {
-  let bytes = string_to_bytes(name)
-  self.write_u32(bytes.length())
-  self.write_array(bytes)
-}
-
-///|
-/// Write f32 in little-endian IEEE 754
-fn BinaryWriter::write_f32(self : BinaryWriter, val : Float) -> Unit {
-  let bits = val.reinterpret_as_int()
-  self.buf.push(bits & 0xFF)
-  self.buf.push((bits >> 8) & 0xFF)
-  self.buf.push((bits >> 16) & 0xFF)
-  self.buf.push((bits >> 24) & 0xFF)
-}
-
-///|
-/// Write f64 in little-endian IEEE 754
-fn BinaryWriter::write_f64(self : BinaryWriter, val : Double) -> Unit {
-  let bits = val.reinterpret_as_int64()
-  self.buf.push(bits.to_int() & 0xFF)
-  self.buf.push((bits >> 8).to_int() & 0xFF)
-  self.buf.push((bits >> 16).to_int() & 0xFF)
-  self.buf.push((bits >> 24).to_int() & 0xFF)
-  self.buf.push((bits >> 32).to_int() & 0xFF)
-  self.buf.push((bits >> 40).to_int() & 0xFF)
-  self.buf.push((bits >> 48).to_int() & 0xFF)
-  self.buf.push((bits >> 56).to_int() & 0xFF)
-}
-
-///|
-fn BinaryWriter::to_bytes(self : BinaryWriter) -> Array[Int32] {
-  self.buf
-}
-
 // ============ Type Encoding ============
 
 ///|
 /// Encode a value type
-fn encode_valtype(w : BinaryWriter, vt : @types.ValueType) -> Unit {
+fn encode_valtype(w : @binary.Writer, vt : @types.ValueType) -> Unit {
   match vt {
     I32 => w.write_byte(0x7F)
     I64 => w.write_byte(0x7E)
@@ -303,7 +124,7 @@ fn encode_valtype(w : BinaryWriter, vt : @types.ValueType) -> Unit {
 
 ///|
 /// Encode a storage type (for GC struct/array fields)
-fn encode_storage_type(w : BinaryWriter, st : @types.StorageType) -> Unit {
+fn encode_storage_type(w : @binary.Writer, st : @types.StorageType) -> Unit {
   match st {
     Val(vt) => encode_valtype(w, vt)
     Packed(pt) =>
@@ -316,14 +137,14 @@ fn encode_storage_type(w : BinaryWriter, st : @types.StorageType) -> Unit {
 
 ///|
 /// Encode a field type
-fn encode_field_type(w : BinaryWriter, ft : @types.FieldType) -> Unit {
+fn encode_field_type(w : @binary.Writer, ft : @types.FieldType) -> Unit {
   encode_storage_type(w, ft.storage_type)
   w.write_byte(if ft.mutable { 1 } else { 0 })
 }
 
 ///|
 /// Encode a function type
-fn encode_func_type(w : BinaryWriter, ft : @types.FuncType) -> Unit {
+fn encode_func_type(w : @binary.Writer, ft : @types.FuncType) -> Unit {
   w.write_byte(0x60) // func type marker
   // Params
   w.write_u32(ft.params.length())
@@ -339,7 +160,7 @@ fn encode_func_type(w : BinaryWriter, ft : @types.FuncType) -> Unit {
 
 ///|
 /// Encode a struct type
-fn encode_struct_type(w : BinaryWriter, st : @types.StructType) -> Unit {
+fn encode_struct_type(w : @binary.Writer, st : @types.StructType) -> Unit {
   w.write_byte(0x5F) // struct type marker
   w.write_u32(st.fields.length())
   for field in st.fields {
@@ -349,14 +170,14 @@ fn encode_struct_type(w : BinaryWriter, st : @types.StructType) -> Unit {
 
 ///|
 /// Encode an array type
-fn encode_array_type(w : BinaryWriter, at : @types.ArrayType) -> Unit {
+fn encode_array_type(w : @binary.Writer, at : @types.ArrayType) -> Unit {
   w.write_byte(0x5E) // array type marker
   encode_field_type(w, at.element)
 }
 
 ///|
 /// Encode a composite type
-fn encode_composite_type(w : BinaryWriter, ct : @types.CompositeType) -> Unit {
+fn encode_composite_type(w : @binary.Writer, ct : @types.CompositeType) -> Unit {
   match ct {
     Func(ft) => encode_func_type(w, ft)
     Struct(st) => encode_struct_type(w, st)
@@ -370,7 +191,7 @@ fn encode_composite_type(w : BinaryWriter, ct : @types.CompositeType) -> Unit {
 
 ///|
 /// Encode a subtype
-fn encode_subtype(w : BinaryWriter, st : @types.SubType) -> Unit {
+fn encode_subtype(w : @binary.Writer, st : @types.SubType) -> Unit {
   if st.supertypes.is_empty() && st.final_ {
     // Simple case: no supertypes, final
     encode_composite_type(w, st.composite)
@@ -397,7 +218,7 @@ fn encode_subtype(w : BinaryWriter, st : @types.SubType) -> Unit {
 ///|
 /// Encode table limits (supports table64 via flag 0x04)
 fn encode_table_limits(
-  w : BinaryWriter,
+  w : @binary.Writer,
   limits : @types.Limits,
   is_table64 : Bool,
 ) -> Unit {
@@ -420,14 +241,14 @@ fn encode_table_limits(
 
 ///|
 /// Encode a table type
-fn encode_table_type(w : BinaryWriter, tt : @types.TableType) -> Unit {
+fn encode_table_type(w : @binary.Writer, tt : @types.TableType) -> Unit {
   encode_valtype(w, tt.elem_type)
   encode_table_limits(w, tt.limits, tt.is_table64)
 }
 
 ///|
 /// Encode memory limits (supports memory64 and custom page sizes)
-fn encode_memory_limits(w : BinaryWriter, mt : @types.MemoryType) -> Unit {
+fn encode_memory_limits(w : @binary.Writer, mt : @types.MemoryType) -> Unit {
   let has_max = mt.limits.max is Some(_)
   let has_custom_page_size = mt.page_size_log2 != 16
   let mut flags = 0x00
@@ -456,13 +277,13 @@ fn encode_memory_limits(w : BinaryWriter, mt : @types.MemoryType) -> Unit {
 
 ///|
 /// Encode a memory type
-fn encode_memory_type(w : BinaryWriter, mt : @types.MemoryType) -> Unit {
+fn encode_memory_type(w : @binary.Writer, mt : @types.MemoryType) -> Unit {
   encode_memory_limits(w, mt)
 }
 
 ///|
 /// Encode a global type
-fn encode_global_type(w : BinaryWriter, gt : @types.GlobalType) -> Unit {
+fn encode_global_type(w : @binary.Writer, gt : @types.GlobalType) -> Unit {
   encode_valtype(w, gt.value_type)
   w.write_byte(if gt.mutable { 1 } else { 0 })
 }
@@ -471,7 +292,7 @@ fn encode_global_type(w : BinaryWriter, gt : @types.GlobalType) -> Unit {
 
 ///|
 /// Encode a block type
-fn encode_block_type(w : BinaryWriter, bt : @types.BlockType) -> Unit {
+fn encode_block_type(w : @binary.Writer, bt : @types.BlockType) -> Unit {
   match bt {
     Empty => w.write_byte(0x40) // empty block type
     Value(vt) => encode_valtype(w, vt)
@@ -481,21 +302,26 @@ fn encode_block_type(w : BinaryWriter, bt : @types.BlockType) -> Unit {
 }
 
 ///|
-/// Encode a memory argument (align, offset)
+/// Encode alignment, an optional memory index, and the offset.
 fn encode_memarg(
-  w : BinaryWriter,
-  _memidx : Int32,
+  w : @binary.Writer,
+  memidx : Int32,
   align : Int32,
   offset : Int64,
 ) -> Unit {
-  w.write_u32(align)
+  if memidx == 0 {
+    w.write_u32(align)
+  } else {
+    w.write_u32(align | 0x40)
+    w.write_u32(memidx)
+  }
   w.write_u64(offset)
 }
 
 ///|
 /// Encode instructions
 fn encode_instructions(
-  w : BinaryWriter,
+  w : @binary.Writer,
   instrs : ArrayView[@types.Instruction],
 ) -> Unit {
   for instr in instrs {
@@ -505,7 +331,7 @@ fn encode_instructions(
 
 ///|
 /// Encode a single instruction
-fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
+fn encode_instruction(w : @binary.Writer, instr : @types.Instruction) -> Unit {
   match instr {
     // Control instructions
     Unreachable => w.write_byte(0x00)
@@ -1228,35 +1054,14 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
       w.write_byte(0xFB)
       w.write_u32(27)
     }
-
-    // SIMD - V128 constant and load/store
-    V128Const(bytes) => {
-      w.write_byte(0xFD)
-      w.write_u32(12)
-      for i in 0..<16 {
-        w.write_byte(bytes[i].to_int())
-      }
-    }
-    V128Load(memidx, align, offset) => {
-      w.write_byte(0xFD)
-      w.write_u32(0)
-      encode_memarg(w, memidx, align, offset)
-    }
-    V128Store(memidx, align, offset) => {
-      w.write_byte(0xFD)
-      w.write_u32(11)
-      encode_memarg(w, memidx, align, offset)
-    }
-
-    // For unhandled SIMD instructions, use unreachable as placeholder
-    _ => w.write_byte(0x00)
+    _ => encode_simd_instruction(w, instr)
   }
 }
 
 ///|
 /// Encode a catch handler
 fn encode_catch_handler(
-  w : BinaryWriter,
+  w : @binary.Writer,
   handler : @types.CatchHandler,
 ) -> Unit {
   match handler {
@@ -1286,22 +1091,22 @@ fn encode_catch_handler(
 ///|
 /// Write a section with its content
 fn write_section(
-  w : BinaryWriter,
+  w : @binary.Writer,
   section_id : Int32,
-  content : Array[Int32],
+  payload : @binary.Writer,
 ) -> Unit {
   w.write_byte(section_id)
-  w.write_u32(content.length())
-  w.write_array(content)
+  w.write_u32(payload.length())
+  w.write_buffer(payload)
 }
 
 ///|
 /// Encode the type section
-fn encode_type_section(mod : @types.Module) -> Array[Int32] {
+fn encode_type_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.types.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   let groups : Array[(Int32, Int32)] = []
   let mut start = 0
   while start < mod.types.length() {
@@ -1326,16 +1131,16 @@ fn encode_type_section(mod : @types.Module) -> Array[Int32] {
       encode_subtype(w, mod.types[index])
     }
   }
-  w.to_bytes()
+  write_section(out, 1, w)
 }
 
 ///|
 /// Encode the import section
-fn encode_import_section(mod : @types.Module) -> Array[Int32] {
+fn encode_import_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.imports.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.imports.length())
   for imp in mod.imports {
     w.write_name(imp.mod_name)
@@ -1364,30 +1169,30 @@ fn encode_import_section(mod : @types.Module) -> Array[Int32] {
       }
     }
   }
-  w.to_bytes()
+  write_section(out, 2, w)
 }
 
 ///|
 /// Encode the function section
-fn encode_function_section(mod : @types.Module) -> Array[Int32] {
+fn encode_function_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.funcs.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.funcs.length())
   for type_idx in mod.funcs {
     w.write_u32(type_idx)
   }
-  w.to_bytes()
+  write_section(out, 3, w)
 }
 
 ///|
 /// Encode the table section
-fn encode_table_section(mod : @types.Module) -> Array[Int32] {
+fn encode_table_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.tables.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.tables.length())
   for table in mod.tables {
     match table.init {
@@ -1402,46 +1207,46 @@ fn encode_table_section(mod : @types.Module) -> Array[Int32] {
       None => encode_table_type(w, table.type_)
     }
   }
-  w.to_bytes()
+  write_section(out, 4, w)
 }
 
 ///|
 /// Encode the memory section
-fn encode_memory_section(mod : @types.Module) -> Array[Int32] {
+fn encode_memory_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.memories.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.memories.length())
   for mem in mod.memories {
     encode_memory_type(w, mem)
   }
-  w.to_bytes()
+  write_section(out, 5, w)
 }
 
 ///|
 /// Encode the global section
-fn encode_global_section(mod : @types.Module) -> Array[Int32] {
+fn encode_global_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.globals.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.globals.length())
   for global in mod.globals {
     encode_global_type(w, global.type_)
     encode_instructions(w, global.init)
     w.write_byte(0x0B) // end
   }
-  w.to_bytes()
+  write_section(out, 6, w)
 }
 
 ///|
 /// Encode the export section
-fn encode_export_section(mod : @types.Module) -> Array[Int32] {
+fn encode_export_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.exports.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.exports.length())
   for exp in mod.exports {
     w.write_name(exp.name)
@@ -1468,94 +1273,94 @@ fn encode_export_section(mod : @types.Module) -> Array[Int32] {
       }
     }
   }
-  w.to_bytes()
+  write_section(out, 7, w)
 }
 
 ///|
 /// Encode the start section
-fn encode_start_section(mod : @types.Module) -> Array[Int32] {
+fn encode_start_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   match mod.start {
     Some(func_idx) => {
-      let w = BinaryWriter::BinaryWriter()
+      let w = @binary.Writer()
       w.write_u32(func_idx)
-      w.to_bytes()
+      write_section(out, 8, w)
     }
-    None => []
+    None => ()
   }
 }
 
 ///|
 /// Encode the element section
-fn encode_element_section(mod : @types.Module) -> Array[Int32] {
+fn encode_element_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.elems.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.elems.length())
   for elem in mod.elems {
     match elem.mode {
-      Active(table_idx, offset_expr) =>
-        if table_idx == 0 && elem.type_ is FuncRef {
-          // Simplified encoding for table 0 with funcref
+      Active(table_idx, offset_expr) => {
+        let implicit_funcref = table_idx == 0 && elem.type_ is FuncRef
+        if implicit_funcref &&
+          elem.init.iter().all(expr => expr is [RefFunc(_)]) {
           w.write_byte(0x00)
           encode_instructions(w, offset_expr)
-          w.write_byte(0x0B) // end
-          // Write function indices directly
+          w.write_byte(0x0B)
           w.write_u32(elem.init.length())
-          for init_expr in elem.init {
-            // Extract function index from ref.func instruction
-            match init_expr {
-              [RefFunc(idx)] => w.write_u32(idx)
-              _ => w.write_u32(0) // fallback
+          for expr in elem.init {
+            guard expr is [RefFunc(index)] else {
+              abort("compact element encoding requires a function index")
             }
+            w.write_u32(index)
           }
         } else {
-          // Full encoding
-          w.write_byte(0x06) // active with table index, elem type, expr init
-          w.write_u32(table_idx)
-          encode_instructions(w, offset_expr)
-          w.write_byte(0x0B) // end
-          encode_valtype(w, elem.type_)
-          w.write_u32(elem.init.length())
-          for init_expr in elem.init {
-            encode_instructions(w, init_expr)
-            w.write_byte(0x0B) // end
+          if implicit_funcref {
+            w.write_byte(0x04)
+          } else {
+            w.write_byte(0x06)
+            w.write_u32(table_idx)
           }
-        }
-      Passive => {
-        w.write_byte(0x05) // passive with elem type and expr init
-        encode_valtype(w, elem.type_)
-        w.write_u32(elem.init.length())
-        for init_expr in elem.init {
-          encode_instructions(w, init_expr)
-          w.write_byte(0x0B) // end
+          encode_instructions(w, offset_expr)
+          w.write_byte(0x0B)
+          if !implicit_funcref {
+            encode_valtype(w, elem.type_)
+          }
+          encode_element_expressions(w, elem.init)
         }
       }
-      Declarative => {
-        w.write_byte(0x07) // declarative with elem type and expr init
+      Passive | Declarative => {
+        w.write_byte(if elem.mode is Passive { 0x05 } else { 0x07 })
         encode_valtype(w, elem.type_)
-        w.write_u32(elem.init.length())
-        for init_expr in elem.init {
-          encode_instructions(w, init_expr)
-          w.write_byte(0x0B) // end
-        }
+        encode_element_expressions(w, elem.init)
       }
     }
   }
-  w.to_bytes()
+  write_section(out, 9, w)
+}
+
+///|
+fn encode_element_expressions(
+  w : @binary.Writer,
+  expressions : ReadOnlyArray[ReadOnlyArray[@types.Instruction]],
+) -> Unit {
+  w.write_u32(expressions.length())
+  for expr in expressions {
+    encode_instructions(w, expr)
+    w.write_byte(0x0B)
+  }
 }
 
 ///|
 /// Encode the code section
-fn encode_code_section(mod : @types.Module) -> Array[Int32] {
+fn encode_code_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.codes.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.codes.length())
   for code in mod.codes {
     // Encode function body
-    let body_writer = BinaryWriter::BinaryWriter()
+    let body_writer = @binary.Writer()
 
     // Compress locals: group consecutive same-type locals
     let compressed_locals : Array[(Int32, @types.ValueType)] = []
@@ -1583,20 +1388,19 @@ fn encode_code_section(mod : @types.Module) -> Array[Int32] {
     body_writer.write_byte(0x0B) // end
 
     // Write function body with size prefix
-    let body_bytes = body_writer.to_bytes()
-    w.write_u32(body_bytes.length())
-    w.write_array(body_bytes)
+    w.write_u32(body_writer.length())
+    w.write_buffer(body_writer)
   }
-  w.to_bytes()
+  write_section(out, 10, w)
 }
 
 ///|
 /// Encode the data section
-fn encode_data_section(mod : @types.Module) -> Array[Int32] {
+fn encode_data_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.datas.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.datas.length())
   for data in mod.datas {
     if data.memory_idx < 0 {
@@ -1616,145 +1420,70 @@ fn encode_data_section(mod : @types.Module) -> Array[Int32] {
     }
     // Write data bytes
     w.write_u32(data.init.length())
-    for i in 0..<data.init.length() {
-      w.write_byte(data.init[i].to_int())
-    }
+    w.write_bytes(data.init)
   }
-  w.to_bytes()
+  write_section(out, 11, w)
 }
 
 ///|
 /// Encode the data count section (required for bulk memory)
-fn encode_datacount_section(mod : @types.Module) -> Array[Int32] {
+fn encode_datacount_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.datas.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.datas.length())
-  w.to_bytes()
+  write_section(out, 12, w)
 }
 
 ///|
 /// Encode the tag section
-fn encode_tag_section(mod : @types.Module) -> Array[Int32] {
+fn encode_tag_section(out : @binary.Writer, mod : @types.Module) -> Unit {
   if mod.tags.is_empty() {
-    return []
+    return
   }
-  let w = BinaryWriter::BinaryWriter()
+  let w = @binary.Writer()
   w.write_u32(mod.tags.length())
   for tag in mod.tags {
     w.write_byte(0x00) // exception kind
     w.write_u32(tag.type_idx)
   }
-  w.to_bytes()
+  write_section(out, 13, w)
 }
 
 // ============ Main Encoder ============
 
 ///|
-/// Encode a Module to WebAssembly binary format
-pub fn encode(mod : @types.Module) -> Array[Int32] {
+/// Encode a module as WebAssembly bytes.
+pub fn encode_bytes(mod : @types.Module) -> Bytes {
   let mod = resolve_block_types(mod)
-  let w = BinaryWriter::BinaryWriter()
-
-  // Write magic number: \0asm
-  w.write_byte(0x00)
-  w.write_byte(0x61)
-  w.write_byte(0x73)
-  w.write_byte(0x6D)
-
-  // Write version 1
-  w.write_byte(0x01)
-  w.write_byte(0x00)
-  w.write_byte(0x00)
-  w.write_byte(0x00)
-
-  // Type section (id=1)
-  let type_section = encode_type_section(mod)
-  if !type_section.is_empty() {
-    write_section(w, 1, type_section)
-  }
-
-  // Import section (id=2)
-  let import_section = encode_import_section(mod)
-  if !import_section.is_empty() {
-    write_section(w, 2, import_section)
-  }
-
-  // Function section (id=3)
-  let function_section = encode_function_section(mod)
-  if !function_section.is_empty() {
-    write_section(w, 3, function_section)
-  }
-
-  // Table section (id=4)
-  let table_section = encode_table_section(mod)
-  if !table_section.is_empty() {
-    write_section(w, 4, table_section)
-  }
-
-  // Memory section (id=5)
-  let memory_section = encode_memory_section(mod)
-  if !memory_section.is_empty() {
-    write_section(w, 5, memory_section)
-  }
-
-  // Tag section (id=13)
-  let tag_section = encode_tag_section(mod)
-  if !tag_section.is_empty() {
-    write_section(w, 13, tag_section)
-  }
-
-  // Global section (id=6)
-  let global_section = encode_global_section(mod)
-  if !global_section.is_empty() {
-    write_section(w, 6, global_section)
-  }
-
-  // Export section (id=7)
-  let export_section = encode_export_section(mod)
-  if !export_section.is_empty() {
-    write_section(w, 7, export_section)
-  }
-
-  // Start section (id=8)
-  let start_section = encode_start_section(mod)
-  if !start_section.is_empty() {
-    write_section(w, 8, start_section)
-  }
-
-  // Element section (id=9)
-  let element_section = encode_element_section(mod)
-  if !element_section.is_empty() {
-    write_section(w, 9, element_section)
-  }
-
-  // Data count section (id=12)
-  let datacount_section = encode_datacount_section(mod)
-  if !datacount_section.is_empty() {
-    write_section(w, 12, datacount_section)
-  }
-
-  // Code section (id=10)
-  let code_section = encode_code_section(mod)
-  if !code_section.is_empty() {
-    write_section(w, 10, code_section)
-  }
-
-  // Data section (id=11)
-  let data_section = encode_data_section(mod)
-  if !data_section.is_empty() {
-    write_section(w, 11, data_section)
-  }
-  let names = encode_function_names(mod)
-  if !names.is_empty() {
-    write_section(w, 0, names)
-  }
+  let w = @binary.Writer()
+  w.write_bytes(b"\x00asm\x01\x00\x00\x00")
+  encode_type_section(w, mod)
+  encode_import_section(w, mod)
+  encode_function_section(w, mod)
+  encode_table_section(w, mod)
+  encode_memory_section(w, mod)
+  encode_tag_section(w, mod)
+  encode_global_section(w, mod)
+  encode_export_section(w, mod)
+  encode_start_section(w, mod)
+  encode_element_section(w, mod)
+  encode_datacount_section(w, mod)
+  encode_code_section(w, mod)
+  encode_data_section(w, mod)
+  encode_function_names(w, mod)
   w.to_bytes()
 }
 
 ///|
-fn encode_function_names(mod : @types.Module) -> Array[Int32] {
+/// Encode a module as an array of unsigned byte values.
+pub fn encode(mod : @types.Module) -> Array[Int32] {
+  encode_bytes(mod).iter().map(Byte::to_int).collect()
+}
+
+///|
+fn encode_function_names(out : @binary.Writer, mod : @types.Module) -> Unit {
   let mut count = mod.funcs.length()
   for import_ in mod.imports {
     if import_.desc is Func(_) {
@@ -1768,26 +1497,26 @@ fn encode_function_names(mod : @types.Module) -> Array[Int32] {
     }
   }
   if indices.is_empty() {
-    return []
+    return
   }
   indices.sort()
-  let names = BinaryWriter()
+  let names = @binary.Writer()
   names.write_u32(indices.length())
   for index in indices {
     names.write_u32(index)
     names.write_name(mod.func_names[index])
   }
-  let section = BinaryWriter()
+  let section = @binary.Writer()
   section.write_name("name")
   section.write_byte(1)
-  section.write_u32(names.buf.length())
-  section.write_array(names.buf)
-  section.to_bytes()
+  section.write_u32(names.length())
+  section.write_buffer(names)
+  write_section(out, 0, section)
 }
 
 ///|
 fn encode_resume_handlers(
-  w : BinaryWriter,
+  w : @binary.Writer,
   handlers : ArrayView[@types.ResumeHandler],
 ) -> Unit {
   w.write_u32(handlers.length())
@@ -1808,7 +1537,7 @@ fn encode_resume_handlers(
 
 ///|
 /// Heap immediates omit the value type's nullability prefix.
-fn encode_heaptype(w : BinaryWriter, ty : @types.ValueType) -> Unit {
+fn encode_heaptype(w : @binary.Writer, ty : @types.ValueType) -> Unit {
   let index = match ty {
     RefFuncTyped(i)
     | RefNullFuncTyped(i)

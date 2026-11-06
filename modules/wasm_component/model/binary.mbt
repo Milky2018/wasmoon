@@ -126,92 +126,85 @@ fn Reader::read_u8(self : Reader) -> Int32 raise ComponentParseError {
 }
 
 ///|
+fn Reader::read_view(
+  self : Reader,
+  n : Int32,
+) -> BytesView raise ComponentParseError {
+  let start = self.pos
+  if n < 0 || n > self.data.length() - start {
+    raise UnexpectedEndOfInput
+  }
+  self.pos += n
+  self.data[start:self.pos]
+}
+
+///|
 fn Reader::read_bytes(
   self : Reader,
   n : Int32,
 ) -> Bytes raise ComponentParseError {
-  if self.pos + n > self.data.length() {
-    raise UnexpectedEndOfInput
-  }
-  let bytes : Array[Byte] = []
-  for i in 0..<n {
-    bytes.push(self.data[self.pos + i])
-  }
-  self.pos += n
-  Bytes::from_array(bytes)
+  self.read_view(n).to_owned()
 }
 
 ///|
-fn decode_utf8_validated(bytes : Bytes) -> String raise ComponentParseError {
-  let buf = StringBuilder::StringBuilder()
-  let mut i = 0
-  while i < bytes.length() {
-    let b = bytes[i].to_int()
-    if b < 0x80 {
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xC0 {
-      raise InvalidUtf8
-    } else if b < 0xE0 {
-      if i + 1 >= bytes.length() {
-        raise InvalidUtf8
-      }
-      let b2 = bytes[i + 1].to_int()
-      if (b2 & 0xC0) != 0x80 {
-        raise InvalidUtf8
-      }
-      let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
-      if cp < 0x80 {
-        raise InvalidUtf8
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 2
-    } else if b < 0xF0 {
-      if i + 2 >= bytes.length() {
-        raise InvalidUtf8
-      }
-      let b2 = bytes[i + 1].to_int()
-      let b3 = bytes[i + 2].to_int()
-      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 {
-        raise InvalidUtf8
-      }
-      let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
-      if cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF) {
-        raise InvalidUtf8
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 3
-    } else if b < 0xF8 {
-      if i + 3 >= bytes.length() {
-        raise InvalidUtf8
-      }
-      let b2 = bytes[i + 1].to_int()
-      let b3 = bytes[i + 2].to_int()
-      let b4 = bytes[i + 3].to_int()
-      if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 || (b4 & 0xC0) != 0x80 {
-        raise InvalidUtf8
-      }
-      let cp = ((b & 0x07) << 18) |
-        ((b2 & 0x3F) << 12) |
-        ((b3 & 0x3F) << 6) |
-        (b4 & 0x3F)
-      if cp < 0x10000 || cp > 0x10FFFF {
-        raise InvalidUtf8
-      }
-      buf.write_char(cp.unsafe_to_char())
-      i = i + 4
-    } else {
-      raise InvalidUtf8
-    }
-  }
-  buf.to_string()
+fn Reader::read_blob(self : Reader) -> Bytes raise ComponentParseError {
+  self.read_bytes(self.read_leb_u32())
 }
 
 ///|
 fn Reader::read_name(self : Reader) -> String raise ComponentParseError {
-  let len = self.read_leb_u32()
-  let bytes = self.read_bytes(len)
-  decode_utf8_validated(bytes)
+  let bytes = self.read_view(self.read_leb_u32())
+  @utf8.decode(bytes, ignore_bom=false) catch {
+    _ => raise InvalidUtf8
+  }
+}
+
+///|
+fn Reader::read_count(self : Reader) -> Int32 raise ComponentParseError {
+  let count = self.read_leb_u32()
+  if count < 0 {
+    raise UnexpectedEndOfInput
+  }
+  count
+}
+
+///|
+fn[A] Reader::read_vector(
+  self : Reader,
+  read_entry : (Reader) -> A raise ComponentParseError,
+) -> Array[A] raise ComponentParseError {
+  let count = self.read_count()
+  let entries = []
+  for _ in 0..<count {
+    entries.push(read_entry(self))
+  }
+  entries
+}
+
+///|
+fn[A] Reader::read_optional(
+  self : Reader,
+  read_entry : (Reader) -> A raise ComponentParseError,
+) -> A? raise ComponentParseError {
+  match self.read_u8() {
+    0 => None
+    1 => Some(read_entry(self))
+    _ => raise InvalidTypeSection
+  }
+}
+
+///|
+fn[A] parse_vector_section(
+  payload : Bytes,
+  read_entry : (Reader) -> A raise ComponentParseError,
+  invalid : ComponentParseError,
+) -> Array[A] raise ComponentParseError {
+  let reader = Reader(payload)
+  let entries = reader.read_vector(read_entry)
+  if !reader.is_eof() {
+    raise invalid
+  }
+  entries
 }
 
 ///|
@@ -223,42 +216,12 @@ fn Reader::read_u16_le(self : Reader) -> Int32 raise ComponentParseError {
 
 ///|
 fn Reader::read_leb_u32(self : Reader) -> Int32 raise ComponentParseError {
-  for result = 0, shift = 0 {
-    if shift > 28 {
-      raise Leb128TooLarge
-    }
-    let byte = self.read_u8()
-    if shift == 28 && (byte & 0x7F) > 0x0F {
-      raise Leb128TooLarge
-    }
-    let new_result = result | ((byte & 0x7F) << shift)
-    if (byte & 0x80) == 0 {
-      break new_result
-    } else {
-      continue new_result, shift + 7
-    }
-  }
+  @binary.read_u32(self, Reader::read_u8, () => Leb128TooLarge)
 }
 
 ///|
-fn Reader::read_sleb_i32(self : Reader) -> Int32 raise ComponentParseError {
-  for result = 0, shift = 0 {
-    if shift >= 35 {
-      raise Leb128TooLarge
-    }
-    let b = self.read_u8()
-    let low = b & 0x7F
-    let new_result = result | (low << shift)
-    if (b & 0x80) == 0 {
-      if shift < 32 && (b & 0x40) != 0 {
-        break new_result | (-1 << (shift + 7))
-      } else {
-        break new_result
-      }
-    } else {
-      continue new_result, shift + 7
-    }
-  }
+fn Reader::read_s33(self : Reader) -> Int64 raise ComponentParseError {
+  @binary.read_s33(self, Reader::read_u8, () => Leb128TooLarge)
 }
 
 ///|
@@ -281,7 +244,7 @@ pub fn parse_component_binary(
   }
   let reader = Reader::Reader(bytes)
   // Skip magic.
-  reader.read_bytes(4) |> ignore
+  reader.pos = 4
   let version = reader.read_u16_le()
   let layer = reader.read_u16_le()
   if layer != 1 {

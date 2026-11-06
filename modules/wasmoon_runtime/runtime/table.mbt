@@ -51,10 +51,7 @@ fn Table::allocate(
   if min > 0x7FFF_FFFFL {
     raise TableAllocationFailed
   }
-  guard (match elem_type {
-    I32 | I64 | F32 | F64 | V128 => false
-    _ => true
-  }) else {
+  guard elem_type.is_reference() else {
     raise InvalidTableType("element type must be a reference type")
   }
   if min != 0L && !value_fits_kind(init_value, elem_type) {
@@ -94,6 +91,42 @@ pub fn Table::from_type(
     ty.is_table64,
     resource_budget,
   )
+}
+
+///|
+/// Bind a table to this Store, reusing the original address for aliases.
+pub fn Store::alloc_table(
+  self : Store,
+  table : Table,
+  use_jit~ : Bool = true,
+) -> Int32 raise RuntimeError {
+  self.ensure_open()
+  table.ensure_open()
+  let idx = self.tables.length()
+  let binding = resource_binding(table.binding, self.closed, idx)
+  if table.binding is Some(_) {
+    return binding.index
+  }
+  let previous_reservation = table.reservation
+  errdefer {
+    if previous_reservation is None && table.reservation is Some(reservation) {
+      reservation.close()
+    }
+    table.reservation = previous_reservation
+  }
+  if self.resource_budget is Some(budget) {
+    table.bind_budget(budget)
+  }
+  self.prepare_table_backing(table, use_jit)
+  table.binding = Some(binding)
+  self.on_instantiation_rollback(fn() {
+    binding.active.val = false
+    self.discard_table_backing(table, idx)
+    self.tables.truncate(idx)
+    self.tables.shrink_to_fit()
+  })
+  self.tables.push(table)
+  idx
 }
 
 ///|

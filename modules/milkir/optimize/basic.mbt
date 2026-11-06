@@ -546,9 +546,11 @@ fn canonicalize_aliases_with_analysis(
       }
     }
     // Canonicalize terminator operands as well.
-    if block.terminator is Some(term) {
-      let new_term = propagate_copies_in_terminator(term, aliases, result)
-      block.set_terminator(new_term, metadata=block.terminator_metadata())
+    if block.terminator is Some(term) &&
+      rewrite_terminator_values(term, value => resolve_copy(value, aliases))
+      is Some(updated) {
+      block.set_terminator(updated, metadata=block.terminator_metadata())
+      result.mark_changed()
     }
     (local_aliases, true)
   }
@@ -575,48 +577,4 @@ fn resolve_copy(
     current = source
   }
   current
-}
-
-///|
-/// Propagate copies in terminator
-fn propagate_copies_in_terminator(
-  term : @milkir.Terminator,
-  copies : Array[@milkir.Value?],
-  result : OptResult,
-) -> @milkir.Terminator {
-  fn canonical(value : @milkir.Value) -> @milkir.Value {
-    let resolved = resolve_copy(value, copies)
-    if resolved.id != value.id {
-      result.mark_changed()
-    }
-    resolved
-  }
-  match term {
-    Jump(target, args) => {
-      for index, value in args {
-        args[index] = canonical(value)
-      }
-      Jump(target, args)
-    }
-    Brz(cond, then_t, else_t) => Brz(canonical(cond), then_t, else_t)
-    Brnz(cond, then_t, else_t) => Brnz(canonical(cond), then_t, else_t)
-    Branch(cond, true_t, true_args, false_t, false_args) => {
-      for index, value in true_args {
-        true_args[index] = canonical(value)
-      }
-      for index, value in false_args {
-        false_args[index] = canonical(value)
-      }
-      Branch(canonical(cond), true_t, true_args, false_t, false_args)
-    }
-    BrTable(index, targets, default_t) =>
-      BrTable(canonical(index), targets, default_t)
-    Return(values) => {
-      for index, value in values {
-        values[index] = canonical(value)
-      }
-      Return(values)
-    }
-    Trap(_) | TrapExit(_) => term
-  }
 }

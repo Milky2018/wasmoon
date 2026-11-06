@@ -4,11 +4,7 @@
 pub struct CoreWastContext {
   store : @runtime.Store
   mut closed : Bool
-  mut current_module : @runtime.ModuleInstance?
-  named_modules : Map[String, @runtime.ModuleInstance]
-  module_definitions : Map[String, @types.Module]
-  mut current_definition : @types.Module?
-  registered_modules : Map[String, @runtime.ModuleInstance]
+  modules : WastModules
   stack_switching : Bool
 }
 
@@ -33,11 +29,7 @@ pub fn CoreWastContext::new(
   {
     store,
     closed: false,
-    current_module: None,
-    named_modules: Map([]),
-    module_definitions: Map([]),
-    current_definition: None,
-    registered_modules: registered,
+    modules: WastModules::new(registered),
     stack_switching,
   }
 }
@@ -49,60 +41,108 @@ pub fn CoreWastContext::close(self : CoreWastContext) -> Unit {
   }
   self.closed = true
   self.store.close()
-  self.current_module = None
-  self.current_definition = None
-  self.named_modules.clear()
-  self.module_definitions.clear()
-  self.registered_modules.clear()
+  self.modules.clear()
 }
 
 ///|
-fn run_wast_module(
+pub fn CoreWastContext::build_imports(
+  self : CoreWastContext,
+) -> @runtime.Imports {
+  self.modules.build_imports(self.store)
+}
+
+///|
+impl WastEngine for CoreWastContext with fn modules(self) {
+  self.modules
+}
+
+///|
+impl WastEngine for CoreWastContext with fn store(self) {
+  self.store
+}
+
+///|
+impl WastEngine for CoreWastContext with fn closed(self) {
+  self.closed
+}
+
+///|
+impl WastEngine for CoreWastContext with fn validate(self, module_) {
+  @validator.validate_module(
+    module_,
+    bulk_memory=true,
+    stack_switching=self.stack_switching,
+  )
+  @executor.validate_continuation_gc_storage(module_)
+}
+
+///|
+impl WastEngine for CoreWastContext with fn instantiate(self, module_, name) {
+  WastEngine::validate(self, module_)
+  let instance = @executor.instantiate_module_with_imports(
+    self.store,
+    module_,
+    self.build_imports(),
+  )
+  self.modules.publish(instance, name)
+}
+
+///|
+impl WastEngine for CoreWastContext with fn source_is_invalid(
+  self,
+  source,
+  _expected,
+) {
+  @assertions.validate_module_source(
+    source,
+    bulk_memory=true,
+    stack_switching=self.stack_switching,
+  )
+  is None
+}
+
+///|
+impl WastEngine for CoreWastContext with fn registered(_self, _name) {
+  ()
+}
+
+///|
+impl WastEngine for CoreWastContext with fn invoke(self, action) {
+  invoke_action(self, action)
+}
+
+///|
+pub fn invoke_action(
   ctx : CoreWastContext,
-  module_ : @types.Module,
-  name : String?,
+  action : @wat.WastAction,
+) -> Array[@types.Value] raise WastRunnerError {
+  invoke_script_action(ctx.store, ctx.modules, action)
+}
+
+///|
+pub fn run_wast_command(
+  ctx : CoreWastContext,
+  command : @wat.WastCommand,
   line : Int32,
   result : WastResult,
+  show_success : Bool,
 ) -> Unit {
-  try {
-    ctx.validate_core_module(module_)
-    let instance = @executor.instantiate_module_with_imports(
-      ctx.store,
-      module_,
-      ctx.build_imports(),
-    )
-    ctx.current_module = Some(instance)
-    if name is Some(name) {
-      ctx.named_modules.set(name, instance)
-    }
-  } catch {
-    @runtime.RuntimeError::UnsupportedHostCapability(detail) =>
-      result.unsupported.push("line \{line}: \{detail}")
-    error => {
-      result.failed += 1
-      result.failures.push(
-        "line \{line}: module instantiation failed: \{error}",
-      )
-    }
-  }
+  execute_command(
+    ctx,
+    command,
+    line,
+    result,
+    show_success,
+    track_unsupported=true,
+  )
 }
 
 ///|
-fn try_instantiate_source_traps(
-  ctx : CoreWastContext,
-  source : @wat.WastModuleSource,
-  expected : String,
-) -> Bool {
-  let module_ = match source {
-    Binary(bytes) => @parser.parse_module(bytes) catch { _ => return false }
-    Inline(module_) => module_
-    Quote(parts) =>
-      @wat.parse(parts.join(""), implicit_module=true) catch {
-        _ => return false
-      }
-    FailedToParse(_) => return false
+impl WastEngine for CoreWastContext with fn source_traps(ctx, source, expected) {
+  let module_ = @assertions.parse_module_source(source) catch {
+    _ => return false
   }
-  ctx.validate_core_module(module_) catch {
+  WastEngine::validate(ctx, module_) catch {
     _ => return false
   }
   try {
@@ -139,7 +179,7 @@ pub fn run_script(
     }
   }
   for command in script.commands {
-    run_wast_command(ctx, command.0, command.1, result, "", false)
+    run_wast_command(ctx, command.0, command.1, result, false)
     if !result.unsupported.is_empty() {
       break
     }

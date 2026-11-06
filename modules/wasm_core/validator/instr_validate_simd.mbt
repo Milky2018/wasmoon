@@ -18,16 +18,9 @@ fn validate_instr_simd(
     // v128.load: 16 bytes = 4, load8x8/16x4/32x2: 8 bytes = 3
     // load8_splat: 0, load16_splat: 1, load32_splat/zero: 2, load64_splat/zero: 3
     V128Load(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 4 {
-        raise InvalidAlignment(
-          "v128.load alignment \{align} exceeds natural alignment 4",
-        )
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 4, "v128.load")
+      validate_mem_offset(mem, offset)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
@@ -37,228 +30,114 @@ fn validate_instr_simd(
     | V128Load16x4U(memidx, align, offset)
     | V128Load32x2S(memidx, align, offset)
     | V128Load32x2U(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 3 {
-        raise InvalidAlignment(
-          "v128.load_extend alignment \{align} exceeds natural alignment 3",
-        )
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 3, "v128.load_extend")
+      validate_mem_offset(mem, offset)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Load8Splat(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 0 {
-        raise InvalidAlignment(
-          "v128.load8_splat alignment \{align} exceeds natural alignment 0",
-        )
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 0, "v128.load8_splat")
+      validate_mem_offset(mem, offset)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Load16Splat(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 1 {
-        raise InvalidAlignment(
-          "v128.load16_splat alignment \{align} exceeds natural alignment 1",
-        )
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 1, "v128.load16_splat")
+      validate_mem_offset(mem, offset)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Load32Splat(memidx, align, offset)
     | V128Load32Zero(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "v128.load32 alignment \{align} exceeds natural alignment 2",
-        )
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 2, "v128.load32")
+      validate_mem_offset(mem, offset)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Load64Splat(memidx, align, offset)
     | V128Load64Zero(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 3 {
-        raise InvalidAlignment(
-          "v128.load64 alignment \{align} exceeds natural alignment 3",
-        )
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 3, "v128.load64")
+      validate_mem_offset(mem, offset)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Store(memidx, align, offset) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 4 {
-        raise InvalidAlignment(
-          "v128.store alignment \{align} exceeds natural alignment 4",
-        )
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 4, "v128.store")
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
     }
     V128Load8Lane(memidx, align, offset, lane) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 0 {
-        raise InvalidAlignment(
-          "v128.load8_lane alignment \{align} exceeds natural alignment 0",
-        )
-      }
-      if lane < 0 || lane >= 16 {
-        raise InvalidLaneIndex(lane, 16)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 0, "v128.load8_lane")
+      validate_lane_index(lane, 16)
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Load16Lane(memidx, align, offset, lane) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 1 {
-        raise InvalidAlignment(
-          "v128.load16_lane alignment \{align} exceeds natural alignment 1",
-        )
-      }
-      if lane < 0 || lane >= 8 {
-        raise InvalidLaneIndex(lane, 8)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 1, "v128.load16_lane")
+      validate_lane_index(lane, 8)
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Load32Lane(memidx, align, offset, lane) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "v128.load32_lane alignment \{align} exceeds natural alignment 2",
-        )
-      }
-      if lane < 0 || lane >= 4 {
-        raise InvalidLaneIndex(lane, 4)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 2, "v128.load32_lane")
+      validate_lane_index(lane, 4)
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Load64Lane(memidx, align, offset, lane) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 3 {
-        raise InvalidAlignment(
-          "v128.load64_lane alignment \{align} exceeds natural alignment 3",
-        )
-      }
-      if lane < 0 || lane >= 2 {
-        raise InvalidLaneIndex(lane, 2)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 3, "v128.load64_lane")
+      validate_lane_index(lane, 2)
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
       stack.push(V128)
     }
     V128Store8Lane(memidx, align, offset, lane) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 0 {
-        raise InvalidAlignment(
-          "v128.store8_lane alignment \{align} exceeds natural alignment 0",
-        )
-      }
-      if lane < 0 || lane >= 16 {
-        raise InvalidLaneIndex(lane, 16)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 0, "v128.store8_lane")
+      validate_lane_index(lane, 16)
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
     }
     V128Store16Lane(memidx, align, offset, lane) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 1 {
-        raise InvalidAlignment(
-          "v128.store16_lane alignment \{align} exceeds natural alignment 1",
-        )
-      }
-      if lane < 0 || lane >= 8 {
-        raise InvalidLaneIndex(lane, 8)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 1, "v128.store16_lane")
+      validate_lane_index(lane, 8)
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
     }
     V128Store32Lane(memidx, align, offset, lane) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 2 {
-        raise InvalidAlignment(
-          "v128.store32_lane alignment \{align} exceeds natural alignment 2",
-        )
-      }
-      if lane < 0 || lane >= 4 {
-        raise InvalidLaneIndex(lane, 4)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 2, "v128.store32_lane")
+      validate_lane_index(lane, 4)
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
     }
     V128Store64Lane(memidx, align, offset, lane) => {
-      if memidx < 0 || memidx >= ctx.mems.length() {
-        raise InvalidMemoryIndex(memidx)
-      }
-      if align < 0 || align > 3 {
-        raise InvalidAlignment(
-          "v128.store64_lane alignment \{align} exceeds natural alignment 3",
-        )
-      }
-      if lane < 0 || lane >= 2 {
-        raise InvalidLaneIndex(lane, 2)
-      }
-      validate_mem_offset(ctx.mems[memidx], offset)
-      let mem = ctx.mems[memidx]
+      let mem = ctx.memory_type(memidx)
+      validate_memory_alignment(align, 3, "v128.store64_lane")
+      validate_lane_index(lane, 2)
+      validate_mem_offset(mem, offset)
       stack.pop(V128)
       stack.pop(mem.addr_type())
     }
@@ -303,93 +182,69 @@ fn validate_instr_simd(
 
     // Extract lane (vector -> scalar) with lane validation
     I8x16ExtractLaneS(lane) | I8x16ExtractLaneU(lane) => {
-      if lane < 0 || lane >= 16 {
-        raise InvalidLaneIndex(lane, 16)
-      }
+      validate_lane_index(lane, 16)
       stack.pop(V128)
       stack.push(I32)
     }
     I16x8ExtractLaneS(lane) | I16x8ExtractLaneU(lane) => {
-      if lane < 0 || lane >= 8 {
-        raise InvalidLaneIndex(lane, 8)
-      }
+      validate_lane_index(lane, 8)
       stack.pop(V128)
       stack.push(I32)
     }
     I32x4ExtractLane(lane) => {
-      if lane < 0 || lane >= 4 {
-        raise InvalidLaneIndex(lane, 4)
-      }
+      validate_lane_index(lane, 4)
       stack.pop(V128)
       stack.push(I32)
     }
     I64x2ExtractLane(lane) => {
-      if lane < 0 || lane >= 2 {
-        raise InvalidLaneIndex(lane, 2)
-      }
+      validate_lane_index(lane, 2)
       stack.pop(V128)
       stack.push(I64)
     }
     F32x4ExtractLane(lane) => {
-      if lane < 0 || lane >= 4 {
-        raise InvalidLaneIndex(lane, 4)
-      }
+      validate_lane_index(lane, 4)
       stack.pop(V128)
       stack.push(F32)
     }
     F64x2ExtractLane(lane) => {
-      if lane < 0 || lane >= 2 {
-        raise InvalidLaneIndex(lane, 2)
-      }
+      validate_lane_index(lane, 2)
       stack.pop(V128)
       stack.push(F64)
     }
 
     // Replace lane (vector, scalar -> vector) with lane validation
     I8x16ReplaceLane(lane) => {
-      if lane < 0 || lane >= 16 {
-        raise InvalidLaneIndex(lane, 16)
-      }
+      validate_lane_index(lane, 16)
       stack.pop(I32)
       stack.pop(V128)
       stack.push(V128)
     }
     I16x8ReplaceLane(lane) => {
-      if lane < 0 || lane >= 8 {
-        raise InvalidLaneIndex(lane, 8)
-      }
+      validate_lane_index(lane, 8)
       stack.pop(I32)
       stack.pop(V128)
       stack.push(V128)
     }
     I32x4ReplaceLane(lane) => {
-      if lane < 0 || lane >= 4 {
-        raise InvalidLaneIndex(lane, 4)
-      }
+      validate_lane_index(lane, 4)
       stack.pop(I32)
       stack.pop(V128)
       stack.push(V128)
     }
     I64x2ReplaceLane(lane) => {
-      if lane < 0 || lane >= 2 {
-        raise InvalidLaneIndex(lane, 2)
-      }
+      validate_lane_index(lane, 2)
       stack.pop(I64)
       stack.pop(V128)
       stack.push(V128)
     }
     F32x4ReplaceLane(lane) => {
-      if lane < 0 || lane >= 4 {
-        raise InvalidLaneIndex(lane, 4)
-      }
+      validate_lane_index(lane, 4)
       stack.pop(F32)
       stack.pop(V128)
       stack.push(V128)
     }
     F64x2ReplaceLane(lane) => {
-      if lane < 0 || lane >= 2 {
-        raise InvalidLaneIndex(lane, 2)
-      }
+      validate_lane_index(lane, 2)
       stack.pop(F64)
       stack.pop(V128)
       stack.push(V128)

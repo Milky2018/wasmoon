@@ -376,15 +376,33 @@ pub fn InstructionMetadata::new(
 }
 
 ///|
-fn InstructionMetadata::copy(self : InstructionMetadata) -> InstructionMetadata {
-  {
-    source: self.source,
-    trap: self.trap,
-    safepoint: self.safepoint,
-    live_gc_roots: self.live_gc_roots.copy(),
-    symbol: self.symbol,
-    stack_map: self.stack_map,
+/// Preserve the source, roots, and safepoint semantics of a selected operation.
+pub fn direct_source_metadata(
+  source : @native.SourceLocation?,
+  stack_map : @native.StackMapMetadata?,
+  values : Array[Value],
+  semantics : @native.OperationSemantics,
+  trap? : @native.TrapReason,
+) -> InstructionMetadata {
+  let safepoint : SafepointKind? = match
+    (semantics.gc_safepoint, semantics.cancellation_safepoint) {
+    (true, true) => Some(GcAndCancellation)
+    (true, false) => Some(Gc)
+    (false, true) => Some(Cancellation)
+    (false, false) => None
   }
+  InstructionMetadata::new(
+    source?,
+    trap?,
+    safepoint?,
+    live_gc_roots=values,
+    stack_map?,
+  )
+}
+
+///|
+fn InstructionMetadata::copy(self : InstructionMetadata) -> InstructionMetadata {
+  { ..self, live_gc_roots: self.live_gc_roots.copy(), }
 }
 
 ///|
