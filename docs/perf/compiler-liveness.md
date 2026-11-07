@@ -1,6 +1,6 @@
 # Live-set materialization
 
-Tracking: [ISS-699](../../issues/ISS-699.md).
+Tracking: [ISS-699](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-699.md).
 
 After [function-root lowering](function-roots.md), a valid 8192-object initializer
 still spends 11.970s building live ranges out of 16.694s compilation. Its effective

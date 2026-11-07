@@ -49,9 +49,14 @@ moon test --target native
 Run regression tests relevant to the change. For documentation-only changes,
 review the diff and check formatting and links.
 
-Keep changes focused, preserve unrelated work, update relevant `issues/ISS-*.md`
-files, and use English for commits, code comments, documentation, and PR text.
-Report changes, validation results, and delivery status at handoff.
+Keep changes focused and preserve unrelated work. Use English for commits,
+code comments, documentation, issues, and PR text. Report changes, validation
+results, and delivery status at handoff.
+
+Track bugs, tasks, and follow-ups in
+[GitHub Issues](https://github.com/Milky2018/wasmoon/issues). The
+[legacy Markdown records](https://github.com/Milky2018/wasmoon/tree/35b1d7930daa268d17d7438604fdde44829f2e37/issues)
+are preserved in Git history. Cite the legacy ID when filing a follow-up.
 
 ## Testing
 

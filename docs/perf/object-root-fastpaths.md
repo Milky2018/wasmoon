@@ -1,7 +1,7 @@
 # Checked object views and native root links
 
-Tracking: [ISS-721](../../issues/ISS-721.md) and
-[ISS-722](../../issues/ISS-722.md).
+Tracking: [ISS-721](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-721.md) and
+[ISS-722](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-722.md).
 
 ## Native root ownership
 

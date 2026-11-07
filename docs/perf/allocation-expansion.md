@@ -1,6 +1,6 @@
 # Shared struct reservation expansion
 
-Tracking: [ISS-702](../../issues/ISS-702.md).
+Tracking: [ISS-702](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-702.md).
 
 The direct heap budget already limits large allocation expansions. Its fallback
 still emits a shared reservation call, stores, a slow/join diamond and root

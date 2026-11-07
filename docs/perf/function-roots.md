@@ -1,7 +1,7 @@
 # Function roots and compiler expansion
 
-Tracking: [ISS-697](../../issues/ISS-697.md), [ISS-698](../../issues/ISS-698.md),
-[ISS-703](../../issues/ISS-703.md).
+Tracking: [ISS-697](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-697.md), [ISS-698](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-698.md),
+[ISS-703](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-703.md).
 
 The later [sparse call-frame policy](sparse-root-regions.md) avoids persistent
 definition stores only for producer-admitted small live sets. The complete

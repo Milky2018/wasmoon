@@ -173,7 +173,7 @@ Platform-native CI and sanitizer acceptance remain separate requirements.
 
 ### Strict text validation
 
-The first strict run exposed [ISS-642](../issues/ISS-642.md): 628 existing
+The first strict run exposed [ISS-642](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-642.md): 628 existing
 malformed-text false accepts across 22 Core files. The old native runner rejected
 quoted sources unconditionally, so its earlier green tally did not prove text
 validity. Both runners now actually parse the quoted source; a valid quoted

@@ -1,7 +1,7 @@
 # Typed allocation throughput
 
 Local macOS ARM64 measurements against main `21c702b5` (0.18.0).
-Tracking: [ISS-679](../../issues/ISS-679.md). These are release binaries built
+Tracking: [ISS-679](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-679.md). These are release binaries built
 from the stated base and an explicitly dirty implementation tree, not CI
 acceptance or a general engine ranking. The allocation changes do not alter
 object layout, the root protocol or public APIs. A separate
@@ -488,7 +488,7 @@ Matched original-builtin compilation retains 40 samples, including one 11.7%
 outlier: enabled API medians 6.253 -> 6.236s, plain 5.709 -> 5.691s, with no
 meaningful RSS improvement and byte-identical artifacts in both modes. Independent
 assembler controls, actual Rosetta x64 execution and public semantic/negative
-regressions cover the new rule. Tracking: [ISS-710](../../issues/ISS-710.md).
+regressions cover the new rule. Tracking: [ISS-710](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-710.md).
 
 ## Adapter construction thunks
 
@@ -501,7 +501,7 @@ code. Twenty alternating large-module compiler runs preserve exact artifacts:
 API medians 6.268 -> 6.254s enabled, 5.722 -> 5.702s plain; paired changes are
 about -0.27% and RSS overlaps. This is a small simplification, not a material
 compile-time improvement or a solution to #583. Public tests retain completion
-once and final hidden-safepoint ABI rejection. Tracking: [ISS-711](../../issues/ISS-711.md).
+once and final hidden-safepoint ABI rejection. Tracking: [ISS-711](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-711.md).
 
 ## Struct-view leaf hits
 
@@ -527,7 +527,7 @@ Zero-call changes are noise. Earlier split-only compiler controls preserved
 exact artifacts, with enabled API flat and plain paired median+0.44%/overlapping
 RSS; these are separate measurements, not a compile-time or memory gain.
 Evidence is local ARM64, not x64 timing or a new engine ranking.
-Tracking: [ISS-712](../../issues/ISS-712.md).
+Tracking: [ISS-712](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-712.md).
 
 ## Checked callable resolution
 
@@ -544,7 +544,7 @@ process medians0.4412 ->0.4276s. Auth7 is flat. Short-control noise and outliers
 are retained; further hash/auth/generichash paired medians differ by about
 +0.25/+0.63/+0.20%, not a broad throughput win. All guest artifacts match
 exactly and native host text grows456 bytes. These are ARM64 controls, not
-x64 timings or compile/RSS improvements. Tracking: [ISS-713](../../issues/ISS-713.md).
+x64 timings or compile/RSS improvements. Tracking: [ISS-713](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-713.md).
 
 ### Allocator queue entries and sifting
 
@@ -567,7 +567,7 @@ generalize the larger cohort's gain. No guest execution gain is claimed.
 All 70 original algorithm inputs also retain exact artifacts in both modes
 under all three verifiers (140 correctness comparisons, no timings retained).
 Full validation and platform acceptance are tracked in
-[ISS-714](../../issues/ISS-714.md).
+[ISS-714](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-714.md).
 
 ### Weight queries without temporary use positions
 
@@ -583,7 +583,7 @@ The first five paired runs per mode including encoding show mixed API changes:
 identical harness without encoding/writing: every pair improves0.8-2.9%, with
 medians6.201 ->6.145s and5.673 ->5.608s. Compiler-process RSS is effectively flat.
 These are local ARM64 allocation-churn controls, not universal CPU, peak-memory
-or guest-execution gains. Tracking: [ISS-715](../../issues/ISS-715.md).
+or guest-execution gains. Tracking: [ISS-715](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-715.md).
 
 ### Read-only instruction annotations
 
@@ -604,4 +604,4 @@ and 5.636 -> 5.556 s, paired median gains 1.39%/1.41%, nine of ten pairs faster.
 Both a 7.10% favorable outlier and a 0.25% slower pair are retained. Compiler-process
 RSS is effectively flat. All 10,463 per-function decisions remain exact. These
 are local ARM64 compiler controls, not guest execution or universal CPU/memory
-claims. Tracking: [ISS-716](../../issues/ISS-716.md).
+claims. Tracking: [ISS-716](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-716.md).
