@@ -1,6 +1,6 @@
 # Store callable lookup
 
-Tracking: [ISS-681](../../issues/ISS-681.md), part of
+Tracking: [ISS-681](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-681.md), part of
 [PR 582](https://github.com/Milky2018/wasmoon/pull/582).
 
 ## Attribution and design
@@ -71,7 +71,7 @@ with register-allocation, GC and barrier verification enabled.
 
 ## Remove adapter crossings at the checked boundary
 
-Follow-up [ISS-683](../../issues/ISS-683.md) samples the packed, asserted
+Follow-up [ISS-683](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-683.md) samples the packed, asserted
 indirect-call loop. About2026/2284 main-thread self samples lie in table/type/
 subtype/entry resolution; the signal-wait thread is excluded. Release ARM64
 machine code calls separate table_entry, type lookup, subtype and entry

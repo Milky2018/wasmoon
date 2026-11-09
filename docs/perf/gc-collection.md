@@ -1,6 +1,6 @@
 # Native GC discovery and identity retirement
 
-Tracking: [ISS-684](../../issues/ISS-684.md). Local macOS ARM64 release
+Tracking: [ISS-684](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-684.md). Local macOS ARM64 release
 measurements compare frozen `fef3fa05` binary `1d31661547fb` with explicitly
 dirty candidate `b2fdd81c11eb`. Moon 0.1.20261021 / moonc 0.10.17 builds both.
 This is a root-discovery optimization, not a collector replacement or platform
@@ -123,7 +123,7 @@ run40127134073 establishes Linux LSan and Windows acceptance; see ISS-685.
 
 ## Prepared array constructors
 
-[ISS-686](../../issues/ISS-686.md) reuses the canonical typed initializer through
+[ISS-686](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-686.md) reuses the canonical typed initializer through
 non-collecting scalar/vector constructors. Admission uses the existing prepared
 payload/identity window and excludes quotas, unknown/debug/failure controls,
 growth and collection. Refusal returns zero without allocator mutation; the

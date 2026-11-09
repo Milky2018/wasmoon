@@ -1,7 +1,7 @@
 # Precise native generational collection
 
-Tracking: [ISS-689](../../issues/ISS-689.md),
-[ISS-690](../../issues/ISS-690.md), [ISS-691](../../issues/ISS-691.md).
+Tracking: [ISS-689](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-689.md),
+[ISS-690](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-690.md), [ISS-691](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-691.md).
 This extends the native mark/sweep/compact heap. Root coordination and collection
 policy remain MoonBit; portable Wasm execution and interpreter semantics are unchanged.
 

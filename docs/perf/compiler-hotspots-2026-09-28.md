@@ -218,7 +218,7 @@ and are a larger, unproven change.
   budget. The measured concentration favors other work first. Preserve the meet
   lattice and convergence for loops and irreducible CFGs.
 - Contiguous pointer dependencies remain **deferred** under
-  [ISS-587](../../issues/ISS-587.md): two prior rounds found inconsistent timing,
+  [ISS-587](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-587.md): two prior rounds found inconsistent timing,
   only about 1% cumulative allocation savings and unchanged peak usage. No new
   result here overturns that decision. Restricting dependency edges to relevant
   transfer opcodes is a distinct hypothesis, still requiring worklist tests and

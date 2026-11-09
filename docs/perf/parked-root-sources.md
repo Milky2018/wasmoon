@@ -1,6 +1,6 @@
 # Parked activation root sources
 
-Tracking: [ISS-720](../../issues/ISS-720.md).
+Tracking: [ISS-720](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-720.md).
 
 Native fibers stop with their trap activation, function-frame chain, root scopes,
 exception state, spilled locals and scratch storage still alive. Previously each

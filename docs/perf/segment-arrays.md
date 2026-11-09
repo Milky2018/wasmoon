@@ -1,6 +1,6 @@
 # Data-segment arrays
 
-Tracking: [ISS-695](../../issues/ISS-695.md), [ISS-696](../../issues/ISS-696.md).
+Tracking: [ISS-695](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-695.md), [ISS-696](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-696.md).
 
 Core validation already accepts vector element types for array.new_data and
 array.init_data. A public unaligned v128 fixture passes wasm-tools validation

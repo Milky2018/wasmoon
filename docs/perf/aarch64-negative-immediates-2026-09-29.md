@@ -5,7 +5,7 @@
 Baseline: `ece1aa8c09f6c1ed3d2d123144f54c9d624685fd`, native macOS ARM64.
 Only AArch64 direct arithmetic-immediate selection changes. There is no new
 register reservation, memory-base reuse rule, optimization budget, dependency,
-or public API. Tracking: [ISS-594](../../issues/ISS-594.md).
+or public API. Tracking: [ISS-594](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-594.md).
 
 ## Bounded instruction-selection improvement
 
@@ -59,8 +59,8 @@ Historical experiments explicitly rejected the broader reuse strategy:
 | ISS-433 unbounded stable-global reuse | 1 | 17/19 | Rejected |
 | ISS-433 distance 16, one reuse | 23 | 12/12 | Retained |
 
-These are the dated records in [ISS-259](../../issues/ISS-259.md) and
-[ISS-433](../../issues/ISS-433.md), not new measurements on today's compiler.
+These are the dated records in [ISS-259](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-259.md) and
+[ISS-433](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-433.md), not new measurements on today's compiler.
 ISS-433 records seven cold-cache pairs: unbounded reuse worsened the AEGIS
 median guest ratio against its then-current Wasmtime from 1.248 to 1.634;
 bounded reuse measured 1.093. Do not combine these historical ratios with the

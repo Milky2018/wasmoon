@@ -169,4 +169,4 @@ The existing module-boundary check remains unchanged.
 
 Local verification receipts and remaining platform acceptance are recorded in
 [evidence](evidence/resource-budgets-2026-10-16/README.md) and
-[ISS-627](../issues/ISS-627.md).
+[ISS-627](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-627.md).

@@ -1,6 +1,6 @@
 # Guarded object reads and sparse call frames
 
-Tracking: [ISS-724](../../issues/ISS-724.md).
+Tracking: [ISS-724](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-724.md).
 
 The remaining object-access cost crosses two compiler boundaries. An empty
 conditional dispatch can hide a successful check behind a block parameter.

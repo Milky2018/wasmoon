@@ -4,7 +4,7 @@
 
 Relative to `ae3ca9c8897999bd4989b56fd730c6ffb09ff432`, retain only the instruction-owner scan optimization: skip the second scan only when `args` and `operands` are physically the same array. Preserve all other validation and first-error order.
 
-Conditional jump-threading use counts show a small compiler benefit but are withheld: the combined candidate regresses a real CLI workload, including cache-hit execution where neither changed compiler path runs. Individual CLI probes do not identify the responsible mechanism. Track the unresolved execution sensitivity in [ISS-592](../../issues/ISS-592.md); do not ship the combination based solely on its faster compiler timer.
+Conditional jump-threading use counts show a small compiler benefit but are withheld: the combined candidate regresses a real CLI workload, including cache-hit execution where neither changed compiler path runs. Individual CLI probes do not identify the responsible mechanism. Track the unresolved execution sensitivity in [ISS-592](https://github.com/Milky2018/wasmoon/blob/35b1d7930daa268d17d7438604fdde44829f2e37/issues/ISS-592.md); do not ship the combination based solely on its faster compiler timer.
 
 Reject the per-block prefix-scratch candidate. It reduces allocation but makes complete compilation slower on every workload in both rounds. Its patch and results are retained; no scratch-pooling change is shipped. These experiments do not justify a broad compiler rewrite.
 
