@@ -1796,7 +1796,13 @@ pub fn lower_to_sink(
     let struct_views = structs && environment.struct_views is Some(_)
     let projection_sites = if struct_views ||
       (arrays && environment.array_views is Some(_)) {
-      Some(inline_projection_sites(function, reserve_struct=struct_views))
+      Some(
+        inline_projection_sites(
+          function,
+          reserve_struct=struct_views,
+          reuse_only=environment.offset_refs is Some(_),
+        ),
+      )
     } else {
       None
     }

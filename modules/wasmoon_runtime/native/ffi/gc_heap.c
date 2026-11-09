@@ -418,6 +418,7 @@ static GcHeap* gc_heap_new(size_t initial_capacity) {
     }
     atomic_fetch_add_explicit(&gc_heap_live_count, 1, memory_order_relaxed);
     heap->allocation_control = &gc_allocation_control;
+    if (heap->offset_ids && !gc_verify_enabled()) heap->offset_view_ids = heap->offset_ids;
     heap->capacity = initial_capacity;
     heap->collection_limit = MIN_COLLECTION_BUDGET;
     heap->free_capacity = DEFAULT_FREE_CAPACITY;
@@ -1398,7 +1399,7 @@ static void gc_heap_compact_mode(GcHeap *heap, int young, size_t allocation_budg
                 // Moves run in increasing source order and only move down.
                 // Clearing this old start cannot erase an earlier destination.
                 heap->offset_ids[(uint32_t)old_offset >> GC_OFFSET_ALIGNMENT_SHIFT] = 0;
-                heap->offset_ids[new_offset >> GC_OFFSET_ALIGNMENT_SHIFT] = ref;
+                heap->offset_ids[new_offset >> GC_OFFSET_ALIGNMENT_SHIFT] = gc_offset_entry_word(ref);
             }
         }
 
@@ -1587,7 +1588,7 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             return 0;
         }
 
-        if (heap->offset_ids && heap->offset_ids[(uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT] != (uint32_t)gc_ref)
+        if (heap->offset_ids && heap->offset_ids[(uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT] != gc_offset_entry_word(gc_ref))
             return gc_verify_fail("offset directory disagrees with live identity", verbose);
         GcHeader* header = (GcHeader*)(heap->data + offset);
         GcIdentityPage *page = gc_heap_identity_page(heap, gc_ref);

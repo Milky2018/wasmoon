@@ -119,7 +119,7 @@ pub fn build_artifact_manifest(
     required_cpu_features: required_cpu_features.copy(),
     jit_abi_version: WASMOON_JIT_ABI_VERSION,
     codegen_revision: if offset_reference_codegen_enabled {
-      "direct-vcode-offset-experiment-2"
+      "direct-vcode-offset-experiment-5"
     } else {
       WASMOON_CODEGEN_REVISION
     },

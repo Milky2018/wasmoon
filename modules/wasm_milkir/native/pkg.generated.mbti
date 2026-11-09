@@ -63,6 +63,7 @@ pub(all) struct InlineHeapLayout {
 
 pub(all) struct OffsetRefLayout {
   directory : Int32
+  view_directory : Int32
   header_flags : Int32
   header_reserved : Int32
   header_size : Int32

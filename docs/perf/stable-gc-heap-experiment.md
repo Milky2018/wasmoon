@@ -111,3 +111,36 @@ and moving-relocation regressions with heap, barrier, and register-allocation
 verification enabled. Both packed modes pass all 633 assertions in the 17
 Core GC spec files in each execution mode. x64 was checked through code
 emission. The performance results support keeping this as an opt-in experiment.
+
+## Selective projection tuning
+
+The offset mode retains the existing bounded view cache for references likely
+to repeat in a loop. This includes function parameters and fixed VMContext
+slots in loops without explicit context writes or allocation. Cache misses
+still take the checked path, including after a poll. Loop-carried references
+and freshly allocated references keep the offset path. Giving all bounded
+cache sites priority recovered the field-read workload but regressed the
+retained graph. The selective policy recovered both.
+
+Offset admission now uses one published directory pointer. Full GC
+verification leaves the pointer null. The occupied-slot encoding keeps
+zero identities from matching an empty entry while allowing one identity
+comparison. The tag, live-slot check, shape checks, and array bounds remain.
+
+Six balanced cold rounds per input on macOS ARM64 used the same
+self-checking Wasm binaries in all configurations. The default and initial offset controls
+use commit `1153f671` with the experiment off and on respectively.
+
+| Input or phase | Default | Initial offsets | Selective offsets |
+| --- | ---: | ---: | ---: |
+| Original parse_double invocation | 1.480 s | 1.448 s | 1.407 s |
+| Original parse_double native compilation | 0.833 s | 1.063 s | 1.019 s |
+| Original parse_double process wall time | 2.400 s | 2.610 s | 2.512 s |
+| Alternating field reads | 29.83 ms | 50.24 ms | 29.36 ms |
+| Retained graph | 110.87 ms | 104.30 ms | 104.05 ms |
+
+The field-read machine code matches the default byte for byte on ARM64
+and x64. The ARM64 `parse_decimal_from_view` body shrank from 18,080 to
+17,048 bytes. Its x64 counterpart shrank from 44,654 to 41,642 bytes.
+Offset mode remains opt-in because the original workload still takes
+longer end to end than the default.

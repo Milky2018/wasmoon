@@ -408,13 +408,9 @@ fn inline_struct_reservation(
         ],
         [I32],
       )[0]
-    heap_store(
-      context,
-      heap_index(context, directory, slot, 2),
-      0,
-      reference,
-      I32,
-    )
+    let low = context.emit(Convert(I32WrapI64), [word], [I32])[0]
+    let entry = context.emit(IntBinaryImmediate(Or, 1UL), [low], [I32])[0]
+    heap_store(context, heap_index(context, directory, slot, 2), 0, entry, I32)
     let offset = context.emit(Convert(I64ExtendI32(Unsigned)), [slot], [I64])[0]
     let offset = context.emit(
         IntBinary(ShiftLeft),

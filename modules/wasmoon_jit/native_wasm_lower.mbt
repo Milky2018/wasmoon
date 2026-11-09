@@ -108,6 +108,7 @@ fn wasmoon_native_environment(
     offset_refs=if offset_reference_codegen_enabled {
       Some({
         directory: native_layout_field(71),
+        view_directory: native_layout_field(75),
         header_flags: native_layout_field(72),
         header_reserved: native_layout_field(73),
         header_size: native_layout_field(74),

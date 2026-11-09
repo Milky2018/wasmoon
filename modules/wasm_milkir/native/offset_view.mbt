@@ -4,6 +4,7 @@
 /// 16-byte slot and keeps the stable identity in the low word.
 pub(all) struct OffsetRefLayout {
   directory : Int32
+  view_directory : Int32
   header_flags : Int32
   header_reserved : Int32
   header_size : Int32
@@ -69,29 +70,15 @@ fn checked_offset_header(
   let tag = context.emit(IntBinaryImmediate(And, OFFSET_REF_MASK), [word], [I64])[0]
   view_guard_immediate(context, Equal, tag, OFFSET_REF_TAG, slow)
   view_guard_nonzero(context, heap, slow)
-  let directory = heap_load(context, heap, layout.directory, Ptr64)
+  let directory = heap_load(context, heap, layout.view_directory, Ptr64)
   view_guard_nonzero(context, directory, slow)
-  let control = heap_load(context, heap, heap_layout.allocation_control, Ptr64)
-  view_guard_nonzero(context, control, slow)
-  view_guard_immediate(
-    context,
-    NotEqual,
-    heap_load(context, control, heap_layout.control_enabled, I32),
-    0UL,
-    slow,
-  )
   let slot = context.emit(
       IntBinaryImmediate(And, 0x07FFFFFFUL),
       [offset_upper_word(context, word)],
       [I32],
     )[0]
   let low = context.emit(Convert(I32WrapI64), [word], [I32])[0]
-  let id = context.emit(
-      IntBinary(UnsignedShiftRight),
-      [low, i32_immediate(context, 1)],
-      [I32],
-    )[0]
-  view_guard_immediate(context, NotEqual, id, 0UL, slow)
+  let id = context.emit(IntBinaryImmediate(Or, 1UL), [low], [I32])[0]
   let live = heap_load(context, heap_index(context, directory, slot, 2), 0, I32)
   heap_cast_guard(context, Equal, live, id, slow)
   heap_index(

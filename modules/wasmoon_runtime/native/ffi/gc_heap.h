@@ -249,6 +249,9 @@ typedef struct GcHeap {
     // reuse. Compaction maintains this directory while old reference words
     // retain the stable identity needed to resolve a stale offset.
     uint32_t *offset_ids;
+    // The directory is allocated once. Full verification keeps this alias
+    // null so native projections use the checked runtime path.
+    const uint32_t *offset_view_ids;
 } GcHeap;
 
 static inline size_t gc_heap_payload_bytes(const GcHeap *heap) {
@@ -329,6 +332,12 @@ static inline int gc_is_offset_ref(int64_t word) {
     return ((uint64_t)word & GC_OFFSET_REF_MASK) == GC_OFFSET_REF_TAG;
 }
 
+// Zero means vacant. The odd encoding makes an invalid zero identity
+// unmatchable without a separate branch in generated projections.
+static inline uint32_t gc_offset_entry_word(int32_t id) {
+    return ((uint32_t)id << 1) | 1;
+}
+
 static inline int32_t gc_heap_ref_id(GcHeap *heap, int64_t word) {
     if (!heap || word <= 0 || (word & 1)) return 0;
     uint32_t id = (uint32_t)word >> 1;
@@ -339,7 +348,7 @@ static inline int32_t gc_heap_ref_id(GcHeap *heap, int64_t word) {
     // heap can also reject a mismatched hint at the checked boundary.
     if (!heap->payload_reservation) return (int32_t)id;
     uint32_t slot = ((uint64_t)word >> 32) & GC_OFFSET_SLOT_MASK;
-    return heap->offset_ids[slot] == id ? (int32_t)id : 0;
+    return heap->offset_ids[slot] == ((uint32_t)word | 1) ? (int32_t)id : 0;
 }
 
 static inline int64_t gc_heap_ref_word(GcHeap *heap, int32_t id) {
@@ -414,7 +423,7 @@ static inline int32_t gc_heap_publish_object(GcHeap *heap, int32_t offset, int32
     page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = type;
     page->live_count++;
     int32_t ref = index + 1;
-    if (heap->offset_ids) heap->offset_ids[(uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT] = ref;
+    if (heap->offset_ids) heap->offset_ids[(uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT] = gc_offset_entry_word(ref);
     heap->live_objects[heap->live_count++] = ref;
     heap->total_allocations++;
     return ref;
