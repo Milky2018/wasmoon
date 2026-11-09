@@ -1028,6 +1028,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_layout_field(int32_t index) {
         (int32_t)offsetof(jit_runtime_state_t, callable_registry) - (int32_t)offsetof(jit_context_owner_t, abi),
         offsetof(jit_callable_registry_t, parents),
         offsetof(jit_callable_registry_t, type_count),
+        offsetof(GcHeap, offset_ids),
+        offsetof(GcHeader, flags),
+        offsetof(GcHeader, reserved),
+        sizeof(GcHeader),
     };
     assert(index >= 0 && (size_t)index < sizeof(fields) / sizeof(fields[0]));
     return fields[index];

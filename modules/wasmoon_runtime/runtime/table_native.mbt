@@ -116,14 +116,27 @@ fn StoreReferences::encode_table_value(
         match value {
           ExternRef(index) => @native_bridge.encode_externref(index)
           I31(value) => ((value & @types.I32_MAX).to_int64() << 1) | 1L
-          StructRef(value) | ArrayRef(value) =>
-            @native_bridge.value_to_i64(StructRef(value))
+          StructRef(index) | ArrayRef(index) =>
+            self.native_table_heap_word(index)
           Null => 0L
           _ => raise TypeMismatch
         },
       )
     }
+    StructRef(index) | ArrayRef(index) =>
+      (-1, self.native_table_heap_word(index))
     _ => (-1, @native_bridge.value_to_i64(value))
+  }
+}
+
+///|
+fn StoreReferences::native_table_heap_word(
+  self : StoreReferences,
+  index : Int32,
+) -> Int64 {
+  match self.native.c_heap {
+    Some(heap) => heap.encode_ref_word(index)
+    None => @native_bridge.encode_gc_heap_ref(index)
   }
 }
 

@@ -725,7 +725,7 @@ static int32_t allocate_segment_array(GcHeap *heap, const GcTypeLayout *layout,
 }
 
 // array.new_data - Create array from data segment
-// Returns: encoded GC reference (gc_ref << 1)
+// Returns the encoded native GC reference.
 static int64_t WASMOON_GUEST_ABI gc_array_new_data_impl(
     jit_context_t *ctx,
     int32_t type_idx,
@@ -780,7 +780,7 @@ check_segment:
     if (packed) {
         gc_ref = gc_heap_alloc_typed_array_data(
             heap, layout, identity, type_idx, (int32_t)len_u32, p, allow_collection);
-        if (gc_ref > 0) return ((int64_t)gc_ref) << 1;
+        if (gc_ref > 0) return gc_heap_ref_word(heap, gc_ref);
     } else if (allow_collection &&
         compact_numeric_segment_layout(layout, elem_size, elem_tag) &&
         gc_heap_segment_needs_collection(heap)) {
@@ -813,11 +813,11 @@ check_segment:
         }
     }
 
-    return ((int64_t)gc_ref) << 1;
+    return gc_heap_ref_word(heap, gc_ref);
 }
 
 // array.new_elem - Create array from element segment
-// Returns: encoded GC reference (gc_ref << 1)
+// Returns the encoded native GC reference.
 static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
     jit_context_t *ctx,
     int32_t type_idx,
@@ -864,7 +864,7 @@ static int64_t WASMOON_GUEST_ABI gc_array_new_elem_impl(
         gc_heap_array_set(heap, gc_ref, (int32_t)i, v);
     }
 
-    return ((int64_t)gc_ref) << 1;
+    return gc_heap_ref_word(heap, gc_ref);
 }
 
 // array.init_data - Initialize array region from data segment
@@ -898,7 +898,7 @@ static void WASMOON_GUEST_ABI gc_array_init_data_impl(
         return;
     }
 
-    int32_t gc_ref = (int32_t)(array_ref >> 1);
+    int32_t gc_ref = gc_heap_ref_id(heap, array_ref);
     GcHeader *header = gc_access_object_header(heap, gc_ref);
     int32_t array_len = header ? *(const int32_t *)(header + 1) : 0;
     if (!segment_range_fits((uint64_t)array_len, arr_off_u32, len_u32)) {
@@ -972,7 +972,7 @@ static void WASMOON_GUEST_ABI gc_array_init_elem_impl(
         return;
     }
 
-    int32_t gc_ref = (int32_t)(array_ref >> 1);
+    int32_t gc_ref = gc_heap_ref_id(heap, array_ref);
     int32_t array_len = gc_heap_array_len(heap, gc_ref);
     if (!segment_range_fits((uint64_t)array_len, arr_off_u32, len_u32)) {
         jit_trap_result(WASMOON_TRAP_ARRAY_BOUNDS);

@@ -48,7 +48,11 @@ test "array metadata views observe writes growth and relocating collection" {
     assert_eq(read(), [24L])
     let offset = heap.get_offset(object)
     assert_eq(store.collect_garbage(), 1)
-    assert_true(heap.get_offset(object) < offset)
+    if @env.get_env_var("WASMOON_EXPERIMENT_STABLE_HEAP") is Some("1") {
+      assert_eq(heap.get_offset(object), offset)
+    } else {
+      assert_true(heap.get_offset(object) < offset)
+    }
     assert_eq(read(), [24L])
     assert_true(
       heap

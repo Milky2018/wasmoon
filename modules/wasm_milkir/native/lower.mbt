@@ -13,6 +13,7 @@ struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
   ordinary_view_publication : Bool
   inline_heap : InlineHeapLayout?
+  offset_refs : (OffsetRefLayout, InlineHeapLayout)?
   heap_cast_pages : Int32?
   struct_views : StructViewLayout?
   array_views : ArrayViewLayout?
@@ -62,6 +63,7 @@ pub fn Environment::new(
   poll_budget_offset~ : Int32? = None,
   prepared_arrays~ : Bool = false,
   inline_heap~ : InlineHeapLayout? = None,
+  offset_refs~ : OffsetRefLayout? = None,
   heap_cast_pages~ : Int32? = None,
   struct_views~ : StructViewLayout? = None,
   array_views~ : ArrayViewLayout? = None,
@@ -81,6 +83,12 @@ pub fn Environment::new(
     projection_sites: None,
     expand_structs: true,
     inline_heap,
+    // Projection needs the heap ABI even when allocation inlining is
+    // disabled for this function by the allocation expansion budget.
+    offset_refs: match (offset_refs, inline_heap) {
+      (Some(offsets), Some(heap)) => Some((offsets, heap))
+      _ => None
+    },
     heap_cast_pages,
     struct_views,
     array_views,
@@ -1477,7 +1485,13 @@ fn lower_extension(
       None
     }
     RefEq => {
-      context.finish_operation(ReferenceCompare(Equal), context.operands())
+      if environment.offset_refs is Some(_) {
+        let left = canonical_reference_bits(context, context.operands()[0])
+        let right = canonical_reference_bits(context, context.operands()[1])
+        context.finish_operation(IntCompare(Equal), [left, right])
+      } else {
+        context.finish_operation(ReferenceCompare(Equal), context.operands())
+      }
       None
     }
     RefTest(type_index, nullable) => {

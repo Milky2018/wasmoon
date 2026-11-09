@@ -215,10 +215,10 @@ void gc_generation_promote(GcHeap *heap, int young) {
     }
     generation->old_count = heap->live_count;
     generation->old_boundary = heap->object_count;
-    generation->old_size = heap->size;
+    generation->old_size = gc_heap_payload_bytes(heap);
     if (young) generation->minors_since_major++;
     else {
-        generation->last_major_size = heap->size;
+        generation->last_major_size = generation->old_size;
         generation->minors_since_major = 0;
     }
 }
@@ -243,8 +243,17 @@ int gc_generation_verify(GcHeap *heap, int verbose) {
     }
     int32_t last = heap->live_objects[generation->old_count - 1];
     GcHeader *last_header = (GcHeader *)(heap->data + gc_heap_identity_offset(heap, last));
-    if (last > generation->old_boundary ||
-        (size_t)gc_heap_identity_offset(heap, last) + last_header->size != generation->old_size)
+    size_t mature_bytes = (size_t)gc_heap_identity_offset(heap, last) + last_header->size;
+    if (heap->payload_reservation) {
+        mature_bytes = 0;
+        for (int32_t i = 0; i < generation->old_count; ++i) {
+            int32_t offset = gc_heap_identity_offset(heap, heap->live_objects[i]);
+            if (offset < 0 || (size_t)offset + GC_HEADER_SIZE > heap->size)
+                return generation_error("invalid mature object offset", verbose);
+            mature_bytes += ((GcHeader *)(heap->data + offset))->size;
+        }
+    }
+    if (last > generation->old_boundary || mature_bytes != generation->old_size)
         return generation_error("mature payload boundary does not match identities", verbose);
     if (generation->old_count < heap->live_count &&
         heap->live_objects[generation->old_count] <= generation->old_boundary)

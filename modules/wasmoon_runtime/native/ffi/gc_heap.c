@@ -16,6 +16,12 @@
 #include <stdio.h>
 #include <limits.h>
 #include <stdatomic.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
 
 // Default sizes
 #define DEFAULT_HEAP_CAPACITY (1024 * 1024)  // 1MB
@@ -42,6 +48,19 @@ static int gc_is_truthy_env(const char* value) {
         || strcmp(value, "YES") == 0
         || strcmp(value, "on") == 0
         || strcmp(value, "ON") == 0;
+}
+
+// The compiler and the heap agree for the lifetime of the process. The
+// artifact key also includes the mode, so neither representation reuses
+// machine code compiled for the other.
+MOONBIT_FFI_EXPORT int32_t wasmoon_gc_offset_references_enabled(void) {
+    static atomic_int mode = -1;
+    int current = atomic_load_explicit(&mode, memory_order_relaxed);
+    if (current >= 0) return current;
+    int enabled = gc_is_truthy_env(getenv("WASMOON_EXPERIMENT_OFFSET_REFS"));
+    if (atomic_compare_exchange_strong_explicit(
+            &mode, &current, enabled, memory_order_relaxed, memory_order_relaxed)) return enabled;
+    return current;
 }
 
 static int gc_verify_enabled(void) {
@@ -134,6 +153,68 @@ static int gc_barrier_assert_enabled(void) {
 
 // ============ Internal Helpers ============
 
+static int commit_payload_pages(uint8_t *base, size_t size) {
+#ifdef _WIN32
+    return VirtualAlloc(base, size, MEM_COMMIT, PAGE_READWRITE) != NULL;
+#else
+    return mprotect(base, size, PROT_READ | PROT_WRITE) == 0;
+#endif
+}
+
+static void release_payload_pages(GcHeap *heap) {
+#ifdef _WIN32
+    VirtualFree(heap->data, 0, MEM_RELEASE);
+#else
+    munmap(heap->data, heap->payload_reservation);
+#endif
+}
+
+static int reserve_stable_payload(GcHeap *heap, size_t initial_capacity) {
+    if (initial_capacity > INT32_MAX || !wasmoon_native_allocation_allowed()) return 0;
+#ifdef _WIN32
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    size_t page_size = (size_t)info.dwPageSize;
+#else
+    size_t page_size = (size_t)getpagesize();
+#endif
+    size_t reservation = ALIGN_UP((size_t)INT32_MAX, page_size);
+    size_t capacity = ALIGN_UP(initial_capacity, page_size);
+#ifdef _WIN32
+    void *mapping = VirtualAlloc(NULL, reservation, MEM_RESERVE, PAGE_NOACCESS);
+    if (!mapping) return 0;
+#else
+    void *mapping = mmap(NULL, reservation, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mapping == MAP_FAILED) return 0;
+#endif
+    heap->data = mapping;
+    heap->payload_reservation = reservation;
+    heap->payload_page_size = page_size;
+    if (!commit_payload_pages(heap->data, capacity)) {
+        release_payload_pages(heap);
+        heap->data = NULL;
+        heap->payload_reservation = 0;
+        return 0;
+    }
+    return 1;
+}
+
+static void trim_stable_payload(GcHeap *heap) {
+    size_t retained = heap->size > DEFAULT_HEAP_CAPACITY ? heap->size : DEFAULT_HEAP_CAPACITY;
+    size_t end = ALIGN_UP(retained, heap->payload_page_size);
+    size_t committed = ALIGN_UP(heap->capacity, heap->payload_page_size);
+    if (end >= committed) return;
+    uint8_t *base = heap->data + end;
+    size_t bytes = committed - end;
+#ifdef _WIN32
+    if (!VirtualFree(base, bytes, MEM_DECOMMIT)) return;
+#else
+    if (mmap(base, bytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0)
+        == MAP_FAILED) return;
+#endif
+    heap->capacity = end;
+}
+
 int gc_heap_ensure_payload_capacity(GcHeap* heap, size_t needed) {
     // Object offsets and header sizes are signed 32-bit values. Reject before
     // addition or capacity doubling can wrap or truncate those representations.
@@ -148,6 +229,16 @@ int gc_heap_ensure_payload_capacity(GcHeap* heap, size_t needed) {
     size_t new_capacity = heap->capacity * 2;
     while (new_capacity < heap->size + needed) {
         new_capacity *= 2;
+    }
+
+    if (heap->payload_reservation) {
+        if (new_capacity > heap->payload_reservation) new_capacity = heap->payload_reservation;
+        size_t start = ALIGN_UP(heap->capacity, heap->payload_page_size);
+        size_t end = ALIGN_UP(new_capacity, heap->payload_page_size);
+        if (!wasmoon_native_allocation_allowed() ||
+            (end > start && !commit_payload_pages(heap->data + start, end - start))) return 0;
+        heap->capacity = new_capacity;
+        return 1;
     }
 
     uint8_t* new_data = (uint8_t*)wasmoon_native_realloc(heap->data, new_capacity);
@@ -227,7 +318,7 @@ static void forget_identity_window(GcHeap *heap) {
 }
 
 // Called only after capacity admission; no callbacks or allocations publish a
-// partially initialized object. Payload order and identity order agree.
+// partially initialized object. Identity order is independent of placement.
 int32_t gc_heap_register_object(GcHeap *heap, int32_t offset) {
     // Typed prepared constructors register before initializing their header.
     // Allocation sites, not publication of a reserved identity, classify layout.
@@ -289,7 +380,9 @@ static void finalize_gc_heap(void *object) {
     for (int32_t i = 0; i < heap->identity_page_capacity; i++) gc_generation_free_page(heap->identity_pages[i]);
     free(heap->identity_pages);
     free(heap->live_objects);
-    free(heap->data);
+    free(heap->offset_ids);
+    if (heap->payload_reservation) release_payload_pages(heap);
+    else free(heap->data);
     if (heap->byte_reservation) moonbit_decref(heap->byte_reservation);
     if (heap->object_reservation) moonbit_decref(heap->object_reservation);
     if (heap->capacity) atomic_fetch_sub_explicit(&gc_heap_live_count, 1, memory_order_relaxed);
@@ -308,9 +401,17 @@ int32_t wasmoon_gc_heap_is_empty(GcHeap *heap) {
 static GcHeap* gc_heap_new(size_t initial_capacity) {
     if (initial_capacity == 0) initial_capacity = DEFAULT_HEAP_CAPACITY;
     GcHeap *heap = wasmoon_gc_heap_empty();
-    heap->data = wasmoon_native_malloc(initial_capacity);
+    if (gc_is_truthy_env(getenv("WASMOON_EXPERIMENT_STABLE_HEAP"))) {
+        reserve_stable_payload(heap, initial_capacity);
+    } else {
+        heap->data = wasmoon_native_malloc(initial_capacity);
+    }
+    int offset_refs = wasmoon_gc_offset_references_enabled();
+    if (offset_refs) {
+        heap->offset_ids = wasmoon_native_calloc((size_t)GC_OFFSET_SLOT_MASK + 1, sizeof(uint32_t));
+    }
     heap->free_list = wasmoon_native_malloc(DEFAULT_FREE_CAPACITY * sizeof(int32_t));
-    if (!heap->data || !heap->free_list) {
+    if (!heap->data || !heap->free_list || (offset_refs && !heap->offset_ids)) {
         finalize_gc_heap(heap);
         memset(heap, 0, sizeof(*heap));
         return heap;
@@ -666,13 +767,14 @@ MOONBIT_FFI_EXPORT int64_t *wasmoon_gc_heap_reference_candidates(GcHeap *heap, i
 
 int gc_heap_admit(GcHeap *heap, size_t needed) {
     heap->quota_denied = 0;
-    if (needed > INT32_MAX || heap->size > (size_t)INT32_MAX - needed || heap->object_count == INT32_MAX) return 0;
-    if (heap->byte_reservation && !wasmoon_reservation_resize(heap->byte_reservation, (int64_t)(heap->size + needed))) {
+    size_t used = gc_heap_payload_bytes(heap);
+    if (needed > INT32_MAX || used > (size_t)INT32_MAX - needed || heap->object_count == INT32_MAX) return 0;
+    if (heap->byte_reservation && !wasmoon_reservation_resize(heap->byte_reservation, (int64_t)(used + needed))) {
         heap->quota_denied = 1;
         return 0;
     }
     if (heap->object_reservation && !wasmoon_reservation_resize(heap->object_reservation, (int64_t)heap->object_count + 1)) {
-        if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)heap->size);
+        if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)used);
         heap->quota_denied = 2;
         return 0;
     }
@@ -680,17 +782,53 @@ int gc_heap_admit(GcHeap *heap, size_t needed) {
 }
 
 static void gc_heap_undo_admission(GcHeap *heap) {
-    if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)heap->size);
+    if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)gc_heap_payload_bytes(heap));
     if (heap->object_reservation) wasmoon_reservation_resize(heap->object_reservation, heap->object_count);
 }
 
-int gc_heap_reserve_storage(GcHeap *heap, size_t size) {
-    if (!gc_heap_admit(heap, size)) return 0;
-    if (!gc_heap_ensure_payload_capacity(heap, size) || !gc_heap_ensure_object_capacity(heap)) {
-        gc_heap_undo_admission(heap);
-        return 0;
+// Return an offset only after payload, quota and identity admission. Callers
+// initialize the entire extent before publishing its identity.
+int32_t gc_heap_reserve_storage(GcHeap *heap, size_t size) {
+    if (!gc_heap_admit(heap, size)) return -1;
+    int32_t previous = 0;
+    int32_t link = size <= heap->largest_free_payload ? heap->free_payload_head : 0;
+    while (link) {
+        GcHeader *hole = (GcHeader *)(heap->data + link - 1);
+        if (hole->size >= size) break;
+        previous = link;
+        link = (int32_t)hole->reserved;
     }
-    return 1;
+    if ((!link && !gc_heap_ensure_payload_capacity(heap, size)) ||
+        !gc_heap_ensure_object_capacity(heap)) {
+        gc_heap_undo_admission(heap);
+        return -1;
+    }
+    if (!link) {
+        int32_t offset = (int32_t)heap->size;
+        heap->size += size;
+        return offset;
+    }
+
+    int32_t offset = link - 1;
+    GcHeader *hole = (GcHeader *)(heap->data + offset);
+    int32_t next = (int32_t)hole->reserved;
+    size_t remainder = hole->size - size;
+    if (remainder) {
+        GcHeader *rest = (GcHeader *)(heap->data + offset + size);
+        *rest = (GcHeader){.kind = GC_KIND_FREE, .size = (uint32_t)remainder, .reserved = (uint64_t)next};
+        next = (int32_t)(offset + size) + 1;
+    }
+    if (previous) ((GcHeader *)(heap->data + previous - 1))->reserved = (uint64_t)next;
+    else heap->free_payload_head = next;
+    heap->free_payload_bytes -= size;
+    if (!heap->free_payload_head) heap->largest_free_payload = 0;
+    // The generated append path still compares the physical bump offset with
+    // collection_limit. Reusing bytes must charge the same remaining allowance.
+    if (heap->collection_limit > heap->size) {
+        size_t remaining = heap->collection_limit - heap->size;
+        heap->collection_limit -= size < remaining ? size : remaining;
+    }
+    return offset;
 }
 
 static int32_t allocate_slots(GcHeap *heap, uint8_t kind, int32_t type_idx,
@@ -704,9 +842,8 @@ static int32_t allocate_slots(GcHeap *heap, uint8_t kind, int32_t type_idx,
     if ((size_t)count > (INT32_MAX - prefix) / GC_VALUE_SLOT_SIZE) return 0;
     size_t value_bytes = (size_t)count * GC_VALUE_SLOT_SIZE;
     size_t size = ALIGN_UP(prefix + value_bytes, 16);
-    if (!gc_heap_reserve_storage(heap, size)) return 0;
-
-    int32_t offset = (int32_t)heap->size;
+    int32_t offset = gc_heap_reserve_storage(heap, size);
+    if (offset < 0) return 0;
     GcHeader *header = (GcHeader *)(heap->data + offset);
     // Untyped payloads and padding must be initialized before tracing can see them.
     memset(header, 0, size);
@@ -726,7 +863,6 @@ static int32_t allocate_slots(GcHeap *heap, uint8_t kind, int32_t type_idx,
         memcpy(slots, values, value_bytes);
     }
 
-    heap->size += size;
     heap->generation.has_untyped_allocations = 1;
     int32_t ref = gc_heap_register_object(heap, offset);
     gc_heap_maybe_verify(heap, verify_site);
@@ -1043,6 +1179,15 @@ void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
     }
 }
 
+static void retire_payload(GcHeap *heap, int32_t offset, GcHeader *header) {
+    if (heap->offset_ids) heap->offset_ids[(uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT] = 0;
+    header->kind = GC_KIND_FREE;
+    if (heap->payload_reservation) {
+        header->reserved = (uint32_t)heap->reclaimed_payload_head;
+        heap->reclaimed_payload_head = offset + 1;
+    }
+}
+
 static int32_t gc_heap_sweep_mode(GcHeap *heap, int young, int discard_dead_payload) {
     if (!heap) return 0;
     if (!young) gc_generation_prepare_major(heap);
@@ -1065,11 +1210,20 @@ static int32_t gc_heap_sweep_mode(GcHeap *heap, int young, int discard_dead_payl
             // benefit later large zero fills. The packed constructor overwrites
             // its destination. After retiring this unmarked page, compaction
             // never reads these headers and no old identity can name them.
-            if (!discard_dead_payload) {
+            if (!discard_dead_payload || heap->payload_reservation) {
                 for (int32_t j = i; j < end; ++j) {
                     int32_t ref = heap->live_objects[j];
                     int32_t offset = page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)];
-                    ((GcHeader *)(data + offset))->kind = GC_KIND_FREE;
+                    retire_payload(heap, offset, (GcHeader *)(data + offset));
+                }
+            } else if (heap->offset_ids) {
+                // The packed constructor can overwrite dead payload without
+                // reading it. Retire the directory entries without touching
+                // the old object headers on that path.
+                for (int32_t j = i; j < end; ++j) {
+                    int32_t ref = heap->live_objects[j];
+                    int32_t offset = page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)];
+                    heap->offset_ids[(uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT] = 0;
                 }
             }
             int32_t count = end - i;
@@ -1093,7 +1247,7 @@ static int32_t gc_heap_sweep_mode(GcHeap *heap, int young, int discard_dead_payl
                 gc_heap_clear_mark(heap, ref);
                 heap->live_objects[survivors++] = ref;
             } else {
-                header->kind = GC_KIND_FREE;
+                retire_payload(heap, offset, header);
                 retire_identity(heap, ref);
                 ++collected;
                 if (heap->free_count < heap->free_capacity)
@@ -1106,12 +1260,112 @@ static int32_t gc_heap_sweep_mode(GcHeap *heap, int young, int discard_dead_payl
     return collected;
 }
 
+static void rebuild_stable_payload(GcHeap *heap, int young, size_t allocation_budget);
+
 int32_t gc_heap_sweep(GcHeap *heap) {
-    return gc_heap_sweep_mode(heap, 0, 0);
+    int32_t collected = gc_heap_sweep_mode(heap, 0, 0);
+    if (heap && heap->payload_reservation) rebuild_stable_payload(heap, 0, 0);
+    return collected;
+}
+
+static GcHeader *free_span(GcHeap *heap, int32_t link) {
+    return (GcHeader *)(heap->data + link - 1);
+}
+
+static int32_t merge_free_spans(GcHeap *heap, int32_t first, int32_t second) {
+    int32_t head = 0;
+    GcHeader *tail = NULL;
+    while (first && second) {
+        int32_t *earlier = first < second ? &first : &second;
+        int32_t link = *earlier;
+        GcHeader *span = free_span(heap, link);
+        *earlier = (int32_t)span->reserved;
+        if (tail) tail->reserved = (uint32_t)link;
+        else head = link;
+        tail = span;
+    }
+    int32_t rest = first ? first : second;
+    if (!tail) return rest;
+    tail->reserved = (uint32_t)rest;
+    return head;
+}
+
+// Reuse the dead headers while collecting. Sorting the newly dead extents
+// requires no extra allocation and never walks the retained object bodies.
+static int32_t sort_reclaimed_spans(GcHeap *heap, int32_t head) {
+    if (!head || !free_span(heap, head)->reserved) return head;
+    int32_t slow = head;
+    int32_t fast = (int32_t)free_span(heap, head)->reserved;
+    while (fast && free_span(heap, fast)->reserved) {
+        slow = (int32_t)free_span(heap, slow)->reserved;
+        int32_t next = (int32_t)free_span(heap, fast)->reserved;
+        fast = (int32_t)free_span(heap, next)->reserved;
+    }
+    int32_t other = (int32_t)free_span(heap, slow)->reserved;
+    free_span(heap, slow)->reserved = 0;
+    int32_t left = sort_reclaimed_spans(heap, head);
+    int32_t right = sort_reclaimed_spans(heap, other);
+    return merge_free_spans(heap, left, right);
+}
+
+static void rebuild_stable_payload(GcHeap *heap, int young, size_t allocation_budget) {
+    forget_identity_window(heap);
+    gc_heap_forget_views(heap);
+    int32_t reclaimed = sort_reclaimed_spans(heap, heap->reclaimed_payload_head);
+    int32_t link = merge_free_spans(heap, heap->free_payload_head, reclaimed);
+    heap->reclaimed_payload_head = 0;
+    heap->free_payload_head = 0;
+    heap->free_payload_bytes = 0;
+    heap->largest_free_payload = 0;
+    GcHeader *previous = NULL;
+    while (link) {
+        size_t start = (size_t)(link - 1);
+        GcHeader *header = free_span(heap, link);
+        size_t end = start + header->size;
+        int32_t next = (int32_t)header->reserved;
+        while (next && (size_t)(next - 1) == end) {
+            GcHeader *adjacent = free_span(heap, next);
+            end += adjacent->size;
+            next = (int32_t)adjacent->reserved;
+        }
+        if (end > heap->size || (next && (size_t)(next - 1) < end)) abort();
+        if (end == heap->size) {
+            heap->size = start;
+            // Allocation-triggered collections retain the committed runway.
+            // An explicit collection can return unused tail pages to the OS.
+            if (!allocation_budget) trim_stable_payload(heap);
+            break;
+        }
+        *header = (GcHeader){.kind = GC_KIND_FREE, .size = (uint32_t)(end - start)};
+        if (previous) previous->reserved = (uint32_t)link;
+        else heap->free_payload_head = link;
+        previous = header;
+        heap->free_payload_bytes += header->size;
+        if (header->size > heap->largest_free_payload) heap->largest_free_payload = header->size;
+        link = next;
+    }
+    size_t used = gc_heap_payload_bytes(heap);
+    if (heap->byte_reservation) wasmoon_reservation_resize(heap->byte_reservation, (int64_t)used);
+    size_t allowance = allocation_budget ? allocation_budget :
+        used > MIN_COLLECTION_BUDGET ? used : MIN_COLLECTION_BUDGET;
+    heap->collection_limit = heap->size + allowance;
+    heap->free_count = 0;
+    for (int32_t i = young ? heap->generation.old_count : 0; i < heap->live_count; ++i) {
+        int32_t ref = heap->live_objects[i];
+        GcHeader *header = get_object_header(heap, ref);
+        int32_t fields = header->kind == GC_KIND_ARRAY ?
+            *(int32_t *)(header + 1) : (int32_t)header->reserved;
+        if (fields >= GC_CARD_MIN_FIELDS) gc_generation_prepare_object(heap, ref);
+    }
+    gc_generation_promote(heap, young);
 }
 
 static void gc_heap_compact_mode(GcHeap *heap, int young, size_t allocation_budget) {
     if (!heap) return;
+    if (heap->payload_reservation) {
+        rebuild_stable_payload(heap, young, allocation_budget);
+        return;
+    }
     if (heap->object_count == 0) {
         gc_generation_promote(heap, young);
         return;
@@ -1140,6 +1394,12 @@ static void gc_heap_compact_mode(GcHeap *heap, int young, size_t allocation_budg
             memmove(data + new_offset, data + old_offset, obj_size);
             GcIdentityPage *page = gc_heap_identity_page(heap, ref);
             page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = (int32_t)new_offset;
+            if (heap->offset_ids) {
+                // Moves run in increasing source order and only move down.
+                // Clearing this old start cannot erase an earlier destination.
+                heap->offset_ids[(uint32_t)old_offset >> GC_OFFSET_ALIGNMENT_SHIFT] = 0;
+                heap->offset_ids[new_offset >> GC_OFFSET_ALIGNMENT_SHIFT] = ref;
+            }
         }
 
         GcHeader *current = (GcHeader *)(data + new_offset);
@@ -1198,6 +1458,41 @@ static int gc_verify_fail(const char* message, int32_t verbose) {
     return 0;
 }
 
+static int compare_payload_offsets(const void *left, const void *right) {
+    int32_t a = *(const int32_t *)left;
+    int32_t b = *(const int32_t *)right;
+    return (a > b) - (a < b);
+}
+
+// Check the complete physical partition independently of identity order.
+// Every live range must begin at its unique header. Every hole must be linked.
+static int verify_stable_payload(GcHeap *heap) {
+    int32_t count = heap->live_count;
+    int32_t *offsets = count ? malloc((size_t)count * sizeof(*offsets)) : NULL;
+    if (count && !offsets) return 0;
+    for (int32_t i = 0; i < count; ++i)
+        offsets[i] = gc_heap_identity_offset(heap, heap->live_objects[i]);
+    if (count > 1) qsort(offsets, (size_t)count, sizeof(*offsets), compare_payload_offsets);
+    size_t cursor = 0, holes = 0;
+    int32_t index = 0, link = heap->free_payload_head;
+    while (cursor < heap->size && heap->size - cursor >= GC_HEADER_SIZE) {
+        GcHeader *header = (GcHeader *)(heap->data + cursor);
+        size_t size = header->size;
+        if (size < GC_HEADER_SIZE || (size & 15) || size > heap->size - cursor) break;
+        if (header->kind == GC_KIND_FREE) {
+            if (link != (int32_t)cursor + 1 || header->reserved > INT32_MAX) break;
+            link = (int32_t)header->reserved;
+            holes += size;
+        } else {
+            if (index == count || offsets[index] != (int32_t)cursor) break;
+            ++index;
+        }
+        cursor += size;
+    }
+    free(offsets);
+    return cursor == heap->size && index == count && link == 0 && holes == heap->free_payload_bytes;
+}
+
 int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
     if (!heap) {
         return gc_verify_fail("heap is NULL", verbose);
@@ -1232,14 +1527,14 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
         GcStructViewCache *cached = &heap->struct_views[i];
         if (!cached->reference) continue;
         int64_t word = cached->reference;
-        int32_t offset = word > 0 && !(word & 1) && word <= (int64_t)INT32_MAX * 2
-            ? gc_heap_identity_offset(heap, (int32_t)(word >> 1)) : -1;
+        int32_t ref = gc_heap_ref_id(heap, word);
+        int32_t offset = gc_heap_identity_offset(heap, ref);
         GcHeader *header = offset >= 0 && (size_t)offset + GC_HEADER_SIZE <= heap->size
             ? (GcHeader *)(heap->data + offset) : NULL;
         if (!header || header->kind != GC_KIND_STRUCT ||
             cached->payload != header + 1 ||
             cached->identity != (int32_t)(header->reserved >> 32) - 1 ||
-            cached->identity != gc_heap_runtime_type(heap, (int32_t)(word >> 1))) {
+            cached->identity != gc_heap_runtime_type(heap, ref)) {
             return gc_verify_fail("invalid cached struct view", verbose);
         }
         GcTypeLayout *layout = gc_object_layout(heap, header);
@@ -1259,8 +1554,8 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
         GcArrayViewCache *cached = &heap->array_views[i];
         if (!cached->reference) continue;
         int64_t word = cached->reference;
-        int32_t offset = word > 0 && !(word & 1) && word <= (int64_t)INT32_MAX * 2
-            ? gc_heap_identity_offset(heap, (int32_t)(word >> 1)) : -1;
+        int32_t ref = gc_heap_ref_id(heap, word);
+        int32_t offset = gc_heap_identity_offset(heap, ref);
         GcHeader *header = offset >= 0 && (size_t)offset + GC_HEADER_SIZE <= heap->size
             ? (GcHeader *)(heap->data + offset) : NULL;
         int32_t width = header ? gc_access_compact_array_width(gc_object_layout(heap, header)) : 0;
@@ -1292,6 +1587,8 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             return 0;
         }
 
+        if (heap->offset_ids && heap->offset_ids[(uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT] != (uint32_t)gc_ref)
+            return gc_verify_fail("offset directory disagrees with live identity", verbose);
         GcHeader* header = (GcHeader*)(heap->data + offset);
         GcIdentityPage *page = gc_heap_identity_page(heap, gc_ref);
         int32_t page_index = (gc_ref - 1) >> GC_ID_PAGE_BITS;
@@ -1331,7 +1628,7 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             }
             return 0;
         }
-        if (saw_active && (size_t)offset < previous_end) {
+        if (!heap->payload_reservation && saw_active && (size_t)offset < previous_end) {
             if (verbose) {
                 fprintf(stderr, "[GC VERIFY] object overlap/order violation: gc_ref=%d offset=%d previous_end=%zu\n", gc_ref, offset, previous_end);
             }
@@ -1353,6 +1650,8 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
         if (header->kind == GC_KIND_STRUCT) {
             uint64_t num_fields_u64 = (uint32_t)header->reserved;
             GcTypeLayout *layout = gc_object_layout(heap, header);
+            if (header->flags == GC_OFFSET_STRUCT_LAYOUT && !layout)
+                return gc_verify_fail("offset struct without a published layout", verbose);
             if (layout ? layout->kind != GC_KIND_STRUCT || (uint64_t)layout->count != num_fields_u64 ||
                     (size_t)layout->size > payload_size : num_fields_u64 > (payload_size / GC_VALUE_SLOT_SIZE)) {
                 if (verbose) {
@@ -1382,6 +1681,8 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             GcTypeLayout *layout = gc_object_layout(heap, header);
             size_t stride = layout ? (size_t)layout->size : GC_VALUE_SLOT_SIZE;
             if (layout && layout->kind != GC_KIND_ARRAY) return gc_verify_fail("wrong array layout", verbose);
+            if (header->flags && header->flags != gc_access_array_view(NULL, gc_access_compact_array_width(layout)))
+                return gc_verify_fail("offset array width does not match its layout", verbose);
             size_t need = GC_ARRAY_DATA_OFFSET + ((size_t)len * stride);
             if (need > payload_size) {
                 if (verbose) {
@@ -1411,6 +1712,8 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
         }
     }
 
+    if (heap->payload_reservation && !verify_stable_payload(heap))
+        return gc_verify_fail("invalid stable payload partition", verbose);
     return gc_generation_verify(heap, verbose);
 }
 
@@ -1428,7 +1731,7 @@ int32_t gc_heap_get_offset(GcHeap* heap, int32_t gc_ref) {
 }
 
 size_t gc_heap_get_size(GcHeap* heap) {
-    return heap ? heap->size : 0;
+    return heap ? gc_heap_payload_bytes(heap) : 0;
 }
 
 size_t gc_heap_get_capacity(GcHeap* heap) {
@@ -1457,7 +1760,7 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_rollback(GcCollectionRequest *requ
             gc_heap_clear_mark(heap, ref);
             heap->live_objects[survivors++] = ref;
         } else {
-            header->kind = GC_KIND_FREE;
+            retire_payload(heap, offset, header);
             retire_identity(heap, ref);
         }
     }
@@ -1469,6 +1772,11 @@ MOONBIT_FFI_EXPORT void wasmoon_gc_collection_rollback(GcCollectionRequest *requ
     if (heap->object_count == 0) {
         heap->size = 0;
         heap->free_count = 0;
+        heap->free_payload_bytes = 0;
+        heap->free_payload_head = 0;
+        heap->reclaimed_payload_head = 0;
+        heap->largest_free_payload = 0;
+        if (heap->payload_reservation) trim_stable_payload(heap);
     } else {
         gc_heap_compact(heap);
     }
@@ -1640,6 +1948,10 @@ int32_t wasmoon_gc_heap_is_valid(GcHeap *heap_ptr, int32_t gc_ref) {
 int64_t wasmoon_gc_heap_get_base(GcHeap *heap_ptr) {
     heap_ptr = gc_heap_live(heap_ptr);
     return (int64_t)(uintptr_t)gc_heap_get_base(heap_ptr);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_gc_heap_ref_word(GcHeap *heap, int32_t gc_ref) {
+    return gc_heap_ref_word(heap, gc_ref);
 }
 
 int32_t wasmoon_gc_heap_get_offset(GcHeap *heap_ptr, int32_t gc_ref) {

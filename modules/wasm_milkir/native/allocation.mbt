@@ -103,9 +103,15 @@ fn lower_fast_struct(
     )
     |> ignore
   }
+  let layout_flag = if environment.offset_refs is Some(_) {
+    OFFSET_STRUCT_LAYOUT << 8
+  } else {
+    0UL
+  }
   let header = context.emit(
       I64Const(
         1UL |
+        layout_flag |
         ((type_index.to_uint64() & 65535UL) << 16) |
         (total.to_uint64() << 32),
       ),

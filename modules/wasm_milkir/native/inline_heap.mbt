@@ -394,5 +394,42 @@ fn inline_struct_reservation(
       [word, context.emit(I64Const(1UL), [], [I64])[0]],
       [I64],
     )[0]
+  let word = if environment.offset_refs is Some((offsets, _)) {
+    let directory = heap_load(context, heap, offsets.directory, Ptr64)
+    let direct = context.create_block([])
+    let ready = context.create_block([I64])
+    context.branch(heap_nonzero(context, directory), direct, [], ready, [word])
+    context.switch_to_block(direct)
+    let slot = context.emit(
+        IntBinary(UnsignedShiftRight),
+        [
+          context.emit(Convert(I32WrapI64), [used], [I32])[0],
+          i32_immediate(context, 4),
+        ],
+        [I32],
+      )[0]
+    heap_store(
+      context,
+      heap_index(context, directory, slot, 2),
+      0,
+      reference,
+      I32,
+    )
+    let offset = context.emit(Convert(I64ExtendI32(Unsigned)), [slot], [I64])[0]
+    let offset = context.emit(
+        IntBinary(ShiftLeft),
+        [offset, context.emit(I64Const(32UL), [], [I64])[0]],
+        [I64],
+      )[0]
+    let tag = context.emit(IntBinaryImmediate(Or, OFFSET_REF_TAG), [offset], [
+        I64,
+      ])[0]
+    let packed = context.emit(IntBinary(Or), [tag, word], [I64])[0]
+    context.jump(ready, [packed])
+    context.switch_to_block(ready)
+    context.block_parameters(ready)[0]
+  } else {
+    word
+  }
   (object, reserved, word)
 }

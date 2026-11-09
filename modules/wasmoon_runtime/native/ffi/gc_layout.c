@@ -91,7 +91,10 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
         (size_t)bytes <= heap->capacity - heap->size &&
         (!heap->precise_roots || heap->size < heap->collection_limit) &&
         heap->object_count < heap->identity_window_limit;
+    int32_t offset;
     if (prepared) {
+        offset = (int32_t)heap->size;
+        heap->size += (size_t)bytes;
         heap->quota_denied = 0;
         heap->allocation_control->attempts++;
     } else {
@@ -100,9 +103,10 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
             gc_heap_segment_needs_collection(heap)) return GC_SEGMENT_NEEDS_COLLECTION;
         heap->quota_denied = 0;
         if (gc_should_fail_allocation()) return 0;
-        if (bytes > INT32_MAX || !gc_heap_reserve_storage(heap, (size_t)bytes)) return 0;
+        if (bytes > INT32_MAX) return 0;
+        offset = gc_heap_reserve_storage(heap, (size_t)bytes);
+        if (offset < 0) return 0;
     }
-    int32_t offset = (int32_t)heap->size;
     GcHeader *header = (GcHeader *)(heap->data + offset);
     int repeated_array = array && (repeated || !values);
     size_t body_bytes = array ? (size_t)count * layout->size : 0;
@@ -122,6 +126,11 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
         memset(header, 0, (size_t)bytes);
     }
     header->kind = (uint8_t)layout->kind;
+    if (heap->offset_ids) {
+        header->flags = array
+            ? (uint8_t)gc_access_array_view(NULL, gc_access_compact_array_width(layout))
+            : GC_OFFSET_STRUCT_LAYOUT;
+    }
     header->type_idx = (uint16_t)local_type;
     header->size = (uint32_t)bytes;
     header->reserved = ((uint64_t)(identity + 1) << 32) | (array ? 0 : (uint32_t)count);
@@ -145,7 +154,6 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
                 &layout->fields[array ? 0 : i], value);
         }
     }
-    heap->size += (size_t)bytes;
     if (prepared) return gc_heap_publish_object(heap, offset, identity);
     int32_t ref = gc_heap_register_object(heap, offset);
     gc_heap_set_runtime_type(heap, ref, identity);
@@ -432,10 +440,8 @@ int64_t *wasmoon_gc_heap_trace_graph(NativeTrace *trace, int32_t ref) {
                 if (field->reference != 2) {
                     // i31 is odd, including negative i31. It is not a continuation.
                     if ((word & 1) && !(word > 0 && ((uint64_t)word & UINT64_C(0x7000000000000000)) == UINT64_C(0x1000000000000000))) continue;
-                    const uint64_t tags = UINT64_C(0x7000000000000000);
-                    uint64_t child64 = (uint64_t)word >> 1;
-                    if (word > 0 && !((uint64_t)word & tags) && child64 <= INT32_MAX) {
-                        int32_t child = (int32_t)child64;
+                    int32_t child = gc_heap_ref_id(heap, word);
+                    if (child > 0) {
                         if (child <= trace->young_boundary && !remembered_owner(heap, child)) continue;
                         if (trace_seen(trace, child)) continue;
                         int32_t child_offset = gc_heap_identity_offset(heap, child);

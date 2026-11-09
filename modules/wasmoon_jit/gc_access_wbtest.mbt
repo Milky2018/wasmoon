@@ -102,3 +102,90 @@ test "array metadata projections preserve exact width opaque layouts and retirem
   }
   assert_true(heap.verify())
 }
+
+///|
+test "native heap preserves live objects across growth and reuse" {
+  let heap = CHeap()
+  defer heap.free()
+  let dead = heap.alloc_struct(0, [I64(17L), I64(18L)])
+  let retained = heap.alloc_struct(0, [I64(42L)])
+  let base = heap.get_base()
+  let offset = heap.get_offset(retained)
+  let dead_offset = heap.get_offset(dead)
+  let large = heap.alloc_array(0, 100_000, I64(0L))
+  assert_true(large >= 0)
+  assert_eq(heap.collect([StructRef(retained)]), 2)
+  assert_false(heap.is_valid(dead))
+  assert_false(heap.is_valid(large))
+  assert_eq(heap.struct_get(retained, 0, I64), I64(42L))
+
+  let replacement = heap.alloc_struct(0, [I64(99L)])
+  assert_true(replacement > large)
+  assert_eq(heap.struct_get(replacement, 0, I64), I64(99L))
+  assert_false(heap.is_valid(dead))
+  if @env.get_env_var("WASMOON_EXPERIMENT_STABLE_HEAP") is Some("1") {
+    assert_eq(heap.get_base(), base)
+    assert_eq(heap.get_offset(retained), offset)
+    assert_eq(heap.get_offset(replacement), dead_offset)
+  }
+  assert_true(heap.verify(verbose=true))
+}
+
+///|
+test "offset references preserve roots and reject interior or recycled slots" {
+  if @env.get_env_var("WASMOON_EXPERIMENT_OFFSET_REFS") is Some("1") &&
+    @env.get_env_var("WASMOON_EXPERIMENT_STABLE_HEAP") is Some("1") {
+    let heap = CHeap()
+    defer heap.free()
+    assert_true(heap.get_ptr().define_layout(0, [1], true))
+    let first = heap.alloc_array(0, 32, I32(37), runtime_type=0)
+    let offset = heap.get_offset(first)
+    let word = heap.encode_ref_word(first)
+    assert_eq(
+      word,
+      0x0800000000000000L |
+      (offset.to_int64() >> 4 << 32) |
+      ((first.to_int64() + 1L) << 1),
+    )
+    assert_eq(gc_word_access(heap.get_ptr(), 2, word, 31, 0L), 37L)
+    assert_eq(gc_word_access(heap.get_ptr(), 5, word + (1L << 32), 0, 0L), 0L)
+    assert_eq(heap.collect_raw([word]), 0)
+    assert_eq(heap.get_offset(first), offset)
+    assert_eq(heap.collect([]), 1)
+    let next = heap.alloc_array(0, 32, I32(99), runtime_type=0)
+    assert_eq(heap.get_offset(next), offset)
+    assert_eq(gc_word_access(heap.get_ptr(), 5, word, 0, 0L), 0L)
+    assert_eq(heap.collect_raw([word]), 1)
+    assert_false(heap.is_valid(next))
+    assert_true(heap.verify(verbose=true))
+  }
+}
+
+///|
+test "offset hints resolve moved references through their original identity" {
+  if @env.get_env_var("WASMOON_EXPERIMENT_OFFSET_REFS") is Some("1") &&
+    @env.get_env_var("WASMOON_EXPERIMENT_STABLE_HEAP") is None {
+    let heap = CHeap()
+    defer heap.free()
+    assert_true(heap.get_ptr().define_layout(0, [1], true))
+    let dead = heap.alloc_array(0, 32, I32(6), runtime_type=0)
+    let live = heap.alloc_array(0, 32, I32(37), runtime_type=0)
+    let offset = heap.get_offset(live)
+    let word = heap.encode_ref_word(live)
+    assert_eq(
+      word,
+      0x0800000000000000L |
+      (offset.to_int64() >> 4 << 32) |
+      ((live.to_int64() + 1L) << 1),
+    )
+    assert_eq(heap.collect_raw([word]), 1)
+    assert_false(heap.is_valid(dead))
+    assert_true(heap.get_offset(live) < offset)
+    let next = heap.alloc_array(0, 32, I32(99), runtime_type=0)
+    assert_eq(heap.get_offset(next), offset)
+    assert_eq(gc_word_access(heap.get_ptr(), 2, word, 31, 0L), 37L)
+    assert_eq(heap.collect_raw([word]), 1)
+    assert_false(heap.is_valid(next))
+    assert_true(heap.verify(verbose=true))
+  }
+}

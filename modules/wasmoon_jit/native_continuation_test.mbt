@@ -678,10 +678,15 @@ test "parked native continuation keeps its precise GC root alive" {
     continuation.continue_with(),
     content="NativeSuspended(HostCall)",
   )
-  inspect(heap.get_offset(rooted) > 0, content="true")
+  let offset = heap.get_offset(rooted)
+  inspect(offset > 0, content="true")
   inspect(heap.collect([]), content="1")
   inspect(heap.is_valid(rooted), content="true")
-  inspect(heap.get_offset(rooted), content="0")
+  if @env.get_env_var("WASMOON_EXPERIMENT_STABLE_HEAP") is Some("1") {
+    assert_eq(heap.get_offset(rooted), offset)
+  } else {
+    inspect(heap.get_offset(rooted), content="0")
+  }
   debug_inspect(heap.struct_get(rooted, 0, I32), content="I32(22)")
   debug_inspect(continuation.continue_with(), content="NativeJITCompleted")
   inspect(values[1], content="1")

@@ -2,6 +2,13 @@
 extern "C" fn poll_layout_field(index : Int32) -> Int32 = "wasmoon_jit_poll_layout_field"
 
 ///|
+extern "C" fn gc_offset_references_enabled() -> Int32 = "wasmoon_gc_offset_references_enabled"
+
+///|
+let offset_reference_codegen_enabled : Bool = gc_offset_references_enabled() !=
+  0
+
+///|
 /// Immutable native offsets are shared by compiler environments. Per-function
 /// expansion state remains private to each lowering invocation.
 let native_struct_view_layout : @wasm_native.StructViewLayout = {
@@ -98,6 +105,16 @@ fn wasmoon_native_environment(
     // allocation attempts; it cannot change the verification setting.
     ordinary_view_publication=true,
     heap_cast_pages=Some(native_layout_field(33)),
+    offset_refs=if offset_reference_codegen_enabled {
+      Some({
+        directory: native_layout_field(71),
+        header_flags: native_layout_field(72),
+        header_reserved: native_layout_field(73),
+        header_size: native_layout_field(74),
+      })
+    } else {
+      None
+    },
     struct_views=Some(native_struct_view_layout),
     array_views=Some({
       allocation_control: native_layout_field(43),

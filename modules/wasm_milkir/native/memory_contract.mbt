@@ -359,6 +359,24 @@ fn lower_projection(
     context.forward_results(context.block_parameters(ready))
     return None
   }
+  if environment.offset_refs is Some((offsets, heap_layout)) {
+    match projection {
+      StructData(type_) => {
+        let (shape, fields) = struct_view_shape(validation, type_).unwrap()
+        inline_offset_struct_projection(
+          context, environment, offsets, heap_layout, type_, shape, fields,
+        )
+        return None
+      }
+      ArrayData(0) => {
+        inline_offset_array_projection(
+          context, environment, offsets, heap_layout,
+        )
+        return None
+      }
+      _ => ()
+    }
+  }
   if projection is ArrayData(0) &&
     environment.array_views is Some(layout) &&
     environment.array_projection_budget > 0 &&

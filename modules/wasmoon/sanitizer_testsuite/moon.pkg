@@ -23,6 +23,7 @@ import {
   "Milky2018/wasm_component/wit",
   "Milky2018/wasmoon/wit_binding",
   "moonbitlang/async",
+  "moonbitlang/core/env",
   "moonbitlang/x/fs",
 } for "test"
 
