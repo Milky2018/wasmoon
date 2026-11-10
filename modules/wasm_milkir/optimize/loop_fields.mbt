@@ -4,59 +4,57 @@ fn append_loop_field_argument(
   header : Int32,
   value : @milkir.Value,
 ) -> Unit {
+  fn args_for(
+    target : Int32,
+    args : Array[@milkir.Value],
+  ) -> Array[@milkir.Value] {
+    if target == header {
+      args + [value]
+    } else {
+      args
+    }
+  }
   let term : @milkir.Terminator = match block.terminator.unwrap() {
     Jump(target, args) => Jump(target, args + [value])
     Branch(condition, yes, yes_args, no, no_args) =>
-      Branch(
-        condition,
-        yes,
-        if yes == header {
-          yes_args + [value]
-        } else {
-          yes_args
-        },
-        no,
-        if no == header {
-          no_args + [value]
-        } else {
-          no_args
-        },
-      )
-    Brz(condition, yes, no) =>
-      Branch(
-        condition,
-        no,
-        if no == header {
-          [value]
-        } else {
-          []
-        },
-        yes,
-        if yes == header {
-          [value]
-        } else {
-          []
-        },
-      )
-    Brnz(condition, yes, no) =>
-      Branch(
-        condition,
-        yes,
-        if yes == header {
-          [value]
-        } else {
-          []
-        },
-        no,
-        if no == header {
-          [value]
-        } else {
-          []
-        },
-      )
+      Branch(condition, yes, args_for(yes, yes_args), no, args_for(no, no_args))
+    Brz(condition, no, yes) | Brnz(condition, yes, no) =>
+      Branch(condition, yes, args_for(yes, []), no, args_for(no, []))
     _ => abort("loop field edge was not admitted")
   }
   block.set_terminator(term, metadata=block.terminator_metadata())
+}
+
+///|
+fn loop_field_prefix_barrier(inst : @milkir.Inst) -> Bool {
+  let effects = @effects.analyze(inst.opcode)
+  effects.may_trap ||
+  effects.write is Some(_) ||
+  effects.may_collect ||
+  !effects.preserves_checked_references()
+}
+
+///|
+fn seed_loop_field(
+  function : @milkir.Function,
+  preheader : @milkir.Block,
+  read : @milkir.Inst,
+  receiver : @milkir.Value,
+) -> @milkir.Value {
+  let initial = function.new_value(read.results[0].ty)
+  let seed = function.new_inst(read.opcode, [receiver], [initial])
+  for metadata in read.metadata {
+    seed.add_metadata(metadata)
+  }
+  preheader.append_inst(seed)
+  initial
+}
+
+///|
+fn replace_loop_field_read(read : @milkir.Inst, value : @milkir.Value) -> Unit {
+  read.set_opcode(Scalar(Copy))
+  read.operands.clear()
+  read.operands.push(value)
 }
 
 ///|
@@ -106,13 +104,7 @@ fn forward_loop_fields(function : @milkir.Function) -> Bool {
         read = Some(inst)
         break
       }
-      let effects = @effects.analyze(inst.opcode)
-      if effects.may_trap ||
-        effects.write is Some(_) ||
-        effects.may_collect ||
-        effects.may_reenter ||
-        effects.may_suspend ||
-        effects.may_replace_heap {
+      if loop_field_prefix_barrier(inst) {
         break
       }
     }
@@ -153,16 +145,9 @@ fn forward_loop_fields(function : @milkir.Function) -> Bool {
       dominance.dominates(store_block, latch_id) else {
       continue
     }
-    let initial = function.new_value(read.results[0].ty)
-    let seed = function.new_inst(read.opcode, read.args.copy(), [initial])
-    for metadata in read.metadata {
-      seed.add_metadata(metadata)
-    }
-    preheader.append_inst(seed)
+    let initial = seed_loop_field(function, preheader, read, receiver)
     let carried = function.append_block_param(header, initial.ty)
-    read.set_opcode(Scalar(Copy))
-    read.operands.clear()
-    read.operands.push(carried)
+    replace_loop_field_read(read, carried)
     append_loop_field_argument(preheader, header.id, initial)
     append_loop_field_argument(latch, header.id, stored)
     if store_block == latch_id &&
@@ -183,9 +168,7 @@ fn forward_loop_fields(function : @milkir.Function) -> Bool {
             t == type_index &&
             f == field &&
             inst.args == [receiver] {
-            inst.set_opcode(Scalar(Copy))
-            inst.operands.clear()
-            inst.operands.push(current)
+            replace_loop_field_read(inst, current)
           }
         }
       }

@@ -298,3 +298,38 @@ pub fn[Inst, Failure] DirectLoweringState::tail_call_inputs(
   }
   (plan, inputs)
 }
+
+///|
+/// Materialize and validate a tail call with the target's instruction and clobbers.
+pub fn[Inst, Failure] DirectLoweringState::emit_tail_call(
+  self : DirectLoweringState[Inst, Failure],
+  block : Block,
+  call : @native.NativeCall,
+  operands : Array[Value],
+  metadata : InstructionMetadata,
+  make_move : (@native.ValueType) -> Inst,
+  is_allocatable : (PhysicalReg) -> Bool,
+  select : (InternalCallPlan) -> (Inst, Array[PhysicalReg]),
+) -> Unit raise CallMaterializationError {
+  let operands = self.builder.materialize_abi_words(
+    block,
+    operands,
+    call.signature.params,
+    make_move,
+    operand_start=if call.callee is Indirect { 1 } else { 0 },
+  ) catch {
+    error => raise BuildFailure(error)
+  }
+  let (plan, inputs) = self.tail_call_inputs(call, operands, is_allocatable)
+  let (target, clobbers) = select(plan)
+  let metadata = direct_source_metadata(
+    metadata.source,
+    None,
+    metadata.live_gc_roots,
+    call.behavior.semantics(),
+  )
+  (self.builder.set_terminator(block, target, inputs, [], clobbers, metadata)
+  |> ignore) catch {
+    error => raise BuildFailure(error)
+  }
+}

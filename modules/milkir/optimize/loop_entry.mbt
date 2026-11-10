@@ -33,17 +33,11 @@ fn merge_loop_entries(
   }
   for id in entries {
     let block = find_unroll_block(function, id).unwrap()
-    let terminator : @milkir.Terminator = match block.terminator.unwrap() {
-      Jump(next, arguments) => Jump(target(next), arguments)
-      Branch(condition, a, aa, b, ba) =>
-        Branch(condition, target(a), aa, target(b), ba)
-      Brz(condition, a, b) => Brz(condition, target(a), target(b))
-      Brnz(condition, a, b) => Brnz(condition, target(a), target(b))
-      BrTable(index, targets, default_) =>
-        BrTable(index, targets.map(target), target(default_))
-      Return(_) | Trap(_) | TrapExit(_) => abort("invalid loop predecessor")
+    let term = block.terminator.unwrap()
+    guard !(term is (Return(_) | Trap(_) | TrapExit(_))) else {
+      abort("invalid loop predecessor")
     }
-    block.set_terminator(terminator)
+    block.set_terminator(remap_terminator(term, target))
   }
   true
 }

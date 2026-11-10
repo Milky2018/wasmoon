@@ -459,6 +459,7 @@ pub fn[Inst, Failure] DirectLoweringState::constructed_function(Self[Inst, Failu
 pub fn[Inst, Failure] DirectLoweringState::create_block(Self[Inst, Failure], Array[@native_types.ValueType]) -> (Int32, Array[Int32])
 pub fn[Inst, Failure] DirectLoweringState::create_stack_object(Self[Inst, Failure], Int32, Int32) -> Int32
 pub fn[Inst, Failure] DirectLoweringState::edge(Self[Inst, Failure], Block, Int32, Array[Int32], (@native_types.ValueType) -> Inst) -> Edge raise VCodeBuildError
+pub fn[Inst, Failure] DirectLoweringState::emit_tail_call(Self[Inst, Failure], Block, @native_types.NativeCall, Array[Value], InstructionMetadata, (@native_types.ValueType) -> Inst, (@allocation_types.PhysicalReg) -> Bool, (InternalCallPlan) -> (Inst, Array[@allocation_types.PhysicalReg])) -> Unit raise CallMaterializationError
 pub fn[Inst, Failure] DirectLoweringState::finish_construction(Self[Inst, Failure], (VCodeBuildError) -> Failure) -> Unit
 pub fn[Inst, Failure] DirectLoweringState::first_error(Self[Inst, Failure]) -> Failure?
 pub fn[Inst, Failure] DirectLoweringState::instruction_index(Self[Inst, Failure]) -> Int32

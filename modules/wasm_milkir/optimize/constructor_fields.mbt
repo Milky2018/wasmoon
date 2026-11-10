@@ -41,16 +41,8 @@ fn forward_constructor_fields(
         if reads.length() == 4 {
           break
         }
-      } else {
-        let effects = @effects.analyze(inst.opcode)
-        if effects.may_trap ||
-          effects.write is Some(_) ||
-          effects.may_collect ||
-          effects.may_reenter ||
-          effects.may_suspend ||
-          effects.may_replace_heap {
-          break
-        }
+      } else if loop_field_prefix_barrier(inst) {
+        break
       }
     }
     guard reads.get(0) is Some(anchor) &&
@@ -123,7 +115,6 @@ fn forward_constructor_fields(
         }
       }
     }
-    let anchor_opcode = anchor.opcode
     let mut seeded_anchor : @milkir.Value? = None
     for read in reads {
       guard @wasm_milkir.decode_opcode(read.opcode) is Some(StructGet(t, field)) &&
@@ -145,28 +136,14 @@ fn forward_constructor_fields(
         continue
       }
       if seeded_anchor is None {
-        let checked = function.new_value(anchor.results[0].ty)
-        let seed = function.new_inst(anchor_opcode, [entry_args[parameter]], [
-          checked,
-        ])
-        for metadata in anchor.metadata {
-          seed.add_metadata(metadata)
-        }
-        preheader.append_inst(seed)
-        seeded_anchor = Some(checked)
+        seeded_anchor = Some(
+          seed_loop_field(function, preheader, anchor, entry_args[parameter]),
+        )
       }
       let initial = if read.id == anchor.id {
         seeded_anchor.unwrap()
       } else {
-        let initial = function.new_value(read.results[0].ty)
-        let seed = function.new_inst(read.opcode, [entry_args[parameter]], [
-          initial,
-        ])
-        for metadata in read.metadata {
-          seed.add_metadata(metadata)
-        }
-        preheader.append_inst(seed)
-        initial
+        seed_loop_field(function, preheader, read, entry_args[parameter])
       }
       let carried = function.append_block_param(header, initial.ty)
       append_loop_field_argument(preheader, header.id, initial)
@@ -187,9 +164,7 @@ fn forward_constructor_fields(
             @wasm_milkir.decode_opcode(inst.opcode) is Some(StructGet(t, f)) &&
             t == type_index &&
             f == field {
-            inst.set_opcode(Scalar(Copy))
-            inst.operands.clear()
-            inst.operands.push(carried)
+            replace_loop_field_read(inst, carried)
           }
         }
       }

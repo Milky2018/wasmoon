@@ -7,26 +7,19 @@ fn struct_allocation_layout(
   let offsets : Array[Int32] = []
   let mut shape = 0UL
   let mut size = 0
-  guard validation.struct_fields(type_index) is Some(fields) else {
+  guard validation.struct_fields(type_index) is Some(fields) &&
+    fields.length() <= 16 else {
     return None
   }
   for index, field in fields {
-    guard field_width(field) is Some(width) &&
-      index < 16 &&
-      !(field.storage is Value(CallableRef | OpaqueRef)) else {
+    guard field_width(field, allow_callable_or_opaque=false) is Some(width) else {
       return None
     }
     size = (size + width - 1) / width * width
     offsets.push(size + 16)
     size += width
     widths.push(width)
-    let code = match width {
-      1 => 1UL
-      2 => 2UL
-      4 => 3UL
-      _ => 4UL
-    }
-    let code = if field.storage is Value(Ref) { code | 8UL } else { code }
+    let code = field_shape_code(width, field_is_reference(field))
     shape = shape | (code << (index * 4))
   }
   let total = (size + 31) / 16 * 16
@@ -285,13 +278,13 @@ fn allocation_field_count(
   validation : @wasm_milkir.WasmValidationContext,
   type_ : Int32,
 ) -> Int32? {
-  guard validation.struct_fields(type_) is Some(fields) else { return None }
-  for index, field in fields {
-    if index == 16 ||
-      !(field.storage
-      is (Packed8 | Packed16 | Value(I32 | F32 | I64 | F64 | V128 | Ref))) {
-      return None
-    }
+  guard validation.struct_fields(type_) is Some(fields) &&
+    fields.length() <= 16 &&
+    fields.all(field => {
+      field_width(field, allow_v128=true, allow_callable_or_opaque=false)
+      is Some(_)
+    }) else {
+    return None
   }
   Some(fields.length())
 }

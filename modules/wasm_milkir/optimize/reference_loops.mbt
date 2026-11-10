@@ -43,31 +43,6 @@ fn reference_loop_invariant(
 }
 
 ///|
-fn reference_region_targets(
-  term : @milkir.Terminator,
-  target : (Int32) -> Int32,
-  value : (@milkir.Value) -> @milkir.Value,
-) -> @milkir.Terminator {
-  match term {
-    Jump(next, args) => Jump(target(next), args.map(value))
-    Branch(condition, yes, aa, no, ba) =>
-      Branch(
-        value(condition),
-        target(yes),
-        aa.map(value),
-        target(no),
-        ba.map(value),
-      )
-    Brz(condition, yes, no) => Brz(value(condition), target(yes), target(no))
-    Brnz(condition, yes, no) => Brnz(value(condition), target(yes), target(no))
-    BrTable(index, targets, default_) =>
-      BrTable(value(index), targets.map(target), target(default_))
-    Return(args) => Return(args.map(value))
-    Trap(_) | TrapExit(_) => term
-  }
-}
-
-///|
 fn null_reference_constant(
   function : @milkir.Function,
   value : @milkir.Value,
@@ -76,104 +51,6 @@ fn null_reference_constant(
     Some(inst) => inst.opcode is Scalar(IntConst(0L))
     None => false
   }
-}
-
-///|
-fn clone_reference_region(
-  function : @milkir.Function,
-  body : Array[@milkir.Block],
-  guard_block : Int32,
-  guard_instruction : Int32,
-  hit : Int32,
-  hit_args : Array[@milkir.Value],
-  header : Int32,
-  next_header : Int32?,
-  checked_reference : @milkir.Value,
-  expected_reference : @milkir.Value,
-) -> Map[Int32, @milkir.Block] {
-  let blocks : Map[Int32, @milkir.Block] = Map([])
-  let values : Map[Int32, @milkir.Value] = Map([])
-  for block in body {
-    let copy = function.new_block0()
-    blocks[block.id] = copy
-    for parameter in block.params {
-      values[parameter.0.id] = function.append_block_param(copy, parameter.1)
-    }
-    for id in function.block_instruction_ids(block) {
-      for result in function.instruction_by_id(id).unwrap().results {
-        values[result.id] = function.new_value(result.ty)
-      }
-    }
-  }
-  fn value(original : @milkir.Value) -> @milkir.Value {
-    values.get(original.id).unwrap_or(original)
-  }
-  fn target(original : Int32) -> Int32 {
-    if original == header && next_header is Some(next) {
-      next
-    } else {
-      blocks.get(original).map(block => block.id).unwrap_or(original)
-    }
-  }
-  for block in body {
-    let copy = blocks[block.id]
-    for id in function.block_instruction_ids(block) {
-      let original = function.instruction_by_id(id).unwrap()
-      let nullable = original.opcode is Scalar(IntCompare(Eq | Ne)) &&
-        original.args.length() == 2 &&
-        (
-          (
-            original.args[0] == checked_reference &&
-            null_reference_constant(function, original.args[1])
-          ) ||
-          (
-            original.args[1] == checked_reference &&
-            null_reference_constant(function, original.args[0])
-          )
-        )
-      let cloned = if original.results is [defined] &&
-        defined == checked_reference {
-        function.new_inst(
-          Scalar(Copy),
-          [expected_reference],
-          original.results.map(value),
-        )
-      } else if nullable {
-        let truth = if original.opcode is Scalar(IntCompare(Ne)) {
-          1L
-        } else {
-          0L
-        }
-        function.new_inst(
-          Scalar(IntConst(truth)),
-          [],
-          original.results.map(value),
-        )
-      } else if id == guard_instruction {
-        function.new_inst(Scalar(IntConst(1L)), [], original.results.map(value))
-      } else {
-        function.new_inst(
-          original.opcode,
-          original.args.map(value),
-          original.results.map(value),
-        )
-      }
-      for metadata in original.metadata {
-        cloned.add_metadata(metadata)
-      }
-      copy.append_inst(cloned)
-    }
-    let term = if block.id == guard_block {
-      @milkir.Terminator::Jump(hit, hit_args)
-    } else {
-      block.terminator.unwrap()
-    }
-    copy.set_terminator(
-      reference_region_targets(term, target, value),
-      metadata=block.terminator_metadata(),
-    )
-  }
-  blocks
 }
 
 ///|
@@ -276,29 +153,42 @@ fn specialize_reference_loop_at(
     body.length() + tail.length() > 64 {
     return false
   }
-  let fast = clone_reference_region(
+  fn replace(inst : @milkir.Inst) -> (@milkir.Opcode, Array[@milkir.Value])? {
+    if inst.results is [defined] && defined == reference {
+      return Some((Scalar(Copy), [expected]))
+    }
+    if inst.opcode is Scalar(IntCompare(Eq | Ne)) &&
+      inst.args is [a, b] &&
+      (
+        (a == reference && null_reference_constant(function, b)) ||
+        (b == reference && null_reference_constant(function, a))
+      ) {
+      let truth = if inst.opcode is Scalar(IntCompare(Ne)) { 1L } else { 0L }
+      return Some((Scalar(IntConst(truth)), []))
+    }
+    if inst.id == check.id {
+      Some((Scalar(IntConst(1L)), []))
+    } else {
+      None
+    }
+  }
+  let fast = @generic.clone_region(
     function,
     body,
-    guard_block.id,
-    check.id,
-    hit,
-    hit_args,
-    loop_.header,
-    None,
-    reference,
-    expected,
+    replace_instruction=replace,
+    select_terminator=block => {
+      if block.id == guard_block.id {
+        Jump(hit, hit_args)
+      } else {
+        block.terminator.unwrap()
+      }
+    },
   )
-  let first = clone_reference_region(
+  let first = @generic.clone_region(
     function,
     tail,
-    guard_block.id,
-    check.id,
-    hit,
-    hit_args,
-    loop_.header,
-    Some(fast[loop_.header].id),
-    reference,
-    expected,
+    replace_instruction=replace,
+    redirect=id => if id == loop_.header { Some(fast[id].id) } else { None },
   )
   guard_block.set_terminator(
     Branch(condition, first[hit].id, hit_args, miss, miss_args),

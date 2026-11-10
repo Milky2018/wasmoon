@@ -159,12 +159,18 @@ fn annotate_semantic(
 }
 
 ///|
-fn field_width(field : @wasm_milkir.WasmFieldContract) -> Int32? {
+fn field_width(
+  field : @wasm_milkir.WasmFieldContract,
+  allow_v128~ : Bool = false,
+  allow_callable_or_opaque~ : Bool = true,
+) -> Int32? {
   match field.storage {
     Packed8 => Some(1)
     Packed16 => Some(2)
     Value(I32 | F32) => Some(4)
-    Value(I64 | F64 | Ref | CallableRef | OpaqueRef) => Some(8)
+    Value(I64 | F64 | Ref) => Some(8)
+    Value(CallableRef | OpaqueRef) if allow_callable_or_opaque => Some(8)
+    Value(V128) if allow_v128 => Some(16)
     _ => None
   }
 }
@@ -172,6 +178,17 @@ fn field_width(field : @wasm_milkir.WasmFieldContract) -> Int32? {
 ///|
 fn field_is_reference(field : @wasm_milkir.WasmFieldContract) -> Bool {
   field.storage is Value(Ref | CallableRef | OpaqueRef)
+}
+
+///|
+fn field_shape_code(width : Int32, reference : Bool) -> UInt64 {
+  // Widths are powers of two. The low bits encode log2(width) + 1.
+  let code = (width.ctz() + 1).to_uint64()
+  if reference {
+    code | 8UL
+  } else {
+    code
+  }
 }
 
 ///|
@@ -553,15 +570,10 @@ fn struct_view_prefix(
   // every admitted field, including fields with distinct logical carriers.
   for index in 0..<count {
     let field = fields[index]
-    let code = match field.storage {
-      Packed8 => 1UL
-      Packed16 => 2UL
-      Value(I32 | F32) => 3UL
-      Value(I64 | F64) => 4UL
-      Value(V128) => 5UL
-      Value(Ref | CallableRef | OpaqueRef) => 12UL
-      _ => return None
+    guard field_width(field, allow_v128=true) is Some(width) else {
+      return None
     }
+    let code = field_shape_code(width, field_is_reference(field))
     shape = shape | (code << (index * 4))
   }
   Some((shape, count))

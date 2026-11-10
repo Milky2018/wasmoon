@@ -1092,12 +1092,25 @@ fn DirectLoweringSession::terminate(
         )
       }
       TailCall(call, operands) =>
-        self.terminate_tail_call(
+        self.state.emit_tail_call(
           block,
           call,
           self.state.target_values(operands),
           ordinary_metadata,
-        )
+          ty => Move(ty),
+          is_allocatable,
+          plan => {
+            let target = match call.callee {
+              Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
+              Indirect => TailCallIndirect(call.signature, plan)
+              External(_) => abort("external tail call rejected above")
+            }
+            (target, platform_call_clobbers())
+          },
+        ) catch {
+          UnsupportedAbi(message) => raise UnsupportedAbi(message~)
+          BuildFailure(cause) => raise BuildFailure(cause~)
+        }
       NoReturnCall(call, operands) => {
         let operands = self.state.target_values(operands)
         let call_metadata = direct_source_metadata(
@@ -1170,51 +1183,6 @@ fn DirectLoweringSession::terminate(
       }
     }
   }
-}
-
-///|
-fn DirectLoweringSession::terminate_tail_call(
-  self : DirectLoweringSession,
-  block : @vcode.Block,
-  call : @native.NativeCall,
-  operands : Array[@vcode.Value],
-  metadata : @vcode.InstructionMetadata,
-) -> Unit raise AArch64LowerError {
-  let operands = self.state.builder.materialize_abi_words(
-    block,
-    operands,
-    call.signature.params,
-    ty => Move(ty),
-    operand_start=if call.callee is Indirect { 1 } else { 0 },
-  ) catch {
-    error => raise BuildFailure(cause=error)
-  }
-  let (plan, inputs) = self.state.tail_call_inputs(
-    call, operands, is_allocatable,
-  ) catch {
-    UnsupportedAbi(message) => raise UnsupportedAbi(message~)
-    BuildFailure(cause) => raise BuildFailure(cause~)
-  }
-  let target = match call.callee {
-    Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
-    Indirect => TailCallIndirect(call.signature, plan)
-    External(_) => abort("external tail call rejected above")
-  }
-  let metadata = direct_source_metadata(
-    metadata.source,
-    None,
-    metadata.live_gc_roots,
-    call.behavior.semantics(),
-  )
-  set_terminator(
-    self.state.builder,
-    block,
-    target,
-    inputs,
-    [],
-    metadata,
-    clobbers=platform_call_clobbers(),
-  )
 }
 
 ///|

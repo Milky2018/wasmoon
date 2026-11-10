@@ -1,21 +1,4 @@
 ///|
-fn dynamic_unroll_target(
-  term : @milkir.Terminator,
-  target : (Int32) -> Int32,
-) -> @milkir.Terminator {
-  match term {
-    Jump(id, args) => Jump(target(id), args)
-    Branch(condition, yes, aa, no, ba) =>
-      Branch(condition, target(yes), aa, target(no), ba)
-    Brz(condition, yes, no) => Brz(condition, target(yes), target(no))
-    Brnz(condition, yes, no) => Brnz(condition, target(yes), target(no))
-    BrTable(index, targets, default_) =>
-      BrTable(index, targets.map(target), target(default_))
-    Return(_) | Trap(_) | TrapExit(_) => term
-  }
-}
-
-///|
 /// Perform one bounded unrolling step after memory placement. Each copied
 /// header retains its condition, so dynamic bounds and early exits need no
 /// trip-count speculation. Callers apply this step once per prepared body.
@@ -111,55 +94,15 @@ pub fn unroll_dynamic_memory_loop(function : @milkir.Function) -> OptResult {
     selected_pure = pure
   }
   guard selected is Some((loop_, body, latch)) else { return result }
-  let copies : Map[Int32, @milkir.Block] = Map([])
-  let values : Map[Int32, @milkir.Value] = Map([])
-  for block in body {
-    let copy = function.new_block0()
-    copies[block.id] = copy
-    for (value, type_) in block.params {
-      values[value.id] = function.append_block_param(copy, type_)
+  let copies = clone_region(function, body, redirect=id => {
+    if id == loop_.header {
+      Some(id)
+    } else {
+      None
     }
-    for id in function.block_instruction_ids(block) {
-      for value in function.instruction_by_id(id).unwrap().results {
-        values[value.id] = function.new_value(value.ty)
-      }
-    }
-  }
-  fn value(v : @milkir.Value) -> @milkir.Value {
-    values.get(v.id).unwrap_or(v)
-  }
-  for block in body {
-    let copy = copies[block.id]
-    for id in function.block_instruction_ids(block) {
-      let inst = function.instruction_by_id(id).unwrap()
-      let cloned = function.new_inst(
-        inst.opcode,
-        inst.args.map(value),
-        inst.results.map(value),
-      )
-      for metadata in inst.metadata {
-        cloned.add_metadata(metadata)
-      }
-      copy.append_inst(cloned)
-    }
-    let term = block.terminator.unwrap()
-    copy.set_terminator(
-      dynamic_unroll_target(
-        rewrite_terminator_values(term, value).unwrap_or(term),
-        id => {
-          if id == loop_.header {
-            id
-          } else {
-            copies.get(id).map(block => block.id).unwrap_or(id)
-          }
-        },
-      ),
-      metadata=block.terminator_metadata(),
-    )
-  }
-  let term = latch.terminator.unwrap()
+  })
   latch.set_terminator(
-    dynamic_unroll_target(term, id => {
+    remap_terminator(latch.terminator.unwrap(), id => {
       if id == loop_.header {
         copies[id].id
       } else {

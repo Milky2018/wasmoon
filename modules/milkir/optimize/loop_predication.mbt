@@ -1,21 +1,4 @@
 ///|
-fn predicated_successors(
-  term : @milkir.Terminator,
-  target : (Int32) -> Int32,
-) -> @milkir.Terminator {
-  match term {
-    Jump(id, args) => Jump(target(id), args)
-    Branch(condition, yes, aa, no, ba) =>
-      Branch(condition, target(yes), aa, target(no), ba)
-    Brz(condition, yes, no) => Brz(condition, target(yes), target(no))
-    Brnz(condition, yes, no) => Brnz(condition, target(yes), target(no))
-    BrTable(index, targets, default_) =>
-      BrTable(index, targets.map(target), target(default_))
-    Return(_) | Trap(_) | TrapExit(_) => term
-  }
-}
-
-///|
 fn induction_step(
   function : @milkir.Function,
   next : @milkir.Value,
@@ -366,46 +349,9 @@ pub fn predicate_counted_loop_bounds(function : @milkir.Function) -> OptResult {
       }) {
       continue
     }
-    let copies : Map[Int32, @milkir.Block] = Map([])
-    let values : Map[Int32, @milkir.Value] = Map([])
-    for block in fast_body {
-      let copy = function.new_block0()
-      copies[block.id] = copy
-      for (value, type_) in block.params {
-        values[value.id] = function.append_block_param(copy, type_)
-      }
-      for id in function.block_instruction_ids(block) {
-        for value in function.instruction_by_id(id).unwrap().results {
-          values[value.id] = function.new_value(value.ty)
-        }
-      }
-    }
-    fn value(v : @milkir.Value) -> @milkir.Value {
-      values.get(v.id).unwrap_or(v)
-    }
-    for block in fast_body {
-      let copy = copies[block.id]
-      for id in function.block_instruction_ids(block) {
-        let inst = function.instruction_by_id(id).unwrap()
-        let cloned = function.new_inst(
-          inst.opcode,
-          inst.args.map(value),
-          inst.results.map(value),
-        )
-        for metadata in inst.metadata {
-          cloned.add_metadata(metadata)
-        }
-        copy.append_inst(cloned)
-      }
-      let term = predication_term(block, guards)
-      copy.set_terminator(
-        predicated_successors(
-          rewrite_terminator_values(term, value).unwrap_or(term),
-          id => copies.get(id).map(block => block.id).unwrap_or(id),
-        ),
-        metadata=block.terminator_metadata(),
-      )
-    }
+    let copies = clone_region(function, fast_body, select_terminator=block => {
+      predication_term(block, guards)
+    })
     let zero = predication_value(function, preheader, IntConst(0L), [])
     let checks = [
       predication_value(function, preheader, IntCompare(Sge), [start, zero]),

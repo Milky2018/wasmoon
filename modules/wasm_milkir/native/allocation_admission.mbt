@@ -248,8 +248,7 @@ fn prepare_allocation_admission(
         guard validation.struct_fields(type_) is Some(fields) &&
           fields.length() <= 16 &&
           fields.all(field => {
-            field_width(field) is Some(_) &&
-            !(field.storage is Value(CallableRef | OpaqueRef))
+            field_width(field, allow_callable_or_opaque=false) is Some(_)
           }) else {
           continue
         }
