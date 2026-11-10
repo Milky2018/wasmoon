@@ -327,7 +327,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("direct-vcode-53", "direct-vcode-51", true, false)
+      #|("direct-vcode-54", "direct-vcode-51", true, false)
     ),
   )
 }

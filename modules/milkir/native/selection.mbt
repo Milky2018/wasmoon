@@ -743,6 +743,16 @@ fn selected_by_memory_address(
 }
 
 ///|
+fn MemoryAddressMatch::absorbs(
+  self : MemoryAddressMatch,
+  value : @milkir.Value,
+) -> Bool {
+  self.selection.base != value &&
+  self.selection.index != Some(value) &&
+  self.consumed.contains(value)
+}
+
+///|
 fn selected_by_memory_address_use(
   value : @milkir.Value,
   consumer : @milkir.Inst,
@@ -760,9 +770,20 @@ fn selected_by_memory_address_use(
     memory_selection(instruction, facts) is Some(selected) else {
     return false
   }
-  selected.selection.base != value &&
-  selected.selection.index != Some(value) &&
-  selected.consumed.any(consumed_value => consumed_value == value)
+  // A value can feed both the selected address and the stored payload.
+  // Following a single-use chain to a store does not prove that the chain
+  // contributes to its address.
+  if consumer_id == consumer.id {
+    if consumer.opcode is Memory(Store(_) | StoreNarrow(_)) &&
+      consumer.args[1] == value {
+      return false
+    }
+  } else {
+    guard consumer.results is [result] && selected.absorbs(result) else {
+      return false
+    }
+  }
+  selected.absorbs(value)
 }
 
 ///|

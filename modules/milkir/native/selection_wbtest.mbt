@@ -779,6 +779,42 @@ test "multiply add retains a shared accumulator constant in its dominator" {
 }
 
 ///|
+test "indexed stores retain a shared index used in their payload" {
+  for computed_payload in [false, true] {
+    let b = @milkir.FunctionBuilder("shared_index_store_payload")
+    let base = b.add_param(Ptr)
+    let index = b.add_param(I32)
+    let tag = b.add_param(I64)
+    let condition = b.add_param(I32)
+    let index = b.uextend(I64, index)
+    let yes = b.create_block()
+    let no = b.create_block()
+    b.branch(condition, yes, [], no, [])
+    for block in [yes, no] {
+      b.switch_to_block(block)
+      let payload = if computed_payload { b.bor(index, tag) } else { index }
+      b.store_ptr(I64, base, payload, index)
+      b.return_([])
+    }
+    let function = b.finalize()
+    function.verify_core()
+    let trace = trace_lowering(function, folds_unsigned_index_into_memory=true)
+    let mut extensions = 0
+    for instruction, operation in trace.operations {
+      if operation is Convert(I64ExtendI32(Unsigned)) {
+        extensions += 1
+        assert_eq(trace.operation_blocks[instruction], 0)
+      }
+    }
+    assert_eq(extensions, 1)
+    assert_eq(
+      trace.operations.filter(op => op is StoreIndexed(_, 0)).length(),
+      2,
+    )
+  }
+}
+
+///|
 test "memory selection retains a constant used as both base and offset" {
   let b = @milkir.FunctionBuilder("shared_constant_address")
   let condition = b.add_param(I32)
