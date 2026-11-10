@@ -206,6 +206,15 @@ pub fn WasmFunctionContract::equal(Self, Self) -> Bool
 pub fn WasmFunctionContract::not_equal(Self, Self) -> Bool
 pub fn WasmFunctionContract::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
+pub(all) enum WasmFunctionEffects {
+  NonCollectingReadOnly
+  NonCollectingReadWrite
+}
+pub fn WasmFunctionEffects::equal(Self, Self) -> Bool
+pub fn WasmFunctionEffects::not_equal(Self, Self) -> Bool
+pub fn WasmFunctionEffects::to_repr(Self) -> @debug.Repr
+
 #derive(Eq, Hash, @debug.Debug)
 pub(all) enum WasmOpcode {
   WasmCall(Int32)
@@ -260,6 +269,7 @@ pub(all) enum WasmOpcode {
   ContResume(Int32, Int32, Int32, Int32)
   ContSwitch(Int32, Int32)
   SafepointPoll(Int32, Int32, Int32, Int32)
+  ExecutableFuncRefEq
 }
 pub fn WasmOpcode::equal(Self, Self) -> Bool
 pub fn WasmOpcode::hash(Self) -> Int32
@@ -371,8 +381,11 @@ type WasmValidationContext
 pub fn WasmValidationContext::admits_function_body(Self, Int32, @milkir.Function) -> Bool
 pub fn WasmValidationContext::array_element(Self, Int32) -> WasmFieldContract?
 pub fn WasmValidationContext::empty() -> Self
+pub fn WasmValidationContext::function_has_type_index(Self, Int32, Int32) -> Bool
+pub fn WasmValidationContext::function_is_noncollecting(Self, Int32) -> Bool
+pub fn WasmValidationContext::function_is_readonly(Self, Int32) -> Bool
 pub fn WasmValidationContext::is_final_type(Self, Int32) -> Bool
-pub fn WasmValidationContext::new(WasmValidationResolvers, final_types? : Array[Int32]) -> Self
+pub fn WasmValidationContext::new(WasmValidationResolvers, final_types? : Array[Int32], function_types? : Map[Int32, Int32], function_effects? : Map[Int32, WasmFunctionEffects]) -> Self
 pub fn WasmValidationContext::struct_field(Self, Int32, Int32) -> WasmFieldContract?
 pub fn WasmValidationContext::struct_fields(Self, Int32) -> ArrayView[WasmFieldContract]?
 pub fn WasmValidationContext::validate_extension(Self, @milkir.ExtensionInstView, Array[@milkir.Type]) -> String?

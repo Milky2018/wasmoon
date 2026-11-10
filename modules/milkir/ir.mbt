@@ -382,6 +382,8 @@ pub struct ExtOp {
   opcode : String
   immediates : FixedArray[Int32]
   effects : ExtensionEffects?
+  // Reusing this result also requires an unchanged physical-address epoch.
+  reads_address_epoch : Bool
 }
 
 ///|
@@ -393,6 +395,9 @@ pub impl Debug for ExtOp with fn to_repr(self) {
   }
   if self.effects is Some(effects) {
     fields["effects"] = Repr(effects)
+  }
+  if self.reads_address_epoch {
+    fields["reads_address_epoch"] = Repr(true)
   }
   Repr::record(fields)
 }
@@ -455,8 +460,9 @@ pub fn ExtOp::ExtOp(
   opcode : String,
   immediates : FixedArray[Int32],
   effects~ : ExtensionEffects? = None,
+  reads_address_epoch~ : Bool = false,
 ) -> ExtOp {
-  { dialect, opcode, immediates, effects, }
+  { dialect, opcode, immediates, effects, reads_address_epoch, }
 }
 
 ///|
@@ -492,7 +498,8 @@ pub fn ExtOp::matches_descriptor(
 pub impl Eq for ExtOp with fn equal(self, other) {
   if self.dialect != other.dialect ||
     self.opcode != other.opcode ||
-    self.effects != other.effects {
+    self.effects != other.effects ||
+    self.reads_address_epoch != other.reads_address_epoch {
     return false
   }
   if self.immediates.length() != other.immediates.length() {
@@ -510,6 +517,7 @@ pub impl Eq for ExtOp with fn equal(self, other) {
 pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
   hasher.combine(self.dialect)
   hasher.combine(self.effects)
+  hasher.combine(self.reads_address_epoch)
   hasher.combine(self.opcode)
   hasher.combine(self.immediates.length())
   for imm in self.immediates {

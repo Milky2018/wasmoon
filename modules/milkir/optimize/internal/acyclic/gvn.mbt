@@ -3,15 +3,23 @@
 ///|
 priv struct PtrAccess {
   base_id : Int32
-  offset_id : Int32
+  offset : @milkir.Value
   region : @milkir.AliasRegion
+}
+
+///|
+#valtype
+#derive(Eq, Hash)
+priv enum MemoryOffset {
+  Constant(Int64)
+  Dynamic(Int32)
 }
 
 ///|
 #derive(Eq, Hash)
 priv struct PtrLocationKey {
   base_id : Int32
-  offset_id : Int32
+  offset : MemoryOffset
   region : @milkir.AliasRegion
 }
 
@@ -25,9 +33,9 @@ priv struct StoreVersion {
 ///|
 priv struct LastStoreState {
   mut address_epoch : StoreVersion?
-  mut heap : @hashmap.HashMap[Int32, StoreVersion]
+  mut heap : @hashmap.HashMap[Int32, StoreVersion]?
   mut heap_default : StoreVersion?
-  mut table : @hashmap.HashMap[Int32, StoreVersion]
+  mut table : @hashmap.HashMap[Int32, StoreVersion]?
   mut table_default : StoreVersion?
   mut control : StoreVersion?
   mut context : StoreVersion?
@@ -58,17 +66,26 @@ priv struct MemoryValueEntry {
 }
 
 ///|
-fn PtrAccess::location_key(self : PtrAccess) -> PtrLocationKey {
-  { base_id: self.base_id, offset_id: self.offset_id, region: self.region, }
+fn PtrAccess::location_key(
+  self : PtrAccess,
+  session : OptimizerSession,
+) -> PtrLocationKey {
+  // Constants stay locally materialized. Their literal value, rather than
+  // their SSA definition, identifies the address used by a memory operation.
+  let offset = match session.int_constant(self.offset) {
+    Some(value) => MemoryOffset::Constant(value)
+    None => Dynamic(self.offset.id)
+  }
+  { base_id: self.base_id, offset, region: self.region, }
 }
 
 ///|
 fn LastStoreState::LastStoreState() -> LastStoreState {
   {
     address_epoch: None,
-    heap: HashMap([]),
+    heap: None,
     heap_default: None,
-    table: HashMap([]),
+    table: None,
     table_default: None,
     control: None,
     context: None,
@@ -77,22 +94,28 @@ fn LastStoreState::LastStoreState() -> LastStoreState {
 }
 
 ///|
+fn clone_indexed_store_map(
+  entries : @hashmap.HashMap[Int32, StoreVersion]?,
+) -> @hashmap.HashMap[Int32, StoreVersion]? {
+  match entries {
+    None => None
+    Some(entries) => {
+      let copy : @hashmap.HashMap[Int32, StoreVersion] = HashMap([])
+      for index, token in entries {
+        copy.set(index, token)
+      }
+      Some(copy)
+    }
+  }
+}
+
+///|
 fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
-  let heap : @hashmap.HashMap[Int32, StoreVersion] = HashMap([])
-  for entry in self.heap.iter() {
-    let (memidx, token) = entry
-    heap.set(memidx, token)
-  }
-  let table : @hashmap.HashMap[Int32, StoreVersion] = HashMap([])
-  for entry in self.table.iter() {
-    let (tableidx, token) = entry
-    table.set(tableidx, token)
-  }
   {
-    heap,
+    heap: clone_indexed_store_map(self.heap),
     address_epoch: self.address_epoch,
     heap_default: self.heap_default,
-    table,
+    table: clone_indexed_store_map(self.table),
     table_default: self.table_default,
     control: self.control,
     context: self.context,
@@ -102,18 +125,24 @@ fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
 
 ///|
 fn indexed_store_maps_equal(
-  left : @hashmap.HashMap[Int32, StoreVersion],
-  right : @hashmap.HashMap[Int32, StoreVersion],
+  left : @hashmap.HashMap[Int32, StoreVersion]?,
+  right : @hashmap.HashMap[Int32, StoreVersion]?,
 ) -> Bool {
-  if left.length() != right.length() {
-    return false
-  }
-  for entry in left.iter() {
-    if right.get(entry.0) != Some(entry.1) {
-      return false
+  match (left, right) {
+    (None, None) => true
+    (Some(left), Some(right)) => {
+      if left.length() != right.length() {
+        return false
+      }
+      for index, token in left {
+        if right.get(index) != Some(token) {
+          return false
+        }
+      }
+      true
     }
+    (Some(entries), None) | (None, Some(entries)) => entries.is_empty()
   }
-  true
 }
 
 ///|
@@ -139,41 +168,63 @@ fn meet_last_store_token(
 
 ///|
 fn indexed_store_token(
-  entries : @hashmap.HashMap[Int32, StoreVersion],
+  entries : @hashmap.HashMap[Int32, StoreVersion]?,
   default : StoreVersion?,
   index : Int32,
 ) -> StoreVersion? {
-  match entries.get(index) {
-    Some(token) => Some(token)
+  match entries {
+    Some(entries) =>
+      match entries.get(index) {
+        Some(token) => Some(token)
+        None => default
+      }
     None => default
   }
 }
 
 ///|
+fn set_indexed_store_token(
+  entries : @hashmap.HashMap[Int32, StoreVersion]?,
+  index : Int32,
+  token : StoreVersion,
+) -> @hashmap.HashMap[Int32, StoreVersion]? {
+  let entries = match entries {
+    Some(entries) => entries
+    None => HashMap([])
+  }
+  entries.set(index, token)
+  Some(entries)
+}
+
+///|
 fn meet_indexed_store_maps(
-  left : @hashmap.HashMap[Int32, StoreVersion],
+  left : @hashmap.HashMap[Int32, StoreVersion]?,
   left_default : StoreVersion?,
-  right : @hashmap.HashMap[Int32, StoreVersion],
+  right : @hashmap.HashMap[Int32, StoreVersion]?,
   right_default : StoreVersion?,
   merged_default : StoreVersion?,
   join_token : StoreVersion,
-) -> @hashmap.HashMap[Int32, StoreVersion] {
-  let merged : @hashmap.HashMap[Int32, StoreVersion] = HashMap([])
-  for entry in left.iter() {
-    let token = meet_last_store_token(
-      Some(entry.1),
-      indexed_store_token(right, right_default, entry.0),
-      join_token,
-    )
-    if token is Some(value) && token != merged_default {
-      merged.set(entry.0, value)
+) -> @hashmap.HashMap[Int32, StoreVersion]? {
+  let mut merged : @hashmap.HashMap[Int32, StoreVersion]? = None
+  if left is Some(entries) {
+    for index, value in entries {
+      let token = meet_last_store_token(
+        Some(value),
+        indexed_store_token(right, right_default, index),
+        join_token,
+      )
+      if token is Some(value) && token != merged_default {
+        merged = set_indexed_store_token(merged, index, value)
+      }
     }
   }
-  for entry in right.iter() {
-    if left.get(entry.0) is None {
-      let token = meet_last_store_token(left_default, Some(entry.1), join_token)
-      if token is Some(value) && token != merged_default {
-        merged.set(entry.0, value)
+  if right is Some(entries) {
+    for index, value in entries {
+      if indexed_store_token(left, None, index) is None {
+        let token = meet_last_store_token(left_default, Some(value), join_token)
+        if token is Some(value) && token != merged_default {
+          merged = set_indexed_store_token(merged, index, value)
+        }
       }
     }
   }
@@ -262,8 +313,9 @@ fn LastStoreState::set_region_token(
   // Unknown readers can alias every concrete region.
   self.other = Some(token)
   match region {
-    Heap(index) => self.heap.set(index, token)
-    Table(index) => self.table.set(index, token)
+    Heap(index) => self.heap = set_indexed_store_token(self.heap, index, token)
+    Table(index) =>
+      self.table = set_indexed_store_token(self.table, index, token)
     Control => self.control = Some(token)
     Context => self.context = Some(token)
     Other => self.other = Some(token)
@@ -276,9 +328,9 @@ fn LastStoreState::set_all_tokens(
   token : StoreVersion,
 ) -> Unit {
   self.address_epoch = Some(token)
-  self.heap.clear()
+  self.heap = None
   self.heap_default = Some(token)
-  self.table.clear()
+  self.table = None
   self.table_default = Some(token)
   self.control = Some(token)
   self.context = Some(token)
@@ -442,7 +494,7 @@ fn ptr_access_from_inst(
         let base = inst.operands[0]
         let offset = inst.operands[1]
         let region = ptr_base_region(base.id, ptr_base_infos)
-        Some({ base_id: base.id, offset_id: offset.id, region, })
+        Some({ base_id: base.id, offset, region, })
       } else {
         None
       }
@@ -451,7 +503,7 @@ fn ptr_access_from_inst(
         let base = inst.operands[0]
         let offset = inst.operands[1]
         let region = ptr_base_region(base.id, ptr_base_infos)
-        Some({ base_id: base.id, offset_id: offset.id, region, })
+        Some({ base_id: base.id, offset, region, })
       } else {
         None
       }
@@ -460,7 +512,7 @@ fn ptr_access_from_inst(
         let base = inst.operands[0]
         let offset = inst.operands[2]
         let region = ptr_base_region(base.id, ptr_base_infos)
-        Some({ base_id: base.id, offset_id: offset.id, region, })
+        Some({ base_id: base.id, offset, region, })
       } else {
         None
       }
@@ -469,7 +521,7 @@ fn ptr_access_from_inst(
         let base = inst.operands[0]
         let offset = inst.operands[2]
         let region = ptr_base_region(base.id, ptr_base_infos)
-        Some({ base_id: base.id, offset_id: offset.id, region, })
+        Some({ base_id: base.id, offset, region, })
       } else {
         None
       }
@@ -479,12 +531,13 @@ fn ptr_access_from_inst(
 
 ///|
 fn memory_key_from_access(
+  session : OptimizerSession,
   access : PtrAccess,
   ty : @milkir.Type,
   last_store : StoreVersion?,
   address_epoch : StoreVersion?,
 ) -> MemoryValueKey {
-  { address_epoch, last_store, location: access.location_key(), ty, }
+  { address_epoch, last_store, location: access.location_key(session), ty, }
 }
 
 ///|
@@ -787,6 +840,7 @@ fn AcyclicOptimizer::process_inst(
     inst.opcode is Memory(Load(load_ty)) &&
     ptr_access_from_inst(inst, self.ptr_base_infos) is Some(load_access) {
     let key = memory_key_from_access(
+      self.session,
       load_access,
       load_ty,
       last_store_state.get_region_token(load_access.region),
@@ -823,6 +877,7 @@ fn AcyclicOptimizer::process_inst(
     ptr_access_from_inst(inst, self.ptr_base_infos) is Some(store_access) &&
     inst.operands.length() >= 2 {
     let key = memory_key_from_access(
+      self.session,
       store_access,
       store_ty,
       Some({ block_id, inst_id: inst.id, }),

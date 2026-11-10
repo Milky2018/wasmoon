@@ -385,3 +385,77 @@ test "x64 emits repeated mixed ABI groups at block-local positions" {
   // Every call needs its own transfer group, including stack/vector results.
   assert_eq(object.relocations().length(), 32)
 }
+
+///|
+test "x64 raw-word ABI arguments retain their type when spilled" {
+  let abi = @x64_target.InternalAbi::new(
+    7,
+    12,
+    [6, 2, 1, 8, 9],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 2, 1, 8, 9, 6, 7, 10],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  )
+  for from in [@native.ValueType::I64, Ptr64] {
+    let to : @native.ValueType = if from == I64 { Ptr64 } else { I64 }
+    for mode in 0..<3 {
+      let params = [@native.ValueType::Ptr64] + Array::make(32, from)
+      let call_params = [@native.ValueType::Ptr64] + Array::make(32, to)
+      let session = @x64_target.DirectLoweringSession::new(
+        "spilled_raw_word_arguments",
+        Internal,
+        params,
+        [],
+        @x64_target.LoweringContext::new(abi),
+      )
+      let builder = @lowering.DirectBuilder::new(params, session.sink())
+      let operands = [builder.parameters()[0]]
+      for value in builder.parameters()[1:] {
+        operands.push(
+          builder.emit_with_metadata(
+            Convert(Bitcast(from, to)),
+            [value],
+            [to],
+            @lowering.InstructionMetadata::empty(),
+          )[0],
+        )
+      }
+      let call = @native.NativeCall::new(
+        if mode == 0 {
+          External(@native.ExternalSymbol::new("callee"))
+        } else {
+          Internal(@native.CodeSymbol::new("callee"))
+        },
+        @native.Signature::new(call_params, []),
+        if mode == 0 {
+          Platform
+        } else {
+          Internal
+        },
+        @native.CallBehavior::new(ReadWrite, true, false, false, false),
+      )
+      if mode == 2 {
+        builder.tail_call_with_metadata(
+          call,
+          operands,
+          @lowering.TerminatorMetadata::new(None, []),
+        )
+      } else {
+        builder.emit_with_metadata(
+          Call(call),
+          operands,
+          [],
+          @lowering.InstructionMetadata::empty(),
+        )
+        |> ignore
+        builder.return_([])
+      }
+      builder.finish()
+      @x64_target.compile_selected(
+        session.finish_selected(),
+        verify_allocation=true,
+      )
+      |> ignore
+    }
+  }
+}

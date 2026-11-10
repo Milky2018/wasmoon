@@ -1054,3 +1054,53 @@ test "parallel phi alias verification rejects different bits and overwritten ali
     assert_true(rejected)
   }
 }
+
+///|
+test "ordered segment identities retain a shallow allocation index" {
+  let count = 1024
+  let segments : Array[AllocationSegment] = Array::makei(count, id => {
+    id,
+    value: { id, class: Int, },
+    range: ProgramRange(ProgramPoint(0, id * 2), ProgramPoint(0, id * 2 + 1)),
+    weight: 1,
+    has_fixed_constraint: false,
+    fixed_hint: None,
+    preference_hint: None,
+    location: None,
+  })
+  for reversed in [false, true] {
+    let index = RegisterAllocationIndex::for_session(
+      AllocationSession::new(),
+      1,
+      segments,
+      Array::makei(count, id => id),
+      Array::make(count, 0),
+      [0],
+    )
+    for ordinal in 0..<count {
+      index.insert(0, if reversed { count - ordinal - 1 } else { ordinal })
+    }
+    let stack : Array[(Int32, Int32)] = [(index.roots[0], 1)]
+    let mut depth = 0
+    while stack.pop() is Some((node, current)) {
+      depth = depth.max(current)
+      if index.left[node] >= 0 {
+        stack.push((index.left[node], current + 1))
+      }
+      if index.right[node] >= 0 {
+        stack.push((index.right[node], current + 1))
+      }
+    }
+    assert_true(depth <= 64)
+    let cursor : Array[Int32] = []
+    index.seek(0, ProgramPoint(0, -1), cursor)
+    for id in 0..<count {
+      assert_eq(index.next(cursor), Some(id))
+    }
+    assert_eq(index.next(cursor), None)
+    for id in 0..<count {
+      index.remove(0, id)
+    }
+    assert_eq(index.roots[0], -1)
+  }
+}

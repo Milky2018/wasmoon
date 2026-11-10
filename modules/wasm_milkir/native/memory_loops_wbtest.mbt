@@ -118,3 +118,44 @@ test "loop read motion respects barriers and guards an initially unchecked read"
     )
   }
 }
+
+///|
+test "loop type checks do not alias numeric field writes" {
+  let b = @milkir.FunctionBuilder("loop_type_metadata")
+  let object = b.add_param(Ref)
+  let count = b.add_param(I32)
+  b.add_result(I32)
+  let header = b.create_block()
+  let body = b.create_block()
+  let exit = b.create_block()
+  let i = b.add_block_param(header, I32)
+  let result = b.add_block_param(exit, I32)
+  b.jump(header, [b.iconst_i32(0)])
+  b.switch_to_block(header)
+  b.branch(b.icmp_slt(i, count), body, [], exit, [i])
+  b.switch_to_block(body)
+  let cast = @wasm_milkir.ref_cast(b, 0, false, object, Ref)
+  @wasm_milkir.struct_set(b, 0, 0, cast, i)
+  b.jump(header, [b.iadd(i, b.iconst_i32(1))])
+  b.switch_to_block(exit)
+  b.return_([result])
+  let function = b.get_function()
+  prepare_gc_memory(function, loop_read_context())
+  let mut checks = 0
+  for loop_ in @milkir.CFG::build(function).find_loops() {
+    for block in function.blocks {
+      if loop_.contains(block.id) {
+        for id in function.block_instruction_ids(block) {
+          if @wasm_milkir.decode_opcode(
+              function.instruction_by_id(id).unwrap().opcode,
+            )
+            is Some(RefCast(_, _)) {
+            checks += 1
+          }
+        }
+      }
+    }
+  }
+  assert_eq(checks, 0)
+  assert_eq(gc_borrow_error(function), None)
+}

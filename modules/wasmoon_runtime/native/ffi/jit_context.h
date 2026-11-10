@@ -52,7 +52,17 @@ typedef struct {
     int32_t scheduling_quantum;
 } jit_invocation_controls_t;
 
+typedef struct {
+    uint64_t header;
+    uint64_t prefix_shape;
+} gc_offset_struct_binding_t;
+
+_Static_assert(sizeof(gc_offset_struct_binding_t) == 16, "offset struct binding size");
+
 typedef struct jit_runtime_state {
+    // Prepend experimental fields to preserve ABI-relative offsets.
+    gc_offset_struct_binding_t *gc_offset_struct_bindings;
+
     // Published only for the current activation when it has no callback.
     // Keep this at the start so existing ABI-relative offsets stay fixed.
     int32_t *poll_budget;
@@ -106,6 +116,8 @@ typedef struct jit_runtime_state {
     int callable_local_type_count;
     int callable_tag_count;
     int callable_function_count;
+    // Use the tail padding so generated offsets and the context stay compact.
+    int gc_offset_struct_bindings_enabled;
 } jit_runtime_state_t;
 
 // Private state precedes the address passed to generated code. Its size is
@@ -119,6 +131,8 @@ typedef struct {
 static inline jit_runtime_state_t *ctx_runtime(const jit_context_t *ctx) {
     return (jit_runtime_state_t *)((char *)(void *)ctx - offsetof(jit_context_owner_t, abi));
 }
+
+void ctx_clear_gc_offset_struct_bindings(jit_context_t *ctx);
 
 // Read/write helper access. Real invocations install their stack-owned state;
 // only standalone context helpers need a separately allocated fallback.

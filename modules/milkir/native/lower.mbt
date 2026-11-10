@@ -1259,9 +1259,13 @@ fn lower_scalar_instruction(
       assign_instruction_results(values, instruction, lowered_results)
       return
     }
-    Some(MultiplyAdd(accumulator, left, right)) => {
+    Some(MultiplyAccumulate(accumulator, left, right, subtract)) => {
       let lowered_results = builder.emit_with_metadata(
-        IntMultiplyAdd,
+        if subtract {
+          IntMultiplySubtract
+        } else {
+          IntMultiplyAdd
+        },
         [
           demand_value(builder, values, value_types, facts, accumulator),
           demand_value(builder, values, value_types, facts, left),
@@ -1283,9 +1287,13 @@ fn lower_scalar_instruction(
       assign_instruction_results(values, instruction, results)
       return
     }
-    Some(AddShiftedLeft(accumulator, input, amount)) => {
+    Some(AddShifted(accumulator, input, amount, right)) => {
       let lowered_results = builder.emit_with_metadata(
-        IntAddShiftedLeft(amount),
+        if right {
+          IntAddShiftedRight(amount)
+        } else {
+          IntAddShiftedLeft(amount)
+        },
         [
           demand_value(builder, values, value_types, facts, accumulator),
           demand_value(builder, values, value_types, facts, input),
@@ -1417,7 +1425,7 @@ fn lower_instruction(
   if instruction.opcode
     is (Scalar(
       IntConst(_)
-      | IntBinary(Add | Mul | ShiftLeft)
+      | IntBinary(Add | Mul | ShiftLeft | UnsignedShiftRight)
       | IntCompare(_)
       | Convert(UnsignedExtend | Bitcast)
     )
@@ -1780,6 +1788,9 @@ fn lower_verified_construction(
   let facts = build_selection_facts(
     function,
     sink.folds_unsigned_index_into_memory(),
+    fn(operation, ty, bits) {
+      sink.supports_int_binary_immediate(operation, ty, bits)
+    },
     fn(ty, bits) { sink.supports_int_compare_immediate(ty, bits) },
   )
   let gc_roots = if has_gc_references && has_gc_points {

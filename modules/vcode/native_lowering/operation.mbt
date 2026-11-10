@@ -471,9 +471,13 @@ pub(all) enum Operation {
   IntBinaryImmediate(IntBinaryOp, UInt64)
   IntShiftImmediate(IntBinaryOp, Int32)
   IntMultiplyAdd
+  IntMultiplySubtract
   IntAddShiftedLeft(Int32)
+  IntAddShiftedRight(Int32)
   /// Keep the low field bits, then shift left; other result bits are zero.
   IntLowBitsShiftLeft(Int32, Int32)
+  /// Extract a contiguous field and zero-extend it to the operand width.
+  IntExtractBits(Int32, Int32)
   IntHighMultiply(@native.Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
@@ -555,8 +559,11 @@ pub fn Operation::copy(self : Operation) -> Operation {
     | IntBinaryImmediate(_, _)
     | IntShiftImmediate(_, _)
     | IntMultiplyAdd
+    | IntMultiplySubtract
     | IntAddShiftedLeft(_)
+    | IntAddShiftedRight(_)
     | IntLowBitsShiftLeft(_, _)
+    | IntExtractBits(_, _)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
@@ -1326,7 +1333,7 @@ pub fn verify_operation_contract(
       }
       None
     }
-    IntMultiplyAdd => {
+    IntMultiplyAdd | IntMultiplySubtract => {
       if operands.length() != 3 ||
         results.length() != 1 ||
         !is_integer_type(operands[0]) ||
@@ -1336,6 +1343,24 @@ pub fn verify_operation_contract(
         return operation_error(
           "integer multiply-add expects three matching i32 or i64 operands",
         )
+      }
+      None
+    }
+    IntExtractBits(start, field_bits) => {
+      if operands.length() != 1 ||
+        results.length() != 1 ||
+        !is_integer_type(operands[0]) ||
+        operands[0] != results[0] {
+        return operation_error(
+          "integer bit extract expects one matching i32 or i64 result",
+        )
+      }
+      let bits = value_type_bits(operands[0])
+      if start < 0 ||
+        start >= bits ||
+        field_bits <= 0 ||
+        field_bits > bits - start {
+        return operation_error("integer bit extract is out of range")
       }
       None
     }
@@ -1357,7 +1382,7 @@ pub fn verify_operation_contract(
       }
       None
     }
-    IntAddShiftedLeft(amount) => {
+    IntAddShiftedLeft(amount) | IntAddShiftedRight(amount) => {
       if operands.length() != 2 ||
         results.length() != 1 ||
         !is_integer_type(operands[0]) ||
@@ -1748,8 +1773,11 @@ pub fn Operation::semantics(self : Operation) -> @native.OperationSemantics {
     | IntBinaryImmediate(_, _)
     | IntShiftImmediate(_, _)
     | IntMultiplyAdd
+    | IntMultiplySubtract
     | IntAddShiftedLeft(_)
+    | IntAddShiftedRight(_)
     | IntLowBitsShiftLeft(_, _)
+    | IntExtractBits(_, _)
     | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)

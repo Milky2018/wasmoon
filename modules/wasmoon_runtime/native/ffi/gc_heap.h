@@ -414,6 +414,21 @@ static inline void gc_heap_set_runtime_type(GcHeap *heap, int32_t ref, int32_t t
     if (page) page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = type;
 }
 
+// Reserve only within an already admitted metadata and payload window.
+static inline int32_t gc_heap_reserve_prepared_storage(GcHeap *heap, size_t bytes) {
+    if (!heap->allocation_control || !heap->allocation_control->enabled ||
+        heap->byte_reservation || heap->object_reservation || bytes > INT32_MAX ||
+        heap->size > (size_t)INT32_MAX - bytes ||
+        bytes > heap->capacity - heap->size ||
+        (heap->precise_roots && heap->size >= heap->collection_limit) ||
+        heap->object_count >= heap->identity_window_limit) return -1;
+    int32_t offset = (int32_t)heap->size;
+    heap->size += bytes;
+    heap->quota_denied = 0;
+    heap->allocation_control->attempts++;
+    return offset;
+}
+
 // Capacity and resource admission precede publication. No allocation, callback
 // or safepoint may intervene between initializing the payload and this update.
 static inline int32_t gc_heap_publish_object(GcHeap *heap, int32_t offset, int32_t type) {

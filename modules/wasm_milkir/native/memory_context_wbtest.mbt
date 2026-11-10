@@ -187,3 +187,81 @@ test "broader access views do not consume unrelated allocation expansion budgets
   assert_eq(allocation_expansion_limits(function, context), (true, true, true))
   assert_eq(function.print(), before)
 }
+
+///|
+test "direct allocation budget prioritizes call-free loop sites and remains bounded" {
+  let b = @milkir.FunctionBuilder("allocation_site_budget")
+  let number = b.add_param(I64)
+  let condition = b.add_param(I32)
+  for _ in 0..<31 {
+    @wasm_milkir.struct_new(b, 0, [number, number]) |> ignore
+  }
+  let interrupted = b.create_block()
+  let interrupted_body = b.create_block()
+  let plain = b.create_block()
+  let plain_body = b.create_block()
+  let exit = b.create_block()
+  b.jump(interrupted, [])
+  b.switch_to_block(interrupted)
+  b.branch(condition, interrupted_body, [], plain, [])
+  b.switch_to_block(interrupted_body)
+  @wasm_milkir.struct_new(b, 0, [number, number]) |> ignore
+  let reentrant = b.get_function().declare_external_symbol("opaque")
+  b.call_symbol(reentrant, None, []) |> ignore
+  b.jump(interrupted, [])
+  b.switch_to_block(plain)
+  b.branch(condition, plain_body, [], exit, [])
+  b.switch_to_block(plain_body)
+  for _ in 0..<4 {
+    @wasm_milkir.struct_new(b, 0, [number, number]) |> ignore
+  }
+  b.jump(plain, [])
+  b.switch_to_block(exit)
+  b.return_([])
+  let function = b.get_function()
+  let before = function.print()
+  let context = allocation_contract_context()
+  assert_eq(
+    allocation_expansion_limits(function, context),
+    (false, true, false),
+  )
+  let sites = hot_struct_expansion_sites(function, context)
+  assert_eq(sites.length(), 3)
+  let mut plain_sites = 0
+  for block in function.blocks {
+    for id in function.block_instruction_ids(block) {
+      if sites.contains(id) {
+        assert_eq(block.id, plain_body.id)
+        plain_sites += 1
+      }
+    }
+  }
+  assert_eq(plain_sites, 3)
+  assert_eq(function.print(), before)
+}
+
+///|
+test "empty structs consume the direct and shared code budgets" {
+  let context = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { None },
+    defined_type_contract: fn(_) { Some(Struct([])) },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  for count in [4, 5, 37, 38] {
+    let b = @milkir.FunctionBuilder("empty_struct_budget")
+    for _ in 0..<count {
+      @wasm_milkir.struct_new_default(b, 0) |> ignore
+    }
+    b.return_([])
+    let function = b.get_function()
+    assert_eq(
+      allocation_expansion_limits(function, context),
+      (count <= 4, true, count <= 37),
+    )
+    assert_true(hot_struct_expansion_sites(function, context).is_empty())
+  }
+}

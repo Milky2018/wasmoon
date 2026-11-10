@@ -94,12 +94,8 @@ fn[Inst] CheckedBuilder::validate_local_facts(
   metadata : InstructionMetadata,
 ) -> Int32? raise VCodeBuildError {
   let function = self.builder.function
-  for index, reg in clobbers {
-    for earlier in 0..<index {
-      if clobbers[earlier] == reg {
-        raise DuplicateClobber(reg~)
-      }
-    }
+  if first_duplicate_clobber(clobbers[:]) is Some(reg) {
+    raise DuplicateClobber(reg~)
   }
   for edge in successors {
     let parameters = function.blocks[edge.target.id].parameters

@@ -459,6 +459,34 @@ void ctx_set_indirect_internal(jit_context_t *ctx, int table_idx, int func_idx, 
 
 // ============ GC Heap Support ============
 
+void ctx_clear_gc_offset_struct_bindings(jit_context_t *ctx) {
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    free(state->gc_offset_struct_bindings);
+    state->gc_offset_struct_bindings = NULL;
+}
+
+static void rebuild_gc_offset_struct_bindings(jit_context_t *ctx, GcHeap *heap) {
+    jit_runtime_state_t *state = ctx_runtime(ctx);
+    ctx_clear_gc_offset_struct_bindings(ctx);
+    if (!heap || !heap->offset_view_ids || !state->gc_offset_struct_bindings_enabled ||
+        !state->callable_local_types) return;
+
+    size_t count = state->callable_local_type_count;
+    gc_offset_struct_binding_t *bindings = NULL;
+    for (size_t i = 0; i < count; i++) {
+        int32_t identity = state->callable_local_types[i];
+        const GcTypeLayout *layout = gc_heap_layout(heap, identity);
+        if (!layout || layout->kind != GC_KIND_STRUCT) continue;
+        if (!bindings) {
+            bindings = wasmoon_native_calloc(count, sizeof(*bindings));
+            if (!bindings) return;
+        }
+        bindings[i].header = ((uint64_t)(identity + 1) << 32) | (uint32_t)layout->count;
+        bindings[i].prefix_shape = layout->prefix_shape;
+    }
+    state->gc_offset_struct_bindings = bindings;
+}
+
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap) {
     if (!ctx) return;
 
@@ -467,6 +495,7 @@ void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap) {
         if (heap) moonbit_incref(heap);
         GcHeap *old = ctx_gc_heap(ctx);
         ctx_set_gc_heap(ctx, heap);
+        rebuild_gc_offset_struct_bindings(ctx, heap);
         if (old) moonbit_decref(old);
     }
     if (heap) {
@@ -1033,6 +1062,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_layout_field(int32_t index) {
         offsetof(GcHeader, reserved),
         sizeof(GcHeader),
         offsetof(GcHeap, offset_view_ids),
+        (int32_t)offsetof(jit_runtime_state_t, gc_offset_struct_bindings) - (int32_t)offsetof(jit_context_owner_t, abi),
     };
     assert(index >= 0 && (size_t)index < sizeof(fields) / sizeof(fields[0]));
     return fields[index];
@@ -1043,13 +1073,14 @@ extern int64_t wasmoon_jit_context_ptr(void *context);
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_bind_callable_registry(
     void *managed_context, void *registry,
-    int32_t *local_types, int32_t local_count,
-    int32_t *tags, int32_t tag_count,
-    int32_t *functions, int32_t function_count
+    int32_t *local_types, int32_t *tags, int32_t *functions, int32_t snapshot_locals
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(managed_context);
     if (!ctx) return;
     // Preserve the legacy empty-local-map fallback while retaining nonempty arrays.
+    int32_t local_count = Moonbit_array_length(local_types);
+    int32_t tag_count = Moonbit_array_length(tags);
+    int32_t function_count = Moonbit_array_length(functions);
     int32_t *locals = local_count ? local_types : NULL;
     int32_t *tag_map = tag_count ? tags : NULL;
     int32_t *function_map = function_count ? functions : NULL;
@@ -1069,6 +1100,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_bind_callable_registry(
     state->callable_tag_count = tag_count;
     state->callable_functions = function_map;
     state->callable_function_count = function_count;
+    state->gc_offset_struct_bindings_enabled = snapshot_locals;
+    rebuild_gc_offset_struct_bindings(ctx, ctx_gc_heap(ctx));
 }
 
 // The MoonBit owner prepares typed arrays. Native helpers only retain/read them.

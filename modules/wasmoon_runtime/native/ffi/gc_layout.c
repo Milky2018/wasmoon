@@ -85,19 +85,9 @@ static int32_t allocate_typed(GcHeap *heap, GcTypeLayout *layout, int32_t identi
     // The prepared window owns capacity, not identities. Ordinary allocations
     // can consume it without repeated capacity/debug/quota calls. Every other
     // case retains the complete allocator and its failure ordering.
-    int prepared = heap->allocation_control && heap->allocation_control->enabled &&
-        !heap->byte_reservation && !heap->object_reservation && bytes <= INT32_MAX &&
-        heap->size <= (size_t)(INT32_MAX - bytes) &&
-        (size_t)bytes <= heap->capacity - heap->size &&
-        (!heap->precise_roots || heap->size < heap->collection_limit) &&
-        heap->object_count < heap->identity_window_limit;
-    int32_t offset;
-    if (prepared) {
-        offset = (int32_t)heap->size;
-        heap->size += (size_t)bytes;
-        heap->quota_denied = 0;
-        heap->allocation_control->attempts++;
-    } else {
+    int32_t offset = gc_heap_reserve_prepared_storage(heap, (size_t)bytes);
+    int prepared = offset >= 0;
+    if (!prepared) {
         if (admission == GC_TYPED_PREPARED_ONLY) return 0;
         if (admission == GC_TYPED_SEGMENT_COLLECT && bytes <= INT32_MAX &&
             gc_heap_segment_needs_collection(heap)) return GC_SEGMENT_NEEDS_COLLECTION;

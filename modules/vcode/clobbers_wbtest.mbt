@@ -43,3 +43,41 @@ test "repeated call clobbers grow storage geometrically and preserve instruction
     assert_true(growths <= 16)
   }
 }
+
+///|
+test "clobber duplicate detection agrees with ordered equality for every register class" {
+  fn reference(registers : Array[PhysicalReg]) -> PhysicalReg? {
+    for index, reg in registers {
+      for earlier in 0..<index {
+        if registers[earlier] == reg {
+          return Some(reg)
+        }
+      }
+    }
+    None
+  }
+  let classes = [RegClass::Int, Float, Vector, FpVector]
+  let ids = [-1, 0, 1, 31, 63, 64, 2147483647]
+  let unique : Array[PhysicalReg] = []
+  for class in classes {
+    for id in ids {
+      unique.push(PhysicalReg::new(id, class))
+    }
+  }
+  for class in classes {
+    for id in ids {
+      assert_eq(first_duplicate_clobber(unique[:]), None)
+      for position in 0..<=unique.length() {
+        let registers = unique.copy()
+        registers.insert(position, PhysicalReg::new(id, class))
+        assert_eq(first_duplicate_clobber(registers[:]), reference(registers))
+      }
+    }
+  }
+  let second = PhysicalReg::new(0, Float)
+  let first = PhysicalReg::new(0, FpVector)
+  assert_eq(
+    first_duplicate_clobber([first, second, second, first][:]),
+    Some(second),
+  )
+}

@@ -1,4 +1,5 @@
 #include "../callable_lookup.h"
+#include "../gc_access.h"
 
 // Enter the guest helper through its declared calling convention without
 // requiring an active TLS context.
@@ -12,6 +13,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_test_gc_word_access(
     case 3: gc_array_set_heap_impl(heap, reference, index, value); return 0;
     case 4: return gc_array_len_heap_impl(heap, reference);
     case 5: return (int64_t)(uintptr_t)gc_array_data_heap_impl(heap, reference, index);
+    case 6: return gc_access_offset_header(heap, reference) != NULL;
     default: return -1;
     }
 }
@@ -544,4 +546,38 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_gc_sparse_trace_history(GcHeap *heap) {
     heap->identity_window_limit = 0;
     heap->identity_window_page = NULL;
     return gc_heap_verify(heap, 0);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_prepared_storage(void) {
+    GcAllocationControl control = {.enabled = 1, .attempts = 7};
+    GcHeap baseline = {.allocation_control = &control, .size = 32,
+        .capacity = 256, .collection_limit = 128, .precise_roots = 1,
+        .object_count = 1, .identity_window_limit = 8, .quota_denied = 9};
+    GcHeap heap = baseline;
+    int passed = gc_heap_reserve_prepared_storage(&heap, 32) == 32 &&
+        heap.size == 64 && heap.object_count == 1 && heap.live_count == 0 &&
+        heap.total_allocations == 0 && heap.quota_denied == 0 && control.attempts == 8;
+    for (int mode = 0; mode < 9; mode++) {
+        heap = baseline;
+        control.enabled = 1;
+        control.attempts = 7;
+        size_t bytes = 32;
+        switch (mode) {
+        case 0: control.enabled = 0; break;
+        case 1: heap.byte_reservation = (void *)(uintptr_t)1; break;
+        case 2: heap.object_reservation = (void *)(uintptr_t)1; break;
+        case 3: heap.capacity = 48; break;
+        case 4: heap.collection_limit = heap.size; break;
+        case 5: heap.identity_window_limit = heap.object_count; break;
+        case 6: bytes = (size_t)INT32_MAX + 1; break;
+        case 7: heap.size = INT32_MAX; break;
+        case 8: heap.allocation_control = NULL; break;
+        }
+        GcHeap before = heap;
+        GcAllocationControl before_control = control;
+        passed &= gc_heap_reserve_prepared_storage(&heap, bytes) == -1 &&
+            memcmp(&heap, &before, sizeof(heap)) == 0 &&
+            memcmp(&control, &before_control, sizeof(control)) == 0;
+    }
+    return passed;
 }

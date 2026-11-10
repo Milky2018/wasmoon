@@ -75,7 +75,7 @@ fn lower_direct_operation(
     |> ignore
     return []
   }
-  if operation is IntMultiplyAdd {
+  if operation is (IntMultiplyAdd | IntMultiplySubtract) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
@@ -90,10 +90,49 @@ fn lower_direct_operation(
     return append_body(
       builder,
       block,
-      IntBinary(width, Add),
+      IntBinary(width, if operation is IntMultiplySubtract { Sub } else { Add }),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(product)],
       scratch.any_outputs(result_types),
       site.metadata(),
+    )
+  }
+  if operation is IntExtractBits(start, field_bits) {
+    let shifted = lower_direct_operation(
+        context,
+        builder,
+        block,
+        block_index,
+        instruction_index,
+        IntShiftImmediate(UnsignedShiftRight, start),
+        operands,
+        operand_types,
+        result_types,
+        [],
+        None,
+        None,
+        stack_object,
+        scratch,
+      )[0]
+    let mask = if field_bits == 64 {
+      0xFFFFFFFFFFFFFFFFUL
+    } else {
+      (1UL << field_bits) - 1UL
+    }
+    return lower_direct_operation(
+      context,
+      builder,
+      block,
+      block_index,
+      instruction_index,
+      IntBinaryImmediate(And, mask),
+      [shifted],
+      result_types,
+      result_types,
+      roots,
+      source_location,
+      stack_map,
+      stack_object,
+      scratch,
     )
   }
   if operation is IntLowBitsShiftLeft(field_bits, amount) {
@@ -136,7 +175,7 @@ fn lower_direct_operation(
       scratch,
     )
   }
-  if operation is IntAddShiftedLeft(amount) {
+  if operation is (IntAddShiftedLeft(amount) | IntAddShiftedRight(amount)) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
@@ -151,7 +190,14 @@ fn lower_direct_operation(
     let shifted = append_body(
         builder,
         block,
-        IntBinary(width, Lsl),
+        IntBinary(
+          width,
+          if operation is IntAddShiftedRight(_) {
+            Lsr
+          } else {
+            Lsl
+          },
+        ),
         [@vcode.Input::any(operands[1]), @vcode.Input::any(constant)],
         scratch.any_outputs(result_types),
         @vcode.InstructionMetadata::empty(),
@@ -204,6 +250,7 @@ fn lower_direct_operation(
     guard optional_gpr_width(operand_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
+    let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
     let constant = append_body(
         builder,
         block,
@@ -225,6 +272,7 @@ fn lower_direct_operation(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
+    let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
     let (selected, selected_bits) = match binary {
       UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
         (And, bits - 1UL)
@@ -1111,6 +1159,7 @@ fn DirectLoweringSession::terminate(
         } else {
           W64
         }
+        let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
         let constant = append_body(
             self.state.builder,
             block,
@@ -1258,6 +1307,15 @@ fn DirectLoweringSession::terminate_tail_call(
   operands : Array[@vcode.Value],
   metadata : @vcode.InstructionMetadata,
 ) -> Unit raise X64LowerError {
+  let operands = self.state.builder.materialize_abi_words(
+    block,
+    operands,
+    call.signature.params,
+    ty => Move(ty),
+    operand_start=if call.callee is Indirect { 1 } else { 0 },
+  ) catch {
+    error => raise BuildFailure(cause=error)
+  }
   let (plan, inputs) = self.state.tail_call_inputs(
     call, operands, is_allocatable,
   ) catch {
@@ -1306,6 +1364,7 @@ pub fn DirectLoweringSession::sink(
     },
     fn() { self.state.finish_construction(error => BuildFailure(cause=error)) },
     folds_unsigned_index_into_memory=false,
+    supports_int_binary_immediate=fn(_, _, _) { false },
   )
 }
 

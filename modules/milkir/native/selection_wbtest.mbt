@@ -11,6 +11,7 @@ fn trace_lowering(
   function : @milkir.Function,
   folds_unsigned_index_into_memory~ : Bool = false,
   compare_immediates~ : Bool = false,
+  binary_immediates~ : Bool = true,
   on_event~ : (NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> LoweringTrace raise {
   let operands : Array[Array[Int32]] = []
@@ -44,6 +45,7 @@ fn trace_lowering(
     },
     fn(_, terminator, _) { terminators.push(terminator) },
     fn() { () },
+    supports_int_binary_immediate=fn(_, _, _) { binary_immediates },
     folds_unsigned_index_into_memory~,
     supports_int_compare_immediate=fn(_, bits) {
       compare_immediates && bits == 42UL
@@ -54,19 +56,28 @@ fn trace_lowering(
 }
 
 ///|
-test "native demand selection fuses multiply-add and shifted-add" {
+test "native demand selection fuses integer multiply and shift arithmetic" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("composite_arithmetic")
   let accumulator = builder.add_param(I32)
   let left = builder.add_param(I32)
   let right = builder.add_param(I32)
   builder.add_result(I32)
   builder.add_result(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
   let product = builder.imul(left, right)
+  let subtract = builder.isub(accumulator, builder.imul(right, left))
   let multiply_add = builder.iadd(accumulator, product)
   let amount = builder.iconst_i32(3)
   let shifted = builder.ishl(left, amount)
   let shifted_add = builder.iadd(accumulator, shifted)
-  builder.return_([multiply_add, shifted_add])
+  let shifted_right = builder.emit_inst(
+    I32,
+    Scalar(IntBinary(UnsignedShiftRight)),
+    [right, amount],
+  )
+  let right_add = builder.iadd(accumulator, shifted_right)
+  builder.return_([multiply_add, shifted_add, subtract, right_add])
   let trace = trace_lowering(builder.finalize())
   inspect(
     trace.operations.any(operation => operation is IntMultiplyAdd),
@@ -76,9 +87,19 @@ test "native demand selection fuses multiply-add and shifted-add" {
     trace.operations.any(operation => operation is IntAddShiftedLeft(3)),
     content="true",
   )
+  assert_true(
+    trace.operations.any(operation => operation is IntMultiplySubtract),
+  )
+  assert_true(
+    trace.operations.any(operation => operation is IntAddShiftedRight(3)),
+  )
   inspect(
     trace.operations.any(operation => {
-      operation is (IntBinary(Mul) | IntBinary(ShiftLeft) | I32Const(_))
+      operation
+      is (IntBinary(Mul)
+      | IntBinary(ShiftLeft | UnsignedShiftRight)
+      | IntShiftImmediate(UnsignedShiftRight, _)
+      | I32Const(_))
     }),
     content="false",
   )
@@ -248,10 +269,11 @@ test "native demand selection shares zero-extended memory indices" {
   let base_bits = builder.bitcast(I64, base)
   let extended = builder.uextend(I64, index)
   let first_address = builder.iadd(base_bits, extended)
-  let second_address = builder.iadd(base_bits, extended)
+  let stride = builder.iconst_i64(2L)
+  let scaled = builder.ishl(extended, stride)
   let zero = builder.iconst_i64(0L)
   let first = builder.load_ptr(I32, first_address, zero)
-  let second = builder.load_ptr(I32, second_address, zero)
+  let second = builder.load_ptr(I32, base, scaled)
   builder.return_([first, second])
   let trace = trace_lowering(
     builder.finalize(),
@@ -259,13 +281,17 @@ test "native demand selection shares zero-extended memory indices" {
   )
   inspect(
     trace.operations
-    .filter(operation => operation is LoadIndexed(_, 0))
+    .filter(operation => operation is LoadIndexed(_, 0 | 2))
     .length(),
     content="2",
   )
   inspect(
     trace.operations.any(operation => {
-      operation is (PointerOffset | Convert(I64ExtendI32(Unsigned)))
+      operation
+      is (PointerOffset
+      | Convert(I64ExtendI32(Unsigned))
+      | IntShiftImmediate(ShiftLeft, _)
+      | I64Const(2UL))
     }),
     content="false",
   )
@@ -627,4 +653,153 @@ test "terminator arguments do not absorb comparisons or shared constants" {
     })
     .filter(block => block >= 0)
   debug_inspect(definitions, content="[0]")
+}
+
+///|
+test "multiply-add keeps a shared constant in its dominating block" {
+  let b = @milkir.FunctionBuilder("shared_multiply_constant")
+  let condition = b.add_param(I32)
+  let x = b.add_param(I32)
+  let y = b.add_param(I32)
+  let k = b.iconst_i32(-1028477379)
+  b.add_result(I32)
+  let yes = b.create_block()
+  let no = b.create_block()
+  b.branch(condition, yes, [], no, [])
+  b.switch_to_block(yes)
+  b.return_([b.iadd(b.imul(x, k), y)])
+  b.switch_to_block(no)
+  b.return_([b.isub(y, b.imul(x, k))])
+  let f = b.get_function()
+  f.verify()
+  let trace = trace_lowering(f)
+  let mut constants = 0
+  for i, op in trace.operations {
+    if op is I32Const(_) {
+      constants += 1
+      assert_eq(trace.operation_blocks[i], 0)
+    }
+  }
+  assert_eq(constants, 1)
+  assert_eq(
+    trace.operations
+    .filter(op => op is (IntMultiplyAdd | IntMultiplySubtract))
+    .length(),
+    2,
+  )
+}
+
+///|
+test "unsupported binary immediates retain a shared constant definition" {
+  let b = @milkir.FunctionBuilder("unsupported_binary_immediate")
+  let condition = b.add_param(I32)
+  let x = b.add_param(I64)
+  let k = b.iconst_i64(0x1122334455667788L)
+  b.add_result(I64)
+  let yes = b.create_block()
+  let no = b.create_block()
+  b.branch(condition, yes, [], no, [])
+  b.switch_to_block(yes)
+  b.return_([b.iadd(x, k)])
+  b.switch_to_block(no)
+  b.return_([b.isub(x, k)])
+  let f = b.get_function()
+  f.verify()
+  let trace = trace_lowering(f, binary_immediates=false)
+  let mut constants = 0
+  for i, op in trace.operations {
+    if op is I64Const(_) {
+      constants += 1
+      assert_eq(trace.operation_blocks[i], 0)
+    }
+    assert_false(op is IntBinaryImmediate(_, _))
+  }
+  assert_eq(constants, 1)
+}
+
+///|
+test "shifted add retains a shared register constant in its dominator" {
+  let b = @milkir.FunctionBuilder("shared_shift_accumulator")
+  let condition = b.add_param(I32)
+  let x = b.add_param(I64)
+  let constant = b.iconst_i64(16L)
+  let amount = b.iconst_i64(2L)
+  let yes = b.create_block()
+  let no = b.create_block()
+  b.add_result(I64)
+  b.branch(condition, yes, [], no, [])
+  b.switch_to_block(yes)
+  b.return_([b.iadd(constant, b.ishl(x, amount))])
+  b.switch_to_block(no)
+  b.return_([b.iadd(constant, b.ishl(x, amount))])
+  let function = b.finalize()
+  function.verify_core()
+  let trace = trace_lowering(function)
+  let mut constants = 0
+  for index, operation in trace.operations {
+    if operation is I64Const(16UL) {
+      constants += 1
+      assert_eq(trace.operation_blocks[index], 0)
+    }
+  }
+  assert_eq(constants, 1)
+  assert_eq(
+    trace.operations.filter(op => op is IntAddShiftedLeft(_)).length(),
+    2,
+  )
+}
+
+///|
+test "multiply add retains a shared accumulator constant in its dominator" {
+  let b = @milkir.FunctionBuilder("shared_product_accumulator")
+  let condition = b.add_param(I32)
+  let x = b.add_param(I64)
+  let y = b.add_param(I64)
+  let constant = b.iconst_i64(16L)
+  let yes = b.create_block()
+  let no = b.create_block()
+  b.add_result(I64)
+  b.branch(condition, yes, [], no, [])
+  b.switch_to_block(yes)
+  b.return_([b.iadd(constant, b.imul(x, y))])
+  b.switch_to_block(no)
+  b.return_([b.iadd(constant, b.imul(x, y))])
+  let function = b.finalize()
+  function.verify_core()
+  let trace = trace_lowering(function)
+  let mut constants = 0
+  for index, operation in trace.operations {
+    if operation is I64Const(16UL) {
+      constants += 1
+      assert_eq(trace.operation_blocks[index], 0)
+    }
+  }
+  assert_eq(constants, 1)
+  assert_eq(trace.operations.filter(op => op is IntMultiplyAdd).length(), 2)
+}
+
+///|
+test "memory selection retains a constant used as both base and offset" {
+  let b = @milkir.FunctionBuilder("shared_constant_address")
+  let condition = b.add_param(I32)
+  let address = b.iconst_i64(16L)
+  let yes = b.create_block()
+  let no = b.create_block()
+  b.add_result(I32)
+  b.branch(condition, yes, [], no, [])
+  b.switch_to_block(yes)
+  b.return_([b.load_ptr(I32, address, address)])
+  b.switch_to_block(no)
+  b.return_([b.load_ptr(I32, address, address)])
+  let function = b.finalize()
+  function.verify_core()
+  let trace = trace_lowering(function)
+  let mut constants = 0
+  for index, operation in trace.operations {
+    if operation is I64Const(16UL) {
+      constants += 1
+      assert_eq(trace.operation_blocks[index], 0)
+    }
+  }
+  assert_eq(constants, 1)
 }

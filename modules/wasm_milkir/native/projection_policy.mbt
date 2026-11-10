@@ -14,6 +14,7 @@ fn following_reference_read(
 ///|
 priv struct InlineProjectionSites {
   eligible : Map[Int32, Bool]
+  offset_sites : Map[Int32, Bool]
   reserved_struct : Int32?
 }
 
@@ -75,8 +76,10 @@ fn inline_projection_sites(
   reuse_only~ : Bool = false,
 ) -> InlineProjectionSites {
   let sites : Map[Int32, Bool] = Map([])
-  let empty = { eligible: sites, reserved_struct: None, }
-  if function.blocks.length() > 64 {
+  let offset_sites = Map([])
+  let empty = { eligible: sites, offset_sites, reserved_struct: None, }
+  let bounded_cache = function.blocks.length() <= 64
+  if !bounded_cache && !reuse_only {
     return empty
   }
   let candidates : Array[(Int32, Int32, Bool, @milkir.Value)] = []
@@ -102,10 +105,15 @@ fn inline_projection_sites(
   }
   let cfg = @milkir.CFG::build(function)
   let loops = cfg.find_loops()
+  let dominance = if reuse_only && bounded_cache && !loops.is_empty() {
+    Some(cfg.compute_dominance())
+  } else {
+    None
+  }
+  let mut preheader_budget = 4
   // Small acyclic accessors can be called repeatedly by an outer loop. Bound
   // their expansion independently of local loop detection and allocator work.
-  let small_accessor = !reuse_only &&
-    function.blocks.length() <= 12 &&
+  let small_accessor = function.blocks.length() <= 12 &&
     candidates.length() <= 3 &&
     loops.is_empty() &&
     function.blocks.fold(init=0, fn(total, block) {
@@ -114,18 +122,26 @@ fn inline_projection_sites(
     64
   let mut reserved_struct = None
   let mut smallest_loop = function.blocks.length() + 1
-  let read_only_loops = if reuse_only {
+  let read_only_loops = if reuse_only && bounded_cache {
     loops.map(loop_ => loop_has_read_only_context(function, loop_))
   } else {
     []
   }
   for (block, id, reference_read, reference) in candidates {
-    let fixed_slot = reuse_only && fixed_context_reference(function, reference)
+    let fixed_slot = reuse_only &&
+      bounded_cache &&
+      fixed_context_reference(function, reference)
     let invariant_param = reuse_only &&
+      bounded_cache &&
       function.params.any(parameter => parameter.0.id == reference.id)
     let mut in_loop = false
+    let mut offset_hot = small_accessor
     for index, loop_ in loops {
-      if loop_.contains(block) &&
+      if !loop_.contains(block) {
+        continue
+      }
+      offset_hot = true
+      if bounded_cache &&
         (
           !reuse_only ||
           invariant_param ||
@@ -140,9 +156,21 @@ fn inline_projection_sites(
         }
       }
     }
-    if small_accessor || in_loop {
+    // LICM keeps a loop's physical queries in dominating preheaders. Retain
+    // direct offset lowering for a bounded number of those queries as well.
+    if !offset_hot &&
+      preheader_budget > 0 &&
+      dominance is Some(tree) &&
+      loops.any(loop_ => tree.dominates(block, loop_.header)) {
+      offset_hot = true
+      preheader_budget -= 1
+    }
+    if reuse_only && offset_hot {
+      offset_sites[id] = true
+    }
+    if (!reuse_only && small_accessor) || in_loop {
       sites[id] = true
     }
   }
-  { eligible: sites, reserved_struct, }
+  { eligible: sites, offset_sites, reserved_struct, }
 }

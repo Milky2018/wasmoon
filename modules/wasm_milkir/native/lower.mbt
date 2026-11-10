@@ -13,6 +13,8 @@ struct Environment {
   gc_heap_field : @native_types.EnvironmentField?
   ordinary_view_publication : Bool
   inline_heap : InlineHeapLayout?
+  direct_struct_allocations : Bool
+  direct_struct_sites : Map[Int32, Bool]
   offset_refs : (OffsetRefLayout, InlineHeapLayout)?
   heap_cast_pages : Int32?
   struct_views : StructViewLayout?
@@ -20,6 +22,7 @@ struct Environment {
   mut array_projection_budget : Int32
   mut projection_budget : Int32
   projection_sites : InlineProjectionSites?
+  checked_struct_sites : Map[Int32, Bool]
   exclusive_poll_controls : Bool
   poll_budget_offset : Int32?
   gc_array_regions : Bool
@@ -81,8 +84,11 @@ pub fn Environment::new(
     prepared_arrays,
     projection_budget: 8,
     projection_sites: None,
+    checked_struct_sites: Map([]),
     expand_structs: true,
     inline_heap,
+    direct_struct_allocations: true,
+    direct_struct_sites: Map([]),
     // Projection needs the heap ABI even when allocation inlining is
     // disabled for this function by the allocation expansion budget.
     offset_refs: match (offset_refs, inline_heap) {
@@ -102,6 +108,8 @@ fn direct_call_contract(
   function_index : Int32,
   environment : Environment,
   result_types : Array[@native_types.ValueType],
+  noncollecting~ : Bool = false,
+  read_only~ : Bool = false,
 ) -> (@native_types.NativeCall, Array[@lowering.Value]) {
   let parameter_types : Array[@native_types.ValueType] = [Ptr64]
   for type_ in context.operand_types() {
@@ -116,7 +124,21 @@ fn direct_call_contract(
       Internal((environment.function_symbol)(function_index)),
       @native_types.Signature::new(parameter_types, result_types),
       Internal,
-      @native_types.CallBehavior::conservative(),
+      if noncollecting {
+        @native_types.CallBehavior::new(
+          if read_only {
+            Read
+          } else {
+            ReadWrite
+          },
+          true,
+          true,
+          false,
+          false,
+        )
+      } else {
+        @native_types.CallBehavior::conservative()
+      },
     ),
     operands,
   )
@@ -127,12 +149,16 @@ fn lower_direct_call(
   context : @adapter.InstructionContext,
   function_index : Int32,
   environment : Environment,
+  noncollecting : Bool,
+  read_only : Bool,
 ) -> Unit {
   let (call, operands) = direct_call_contract(
     context,
     function_index,
     environment,
     context.result_types(),
+    noncollecting~,
+    read_only~,
   )
   context.finish_call(call, operands)
 }
@@ -1141,15 +1167,17 @@ fn emit_fixed_allocation(
   environment : Environment,
   helper : @wasm_milkir.WasmRuntimeHelper,
   type_index : Int32,
+  fields~ : (Array[@lowering.Value], Array[@native_types.ValueType])? = None,
 ) -> @lowering.Value {
-  let types = context.operand_types()
+  let (values, types) = fields.unwrap_or_else(() => {
+    (context.operands(), context.operand_types())
+  })
   let mut has_vector = false
   for ty in types {
     if ty is V128 {
       has_vector = true
     }
   }
-  let values = context.operands()
   // With a vector member the buffer has to be GcSlot-shaped, and the helper
   // that reads it has to agree; without one, the packed word buffer is both
   // smaller and what the existing fast paths already expect.
@@ -1444,8 +1472,26 @@ fn lower_extension(
       lower_get_function_reference(context, function_index, environment)
       None
     }
+    ExecutableFuncRefEq => {
+      let reference = context.operands()[0]
+      // Keep the original executable-target check, including null, Store owner
+      // resolution and the missing-backend trap, before admitting an inline.
+      untag_callable_reference(context, reference, environment) |> ignore
+      let address = context.emit(GcRefAddress, [reference], [Ptr64])[0]
+      let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [address], [I64])[0]
+      let address = context.emit(GcRefAddress, [context.operands()[1]], [Ptr64])[0]
+      let expected = context.emit(Convert(Bitcast(Ptr64, I64)), [address], [I64])[0]
+      context.finish_operation(IntCompare(Equal), [bits, expected])
+      None
+    }
     WasmCall(function_index) => {
-      lower_direct_call(context, function_index, environment)
+      lower_direct_call(
+        context,
+        function_index,
+        environment,
+        validation_context.function_is_noncollecting(function_index),
+        validation_context.function_is_readonly(function_index),
+      )
       None
     }
     WasmCallIndirect(type_index, table_index) => {
@@ -1767,7 +1813,12 @@ pub fn lower_to_sink(
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir_native.NativeLowerError {
   if environment.gc_array_regions && environment.gc_heap_field is Some(_) {
-    prepare_gc_memory(function, validation_context, on_event~) catch {
+    prepare_gc_memory(
+      function,
+      validation_context,
+      on_event~,
+      split_array_payload=environment.offset_refs is Some(_),
+    ) catch {
       error =>
         raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
     }
@@ -1795,7 +1846,8 @@ pub fn lower_to_sink(
     )
     let struct_views = structs && environment.struct_views is Some(_)
     let projection_sites = if struct_views ||
-      (arrays && environment.array_views is Some(_)) {
+      (arrays && environment.array_views is Some(_)) ||
+      environment.offset_refs is Some(_) {
       Some(
         inline_projection_sites(
           function,
@@ -1822,10 +1874,11 @@ pub fn lower_to_sink(
       },
       projection_sites,
       expand_structs: shared_structs,
-      inline_heap: if structs {
-        environment.inline_heap
+      direct_struct_allocations: structs,
+      direct_struct_sites: if structs || environment.inline_heap is None {
+        Map([])
       } else {
-        None
+        hot_struct_expansion_sites(function, validation_context)
       },
       prepared_arrays: environment.prepared_arrays &&
       environment.gc_heap_field is Some(_) &&
@@ -1834,7 +1887,71 @@ pub fn lower_to_sink(
   } else {
     environment
   }
+  let admission = if environment.inline_heap is Some(_) &&
+    environment.offset_refs is Some(_) {
+    let sites = if environment.direct_struct_allocations {
+      let sites : Map[Int32, Bool] = Map([])
+      for block in function.blocks {
+        for id in function.block_instruction_ids(block) {
+          if @wasm_milkir.decode_opcode(
+              function.instruction_by_id(id).unwrap().opcode,
+            )
+            is Some(StructNew(_) | StructNewDefault(_)) {
+            sites[id] = true
+          }
+        }
+      }
+      sites
+    } else {
+      environment.direct_struct_sites
+    }
+    prepare_allocation_admission(function, validation_context, sites) catch {
+      error =>
+        raise @milkir_native.NativeLowerError::invalid_milkir(error.to_string())
+    }
+  } else {
+    None
+  }
+  defer (if admission is Some(edit) { (edit.restore)() })
+  let admitted = match admission {
+    Some(edit) => edit.operations
+    None => Map([])
+  }
   fn validate(view : @milkir.ExtensionInstView) -> String? {
+    if !admitted.is_empty() &&
+      decode_allocation_admission(view.op) is Some(operation) {
+      let valid = match operation {
+        Acquire(_) =>
+          view.operand_types.is_empty() && view.result_types is [Ptr]
+        New(type_, default_) => {
+          guard validation_context.struct_fields(type_) is Some(fields) else {
+            return Some("invalid allocation admission type")
+          }
+          let count = if default_ { 0 } else { fields.length() }
+          view.result_types is [Ref] &&
+          view.operand_types.length() == count + 1 &&
+          view.operand_types[count] == Ptr &&
+          (if default_ {
+            fields.all(field => field.defaultable)
+          } else {
+            let mut valid = true
+            for index, field in fields {
+              let type_ = match field.storage {
+                Packed8 | Packed16 => @milkir.Type::I32
+                Value(type_) => type_
+              }
+              valid = valid && view.operand_types[index] == type_
+            }
+            valid
+          })
+        }
+      }
+      return if valid {
+        None
+      } else {
+        Some("invalid allocation admission signature")
+      }
+    }
     if !cached_polls.is_empty() && decode_cached_poll(view.op) is Some(poll) {
       if (match poll {
           Step(_, true) =>
@@ -1850,12 +1967,45 @@ pub fn lower_to_sink(
     }
     validate_memory_extension(view, validation_context, function.results)
   }
+  let environment = if environment.gc_array_regions &&
+    environment.offset_refs is Some(_) &&
+    environment.ordinary_view_publication {
+    {
+      ..environment,
+      checked_struct_sites: checked_struct_projection_sites(function),
+    }
+  } else {
+    environment
+  }
   let cast_views = adjacent_cast_views(function, environment)
   let pending_view : Ref[(Int32, @lowering.Value)?] = Ref(None)
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
   ) -> String? {
+    if decode_allocation_admission(extension) is Some(operation) {
+      if admitted.get(context.instruction_id()) != Some(operation) {
+        return Some("unverified allocation admission")
+      }
+      match operation {
+        Acquire(type_) =>
+          lower_struct_admission(
+            context, environment, validation_context, type_,
+          )
+        New(type_, default_) =>
+          if !lower_fast_struct(
+              context,
+              environment,
+              validation_context,
+              type_,
+              default_,
+              admission=Some(context.operands().last().unwrap()),
+            ) {
+            return Some("admitted allocation lost its complete layout")
+          }
+      }
+      return None
+    }
     if decode_cached_poll(extension) is Some(poll) {
       if cached_polls.get(context.instruction_id()) != Some(poll) {
         return Some(
@@ -1910,8 +2060,17 @@ pub fn lower_to_sink(
     resolve_context_field,
     sink,
     call_abi?,
-    verify_input=verify_input || !cached_polls.is_empty(),
-    root_free_extension=op => decode_cached_poll(op) is Some(Publish(_)),
+    verify_input=verify_input ||
+      !cached_polls.is_empty() ||
+      !admitted.is_empty(),
+    root_free_extension=op => {
+      decode_cached_poll(op) is Some(Publish(_)) ||
+      decode_allocation_admission(op) is Some(Acquire(_)) ||
+      (
+        @wasm_milkir.decode(op) is Some(WasmCall(index)) &&
+        validation_context.function_is_noncollecting(index)
+      )
+    },
     prefer_scoped_root_site=op => {
       decode_cached_poll(op) is Some(Step(_, _)) ||
       @wasm_milkir.decode(op) is Some(SafepointPoll(_, _, _, _)) ||

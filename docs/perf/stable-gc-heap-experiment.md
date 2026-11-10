@@ -144,3 +144,154 @@ and x64. The ARM64 `parse_decimal_from_view` body shrank from 18,080 to
 17,048 bytes. Its x64 counterpart shrank from 44,654 to 41,642 bytes.
 Offset mode remains opt-in because the original workload still takes
 longer end to end than the default.
+
+## Bound layouts and bounded expansion
+
+The next offset revision prepares a table from the instance's private type map
+and the heap's immutable layouts. A published entry pairs the exact typed
+header (canonical identity and field count) with the physical prefix. The JIT
+still verifies the packed reference and live slot, the typed header, and the
+compiled prefix before it produces a view. Heap changes revoke the binding.
+Borrowed mutable type maps, missing layouts, allocation refusal, debug
+verification, and mismatches use the checked helper. Array width and bounds
+checks and the borrow verifier are unchanged.
+
+Binding alone reduced the cold compiler median from 1.033 to 0.985 s and
+invocation from 1.410 to 1.382 s in the first six-round comparison. The
+compiler still emitted a checked fast/slow split at each projection. Restricting
+expansion to loops and small accessors recovered another 92 ms of compiler
+time in a second round, while losing 44 ms of invocation time versus binding
+alone. Using immediate shifts and reusing the published heap/directory
+admission then shortened the expanded path. Expansion uses the function's
+control flow and projection count.
+
+The final comparison used seven balanced rounds on macOS ARM64, with fresh
+processes and independent cold caches. All 147 processes returned the expected
+value on the same three Wasm binaries. The previous build is `64fb4849`.
+The new build adds eight bytes per native context. Wasmtime 49.0.1 uses
+serial compilation and its copying collector. V8 14.1.146.11-node.14 uses
+eager optimizing compilation with one compilation task.
+
+| Input or phase | Previous default | New default | Previous offsets | Bound offsets, compacting | Bound offsets, stable | Wasmtime | Eager V8 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Original parse_double compile | 809.74 ms | 805.11 ms | 986.01 ms | 858.23 ms | 858.36 ms |  | 432.32 ms |
+| Original parse_double invoke | 1.443 s | 1.452 s | 1.380 s | 1.389 s | 3.305 s |  | 0.756 s |
+| Original parse_double process wall | 2.328 s | 2.325 s | 2.458 s | 2.318 s | 4.229 s | 2.462 s | 1.237 s |
+| Alternating field reads, invoke | 29.39 ms | 29.30 ms | 29.32 ms | 29.38 ms | 29.19 ms |  | 6.05 ms |
+| Alternating field reads, process wall | 34.42 ms | 34.31 ms | 34.21 ms | 34.21 ms | 33.96 ms | 13.31 ms | 52.81 ms |
+| Retained graph, invoke | 106.46 ms | 107.30 ms | 100.09 ms | 99.31 ms | 103.60 ms |  | 129.45 ms |
+| Retained graph, process wall | 114.96 ms | 115.88 ms | 109.27 ms | 108.23 ms | 112.89 ms | 545.02 ms | 182.35 ms |
+
+Wasmoon reports native compilation separately from decode and validation.
+V8's compile phase includes validation. Wasmtime is timed at the process
+boundary. On the original property, the paired median whole-process change
+is a 5.72% reduction versus the previous offset path and a
+0.29% reduction versus the previous default. Invocation is close to the
+previous offset path. The whole-process ratio to eager V8 is 1.87x. The
+stable heap takes 2.38x as long as compacting during invocation on this input.
+
+The emitted `parse_decimal_from_view` body is 11,840 bytes on AArch64 and
+28,140 bytes on x64, down from 17,048 and 41,642 bytes. The alternating
+field-read body remains byte-identical on both targets. With offsets disabled,
+both inspected functions match the control machine bytes. The evidence
+supports keeping the compacting offset path opt-in.
+
+A separate three-round screen covered zero and nonzero i32 arrays, four-element
+arrays, v128 initialization and a mutated large reference array. All 60
+processes returned the expected value. Invocation medians changed by -1.94%
+to +4.61% versus previous offsets. A nine-round repeat of the four-element
+case gave a paired median invocation increase of 1.57%, with pairs ranging
+from -4.25% to +5.04%. These samples do not establish an array speedup.
+
+Local validation passed all 3,292 native tests and 45 C stubs with warnings
+denied. The rebinding regression passed in both offset modes, and all 633
+Core GC assertions passed in each JIT/interpreter and compacting/stable
+combination. AArch64 execution and x64 code emission were checked on macOS.
+
+## Indexed array payloads and integer selection
+
+Two invocation-only sampling windows on the original `parse_double`
+property put about 72% of main-thread leaf samples in JIT code and 10% in
+the three array and struct projection helpers. A separate build that
+recorded linked function ranges attributed 48–50% of main-thread samples
+to `Decimal.left_shift` and `Decimal.right_shift` together. The hot byte
+array accesses spent three instructions forming each element address
+before the load or store. The same function in eager V8 used indexed byte
+accesses. Both V8 and Wasmtime emitted `msub` for the multiply and
+subtract in the decimal remainder.
+
+In offset mode, the memory rewrite exposes a numeric array payload only
+from a width-matched element view on the guarded edge. The verifier checks
+that provenance and the existing borrow lifetime. Length still comes from
+the metadata view. This separates the 16-byte prefix from the element
+offset, so selection can pass the base and the zero-extended index directly
+to a target memory operand. The original fallback and its traps remain
+available. Reference stores continue through the existing barriers.
+
+The native selector also folds single-use multiply/subtract and logical
+shift/add. AArch64 uses `msub` and `add ... lsr`, while x64 emits the
+equivalent separate operations. The offset admission path extracts the
+same 27-bit slot once for both the identity-directory lookup and the heap
+address. The tag predicate, directory identity check, typed layout check
+and slow path remain in place.
+
+In the emitted AArch64 body for `Decimal.left_shift`, an indexed
+`ldrb` or `strb` replaces the four-instruction byte access sequence.
+The reciprocal quotient adjustment uses a shifted add without a separate
+shift. `Decimal.left_shift` shrank from 3,640 to 3,592 bytes and
+`parse_decimal_from_view` from 11,840 to 11,408 bytes.
+`Decimal.right_shift` grew from 3,388 to 3,472 bytes.
+
+Allocation-time reference packing, width specialization alone, and
+cloning the loop to lift the view guard were tested separately. The
+allocation and width changes did not improve the property reliably. Loop
+cloning saved about 3 ms in a four-round screen and increased code size.
+Keeping array length opaque put a helper call back inside the hot loop.
+These variants were discarded.
+
+Seven rotated cold rounds on macOS ARM64 measured the original seed-37
+property with all 20,000 assertions. Each engine received the same Wasm
+binary (`fb7bf21507c21de4ffb79126f94cc0846314bd0b03c33060a533f15afe441db1`).
+All processes returned the expected result. The previous offsets include
+the bound-layout changes above. Wasmtime 49.0.1 ran serially with its copying
+collector and cache disabled. V8 14.1.146.11-node.14 used eager optimizing
+compilation with one compilation task.
+
+| Phase | Previous default | Previous offsets | Indexed offsets | Wasmtime | Eager V8 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Compilation | 823.81 ms | 869.48 ms | 858.68 ms | | 448.55 ms |
+| Invocation | 1.462 s | 1.405 s | 1.377 s | | 0.781 s |
+| Process wall | 2.356 s | 2.349 s | 2.308 s | 2.417 s | 1.277 s |
+
+Wasmoon measures native compilation separately from decode and validation.
+V8's compile timer includes validation. Wasmtime is timed at the process
+boundary. Versus the previous offset build, the paired median reductions
+were 1.92% in invocation and 1.51% in process wall time. Six of seven
+rounds improved on both measures. One slower round remained in the results.
+Invocation still takes 1.76x V8 and process wall time takes 1.81x. Indexed
+offsets remain opt-in.
+
+In seven cold rounds of alternating field reads, the invocation medians
+were 29.35 ms before the change, 29.80 ms after it, and 6.07 ms in V8.
+The corresponding process wall times were 35.40 ms, 35.65 ms, and
+13.76 ms in serial Wasmtime. The graph with 2,097,152 surviving objects
+and 100,000 churn iterations varied much more in the mixed-engine screen.
+In a separate 13-round comparison, its paired median invocation increased
+1.38% from the previous offsets and the process user CPU median change
+rounded to zero.
+Both emitted AArch64 function bodies in the field-read workload match
+the previous offset build byte for byte.
+
+A nine-round Wasm 1.0 control ran 409.6 million wide products per
+invocation with asserted checksums and offsets disabled. The paired median invocation change
+was +0.11% versus the previous build. Process wall medians were 0.698 s
+for the new build, 0.811 s for serial Wasmtime and 0.850 s for eager V8.
+These measurements cover the listed workloads.
+
+The final build passed 3,293 native tests and 62,563 Core spec assertions
+in each of the default interpreter and JIT runs. Both offset heap modes
+passed the 633 GC spec assertions in each execution mode, plus the
+focused offset and heap-rebinding tests. The changed packages passed
+strict native checking. The full-workspace strict check reproduced the
+baseline WASI HTTP cancellation warning. Local execution was AArch64.
+The x64 target was checked through emission.

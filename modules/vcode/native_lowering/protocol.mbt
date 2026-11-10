@@ -2,12 +2,14 @@
 /// Opaque handles used only while one MilkIR function is streamed into a
 /// target selector. They do not own an SSA graph.
 #derive(Debug, Eq, Hash)
+#valtype
 pub(all) struct Value {
   id : Int32
 }
 
 ///|
 #derive(Debug, Eq, Hash)
+#valtype
 pub(all) struct Block {
   id : Int32
 }
@@ -134,6 +136,7 @@ pub(all) enum TargetTerminator {
 /// and stack-object requests; `DirectBuilder` is the only component that
 /// exposes typed transient handles to legalization code.
 pub struct TargetSink {
+  priv supports_int_binary_immediate : (IntBinaryOp, @native.ValueType, UInt64) -> Bool
   priv supports_int_compare_immediate : (@native.ValueType, UInt64) -> Bool
   priv folds_unsigned_index_into_memory : Bool
   priv parameters : () -> Array[Int32]
@@ -173,6 +176,13 @@ pub fn TargetSink::new(
   terminate : (Int32, TargetTerminator, TargetTerminatorMetadata) -> Unit,
   finish : () -> Unit,
   folds_unsigned_index_into_memory~ : Bool = false,
+  supports_int_binary_immediate~ : (IntBinaryOp, @native.ValueType, UInt64) -> Bool = fn(
+    _,
+    _,
+    _,
+  ) {
+    true
+  },
   supports_int_compare_immediate~ : (@native.ValueType, UInt64) -> Bool = fn(
     _,
     _,
@@ -181,6 +191,7 @@ pub fn TargetSink::new(
   },
 ) -> TargetSink {
   {
+    supports_int_binary_immediate,
     supports_int_compare_immediate,
     folds_unsigned_index_into_memory,
     parameters,
@@ -1238,4 +1249,15 @@ fn DirectBuilder::publish_root_frame(
     self.jump(ready, [])
     self.switch_to_block(ready)
   }
+}
+
+///|
+/// Whether this target consumes a binary constant without a register operand.
+pub fn TargetSink::supports_int_binary_immediate(
+  self : TargetSink,
+  operation : IntBinaryOp,
+  ty : @native.ValueType,
+  bits : UInt64,
+) -> Bool {
+  (self.supports_int_binary_immediate)(operation, ty, bits)
 }

@@ -32,7 +32,12 @@ fn SparseVRegSet::word(self : SparseVRegSet, word_id : Int32) -> UInt64 {
       0UL
     }
     Large(words) => words.get(word_id).unwrap_or(0UL)
-    Dense(words) => words.get(word_id).unwrap_or(0UL)
+    Dense(words) =>
+      if word_id >= 0 && word_id < words.length() {
+        words[word_id]
+      } else {
+        0UL
+      }
   }
 }
 

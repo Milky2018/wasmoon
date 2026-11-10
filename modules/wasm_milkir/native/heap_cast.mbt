@@ -56,12 +56,44 @@ fn inline_exact_heap_cast(
   let ready = context.create_block([GcRef64])
   let pointer = context.emit(GcRefAddress, [reference], [Ptr64])[0]
   let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [pointer], [I64])[0]
+  let heap = context.emit(
+      EnvironmentField(heap_field, Mutable),
+      context.environment(),
+      [Ptr64],
+    )[0]
+  let legacy = context.create_block([])
+  let validated = context.create_block([])
+  if environment.offset_refs is Some((offsets, _)) {
+    let packed = context.create_block([])
+    let tag = context.emit(IntBinaryImmediate(And, OFFSET_REF_MASK), [bits], [
+        I64,
+      ])[0]
+    context.branch_int_compare_immediate(
+      Equal,
+      tag,
+      OFFSET_REF_TAG,
+      packed,
+      [],
+      legacy,
+      [],
+    )
+    context.switch_to_block(packed)
+    // Validate the entire packed reference before using its low identity word.
+    // An interior or recycled slot must never become a valid legacy identity.
+    checked_offset_header(context, heap, offsets, heap_layout, slow) |> ignore
+    context.jump(validated, [])
+  } else {
+    context.jump(legacy, [])
+  }
+  context.switch_to_block(legacy)
   let disallowed = context.emit(
       IntBinaryImmediate(And, 0xFFFFFFFF00000001UL),
       [bits],
       [I64],
     )[0]
   view_guard_immediate(context, Equal, disallowed, 0UL, slow)
+  context.jump(validated, [])
+  context.switch_to_block(validated)
   let bits = context.emit(Convert(I32WrapI64), [bits], [I32])[0]
   let ref_ = context.emit(
       IntBinary(UnsignedShiftRight),
@@ -69,11 +101,6 @@ fn inline_exact_heap_cast(
       [I32],
     )[0]
   let ordinal = context.emit(IntBinaryImmediate(Sub, 1UL), [ref_], [I32])[0]
-  let heap = context.emit(
-      EnvironmentField(heap_field, Mutable),
-      context.environment(),
-      [Ptr64],
-    )[0]
   view_guard_nonzero(context, heap, slow)
   let objects = heap_load(context, heap, heap_layout.object_count, I32)
   heap_cast_guard(context, UnsignedLessThan, ordinal, objects, slow)

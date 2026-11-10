@@ -1,31 +1,47 @@
 ///|
-fn test_context() -> @wasm_milkir.WasmValidationContext {
-  @wasm_milkir.WasmValidationContext::new({
-    function_contract: fn(_) { None },
-    defined_type_contract: fn(index) {
-      match index {
-        0 =>
-          Some(
-            Struct([
-              { storage: Value(I32), mutable_: true, defaultable: true, },
-              { storage: Value(I32), mutable_: true, defaultable: true, },
-              { storage: Packed8, mutable_: true, defaultable: true, },
-              { storage: Value(Ref), mutable_: true, defaultable: true, },
-            ]),
-          )
-        1 =>
-          Some(
-            Array({ storage: Value(I32), mutable_: true, defaultable: true, }),
-          )
-        _ => None
-      }
+fn test_context(
+  function_effects~ : Map[Int32, @wasm_milkir.WasmFunctionEffects] = Map([]),
+) -> @wasm_milkir.WasmValidationContext {
+  @wasm_milkir.WasmValidationContext::new(
+    {
+      function_contract: fn(index) {
+        if index == 8 {
+          Some({ params: [Ref], results: [I32], })
+        } else if index == 7 {
+          Some({ params: [Ref], results: [], })
+        } else {
+          None
+        }
+      },
+      defined_type_contract: fn(index) {
+        match index {
+          0 =>
+            Some(
+              Struct([
+                { storage: Value(I32), mutable_: true, defaultable: true, },
+                { storage: Value(I32), mutable_: true, defaultable: true, },
+                { storage: Packed8, mutable_: true, defaultable: true, },
+                { storage: Value(Ref), mutable_: true, defaultable: true, },
+              ]),
+            )
+          1 =>
+            Some(
+              Array({ storage: Value(I32), mutable_: true, defaultable: true, }),
+            )
+          2 => Some(Function({ params: [Ref], results: [], }))
+          3 => Some(Function({ params: [Ref], results: [I32], }))
+          _ => None
+        }
+      },
+      table_contract: fn(_) { None },
+      tag_contract: fn(_) { None },
+      memory_exists: fn(_) { false },
+      data_segment_exists: fn(_) { false },
+      element_segment_type: fn(_) { None },
     },
-    table_contract: fn(_) { None },
-    tag_contract: fn(_) { None },
-    memory_exists: fn(_) { false },
-    data_segment_exists: fn(_) { false },
-    element_segment_type: fn(_) { None },
-  })
+    function_types=Map([(7, 2), (8, 3)]),
+    function_effects~,
+  )
 }
 
 ///|
@@ -267,4 +283,51 @@ test "large extended regions and long copy chains remain well formed" {
   prepare_gc_memory(function, test_context())
   // Forgetting available reads must not discard any of these distinct reads.
   inspect(gc_read_count(function), content="192")
+}
+
+///|
+test "read-only local calls preserve checked views and values without erasing the call" {
+  for
+    effects in [
+      None,
+      Some(@wasm_milkir.WasmFunctionEffects::NonCollectingReadOnly),
+      Some(NonCollectingReadWrite),
+    ] {
+    let b = @milkir.FunctionBuilder("checked_readonly_call")
+    b.add_param(I64) |> ignore
+    let object = b.add_param(Ref)
+    b.add_result(I32)
+    let first = @wasm_milkir.struct_get(b, 0, 0, object, I32)
+    @wasm_milkir.call_multi(b, 7, [], [object]) |> ignore
+    @wasm_milkir.call_multi(b, 7, [], [object]) |> ignore
+    let last = @wasm_milkir.struct_get(b, 0, 0, object, I32)
+    b.return_([b.iadd(first, last)])
+    let function = b.finalize()
+    let function_effects = Map([])
+    if effects is Some(effects) {
+      function_effects[7] = effects
+    }
+    optimize_memory_test(function, test_context(function_effects~), O2)
+    |> ignore
+    assert_eq(
+      gc_read_count(function),
+      if effects is Some(NonCollectingReadOnly) {
+        1
+      } else {
+        2
+      },
+    )
+    let mut calls = 0
+    for block in function.blocks {
+      for id in function.block_instruction_ids(block) {
+        if @wasm_milkir.decode_opcode(
+            function.instruction_by_id(id).unwrap().opcode,
+          )
+          is Some(WasmCall(7)) {
+          calls += 1
+        }
+      }
+    }
+    assert_eq(calls, 2)
+  }
 }

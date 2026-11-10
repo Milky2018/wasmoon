@@ -112,10 +112,7 @@ fn[F : FunctionView] build_function_range_fragments(
   live_out : Array[Array[Int32]],
 ) -> Unit {
   let block_ends = Array::make(function.block_count(), 0)
-  let open_ends : Array[ProgramPoint?] = Array::make(
-    function.value_count(),
-    None,
-  )
+  let open_ends = Array::make(function.value_count(), no_program_point())
   let open_values : Array[Int32] = []
   for block in 0..<function.block_count() {
     let instruction_count = function.block_instruction_count(block)
@@ -123,10 +120,10 @@ fn[F : FunctionView] build_function_range_fragments(
     let block_end = ProgramPoint(block, instruction_count * 2)
     block_ends[block] = block_end.inst
     for value in live_out[block] {
-      if open_ends[value] is None {
+      if !open_ends[value].present {
         open_values.push(value)
       }
-      open_ends[value] = Some(block_end)
+      open_ends[value] = some_program_point(block_end)
     }
     if instruction_count > 0 {
       let edge_point = ProgramPoint(block, (instruction_count - 1) * 2)
@@ -135,9 +132,9 @@ fn[F : FunctionView] build_function_range_fragments(
           let argument = function.edge_argument_at(
             block, successor, argument_index,
           )
-          if open_ends[argument.id] is None {
+          if !open_ends[argument.id].present {
             open_values.push(argument.id)
-            open_ends[argument.id] = Some(edge_point)
+            open_ends[argument.id] = some_program_point(edge_point)
           }
         }
       }
@@ -152,23 +149,27 @@ fn[F : FunctionView] build_function_range_fragments(
           if operand.timing == timing &&
             (operand.role is Def || operand.role is UseDef) {
             let point = operand_program_point(block, instruction_index, timing)
-            match open_ends[operand.vreg.id] {
-              Some(end) => {
-                add_live_range_fragment(ranges, operand.vreg, point, end)
-                open_ends[operand.vreg.id] = None
-              }
-              None =>
-                add_live_range_fragment(ranges, operand.vreg, point, point)
-            }
+            let end = open_ends[operand.vreg.id]
+            add_live_range_fragment(
+              ranges,
+              operand.vreg,
+              point,
+              if end.present {
+                end.point
+              } else {
+                point
+              },
+            )
+            open_ends[operand.vreg.id] = no_program_point()
           }
         }
         for operand in operands {
           if operand.timing == timing &&
             (operand.role is Use || operand.role is UseDef) {
             let point = operand_program_point(block, instruction_index, timing)
-            if open_ends[operand.vreg.id] is None {
+            if !open_ends[operand.vreg.id].present {
               open_values.push(operand.vreg.id)
-              open_ends[operand.vreg.id] = Some(point)
+              open_ends[operand.vreg.id] = some_program_point(point)
             }
           }
         }
@@ -176,37 +177,46 @@ fn[F : FunctionView] build_function_range_fragments(
     }
     for parameter_index in 0..<function.block_parameter_count(block) {
       let parameter = function.block_parameter_at(block, parameter_index)
-      match open_ends[parameter.id] {
-        Some(end) => {
-          add_live_range_fragment(ranges, parameter, block_start, end)
-          open_ends[parameter.id] = None
-        }
-        None =>
-          add_live_range_fragment(ranges, parameter, block_start, block_start)
-      }
+      let end = open_ends[parameter.id]
+      add_live_range_fragment(
+        ranges,
+        parameter,
+        block_start,
+        if end.present {
+          end.point
+        } else {
+          block_start
+        },
+      )
+      open_ends[parameter.id] = no_program_point()
     }
     if block == 0 {
       for parameter_index in 0..<function.entry_value_count() {
         let parameter = function.entry_value_at(parameter_index)
-        match open_ends[parameter.id] {
-          Some(end) => {
-            add_live_range_fragment(ranges, parameter, block_start, end)
-            open_ends[parameter.id] = None
-          }
-          None =>
-            add_live_range_fragment(ranges, parameter, block_start, block_start)
-        }
+        let end = open_ends[parameter.id]
+        add_live_range_fragment(
+          ranges,
+          parameter,
+          block_start,
+          if end.present {
+            end.point
+          } else {
+            block_start
+          },
+        )
+        open_ends[parameter.id] = no_program_point()
       }
     }
     for value_id in open_values {
-      if open_ends[value_id] is Some(end) {
+      let end = open_ends[value_id]
+      if end.present {
         add_live_range_fragment(
           ranges,
           { id: value_id, class: function.value_class(value_id), },
           block_start,
-          end,
+          end.point,
         )
-        open_ends[value_id] = None
+        open_ends[value_id] = no_program_point()
       }
     }
     open_values.clear()
@@ -228,18 +238,24 @@ fn[F : FunctionView] build_function_live_ranges(function : F) -> LiveRangeSet {
   let live_out = collect_function_liveness(function, ranges)
   build_function_range_fragments(ranges, function, live_out)
   ranges.ranges.sort_by(fn(a, b) {
-    match (a.start(), b.start()) {
-      (Some(lhs), Some(rhs)) => {
-        let by_point = lhs.compare_with_order(rhs, ranges.block_order)
-        if by_point != 0 {
-          by_point
-        } else {
-          a.vreg.id - b.vreg.id
-        }
+    if a.ranges.is_empty() {
+      if b.ranges.is_empty() {
+        a.vreg.id - b.vreg.id
+      } else {
+        1
       }
-      (None, Some(_)) => 1
-      (Some(_), None) => -1
-      (None, None) => a.vreg.id - b.vreg.id
+    } else if b.ranges.is_empty() {
+      -1
+    } else {
+      let by_point = a.ranges[0].start.compare_with_order(
+        b.ranges[0].start,
+        ranges.block_order,
+      )
+      if by_point != 0 {
+        by_point
+      } else {
+        a.vreg.id - b.vreg.id
+      }
     }
   })
   ranges

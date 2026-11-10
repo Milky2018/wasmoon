@@ -92,6 +92,10 @@ pub fn TranslationContext::wasm_validation_context(
 ) -> @wasm_milkir.WasmValidationContext {
   let defined_types = self.module_types.map(validation_defined_type_contract)
   let function_contracts = self.linked_function_contracts(defined_types)
+  let function_types : Map[Int32, Int32] = Map([])
+  for local_index, type_index in self.func_type_indices {
+    function_types[self.func_base + self.num_imports + local_index] = type_index
+  }
   let table_contracts : Array[@wasm_milkir.WasmTableContract] = self.tables.map(table => {
       index_type: if table.type_.is_table64 {
         I64
@@ -124,5 +128,7 @@ pub fn TranslationContext::wasm_validation_context(
       element_segment_type: fn(index) { element_types.get(index) },
     },
     final_types~,
+    function_types~,
+    function_effects=self.function_effects,
   )
 }

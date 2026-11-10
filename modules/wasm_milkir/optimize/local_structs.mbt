@@ -17,7 +17,7 @@ fn terminator_values(term : @milkir.Terminator) -> Array[@milkir.Value] {
 }
 
 ///|
-/// Scalarize private integer boxes, keeping their effectful allocation.
+/// Scalarize private scalar and GC-reference boxes, keeping their allocation.
 /// Only allocations with direct field-zero uses are admitted. Passing
 /// the reference through a call, copy, phi, return or any other operation
 /// rejects the candidate; no alias or interprocedural assumptions are needed.
@@ -42,7 +42,7 @@ fn promote_local_structs(function : @milkir.Function) -> Bool {
       if candidates.length() < 16 &&
         @wasm_milkir.decode_opcode(inst.opcode) is Some(StructNew(type_index)) &&
         inst.args is [initial] &&
-        initial.ty is (I32 | I64) &&
+        initial.ty is (I32 | I64 | Ref) &&
         inst.results is [object] {
         candidates.push({ object, type_index, initial, })
       }

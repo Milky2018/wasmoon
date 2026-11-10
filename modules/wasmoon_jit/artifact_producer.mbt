@@ -8,7 +8,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-51"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-53"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int32 = "wasmoon_jit_host_operating_system_abi"
@@ -119,7 +119,7 @@ pub fn build_artifact_manifest(
     required_cpu_features: required_cpu_features.copy(),
     jit_abi_version: WASMOON_JIT_ABI_VERSION,
     codegen_revision: if offset_reference_codegen_enabled {
-      "direct-vcode-offset-experiment-5"
+      "direct-vcode-offset-experiment-8"
     } else {
       WASMOON_CODEGEN_REVISION
     },

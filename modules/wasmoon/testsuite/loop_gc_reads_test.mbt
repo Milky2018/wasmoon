@@ -191,3 +191,72 @@ test "merged loop entries preserve initial values zero trips and alias writes" {
     }
   }
 }
+
+///|
+test "dynamic GC loops preserve every exit and ordered array update" {
+  let source =
+    #|(module (type $a (array (mut i32)))
+    #| (func (export "test") (param $count i32) (param $stop i32) (result i32)
+    #|  (local $a (ref $a)) (local $i i32) (local $sum i32) (local $value i32)
+    #|  i32.const 7 i32.const 12 array.new $a local.set $a
+    #|  (block $done (loop $again
+    #|   local.get $i local.get $count i32.ge_u br_if $done
+    #|   local.get $i local.get $stop i32.eq br_if $done
+    #|   local.get $a local.get $i array.get $a local.set $value
+    #|   local.get $a local.get $i local.get $value i32.const 1 i32.add array.set $a
+    #|   local.get $sum local.get $value i32.add local.set $sum
+    #|   local.get $i i32.const 1 i32.add local.set $i br $again))
+    #|  local.get $sum i32.const 100 i32.mul
+    #|  local.get $a i32.const 0 array.get $a i32.add))
+  for count in [0, 1, 2, 3, 7, 12, 13] {
+    for stop in [-1, 0, 1, 2, 9] {
+      for level in [0, 2, 3] {
+        let comparison = @testsuite.compare_jit_interp_with_opt_level(
+          source,
+          "test",
+          [I32(count), I32(stop)],
+          level,
+        )
+        if count == 13 && stop == -1 {
+          assert_true(
+            @testsuite.compare_result_errors_contain(comparison, "bounds"),
+          )
+        } else {
+          assert_true(@testsuite.compare_result_is_match(comparison))
+        }
+      }
+    }
+  }
+}
+
+///|
+test "private reference box SSA carries fresh objects through calls and backedges" {
+  let source =
+    #|(module
+    #| (type $item (struct (field i32)))
+    #| (type $box (struct (field (mut (ref null $item)))))
+    #| (type $bytes (array (mut i8)))
+    #| (func $allocate i32.const 8192 array.new_default $bytes drop)
+    #| (func (export "test") (result i32)
+    #|  (local $box (ref null $box)) (local $i i32) (local $sum i32)
+    #|  i32.const 42 struct.new $item struct.new $box local.set $box
+    #|  (loop $again
+    #|   call $allocate
+    #|   local.get $sum local.get $box struct.get $box 0 struct.get $item 0
+    #|   i32.add local.set $sum
+    #|   local.get $box local.get $i i32.const 43 i32.add struct.new $item
+    #|   struct.set $box 0
+    #|   local.get $i i32.const 1 i32.add local.tee $i
+    #|   i32.const 1024 i32.lt_u br_if $again)
+    #|  local.get $sum))
+  assert_eq(@testsuite.run_interp_only(source, "test", []).unwrap(), [
+    I32(566784),
+  ])
+  for level in [0, 2, 3] {
+    assert_true(
+      @testsuite.compare_result_is_match(
+        @testsuite.compare_jit_interp_with_opt_level(source, "test", [], level),
+      ),
+    )
+  }
+}

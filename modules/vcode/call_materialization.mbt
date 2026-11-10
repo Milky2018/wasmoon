@@ -166,6 +166,46 @@ pub fn[Inst, Failure] DirectLoweringState::materialize_return_values(
 }
 
 ///|
+/// Restore ABI types for erased raw-word bitcasts. Register allocation may
+/// coalesce the copy, while spilled arguments retain correctly typed homes.
+pub fn[Inst] CheckedBuilder::materialize_abi_words(
+  self : CheckedBuilder[Inst],
+  block : Block,
+  operands : Array[Value],
+  types : Array[@native.ValueType],
+  make_move : (@native.ValueType) -> Inst,
+  operand_start~ : Int32 = 0,
+) -> Array[Value] raise VCodeBuildError {
+  let mut materialized : Array[Value]? = None
+  for index, expected in types {
+    let operand_index = operand_start + index
+    let value = operands[operand_index]
+    let actual = self.value_type(value)
+    if (expected == I64 && actual == Some(Ptr64)) ||
+      (expected == Ptr64 && actual == Some(I64)) {
+      let (_, results) = self.append_body(
+        block,
+        make_move(expected),
+        [Input::any(value)],
+        [Output::any(expected)],
+        [],
+        InstructionMetadata::empty(),
+      )
+      let values = match materialized {
+        Some(values) => values
+        None => {
+          let values = operands.copy()
+          materialized = Some(values)
+          values
+        }
+      }
+      values[operand_index] = results[0]
+    }
+  }
+  materialized.unwrap_or(operands)
+}
+
+///|
 pub fn call_argument_inputs(
   operands : Array[Value],
   locations : ArrayView[CallArgumentLocation],

@@ -308,3 +308,64 @@ test "adjacent exact cast rechecks the live registry before using a warm view" {
     assert_true(heap.verify())
   }
 }
+
+///|
+test "offset struct projections follow heap and type rebinding" {
+  let module_ = @wat.parse(
+    (
+      #|(module
+      #|  (type $expected (struct (field i64)))
+      #|  (type $other (struct (field i32)))
+      #|  (func (param (ref $expected)) (result i64)
+      #|    local.get 0 struct.get $expected 0))
+    ),
+  )
+  @validator.validate_module(module_)
+  let store = @runtime.Store::with_c_heap()
+  defer store.close()
+  let instance = @executor.instantiate_module_with_imports(
+    store,
+    module_,
+    Imports(store),
+  )
+  let context = build_gc_root_context(module_, instance, store, opt_level=3)
+  defer context.close()
+  let jit = context.jit_module
+  let ids = store.native_type_indices(instance)
+  let original = store.native_heap().unwrap()
+  let expected = store.alloc_struct(0, [I64(42L)], instance~)
+  let other = store.alloc_struct(1, [I32(37)], instance~)
+  let read = fn(reference : Int64) raise @jit.JITTrap {
+    jit.call_with_context(jit.get_func(0).unwrap(), [reference])
+  }
+  let rejected = fn(reference : Int64) raise {
+    try read(reference) catch {
+      JITTrap(message) => assert_true(message.contains("unreachable"))
+      error => fail(error.to_string())
+    } noraise {
+      _ => fail("read accepted a different struct binding")
+    }
+  }
+  jit.set_gc_heap(original.get_ptr())
+  assert_eq(read(original.encode_ref_word(expected)), [42L])
+
+  // Reuse the same canonical identity and header count in a different heap.
+  // Only the physical prefix distinguishes it from the original layout.
+  let replacement = @wasmoon_jit.CHeap()
+  defer replacement.free()
+  assert_true(replacement.get_ptr().define_layout(ids[0], [4], false))
+  let foreign = replacement.alloc_struct(0, [I32(99)], runtime_type=ids[0])
+  jit.set_gc_heap(replacement.get_ptr())
+  rejected(replacement.encode_ref_word(foreign))
+
+  jit.set_gc_heap(original.get_ptr())
+  assert_eq(read(original.encode_ref_word(expected)), [42L])
+  let registry = store.native_callable_registry().unwrap()
+  jit.bind_callable_registry(registry, [ids[1], ids[1]], [])
+  rejected(original.encode_ref_word(expected))
+  rejected(original.encode_ref_word(other))
+  jit.bind_callable_registry(registry, ids, [])
+  assert_eq(read(original.encode_ref_word(expected)), [42L])
+  assert_true(original.verify())
+  assert_true(replacement.verify())
+}

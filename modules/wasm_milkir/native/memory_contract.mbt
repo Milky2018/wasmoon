@@ -6,6 +6,7 @@
 priv enum Projection {
   ArrayData(Int32)
   ArrayElements(Int32)
+  ArrayPayload(Int32)
   ArrayLength
   StructData(Int32)
   FieldData(Int32, Int32, Int32, Int32, Bool)
@@ -16,6 +17,7 @@ fn projection_opcode(projection : Projection) -> @milkir.ExtOp {
   let (name, immediates) : (String, FixedArray[Int32]) = match projection {
     ArrayData(width) => ("native_array_data", [width])
     ArrayElements(width) => ("native_array_elements", [width])
+    ArrayPayload(width) => ("native_array_payload", [width])
     ArrayLength => ("native_array_length", [])
     StructData(type_) => ("native_struct_data", [type_])
     FieldData(type_, field, width, reference, read) =>
@@ -29,7 +31,8 @@ fn projection_opcode(projection : Projection) -> @milkir.ExtOp {
     name,
     immediates,
     effects=Some({
-      read: if projection is (FieldData(_, _, _, _, _) | ArrayElements(_)) {
+      read: if projection
+        is (FieldData(_, _, _, _, _) | ArrayElements(_) | ArrayPayload(_)) {
         None
       } else {
         Some(Context)
@@ -45,7 +48,7 @@ fn projection_opcode(projection : Projection) -> @milkir.ExtOp {
       pointer_region: match projection {
         ArrayLength => None
         StructData(_) => Some(Context)
-        ArrayData(_) | ArrayElements(_) => Some(Heap(-1))
+        ArrayData(_) | ArrayElements(_) | ArrayPayload(_) => Some(Heap(-1))
         FieldData(_, field, _, _, _) => Some(Heap(-2 - field))
       },
     }),
@@ -67,6 +70,10 @@ fn decode_projection(extension : @milkir.ExtOp) -> Projection? {
       width == 2 ||
       width == 4 ||
       width == 8 => Some(ArrayElements(width))
+    ("native_array_payload", [width]) if width == 1 ||
+      width == 2 ||
+      width == 4 ||
+      width == 8 => Some(ArrayPayload(width))
     ("native_array_length", []) => Some(ArrayLength)
     ("native_struct_data", [type_]) if type_ >= 0 => Some(StructData(type_))
     ("native_field_data", [type_, field, width, reference, read]) if type_ >= 0 &&
@@ -95,7 +102,7 @@ fn semantic_effects(opcode : @milkir.Opcode) -> @milkir.ExtensionEffects {
   let read = match effects.read {
     None => None
     Some(Unknown) => Some(@milkir.AliasRegion::Other)
-    Some(ArrayLength) => Some(Context)
+    Some(ArrayLength | ReferenceType) => Some(Context)
     Some(StructField(_, field)) => Some(Heap(-2 - field))
     Some(_) => Some(Heap(-1))
   }
@@ -117,17 +124,37 @@ fn semantic_effects(opcode : @milkir.Opcode) -> @milkir.ExtensionEffects {
 fn annotate_semantic(
   extension : @milkir.ExtOp,
   signature : @milkir.Signature,
+  validation_context~ : @wasm_milkir.WasmValidationContext? = None,
 ) -> @milkir.ExtOp {
   let plain = @milkir.ExtOp(
     extension.dialect,
     extension.opcode,
     extension.immediates,
   )
+  let read_only = validation_context is Some(context) &&
+    @wasm_milkir.decode(plain) is Some(WasmCall(index)) &&
+    context.function_is_readonly(index)
+  let effects : @milkir.ExtensionEffects = if read_only {
+    // The first call and its possible trap remain. Reuse requires both the
+    // same logical memory version and the same physical-address epoch.
+    {
+      read: Some(Other),
+      write: None,
+      may_trap: true,
+      observable: false,
+      invalidates_addresses: false,
+      pointer_region: None,
+      pointer_bytes: 0,
+    }
+  } else {
+    semantic_effects(Ext(plain, signature))
+  }
   ExtOp(
     plain.dialect,
     plain.opcode,
     plain.immediates,
-    effects=Some(semantic_effects(Ext(plain, signature))),
+    effects=Some(effects),
+    reads_address_epoch=read_only,
   )
 }
 
@@ -160,7 +187,7 @@ fn validate_memory_extension(
     let (parameters, returns) : (Array[@milkir.Type], Array[@milkir.Type]) = match
       projection {
       ArrayLength => ([Ptr], [I32])
-      ArrayElements(_) => ([Ptr], [Ptr])
+      ArrayElements(_) | ArrayPayload(_) => ([Ptr], [Ptr])
       FieldData(_, _, _, _, _) => ([Ptr], [Ptr])
       _ => ([Ref], [Ptr])
     }
@@ -199,7 +226,7 @@ fn validate_memory_extension(
     return None
   }
   let plain = @milkir.ExtOp(view.op.dialect, view.op.opcode, view.op.immediates)
-  if view.op.effects is Some(_) &&
+  if (view.op.effects is Some(_) || view.op.reads_address_epoch) &&
     view.op !=
     annotate_semantic(
       plain,
@@ -207,6 +234,7 @@ fn validate_memory_extension(
         Array::makei(view.operand_types.length(), i => view.operand_types[i]),
         Array::makei(view.result_types.length(), i => view.result_types[i]),
       ),
+      validation_context=Some(context),
     ) {
     return Some("invalid refined Wasm memory effects")
   }
@@ -327,6 +355,10 @@ fn lower_projection(
     ])
     return None
   }
+  if projection is ArrayPayload(_) {
+    context.forward_results([offset_payload(context, context.operands()[0], 16)])
+    return None
+  }
   if projection is ArrayLength {
     let tagged = context.emit(
         Convert(Bitcast(Ptr64, I64)),
@@ -387,25 +419,50 @@ fn lower_projection(
       environment.projection_budget -= 1
     }
     let (shape, fields) = struct_view_shape(validation, type_).unwrap()
-    inline_cached_struct_projection(
-      context,
-      environment,
-      layout,
-      type_,
-      shape,
-      fields,
-      exact_type=validation.is_final_type(type_),
-    )
+    if environment.checked_struct_sites.contains(context.instruction_id()) &&
+      environment.offset_refs is Some((offsets, heap_layout)) {
+      inline_offset_struct_projection(
+        context,
+        environment,
+        offsets,
+        heap_layout,
+        type_,
+        shape,
+        fields,
+        checked_type=true,
+      )
+    } else {
+      inline_cached_struct_projection(
+        context,
+        environment,
+        layout,
+        type_,
+        shape,
+        fields,
+        exact_type=validation.is_final_type(type_),
+      )
+    }
     return None
   }
-  // The bounded cache paths already amortize checked access in small
-  // loops. Use offset projections at sites that would otherwise call.
-  if environment.offset_refs is Some((offsets, heap_layout)) {
+  // Expand offsets only in loops and small accessors. Acyclic regions
+  // of larger functions share the checked projection helpers.
+  if environment.offset_refs is Some((offsets, heap_layout)) &&
+    environment.projection_sites is Some(sites) &&
+    sites.offset_sites.contains(context.instruction_id()) {
     match projection {
-      StructData(type_) => {
+      StructData(type_) if type_ <= (2147483647 - 8) / 16 => {
         let (shape, fields) = struct_view_shape(validation, type_).unwrap()
         inline_offset_struct_projection(
-          context, environment, offsets, heap_layout, type_, shape, fields,
+          context,
+          environment,
+          offsets,
+          heap_layout,
+          type_,
+          shape,
+          fields,
+          checked_type=environment.checked_struct_sites.contains(
+            context.instruction_id(),
+          ),
         )
         return None
       }
@@ -444,7 +501,8 @@ fn lower_projection(
       parameters.push(I32)
       @wasm_milkir.WasmRuntimeHelper::GcStructData
     }
-    ArrayElements(_) => return Some("unexpected array element projection")
+    ArrayElements(_) | ArrayPayload(_) =>
+      return Some("unexpected array element projection")
     ArrayData(width) => {
       operands.push(i32_immediate(context, width))
       parameters.push(I32)

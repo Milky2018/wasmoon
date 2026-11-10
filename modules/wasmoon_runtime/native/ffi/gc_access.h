@@ -18,6 +18,15 @@ static inline GcHeader* gc_access_object_header(GcHeap* heap, int32_t gc_ref) {
     return (GcHeader*)(heap->data + offset);
 }
 
+// The same live-start proof used by generated projections. A moved hint or
+// retired identity must use the identity-based accessor, never its old address.
+static inline GcHeader* gc_access_offset_header(GcHeap *heap, int64_t word) {
+    if (!heap || !heap->offset_view_ids || !gc_is_offset_ref(word)) return NULL;
+    uint32_t slot = ((uint64_t)word >> 32) & GC_OFFSET_SLOT_MASK;
+    if (heap->offset_view_ids[slot] != ((uint32_t)word | 1U)) return NULL;
+    return (GcHeader *)(heap->data + ((size_t)slot << GC_OFFSET_ALIGNMENT_SHIFT));
+}
+
 static inline uint8_t* gc_access_object_data(GcHeap* heap, int32_t gc_ref) {
     GcHeader* header = gc_access_object_header(heap, gc_ref);
     if (!header) {

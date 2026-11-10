@@ -11,7 +11,7 @@ import {
 // Values
 pub fn lower_to_sink(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment, @native_lowering.TargetSink, call_abi? : @native_lowering.CallAbiElaboration, verify_input? : Bool, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @Milky2018/milkir/native.NativeLowerError
 
-pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @milkir.VerifyError
+pub fn prepare_gc_memory(@milkir.Function, @wasm_milkir.WasmValidationContext, split_array_payload? : Bool, on_event? : (@Milky2018/milkir/native.NativeLowerEvent) -> Unit) -> Unit raise @milkir.VerifyError
 
 // Errors
 
@@ -64,6 +64,7 @@ pub(all) struct InlineHeapLayout {
 pub(all) struct OffsetRefLayout {
   directory : Int32
   view_directory : Int32
+  struct_bindings : Int32
   header_flags : Int32
   header_reserved : Int32
   header_size : Int32

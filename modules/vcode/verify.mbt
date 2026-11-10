@@ -156,12 +156,11 @@ fn[Inst] Function::verify_instruction(
       raise DefinitionDoesNotDominate(instruction~, value=operand.value)
     }
   }
-  for index, reg in self.instruction_clobbers(instruction) {
-    for earlier in 0..<index {
-      if self.clobbers[data.clobber_start + earlier] == reg {
-        raise DuplicateClobber(instruction~, reg~)
-      }
-    }
+  if first_duplicate_clobber(
+      self.clobbers[data.clobber_start:data.clobber_start + data.clobber_count],
+    )
+    is Some(reg) {
+    raise DuplicateClobber(instruction~, reg~)
   }
   let metadata = data.metadata
   if metadata.stack_map is Some(stack_map) {
@@ -820,4 +819,35 @@ pub fn[Inst] verify_emission_input(
   verify_framed(function, allocation, frame) catch {
     error => raise FrameFailure(cause=error)
   }
+}
+
+///|
+fn first_duplicate_clobber(registers : ArrayView[PhysicalReg]) -> PhysicalReg? {
+  if registers.length() < 2 {
+    return None
+  }
+  let seen : FixedArray[UInt64] = [0UL, 0UL, 0UL, 0UL]
+  for index, reg in registers {
+    if reg.id >= 0 && reg.id < 64 {
+      let class = match reg.class {
+        Int => 0
+        Float => 1
+        Vector => 2
+        FpVector => 3
+      }
+      let bit = 1UL << reg.id
+      if (seen[class] & bit) != 0UL {
+        return Some(reg)
+      }
+      seen[class] = seen[class] | bit
+    } else {
+      // Preserve equality and the first duplicate for arbitrary embedding IDs.
+      for earlier in 0..<index {
+        if registers[earlier] == reg {
+          return Some(reg)
+        }
+      }
+    }
+  }
+  None
 }

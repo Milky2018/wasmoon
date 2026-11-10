@@ -460,3 +460,133 @@ test "control reads are invalidated by control and opaque writes" {
     assert_eq(count, 2)
   }
 }
+
+///|
+test "guarded LICM moves mandatory checked header reads only across stable iterations" {
+  for barrier in [false, true] {
+    let builder = @milkir.FunctionBuilder("checked_loop_header")
+    let enter = builder.add_param(I32)
+    let repeat = builder.add_param(I32)
+    let reference = builder.add_param(Ref)
+    builder.add_result(I32)
+    let header = builder.create_block()
+    let bypass = builder.create_block()
+    let exit = builder.create_block()
+    let result = builder.add_block_param(exit, I32)
+    builder.branch(enter, header, [], bypass, [])
+    builder.switch_to_block(bypass)
+    builder.jump(exit, [builder.iconst_i32(-1)])
+    builder.switch_to_block(header)
+    let pointer = builder.emit_ext_inst(
+      Ptr,
+      ExtOp(
+        "memory-test",
+        "checked-header",
+        [],
+        effects=Some({
+          read: Some(Context),
+          write: None,
+          may_trap: true,
+          observable: false,
+          invalidates_addresses: false,
+          pointer_region: Some(Heap(0)),
+          pointer_bytes: 4,
+        }),
+      ),
+      [reference],
+    )
+    let value = builder.load_ptr(I32, pointer, builder.iconst_i64(0L))
+    if barrier {
+      let symbol = builder.get_function().declare_external_symbol("reenter")
+      builder.call_symbol(symbol, None, []) |> ignore
+    }
+    builder.branch(repeat, header, [], exit, [value])
+    builder.switch_to_block(exit)
+    builder.return_([result])
+    let function = builder.finalize()
+    hoist_loop_invariants(function, guard_entries=true) |> ignore
+    function.verify()
+    let checked = function.blocks.filter(block => {
+      function
+      .block_instruction_ids(block)
+      .any(id => function.instruction_by_id(id).unwrap().opcode is Ext(_, _))
+    })
+    assert_eq(checked.length(), 1)
+    let checked_id = checked[0].id
+    let cfg = @milkir.CFG::build(function)
+    assert_eq(
+      cfg.find_loops().any(loop_ => loop_.contains(checked_id)),
+      barrier,
+    )
+    assert_true(checked_id != function.blocks[0].id)
+    assert_true(checked_id != bypass.id)
+    assert_false(cfg.compute_dominance().dominates(checked_id, bypass.id))
+  }
+}
+
+///|
+test "mandatory header placement retains reads after earlier traps and writes" {
+  for mode in ["earlier-trap", "write", "dynamic-address"] {
+    let builder = @milkir.FunctionBuilder("header_read_barrier")
+    let base = builder.add_param(Ptr)
+    let repeat = builder.add_param(I32)
+    builder.add_result(I32)
+    let header = builder.create_block()
+    let cursor = builder.add_block_param(header, Ptr)
+    let exit = builder.create_block()
+    let result = builder.add_block_param(exit, I32)
+    builder.jump(header, [base])
+    builder.switch_to_block(header)
+    if mode == "earlier-trap" {
+      builder.emit_void_ext_inst(
+        ExtOp(
+          "memory-test",
+          "must-trap-first",
+          [],
+          effects=Some({
+            read: None,
+            write: None,
+            may_trap: true,
+            observable: false,
+            invalidates_addresses: false,
+            pointer_region: None,
+            pointer_bytes: 0,
+          }),
+        ),
+        [],
+      )
+    }
+    let zero = builder.iconst_i64(0L)
+    let value = builder.load_ptr(
+      I32,
+      if mode == "dynamic-address" {
+        cursor
+      } else {
+        base
+      },
+      zero,
+    )
+    if mode == "write" {
+      builder.store_ptr(I32, base, builder.iconst_i32(42), zero)
+    }
+    builder.branch(repeat, header, [base], exit, [value])
+    builder.switch_to_block(exit)
+    builder.return_([result])
+    let function = builder.finalize()
+    hoist_loop_invariants(function, guard_entries=true) |> ignore
+    function.verify()
+    let block = function.blocks.filter(block => {
+        function
+        .block_instruction_ids(block)
+        .any(id => {
+          function.instruction_by_id(id).unwrap().results.contains(value)
+        })
+      })[0]
+    assert_true(
+      @milkir.CFG::build(function)
+      .find_loops()
+      .any(loop_ => loop_.contains(block.id)),
+      msg=mode,
+    )
+  }
+}

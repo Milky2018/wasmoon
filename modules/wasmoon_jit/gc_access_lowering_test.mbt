@@ -514,3 +514,39 @@ test "both targets bound shared struct reservation expansion" {
     assert_true(diagnostics.code_object.contains("gc.alloc_struct_slow"))
   }
 }
+
+///|
+test "unrelated allocation budgets preserve exact cast code on both targets" {
+  let validation = @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(_) { None },
+    defined_type_contract: fn(_) {
+      Some(
+        Struct([{ storage: Value(I32), mutable_: true, defaultable: true, }]),
+      )
+    },
+    table_contract: fn(_) { None },
+    tag_contract: fn(_) { None },
+    memory_exists: fn(_) { false },
+    data_segment_exists: fn(_) { false },
+    element_segment_type: fn(_) { None },
+  })
+  for count in [1, 12] {
+    let b = @milkir.FunctionBuilder("cast_allocation_budget")
+    b.add_param(Ptr) |> ignore
+    let argument = b.add_param(Ref)
+    b.add_result(Ref)
+    for _ in 0..<count {
+      @wasm_milkir.struct_new(b, 0, [b.iconst_i32(7)]) |> ignore
+    }
+    b.return_([@wasm_milkir.ref_cast(b, 0, false, argument, Ref)])
+    for target in [@wasmoon_jit.NativeTarget::AArch64, X64] {
+      let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
+        b.get_function(),
+        validation,
+        target,
+      )
+      assert_true(diagnostics.target_vcode.contains("18446744069414584321"))
+      assert_true(diagnostics.code_object.contains("gc.ref_cast"))
+    }
+  }
+}

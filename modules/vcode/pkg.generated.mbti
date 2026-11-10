@@ -418,6 +418,7 @@ pub fn[Inst] CheckedBuilder::block_parameter(Self[Inst], Block, Int32) -> Value 
 pub fn[Inst] CheckedBuilder::create_block(Self[Inst], Array[@native_types.ValueType]) -> Block
 pub fn[Inst] CheckedBuilder::entry_block(Self[Inst]) -> Block
 pub fn[Inst] CheckedBuilder::finish(Self[Inst]) -> Function[Inst] raise VCodeBuildError
+pub fn[Inst] CheckedBuilder::materialize_abi_words(Self[Inst], Block, Array[Value], Array[@native_types.ValueType], (@native_types.ValueType) -> Inst, operand_start? : Int32) -> Array[Value] raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::materialize_atomic_address(Self[Inst], Block, @native_lowering.Operation, Array[Value], (UInt64) -> Inst, Inst) -> Array[Value] raise VCodeBuildError
 pub fn[Inst] CheckedBuilder::new(String, Array[@native_types.ValueType]) -> Self[Inst]
 pub fn[Inst] CheckedBuilder::new_with_protocol(String, @native_types.CallProtocol, Array[@native_types.ValueType], Array[@native_types.ValueType]) -> Self[Inst]
@@ -588,6 +589,7 @@ pub fn[Inst] Function::block_parameter_at(Self[Inst], Block, Int32) -> Value?
 pub fn[Inst] Function::block_parameter_count(Self[Inst], Block) -> Int32
 pub fn[Inst] Function::block_parameters(Self[Inst], Block) -> Array[Value]
 pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
+pub fn[Inst] Function::emission_layout(Self[Inst]) -> Array[Block]
 pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Function::instruction(Self[Inst], Instruction) -> Inst?
 pub fn[Inst] Function::instruction_allocation_operand_at(Self[Inst], Instruction, Int32) -> @allocation_types.AllocationOperand?

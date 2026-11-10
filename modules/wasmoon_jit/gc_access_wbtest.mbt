@@ -178,9 +178,20 @@ test "offset hints resolve moved references through their original identity" {
       (offset.to_int64() >> 4 << 32) |
       ((live.to_int64() + 1L) << 1),
     )
+    // Warm the exact opaque view before movement, then require the current
+    // payload after collection. The same word must not retain its old address.
+    let view = gc_word_access(heap.get_ptr(), 5, word, 1, 0L)
     assert_eq(heap.collect_raw([word]), 1)
     assert_false(heap.is_valid(dead))
     assert_true(heap.get_offset(live) < offset)
+    let moved_view = gc_word_access(heap.get_ptr(), 5, word, 1, 0L)
+    if view != 0L {
+      assert_true(moved_view != view)
+      assert_eq(
+        moved_view,
+        heap.get_base() + heap.get_offset(live).to_int64() + 16L,
+      )
+    }
     let next = heap.alloc_array(0, 32, I32(99), runtime_type=0)
     assert_eq(heap.get_offset(next), offset)
     assert_eq(gc_word_access(heap.get_ptr(), 2, word, 31, 0L), 37L)
@@ -188,4 +199,44 @@ test "offset hints resolve moved references through their original identity" {
     assert_false(heap.is_valid(next))
     assert_true(heap.verify(verbose=true))
   }
+}
+
+///|
+test "direct offset headers require a current live object start" {
+  if @env.get_env_var("WASMOON_EXPERIMENT_OFFSET_REFS") is Some("1") {
+    let heap = CHeap()
+    defer heap.free()
+    assert_true(heap.get_ptr().define_layout(0, [1], true))
+    let first = heap.alloc_array(0, 32, I32(37), runtime_type=0)
+    let word = heap.encode_ref_word(first)
+    let available = if @env.get_env_var("WASMOON_GC_VERIFY") is Some("1") {
+      0L
+    } else {
+      1L
+    }
+    assert_eq(gc_word_access(heap.get_ptr(), 6, word, 0, 0L), available)
+    assert_eq(gc_word_access(heap.get_ptr(), 6, word + (1L << 32), 0, 0L), 0L)
+    assert_eq(gc_word_access(heap.get_ptr(), 6, 0L, 0, 0L), 0L)
+    assert_eq(
+      gc_word_access(heap.get_ptr(), 6, (first.to_int64() + 1L) << 1, 0, 0L),
+      0L,
+    )
+    heap.collect([]) |> ignore
+    let next = heap.alloc_array(0, 32, I32(99), runtime_type=0)
+    assert_true(next > first)
+    assert_eq(gc_word_access(heap.get_ptr(), 6, word, 0, 0L), 0L)
+    assert_eq(
+      gc_word_access(heap.get_ptr(), 2, heap.encode_ref_word(next), 31, 0L),
+      99L,
+    )
+    assert_true(heap.verify())
+  }
+}
+
+///|
+extern "c" fn prepared_storage_contract() -> Int32 = "wasmoon_test_prepared_storage"
+
+///|
+test "prepared storage retains admission accounting and refusal atomicity" {
+  assert_eq(prepared_storage_contract(), 1)
 }

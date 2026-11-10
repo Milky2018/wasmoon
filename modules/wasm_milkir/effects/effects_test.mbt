@@ -91,3 +91,14 @@ test "retained-metadata ref tests preserve physical epochs and cast traps" {
     debug_inspect(effects.write, content="None")
   }
 }
+
+///|
+test "reference type metadata is disjoint from field values" {
+  for
+    operation in [@wasm_milkir.WasmOpcode::RefTest(0, false), RefCast(0, false)] {
+    let effect = @effects.analyze(wasm(operation))
+    debug_inspect(effect.read, content="Some(ReferenceType)")
+    assert_eq(effect.write, None)
+    assert_true(effect.preserves_physical_addresses())
+  }
+}

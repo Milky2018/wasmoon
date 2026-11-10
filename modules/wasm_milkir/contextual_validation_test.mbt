@@ -1,6 +1,8 @@
 ///|
 fn contextual_test_context(
   final_types~ : Array[Int32] = [],
+  function_effects~ : Map[Int32, @wasm_milkir.WasmFunctionEffects] = Map([]),
+  function_types~ : Map[Int32, Int32] = Map([]),
 ) -> @wasm_milkir.WasmValidationContext {
   @wasm_milkir.WasmValidationContext::new(
     {
@@ -61,6 +63,8 @@ fn contextual_test_context(
       },
     },
     final_types~,
+    function_effects~,
+    function_types~,
   )
 }
 
@@ -272,4 +276,25 @@ test "contextual Wasm validation still rejects the invalid heap type marker" {
     contextual_error_for(builder),
     content="UnverifiableInstruction(message=\"malformed contextual Wasm MilkIR extension 'ref_test': unknown heap type id -100\")",
   )
+}
+
+///|
+test "noncollecting function proofs own their metadata and exclude imports" {
+  let effects : Map[Int32, @wasm_milkir.WasmFunctionEffects] = Map([
+    (7, NonCollectingReadOnly),
+    (8, NonCollectingReadWrite),
+    (-1, NonCollectingReadOnly),
+  ])
+  let types = Map([(7, 2)])
+  let context = contextual_test_context(
+    function_effects=effects,
+    function_types=types,
+  )
+  effects.clear()
+  types.clear()
+  assert_true(context.function_is_noncollecting(7))
+  assert_true(context.function_is_readonly(7))
+  assert_false(context.function_is_noncollecting(8))
+  assert_false(context.function_is_noncollecting(-1))
+  assert_false(contextual_test_context().function_is_noncollecting(7))
 }

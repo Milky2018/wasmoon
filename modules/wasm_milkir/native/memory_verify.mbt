@@ -20,8 +20,17 @@ fn borrow_present(words : Array[UInt64], bit : Int32) -> Bool {
 fn invalidates_borrows(
   inst : @milkir.Inst,
   aliases : Map[Int32, Int32],
+  validation_context : @wasm_milkir.WasmValidationContext?,
 ) -> Bool {
   if inst.opcode is Ext(extension, _) && decode_projection(extension) is Some(_) {
+    return false
+  }
+  if validation_context is Some(context) &&
+    inst.opcode is Ext(extension, signature) &&
+    @wasm_milkir.decode(extension) is Some(WasmCall(index)) &&
+    context.function_is_readonly(index) &&
+    extension ==
+    annotate_semantic(extension, signature, validation_context=Some(context)) {
     return false
   }
   if inst.opcode is Memory(Store(_) | StoreNarrow(_)) &&
@@ -36,7 +45,10 @@ fn invalidates_borrows(
 /// Must-analysis independent of placement/hoisting. It checks every CFG route,
 /// including backedges and side entries, rather than trusting planner labels.
 /// A missing or incomplete proof fails closed before selection.
-fn gc_borrow_error(function : @milkir.Function) -> String? {
+fn gc_borrow_error(
+  function : @milkir.Function,
+  validation_context~ : @wasm_milkir.WasmValidationContext? = None,
+) -> String? {
   let origins : Map[Int32, Int32] = Map([])
   let shapes : Map[Int32, Projection] = Map([])
   let aliases : Map[Int32, Int32] = Map([])
@@ -48,6 +60,7 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
         is Some(
           ArrayData(_)
           | ArrayElements(_)
+          | ArrayPayload(_)
           | StructData(_)
           | FieldData(_, _, _, _, _)
         ) &&
@@ -96,6 +109,15 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
             aliases.get(argument.id) is Some(origin) &&
             shapes.get(origin) is Some(ArrayData(_)) else {
             return Some("instruction \{id}: element view lacks array metadata")
+          }
+        } else if projection is ArrayPayload(width) {
+          guard inst.args is [argument] &&
+            aliases.get(argument.id) is Some(origin) &&
+            shapes.get(origin) is Some(ArrayElements(source_width)) &&
+            width == source_width else {
+            return Some(
+              "instruction \{id}: array payload lacks its width proof",
+            )
           }
         } else if projection is ArrayLength {
           guard inst.args is [argument] &&
@@ -165,7 +187,7 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
         return Some("physical borrow analysis budget exhausted")
       }
       let inst = function.instruction_by_id(id).unwrap()
-      if invalidates_borrows(inst, aliases) {
+      if invalidates_borrows(inst, aliases, validation_context) {
         for word in 0..<live.length() {
           live[word] = 0UL
         }
@@ -203,7 +225,7 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
             Scalar(Copy | Convert(Bitcast) | IntCompare(_)) => true
             Ext(extension, _) =>
               match decode_projection(extension) {
-                Some(ArrayLength | ArrayElements(_)) => true
+                Some(ArrayLength | ArrayElements(_) | ArrayPayload(_)) => true
                 Some(FieldData(type_, _, _, _, _)) =>
                   shapes.get(origin) is Some(StructData(source_type)) &&
                   source_type == type_
@@ -218,7 +240,7 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
           }
         }
       }
-      if invalidates_borrows(inst, aliases) {
+      if invalidates_borrows(inst, aliases, validation_context) {
         for word in 0..<live.length() {
           live[word] = 0UL
         }
@@ -249,7 +271,8 @@ fn gc_borrow_error(function : @milkir.Function) -> String? {
 fn valid_borrow_access(inst : @milkir.Inst, shape : Projection) -> Bool {
   let (width, reference, writable) = match shape {
     FieldData(_, _, width, reference, read) => (width, reference == 1, !read)
-    ArrayData(width) | ArrayElements(width) if width > 0 => (width, false, true)
+    ArrayData(width) | ArrayElements(width) | ArrayPayload(width) if width > 0 =>
+      (width, false, true)
     _ => return false
   }
   match inst.opcode {
