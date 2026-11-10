@@ -1,4 +1,129 @@
 ///|
+fn inline_struct_admission(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  layout : InlineHeapLayout,
+  type_index : Int32,
+  count : Int32,
+  shape : UInt64,
+  total : Int32,
+  slow : @lowering.Block,
+) -> (@lowering.Value, @lowering.Value, @lowering.Value) {
+  let heap = context.emit(
+      EnvironmentField(environment.gc_heap_field.unwrap(), Mutable),
+      context.environment(),
+      [Ptr64],
+    )[0]
+  view_guard_nonzero(context, heap, slow)
+  let control = heap_load(context, heap, layout.allocation_control, Ptr64)
+  view_guard_nonzero(context, control, slow)
+  let enabled = heap_load(context, control, layout.control_enabled, I32)
+  let bytes = heap_load(context, heap, layout.byte_reservation, Ptr64)
+  let objects = heap_load(context, heap, layout.object_reservation, Ptr64)
+  let enabled = context.emit(IntBinaryImmediate(And, 1UL), [enabled], [I32])[0]
+  view_guard_immediate(context, Equal, enabled, 1UL, slow)
+  view_guard_immediate(
+    context,
+    Equal,
+    context.emit(Convert(Bitcast(Ptr64, I64)), [bytes], [I64])[0],
+    0UL,
+    slow,
+  )
+  view_guard_immediate(
+    context,
+    Equal,
+    context.emit(Convert(Bitcast(Ptr64, I64)), [objects], [I64])[0],
+    0UL,
+    slow,
+  )
+  let identity = if environment.offset_refs is Some((offsets, _)) {
+    // The context publishes these immutable canonical bindings only for its
+    // current heap. Shape and count equality prove the same physical layout
+    // as the descriptor checks below, including alignment and total size.
+    let bindings = heap_load(
+      context,
+      context.environment()[0],
+      offsets.struct_bindings,
+      Ptr64,
+    )
+    view_guard_nonzero(context, bindings, slow)
+    let types = heap_load(
+      context,
+      context.environment()[0],
+      layout.type_count_offset,
+      I32,
+    )
+    view_guard_immediate(
+      context,
+      UnsignedGreaterThan,
+      types,
+      type_index.to_uint64(),
+      slow,
+    )
+    let header = heap_load(context, bindings, type_index * 16, I64)
+    let actual_shape = heap_load(context, bindings, type_index * 16 + 8, I64)
+    let encoded_identity = context.emit(
+        IntShiftImmediate(UnsignedShiftRight, 32),
+        [header],
+        [I64],
+      )[0]
+    let fields = context.emit(Convert(I32WrapI64), [header], [I32])[0]
+    view_guard_immediate(context, NotEqual, encoded_identity, 0UL, slow)
+    view_guard_immediate(context, Equal, fields, count.to_uint64(), slow)
+    view_guard_immediate(context, Equal, actual_shape, shape, slow)
+    let identity = context.emit(Convert(I32WrapI64), [encoded_identity], [I32])[0]
+    heap_add(context, identity, -1, I32)
+  } else {
+    let ids = heap_load(
+      context,
+      context.environment()[0],
+      layout.type_ids_offset,
+      Ptr64,
+    )
+    let types = heap_load(
+      context,
+      context.environment()[0],
+      layout.type_count_offset,
+      I32,
+    )
+    view_guard_nonzero(context, ids, slow)
+    view_guard_immediate(
+      context,
+      UnsignedGreaterThan,
+      types,
+      type_index.to_uint64(),
+      slow,
+    )
+    let identity = heap_load(context, ids, type_index * 4, I32)
+    let layouts = heap_load(context, heap, layout.layouts, Ptr64)
+    let layout_count = heap_load(context, heap, layout.layout_capacity, I32)
+    heap_cast_guard(context, UnsignedLessThan, identity, layout_count, slow)
+    let descriptor = heap_load(
+      context,
+      heap_index(context, layouts, identity, 3),
+      0,
+      Ptr64,
+    )
+    view_guard_nonzero(context, descriptor, slow)
+    let kind = heap_load(context, descriptor, layout.layout_kind, I32)
+    let fields = heap_load(context, descriptor, layout.layout_count, I32)
+    let size = heap_load(context, descriptor, layout.layout_size, I32)
+    let actual_shape = heap_load(context, descriptor, layout.layout_shape, I64)
+    view_guard_immediate(context, Equal, actual_shape, shape, slow)
+    view_guard_immediate(context, Equal, fields, count.to_uint64(), slow)
+    view_guard_immediate(context, Equal, kind, 1UL, slow)
+    let aligned = context.emit(
+        IntBinaryImmediate(And, 0xFFFFFFF0UL),
+        [heap_add(context, size, 31, I32)],
+        [I32],
+      )[0]
+    view_guard_immediate(context, Equal, aligned, total.to_uint64(), slow)
+    identity
+  }
+  (heap, control, identity)
+}
+
+///|
 /// Embedding-owned offsets for a 64-bit stable-identity heap. All capacity,
 /// policy, canonical layout and identity-page checks precede publication.
 /// Bound quota reservations always select the shared collecting allocator.
@@ -101,26 +226,6 @@ fn heap_store(
 }
 
 ///|
-fn heap_guard(
-  context : @adapter.InstructionContext,
-  condition : @lowering.Value,
-  slow : @lowering.Block,
-) -> Unit {
-  let next = context.create_block([])
-  context.branch(condition, next, [], slow, [])
-  context.switch_to_block(next)
-}
-
-///|
-fn heap_nonzero(
-  context : @adapter.InstructionContext,
-  value : @lowering.Value,
-) -> @lowering.Value {
-  let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [value], [I64])[0]
-  context.emit(IntCompareImmediate(NotEqual, 0UL), [bits], [I32])[0]
-}
-
-///|
 fn heap_add(
   context : @adapter.InstructionContext,
   value : @lowering.Value,
@@ -138,6 +243,16 @@ fn heap_index(
   shift : Int32,
 ) -> @lowering.Value {
   let wide = context.emit(Convert(I64ExtendI32(Unsigned)), [index], [I64])[0]
+  heap_index_wide(context, base, wide, shift)
+}
+
+///|
+fn heap_index_wide(
+  context : @adapter.InstructionContext,
+  base : @lowering.Value,
+  wide : @lowering.Value,
+  shift : Int32,
+) -> @lowering.Value {
   let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [base], [I64])[0]
   let address = context.emit(IntAddShiftedLeft(shift), [bits, wide], [I64])[0]
   context.emit(Convert(Bitcast(I64, Ptr64)), [address], [Ptr64])[0]
@@ -156,125 +271,33 @@ fn inline_struct_reservation(
   shape : UInt64,
   total : Int32,
   slow : @lowering.Block,
+  admission~ : @lowering.Value? = None,
 ) -> (@lowering.Value, @lowering.Value, @lowering.Value) {
-  let heap = context.emit(
-      EnvironmentField(environment.gc_heap_field.unwrap(), Mutable),
-      context.environment(),
-      [Ptr64],
-    )[0]
-  heap_guard(context, heap_nonzero(context, heap), slow)
-  let control = heap_load(context, heap, layout.allocation_control, Ptr64)
-  heap_guard(context, heap_nonzero(context, control), slow)
-  let enabled = heap_load(context, control, layout.control_enabled, I32)
-  let bytes = heap_load(context, heap, layout.byte_reservation, Ptr64)
-  let objects = heap_load(context, heap, layout.object_reservation, Ptr64)
-  let unrestricted = context.emit(
-      IntBinaryImmediate(Xor, 1UL),
-      [heap_nonzero(context, bytes)],
-      [I32],
-    )[0]
-  let unrestricted_objects = context.emit(
-      IntBinaryImmediate(Xor, 1UL),
-      [heap_nonzero(context, objects)],
-      [I32],
-    )[0]
-  let allowed = context.emit(IntBinary(And), [enabled, unrestricted], [I32])[0]
-  let allowed = context.emit(IntBinary(And), [allowed, unrestricted_objects], [
-      I32,
-    ])[0]
-  heap_guard(context, allowed, slow)
-  let ids = heap_load(
-    context,
-    context.environment()[0],
-    layout.type_ids_offset,
-    Ptr64,
-  )
-  let types = heap_load(
-    context,
-    context.environment()[0],
-    layout.type_count_offset,
-    I32,
-  )
-  heap_guard(context, heap_nonzero(context, ids), slow)
-  heap_guard(
-    context,
-    context.emit(
-      IntCompareImmediate(UnsignedGreaterThan, type_index.to_uint64()),
-      [types],
-      [I32],
-    )[0],
-    slow,
-  )
-  let identity = heap_load(context, ids, type_index * 4, I32)
-  let layouts = heap_load(context, heap, layout.layouts, Ptr64)
-  let layout_count = heap_load(context, heap, layout.layout_capacity, I32)
-  heap_guard(
-    context,
-    context.emit(IntCompare(UnsignedLessThan), [identity, layout_count], [I32])[0],
-    slow,
-  )
-  let descriptor = heap_load(
-    context,
-    heap_index(context, layouts, identity, 3),
-    0,
-    Ptr64,
-  )
-  heap_guard(context, heap_nonzero(context, descriptor), slow)
-  let kind = heap_load(context, descriptor, layout.layout_kind, I32)
-  let fields = heap_load(context, descriptor, layout.layout_count, I32)
-  let size = heap_load(context, descriptor, layout.layout_size, I32)
-  let actual_shape = heap_load(context, descriptor, layout.layout_shape, I64)
-  let shape_ok = context.emit(
-      IntCompareImmediate(Equal, shape),
-      [actual_shape],
-      [I32],
-    )[0]
-  let fields_ok = context.emit(
-      IntCompareImmediate(Equal, count.to_uint64()),
-      [fields],
-      [I32],
-    )[0]
-  let kind_ok = context.emit(IntCompareImmediate(Equal, 1UL), [kind], [I32])[0]
-  let aligned = context.emit(
-      IntBinaryImmediate(And, 0xFFFFFFF0UL),
-      [heap_add(context, size, 31, I32)],
-      [I32],
-    )[0]
-  let size_ok = context.emit(
-      IntCompareImmediate(Equal, total.to_uint64()),
-      [aligned],
-      [I32],
-    )[0]
-  let valid = context.emit(IntBinary(And), [shape_ok, fields_ok], [I32])[0]
-  let valid = context.emit(IntBinary(And), [valid, kind_ok], [I32])[0]
-  heap_guard(
-    context,
-    context.emit(IntBinary(And), [valid, size_ok], [I32])[0],
-    slow,
-  )
+  let (heap, control, identity) = if admission is Some(cell) {
+    let token = heap_load(context, cell, 0, I32)
+    view_guard_immediate(context, NotEqual, token, 0UL, slow)
+    let heap = context.emit(
+        EnvironmentField(environment.gc_heap_field.unwrap(), Mutable),
+        context.environment(),
+        [Ptr64],
+      )[0]
+    (
+      heap,
+      heap_load(context, heap, layout.allocation_control, Ptr64),
+      heap_add(context, token, -1, I32),
+    )
+  } else {
+    inline_struct_admission(
+      context, environment, layout, type_index, count, shape, total, slow,
+    )
+  }
   let used = heap_load(context, heap, layout.size, I64)
   let end = heap_add(context, used, total, I64)
   let capacity = heap_load(context, heap, layout.capacity, I64)
   let limit = heap_load(context, heap, layout.collection_limit, I64)
-  let capacity_ok = context.emit(
-      IntCompare(UnsignedLessOrEqual),
-      [end, capacity],
-      [I32],
-    )[0]
-  let budget_ok = context.emit(IntCompare(UnsignedLessThan), [used, limit], [
-      I32,
-    ])[0]
-  let range_ok = context.emit(
-      IntCompareImmediate(UnsignedLessOrEqual, 2147483647UL),
-      [end],
-      [I32],
-    )[0]
-  let room = context.emit(IntBinary(And), [capacity_ok, budget_ok], [I32])[0]
-  heap_guard(
-    context,
-    context.emit(IntBinary(And), [room, range_ok], [I32])[0],
-    slow,
-  )
+  heap_cast_guard(context, UnsignedLessOrEqual, end, capacity, slow)
+  heap_cast_guard(context, UnsignedLessThan, used, limit, slow)
+  view_guard_immediate(context, UnsignedLessOrEqual, end, 2147483647UL, slow)
   let index = heap_load(context, heap, layout.object_count, I32)
   let identity_limit = heap_load(
     context,
@@ -282,11 +305,7 @@ fn inline_struct_reservation(
     layout.identity_window_limit,
     I32,
   )
-  heap_guard(
-    context,
-    context.emit(IntCompare(UnsignedLessThan), [index, identity_limit], [I32])[0],
-    slow,
-  )
+  heap_cast_guard(context, UnsignedLessThan, index, identity_limit, slow)
   let page = heap_load(context, heap, layout.identity_window_page, Ptr64)
   let live_count = heap_load(context, heap, layout.live_count, I32)
   let slot = context.emit(
@@ -379,8 +398,8 @@ fn inline_struct_reservation(
       [I64],
     )[0]
   let runtime_type = context.emit(
-      IntBinary(ShiftLeft),
-      [runtime_type, context.emit(I64Const(32UL), [], [I64])[0]],
+      IntShiftImmediate(ShiftLeft, 32),
+      [runtime_type],
       [I64],
     )[0]
   let reserved = context.emit(
@@ -389,10 +408,41 @@ fn inline_struct_reservation(
       [I64],
     )[0]
   let word = context.emit(Convert(I64ExtendI32(Unsigned)), [reference], [I64])[0]
-  let word = context.emit(
-      IntBinary(ShiftLeft),
-      [word, context.emit(I64Const(1UL), [], [I64])[0]],
-      [I64],
-    )[0]
+  let word = context.emit(IntShiftImmediate(ShiftLeft, 1), [word], [I64])[0]
+  let word = if environment.offset_refs is Some((offsets, _)) {
+    let directory = heap_load(context, heap, offsets.directory, Ptr64)
+    let direct = context.create_block([])
+    let ready = context.create_block([I64])
+    let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [directory], [I64])[0]
+    context.branch_int_compare_immediate(
+      NotEqual,
+      bits,
+      0UL,
+      direct,
+      [],
+      ready,
+      [word],
+    )
+    context.switch_to_block(direct)
+    let slot = context.emit(
+        IntShiftImmediate(UnsignedShiftRight, 4),
+        [context.emit(Convert(I32WrapI64), [used], [I32])[0]],
+        [I32],
+      )[0]
+    let low = context.emit(Convert(I32WrapI64), [word], [I32])[0]
+    let entry = context.emit(IntBinaryImmediate(Or, 1UL), [low], [I32])[0]
+    heap_store(context, heap_index(context, directory, slot, 2), 0, entry, I32)
+    let offset = context.emit(Convert(I64ExtendI32(Unsigned)), [slot], [I64])[0]
+    let offset = context.emit(IntShiftImmediate(ShiftLeft, 32), [offset], [I64])[0]
+    let tag = context.emit(IntBinaryImmediate(Or, OFFSET_REF_TAG), [offset], [
+        I64,
+      ])[0]
+    let packed = context.emit(IntBinary(Or), [tag, word], [I64])[0]
+    context.jump(ready, [packed])
+    context.switch_to_block(ready)
+    context.block_parameters(ready)[0]
+  } else {
+    word
+  }
   (object, reserved, word)
 }

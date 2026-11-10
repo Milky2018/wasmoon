@@ -2,7 +2,8 @@
 pub fn depends_on_addresses(inst : @milkir.Inst) -> Bool {
   match inst.opcode {
     Ext(extension, _) =>
-      extension.effects is Some(effects) && effects.pointer_region is Some(_)
+      extension.reads_address_epoch ||
+      (extension.effects is Some(effects) && effects.pointer_region is Some(_))
     Memory(_) => true
     _ => false
   }

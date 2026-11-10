@@ -64,6 +64,24 @@ test "digit-loop memory SSA hoists physical queries without a GC-specific loop r
     }
   }
   assert_true(verify_gc_borrows(function))
+  let sites = inline_projection_sites(function, reuse_only=true)
+  let dominance = cfg.compute_dominance()
+  let mut hoisted = 0
+  for block in function.blocks {
+    for id in function.block_instruction_ids(block) {
+      let inst = function.instruction_by_id(id).unwrap()
+      if inst.opcode is Ext(extension, _) &&
+        decode_projection(extension) is Some(StructData(_) | ArrayData(0)) &&
+        loops.any(loop_ => {
+          !loop_.contains(block.id) &&
+          dominance.dominates(block.id, loop_.header)
+        }) {
+        hoisted += 1
+        assert_true(sites.offset_sites.contains(id))
+      }
+    }
+  }
+  assert_true(hoisted > 0)
 }
 
 ///|

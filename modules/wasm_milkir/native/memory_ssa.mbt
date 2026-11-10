@@ -131,7 +131,8 @@ fn memory_access(
         },
         !write,
       )
-    StructData(_) | ArrayElements(_) | ArrayLength => return None
+    StructData(_) | ArrayElements(_) | ArrayPayload(_) | ArrayLength =>
+      return None
   }
   Some({ projection, width, type_, signed, array, write, length, })
 }
@@ -145,6 +146,7 @@ fn expand_memory_access(
   block : @milkir.Block,
   inst : @milkir.Inst,
   access : MemoryAccess,
+  split_array_payload : Bool,
 ) -> @milkir.Block {
   let source = match access.projection {
     FieldData(type_, _, _, _, _) =>
@@ -201,6 +203,12 @@ fn expand_memory_access(
   let fallback = function.new_inst(old_opcode, old_args, slow_results)
   slow.append_inst(fallback)
   slow.set_terminator(Jump(join.id, slow_results))
+  let payload = if split_array_payload &&
+    access.projection is ArrayElements(width) {
+    memory_project(function, fast, ArrayPayload(width), pointer)
+  } else {
+    pointer
+  }
   let offset = if access.array && !access.length {
     let index = memory_emit(
       function,
@@ -217,8 +225,12 @@ fn expand_memory_access(
       [index, stride],
       I64,
     )
-    let start = memory_constant(function, fast, I64, 16L)
-    memory_emit(function, fast, Scalar(IntBinary(Add)), [element, start], I64)
+    if split_array_payload {
+      element
+    } else {
+      let start = memory_constant(function, fast, I64, 16L)
+      memory_emit(function, fast, Scalar(IntBinary(Add)), [element, start], I64)
+    }
   } else {
     memory_constant(function, fast, I64, 0L)
   }
@@ -234,7 +246,7 @@ fn expand_memory_access(
     fast.append_inst(
       function.new_inst(
         opcode,
-        [pointer, old_args[if access.array { 2 } else { 1 }], offset],
+        [payload, old_args[if access.array { 2 } else { 1 }], offset],
         [],
       ),
     )
@@ -245,7 +257,7 @@ fn expand_memory_access(
       Memory(Load(access.type_))
     }
     fast_results.push(
-      memory_emit(function, fast, opcode, [pointer, offset], access.type_),
+      memory_emit(function, fast, opcode, [payload, offset], access.type_),
     )
   }
   fast.set_terminator(Jump(join.id, fast_results))
@@ -268,6 +280,7 @@ fn expand_memory_access(
 pub fn prepare_gc_memory(
   function : @milkir.Function,
   context : @wasm_milkir.WasmValidationContext,
+  split_array_payload~ : Bool = false,
   on_event~ : (@milkir_native.NativeLowerEvent) -> Unit = fn(_) { () },
 ) -> Unit raise @milkir.VerifyError {
   fn validate(view : @milkir.ExtensionInstView) -> String? {
@@ -288,7 +301,10 @@ pub fn prepare_gc_memory(
     function
     .block_instruction_ids(block)
     .any(id => {
-      memory_access(function.instruction_by_id(id).unwrap(), context) is Some(_)
+      let inst = function.instruction_by_id(id).unwrap()
+      memory_access(inst, context) is Some(_) ||
+      @wasm_milkir.decode_opcode(inst.opcode)
+      is Some(RefCast(_, _) | RefTest(_, _))
     })
   })
   let already_prepared = old_blocks.any(block => {
@@ -296,7 +312,7 @@ pub fn prepare_gc_memory(
     .block_instruction_ids(block)
     .any(id => {
       function.instruction_by_id(id).unwrap().opcode is Ext(extension, _) &&
-      extension.effects is Some(_)
+      (extension.effects is Some(_) || extension.reads_address_epoch)
     })
   })
   let expand = has_access &&
@@ -317,7 +333,14 @@ pub fn prepare_gc_memory(
         let inst = function.instruction_by_id(id).unwrap()
         if inst.opcode is Ext(extension, signature) {
           inst.set_opcode(
-            Ext(annotate_semantic(extension, signature), signature),
+            Ext(
+              annotate_semantic(
+                extension,
+                signature,
+                validation_context=Some(context),
+              ),
+              signature,
+            ),
           )
         }
       }
@@ -336,13 +359,22 @@ pub fn prepare_gc_memory(
         let access = memory_access(inst, context)
         if inst.opcode is Ext(extension, signature) {
           inst.set_opcode(
-            Ext(annotate_semantic(extension, signature), signature),
+            Ext(
+              annotate_semantic(
+                extension,
+                signature,
+                validation_context=Some(context),
+              ),
+              signature,
+            ),
           )
         }
         if access is Some(access) {
           let first_generated = function.next_inst_id
           let source_metadata = inst.metadata.copy()
-          current = expand_memory_access(function, current, inst, access)
+          current = expand_memory_access(
+            function, current, inst, access, split_array_payload,
+          )
           // Checked projections can carry the original null/type trap. Keep
           // its source location on every generated part, including fallback.
           for id in first_generated..<function.next_inst_id {
@@ -384,6 +416,18 @@ pub fn prepare_gc_memory(
       @generic.optimize_with_level(function, O2) |> ignore
     }
   }
+  if expand && @generic.predicate_counted_loop_bounds(function).changed {
+    on_event(PreparationStarted(name="gc_memory_predication_cleanup"))
+    @generic.optimize_with_level(function, O2) |> ignore
+  }
+  if expand && @generic.unroll_dynamic_memory_loop(function).changed {
+    on_event(PreparationStarted(name="gc_memory_dynamic_unroll_cleanup"))
+    @generic.optimize_with_level(function, O2) |> ignore
+  }
+  if expand {
+    on_event(PreparationStarted(name="gc_memory_loop_materializations"))
+    @generic.localize_loop_materializations(function) |> ignore
+  }
   if expand {
     on_event(PreparationStarted(name="gc_memory_output_validation"))
     function.verify_with_dialect_validator(
@@ -393,7 +437,7 @@ pub fn prepare_gc_memory(
     )
   }
   on_event(PreparationStarted(name="gc_memory_borrow_validation"))
-  if gc_borrow_error(function) is Some(error) {
+  if gc_borrow_error(function, validation_context=Some(context)) is Some(error) {
     raise @milkir.VerifyError::unverifiable_instruction(
       "GC memory in \{function.name}: \{error}",
     )

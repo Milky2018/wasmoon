@@ -75,7 +75,7 @@ fn lower_direct_operation(
     |> ignore
     return []
   }
-  if operation is IntMultiplyAdd {
+  if operation is (IntMultiplyAdd | IntMultiplySubtract) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
@@ -90,10 +90,49 @@ fn lower_direct_operation(
     return append_body(
       builder,
       block,
-      IntBinary(width, Add),
+      IntBinary(width, if operation is IntMultiplySubtract { Sub } else { Add }),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(product)],
       scratch.any_outputs(result_types),
       site.metadata(),
+    )
+  }
+  if operation is IntExtractBits(start, field_bits) {
+    let shifted = lower_direct_operation(
+        context,
+        builder,
+        block,
+        block_index,
+        instruction_index,
+        IntShiftImmediate(UnsignedShiftRight, start),
+        operands,
+        operand_types,
+        result_types,
+        [],
+        None,
+        None,
+        stack_object,
+        scratch,
+      )[0]
+    let mask = if field_bits == 64 {
+      0xFFFFFFFFFFFFFFFFUL
+    } else {
+      (1UL << field_bits) - 1UL
+    }
+    return lower_direct_operation(
+      context,
+      builder,
+      block,
+      block_index,
+      instruction_index,
+      IntBinaryImmediate(And, mask),
+      [shifted],
+      result_types,
+      result_types,
+      roots,
+      source_location,
+      stack_map,
+      stack_object,
+      scratch,
     )
   }
   if operation is IntLowBitsShiftLeft(field_bits, amount) {
@@ -136,7 +175,7 @@ fn lower_direct_operation(
       scratch,
     )
   }
-  if operation is IntAddShiftedLeft(amount) {
+  if operation is (IntAddShiftedLeft(amount) | IntAddShiftedRight(amount)) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
@@ -151,7 +190,14 @@ fn lower_direct_operation(
     let shifted = append_body(
         builder,
         block,
-        IntBinary(width, Lsl),
+        IntBinary(
+          width,
+          if operation is IntAddShiftedRight(_) {
+            Lsr
+          } else {
+            Lsl
+          },
+        ),
         [@vcode.Input::any(operands[1]), @vcode.Input::any(constant)],
         scratch.any_outputs(result_types),
         @vcode.InstructionMetadata::empty(),
@@ -204,6 +250,7 @@ fn lower_direct_operation(
     guard optional_gpr_width(operand_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
+    let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
     let constant = append_body(
         builder,
         block,
@@ -225,6 +272,7 @@ fn lower_direct_operation(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
+    let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
     let (selected, selected_bits) = match binary {
       UnsignedRem if bits > 1UL && (bits & (bits - 1UL)) == 0UL =>
         (And, bits - 1UL)
@@ -1111,6 +1159,7 @@ fn DirectLoweringSession::terminate(
         } else {
           W64
         }
+        let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
         let constant = append_body(
             self.state.builder,
             block,
@@ -1170,12 +1219,26 @@ fn DirectLoweringSession::terminate(
         )
       }
       TailCall(call, operands) =>
-        self.terminate_tail_call(
+        self.state.emit_tail_call(
           block,
           call,
           self.state.target_values(operands),
           ordinary_metadata,
-        )
+          ty => Move(ty),
+          is_allocatable,
+          plan => {
+            let target = match call.callee {
+              Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
+              Indirect => TailCallIndirect(call.signature, plan)
+              External(_) => abort("external tail call rejected above")
+            }
+            // Tail argument setup writes the hidden result-area register too.
+            (target, internal_call_clobbers(plan))
+          },
+        ) catch {
+          UnsupportedAbi(message) => raise UnsupportedAbi(message~)
+          BuildFailure(cause) => raise BuildFailure(cause~)
+        }
       NoReturnCall(call, operands) => {
         let operands = self.state.target_values(operands)
         let call_metadata = direct_source_metadata(
@@ -1251,44 +1314,6 @@ fn DirectLoweringSession::terminate(
 }
 
 ///|
-fn DirectLoweringSession::terminate_tail_call(
-  self : DirectLoweringSession,
-  block : @vcode.Block,
-  call : @native.NativeCall,
-  operands : Array[@vcode.Value],
-  metadata : @vcode.InstructionMetadata,
-) -> Unit raise X64LowerError {
-  let (plan, inputs) = self.state.tail_call_inputs(
-    call, operands, is_allocatable,
-  ) catch {
-    UnsupportedAbi(message) => raise UnsupportedAbi(message~)
-    BuildFailure(cause) => raise BuildFailure(cause~)
-  }
-  let target = match call.callee {
-    Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
-    Indirect => TailCallIndirect(call.signature, plan)
-    External(_) => abort("external tail call rejected above")
-  }
-  let metadata = direct_source_metadata(
-    metadata.source,
-    None,
-    metadata.live_gc_roots,
-    call.behavior.semantics(),
-  )
-  set_terminator(
-    self.state.builder,
-    block,
-    target,
-    inputs,
-    [],
-    metadata,
-    // Tail argument setup writes the hidden result-area register too. Roots
-    // must not occupy it even though the platform ABI treats it as preserved.
-    clobbers=internal_call_clobbers(plan),
-  )
-}
-
-///|
 pub fn DirectLoweringSession::sink(
   self : DirectLoweringSession,
 ) -> @lowering.TargetSink {
@@ -1306,6 +1331,7 @@ pub fn DirectLoweringSession::sink(
     },
     fn() { self.state.finish_construction(error => BuildFailure(cause=error)) },
     folds_unsigned_index_into_memory=false,
+    supports_int_binary_immediate=fn(_, _, _) { false },
   )
 }
 

@@ -193,12 +193,12 @@ int32_t WASMOON_GUEST_ABI gc_ref_test_impl(jit_context_t *ctx, int64_t value, in
         return 0;
     }
 
-    int32_t gc_ref = (int32_t)(value >> 1);
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
+    int32_t gc_ref = gc_heap_ref_id(heap, value);
     if (gc_ref <= 0) {
         return 0;
     }
 
-    GcHeap *heap = (GcHeap *)ctx_gc_heap(ctx);
     if (type_idx >= 0) {
         // Concrete checks need the canonical identity, not the object's kind.
         // Legacy allocations still use their module-local type cache.

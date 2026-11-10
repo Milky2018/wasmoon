@@ -23,6 +23,24 @@ fn native_test_env() -> @frontend.EmbeddingEnvironment {
 }
 
 ///|
+test "local immutable scalar globals are compile-time constants" {
+  let module_ = @types.Module::simple([], [I32], [GlobalGet(1)], "constant")
+  module_.imports.push({
+    mod_name: "host",
+    name: "imported",
+    desc: Global({ value_type: I32, mutable: false, }),
+  })
+  module_.globals.push({
+    type_: { value_type: I32, mutable: false, },
+    init: [I32Const(59)],
+  })
+  let function = @frontend.translate_function(native_test_env(), module_, 0)
+  inspect(function.print().contains("iconst 59"), content="true")
+  inspect(function.print().contains("load"), content="false")
+  @wasm_milkir.verify_function(function)
+}
+
+///|
 test "lower empty wasm function through embedding environment" {
   let mod_ = @types.Module::simple([], [], [], "run")
   let env = native_test_env()

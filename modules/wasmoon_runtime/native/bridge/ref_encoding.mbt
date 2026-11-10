@@ -99,7 +99,7 @@ pub fn decode_gc_heap_ref(raw : Int64) -> Int32? {
   } else if (raw & 1L) == 1L {
     None
   } else {
-    Some(((raw >> 1) - 1L).to_int())
+    Some(decode_heap_ref(raw))
   }
 }
 
@@ -108,7 +108,7 @@ pub fn decode_gc_heap_ref(raw : Int64) -> Int32? {
 /// Returns 0-based heap_idx for MoonBit Store/CHeap
 pub fn decode_heap_ref(encoded : Int64) -> Int32 {
   // Shift right to get 1-based gc_ref, then convert to 0-based
-  (encoded >> 1).to_int() - 1
+  ((encoded & 0xFFFFFFFFL) >> 1).to_int() - 1
 }
 
 // ============ GC Libcall Function Pointers ============

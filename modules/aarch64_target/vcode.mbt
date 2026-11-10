@@ -119,10 +119,13 @@ pub(all) enum AArch64Inst {
   IntBinary(GprWidth, AArch64IntBinary)
   IntBinaryImmediate(GprWidth, AArch64IntBinary, UInt64)
   IntMultiplyAdd(GprWidth)
+  IntMultiplySubtract(GprWidth)
   IntShiftRegister(GprWidth, AArch64Shift)
   IntShiftImmediate(GprWidth, AArch64Shift, Int32)
   IntAddShiftedLeft(GprWidth, Int32)
+  IntAddShiftedRight(GprWidth, Int32)
   IntLowBitsShiftLeft(GprWidth, Int32, Int32)
+  IntExtractBits(GprWidth, Int32, Int32)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @native.Signedness)
   IntWithOverflow(GprWidth, @lowering.IntOverflowOp)
@@ -352,7 +355,7 @@ fn verify_target_vcode(
         }
         check.shape([ty], [ty])
       }
-      IntMultiplyAdd(width) =>
+      IntMultiplyAdd(width) | IntMultiplySubtract(width) =>
         check.shape(
           [integer_type(width), integer_type(width), integer_type(width)],
           [integer_type(width)],
@@ -366,6 +369,20 @@ fn verify_target_vcode(
             message="integer shift amount is out of range",
           )
         }
+        check.shape([ty], [ty])
+      }
+      IntExtractBits(width, start, field_bits) => {
+        let bits = if width == W32 { 32 } else { 64 }
+        if start < 0 ||
+          start >= bits ||
+          field_bits <= 0 ||
+          field_bits > bits - start {
+          raise InvalidInstruction(
+            instruction~,
+            message="integer bit extract is out of range",
+          )
+        }
+        let ty = integer_type(width)
         check.shape([ty], [ty])
       }
       IntLowBitsShiftLeft(width, field_bits, amount) => {
@@ -382,7 +399,7 @@ fn verify_target_vcode(
         }
         check.shape([ty], [ty])
       }
-      IntAddShiftedLeft(width, amount) => {
+      IntAddShiftedLeft(width, amount) | IntAddShiftedRight(width, amount) => {
         let ty = integer_type(width)
         let bit_width = if width == W32 { 32 } else { 64 }
         if amount < 0 || amount >= bit_width {

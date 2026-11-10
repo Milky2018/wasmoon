@@ -46,12 +46,18 @@ fn hoist_loop_invariants_once(
 
   // Process each loop
   for loop_ in loops {
-    let first = if guard_entries {
+    let header_reads = if guard_entries {
+      first_iteration_invariants(func, loop_, value_to_block, header_only=true)
+    } else {
+      Map([])
+    }
+    let body_reads = if guard_entries && header_reads.is_empty() {
       first_iteration_invariants(func, loop_, value_to_block)
     } else {
       Map([])
     }
-    if !first.is_empty() && merge_loop_entries(func, cfg, loop_) {
+    if (!header_reads.is_empty() || !body_reads.is_empty()) &&
+      merge_loop_entries(func, cfg, loop_) {
       result.mark_changed()
       return (result, true)
     }
@@ -67,7 +73,7 @@ fn hoist_loop_invariants_once(
       }
       if preheader_block is Some(preheader) {
         // Find loop-invariant instructions and move them
-        let guarded = if !first.is_empty() {
+        let guarded = if !body_reads.is_empty() {
           guard_loop_entry(func, loop_, preheader, value_to_block)
         } else {
           None
@@ -78,9 +84,9 @@ fn hoist_loop_invariants_once(
           guarded.unwrap_or(preheader),
           value_to_block,
           if guarded is Some(_) {
-            first
+            body_reads
           } else {
-            Map([])
+            header_reads
           },
         )
         if hoisted || guarded is Some(_) {
@@ -155,13 +161,14 @@ fn is_loop_invariant(
       _ => None
     }
   }
-  if admitted_load && read_region is None {
+  if (admitted_load || first_read) && read_region is None {
     return false
   }
   let address_dependent = @analysis.depends_on_addresses(inst)
   if read_region is Some(_) || address_dependent {
     let effects = memory.effects_in_loop(func, loop_)
     if (address_dependent && effects.invalidates_addresses) ||
+      (first_read && read_region == Some(Other) && !effects.writes.is_empty()) ||
       (read_region is Some(region) && effects.blocks_read(region)) {
       return false
     }

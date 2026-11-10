@@ -62,6 +62,25 @@ pub fn CHeap::get_ptr(self : CHeap) -> GCHeapHandle {
 }
 
 ///|
+#borrow(heap)
+extern "C" fn c_heap_ref_word(heap : GCHeapHandle, reference : Int32) -> Int64 = "wasmoon_gc_heap_ref_word"
+
+///|
+/// Encode a Store-owned object at the native ABI boundary.
+pub fn CHeap::encode_ref_word(self : CHeap, index : Int32) -> Int64 {
+  c_heap_ref_word(self.ptr, index + 1)
+}
+
+///|
+fn CHeap::encode_slot(self : CHeap, value : @types.Value) -> GcSlot {
+  match value {
+    StructRef(index) | ArrayRef(index) =>
+      { lo: self.encode_ref_word(index), hi: 0L, }
+    _ => value_to_slot(value)
+  }
+}
+
+///|
 /// Return an owner-bound action that reclaims later allocations unless they
 /// remain reachable when the action runs. Retained object-table indices are
 /// never reused. If root discovery raises, skip reclamation rather than use an
@@ -88,9 +107,12 @@ pub fn CHeap::make_allocation_rollback(
 
 ///|
 /// Flatten values into the [lo, hi] word pairs the wide C entry points take.
-fn slots_to_words(values : Array[@types.Value]) -> FixedArray[Int64] {
+fn CHeap::slots_to_words(
+  self : CHeap,
+  values : Array[@types.Value],
+) -> FixedArray[Int64] {
   FixedArray::makei(values.length() * 2, fn(i) {
-    let slot = value_to_slot(values[i / 2])
+    let slot = self.encode_slot(values[i / 2])
     if i % 2 == 0 {
       slot.lo
     } else {
@@ -113,7 +135,7 @@ pub fn CHeap::alloc_struct(
   runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
   let num_fields = fields.length()
-  let raw_fields = slots_to_words(fields)
+  let raw_fields = self.slots_to_words(fields)
   let gc_ref = if runtime_type >= 0 {
     self.ptr.allocate_typed(
       runtime_type, type_idx, raw_fields, num_fields, false,
@@ -152,7 +174,7 @@ pub fn CHeap::struct_set(
   value : @types.Value,
 ) -> Unit {
   let gc_ref = struct_idx + 1
-  let slot = value_to_slot(value)
+  let slot = self.encode_slot(value)
   c_gc_heap_struct_set_wide(self.ptr, gc_ref, field_idx, slot.lo, slot.hi)
 }
 
@@ -170,7 +192,7 @@ pub fn CHeap::alloc_array(
   init_value : @types.Value,
   runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
-  let slot = value_to_slot(init_value)
+  let slot = self.encode_slot(init_value)
   let gc_ref = if runtime_type >= 0 {
     self.ptr.allocate_typed(
       runtime_type,
@@ -198,7 +220,7 @@ pub fn CHeap::alloc_array_from_values(
   runtime_type~ : Int32 = -1,
 ) -> Int32 raise CHeapError {
   let len = elements.length()
-  let raw_values = slots_to_words(elements)
+  let raw_values = self.slots_to_words(elements)
   let gc_ref = if runtime_type >= 0 {
     self.ptr.allocate_typed(runtime_type, type_idx, raw_values, len, false)
   } else {
@@ -250,7 +272,7 @@ pub fn CHeap::array_set(
   if elem_idx < 0 || elem_idx >= len {
     raise OutOfBoundsArrayAccess
   }
-  let slot = value_to_slot(value)
+  let slot = self.encode_slot(value)
   c_gc_heap_array_set_wide(self.ptr, gc_ref, elem_idx, slot.lo, slot.hi)
 }
 
@@ -269,7 +291,7 @@ pub fn CHeap::array_fill(
   if offset < 0 || count < 0 || offset > len || count > len - offset {
     raise OutOfBoundsArrayAccess
   }
-  let slot = value_to_slot(value)
+  let slot = self.encode_slot(value)
   c_gc_heap_array_fill_wide(self.ptr, gc_ref, offset, slot.lo, slot.hi, count)
 }
 

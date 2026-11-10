@@ -94,3 +94,76 @@ test "unknown readers may alias writes in any concrete region" {
   function.verify()
   assert_eq(remaining_loads(function), 2)
 }
+
+///|
+test "memory value numbering compares separately materialized constant offsets by value" {
+  for boundary in 0..<4 {
+    let b = @milkir.FunctionBuilder("constant_offset_identity")
+    let pointer = b.add_param(Ptr)
+    let other = b.add_param(Ptr)
+    let value = b.add_param(I32)
+    b.add_result(I32)
+    b.add_result(I32)
+    let first = if boundary == 3 {
+      b.store_ptr(I32, pointer, value, b.iconst_i64(32L))
+      value
+    } else {
+      b.load_ptr(I32, pointer, b.iconst_i64(32L))
+    }
+    if boundary == 1 {
+      b.store_ptr(I32, other, value, b.iconst_i64(32L))
+    }
+    let second = b.load_ptr(
+      I32,
+      pointer,
+      b.iconst_i64(if boundary == 2 { 36L } else { 32L }),
+    )
+    b.return_([first, second])
+    let function = b.finalize()
+    optimize_with_level(function, O2) |> ignore
+    function.verify()
+    assert_eq(
+      remaining_loads(function),
+      match boundary {
+        0 => 1
+        3 => 0
+        _ => 2
+      },
+    )
+  }
+}
+
+///|
+test "literal memory offsets retain dominance and conditional write barriers" {
+  for writing in [false, true] {
+    let b = @milkir.FunctionBuilder("literal_offset_join")
+    let pointer = b.add_param(Ptr)
+    let condition = b.add_param(I32)
+    b.add_result(I32)
+    let initial = if writing {
+      b.load_ptr(I32, pointer, b.iconst_i64(24L))
+    } else {
+      condition
+    }
+    let left = b.create_block()
+    let right = b.create_block()
+    let join = b.create_block()
+    b.branch(condition, left, [], right, [])
+    b.switch_to_block(left)
+    if writing {
+      b.store_ptr(I32, pointer, condition, b.iconst_i64(24L))
+    } else {
+      b.load_ptr(I32, pointer, b.iconst_i64(24L)) |> ignore
+    }
+    b.jump(join, [])
+    b.switch_to_block(right)
+    b.jump(join, [])
+    b.switch_to_block(join)
+    let after = b.load_ptr(I32, pointer, b.iconst_i64(24L))
+    b.return_([b.iadd(initial, after)])
+    let function = b.finalize()
+    optimize_with_level(function, O2) |> ignore
+    function.verify()
+    assert_eq(remaining_loads(function), 2)
+  }
+}

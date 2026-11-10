@@ -33,6 +33,7 @@ pub(all) enum Location {
   StructField(Int32, Int32)
   ArrayLength
   ArrayElements
+  ReferenceType
   Unknown
 }
 pub fn Location::equal(Self, Self) -> Bool

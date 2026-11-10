@@ -65,7 +65,7 @@ typedef int32_t (*GcCollectionPolicy)(void *, void *, int32_t);
  */
 typedef struct GcHeader {
     uint8_t kind;       // GC_KIND_STRUCT or GC_KIND_ARRAY
-    uint8_t flags;      // Reserved; collector marks live in identity pages.
+    uint8_t flags;      // Optional offset view layout; marks live in identity pages.
     uint16_t type_idx;  // Type index in module
     uint32_t size;      // Total object size (including header)
     uint64_t reserved;  // For structs: field count; for arrays: unused
@@ -236,7 +236,27 @@ typedef struct GcHeap {
     GcGeneration generation;
     uint64_t structural_epoch; // Invalidates trace shortcuts before identity retirement.
     GcArrayViewCache array_views[GC_ARRAY_VIEW_CACHE_SIZE];
+    // Experimental nonmoving payload space. A zero reservation selects the
+    // existing compacting allocator. Free spans are linked in their headers.
+    size_t payload_reservation;
+    size_t payload_page_size;
+    size_t free_payload_bytes;
+    int32_t free_payload_head;
+    int32_t reclaimed_payload_head;
+    uint32_t largest_free_payload;
+    // Offset-indexed live identity, one entry per aligned heap position.
+    // Interior positions stay zero, and retirement clears the entry before
+    // reuse. Compaction maintains this directory while old reference words
+    // retain the stable identity needed to resolve a stale offset.
+    uint32_t *offset_ids;
+    // The directory is allocated once. Full verification keeps this alias
+    // null so native projections use the checked runtime path.
+    const uint32_t *offset_view_ids;
 } GcHeap;
+
+static inline size_t gc_heap_payload_bytes(const GcHeap *heap) {
+    return heap->size - heap->free_payload_bytes;
+}
 
 typedef enum { GC_ROOT_UNBOUND, GC_ROOT_EXCEPTION, GC_ROOT_CONTINUATION } GcRootOwnerKind;
 
@@ -278,12 +298,12 @@ static inline void gc_heap_forget_views(GcHeap *heap) {
 static inline void gc_heap_forget_reference_views(GcHeap *heap, int32_t ref) {
     int64_t word = (int64_t)ref * 2;
     GcStructViewCache *cached = gc_struct_view_entry(heap, word);
-    if (cached->reference == word) {
+    if ((uint32_t)cached->reference == (uint32_t)word) {
         cached->reference = 0;
         cached->payload = NULL;
     }
     GcArrayViewCache *array = gc_array_view_entry(heap, word);
-    if (array->reference == word) {
+    if ((uint32_t)array->reference == (uint32_t)word) {
         array->reference = 0;
         array->view = 0;
     }
@@ -299,6 +319,50 @@ static inline int32_t gc_heap_identity_offset(GcHeap *heap, int32_t ref) {
     return page ? page->offsets[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] : -1;
 }
 
+// The low 32 bits retain the existing tagged identity. The high word holds
+// the aligned heap offset and a representation bit distinct from all Wasm
+// reference tags. Offsets fit because allocation already caps size at INT32_MAX.
+#define GC_OFFSET_REF_TAG UINT64_C(0x0800000000000000)
+#define GC_OFFSET_REF_MASK UINT64_C(0xF800000000000001)
+#define GC_OFFSET_SLOT_MASK UINT32_C(0x07FFFFFF)
+#define GC_OFFSET_ALIGNMENT_SHIFT 4
+#define GC_OFFSET_STRUCT_LAYOUT UINT8_C(0x80)
+
+static inline int gc_is_offset_ref(int64_t word) {
+    return ((uint64_t)word & GC_OFFSET_REF_MASK) == GC_OFFSET_REF_TAG;
+}
+
+// Zero means vacant. The odd encoding makes an invalid zero identity
+// unmatchable without a separate branch in generated projections.
+static inline uint32_t gc_offset_entry_word(int32_t id) {
+    return ((uint32_t)id << 1) | 1;
+}
+
+static inline int32_t gc_heap_ref_id(GcHeap *heap, int64_t word) {
+    if (!heap || word <= 0 || (word & 1)) return 0;
+    uint32_t id = (uint32_t)word >> 1;
+    if ((uint64_t)word <= UINT32_MAX) return (int32_t)id;
+    if (!heap->offset_ids || !id || !gc_is_offset_ref(word)) return 0;
+    // Moving heaps may still hold older hints in roots and fields. Their
+    // slow path uses only the identity, never the stale address. A stable
+    // heap can also reject a mismatched hint at the checked boundary.
+    if (!heap->payload_reservation) return (int32_t)id;
+    uint32_t slot = ((uint64_t)word >> 32) & GC_OFFSET_SLOT_MASK;
+    return heap->offset_ids[slot] == ((uint32_t)word | 1) ? (int32_t)id : 0;
+}
+
+static inline int64_t gc_heap_ref_word(GcHeap *heap, int32_t id) {
+    uint64_t word = (uint64_t)(uint32_t)id << 1;
+    if (heap && heap->offset_ids && id > 0) {
+        int32_t offset = gc_heap_identity_offset(heap, id);
+        if (offset >= 0) {
+            uint64_t slot = (uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT;
+            word |= GC_OFFSET_REF_TAG | (slot << 32);
+        }
+    }
+    return (int64_t)word;
+}
+
 static inline int gc_try_decode_heap_ref_candidate(
     GcHeap* heap,
     int64_t value,
@@ -307,16 +371,12 @@ static inline int gc_try_decode_heap_ref_candidate(
     if (!heap || value <= 0) {
         return 0;
     }
-    // i31 and tagged refs are not GC heap references.
-    if ((value & 1L) != 0L || (value & GC_REF_TAGS_MASK) != 0L) {
-        return 0;
-    }
-    int64_t target64 = value >> 1;
-    if (target64 <= 0 || target64 > heap->object_count) {
+    int32_t target = gc_heap_ref_id(heap, value);
+    if (target <= 0 || target > heap->object_count) {
         return 0;
     }
     if (out_target_gc_ref) {
-        *out_target_gc_ref = (int32_t)target64;
+        *out_target_gc_ref = target;
     }
     return 1;
 }
@@ -354,6 +414,21 @@ static inline void gc_heap_set_runtime_type(GcHeap *heap, int32_t ref, int32_t t
     if (page) page->runtime_types[(ref - 1) & (GC_ID_PAGE_SIZE - 1)] = type;
 }
 
+// Reserve only within an already admitted metadata and payload window.
+static inline int32_t gc_heap_reserve_prepared_storage(GcHeap *heap, size_t bytes) {
+    if (!heap->allocation_control || !heap->allocation_control->enabled ||
+        heap->byte_reservation || heap->object_reservation || bytes > INT32_MAX ||
+        heap->size > (size_t)INT32_MAX - bytes ||
+        bytes > heap->capacity - heap->size ||
+        (heap->precise_roots && heap->size >= heap->collection_limit) ||
+        heap->object_count >= heap->identity_window_limit) return -1;
+    int32_t offset = (int32_t)heap->size;
+    heap->size += bytes;
+    heap->quota_denied = 0;
+    heap->allocation_control->attempts++;
+    return offset;
+}
+
 // Capacity and resource admission precede publication. No allocation, callback
 // or safepoint may intervene between initializing the payload and this update.
 static inline int32_t gc_heap_publish_object(GcHeap *heap, int32_t offset, int32_t type) {
@@ -363,6 +438,7 @@ static inline int32_t gc_heap_publish_object(GcHeap *heap, int32_t offset, int32
     page->runtime_types[index & (GC_ID_PAGE_SIZE - 1)] = type;
     page->live_count++;
     int32_t ref = index + 1;
+    if (heap->offset_ids) heap->offset_ids[(uint32_t)offset >> GC_OFFSET_ALIGNMENT_SHIFT] = gc_offset_entry_word(ref);
     heap->live_objects[heap->live_count++] = ref;
     heap->total_allocations++;
     return ref;
@@ -399,7 +475,7 @@ int32_t gc_heap_try_array(GcHeap *heap, int32_t identity, int32_t local_type,
 void gc_heap_maybe_verify(GcHeap *heap, const char *op_name);
 int gc_should_fail_allocation(void);
 int gc_heap_admit(GcHeap *heap, size_t size);
-int gc_heap_reserve_storage(GcHeap *heap, size_t size);
+int32_t gc_heap_reserve_storage(GcHeap *heap, size_t size);
 int gc_heap_ensure_payload_capacity(GcHeap *heap, size_t needed);
 
 // Budgeted heaps enter the common allocator before any guest payload write.

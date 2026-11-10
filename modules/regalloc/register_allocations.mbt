@@ -128,10 +128,12 @@ fn RegisterAllocationIndex::add_segment(
 
 ///|
 fn allocation_node_priority(segment : Int32) -> UInt32 {
+  // Avalanche neighboring identities instead of preserving their bit patterns.
+  // Tree shape must stay independent of the ordered endpoints' usual ID order.
   let mut value = (segment + 1).reinterpret_as_uint()
-  value = value ^ (value << 13)
-  value = value ^ (value >> 17)
-  value ^ (value << 5)
+  value = (value ^ (value >> 16)) * 0x85EBCA6B
+  value = (value ^ (value >> 13)) * 0xC2B2AE35
+  value ^ (value >> 16)
 }
 
 ///|

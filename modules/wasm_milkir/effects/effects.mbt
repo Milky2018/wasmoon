@@ -7,6 +7,7 @@ pub(all) enum Location {
   StructField(Int32, Int32)
   ArrayLength
   ArrayElements
+  ReferenceType
   Unknown
 }
 
@@ -159,8 +160,9 @@ fn wasm_effects(operation : @wasm_milkir.WasmOpcode) -> Effects {
     // Native ref tests/casts only inspect retained type metadata and identity
     // tables. They neither allocate nor invoke managed/guest code; a cast's
     // failure trap remains observable and may not be speculated.
-    RefTest(_, _) => effects(read=Some(Unknown))
-    RefCast(_, _) => effects(read=Some(Unknown), may_trap=true)
+    ExecutableFuncRefEq => effects(read=Some(Unknown), may_trap=true)
+    RefTest(_, _) => effects(read=Some(ReferenceType))
+    RefCast(_, _) => effects(read=Some(ReferenceType), may_trap=true)
     // These operations remain conservative until their embedding contracts
     // describe all root, heap, exception and continuation state transitions.
     WasmCall(_)

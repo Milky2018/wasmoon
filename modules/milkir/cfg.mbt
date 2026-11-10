@@ -225,13 +225,25 @@ pub struct Dominance {
 
 ///|
 pub fn CFG::compute_dominance(self : CFG) -> Dominance {
+  let (dominance, _) = self.compute_dominance_and_tree()
+  dominance
+}
+
+///|
+/// Compute dominance intervals and their ordered child lists together.
+/// The child lists are a separate snapshot; mutating them does not change
+/// dominance queries or the immediate-dominator table.
+pub fn CFG::compute_dominance_and_tree(
+  self : CFG,
+) -> (Dominance, Array[Array[Int32]]) {
   let idom = self.compute_dominators()
+  let tree = build_dominator_tree(idom)
   let preorder = Array::make(idom.length(), -1)
   let subtree_end = Array::make(idom.length(), -1)
   let mut next = 0
   if self.is_valid(0) {
     visit_dominator_tree(
-      build_dominator_tree(idom),
+      tree,
       0,
       fn(block_id) {
         preorder[block_id] = next
@@ -241,7 +253,7 @@ pub fn CFG::compute_dominance(self : CFG) -> Dominance {
       fn(block_id) { subtree_end[block_id] = next },
     )
   }
-  { idom, preorder, subtree_end, }
+  ({ idom, preorder, subtree_end, }, tree)
 }
 
 ///|
@@ -317,8 +329,9 @@ pub fn[Scope] visit_dominator_tree(
         if descend && block_id >= 0 && block_id < domtree.length() {
           // Reversed: the stack is LIFO, so this pops the children back out
           // in the order the recursive descent took them.
-          for child in domtree[block_id].rev_iter() {
-            events.push(Enter(child))
+          let children = domtree[block_id]
+          for index = children.length() - 1; index >= 0; index = index - 1 {
+            events.push(Enter(children[index]))
           }
         }
       }

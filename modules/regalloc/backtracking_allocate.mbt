@@ -1,4 +1,6 @@
 ///|
+#derive(Eq)
+#valtype
 priv enum SegmentLocation {
   SegmentReg(PhysicalReg)
   SegmentSpill
@@ -70,7 +72,7 @@ fn segment_metadata(
   use_start~ : Int32 = 0,
   use_end~ : Int32 = -1,
 ) -> SegmentMetadata {
-  let mut use_cost = 0
+  let mut use_cost = 0L
   let mut has_fixed_constraint = false
   let mut fixed_hint : PhysicalReg? = None
   let mut preference_regs : Array[PhysicalReg]? = None
@@ -85,7 +87,7 @@ fn segment_metadata(
           use_position.kind,
           use_position.constraint,
           loop_depths,
-        )
+        ).to_int64()
       if use_position.constraint is FixedReg(_) {
         has_fixed_constraint = true
       }
@@ -117,10 +119,13 @@ fn segment_metadata(
     }
   }
   let length = ranges.program_range_length(fragment)
-  let weight = if use_cost == 0 {
+  let weight = if use_cost == 0L {
     1
   } else {
-    ((use_cost + length - 1) / length).max(1)
+    ((use_cost + length.to_int64() - 1L) / length.to_int64())
+    .max(1L)
+    .min(2147483647L)
+    .to_int()
   }
   let mut preference_hint : PhysicalReg? = None
   let mut selected_count = 0
@@ -747,9 +752,10 @@ fn[F : FunctionView, S : AllocationSink] try_assign_home_operands(
       for operand in function.instruction_operands(instruction) {
         guard operand.tie_id < 0 &&
           plan.sink.value_location(operand.vreg.id) is Some(home) &&
-          home.register() is Some(reg) else {
+          home.is_register() else {
           return false
         }
+        let reg = home.register_unchecked()
         if operand.constraint is FixedReg(required) && required != reg {
           return false
         }
@@ -807,11 +813,12 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   }
   for segment in segments {
     if segment.location is Some(_) &&
-      plan.sink
-      .value_location(segment.value.id)
-      .bind(location => location.register())
-      is Some(home_reg) &&
-      register_indexes.find(environment.allocatable_regs, home_reg)
+      plan.sink.value_location(segment.value.id) is Some(home) &&
+      home.is_register() &&
+      register_indexes.find(
+        environment.allocatable_regs,
+        home.register_unchecked(),
+      )
       is Some(index) {
       register_home_segments[index].push(segment.id)
     }
@@ -837,7 +844,7 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   }
   let assigned : Array[Location?] = []
   let natural_locations : Array[Location] = []
-  let reserved_registers : Array[PhysicalReg?] = []
+  let reserved_registers : Array[SegmentLocation] = []
   let operand_segments : Array[Int32?] = []
   let used_temps : Array[PhysicalReg] = []
   let borrowed_temps : Array[PhysicalReg] = []
@@ -957,20 +964,25 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
           Some(slot) => tied_constraints[slot].unwrap_or(operand.constraint)
           None => operand.constraint
         }
-        let reserved = match constraint {
-          FixedReg(reg) => Some(reg)
-          AnyLocation => any_location.register()
-          AnyReg => natural.register()
-          PreservedHome => home.register()
+        let reserved_location = match constraint {
+          FixedReg(reg) => reg_location(reg)
+          AnyLocation => any_location
+          AnyReg => natural
+          PreservedHome => home
+        }
+        let reserved = if reserved_location.is_register() {
+          SegmentReg(reserved_location.register_unchecked())
+        } else {
+          SegmentSpill
         }
         reserved_registers.push(reserved)
         if tie_slot is Some(slot) &&
           constraint is AnyReg &&
-          reserved is Some(reg) &&
+          reserved is SegmentReg(reg) &&
           tied_locations[slot] is None {
           tied_locations[slot] = Some(reg_location(reg))
         }
-        if reserved is Some(reg) && !used_temps.contains(reg) {
+        if reserved is SegmentReg(reg) && !used_temps.contains(reg) {
           used_temps.push(reg)
         }
       }
@@ -989,10 +1001,10 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
         if phase_mask == 3 &&
           tie_slot is None &&
           (operand.constraint is AnyReg || operand.constraint is AnyLocation) &&
-          reserved_registers[operand_index] is Some(reg) {
+          reserved_registers[operand_index] is SegmentReg(reg) {
           for other_index, other in operands {
             if other.vreg == operand.vreg ||
-              reserved_registers[other_index] != Some(reg) {
+              reserved_registers[other_index] != SegmentReg(reg) {
               continue
             }
             let early_definition = other.timing is Early &&
@@ -1038,49 +1050,51 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
                   natural_locations[operand_index]
                 }
               AnyReg | AnyLocation =>
-                match natural_locations[operand_index].register() {
-                  Some(reg) if !phase_conflict => reg_location(reg)
-                  _ => {
-                    let point = operand_program_point(
-                      block,
-                      instruction_index,
-                      operand.timing,
-                    )
-                    let temporary = match
-                      find_scratch_reg(
+                if natural_locations[operand_index].is_register() &&
+                  !phase_conflict {
+                  reg_location(
+                    natural_locations[operand_index].register_unchecked(),
+                  )
+                } else {
+                  let point = operand_program_point(
+                    block,
+                    instruction_index,
+                    operand.timing,
+                  )
+                  let temporary = match
+                    find_scratch_reg(
+                      environment,
+                      operand.vreg.class,
+                      used_temps,
+                    ) {
+                    Some(reg) => Some(reg)
+                    None => {
+                      let borrowed = borrow_allocatable_register(
+                        plan,
+                        function,
                         environment,
+                        register_home_segments,
+                        resident_by_register,
+                        segments,
+                        borrow_slots,
+                        instruction,
+                        point,
                         operand.vreg.class,
                         used_temps,
-                      ) {
-                      Some(reg) => Some(reg)
-                      None => {
-                        let borrowed = borrow_allocatable_register(
-                          plan,
-                          function,
-                          environment,
-                          register_home_segments,
-                          resident_by_register,
-                          segments,
-                          borrow_slots,
-                          instruction,
-                          point,
-                          operand.vreg.class,
-                          used_temps,
-                        )
-                        if borrowed is Some(reg) {
-                          borrowed_temps.push(reg)
-                        }
-                        borrowed
-                      }
-                    }
-                    guard temporary is Some(reg) else {
-                      raise ScratchRegisterUnavailable(
-                        message="no register for spilled operand",
                       )
+                      if borrowed is Some(reg) {
+                        borrowed_temps.push(reg)
+                      }
+                      borrowed
                     }
-                    used_temps.push(reg)
-                    reg_location(reg)
                   }
+                  guard temporary is Some(reg) else {
+                    raise ScratchRegisterUnavailable(
+                      message="no register for spilled operand",
+                    )
+                  }
+                  used_temps.push(reg)
+                  reg_location(reg)
                 }
             }
         }
@@ -1107,10 +1121,13 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
           if operand.role is Use || operand.role is UseDef {
             match resident_operand_segments[operand_index] {
               Some(segment) => {
-                let register = match selected.register() {
-                  Some(reg) =>
-                    register_indexes.find(environment.allocatable_regs, reg)
-                  None => None
+                let register = if selected.is_register() {
+                  register_indexes.find(
+                    environment.allocatable_regs,
+                    selected.register_unchecked(),
+                  )
+                } else {
+                  None
                 }
                 match register {
                   Some(index) if resident_by_register[index] != segment => {
@@ -1124,9 +1141,12 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
               }
               None => {
                 add_use_transfer(plan, instruction, operand, home, selected)
-                if selected.register() is Some(reg) &&
-                  !borrowed_temps.contains(reg) {
-                  if register_indexes.find(environment.allocatable_regs, reg)
+                if selected.is_register() &&
+                  !borrowed_temps.contains(selected.register_unchecked()) {
+                  if register_indexes.find(
+                      environment.allocatable_regs,
+                      selected.register_unchecked(),
+                    )
                     is Some(index) {
                     resident_by_register[index] = -1
                   }
@@ -1151,14 +1171,20 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
             })
           }
           if resident_operand_segments[operand_index] is Some(segment) &&
-            selected.register() is Some(reg) {
-            if register_indexes.find(environment.allocatable_regs, reg)
+            selected.is_register() {
+            if register_indexes.find(
+                environment.allocatable_regs,
+                selected.register_unchecked(),
+              )
               is Some(index) {
               resident_by_register[index] = segment
             }
-          } else if selected.register() is Some(reg) &&
-            !borrowed_temps.contains(reg) {
-            if register_indexes.find(environment.allocatable_regs, reg)
+          } else if selected.is_register() &&
+            !borrowed_temps.contains(selected.register_unchecked()) {
+            if register_indexes.find(
+                environment.allocatable_regs,
+                selected.register_unchecked(),
+              )
               is Some(index) {
               resident_by_register[index] = -1
             }

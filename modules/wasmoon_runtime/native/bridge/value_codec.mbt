@@ -90,14 +90,14 @@ pub fn slot_to_value(slot : GcSlot, ty : @types.ValueType) -> @types.Value {
         Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
-        StructRef(((raw >> 1) - 1L).to_int())
+        StructRef(decode_heap_ref(raw))
       }
     RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
       if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
-        ArrayRef(((raw >> 1) - 1L).to_int())
+        ArrayRef(decode_heap_ref(raw))
       }
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
       if raw == @wasm_milkir.NULL_REF {
@@ -113,7 +113,7 @@ pub fn slot_to_value(slot : GcSlot, ty : @types.ValueType) -> @types.Value {
       } else if (raw & 1L) != 0L {
         I31((raw >> 1).to_int())
       } else {
-        StructRef(((raw >> 1) - 1L).to_int())
+        StructRef(decode_heap_ref(raw))
       }
     ContRef
     | RefCont
@@ -149,7 +149,7 @@ pub fn slot_to_value(slot : GcSlot, ty : @types.ValueType) -> @types.Value {
         // GC reference (even, non-zero)
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
         // We don't know if struct or array without querying the heap
-        StructRef(((raw >> 1) - 1L).to_int())
+        StructRef(decode_heap_ref(raw))
       }
     NullRef | NullFuncRef | NullExnRef | NullExternRef | RefNone => Null
     V128 => V128(@types.int64_pair_to_v128_le(slot.lo, slot.hi))

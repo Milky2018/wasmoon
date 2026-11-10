@@ -72,3 +72,41 @@ fn rewrite_terminator_values(
     Trap(_) | TrapExit(_) => None
   }
 }
+
+///|
+fn remap_terminator(
+  term : @milkir.Terminator,
+  target : (Int32) -> Int32,
+  value? : (@milkir.Value) -> @milkir.Value,
+) -> @milkir.Terminator {
+  fn operand(v : @milkir.Value) -> @milkir.Value {
+    match value {
+      Some(rewrite) => rewrite(v)
+      None => v
+    }
+  }
+  fn operands(args : Array[@milkir.Value]) -> Array[@milkir.Value] {
+    match value {
+      Some(rewrite) => args.map(rewrite)
+      None => args
+    }
+  }
+  match term {
+    Jump(id, args) => Jump(target(id), operands(args))
+    Branch(condition, yes, aa, no, ba) =>
+      Branch(
+        operand(condition),
+        target(yes),
+        operands(aa),
+        target(no),
+        operands(ba),
+      )
+    Brz(condition, yes, no) => Brz(operand(condition), target(yes), target(no))
+    Brnz(condition, yes, no) =>
+      Brnz(operand(condition), target(yes), target(no))
+    BrTable(index, targets, default_) =>
+      BrTable(operand(index), targets.map(target), target(default_))
+    Return(args) => Return(operands(args))
+    Trap(_) | TrapExit(_) => term
+  }
+}

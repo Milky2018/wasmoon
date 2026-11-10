@@ -3128,6 +3128,10 @@ fn emit_instruction(
       buffer.emit_word(
         encode_int_multiply_add(width, reg(3), reg(0), reg(1), reg(2)),
       )
+    IntMultiplySubtract(width) =>
+      buffer.emit_word(
+        encode_int_multiply_add(width, reg(3), reg(0), reg(1), reg(2)) | 0x8000U,
+      )
     IntShiftRegister(width, operation) =>
       buffer.emit_word(
         encode_shift_register(width, operation, reg(2), reg(0), reg(1)),
@@ -3136,6 +3140,16 @@ fn emit_instruction(
       buffer.emit_word(
         encode_shift_immediate(width, operation, amount, reg(1), reg(0)),
       )
+    IntExtractBits(width, start, field_bits) => {
+      let base = if width == W32 { 0x53000000U } else { 0xD3400000U }
+      buffer.emit_word(
+        base |
+        (start.reinterpret_as_uint() << 16) |
+        ((start + field_bits - 1).reinterpret_as_uint() << 10) |
+        (reg_bits(reg(0)) << 5) |
+        reg_bits(reg(1)),
+      )
+    }
     IntLowBitsShiftLeft(width, field_bits, amount) =>
       buffer.emit_word(
         encode_low_bits_shift_left(width, field_bits, amount, reg(1), reg(0)),
@@ -3143,6 +3157,11 @@ fn emit_instruction(
     IntAddShiftedLeft(width, amount) =>
       buffer.emit_word(
         encode_add_shifted_left(width, amount, reg(2), reg(0), reg(1)),
+      )
+    IntAddShiftedRight(width, amount) =>
+      buffer.emit_word(
+        encode_add_shifted_left(width, amount, reg(2), reg(0), reg(1)) |
+        0x00400000U,
       )
     PopulationCount(width) => {
       let scratch = @vcode.PhysicalReg::new(16, FpVector)
@@ -3871,7 +3890,7 @@ fn emit_single_pass(
   let sites = @vcode.CodeSites::new()
   let unwind : Array[@code_object.UnwindDirective] = []
   emit_prologue(buffer, frame, unwind)
-  let layout = function.layout()
+  let layout = function.emission_layout()
   for block_index, block in layout {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
     // ABI transfer groups borrow this one snapshot; never copy/search the block

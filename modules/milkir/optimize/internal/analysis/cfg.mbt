@@ -11,8 +11,8 @@ pub struct FunctionAnalysis {
 ///|
 pub fn FunctionAnalysis::build(func : @milkir.Function) -> FunctionAnalysis {
   let cfg = @milkir.CFG::build(func)
-  let dominance = cfg.compute_dominance()
-  FunctionAnalysis::from_control_flow(func, cfg, dominance)
+  let (dominance, domtree) = cfg.compute_dominance_and_tree()
+  function_analysis_from_tree(func, cfg, dominance, domtree)
 }
 
 ///|
@@ -23,14 +23,24 @@ pub fn FunctionAnalysis::from_control_flow(
   cfg : @milkir.CFG,
   dominance : @milkir.Dominance,
 ) -> FunctionAnalysis {
+  function_analysis_from_tree(
+    func,
+    cfg,
+    dominance,
+    @milkir.build_dominator_tree(dominance.idom),
+  )
+}
+
+///|
+fn function_analysis_from_tree(
+  func : @milkir.Function,
+  cfg : @milkir.CFG,
+  dominance : @milkir.Dominance,
+  domtree : Array[Array[Int32]],
+) -> FunctionAnalysis {
   let block_idx = Array::make(func.next_block_id, -1)
   for index, block in func.blocks {
     block_idx[block.id] = index
   }
-  {
-    cfg,
-    dominance,
-    domtree: @milkir.build_dominator_tree(dominance.idom),
-    block_idx,
-  }
+  { cfg, dominance, domtree, block_idx, }
 }

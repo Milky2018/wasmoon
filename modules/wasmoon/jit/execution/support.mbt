@@ -1,6 +1,14 @@
 // Store-bound native execution and state binding.
 
 ///|
+fn encode_store_heap_ref(store : @runtime.Store, index : Int32) -> Int64 {
+  match store.native_heap() {
+    Some(heap) => heap.encode_ref_word(index)
+    None => @wasmoon_jit.encode_heap_ref(index)
+  }
+}
+
+///|
 fn encode_extern_value(
   idx : Int32,
   store : @runtime.Store,
@@ -8,7 +16,7 @@ fn encode_extern_value(
   match store.unwrap_extern(ExternRef(idx)) {
     ExternRef(host_idx) => @wasmoon_jit.encode_externref(host_idx)
     I31(value) => @wasmoon_jit.encode_i31(value)
-    StructRef(value) | ArrayRef(value) => @wasmoon_jit.encode_heap_ref(value)
+    StructRef(value) | ArrayRef(value) => encode_store_heap_ref(store, value)
     Null => NULL_REF
     _ => raise TypeMismatch
   }
@@ -422,8 +430,8 @@ fn encode_global_value_for_jit(
     }
     ExternRef(idx) => (encode_extern_value(idx, store), None)
     ExnRef(idx) => (store.encode_native_exception(idx), None)
-    ArrayRef(gc_ref) => (@wasmoon_jit.encode_heap_ref(gc_ref), None)
-    StructRef(gc_ref) => (@wasmoon_jit.encode_heap_ref(gc_ref), None)
+    ArrayRef(gc_ref) => (encode_store_heap_ref(store, gc_ref), None)
+    StructRef(gc_ref) => (encode_store_heap_ref(store, gc_ref), None)
     I31(n) => (@wasmoon_jit.encode_i31(n), None)
     Null => (NULL_REF, None)
     V128(bytes) =>
@@ -836,8 +844,8 @@ fn encode_exception_value_for_jit(
     FuncRef(_) =>
       Some([encode_store_funcref_for_jit(value, store, jit_module, instance)])
     ExternRef(idx) => Some([encode_extern_value(idx, store)])
-    StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
-    ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+    StructRef(idx) => Some([encode_store_heap_ref(store, idx)])
+    ArrayRef(idx) => Some([encode_store_heap_ref(store, idx)])
     I31(n) => Some([@wasmoon_jit.encode_i31(n)])
     ExnRef(idx) => Some([store.encode_native_exception(idx)])
     V128(bytes) =>
@@ -1012,13 +1020,13 @@ fn encode_value(
     StructRef | RefStruct(_) | RefNullStruct(_) | RefStructAbs =>
       match value {
         Null => Some([NULL_REF])
-        StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+        StructRef(idx) => Some([encode_store_heap_ref(store, idx)])
         _ => None
       }
     ArrayRef | RefArray(_) | RefNullArray(_) | RefArrayAbs =>
       match value {
         Null => Some([NULL_REF])
-        ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+        ArrayRef(idx) => Some([encode_store_heap_ref(store, idx)])
         _ => None
       }
     AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
@@ -1026,8 +1034,8 @@ fn encode_value(
         ExternRef(idx) => Some([encode_extern_value(idx, store)])
         Null => Some([NULL_REF])
         I31(n) => Some([@wasmoon_jit.encode_i31(n)])
-        StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
-        ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+        StructRef(idx) => Some([encode_store_heap_ref(store, idx)])
+        ArrayRef(idx) => Some([encode_store_heap_ref(store, idx)])
         _ => None
       }
     RefI31 | RefNullI31 =>

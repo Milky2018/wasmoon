@@ -185,3 +185,17 @@ test "borrow analysis completes a reverse-layout chain before validating uses" {
     }
   }
 }
+
+///|
+test "array element payload preserves its admitted width" {
+  for width in [1, 2, 4, 8] {
+    let b = @milkir.FunctionBuilder("array_payload")
+    let object = b.add_param(Ref)
+    let view = b.emit_ext_inst(Ptr, projection_opcode(ArrayData(0)), [object])
+    let bytes = b.emit_ext_inst(Ptr, projection_opcode(ArrayElements(1)), [view])
+    b.emit_ext_inst(Ptr, projection_opcode(ArrayPayload(width)), [bytes])
+    |> ignore
+    b.return_([])
+    assert_eq(verify_gc_borrows(b.finalize()), width == 1)
+  }
+}

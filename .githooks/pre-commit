@@ -27,4 +27,8 @@ moon check --target native --warn-list +73 --deny-warn
 # sanitizer-covered test file once reached main with a stale manifest
 # because this ran only in CI.
 echo "[pre-commit] script tests"
-python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+# Tests create independent repositories. Keep the hook's Git context out of them.
+(
+  unset $(git rev-parse --local-env-vars)
+  python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+)

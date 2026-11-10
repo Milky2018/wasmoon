@@ -1,4 +1,5 @@
 ///|
+#valtype
 priv enum AllocationBundleState {
   BundlePending
   BundleReg(PhysicalReg)

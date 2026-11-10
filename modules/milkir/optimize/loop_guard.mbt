@@ -147,37 +147,45 @@ fn guard_loop_entry(
 }
 
 ///|
-/// Only the straight-line prefix actually executed on a continuing first
-/// iteration may supply new trapping invariants. Stop before any unmovable
-/// trap, store, call or other observable operation to preserve trap ordering.
+/// The header always executes on an entered edge. The continuing body can
+/// contribute reads only after the cloned entry test. Stop at an unmovable
+/// trap or effect so that the first iteration retains its ordering.
 fn first_iteration_invariants(
   function : @milkir.Function,
   loop_ : @milkir.Loop,
   definitions : Array[Int32],
+  header_only~ : Bool = false,
 ) -> Map[Int32, Bool] {
   let result : Map[Int32, Bool] = Map([])
-  guard loop_.blocks.length() <= 64 &&
+  guard loop_.header != function.blocks[0].id &&
+    loop_.blocks.length() <= 64 &&
     find_unroll_block(function, loop_.header) is Some(header) else {
     return result
   }
-  let next = match header.terminator {
-    Some(Branch(_, a, _, b, _) | Brz(_, a, b) | Brnz(_, a, b)) =>
-      if loop_.contains(a) && !loop_.contains(b) {
-        Some(a)
-      } else if loop_.contains(b) && !loop_.contains(a) {
-        Some(b)
-      } else {
-        None
-      }
-    _ => None
+  let next = if header_only {
+    Some(header.id)
+  } else {
+    match header.terminator {
+      Some(Branch(_, a, _, b, _) | Brz(_, a, b) | Brnz(_, a, b)) =>
+        if loop_.contains(a) && !loop_.contains(b) {
+          Some(a)
+        } else if loop_.contains(b) && !loop_.contains(a) {
+          Some(b)
+        } else {
+          None
+        }
+      _ => None
+    }
   }
-  guard next is Some(first) && first != header.id else { return result }
+  guard next is Some(first) && (header_only || first != header.id) else {
+    return result
+  }
   let invariant : @hashmap.HashMap[Int32, Bool] = HashMap([])
   let memory = LoopMemoryFacts::new(function)
   let visited : Map[Int32, Bool] = Map([])
   let mut current = first
   let mut budget = 256
-  while !visited.contains(current) && current != header.id {
+  while !visited.contains(current) && (header_only || current != header.id) {
     visited[current] = true
     guard find_unroll_block(function, current) is Some(block) else { break }
     for id in function.block_instruction_ids(block) {
@@ -205,6 +213,9 @@ fn first_iteration_invariants(
       } else if opcode_semantics(inst.opcode).must_preserve_if_unused() {
         return result
       }
+    }
+    if header_only {
+      break
     }
     match block.terminator {
       Some(Jump(next, _)) if loop_.contains(next) => current = next

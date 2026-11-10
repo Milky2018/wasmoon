@@ -20,6 +20,7 @@ priv struct FuncEnvironment {
   safepoint_poll_layout : @embedding.SafepointPollLayout?
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
+  global_constants : Array[@milkir.ScalarOp?]
   // Minimum guaranteed memory size in bytes for each memory index
   // Used to eliminate bounds checks for constant addresses within this range
   memory_mins : Array[Int64]
@@ -48,6 +49,7 @@ priv struct FuncEnvironment {
 fn FuncEnvironment::FuncEnvironment(
   embedding_env : @embedding.EmbeddingEnvironment,
   global_types : Array[@types.GlobalType],
+  global_constants~ : Array[@milkir.ScalarOp?] = [],
   memory_mins~ : Array[Int64] = [],
   memory_is_64~ : Array[Bool] = [],
   memory_is_shared~ : Array[Bool] = [],
@@ -77,6 +79,7 @@ fn FuncEnvironment::FuncEnvironment(
       None
     },
     global_types,
+    global_constants,
     memory_mins,
     memory_is_64,
     memory_is_shared,
@@ -130,6 +133,9 @@ fn FuncEnvironment::translate_global_get(
 ) -> Value {
   let global_type = self.global_types[global_idx]
   let ty = type_from_wasm(global_type.value_type)
+  if self.global_constants.get(global_idx) is Some(Some(constant)) {
+    return builder.emit_inst(ty, Scalar(constant), [])
+  }
   let layout = self.runtime_layout
 
   // Load globals_ptr from vmctx

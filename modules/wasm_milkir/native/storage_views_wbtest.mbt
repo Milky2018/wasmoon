@@ -195,3 +195,34 @@ test "loop reference projection gets a reserved struct expansion slot" {
     content="true",
   )
 }
+
+///|
+test "offset projections only cache fixed context loads in read-only loops" {
+  for writes in [false, true] {
+    let b = @milkir.FunctionBuilder("offset_context_load")
+    let context = b.add_param(I64)
+    let replacement = b.add_param(Ref)
+    let again = b.add_param(I32)
+    let header = b.create_block()
+    let exit = b.create_block()
+    b.jump(header, [])
+    b.switch_to_block(header)
+    let table = b.load_ptr(I64, context, b.iconst_i64(8L))
+    let slot = b.load_ptr(I64, table, b.iconst_i64(16L))
+    let zero = b.iconst_i64(0L)
+    if writes {
+      b.store_ptr(Ref, slot, replacement, zero)
+    }
+    let reference = b.load_ptr(Ref, slot, zero)
+    let view = b.emit_ext_inst(Ptr, projection_opcode(StructData(0)), [
+      reference,
+    ])
+    b.branch(again, header, [], exit, [])
+    b.switch_to_block(exit)
+    b.return_([])
+    let function = b.finalize()
+    let projection = function.defining_inst(view).unwrap().id
+    let sites = inline_projection_sites(function, reuse_only=true)
+    assert_eq(sites.eligible.contains(projection), !writes)
+  }
+}

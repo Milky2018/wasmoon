@@ -35,6 +35,14 @@ fn sink_single_use_materializations(func : @milkir.Function) -> OptResult {
     }
   }
 
+  let cfg = @milkir.CFG::build(func)
+  let loop_depths = Array::make(cfg.size, 0)
+  for loop_ in cfg.find_loops() {
+    for block in loop_.blocks {
+      loop_depths[block] += 1
+    }
+  }
+
   for block in func.blocks {
     let rewritten : Array[@milkir.Inst] = []
     fn sink(value : @milkir.Value) -> @milkir.Value {
@@ -43,6 +51,9 @@ fn sink_single_use_materializations(func : @milkir.Function) -> OptResult {
         uses[value.id] != 1 ||
         defining_blocks[value.id] < 0 ||
         defining_blocks[value.id] == block.id ||
+        // Sinking into a loop repeats a materialization that LICM deliberately
+        // moved to a less frequently executed block.
+        loop_depths[block.id] > loop_depths[defining_blocks[value.id]] ||
         !is_cheap_rematerializable_value(func, value) {
         return value
       }

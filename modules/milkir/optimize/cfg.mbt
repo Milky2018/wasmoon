@@ -331,6 +331,38 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
       }
     }
   }
+  // A varying SSA phi is still one identity on an edge. Propagating its
+  // abstract Many state must not prevent removing an alias with identical incoming identities.
+  let identical_sources = Array::make(value_count, -1)
+  for (formal, actual) in propagation_pairs {
+    let previous = identical_sources[formal]
+    identical_sources[formal] = if previous == -1 || previous == actual {
+      actual
+    } else {
+      -2
+    }
+  }
+  let reachable = Array::make(func.next_block_id, false)
+  let loop_exits = Array::make(func.next_block_id, false)
+  if propagation_pairs.any(pair => {
+      state[pair.0] is Some(Many) && identical_sources[pair.0] >= 0
+    }) {
+    let cfg = @milkir.CFG::build(func)
+    for block in cfg.reverse_postorder() {
+      reachable[block] = true
+    }
+    // Guarded LICM and loop cloning use explicit exit arguments for varying
+    // live-outs. Preserve LCSSA when simplifying aliases within a loop body.
+    for loop_ in cfg.find_loops() {
+      for block in loop_.blocks {
+        for target in cfg.get_successors(block) {
+          if !loop_.contains(target) {
+            loop_exits[target] = true
+          }
+        }
+      }
+    }
+  }
   let params_to_keep : Array[Array[Int32]] = []
   let replace_ids : Array[Int32] = Array::make(value_count, -1)
   let mut will_change = false
@@ -342,6 +374,13 @@ fn eliminate_constant_block_params(func : @milkir.Function) -> OptResult {
         match state[v.id] {
           Some(One(replacement_id)) => {
             replace_ids[v.id] = replacement_id
+            will_change = true
+          }
+          Some(Many) if reachable[block.id] &&
+            !loop_exits[block.id] &&
+            identical_sources[v.id] >= 0 &&
+            identical_sources[v.id] != v.id => {
+            replace_ids[v.id] = identical_sources[v.id]
             will_change = true
           }
           _ => keep.push(i)

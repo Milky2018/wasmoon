@@ -56,6 +56,7 @@ pub(all) enum WasmOpcode {
   ContResume(Int, Int, Int, Int)
   ContSwitch(Int, Int)
   SafepointPoll(Int, Int, Int, Int)
+  ExecutableFuncRefEq
 }
 
 ///|
@@ -580,6 +581,16 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_operands: false,
     variadic_results: false,
   },
+  {
+    id: 52,
+    typed_constructor: "ExecutableFuncRefEq",
+    wire_name: "executable_funcref_eq",
+    immediate_kinds: [],
+    operand_types: [ExactType(CallableRef), ExactType(CallableRef)],
+    result_types: [ExactType(I32)],
+    variadic_operands: false,
+    variadic_results: false,
+  },
 ]
 
 ///|
@@ -637,6 +648,7 @@ fn opcode_payload(opcode : WasmOpcode) -> (Int, FixedArray[Int]) {
     ContResume(imm0, imm1, imm2, imm3) => (49, imm([imm0, imm1, imm2, imm3]))
     ContSwitch(imm0, imm1) => (50, imm([imm0, imm1]))
     SafepointPoll(imm0, imm1, imm2, imm3) => (51, imm([imm0, imm1, imm2, imm3]))
+    ExecutableFuncRefEq => (52, imm([]))
   }
 }
 
@@ -698,6 +710,7 @@ fn opcode_from_payload(
     49 => Some(ContResume(imms[0], imms[1], imms[2], imms[3]))
     50 => Some(ContSwitch(imms[0], imms[1]))
     51 => Some(SafepointPoll(imms[0], imms[1], imms[2], imms[3]))
+    52 => Some(ExecutableFuncRefEq)
     _ => None
   }
 }

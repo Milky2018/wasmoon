@@ -82,6 +82,7 @@ priv struct BlockFrame {
 ///|
 /// Immutable public translation context for Wasm-to-MilkIR frontend lowering.
 struct TranslationContext {
+  function_effects : Map[Int32, @wasm_milkir.WasmFunctionEffects]
   func_types : Array[@types.FuncType]
   func_type_indices : Array[Int32]
   num_imports : Int32
@@ -93,6 +94,7 @@ struct TranslationContext {
   memory_page_size_log2 : Array[Int32]
   tables : Array[@types.Table]
   global_types : Array[@types.GlobalType]
+  global_constants : Array[@milkir.ScalarOp?]
   type_rec_groups : Array[Int32]
   func_base : Int32
   import_remap : Array[Int32]
@@ -116,6 +118,7 @@ pub fn TranslationContext::from_module(
   let mut num_imports = 0
   let import_func_type_indices : Array[Int32] = []
   let global_types : Array[@types.GlobalType] = []
+  let global_constants : Array[@milkir.ScalarOp?] = []
   let tags : Array[@types.TagType] = []
   let tables : Array[@types.Table] = []
   let memories : Array[@types.MemoryType] = []
@@ -126,13 +129,29 @@ pub fn TranslationContext::from_module(
         import_func_type_indices.push(type_idx)
       }
       Table(table_type) => tables.push({ type_: table_type, init: None, })
-      Global(global_type) => global_types.push(global_type)
+      Global(global_type) => {
+        global_types.push(global_type)
+        global_constants.push(None)
+      }
       Tag(tag_type_idx) => tags.push({ type_idx: tag_type_idx, })
       Memory(memory) => memories.push(memory)
     }
   }
   for global in mod_.globals {
     global_types.push(global.type_)
+    global_constants.push(
+      if global.type_.mutable {
+        None
+      } else {
+        match global.init {
+          [I32Const(value)] => Some(IntConst(value.to_int64()))
+          [I64Const(value)] => Some(IntConst(value))
+          [F32Const(value)] => Some(FloatConst32(value.reinterpret_as_uint()))
+          [F64Const(value)] => Some(FloatConst64(value.reinterpret_as_uint64()))
+          _ => None
+        }
+      },
+    )
   }
   for tag in mod_.tags {
     tags.push(tag)
@@ -159,6 +178,11 @@ pub fn TranslationContext::from_module(
       }
   }
   {
+    function_effects: if embedding_env.cancellation_safepoints() {
+      Map([])
+    } else {
+      noncollecting_local_functions(mod_, num_imports, func_base)
+    },
     func_types: module_func_type_table(mod_.types),
     func_type_indices: mod_.funcs,
     num_imports,
@@ -170,6 +194,7 @@ pub fn TranslationContext::from_module(
     memory_page_size_log2: memories.map(fn(m) { m.page_size_log2 }),
     tables,
     global_types,
+    global_constants,
     type_rec_groups: mod_.type_rec_groups,
     func_base,
     import_remap,
@@ -255,6 +280,7 @@ fn Translator::Translator(
   memory_page_size_log2~ : Array[Int32] = [],
   tables~ : Array[@types.Table] = [],
   global_types~ : Array[@types.GlobalType] = [],
+  global_constants~ : Array[@milkir.ScalarOp?] = [],
   type_rec_groups~ : Array[Int32] = [],
   func_base~ : Int32 = 0,
   import_remap~ : Array[Int32] = [],
@@ -273,6 +299,7 @@ fn Translator::Translator(
   let func_env = FuncEnvironment::FuncEnvironment(
     embedding_env,
     global_types,
+    global_constants~,
     memory_mins~,
     memory_is_64~,
     memory_is_shared~,
@@ -385,6 +412,7 @@ pub fn translate_function_body(
     memory_page_size_log2=ctx.memory_page_size_log2,
     tables=ctx.tables,
     global_types=ctx.global_types,
+    global_constants=ctx.global_constants,
     type_rec_groups=ctx.type_rec_groups,
     func_base=ctx.func_base,
     import_remap=ctx.import_remap,

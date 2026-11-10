@@ -193,6 +193,14 @@ fn lower_direct_platform_call(
         message="platform calls require a direct external symbol",
       )
   }
+  let operands = builder.materialize_abi_words(
+    block,
+    operands,
+    call.signature.params,
+    ty => Move(ty),
+  ) catch {
+    error => raise BuildFailure(cause=error)
+  }
   let result_registers = platform_result_registers(call.signature.results)
   let inputs = @vcode.call_argument_inputs(
     operands,
@@ -243,6 +251,15 @@ fn lower_internal_call(
       raise UnsupportedAbi(
         message="internal calls require a code symbol or function pointer",
       )
+  }
+  let operands = builder.materialize_abi_words(
+    block,
+    operands,
+    call.signature.params,
+    ty => Move(ty),
+    operand_start=if target is None { 1 } else { 0 },
+  ) catch {
+    error => raise BuildFailure(cause=error)
   }
   let plan = context.internal_abi.call_plan(call.signature) catch {
     error => raise UnsupportedAbi(message=error.to_string())

@@ -36,14 +36,31 @@ fn lower_direct_operation(
     |> ignore
     return []
   }
-  if operation is IntMultiplyAdd {
+  if operation is (IntMultiplyAdd | IntMultiplySubtract) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
     return append_unconstrained_body(
       builder,
       block,
-      IntMultiplyAdd(width),
+      if operation is IntMultiplySubtract {
+        IntMultiplySubtract(width)
+      } else {
+        IntMultiplyAdd(width)
+      },
+      operands,
+      result_types,
+      site.metadata(),
+    )
+  }
+  if operation is IntExtractBits(start, field_bits) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    return append_unconstrained_body(
+      builder,
+      block,
+      IntExtractBits(width, start, field_bits),
       operands,
       result_types,
       site.metadata(),
@@ -62,14 +79,18 @@ fn lower_direct_operation(
       site.metadata(),
     )
   }
-  if operation is IntAddShiftedLeft(amount) {
+  if operation is (IntAddShiftedLeft(amount) | IntAddShiftedRight(amount)) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
     return append_unconstrained_body(
       builder,
       block,
-      IntAddShiftedLeft(width, amount),
+      if operation is IntAddShiftedRight(_) {
+        IntAddShiftedRight(width, amount)
+      } else {
+        IntAddShiftedLeft(width, amount)
+      },
       operands,
       result_types,
       site.metadata(),
@@ -107,6 +128,7 @@ fn lower_direct_operation(
     guard optional_gpr_width(operand_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
+    let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
     if add_sub_immediate_shift(bits) is Some(_) {
       return append_unconstrained_body(
         builder,
@@ -138,6 +160,7 @@ fn lower_direct_operation(
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
     }
+    let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
     // Add/sub wrap at the operand width; negate the constant at that width.
     let negated_bits = if width == W32 {
       (0UL - bits) & 0xFFFFFFFFUL
@@ -978,6 +1001,7 @@ fn DirectLoweringSession::terminate(
         } else {
           W64
         }
+        let bits = if width == W32 { bits & 0xFFFFFFFFUL } else { bits }
         let mut first_target = true_target
         let mut first_arguments = true_arguments
         let mut second_target = false_target
@@ -1068,12 +1092,25 @@ fn DirectLoweringSession::terminate(
         )
       }
       TailCall(call, operands) =>
-        self.terminate_tail_call(
+        self.state.emit_tail_call(
           block,
           call,
           self.state.target_values(operands),
           ordinary_metadata,
-        )
+          ty => Move(ty),
+          is_allocatable,
+          plan => {
+            let target = match call.callee {
+              Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
+              Indirect => TailCallIndirect(call.signature, plan)
+              External(_) => abort("external tail call rejected above")
+            }
+            (target, platform_call_clobbers())
+          },
+        ) catch {
+          UnsupportedAbi(message) => raise UnsupportedAbi(message~)
+          BuildFailure(cause) => raise BuildFailure(cause~)
+        }
       NoReturnCall(call, operands) => {
         let operands = self.state.target_values(operands)
         let call_metadata = direct_source_metadata(
@@ -1149,42 +1186,6 @@ fn DirectLoweringSession::terminate(
 }
 
 ///|
-fn DirectLoweringSession::terminate_tail_call(
-  self : DirectLoweringSession,
-  block : @vcode.Block,
-  call : @native.NativeCall,
-  operands : Array[@vcode.Value],
-  metadata : @vcode.InstructionMetadata,
-) -> Unit raise AArch64LowerError {
-  let (plan, inputs) = self.state.tail_call_inputs(
-    call, operands, is_allocatable,
-  ) catch {
-    UnsupportedAbi(message) => raise UnsupportedAbi(message~)
-    BuildFailure(cause) => raise BuildFailure(cause~)
-  }
-  let target = match call.callee {
-    Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
-    Indirect => TailCallIndirect(call.signature, plan)
-    External(_) => abort("external tail call rejected above")
-  }
-  let metadata = direct_source_metadata(
-    metadata.source,
-    None,
-    metadata.live_gc_roots,
-    call.behavior.semantics(),
-  )
-  set_terminator(
-    self.state.builder,
-    block,
-    target,
-    inputs,
-    [],
-    metadata,
-    clobbers=platform_call_clobbers(),
-  )
-}
-
-///|
 pub fn DirectLoweringSession::sink(
   self : DirectLoweringSession,
 ) -> @lowering.TargetSink {
@@ -1202,6 +1203,24 @@ pub fn DirectLoweringSession::sink(
     },
     fn() { self.state.finish_construction(error => BuildFailure(cause=error)) },
     folds_unsigned_index_into_memory=true,
+    supports_int_binary_immediate=fn(operation, ty, bits) {
+      guard optional_gpr_width(Some(ty)) is Some(width) else { return false }
+      match operation {
+        Mul => bits > 0UL && (bits & (bits - 1UL)) == 0UL
+        UnsignedRem => bits > 1UL && (bits & (bits - 1UL)) == 0UL
+        _ => {
+          guard lower_binary(operation) is Some(binary) else { return false }
+          let negated = if width == W32 {
+            (0UL - bits) & 0xFFFFFFFFUL
+          } else {
+            0UL - bits
+          }
+          valid_int_binary_immediate(width, binary, bits) ||
+          (binary == Add && valid_int_binary_immediate(width, Sub, negated)) ||
+          (binary == Sub && valid_int_binary_immediate(width, Add, negated))
+        }
+      }
+    },
     supports_int_compare_immediate=fn(ty, bits) {
       (ty == I32 || ty == I64) && add_sub_immediate_shift(bits) is Some(_)
     },

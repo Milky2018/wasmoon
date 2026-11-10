@@ -340,3 +340,17 @@ test "production bundle plan rejects incompatible range contracts" {
     ),
   )
 }
+
+///|
+test "segment spill costs do not wrap for deeply nested hot uses" {
+  let range = LiveRange::LiveRange(0, { id: 0, class: Int, })
+  let fragment = ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2))
+  range.add_range(fragment)
+  for point in 0..<3 {
+    range.add_use(UsePosition(ProgramPoint(0, point), LiveUse, AnyReg))
+  }
+  let ranges = LiveRangeSet::LiveRangeSet([0])
+  ranges.add_range(range)
+  let metadata = segment_metadata(range, fragment, [10], ranges, [])
+  assert_eq(metadata.weight, 1048577000)
+}

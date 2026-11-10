@@ -10,15 +10,23 @@ pub fn canonicalize_nans(@milkir.Function) -> Unit
 
 pub fn clear_optimization_metrics_sink() -> Unit
 
+pub fn clone_region(@milkir.Function, Array[@milkir.Block], replace_instruction? : (@milkir.Inst) -> (@milkir.Opcode, Array[@milkir.Value])?, select_terminator? : (@milkir.Block) -> @milkir.Terminator, redirect? : (Int32) -> Int32?) -> Map[Int32, @milkir.Block]
+
 pub fn hoist_loop_invariants(@milkir.Function, guard_entries? : Bool) -> OptResult
 
 pub fn install_optimization_metrics_sink(OptimizationMetricsSink) -> Unit
 
 pub fn instruction_count(@milkir.Function) -> Int32
 
+pub fn localize_loop_materializations(@milkir.Function) -> OptResult
+
 pub fn optimize(@milkir.Function) -> OptResult
 
 pub fn optimize_with_level(@milkir.Function, OptLevel) -> OptResult
+
+pub fn predicate_counted_loop_bounds(@milkir.Function) -> OptResult
+
+pub fn unroll_dynamic_memory_loop(@milkir.Function) -> OptResult
 
 // Errors
 

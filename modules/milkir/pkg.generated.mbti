@@ -114,6 +114,7 @@ pub struct CFG {
 pub fn CFG::analyze_loops(Self) -> (Dominance, Array[Loop])
 pub fn CFG::build(Function) -> Self
 pub fn CFG::compute_dominance(Self) -> Dominance
+pub fn CFG::compute_dominance_and_tree(Self) -> (Dominance, Array[Array[Int32]])
 pub fn CFG::compute_dominators(Self) -> Array[Int32]
 pub fn CFG::dominates(Self, Int32, Int32) -> Bool
 pub fn CFG::find_back_edges(Self) -> Array[(Int32, Int32)]
@@ -188,8 +189,9 @@ pub struct ExtOp {
   opcode : String
   immediates : FixedArray[Int32]
   effects : ExtensionEffects?
+  reads_address_epoch : Bool
 }
-pub fn ExtOp::ExtOp(String, String, FixedArray[Int32], effects? : ExtensionEffects?) -> Self
+pub fn ExtOp::ExtOp(String, String, FixedArray[Int32], effects? : ExtensionEffects?, reads_address_epoch? : Bool) -> Self
 pub fn ExtOp::equal(Self, Self) -> Bool
 pub fn ExtOp::hash(Self) -> Int32
 pub fn ExtOp::hash_combine(Self, Hasher) -> Unit

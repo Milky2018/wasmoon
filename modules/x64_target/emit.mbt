@@ -4199,7 +4199,7 @@ fn emit_verified(
   let sites = @vcode.CodeSites::new()
   let unwind : Array[@code_object.UnwindDirective] = []
   emit_prologue(buffer, frame, unwind)
-  let layout = function.layout()
+  let layout = function.emission_layout()
   for block_index, block in layout {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
     // ABI transfer groups borrow this one snapshot; never copy/search the block

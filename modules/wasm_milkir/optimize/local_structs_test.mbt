@@ -11,6 +11,10 @@ fn local_struct_context() -> @wasm_milkir.WasmValidationContext {
         Some(
           Struct([{ storage: Value(I64), mutable_: true, defaultable: true, }]),
         )
+      } else if index == 2 {
+        Some(
+          Struct([{ storage: Value(Ref), mutable_: true, defaultable: true, }]),
+        )
       } else {
         None
       }
@@ -38,6 +42,54 @@ fn remaining_struct_accesses(function : @milkir.Function) -> Int32 {
     }
   }
   count
+}
+
+///|
+test "loop field forwarding retains observable stores and aliased writes" {
+  for aliasing in [false, true] {
+    let b = @milkir.FunctionBuilder::FunctionBuilder("loop_field")
+    b.add_param(I64) |> ignore
+    let object = b.add_param(Ref)
+    let other = b.add_param(Ref)
+    b.add_result(I32)
+    let header = b.create_block()
+    let body = b.create_block()
+    let exit = b.create_block()
+    b.jump(header, [])
+    b.switch_to_block(header)
+    let current = @wasm_milkir.struct_get(b, 0, 0, object, I32)
+    b.brnz(current, body, exit)
+    b.switch_to_block(body)
+    let next = b.isub(current, b.iconst_i32(1))
+    @wasm_milkir.struct_set(b, 0, 0, object, next)
+    if aliasing {
+      @wasm_milkir.struct_set(b, 0, 0, other, b.iconst_i32(0))
+    }
+    b.jump(header, [])
+    b.switch_to_block(exit)
+    b.return_([current])
+    let function = b.get_function()
+    @optimize.optimize_with_level(function, local_struct_context(), O2)
+    |> ignore
+    let mut read_in_loop = false
+    for loop_ in @milkir.CFG::build(function).find_loops() {
+      for block in function.blocks {
+        if loop_.contains(block.id) {
+          for id in function.block_instruction_ids(block) {
+            if @wasm_milkir.decode_opcode(
+                function.instruction_by_id(id).unwrap().opcode,
+              )
+              is Some(StructGet(_, _)) {
+              read_in_loop = true
+            }
+          }
+        }
+      }
+    }
+    assert_eq(read_in_loop, aliasing)
+    assert_eq(remaining_struct_accesses(function), if aliasing { 3 } else { 2 })
+    @wasm_milkir.verify_function_with_context(function, local_struct_context())
+  }
 }
 
 ///|
@@ -205,4 +257,42 @@ test "conditional loop boxes promote with initialization at each allocation" {
   assert_eq(remaining_struct_accesses(function), 0)
   assert_true(function.print().contains("struct_new"))
   @wasm_milkir.verify_function_with_context(function, local_struct_context())
+}
+
+///|
+test "private reference fields remain SSA roots across calls and loop backedges" {
+  let b = @milkir.FunctionBuilder("private_reference")
+  let limit = b.add_param(I32)
+  let first = b.add_param(Ref)
+  let second = b.add_param(Ref)
+  b.add_result(Ref)
+  let object = @wasm_milkir.struct_new(b, 2, [first])
+  let header = b.create_block()
+  let index = b.add_block_param(header, I32)
+  let body = b.create_block()
+  let exit = b.create_block()
+  b.jump(header, [b.iconst_i32(0)])
+  b.switch_to_block(header)
+  let read = @wasm_milkir.struct_get(b, 2, 0, object, Ref)
+  let callee = b
+    .get_function()
+    .declare_external_symbol("collect_without_box_alias")
+  b.call_symbol(callee, None, [read]) |> ignore
+  b.branch(b.icmp_slt(index, limit), body, [], exit, [])
+  b.switch_to_block(body)
+  @wasm_milkir.struct_set(b, 2, 0, object, second)
+  b.jump(header, [b.iadd(index, b.iconst_i32(1))])
+  b.switch_to_block(exit)
+  b.return_([read])
+  let function = b.finalize()
+  let context = local_struct_context()
+  @optimize.optimize_with_level(function, context, O2) |> ignore
+  assert_eq(remaining_struct_accesses(function), 0)
+  assert_true(function.print().contains("struct_new"))
+  assert_true(
+    function.blocks.any(block => {
+      block.params.any(parameter => parameter.1 == Ref)
+    }),
+  )
+  @wasm_milkir.verify_function_with_context(function, context)
 }

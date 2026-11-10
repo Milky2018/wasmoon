@@ -91,3 +91,28 @@ test "O2 keeps repeated cheap address recipes local" {
   )
   func.verify()
 }
+
+///|
+test "materialization sinking preserves a loop invariant" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("loop_materialization")
+  let bound = builder.add_param(I32)
+  builder.add_result(I32)
+  let initial = builder.iconst_i32(0)
+  let factor = builder.iconst_i32(10)
+  let header = builder.create_block()
+  let body = builder.create_block()
+  let exit = builder.create_block()
+  let induction = builder.add_block_param(header, I32)
+  builder.jump(header, [initial])
+  builder.switch_to_block(header)
+  let condition = builder.icmp(Slt, induction, bound)
+  builder.brnz(condition, body, exit)
+  builder.switch_to_block(body)
+  let product = builder.imul(induction, factor)
+  builder.jump(header, [product])
+  builder.switch_to_block(exit)
+  builder.return_([induction])
+  let func = builder.get_function()
+  inspect(sink_single_use_materializations(func).changed, content="false")
+  func.verify()
+}

@@ -1,4 +1,18 @@
 ///|
+/// Proven local call effects under an embedding with entry/loop polls disabled.
+#derive(Eq, Debug)
+pub(all) enum WasmFunctionEffects {
+  NonCollectingReadOnly
+  NonCollectingReadWrite
+}
+
+///|
+pub extend WasmFunctionEffects with Eq::{equal, not_equal}
+
+///|
+pub extend WasmFunctionEffects with Debug::{to_repr}
+
+///|
 /// The lowered MilkIR carrier contract for a WebAssembly function type.
 #derive(Eq, Debug)
 pub(all) struct WasmFunctionContract {
@@ -51,6 +65,8 @@ pub(all) struct WasmTableContract {
 struct WasmValidationContext {
   function_contract : (Int32) -> WasmFunctionContract?
   final_types : Map[Int32, Bool]
+  function_types : Map[Int32, Int32]
+  function_effects : Map[Int32, WasmFunctionEffects]
   defined_type_contract : (Int32) -> WasmDefinedTypeContract?
   table_contract : (Int32) -> WasmTableContract?
   tag_contract : (Int32) -> WasmFunctionContract?
@@ -76,14 +92,24 @@ pub(all) struct WasmValidationResolvers {
 pub fn WasmValidationContext::new(
   resolvers : WasmValidationResolvers,
   final_types~ : Array[Int32] = [],
+  function_types~ : Map[Int32, Int32] = Map([]),
+  function_effects~ : Map[Int32, WasmFunctionEffects] = Map([]),
 ) -> WasmValidationContext {
   let finality : Map[Int32, Bool] = Map([])
   for index in final_types {
     finality[index] = true
   }
+  let known_effects : Map[Int32, WasmFunctionEffects] = Map([])
+  for index, effects in function_effects {
+    if index >= 0 && function_types.contains(index) {
+      known_effects[index] = effects
+    }
+  }
   {
+    function_effects: known_effects,
     function_contract: resolvers.function_contract,
     final_types: finality,
+    function_types: function_types.copy(),
     defined_type_contract: resolvers.defined_type_contract,
     table_contract: resolvers.table_contract,
     tag_contract: resolvers.tag_contract,
@@ -91,6 +117,35 @@ pub fn WasmValidationContext::new(
     data_segment_exists: resolvers.data_segment_exists,
     element_segment_type: resolvers.element_segment_type,
   }
+}
+
+///|
+/// An embedding proof for a defined direct callee with no collection, reentry
+/// or suspension. Missing proofs preserve the conservative call protocol.
+pub fn WasmValidationContext::function_is_noncollecting(
+  self : WasmValidationContext,
+  index : Int32,
+) -> Bool {
+  self.function_effects.contains(index)
+}
+
+///|
+/// Read-only proofs additionally exclude writes to globals and GC payloads.
+pub fn WasmValidationContext::function_is_readonly(
+  self : WasmValidationContext,
+  index : Int32,
+) -> Bool {
+  self.function_effects.get(index) == Some(NonCollectingReadOnly)
+}
+
+///|
+/// Exact module-local type identity for a linked defined function.
+pub fn WasmValidationContext::function_has_type_index(
+  self : WasmValidationContext,
+  function_index : Int32,
+  type_index : Int32,
+) -> Bool {
+  self.function_types.get(function_index) == Some(type_index)
 }
 
 ///|
@@ -793,6 +848,7 @@ pub fn WasmValidationContext::validate_extension(
           "unknown linked function index \{function_index}",
         )
       }
+    ExecutableFuncRefEq => None
     StructNew(type_index) =>
       validate_struct_new("struct_new", view, self, type_index, false)
     StructNewDefault(type_index) =>

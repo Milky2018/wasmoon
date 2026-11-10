@@ -1060,3 +1060,67 @@ test "CSE reuses an identical dominating load without speculating its first trap
     ),
   )
 }
+
+///|
+test "single edge forwarding preserves the identity of a varying loop phi" {
+  let b = @milkir.FunctionBuilder("varying_forwarded_phi")
+  let bound = b.add_param(I32)
+  b.add_result(I32)
+  let header = b.create_block()
+  let body = b.create_block()
+  let exit = b.create_block()
+  let index = b.add_block_param(header, I32)
+  let forwarded = b.add_block_param(body, I32)
+  let returned = b.add_block_param(exit, I32)
+  b.jump(header, [b.iconst_i32(0)])
+  b.switch_to_block(header)
+  b.branch(b.icmp_slt(index, bound), body, [index], exit, [index])
+  b.switch_to_block(body)
+  b.jump(header, [b.iadd(forwarded, b.iconst_i32(1))])
+  b.switch_to_block(exit)
+  b.return_([returned])
+  let function = b.finalize()
+  function.verify()
+  assert_true(eliminate_constant_block_params(function).changed)
+  function.verify()
+  assert_eq(header.params.length(), 1)
+  assert_eq(body.params.length(), 0)
+  // Varying exit arguments remain explicit for guarded loop transformations.
+  assert_eq(exit.params.length(), 1)
+}
+
+///|
+test "identical incoming identities bypass varying phi abstract states" {
+  let b = @milkir.FunctionBuilder("identical_varying_edges")
+  let bound = b.add_param(I32)
+  let choose = b.add_param(I32)
+  b.add_result(I32)
+  let header = b.create_block()
+  let index = b.add_block_param(header, I32)
+  let split = b.create_block()
+  let left = b.create_block()
+  let right = b.create_block()
+  let merge = b.create_block()
+  let forwarded = b.add_block_param(merge, I32)
+  let exit = b.create_block()
+  let returned = b.add_block_param(exit, I32)
+  b.jump(header, [b.iconst_i32(0)])
+  b.switch_to_block(header)
+  b.branch(b.icmp_slt(index, bound), split, [], exit, [index])
+  b.switch_to_block(split)
+  b.branch(choose, left, [], right, [])
+  b.switch_to_block(left)
+  b.jump(merge, [index])
+  b.switch_to_block(right)
+  b.jump(merge, [index])
+  b.switch_to_block(merge)
+  b.jump(header, [b.iadd(forwarded, b.iconst_i32(1))])
+  b.switch_to_block(exit)
+  b.return_([returned])
+  let function = b.finalize()
+  eliminate_constant_block_params(function) |> ignore
+  function.verify()
+  assert_eq(merge.params.length(), 0)
+  assert_eq(header.params.length(), 1)
+  assert_eq(exit.params.length(), 1)
+}

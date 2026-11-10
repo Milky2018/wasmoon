@@ -28,6 +28,7 @@ dev_build(
 )
 
 import {
+  "Milky2018/wasm_component/validator" @component_validator,
   "moonbitlang/x/fs",
   "moonbitlang/core/env",
 } for "test"

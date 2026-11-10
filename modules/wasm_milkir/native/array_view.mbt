@@ -68,17 +68,26 @@ fn inline_cached_array_projection(
   context.switch_to_block(matched)
   context.jump(ready, [heap_load(context, entry, layout.view_payload, Ptr64)])
   context.switch_to_block(slow)
-  let result = context.emit_call_without_roots(
-      @native_types.NativeCall::new(
-        External((environment.runtime_symbol)(GcArrayDataHeap)),
-        @native_types.Signature::new([Ptr64, GcRef64, I32], [Ptr64]),
-        Platform,
-        @native_types.CallBehavior::new(Read, false, false, false, false),
-      ),
-      [heap, context.operands()[0], i32_immediate(context, 0)],
-      [Ptr64],
-    )[0]
+  let result = emit_array_data(context, environment, heap)
   context.jump(ready, [result])
   context.switch_to_block(ready)
   context.forward_results(context.block_parameters(ready))
+}
+
+///|
+fn emit_array_data(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  heap : @lowering.Value,
+) -> @lowering.Value {
+  context.emit_call_without_roots(
+    @native_types.NativeCall::new(
+      External((environment.runtime_symbol)(GcArrayDataHeap)),
+      @native_types.Signature::new([Ptr64, GcRef64, I32], [Ptr64]),
+      Platform,
+      @native_types.CallBehavior::new(Read, false, false, false, false),
+    ),
+    [heap, context.operands()[0], i32_immediate(context, 0)],
+    [Ptr64],
+  )[0]
 }

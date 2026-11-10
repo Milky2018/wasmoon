@@ -9,10 +9,6 @@
 
 // ============ Value Decoding Helpers ============
 
-static inline int32_t decode_heap_ref(int64_t val) {
-    return (int32_t)(val >> 1);
-}
-
 static inline jit_context_t *resolve_ctx(jit_context_t *ctx) {
     if (ctx) return ctx;
     return get_current_jit_context_fast();
@@ -164,12 +160,15 @@ static int64_t gc_finish_allocation(const gc_allocation_request_t *request,
     if (operation) gc_log_alloc_retry(operation, &request->result);
     if (request->ctx) {
         GcHeap *heap = request->heap;
-        ctx_set_gc_heap(request->ctx, heap);
+        if (ctx_gc_heap(request->ctx) != heap) {
+            ctx_clear_gc_offset_struct_bindings(request->ctx);
+            ctx_set_gc_heap(request->ctx, heap);
+        }
         ctx_set_gc_heap_ptr(request->ctx, heap->data + heap->size);
         ctx_set_gc_heap_limit(request->ctx, gc_heap_allocation_limit(heap));
     }
     // The encoded 1-based reference cannot collide with null.
-    return (int64_t)ref << 1;
+    return gc_heap_ref_word(request->heap, ref);
 }
 
 static int32_t gc_struct_field_count(jit_context_t *ctx, int32_t type_idx,
@@ -268,8 +267,8 @@ void WASMOON_GUEST_ABI gc_array_fill_impl(int64_t ref, int32_t offset, int64_t v
         return;
     }
 
-    // Decode: gc_ref = ref >> 1 (1-based)
-    int32_t gc_ref = decode_heap_ref(ref);
+    // Decode the 1-based object identity.
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
 
     // Bounds check
     int32_t len = gc_access_array_len(heap, gc_ref);
@@ -306,9 +305,9 @@ void WASMOON_GUEST_ABI gc_array_copy_impl(
         return;
     }
 
-    // Decode: gc_ref = ref >> 1 (1-based)
-    int32_t dst_gc_ref = decode_heap_ref(dst_ref);
-    int32_t src_gc_ref = decode_heap_ref(src_ref);
+    // Decode the 1-based object identity.
+    int32_t dst_gc_ref = gc_heap_ref_id(heap, dst_ref);
+    int32_t src_gc_ref = gc_heap_ref_id(heap, src_ref);
 
     // Bounds check
     int32_t dst_len = gc_heap_array_len(heap, dst_gc_ref);
@@ -347,25 +346,30 @@ int64_t WASMOON_GUEST_ABI gc_reserve_struct_fast_impl(jit_context_t *ctx,
     if (!layout || layout->kind != GC_KIND_STRUCT || layout->count != count ||
         total_size != ((GC_HEADER_SIZE + layout->size + 15) & -16)) return 0;
     if (layout->prefix_shape != shape) return 0;
-    if (heap->size >= heap->collection_limit || total_size < 16 ||
-        heap->size > (size_t)INT32_MAX - (size_t)total_size ||
-        heap->size + (size_t)total_size > heap->capacity || heap->object_count == INT32_MAX ||
-        heap->live_count >= heap->live_capacity) return 0;
-    int32_t page_index = heap->object_count >> GC_ID_PAGE_BITS;
-    if (page_index >= heap->identity_page_capacity || !heap->identity_pages[page_index]) return 0;
-    // No allocation/retry occurs after admission. Denial leaves reservations
-    // unchanged and the checked slow path reports the established quota error.
-    if (!gc_heap_admit(heap, (size_t)total_size)) return 0;
-    (void)gc_should_fail_allocation(); // Enabled above excludes injected failure.
-    int32_t offset = (int32_t)heap->size;
-    heap->size += (size_t)total_size;
-    int32_t ref = gc_heap_register_object(heap, offset);
-    gc_heap_set_runtime_type(heap, ref, identity);
+    if (heap->size >= heap->collection_limit || total_size < 16) return 0;
+    int32_t offset = gc_heap_reserve_prepared_storage(heap, (size_t)total_size);
+    int32_t ref;
+    if (offset >= 0) {
+        ref = gc_heap_publish_object(heap, offset, identity);
+    } else {
+        if (heap->size > (size_t)INT32_MAX - (size_t)total_size ||
+            heap->size + (size_t)total_size > heap->capacity || heap->object_count == INT32_MAX ||
+            heap->live_count >= heap->live_capacity) return 0;
+        int32_t page_index = heap->object_count >> GC_ID_PAGE_BITS;
+        if (page_index >= heap->identity_page_capacity || !heap->identity_pages[page_index]) return 0;
+        // Denial leaves reservations unchanged for the established slow path.
+        if (!gc_heap_admit(heap, (size_t)total_size)) return 0;
+        (void)gc_should_fail_allocation();
+        offset = (int32_t)heap->size;
+        heap->size += (size_t)total_size;
+        ref = gc_heap_register_object(heap, offset);
+        gc_heap_set_runtime_type(heap, ref, identity);
+    }
     ticket[0] = (int64_t)(uintptr_t)(heap->data + offset);
     ticket[1] = (int64_t)(((uint64_t)(identity + 1) << 32) | (uint32_t)count);
     ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
     ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
-    return (int64_t)ref << 1;
+    return gc_heap_ref_word(heap, ref);
 }
 
 // Register a struct that was allocated inline by JIT code
@@ -392,7 +396,7 @@ int64_t WASMOON_GUEST_ABI gc_register_struct_inline(jit_context_t *ctx, uint8_t 
     heap->size = (size_t)(ctx_gc_heap_ptr(actual_ctx) - heap->data);
 
     // Encode: gc_ref << 1
-    return ((int64_t)gc_ref) << 1;
+    return gc_heap_ref_word(heap, gc_ref);
 }
 
 // Slow path for struct allocation - called when inline check fails
@@ -468,7 +472,7 @@ static int64_t try_array(jit_context_t *ctx, int32_t type, int32_t len, GcSlot i
     if (!ref) return 0;
     ctx_set_gc_heap_ptr(ctx, heap->data + heap->size);
     ctx_set_gc_heap_limit(ctx, gc_heap_allocation_limit(heap));
-    return (int64_t)ref << 1;
+    return gc_heap_ref_word(heap, ref);
 }
 
 int64_t WASMOON_GUEST_ABI gc_try_array_impl(jit_context_t *ctx, int32_t type,
@@ -605,7 +609,7 @@ void WASMOON_GUEST_ABI gc_struct_get_v128_impl(int64_t ref, int32_t type_idx, in
         return;
     }
 
-    int32_t gc_ref = decode_heap_ref(ref);
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
     *out = gc_heap_struct_get_wide(heap, gc_ref, field_idx);
 }
 
@@ -620,7 +624,7 @@ void WASMOON_GUEST_ABI gc_struct_set_v128_impl(int64_t ref, int32_t type_idx, in
         return;
     }
 
-    int32_t gc_ref = decode_heap_ref(ref);
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
     gc_heap_struct_set_wide(heap, gc_ref, field_idx,
                             *(const GcSlot *)(uintptr_t)value_ptr);
 }
@@ -637,7 +641,7 @@ void WASMOON_GUEST_ABI gc_array_get_v128_impl(int64_t ref, int32_t type_idx, int
         return;
     }
 
-    GcArrayElement element = gc_trapping_array_element(heap, decode_heap_ref(ref), idx);
+    GcArrayElement element = gc_trapping_array_element(heap, gc_heap_ref_id(heap, ref), idx);
     if (element.address) *out = gc_access_layout_read(element.address, element.field);
 }
 
@@ -652,7 +656,7 @@ void WASMOON_GUEST_ABI gc_array_set_v128_impl(int64_t ref, int32_t type_idx, int
         return;
     }
 
-    int32_t gc_ref = decode_heap_ref(ref);
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
     GcArrayElement element = gc_trapping_array_element(heap, gc_ref, idx);
     if (element.address) {
         gc_access_array_write(heap, gc_ref, idx, element, *(const GcSlot *)(uintptr_t)value_ptr);
@@ -674,7 +678,7 @@ void WASMOON_GUEST_ABI gc_array_fill_v128_impl(int64_t ref, int32_t offset, int6
         return;
     }
 
-    int32_t gc_ref = decode_heap_ref(ref);
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
     int32_t len = gc_access_array_len(heap, gc_ref);
     if (offset < 0 || count < 0 || (int64_t)offset + count > len) {
         g_trap_code = WASMOON_TRAP_ARRAY_BOUNDS;
@@ -777,8 +781,8 @@ int64_t WASMOON_GUEST_ABI gc_struct_get_heap_impl(GcHeap *heap, int64_t ref, int
         return jit_trap_result(WASMOON_TRAP_NULL_REFERENCE);
     }
 
-    // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
-    int32_t gc_ref = decode_heap_ref(ref);
+    // Decode the 1-based object identity.
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
     return gc_access_struct_get(heap, gc_ref, field_idx).lo;
 }
 
@@ -795,8 +799,8 @@ void WASMOON_GUEST_ABI gc_struct_set_heap_impl(GcHeap *heap, int64_t ref, int32_
         return;
     }
 
-    // Decode ref: encoded as gc_ref << 1 (1-based gc_ref)
-    int32_t gc_ref = decode_heap_ref(ref);
+    // Decode the 1-based object identity.
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
     gc_access_struct_set(heap, gc_ref, field_idx, (GcSlot){value, 0});
 }
 
@@ -813,13 +817,16 @@ _Static_assert(GC_ARRAY_DATA_OFFSET == 16, "numeric array view ABI");
 // at offset zero and elements at offset 16. A zero result selects the existing
 // checked accessor (including verification).
 void* WASMOON_GUEST_ABI gc_array_data_heap_impl(GcHeap *heap, int64_t ref, int32_t width) {
-    if (!heap || !ref || ref < 0 || ref > (int64_t)INT32_MAX * 2 || (ref & 1)) return NULL;
-    if (gc_verify_env_cached != 0) return NULL;
+    if (!heap || !ref || gc_verify_env_cached != 0) return NULL;
     GcArrayViewCache *cached = gc_array_view_entry(heap, ref);
     if (cached->reference != ref) {
-        GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
+        if (!gc_heap_ref_id(heap, ref)) return NULL;
+        GcHeader *header = gc_access_offset_header(heap, ref);
+        if (!header) header = gc_access_object_header(heap, gc_heap_ref_id(heap, ref));
         if (!header || header->kind != GC_KIND_ARRAY) return NULL;
-        int32_t compact_width = gc_access_compact_array_width(gc_object_layout(heap, header));
+        int32_t compact_width = header->flags >= 1 && header->flags <= 4
+            ? 1 << (header->flags - 1)
+            : gc_access_compact_array_width(gc_object_layout(heap, header));
         *cached = (GcArrayViewCache){ref, gc_access_array_view(header + 1, compact_width), compact_width};
     }
     if (width == 0) return (void *)cached->view;
@@ -852,7 +859,7 @@ static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t r
         ctx = resolve_ctx(ctx);
         heap = resolve_heap(ctx);
     }
-    if (!heap || ref < 0 || ref > (int64_t)INT32_MAX * 2 || (ref & 1) || fields < 0 || fields > 16) {
+    if (!heap || !gc_heap_ref_id(heap, ref) || fields < 0 || fields > 16) {
         jit_trap_result(WASMOON_TRAP_UNREACHABLE); return NULL;
     }
     int32_t target = ctx && ctx_runtime(ctx)->callable_local_types && type_idx >= 0 &&
@@ -863,12 +870,13 @@ static void* WASMOON_GUEST_ABI gc_struct_data_slow(jit_context_t *ctx, int64_t r
         cached->reference == ref && gc_struct_view_has_prefix(cached, shape, fields) &&
         (cached->identity == target ||
          callable_subtype_registered(ctx_runtime(ctx), cached->identity, type_idx))) return cached->payload;
-    GcHeader *header = gc_access_object_header(heap, decode_heap_ref(ref));
+    GcHeader *header = gc_access_offset_header(heap, ref);
+    if (!header) header = gc_access_object_header(heap, gc_heap_ref_id(heap, ref));
     if (!header || header->kind != GC_KIND_STRUCT || (uint32_t)header->reserved < (uint32_t)fields) {
         jit_trap_result(WASMOON_TRAP_UNREACHABLE); return NULL;
     }
     int32_t identity = (int32_t)(header->reserved >> 32) - 1;
-    int32_t actual = gc_heap_runtime_type(heap, decode_heap_ref(ref));
+    int32_t actual = gc_heap_runtime_type(heap, gc_heap_ref_id(heap, ref));
     int exact = identity >= 0 && identity == target;
     if (!exact) {
         // The live struct and concrete target are already checked above. Use
@@ -921,6 +929,23 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
                     if (target >= 0 && cached->identity == target) return cached->payload;
                 }
             }
+            jit_runtime_state_t *runtime = ctx_runtime(ctx);
+            if (runtime->gc_offset_struct_bindings && type_idx >= 0 &&
+                type_idx < runtime->callable_local_type_count && fields >= 0 && fields <= 16) {
+                const gc_offset_struct_binding_t *binding = &runtime->gc_offset_struct_bindings[type_idx];
+                GcHeader *header = gc_access_offset_header(heap, ref);
+                if (header && header->kind == GC_KIND_STRUCT &&
+                    header->flags == GC_OFFSET_STRUCT_LAYOUT &&
+                    header->reserved == binding->header &&
+                    (uint32_t)binding->header == (uint32_t)fields &&
+                    binding->prefix_shape == shape) {
+                    void *payload = header + 1;
+                    int32_t identity = (int32_t)(binding->header >> 32) - 1;
+                    if (gc_heap_runtime_type(heap, (int32_t)((uint32_t)ref >> 1)) == identity)
+                        *cached = (GcStructViewCache){ref, identity, fields, shape, payload};
+                    return payload;
+                }
+            }
         }
     }
     return gc_struct_data_slow(ctx, ref, type_idx, shape, fields, heap);
@@ -929,14 +954,14 @@ void* WASMOON_GUEST_ABI gc_struct_data_impl(jit_context_t *ctx, int64_t ref, int
 int64_t WASMOON_GUEST_ABI gc_array_get_heap_impl(GcHeap *heap, int64_t ref, int32_t idx) {
     if (!heap) { return jit_trap_result(WASMOON_TRAP_UNREACHABLE); }
     if (!ref) { return jit_trap_result(WASMOON_TRAP_NULL_REFERENCE); }
-    GcArrayElement element = gc_trapping_array_element(heap, decode_heap_ref(ref), idx);
+    GcArrayElement element = gc_trapping_array_element(heap, gc_heap_ref_id(heap, ref), idx);
     return element.address ? gc_access_layout_read(element.address, element.field).lo : 0;
 }
 
 void WASMOON_GUEST_ABI gc_array_set_heap_impl(GcHeap *heap, int64_t ref, int32_t idx, int64_t value) {
     if (!heap) { jit_trap_result(WASMOON_TRAP_UNREACHABLE); return; }
     if (!ref) { jit_trap_result(WASMOON_TRAP_NULL_REFERENCE); return; }
-    int32_t gc_ref = decode_heap_ref(ref);
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
     GcArrayElement element = gc_trapping_array_element(heap, gc_ref, idx);
     if (element.address) gc_access_array_write(heap, gc_ref, idx, element, (GcSlot){value, 0});
 }
@@ -952,8 +977,8 @@ int32_t WASMOON_GUEST_ABI gc_array_len_heap_impl(GcHeap *heap, int64_t ref) {
         return 0;
     }
 
-    // Decode: gc_ref = ref >> 1 (1-based)
-    int32_t gc_ref = decode_heap_ref(ref);
+    // Decode the 1-based object identity.
+    int32_t gc_ref = gc_heap_ref_id(heap, ref);
     return gc_access_array_len(heap, gc_ref);
 }
 

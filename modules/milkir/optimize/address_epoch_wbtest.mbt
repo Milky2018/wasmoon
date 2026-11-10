@@ -223,3 +223,99 @@ test "LICM never moves physical projections across address invalidation" {
     )
   }
 }
+
+///|
+fn epoch_value(
+  b : @milkir.FunctionBuilder,
+  object : @milkir.Value,
+) -> @milkir.Value {
+  b.emit_ext_inst(
+    I32,
+    ExtOp(
+      "memory-test",
+      "address_dependent_value",
+      [],
+      effects=Some({
+        read: Some(Other),
+        write: None,
+        may_trap: false,
+        observable: false,
+        invalidates_addresses: false,
+        pointer_region: None,
+        pointer_bytes: 0,
+      }),
+      reads_address_epoch=true,
+    ),
+    [object],
+  )
+}
+
+///|
+test "integer results with address dependencies expire across non-writing movement" {
+  for barrier in [false, true] {
+    for budget in [0, 1, 100] {
+      let b = @milkir.FunctionBuilder("integer_address_epoch")
+      let object = b.add_param(Ref)
+      b.add_result(I32)
+      b.add_result(I32)
+      let first = epoch_value(b, object)
+      if barrier {
+        epoch_barrier(b)
+      }
+      let second = epoch_value(b, object)
+      b.return_([first, second])
+      let function = b.finalize()
+      run_acyclic_optimization_with_budget_and_analysis(
+        function,
+        budget,
+        FunctionAnalysis::build(function),
+      )
+      |> ignore
+      function.verify()
+      let mut reads = 0
+      for block in function.blocks {
+        for id in function.block_instruction_ids(block) {
+          if function.instruction_by_id(id).unwrap().opcode is Ext(extension, _) &&
+            extension.opcode == "address_dependent_value" {
+            reads += 1
+          }
+        }
+      }
+      assert_eq(reads, if barrier { 2 } else { 1 })
+    }
+  }
+}
+
+///|
+test "LICM keeps integer address-dependent reads inside moving loops" {
+  let b = @milkir.FunctionBuilder("integer_loop_epoch")
+  let object = b.add_param(Ref)
+  let condition = b.add_param(I32)
+  b.add_result(I32)
+  let header = b.create_block()
+  let exit = b.create_block()
+  b.jump(header, [])
+  b.switch_to_block(header)
+  epoch_barrier(b)
+  let value = epoch_value(b, object)
+  b.branch(condition, header, [], exit, [])
+  b.switch_to_block(exit)
+  b.return_([value])
+  let function = b.finalize()
+  optimize_with_level(function, O3) |> ignore
+  let loops = @milkir.CFG::build(function).find_loops()
+  assert_false(loops.is_empty())
+  for loop_ in loops {
+    assert_true(
+      function.blocks.any(block => {
+        loop_.contains(block.id) &&
+        function
+        .block_instruction_ids(block)
+        .any(id => {
+          function.instruction_by_id(id).unwrap().opcode is Ext(extension, _) &&
+          extension.opcode == "address_dependent_value"
+        })
+      }),
+    )
+  }
+}

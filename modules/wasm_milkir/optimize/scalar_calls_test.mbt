@@ -279,3 +279,76 @@ test "leaf inlining retains entry polls even when its result is unused" {
   }
   assert_eq(polls, 3)
 }
+
+///|
+test "reference inlining guards one exact scalar target and retains the indirect miss" {
+  let callee = @milkir.FunctionBuilder::FunctionBuilder("extend")
+  callee.add_param(I64) |> ignore
+  let input = callee.add_param(I32)
+  callee.add_result(I64)
+  callee.return_([callee.sextend(I64, input)])
+  let b = @milkir.FunctionBuilder::FunctionBuilder("guarded")
+  b.add_param(I64) |> ignore
+  let reference = b.add_param(CallableRef)
+  let argument = b.add_param(I32)
+  b.add_result(I64)
+  let result = b.emit_inst(
+    I64,
+    Ext(@wasm_milkir.encode(CallRef(7)), Signature([CallableRef, I32], [I64])),
+    [reference, argument],
+  )
+  b.return_([result])
+  let types = Map([(0, 7)])
+  let context = @wasm_milkir.WasmValidationContext::new(
+    {
+      function_contract: fn(index) {
+        if index == 0 {
+          Some({ params: [I32], results: [I64], })
+        } else {
+          None
+        }
+      },
+      defined_type_contract: fn(index) {
+        if index == 7 {
+          Some(Function({ params: [I32], results: [I64], }))
+        } else {
+          None
+        }
+      },
+      table_contract: fn(_) { None },
+      tag_contract: fn(_) { None },
+      memory_exists: fn(_) { false },
+      data_segment_exists: fn(_) { false },
+      element_segment_type: fn(_) { None },
+    },
+    function_types=types,
+  )
+  types[0] = 8
+  assert_true(context.function_has_type_index(0, 7))
+  let function = b.get_function()
+  @optimize.optimize_with_level(
+    function,
+    context,
+    O2,
+    scalar_callees=Map([(0, callee.get_function())]),
+  )
+  |> ignore
+  let mut guards = 0
+  let mut misses = 0
+  let mut direct = 0
+  for block in function.blocks {
+    for id in function.block_instruction_ids(block) {
+      match
+        @wasm_milkir.decode_opcode(
+          function.instruction_by_id(id).unwrap().opcode,
+        ) {
+        Some(ExecutableFuncRefEq) => guards += 1
+        Some(CallRef(_)) => misses += 1
+        Some(WasmCall(_)) => direct += 1
+        _ => ()
+      }
+    }
+  }
+  assert_eq((guards, misses, direct), (1, 1, 0))
+  @wasm_milkir.verify_function_with_context(function, context)
+}

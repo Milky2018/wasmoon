@@ -57,6 +57,7 @@ pub(all) enum CallProtocol {
 /// Function-local stack-object request used during native lowering. The id is
 /// interpreted only by the current target-lowering session.
 #derive(Debug, Eq, Hash)
+#valtype
 pub(all) struct StackObject {
   id : Int32
 }

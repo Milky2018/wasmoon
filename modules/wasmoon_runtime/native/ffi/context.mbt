@@ -34,11 +34,9 @@ extern "c" fn bind_callable_view(
   context : JITContext,
   view : @callable.NativeCallableView,
   locals : FixedArray[Int32],
-  local_count : Int32,
   tags : FixedArray[Int32],
-  tag_count : Int32,
   functions : FixedArray[Int32],
-  function_count : Int32,
+  snapshot_locals : Bool,
 ) -> Unit = "wasmoon_jit_bind_callable_registry"
 
 ///|
@@ -55,11 +53,28 @@ pub fn JITContext::bind_callable_registry(
     self,
     registry.native_view(),
     locals,
-    locals.length(),
     tags,
-    tags.length(),
     functions,
-    functions.length(),
+    false,
+  )
+}
+
+///|
+/// Bind an owned snapshot of the local types for exact native struct access.
+pub fn JITContext::bind_callable_registry_snapshot(
+  self : JITContext,
+  registry : @callable.NativeCallableRegistry,
+  locals : ArrayView[Int32],
+  tags : FixedArray[Int32],
+  functions : FixedArray[Int32],
+) -> Unit {
+  bind_callable_view(
+    self,
+    registry.native_view(),
+    FixedArray::makei(locals.length(), i => locals[i]),
+    tags,
+    functions,
+    true,
   )
 }
 
