@@ -10,15 +10,6 @@ fn core_valtypes_for_component_valtype(
 }
 
 ///|
-fn core_functype_for_component_functype(
-  ft : @component.FuncType,
-  type_table : Array[@component.TypeDef?],
-  pointer_type : @types.ValueType,
-) -> @types.FuncType? {
-  @component.canonical_lift_core_func_type(ft, type_table, pointer_type)
-}
-
-///|
 fn core_functype_for_task_return(
   result : @component.ValType?,
   type_table : Array[@component.TypeDef?],
@@ -260,7 +251,7 @@ fn validate_canon(
             match
               (
                 core_func_types[core_func_idx],
-                core_functype_for_component_functype(
+                @component.canonical_lift_core_func_type(
                   ft,
                   type_table,
                   core_memory_address_type(options.memory, core_memory_types),

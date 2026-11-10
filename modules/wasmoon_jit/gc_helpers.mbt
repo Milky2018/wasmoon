@@ -25,25 +25,6 @@ pub fn encode_i31(value : Int32) -> Int64 {
 }
 
 ///|
-/// Decode an i31 value from JIT representation
-pub fn decode_i31(encoded : Int64) -> Int32 {
-  // Remove tag and get signed 31-bit value
-  let value = (encoded >> 1).to_int()
-  // Sign extend from 31 bits
-  if (value & 0x40000000) != 0 {
-    value | @types.I32_MIN
-  } else { // 0x80000000
-    value
-  }
-}
-
-///|
-/// Check if a JIT value is an i31 (has tag bit set)
-pub fn is_i31(value : Int64) -> Bool {
-  (value & 1L) == 1L
-}
-
-///|
 /// Check if a JIT value is null
 pub fn is_null(value : Int64) -> Bool {
   value == @wasm_milkir.NULL_REF
@@ -204,14 +185,6 @@ fn gc_set_heap(context : JITContext, heap : CHeap) -> Unit {
 }
 
 ///|
-fn gc_set_context_heap_ptr(
-  context : JITContext,
-  heap_ptr : GCHeapHandle,
-) -> Unit {
-  c_jit_ctx_set_gc_heap_managed(context, heap_ptr)
-}
-
-///|
 /// Begin a GC frame scope for current JIT context.
 fn gc_begin_frame(
   context : JITContext,
@@ -270,30 +243,37 @@ fn gc_set_code_object_safepoints(
 }
 
 ///|
+fn append_stackmap_u32_le(bytes : Array[Byte], value : Int32) -> Unit {
+  bytes.push((value & 0xFF).to_byte())
+  bytes.push(((value >> 8) & 0xFF).to_byte())
+  bytes.push(((value >> 16) & 0xFF).to_byte())
+  bytes.push(((value >> 24) & 0xFF).to_byte())
+}
+
+///|
 fn prepare_code_object_safepoints(
   safepoints : Array[@code_object.SafepointSite],
 ) -> (Bytes, FixedArray[Int32]) {
-  let entries : Array[GcSafepoint] = []
-  let root_counts : Array[Int32] = []
+  if safepoints.is_empty() {
+    return (b"", [])
+  }
+  let bytes : Array[Byte] = []
+  append_stackmap_u32_le(bytes, 2)
+  append_stackmap_u32_le(bytes, safepoints.length())
   for site in safepoints {
-    let root_count = match site.stack_map {
-      Some(stack_map) => stack_map.argument_root_count
+    // Argument roots occupy dense indices in the caller-owned scratch area.
+    let count = match site.stack_map {
+      Some(stack_map) => Int32::max(0, stack_map.argument_root_count)
       None => 0
     }
-    entries.push(
-      GcSafepoint(
-        site.offset,
-        Array::makei(root_count, index => index),
-        root_count.to_int64(),
-      ),
-    )
-    root_counts.push(root_count)
+    append_stackmap_u32_le(bytes, count)
+    append_stackmap_u32_le(bytes, count)
+    for index in 0..<count {
+      append_stackmap_u32_le(bytes, index)
+    }
   }
-  let stackmap_blob = compiled_build_gc_stackmap_blob_v2(entries, root_counts)
-  let offsets = FixedArray::makei(entries.length(), fn(i) {
-    entries[i].code_offset
-  })
-  (stackmap_blob, offsets)
+  let offsets = FixedArray::makei(safepoints.length(), i => safepoints[i].offset)
+  (Bytes::from_array(bytes), offsets)
 }
 
 ///|
@@ -405,7 +385,7 @@ pub fn NativeJITContext::set_gc_heap_ptr(
   self : NativeJITContext,
   heap_ptr : GCHeapHandle,
 ) -> Unit {
-  gc_set_context_heap_ptr(self.handle, heap_ptr)
+  c_jit_gc_set_heap_managed(self.handle, heap_ptr)
 }
 
 ///|

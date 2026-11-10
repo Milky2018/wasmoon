@@ -1,34 +1,16 @@
-# Native Preflight Validation API
+# Migration from the Native Preflight API
 
-Wasmoon now provides a lightweight preflight package for native integrations:
+The unused `Milky2018/wasmoon/preflight` package is retired. It maintained a
+separate, x64-only compilation probe that no repository runtime or CLI consumed.
+This is a source API removal; external callers must migrate.
 
-- Package: `Milky2018/wasmoon/preflight`
-- APIs:
-  - `validate_module(module_bytes : Bytes) -> PreflightResult`
-  - `validate_jit(module_bytes : Bytes, opt_level? : Int = 2) -> PreflightResult`
+For binary parsing and WebAssembly validation, use
+`Milky2018/wasm_core/parser.parse_module` and
+`Milky2018/wasm_core/validator.validate_module`. Both report structured errors.
 
-## What it validates
-
-`validate_module`:
-- Binary parse check.
-- WebAssembly semantic validation.
-
-`validate_jit`:
-- Includes all `validate_module` checks.
-- Runs IR translation, lowering, and register allocation over all local functions.
-
-`validate_jit` is intentionally non-emitting in this phase (no machine-code emission), so integrations can run preflight safely and collect structured diagnostics.
-
-## Result format
-
-`PreflightResult` includes:
-- `ok : Bool`
-- `diagnostics : Array[PreflightDiagnostic]`
-- `total_funcs : Int`
-- `checked_funcs : Int`
-
-Each `PreflightDiagnostic` includes:
-- `severity` (`error` / `warning`)
-- `stage` (`parse`, `validate`, `translate`, `lower`, `regalloc`)
-- `message`
-- optional `func_idx`, `func_name`
+For native compilation checks, use the production frontend and
+`wasmoon_jit.NativeCompiler::compile_wasm_body_artifact_function` with the
+intended target and embedding context. See the
+[library migration guidance](../modules/wasmoon/README.mbt.md#library-usage).
+Compilation produces code objects; installation and execution remain separate
+operations. There is no second preflight pipeline or stage-report vocabulary.

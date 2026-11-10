@@ -214,19 +214,17 @@ fn lower_direct_operation(
     )
   }
   if operation is Call(call) {
-    let metadata = site.metadata()
-    let results = match call.protocol {
-      Platform =>
-        lower_direct_platform_call(
-          builder, block, call, operands, result_types, metadata,
-        )
-      Internal =>
-        lower_internal_call(
-          context, builder, block, call, operands, result_types, metadata,
-        )
-    }
-    return results
+    return lower_call(
+      context,
+      builder,
+      block,
+      call,
+      operands,
+      result_types,
+      site.metadata(),
+    )
   }
+
   if operation is IntBinary(binary) &&
     binary is (SignedDiv | UnsignedDiv | SignedRem | UnsignedRem) {
     guard optional_gpr_width(result_types.get(0)) is Some(width) else {
@@ -1119,29 +1117,16 @@ fn DirectLoweringSession::terminate(
           ordinary_metadata.live_gc_roots,
           call.behavior.semantics(),
         )
-        match call.protocol {
-          Platform =>
-            lower_direct_platform_call(
-              self.state.builder,
-              block,
-              call,
-              operands,
-              [],
-              call_metadata,
-            )
-            |> ignore
-          Internal =>
-            lower_internal_call(
-              self.state.context,
-              self.state.builder,
-              block,
-              call,
-              operands,
-              [],
-              call_metadata,
-            )
-            |> ignore
-        }
+        lower_call(
+          self.state.context,
+          self.state.builder,
+          block,
+          call,
+          operands,
+          [],
+          call_metadata,
+        )
+        |> ignore
         set_terminator(
           self.state.builder,
           block,

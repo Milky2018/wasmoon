@@ -26,6 +26,22 @@ pub fn[Inst] materialize_entry_arguments(
   is_allocatable : (PhysicalReg) -> Bool,
 ) -> (Array[Value], Value?) raise VCodeBuildError {
   let entry = builder.entry_block()
+  // Batched emission captures registers before stack inputs. Keep this pointer
+  // live across every input copy so their homes cannot alias its saved value.
+  let result_area = match result_area_register {
+    Some(reg) => {
+      let (_, results) = builder.append_body(
+        entry,
+        incoming_result_area(reg),
+        [],
+        [Output::any_location(Ptr64)],
+        [],
+        InstructionMetadata::empty(),
+      )
+      Some(results[0])
+    }
+    None => None
+  }
   let values : Array[Value] = []
   for index, ty in types {
     let raw = builder.parameter(index)
@@ -47,20 +63,7 @@ pub fn[Inst] materialize_entry_arguments(
     )
     values.push(results[0])
   }
-  let result_area = match result_area_register {
-    Some(reg) => {
-      let (_, results) = builder.append_body(
-        entry,
-        incoming_result_area(reg),
-        [],
-        [Output::any_location(Ptr64)],
-        [],
-        InstructionMetadata::empty(),
-      )
-      Some(results[0])
-    }
-    None => None
-  }
+
   (values, result_area)
 }
 

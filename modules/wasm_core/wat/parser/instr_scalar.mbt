@@ -18,7 +18,7 @@ fn Parser::parse_i32_instruction(
     "i32.store16" => parse_mem_arg(self, fn(m, a, o) { I32Store16(m, a, o) })
 
     // Constants
-    "i32.const" => I32Const(self.parse_i32())
+    "i32.const" => I32Const(parse_int(self.parse_number()))
 
     // i32 operations
     "i32.eqz" => I32Eqz
@@ -88,7 +88,7 @@ fn Parser::parse_i64_instruction(
     "i64.store8" => parse_mem_arg(self, fn(m, a, o) { I64Store8(m, a, o) })
     "i64.store16" => parse_mem_arg(self, fn(m, a, o) { I64Store16(m, a, o) })
     "i64.store32" => parse_mem_arg(self, fn(m, a, o) { I64Store32(m, a, o) })
-    "i64.const" => I64Const(self.parse_i64())
+    "i64.const" => I64Const(parse_int64(self.parse_number()))
 
     // i64 operations
     "i64.eqz" => I64Eqz
@@ -151,7 +151,7 @@ fn Parser::parse_f32_instruction(
   match kw {
     "f32.load" => parse_mem_arg(self, fn(m, a, o) { F32Load(m, a, o) })
     "f32.store" => parse_mem_arg(self, fn(m, a, o) { F32Store(m, a, o) })
-    "f32.const" => F32Const(self.parse_f32())
+    "f32.const" => F32Const(parse_float32(self.parse_number()))
 
     // f32 operations
     "f32.abs" => F32Abs
@@ -192,7 +192,7 @@ fn Parser::parse_f64_instruction(
   match kw {
     "f64.load" => parse_mem_arg(self, fn(m, a, o) { F64Load(m, a, o) })
     "f64.store" => parse_mem_arg(self, fn(m, a, o) { F64Store(m, a, o) })
-    "f64.const" => F64Const(self.parse_f64())
+    "f64.const" => F64Const(parse_float64(self.parse_number()))
 
     // f64 operations
     "f64.abs" => F64Abs

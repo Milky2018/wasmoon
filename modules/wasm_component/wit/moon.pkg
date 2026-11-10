@@ -2,3 +2,7 @@ import {
   "Milky2018/wasm_core/binary",
   "Milky2018/wasm_component" @component,
 }
+
+import {
+  "moonbitlang/core/json",
+} for "test"

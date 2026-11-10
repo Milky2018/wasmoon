@@ -1048,8 +1048,8 @@ fn Translator::get_tag_param_types(
 }
 
 ///|
-/// Helper for binary i32 operations
-fn Translator::translate_binary_i32(
+/// Apply a scalar binary builder operation to the top stack operands.
+fn Translator::translate_binary(
   self : Translator,
   op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
@@ -1060,77 +1060,8 @@ fn Translator::translate_binary_i32(
 }
 
 ///|
-/// Helper for binary i64 operations
-fn Translator::translate_binary_i64(
-  self : Translator,
-  op : (FunctionBuilder, Value, Value) -> Value,
-) -> Unit {
-  let b = self.pop()
-  let a = self.pop()
-  let result = op(self.builder, a, b)
-  self.push(result)
-}
-
-///|
-/// Helper for binary f32 operations
-fn Translator::translate_binary_f32(
-  self : Translator,
-  op : (FunctionBuilder, Value, Value) -> Value,
-) -> Unit {
-  let b = self.pop()
-  let a = self.pop()
-  let result = op(self.builder, a, b)
-  self.push(result)
-}
-
-///|
-/// Helper for binary f64 operations
-fn Translator::translate_binary_f64(
-  self : Translator,
-  op : (FunctionBuilder, Value, Value) -> Value,
-) -> Unit {
-  let b = self.pop()
-  let a = self.pop()
-  let result = op(self.builder, a, b)
-  self.push(result)
-}
-
-///|
-/// Helper for unary f32 operations
-fn Translator::translate_unary_f32(
-  self : Translator,
-  op : (FunctionBuilder, Value) -> Value,
-) -> Unit {
-  let a = self.pop()
-  let result = op(self.builder, a)
-  self.push(result)
-}
-
-///|
-/// Helper for unary f64 operations
-fn Translator::translate_unary_f64(
-  self : Translator,
-  op : (FunctionBuilder, Value) -> Value,
-) -> Unit {
-  let a = self.pop()
-  let result = op(self.builder, a)
-  self.push(result)
-}
-
-///|
-/// Helper for unary i32 operations
-fn Translator::translate_unary_i32(
-  self : Translator,
-  op : (FunctionBuilder, Value) -> Value,
-) -> Unit {
-  let a = self.pop()
-  let result = op(self.builder, a)
-  self.push(result)
-}
-
-///|
-/// Helper for unary i64 operations
-fn Translator::translate_unary_i64(
+/// Apply a scalar unary builder operation to the top stack operands.
+fn Translator::translate_unary(
   self : Translator,
   op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {

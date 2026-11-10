@@ -90,31 +90,21 @@ pub fn c_p1_recv(Int32, FixedArray[Byte], Int32, Int32, FixedArray[Int32]) -> In
 
 pub fn c_p1_send(Int32, FixedArray[Byte], Int32) -> Int32
 
-pub fn c_path_within_base(FixedArray[Byte], FixedArray[Byte]) -> Int32
-
 pub fn c_poll(FixedArray[Int32], FixedArray[Int32], FixedArray[Int32], Int32, Int32) -> Int32
 
 pub fn c_pread(Int32, FixedArray[Byte], Int32, Int64) -> Int32
-
-pub fn c_print_string(FixedArray[Byte], Int32) -> Unit
 
 pub fn c_putchar(Int32) -> Unit
 
 pub fn c_pwrite(Int32, FixedArray[Byte], Int32, Int64) -> Int32
 
-pub fn c_raise(Int32) -> Int32
-
 pub fn c_raise_signal(Int32) -> Int32
 
 pub fn c_read(Int32, FixedArray[Byte], Int32) -> Int32
 
-pub fn c_readdir(FixedArray[Byte]) -> Bytes?
-
 pub fn c_readdir_fd(Int32) -> Bytes?
 
 pub fn c_readlinkat(Int32, FixedArray[Byte], FixedArray[Byte], Int64) -> Int64
-
-pub fn c_recv(Int32, FixedArray[Byte], Int64, Int32) -> Int64
 
 pub fn c_renameat(Int32, FixedArray[Byte], Int32, FixedArray[Byte]) -> Int32
 
@@ -123,8 +113,6 @@ pub fn c_resolver_drop(NativeResolverHandle) -> Unit
 pub fn c_resolver_next(NativeResolverHandle, FixedArray[Byte], FixedArray[Byte], FixedArray[UInt32]) -> Int32
 
 pub fn c_resolver_start(FixedArray[Byte]) -> (NativeResolverHandle, Int32)
-
-pub fn c_send(Int32, FixedArray[Byte], Int64, Int32) -> Int64
 
 pub fn c_set_errno_illegal_byte_sequence() -> Unit
 

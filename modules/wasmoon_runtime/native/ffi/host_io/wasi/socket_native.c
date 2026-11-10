@@ -406,34 +406,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_bytes_available(int fd) {
 #endif
 }
 
-// Socket recv
-MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_recv(int sockfd, moonbit_bytes_t buf,
-    int64_t len, int flags) {
-#ifdef _WIN32
-  SOCKET socket = wasmoon_windows_socket_get(sockfd);
-  if (socket == INVALID_SOCKET) return -1;
-  if (len < 0 || len > INT_MAX) { errno = EINVAL; return -1; }
-  int result = recv(socket, (char *)buf, (int)len, flags);
-  return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
-#else
-  return recv(sockfd, buf, len, flags);
-#endif
-}
-
-// Socket send
-MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_send(int sockfd, moonbit_bytes_t buf,
-    int64_t len, int flags) {
-#ifdef _WIN32
-  SOCKET socket = wasmoon_windows_socket_get(sockfd);
-  if (socket == INVALID_SOCKET) return -1;
-  if (len < 0 || len > INT_MAX) { errno = EINVAL; return -1; }
-  int result = send(socket, (char *)buf, (int)len, flags);
-  return result == SOCKET_ERROR ? wasmoon_windows_socket_error(WSAGetLastError()) : result;
-#else
-  return send(sockfd, buf, len, flags);
-#endif
-}
-
 // Socket shutdown
 MOONBIT_FFI_EXPORT int wasmoon_wasi_shutdown(int sockfd, int how) {
 #ifdef _WIN32

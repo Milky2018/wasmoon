@@ -128,21 +128,13 @@ pub fn native_o_nonblock() -> Int32
 
 pub fn native_o_rdonly() -> Int32
 
-pub fn native_o_rdwr() -> Int32
-
-pub fn native_o_wronly() -> Int32
-
 pub fn native_open(String, Array[OpenFlags], Int32) -> Int32?
 
 pub fn native_open_parent_beneath(Int32, String) -> Int32?
 
 pub fn native_open_read(String) -> Int32?
 
-pub fn native_open_write(String) -> Int32?
-
 pub fn native_openat_beneath(Int32, String, String, Array[OpenFlags], Int32, Bool) -> Int32?
-
-pub fn native_path_within_base(String, String) -> Bool
 
 pub fn native_poll(Array[Int32], Array[Int32], Int32) -> PollResult?
 
@@ -150,19 +142,11 @@ pub fn native_pread(Int32, FixedArray[Byte], Int32, Int64) -> Int32?
 
 pub fn native_pwrite(Int32, FixedArray[Byte], Int32, Int64) -> Int32?
 
-pub fn native_raise(Int32) -> Bool
-
 pub fn native_read(Int32, FixedArray[Byte], Int32) -> Int32?
-
-pub fn native_read_to_memory(Int32, @runtime.Memory, Int32, Int32) -> Int32?
-
-pub fn native_readdir(String) -> Array[(String, Int32)]?
 
 pub fn native_readdir_fd(Int32) -> Array[(String, Int32)]?
 
 pub fn native_readlinkat(Int32, String, Int32) -> String?
-
-pub fn native_recv(Int32, FixedArray[Byte], Int32) -> Int64
 
 pub fn native_renameat(Int32, String, Int32, String) -> Bool
 
@@ -173,8 +157,6 @@ pub fn native_resolver_next(@Milky2018/wasmoon_runtime/native/host_io/wasi.Nativ
 pub fn native_resolver_start(String) -> NativeResolver?
 
 pub fn native_seek(Int32, Int64, Whence) -> Int64?
-
-pub fn native_send(Int32, FixedArray[Byte], Int32, Int32) -> Int64
 
 pub fn native_shutdown(Int32, Int32) -> Bool
 
@@ -233,8 +215,6 @@ pub fn path_symlink_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int3
 pub fn path_unlink_file_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32) -> Int32
 
 pub fn poll_oneoff_impl(WasiContext, @runtime.Memory, Int32, Int32, Int32, Int32) -> Int32
-
-pub fn print_string(String) -> Unit
 
 pub fn proc_exit(WasiContext, Int32) -> Unit raise WasiExit
 
@@ -519,12 +499,6 @@ pub(all) struct PollResult {
   revents : Array[Int32]
 }
 
-pub(all) enum ResolvePathError {
-  BadFd
-  Perm
-  NotCapable
-}
-
 #derive(Eq, @debug.Debug)
 pub(all) struct Size(Int32)
 pub fn Size::equal(Self, Self) -> Bool
@@ -566,11 +540,8 @@ pub fn WasiContext::alloc_fd(Self, OpenFile) -> Int32
 pub fn WasiContext::close_fd(Self, Int32) -> Bool
 pub fn WasiContext::get_exit_code(Self) -> Int32?
 pub fn WasiContext::get_file(Self, Int32) -> OpenFile?
-pub fn WasiContext::get_preopen_host_path(Self, Int32) -> String?
 pub fn WasiContext::has_exited(Self) -> Bool
 pub fn WasiContext::is_valid_fd(Self, Int32) -> Bool
-pub fn WasiContext::resolve_path(Self, Int32, String) -> Result[String, ResolvePathError]
-pub fn WasiContext::resolve_path_nofollow_leaf(Self, Int32, String) -> Result[String, ResolvePathError]
 pub fn WasiContext::take_socket(Self, Int32, rights_base? : Int64, rights_inheriting? : Int64) -> Result[Int32, Int32]
 
 pub(all) struct WasiContextBuilder {

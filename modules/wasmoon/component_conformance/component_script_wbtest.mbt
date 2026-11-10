@@ -1,4 +1,25 @@
 ///|
+test "component conformance JSON roundtrips control characters" {
+  let text = "\u{0000}\u{0001}\u{0008}\u{000C}\t\r\n\"\\😀"
+  let result = ScriptResult::ScriptResult()
+  result.add_failed(text)
+  assert_eq(
+    @json.parse(component_test_json(false, None, text, text, Some(result))),
+    @json.Json::object(
+      Map([
+        ("ok", @json.Json::boolean(false)),
+        ("phase", @json.Json::string(text)),
+        ("detail", @json.Json::string(text)),
+        ("passed", @json.to_json(0)),
+        ("failed", @json.to_json(1)),
+        ("skipped", @json.to_json(0)),
+        ("failures", @json.to_json([text])),
+      ]),
+    ),
+  )
+}
+
+///|
 test "component conformance JSON status fields remain stable" {
   let result = ScriptResult::ScriptResult()
   result.add_passed()

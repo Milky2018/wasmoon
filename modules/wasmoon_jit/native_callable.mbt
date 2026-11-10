@@ -133,10 +133,7 @@ pub fn NativeJITContext::bind_callable_registry(
   tags : Array[Int32],
   functions~ : Array[Int32] = [],
 ) -> Unit {
-  let tag_addresses = FixedArray::make(tags.length(), 0)
-  for i, address in tags {
-    tag_addresses[i] = address
-  }
+  let tag_addresses = FixedArray::makei(tags.length(), i => tags[i])
   self.handle.bind_callable_registry_snapshot(
     registry,
     local_types[:],

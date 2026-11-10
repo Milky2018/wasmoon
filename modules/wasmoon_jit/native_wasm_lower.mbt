@@ -220,30 +220,6 @@ fn wasmoon_call_abi(
 }
 
 ///|
-fn wasm_x64_context(
-  environment : WasmoonNativeEnvironment,
-) -> @x64_target.LoweringContext raise JitPipelineError {
-  let abi = wasm_internal_abi(X64) catch {
-    error => raise X64AbiInvalid(cause=error)
-  }
-  @x64_target.LoweringContext::new(abi).with_environment_field_resolver(field => {
-    environment.field_paths.get(field.name)
-  })
-}
-
-///|
-fn wasm_aarch64_context(
-  environment : WasmoonNativeEnvironment,
-) -> @aarch64_target.LoweringContext raise JitPipelineError {
-  let abi = wasm_internal_abi(AArch64) catch {
-    error => raise AArch64AbiInvalid(cause=error)
-  }
-  @aarch64_target.LoweringContext::new(abi).with_environment_field_resolver(field => {
-    environment.field_paths.get(field.name)
-  })
-}
-
-///|
 fn lower_wasm_body_to_sink(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
@@ -272,18 +248,20 @@ fn lower_wasm_body_to_sink(
 }
 
 ///|
-fn compile_wasm_body_x64_target(
+fn NativeCompiler::compile_wasm_body(
+  self : NativeCompiler,
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,
-  context_layout~ : VMContextLayout = vmcontext_layout(),
-  function_index~ : Int32 = -1,
+  function_index~ : Int32,
   record_metrics~ : Bool = false,
   on_diagnostics~ : ((String, String) -> Unit)? = None,
-  compilation_session~ : @x64_target.CompilationSession = @x64_target.CompilationSession::new(),
-) -> X64TargetCompilation raise JitPipelineError {
+) -> (@code_object.UnlinkedCodeObject, Int32) raise JitPipelineError {
   let environment_tick = detail_metrics_tick(record_metrics)
-  let environment = wasmoon_native_environment(context_layout)
-  let context = wasm_x64_context(environment)
+  let environment = wasmoon_native_environment(self.context_layout)
+  let context = native_lowering_context(self.backend.target()).with_environment_field_resolver(field => {
+      environment.field_paths.get(field.name)
+    },
+  )
   record_compile_subphase("native_environment", environment_tick)
   let signature = @milkir_native.function_signature(function, environment_parameters=[
     (0, Ptr64),
@@ -294,95 +272,21 @@ fn compile_wasm_body_x64_target(
   } else {
     fn(_) { () }
   }
-  let session = @x64_target.DirectLoweringSession::new(
+  self.backend.compile(
     function.name,
     Internal,
-    signature.params,
-    signature.results,
+    signature,
     context,
+    sink => {
+      lower_wasm_body_to_sink(
+        function, validation_context, environment, sink, function_index, record_metrics,
+      )
+      target_lower_tick.val = target_metrics_tick(record_metrics)
+    },
     on_event=observer,
-  ) catch {
-    error => raise X64LoweringFailed(cause=error)
-  }
-  lower_wasm_body_to_sink(
-    function,
-    validation_context,
-    environment,
-    session.sink(),
-    function_index,
-    record_metrics,
-  )
-  target_lower_tick.val = target_metrics_tick(record_metrics)
-  let selected = session.finish_selected(verify_selected=compiler_validation()) catch {
-    error => raise X64LoweringFailed(cause=error)
-  }
-  let compiled = compilation_session.compile_selected(
-    selected,
-    on_event=observer,
-    verify_allocation=compiler_validation(),
+    verify=compiler_validation,
     on_diagnostics~,
-  ) catch {
-    error => raise X64CompilationFailed(cause=error)
-  }
-  let (object, frame_size) = compiled
-  { object, frame_size, }
-}
-
-///|
-fn compile_wasm_body_aarch64_target(
-  function : @milkir.Function,
-  validation_context : @wasm_milkir.WasmValidationContext,
-  context_layout~ : VMContextLayout = vmcontext_layout(),
-  function_index~ : Int32 = -1,
-  record_metrics~ : Bool = false,
-  on_diagnostics~ : ((String, String) -> Unit)? = None,
-  compilation_session~ : @aarch64_target.CompilationSession = @aarch64_target.CompilationSession::new(),
-) -> AArch64TargetCompilation raise JitPipelineError {
-  let environment_tick = detail_metrics_tick(record_metrics)
-  let environment = wasmoon_native_environment(context_layout)
-  let context = wasm_aarch64_context(environment)
-  record_compile_subphase("native_environment", environment_tick)
-  let signature = @milkir_native.function_signature(function, environment_parameters=[
-    (0, Ptr64),
-  ])
-  let target_lower_tick : Ref[@perf.PerfTick?] = { val: None, }
-  let observer = if record_metrics {
-    target_compile_metrics_observer(target_lower_tick)
-  } else {
-    fn(_) { () }
-  }
-  let session = @aarch64_target.DirectLoweringSession::new(
-    function.name,
-    Internal,
-    signature.params,
-    signature.results,
-    context,
-    on_event=observer,
-  ) catch {
-    error => raise AArch64LoweringFailed(cause=error)
-  }
-  lower_wasm_body_to_sink(
-    function,
-    validation_context,
-    environment,
-    session.sink(),
-    function_index,
-    record_metrics,
   )
-  target_lower_tick.val = target_metrics_tick(record_metrics)
-  let selected = session.finish_selected(verify_selected=compiler_validation()) catch {
-    error => raise AArch64LoweringFailed(cause=error)
-  }
-  let compiled = compilation_session.compile_selected(
-    selected,
-    on_event=observer,
-    verify_allocation=compiler_validation(),
-    on_diagnostics~,
-  ) catch {
-    error => raise AArch64CompilationFailed(cause=error)
-  }
-  let (object, frame_size) = compiled
-  { object, frame_size, }
 }
 
 ///|
@@ -429,20 +333,4 @@ pub fn NativeCompiler::diagnose_wasm_body(
     .map(byte => @types.to_hex_byte(byte.to_int()))
     .join(" "),
   }
-}
-
-///|
-pub fn plan_wasm_body_aarch64_code_object(
-  function : @milkir.Function,
-  validation_context : @wasm_milkir.WasmValidationContext,
-) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
-  compile_wasm_body_aarch64_target(function, validation_context).object
-}
-
-///|
-pub fn plan_wasm_body_x64_code_object(
-  function : @milkir.Function,
-  validation_context : @wasm_milkir.WasmValidationContext,
-) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
-  compile_wasm_body_x64_target(function, validation_context).object
 }

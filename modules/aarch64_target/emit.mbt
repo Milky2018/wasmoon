@@ -2615,6 +2615,29 @@ fn is_function_input(instruction : AArch64Inst) -> Bool {
 }
 
 ///|
+fn incoming_call_result(
+  instruction : AArch64Inst,
+) -> (@native.ValueType, CallArgumentLocation, Int32)? {
+  match instruction {
+    IncomingCallResult(ty, source) => Some((ty, CallRegister(source), 0))
+    IncomingCallAreaResult(ty, offset) => Some((ty, CallStack(offset), 0))
+    _ => None
+  }
+}
+
+///|
+fn function_input(
+  instruction : AArch64Inst,
+) -> (@native.ValueType, CallArgumentLocation, Int32)? {
+  match instruction {
+    IncomingReg(ty, source) => Some((ty, CallRegister(source), 1))
+    IncomingStack(ty, offset) => Some((ty, CallStack(offset), 0))
+    IncomingResultArea(source) => Some((Ptr64, CallRegister(source), 0))
+    _ => None
+  }
+}
+
+///|
 fn value_home(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
@@ -2628,202 +2651,35 @@ fn value_home(
 }
 
 ///|
-fn function_input_register_moves(
-  function : @vcode.Function[AArch64Inst],
-  allocation : @vcode.Allocation,
-  body : ArrayView[@vcode.Instruction],
-  start : Int32,
-) -> Array[@vcode.ParallelMove] {
-  let moves : Array[@vcode.ParallelMove] = []
-  let mut index = start
-  while index < body.length() {
-    let input_instruction = body[index]
-    match function.instruction(input_instruction).unwrap() {
-      IncomingReg(ty, source) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            ty,
-            Register(source),
-            value_home(function, allocation, input_instruction, 1),
-          ),
-        )
-      IncomingResultArea(source) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            Ptr64,
-            Register(source),
-            value_home(function, allocation, input_instruction, 0),
-          ),
-        )
-      IncomingStack(_, _) => ()
-      _ => break
-    }
-    index += 1
-  }
-  moves
-}
-
-///|
-fn emit_function_inputs(
+fn emit_incoming_values(
   buffer : CodeBuffer,
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
   body : ArrayView[@vcode.Instruction],
   current_index : Int32,
+  describe : (AArch64Inst) -> (@native.ValueType, CallArgumentLocation, Int32)?,
+  stack_base : Int32?,
+  stack_scratch : (@native.ValueType) -> @vcode.PhysicalReg,
 ) -> Unit raise AArch64EmitError {
-  if current_index > 0 &&
-    is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
-    return
-  }
-  let stack_inputs : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
-  let mut index = current_index
-  while index < body.length() {
-    let input_instruction = body[index]
-    match function.instruction(input_instruction).unwrap() {
-      IncomingReg(_, _) => ()
-      IncomingStack(ty, offset) =>
-        stack_inputs.push((input_instruction, ty, offset))
-      IncomingResultArea(_) => ()
-      _ => break
-    }
-    index += 1
-  }
-  let resolved = @vcode.plan_parallel_moves(
-    function_input_register_moves(function, allocation, body, current_index),
+  @vcode.emit_incoming_values(
+    function,
+    allocation,
+    body,
+    current_index,
+    describe,
+    buffer,
+    frame,
+    stack_base,
+    AArch64Frame::slot_offset,
+    stack_scratch,
     int_transfer_scratch(),
     fp_transfer_scratch(),
-  ) catch {
-    error => raise InvalidParallelMove(cause=error)
-  }
-  emit_resolved_moves(buffer, frame, resolved)
-  for input in stack_inputs {
-    let (input_instruction, ty, offset) = input
-    match value_home(function, allocation, input_instruction, 0) {
-      Register(destination) =>
-        emit_stack_access(
-          buffer,
-          true,
-          ty,
-          destination,
-          frame.frame_size() + offset,
-        )
-      Stack(slot) => {
-        let scratch = transfer_scratch_for_type(ty)
-        emit_stack_access(
-          buffer,
-          true,
-          ty,
-          scratch,
-          frame.frame_size() + offset,
-        )
-        emit_stack_access(
-          buffer,
-          false,
-          ty,
-          scratch,
-          frame.slot_offset(slot).unwrap(),
-        )
-      }
-    }
-  }
-}
-
-///|
-fn emit_incoming_call_results(
-  buffer : CodeBuffer,
-  function : @vcode.Function[AArch64Inst],
-  allocation : @vcode.Allocation,
-  frame : AArch64Frame,
-  body : ArrayView[@vcode.Instruction],
-  current_index : Int32,
-) -> Unit raise AArch64EmitError {
-  if current_index > 0 &&
-    is_incoming_call_result(
-      function.instruction(body[current_index - 1]).unwrap(),
-    ) {
-    return
-  }
-  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
-  let mut index = current_index
-  while index < body.length() {
-    let result_instruction = body[index]
-    match function.instruction(result_instruction).unwrap() {
-      IncomingCallResult(_, _) => ()
-      IncomingCallAreaResult(ty, offset) =>
-        area_results.push((result_instruction, ty, offset))
-      _ => break
-    }
-    index += 1
-  }
-  let resolved = @vcode.plan_parallel_moves(
-    incoming_call_result_register_moves(
-      function, allocation, body, current_index,
-    ),
-    int_transfer_scratch(),
-    fp_transfer_scratch(),
-  ) catch {
-    error => raise InvalidParallelMove(cause=error)
-  }
-  emit_resolved_moves(buffer, frame, resolved)
-  guard frame.result_area_offset() is Some(result_area_base) else {
-    if !area_results.is_empty() {
-      raise MissingResultArea
-    }
-    return
-  }
-  for result in area_results {
-    let (result_instruction, ty, offset) = result
-    match value_home(function, allocation, result_instruction, 0) {
-      Register(destination) =>
-        emit_stack_access(
-          buffer,
-          true,
-          ty,
-          destination,
-          result_area_base + offset,
-        )
-      Stack(slot) => {
-        let scratch = transfer_scratch_for_type(ty)
-        emit_stack_access(buffer, true, ty, scratch, result_area_base + offset)
-        emit_stack_access(
-          buffer,
-          false,
-          ty,
-          scratch,
-          frame.slot_offset(slot).unwrap(),
-        )
-      }
-    }
-  }
-}
-
-///|
-fn incoming_call_result_register_moves(
-  function : @vcode.Function[AArch64Inst],
-  allocation : @vcode.Allocation,
-  body : ArrayView[@vcode.Instruction],
-  start : Int32,
-) -> Array[@vcode.ParallelMove] {
-  let moves : Array[@vcode.ParallelMove] = []
-  let mut index = start
-  while index < body.length() {
-    let result_instruction = body[index]
-    match function.instruction(result_instruction).unwrap() {
-      IncomingCallResult(ty, source) =>
-        moves.push(
-          @vcode.ParallelMove::new(
-            ty,
-            Register(source),
-            value_home(function, allocation, result_instruction, 0),
-          ),
-        )
-      IncomingCallAreaResult(_, _) => ()
-      _ => break
-    }
-    index += 1
-  }
-  moves
+    emit_resolved_moves,
+    emit_stack_access,
+    error => InvalidParallelMove(cause=error),
+    MissingResultArea,
+  )
 }
 
 ///|
@@ -2965,12 +2821,28 @@ fn emit_instruction(
   let mut metadata_offset = buffer.position()
   match function.instruction(instruction).unwrap() {
     IncomingReg(_, _) | IncomingStack(_, _) | IncomingResultArea(_) =>
-      emit_function_inputs(
-        buffer, function, allocation, frame, body, body_index,
+      emit_incoming_values(
+        buffer,
+        function,
+        allocation,
+        frame,
+        body,
+        body_index,
+        function_input,
+        Some(frame.frame_size()),
+        transfer_scratch_for_type,
       )
     IncomingCallResult(_, _) | IncomingCallAreaResult(_, _) =>
-      emit_incoming_call_results(
-        buffer, function, allocation, frame, body, body_index,
+      emit_incoming_values(
+        buffer,
+        function,
+        allocation,
+        frame,
+        body,
+        body_index,
+        incoming_call_result,
+        frame.result_area_offset(),
+        transfer_scratch_for_type,
       )
     OutgoingReg(_, _) | OutgoingAreaResult(_, _) =>
       emit_function_outputs(

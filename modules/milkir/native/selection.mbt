@@ -441,22 +441,6 @@ fn selection_binary_operation(
 }
 
 ///|
-fn selection_comparison(comparison : @milkir.IntCC) -> @lowering.IntComparison {
-  match comparison {
-    Eq => Equal
-    Ne => NotEqual
-    Slt => SignedLessThan
-    Sle => SignedLessOrEqual
-    Sgt => SignedGreaterThan
-    Sge => SignedGreaterOrEqual
-    Ult => UnsignedLessThan
-    Ule => UnsignedLessOrEqual
-    Ugt => UnsignedGreaterThan
-    Uge => UnsignedGreaterOrEqual
-  }
-}
-
-///|
 fn swapped_comparison(
   comparison : @lowering.IntComparison,
 ) -> @lowering.IntComparison {
@@ -1096,7 +1080,7 @@ fn select_comparison(
   }
   guard binary_operands(instruction) is Some((left, right)) else { return None }
   guard left.ty == right.ty && left.ty is (I32 | I64) else { return None }
-  let condition = selection_comparison(comparison)
+  let condition = lower_int_comparison(comparison)
   if constants[right.id] is Some(bits) &&
     accepts_immediate(lower_type(left.ty), bits) {
     return Some(CompareImmediate(left, right, bits, condition))

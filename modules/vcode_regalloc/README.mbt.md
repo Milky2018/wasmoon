@@ -27,6 +27,8 @@ statically dispatched `AllocationSink`; production does not create an
 `AllocationPlan` or translate a completed plan into VCode. Standalone allocator
 clients keep the `AllocationPlan` API, backed by the same algorithm and a plan
 sink. Only unresolved parallel edits remain allocator-owned temporary data.
+The former `AllocationBuilder::from_plan_storage` conversion API is retired;
+selected output uses the checked sink and `finish_selected` instead.
 
 The adapter checks each write and requires complete output even when full
 verification is disabled. VCode owns final safepoint-root construction because

@@ -77,16 +77,6 @@ extern void wasmoon_jit_exception_throw_ref_msvc_guest(void);
 extern void wasmoon_jit_exception_throw_tag_msvc_guest(void);
 extern void wasmoon_jit_exception_try_begin_msvc_guest(void);
 extern void wasmoon_jit_exception_try_end_msvc_guest(void);
-extern void wasmoon_jit_gc_pop_root_scope_or_trap_msvc_guest(void);
-extern void wasmoon_jit_gc_push_root_scope_or_trap_msvc_guest(void);
 extern void wasmoon_jit_hostcall_msvc_guest(void);
-extern void wasmoon_jit_i32_sdiv_msvc_guest(void);
-extern void wasmoon_jit_i32_srem_msvc_guest(void);
-extern void wasmoon_jit_i32_udiv_msvc_guest(void);
-extern void wasmoon_jit_i32_urem_msvc_guest(void);
-extern void wasmoon_jit_i64_sdiv_msvc_guest(void);
-extern void wasmoon_jit_i64_srem_msvc_guest(void);
-extern void wasmoon_jit_i64_udiv_msvc_guest(void);
-extern void wasmoon_jit_i64_urem_msvc_guest(void);
 extern void wasmoon_jit_table_grow_msvc_guest(void);
 #endif

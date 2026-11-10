@@ -135,10 +135,6 @@ int64_t memory_len_desc_internal(wasmoon_memory_t *mem) {
     return (int64_t)atomic_load_explicit(&mem->current_length, memory_order_acquire);
 }
 
-uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem) {
-    return mem ? mem->base : NULL;
-}
-
 static int64_t memory_grow_desc_locked(wasmoon_memory_t *mem, int64_t delta, int32_t max_pages) {
     if (!mem) return -1;
     if (delta < 0) return -1;

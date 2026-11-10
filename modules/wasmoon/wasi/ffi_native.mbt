@@ -18,7 +18,6 @@ using @native_io {
   c_set_errno_invalid_argument,
   c_set_errno_illegal_byte_sequence,
   c_isatty,
-  c_path_within_base,
   c_errno_to_wasi,
   c_o_rdonly,
   c_o_wronly,
@@ -32,9 +31,7 @@ using @native_io {
   c_o_nofollow,
   c_mkdir,
   c_mkdirat,
-  c_readdir,
   c_readdir_fd,
-  c_print_string,
   c_putchar,
   c_fsync,
   c_fdatasync,
@@ -72,11 +69,8 @@ using @native_io {
   c_resolver_start,
   c_resolver_next,
   c_resolver_drop,
-  c_recv,
-  c_send,
   c_shutdown,
   c_accept,
-  c_raise,
   c_getrandom,
   c_fstat_beneath,
   c_utimens_beneath,
@@ -219,24 +213,8 @@ pub fn native_open_read(path : String) -> Int32? {
 }
 
 ///|
-/// Open a file for writing (create if not exists, truncate if exists)
-pub fn native_open_write(path : String) -> Int32? {
-  native_open(path, [WriteOnly, Create, Truncate], 0o644)
-}
-
-///|
 pub fn native_o_rdonly() -> Int32 {
   c_o_rdonly()
-}
-
-///|
-pub fn native_o_wronly() -> Int32 {
-  c_o_wronly()
-}
-
-///|
-pub fn native_o_rdwr() -> Int32 {
-  c_o_rdwr()
 }
 
 ///|
@@ -342,7 +320,7 @@ pub fn native_tell(fd : Int32) -> Int64? {
 /// Get the last error message
 pub fn native_get_error_message() -> String {
   let bytes = c_get_error_message()
-  utf8_bytes_to_string(bytes)
+  @utf8.decode_lossy(bytes)
 }
 
 ///|
@@ -360,21 +338,6 @@ pub fn native_last_errno_to_wasi() -> Int32 {
 ///|
 pub fn native_errno_to_wasi(errno : Int32) -> Int32 {
   c_errno_to_wasi(errno)
-}
-
-///|
-/// Check whether target path stays within base after symlink resolution
-pub fn native_path_within_base(
-  base_path : String,
-  target_path : String,
-) -> Bool {
-  guard string_to_cstring(base_path) is Some(base_path_bytes) else {
-    return false
-  }
-  guard string_to_cstring(target_path) is Some(target_path_bytes) else {
-    return false
-  }
-  c_path_within_base(base_path_bytes, target_path_bytes) != 0
 }
 
 ///|
@@ -439,16 +402,6 @@ fn parse_native_readdir(result : Bytes?) -> Array[(String, Int32)]? {
 }
 
 ///|
-/// Read directory entries.
-///
-/// Each entry contains its name and native file-type token. Tokens 0-7 match
-/// WASI Preview 1 filetype; token 8 denotes a FIFO.
-pub fn native_readdir(path : String) -> Array[(String, Int32)]? {
-  guard string_to_cstring(path) is Some(path_bytes) else { return None }
-  parse_native_readdir(c_readdir(path_bytes))
-}
-
-///|
 /// Read directory entries from an opened directory fd.
 ///
 /// Each entry contains its name and native file-type token. Tokens 0-7 match
@@ -475,50 +428,9 @@ fn string_to_cstring(s : String) -> FixedArray[Byte]? {
 }
 
 ///|
-/// Convert UTF-8 bytes to a MoonBit string
-fn utf8_bytes_to_string(bytes : Bytes) -> String {
-  @utf8.decode_lossy(bytes)
-}
-
-///|
 /// Print a single character to stdout (public wrapper)
 pub fn putchar(c : Int32) -> Unit {
   c_putchar(c)
-}
-
-///|
-/// Print a string to stdout without newline
-pub fn print_string(s : String) -> Unit {
-  let encoded = @utf8.encode(s)
-  let bytes = FixedArray::makei(encoded.length(), fn(i) { encoded[i] })
-  if bytes.length() > 0 {
-    c_print_string(bytes, bytes.length())
-  }
-}
-
-///|
-/// Read from a file descriptor directly into WASM memory
-/// This avoids the FixedArray issue by reading byte by byte
-pub fn native_read_to_memory(
-  fd : Int32,
-  mem : @runtime.Memory,
-  buf_ptr : Int32,
-  count : Int32,
-) -> Int32? {
-  let buf = FixedArray::make(1, b'\x00')
-  let mut total_read = 0
-  for i in 0..<count {
-    let n = c_read(fd, buf, 1)
-    if n < 0 {
-      return if total_read > 0 { Some(total_read) } else { None }
-    }
-    if n == 0 {
-      break // EOF
-    }
-    mem.write_byte(buf_ptr + i, buf[0])
-    total_read = total_read + 1
-  }
-  Some(total_read)
 }
 
 // ============================================================================
@@ -1106,27 +1018,6 @@ pub fn native_resolver_drop(resolver : NativeResolverHandle) -> Unit {
 }
 
 ///|
-/// Socket recv
-pub fn native_recv(
-  sockfd : Int32,
-  buf : FixedArray[Byte],
-  flags : Int32,
-) -> Int64 {
-  c_recv(sockfd, buf, buf.length().to_int64(), flags)
-}
-
-///|
-/// Socket send
-pub fn native_send(
-  sockfd : Int32,
-  buf : FixedArray[Byte],
-  len : Int32,
-  flags : Int32,
-) -> Int64 {
-  c_send(sockfd, buf, len.to_int64(), flags)
-}
-
-///|
 /// Socket shutdown
 pub fn native_shutdown(sockfd : Int32, how : Int32) -> Bool {
   c_shutdown(sockfd, how) == 0
@@ -1136,12 +1027,6 @@ pub fn native_shutdown(sockfd : Int32, how : Int32) -> Bool {
 /// Socket accept - returns new socket fd or -1 on error
 pub fn native_accept(sockfd : Int32) -> Int32 {
   c_accept(sockfd)
-}
-
-///|
-/// Raise signal
-pub fn native_raise(sig : Int32) -> Bool {
-  c_raise(sig) == 0
 }
 
 // ============================================================================

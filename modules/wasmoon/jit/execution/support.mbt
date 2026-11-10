@@ -676,16 +676,7 @@ pub fn build_func_signatures(
 }
 
 ///|
-/// Count the number of function imports in the import list
-pub fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Func(_) {
-      count = count + 1
-    }
-  }
-  count
-}
+pub using @types {count_func_imports}
 
 // ============================================================
 // JIT Hostcall Bridge (Host Closures With Caller)

@@ -7,6 +7,7 @@
  */
 
 #include "gc_heap.h"
+#include "native_env.h"
 #include "gc_access.h"
 #include "native_alloc.h"
 #include "ffi_callbacks.h"
@@ -37,19 +38,6 @@ int gc_verify_env_cached = -1;
 static GcAllocationControl gc_allocation_control;
 static void refresh_allocation_control(void);
 
-static int gc_is_truthy_env(const char* value) {
-    if (!value) {
-        return 0;
-    }
-    return strcmp(value, "1") == 0
-        || strcmp(value, "true") == 0
-        || strcmp(value, "TRUE") == 0
-        || strcmp(value, "yes") == 0
-        || strcmp(value, "YES") == 0
-        || strcmp(value, "on") == 0
-        || strcmp(value, "ON") == 0;
-}
-
 // The compiler and the heap agree for the lifetime of the process. The
 // artifact key also includes the mode, so neither representation reuses
 // machine code compiled for the other.
@@ -57,7 +45,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_offset_references_enabled(void) {
     static atomic_int mode = -1;
     int current = atomic_load_explicit(&mode, memory_order_relaxed);
     if (current >= 0) return current;
-    int enabled = gc_is_truthy_env(getenv("WASMOON_EXPERIMENT_OFFSET_REFS"));
+    int enabled = wasmoon_native_env_truthy(getenv("WASMOON_EXPERIMENT_OFFSET_REFS"));
     if (atomic_compare_exchange_strong_explicit(
             &mode, &current, enabled, memory_order_relaxed, memory_order_relaxed)) return enabled;
     return current;
@@ -66,7 +54,7 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_gc_offset_references_enabled(void) {
 static int gc_verify_enabled(void) {
     if (gc_verify_env_cached < 0) {
         const char* value = getenv("WASMOON_GC_VERIFY");
-        gc_verify_env_cached = gc_is_truthy_env(value) ? 1 : 0;
+        gc_verify_env_cached = wasmoon_native_env_truthy(value) ? 1 : 0;
     }
     refresh_allocation_control();
     return gc_verify_env_cached;
@@ -146,7 +134,7 @@ static int gc_barrier_assert_env_cached = -1;
 static int gc_barrier_assert_enabled(void) {
     if (gc_barrier_assert_env_cached < 0) {
         const char* value = getenv("WASMOON_GC_ASSERT_BARRIER");
-        gc_barrier_assert_env_cached = gc_is_truthy_env(value) ? 1 : 0;
+        gc_barrier_assert_env_cached = wasmoon_native_env_truthy(value) ? 1 : 0;
     }
     return gc_barrier_assert_env_cached;
 }
@@ -401,7 +389,7 @@ int32_t wasmoon_gc_heap_is_empty(GcHeap *heap) {
 static GcHeap* gc_heap_new(size_t initial_capacity) {
     if (initial_capacity == 0) initial_capacity = DEFAULT_HEAP_CAPACITY;
     GcHeap *heap = wasmoon_gc_heap_empty();
-    if (gc_is_truthy_env(getenv("WASMOON_EXPERIMENT_STABLE_HEAP"))) {
+    if (wasmoon_native_env_truthy(getenv("WASMOON_EXPERIMENT_STABLE_HEAP"))) {
         reserve_stable_payload(heap, initial_capacity);
     } else {
         heap->data = wasmoon_native_malloc(initial_capacity);
@@ -905,11 +893,6 @@ GcSlot gc_heap_struct_get_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx) 
     return gc_access_struct_get(heap, gc_ref, field_idx);
 }
 
-void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t value) {
-    GcSlot slot = {value, 0};
-    gc_heap_struct_set_wide(heap, gc_ref, field_idx, slot);
-}
-
 void gc_heap_struct_set_wide(GcHeap* heap, int32_t gc_ref, int32_t field_idx,
                              GcSlot value) {
     gc_access_struct_set(heap, gc_ref, field_idx, value);
@@ -1258,14 +1241,6 @@ static int32_t gc_heap_sweep_mode(GcHeap *heap, int young, int discard_dead_payl
     }
     heap->live_count = survivors;
     heap->has_marked_objects = 0;
-    return collected;
-}
-
-static void rebuild_stable_payload(GcHeap *heap, int young, size_t allocation_budget);
-
-int32_t gc_heap_sweep(GcHeap *heap) {
-    int32_t collected = gc_heap_sweep_mode(heap, 0, 0);
-    if (heap && heap->payload_reservation) rebuild_stable_payload(heap, 0, 0);
     return collected;
 }
 
@@ -1720,10 +1695,6 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
 
 // ============ Utilities ============
 
-uint8_t* gc_heap_get_base(GcHeap* heap) {
-    return heap ? heap->data : NULL;
-}
-
 int32_t gc_heap_get_offset(GcHeap* heap, int32_t gc_ref) {
     if (!heap || gc_ref <= 0 || gc_ref > heap->object_count) {
         return -1;
@@ -1826,16 +1797,6 @@ int32_t wasmoon_gc_heap_alloc_struct(GcHeap *heap_ptr, int32_t type_idx,
     return gc_heap_alloc_struct(heap_ptr, type_idx, fields, num_fields);
 }
 
-int64_t wasmoon_gc_heap_struct_get(GcHeap *heap_ptr, int32_t gc_ref, int32_t field_idx) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    return gc_heap_struct_get(heap_ptr, gc_ref, field_idx);
-}
-
-void wasmoon_gc_heap_struct_set(GcHeap *heap_ptr, int32_t gc_ref, int32_t field_idx, int64_t value) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    gc_heap_struct_set(heap_ptr, gc_ref, field_idx, value);
-}
-
 // The `_wide` wrappers carry whole slots as flat [lo, hi] word pairs, because
 // that is what crosses the MoonBit FFI cleanly as a FixedArray[Int64].
 
@@ -1861,31 +1822,9 @@ void wasmoon_gc_heap_struct_set_wide(GcHeap *heap_ptr, int32_t gc_ref,
     gc_heap_struct_set_wide(heap_ptr, gc_ref, field_idx, slot);
 }
 
-int32_t wasmoon_gc_heap_alloc_array(GcHeap *heap_ptr, int32_t type_idx,
-                                     int32_t len, int64_t init_value) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    return gc_heap_alloc_array(heap_ptr, type_idx, len, init_value);
-}
-
 int32_t wasmoon_gc_heap_array_len(GcHeap *heap_ptr, int32_t gc_ref) {
     heap_ptr = gc_heap_live(heap_ptr);
     return gc_heap_array_len(heap_ptr, gc_ref);
-}
-
-int64_t wasmoon_gc_heap_array_get(GcHeap *heap_ptr, int32_t gc_ref, int32_t idx) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    return gc_heap_array_get(heap_ptr, gc_ref, idx);
-}
-
-void wasmoon_gc_heap_array_set(GcHeap *heap_ptr, int32_t gc_ref, int32_t idx, int64_t value) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    gc_heap_array_set(heap_ptr, gc_ref, idx, value);
-}
-
-void wasmoon_gc_heap_array_fill(GcHeap *heap_ptr, int32_t gc_ref, int32_t offset,
-                                 int64_t value, int32_t count) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    gc_heap_array_fill(heap_ptr, gc_ref, offset, value, count);
 }
 
 int32_t wasmoon_gc_heap_alloc_array_wide(GcHeap *heap_ptr, int32_t type_idx,
@@ -1948,7 +1887,7 @@ int32_t wasmoon_gc_heap_is_valid(GcHeap *heap_ptr, int32_t gc_ref) {
 
 int64_t wasmoon_gc_heap_get_base(GcHeap *heap_ptr) {
     heap_ptr = gc_heap_live(heap_ptr);
-    return (int64_t)(uintptr_t)gc_heap_get_base(heap_ptr);
+    return heap_ptr ? (int64_t)(uintptr_t)heap_ptr->data : 0;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_gc_heap_ref_word(GcHeap *heap, int32_t gc_ref) {
@@ -1960,30 +1899,9 @@ int32_t wasmoon_gc_heap_get_offset(GcHeap *heap_ptr, int32_t gc_ref) {
     return gc_heap_get_offset(heap_ptr, gc_ref);
 }
 
-int32_t wasmoon_gc_heap_collect(GcHeap *heap_ptr, int64_t* roots, int32_t num_roots) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    return gc_heap_collect(heap_ptr, roots, num_roots);
-}
-
-int32_t wasmoon_gc_heap_alloc_array_from_values(GcHeap *heap_ptr, int32_t type_idx,
-                                                  int64_t* values, int32_t len) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    return gc_heap_alloc_array_from_values(heap_ptr, type_idx, values, len);
-}
-
 void wasmoon_gc_heap_mark(GcHeap *heap_ptr, int32_t gc_ref) {
     heap_ptr = gc_heap_live(heap_ptr);
     gc_heap_mark(heap_ptr, gc_ref);
-}
-
-void wasmoon_gc_heap_mark_roots(GcHeap *heap_ptr, int64_t* roots, int32_t num_roots) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    gc_heap_mark_roots(heap_ptr, roots, num_roots);
-}
-
-int32_t wasmoon_gc_heap_sweep(GcHeap *heap_ptr) {
-    heap_ptr = gc_heap_live(heap_ptr);
-    return gc_heap_sweep(heap_ptr);
 }
 
 int64_t wasmoon_gc_heap_get_size(GcHeap *heap_ptr) {

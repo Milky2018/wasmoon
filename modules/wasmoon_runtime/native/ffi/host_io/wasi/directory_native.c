@@ -124,20 +124,6 @@ static moonbit_bytes_t serialize_windows_directory(int fd) {
 }
 #endif
 
-MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
-#ifdef _WIN32
-  int fd = wasmoon_windows_open((const char *)path, WASMOON_O_DIRECTORY | _O_RDONLY, 0);
-  if (fd < 0) return NULL;
-  moonbit_bytes_t result = serialize_windows_directory(fd);
-  int error = errno;
-  wasmoon_windows_close(fd); errno = error;
-  return result;
-#else
-  DIR *dir = opendir((const char *)path);
-  return dir ? serialize_directory(dir) : NULL;
-#endif
-}
-
 MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir_fd(int fd) {
 #ifdef _WIN32
   return serialize_windows_directory(fd);

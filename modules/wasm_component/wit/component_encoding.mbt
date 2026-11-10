@@ -17,33 +17,6 @@
 /// - World inline interfaces / import/export funcs / include / use (world-level)
 
 ///|
-fn wit_type_to_prim_opcode(t : TypeExpr) -> Int32 raise WitError {
-  match t {
-    Id(n) =>
-      match n {
-        "bool" => 0x7f
-        "s8" => 0x7e
-        "u8" => 0x7d
-        "s16" => 0x7c
-        "u16" => 0x7b
-        "s32" => 0x7a
-        "u32" => 0x79
-        "s64" => 0x78
-        "u64" => 0x77
-        "f32" => 0x76
-        "f64" => 0x75
-        "char" => 0x74
-        "string" => 0x73
-        _ =>
-          raise Error(
-            "unsupported WIT type for component encoding: `" + n + "`",
-          )
-      }
-    _ => raise Error("unsupported WIT type expression in signature")
-  }
-}
-
-///|
 priv enum EncValType {
   Prim(Int32)
   TypeIdx(Int32)
@@ -392,33 +365,28 @@ fn encode_componenttype(decls : Array[Bytes]) -> Bytes {
 }
 
 ///|
-fn is_prim_id(name : String) -> Bool {
+fn prim_opcode_of_id(name : String) -> Int32? {
   match name {
-    "bool"
-    | "s8"
-    | "u8"
-    | "s16"
-    | "u16"
-    | "s32"
-    | "u32"
-    | "s64"
-    | "u64"
-    | "f32"
-    | "f64"
-    | "char"
-    | "string" => true
-    _ => false
+    "bool" => Some(0x7f)
+    "s8" => Some(0x7e)
+    "u8" => Some(0x7d)
+    "s16" => Some(0x7c)
+    "u16" => Some(0x7b)
+    "s32" => Some(0x7a)
+    "u32" => Some(0x79)
+    "s64" => Some(0x78)
+    "u64" => Some(0x77)
+    "f32" => Some(0x76)
+    "f64" => Some(0x75)
+    "char" => Some(0x74)
+    "string" => Some(0x73)
+    _ => None
   }
 }
 
 ///|
-fn prim_opcode_of_id(name : String) -> Int32 raise WitError {
-  wit_type_to_prim_opcode(Id(name))
-}
-
-///|
 priv struct TypeEnv {
-  next_typeidx : Array[Int32]
+  mut next_typeidx : Int32
   // Exported type/resource name -> nominal type index (the one created by type export decl).
   named_typeidx : Map[String, Int32]
   // local-name -> true iff it's a resource type.
@@ -431,7 +399,7 @@ priv struct TypeEnv {
 ///|
 fn TypeEnv::TypeEnv() -> TypeEnv {
   {
-    next_typeidx: [0],
+    next_typeidx: 0,
     named_typeidx: Map([]),
     resources: Map([]),
     cache: Map([]),
@@ -441,40 +409,37 @@ fn TypeEnv::TypeEnv() -> TypeEnv {
 
 ///|
 fn TypeEnv::alloc_type(self : TypeEnv, typedef : Bytes) -> Int32 {
-  let idx = self.next_typeidx[0]
-  self.next_typeidx[0] = self.next_typeidx[0] + 1
+  let idx = self.next_typeidx
+  self.next_typeidx = self.next_typeidx + 1
   self.decls.push(instancedecl_type(typedef))
   idx
 }
 
 ///|
 fn TypeEnv::alloc_alias_outer(self : TypeEnv, outer_typeidx : Int32) -> Int32 {
-  let idx = self.next_typeidx[0]
-  self.next_typeidx[0] = self.next_typeidx[0] + 1
+  let idx = self.next_typeidx
+  self.next_typeidx = self.next_typeidx + 1
   self.decls.push(instancedecl_alias_outer_type(1, outer_typeidx))
   idx
 }
 
 ///|
-fn TypeEnv::export_type_eq(
+fn TypeEnv::export_type(
   self : TypeEnv,
   name : String,
-  target_idx : Int32,
+  bound : EncTypeBound,
 ) -> Int32 {
   // Exporting a type introduces a fresh nominal type index.
-  self.decls.push(instancedecl_export_type(name, Eq(target_idx)))
-  let idx = self.next_typeidx[0]
-  self.next_typeidx[0] = self.next_typeidx[0] + 1
+  self.decls.push(instancedecl_export_type(name, bound))
+  let idx = self.next_typeidx
+  self.next_typeidx = self.next_typeidx + 1
   self.named_typeidx.set(name, idx)
   idx
 }
 
 ///|
 fn TypeEnv::export_resource(self : TypeEnv, name : String) -> Int32 {
-  self.decls.push(instancedecl_export_type(name, SubResource))
-  let idx = self.next_typeidx[0]
-  self.next_typeidx[0] = self.next_typeidx[0] + 1
-  self.named_typeidx.set(name, idx)
+  let idx = self.export_type(name, SubResource)
   self.resources.set(name, true)
   idx
 }
@@ -506,13 +471,13 @@ fn lower_valtype_in_typedef(
 ) -> EncValType raise WitError {
   match t {
     Id(n) =>
-      if is_prim_id(n) {
-        Prim(prim_opcode_of_id(n))
-      } else {
-        match env.named_typeidx.get(n) {
-          Some(i) => TypeIdx(i)
-          None => raise Error("unknown type `" + n + "` in type definition")
-        }
+      match prim_opcode_of_id(n) {
+        Some(op) => Prim(op)
+        None =>
+          match env.named_typeidx.get(n) {
+            Some(i) => TypeIdx(i)
+            None => raise Error("unknown type `" + n + "` in type definition")
+          }
       }
     Record(fields) => {
       // Anonymous inline record type.
@@ -647,23 +612,26 @@ fn lower_valtype_in_value(
 ) -> EncValType raise WitError {
   match t {
     Id(n) =>
-      if is_prim_id(n) {
-        Prim(prim_opcode_of_id(n))
-      } else if env.resources.get(n) is Some(true) {
-        // Plain resource type in WIT value position is owned.
-        let ridx = env.named_typeidx
-          .get(n)
-          .unwrap_or_else(() => {
-            raise WitError::Error("unknown resource `" + n + "`")
-          })
-        let key = "own:" + ridx.to_string()
-        let idx = ensure_compound_type(env, key, typedef_own(ridx))
-        TypeIdx(idx)
-      } else {
-        match env.named_typeidx.get(n) {
-          Some(i) => TypeIdx(i)
-          None => raise Error("unknown type `" + n + "` in function signature")
-        }
+      match prim_opcode_of_id(n) {
+        Some(op) => Prim(op)
+        None =>
+          if env.resources.get(n) is Some(true) {
+            // Plain resource type in WIT value position is owned.
+            let ridx = env.named_typeidx
+              .get(n)
+              .unwrap_or_else(() => {
+                raise WitError::Error("unknown resource `" + n + "`")
+              })
+            let key = "own:" + ridx.to_string()
+            let idx = ensure_compound_type(env, key, typedef_own(ridx))
+            TypeIdx(idx)
+          } else {
+            match env.named_typeidx.get(n) {
+              Some(i) => TypeIdx(i)
+              None =>
+                raise Error("unknown type `" + n + "` in function signature")
+            }
+          }
       }
     _ => lower_valtype_in_typedef(env, t)
   }
@@ -681,7 +649,7 @@ fn encode_interface_instancetype_full(
   for it in imported_types {
     let (local_name, outer_ti, is_res) = it
     let alias_idx = env.alloc_alias_outer(outer_ti)
-    env.export_type_eq(local_name, alias_idx) |> ignore
+    env.export_type(local_name, Eq(alias_idx)) |> ignore
     if is_res {
       env.resources.set(local_name, true)
     }
@@ -703,7 +671,7 @@ fn encode_interface_instancetype_full(
   // Helper to collect dependencies from a TypeExpr.
   fn collect_deps_from_typeexpr(t : TypeExpr, out : Map[String, Bool]) -> Unit {
     match t {
-      Id(n) => if !is_prim_id(n) { out.set(n, true) }
+      Id(n) => if prim_opcode_of_id(n) is None { out.set(n, true) }
       Apply(_n, args) =>
         for a in args {
           collect_deps_from_typeexpr(a, out)
@@ -806,18 +774,19 @@ fn encode_interface_instancetype_full(
           if t.name == name {
             match t.ty {
               Id(rhs) =>
-                if is_prim_id(rhs) {
-                  let base = env.alloc_type(
-                    typedef_prim(prim_opcode_of_id(rhs)),
-                  )
-                  env.export_type_eq(t.name, base) |> ignore
-                } else {
-                  let target = env.named_typeidx
-                    .get(rhs)
-                    .unwrap_or_else(() => {
-                      raise WitError::Error("unknown type `" + rhs + "`")
-                    })
-                  env.export_type_eq(t.name, target) |> ignore
+                match prim_opcode_of_id(rhs) {
+                  Some(op) => {
+                    let base = env.alloc_type(typedef_prim(op))
+                    env.export_type(t.name, Eq(base)) |> ignore
+                  }
+                  None => {
+                    let target = env.named_typeidx
+                      .get(rhs)
+                      .unwrap_or_else(() => {
+                        raise WitError::Error("unknown type `" + rhs + "`")
+                      })
+                    env.export_type(t.name, Eq(target)) |> ignore
+                  }
                 }
               _ => {
                 let base = match t.ty {
@@ -891,7 +860,7 @@ fn encode_interface_instancetype_full(
                     // Handled above.
                     env.alloc_type(typedef_prim(0x7f))
                 }
-                env.export_type_eq(t.name, base) |> ignore
+                env.export_type(t.name, Eq(base)) |> ignore
               }
             }
           }
@@ -902,7 +871,7 @@ fn encode_interface_instancetype_full(
               fields.push((f.0, lower_valtype_in_typedef(env, f.1)))
             }
             let base = env.alloc_type(typedef_record(fields))
-            env.export_type_eq(r.name, base) |> ignore
+            env.export_type(r.name, Eq(base)) |> ignore
           }
         Variant(v) =>
           if v.name == name {
@@ -915,17 +884,17 @@ fn encode_interface_instancetype_full(
               cases.push((c.name, payload))
             }
             let base = env.alloc_type(typedef_variant(cases))
-            env.export_type_eq(v.name, base) |> ignore
+            env.export_type(v.name, Eq(base)) |> ignore
           }
         Flags(f) =>
           if f.name == name {
             let base = env.alloc_type(typedef_flags(f.flags))
-            env.export_type_eq(f.name, base) |> ignore
+            env.export_type(f.name, Eq(base)) |> ignore
           }
         Enum(e) =>
           if e.name == name {
             let base = env.alloc_type(typedef_enum(e.cases))
-            env.export_type_eq(e.name, base) |> ignore
+            env.export_type(e.name, Eq(base)) |> ignore
           }
         _ => ()
       }
@@ -1393,29 +1362,9 @@ fn export_name_to_string(n : @component.ExportName) -> String {
 }
 
 ///|
-fn pp_primvaltype(p : @component.PrimValType) -> String {
-  match p {
-    Bool => "bool"
-    S8 => "s8"
-    U8 => "u8"
-    S16 => "s16"
-    U16 => "u16"
-    S32 => "s32"
-    U32 => "u32"
-    S64 => "s64"
-    U64 => "u64"
-    F32 => "f32"
-    F64 => "f64"
-    Char => "char"
-    String => "string"
-    ErrorContext => "error-context"
-  }
-}
-
-///|
 fn pp_valtype(v : @component.ValType) -> String {
   match v {
-    Prim(p) => pp_primvaltype(p)
+    Prim(p) => primitive_type_name(p)
     TypeIdx(i) => i.to_string()
   }
 }
@@ -1436,7 +1385,7 @@ fn pp_functype(sb : StringBuilder, ft : @component.FuncType) -> Unit {
 ///|
 fn pp_typedef(sb : StringBuilder, td : @component.TypeDef) -> Unit {
   match td {
-    DefValType(p) => sb.write_string(pp_primvaltype(p))
+    DefValType(p) => sb.write_string(primitive_type_name(p))
     FuncType(ft) => pp_functype(sb, ft)
     List(t) => sb.write_string("(list " + pp_valtype(t) + ")")
     FixedList(t, len) =>

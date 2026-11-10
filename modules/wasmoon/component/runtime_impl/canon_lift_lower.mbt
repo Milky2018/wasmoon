@@ -20,7 +20,7 @@ fn instantiate_canon_lift(
   core_func_idx : Int32,
   opts : Array[CanonOpt],
   type_idx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   entry_state : ComponentInstanceEntryState,
 ) -> Unit raise ComponentRuntimeError {
   if core_func_idx < 0 || core_func_idx >= state.core_funcs.length() {
@@ -57,7 +57,7 @@ fn instantiate_canon_lift(
 fn instantiate_canon_lower(
   func_idx : Int32,
   opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   if func_idx < 0 || func_idx >= state.funcs.length() {

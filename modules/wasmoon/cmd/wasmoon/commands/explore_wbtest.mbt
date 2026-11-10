@@ -108,7 +108,7 @@ test "explore matches production artifacts with compact context and imported fun
         let scalar_callees = @wasm_frontend.scalar_callees(context, mod_)
         let functions : Array[@artifact.FunctionCode] = []
         for i, code in mod_.codes {
-          let index = i + count_func_imports(mod_.imports)
+          let index = i + @types.count_func_imports(mod_.imports)
           let func_type = mod_.validated_func_type_at(mod_.funcs[i])
           let function = @wasm_frontend.translate_function_body(
             context,

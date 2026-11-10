@@ -1,6 +1,5 @@
 ///|
-#derive(Debug)
-struct DenseCfgEdges {
+priv struct DenseCfgEdges {
   preds : Array[Array[Int32]]
   succs : Array[Array[Int32]]
 }

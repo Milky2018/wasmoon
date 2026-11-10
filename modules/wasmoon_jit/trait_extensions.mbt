@@ -5,9 +5,6 @@ pub extend GCSetupError with Debug::{to_repr}
 pub extend GCSetupError with Show::{to_string, output}
 
 ///|
-pub extend GcSafepoint with Debug::{to_repr}
-
-///|
 pub extend HostcallImportTrampolineError with Debug::{to_repr}
 
 ///|
@@ -21,9 +18,6 @@ pub extend ImportFunctionResolution with Debug::{to_repr}
 
 ///|
 pub extend ImportFunctionResolution with Eq::{not_equal, equal}
-
-///|
-pub extend JitCodeObject with Debug::{to_repr}
 
 ///|
 pub extend JitPipelineDiagnostics with Debug::{to_repr}

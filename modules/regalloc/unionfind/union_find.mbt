@@ -1,24 +1,21 @@
 // Union-Find (Disjoint Set) Data Structure
-// Used for bundle merging in the Ion-style register allocator.
-// Implements path compression and union by rank for efficiency.
+// Directional bundle merging with path compression.
+// The requested target representative remains the root.
 
 ///|
 /// Union-Find data structure for grouping LiveRanges into Bundles
 struct UnionFind {
   parent : Array[Int32] // Parent pointer (or self if root)
-  rank : Array[Int32] // Rank for union by rank heuristic
 }
 
 ///|
 /// Create a new UnionFind with n elements (0..n-1)
 pub fn UnionFind::UnionFind(n : Int32) -> UnionFind {
   let parent : Array[Int32] = []
-  let rank : Array[Int32] = []
   for i in 0..<n {
     parent.push(i) // Each element is its own parent initially
-    rank.push(0)
   }
-  { parent, rank, }
+  { parent, }
 }
 
 ///|
@@ -39,30 +36,6 @@ pub fn UnionFind::find(self : UnionFind, x : Int32) -> Int32 {
 }
 
 ///|
-/// Union the sets containing x and y
-/// Uses union by rank for balanced trees
-/// Returns true if a union was performed (sets were different)
-pub fn UnionFind::union(self : UnionFind, x : Int32, y : Int32) -> Bool {
-  let root_x = self.find(x)
-  let root_y = self.find(y)
-  if root_x == root_y {
-    return false // Already in same set
-  }
-
-  // Union by rank: attach smaller tree under larger tree
-  if self.rank[root_x] < self.rank[root_y] {
-    self.parent[root_x] = root_y
-  } else if self.rank[root_x] > self.rank[root_y] {
-    self.parent[root_y] = root_x
-  } else {
-    // Same rank: choose arbitrarily and increment rank
-    self.parent[root_y] = root_x
-    self.rank[root_x] += 1
-  }
-  true
-}
-
-///|
 /// Union the set containing `from` into the set containing `to`.
 /// Returns true if a union was performed (sets were different).
 pub fn UnionFind::union_into(
@@ -77,58 +50,4 @@ pub fn UnionFind::union_into(
   }
   self.parent[from_root] = to_root
   true
-}
-
-///|
-/// Check if x and y are in the same set
-pub fn UnionFind::same_set(self : UnionFind, x : Int32, y : Int32) -> Bool {
-  self.find(x) == self.find(y)
-}
-
-///|
-/// Get all elements in the same set as x
-pub fn UnionFind::get_set(self : UnionFind, x : Int32) -> Array[Int32] {
-  let root = self.find(x)
-  let result : Array[Int32] = []
-  for i in 0..<self.parent.length() {
-    if self.find(i) == root {
-      result.push(i)
-    }
-  }
-  result
-}
-
-///|
-/// Get all unique sets (as arrays of their members)
-pub fn UnionFind::get_all_sets(self : UnionFind) -> Array[Array[Int32]] {
-  let sets : Map[Int32, Array[Int32]] = Map([])
-  for i in 0..<self.parent.length() {
-    let root = self.find(i)
-    match sets.get(root) {
-      Some(arr) => arr.push(i)
-      None => sets.set(root, [i])
-    }
-  }
-  let result : Array[Array[Int32]] = []
-  for entry in sets {
-    let (_, members) = entry
-    result.push(members)
-  }
-  result
-}
-
-///|
-/// Get the number of elements
-pub fn UnionFind::length(self : UnionFind) -> Int32 {
-  self.parent.length()
-}
-
-///|
-/// Count the number of distinct sets
-pub fn UnionFind::num_sets(self : UnionFind) -> Int32 {
-  let roots : Set[Int32] = Set([])
-  for i in 0..<self.parent.length() {
-    roots.add(self.find(i))
-  }
-  roots.length()
 }

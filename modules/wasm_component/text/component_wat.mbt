@@ -2907,16 +2907,18 @@ fn parse_core_func_ref(
 }
 
 ///|
-fn parse_core_memory_ref(
+fn parse_core_reference(
   expr : SExpr,
   state : ComponentBuildState,
+  expected_kind : Int32,
 ) -> Int32 raise ComponentTextError {
+  let (space, context) = alias_space(state, 0x00, Some(expected_kind)).unwrap()
   if expr is Atom(_) {
-    return resolve_reference(expr, state.core_memory_space.names, "core memory")
+    return resolve_reference(expr, space.names, context)
   }
   let sort_ref = parse_core_sort_ref(expr, state)
-  if sort_ref.kind != 0x02 {
-    raise Unsupported("expected core memory reference")
+  if sort_ref.kind != expected_kind {
+    raise Unsupported("expected \{context} reference")
   }
   sort_ref.idx
 }
@@ -2954,7 +2956,7 @@ fn parse_canon_memory_option(
   state : ComponentBuildState,
 ) -> Int32 raise ComponentTextError {
   if items.length() == 2 {
-    parse_core_memory_ref(items[1], state)
+    parse_core_reference(items[1], state, 2)
   } else if items.length() == 3 {
     let instance = resolve_reference(
       items[1],
@@ -3213,36 +3215,6 @@ fn parse_component_type_ref(
 }
 
 ///|
-fn parse_core_type_ref(
-  expr : SExpr,
-  state : ComponentBuildState,
-) -> Int32 raise ComponentTextError {
-  if expr is Atom(_) {
-    return resolve_reference(expr, state.core_type_space.names, "core type")
-  }
-  let sort_ref = parse_core_sort_ref(expr, state)
-  if sort_ref.kind != 0x05 {
-    raise Unsupported("expected core type reference")
-  }
-  sort_ref.idx
-}
-
-///|
-fn parse_core_table_ref(
-  expr : SExpr,
-  state : ComponentBuildState,
-) -> Int32 raise ComponentTextError {
-  if expr is Atom(_) {
-    return resolve_reference(expr, state.core_table_space.names, "core table")
-  }
-  let sort_ref = parse_core_sort_ref(expr, state)
-  if sort_ref.kind != 0x01 {
-    raise Unsupported("expected core table reference")
-  }
-  sort_ref.idx
-}
-
-///|
 fn parse_canon_bool_flag(expr : SExpr) -> Bool raise ComponentTextError {
   if expr is Atom(flag_name) {
     if flag_name == "async" || flag_name == "cancellable" {
@@ -3403,8 +3375,8 @@ fn parse_canon_decl(
     }
     let decl = @binary.Writer()
     decl.write_byte(0x27)
-    decl.write_u32(parse_core_type_ref(canon_items[2], state))
-    decl.write_u32(parse_core_table_ref(canon_items[3], state))
+    decl.write_u32(parse_core_reference(canon_items[2], state, 5))
+    decl.write_u32(parse_core_reference(canon_items[3], state, 1))
     return (decl.to_bytes(), true, target_name_opt)
   }
   if op_name == "thread.yield" ||

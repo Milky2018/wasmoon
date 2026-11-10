@@ -941,13 +941,6 @@ MOONBIT_FFI_EXPORT uint64_t wasmoon_dwarf_get_low_pc(void) {
     return 0;
 }
 
-MOONBIT_FFI_EXPORT uint64_t wasmoon_dwarf_get_high_pc(void) {
-    if (g_active_dwarf) {
-        return g_active_dwarf->high_pc;
-    }
-    return 0;
-}
-
 // Lookup an address in the DWARF builder
 // Returns required UTF-8 name bytes including NUL, or 0 if absent.
 // If found, fills in name (up to name_size bytes), func_idx, and offset
@@ -991,12 +984,6 @@ MOONBIT_FFI_EXPORT int wasmoon_dwarf_lookup_address(
 // Maximum backtrace depth
 #define MAX_BACKTRACE_DEPTH 64
 
-// Backtrace frame structure
-typedef struct {
-    uint64_t pc;        // Program counter / return address
-    uint64_t fp;        // Frame pointer
-} backtrace_frame_t;
-
 // Capture a backtrace using pre-captured frames from signal handler
 // The frame chain was captured after returning to the trap activation.
 // Returns the number of frames captured
@@ -1038,58 +1025,4 @@ MOONBIT_FFI_EXPORT int wasmoon_dwarf_capture_backtrace_ex(
     }
 
     return count;
-}
-
-// Format a backtrace as a string
-// Returns the number of bytes written (excluding null terminator)
-MOONBIT_FFI_EXPORT int wasmoon_dwarf_format_backtrace(
-    void *dwarf,
-    int64_t *frames,
-    int frame_count,
-    char *buffer,
-    int buffer_size
-) {
-    if (!buffer || buffer_size <= 0) {
-        return 0;
-    }
-
-    dwarf_builder_t *builder = (dwarf_builder_t *)dwarf;
-    if (!builder) {
-        builder = g_active_dwarf;
-    }
-
-    int written = 0;
-    int remaining = buffer_size - 1;  // Reserve space for null terminator
-
-    for (int i = 0; i < frame_count && remaining > 0; i++) {
-        uint64_t pc = (uint64_t)frames[i * 2];
-
-        char name[256] = "<unknown>";
-        int func_idx = -1;
-        int64_t offset = 0;
-
-        if (builder) {
-            wasmoon_dwarf_lookup_address(builder, pc, name, sizeof(name), &func_idx, &offset);
-        }
-
-        int n;
-        if (func_idx >= 0) {
-            n = snprintf(buffer + written, remaining,
-                         "  #%d 0x%llx %s+0x%llx\n",
-                         i, (unsigned long long)pc, name, (unsigned long long)offset);
-        } else {
-            n = snprintf(buffer + written, remaining,
-                         "  #%d 0x%llx <unknown>\n",
-                         i, (unsigned long long)pc);
-        }
-
-        if (n < 0 || n >= remaining) {
-            break;
-        }
-        written += n;
-        remaining -= n;
-    }
-
-    buffer[written] = '\0';
-    return written;
 }

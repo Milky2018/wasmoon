@@ -8,7 +8,7 @@ pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 /// Advance this value whenever compiler changes can alter emitted code while
 /// preserving the artifact format and JIT ABI. Persistent caches use it as part
 /// of their compatibility identity.
-pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-54"
+pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-55"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int32 = "wasmoon_jit_host_operating_system_abi"
@@ -119,7 +119,7 @@ pub fn build_artifact_manifest(
     required_cpu_features: required_cpu_features.copy(),
     jit_abi_version: WASMOON_JIT_ABI_VERSION,
     codegen_revision: if offset_reference_codegen_enabled {
-      "direct-vcode-offset-experiment-9"
+      "direct-vcode-offset-experiment-10"
     } else {
       WASMOON_CODEGEN_REVISION
     },
@@ -281,10 +281,8 @@ fn artifact_function_from_code_object(
 /// Compile one verified Wasm MilkIR body directly into the final unlinked
 /// artifact representation. Symbolic relocations are retained unchanged.
 pub struct NativeCompiler {
-  priv target : NativeTarget
+  priv backend : NativeBackend
   priv context_layout : VMContextLayout
-  priv aarch64 : @aarch64_target.CompilationSession?
-  priv x64 : @x64_target.CompilationSession?
 }
 
 ///|
@@ -319,21 +317,9 @@ fn native_compiler(
   context_shape : ContextShape,
   lse_atomic_add : Bool,
 ) -> NativeCompiler {
-  match target {
-    AArch64 =>
-      {
-        target,
-        context_layout: shaped_vmcontext_layout(context_shape),
-        aarch64: Some(@aarch64_target.CompilationSession::new(lse_atomic_add~)),
-        x64: None,
-      }
-    X64 =>
-      {
-        target,
-        context_layout: shaped_vmcontext_layout(context_shape),
-        aarch64: None,
-        x64: Some(@x64_target.CompilationSession::new()),
-      }
+  {
+    backend: NativeBackend::new(target, lse_atomic_add~),
+    context_layout: shaped_vmcontext_layout(context_shape),
   }
 }
 
@@ -382,41 +368,4 @@ pub fn NativeCompiler::compile_wasm_body_artifact_function(
   )
   record_compile_subphase("artifact_packaging", packaging_tick)
   result
-}
-
-///|
-fn NativeCompiler::compile_wasm_body(
-  self : NativeCompiler,
-  function : @milkir.Function,
-  validation_context : @wasm_milkir.WasmValidationContext,
-  function_index~ : Int32,
-  record_metrics~ : Bool = false,
-  on_diagnostics~ : ((String, String) -> Unit)? = None,
-) -> (@code_object.UnlinkedCodeObject, Int32) raise JitPipelineError {
-  match self.target {
-    AArch64 => {
-      let compiled = compile_wasm_body_aarch64_target(
-        function,
-        validation_context,
-        record_metrics~,
-        function_index~,
-        context_layout=self.context_layout,
-        compilation_session=self.aarch64.unwrap(),
-        on_diagnostics~,
-      )
-      (compiled.object, compiled.frame_size)
-    }
-    X64 => {
-      let compiled = compile_wasm_body_x64_target(
-        function,
-        validation_context,
-        record_metrics~,
-        function_index~,
-        context_layout=self.context_layout,
-        compilation_session=self.x64.unwrap(),
-        on_diagnostics~,
-      )
-      (compiled.object, compiled.frame_size)
-    }
-  }
 }

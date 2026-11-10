@@ -19,7 +19,7 @@ priv enum TypeSlot {
 }
 
 ///|
-fn prim_name_of(p : @component.PrimValType) -> String {
+fn primitive_type_name(p : @component.PrimValType) -> String {
   match p {
     Bool => "bool"
     S8 => "s8"
@@ -46,7 +46,7 @@ fn typeexpr_of_valtype(
   resource_by_idx : Map[Int32, String],
 ) -> TypeExpr raise WitError {
   match v {
-    Prim(p) => Id(prim_name_of(p))
+    Prim(p) => Id(primitive_type_name(p))
     TypeIdx(i) =>
       match export_name_by_idx.get(i) {
         Some(n) => Id(n)
@@ -77,7 +77,7 @@ fn typeexpr_of_typedef(
   resource_by_idx : Map[Int32, String],
 ) -> TypeExpr raise WitError {
   match td {
-    DefValType(p) => Id(prim_name_of(p))
+    DefValType(p) => Id(primitive_type_name(p))
     List(t) =>
       Apply("list", [
         typeexpr_of_valtype(slots, t, export_name_by_idx, resource_by_idx),

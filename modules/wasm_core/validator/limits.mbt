@@ -134,39 +134,6 @@ fn validate_table_type(
 }
 
 ///|
-fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Func(_) {
-      count = count + 1
-    }
-  }
-  count
-}
-
-///|
-fn count_global_imports(imports : Array[@types.Import]) -> Int32 {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Global(_) {
-      count = count + 1
-    }
-  }
-  count
-}
-
-///|
-fn count_tag_imports(imports : Array[@types.Import]) -> Int32 {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Tag(_) {
-      count = count + 1
-    }
-  }
-  count
-}
-
-///|
 fn ValidationContext::memory_type(
   self : ValidationContext,
   index : Int32,

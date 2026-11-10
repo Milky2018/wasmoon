@@ -5,10 +5,10 @@ fn BuildState::append_declared_type(
   value : TypeDef?,
 ) -> Unit {
   let index = self.next_declared_type.val
-  if index == self.types.length() {
-    self.types.push(value)
+  if index == self.instance.types.length() {
+    self.instance.types.push(value)
   } else {
-    self.types[index] = value
+    self.instance.types[index] = value
   }
   self.next_declared_type.val += 1
 }

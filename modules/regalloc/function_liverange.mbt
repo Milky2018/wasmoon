@@ -65,7 +65,6 @@ fn[F : FunctionView] collect_function_liveness(
           kind: use_kind_of_role(operand.role),
           constraint: operand.constraint,
           preference: operand.preference,
-          tie_id: operand.tie_id,
         })
         if operand.role is Use {
           if !definitions.contains(operand.vreg.id) {

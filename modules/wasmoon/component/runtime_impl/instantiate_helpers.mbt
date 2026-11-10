@@ -1,98 +1,6 @@
 ///|
 fn resolve_sortidx(
   sortidx : SortIdx,
-  state : BuildState,
-) -> ComponentExtern raise ComponentRuntimeError {
-  let idx = sortidx.idx
-  match sortidx.sort {
-    Func =>
-      if idx < 0 || idx >= state.funcs.length() {
-        raise InvalidFuncIndex(idx)
-      } else {
-        Func(state.funcs[idx])
-      }
-    Value =>
-      if idx < 0 || idx >= state.values.length() {
-        raise InvalidValueIndex(idx)
-      } else {
-        Value(state.values[idx])
-      }
-    Type =>
-      if idx < 0 || idx >= state.types.length() {
-        raise InvalidTypeIndex(idx)
-      } else {
-        Type(state.types[idx])
-      }
-    Component =>
-      if idx < 0 || idx >= state.components.length() {
-        raise InvalidComponentIndex(idx)
-      } else {
-        Component(state.components[idx])
-      }
-    Instance =>
-      if idx < 0 || idx >= state.instances.length() {
-        raise InvalidInstanceIndex(idx)
-      } else {
-        Instance(state.instances[idx])
-      }
-    Core(core_sort) =>
-      match core_sort {
-        0x00 =>
-          if idx < 0 || idx >= state.core_funcs.length() {
-            raise InvalidCoreFuncIndex(idx)
-          } else {
-            CoreFunc(state.core_funcs[idx])
-          }
-        0x01 =>
-          if idx < 0 || idx >= state.core_tables.length() {
-            raise InvalidCoreTableIndex(idx)
-          } else {
-            CoreTable(state.core_tables[idx])
-          }
-        0x02 =>
-          if idx < 0 || idx >= state.core_mems.length() {
-            raise InvalidCoreMemoryIndex(idx)
-          } else {
-            CoreMemory(state.core_mems[idx])
-          }
-        0x03 =>
-          if idx < 0 || idx >= state.core_globals.length() {
-            raise InvalidCoreGlobalIndex(idx)
-          } else {
-            CoreGlobal(state.core_globals[idx])
-          }
-        0x04 =>
-          if idx < 0 || idx >= state.core_tags.length() {
-            raise InvalidCoreTagIndex(idx)
-          } else {
-            CoreTag(state.core_tags[idx])
-          }
-        0x05 | 0x10 =>
-          if idx < 0 || idx >= state.core_types.length() {
-            raise InvalidCoreTypeIndex(idx)
-          } else {
-            CoreType(state.core_types[idx])
-          }
-        0x11 =>
-          if idx < 0 || idx >= state.core_modules.length() {
-            raise InvalidCoreModuleIndex(idx)
-          } else {
-            CoreModule(state.core_modules[idx])
-          }
-        0x12 =>
-          if idx < 0 || idx >= state.core_instances.length() {
-            raise InvalidCoreInstanceIndex(idx)
-          } else {
-            CoreInstance(state.core_instances[idx])
-          }
-        _ => raise AliasTargetMismatch("unsupported core sort")
-      }
-  }
-}
-
-///|
-fn resolve_sortidx_in_instance(
-  sortidx : SortIdx,
   inst : ComponentInstance,
 ) -> ComponentExtern raise ComponentRuntimeError {
   let idx = sortidx.idx
@@ -189,56 +97,56 @@ fn append_alias(
   state : BuildState,
 ) -> Unit raise ComponentRuntimeError {
   match (sort, ext) {
-    (Func, Func(f)) => state.funcs.push(f)
-    (Value, Value(v)) => state.values.push(v)
+    (Func, Func(f)) => state.instance.funcs.push(f)
+    (Value, Value(v)) => state.instance.values.push(v)
     (Type, Type(t)) => state.append_declared_type(t)
-    (Component, Component(c)) => state.components.push(c)
-    (Instance, Instance(i)) => state.instances.push(i)
+    (Component, Component(c)) => state.instance.components.push(c)
+    (Instance, Instance(i)) => state.instance.instances.push(i)
     (Core(core_sort), CoreFunc(f)) =>
       if core_sort == 0x00 {
-        state.core_funcs.push(f)
+        state.instance.core_funcs.push(f)
       } else {
         raise AliasTargetMismatch("core func")
       }
     (Core(core_sort), CoreTable(t)) =>
       if core_sort == 0x01 {
-        state.core_tables.push(t)
+        state.instance.core_tables.push(t)
       } else {
         raise AliasTargetMismatch("core table")
       }
     (Core(core_sort), CoreMemory(m)) =>
       if core_sort == 0x02 {
-        state.core_mems.push(m)
+        state.instance.core_mems.push(m)
       } else {
         raise AliasTargetMismatch("core memory")
       }
     (Core(core_sort), CoreGlobal(g)) =>
       if core_sort == 0x03 {
-        state.core_globals.push(g)
+        state.instance.core_globals.push(g)
       } else {
         raise AliasTargetMismatch("core global")
       }
     (Core(core_sort), CoreTag(t)) =>
       if core_sort == 0x04 {
-        state.core_tags.push(t)
+        state.instance.core_tags.push(t)
       } else {
         raise AliasTargetMismatch("core tag")
       }
     (Core(core_sort), CoreType(t)) =>
       if core_sort == 0x05 || core_sort == 0x10 {
-        state.core_types.push(t)
+        state.instance.core_types.push(t)
       } else {
         raise AliasTargetMismatch("core type")
       }
     (Core(core_sort), CoreModule(m)) =>
       if core_sort == 0x11 {
-        state.core_modules.push(m)
+        state.instance.core_modules.push(m)
       } else {
         raise AliasTargetMismatch("core module")
       }
     (Core(core_sort), CoreInstance(i)) =>
       if core_sort == 0x12 {
-        state.core_instances.push(i)
+        state.instance.core_instances.push(i)
       } else {
         raise AliasTargetMismatch("core instance")
       }
@@ -257,7 +165,7 @@ fn resolve_outer_alias(
     raise OuterAliasOutOfRange(depth)
   }
   let outer = outer_stack[outer_stack.length() - 1 - depth]
-  resolve_sortidx_in_instance({ sort, idx, }, outer)
+  resolve_sortidx({ sort, idx, }, outer)
 }
 
 ///|
@@ -274,38 +182,16 @@ fn extend_outer_stack(
 }
 
 ///|
-fn env_instance_from_state(
-  name : String,
-  state : BuildState,
-  store : @runtime.Store,
+fn ComponentInstance::environment(
+  self : ComponentInstance,
 ) -> ComponentInstance {
-  {
-    name,
-    types: state.types,
-    funcs: state.funcs,
-    values: state.values,
-    components: state.components,
-    instances: state.instances,
-    resource_table: state.resource_table,
-    stream_table: state.stream_table,
-    async_state: state.async_state,
-    core_modules: state.core_modules,
-    core_instances: state.core_instances,
-    core_funcs: state.core_funcs,
-    core_types: state.core_types,
-    core_tables: state.core_tables,
-    core_mems: state.core_mems,
-    core_globals: state.core_globals,
-    core_tags: state.core_tags,
-    exports: state.exports,
-    store,
-  }
+  { ..self, name: "\{self.name}::env", }
 }
 
 ///|
 fn build_inline_core_instance(
   exports : Array[CoreInlineExport],
-  state : BuildState,
+  state : ComponentInstance,
 ) -> CoreInstance raise ComponentRuntimeError {
   let funcs : Map[String, CoreFuncRef] = Map([])
   let tables : Map[String, Int32] = Map([])
@@ -347,7 +233,7 @@ fn split_core_import_name(name : String) -> (String, String) {
 ///|
 fn core_imports_from_args(
   args : Array[CoreInstantiateArg],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> @runtime.Imports raise ComponentRuntimeError {
   let imports = @runtime.Imports::Imports(store)
@@ -406,7 +292,7 @@ fn core_imports_from_args(
 ///|
 fn core_args_may_suspend(
   args : Array[CoreInstantiateArg],
-  state : BuildState,
+  state : ComponentInstance,
 ) -> Bool raise ComponentRuntimeError {
   for arg in args {
     match resolve_sortidx(arg.sortidx, state) {
@@ -428,7 +314,7 @@ fn core_args_may_suspend(
 ///|
 fn core_args_native_eligible(
   args : Array[CoreInstantiateArg],
-  state : BuildState,
+  state : ComponentInstance,
 ) -> Bool raise ComponentRuntimeError {
   for arg in args {
     match resolve_sortidx(arg.sortidx, state) {
@@ -455,7 +341,7 @@ fn supplied_core_func_for_import(
   mod_name : String,
   field : String,
   args : Array[CoreInstantiateArg],
-  state : BuildState,
+  state : ComponentInstance,
 ) -> CoreFuncRef? raise ComponentRuntimeError {
   for arg in args {
     match resolve_sortidx(arg.sortidx, state) {
@@ -482,7 +368,7 @@ fn supplied_core_func_for_import(
 fn validate_core_import_args(
   module_ : @types.Module,
   args : Array[CoreInstantiateArg],
-  state : BuildState,
+  state : ComponentInstance,
 ) -> Unit raise ComponentRuntimeError {
   for imp in module_.imports {
     match imp.desc {

@@ -83,7 +83,7 @@ fn run_explore_with_compiler(
 
   // Count imports to convert between absolute and local function indices
   // Absolute index = num_imports + local_index (matches JIT error messages)
-  let num_imports = count_func_imports(mod_.imports)
+  let num_imports = @types.count_func_imports(mod_.imports)
   // Determine which functions to explore before emitting any report output.
   // User provides an absolute WebAssembly function index (including imports),
   // matching the indices shown in JIT diagnostics.

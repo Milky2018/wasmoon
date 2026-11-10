@@ -1,7 +1,12 @@
 ///|
 pub fn package_to_json(pkg : Package) -> String {
-  // Small JSON emitter for CLI output; stable ordering.
   let sb = StringBuilder::StringBuilder()
+  write_package_json(sb, pkg)
+  sb.to_string()
+}
+
+///|
+fn write_package_json(sb : StringBuilder, pkg : Package) -> Unit {
   sb.write_char('{')
   sb.write_string("\"name\":")
   match pkg.name {
@@ -18,7 +23,7 @@ pub fn package_to_json(pkg : Package) -> String {
     if i > 0 {
       sb.write_char(',')
     }
-    sb.write_string(package_to_json(pkg.nested[i]))
+    write_package_json(sb, pkg.nested[i])
   }
   sb.write_char(']')
   sb.write_string(",\"items\":[")
@@ -36,46 +41,18 @@ pub fn package_to_json(pkg : Package) -> String {
             sb.write_char(',')
           }
           match it.items[j] {
-            Func(fd) => {
-              sb.write_string("{\"kind\":\"func\",\"name\":")
-              json_string(sb, fd.name)
-              sb.write_string("}")
-            }
-            TypeAlias(td) => {
-              sb.write_string("{\"kind\":\"type\",\"name\":")
-              json_string(sb, td.name)
-              sb.write_string("}")
-            }
-            Record(rd) => {
-              sb.write_string("{\"kind\":\"record\",\"name\":")
-              json_string(sb, rd.name)
-              sb.write_string("}")
-            }
-            Use(u) => {
-              sb.write_string("{\"kind\":\"use\",\"path\":")
-              json_string(sb, u.path.raw)
-              sb.write_string("}")
-            }
-            Resource(r) => {
-              sb.write_string("{\"kind\":\"resource\",\"name\":")
-              json_string(sb, r.name)
-              sb.write_string("}")
-            }
-            Variant(v) => {
-              sb.write_string("{\"kind\":\"variant\",\"name\":")
-              json_string(sb, v.name)
-              sb.write_string("}")
-            }
-            Flags(f) => {
-              sb.write_string("{\"kind\":\"flags\",\"name\":")
-              json_string(sb, f.name)
-              sb.write_string("}")
-            }
-            Enum(e) => {
-              sb.write_string("{\"kind\":\"enum\",\"name\":")
-              json_string(sb, e.name)
-              sb.write_string("}")
-            }
+            Func(fd) => json_item(sb, "{\"kind\":\"func\",\"name\":", fd.name)
+            TypeAlias(td) =>
+              json_item(sb, "{\"kind\":\"type\",\"name\":", td.name)
+            Record(rd) =>
+              json_item(sb, "{\"kind\":\"record\",\"name\":", rd.name)
+            Use(u) => json_item(sb, "{\"kind\":\"use\",\"path\":", u.path.raw)
+            Resource(r) =>
+              json_item(sb, "{\"kind\":\"resource\",\"name\":", r.name)
+            Variant(v) =>
+              json_item(sb, "{\"kind\":\"variant\",\"name\":", v.name)
+            Flags(f) => json_item(sb, "{\"kind\":\"flags\",\"name\":", f.name)
+            Enum(e) => json_item(sb, "{\"kind\":\"enum\",\"name\":", e.name)
           }
         }
         sb.write_string("]}")
@@ -89,76 +66,29 @@ pub fn package_to_json(pkg : Package) -> String {
             sb.write_char(',')
           }
           match w.items[j] {
-            Import(p) => {
-              sb.write_string("{\"kind\":\"import\",\"path\":")
-              json_string(sb, p.raw)
-              sb.write_string("}")
-            }
-            Export(p) => {
-              sb.write_string("{\"kind\":\"export\",\"path\":")
-              json_string(sb, p.raw)
-              sb.write_string("}")
-            }
-            ImportFunc(f) => {
-              sb.write_string("{\"kind\":\"import-func\",\"name\":")
-              json_string(sb, f.name)
-              sb.write_string("}")
-            }
-            ExportFunc(f) => {
-              sb.write_string("{\"kind\":\"export-func\",\"name\":")
-              json_string(sb, f.name)
-              sb.write_string("}")
-            }
-            ImportInlineInterface(nm, _) => {
-              sb.write_string("{\"kind\":\"import-interface\",\"name\":")
-              json_string(sb, nm)
-              sb.write_string("}")
-            }
-            ExportInlineInterface(nm, _) => {
-              sb.write_string("{\"kind\":\"export-interface\",\"name\":")
-              json_string(sb, nm)
-              sb.write_string("}")
-            }
-            Include(inc) => {
-              sb.write_string("{\"kind\":\"include\",\"path\":")
-              json_string(sb, inc.path.raw)
-              sb.write_string("}")
-            }
-            Use(u) => {
-              sb.write_string("{\"kind\":\"use\",\"path\":")
-              json_string(sb, u.path.raw)
-              sb.write_string("}")
-            }
-            TypeAlias(td) => {
-              sb.write_string("{\"kind\":\"type\",\"name\":")
-              json_string(sb, td.name)
-              sb.write_string("}")
-            }
-            Record(rd) => {
-              sb.write_string("{\"kind\":\"record\",\"name\":")
-              json_string(sb, rd.name)
-              sb.write_string("}")
-            }
-            Resource(r) => {
-              sb.write_string("{\"kind\":\"resource\",\"name\":")
-              json_string(sb, r.name)
-              sb.write_string("}")
-            }
-            Variant(v) => {
-              sb.write_string("{\"kind\":\"variant\",\"name\":")
-              json_string(sb, v.name)
-              sb.write_string("}")
-            }
-            Flags(f) => {
-              sb.write_string("{\"kind\":\"flags\",\"name\":")
-              json_string(sb, f.name)
-              sb.write_string("}")
-            }
-            Enum(e) => {
-              sb.write_string("{\"kind\":\"enum\",\"name\":")
-              json_string(sb, e.name)
-              sb.write_string("}")
-            }
+            Import(p) => json_item(sb, "{\"kind\":\"import\",\"path\":", p.raw)
+            Export(p) => json_item(sb, "{\"kind\":\"export\",\"path\":", p.raw)
+            ImportFunc(f) =>
+              json_item(sb, "{\"kind\":\"import-func\",\"name\":", f.name)
+            ExportFunc(f) =>
+              json_item(sb, "{\"kind\":\"export-func\",\"name\":", f.name)
+            ImportInlineInterface(nm, _) =>
+              json_item(sb, "{\"kind\":\"import-interface\",\"name\":", nm)
+            ExportInlineInterface(nm, _) =>
+              json_item(sb, "{\"kind\":\"export-interface\",\"name\":", nm)
+            Include(inc) =>
+              json_item(sb, "{\"kind\":\"include\",\"path\":", inc.path.raw)
+            Use(u) => json_item(sb, "{\"kind\":\"use\",\"path\":", u.path.raw)
+            TypeAlias(td) =>
+              json_item(sb, "{\"kind\":\"type\",\"name\":", td.name)
+            Record(rd) =>
+              json_item(sb, "{\"kind\":\"record\",\"name\":", rd.name)
+            Resource(r) =>
+              json_item(sb, "{\"kind\":\"resource\",\"name\":", r.name)
+            Variant(v) =>
+              json_item(sb, "{\"kind\":\"variant\",\"name\":", v.name)
+            Flags(f) => json_item(sb, "{\"kind\":\"flags\",\"name\":", f.name)
+            Enum(e) => json_item(sb, "{\"kind\":\"enum\",\"name\":", e.name)
           }
         }
         sb.write_string("]}")
@@ -176,21 +106,43 @@ pub fn package_to_json(pkg : Package) -> String {
     }
   }
   sb.write_string("]}")
-  sb.to_string()
+}
+
+///|
+#inline
+fn json_item(sb : StringBuilder, prefix : String, value : String) -> Unit {
+  sb.write_string(prefix)
+  json_string(sb, value)
+  sb.write_char('}')
 }
 
 ///|
 fn json_string(sb : StringBuilder, s : String) -> Unit {
   sb.write_char('"')
-  for c in s {
-    match c {
-      '"' => sb.write_string("\\\"")
-      '\\' => sb.write_string("\\\\")
-      '\n' => sb.write_string("\\n")
-      '\r' => sb.write_string("\\r")
-      '\t' => sb.write_string("\\t")
-      _ => sb.write_char(c)
+  for unit in s.code_units() {
+    if unit == 0x22 || unit == 0x5C || unit < 0x20 {
+      for c in s {
+        match c {
+          '"' => sb.write_string("\\\"")
+          '\\' => sb.write_string("\\\\")
+          '\n' => sb.write_string("\\n")
+          '\r' => sb.write_string("\\r")
+          '\t' => sb.write_string("\\t")
+          '\u{0020}'..<='\u{10FFFF}' => sb.write_char(c)
+          _ => {
+            let code = c.to_int()
+            sb.write_string("\\u00")
+            if code < 0x10 {
+              sb.write_char('0')
+            }
+            sb.write_string(code.to_string(radix=16))
+          }
+        }
+      }
+      sb.write_char('"')
+      return
     }
   }
+  sb.write_string(s)
   sb.write_char('"')
 }

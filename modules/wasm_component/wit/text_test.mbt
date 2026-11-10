@@ -33,3 +33,31 @@ test "wit: json output is stable" {
     content="{\"name\":\"a:b\",\"version\":\"1.2.3\",\"nested\":[],\"items\":[{\"kind\":\"interface\",\"name\":\"i\",\"items\":[{\"kind\":\"type\",\"name\":\"t\"},{\"kind\":\"func\",\"name\":\"f\"}]}]}",
   )
 }
+
+///|
+test "wit JSON roundtrips control characters in nested package metadata" {
+  let text = "\u{0000}\u{0001}\u{0008}\u{000C}\u{001F}\t\r\n\"\\😀"
+  let child : @wit.Package = {
+    name: Some(text),
+    version: None,
+    items: [],
+    nested: [],
+  }
+  let package_ : @wit.Package = {
+    name: None,
+    version: Some(text),
+    items: [],
+    nested: [child],
+  }
+  let output = @json.parse(@wit.package_to_json(package_))
+  guard output is Object(fields) else { fail("expected package object") }
+  assert_eq(fields.get("version"), Some(@json.Json::string(text)))
+  guard fields.get("nested") is Some(Array(nested)) else {
+    fail("expected nested package array")
+  }
+  assert_eq(nested.length(), 1)
+  guard nested[0] is Object(child_fields) else {
+    fail("expected nested package object")
+  }
+  assert_eq(child_fields.get("name"), Some(@json.Json::string(text)))
+}

@@ -1,4 +1,22 @@
 ///|
+impl Debug for ProgramPoint with fn to_repr(self) {
+  Repr::record({ "block": Repr(self.block), "inst": Repr(self.inst) })
+}
+
+///|
+impl Debug for ProgramRange with fn to_repr(self) {
+  Repr::record({ "start": Repr(self.start), "end": Repr(self.end) })
+}
+
+///|
+fn UsePosition::with_preference(
+  self : UsePosition,
+  preference : PhysicalReg?,
+) -> UsePosition {
+  { ..self, preference, }
+}
+
+///|
 test "live range lookup uses a direct per-class dense index" {
   let ranges = LiveRangeSet::LiveRangeSet([])
   let int_reg : VirtualReg = { id: 4096, class: Int, }
@@ -19,8 +37,8 @@ test "live range lookup uses a direct per-class dense index" {
       ranges.int_ranges_by_id.length(),
       ranges.float_ranges_by_id.length(),
       ranges.vector_ranges_by_id.length(),
-      ranges.get_by_vreg(int_reg).map(range => range.id()),
-      ranges.get_by_vreg(float_reg).map(range => range.id()),
+      ranges.get_by_vreg(int_reg).map(range => range.id),
+      ranges.get_by_vreg(float_reg).map(range => range.id),
     ),
     content="(4097, 4097, 0, Some(0), Some(1))",
   )
@@ -199,18 +217,6 @@ test "instruction edit resolution preserves position order and edge edits" {
       #|]
     ),
   )
-}
-
-///|
-test "reserve spill slots aligns vector slots" {
-  let int_slot = reserve_spill_slot(0, Int)
-  inspect(int_slot.slot, content="0")
-  inspect(int_slot.next_slot, content="1")
-  inspect(int_slot.slots_used, content="1")
-  let vector_slot = reserve_spill_slot(1, Vector)
-  inspect(vector_slot.slot, content="2")
-  inspect(vector_slot.next_slot, content="4")
-  inspect(vector_slot.slots_used, content="2")
 }
 
 ///|
@@ -407,7 +413,7 @@ test "operand assignment reuses a tied group's resident register" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(2)
-  let slot = plan.create_spill_slot(0, 8, 8)
+  let slot = plan.create_spill_slot(8, 8)
   plan.assign_value(spilled, spill_location(slot))
   plan.assign_value(resident, reg_location(r0))
   let (segments, segments_by_value) = build_allocation_segments(
@@ -474,7 +480,7 @@ test "plan verifier rejects a spilled AnyReg operand" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  let slot = plan.create_spill_slot(0, 8, 8)
+  let slot = plan.create_spill_slot(8, 8)
   plan.assign_value(value, spill_location(slot))
   plan.assign_operand(0, 0, spill_location(slot))
   let error = try {
@@ -691,7 +697,7 @@ test "any-location definitions materialize in their stable home" {
     block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
-  let slot = plan.create_spill_slot(0, 8, 8)
+  let slot = plan.create_spill_slot(8, 8)
   plan.assign_value(value, spill_location(slot))
   let segments : Array[AllocationSegment] = [
     {
@@ -927,7 +933,7 @@ test "plan verifier processes a deep diamond join chain once per block" {
 }
 
 ///|
-test "liveness retains operand timing preference and tie metadata" {
+test "liveness records timing and preference while ties stay on source operands" {
   let value : VirtualReg = { id: 0, class: Int, }
   let preference : PhysicalReg = { id: 1, class: Int, }
   let function : VerifierCfgView = {
@@ -950,11 +956,11 @@ test "liveness retains operand timing preference and tie metadata" {
     block_visits: Ref(0),
   }
   let range = build_function_live_ranges(function).get_by_vreg(value).unwrap()
-  let position = range.uses.filter(position => position.kind == LiveUse)[0]
+  let position = range.uses.filter(position => position.kind is LiveUse)[0]
   assert_eq(position.point, ProgramPoint(0, 1))
   assert_eq(position.constraint, AnyLocation)
   assert_eq(position.preference, Some(preference))
-  assert_eq(position.tie_id, 7)
+  assert_eq(FunctionView::instruction_operands(function, 0)[0].tie_id, 7)
 }
 
 ///|

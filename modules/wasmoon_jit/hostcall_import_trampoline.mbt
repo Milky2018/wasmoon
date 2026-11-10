@@ -55,56 +55,32 @@ fn a64_emit(code : Array[Int32], word : Int32) -> Unit {
 }
 
 ///|
-fn a64_emit_add_imm(
+fn a64_emit_adjust_imm(
   code : Array[Int32],
   rd : Int32,
   rn : Int32,
   imm : Int32,
+  subtract~ : Bool = false,
 ) -> Unit raise HostcallImportTrampolineError {
   if imm < 0 {
     unsupported_hostcall_import(
       "hostcall import trampoline stack adjustment must be non-negative",
     )
   }
-  if imm == 0 {
-    a64_emit(code, 0x91000000 | ((rn & 31) << 5) | (rd & 31))
-    return
-  }
+  let opcode = if subtract { 0xd1000000 } else { 0x91000000 }
   let mut remaining = imm
-  while remaining > 0 {
+  let mut source = rn
+  while true {
     let chunk = if remaining > 4095 { 4095 } else { remaining }
     a64_emit(
       code,
-      0x91000000 | ((chunk & 0xfff) << 10) | ((rn & 31) << 5) | (rd & 31),
+      opcode | ((chunk & 0xfff) << 10) | ((source & 31) << 5) | (rd & 31),
     )
     remaining = remaining - chunk
-  }
-}
-
-///|
-fn a64_emit_sub_imm(
-  code : Array[Int32],
-  rd : Int32,
-  rn : Int32,
-  imm : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  if imm < 0 {
-    unsupported_hostcall_import(
-      "hostcall import trampoline stack adjustment must be non-negative",
-    )
-  }
-  if imm == 0 {
-    a64_emit(code, 0xd1000000 | ((rn & 31) << 5) | (rd & 31))
-    return
-  }
-  let mut remaining = imm
-  while remaining > 0 {
-    let chunk = if remaining > 4095 { 4095 } else { remaining }
-    a64_emit(
-      code,
-      0xd1000000 | ((chunk & 0xfff) << 10) | ((rn & 31) << 5) | (rd & 31),
-    )
-    remaining = remaining - chunk
+    source = rd
+    if remaining == 0 {
+      break
+    }
   }
 }
 
@@ -160,7 +136,7 @@ fn a64_emit_add_byte_offset(
       "hostcall import trampoline AArch64 memory offset must be non-negative",
     )
   }
-  a64_emit_add_imm(code, rd, rn, offset)
+  a64_emit_adjust_imm(code, rd, rn, offset)
 }
 
 ///|
@@ -173,148 +149,35 @@ fn a64_scratch_gpr_for(rt : Int32) -> Int32 {
 }
 
 ///|
-fn a64_emit_ldr_x(
+fn a64_emit_memory_slot(
   code : Array[Int32],
-  rt : Int32,
-  rn : Int32,
+  ty : @types.ValueType,
+  reg : Int32,
+  base : Int32,
   offset : Int32,
+  load~ : Bool = false,
 ) -> Unit raise HostcallImportTrampolineError {
-  if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
-    let scratch = a64_scratch_gpr_for(rt)
-    a64_emit_add_byte_offset(code, scratch, rn, offset)
-    a64_emit_ldr_x(code, rt, scratch, 0)
-    return
+  let (store_opcode, scale, scratch) = match ty {
+    F32 => (0xbd000000, 4, 16)
+    F64 => (0xfd000000, 8, 16)
+    V128 => (0x3d800000, 16, 16)
+    _ => (0xf9000000, 8, a64_scratch_gpr_for(reg))
+  }
+  let opcode = if load { store_opcode | 0x00400000 } else { store_opcode }
+  let (selected_base, selected_offset) = if offset % scale != 0 ||
+    offset < 0 ||
+    offset / scale > 4095 {
+    a64_emit_add_byte_offset(code, scratch, base, offset)
+    (scratch, 0)
+  } else {
+    (base, offset)
   }
   a64_emit(
     code,
-    0xf9400000 | ((offset / 8) << 10) | ((rn & 31) << 5) | (rt & 31),
-  )
-}
-
-///|
-fn a64_emit_str_x(
-  code : Array[Int32],
-  rt : Int32,
-  rn : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
-    let scratch = a64_scratch_gpr_for(rt)
-    a64_emit_add_byte_offset(code, scratch, rn, offset)
-    a64_emit_str_x(code, rt, scratch, 0)
-    return
-  }
-  a64_emit(
-    code,
-    0xf9000000 | ((offset / 8) << 10) | ((rn & 31) << 5) | (rt & 31),
-  )
-}
-
-///|
-fn a64_emit_ldr_s(
-  code : Array[Int32],
-  rt : Int32,
-  rn : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  if offset % 4 != 0 || offset < 0 || offset / 4 > 4095 {
-    a64_emit_add_byte_offset(code, 16, rn, offset)
-    a64_emit_ldr_s(code, rt, 16, 0)
-    return
-  }
-  a64_emit(
-    code,
-    0xbd400000 | ((offset / 4) << 10) | ((rn & 31) << 5) | (rt & 31),
-  )
-}
-
-///|
-fn a64_emit_str_s(
-  code : Array[Int32],
-  rt : Int32,
-  rn : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  if offset % 4 != 0 || offset < 0 || offset / 4 > 4095 {
-    a64_emit_add_byte_offset(code, 16, rn, offset)
-    a64_emit_str_s(code, rt, 16, 0)
-    return
-  }
-  a64_emit(
-    code,
-    0xbd000000 | ((offset / 4) << 10) | ((rn & 31) << 5) | (rt & 31),
-  )
-}
-
-///|
-fn a64_emit_ldr_d(
-  code : Array[Int32],
-  rt : Int32,
-  rn : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
-    a64_emit_add_byte_offset(code, 16, rn, offset)
-    a64_emit_ldr_d(code, rt, 16, 0)
-    return
-  }
-  a64_emit(
-    code,
-    0xfd400000 | ((offset / 8) << 10) | ((rn & 31) << 5) | (rt & 31),
-  )
-}
-
-///|
-fn a64_emit_str_d(
-  code : Array[Int32],
-  rt : Int32,
-  rn : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
-    a64_emit_add_byte_offset(code, 16, rn, offset)
-    a64_emit_str_d(code, rt, 16, 0)
-    return
-  }
-  a64_emit(
-    code,
-    0xfd000000 | ((offset / 8) << 10) | ((rn & 31) << 5) | (rt & 31),
-  )
-}
-
-///|
-fn a64_emit_ldr_q(
-  code : Array[Int32],
-  rt : Int32,
-  rn : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  if offset % 16 != 0 || offset < 0 || offset / 16 > 4095 {
-    a64_emit_add_byte_offset(code, 16, rn, offset)
-    a64_emit_ldr_q(code, rt, 16, 0)
-    return
-  }
-  a64_emit(
-    code,
-    0x3dc00000 | ((offset / 16) << 10) | ((rn & 31) << 5) | (rt & 31),
-  )
-}
-
-///|
-fn a64_emit_str_q(
-  code : Array[Int32],
-  rt : Int32,
-  rn : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  if offset % 16 != 0 || offset < 0 || offset / 16 > 4095 {
-    a64_emit_add_byte_offset(code, 16, rn, offset)
-    a64_emit_str_q(code, rt, 16, 0)
-    return
-  }
-  a64_emit(
-    code,
-    0x3d800000 | ((offset / 16) << 10) | ((rn & 31) << 5) | (rt & 31),
+    opcode |
+    ((selected_offset / scale) << 10) |
+    ((selected_base & 31) << 5) |
+    (reg & 31),
   )
 }
 
@@ -335,23 +198,7 @@ fn a64_emit_store_slot(
   reg : Int32,
   offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
-  a64_emit_store_slot_base(code, ty, reg, 31, offset)
-}
-
-///|
-fn a64_emit_store_slot_base(
-  code : Array[Int32],
-  ty : @types.ValueType,
-  reg : Int32,
-  base : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  match ty {
-    F32 => a64_emit_str_s(code, reg, base, offset)
-    F64 => a64_emit_str_d(code, reg, base, offset)
-    V128 => a64_emit_str_q(code, reg, base, offset)
-    _ => a64_emit_str_x(code, reg, base, offset)
-  }
+  a64_emit_memory_slot(code, ty, reg, 31, offset)
 }
 
 ///|
@@ -361,23 +208,7 @@ fn a64_emit_load_slot(
   reg : Int32,
   offset : Int32,
 ) -> Unit raise HostcallImportTrampolineError {
-  a64_emit_load_slot_base(code, ty, reg, 31, offset)
-}
-
-///|
-fn a64_emit_load_slot_base(
-  code : Array[Int32],
-  ty : @types.ValueType,
-  reg : Int32,
-  base : Int32,
-  offset : Int32,
-) -> Unit raise HostcallImportTrampolineError {
-  match ty {
-    F32 => a64_emit_ldr_s(code, reg, base, offset)
-    F64 => a64_emit_ldr_d(code, reg, base, offset)
-    V128 => a64_emit_ldr_q(code, reg, base, offset)
-    _ => a64_emit_ldr_x(code, reg, base, offset)
-  }
+  a64_emit_memory_slot(code, ty, reg, 31, offset, load=true)
 }
 
 ///|
@@ -411,7 +242,7 @@ fn a64_emit_load_result_from_values_vec(
     CallResultArea(offset, _) => {
       let scratch = 16
       a64_emit_load_slot(code, ty, scratch, values_offset)
-      a64_emit_store_slot_base(code, ty, scratch, 23, offset)
+      a64_emit_memory_slot(code, ty, scratch, 23, offset)
     }
   }
 }
@@ -426,11 +257,11 @@ fn a64_emit_store_result_to_values_vec(
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
     CallResultRegister(preg) =>
-      a64_emit_store_slot_base(code, ty, preg.id, 19, values_offset)
+      a64_emit_memory_slot(code, ty, preg.id, 19, values_offset)
     CallResultArea(offset, _) => {
       let scratch = 16
       a64_emit_load_slot(code, ty, scratch, return_area_offset + offset)
-      a64_emit_store_slot_base(code, ty, scratch, 19, values_offset)
+      a64_emit_memory_slot(code, ty, scratch, 19, values_offset)
     }
   }
 }
@@ -450,11 +281,11 @@ fn build_aarch64_hostcall_import_trampoline(
   // alive across the platform C call. LR occupies the final eight bytes.
   let frame_size = align_to(layout.values_vec_bytes + 16, 16)
   if frame_size > 0 {
-    a64_emit_sub_imm(code, 31, 31, frame_size)
-    a64_emit_str_x(code, 23, 31, frame_size - 16)
-    a64_emit_str_x(code, 30, 31, frame_size - 8)
+    a64_emit_adjust_imm(code, 31, 31, frame_size, subtract=true)
+    a64_emit_store_slot(code, I64, 23, frame_size - 16)
+    a64_emit_store_slot(code, I64, 30, frame_size - 8)
   }
-  a64_emit_add_imm(code, 23, 8, 0)
+  a64_emit_adjust_imm(code, 23, 8, 0)
   let mut offset = 0
   for i, ty in param_types {
     a64_emit_store_arg_to_values_vec(
@@ -467,7 +298,7 @@ fn build_aarch64_hostcall_import_trampoline(
     offset = offset + hostcall_value_byte_count(ty)
   }
   a64_emit_load_imm64_fixed(code, 1, host_func_addr.to_int64())
-  a64_emit_add_imm(code, 2, 31, 0)
+  a64_emit_adjust_imm(code, 2, 31, 0)
   a64_emit_load_imm64_fixed(code, 3, layout.arg_slots.to_int64())
   a64_emit_load_imm64_fixed(code, 4, layout.result_slots.to_int64())
   a64_emit_load_imm64_fixed(code, 16, c_jit_get_hostcall_ptr())
@@ -483,9 +314,9 @@ fn build_aarch64_hostcall_import_trampoline(
     result_offset = result_offset + hostcall_value_byte_count(ty)
   }
   if frame_size > 0 {
-    a64_emit_ldr_x(code, 23, 31, frame_size - 16)
-    a64_emit_ldr_x(code, 30, 31, frame_size - 8)
-    a64_emit_add_imm(code, 31, 31, frame_size)
+    a64_emit_load_slot(code, I64, 23, frame_size - 16)
+    a64_emit_load_slot(code, I64, 30, frame_size - 8)
+    a64_emit_adjust_imm(code, 31, 31, frame_size)
   }
   a64_emit_ret(code)
   { code, }
@@ -852,25 +683,25 @@ fn build_aarch64_entry_trampoline(
   let return_area_offset = outgoing_stack_size
   let save_area_offset = return_area_offset + return_area_size
   let frame_size = align_to(save_area_offset + 32, 16)
-  a64_emit_sub_imm(code, 31, 31, frame_size)
-  a64_emit_str_x(code, 19, 31, save_area_offset)
-  a64_emit_str_x(code, 20, 31, save_area_offset + 8)
-  a64_emit_str_x(code, 23, 31, save_area_offset + 16)
-  a64_emit_str_x(code, 30, 31, save_area_offset + 24)
-  a64_emit_add_imm(code, 19, 1, 0)
-  a64_emit_add_imm(code, 20, 2, 0)
+  a64_emit_adjust_imm(code, 31, 31, frame_size, subtract=true)
+  a64_emit_store_slot(code, I64, 19, save_area_offset)
+  a64_emit_store_slot(code, I64, 20, save_area_offset + 8)
+  a64_emit_store_slot(code, I64, 23, save_area_offset + 16)
+  a64_emit_store_slot(code, I64, 30, save_area_offset + 24)
+  a64_emit_adjust_imm(code, 19, 1, 0)
+  a64_emit_adjust_imm(code, 20, 2, 0)
   if return_area_size > 0 {
-    a64_emit_add_imm(code, 23, 31, return_area_offset)
-    a64_emit_add_imm(code, 8, 23, 0)
+    a64_emit_adjust_imm(code, 23, 31, return_area_offset)
+    a64_emit_adjust_imm(code, 8, 23, 0)
   }
   let mut value_offset = 0
   for i, ty in param_types {
     match param_locations[i] {
       CallRegister(preg) =>
-        a64_emit_load_slot_base(code, ty, preg.id, 19, value_offset)
+        a64_emit_memory_slot(code, ty, preg.id, 19, value_offset, load=true)
       CallStack(offset) => {
         let scratch = 16
-        a64_emit_load_slot_base(code, ty, scratch, 19, value_offset)
+        a64_emit_memory_slot(code, ty, scratch, 19, value_offset, load=true)
         a64_emit_store_slot(code, ty, scratch, offset)
       }
     }
@@ -889,11 +720,11 @@ fn build_aarch64_entry_trampoline(
     result_offset = result_offset + hostcall_value_byte_count(ty)
   }
   a64_emit_load_imm64_fixed(code, 0, 0L)
-  a64_emit_ldr_x(code, 19, 31, save_area_offset)
-  a64_emit_ldr_x(code, 20, 31, save_area_offset + 8)
-  a64_emit_ldr_x(code, 23, 31, save_area_offset + 16)
-  a64_emit_ldr_x(code, 30, 31, save_area_offset + 24)
-  a64_emit_add_imm(code, 31, 31, frame_size)
+  a64_emit_load_slot(code, I64, 19, save_area_offset)
+  a64_emit_load_slot(code, I64, 20, save_area_offset + 8)
+  a64_emit_load_slot(code, I64, 23, save_area_offset + 16)
+  a64_emit_load_slot(code, I64, 30, save_area_offset + 24)
+  a64_emit_adjust_imm(code, 31, 31, frame_size)
   a64_emit_ret(code)
   code
 }

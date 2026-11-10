@@ -24,3 +24,7 @@ and `fill_at`. Use `memory.offset32(address)` when adapting a 32-bit address:
 it widens memory32 addresses as unsigned and memory64 addresses as signed.
 The duplicate 32-bit checked accessors and `new_guarded_memory0` have been
 retired. Construct memory with `Memory` or `Memory::from_type`.
+
+The unused native `CHeap::get_base` and its C bridge have been retired.
+Object access goes through checked heap accessors and managed object views;
+callers cannot obtain a backing-buffer address through this former API.

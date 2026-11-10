@@ -55,36 +55,6 @@ fn move_bank(ty : ValueType) -> RegClass {
 }
 
 ///|
-fn select_legacy_scratch(
-  class : RegClass,
-  moves : Array[ParallelMove],
-  scratch_int : Array[PhysicalReg],
-  scratch_fp : Array[PhysicalReg],
-) -> PhysicalReg raise MoveResolveError {
-  let candidates = if class == Int { scratch_int } else { scratch_fp }
-  for reg in candidates {
-    if reg.class != class {
-      raise InvalidScratch(reg~, expected=class)
-    }
-    let candidate : Location = Register(reg)
-    let mut used = false
-    for transfer in moves {
-      if transfer.from == candidate || transfer.to == candidate {
-        used = true
-        break
-      }
-    }
-    if !used {
-      return reg
-    }
-  }
-  if candidates.is_empty() {
-    raise MissingScratch(class~)
-  }
-  raise NoSafeCycleScratch(class~)
-}
-
-///|
 fn source_locations(moves : Array[ParallelMove]) -> Array[Location] {
   let sources : Array[Location] = []
   for transfer in moves {
@@ -236,29 +206,4 @@ pub fn plan_parallel_moves(
     requires_emergency: int_plan.requires_emergency ||
     fp_plan.requires_emergency,
   }
-}
-
-///|
-pub fn resolve_parallel_moves(
-  moves : Array[ParallelMove],
-  scratch_int : Array[PhysicalReg],
-  scratch_fp : Array[PhysicalReg],
-) -> Array[ParallelMove] raise MoveResolveError {
-  if moves.is_empty() {
-    return []
-  }
-  let plan = plan_parallel_moves(
-    moves,
-    select_legacy_scratch(Int, moves, scratch_int, scratch_fp),
-    select_legacy_scratch(FpVector, moves, scratch_int, scratch_fp),
-  )
-  let resolved : Array[ParallelMove] = []
-  for step in plan.steps {
-    match step {
-      Transfer(transfer) => resolved.push(transfer)
-      SpillScratchToEmergency(..) | ReloadScratchFromEmergency(..) =>
-        raise NoSafeCycleScratch(class=Int)
-    }
-  }
-  resolved
 }

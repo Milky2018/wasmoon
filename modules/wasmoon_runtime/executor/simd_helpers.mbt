@@ -1,78 +1,38 @@
 ///|
-fn v128_replace_i8(v128 : Bytes, lane : Int32, val : Byte) -> Bytes {
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
-  for i in 0..<16 {
-    if i == lane {
-      buf.write_byte(val)
+fn v128_replace_lane(
+  v128 : Bytes,
+  lane : Int32,
+  val : Int64,
+  width : Int32,
+) -> Bytes {
+  let offset = lane * width
+  Bytes::makei(16, i => {
+    if i >= offset && i < offset + width {
+      (val >> ((i - offset) * 8)).to_byte()
     } else {
-      buf.write_byte(v128[i])
+      v128[i]
     }
-  }
-  buf.contents()
+  })
+}
+
+///|
+fn v128_replace_i8(v128 : Bytes, lane : Int32, val : Byte) -> Bytes {
+  v128_replace_lane(v128, lane, val.to_int64(), 1)
 }
 
 ///|
 fn v128_replace_i16(v128 : Bytes, lane : Int32, val : Int32) -> Bytes {
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
-  let offset = lane * 2
-  for i in 0..<16 {
-    if i == offset {
-      buf.write_byte(val.to_byte())
-    } else if i == offset + 1 {
-      buf.write_byte((val >> 8).to_byte())
-    } else {
-      buf.write_byte(v128[i])
-    }
-  }
-  buf.contents()
+  v128_replace_lane(v128, lane, val.to_int64(), 2)
 }
 
 ///|
 fn v128_replace_i32(v128 : Bytes, lane : Int32, val : Int32) -> Bytes {
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
-  let offset = lane * 4
-  for i in 0..<16 {
-    if i == offset {
-      buf.write_byte(val.to_byte())
-    } else if i == offset + 1 {
-      buf.write_byte((val >> 8).to_byte())
-    } else if i == offset + 2 {
-      buf.write_byte((val >> 16).to_byte())
-    } else if i == offset + 3 {
-      buf.write_byte((val >> 24).to_byte())
-    } else {
-      buf.write_byte(v128[i])
-    }
-  }
-  buf.contents()
+  v128_replace_lane(v128, lane, val.to_int64(), 4)
 }
 
 ///|
 fn v128_replace_i64(v128 : Bytes, lane : Int32, val : Int64) -> Bytes {
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
-  let offset = lane * 8
-  for i in 0..<16 {
-    if i == offset {
-      buf.write_byte(val.to_byte())
-    } else if i == offset + 1 {
-      buf.write_byte((val >> 8).to_byte())
-    } else if i == offset + 2 {
-      buf.write_byte((val >> 16).to_byte())
-    } else if i == offset + 3 {
-      buf.write_byte((val >> 24).to_byte())
-    } else if i == offset + 4 {
-      buf.write_byte((val >> 32).to_byte())
-    } else if i == offset + 5 {
-      buf.write_byte((val >> 40).to_byte())
-    } else if i == offset + 6 {
-      buf.write_byte((val >> 48).to_byte())
-    } else if i == offset + 7 {
-      buf.write_byte((val >> 56).to_byte())
-    } else {
-      buf.write_byte(v128[i])
-    }
-  }
-  buf.contents()
+  v128_replace_lane(v128, lane, val, 8)
 }
 
 ///|
@@ -174,36 +134,6 @@ fn get_f64_lane(v : Bytes, lane : Int32) -> Double {
 }
 
 ///|
-fn write_i32_lane(buf : @buffer.Buffer, v : Int32) -> Unit {
-  buf.write_byte(v.to_byte())
-  buf.write_byte((v >> 8).to_byte())
-  buf.write_byte((v >> 16).to_byte())
-  buf.write_byte((v >> 24).to_byte())
-}
-
-///|
-fn write_i64_lane(buf : @buffer.Buffer, v : Int64) -> Unit {
-  buf.write_byte(v.to_byte())
-  buf.write_byte((v >> 8).to_byte())
-  buf.write_byte((v >> 16).to_byte())
-  buf.write_byte((v >> 24).to_byte())
-  buf.write_byte((v >> 32).to_byte())
-  buf.write_byte((v >> 40).to_byte())
-  buf.write_byte((v >> 48).to_byte())
-  buf.write_byte((v >> 56).to_byte())
-}
-
-///|
-fn write_f32_lane(buf : @buffer.Buffer, v : Float) -> Unit {
-  write_i32_lane(buf, v.reinterpret_as_int())
-}
-
-///|
-fn write_f64_lane(buf : @buffer.Buffer, v : Double) -> Unit {
-  write_i64_lane(buf, v.reinterpret_as_int64())
-}
-
-///|
 fn write_i16_lane(buf : @buffer.Buffer, v : Int32) -> Unit {
   buf.write_byte(v.to_byte())
   buf.write_byte((v >> 8).to_byte())
@@ -225,34 +155,6 @@ fn sign_extend_i16(v : Int32) -> Int32 {
   } else {
     v & 0xFFFF
   }
-}
-
-///|
-fn trunc_sat_f32_to_i32_u(f : Float) -> Int32 {
-  if f.is_nan() {
-    return 0
-  }
-  if f <= 0.0 {
-    return 0
-  }
-  if f >= @types.U32_MODULUS_F32 {
-    return @types.U32_MAX.reinterpret_as_int()
-  }
-  f.to_double().to_uint().reinterpret_as_int()
-}
-
-///|
-fn trunc_sat_f64_to_i32_u(f : Double) -> Int32 {
-  if f.is_nan() {
-    return 0
-  }
-  if f <= 0.0 {
-    return 0
-  }
-  if f >= @types.U32_MODULUS_F64 {
-    return @types.U32_MAX.reinterpret_as_int()
-  }
-  f.to_uint().reinterpret_as_int()
 }
 
 ///|
@@ -320,7 +222,7 @@ fn ExecContext::exec_v128_cmp_i32(
     } else {
       0
     }
-    write_i32_lane(buf, result)
+    buf.write_int_le(result)
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -334,7 +236,7 @@ fn ExecContext::exec_v128_binop_i32(
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<4 {
-    write_i32_lane(buf, op(get_i32_lane(a, i), get_i32_lane(b, i)))
+    buf.write_int_le(op(get_i32_lane(a, i), get_i32_lane(b, i)))
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -347,7 +249,7 @@ fn ExecContext::exec_v128_unop_i32(
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<4 {
-    write_i32_lane(buf, op(get_i32_lane(a, i)))
+    buf.write_int_le(op(get_i32_lane(a, i)))
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -366,7 +268,7 @@ fn ExecContext::exec_v128_cmp_i64(
     } else {
       0L
     }
-    write_i64_lane(buf, result)
+    buf.write_int64_le(result)
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -380,7 +282,7 @@ fn ExecContext::exec_v128_binop_i64(
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<2 {
-    write_i64_lane(buf, op(get_i64_lane(a, i), get_i64_lane(b, i)))
+    buf.write_int64_le(op(get_i64_lane(a, i), get_i64_lane(b, i)))
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -393,7 +295,7 @@ fn ExecContext::exec_v128_unop_i64(
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<2 {
-    write_i64_lane(buf, op(get_i64_lane(a, i)))
+    buf.write_int64_le(op(get_i64_lane(a, i)))
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -412,7 +314,7 @@ fn ExecContext::exec_v128_cmp_f32(
     } else {
       0
     }
-    write_i32_lane(buf, result)
+    buf.write_int_le(result)
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -426,7 +328,7 @@ fn ExecContext::exec_v128_binop_f32(
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<4 {
-    write_f32_lane(buf, op(get_f32_lane(a, i), get_f32_lane(b, i)))
+    buf.write_float_le(op(get_f32_lane(a, i), get_f32_lane(b, i)))
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -439,7 +341,7 @@ fn ExecContext::exec_v128_unop_f32(
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<4 {
-    write_f32_lane(buf, op(get_f32_lane(a, i)))
+    buf.write_float_le(op(get_f32_lane(a, i)))
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -458,7 +360,7 @@ fn ExecContext::exec_v128_cmp_f64(
     } else {
       0L
     }
-    write_i64_lane(buf, result)
+    buf.write_int64_le(result)
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -472,7 +374,7 @@ fn ExecContext::exec_v128_binop_f64(
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<2 {
-    write_f64_lane(buf, op(get_f64_lane(a, i), get_f64_lane(b, i)))
+    buf.write_double_le(op(get_f64_lane(a, i), get_f64_lane(b, i)))
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -485,7 +387,7 @@ fn ExecContext::exec_v128_unop_f64(
   let a = self.stack.pop_v128()
   let buf : @buffer.Buffer = Buffer(size_hint=16)
   for i in 0..<2 {
-    write_f64_lane(buf, op(get_f64_lane(a, i)))
+    buf.write_double_le(op(get_f64_lane(a, i)))
   }
   self.stack.push(V128(buf.contents()))
 }
@@ -728,62 +630,6 @@ fn f64_max(a : Double, b : Double) -> Double {
   } else {
     b
   }
-}
-
-///|
-fn trunc_sat_f32_to_i32_s(f : Float) -> Int32 {
-  if f.is_nan() {
-    return 0
-  }
-  if f >= @types.I32_MAX_F32 + 1.0 {
-    return @types.I32_MAX
-  }
-  if f <= @types.I32_MIN_F32 - 1.0 {
-    return @types.I32_MIN
-  }
-  f.to_int()
-}
-
-///|
-fn trunc_sat_f32_to_u32(f : Float) -> UInt32 {
-  if f.is_nan() {
-    return 0U
-  }
-  if f <= 0.0 {
-    return 0U
-  }
-  if f >= @types.U32_MODULUS_F32 {
-    return @types.U32_MAX
-  }
-  f.to_double().to_uint()
-}
-
-///|
-fn trunc_sat_f64_to_i32_s(f : Double) -> Int32 {
-  if f.is_nan() {
-    return 0
-  }
-  if f >= @types.I32_MAX_F64 + 1.0 {
-    return @types.I32_MAX
-  }
-  if f <= @types.I32_MIN_F64 - 1.0 {
-    return @types.I32_MIN
-  }
-  f.to_int()
-}
-
-///|
-fn trunc_sat_f64_to_u32(f : Double) -> UInt32 {
-  if f.is_nan() {
-    return 0U
-  }
-  if f <= 0.0 {
-    return 0U
-  }
-  if f >= @types.U32_MODULUS_F64 {
-    return @types.U32_MAX
-  }
-  f.to_uint()
 }
 
 ///|

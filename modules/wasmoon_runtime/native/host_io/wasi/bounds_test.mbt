@@ -1,6 +1,7 @@
 ///|
 test "native buffer bounds reject negative and oversized counts" {
   let buffer : FixedArray[Byte] = [b'x']
+  let truncated : FixedArray[Int32] = [123]
   for count in [-1, 2] {
     inspect(@wasi.c_read(-1, buffer, count), content="-1")
     inspect(@wasi.c_errno_to_wasi(@wasi.c_get_errno()), content="28")
@@ -12,12 +13,13 @@ test "native buffer bounds reject negative and oversized counts" {
     inspect(@wasi.c_errno_to_wasi(@wasi.c_get_errno()), content="28")
     inspect(@wasi.c_getrandom(buffer, count), content="-1")
     inspect(@wasi.c_errno_to_wasi(@wasi.c_get_errno()), content="28")
-    inspect(@wasi.c_send(-1, buffer, count.to_int64(), 0), content="-1")
+    inspect(@wasi.c_p1_send(-1, buffer, count), content="-1")
     inspect(@wasi.c_errno_to_wasi(@wasi.c_get_errno()), content="28")
-    inspect(@wasi.c_recv(-1, buffer, count.to_int64(), 0), content="-1")
+    inspect(@wasi.c_p1_recv(-1, buffer, count, 0, truncated), content="-1")
     inspect(@wasi.c_errno_to_wasi(@wasi.c_get_errno()), content="28")
   }
   inspect(buffer[0].to_int(), content="120")
+  inspect(truncated[0], content="123")
 }
 
 ///|

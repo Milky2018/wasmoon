@@ -32,7 +32,7 @@ fn lift_task_return_value(
 fn instantiate_canon_task_return(
   result : ValType?,
   opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   for opt in opts {
@@ -155,7 +155,7 @@ fn instantiate_canon_task_return(
 
 ///|
 fn instantiate_canon_task_cancel(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [], }

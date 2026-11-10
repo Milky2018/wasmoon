@@ -145,39 +145,6 @@ pub fn is_cancelled_trap_code(code : Int32) -> Bool {
 }
 
 ///|
-/// Map Wasm trap reasons to the payload consumed by Wasmoon's native trap
-/// handler. Native lowering only carries the integer payload; this module owns the
-/// Wasmoon-specific reason-to-payload policy.
-pub fn wasm_trap_payload(reason : String) -> Int32 {
-  if reason == "unreachable" {
-    0
-  } else if reason.contains("out of bounds") {
-    1
-  } else if reason.contains("type mismatch") {
-    2
-  } else if reason.contains("invalid conversion") {
-    3
-  } else if reason.contains("divide by zero") {
-    4
-  } else if reason.contains("overflow") {
-    5
-  } else {
-    6
-  }
-}
-
-///|
-pub fn take_pending_trap_message() -> String? {
-  let code = c_jit_get_trap_code()
-  if code == 0 {
-    None
-  } else {
-    c_jit_clear_trap()
-    Some(jit_trap_message(code))
-  }
-}
-
-///|
 pub fn is_wasi_exit_trap_code(code : Int32) -> Bool {
   code == 100
 }

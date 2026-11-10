@@ -39,3 +39,5 @@ options(
     },
   },
 )
+
+supported_targets = "+native"

@@ -600,7 +600,7 @@ fn resolve_start_core_func(
 
 ///|
 fn instantiate_canon_thread_index(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I32], }
@@ -625,7 +625,7 @@ fn instantiate_canon_thread_index(
 ///|
 fn instantiate_canon_thread_yield(
   cancellable : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I32], }
@@ -654,7 +654,7 @@ fn instantiate_canon_thread_yield(
 ///|
 fn instantiate_canon_thread_yield_then_resume(
   cancellable : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32], }
@@ -687,7 +687,7 @@ fn instantiate_canon_thread_yield_then_resume(
 ///|
 fn instantiate_canon_thread_suspend_then_resume(
   cancellable : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32], }
@@ -720,7 +720,7 @@ fn instantiate_canon_thread_suspend_then_resume(
 ///|
 fn instantiate_unsupported_thread_promotion(
   operation : String,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32], }
@@ -738,7 +738,7 @@ fn instantiate_unsupported_thread_promotion(
 ///|
 fn instantiate_canon_thread_suspend_then_promote(
   _cancellable : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   instantiate_unsupported_thread_promotion(
@@ -749,7 +749,7 @@ fn instantiate_canon_thread_suspend_then_promote(
 ///|
 fn instantiate_canon_thread_yield_then_promote(
   _cancellable : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   instantiate_unsupported_thread_promotion(
@@ -759,7 +759,7 @@ fn instantiate_canon_thread_yield_then_promote(
 
 ///|
 fn instantiate_canon_thread_resume_later(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }
@@ -798,7 +798,7 @@ fn instantiate_canon_thread_resume_later(
 ///|
 fn instantiate_canon_thread_suspend(
   cancellable : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I32], }
@@ -828,7 +828,7 @@ fn instantiate_canon_thread_suspend(
 fn instantiate_canon_thread_new_indirect(
   _type_idx : Int32,
   table_idx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }

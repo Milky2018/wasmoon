@@ -577,15 +577,6 @@ int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
 int64_t gc_heap_struct_get(GcHeap* heap, int32_t gc_ref, int32_t field_idx);
 
 /**
- * Set a struct field value
- * @param heap The GC heap
- * @param gc_ref Object reference (1-based)
- * @param field_idx Field index
- * @param value New value as int64_t
- */
-void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t value);
-
-/**
  * Allocate a struct from full slots, so v128 fields keep their high word.
  *
  * `gc_heap_alloc_struct` above takes runtime words and is what JIT-emitted
@@ -752,13 +743,6 @@ void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots);
 int32_t jit_copy_active_gc_roots(GcHeap *heap, int64_t *roots);
 
 /**
- * Sweep unmarked objects
- * @param heap The GC heap
- * @return Number of objects collected
- */
-int32_t gc_heap_sweep(GcHeap* heap);
-
-/**
  * Perform a full GC cycle (mark + sweep)
  * @param heap The GC heap
  * @param roots Array of root values
@@ -776,13 +760,6 @@ int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots);
 int32_t gc_heap_verify(GcHeap* heap, int32_t verbose);
 
 // ============ Utilities ============
-
-/**
- * Get heap base pointer (for JIT inline access)
- * @param heap The GC heap
- * @return Pointer to heap data
- */
-uint8_t* gc_heap_get_base(GcHeap* heap);
 
 /**
  * Get object offset in heap (for JIT inline access)
