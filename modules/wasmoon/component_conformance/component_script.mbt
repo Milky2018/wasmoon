@@ -85,22 +85,6 @@ fn ScriptResult::add_failed(self : ScriptResult, msg : String) -> Unit {
 }
 
 ///|
-fn json_escape_string_component_test(s : String) -> String {
-  let buf = StringBuilder::StringBuilder()
-  for c in s {
-    match c {
-      '"' => buf.write_string("\\\"")
-      '\\' => buf.write_string("\\\\")
-      '\n' => buf.write_string("\\n")
-      '\r' => buf.write_string("\\r")
-      '\t' => buf.write_string("\\t")
-      _ => buf.write_char(c)
-    }
-  }
-  buf.to_string()
-}
-
-///|
 fn component_test_json(
   ok : Bool,
   code : ComponentTestErrorCode?,
@@ -108,25 +92,17 @@ fn component_test_json(
   detail : String,
   result : ScriptResult?,
 ) -> String {
-  let mut line = "{\"ok\":"
-  line = line + (if ok { "true" } else { "false" })
+  let mut line = "{\"ok\":\{ok}"
   if code is Some(code) {
-    line = line + ",\"code\":\"\{component_test_error_code_string(code)}\""
+    line += ",\"code\":\{@json.Json::string(component_test_error_code_string(code)).stringify()}"
   }
-  line = line + ",\"phase\":\"\{json_escape_string_component_test(phase)}\""
-  line = line + ",\"detail\":\"\{json_escape_string_component_test(detail)}\""
+  line += ",\"phase\":\{@json.Json::string(phase).stringify()}"
+  line += ",\"detail\":\{@json.Json::string(detail).stringify()}"
   if result is Some(result) {
-    line = line + ",\"passed\":\{result.passed}"
-    line = line + ",\"failed\":\{result.failed}"
-    line = line + ",\"skipped\":\{result.skipped}"
-    line = line + ",\"failures\":["
-    for i, item in result.failures {
-      if i > 0 {
-        line = line + ","
-      }
-      line = line + "\"\{json_escape_string_component_test(item)}\""
-    }
-    line = line + "]"
+    line += ",\"passed\":\{result.passed}"
+    line += ",\"failed\":\{result.failed}"
+    line += ",\"skipped\":\{result.skipped}"
+    line += ",\"failures\":\{@json.to_json(result.failures).stringify()}"
   }
   line + "}"
 }

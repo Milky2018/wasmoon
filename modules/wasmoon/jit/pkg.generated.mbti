@@ -45,12 +45,6 @@ pub fn JITTrap::to_repr(Self) -> @debug.Repr
 pub fn JITTrap::to_string(Self) -> String
 pub impl Show for JITTrap
 
-pub suberror PolycallError {
-  InputNumber(Int32, Int32)
-  OutputNumber(Int32, Int32)
-  JIT(JITTrap)
-}
-
 // Types and methods
 #derive(@debug.Debug)
 type AddressRange
@@ -93,7 +87,6 @@ pub fn JITModule::bind_globals(Self, FixedArray[Int64]) -> Int64
 pub fn JITModule::bind_segment_drop_flags(Self, @runtime.ModuleInstance) -> Unit
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64], capture_exceptions? : Bool) -> Array[Int64] raise JITTrap
 pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?, timeout_ms? : Int32?) -> JITCallResult
-pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::clear_hostcall_callback(Self) -> Unit
 pub fn JITModule::clear_segments(Self) -> Unit
 pub fn JITModule::close(Self) -> Unit
@@ -145,27 +138,6 @@ pub fn JITModule::throw_exception_tag(Self, Int32) -> Unit raise @wasmoon_jit.Na
 pub fn JITModule::throw_exception_values(Self, Int32, Array[Int64]) -> Unit raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::throw_store_exception_values(Self, Int32, Array[Int64]) -> Unit raise @wasmoon_jit.NativeSetupError
 
-pub(all) struct Single[A](A)
-pub fn[A : @types.FromInt64] Single::from_int64_array(Array[Int64]) -> Self[A]
-pub fn[A : @types.ToInt64] Single::to_int64_array(Self[A]) -> Array[Int64]
-pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
-pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
-
 // Type aliases
 
 // Traits
-pub trait DynamicArgs {
-  fn to_int64_array(Self) -> Array[Int64]
-}
-pub impl DynamicArgs for Unit
-pub impl[A : @types.ToInt64, B : @types.ToInt64] DynamicArgs for (A, B)
-pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64] DynamicArgs for (A, B, C)
-pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64, D : @types.ToInt64] DynamicArgs for (A, B, C, D)
-
-pub trait DynamicReturn {
-  fn from_int64_array(Array[Int64]) -> Self
-}
-pub impl DynamicReturn for Unit
-pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B)
-pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64] DynamicReturn for (A, B, C)
-pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64, D : @types.FromInt64] DynamicReturn for (A, B, C, D)

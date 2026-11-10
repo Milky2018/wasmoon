@@ -277,7 +277,6 @@ void WASMOON_GUEST_ABI memory_copy_indexed_internal(jit_context_t *ctx, int32_t 
 // Descriptor-only variants (no ctx)
 int64_t memory_grow_desc_internal(wasmoon_memory_t *mem, int64_t delta, int32_t max_pages);
 int64_t memory_len_desc_internal(wasmoon_memory_t *mem);
-uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem);
 
 // Table operations
 int64_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t delta, int64_t init_value);

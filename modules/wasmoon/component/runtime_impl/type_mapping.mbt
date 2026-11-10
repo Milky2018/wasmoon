@@ -101,7 +101,7 @@ fn func_type_needs_memory(
 ///|
 fn resolve_canon_resources(
   opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
 ) -> CanonResources raise ComponentRuntimeError {
   let mut mem : Int32? = None
   let mut realloc : CanonicalRealloc? = None
@@ -151,7 +151,7 @@ fn canon_opt_is_async(opts : Array[CanonOpt]) -> Bool {
 ///|
 fn resolve_canon_callback(
   opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
 ) -> CoreFuncRef? raise ComponentRuntimeError {
   for opt in opts {
     if opt is Callback(idx) {

@@ -5,7 +5,7 @@
 ///|
 fn instantiate_canon_stream_new(
   _tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I64], }
@@ -214,7 +214,7 @@ fn progress_host_stream_sources(
 fn instantiate_canon_stream_read(
   _tyidx : Int32,
   opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32], }
@@ -618,7 +618,7 @@ fn instantiate_canon_stream_read(
 fn instantiate_canon_stream_write(
   _tyidx : Int32,
   opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32], }
@@ -945,7 +945,7 @@ fn instantiate_canon_stream_write(
 ///|
 fn instantiate_canon_stream_cancel(
   is_async_cancel : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
   readable~ : Bool,
 ) -> Unit raise ComponentRuntimeError {
@@ -990,7 +990,7 @@ fn instantiate_canon_stream_cancel(
 ///|
 fn instantiate_canon_stream_drop_readable(
   _tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }
@@ -1084,7 +1084,7 @@ fn instantiate_canon_stream_drop_readable(
 ///|
 fn instantiate_canon_stream_drop_writable(
   _tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }

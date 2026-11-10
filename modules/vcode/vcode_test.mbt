@@ -381,47 +381,6 @@ test "allocation view resolves successors after layout changes" {
 }
 
 ///|
-test "plan storage adoption rejects undersized spill metadata" {
-  let builder : @vcode.Builder[TestInst] = @vcode.Builder::new("plan_storage", [
-    I64,
-  ])
-  builder.set_terminator(
-    builder.entry_block(),
-    Return,
-    [],
-    [],
-    [],
-    @vcode.InstructionMetadata::empty(),
-  )
-  |> ignore
-  let function = builder.finish()
-  inspect(
-    @vcode.AllocationBuilder::from_plan_storage(
-      function,
-      [Some(@vcode.AllocationLocation::spill(0))],
-      [[]],
-      [0],
-      [4],
-      [4],
-    )
-    is None,
-    content="true",
-  )
-  inspect(
-    @vcode.AllocationBuilder::from_plan_storage(
-      function,
-      [Some(@vcode.AllocationLocation::spill(0))],
-      [[]],
-      [0],
-      [8],
-      [8],
-    )
-    is Some(_),
-    content="true",
-  )
-}
-
-///|
 test "Allocation remains separate and verifies edits, slots, and safepoints" {
   let builder : @vcode.Builder[TestInst] = @vcode.Builder::new("pressure", [
     GcRef64,

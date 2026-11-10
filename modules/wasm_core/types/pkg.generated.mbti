@@ -58,6 +58,12 @@ pub fn compact_show_repr(String) -> String
 
 pub fn compute_canonical_type_indices(ArrayView[SubType], type_rec_groups? : ArrayView[Int32]) -> Array[Int32]
 
+pub fn count_func_imports(Array[Import]) -> Int32
+
+pub fn count_global_imports(Array[Import]) -> Int32
+
+pub fn count_tag_imports(Array[Import]) -> Int32
+
 pub fn fold_type_groups(ArrayView[SubType], type_rec_groups? : ArrayView[Int32], external_identity~ : (Int32) -> Int32, visit~ : (ArrayView[Int32], Int64) -> Unit) -> Unit
 
 pub fn func_types_equal(FuncType, FuncType) -> Bool

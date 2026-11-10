@@ -22,10 +22,7 @@ fn ExecCode::try_alloc(
   if size == 0 {
     return None
   }
-  let bytes = FixedArray::make(size, b'\x00')
-  for i, b in code {
-    bytes[i] = b.to_byte()
-  }
+  let bytes = FixedArray::makei(size, i => code[i].to_byte())
   let ec = alloc_exec_managed(bytes, size)
   if exec_code_pointer(ec) != 0L {
     if reservation is Some(reservation) && !ec.bind_reservation(reservation) {
@@ -60,10 +57,7 @@ fn ExecCode::try_stage(
 ///|
 fn ExecCode::finalize(self : ExecCode, code : Array[Byte]) -> Bool {
   let size = code.length()
-  let bytes = FixedArray::make(size, b'\x00')
-  for index, byte in code {
-    bytes[index] = byte
-  }
+  let bytes = FixedArray::makei(size, i => code[i])
   finalize_exec_managed(self.0, bytes, size) == 0
 }
 

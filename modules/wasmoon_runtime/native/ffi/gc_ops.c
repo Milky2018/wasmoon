@@ -3,6 +3,7 @@
 // Implements struct.new/get/set, array.new/get/set/len/fill/copy
 
 #include "jit_internal.h"
+#include "native_env.h"
 #include "gc_allocator.h"
 #include "gc_access.h"
 #include "callable_lookup.h"
@@ -32,20 +33,11 @@ static inline GcArrayElement gc_trapping_array_element(GcHeap *heap, int32_t ref
 
 static int gc_alloc_debug_cached = -1;
 
-static int gc_is_truthy_env(const char *value) {
-    if (!value) return 0;
-    return strcmp(value, "1") == 0 ||
-           strcmp(value, "true") == 0 ||
-           strcmp(value, "TRUE") == 0 ||
-           strcmp(value, "yes") == 0 ||
-           strcmp(value, "YES") == 0 ||
-           strcmp(value, "on") == 0 ||
-           strcmp(value, "ON") == 0;
-}
+
 
 static int gc_alloc_debug_enabled(void) {
     if (gc_alloc_debug_cached < 0) {
-        gc_alloc_debug_cached = gc_is_truthy_env(getenv("WASMOON_GC_ALLOC_DEBUG")) ? 1 : 0;
+        gc_alloc_debug_cached = wasmoon_native_env_truthy(getenv("WASMOON_GC_ALLOC_DEBUG")) ? 1 : 0;
     }
     return gc_alloc_debug_cached;
 }

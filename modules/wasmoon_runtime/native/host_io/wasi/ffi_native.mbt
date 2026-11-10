@@ -145,14 +145,6 @@ pub extern "c" fn c_set_errno_illegal_byte_sequence() -> Unit = "wasmoon_wasi_se
 pub extern "c" fn c_isatty(fd : Int32) -> Int32 = "wasmoon_wasi_isatty"
 
 ///|
-/// Check whether target path remains within base after canonicalization
-#borrow(base_path, target_path)
-pub extern "c" fn c_path_within_base(
-  base_path : FixedArray[Byte],
-  target_path : FixedArray[Byte],
-) -> Int32 = "wasmoon_wasi_path_within_base"
-
-///|
 /// Convert native errno to WASI errno
 pub extern "c" fn c_errno_to_wasi(err : Int32) -> Int32 = "wasmoon_wasi_errno_to_wasi"
 
@@ -202,28 +194,7 @@ pub extern "c" fn c_mkdirat(
 ) -> Int32 = "wasmoon_wasi_mkdirat"
 
 ///|
-/// Read directory entries
-/// Returns serialized entries or null on error
-#borrow(path)
-pub extern "c" fn c_readdir(path : FixedArray[Byte]) -> Bytes? = "wasmoon_wasi_readdir"
-
-///|
 pub extern "c" fn c_readdir_fd(fd : Int32) -> Bytes? = "wasmoon_wasi_readdir_fd"
-
-///|
-/// Print string to stdout without newline
-#borrow(str)
-extern "c" fn raw_c_print_string(str : FixedArray[Byte], len : Int32) -> Unit = "wasmoon_print_string"
-
-///|
-/// Reject invalid buffer extents before entering the native ABI.
-pub fn c_print_string(str : FixedArray[Byte], len : Int32) -> Unit {
-  if len < 0 || len > str.length() {
-    c_set_errno_invalid_argument()
-    return ()
-  }
-  raw_c_print_string(str, len)
-}
 
 ///|
 /// Print a single character to stdout
@@ -721,66 +692,12 @@ pub fn c_resolver_next(
 pub extern "c" fn c_resolver_drop(resolver : NativeResolverHandle) = "wasmoon_wasi_resolver_drop"
 
 ///|
-/// Socket recv
-#borrow(buf)
-extern "c" fn raw_c_recv(
-  sockfd : Int32,
-  buf : FixedArray[Byte],
-  len : Int64,
-  flags : Int32,
-) -> Int64 = "wasmoon_wasi_recv"
-
-///|
-/// Reject invalid buffer extents before entering the native ABI.
-pub fn c_recv(
-  sockfd : Int32,
-  buf : FixedArray[Byte],
-  len : Int64,
-  flags : Int32,
-) -> Int64 {
-  if len < 0L || len > buf.length().to_int64() {
-    c_set_errno_invalid_argument()
-    return -1L
-  }
-  raw_c_recv(sockfd, buf, len, flags)
-}
-
-///|
-/// Socket send
-#borrow(buf)
-extern "c" fn raw_c_send(
-  sockfd : Int32,
-  buf : FixedArray[Byte],
-  len : Int64,
-  flags : Int32,
-) -> Int64 = "wasmoon_wasi_send"
-
-///|
-/// Reject invalid buffer extents before entering the native ABI.
-pub fn c_send(
-  sockfd : Int32,
-  buf : FixedArray[Byte],
-  len : Int64,
-  flags : Int32,
-) -> Int64 {
-  if len < 0L || len > buf.length().to_int64() {
-    c_set_errno_invalid_argument()
-    return -1L
-  }
-  raw_c_send(sockfd, buf, len, flags)
-}
-
-///|
 /// Socket shutdown
 pub extern "c" fn c_shutdown(sockfd : Int32, how : Int32) -> Int32 = "wasmoon_wasi_shutdown"
 
 ///|
 /// Socket accept
 pub extern "c" fn c_accept(sockfd : Int32) -> Int32 = "wasmoon_wasi_accept"
-
-///|
-/// Raise signal
-pub extern "c" fn c_raise(sig : Int32) -> Int32 = "wasmoon_wasi_raise"
 
 ///|
 /// Get random bytes from system

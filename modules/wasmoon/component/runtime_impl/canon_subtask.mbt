@@ -24,7 +24,7 @@ fn take_subtask_terminal_status(
 ///|
 fn instantiate_canon_subtask_cancel(
   is_async_cancel : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32], }
@@ -127,7 +127,7 @@ fn instantiate_canon_subtask_cancel(
 
 ///|
 fn instantiate_canon_subtask_drop(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }

@@ -26,13 +26,13 @@ pub fn direct_source_metadata(@native_types.SourceLocation?, @native_types.Stack
 
 pub fn[Buffer, Frame, E : Error] emit_call_stack_transfers(ResolvedCallTransferPlan, Buffer, Frame, (Frame, StackSlot) -> Int32?, (Buffer, Bool, @native_types.ValueType, @allocation_types.PhysicalReg, Int32) -> Unit raise E) -> Unit raise E
 
+pub fn[Inst, Buffer, Frame, E : Error] emit_incoming_values(Function[Inst], Allocation, ArrayView[Instruction], Int32, (Inst) -> (@native_types.ValueType, CallArgumentLocation, Int32)?, Buffer, Frame, Int32?, (Frame, StackSlot) -> Int32?, (@native_types.ValueType) -> @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, (Buffer, Frame, ResolvedMovePlan) -> Unit raise E, (Buffer, Bool, @native_types.ValueType, @allocation_types.PhysicalReg, Int32) -> Unit raise E, (MoveResolveError) -> E, E) -> Unit raise E
+
 pub fn[Buffer, Frame, E : Error] emit_resolved_moves(ResolvedMovePlan, Buffer, Frame, (Frame, StackSlot) -> Int32?, (Frame) -> Int32?, (Buffer, @native_types.ValueType, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Unit, (Buffer, Bool, @native_types.ValueType, @allocation_types.PhysicalReg, Int32) -> Unit raise E, E, E) -> Unit raise E
 
 pub fn[Inst] materialize_call_results(CheckedBuilder[Inst], Block, Array[@native_types.ValueType], ArrayView[CallResultLocation], Array[Value], (@native_types.ValueType, @allocation_types.PhysicalReg) -> Inst, (@native_types.ValueType, Int32) -> Inst, Inst, (@allocation_types.PhysicalReg) -> Bool) -> Array[Value] raise VCodeBuildError
 
 pub fn[Inst] materialize_entry_arguments(CheckedBuilder[Inst], Array[@native_types.ValueType], ArrayView[CallArgumentLocation], @allocation_types.PhysicalReg?, (@native_types.ValueType, @allocation_types.PhysicalReg) -> Inst, (@native_types.ValueType, Int32) -> Inst, (@allocation_types.PhysicalReg) -> Inst, (@allocation_types.PhysicalReg) -> Bool) -> (Array[Value], Value?) raise VCodeBuildError
-
-pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int32, Int32, Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
 
 pub fn[Inst : Eq] plan_conditional_edges(Function[Inst], Allocation, Block, Instruction, Block?, Inst, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg, split_false_first~ : Bool) -> ConditionalEdgeLayout raise MoveResolveError
 
@@ -59,8 +59,6 @@ pub fn[Inst] require_tail_call_plan(Function[Inst], Instruction, @native_types.S
 pub fn[Inst] requires_emergency_move_area(Function[Inst], Allocation, (Inst) -> Bool, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> Bool raise MoveResolveError
 
 pub fn[Inst] resolve_edge_moves(Function[Inst], Allocation, Block, Int32, @allocation_types.PhysicalReg, @allocation_types.PhysicalReg) -> ResolvedMovePlan raise MoveResolveError
-
-pub fn resolve_parallel_moves(Array[ParallelMove], Array[@allocation_types.PhysicalReg], Array[@allocation_types.PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
 
 pub fn select_condition(@native_lowering.IntComparison) -> IntegerCondition
 
@@ -322,11 +320,8 @@ pub fn[Inst] AllocationBuilder::create_stack_slot(Self[Inst], Int32, Int32, Int3
 pub fn[Inst] AllocationBuilder::finish(Self[Inst]) -> Allocation
 pub fn[Inst] AllocationBuilder::finish_selected(Self[Inst]) -> Allocation?
 pub fn[Inst] AllocationBuilder::for_selected_function(Function[Inst]) -> Self[Inst]
-pub fn[Inst] AllocationBuilder::from_plan_storage(Function[Inst], Array[@allocation_types.AllocationLocation?], Array[Array[@allocation_types.AllocationLocation?]], Array[Int32], Array[Int32], Array[Int32]) -> Self[Inst]?
 pub fn[Inst] AllocationBuilder::new(Function[Inst]) -> Self[Inst]
-pub fn[Inst] AllocationBuilder::operand_value_at(Self[Inst], Int32, Int32) -> Int32
 pub fn[Inst] AllocationBuilder::value_location(Self[Inst], Int32) -> @allocation_types.AllocationLocation?
-pub fn[Inst] AllocationBuilder::value_type_at(Self[Inst], Int32) -> @native_types.ValueType
 
 #derive(Eq, @debug.Debug)
 pub struct AllocationStatistics {
@@ -398,15 +393,6 @@ pub struct CallTransfer {
 }
 pub fn CallTransfer::to_register(@native_types.ValueType, Location, @allocation_types.PhysicalReg) -> Self
 pub fn CallTransfer::to_stack(@native_types.ValueType, Location, Int32) -> Self
-
-#derive(Eq, @debug.Debug)
-pub struct CallTransferPlan {
-  stack_transfers : Array[StackArgumentTransfer]
-  register_moves : Array[ParallelMove]
-}
-pub fn CallTransferPlan::equal(Self, Self) -> Bool
-pub fn CallTransferPlan::not_equal(Self, Self) -> Bool
-pub fn CallTransferPlan::to_repr(Self) -> @debug.Repr
 
 pub struct CheckedBuilder[Inst] {
   // private fields
@@ -578,7 +564,6 @@ pub fn[Inst] Function::allocation_instruction_clobbers(Self[Inst], Int32) -> Arr
 pub fn[Inst] Function::allocation_instruction_operands(Self[Inst], Int32) -> ArrayView[@allocation_types.AllocationOperand]
 pub fn[Inst] Function::allocation_layout_block_id_at(Self[Inst], Int32) -> Int32
 pub fn[Inst] Function::allocation_value_type_at(Self[Inst], Int32) -> @native_types.ValueType
-pub fn[Inst] Function::allocation_vreg(Self[Inst], Value) -> @allocation_types.VirtualReg?
 pub fn[Inst] Function::before(Self[Inst], Instruction) -> ProgramPoint?
 pub fn[Inst] Function::block_at(Self[Inst], Int32) -> Block?
 pub fn[Inst] Function::block_body(Self[Inst], Block) -> Array[Instruction]
@@ -593,11 +578,8 @@ pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
 pub fn[Inst] Function::emission_layout(Self[Inst]) -> Array[Block]
 pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Function::instruction(Self[Inst], Instruction) -> Inst?
-pub fn[Inst] Function::instruction_allocation_operand_at(Self[Inst], Instruction, Int32) -> @allocation_types.AllocationOperand?
 pub fn[Inst] Function::instruction_annotations(Self[Inst], Instruction) -> InstructionAnnotations?
 pub fn[Inst] Function::instruction_at(Self[Inst], Int32) -> Instruction?
-pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int32) -> @allocation_types.PhysicalReg?
-pub fn[Inst] Function::instruction_clobber_count(Self[Inst], Instruction) -> Int32
 pub fn[Inst] Function::instruction_clobbers(Self[Inst], Instruction) -> Array[@allocation_types.PhysicalReg]
 pub fn[Inst] Function::instruction_count(Self[Inst]) -> Int32
 pub fn[Inst] Function::instruction_index(Self[Inst], Instruction) -> Int32?
@@ -727,7 +709,6 @@ pub struct LoweringContext {
 }
 pub fn LoweringContext::environment_field_offsets(Self, @native_types.EnvironmentField) -> Array[Int32]?
 pub fn LoweringContext::new(InternalAbi) -> Self
-pub fn LoweringContext::with_environment_field(Self, @native_types.EnvironmentField, Array[Int32]) -> Self
 pub fn LoweringContext::with_environment_field_resolver(Self, (@native_types.EnvironmentField) -> Array[Int32]?) -> Self
 
 #derive(Eq, @debug.Debug)

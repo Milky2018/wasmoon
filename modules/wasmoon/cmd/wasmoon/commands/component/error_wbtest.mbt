@@ -20,6 +20,36 @@ test "component error code mapping: validate unsupported -> COMP_UNSUPPORTED" {
 }
 
 ///|
+test "component JSON roundtrips control characters" {
+  let text = "\u{0000}\u{0001}\u{0008}\u{000C}\t\r\n\"\\😀"
+  let output = @json.parse(
+    component_error_json(false, None, text, text, summary=Some([text])),
+  )
+  assert_eq(
+    output,
+    @json.Json::object(
+      Map([
+        ("ok", @json.Json::boolean(false)),
+        ("phase", @json.Json::string(text)),
+        ("detail", @json.Json::string(text)),
+        ("summary", @json.to_json([text])),
+      ]),
+    ),
+  )
+  assert_eq(
+    @json.parse(component_invoke_success_json(text, [])),
+    @json.Json::object(
+      Map([
+        ("ok", @json.Json::boolean(true)),
+        ("phase", @json.Json::string("invoke")),
+        ("detail", @json.Json::string(text)),
+        ("result", @json.Json::array([])),
+      ]),
+    ),
+  )
+}
+
+///|
 test "component error json format includes structured fields" {
   let out = component_error_json(
     false,

@@ -36,7 +36,7 @@ fn validate_module_core(
     error => raise decorate_validation_error(error, with_context)
   }
   // Validate all function bodies
-  let num_imports = count_func_imports(mod.imports)
+  let num_imports = @types.count_func_imports(mod.imports)
   for i, code in mod.codes {
     let func_idx = num_imports + i
     let type_idx = ctx.funcs[func_idx]
@@ -137,7 +137,7 @@ fn validate_module_declarations(
   }
 
   // Table initializers can only see imported globals.
-  let num_imported_globals = count_global_imports(mod.imports)
+  let num_imported_globals = @types.count_global_imports(mod.imports)
   // Validate table types and limits
   for table in mod.tables {
     validate_table_type(table, ctx, ctx.globals[:num_imported_globals])
@@ -314,7 +314,7 @@ fn validate_exports(
         }
       Tag(idx) => {
         // Validate tag index - count imported tags plus defined tags
-        let num_imported_tags = count_tag_imports(mod.imports)
+        let num_imported_tags = @types.count_tag_imports(mod.imports)
         let total_tags = num_imported_tags + mod.tags.length()
         if idx < 0 || idx >= total_tags {
           raise UnknownExport("unknown tag \{idx}")

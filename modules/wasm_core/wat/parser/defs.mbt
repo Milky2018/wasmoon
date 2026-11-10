@@ -202,9 +202,9 @@ fn Parser::parse_memory_type_tail(
   self : Parser,
   is_memory64 : Bool,
 ) -> @types.MemoryType raise WatError {
-  let min = self.parse_u64()
+  let min = parse_u64(self.parse_number())
   let max = match self.current.token {
-    Number(_) => Some(self.parse_u64())
+    Number(_) => Some(parse_u64(self.parse_number()))
     _ => None
   }
   let is_shared = self.current.token == Keyword("shared")
@@ -228,7 +228,7 @@ fn Parser::parse_optional_page_size_log2(self : Parser) -> Int32 raise WatError 
     return 16
   }
   self.advance()
-  let page_size = self.parse_u64().reinterpret_as_uint64()
+  let page_size = parse_u64(self.parse_number()).reinterpret_as_uint64()
   if page_size == 0UL || (page_size & (page_size - 1UL)) != 0UL {
     raise UnexpectedToken(
       "memory page size must be a nonzero u64 power of two",
@@ -332,9 +332,9 @@ fn Parser::parse_table_def(
         }
 
         // Parse limits - use u64 for table64, u32 for table32
-        let min = self.parse_u64()
+        let min = parse_u64(self.parse_number())
         let max = match self.current.token {
-          Number(_) => Some(self.parse_u64())
+          Number(_) => Some(parse_u64(self.parse_number()))
           _ => None
         }
         // Parse element type
@@ -399,7 +399,7 @@ fn Parser::parse_table_def(
                       self.advance()
                   }
                 Number(_) => {
-                  let idx = self.parse_u32()
+                  let idx = parse_u32(self.parse_number())
                   init.push([RefFunc(idx)])
                 }
                 LParen => {
@@ -533,7 +533,7 @@ fn Parser::parse_table_def(
                           None => self.advance() // Placeholder for late-bound refs
                         }
                       Number(_) => {
-                        let idx = self.parse_u32()
+                        let idx = parse_u32(self.parse_number())
                         init.push([RefFunc(idx)])
                       }
                       LParen => {
@@ -624,9 +624,9 @@ fn Parser::parse_table_def(
         }
       }
       // Parse limits - use u64 for table64, u32 for table32
-      let min = self.parse_u64()
+      let min = parse_u64(self.parse_number())
       let max = match self.current.token {
-        Number(_) => Some(self.parse_u64())
+        Number(_) => Some(parse_u64(self.parse_number()))
         _ => None
       }
       let elem_type = self.parse_value_type()
@@ -695,7 +695,7 @@ fn Parser::parse_export_def(
     Keyword("memory") => {
       self.advance()
       let idx = match self.current.token {
-        Number(_) => self.parse_u32()
+        Number(_) => parse_u32(self.parse_number())
         Id(name) =>
           match self.memory_names.get(name) {
             Some(idx) => {
@@ -711,7 +711,7 @@ fn Parser::parse_export_def(
     Keyword("table") => {
       self.advance()
       let idx = match self.current.token {
-        Number(_) => self.parse_u32()
+        Number(_) => parse_u32(self.parse_number())
         Id(name) =>
           match self.table_names.get(name) {
             Some(idx) => {
@@ -756,7 +756,7 @@ fn Parser::parse_import_def(
       // Optional func name - imported function index is count of function imports so far
       match self.current.token {
         Id(fname) => {
-          self.func_names.set(fname, count_func_imports(mod_.imports))
+          self.func_names.set(fname, @types.count_func_imports(mod_.imports))
           self.advance()
         }
         _ => ()
@@ -818,9 +818,9 @@ fn Parser::parse_import_def(
         self.advance()
       }
       // Decode limits independently of the table address type
-      let min = self.parse_u64()
+      let min = parse_u64(self.parse_number())
       let max = match self.current.token {
-        Number(_) => Some(self.parse_u64())
+        Number(_) => Some(parse_u64(self.parse_number()))
         _ => None
       }
       let elem_type = self.parse_value_type()
@@ -830,7 +830,7 @@ fn Parser::parse_import_def(
       self.advance()
       // Optional global name
       if self.current.token is Id(gname) {
-        self.global_names.set(gname, count_global_imports(mod_.imports))
+        self.global_names.set(gname, @types.count_global_imports(mod_.imports))
         self.advance()
       }
       Global(self.parse_global_type())
@@ -839,7 +839,7 @@ fn Parser::parse_import_def(
       self.advance()
       // Optional tag name
       if self.current.token is Id(tname) {
-        self.tag_names.set(tname, count_tag_imports(mod_.imports))
+        self.tag_names.set(tname, @types.count_tag_imports(mod_.imports))
         self.advance()
       }
       // Parse type - either (type $idx) or inline (param ...)
@@ -909,7 +909,7 @@ fn Parser::parse_data_def(
   let mut is_passive = true
 
   if self.current.token is Number(_) {
-    memory_idx = self.parse_u32()
+    memory_idx = parse_u32(self.parse_number())
     is_passive = false
   }
 
@@ -922,7 +922,7 @@ fn Parser::parse_data_def(
         is_passive = false
         self.advance()
         memory_idx = match self.current.token {
-          Number(_) => self.parse_u32()
+          Number(_) => parse_u32(self.parse_number())
           Id(name) =>
             match self.memory_names.get(name) {
               Some(idx) => {
@@ -1039,7 +1039,7 @@ fn Parser::parse_elem_def(
           // Active with explicit table
           self.advance()
           let table_idx = match self.current.token {
-            Number(_) => self.parse_u32()
+            Number(_) => parse_u32(self.parse_number())
             Id(name) =>
               match self.table_names.get(name) {
                 Some(idx) => {
@@ -1242,7 +1242,7 @@ fn Parser::parse_tag_def(
   if self.current.token is Id(name) {
     self.tag_names.set(
       name,
-      count_tag_imports(mod_.imports) + mod_.tags.length(),
+      @types.count_tag_imports(mod_.imports) + mod_.tags.length(),
     )
     self.advance()
   }
@@ -1326,7 +1326,7 @@ fn Parser::parse_tag_type_spec(
 /// Parse a tag index (number or $name)
 fn Parser::parse_tag_idx(self : Parser) -> Int32 raise WatError {
   match self.current.token {
-    Number(_) => self.parse_u32()
+    Number(_) => parse_u32(self.parse_number())
     Id(name) =>
       match self.tag_names.get(name) {
         Some(idx) => {

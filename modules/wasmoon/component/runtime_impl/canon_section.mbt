@@ -6,7 +6,7 @@
 ///|
 fn process_canon_section(
   payload : Bytes,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
   entry_state : ComponentInstanceEntryState,
 ) -> Unit raise ComponentRuntimeError {

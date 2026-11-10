@@ -19,7 +19,7 @@ fn release_waiter(
 
 ///|
 fn instantiate_canon_waitable_set_new(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I32], }
@@ -48,7 +48,7 @@ fn instantiate_canon_waitable_set_new(
 fn instantiate_canon_waitable_set_wait(
   _cancellable : Bool,
   memidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
@@ -223,7 +223,7 @@ fn instantiate_canon_waitable_set_wait(
 fn instantiate_canon_waitable_set_poll(
   _cancellable : Bool,
   memidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
@@ -282,7 +282,7 @@ fn instantiate_canon_waitable_set_poll(
 
 ///|
 fn instantiate_canon_waitable_set_drop(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }
@@ -336,7 +336,7 @@ fn instantiate_canon_waitable_set_drop(
 
 ///|
 fn instantiate_canon_waitable_join(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [], }
@@ -436,7 +436,7 @@ fn instantiate_canon_waitable_join(
 
 ///|
 fn instantiate_waitable_cancel(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
   is_async_cancel : Bool,
   cancel : (Int32) -> Int32 raise @runtime.RuntimeError,

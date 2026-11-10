@@ -9,7 +9,6 @@ extern "C" {
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <signal.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -59,13 +58,6 @@ typedef int socklen_t;
 // before calling libc APIs so behavior is consistent across platforms.
 #define WASMOON_AT_REMOVEDIR_TOKEN 0x200
 #define WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN 0x100
-
-#ifndef _WIN32
-static int wasmoon_wasi_path_is_within_base(
-  const char *base_real,
-  const char *target_real
-);
-#endif
 
 #ifdef _WIN32
 // These aliases are limited to the shared capability walker. They preserve
@@ -379,73 +371,6 @@ static int wasmoon_wasi_open_parent_beneath_impl(int root_fd, const char *path) 
 #undef ftruncate
 #endif
 
-#ifndef _WIN32
-static int wasmoon_wasi_path_is_within_base(const char *base_real, const char *target_real) {
-  if (!base_real || !target_real) return 0;
-  if (strcmp(base_real, "/") == 0) {
-    return target_real[0] == '/';
-  }
-  size_t base_len = strlen(base_real);
-  if (strncmp(base_real, target_real, base_len) != 0) return 0;
-  char next = target_real[base_len];
-  return next == '\0' || next == '/';
-}
-
-static int wasmoon_wasi_realpath_existing_parent(const char *path, char **out_real) {
-  if (!path || !out_real) return 0;
-  *out_real = NULL;
-
-  char *scratch = strdup(path);
-  if (!scratch) return 0;
-
-  while (1) {
-    errno = 0;
-    char *resolved = realpath(scratch, NULL);
-    if (resolved) {
-      *out_real = resolved;
-      free(scratch);
-      return 1;
-    }
-
-    if (errno != ENOENT && errno != ENOTDIR) {
-      break;
-    }
-
-    char *slash = strrchr(scratch, '/');
-    if (!slash) {
-      scratch[0] = '.';
-      scratch[1] = '\0';
-    } else if (slash == scratch) {
-      scratch[1] = '\0';
-    } else {
-      *slash = '\0';
-    }
-  }
-
-  free(scratch);
-  return 0;
-}
-
-static int wasmoon_wasi_path_within_base_impl(const char *base_path, const char *target_path) {
-  if (!base_path || !target_path) return 0;
-
-  char *base_real = realpath(base_path, NULL);
-  if (!base_real) return 0;
-
-  char *target_real = realpath(target_path, NULL);
-  if (!target_real) {
-    if (!wasmoon_wasi_realpath_existing_parent(target_path, &target_real)) {
-      free(base_real);
-      return 0;
-    }
-  }
-
-  int ok = wasmoon_wasi_path_is_within_base(base_real, target_real);
-  free(base_real);
-  free(target_real);
-  return ok;
-}
-#endif
 
 // Open a file and return file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_open(moonbit_bytes_t path, int flags, int mode) {
@@ -617,22 +542,6 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_isatty(int fd) {
   return handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode);
 #else
   return isatty(fd);
-#endif
-}
-
-// Check whether a target path stays within the base directory after canonical
-// resolution (including symlink traversal).
-MOONBIT_FFI_EXPORT int wasmoon_wasi_path_within_base(
-  moonbit_bytes_t base_path,
-  moonbit_bytes_t target_path
-) {
-#ifdef _WIN32
-  return wasmoon_windows_path_within_base((const char *)base_path, (const char *)target_path);
-#else
-  return wasmoon_wasi_path_within_base_impl(
-    (const char *)base_path,
-    (const char *)target_path
-  );
 #endif
 }
 
@@ -914,12 +823,6 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdirat(
 #else
   return mkdirat(dirfd, (const char *)path, mode);
 #endif
-}
-
-// Print string to stdout without newline
-MOONBIT_FFI_EXPORT void wasmoon_print_string(moonbit_bytes_t str, int len) {
-  fwrite(str, 1, len, stdout);
-  fflush(stdout);
 }
 
 // Print a single character to stdout
@@ -1323,15 +1226,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_clock_getres_realtime(void) {
     return -1;
   }
   return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-#endif
-}
-
-// Number of bytes currently readable from a socket, or -1 on error.
-MOONBIT_FFI_EXPORT int wasmoon_wasi_raise(int sig) {
-#ifdef _WIN32
-  return raise(sig);
-#else
-  return raise(sig);
 #endif
 }
 

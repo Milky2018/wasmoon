@@ -41,7 +41,6 @@ pub struct AllocationPlan {
   priv operand_locations : Array[Array[Location?]]
   priv edits : Array[AllocationEdit]
   priv spill_slots : Array[SpillSlotSpec]
-  priv spill_slot_owners : Array[Int32]
 }
 
 ///|
@@ -66,7 +65,6 @@ fn AllocationPlan::new(value_count : Int32) -> AllocationPlan {
     operand_locations: [],
     edits: [],
     spill_slots: [],
-    spill_slot_owners: [],
   }
 }
 
@@ -109,13 +107,11 @@ fn AllocationPlan::add_edit(
 ///|
 fn AllocationPlan::create_spill_slot(
   self : AllocationPlan,
-  owner : Int32,
   size : Int32,
   alignment : Int32,
 ) -> Int32 {
   let slot = self.spill_slots.length()
   self.spill_slots.push({ size, alignment, })
-  self.spill_slot_owners.push(owner)
   slot
 }
 
@@ -178,13 +174,6 @@ pub fn AllocationPlan::operand_assignments(
 }
 
 ///|
-pub fn AllocationPlan::operand_instruction_count(
-  self : AllocationPlan,
-) -> Int32 {
-  self.operand_locations.length()
-}
-
-///|
 pub fn AllocationPlan::instruction_operand_count(
   self : AllocationPlan,
   instruction : Int32,
@@ -206,14 +195,6 @@ pub fn AllocationPlan::edit_count(self : AllocationPlan) -> Int32 {
 }
 
 ///|
-pub fn AllocationPlan::edit_at(
-  self : AllocationPlan,
-  index : Int32,
-) -> AllocationEdit? {
-  self.edits.get(index)
-}
-
-///|
 pub fn AllocationPlan::spill_count(self : AllocationPlan) -> Int32 {
   self.spill_slots.length()
 }
@@ -224,31 +205,4 @@ pub fn AllocationPlan::spill_slot(
   index : Int32,
 ) -> SpillSlotSpec? {
   self.spill_slots.get(index)
-}
-
-///|
-pub fn AllocationPlan::spill_slot_owner(
-  self : AllocationPlan,
-  index : Int32,
-) -> Int32? {
-  self.spill_slot_owners.get(index)
-}
-
-///|
-/// Shares the allocator's finalized dense value-location table with an
-/// embedding. The plan must not be mutated after this table is adopted.
-pub fn AllocationPlan::value_location_storage(
-  self : AllocationPlan,
-) -> Array[Location?] {
-  self.value_locations
-}
-
-///|
-/// Shares the allocator's finalized dense operand-location tables with an
-/// embedding. `seal_operand_storage` establishes the source function's exact
-/// instruction and operand shape before allocation returns.
-pub fn AllocationPlan::operand_location_storage(
-  self : AllocationPlan,
-) -> Array[Array[Location?]] {
-  self.operand_locations
 }

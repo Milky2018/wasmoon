@@ -2,6 +2,7 @@
 // Segment operations for bulk memory/table instructions
 
 #include "jit_internal.h"
+#include "native_env.h"
 #include "gc_access.h"
 #include "callable_lookup.h"
 #include <string.h>
@@ -18,18 +19,7 @@ static int table_debug_cached = -1;
 static int table_debug_enabled(void) {
     if (table_debug_cached < 0) {
         const char *v = getenv("WASMOON_TABLE_DEBUG");
-        table_debug_cached = (
-            v &&
-            (
-                strcmp(v, "1") == 0 ||
-                strcmp(v, "true") == 0 ||
-                strcmp(v, "TRUE") == 0 ||
-                strcmp(v, "yes") == 0 ||
-                strcmp(v, "YES") == 0 ||
-                strcmp(v, "on") == 0 ||
-                strcmp(v, "ON") == 0
-            )
-        ) ? 1 : 0;
+        table_debug_cached = wasmoon_native_env_truthy(v) ? 1 : 0;
     }
     return table_debug_cached;
 }

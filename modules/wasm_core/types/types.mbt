@@ -1400,22 +1400,7 @@ pub fn Module::is_array_type(self : Module, idx : Int32) -> Bool {
 ///|
 /// Create an empty module
 pub fn Module::Module() -> Module {
-  {
-    types: [],
-    type_rec_groups: [],
-    imports: [],
-    funcs: [],
-    tables: [],
-    memories: [],
-    globals: [],
-    exports: [],
-    start: None,
-    elems: [],
-    codes: [],
-    datas: [],
-    tags: [],
-    func_names: Map([]),
-  }
+  Module::empty()
 }
 
 ///|

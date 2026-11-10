@@ -160,6 +160,11 @@ safely with that scratch, the planner emits explicit emergency save and restore
 steps. The target owns the physical emergency area and must verify that its
 frame reserves it whenever the resolved plan requires it.
 
+`emit_incoming_values` receives function arguments and call results through the
+same transfer path. Each target describes its incoming pseudos, stack base, and
+scratch registers. Register transfers complete before stack values are loaded,
+including values whose allocated homes are spill slots.
+
 The verification functions represent lifecycle boundaries:
 
 - `verify_selected` checks CFG shape, SSA dominance, operands, clobbers,
@@ -209,3 +214,15 @@ register locations are relative to the canonical frame address.
   them.
 - Treat verification errors as compiler contract failures with structured
   diagnostics. Do not bypass a failed stage to continue emission.
+
+Bind embedding-owned environment fields with
+`LoweringContext::with_environment_field_resolver`. The unused fixed-binding
+builder `with_environment_field` has been removed; unresolved fields still
+fail target lowering.
+
+Plan parallel moves with `plan_parallel_moves` and call setup with
+`plan_resolved_call_transfers`. Both return typed move steps, including any
+emergency spill and reload required for stack cycles. The unused legacy
+`resolve_parallel_moves`, `plan_call_transfers`, and `CallTransferPlan` APIs
+have been removed. Supply concrete, reserved move scratch registers; stack
+transfer scratch candidates and protected root locations remain separate.

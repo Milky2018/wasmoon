@@ -5,7 +5,7 @@
 ///|
 fn instantiate_canon_resource_new(
   tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   if tyidx < 0 || tyidx >= state.types.length() {
@@ -61,7 +61,7 @@ fn instantiate_canon_resource_new(
 ///|
 fn instantiate_canon_resource_rep(
   tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   if tyidx < 0 || tyidx >= state.types.length() {
@@ -120,7 +120,7 @@ fn instantiate_canon_resource_rep(
 ///|
 fn instantiate_canon_resource_drop(
   tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   if tyidx < 0 || tyidx >= state.types.length() {

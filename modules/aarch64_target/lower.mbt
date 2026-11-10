@@ -170,64 +170,7 @@ fn lower_call_results(
 }
 
 ///|
-fn lower_direct_platform_call(
-  builder : @vcode.CheckedBuilder[AArch64Inst],
-  block : @vcode.Block,
-  call : @native.NativeCall,
-  operands : Array[@vcode.Value],
-  result_types : Array[@native.ValueType],
-  metadata : @vcode.InstructionMetadata,
-) -> Array[@vcode.Value] raise AArch64LowerError {
-  if call.protocol != Platform {
-    raise UnsupportedAbi(message="direct internal call ABI is not selected yet")
-  }
-  if result_types.length() > 1 {
-    raise UnsupportedAbi(
-      message="platform calls support at most one direct result",
-    )
-  }
-  let target = match call.callee {
-    External(symbol) => symbol
-    _ =>
-      raise UnsupportedAbi(
-        message="platform calls require a direct external symbol",
-      )
-  }
-  let operands = builder.materialize_abi_words(
-    block,
-    operands,
-    call.signature.params,
-    ty => Move(ty),
-  ) catch {
-    error => raise BuildFailure(cause=error)
-  }
-  let result_registers = platform_result_registers(call.signature.results)
-  let inputs = @vcode.call_argument_inputs(
-    operands,
-    platform_call_layout(call.signature.params).arguments,
-    is_allocatable,
-  )
-  (builder.append_body(
-    block,
-    if call.behavior.returns_twice {
-      ReturnsTwicePlatformCall(target, call.signature)
-    } else {
-      PlatformCall(target, call.signature)
-    },
-    inputs,
-    [],
-    platform_call_clobbers(),
-    metadata,
-  ) catch {
-    error => raise BuildFailure(cause=error)
-  })
-  |> ignore
-  let locations = result_registers.map(reg => @vcode.CallResultRegister(reg))
-  lower_call_results(builder, block, result_types, locations, metadata)
-}
-
-///|
-fn lower_internal_call(
+fn lower_call(
   context : LoweringContext,
   builder : @vcode.CheckedBuilder[AArch64Inst],
   block : @vcode.Block,
@@ -236,62 +179,103 @@ fn lower_internal_call(
   result_types : Array[@native.ValueType],
   metadata : @vcode.InstructionMetadata,
 ) -> Array[@vcode.Value] raise AArch64LowerError {
-  if call.protocol != Internal {
-    raise UnsupportedAbi(message="internal call requires the internal protocol")
-  }
-  if call.behavior.returns_twice {
-    raise UnsupportedAbi(
-      message="returns-twice internal calls are not supported",
-    )
-  }
-  let target = match call.callee {
-    Internal(symbol) => Some(symbol)
-    Indirect => None
-    External(_) =>
-      raise UnsupportedAbi(
-        message="internal calls require a code symbol or function pointer",
+  let (instruction, inputs, clobbers, locations) : (
+    AArch64Inst,
+    Array[@vcode.Input],
+    Array[@vcode.PhysicalReg],
+    ArrayView[CallResultLocation],
+  ) = match call.protocol {
+    Platform => {
+      if result_types.length() > 1 {
+        raise UnsupportedAbi(
+          message="platform calls support at most one direct result",
+        )
+      }
+      let target = match call.callee {
+        External(symbol) => symbol
+        _ =>
+          raise UnsupportedAbi(
+            message="platform calls require a direct external symbol",
+          )
+      }
+      let operands = builder.materialize_abi_words(
+        block,
+        operands,
+        call.signature.params,
+        ty => Move(ty),
+      ) catch {
+        error => raise BuildFailure(cause=error)
+      }
+      let result_registers = platform_result_registers(call.signature.results)
+      let inputs = @vcode.call_argument_inputs(
+        operands,
+        platform_call_layout(call.signature.params).arguments,
+        is_allocatable,
       )
+      let instruction = if call.behavior.returns_twice {
+        ReturnsTwicePlatformCall(target, call.signature)
+      } else {
+        PlatformCall(target, call.signature)
+      }
+      (
+        instruction,
+        inputs,
+        platform_call_clobbers(),
+        result_registers.map(reg => CallResultRegister(reg)),
+      )
+    }
+    Internal => {
+      if call.behavior.returns_twice {
+        raise UnsupportedAbi(
+          message="returns-twice internal calls are not supported",
+        )
+      }
+      let target = match call.callee {
+        Internal(symbol) => Some(symbol)
+        Indirect => None
+        External(_) =>
+          raise UnsupportedAbi(
+            message="internal calls require a code symbol or function pointer",
+          )
+      }
+      let operands = builder.materialize_abi_words(
+        block,
+        operands,
+        call.signature.params,
+        ty => Move(ty),
+        operand_start=if target is None { 1 } else { 0 },
+      ) catch {
+        error => raise BuildFailure(cause=error)
+      }
+      let plan = context.internal_abi.call_plan(call.signature) catch {
+        error => raise UnsupportedAbi(message=error.to_string())
+      }
+      let instruction = match target {
+        Some(target) => InternalCall(target, call.signature, plan)
+        None => InternalCallIndirect(call.signature, plan)
+      }
+      let inputs = match target {
+        Some(_) =>
+          @vcode.call_argument_inputs(operands, plan.arguments, is_allocatable)
+        None =>
+          [
+            @vcode.Input::any_location(operands[0]),
+            ..@vcode.call_argument_inputs(
+              operands[1:].to_owned(),
+              plan.arguments,
+              is_allocatable,
+            ),
+          ]
+      }
+      (instruction, inputs, platform_call_clobbers(), plan.results)
+    }
   }
-  let operands = builder.materialize_abi_words(
-    block,
-    operands,
-    call.signature.params,
-    ty => Move(ty),
-    operand_start=if target is None { 1 } else { 0 },
-  ) catch {
-    error => raise BuildFailure(cause=error)
-  }
-  let plan = context.internal_abi.call_plan(call.signature) catch {
-    error => raise UnsupportedAbi(message=error.to_string())
-  }
-  let inputs = match target {
-    Some(_) =>
-      @vcode.call_argument_inputs(operands, plan.arguments, is_allocatable)
-    None =>
-      [
-        @vcode.Input::any_location(operands[0]),
-        ..@vcode.call_argument_inputs(
-          operands[1:].to_owned(),
-          plan.arguments,
-          is_allocatable,
-        ),
-      ]
-  }
-  (builder.append_body(
-    block,
-    match target {
-      Some(target) => InternalCall(target, call.signature, plan)
-      None => InternalCallIndirect(call.signature, plan)
+  ignore(
+    builder.append_body(block, instruction, inputs, [], clobbers, metadata) catch {
+      error => raise BuildFailure(cause=error)
     },
-    inputs,
-    [],
-    platform_call_clobbers(),
-    metadata,
-  ) catch {
-    error => raise BuildFailure(cause=error)
-  })
-  |> ignore
-  lower_call_results(builder, block, result_types, plan.results, metadata)
+  )
+  lower_call_results(builder, block, result_types, locations, metadata)
 }
 
 ///|

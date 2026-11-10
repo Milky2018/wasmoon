@@ -291,3 +291,39 @@ test "direct output preserves implicit GC operands and spilled root homes" {
   let again = session.allocate_selected_vcode(function, environment)
   assert_eq(again.summary(), checked.summary())
 }
+
+///|
+test "forced integer and vector spills retain byte sizes and alignments" {
+  let builder : @vcode.Builder[Unit] = @vcode.Builder::new(
+    "mixed_spill_layouts",
+    [I64, V128],
+  )
+  let integer = builder.parameter(0)
+  let vector = builder.parameter(1)
+  builder.set_terminator(
+    builder.entry_block(),
+    (),
+    [@vcode.Input::any_location(integer), @vcode.Input::any_location(vector)],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  let allocation = @vcode_regalloc.allocate_vcode(
+    function,
+    @vcode_regalloc.VCodeAllocationEnvironment::new([], []),
+  )
+  guard allocation.value_location(integer) is Some(Stack(integer_slot)) else {
+    fail("expected an integer spill")
+  }
+  guard allocation.value_location(vector) is Some(Stack(vector_slot)) else {
+    fail("expected a vector spill")
+  }
+  assert_eq(allocation.stack_slot_count(), 2)
+  assert_false(integer_slot == vector_slot)
+  assert_eq(allocation.stack_slot_size(integer_slot), Some(8))
+  assert_eq(allocation.stack_slot_alignment(integer_slot), Some(8))
+  assert_eq(allocation.stack_slot_size(vector_slot), Some(16))
+  assert_eq(allocation.stack_slot_alignment(vector_slot), Some(16))
+}

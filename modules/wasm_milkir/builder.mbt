@@ -1,14 +1,4 @@
 ///|
-fn i32_type() -> @milkir.Type {
-  I32
-}
-
-///|
-fn i64_type() -> @milkir.Type {
-  I64
-}
-
-///|
 pub fn wasm_funcref_type() -> @milkir.Type {
   CallableRef
 }
@@ -34,6 +24,19 @@ fn call_runtime(
   args : Array[@milkir.Value],
 ) -> @milkir.Value? {
   builder.call_symbol(external_symbol(builder, symbol), result_ty, args)
+}
+
+///|
+/// Runtime memory and table helpers receive unsigned 64-bit indices.
+fn runtime_index(
+  builder : @milkir.FunctionBuilder,
+  value : @milkir.Value,
+) -> @milkir.Value {
+  if value.ty == I64 {
+    value
+  } else {
+    builder.uextend(I64, value)
+  }
 }
 
 ///|
@@ -144,11 +147,7 @@ pub fn memory_grow(
     [
       vmctx,
       builder.iconst_i32(memidx),
-      if delta.ty == I64 {
-        delta
-      } else {
-        builder.uextend(I64, delta)
-      },
+      runtime_index(builder, delta),
       builder.iconst_i32(max_pages_value),
     ],
   ).unwrap()
@@ -193,17 +192,9 @@ pub fn memory_fill(
   call_runtime(builder, runtime_symbols.symbol_name(MemoryFill), None, [
     vmctx,
     builder.iconst_i32(memidx),
-    if dst.ty == I64 {
-      dst
-    } else {
-      builder.uextend(I64, dst)
-    },
+    runtime_index(builder, dst),
     val,
-    if size.ty == I64 {
-      size
-    } else {
-      builder.uextend(I64, size)
-    },
+    runtime_index(builder, size),
   ])
   |> ignore
 }
@@ -223,21 +214,9 @@ pub fn memory_copy(
     vmctx,
     builder.iconst_i32(dst_memidx),
     builder.iconst_i32(src_memidx),
-    if dst.ty == I64 {
-      dst
-    } else {
-      builder.uextend(I64, dst)
-    },
-    if src.ty == I64 {
-      src
-    } else {
-      builder.uextend(I64, src)
-    },
-    if size.ty == I64 {
-      size
-    } else {
-      builder.uextend(I64, size)
-    },
+    runtime_index(builder, dst),
+    runtime_index(builder, src),
+    runtime_index(builder, size),
   ])
   |> ignore
 }
@@ -257,21 +236,9 @@ pub fn memory_init(
     vmctx,
     builder.iconst_i32(memidx),
     builder.iconst_i32(data_idx),
-    if dst.ty == I64 {
-      dst
-    } else {
-      builder.uextend(I64, dst)
-    },
-    if src.ty == I64 {
-      src
-    } else {
-      builder.uextend(I64, src)
-    },
-    if size.ty == I64 {
-      size
-    } else {
-      builder.uextend(I64, size)
-    },
+    runtime_index(builder, dst),
+    runtime_index(builder, src),
+    runtime_index(builder, size),
   ])
   |> ignore
 }
@@ -300,11 +267,7 @@ pub fn table_grow(
   init_value : @milkir.Value,
   is_table64~ : Bool = false,
 ) -> @milkir.Value {
-  let runtime_delta = if delta.ty == I64 {
-    delta
-  } else {
-    builder.uextend(I64, delta)
-  }
+  let runtime_delta = runtime_index(builder, delta)
   let call_result = call_runtime(
     builder,
     runtime_symbols.symbol_name(TableGrow),
@@ -643,7 +606,7 @@ pub fn array_len(
   builder : @milkir.FunctionBuilder,
   array_ref : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), ArrayLen, [array_ref])
+  emit_wasm_inst(builder, I32, ArrayLen, [array_ref])
 }
 
 ///|
@@ -745,7 +708,7 @@ pub fn i31_get_s(
   builder : @milkir.FunctionBuilder,
   i31_ref : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), I31GetS, [i31_ref])
+  emit_wasm_inst(builder, I32, I31GetS, [i31_ref])
 }
 
 ///|
@@ -753,7 +716,7 @@ pub fn i31_get_u(
   builder : @milkir.FunctionBuilder,
   i31_ref : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), I31GetU, [i31_ref])
+  emit_wasm_inst(builder, I32, I31GetU, [i31_ref])
 }
 
 ///|
@@ -763,7 +726,7 @@ pub fn ref_test(
   nullable : Bool,
   ref_val : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), RefTest(type_idx, nullable), [ref_val])
+  emit_wasm_inst(builder, I32, RefTest(type_idx, nullable), [ref_val])
 }
 
 ///|
@@ -799,7 +762,7 @@ pub fn ref_eq(
   ref1 : @milkir.Value,
   ref2 : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), RefEq, [ref1, ref2])
+  emit_wasm_inst(builder, I32, RefEq, [ref1, ref2])
 }
 
 ///|
@@ -824,7 +787,7 @@ pub fn try_table_begin(
   builder : @milkir.FunctionBuilder,
   handler_id : Int32,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), TryTableBegin(handler_id), [])
+  emit_wasm_inst(builder, I32, TryTableBegin(handler_id), [])
 }
 
 ///|
@@ -837,7 +800,7 @@ pub fn try_table_end(
 
 ///|
 pub fn get_exception_tag(builder : @milkir.FunctionBuilder) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), GetExceptionTag, [])
+  emit_wasm_inst(builder, I32, GetExceptionTag, [])
 }
 
 ///|
@@ -845,14 +808,14 @@ pub fn get_exception_value(
   builder : @milkir.FunctionBuilder,
   idx : Int32,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), GetExceptionValue(idx), [])
+  emit_wasm_inst(builder, I64, GetExceptionValue(idx), [])
 }
 
 ///|
 pub fn get_exception_value_count(
   builder : @milkir.FunctionBuilder,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), GetExceptionValueCount, [])
+  emit_wasm_inst(builder, I32, GetExceptionValueCount, [])
 }
 
 ///|
@@ -873,7 +836,7 @@ pub fn get_spilled_local(
   builder : @milkir.FunctionBuilder,
   idx : Int32,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), GetSpilledLocal(idx), [])
+  emit_wasm_inst(builder, I64, GetSpilledLocal(idx), [])
 }
 
 ///|

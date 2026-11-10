@@ -544,7 +544,7 @@ fn find_exported_func_type(
     if exp.name == func_name && exp.desc is Func(idx) {
       // Get the type index for this function
       // Account for imported functions
-      let num_imports = count_func_imports(mod_.imports)
+      let num_imports = @types.count_func_imports(mod_.imports)
       let type_idx = if idx < num_imports {
         // It's an imported function
         get_import_func_type_idx(mod_.imports, idx)
@@ -574,14 +574,6 @@ fn find_exported_func_idx(mod_ : @types.Module, func_name : String) -> Int32? {
     }
   }
   None
-}
-
-///|
-fn build_run_compile_mask(
-  mod_ : @types.Module,
-  entry_func_idx : Int32,
-) -> Array[Bool]? {
-  build_compile_mask(mod_, [entry_func_idx])
 }
 
 ///|
@@ -947,18 +939,6 @@ fn should_use_run_jit_cache(
 }
 
 ///|
-/// Count function imports
-fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Func(_) {
-      count = count + 1
-    }
-  }
-  count
-}
-
-///|
 /// Prefer binary/text debug names, then exports, then a stable index fallback.
 fn get_func_name(mod_ : @types.Module, func_idx : Int32) -> String {
   if mod_.func_names.get(func_idx) is Some(name) {
@@ -1024,7 +1004,7 @@ fn run_with_jit(
     None
   }
   let local_compile_mask = match find_exported_func_idx(mod_, func_name) {
-    Some(func_idx) => build_run_compile_mask(mod_, func_idx)
+    Some(func_idx) => build_compile_mask(mod_, [func_idx])
     None => None
   }
   let expected_manifest = build_jit_artifact_manifest(
@@ -1613,7 +1593,7 @@ fn compile_validated_module_to_jit(
   } else {
     None
   }
-  let num_imports = count_func_imports(mod_.imports)
+  let num_imports = @types.count_func_imports(mod_.imports)
   let compile_mask = match local_compile_mask {
     Some(mask) =>
       if mask.length() == mod_.codes.length() {
@@ -1972,7 +1952,7 @@ fn compile_validated_module_to_jit(
 fn build_jit_func_signatures(
   mod_ : @types.Module,
 ) -> Array[(Array[@types.ValueType], Array[@types.ValueType])] {
-  let num_imports = count_func_imports(mod_.imports)
+  let num_imports = @types.count_func_imports(mod_.imports)
   let total_funcs = num_imports + mod_.funcs.length()
   let signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])] = []
   // Pre-fill with empty signatures for all functions
@@ -2005,7 +1985,8 @@ fn build_jit_func_signatures(
 
 ///|
 pub fn build_jit_function_names(mod_ : @types.Module) -> Array[String] {
-  let total_funcs = count_func_imports(mod_.imports) + mod_.funcs.length()
+  let total_funcs = @types.count_func_imports(mod_.imports) +
+    mod_.funcs.length()
   Array::makei(total_funcs, fn(index) { get_func_name(mod_, index) })
 }
 

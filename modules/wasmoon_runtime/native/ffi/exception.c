@@ -654,16 +654,6 @@ MOONBIT_FFI_EXPORT void WASMOON_GUEST_ABI wasmoon_jit_exception_throw_tag(int64_
     exception_throw_impl(ctx, tag_addr, NULL, 0);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_values(
-    int64_t ctx_ptr,
-    int32_t tag_addr,
-    int64_t *values,
-    int32_t count
-) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    exception_throw_impl(ctx, tag_addr, values, count);
-}
-
 extern int64_t wasmoon_jit_context_ptr(void *jit_context);
 
 static int32_t exception_stage_hostcall(jit_context_t *ctx, int32_t tag,

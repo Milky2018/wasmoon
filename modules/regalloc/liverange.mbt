@@ -1,18 +1,18 @@
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 #valtype
-pub(all) struct ProgramPoint {
+priv struct ProgramPoint {
   block : Int32
   inst : Int32
 }
 
 ///|
-pub fn ProgramPoint::ProgramPoint(block : Int32, inst : Int32) -> ProgramPoint {
+fn ProgramPoint::ProgramPoint(block : Int32, inst : Int32) -> ProgramPoint {
   { block, inst, }
 }
 
 ///|
-pub fn ProgramPoint::compare_with_order(
+fn ProgramPoint::compare_with_order(
   self : ProgramPoint,
   other : ProgramPoint,
   block_order : Array[Int32],
@@ -51,15 +51,14 @@ fn compare_program_positions(
 }
 
 ///|
-#derive(Eq, Debug)
 #valtype
-pub(all) struct ProgramRange {
+priv struct ProgramRange {
   start : ProgramPoint
   end : ProgramPoint
 }
 
 ///|
-pub fn ProgramRange::ProgramRange(
+fn ProgramRange::ProgramRange(
   start : ProgramPoint,
   end : ProgramPoint,
 ) -> ProgramRange {
@@ -67,7 +66,7 @@ pub fn ProgramRange::ProgramRange(
 }
 
 ///|
-pub fn ProgramRange::overlaps(
+fn ProgramRange::overlaps(
   self : ProgramRange,
   other : ProgramRange,
   block_order : Array[Int32],
@@ -77,7 +76,7 @@ pub fn ProgramRange::overlaps(
 }
 
 ///|
-pub fn ProgramRange::contains(
+fn ProgramRange::contains(
   self : ProgramRange,
   point : ProgramPoint,
   block_order : Array[Int32],
@@ -87,48 +86,31 @@ pub fn ProgramRange::contains(
 }
 
 ///|
-#derive(Eq, Debug)
-pub(all) enum UseKind {
+priv enum UseKind {
   LiveDef
   LiveUse
   LiveUseDef
 }
 
 ///|
-#derive(Eq, Debug)
-pub(all) struct UsePosition {
+priv struct UsePosition {
   point : ProgramPoint
   kind : UseKind
   constraint : OperandConstraint
   preference : PhysicalReg?
-  tie_id : Int32
 }
 
 ///|
-pub fn UsePosition::UsePosition(
+fn UsePosition::UsePosition(
   point : ProgramPoint,
   kind : UseKind,
   constraint : OperandConstraint,
 ) -> UsePosition {
-  { point, kind, constraint, preference: None, tie_id: -1, }
+  { point, kind, constraint, preference: None, }
 }
 
 ///|
-pub fn UsePosition::with_tie(self : UsePosition, tie_id : Int32) -> UsePosition {
-  { ..self, tie_id, }
-}
-
-///|
-pub fn UsePosition::with_preference(
-  self : UsePosition,
-  preference : PhysicalReg?,
-) -> UsePosition {
-  { ..self, preference, }
-}
-
-///|
-#derive(Debug)
-struct LiveRange {
+priv struct LiveRange {
   id : Int32
   vreg : VirtualReg
   ranges : Array[ProgramRange]
@@ -136,32 +118,22 @@ struct LiveRange {
 }
 
 ///|
-pub fn LiveRange::LiveRange(id : Int32, vreg : VirtualReg) -> LiveRange {
+fn LiveRange::LiveRange(id : Int32, vreg : VirtualReg) -> LiveRange {
   { id, vreg, ranges: [], uses: [], }
 }
 
 ///|
-pub fn LiveRange::id(self : LiveRange) -> Int32 {
-  self.id
-}
-
-///|
-pub fn LiveRange::vreg(self : LiveRange) -> VirtualReg {
-  self.vreg
-}
-
-///|
-pub fn LiveRange::range_count(self : LiveRange) -> Int32 {
+fn LiveRange::range_count(self : LiveRange) -> Int32 {
   self.ranges.length()
 }
 
 ///|
-pub fn LiveRange::range_at(self : LiveRange, index : Int32) -> ProgramRange? {
+fn LiveRange::range_at(self : LiveRange, index : Int32) -> ProgramRange? {
   self.ranges.get(index)
 }
 
 ///|
-pub fn LiveRange::add_range(self : LiveRange, range : ProgramRange) -> Unit {
+fn LiveRange::add_range(self : LiveRange, range : ProgramRange) -> Unit {
   self.ranges.push(range)
 }
 
@@ -209,84 +181,8 @@ fn LiveRange::coalesce_contiguous_ranges(
 }
 
 ///|
-pub fn LiveRange::use_count(self : LiveRange) -> Int32 {
-  self.uses.length()
-}
-
-///|
-pub fn LiveRange::use_at(self : LiveRange, index : Int32) -> UsePosition? {
-  self.uses.get(index)
-}
-
-///|
-pub fn LiveRange::add_use(self : LiveRange, use_pos : UsePosition) -> Unit {
+fn LiveRange::add_use(self : LiveRange, use_pos : UsePosition) -> Unit {
   self.uses.push(use_pos)
-}
-
-///|
-pub fn LiveRange::touch(self : LiveRange, point : ProgramPoint) -> Unit {
-  self.touch_with_order(point, [])
-}
-
-///|
-pub fn LiveRange::touch_with_order(
-  self : LiveRange,
-  point : ProgramPoint,
-  block_order : Array[Int32],
-) -> Unit {
-  if self.ranges.length() == 0 {
-    self.ranges.push(ProgramRange(point, point))
-    return
-  }
-  let first = self.ranges[0]
-  if point.compare_with_order(first.start, block_order) < 0 {
-    self.ranges[0] = ProgramRange(point, first.end)
-  }
-  let last_idx = self.ranges.length() - 1
-  let last = self.ranges[last_idx]
-  if last.end.compare_with_order(point, block_order) < 0 {
-    self.ranges[last_idx] = ProgramRange(last.start, point)
-  }
-}
-
-///|
-pub fn LiveRange::has_fixed_constraint(self : LiveRange) -> Bool {
-  for use_pos in self.uses {
-    if use_pos.constraint is FixedReg(_) {
-      return true
-    }
-  }
-  false
-}
-
-///|
-pub fn LiveRange::get_fixed_reg(self : LiveRange) -> PhysicalReg? {
-  let mut fixed : PhysicalReg? = None
-  for use_pos in self.uses {
-    if use_pos.constraint is FixedReg(preg) {
-      match fixed {
-        None => fixed = Some(preg)
-        Some(existing) => if existing != preg { return None }
-      }
-    }
-  }
-  fixed
-}
-
-///|
-pub fn LiveRange::overlaps(
-  self : LiveRange,
-  other : LiveRange,
-  block_order : Array[Int32],
-) -> Bool {
-  for range in self.ranges {
-    for other_range in other.ranges {
-      if range.overlaps(other_range, block_order) {
-        return true
-      }
-    }
-  }
-  false
 }
 
 ///|
@@ -303,115 +199,7 @@ fn later_point(
 }
 
 ///|
-fn earlier_point(
-  lhs : ProgramPoint,
-  rhs : ProgramPoint,
-  block_order : Array[Int32],
-) -> ProgramPoint {
-  if lhs.compare_with_order(rhs, block_order) <= 0 {
-    lhs
-  } else {
-    rhs
-  }
-}
-
-///|
-pub fn LiveRange::has_tie_at(
-  self : LiveRange,
-  other : LiveRange,
-  point : ProgramPoint,
-) -> Bool {
-  for lhs in self.uses {
-    if lhs.tie_id < 0 || lhs.point != point {
-      continue
-    }
-    for rhs in other.uses {
-      if rhs.point == point && rhs.tie_id == lhs.tie_id {
-        return true
-      }
-    }
-  }
-  false
-}
-
-///|
-pub fn LiveRange::overlap_allowed_by_tie(
-  self : LiveRange,
-  other : LiveRange,
-  block_order : Array[Int32],
-) -> Bool {
-  for lhs in self.ranges {
-    for rhs in other.ranges {
-      if !lhs.overlaps(rhs, block_order) {
-        continue
-      }
-      let start = later_point(lhs.start, rhs.start, block_order)
-      let end = earlier_point(lhs.end, rhs.end, block_order)
-      if start.compare_with_order(end, block_order) != 0 ||
-        !self.has_tie_at(other, start) {
-        return false
-      }
-    }
-  }
-  true
-}
-
-///|
-pub fn LiveRange::is_live_across(
-  self : LiveRange,
-  point : ProgramPoint,
-  block_order : Array[Int32],
-) -> Bool {
-  for range in self.ranges {
-    if range.start.compare_with_order(point, block_order) < 0 &&
-      point.compare_with_order(range.end, block_order) < 0 {
-      return true
-    }
-  }
-  false
-}
-
-///|
-pub fn LiveRange::start(self : LiveRange) -> ProgramPoint? {
-  if self.ranges.length() == 0 {
-    None
-  } else {
-    Some(self.ranges[0].start)
-  }
-}
-
-///|
-pub fn LiveRange::end(self : LiveRange) -> ProgramPoint? {
-  if self.ranges.length() == 0 {
-    None
-  } else {
-    Some(self.ranges[self.ranges.length() - 1].end)
-  }
-}
-
-///|
-pub fn LiveRange::total_length(self : LiveRange) -> Int32 {
-  let mut total = 0
-  for range in self.ranges {
-    if range.start.block == range.end.block {
-      total = total + (range.end.inst - range.start.inst).abs() + 1
-    } else {
-      total = total +
-        (range.end.block - range.start.block).abs() * 10 +
-        (range.end.inst - range.start.inst).abs() +
-        1
-    }
-  }
-  if total <= 0 {
-    1
-  } else {
-    total
-  }
-}
-
-///|
-#derive(Debug)
-struct LiveRangeSet {
+priv struct LiveRangeSet {
   ranges : Array[LiveRange]
   block_order : Array[Int32]
   block_ends : Array[Int32]
@@ -422,7 +210,7 @@ struct LiveRangeSet {
 }
 
 ///|
-pub fn LiveRangeSet::LiveRangeSet(block_order : Array[Int32]) -> LiveRangeSet {
+fn LiveRangeSet::LiveRangeSet(block_order : Array[Int32]) -> LiveRangeSet {
   {
     ranges: [],
     block_order,
@@ -495,25 +283,7 @@ fn LiveRangeSet::ranges_by_id_for_class(
 }
 
 ///|
-pub fn LiveRangeSet::block_order_count(self : LiveRangeSet) -> Int32 {
-  self.block_order.length()
-}
-
-///|
-pub fn LiveRangeSet::block_order(self : LiveRangeSet) -> Array[Int32] {
-  self.block_order.copy()
-}
-
-///|
-pub fn LiveRangeSet::block_order_at(
-  self : LiveRangeSet,
-  index : Int32,
-) -> Int32? {
-  self.block_order.get(index)
-}
-
-///|
-pub fn LiveRangeSet::add_range(self : LiveRangeSet, range : LiveRange) -> Unit {
+fn LiveRangeSet::add_range(self : LiveRangeSet, range : LiveRange) -> Unit {
   self.ranges.push(range)
   if range.vreg.id >= 0 {
     let ranges_by_id = self.ranges_by_id_for_class(range.vreg.class)
@@ -525,17 +295,12 @@ pub fn LiveRangeSet::add_range(self : LiveRangeSet, range : LiveRange) -> Unit {
 }
 
 ///|
-pub fn LiveRangeSet::get(self : LiveRangeSet, idx : Int32) -> LiveRange {
-  self.ranges[idx]
-}
-
-///|
-pub fn LiveRangeSet::length(self : LiveRangeSet) -> Int32 {
+fn LiveRangeSet::length(self : LiveRangeSet) -> Int32 {
   self.ranges.length()
 }
 
 ///|
-pub fn LiveRangeSet::get_by_vreg(
+fn LiveRangeSet::get_by_vreg(
   self : LiveRangeSet,
   vreg : VirtualReg,
 ) -> LiveRange? {

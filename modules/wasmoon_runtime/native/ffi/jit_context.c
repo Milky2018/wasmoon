@@ -3,25 +3,17 @@
 // Handles allocation, configuration, and lifecycle of jit_context_t
 
 #include "jit_internal.h"
+#include "native_env.h"
 #include <assert.h>
 
 static int gc_collect_debug_cached = -1;
 
-static int gc_collect_is_truthy_env(const char *value) {
-    if (!value) return 0;
-    return strcmp(value, "1") == 0 ||
-           strcmp(value, "true") == 0 ||
-           strcmp(value, "TRUE") == 0 ||
-           strcmp(value, "yes") == 0 ||
-           strcmp(value, "YES") == 0 ||
-           strcmp(value, "on") == 0 ||
-           strcmp(value, "ON") == 0;
-}
+
 
 static int gc_collect_debug_enabled(void) {
     if (gc_collect_debug_cached < 0) {
         gc_collect_debug_cached =
-            gc_collect_is_truthy_env(getenv("WASMOON_GC_ALLOC_DEBUG")) ? 1 : 0;
+            wasmoon_native_env_truthy(getenv("WASMOON_GC_ALLOC_DEBUG")) ? 1 : 0;
     }
     return gc_collect_debug_cached;
 }
@@ -421,19 +413,6 @@ void ctx_refresh_memory0_fast_fields(jit_context_t *ctx) {
     );
 }
 
-void ctx_set_func_internal(jit_context_t *ctx, int idx, void *func_ptr) {
-    if (ctx && idx >= 0 && idx < ctx_func_count(ctx)) {
-        ctx_func_table(ctx)[idx] = func_ptr;
-    }
-}
-
-void ctx_set_memory_internal(jit_context_t *ctx, wasmoon_memory_t *mem0) {
-    if (ctx) {
-        ctx_set_memory0(ctx, mem0);
-        ctx_refresh_memory0_fast_fields(ctx);
-    }
-}
-
 // Consume the RC array of borrowed runtime global-cell addresses.
 void ctx_set_globals_internal(jit_context_t *ctx, int64_t *globals) {
     if (ctx && ctx_globals_address(ctx)) {
@@ -442,19 +421,6 @@ void ctx_set_globals_internal(jit_context_t *ctx, int64_t *globals) {
         globals = previous;
     }
     if (globals) moonbit_decref(globals);
-}
-
-// ============ Indirect Table Management ============
-
-void ctx_set_indirect_internal(jit_context_t *ctx, int table_idx, int func_idx, int type_idx) {
-    if (ctx && ctx_table0_base(ctx) &&
-        table_idx >= 0 && (size_t)table_idx < ctx_table0_elements(ctx) &&
-        func_idx >= 0 && func_idx < ctx_func_count(ctx)) {
-        // Store func_ptr at offset 0, type_idx at offset 8
-        ctx_table0_base(ctx)[table_idx * 2] = ctx_func_table(ctx)[func_idx];
-        ctx_table0_base(ctx)[table_idx * 2 + 1] = (void*)(intptr_t)type_idx;
-        table_mark_mutated(ctx, 0);
-    }
 }
 
 // ============ GC Heap Support ============

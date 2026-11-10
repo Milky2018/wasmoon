@@ -229,53 +229,25 @@ fn ExecContext::exec_trunc_sat(
     // i32.trunc_sat_f32_s: f32 -> i32 (saturating signed truncation)
     I32TruncSatF32S => {
       let a = self.stack.pop_f32()
-      let result = if a.is_nan() {
-        0
-      } else if a >= @types.I32_MAX_F32 {
-        @types.I32_MAX
-      } else if a <= @types.I32_MIN_F32 {
-        @types.I32_MIN
-      } else {
-        a.to_int()
-      }
+      let result = trunc_sat_f32_to_i32_s(a)
       self.stack.push(I32(result))
     }
     // i32.trunc_sat_f32_u: f32 -> i32 (saturating unsigned truncation)
     I32TruncSatF32U => {
       let a = self.stack.pop_f32()
-      let result = if a.is_nan() || a <= 0.0 {
-        0
-      } else if a >= @types.U32_MAX_F32 {
-        @types.U32_MAX.reinterpret_as_int()
-      } else {
-        a.to_double().to_uint().reinterpret_as_int()
-      }
+      let result = trunc_sat_f32_to_u32(a).reinterpret_as_int()
       self.stack.push(I32(result))
     }
     // i32.trunc_sat_f64_s: f64 -> i32 (saturating signed truncation)
     I32TruncSatF64S => {
       let a = self.stack.pop_f64()
-      let result = if a.is_nan() {
-        0
-      } else if a >= @types.I32_MAX_F64 {
-        @types.I32_MAX
-      } else if a <= @types.I32_MIN_F64 {
-        @types.I32_MIN
-      } else {
-        a.to_int()
-      }
+      let result = trunc_sat_f64_to_i32_s(a)
       self.stack.push(I32(result))
     }
     // i32.trunc_sat_f64_u: f64 -> i32 (saturating unsigned truncation)
     I32TruncSatF64U => {
       let a = self.stack.pop_f64()
-      let result = if a.is_nan() || a <= 0.0 {
-        0
-      } else if a >= @types.U32_MAX_F64 {
-        @types.U32_MAX.reinterpret_as_int()
-      } else {
-        a.to_uint().reinterpret_as_int()
-      }
+      let result = trunc_sat_f64_to_u32(a).reinterpret_as_int()
       self.stack.push(I32(result))
     }
     // i64.trunc_sat_f32_s: f32 -> i64 (saturating signed truncation)
@@ -340,4 +312,60 @@ fn ExecContext::exec_trunc_sat(
     }
     _ => raise @runtime.RuntimeError::Unreachable
   }
+}
+
+///|
+fn trunc_sat_f32_to_i32_s(f : Float) -> Int32 {
+  if f.is_nan() {
+    return 0
+  }
+  if f >= @types.I32_MAX_F32 + 1.0 {
+    return @types.I32_MAX
+  }
+  if f <= @types.I32_MIN_F32 - 1.0 {
+    return @types.I32_MIN
+  }
+  f.to_int()
+}
+
+///|
+fn trunc_sat_f32_to_u32(f : Float) -> UInt32 {
+  if f.is_nan() {
+    return 0U
+  }
+  if f <= 0.0 {
+    return 0U
+  }
+  if f >= @types.U32_MODULUS_F32 {
+    return @types.U32_MAX
+  }
+  f.to_double().to_uint()
+}
+
+///|
+fn trunc_sat_f64_to_i32_s(f : Double) -> Int32 {
+  if f.is_nan() {
+    return 0
+  }
+  if f >= @types.I32_MAX_F64 + 1.0 {
+    return @types.I32_MAX
+  }
+  if f <= @types.I32_MIN_F64 - 1.0 {
+    return @types.I32_MIN
+  }
+  f.to_int()
+}
+
+///|
+fn trunc_sat_f64_to_u32(f : Double) -> UInt32 {
+  if f.is_nan() {
+    return 0U
+  }
+  if f <= 0.0 {
+    return 0U
+  }
+  if f >= @types.U32_MODULUS_F64 {
+    return @types.U32_MAX
+  }
+  f.to_uint()
 }

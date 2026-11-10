@@ -52,8 +52,6 @@ pub fn memory_descriptor_write(
 ///|
 /// Return 0 on success, -1 for an invalid descriptor, memory range or source
 /// buffer length. Rejected operations leave the destination unchanged.
-/// Return 0 on success, -1 for an invalid descriptor, memory range or source
-/// buffer length. Rejected operations leave the destination unchanged.
 #borrow(data)
 pub fn memory_descriptor_write_bytes(
   mem_desc_ptr : MemoryDescriptor,

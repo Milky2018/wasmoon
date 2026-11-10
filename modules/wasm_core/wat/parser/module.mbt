@@ -268,72 +268,11 @@ fn Parser::skip_optional_id(self : Parser) -> Unit raise WatError {
 }
 
 ///|
-fn Parser::parse_u32(self : Parser) -> Int32 raise WatError {
+fn Parser::parse_number(self : Parser) -> String raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
-      parse_u32(s)
-    }
-    _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
-  }
-}
-
-///|
-/// Parse a u64 number (for memory64 limits)
-fn Parser::parse_u64(self : Parser) -> Int64 raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_u64(s)
-    }
-    _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
-  }
-}
-
-///|
-fn Parser::parse_i32(self : Parser) -> Int32 raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_int(s)
-    }
-    _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
-  }
-}
-
-///|
-fn Parser::parse_i64(self : Parser) -> Int64 raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_int64(s)
-    }
-    _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
-  }
-}
-
-///|
-fn Parser::parse_f32(self : Parser) -> Float raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_float32(s)
-    }
-    _ =>
-      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
-  }
-}
-
-///|
-fn Parser::parse_f64(self : Parser) -> Double raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_float64(s)
+      s
     }
     _ =>
       raise UnexpectedToken("expected number, got \{self.current}", self.loc())
@@ -368,7 +307,7 @@ fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
           }
         "i32x4" =>
           for _ in 0..<4 {
-            let v = self.parse_i32()
+            let v = parse_int(self.parse_number())
             buf.write_byte(v.to_byte())
             buf.write_byte((v >> 8).to_byte())
             buf.write_byte((v >> 16).to_byte())
@@ -376,7 +315,7 @@ fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
           }
         "i64x2" =>
           for _ in 0..<2 {
-            let v = self.parse_i64()
+            let v = parse_int64(self.parse_number())
             buf.write_byte(v.to_byte())
             buf.write_byte((v >> 8).to_byte())
             buf.write_byte((v >> 16).to_byte())
@@ -388,7 +327,7 @@ fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
           }
         "f32x4" =>
           for _ in 0..<4 {
-            let f = self.parse_f32()
+            let f = parse_float32(self.parse_number())
             let v = f.reinterpret_as_int()
             buf.write_byte(v.to_byte())
             buf.write_byte((v >> 8).to_byte())
@@ -397,7 +336,7 @@ fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
           }
         "f64x2" =>
           for _ in 0..<2 {
-            let f = self.parse_f64()
+            let f = parse_float64(self.parse_number())
             let v = f.reinterpret_as_int64()
             buf.write_byte(v.to_byte())
             buf.write_byte((v >> 8).to_byte())
@@ -613,18 +552,6 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
 }
 
 ///|
-/// Count the number of function imports
-fn count_func_imports(imports : Array[@types.Import]) -> Int32 {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Func(_) {
-      count = count + 1
-    }
-  }
-  count
-}
-
-///|
 fn count_table_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
@@ -636,32 +563,10 @@ fn count_table_imports(imports : Array[@types.Import]) -> Int32 {
 }
 
 ///|
-fn count_global_imports(imports : Array[@types.Import]) -> Int32 {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Global(_) {
-      count = count + 1
-    }
-  }
-  count
-}
-
-///|
 fn count_memory_imports(imports : Array[@types.Import]) -> Int32 {
   let mut count = 0
   for imp in imports {
     if imp.desc is Memory(_) {
-      count = count + 1
-    }
-  }
-  count
-}
-
-///|
-fn count_tag_imports(imports : Array[@types.Import]) -> Int32 {
-  let mut count = 0
-  for imp in imports {
-    if imp.desc is Tag(_) {
       count = count + 1
     }
   }
@@ -1013,7 +918,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
             match self.parse_func_def(mod_) {
               FuncDef(type_idx, code, export_names) => {
                 // func_idx must account for imported functions
-                let func_idx = count_func_imports(mod_.imports) +
+                let func_idx = @types.count_func_imports(mod_.imports) +
                   mod_.funcs.length()
                 mod_.funcs.push(type_idx)
                 mod_.codes.push(code)
@@ -1023,7 +928,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
               }
               InlineImport(imp, export_names) => {
                 // Add the import and optionally export it
-                let func_idx = count_func_imports(mod_.imports)
+                let func_idx = @types.count_func_imports(mod_.imports)
                 self.check_import_order(mod_)
                 mod_.imports.push(imp)
                 for name in export_names {
@@ -1159,7 +1064,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
           Keyword("tag") =>
             match self.parse_tag_def(mod_) {
               TagDef(tag, export_names) => {
-                let tag_idx = count_tag_imports(mod_.imports) +
+                let tag_idx = @types.count_tag_imports(mod_.imports) +
                   mod_.tags.length()
                 mod_.tags.push(tag)
                 for name in export_names {
@@ -1167,7 +1072,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 }
               }
               TagImport(imp, export_names) => {
-                let tag_idx = count_tag_imports(mod_.imports)
+                let tag_idx = @types.count_tag_imports(mod_.imports)
                 self.check_import_order(mod_)
                 mod_.imports.push(imp)
                 for name in export_names {
@@ -1233,7 +1138,7 @@ fn Parser::check_import_order(
 
 ///|
 fn Parser::parse_lane_index(self : Parser) -> Int32 raise WatError {
-  let index = self.parse_u32()
+  let index = parse_u32(self.parse_number())
   if index < 0 || index > 255 {
     raise ParseError("Lane index exceeds u8", self.loc())
   }

@@ -5,14 +5,6 @@
 // ============ Trap Handling ============
 
 ///|
-/// Get trap code (0 = no trap, 1 = out of bounds memory access, 9 = out of memory, 10 = gc precise roots unavailable)
-extern "c" fn c_jit_get_trap_code() -> Int32 = "wasmoon_jit_get_trap_code"
-
-///|
-/// Clear trap code
-extern "c" fn c_jit_clear_trap() -> Unit = "wasmoon_jit_clear_trap"
-
-///|
 /// Get last trap signal number (e.g. SIGSEGV/SIGBUS/SIGTRAP), or 0 if none
 extern "c" fn c_jit_get_trap_signal() -> Int32 = "wasmoon_jit_get_trap_signal"
 
@@ -712,13 +704,6 @@ extern "c" fn c_jit_gc_set_heap_managed(
   jit_context : JITContext,
   heap_ptr : GCHeapHandle,
 ) -> Unit = "wasmoon_jit_gc_set_heap_managed"
-
-///|
-#borrow(jit_context, heap_ptr)
-extern "c" fn c_jit_ctx_set_gc_heap_managed(
-  jit_context : JITContext,
-  heap_ptr : GCHeapHandle,
-) -> Unit = "wasmoon_jit_ctx_set_gc_heap_managed"
 
 ///|
 #borrow(jit_context)

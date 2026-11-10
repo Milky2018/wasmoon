@@ -116,7 +116,7 @@ bridge on every platform, including descriptor lookup for `poll_oneoff`.
 Path entry operations hold the resolved parent directory. Open and metadata
 operations share the beneath walker, including final symlink expansion. The
 metadata mutation itself remains nofollow if the leaf changes concurrently.
-Diagnostic `resolve_path` strings are no longer used to authorize P1 I/O.
+The obsolete diagnostic `resolve_path` APIs have been retired.
 
 Final acceptance: 116 capabilities-profile scenarios passed across both engines
 on every matrix entry. Four race scenarios per entry covered ancestor and

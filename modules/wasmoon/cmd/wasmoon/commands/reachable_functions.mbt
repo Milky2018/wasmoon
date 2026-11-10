@@ -41,7 +41,7 @@ fn build_compile_mask(
   roots : ArrayView[Int32],
 ) -> Array[Bool]? {
   let reachable : ReachableFunctions = {
-    imports: count_func_imports(mod_.imports),
+    imports: @types.count_func_imports(mod_.imports),
     selected: Array::make(mod_.codes.length(), false),
     pending: [],
   }

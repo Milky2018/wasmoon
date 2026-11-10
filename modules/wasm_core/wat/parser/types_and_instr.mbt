@@ -604,7 +604,7 @@ fn Parser::parse_func_def(
   if import_names is None && func_name is Some(name) {
     self.func_names.set(
       name,
-      count_func_imports(mod_.imports) + mod_.funcs.length(),
+      @types.count_func_imports(mod_.imports) + mod_.funcs.length(),
     )
   }
 
@@ -682,7 +682,7 @@ fn Parser::parse_func_def(
   if import_names is Some((mod_name, name)) {
     self.expect_rparen()
     if func_name is Some(local_name) {
-      self.func_names.set(local_name, count_func_imports(mod_.imports))
+      self.func_names.set(local_name, @types.count_func_imports(mod_.imports))
     }
     return InlineImport({ mod_name, name, desc: Func(type_idx), }, export_names)
   }
@@ -765,60 +765,42 @@ fn Parser::parse_type_idx(self : Parser) -> Int32 raise WatError {
 }
 
 ///|
-fn Parser::parse_func_idx(self : Parser) -> Int32 raise WatError {
+fn Parser::parse_index(
+  self : Parser,
+  names : Map[String, Int32],
+  kind : String,
+  expected : String,
+) -> Int32 raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
       parse_int(s)
     }
     Id(name) =>
-      match self.func_names.get(name) {
+      match names.get(name) {
         Some(idx) => {
           self.advance()
           idx
         }
-        None => raise UndefinedIdentifier("func $\{name}", self.loc())
+        None => raise UndefinedIdentifier("\{kind} $\{name}", self.loc())
       }
-    _ => raise UnexpectedToken("expected func index", self.loc())
+    _ => raise UnexpectedToken(expected, self.loc())
   }
+}
+
+///|
+fn Parser::parse_func_idx(self : Parser) -> Int32 raise WatError {
+  self.parse_index(self.func_names, "func", "expected func index")
 }
 
 ///|
 fn Parser::parse_local_idx(self : Parser) -> Int32 raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_int(s)
-    }
-    Id(name) =>
-      match self.local_names.get(name) {
-        Some(idx) => {
-          self.advance()
-          idx
-        }
-        None => raise UndefinedIdentifier("local $\{name}", self.loc())
-      }
-    _ => raise UnexpectedToken("expected local index", self.loc())
-  }
+  self.parse_index(self.local_names, "local", "expected local index")
 }
 
 ///|
 fn Parser::parse_global_idx(self : Parser) -> Int32 raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_int(s)
-    }
-    Id(name) =>
-      match self.global_names.get(name) {
-        Some(idx) => {
-          self.advance()
-          idx
-        }
-        None => raise UndefinedIdentifier("global $\{name}", self.loc())
-      }
-    _ => raise UnexpectedToken("expected global index", self.loc())
-  }
+  self.parse_index(self.global_names, "global", "expected global index")
 }
 
 ///|
@@ -871,40 +853,12 @@ fn Parser::parse_index_for_memory_init(self : Parser) -> Int32 raise WatError {
 
 ///|
 fn Parser::parse_data_idx(self : Parser) -> Int32 raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_int(s)
-    }
-    Id(name) =>
-      match self.data_names.get(name) {
-        Some(idx) => {
-          self.advance()
-          idx
-        }
-        None => raise UndefinedIdentifier("data $\{name}", self.loc())
-      }
-    _ => raise UnexpectedToken("expected data segment index", self.loc())
-  }
+  self.parse_index(self.data_names, "data", "expected data segment index")
 }
 
 ///|
 fn Parser::parse_elem_idx(self : Parser) -> Int32 raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_int(s)
-    }
-    Id(name) =>
-      match self.elem_names.get(name) {
-        Some(idx) => {
-          self.advance()
-          idx
-        }
-        None => raise UndefinedIdentifier("elem $\{name}", self.loc())
-      }
-    _ => raise UnexpectedToken("expected elem segment index", self.loc())
-  }
+  self.parse_index(self.elem_names, "elem", "expected elem segment index")
 }
 
 ///|
@@ -1039,7 +993,7 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
       RefNullEq
     }
     Number(_) => {
-      let type_idx = self.parse_u32()
+      let type_idx = parse_u32(self.parse_number())
       self.get_typed_ref(type_idx, true)
     }
     Id(name) => {

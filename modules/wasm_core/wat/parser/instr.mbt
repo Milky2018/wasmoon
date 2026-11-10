@@ -561,7 +561,7 @@ fn Parser::parse_plain_instruction(
     "array.new_default" => ArrayNewDefault(self.parse_type_idx())
     "array.new_fixed" => {
       let type_idx = self.parse_type_idx()
-      let len = self.parse_u32()
+      let len = parse_u32(self.parse_number())
       ArrayNewFixed(type_idx, len)
     }
     "array.get" => ArrayGet(self.parse_type_idx())
@@ -947,7 +947,7 @@ fn Parser::parse_indirect_call(
         }
         None => () // Not a table name, might be something else
       }
-    Number(_) => table_idx = self.parse_u32()
+    Number(_) => table_idx = parse_u32(self.parse_number())
     _ => ()
   }
 

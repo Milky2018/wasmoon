@@ -25,10 +25,7 @@ pub fn NativeJITContext::define_continuation_type(
       _ => roots.push(1)
     }
   }
-  let buffer = FixedArray::make(roots.length(), 0)
-  for i, root in roots {
-    buffer[i] = root
-  }
+  let buffer = FixedArray::makei(roots.length(), i => roots[i])
   self.handle.define_continuation_type(
     index,
     trampoline,

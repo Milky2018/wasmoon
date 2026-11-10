@@ -12,7 +12,7 @@ fn parse_i32_like_arg(v : @types.Value) -> Int32? {
 
 ///|
 fn instantiate_canon_backpressure_inc(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [], }
@@ -37,7 +37,7 @@ fn instantiate_canon_backpressure_inc(
 
 ///|
 fn instantiate_canon_backpressure_dec(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [], }
@@ -63,7 +63,7 @@ fn instantiate_canon_backpressure_dec(
 ///|
 fn instantiate_canon_error_context_new(
   opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let resources = resolve_canon_resources(opts, state)
@@ -110,7 +110,7 @@ fn instantiate_canon_error_context_new(
 ///|
 fn instantiate_canon_error_context_debug_message(
   opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let resources = resolve_canon_resources(opts, state)
@@ -187,7 +187,7 @@ fn instantiate_canon_error_context_debug_message(
 
 ///|
 fn instantiate_canon_error_context_drop(
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }

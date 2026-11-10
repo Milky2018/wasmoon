@@ -32,14 +32,6 @@ fn context_func_count(context : JITContext) -> Int32 {
 }
 
 ///|
-fn context_table_ptr(
-  context : JITContext,
-  table_idx : Int32,
-) -> NativeTableHandle {
-  c_jit_ctx_get_table_ptr_managed(context, table_idx)
-}
-
-///|
 fn context_table_size(context : JITContext, table_idx : Int32) -> Int32 {
   c_jit_ctx_get_table_size_managed(context, table_idx)
 }
@@ -130,7 +122,7 @@ pub fn NativeJITContext::refresh_table_layout(
     return false
   }
   guard self.jit_tables[table_idx] is Some(jit_table) else { return false }
-  let table_ptr = context_table_ptr(self.handle, table_idx)
+  let table_ptr = c_jit_ctx_get_table_ptr_managed(self.handle, table_idx)
   let size = context_table_size(self.handle, table_idx)
   if jit_table.raw_ptr().is_null() || table_ptr.is_null() || size < 0 {
     return false
@@ -144,10 +136,7 @@ pub fn NativeJITContext::set_memory_pointers(
   self : NativeJITContext,
   memories : Array[MemoryInfo],
 ) -> Unit raise NativeSetupError {
-  let ptrs = FixedArray::make(memories.length(), MemoryDescriptor::null())
-  for i, mem in memories {
-    ptrs[i] = mem.ptr
-  }
+  let ptrs = FixedArray::makei(memories.length(), i => memories[i].ptr)
   match
     c_jit_ctx_set_memory_pointers_managed(self.handle, ptrs, memories.length()) {
     1 => ()

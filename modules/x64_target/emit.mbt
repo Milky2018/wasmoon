@@ -3106,6 +3106,29 @@ fn is_function_input(instruction : X64Inst) -> Bool {
 }
 
 ///|
+fn incoming_call_result(
+  instruction : X64Inst,
+) -> (@native.ValueType, CallArgumentLocation, Int32)? {
+  match instruction {
+    IncomingCallResult(ty, source) => Some((ty, CallRegister(source), 0))
+    IncomingCallAreaResult(ty, offset) => Some((ty, CallStack(offset), 0))
+    _ => None
+  }
+}
+
+///|
+fn function_input(
+  instruction : X64Inst,
+) -> (@native.ValueType, CallArgumentLocation, Int32)? {
+  match instruction {
+    IncomingReg(ty, source) => Some((ty, CallRegister(source), 1))
+    IncomingStack(ty, offset) => Some((ty, CallStack(offset), 0))
+    IncomingResultArea(source) => Some((Ptr64, CallRegister(source), 0))
+    _ => None
+  }
+}
+
+///|
 fn value_home(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
@@ -3119,170 +3142,35 @@ fn value_home(
 }
 
 ///|
-fn emit_function_inputs(
+fn emit_incoming_values(
   buffer : CodeBuffer,
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
   body : ArrayView[@vcode.Instruction],
   current_index : Int32,
+  describe : (X64Inst) -> (@native.ValueType, CallArgumentLocation, Int32)?,
+  stack_base : Int32?,
+  stack_scratch : (@native.ValueType) -> @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
-  if current_index > 0 &&
-    is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
-    return
-  }
-  let register_moves : Array[@vcode.ParallelMove] = []
-  let stack_inputs : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
-  let mut index = current_index
-  while index < body.length() {
-    let input_instruction = body[index]
-    match function.instruction(input_instruction).unwrap() {
-      IncomingReg(ty, source) =>
-        register_moves.push(
-          @vcode.ParallelMove::new(
-            ty,
-            Register(source),
-            value_home(function, allocation, input_instruction, 1),
-          ),
-        )
-      IncomingStack(ty, offset) =>
-        stack_inputs.push((input_instruction, ty, offset))
-      IncomingResultArea(source) =>
-        register_moves.push(
-          @vcode.ParallelMove::new(
-            Ptr64,
-            Register(source),
-            value_home(function, allocation, input_instruction, 0),
-          ),
-        )
-      _ => break
-    }
-    index += 1
-  }
-  let resolved = @vcode.plan_parallel_moves(
-    register_moves,
+  @vcode.emit_incoming_values(
+    function,
+    allocation,
+    body,
+    current_index,
+    describe,
+    buffer,
+    frame,
+    stack_base,
+    X64Frame::slot_offset,
+    stack_scratch,
     int_transfer_scratch(),
     fp_transfer_scratch(),
-  ) catch {
-    error => raise InvalidParallelMove(cause=error)
-  }
-  emit_resolved_moves(buffer, frame, resolved)
-  for input in stack_inputs {
-    let (input_instruction, ty, offset) = input
-    match value_home(function, allocation, input_instruction, 0) {
-      Register(destination) =>
-        emit_stack_access(
-          buffer,
-          true,
-          ty,
-          destination,
-          frame.frame_size() + 8 + offset,
-        )
-      Stack(slot) => {
-        let scratch = @vcode.PhysicalReg::new(
-          if @vcode.reg_class_for_value_type(ty) == Int {
-            10
-          } else {
-            14
-          },
-          @vcode.reg_class_for_value_type(ty),
-        )
-        emit_stack_access(
-          buffer,
-          true,
-          ty,
-          scratch,
-          frame.frame_size() + 8 + offset,
-        )
-        emit_stack_access(
-          buffer,
-          false,
-          ty,
-          scratch,
-          frame.slot_offset(slot).unwrap(),
-        )
-      }
-    }
-  }
-}
-
-///|
-fn emit_incoming_call_results(
-  buffer : CodeBuffer,
-  function : @vcode.Function[X64Inst],
-  allocation : @vcode.Allocation,
-  frame : X64Frame,
-  body : ArrayView[@vcode.Instruction],
-  current_index : Int32,
-) -> Unit raise X64EmitError {
-  if current_index > 0 &&
-    is_incoming_call_result(
-      function.instruction(body[current_index - 1]).unwrap(),
-    ) {
-    return
-  }
-  let register_moves : Array[@vcode.ParallelMove] = []
-  let area_results : Array[(@vcode.Instruction, @native.ValueType, Int32)] = []
-  let mut index = current_index
-  while index < body.length() {
-    let result_instruction = body[index]
-    match function.instruction(result_instruction).unwrap() {
-      IncomingCallResult(ty, source) =>
-        register_moves.push(
-          @vcode.ParallelMove::new(
-            ty,
-            Register(source),
-            value_home(function, allocation, result_instruction, 0),
-          ),
-        )
-      IncomingCallAreaResult(ty, offset) =>
-        area_results.push((result_instruction, ty, offset))
-      _ => break
-    }
-    index += 1
-  }
-  let resolved = @vcode.plan_parallel_moves(
-    register_moves,
-    int_transfer_scratch(),
-    fp_transfer_scratch(),
-  ) catch {
-    error => raise InvalidParallelMove(cause=error)
-  }
-  emit_resolved_moves(buffer, frame, resolved)
-  guard frame.result_area_offset() is Some(result_area_base) else {
-    if !area_results.is_empty() {
-      raise MissingResultArea
-    }
-    return
-  }
-  for result in area_results {
-    let (result_instruction, ty, offset) = result
-    match value_home(function, allocation, result_instruction, 0) {
-      Register(destination) =>
-        emit_stack_access(
-          buffer,
-          true,
-          ty,
-          destination,
-          result_area_base + offset,
-        )
-      Stack(slot) => {
-        let scratch = if @vcode.reg_class_for_value_type(ty) == Int {
-          int_transfer_scratch()
-        } else {
-          fp_transfer_scratch()
-        }
-        emit_stack_access(buffer, true, ty, scratch, result_area_base + offset)
-        emit_stack_access(
-          buffer,
-          false,
-          ty,
-          scratch,
-          frame.slot_offset(slot).unwrap(),
-        )
-      }
-    }
-  }
+    emit_resolved_moves,
+    emit_stack_access,
+    error => InvalidParallelMove(cause=error),
+    MissingResultArea,
+  )
 }
 
 ///|
@@ -3410,12 +3298,43 @@ fn emit_instruction(
   let mut metadata_offset = buffer.position()
   match function.instruction(instruction).unwrap() {
     IncomingReg(_, _) | IncomingStack(_, _) | IncomingResultArea(_) =>
-      emit_function_inputs(
-        buffer, function, allocation, frame, body, body_index,
+      emit_incoming_values(
+        buffer,
+        function,
+        allocation,
+        frame,
+        body,
+        body_index,
+        function_input,
+        Some(frame.frame_size() + 8),
+        ty => {
+          @vcode.PhysicalReg::new(
+            if @vcode.reg_class_for_value_type(ty) == Int {
+              10
+            } else {
+              14
+            },
+            @vcode.reg_class_for_value_type(ty),
+          )
+        },
       )
     IncomingCallResult(_, _) | IncomingCallAreaResult(_, _) =>
-      emit_incoming_call_results(
-        buffer, function, allocation, frame, body, body_index,
+      emit_incoming_values(
+        buffer,
+        function,
+        allocation,
+        frame,
+        body,
+        body_index,
+        incoming_call_result,
+        frame.result_area_offset(),
+        ty => {
+          if @vcode.reg_class_for_value_type(ty) == Int {
+            int_transfer_scratch()
+          } else {
+            fp_transfer_scratch()
+          }
+        },
       )
     OutgoingReg(_, _) | OutgoingAreaResult(_, _) =>
       emit_function_outputs(

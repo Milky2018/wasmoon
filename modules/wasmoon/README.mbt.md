@@ -328,6 +328,15 @@ production core and component compilers do. This preserves explicit target,
 context shape, validation, and structured compiler errors rather than routing
 through a separate probe pipeline. The embedding-environment API is unchanged.
 
+### Calling compiled functions
+
+The unused tuple facade `jit.JITModule::call_with_context_poly`, `Single`,
+`DynamicArgs`, `DynamicReturn`, and `PolycallError` has been removed. Use
+`jit/execution.JITModuleContext::call_core_func` with `Array[Value]` for the
+Store-aware entry point, or `jit.JITModule::call_with_context` with explicit
+raw argument slots for low-level calls. Numeric bit-conversion traits remain
+available in `wasm_core/types`.
+
 ### JIT GC Setup
 
 Call `@jit.gc_setup(...)` with the VMContext and function-table data used by typed function references:

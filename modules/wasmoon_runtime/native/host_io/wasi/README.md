@@ -56,3 +56,21 @@ negative on startup failure. Pass the handle to `c_resolver_next` and
 `native_resolver_start` retains its optional `NativeResolver` result; its handle
 field now has the opaque type. Close or finalize only after unregistering any
 readiness subscription; descriptors returned before close must not be reused.
+
+Unused path-based `native_readdir`/`c_readdir`, string-printing
+`print_string`/`c_print_string`, and raw-signal `native_raise`/`c_raise` entry
+points have been retired. Use opened directory descriptors, configured WASI
+stdio callbacks, and the WASI signal-mapping API. The one-shot
+`native_open_write` and duplicate open-mode getters are also retired; use
+`native_open` with explicit flags.
+
+The unused raw-socket `native_recv`/`native_send` and `c_recv`/`c_send` adapters
+have been removed. Preview 1 uses `c_p1_recv`/`c_p1_send`, which check buffer
+extents before entering the native ABI. Their boundary tests retain negative
+and oversized counts, errno checks, and unchanged-buffer assertions.
+
+The obsolete diagnostic `WasiContext::resolve_path`,
+`resolve_path_nofollow_leaf`, `get_preopen_host_path`, `ResolvePathError`, and
+`native_path_within_base`/`c_path_within_base` APIs have been retired. Production
+P1 operations resolve relative paths through held directory descriptors with
+`native_open_parent_beneath` and `native_openat_beneath`.

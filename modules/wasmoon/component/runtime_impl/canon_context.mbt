@@ -6,7 +6,7 @@
 fn instantiate_canon_context_get(
   _vt : @types.ValueType,
   _idx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [_vt], }
@@ -46,7 +46,7 @@ fn instantiate_canon_context_get(
 fn instantiate_canon_context_set(
   _vt : @types.ValueType,
   _idx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [_vt], results: [], }

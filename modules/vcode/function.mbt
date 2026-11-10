@@ -427,36 +427,6 @@ pub fn[Inst] Function::instruction_operand_at(
 }
 
 ///|
-pub fn[Inst] Function::allocation_vreg(
-  self : Function[Inst],
-  value : Value,
-) -> AllocationVirtualReg? {
-  if !self.owns_value(value) {
-    return None
-  }
-  Some({
-    id: value.id,
-    class: reg_class_for_value_type(self.values[value.id].ty),
-  })
-}
-
-///|
-pub fn[Inst] Function::instruction_allocation_operand_at(
-  self : Function[Inst],
-  instruction : Instruction,
-  index : Int32,
-) -> AllocationOperand? {
-  if !self.owns_instruction(instruction) {
-    return None
-  }
-  let data = self.instructions[instruction.id]
-  if index < 0 || index >= data.operand_count {
-    return None
-  }
-  Some(self.operands[data.operand_start + index])
-}
-
-///|
 pub fn[Inst] Function::instruction_clobbers(
   self : Function[Inst],
   instruction : Instruction,
@@ -466,34 +436,6 @@ pub fn[Inst] Function::instruction_clobbers(
   }
   let data = self.instructions[instruction.id]
   self.clobbers[data.clobber_start:data.clobber_start + data.clobber_count].to_owned()
-}
-
-///|
-pub fn[Inst] Function::instruction_clobber_count(
-  self : Function[Inst],
-  instruction : Instruction,
-) -> Int32 {
-  if self.owns_instruction(instruction) {
-    self.instructions[instruction.id].clobber_count
-  } else {
-    0
-  }
-}
-
-///|
-pub fn[Inst] Function::instruction_clobber_at(
-  self : Function[Inst],
-  instruction : Instruction,
-  index : Int32,
-) -> PhysicalReg? {
-  if !self.owns_instruction(instruction) {
-    return None
-  }
-  let data = self.instructions[instruction.id]
-  if index < 0 || index >= data.clobber_count {
-    return None
-  }
-  self.clobbers.get(data.clobber_start + index)
 }
 
 ///|

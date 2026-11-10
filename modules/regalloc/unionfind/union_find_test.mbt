@@ -1,13 +1,20 @@
 ///|
-test "union find groups sets" {
+test "directional union find preserves groups and target representatives" {
   let uf = @unionfind.UnionFind::UnionFind(5)
-  inspect(uf.length(), content="5")
-  inspect(uf.num_sets(), content="5")
-  inspect(uf.union(0, 1), content="true")
-  inspect(uf.union(1, 2), content="true")
-  inspect(uf.union(0, 2), content="false")
-  inspect(uf.same_set(0, 2), content="true")
-  inspect(uf.same_set(0, 3), content="false")
-  debug_inspect(uf.get_set(0), content="[0, 1, 2]")
-  inspect(uf.num_sets(), content="3")
+  fn roots() -> Array[Int32] {
+    Array::makei(5, i => uf.find(i))
+  }
+  debug_inspect(roots(), content="[0, 1, 2, 3, 4]")
+  inspect(Set(roots()).length(), content="5")
+  inspect(uf.union_into(0, 1), content="true")
+  inspect(uf.union_into(1, 2), content="true")
+  inspect(uf.union_into(0, 2), content="false")
+  inspect(uf.find(0) == uf.find(2), content="true")
+  inspect(uf.find(0) == uf.find(3), content="false")
+  debug_inspect(
+    Array::makei(5, i => i).filter(i => uf.find(i) == uf.find(0)),
+    content="[0, 1, 2]",
+  )
+  inspect(Set(roots()).length(), content="3")
+  inspect(uf.find(0), content="2")
 }

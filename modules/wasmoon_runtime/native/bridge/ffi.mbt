@@ -118,11 +118,6 @@ extern "c" fn c_gc_heap_debug_set_fail_alloc(
 extern "c" fn c_gc_heap_get_barrier_writes(heap : GCHeapHandle) -> Int32 = "wasmoon_gc_heap_get_barrier_writes"
 
 ///|
-/// Get heap base pointer (for JIT inline access)
-#borrow(heap)
-extern "c" fn c_gc_heap_get_base(heap : GCHeapHandle) -> Int64 = "wasmoon_gc_heap_get_base"
-
-///|
 /// Get heap capacity (total allocated bytes)
 #borrow(heap)
 extern "c" fn c_gc_heap_get_capacity(heap : GCHeapHandle) -> Int64 = "wasmoon_gc_heap_get_capacity"
@@ -136,6 +131,11 @@ extern "c" fn c_gc_heap_get_kind(heap : GCHeapHandle, gc_ref : Int32) -> Int32 =
 /// Get number of objects in heap
 #borrow(heap)
 extern "c" fn c_gc_heap_get_object_count(heap : GCHeapHandle) -> Int32 = "wasmoon_gc_heap_get_object_count"
+
+///|
+/// Get heap base pointer (for JIT inline access)
+#borrow(heap)
+extern "c" fn c_gc_heap_get_base(heap : GCHeapHandle) -> Int64 = "wasmoon_gc_heap_get_base"
 
 ///|
 /// Get object offset in heap (for JIT inline access)
@@ -322,4 +322,4 @@ extern "c" fn c_mem_desc_write_bytes(
   offset : Int64,
   data : Bytes,
   size : Int32,
-) -> Int32 = "wasmoon_mem_desc_write_bytes"
+) -> Int32 = "wasmoon_mem_desc_write"

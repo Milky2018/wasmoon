@@ -40,8 +40,7 @@ pub struct StackArgumentTransfer {
 }
 
 ///|
-#derive(Eq, Debug)
-pub struct CallTransferPlan {
+priv struct PreparedCallTransfers {
   stack_transfers : Array[StackArgumentTransfer]
   register_moves : Array[ParallelMove]
 }
@@ -132,7 +131,7 @@ fn prepare_call_transfers(
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
   protected_locations : Array[Location],
-) -> CallTransferPlan raise CallTransferError {
+) -> PreparedCallTransfers raise CallTransferError {
   if outgoing_stack_start < 0 || outgoing_stack_size < 0 {
     raise InvalidOutgoingStackRange(
       start=outgoing_stack_start,
@@ -256,30 +255,6 @@ fn prepare_call_transfers(
     }
   }
   { stack_transfers, register_moves, }
-}
-
-///|
-pub fn plan_call_transfers(
-  allocation : Allocation,
-  transfers : Array[CallTransfer],
-  outgoing_stack_start : Int32,
-  outgoing_stack_size : Int32,
-  scratch_int : Array[PhysicalReg],
-  scratch_fp : Array[PhysicalReg],
-  protected_locations : Array[Location],
-) -> CallTransferPlan raise CallTransferError {
-  let transfer_plan = prepare_call_transfers(
-    allocation, transfers, outgoing_stack_start, outgoing_stack_size, scratch_int,
-    scratch_fp, protected_locations,
-  )
-  let register_moves = resolve_parallel_moves(
-    transfer_plan.register_moves,
-    scratch_int,
-    scratch_fp,
-  ) catch {
-    error => raise MoveResolutionFailed(cause=error)
-  }
-  { stack_transfers: transfer_plan.stack_transfers, register_moves, }
 }
 
 ///|

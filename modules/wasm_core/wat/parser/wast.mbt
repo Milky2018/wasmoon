@@ -103,12 +103,32 @@ fn Parser::parse_wast_command_body(self : Parser) -> WastCommand raise WatError 
     Keyword("module") => self.parse_wast_module_command()
     Keyword("assert_return") => self.parse_wast_assert_return()
     Keyword("assert_trap") => self.parse_wast_assert_trap()
-    Keyword("assert_suspension") => self.parse_wast_assert_suspension()
+    Keyword("assert_suspension") =>
+      self.parse_wast_message_assertion(Parser::parse_wast_action, (
+        argument,
+        message,
+      ) => AssertSuspension(argument, message))
     Keyword("assert_exception") => self.parse_wast_assert_exception()
-    Keyword("assert_exhaustion") => self.parse_wast_assert_exhaustion()
-    Keyword("assert_invalid") => self.parse_wast_assert_invalid()
-    Keyword("assert_malformed") => self.parse_wast_assert_malformed()
-    Keyword("assert_unlinkable") => self.parse_wast_assert_unlinkable()
+    Keyword("assert_exhaustion") =>
+      self.parse_wast_message_assertion(Parser::parse_wast_action, (
+        argument,
+        message,
+      ) => AssertExhaustion(argument, message))
+    Keyword("assert_invalid") =>
+      self.parse_wast_message_assertion(Parser::parse_wast_module_source, (
+        argument,
+        message,
+      ) => AssertInvalid(argument, message))
+    Keyword("assert_malformed") =>
+      self.parse_wast_message_assertion(Parser::parse_wast_module_source, (
+        argument,
+        message,
+      ) => AssertMalformed(argument, message))
+    Keyword("assert_unlinkable") =>
+      self.parse_wast_message_assertion(Parser::parse_wast_module_source, (
+        argument,
+        message,
+      ) => AssertUnlinkable(argument, message))
     Keyword("register") => self.parse_wast_register()
     Keyword("invoke") | Keyword("get") => {
       let action = self.parse_wast_action()
@@ -449,55 +469,18 @@ fn Parser::parse_wast_assert_exception(
 }
 
 ///|
-fn Parser::parse_wast_assert_exhaustion(
+fn[T] Parser::parse_wast_message_assertion(
   self : Parser,
+  read_argument : (Parser) -> T raise WatError,
+  make_command : (T, String) -> WastCommand,
 ) -> WastCommand raise WatError {
   self.advance()
   self.expect_lparen()
-  let action = self.parse_wast_action()
+  let argument = read_argument(self)
   self.expect_rparen()
-  let msg = self.parse_wast_string()
+  let message = self.parse_wast_string()
   self.expect_rparen()
-  AssertExhaustion(action, msg)
-}
-
-///|
-fn Parser::parse_wast_assert_invalid(
-  self : Parser,
-) -> WastCommand raise WatError {
-  self.advance()
-  self.expect_lparen()
-  let source = self.parse_wast_module_source()
-  self.expect_rparen()
-  let msg = self.parse_wast_string()
-  self.expect_rparen()
-  AssertInvalid(source, msg)
-}
-
-///|
-fn Parser::parse_wast_assert_malformed(
-  self : Parser,
-) -> WastCommand raise WatError {
-  self.advance()
-  self.expect_lparen()
-  let source = self.parse_wast_module_source()
-  self.expect_rparen()
-  let msg = self.parse_wast_string()
-  self.expect_rparen()
-  AssertMalformed(source, msg)
-}
-
-///|
-fn Parser::parse_wast_assert_unlinkable(
-  self : Parser,
-) -> WastCommand raise WatError {
-  self.advance()
-  self.expect_lparen()
-  let source = self.parse_wast_module_source()
-  self.expect_rparen()
-  let msg = self.parse_wast_string()
-  self.expect_rparen()
-  AssertUnlinkable(source, msg)
+  make_command(argument, message)
 }
 
 ///|
@@ -603,7 +586,7 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
           self.advance()
           F32ArithmeticNan
         }
-        _ => F32(self.parse_wast_f32())
+        _ => F32(self.parse_wast_float(parse_float32))
       }
     }
     Keyword("f64.const") => {
@@ -617,7 +600,7 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
           self.advance()
           F64ArithmeticNan
         }
-        _ => F64(self.parse_wast_f64())
+        _ => F64(self.parse_wast_float(parse_float64))
       }
     }
     Keyword("ref.null") => {
@@ -770,7 +753,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
                 has_nan = true
               }
               _ => {
-                let f = self.parse_wast_f32()
+                let f = self.parse_wast_float(parse_float32)
                 lanes.push(F32(f))
               }
             }
@@ -812,7 +795,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
                 has_nan = true
               }
               _ => {
-                let f = self.parse_wast_f64()
+                let f = self.parse_wast_float(parse_float64)
                 lanes.push(F64(f))
               }
             }
@@ -879,11 +862,14 @@ fn Parser::parse_wast_i64(self : Parser) -> Int64 raise WatError {
 }
 
 ///|
-fn Parser::parse_wast_f32(self : Parser) -> Float raise WatError {
+fn[T] Parser::parse_wast_float(
+  self : Parser,
+  parse : (String) -> T raise WatError,
+) -> T raise WatError {
   match self.current.token {
     Number(s) => {
       self.advance()
-      parse_float32(s)
+      parse(s)
     }
     Keyword(k) =>
       if k == "nan" ||
@@ -896,33 +882,7 @@ fn Parser::parse_wast_f32(self : Parser) -> Float raise WatError {
         k.has_prefix("-nan:") ||
         k.has_prefix("+nan:") {
         self.advance()
-        parse_float32(k)
-      } else {
-        raise UnexpectedToken("expected number", self.loc())
-      }
-    _ => raise UnexpectedToken("expected number", self.loc())
-  }
-}
-
-///|
-fn Parser::parse_wast_f64(self : Parser) -> Double raise WatError {
-  match self.current.token {
-    Number(s) => {
-      self.advance()
-      parse_float64(s)
-    }
-    Keyword(k) =>
-      if k == "nan" ||
-        k == "inf" ||
-        k == "-nan" ||
-        k == "+nan" ||
-        k == "-inf" ||
-        k == "+inf" ||
-        k.has_prefix("nan:") ||
-        k.has_prefix("-nan:") ||
-        k.has_prefix("+nan:") {
-        self.advance()
-        parse_float64(k)
+        parse(k)
       } else {
         raise UnexpectedToken("expected number", self.loc())
       }
@@ -932,66 +892,8 @@ fn Parser::parse_wast_f64(self : Parser) -> Double raise WatError {
 
 ///|
 fn parse_wast_int(s : String) -> Int32 raise WatError {
-  if s.length() == 0 {
-    raise InvalidNumber(s, { line: 0, column: 0, })
-  }
-  let mut start = 0
-  let mut negative = false
-  if s.code_unit_at(0) == '-' {
-    negative = true
-    start = 1
-  } else if s.code_unit_at(0) == '+' {
-    start = 1
-  }
-  if start + 1 < s.length() &&
-    s.code_unit_at(start) == '0' &&
-    (s.code_unit_at(start + 1) == 'x' || s.code_unit_at(start + 1) == 'X') {
-    let hex_val = parse_wast_hex_int(s, start + 2)
-    if negative {
-      -hex_val
-    } else {
-      hex_val
-    }
-  } else {
-    let mut result = 0
-    for i in start..<s.length() {
-      let c = s.code_unit_at(i).unsafe_to_char()
-      if c == '_' {
-        continue
-      }
-      if c < '0' || c > '9' {
-        raise InvalidNumber(s, { line: 0, column: 0, })
-      }
-      result = result * 10 + (c.to_int() - '0'.to_int())
-    }
-    if negative {
-      -result
-    } else {
-      result
-    }
-  }
-}
-
-///|
-fn parse_wast_hex_int(s : String, start : Int32) -> Int32 raise WatError {
-  let mut result = 0
-  for i in start..<s.length() {
-    let c = s.code_unit_at(i).unsafe_to_char()
-    if c == '_' {
-      continue
-    }
-    let digit = if c >= '0' && c <= '9' {
-      c.to_int() - '0'.to_int()
-    } else if c >= 'a' && c <= 'f' {
-      c.to_int() - 'a'.to_int() + 10
-    } else if c >= 'A' && c <= 'F' {
-      c.to_int() - 'A'.to_int() + 10
-    } else {
-      raise InvalidNumber(s, { line: 0, column: 0, })
-    }
-    result = result * 16 + digit
-  }
-  result
+  // The script value wraps at 32 bits, including oversized decimal/hex input.
+  parse_wast_int64(s).to_int()
 }
 
 ///|
@@ -1056,17 +958,4 @@ fn parse_wast_hex_int64(s : String, start : Int32) -> Int64 raise WatError {
     result = result * 16L + digit.to_int64()
   }
   result
-}
-
-///|
-fn Parser::parse_wast_assert_suspension(
-  self : Parser,
-) -> WastCommand raise WatError {
-  self.advance()
-  self.expect_lparen()
-  let action = self.parse_wast_action()
-  self.expect_rparen()
-  let message = self.parse_wast_string()
-  self.expect_rparen()
-  AssertSuspension(action, message)
 }

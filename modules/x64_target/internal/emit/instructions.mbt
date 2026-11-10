@@ -67,8 +67,74 @@ fn emit_sib(
 }
 
 ///|
-fn emit_disp32(mc : CodeBuffer, disp : Int32) -> Unit {
-  emit_u32_le(mc, disp)
+#inline
+fn CodeBuffer::emit_legacy_prefix(
+  self : CodeBuffer,
+  prefix : Int32,
+  reg : Int32,
+  rm : Int32,
+  wide : Bool,
+) -> Unit {
+  if prefix != 0 {
+    self.emit_byte(prefix)
+  }
+  let r = (reg >> 3) & 1
+  let b = (rm >> 3) & 1
+  if wide {
+    emit_rex_w(self, r, b)
+  } else if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+}
+
+///|
+#inline
+fn CodeBuffer::emit_legacy_opcode(
+  self : CodeBuffer,
+  prefix : Int32,
+  escape : Int32,
+  opcode : Int32,
+  reg : Int32,
+  rm : Int32,
+  wide : Bool,
+) -> Unit {
+  self.emit_legacy_prefix(prefix, reg, rm, wide)
+  self.emit_byte(0x0F)
+  if escape != 0 {
+    self.emit_byte(escape)
+  }
+  self.emit_byte(opcode)
+}
+
+///|
+#inline
+fn CodeBuffer::emit_legacy_rr(
+  self : CodeBuffer,
+  prefix : Int32,
+  escape : Int32,
+  opcode : Int32,
+  reg : Int32,
+  rm : Int32,
+  wide : Bool,
+) -> Unit {
+  self.emit_legacy_opcode(prefix, escape, opcode, reg, rm, wide)
+  emit_modrm(self, 3, reg, rm)
+}
+
+///|
+#inline
+fn CodeBuffer::emit_legacy_memory(
+  self : CodeBuffer,
+  prefix : Int32,
+  escape : Int32,
+  opcode : Int32,
+  reg : Int32,
+  base : Int32,
+  disp : Int32,
+  wide : Bool,
+) -> Unit {
+  self.emit_legacy_opcode(prefix, escape, opcode, reg, base, wide)
+  self.emit_memory_operand(reg, base, disp)
 }
 
 ///|
@@ -151,12 +217,7 @@ pub fn CodeBuffer::x86_emit_movsx_r64_r8(
   src : Int32,
 ) -> Unit {
   // movsx r64, r/m8: REX.W + 0F BE /r
-  let r = (dst >> 3) & 1
-  let b = (src >> 3) & 1
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0xBE)
-  emit_modrm(self, 3, dst, src)
+  self.emit_legacy_rr(0, 0, 0xBE, dst, src, true)
 }
 
 ///|
@@ -166,14 +227,7 @@ pub fn CodeBuffer::x86_emit_movsx_r32_r16(
   src : Int32,
 ) -> Unit {
   // movsx r32, r/m16: 0F BF /r
-  let r = (dst >> 3) & 1
-  let b = (src >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xBF)
-  emit_modrm(self, 3, dst, src)
+  self.emit_legacy_rr(0, 0, 0xBF, dst, src, false)
 }
 
 ///|
@@ -183,12 +237,7 @@ pub fn CodeBuffer::x86_emit_movsx_r64_r16(
   src : Int32,
 ) -> Unit {
   // movsx r64, r/m16: REX.W + 0F BF /r
-  let r = (dst >> 3) & 1
-  let b = (src >> 3) & 1
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0xBF)
-  emit_modrm(self, 3, dst, src)
+  self.emit_legacy_rr(0, 0, 0xBF, dst, src, true)
 }
 
 ///|
@@ -267,16 +316,9 @@ pub fn CodeBuffer::x86_emit_mov_r64_m64(
   disp : Int32,
 ) -> Unit {
   // mov r64, [base + disp32]: REX.W + 8B /r, modrm with mod=10 (disp32).
-  let r = (dst >> 3) & 1
-  let b = (base >> 3) & 1
-  emit_rex_w(self, r, b)
+  self.emit_legacy_prefix(0, dst, base, true)
   self.emit_byte(0x8B)
-  emit_modrm(self, 2, dst, base)
-  if (base & 7) == 4 {
-    // SIB required for rsp/r12 base.
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_memory_operand(dst, base, disp)
 }
 
 ///|
@@ -287,17 +329,9 @@ pub fn CodeBuffer::x86_emit_mov_r32_m32(
   disp : Int32,
 ) -> Unit {
   // mov r32, [base + disp32]: 8B /r
-  let r = (dst >> 3) & 1
-  let b = (base >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0, dst, base, false)
   self.emit_byte(0x8B)
-  emit_modrm(self, 2, dst, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_memory_operand(dst, base, disp)
 }
 
 ///|
@@ -308,15 +342,9 @@ pub fn CodeBuffer::x86_emit_mov_m64_r64(
   src : Int32,
 ) -> Unit {
   // mov [base + disp32], r64: REX.W + 89 /r, modrm with mod=10 (disp32).
-  let r = (src >> 3) & 1
-  let b = (base >> 3) & 1
-  emit_rex_w(self, r, b)
+  self.emit_legacy_prefix(0, src, base, true)
   self.emit_byte(0x89)
-  emit_modrm(self, 2, src, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_memory_operand(src, base, disp)
 }
 
 ///|
@@ -327,17 +355,9 @@ pub fn CodeBuffer::x86_emit_mov_m32_r32(
   src : Int32,
 ) -> Unit {
   // mov [base + disp32], r32: 89 /r
-  let r = (src >> 3) & 1
-  let b = (base >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0, src, base, false)
   self.emit_byte(0x89)
-  emit_modrm(self, 2, src, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_memory_operand(src, base, disp)
 }
 
 ///|
@@ -357,11 +377,7 @@ pub fn CodeBuffer::x86_emit_mov_m8_r8(
     emit_rex(self, r, b)
   }
   self.emit_byte(0x88)
-  emit_modrm(self, 2, src, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_memory_operand(src, base, disp)
 }
 
 ///|
@@ -372,18 +388,9 @@ pub fn CodeBuffer::x86_emit_mov_m16_r16(
   src : Int32,
 ) -> Unit {
   // mov r/m16, r16: 66 89 /r
-  let r = (src >> 3) & 1
-  let b = (base >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0x66, src, base, false)
   self.emit_byte(0x89)
-  emit_modrm(self, 2, src, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_memory_operand(src, base, disp)
 }
 
 ///|
@@ -393,14 +400,7 @@ pub fn CodeBuffer::x86_emit_pslld_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // pslld xmm, imm8: 66 0F 72 /6 ib
-  let b = (dst_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if b != 0 {
-    emit_rex(self, 0, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x72)
-  emit_modrm(self, 3, 6, dst_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x72, 6, dst_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -411,14 +411,7 @@ pub fn CodeBuffer::x86_emit_psllq_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // psllq xmm, imm8: 66 0F 73 /6 ib
-  let b = (dst_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if b != 0 {
-    emit_rex(self, 0, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x73)
-  emit_modrm(self, 3, 6, dst_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x73, 6, dst_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -429,14 +422,7 @@ pub fn CodeBuffer::x86_emit_psllw_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // psllw xmm, imm8: 66 0F 71 /6 ib
-  let b = (dst_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if b != 0 {
-    emit_rex(self, 0, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x71)
-  emit_modrm(self, 3, 6, dst_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x71, 6, dst_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -448,12 +434,7 @@ pub fn CodeBuffer::x86_emit_psll_xmm_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // psll{w,d,q} xmm, xmm/m128: 66 0F F1/F2/F3 /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0x66, dst_xmm, src_xmm, false)
   self.emit_byte(0x0F)
   match lane_size {
     H16 => self.emit_byte(0xF1)
@@ -472,12 +453,7 @@ pub fn CodeBuffer::x86_emit_psrl_xmm_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // psrl{w,d,q} xmm, xmm/m128: 66 0F D1/D2/D3 /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0x66, dst_xmm, src_xmm, false)
   self.emit_byte(0x0F)
   match lane_size {
     H16 => self.emit_byte(0xD1)
@@ -496,12 +472,7 @@ pub fn CodeBuffer::x86_emit_psra_xmm_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // psra{w,d} xmm, xmm/m128: 66 0F E1/E2 /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0x66, dst_xmm, src_xmm, false)
   self.emit_byte(0x0F)
   match lane_size {
     H16 => self.emit_byte(0xE1)
@@ -518,14 +489,7 @@ pub fn CodeBuffer::x86_emit_psrlw_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // psrlw xmm, imm8: 66 0F 71 /2 ib
-  let b = (dst_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if b != 0 {
-    emit_rex(self, 0, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x71)
-  emit_modrm(self, 3, 2, dst_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x71, 2, dst_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -536,14 +500,7 @@ pub fn CodeBuffer::x86_emit_psrad_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // psrad xmm, imm8: 66 0F 72 /4 ib
-  let b = (dst_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if b != 0 {
-    emit_rex(self, 0, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x72)
-  emit_modrm(self, 3, 4, dst_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x72, 4, dst_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -555,14 +512,7 @@ pub fn CodeBuffer::x86_emit_cmpps_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // cmpps xmm, xmm/m128, imm8: 0F C2 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xC2)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0, 0, 0xC2, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -574,15 +524,7 @@ pub fn CodeBuffer::x86_emit_cmppd_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // cmppd xmm, xmm/m128, imm8: 66 0F C2 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xC2)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0, 0xC2, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -594,16 +536,7 @@ pub fn CodeBuffer::x86_emit_roundps_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // roundps xmm, xmm/m128, imm8: 66 0F 3A 08 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x08)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0x3A, 0x08, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -615,16 +548,7 @@ pub fn CodeBuffer::x86_emit_roundpd_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // roundpd xmm, xmm/m128, imm8: 66 0F 3A 09 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x09)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0x3A, 0x09, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -636,16 +560,7 @@ pub fn CodeBuffer::x86_emit_roundss_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // roundss xmm, xmm/m32, imm8: 66 0F 3A 0A /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x0A)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0x3A, 0x0A, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -657,16 +572,7 @@ pub fn CodeBuffer::x86_emit_roundsd_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // roundsd xmm, xmm/m64, imm8: 66 0F 3A 0B /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x0B)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0x3A, 0x0B, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -677,14 +583,7 @@ pub fn CodeBuffer::x86_emit_psrld_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // psrld xmm, imm8: 66 0F 72 /2 ib
-  let b = (dst_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if b != 0 {
-    emit_rex(self, 0, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x72)
-  emit_modrm(self, 3, 2, dst_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x72, 2, dst_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -695,14 +594,7 @@ pub fn CodeBuffer::x86_emit_psrlq_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // psrlq xmm, imm8: 66 0F 73 /2 ib
-  let b = (dst_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if b != 0 {
-    emit_rex(self, 0, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x73)
-  emit_modrm(self, 3, 2, dst_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x73, 2, dst_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -714,19 +606,7 @@ pub fn CodeBuffer::x86_emit_movss_xmm_m32(
   disp : Int32,
 ) -> Unit {
   // movss xmm, m32: F3 0F 10 /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (base >> 3) & 1
-  self.emit_byte(0xF3)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x10)
-  emit_modrm(self, 2, dst_xmm, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0xF3, 0, 0x10, dst_xmm, base, disp, false)
 }
 
 ///|
@@ -737,19 +617,7 @@ pub fn CodeBuffer::x86_emit_movss_m32_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // movss m32, xmm: F3 0F 11 /r
-  let r = (src_xmm >> 3) & 1
-  let b = (base >> 3) & 1
-  self.emit_byte(0xF3)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x11)
-  emit_modrm(self, 2, src_xmm, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0xF3, 0, 0x11, src_xmm, base, disp, false)
 }
 
 ///|
@@ -760,19 +628,7 @@ pub fn CodeBuffer::x86_emit_movsd_m64_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // movsd m64, xmm: F2 0F 11 /r
-  let r = (src_xmm >> 3) & 1
-  let b = (base >> 3) & 1
-  self.emit_byte(0xF2)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x11)
-  emit_modrm(self, 2, src_xmm, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0xF2, 0, 0x11, src_xmm, base, disp, false)
 }
 
 ///|
@@ -783,19 +639,7 @@ pub fn CodeBuffer::x86_emit_movsd_xmm_m64(
   disp : Int32,
 ) -> Unit {
   // movsd xmm, m64: F2 0F 10 /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (base >> 3) & 1
-  self.emit_byte(0xF2)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x10)
-  emit_modrm(self, 2, dst_xmm, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0xF2, 0, 0x10, dst_xmm, base, disp, false)
 }
 
 ///|
@@ -806,14 +650,7 @@ pub fn CodeBuffer::x86_emit_pinsrq_xmm_r64_imm8(
   imm8 : Int32,
 ) -> Unit {
   // pinsrq xmm, r/m64, imm8: 66 REX.W 0F 3A 22 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0x66)
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x22)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0x66, 0x3A, 0x22, dst_xmm, src, true)
   self.emit_byte(imm8 & 255)
 }
 
@@ -825,16 +662,7 @@ pub fn CodeBuffer::x86_emit_pinsrd_xmm_r32_imm8(
   imm8 : Int32,
 ) -> Unit {
   // pinsrd xmm, r/m32, imm8: 66 0F 3A 22 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x22)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0x66, 0x3A, 0x22, dst_xmm, src, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -846,15 +674,7 @@ pub fn CodeBuffer::x86_emit_pinsrw_xmm_r32_imm8(
   imm8 : Int32,
 ) -> Unit {
   // pinsrw xmm, r/m16, imm8: 66 0F C4 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xC4)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0x66, 0, 0xC4, dst_xmm, src, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -888,16 +708,7 @@ pub fn CodeBuffer::x86_emit_insertps_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // insertps xmm1, xmm2/m32, imm8 (SSE4.1): 66 0F 3A 21 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x21)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0x3A, 0x21, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -909,12 +720,7 @@ pub fn CodeBuffer::x86_emit_padd_xmm_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // padd{b,w,d,q}: 66 0F FC/FD/FE/D4 /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0x66, dst_xmm, src_xmm, false)
   self.emit_byte(0x0F)
   match lane_size {
     B8 => self.emit_byte(0xFC)
@@ -933,12 +739,7 @@ pub fn CodeBuffer::x86_emit_psub_xmm_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // psub{b,w,d,q}: 66 0F F8/F9/FA/FB /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0x66, dst_xmm, src_xmm, false)
   self.emit_byte(0x0F)
   match lane_size {
     B8 => self.emit_byte(0xF8)
@@ -957,12 +758,7 @@ pub fn CodeBuffer::x86_emit_pcmpeq_xmm_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // pcmpeq{b,w,d,q}: 66 0F 74/75/76/38 29 /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0x66, dst_xmm, src_xmm, false)
   self.emit_byte(0x0F)
   match lane_size {
     B8 => {
@@ -991,12 +787,7 @@ pub fn CodeBuffer::x86_emit_pcmpgt_xmm_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // pcmpgt{b,w,d}: 66 0F 64/65/66 /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
+  self.emit_legacy_prefix(0x66, dst_xmm, src_xmm, false)
   self.emit_byte(0x0F)
   match lane_size {
     B8 => self.emit_byte(0x64)
@@ -1015,15 +806,7 @@ pub fn CodeBuffer::x86_emit_pshufd_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // pshufd xmm1, xmm2/m128, imm8: 66 0F 70 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x70)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x70, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1035,15 +818,7 @@ pub fn CodeBuffer::x86_emit_pshuflw_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // pshuflw xmm1, xmm2/m128, imm8: F2 0F 70 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0xF2)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x70)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0xF2, 0, 0x70, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1055,14 +830,7 @@ pub fn CodeBuffer::x86_emit_shufps_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // shufps xmm1, xmm2/m128, imm8: 0F C6 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xC6)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0, 0, 0xC6, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1074,15 +842,7 @@ pub fn CodeBuffer::x86_emit_shufpd_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // shufpd xmm1, xmm2/m128, imm8: 66 0F C6 /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xC6)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0, 0xC6, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1094,16 +854,7 @@ pub fn CodeBuffer::x86_emit_palignr_xmm_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // palignr xmm, xmm/m128, imm8 (SSSE3): 66 0F 3A 0F /r ib
-  let r = (dst_xmm >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x0F)
-  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_legacy_rr(0x66, 0x3A, 0x0F, dst_xmm, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1116,16 +867,7 @@ pub fn CodeBuffer::x86_emit_pextrb_r32_xmm_imm8(
 ) -> Unit {
   // pextrb r32, xmm, imm8 (SSE4.1): 66 0F 3A 14 /r ib
   // ModRM.reg encodes the XMM source; ModRM.r/m encodes the GPR destination.
-  let r = (src_xmm >> 3) & 1
-  let b = (dst >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x14)
-  emit_modrm(self, 3, src_xmm, dst)
+  self.emit_legacy_rr(0x66, 0x3A, 0x14, src_xmm, dst, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1138,16 +880,7 @@ pub fn CodeBuffer::x86_emit_pextrd_r32_xmm_imm8(
 ) -> Unit {
   // pextrd r32, xmm, imm8 (SSE4.1): 66 0F 3A 16 /r ib
   // ModRM.reg encodes the XMM source; ModRM.r/m encodes the GPR destination.
-  let r = (src_xmm >> 3) & 1
-  let b = (dst >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x16)
-  emit_modrm(self, 3, src_xmm, dst)
+  self.emit_legacy_rr(0x66, 0x3A, 0x16, src_xmm, dst, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1160,14 +893,7 @@ pub fn CodeBuffer::x86_emit_pextrq_r64_xmm_imm8(
 ) -> Unit {
   // pextrq r64, xmm, imm8 (SSE4.1): 66 REX.W 0F 3A 16 /r ib
   // ModRM.reg encodes the XMM source; ModRM.r/m encodes the GPR destination.
-  let r = (src_xmm >> 3) & 1
-  let b = (dst >> 3) & 1
-  self.emit_byte(0x66)
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0x3A)
-  self.emit_byte(0x16)
-  emit_modrm(self, 3, src_xmm, dst)
+  self.emit_legacy_rr(0x66, 0x3A, 0x16, src_xmm, dst, true)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1179,15 +905,7 @@ pub fn CodeBuffer::x86_emit_pextrw_r32_xmm_imm8(
   imm8 : Int32,
 ) -> Unit {
   // pextrw r32, xmm, imm8 (SSE2): 66 0F C5 /r ib
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xC5)
-  emit_modrm(self, 3, dst, src_xmm)
+  self.emit_legacy_rr(0x66, 0, 0xC5, dst, src_xmm, false)
   self.emit_byte(imm8 & 255)
 }
 
@@ -1201,15 +919,7 @@ pub fn CodeBuffer::x86_emit_pmovmskb_r32_xmm(
   //
   // Note: Intel manual notes operand-size is 64-bit by default in 64-bit mode
   // but we only need 16 bits. Do not set REX.W.
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xD7)
-  emit_modrm(self, 3, dst, src_xmm)
+  self.emit_legacy_rr(0x66, 0, 0xD7, dst, src_xmm, false)
 }
 
 ///|
@@ -1219,14 +929,7 @@ pub fn CodeBuffer::x86_emit_movmskps_r32_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // movmskps r32, xmm: 0F 50 /r
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x50)
-  emit_modrm(self, 3, dst, src_xmm)
+  self.emit_legacy_rr(0, 0, 0x50, dst, src_xmm, false)
 }
 
 ///|
@@ -1236,15 +939,7 @@ pub fn CodeBuffer::x86_emit_movmskpd_r32_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // movmskpd r32, xmm: 66 0F 50 /r
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x50)
-  emit_modrm(self, 3, dst, src_xmm)
+  self.emit_legacy_rr(0x66, 0, 0x50, dst, src_xmm, false)
 }
 
 ///|
@@ -1254,15 +949,7 @@ pub fn CodeBuffer::x86_emit_cvttss2si_r32_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // cvttss2si r32, xmm: F3 0F 2C /r
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0xF3)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x2C)
-  emit_modrm(self, 3, dst, src_xmm)
+  self.emit_legacy_rr(0xF3, 0, 0x2C, dst, src_xmm, false)
 }
 
 ///|
@@ -1272,13 +959,7 @@ pub fn CodeBuffer::x86_emit_cvttss2si_r64_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // cvttss2si r64, xmm: REX.W + F3 0F 2C /r
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0xF3)
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0x2C)
-  emit_modrm(self, 3, dst, src_xmm)
+  self.emit_legacy_rr(0xF3, 0, 0x2C, dst, src_xmm, true)
 }
 
 ///|
@@ -1288,15 +969,7 @@ pub fn CodeBuffer::x86_emit_cvttsd2si_r32_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // cvttsd2si r32, xmm: F2 0F 2C /r
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0xF2)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x2C)
-  emit_modrm(self, 3, dst, src_xmm)
+  self.emit_legacy_rr(0xF2, 0, 0x2C, dst, src_xmm, false)
 }
 
 ///|
@@ -1306,13 +979,7 @@ pub fn CodeBuffer::x86_emit_cvttsd2si_r64_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // cvttsd2si r64, xmm: REX.W + F2 0F 2C /r
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
-  self.emit_byte(0xF2)
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0x2C)
-  emit_modrm(self, 3, dst, src_xmm)
+  self.emit_legacy_rr(0xF2, 0, 0x2C, dst, src_xmm, true)
 }
 
 ///|
@@ -1322,15 +989,7 @@ pub fn CodeBuffer::x86_emit_cvtsi2ss_xmm_r32(
   src : Int32,
 ) -> Unit {
   // cvtsi2ss xmm, r/m32: F3 0F 2A /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0xF3)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x2A)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0xF3, 0, 0x2A, dst_xmm, src, false)
 }
 
 ///|
@@ -1340,13 +999,7 @@ pub fn CodeBuffer::x86_emit_cvtsi2ss_xmm_r64(
   src : Int32,
 ) -> Unit {
   // cvtsi2ss xmm, r/m64: REX.W + F3 0F 2A /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0xF3)
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0x2A)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0xF3, 0, 0x2A, dst_xmm, src, true)
 }
 
 ///|
@@ -1356,15 +1009,7 @@ pub fn CodeBuffer::x86_emit_cvtsi2sd_xmm_r32(
   src : Int32,
 ) -> Unit {
   // cvtsi2sd xmm, r/m32: F2 0F 2A /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0xF2)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x2A)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0xF2, 0, 0x2A, dst_xmm, src, false)
 }
 
 ///|
@@ -1374,13 +1019,7 @@ pub fn CodeBuffer::x86_emit_cvtsi2sd_xmm_r64(
   src : Int32,
 ) -> Unit {
   // cvtsi2sd xmm, r/m64: REX.W + F2 0F 2A /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0xF2)
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0x2A)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0xF2, 0, 0x2A, dst_xmm, src, true)
 }
 
 ///|
@@ -1391,19 +1030,7 @@ pub fn CodeBuffer::x86_emit_movdqu_m128_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // movdqu m128, xmm: F3 0F 7F /r
-  let r = (src_xmm >> 3) & 1
-  let b = (base >> 3) & 1
-  self.emit_byte(0xF3)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x7F)
-  emit_modrm(self, 2, src_xmm, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0xF3, 0, 0x7F, src_xmm, base, disp, false)
 }
 
 ///|
@@ -1414,19 +1041,7 @@ pub fn CodeBuffer::x86_emit_movdqu_xmm_m128(
   disp : Int32,
 ) -> Unit {
   // movdqu xmm, m128: F3 0F 6F /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (base >> 3) & 1
-  self.emit_byte(0xF3)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x6F)
-  emit_modrm(self, 2, dst_xmm, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0xF3, 0, 0x6F, dst_xmm, base, disp, false)
 }
 
 ///|
@@ -1437,16 +1052,7 @@ pub fn CodeBuffer::x86_emit_movsx_r64_m8(
   disp : Int32,
 ) -> Unit {
   // movsx r64, m8: REX.W + 0F BE /r
-  let r = (dst >> 3) & 1
-  let b = (base >> 3) & 1
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0xBE)
-  emit_modrm(self, 2, dst, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0, 0, 0xBE, dst, base, disp, true)
 }
 
 ///|
@@ -1457,18 +1063,7 @@ pub fn CodeBuffer::x86_emit_movzx_r32_m8(
   disp : Int32,
 ) -> Unit {
   // movzx r32, m8: 0F B6 /r
-  let r = (dst >> 3) & 1
-  let b = (base >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xB6)
-  emit_modrm(self, 2, dst, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0, 0, 0xB6, dst, base, disp, false)
 }
 
 ///|
@@ -1479,16 +1074,7 @@ pub fn CodeBuffer::x86_emit_movsx_r64_m16(
   disp : Int32,
 ) -> Unit {
   // movsx r64, m16: REX.W + 0F BF /r
-  let r = (dst >> 3) & 1
-  let b = (base >> 3) & 1
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0xBF)
-  emit_modrm(self, 2, dst, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0, 0, 0xBF, dst, base, disp, true)
 }
 
 ///|
@@ -1499,18 +1085,7 @@ pub fn CodeBuffer::x86_emit_movzx_r32_m16(
   disp : Int32,
 ) -> Unit {
   // movzx r32, m16: 0F B7 /r
-  let r = (dst >> 3) & 1
-  let b = (base >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xB7)
-  emit_modrm(self, 2, dst, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_legacy_memory(0, 0, 0xB7, dst, base, disp, false)
 }
 
 ///|
@@ -1521,15 +1096,9 @@ pub fn CodeBuffer::x86_emit_movsxd_r64_m32(
   disp : Int32,
 ) -> Unit {
   // movsxd r64, m32: REX.W + 63 /r
-  let r = (dst >> 3) & 1
-  let b = (base >> 3) & 1
-  emit_rex_w(self, r, b)
+  self.emit_legacy_prefix(0, dst, base, true)
   self.emit_byte(0x63)
-  emit_modrm(self, 2, dst, base)
-  if (base & 7) == 4 {
-    emit_sib(self, 0, 4, base)
-  }
-  emit_disp32(self, disp)
+  self.emit_memory_operand(dst, base, disp)
 }
 
 ///|
@@ -1603,14 +1172,7 @@ pub fn CodeBuffer::x86_emit_movzx_r32_r16(
   dst : Int32,
   src : Int32,
 ) -> Unit {
-  let r = (dst >> 3) & 1
-  let b = (src >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xB7)
-  emit_modrm(self, 3, dst, src)
+  self.emit_legacy_rr(0, 0, 0xB7, dst, src, false)
 }
 
 ///|
@@ -1797,15 +1359,7 @@ pub fn CodeBuffer::x86_emit_movd_r32_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // movd r/m32, xmm: 66 0F 7E /r
-  let r = (src_xmm >> 3) & 1
-  let b = (dst >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x7E)
-  emit_modrm(self, 3, src_xmm, dst)
+  self.emit_legacy_rr(0x66, 0, 0x7E, src_xmm, dst, false)
 }
 
 ///|
@@ -1815,15 +1369,7 @@ pub fn CodeBuffer::x86_emit_movd_xmm_r32(
   src : Int32,
 ) -> Unit {
   // movd xmm, r/m32: 66 0F 6E /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0x66)
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0x6E)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0x66, 0, 0x6E, dst_xmm, src, false)
 }
 
 ///|
@@ -1833,13 +1379,7 @@ pub fn CodeBuffer::x86_emit_movq_r64_xmm(
   src_xmm : Int32,
 ) -> Unit {
   // movq r/m64, xmm: REX.W + 66 0F 7E /r
-  let r = (src_xmm >> 3) & 1
-  let b = (dst >> 3) & 1
-  self.emit_byte(0x66)
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0x7E)
-  emit_modrm(self, 3, src_xmm, dst)
+  self.emit_legacy_rr(0x66, 0, 0x7E, src_xmm, dst, true)
 }
 
 ///|
@@ -1849,13 +1389,7 @@ pub fn CodeBuffer::x86_emit_movq_xmm_r64(
   src : Int32,
 ) -> Unit {
   // movq xmm, r/m64: REX.W + 66 0F 6E /r
-  let r = (dst_xmm >> 3) & 1
-  let b = (src >> 3) & 1
-  self.emit_byte(0x66)
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0x6E)
-  emit_modrm(self, 3, dst_xmm, src)
+  self.emit_legacy_rr(0x66, 0, 0x6E, dst_xmm, src, true)
 }
 
 ///|
@@ -1865,14 +1399,7 @@ pub fn CodeBuffer::x86_emit_bsr_r32_r32(
   src : Int32,
 ) -> Unit {
   // bsr r32, r/m32: 0F BD /r
-  let r = (dst >> 3) & 1
-  let b = (src >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  self.emit_byte(0xBD)
-  emit_modrm(self, 3, dst, src)
+  self.emit_legacy_rr(0, 0, 0xBD, dst, src, false)
 }
 
 ///|
@@ -1882,12 +1409,7 @@ pub fn CodeBuffer::x86_emit_bsr_r64_r64(
   src : Int32,
 ) -> Unit {
   // bsr r64, r/m64: REX.W 0F BD /r
-  let r = (dst >> 3) & 1
-  let b = (src >> 3) & 1
-  emit_rex_w(self, r, b)
-  self.emit_byte(0x0F)
-  self.emit_byte(0xBD)
-  emit_modrm(self, 3, dst, src)
+  self.emit_legacy_rr(0, 0, 0xBD, dst, src, true)
 }
 
 ///|
@@ -1924,16 +1446,19 @@ fn CodeBuffer::x86_emit_atomic_memory_prefix(
 }
 
 ///|
-fn CodeBuffer::x86_emit_atomic_modrm(
+#inline
+fn CodeBuffer::emit_memory_operand(
   self : CodeBuffer,
   reg : Int32,
   base : Int32,
+  disp : Int32,
 ) -> Unit {
   emit_modrm(self, 2, reg, base)
   if (base & 7) == 4 {
+    // SIB is required for rsp/r12 bases, including zero displacements.
     emit_sib(self, 0, 4, base)
   }
-  emit_disp32(self, 0)
+  emit_u32_le(self, disp)
 }
 
 ///|
@@ -1947,7 +1472,7 @@ pub fn CodeBuffer::x86_emit_lock_xadd(
   self.x86_emit_atomic_memory_prefix(width, reg, base)
   self.emit_byte(0x0F)
   self.emit_byte(if width == W8 { 0xC0 } else { 0xC1 })
-  self.x86_emit_atomic_modrm(reg, base)
+  self.emit_memory_operand(reg, base, 0)
 }
 
 ///|
@@ -1959,7 +1484,7 @@ pub fn CodeBuffer::x86_emit_xchg_memory(
 ) -> Unit {
   self.x86_emit_atomic_memory_prefix(width, reg, base)
   self.emit_byte(if width == W8 { 0x86 } else { 0x87 })
-  self.x86_emit_atomic_modrm(reg, base)
+  self.emit_memory_operand(reg, base, 0)
 }
 
 ///|
@@ -1973,7 +1498,7 @@ pub fn CodeBuffer::x86_emit_lock_cmpxchg(
   self.x86_emit_atomic_memory_prefix(width, replacement, base)
   self.emit_byte(0x0F)
   self.emit_byte(if width == W8 { 0xB0 } else { 0xB1 })
-  self.x86_emit_atomic_modrm(replacement, base)
+  self.emit_memory_operand(replacement, base, 0)
 }
 
 ///|

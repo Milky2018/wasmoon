@@ -2,15 +2,12 @@
 /// Per-component state shared by all section handlers during instantiation.
 priv struct ComponentInstantiationFrame {
   linker : ComponentLinker
-  name : String
   component : Component
   overrides : Map[String, ComponentExtern]
   override_types : Array[TypeDef?]
   outer_stack : Array[ComponentInstance]
   state : BuildState
   entry_state : ComponentInstanceEntryState
-  store : @runtime.Store
-  async_state : AsyncState
   staged : Array[(String, ComponentInstance)]
 }
 
@@ -37,37 +34,30 @@ fn instantiate_component(
   } else {
     linker.host_runtime_state().async_state
   }
-  let state = BuildState::BuildState(stream_table, async_state)
+  let store = linker.get_store()
+  let state = BuildState::BuildState(name, store, stream_table, async_state)
   let declared_types = count_component_type_slots(component)
   for _ in 0..<declared_types {
-    state.types.push(None)
+    state.instance.types.push(None)
   }
-  state.async_state.resource_tables.set(
-    state.resource_table.id,
-    state.resource_table,
-  )
   let entry_state = ComponentInstanceEntryState::new(
     poisoned=async_state.trapped,
   )
-  let store = linker.get_store()
   let frame : ComponentInstantiationFrame = {
     linker,
-    name,
     component,
     overrides,
     override_types,
     outer_stack,
     state,
     entry_state,
-    store,
-    async_state,
     staged,
   }
   {
     errdefer state.release_aborted()
     run_component_sections(frame)
   }
-  let instance = env_instance_from_state(name, state, store)
+  let instance = state.instance
   // Registration is transactional: the frame stages its instance, nested
   // frames included, and only the root commits the whole tree into the
   // linker once it succeeds on a still-open linker. Rollback releases every
@@ -82,17 +72,16 @@ fn run_component_sections(
 ) -> Unit raise ComponentRuntimeError {
   let {
     linker,
-    name,
     component,
     overrides,
     override_types,
     outer_stack,
-    state,
+    state: build,
     entry_state,
-    store,
-    async_state,
     staged,
   } = frame
+  let state = build.instance
+  let { name, store, async_state, .. } = state
   for section in component.binary.sections {
     match section.id {
       1 => {
@@ -193,7 +182,7 @@ fn run_component_sections(
         let nested = parse_component(section.payload) catch {
           e => raise ComponentParseError(e.to_string())
         }
-        let env = env_instance_from_state("\{name}::env", state, store)
+        let env = state.environment()
         state.components.push({
           component: nested,
           outer_stack: extend_outer_stack(outer_stack, env),
@@ -317,10 +306,7 @@ fn run_component_sections(
               }
             }
             Outer(ct, idx) => {
-              let stack = extend_outer_stack(
-                outer_stack,
-                env_instance_from_state("\{name}::env", state, store),
-              )
+              let stack = extend_outer_stack(outer_stack, state.environment())
               let ext = resolve_outer_alias(stack, ct, alias_decl.sort, idx)
               match ext {
                 Type(type_def) =>
@@ -335,7 +321,7 @@ fn run_component_sections(
               }
             }
           }
-          append_alias(alias_decl.sort, ext, state)
+          append_alias(alias_decl.sort, ext, build)
         }
       }
       7 => {
@@ -357,7 +343,7 @@ fn run_component_sections(
               }
             _ => t
           }
-          state.append_declared_type(Some(t2))
+          build.append_declared_type(Some(t2))
         }
       }
       8 => process_canon_section(section.payload, state, store, entry_state)
@@ -395,7 +381,7 @@ fn run_component_sections(
         }
         let import_outer_stack = extend_outer_stack(
           outer_stack,
-          env_instance_from_state("\{name}::env", state, store),
+          state.environment(),
         )
         for imp in imports {
           let ext = resolve_import(
@@ -438,7 +424,7 @@ fn run_component_sections(
                   } else {
                     t
                   }
-                  state.append_declared_type(imported)
+                  build.append_declared_type(imported)
                 }
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
@@ -463,7 +449,7 @@ fn run_component_sections(
           let name = decode_export_name(exp.name)
           let ext = resolve_sortidx(exp.sortidx, state)
           state.exports.set(name, ext)
-          append_alias(exp.sortidx.sort, ext, state)
+          append_alias(exp.sortidx.sort, ext, build)
         }
       }
       _ => ()

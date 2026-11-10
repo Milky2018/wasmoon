@@ -12,6 +12,9 @@ The plan contains:
 - edge edits for block arguments;
 - reusable spill-slot layouts.
 
+Allocation tables stay private. Consumers use checked location queries, spill-slot
+layouts, and edit snapshots; allocator embeddings write through `AllocationSink`.
+
 Operand constraints and placement preferences are separate contracts. A fixed
 register is a hard correctness requirement and may require an insertion edit.
 A physical-register preference only orders otherwise legal allocation choices;
@@ -81,3 +84,13 @@ whole-function analysis.
 The production integration is complete. CI validates allocation correctness on
 both native targets; retired allocators and backends are not rebuilt as
 performance or code-size acceptance baselines.
+
+## Retired live-range utilities
+
+Live ranges, use positions, and their program-point/range representation are
+private allocator state. Integrations use `FunctionView`, `AllocationSink`,
+and `AllocationPlan`; they do not construct or inspect liveness internals.
+
+Ties remain on the source operands consumed by allocation. Liveness no longer
+copies unused tie ids. Unused range-inspection helpers and
+`UnionFind::get_all_sets` are retired; allocation and tie verification are unchanged.

@@ -36,11 +36,11 @@ impl AllocationSink for AllocationPlan with fn assign_operand(
 ///|
 impl AllocationSink for AllocationPlan with fn create_spill_slot(
   self,
-  owner,
+  _owner,
   size,
   alignment,
 ) {
-  self.create_spill_slot(owner, size, alignment)
+  self.create_spill_slot(size, alignment)
 }
 
 ///|

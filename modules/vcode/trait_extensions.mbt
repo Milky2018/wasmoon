@@ -29,12 +29,6 @@ pub extend CallTransferError with Debug::{to_repr}
 pub extend CallTransferError with Eq::{not_equal, equal}
 
 ///|
-pub extend CallTransferPlan with Debug::{to_repr}
-
-///|
-pub extend CallTransferPlan with Eq::{not_equal, equal}
-
-///|
 pub extend EditKind with Debug::{to_repr}
 
 ///|

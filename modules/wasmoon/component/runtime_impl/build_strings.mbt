@@ -1,23 +1,9 @@
 ///|
+// Construction and published instances share the same index spaces. Outer-alias
+// environments retain these arrays; publication still belongs to the transaction.
 priv struct BuildState {
-  types : Array[TypeDef?]
+  instance : ComponentInstance
   next_declared_type : Ref[Int32]
-  funcs : Array[ComponentFunc]
-  values : Array[ComponentValue]
-  components : Array[ComponentClosure]
-  instances : Array[ComponentInstance]
-  resource_table : ResourceTable
-  stream_table : StreamTable
-  async_state : AsyncState
-  core_modules : Array[@types.Module]
-  core_instances : Array[CoreInstance]
-  core_funcs : Array[CoreFuncRef]
-  core_types : Array[Bytes]
-  core_tables : Array[Int32]
-  core_mems : Array[Int32]
-  core_globals : Array[Int32]
-  core_tags : Array[Int32]
-  exports : Map[String, ComponentExtern]
 }
 
 ///|
@@ -37,62 +23,69 @@ priv struct BuildState {
 /// failed instantiation on a host-runtime-backed linker would grow the
 /// shared table map forever.
 fn BuildState::release_aborted(self : BuildState) -> Unit {
-  self.async_state.resource_tables.remove(self.resource_table.id)
-  self.types.clear()
-  self.types.shrink_to_fit()
-  self.funcs.clear()
-  self.funcs.shrink_to_fit()
-  self.values.clear()
-  self.values.shrink_to_fit()
-  self.components.clear()
-  self.components.shrink_to_fit()
-  self.instances.clear()
-  self.instances.shrink_to_fit()
-  self.core_modules.clear()
-  self.core_modules.shrink_to_fit()
-  self.core_instances.clear()
-  self.core_instances.shrink_to_fit()
-  self.core_funcs.clear()
-  self.core_funcs.shrink_to_fit()
-  self.core_types.clear()
-  self.core_types.shrink_to_fit()
-  self.core_tables.clear()
-  self.core_tables.shrink_to_fit()
-  self.core_mems.clear()
-  self.core_mems.shrink_to_fit()
-  self.core_globals.clear()
-  self.core_globals.shrink_to_fit()
-  self.core_tags.clear()
-  self.core_tags.shrink_to_fit()
-  self.exports.clear()
+  let instance = self.instance
+  instance.async_state.resource_tables.remove(instance.resource_table.id)
+  instance.types.clear()
+  instance.types.shrink_to_fit()
+  instance.funcs.clear()
+  instance.funcs.shrink_to_fit()
+  instance.values.clear()
+  instance.values.shrink_to_fit()
+  instance.components.clear()
+  instance.components.shrink_to_fit()
+  instance.instances.clear()
+  instance.instances.shrink_to_fit()
+  instance.core_modules.clear()
+  instance.core_modules.shrink_to_fit()
+  instance.core_instances.clear()
+  instance.core_instances.shrink_to_fit()
+  instance.core_funcs.clear()
+  instance.core_funcs.shrink_to_fit()
+  instance.core_types.clear()
+  instance.core_types.shrink_to_fit()
+  instance.core_tables.clear()
+  instance.core_tables.shrink_to_fit()
+  instance.core_mems.clear()
+  instance.core_mems.shrink_to_fit()
+  instance.core_globals.clear()
+  instance.core_globals.shrink_to_fit()
+  instance.core_tags.clear()
+  instance.core_tags.shrink_to_fit()
+  instance.exports.clear()
 }
 
 ///|
 fn BuildState::BuildState(
+  name : String,
+  store : @runtime.Store,
   stream_table : StreamTable,
   async_state : AsyncState,
 ) -> BuildState {
   let resource_table = ResourceTable(resources=async_state.concurrent_resources)
   async_state.resource_tables.set(resource_table.id, resource_table)
   {
-    types: [],
+    instance: {
+      name,
+      store,
+      types: [],
+      funcs: [],
+      values: [],
+      components: [],
+      instances: [],
+      resource_table,
+      stream_table,
+      async_state,
+      core_modules: [],
+      core_instances: [],
+      core_funcs: [],
+      core_types: [],
+      core_tables: [],
+      core_mems: [],
+      core_globals: [],
+      core_tags: [],
+      exports: Map([]),
+    },
     next_declared_type: Ref(0),
-    funcs: [],
-    values: [],
-    components: [],
-    instances: [],
-    resource_table,
-    stream_table,
-    async_state,
-    core_modules: [],
-    core_instances: [],
-    core_funcs: [],
-    core_types: [],
-    core_tables: [],
-    core_mems: [],
-    core_globals: [],
-    core_tags: [],
-    exports: Map([]),
   }
 }
 

@@ -83,22 +83,6 @@ fn component_validation_error_code(
 }
 
 ///|
-fn json_escape_string(s : String) -> String {
-  let buf = StringBuilder::StringBuilder()
-  for c in s {
-    match c {
-      '"' => buf.write_string("\\\"")
-      '\\' => buf.write_string("\\\\")
-      '\n' => buf.write_string("\\n")
-      '\r' => buf.write_string("\\r")
-      '\t' => buf.write_string("\\t")
-      _ => buf.write_char(c)
-    }
-  }
-  buf.to_string()
-}
-
-///|
 fn component_error_json(
   ok : Bool,
   code : ComponentErrorCode?,
@@ -106,22 +90,14 @@ fn component_error_json(
   detail : String,
   summary~ : Array[String]? = None,
 ) -> String {
-  let mut line = "{\"ok\":"
-  line = line + (if ok { "true" } else { "false" })
+  let mut line = "{\"ok\":\{ok}"
   if code is Some(code) {
-    line = line + ",\"code\":\"\{component_error_code_string(code)}\""
+    line += ",\"code\":\{@json.Json::string(component_error_code_string(code)).stringify()}"
   }
-  line = line + ",\"phase\":\"\{json_escape_string(phase)}\""
-  line = line + ",\"detail\":\"\{json_escape_string(detail)}\""
+  line += ",\"phase\":\{@json.Json::string(phase).stringify()}"
+  line += ",\"detail\":\{@json.Json::string(detail).stringify()}"
   if summary is Some(summary) {
-    line = line + ",\"summary\":["
-    for i, item in summary {
-      if i > 0 {
-        line = line + ","
-      }
-      line = line + "\"\{json_escape_string(item)}\""
-    }
-    line = line + "]"
+    line += ",\"summary\":\{@json.to_json(summary).stringify()}"
   }
   line + "}"
 }
@@ -285,7 +261,7 @@ fn component_invoke_success_json(
   path : String,
   values : Array[@component_runtime.ComponentValue],
 ) -> String {
-  "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"\{json_escape_string(path)}\",\"result\":\{@component_runtime.component_values_to_json(values).stringify()}}"
+  "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\{@json.Json::string(path).stringify()},\"result\":\{@component_runtime.component_values_to_json(values).stringify()}}"
 }
 
 ///|

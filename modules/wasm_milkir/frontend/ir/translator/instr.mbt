@@ -96,26 +96,26 @@ fn Translator::translate_instruction_impl(
     }
 
     // i32 arithmetic
-    I32Add => self.translate_binary_i32(fn(b, a, v) { b.iadd(a, v) })
-    I32Sub => self.translate_binary_i32(fn(b, a, v) { b.isub(a, v) })
-    I32Mul => self.translate_binary_i32(fn(b, a, v) { b.imul(a, v) })
-    I32DivS => self.translate_binary_i32(fn(b, a, v) { b.sdiv(a, v) })
-    I32DivU => self.translate_binary_i32(fn(b, a, v) { b.udiv(a, v) })
-    I32RemS => self.translate_binary_i32(fn(b, a, v) { b.srem(a, v) })
-    I32RemU => self.translate_binary_i32(fn(b, a, v) { b.urem(a, v) })
-    I32And => self.translate_binary_i32(fn(b, a, v) { b.band(a, v) })
-    I32Or => self.translate_binary_i32(fn(b, a, v) { b.bor(a, v) })
-    I32Xor => self.translate_binary_i32(fn(b, a, v) { b.bxor(a, v) })
-    I32Shl => self.translate_binary_i32(fn(b, a, v) { b.ishl(a, v) })
-    I32ShrS => self.translate_binary_i32(fn(b, a, v) { b.sshr(a, v) })
-    I32ShrU => self.translate_binary_i32(fn(b, a, v) { b.ushr(a, v) })
-    I32Rotl => self.translate_binary_i32(fn(b, a, v) { b.rotl(a, v) })
-    I32Rotr => self.translate_binary_i32(fn(b, a, v) { b.rotr(a, v) })
+    I32Add => self.translate_binary(fn(b, a, v) { b.iadd(a, v) })
+    I32Sub => self.translate_binary(fn(b, a, v) { b.isub(a, v) })
+    I32Mul => self.translate_binary(fn(b, a, v) { b.imul(a, v) })
+    I32DivS => self.translate_binary(fn(b, a, v) { b.sdiv(a, v) })
+    I32DivU => self.translate_binary(fn(b, a, v) { b.udiv(a, v) })
+    I32RemS => self.translate_binary(fn(b, a, v) { b.srem(a, v) })
+    I32RemU => self.translate_binary(fn(b, a, v) { b.urem(a, v) })
+    I32And => self.translate_binary(fn(b, a, v) { b.band(a, v) })
+    I32Or => self.translate_binary(fn(b, a, v) { b.bor(a, v) })
+    I32Xor => self.translate_binary(fn(b, a, v) { b.bxor(a, v) })
+    I32Shl => self.translate_binary(fn(b, a, v) { b.ishl(a, v) })
+    I32ShrS => self.translate_binary(fn(b, a, v) { b.sshr(a, v) })
+    I32ShrU => self.translate_binary(fn(b, a, v) { b.ushr(a, v) })
+    I32Rotl => self.translate_binary(fn(b, a, v) { b.rotl(a, v) })
+    I32Rotr => self.translate_binary(fn(b, a, v) { b.rotr(a, v) })
 
     // i32 bit counting
-    I32Clz => self.translate_unary_i32(fn(b, a) { b.clz(a) })
-    I32Ctz => self.translate_unary_i32(fn(b, a) { b.ctz(a) })
-    I32Popcnt => self.translate_unary_i32(fn(b, a) { b.popcnt(a) })
+    I32Clz => self.translate_unary(fn(b, a) { b.clz(a) })
+    I32Ctz => self.translate_unary(fn(b, a) { b.ctz(a) })
+    I32Popcnt => self.translate_unary(fn(b, a) { b.popcnt(a) })
 
     // i32 comparisons
     I32Eqz => {
@@ -136,9 +136,9 @@ fn Translator::translate_instruction_impl(
     I32GeU => self.translate_icmp(Uge)
 
     // i64 arithmetic
-    I64Add => self.translate_binary_i64(fn(b, a, v) { b.iadd(a, v) })
-    I64Sub => self.translate_binary_i64(fn(b, a, v) { b.isub(a, v) })
-    I64Mul => self.translate_binary_i64(fn(b, a, v) { b.imul(a, v) })
+    I64Add => self.translate_binary(fn(b, a, v) { b.iadd(a, v) })
+    I64Sub => self.translate_binary(fn(b, a, v) { b.isub(a, v) })
+    I64Mul => self.translate_binary(fn(b, a, v) { b.imul(a, v) })
     I64Add128 | I64Sub128 => {
       let b_hi = self.pop()
       let b_lo = self.pop()
@@ -177,23 +177,23 @@ fn Translator::translate_instruction_impl(
       self.push(lo)
       self.push(hi)
     }
-    I64DivS => self.translate_binary_i64(fn(b, a, v) { b.sdiv(a, v) })
-    I64DivU => self.translate_binary_i64(fn(b, a, v) { b.udiv(a, v) })
-    I64RemS => self.translate_binary_i64(fn(b, a, v) { b.srem(a, v) })
-    I64RemU => self.translate_binary_i64(fn(b, a, v) { b.urem(a, v) })
-    I64And => self.translate_binary_i64(fn(b, a, v) { b.band(a, v) })
-    I64Or => self.translate_binary_i64(fn(b, a, v) { b.bor(a, v) })
-    I64Xor => self.translate_binary_i64(fn(b, a, v) { b.bxor(a, v) })
-    I64Shl => self.translate_binary_i64(fn(b, a, v) { b.ishl(a, v) })
-    I64ShrS => self.translate_binary_i64(fn(b, a, v) { b.sshr(a, v) })
-    I64ShrU => self.translate_binary_i64(fn(b, a, v) { b.ushr(a, v) })
-    I64Rotl => self.translate_binary_i64(fn(b, a, v) { b.rotl(a, v) })
-    I64Rotr => self.translate_binary_i64(fn(b, a, v) { b.rotr(a, v) })
+    I64DivS => self.translate_binary(fn(b, a, v) { b.sdiv(a, v) })
+    I64DivU => self.translate_binary(fn(b, a, v) { b.udiv(a, v) })
+    I64RemS => self.translate_binary(fn(b, a, v) { b.srem(a, v) })
+    I64RemU => self.translate_binary(fn(b, a, v) { b.urem(a, v) })
+    I64And => self.translate_binary(fn(b, a, v) { b.band(a, v) })
+    I64Or => self.translate_binary(fn(b, a, v) { b.bor(a, v) })
+    I64Xor => self.translate_binary(fn(b, a, v) { b.bxor(a, v) })
+    I64Shl => self.translate_binary(fn(b, a, v) { b.ishl(a, v) })
+    I64ShrS => self.translate_binary(fn(b, a, v) { b.sshr(a, v) })
+    I64ShrU => self.translate_binary(fn(b, a, v) { b.ushr(a, v) })
+    I64Rotl => self.translate_binary(fn(b, a, v) { b.rotl(a, v) })
+    I64Rotr => self.translate_binary(fn(b, a, v) { b.rotr(a, v) })
 
     // i64 bit counting
-    I64Clz => self.translate_unary_i64(fn(b, a) { b.clz(a) })
-    I64Ctz => self.translate_unary_i64(fn(b, a) { b.ctz(a) })
-    I64Popcnt => self.translate_unary_i64(fn(b, a) { b.popcnt(a) })
+    I64Clz => self.translate_unary(fn(b, a) { b.clz(a) })
+    I64Ctz => self.translate_unary(fn(b, a) { b.ctz(a) })
+    I64Popcnt => self.translate_unary(fn(b, a) { b.popcnt(a) })
 
     // i64 comparisons
     I64Eqz => {
@@ -214,12 +214,12 @@ fn Translator::translate_instruction_impl(
     I64GeU => self.translate_icmp(Uge)
 
     // f32 arithmetic
-    F32Add => self.translate_binary_f32(fn(b, a, v) { b.fadd(a, v) })
-    F32Sub => self.translate_binary_f32(fn(b, a, v) { b.fsub(a, v) })
-    F32Mul => self.translate_binary_f32(fn(b, a, v) { b.fmul(a, v) })
-    F32Div => self.translate_binary_f32(fn(b, a, v) { b.fdiv(a, v) })
-    F32Min => self.translate_binary_f32(fn(b, a, v) { b.fmin(a, v) })
-    F32Max => self.translate_binary_f32(fn(b, a, v) { b.fmax(a, v) })
+    F32Add => self.translate_binary(fn(b, a, v) { b.fadd(a, v) })
+    F32Sub => self.translate_binary(fn(b, a, v) { b.fsub(a, v) })
+    F32Mul => self.translate_binary(fn(b, a, v) { b.fmul(a, v) })
+    F32Div => self.translate_binary(fn(b, a, v) { b.fdiv(a, v) })
+    F32Min => self.translate_binary(fn(b, a, v) { b.fmin(a, v) })
+    F32Max => self.translate_binary(fn(b, a, v) { b.fmax(a, v) })
     F32Copysign => {
       // copysign(x, y) = magnitude of x with sign of y
       let y = self.pop() // sign source
@@ -242,13 +242,13 @@ fn Translator::translate_instruction_impl(
     }
 
     // f32 unary
-    F32Neg => self.translate_unary_f32(fn(b, a) { b.fneg(a) })
-    F32Abs => self.translate_unary_f32(fn(b, a) { b.fabs(a) })
-    F32Sqrt => self.translate_unary_f32(fn(b, a) { b.fsqrt(a) })
-    F32Ceil => self.translate_unary_f32(fn(b, a) { b.fceil(a) })
-    F32Floor => self.translate_unary_f32(fn(b, a) { b.ffloor(a) })
-    F32Trunc => self.translate_unary_f32(fn(b, a) { b.ftrunc(a) })
-    F32Nearest => self.translate_unary_f32(fn(b, a) { b.fnearest(a) })
+    F32Neg => self.translate_unary(fn(b, a) { b.fneg(a) })
+    F32Abs => self.translate_unary(fn(b, a) { b.fabs(a) })
+    F32Sqrt => self.translate_unary(fn(b, a) { b.fsqrt(a) })
+    F32Ceil => self.translate_unary(fn(b, a) { b.fceil(a) })
+    F32Floor => self.translate_unary(fn(b, a) { b.ffloor(a) })
+    F32Trunc => self.translate_unary(fn(b, a) { b.ftrunc(a) })
+    F32Nearest => self.translate_unary(fn(b, a) { b.fnearest(a) })
 
     // f32 comparisons
     F32Eq => self.translate_fcmp(Eq)
@@ -259,12 +259,12 @@ fn Translator::translate_instruction_impl(
     F32Ge => self.translate_fcmp(Ge)
 
     // f64 arithmetic
-    F64Add => self.translate_binary_f64(fn(b, a, v) { b.fadd(a, v) })
-    F64Sub => self.translate_binary_f64(fn(b, a, v) { b.fsub(a, v) })
-    F64Mul => self.translate_binary_f64(fn(b, a, v) { b.fmul(a, v) })
-    F64Div => self.translate_binary_f64(fn(b, a, v) { b.fdiv(a, v) })
-    F64Min => self.translate_binary_f64(fn(b, a, v) { b.fmin(a, v) })
-    F64Max => self.translate_binary_f64(fn(b, a, v) { b.fmax(a, v) })
+    F64Add => self.translate_binary(fn(b, a, v) { b.fadd(a, v) })
+    F64Sub => self.translate_binary(fn(b, a, v) { b.fsub(a, v) })
+    F64Mul => self.translate_binary(fn(b, a, v) { b.fmul(a, v) })
+    F64Div => self.translate_binary(fn(b, a, v) { b.fdiv(a, v) })
+    F64Min => self.translate_binary(fn(b, a, v) { b.fmin(a, v) })
+    F64Max => self.translate_binary(fn(b, a, v) { b.fmax(a, v) })
     F64Copysign => {
       // copysign(x, y) = magnitude of x with sign of y
       let y = self.pop() // sign source
@@ -287,13 +287,13 @@ fn Translator::translate_instruction_impl(
     }
 
     // f64 unary
-    F64Neg => self.translate_unary_f64(fn(b, a) { b.fneg(a) })
-    F64Abs => self.translate_unary_f64(fn(b, a) { b.fabs(a) })
-    F64Sqrt => self.translate_unary_f64(fn(b, a) { b.fsqrt(a) })
-    F64Ceil => self.translate_unary_f64(fn(b, a) { b.fceil(a) })
-    F64Floor => self.translate_unary_f64(fn(b, a) { b.ffloor(a) })
-    F64Trunc => self.translate_unary_f64(fn(b, a) { b.ftrunc(a) })
-    F64Nearest => self.translate_unary_f64(fn(b, a) { b.fnearest(a) })
+    F64Neg => self.translate_unary(fn(b, a) { b.fneg(a) })
+    F64Abs => self.translate_unary(fn(b, a) { b.fabs(a) })
+    F64Sqrt => self.translate_unary(fn(b, a) { b.fsqrt(a) })
+    F64Ceil => self.translate_unary(fn(b, a) { b.fceil(a) })
+    F64Floor => self.translate_unary(fn(b, a) { b.ffloor(a) })
+    F64Trunc => self.translate_unary(fn(b, a) { b.ftrunc(a) })
+    F64Nearest => self.translate_unary(fn(b, a) { b.fnearest(a) })
 
     // f64 comparisons
     F64Eq => self.translate_fcmp(Eq)

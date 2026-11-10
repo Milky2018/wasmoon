@@ -209,18 +209,5 @@ pub fn CodeBuffer::x86_emit_xmm(
     Cvtps2pd => (0, 0, 0x5A)
     Cvtpd2ps => (0x66, 0, 0x5A)
   }
-  if prefix != 0 {
-    self.emit_byte(prefix)
-  }
-  let r = (dst >> 3) & 1
-  let b = (src >> 3) & 1
-  if r != 0 || b != 0 {
-    emit_rex(self, r, b)
-  }
-  self.emit_byte(0x0F)
-  if escape != 0 {
-    self.emit_byte(escape)
-  }
-  self.emit_byte(opcode)
-  emit_modrm(self, 3, dst, src)
+  self.emit_legacy_rr(prefix, escape, opcode, dst, src, false)
 }

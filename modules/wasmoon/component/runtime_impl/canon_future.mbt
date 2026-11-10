@@ -5,7 +5,7 @@
 ///|
 fn instantiate_canon_future_new(
   _tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I64], }
@@ -98,7 +98,7 @@ fn instantiate_canon_future_new(
 fn instantiate_canon_future_read(
   _tyidx : Int32,
   _opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
@@ -440,7 +440,7 @@ fn progress_host_future_sources(
 fn instantiate_canon_future_write(
   _tyidx : Int32,
   _opts : Array[CanonOpt],
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32], }
@@ -665,7 +665,7 @@ fn instantiate_canon_future_write(
 ///|
 fn instantiate_canon_future_cancel(
   is_async_cancel : Bool,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
   readable~ : Bool,
 ) -> Unit raise ComponentRuntimeError {
@@ -726,7 +726,7 @@ fn instantiate_canon_future_cancel(
 ///|
 fn instantiate_canon_future_drop_readable(
   _tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }
@@ -816,7 +816,7 @@ fn instantiate_canon_future_drop_readable(
 ///|
 fn instantiate_canon_future_drop_writable(
   _tyidx : Int32,
-  state : BuildState,
+  state : ComponentInstance,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [], }
