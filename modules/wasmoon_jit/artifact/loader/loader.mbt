@@ -85,38 +85,6 @@ fn contains_cpu_feature(
 }
 
 ///|
-fn contains_external_symbol(
-  symbols : Array[@native.ExternalSymbol],
-  name : String,
-) -> Bool {
-  symbols.any(fn(symbol) { symbol.name == name })
-}
-
-///|
-fn contains_data_symbol(
-  symbols : Array[@native.DataSymbol],
-  name : String,
-) -> Bool {
-  symbols.any(fn(symbol) { symbol.name == name })
-}
-
-///|
-fn contains_function_symbol(
-  functions : Array[@artifact.FunctionCode],
-  name : String,
-) -> Bool {
-  functions.any(fn(function) { function.identity.symbol.name == name })
-}
-
-///|
-fn contains_import_symbol(
-  imports : Array[@artifact.ImportIdentity],
-  name : String,
-) -> Bool {
-  imports.any(fn(import_) { import_.symbol.name == name })
-}
-
-///|
 fn verify_artifact_compatibility(
   decoded : @artifact.Artifact,
   expected : ArtifactCompatibility,
@@ -173,49 +141,58 @@ fn verify_artifact_identities(
   decoded : @artifact.Artifact,
   expected : ArtifactCompatibility,
 ) -> Unit raise ArtifactIncompatible {
-  let function_indices : Array[Int32] = []
-  let symbols : Array[String] = []
+  let function_indices : @hashset.HashSet[Int32] = HashSet([])
+  let import_symbols : @hashset.HashSet[String] = HashSet([])
   for import_ in decoded.imports {
     if import_.function_index < 0 || import_.function_index == 2147483647 {
       raise InvalidFunctionIndex(index=import_.function_index)
     }
-    if function_indices.contains(import_.function_index) {
+    if !function_indices.add_and_check(import_.function_index) {
       raise DuplicateFunctionIndex(index=import_.function_index)
     }
-    function_indices.push(import_.function_index)
-    if import_.symbol.name.is_empty() || symbols.contains(import_.symbol.name) {
+    if import_.symbol.name.is_empty() ||
+      !import_symbols.add_and_check(import_.symbol.name) {
       raise DuplicateSymbol(name=import_.symbol.name)
     }
-    symbols.push(import_.symbol.name)
   }
+  // Index forward targets up front, but check identities and relocations in
+  // the original order so malformed artifacts retain their first diagnostic.
+  let code_symbols = @hashset.HashSet::from_iter(
+    decoded.functions.iter().map(function => function.identity.symbol.name),
+  )
+  let runtime_symbols = @hashset.HashSet::from_iter(
+    expected.runtime_symbols.iter().map(symbol => symbol.name),
+  )
+  let data_symbols = @hashset.HashSet::from_iter(
+    expected.data_symbols.iter().map(symbol => symbol.name),
+  )
+  let symbols = import_symbols.copy()
   for function in decoded.functions {
     if function.identity.function_index < 0 ||
       function.identity.function_index == 2147483647 {
       raise InvalidFunctionIndex(index=function.identity.function_index)
     }
-    if function_indices.contains(function.identity.function_index) {
+    if !function_indices.add_and_check(function.identity.function_index) {
       raise DuplicateFunctionIndex(index=function.identity.function_index)
     }
-    function_indices.push(function.identity.function_index)
     if function.identity.symbol.name.is_empty() ||
-      symbols.contains(function.identity.symbol.name) {
+      !symbols.add_and_check(function.identity.symbol.name) {
       raise DuplicateSymbol(name=function.identity.symbol.name)
     }
-    symbols.push(function.identity.symbol.name)
     for relocation in function.relocations {
       match relocation.target {
         Code(symbol) =>
-          if !contains_function_symbol(decoded.functions, symbol.name) &&
-            !contains_import_symbol(decoded.imports, symbol.name) {
+          if !code_symbols.contains(symbol.name) &&
+            !import_symbols.contains(symbol.name) {
             raise UnknownSymbol(kind="code", name=symbol.name)
           }
         External(symbol) =>
-          if !contains_import_symbol(decoded.imports, symbol.name) &&
-            !contains_external_symbol(expected.runtime_symbols, symbol.name) {
+          if !import_symbols.contains(symbol.name) &&
+            !runtime_symbols.contains(symbol.name) {
             raise UnknownSymbol(kind="external", name=symbol.name)
           }
         Data(symbol) =>
-          if !contains_data_symbol(expected.data_symbols, symbol.name) {
+          if !data_symbols.contains(symbol.name) {
             raise UnknownSymbol(kind="data", name=symbol.name)
           }
       }

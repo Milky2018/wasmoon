@@ -1447,6 +1447,31 @@ pub fn compile_module(
       return None
     }
   }
+  compile_validated_binary_to_jit(
+    wasm_module,
+    module_bytes,
+    instruction_sources,
+    compile_start,
+    opt_level~,
+    enable_dwarf~,
+    on_progress~,
+    enable_cancellation~,
+    nan_canonicalization~,
+  )
+}
+
+///|
+fn compile_validated_binary_to_jit(
+  wasm_module : @types.Module,
+  module_bytes : Bytes,
+  instruction_sources : Array[Array[@types.InstructionSource]],
+  compile_start : @perf.PerfTick,
+  opt_level~ : Int32,
+  enable_dwarf~ : Bool,
+  on_progress~ : (CompileProgress) -> Unit?,
+  enable_cancellation~ : Bool,
+  nan_canonicalization~ : Bool,
+) -> @artifact.Artifact? {
   let compiled = compile_validated_module_to_jit(
     wasm_module,
     false,
