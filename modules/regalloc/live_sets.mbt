@@ -60,22 +60,18 @@ fn propagate_live_sets(
     worklist.push(i)
   }
   while worklist.pop() is Some(block_idx) {
-    let mut changed = false
     for succ in cfg.succs[block_idx] {
       if succ < 0 || succ >= live_in.length() {
         continue
       }
-      if live_out[block_idx].union_with(live_in[succ]) {
-        changed = true
-      }
+      live_out[block_idx].union_with(live_in[succ]) |> ignore
     }
     if live_in[block_idx].union_without(
         live_out[block_idx],
         block_defs[block_idx],
       ) {
-      changed = true
-    }
-    if changed {
+      // Predecessors depend only on this block's live-in set. New live-out
+      // values killed by its definitions do not need another propagation.
       for pred in cfg.preds[block_idx] {
         worklist.push(pred)
       }

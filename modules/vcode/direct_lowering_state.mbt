@@ -230,7 +230,7 @@ pub fn[Inst, Failure] DirectLoweringState::record_results(
   result_types : Array[@native.ValueType],
 ) -> Array[Int32] {
   self.instruction_index += 1
-  let ids : Array[Int32] = []
+  let ids : Array[Int32] = Array(capacity=results.length())
   for index, value in results {
     ids.push(self.values.length())
     self.values.push(value)

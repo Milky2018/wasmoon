@@ -211,7 +211,7 @@ fn[Inst] Builder::commit_instruction(
     self.function.owner,
     self.function.instructions.length(),
   )
-  let results : Array[Value] = []
+  let results : Array[Value] = Array(capacity=outputs.length())
   for output in outputs {
     results.push(
       self.function.allocate_value(output.ty, InstructionResult(instruction)),
@@ -328,7 +328,7 @@ fn[Inst] Builder::commit_unconstrained_body(
     self.function.owner,
     self.function.instructions.length(),
   )
-  let results : Array[Value] = []
+  let results : Array[Value] = Array(capacity=output_types.length())
   for ty in output_types {
     results.push(
       self.function.allocate_value(ty, InstructionResult(instruction)),
