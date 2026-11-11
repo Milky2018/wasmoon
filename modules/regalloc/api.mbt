@@ -157,7 +157,6 @@ pub struct AllocationSession {
   priv occupied_next : Array[Int32]
   priv occupied_starts : Array[Int64]
   priv occupied_ends : Array[Int64]
-  priv occupied_stack : Array[Int32]
   priv preferred_by_value : Array[Int32]
   priv conflict_marks : Array[Int32]
   priv probe_conflicts : Array[Int32]

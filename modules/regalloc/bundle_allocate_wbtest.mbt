@@ -295,7 +295,6 @@ test "spill bundle is normalized before conflict probes" {
     [0, 1],
     Array::make(context.states.length(), 0),
     1,
-    [],
     probe_conflicts,
     probe,
     statistics,
@@ -633,7 +632,6 @@ test "production eviction accounts for and removes every conflicting bundle" {
   )
   occupied.insert(0, 0)
   occupied.insert(0, 1)
-  let occupied_stack : Array[Int32] = []
   let probe_conflicts : Array[Int32] = []
   let probe = BundleRegisterProbe::new(probe_conflicts)
   let statistics = BundleAllocationStatistics::new()
@@ -648,7 +646,6 @@ test "production eviction accounts for and removes every conflicting bundle" {
     [0],
     Array::make(context.states.length(), 0),
     1,
-    occupied_stack,
     probe_conflicts,
     probe,
     statistics,
@@ -693,9 +690,10 @@ test "production eviction accounts for and removes every conflicting bundle" {
     requeued.push(bundle)
   }
   let remaining : Array[Int32] = []
-  occupied.seek(0, ProgramPoint(0, -1), occupied_stack)
-  while occupied.next(occupied_stack) is Some(segment) {
+  let mut segment = occupied.seek(0, ProgramPoint(0, -1))
+  while segment >= 0 {
     remaining.push(segment)
+    segment = occupied.next_order[segment]
   }
   let eviction_snapshot : BundleEvictionSnapshot = {
     bundles: snapshot_bundles(context),
@@ -769,7 +767,6 @@ test "production eviction accounts for and removes every conflicting bundle" {
     [0],
     Array::make(context.states.length(), 0),
     1,
-    occupied_stack,
     cutoff_conflicts,
     cutoff_probe,
     statistics,

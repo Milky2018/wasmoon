@@ -320,6 +320,33 @@ test "backtracking reuses a register across early use and late def" {
 }
 
 ///|
+test "home assignments remain valid around a tied instruction" {
+  let function : TestFunction = {
+    value_count: 2,
+    block_parameters: [value(0)],
+    instructions: [
+      [@regalloc.Operand::use_reg(value(0))],
+      [
+        @regalloc.Operand::use_reg(value(0)).with_tie(0),
+        @regalloc.Operand::def(value(1)).with_tie(0),
+      ],
+      [@regalloc.Operand::use_reg(value(1))],
+    ],
+  }
+  let plan = @regalloc.allocate_function(
+    function,
+    @regalloc.MachineEnv::new([int_reg(0)], [int_reg(1)]),
+  )
+  for (instruction, operand) in [(0, 0), (1, 0), (1, 1), (2, 0)] {
+    debug_inspect(
+      plan.operand_location(instruction, operand),
+      content="Some(Reg(p0:int))",
+    )
+  }
+  debug_inspect(plan.edits(), content="[]")
+}
+
+///|
 test "backtracking reuses spill slots for disjoint values" {
   let function : TestFunction = {
     value_count: 4,
