@@ -121,6 +121,77 @@ test "code object rejects target-mismatched relocations before escape" {
 }
 
 ///|
+test "code object checks relocation encoding before duplicate offsets" {
+  for
+    (kind, expected) in [
+      (
+        @code_object.RelocationKind::AArch64Call26,
+        "DuplicateRelocationOffset(offset=0)",
+      ),
+      (
+        X64PcRelative32,
+        (
+          #|InvalidRelocation(
+          #|  index=1,
+          #|  message="kind, alignment, or range does not match the code object",
+          #|)
+        ),
+      ),
+    ] {
+    try
+      @code_object.build(AArch64, [b'\x00', b'\x00', b'\x00', b'\x94'], relocations=[
+        @code_object.Relocation::new(
+          0,
+          AArch64Call26,
+          Code(@native.CodeSymbol::new("first")),
+        ),
+        @code_object.Relocation::new(
+          0,
+          kind,
+          Code(@native.CodeSymbol::new("second")),
+        ),
+      ])
+      |> ignore
+    catch {
+      error => inspect(error, content=expected)
+    } noraise {
+      _ => fail("expected invalid relocations to fail")
+    }
+  }
+}
+
+///|
+test "code object accepts reordered dense stack maps and rejects sparse ids" {
+  for
+    (ids, expected) in [
+      ([1, 0], "accepted"),
+      ([0, 2], "InvalidStackMap(safepoint=0)"),
+      ([0, 2147483647], "InvalidStackMap(safepoint=0)"),
+      ([2147483647, 2147483647], "InvalidStackMap(safepoint=1)"),
+    ] {
+    let result = try {
+      @code_object.build(
+        AArch64,
+        [b'\x00', b'\x00', b'\x00', b'\x94'],
+        safepoints=ids.map(id => {
+          @code_object.SafepointSite::new(
+            0,
+            Gc,
+            [],
+            stack_map=@native.StackMapMetadata::new(id, argument_root_count=0),
+          )
+        }),
+      )
+      |> ignore
+      "accepted"
+    } catch {
+      error => Repr(error).to_string()
+    }
+    inspect(result, content=expected)
+  }
+}
+
+///|
 test "code object rejects a call relocation on a non-call instruction" {
   try
     @code_object.build(AArch64, [b'\x1f', b'\x20', b'\x03', b'\xd5'], relocations=[

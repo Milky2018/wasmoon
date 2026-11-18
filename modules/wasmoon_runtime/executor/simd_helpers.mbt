@@ -51,7 +51,7 @@ fn ExecContext::exec_v128_cmp_i8(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<16 {
     let result = if cmp(a[i].to_int(), b[i].to_int()) { 0xFF } else { 0 }
     buf.write_byte(result.to_byte())
@@ -66,7 +66,7 @@ fn ExecContext::exec_v128_binop_i8(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<16 {
     buf.write_byte(op(a[i].to_int(), b[i].to_int()))
   }
@@ -79,7 +79,7 @@ fn ExecContext::exec_v128_unop_i8(
   op : (Int32) -> Byte,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<16 {
     buf.write_byte(op(a[i].to_int()))
   }
@@ -164,7 +164,7 @@ fn ExecContext::exec_v128_cmp_i16(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<8 {
     let result = if cmp(get_i16_lane(a, i), get_i16_lane(b, i)) {
       0xFFFF
@@ -184,7 +184,7 @@ fn ExecContext::exec_v128_binop_i16(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<8 {
     let result = op(get_i16_lane(a, i), get_i16_lane(b, i))
     buf.write_byte(result.to_byte())
@@ -199,7 +199,7 @@ fn ExecContext::exec_v128_unop_i16(
   op : (Int32) -> Int32,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<8 {
     let result = op(get_i16_lane(a, i))
     buf.write_byte(result.to_byte())
@@ -215,7 +215,7 @@ fn ExecContext::exec_v128_cmp_i32(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<4 {
     let result = if cmp(get_i32_lane(a, i), get_i32_lane(b, i)) {
       -1
@@ -234,7 +234,7 @@ fn ExecContext::exec_v128_binop_i32(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<4 {
     buf.write_int_le(op(get_i32_lane(a, i), get_i32_lane(b, i)))
   }
@@ -247,7 +247,7 @@ fn ExecContext::exec_v128_unop_i32(
   op : (Int32) -> Int32,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<4 {
     buf.write_int_le(op(get_i32_lane(a, i)))
   }
@@ -261,7 +261,7 @@ fn ExecContext::exec_v128_cmp_i64(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<2 {
     let result : Int64 = if cmp(get_i64_lane(a, i), get_i64_lane(b, i)) {
       -1L
@@ -280,7 +280,7 @@ fn ExecContext::exec_v128_binop_i64(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<2 {
     buf.write_int64_le(op(get_i64_lane(a, i), get_i64_lane(b, i)))
   }
@@ -293,7 +293,7 @@ fn ExecContext::exec_v128_unop_i64(
   op : (Int64) -> Int64,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<2 {
     buf.write_int64_le(op(get_i64_lane(a, i)))
   }
@@ -307,7 +307,7 @@ fn ExecContext::exec_v128_cmp_f32(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<4 {
     let result = if cmp(get_f32_lane(a, i), get_f32_lane(b, i)) {
       -1
@@ -326,7 +326,7 @@ fn ExecContext::exec_v128_binop_f32(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<4 {
     buf.write_float_le(op(get_f32_lane(a, i), get_f32_lane(b, i)))
   }
@@ -339,7 +339,7 @@ fn ExecContext::exec_v128_unop_f32(
   op : (Float) -> Float,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<4 {
     buf.write_float_le(op(get_f32_lane(a, i)))
   }
@@ -353,7 +353,7 @@ fn ExecContext::exec_v128_cmp_f64(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<2 {
     let result : Int64 = if cmp(get_f64_lane(a, i), get_f64_lane(b, i)) {
       -1L
@@ -372,7 +372,7 @@ fn ExecContext::exec_v128_binop_f64(
 ) -> Unit raise {
   let b = self.stack.pop_v128()
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<2 {
     buf.write_double_le(op(get_f64_lane(a, i), get_f64_lane(b, i)))
   }
@@ -385,7 +385,7 @@ fn ExecContext::exec_v128_unop_f64(
   op : (Double) -> Double,
 ) -> Unit raise {
   let a = self.stack.pop_v128()
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for i in 0..<2 {
     buf.write_double_le(op(get_f64_lane(a, i)))
   }

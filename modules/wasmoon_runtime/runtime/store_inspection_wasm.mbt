@@ -17,6 +17,8 @@ pub fn Store::counts(self : Store) -> StoreCounts {
     jit_tables: 0,
     heap_slots: self.heap.length(),
     heap_live: self.heap.stats().live_objects,
-    wrapped_extern_capacity: self.references.wrapped_externs.capacity(),
+    wrapped_extern_capacity: gc_registry_capacity(
+      self.references.wrapped_externs,
+    ),
   }
 }

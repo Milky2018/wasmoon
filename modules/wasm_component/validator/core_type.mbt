@@ -325,7 +325,7 @@ fn exportname_to_bytes(name : @component.ExportName) -> Bytes {
 
 ///|
 fn utf8_bytes_of_string(s : String) -> Bytes {
-  let bytes = @buffer.Buffer(size_hint=s.length())
+  let bytes = @buffer.Buffer(capacity=s.length())
   for char in s {
     bytes.write_char_utf8(char)
   }

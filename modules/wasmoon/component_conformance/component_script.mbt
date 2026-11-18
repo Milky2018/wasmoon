@@ -146,8 +146,8 @@ fn parse_int_string(s : String) -> (Bool, StringView, Int32) {
 
 ///|
 fn parse_signed_int(s : String) -> Int32 raise ComponentTestError {
-  let (negative, digits, base) = parse_int_string(s)
-  let n = @string.parse_int(digits, base~) catch {
+  let (negative, digits, radix) = parse_int_string(s)
+  let n = @string.parse_int(digits, radix~) catch {
     e => raise ParseError(e.to_string())
   }
   if negative {
@@ -159,19 +159,19 @@ fn parse_signed_int(s : String) -> Int32 raise ComponentTestError {
 
 ///|
 fn parse_unsigned_int(s : String) -> UInt32 raise ComponentTestError {
-  let (negative, digits, base) = parse_int_string(s)
+  let (negative, digits, radix) = parse_int_string(s)
   if negative {
     raise ParseError("unsigned value cannot be negative")
   }
-  @string.parse_uint(digits, base~) catch {
+  @string.parse_uint(digits, radix~) catch {
     e => raise ParseError(e.to_string())
   }
 }
 
 ///|
 fn parse_signed_int64(s : String) -> Int64 raise ComponentTestError {
-  let (negative, digits, base) = parse_int_string(s)
-  let n = @string.parse_int64(digits, base~) catch {
+  let (negative, digits, radix) = parse_int_string(s)
+  let n = @string.parse_int64(digits, radix~) catch {
     e => raise ParseError(e.to_string())
   }
   if negative {
@@ -183,11 +183,11 @@ fn parse_signed_int64(s : String) -> Int64 raise ComponentTestError {
 
 ///|
 fn parse_unsigned_int64(s : String) -> UInt64 raise ComponentTestError {
-  let (negative, digits, base) = parse_int_string(s)
+  let (negative, digits, radix) = parse_int_string(s)
   if negative {
     raise ParseError("unsigned value cannot be negative")
   }
-  @string.parse_uint64(digits, base~) catch {
+  @string.parse_uint64(digits, radix~) catch {
     e => raise ParseError(e.to_string())
   }
 }

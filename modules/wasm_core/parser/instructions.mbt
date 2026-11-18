@@ -24,7 +24,7 @@ priv enum ExpressionFrame {
   TryTable(
     @types.BlockType,
     Array[@types.CatchHandler],
-    Array[@types.Instruction]
+    Array[@types.Instruction],
   )
 }
 

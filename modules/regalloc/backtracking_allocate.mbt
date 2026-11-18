@@ -30,7 +30,7 @@ priv struct SegmentMetadata {
 fn use_weight(
   point : ProgramPoint,
   kind : UseKind,
-  constraint : OperandConstraint,
+  constraint : UseConstraint,
   loop_depths : Array[Int32],
 ) -> Int32 {
   let mut depth = if point.block >= 0 && point.block < loop_depths.length() {
@@ -94,7 +94,7 @@ fn segment_metadata(
       if fixed_hint is None && use_position.constraint is FixedReg(reg) {
         fixed_hint = Some(reg)
       }
-      if use_position.preference is Some(preference) &&
+      if use_position.preference is Preferred(preference) &&
         allocatable.contains(preference) {
         if preference_regs is None {
           preference_regs = Some([])
@@ -787,6 +787,64 @@ fn[F : FunctionView, S : AllocationSink] try_assign_home_operands(
 }
 
 ///|
+/// Prepare transfer-free operands without changing the sink. The caller still
+/// applies the shared residency and clobber updates after assigning them.
+fn[S : AllocationSink] prepare_instruction_home_operands(
+  sink : S,
+  block : Int32,
+  instruction_index : Int32,
+  operands : ArrayView[Operand],
+  segments : Array[AllocationSegment],
+  segments_by_value : Array[Array[Int32]],
+  assigned : Array[Location?],
+  resident_operand_segments : Array[Int32?],
+) -> Bool {
+  assigned.clear()
+  resident_operand_segments.clear()
+  let mut early_def = false
+  let mut late_use = false
+  for operand in operands {
+    if operand.tie_id >= 0 {
+      return false
+    }
+    if operand.timing is Early && !(operand.role is Use) {
+      early_def = true
+    }
+    if operand.timing is Late && !(operand.role is Def) {
+      late_use = true
+    }
+  }
+  if early_def && late_use {
+    return false
+  }
+  for operand in operands {
+    guard sink.value_location(operand.vreg.id) is Some(home) &&
+      home.is_register() else {
+      return false
+    }
+    let reg = home.register_unchecked()
+    if operand.constraint is FixedReg(required) && required != reg {
+      return false
+    }
+    let segment = segment_at(
+      segments,
+      segments_by_value,
+      operand.vreg,
+      operand_program_point(block, instruction_index, operand.timing),
+    )
+    if segment is Some(id) {
+      guard segments[id].location is Some(SegmentReg(allocated)) &&
+        allocated == reg else {
+        return false
+      }
+    }
+    assigned.push(Some(home))
+    resident_operand_segments.push(segment)
+  }
+  true
+}
+
+///|
 fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
   plan : AllocationWork[S],
   function : F,
@@ -881,243 +939,269 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
     for instruction_index in 0..<function.block_instruction_count(block) {
       let instruction = function.block_instruction_at(block, instruction_index)
       let operands = function.instruction_operands(instruction)
-      assigned.clear()
-      natural_locations.clear()
-      reserved_registers.clear()
-      operand_segments.clear()
-      used_temps.clear()
-      borrowed_temps.clear()
-      tie_slot_by_id.clear()
-      operand_tie_slots.clear()
-      tied_constraints.clear()
-      tied_locations.clear()
-      resident_operand_segments.clear()
-      let mut phase_mask = 0
-      for operand in operands {
-        if operand.timing is Early &&
-          (operand.role is Def || operand.role is UseDef) {
-          phase_mask = phase_mask | 1
+      let register_homes_only = prepare_instruction_home_operands(
+        plan.sink,
+        block,
+        instruction_index,
+        operands,
+        segments,
+        segments_by_value,
+        assigned,
+        resident_operand_segments,
+      )
+      if register_homes_only {
+        borrowed_temps.clear()
+        for operand in 0..<operands.length() {
+          plan.sink.assign_operand(
+            instruction,
+            operand,
+            assigned[operand].unwrap(),
+          )
         }
-        if operand.timing is Late &&
-          (operand.role is Use || operand.role is UseDef) {
-          phase_mask = phase_mask | 2
-        }
-        assigned.push(None)
-        let tie_slot = if operand.tie_id < 0 {
-          None
-        } else {
-          match tie_slot_by_id.get(operand.tie_id) {
-            Some(slot) => Some(slot)
-            None => {
-              let slot = tied_constraints.length()
-              tie_slot_by_id[operand.tie_id] = slot
-              tied_constraints.push(None)
-              tied_locations.push(None)
-              Some(slot)
-            }
+      } else {
+        assigned.clear()
+        natural_locations.clear()
+        reserved_registers.clear()
+        operand_segments.clear()
+        used_temps.clear()
+        borrowed_temps.clear()
+        tie_slot_by_id.clear()
+        operand_tie_slots.clear()
+        tied_constraints.clear()
+        tied_locations.clear()
+        resident_operand_segments.clear()
+        let mut phase_mask = 0
+        for operand in operands {
+          if operand.timing is Early &&
+            (operand.role is Def || operand.role is UseDef) {
+            phase_mask = phase_mask | 1
           }
-        }
-        operand_tie_slots.push(tie_slot)
-        if tie_slot is Some(slot) {
-          let constraint = match tied_constraints[slot] {
-            None => operand.constraint
-            Some(FixedReg(required)) =>
-              match operand.constraint {
-                FixedReg(other) if other != required =>
-                  raise InvalidPlan(
-                    message="tied operands require different fixed registers",
-                  )
-                _ => FixedReg(required)
+          if operand.timing is Late &&
+            (operand.role is Use || operand.role is UseDef) {
+            phase_mask = phase_mask | 2
+          }
+          assigned.push(None)
+          let tie_slot = if operand.tie_id < 0 {
+            None
+          } else {
+            match tie_slot_by_id.get(operand.tie_id) {
+              Some(slot) => Some(slot)
+              None => {
+                let slot = tied_constraints.length()
+                tie_slot_by_id[operand.tie_id] = slot
+                tied_constraints.push(None)
+                tied_locations.push(None)
+                Some(slot)
               }
-            Some(AnyReg) =>
-              match operand.constraint {
-                FixedReg(required) => FixedReg(required)
-                _ => AnyReg
-              }
-            Some(AnyLocation) => operand.constraint
-            Some(PreservedHome) => PreservedHome
-          }
-          tied_constraints[slot] = Some(constraint)
-        }
-      }
-      for operand_index, operand in operands {
-        let home = plan.sink.value_location(operand.vreg.id).unwrap()
-        let segment = segment_at(
-          segments,
-          segments_by_value,
-          operand.vreg,
-          operand_program_point(block, instruction_index, operand.timing),
-        )
-        operand_segments.push(segment)
-        let natural = match segment {
-          Some(segment) =>
-            match segments[segment].location {
-              Some(SegmentReg(reg)) => reg_location(reg)
-              Some(SegmentSpill) | None => home
-            }
-          None => home
-        }
-        natural_locations.push(natural)
-        let any_location = if operand.role is Def { home } else { natural }
-        let tie_slot = operand_tie_slots[operand_index]
-        let constraint = match tie_slot {
-          Some(slot) => tied_constraints[slot].unwrap_or(operand.constraint)
-          None => operand.constraint
-        }
-        let reserved_location = match constraint {
-          FixedReg(reg) => reg_location(reg)
-          AnyLocation => any_location
-          AnyReg => natural
-          PreservedHome => home
-        }
-        let reserved = if reserved_location.is_register() {
-          SegmentReg(reserved_location.register_unchecked())
-        } else {
-          SegmentSpill
-        }
-        reserved_registers.push(reserved)
-        if tie_slot is Some(slot) &&
-          constraint is AnyReg &&
-          reserved is SegmentReg(reg) &&
-          tied_locations[slot] is None {
-          tied_locations[slot] = Some(reg_location(reg))
-        }
-        if reserved is SegmentReg(reg) && !used_temps.contains(reg) {
-          used_temps.push(reg)
-        }
-      }
-      for operand_index, operand in operands {
-        let home = plan.sink.value_location(operand.vreg.id).unwrap()
-        let tie_slot = operand_tie_slots[operand_index]
-        let tied_location : Location? = match tie_slot {
-          Some(slot) => tied_locations[slot]
-          None => None
-        }
-        // Split segments can put a late read and an early definition in the
-        // same natural register. Reloads execute before the whole instruction,
-        // so their local assignments must remain distinct across both phases.
-        // Keep fixed/tied readers in place and move the unconstrained operand.
-        let mut phase_conflict = false
-        if phase_mask == 3 &&
-          tie_slot is None &&
-          (operand.constraint is AnyReg || operand.constraint is AnyLocation) &&
-          reserved_registers[operand_index] is SegmentReg(reg) {
-          for other_index, other in operands {
-            if other.vreg == operand.vreg ||
-              reserved_registers[other_index] != SegmentReg(reg) {
-              continue
-            }
-            let early_definition = other.timing is Early &&
-              (other.role is Def || other.role is UseDef)
-            let fixed_late_read = other.timing is Late &&
-              (other.role is Use || other.role is UseDef) &&
-              (
-                other.tie_id >= 0 ||
-                !(other.constraint is AnyReg || other.constraint is AnyLocation)
-              )
-            if (
-                operand.timing is Late &&
-                (operand.role is Use || operand.role is UseDef) &&
-                early_definition
-              ) ||
-              (
-                operand.timing is Early &&
-                (operand.role is Def || operand.role is UseDef) &&
-                fixed_late_read
-              ) {
-              phase_conflict = true
-              break
             }
           }
-        }
-        let selected = match tied_location {
-          Some(location) => location
-          None =>
-            match
-              (match tie_slot {
-                Some(slot) =>
-                  tied_constraints[slot].unwrap_or(operand.constraint)
-                None => operand.constraint
-              }) {
-              FixedReg(reg) => reg_location(reg)
-              PreservedHome => home
-              AnyLocation if !phase_conflict || home.is_spill() =>
-                if operand.role is Def {
-                  home
-                } else if phase_conflict {
-                  home
-                } else {
-                  natural_locations[operand_index]
+          operand_tie_slots.push(tie_slot)
+          if tie_slot is Some(slot) {
+            let constraint = match tied_constraints[slot] {
+              None => operand.constraint
+              Some(FixedReg(required)) =>
+                match operand.constraint {
+                  FixedReg(other) if other != required =>
+                    raise InvalidPlan(
+                      message="tied operands require different fixed registers",
+                    )
+                  _ => FixedReg(required)
                 }
-              AnyReg | AnyLocation =>
-                if natural_locations[operand_index].is_register() &&
-                  !phase_conflict {
-                  reg_location(
-                    natural_locations[operand_index].register_unchecked(),
-                  )
-                } else {
-                  let point = operand_program_point(
-                    block,
-                    instruction_index,
-                    operand.timing,
-                  )
-                  let temporary = match
-                    find_scratch_reg(
-                      environment,
-                      operand.vreg.class,
-                      used_temps,
-                    ) {
-                    Some(reg) => Some(reg)
-                    None => {
-                      let borrowed = borrow_allocatable_register(
-                        plan,
-                        function,
+              Some(AnyReg) =>
+                match operand.constraint {
+                  FixedReg(required) => FixedReg(required)
+                  _ => AnyReg
+                }
+              Some(AnyLocation) => operand.constraint
+              Some(PreservedHome) => PreservedHome
+            }
+            tied_constraints[slot] = Some(constraint)
+          }
+        }
+        for operand_index, operand in operands {
+          let home = plan.sink.value_location(operand.vreg.id).unwrap()
+          let segment = segment_at(
+            segments,
+            segments_by_value,
+            operand.vreg,
+            operand_program_point(block, instruction_index, operand.timing),
+          )
+          operand_segments.push(segment)
+          let natural = match segment {
+            Some(segment) =>
+              match segments[segment].location {
+                Some(SegmentReg(reg)) => reg_location(reg)
+                Some(SegmentSpill) | None => home
+              }
+            None => home
+          }
+          natural_locations.push(natural)
+          let any_location = if operand.role is Def { home } else { natural }
+          let tie_slot = operand_tie_slots[operand_index]
+          let constraint = match tie_slot {
+            Some(slot) => tied_constraints[slot].unwrap_or(operand.constraint)
+            None => operand.constraint
+          }
+          let reserved_location = match constraint {
+            FixedReg(reg) => reg_location(reg)
+            AnyLocation => any_location
+            AnyReg => natural
+            PreservedHome => home
+          }
+          let reserved = if reserved_location.is_register() {
+            SegmentReg(reserved_location.register_unchecked())
+          } else {
+            SegmentSpill
+          }
+          reserved_registers.push(reserved)
+          if tie_slot is Some(slot) &&
+            constraint is AnyReg &&
+            reserved is SegmentReg(reg) &&
+            tied_locations[slot] is None {
+            tied_locations[slot] = Some(reg_location(reg))
+          }
+          if reserved is SegmentReg(reg) && !used_temps.contains(reg) {
+            used_temps.push(reg)
+          }
+        }
+        for operand_index, operand in operands {
+          let home = plan.sink.value_location(operand.vreg.id).unwrap()
+          let tie_slot = operand_tie_slots[operand_index]
+          let tied_location : Location? = match tie_slot {
+            Some(slot) => tied_locations[slot]
+            None => None
+          }
+          // Split segments can put a late read and an early definition in the
+          // same natural register. Reloads execute before the whole instruction,
+          // so their local assignments must remain distinct across both phases.
+          // Keep fixed/tied readers in place and move the unconstrained operand.
+          let mut phase_conflict = false
+          if phase_mask == 3 &&
+            tie_slot is None &&
+            (operand.constraint is AnyReg || operand.constraint is AnyLocation) &&
+            reserved_registers[operand_index] is SegmentReg(reg) {
+            for other_index, other in operands {
+              if other.vreg == operand.vreg ||
+                reserved_registers[other_index] != SegmentReg(reg) {
+                continue
+              }
+              let early_definition = other.timing is Early &&
+                (other.role is Def || other.role is UseDef)
+              let fixed_late_read = other.timing is Late &&
+                (other.role is Use || other.role is UseDef) &&
+                (
+                  other.tie_id >= 0 ||
+                  !(other.constraint is AnyReg ||
+                  other.constraint is AnyLocation)
+                )
+              if (
+                  operand.timing is Late &&
+                  (operand.role is Use || operand.role is UseDef) &&
+                  early_definition
+                ) ||
+                (
+                  operand.timing is Early &&
+                  (operand.role is Def || operand.role is UseDef) &&
+                  fixed_late_read
+                ) {
+                phase_conflict = true
+                break
+              }
+            }
+          }
+          let selected = match tied_location {
+            Some(location) => location
+            None =>
+              match
+                (match tie_slot {
+                  Some(slot) =>
+                    tied_constraints[slot].unwrap_or(operand.constraint)
+                  None => operand.constraint
+                }) {
+                FixedReg(reg) => reg_location(reg)
+                PreservedHome => home
+                AnyLocation if !phase_conflict || home.is_spill() =>
+                  if operand.role is Def {
+                    home
+                  } else if phase_conflict {
+                    home
+                  } else {
+                    natural_locations[operand_index]
+                  }
+                AnyReg | AnyLocation =>
+                  if natural_locations[operand_index].is_register() &&
+                    !phase_conflict {
+                    reg_location(
+                      natural_locations[operand_index].register_unchecked(),
+                    )
+                  } else {
+                    let point = operand_program_point(
+                      block,
+                      instruction_index,
+                      operand.timing,
+                    )
+                    let temporary = match
+                      find_scratch_reg(
                         environment,
-                        register_home_segments,
-                        resident_by_register,
-                        segments,
-                        borrow_slots,
-                        instruction,
-                        point,
                         operand.vreg.class,
                         used_temps,
-                      )
-                      if borrowed is Some(reg) {
-                        borrowed_temps.push(reg)
+                      ) {
+                      Some(reg) => Some(reg)
+                      None => {
+                        let borrowed = borrow_allocatable_register(
+                          plan,
+                          function,
+                          environment,
+                          register_home_segments,
+                          resident_by_register,
+                          segments,
+                          borrow_slots,
+                          instruction,
+                          point,
+                          operand.vreg.class,
+                          used_temps,
+                        )
+                        if borrowed is Some(reg) {
+                          borrowed_temps.push(reg)
+                        }
+                        borrowed
                       }
-                      borrowed
                     }
+                    guard temporary is Some(reg) else {
+                      raise ScratchRegisterUnavailable(
+                        message="no register for spilled operand",
+                      )
+                    }
+                    used_temps.push(reg)
+                    reg_location(reg)
                   }
-                  guard temporary is Some(reg) else {
-                    raise ScratchRegisterUnavailable(
-                      message="no register for spilled operand",
-                    )
-                  }
-                  used_temps.push(reg)
-                  reg_location(reg)
-                }
-            }
+              }
+          }
+          assigned[operand_index] = Some(selected)
+          if tie_slot is Some(slot) {
+            tied_locations[slot] = Some(selected)
+          }
+          resident_operand_segments.push(
+            match operand_segments[operand_index] {
+              Some(segment) if natural_locations[operand_index] == selected =>
+                Some(segment)
+              _ => None
+            },
+          )
+          plan.sink.assign_operand(instruction, operand_index, selected)
         }
-        assigned[operand_index] = Some(selected)
-        if tie_slot is Some(slot) {
-          tied_locations[slot] = Some(selected)
-        }
-        resident_operand_segments.push(
-          match operand_segments[operand_index] {
-            Some(segment) if natural_locations[operand_index] == selected =>
-              Some(segment)
-            _ => None
-          },
-        )
-        plan.sink.assign_operand(instruction, operand_index, selected)
       }
       for timing in [OperandTiming::Early, Late] {
         for operand_index, operand in operands {
           if operand.timing != timing {
             continue
           }
-          let home = plan.sink.value_location(operand.vreg.id).unwrap()
           let selected = assigned[operand_index].unwrap()
+          let home = if register_homes_only {
+            selected
+          } else {
+            plan.sink.value_location(operand.vreg.id).unwrap()
+          }
           if operand.role is Use || operand.role is UseDef {
             match resident_operand_segments[operand_index] {
               Some(segment) => {
@@ -1160,8 +1244,12 @@ fn[F : FunctionView, S : AllocationSink] assign_segment_operands(
             !(operand.role is Def || operand.role is UseDef) {
             continue
           }
-          let home = plan.sink.value_location(operand.vreg.id).unwrap()
           let selected = assigned[operand_index].unwrap()
+          let home = if register_homes_only {
+            selected
+          } else {
+            plan.sink.value_location(operand.vreg.id).unwrap()
+          }
           if home != selected {
             plan.edits.push({
               value: operand.vreg,

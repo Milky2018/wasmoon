@@ -13,7 +13,7 @@ fn UsePosition::with_preference(
   self : UsePosition,
   preference : PhysicalReg?,
 ) -> UsePosition {
-  { ..self, preference, }
+  { ..self, preference: UsePreference::from_option(preference), }
 }
 
 ///|
@@ -800,11 +800,11 @@ test "production register allocation index orders updates by range end" {
   debug_inspect(allocations.owner_is_contiguous(0), content="true")
   allocations.insert(0, 1)
   debug_inspect(allocations.owner_is_contiguous(0), content="false")
-  let stack : Array[Int32] = []
   let ordered : Array[Int32] = []
-  allocations.seek(0, ProgramPoint(0, -1), stack)
-  while allocations.next(stack) is Some(segment) {
+  let mut segment = allocations.seek(0, ProgramPoint(0, -1))
+  while segment >= 0 {
     ordered.push(segment)
+    segment = allocations.next_order[segment]
   }
   debug_inspect(ordered, content="[0, 1, 2]")
   allocations.remove(0, 1)
@@ -814,9 +814,10 @@ test "production register allocation index orders updates by range end" {
   allocations.remove(0, 3)
   debug_inspect(allocations.owner_is_contiguous(0), content="true")
   ordered.clear()
-  allocations.seek(0, ProgramPoint(0, -1), stack)
-  while allocations.next(stack) is Some(segment) {
+  segment = allocations.seek(0, ProgramPoint(0, -1))
+  while segment >= 0 {
     ordered.push(segment)
+    segment = allocations.next_order[segment]
   }
   debug_inspect(ordered, content="[0, 2]")
 }
@@ -958,8 +959,8 @@ test "liveness records timing and preference while ties stay on source operands"
   let range = build_function_live_ranges(function).get_by_vreg(value).unwrap()
   let position = range.uses.filter(position => position.kind is LiveUse)[0]
   assert_eq(position.point, ProgramPoint(0, 1))
-  assert_eq(position.constraint, AnyLocation)
-  assert_eq(position.preference, Some(preference))
+  assert_true(position.constraint is AnyLocation)
+  assert_true(position.preference is Preferred(reg) && reg == preference)
   assert_eq(FunctionView::instruction_operands(function, 0)[0].tie_id, 7)
 }
 
@@ -1098,15 +1099,19 @@ test "ordered segment identities retain a shallow allocation index" {
       }
     }
     assert_true(depth <= 64)
-    let cursor : Array[Int32] = []
-    index.seek(0, ProgramPoint(0, -1), cursor)
+    assert_eq(index.seek(0, ProgramPoint(0, 1)), 0)
+    assert_eq(index.seek(0, ProgramPoint(0, 2)), 1)
+    assert_eq(index.seek(0, ProgramPoint(0, count * 2)), -1)
+    let mut cursor = index.seek(0, ProgramPoint(0, -1))
     for id in 0..<count {
-      assert_eq(index.next(cursor), Some(id))
+      assert_eq(cursor, id)
+      cursor = index.next_order[cursor]
     }
-    assert_eq(index.next(cursor), None)
+    assert_eq(cursor, -1)
     for id in 0..<count {
       index.remove(0, id)
     }
     assert_eq(index.roots[0], -1)
+    assert_eq(index.seek(0, ProgramPoint(0, -1)), -1)
   }
 }

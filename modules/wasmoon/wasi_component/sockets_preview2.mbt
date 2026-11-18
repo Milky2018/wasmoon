@@ -131,7 +131,7 @@ fn decode_socket_address(
       }
     Variant(
       1,
-      Some(Tuple([U16(port), U32(_flow_info), address, U32(scope_id)]))
+      Some(Tuple([U16(port), U32(_flow_info), address, U32(scope_id)])),
     ) =>
       match decode_ipv6_tuple(address) {
         Some(bytes) =>

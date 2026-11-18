@@ -396,7 +396,7 @@ fn step_task_once_impl(
       callee_table,
       entry,
       cb_opt,
-      async_abi
+      async_abi,
     ) => {
       if func_type_needs_memory(func_type, types) && resources.mem_addr is None {
         raise MissingCanonMemory
@@ -1076,7 +1076,7 @@ fn call_component_func_in_task_impl(
       callee_table,
       entry,
       cb_opt,
-      async_abi
+      async_abi,
     ) => {
       if func_type.is_async {
         return await_component_func(

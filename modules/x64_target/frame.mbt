@@ -32,7 +32,7 @@ pub suberror X64FrameError {
     expected_incoming~ : Int32,
     actual_incoming~ : Int32,
     expected_tail~ : Int32,
-    actual_tail~ : Int32
+    actual_tail~ : Int32,
   )
   InvalidStackObjectArea(message~ : String)
   MovePlanningFailed(cause~ : @vcode.MoveResolveError)

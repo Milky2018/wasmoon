@@ -68,7 +68,6 @@ pub fn AllocationSession::new() -> AllocationSession {
     occupied_next: [],
     occupied_starts: [],
     occupied_ends: [],
-    occupied_stack: [],
     preferred_by_value: [],
     conflict_marks: [],
     probe_conflicts: [],
@@ -387,7 +386,6 @@ fn probe_bundle_register(
   block_order : Array[Int32],
   conflict_marks : Array[Int32],
   probe_id : Int32,
-  occupied_stack : Array[Int32],
   conflicts : Array[Int32],
   result : BundleRegisterProbe,
   statistics : BundleAllocationStatistics,
@@ -411,34 +409,30 @@ fn probe_bundle_register(
     return
   }
   guard !bundle_segments.is_empty() else { return }
-  occupied.seek(
+  let mut assigned = occupied.seek(
     register,
     segments[bundle_segments[0]].range.start,
-    occupied_stack,
   )
-  let mut assigned = occupied.next(occupied_stack)
   let mut bundle_index = 0
   let mut skipped_occupied = 0
   let mut skipped_bundle = 0
-  while bundle_index < bundle_segments.length() && assigned is Some(_) {
+  while bundle_index < bundle_segments.length() && assigned >= 0 {
     statistics.occupied_segments_scanned = statistics.occupied_segments_scanned +
       1
-    let conflict_segment = assigned.unwrap()
+    let conflict_segment = assigned
     // Keep reference-counted segment records out of the scan-only path. Most
     // visits only compare cached coordinates; ranges are needed only when a
     // previously unseen conflict contributes its first overlap point.
     let current_segment = bundle_segments[bundle_index]
     if occupied.segment_end_before_start(conflict_segment, current_segment) {
       skipped_bundle = 0
-      assigned = occupied.next(occupied_stack)
+      assigned = occupied.next_order[conflict_segment]
       skipped_occupied = skipped_occupied + 1
       if skipped_occupied >= 16 {
-        occupied.seek(
+        assigned = occupied.seek(
           register,
           segments[current_segment].range.start,
-          occupied_stack,
         )
-        assigned = occupied.next(occupied_stack)
         skipped_occupied = 0
       }
       continue
@@ -483,15 +477,11 @@ fn probe_bundle_register(
     }
     if owner != bundle && occupied.owner_is_contiguous(owner) {
       let owner_segments = context.segments[owner]
-      occupied.skip_after(
-        owner_segments[owner_segments.length() - 1],
-        occupied_stack,
-      )
-      assigned = occupied.next(occupied_stack)
+      assigned = occupied.next_order[owner_segments[owner_segments.length() - 1]]
       continue
     }
     if occupied.segment_end_before_or_equal(conflict_segment, current_segment) {
-      assigned = occupied.next(occupied_stack)
+      assigned = occupied.next_order[conflict_segment]
     } else {
       bundle_index = bundle_index + 1
     }
@@ -1247,8 +1237,6 @@ fn[F : FunctionView] allocate_bundles(
     owner_run_count,
     ranges.block_order,
   )
-  let occupied_stack = session.occupied_stack
-  occupied_stack.clear()
   let register_indexes = PhysicalRegisterIndex::for_session(
     session,
     environment.allocatable_regs,
@@ -1344,7 +1332,6 @@ fn[F : FunctionView] allocate_bundles(
         ranges.block_order,
         conflict_marks,
         probe_id,
-        occupied_stack,
         probe_conflicts,
         probe,
         statistics,
@@ -1530,7 +1517,6 @@ fn[F : FunctionView] allocate_bundles(
         ranges.block_order,
         conflict_marks,
         probe_id,
-        occupied_stack,
         probe_conflicts,
         probe,
         statistics,

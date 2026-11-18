@@ -5,7 +5,7 @@ pub(all) enum FuncInst {
   WasmFunc(@types.FunctionCode)
   /// Host function provided by the embedder
   HostFunc(
-    (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError
+    (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
   )
   /// Opt-in synchronous callback with an explicit guest-exception channel.
   ThrowingHostFunc(ThrowingHostFunction)

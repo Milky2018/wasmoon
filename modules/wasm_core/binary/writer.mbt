@@ -60,7 +60,7 @@ pub fn Writer::write_f64(self : Writer, value : Double) -> Unit {
 ///|
 /// Write the byte length followed by the UTF-8 name.
 pub fn Writer::write_name(self : Writer, name : String) -> Unit {
-  let payload = @buffer.Buffer(size_hint=name.length())
+  let payload = @buffer.Buffer(capacity=name.length())
   for char in name {
     let code = char.to_int()
     payload.write_char_utf8(

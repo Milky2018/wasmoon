@@ -1101,7 +1101,7 @@ fn DirectLoweringSession::terminate(
         true_target,
         true_arguments,
         false_target,
-        false_arguments
+        false_arguments,
       ) =>
         set_terminator(
           self.state.builder,
@@ -1121,7 +1121,7 @@ fn DirectLoweringSession::terminate(
         true_target,
         true_arguments,
         false_target,
-        false_arguments
+        false_arguments,
       ) => {
         let width : GprWidth = if self.state.value_type(left) == I32 {
           W32
@@ -1150,7 +1150,7 @@ fn DirectLoweringSession::terminate(
         true_target,
         true_arguments,
         false_target,
-        false_arguments
+        false_arguments,
       ) => {
         let width : GprWidth = if self.state.value_type(input) == I32 {
           W32

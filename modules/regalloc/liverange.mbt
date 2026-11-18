@@ -93,11 +93,47 @@ priv enum UseKind {
 }
 
 ///|
+// Keep use arrays pointer-free, including their constraint and preference data.
+#valtype
+priv enum UseConstraint {
+  AnyReg
+  AnyLocation
+  PreservedHome
+  FixedReg(PhysicalReg)
+}
+
+///|
+fn UseConstraint::from_operand(constraint : OperandConstraint) -> UseConstraint {
+  match constraint {
+    AnyReg => AnyReg
+    AnyLocation => AnyLocation
+    PreservedHome => PreservedHome
+    FixedReg(reg) => FixedReg(reg)
+  }
+}
+
+///|
+#valtype
+priv enum UsePreference {
+  NoPreference
+  Preferred(PhysicalReg)
+}
+
+///|
+fn UsePreference::from_option(preference : PhysicalReg?) -> UsePreference {
+  match preference {
+    None => NoPreference
+    Some(reg) => Preferred(reg)
+  }
+}
+
+///|
+#valtype
 priv struct UsePosition {
   point : ProgramPoint
   kind : UseKind
-  constraint : OperandConstraint
-  preference : PhysicalReg?
+  constraint : UseConstraint
+  preference : UsePreference
 }
 
 ///|
@@ -106,7 +142,12 @@ fn UsePosition::UsePosition(
   kind : UseKind,
   constraint : OperandConstraint,
 ) -> UsePosition {
-  { point, kind, constraint, preference: None, }
+  {
+    point,
+    kind,
+    constraint: UseConstraint::from_operand(constraint),
+    preference: NoPreference,
+  }
 }
 
 ///|
@@ -119,7 +160,7 @@ priv struct LiveRange {
 
 ///|
 fn LiveRange::LiveRange(id : Int32, vreg : VirtualReg) -> LiveRange {
-  { id, vreg, ranges: [], uses: [], }
+  { id, vreg, ranges: Array(capacity=1), uses: Array(capacity=2), }
 }
 
 ///|

@@ -14,7 +14,7 @@ pub suberror ArtifactDecodeError {
     field~ : String,
     offset~ : Int32,
     needed~ : Int32,
-    remaining~ : Int32
+    remaining~ : Int32,
   )
   InvalidTag(field~ : String, tag~ : Int32)
   InvalidValue(field~ : String, message~ : String)

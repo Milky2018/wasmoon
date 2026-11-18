@@ -290,7 +290,7 @@ pub(all) suberror GCSetupError {
   InvalidFuncCount(num_funcs~ : Int32)
   FuncTypeIndicesLengthMismatch(
     func_type_indices_len~ : Int32,
-    num_funcs~ : Int32
+    num_funcs~ : Int32,
   )
   MissingFunctionTableContext(num_funcs~ : Int32)
 }

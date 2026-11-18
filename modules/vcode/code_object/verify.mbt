@@ -182,7 +182,7 @@ pub fn UnlinkedCodeObject::verify(
   if self.architecture == AArch64 && code_size % 4 != 0 {
     raise MisalignedCodeSize(size=code_size)
   }
-  let relocation_offsets : Array[Int32] = []
+  let relocation_offsets : @hashset.HashSet[Int32] = HashSet([])
   for index, relocation in self.relocations {
     let width = relocation_width(relocation.kind)
     if !relocation_matches_architecture(self.architecture, relocation.kind) ||
@@ -195,10 +195,9 @@ pub fn UnlinkedCodeObject::verify(
         message="kind, alignment, or range does not match the code object",
       )
     }
-    if relocation_offsets.contains(relocation.offset) {
+    if !relocation_offsets.add_and_check(relocation.offset) {
       raise DuplicateRelocationOffset(offset=relocation.offset)
     }
-    relocation_offsets.push(relocation.offset)
   }
   let mut source_end = 0L
   for index, source in self.sources {
@@ -238,13 +237,12 @@ pub fn UnlinkedCodeObject::verify(
       raise InvalidStackMap(safepoint=index)
     }
   }
-  let stack_map_ids : Array[Int32] = []
+  let stack_map_ids : @hashset.HashSet[Int32] = HashSet([])
   for index, safepoint in self.safepoints {
     if safepoint.stack_map is Some(stack_map) {
-      if stack_map_ids.contains(stack_map.id) {
+      if !stack_map_ids.add_and_check(stack_map.id) {
         raise InvalidStackMap(safepoint=index)
       }
-      stack_map_ids.push(stack_map.id)
     }
   }
   for id in 0..<stack_map_ids.length() {

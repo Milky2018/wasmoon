@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/cmd/wasmoon/commands"
 
 import {
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/validator",
   "Milky2018/wasmoon/cmd/wasmoon/commands/component",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/artifact",
@@ -74,6 +75,13 @@ pub(all) enum CompileStage {
 pub fn CompileStage::output(Self, &Logger) -> Unit
 pub fn CompileStage::to_string(Self) -> String
 pub impl Show for CompileStage
+
+pub struct ValidatedJITInput {
+  // private fields
+}
+pub fn ValidatedJITInput::compile(Self, opt_level? : Int32, enable_dwarf? : Bool, on_progress? : (CompileProgress) -> Unit?, enable_cancellation? : Bool, nan_canonicalization? : Bool) -> @artifact.Artifact?
+pub fn ValidatedJITInput::parse(Bytes) -> Self raise
+pub fn ValidatedJITInput::validated_module(Self) -> @validator.ValidatedModule
 
 // Type aliases
 pub using @component {type ComponentErrorCode}

@@ -114,7 +114,7 @@ pub(all) enum ConversionOp {
     @native.FloatType,
     @native.IntegerType,
     @native.Signedness,
-    @native.ConversionMode
+    @native.ConversionMode,
   )
   IntToFloat(@native.IntegerType, @native.FloatType, @native.Signedness)
   SignExtend(@native.IntegerType, @native.AccessWidth)

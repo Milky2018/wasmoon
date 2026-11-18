@@ -335,13 +335,12 @@ fn RegisterAllocationIndex::remove(
 }
 
 ///|
+// Return the first inclusive range end reaching the point, or -1 at the end.
 fn RegisterAllocationIndex::seek(
   self : RegisterAllocationIndex,
   register : Int32,
   point : ProgramPoint,
-  stack : Array[Int32],
-) -> Unit {
-  stack.clear()
+) -> Int32 {
   let point_key = ordered_program_point_key(point, self.block_order)
   let mut current = self.roots[register]
   let mut candidate = -1
@@ -353,9 +352,7 @@ fn RegisterAllocationIndex::seek(
       current = self.right[current]
     }
   }
-  if candidate >= 0 {
-    stack.push(candidate)
-  }
+  candidate
 }
 
 ///|
@@ -400,33 +397,9 @@ fn RegisterAllocationIndex::segment_end_before_or_equal(
 }
 
 ///|
-fn RegisterAllocationIndex::next(
-  self : RegisterAllocationIndex,
-  stack : Array[Int32],
-) -> Int32? {
-  guard stack.pop() is Some(segment) else { return None }
-  if self.next_order[segment] >= 0 {
-    stack.push(self.next_order[segment])
-  }
-  Some(segment)
-}
-
-///|
 fn RegisterAllocationIndex::owner_is_contiguous(
   self : RegisterAllocationIndex,
   owner : Int32,
 ) -> Bool {
   self.owner_run_count[owner] == 1
-}
-
-///|
-fn RegisterAllocationIndex::skip_after(
-  self : RegisterAllocationIndex,
-  segment : Int32,
-  stack : Array[Int32],
-) -> Unit {
-  stack.clear()
-  if self.next_order[segment] >= 0 {
-    stack.push(self.next_order[segment])
-  }
 }

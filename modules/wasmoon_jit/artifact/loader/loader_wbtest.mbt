@@ -305,3 +305,55 @@ test "artifact indices cannot overflow native metadata extents" {
     assert_true(rejected)
   }
 }
+
+///|
+test "artifact identity indices keep forward code and external targets distinct" {
+  let artifact = loader_artifact()
+  let first = artifact.functions[0]
+  let second_name = "wasm.function.2"
+  let second = {
+    ..first,
+    identity: {
+      ..first.identity,
+      function_index: 2,
+      symbol: @native.CodeSymbol::new(second_name),
+    },
+    relocations: [],
+  }
+  let forward = {
+    ..first,
+    relocations: [
+      @code_object.Relocation::new(
+        0,
+        AArch64Call26,
+        Code(@native.CodeSymbol::new(second_name)),
+      ),
+    ],
+  }
+  let compatibility = loader_compatibility(artifact)
+  verify_artifact_identities(
+    { ..artifact, functions: [forward, second], },
+    compatibility,
+  )
+  let wrong_namespace = {
+    ..first,
+    relocations: [
+      @code_object.Relocation::new(
+        0,
+        AArch64Call26,
+        External(@native.ExternalSymbol::new(second_name)),
+      ),
+    ],
+  }
+  let result = Ok(
+    verify_artifact_identities(
+      { ..artifact, functions: [wrong_namespace, second], },
+      compatibility,
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  assert_true(
+    result is Err(UnknownSymbol(kind="external", name="wasm.function.2")),
+  )
+}

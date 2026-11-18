@@ -482,3 +482,27 @@ test "CLI JIT atomic add artifacts track the host CPU requirement" {
     inspect(incompatible, content="true")
   }
 }
+
+///|
+test "validated JIT input keeps original bytes and owns its module" {
+  let bytes = minimal_i32_const_module_bytes()
+  let accepted = ValidatedJITInput::parse(bytes)
+  accepted.validated_module().snapshot().codes.clear()
+  guard compile_module(bytes, enable_cancellation=true) is Some(original) &&
+    accepted.compile(enable_cancellation=true) is Some(compiled) else {
+    fail("expected both binary compilation paths to succeed")
+  }
+  assert_eq(@artifact.encode(compiled), @artifact.encode(original))
+}
+
+///|
+test "validated JIT input rejects a parsed but invalid binary" {
+  let module_ = @types.Module::simple([], [], [LocalGet(0)], "invalid_local")
+  let bytes = @encoder.encode_bytes(module_)
+  @parser.parse_module(bytes) |> ignore
+  try ValidatedJITInput::parse(bytes) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected semantic validation to reject the binary")
+  }
+}

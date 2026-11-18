@@ -1980,7 +1980,7 @@ test "validator: non-SIMD dispatch is rejected, not fatal" {
       inspect(
         err
         is UnsupportedInstruction(
-          "non-SIMD instruction routed to SIMD validator: I32Const(0)"
+          "non-SIMD instruction routed to SIMD validator: I32Const(0)",
         ),
         content="true",
       )

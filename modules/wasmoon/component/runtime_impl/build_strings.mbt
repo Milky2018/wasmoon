@@ -116,7 +116,7 @@ fn decode_utf8_runtime(bytes : Bytes) -> String raise ComponentRuntimeError {
 
 ///|
 fn encode_utf8_string(s : String) -> Bytes {
-  let bytes = @buffer.Buffer(size_hint=s.length())
+  let bytes = @buffer.Buffer(capacity=s.length())
   for char in s {
     bytes.write_char_utf8(char)
   }
