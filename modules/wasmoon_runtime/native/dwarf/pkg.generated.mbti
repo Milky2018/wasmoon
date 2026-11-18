@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/native/dwarf"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct BacktraceFrame {
+  pc : Int64
+  name : String
+  offset : Int64
+  func_idx : Int32
+}
+
+pub type DWARFBuilder
+pub fn DWARFBuilder::DWARFBuilder() -> Self
+pub fn DWARFBuilder::add_function(Self, String, Int64, Int32, Int32) -> Unit
+pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]
+pub fn DWARFBuilder::destroy(Self) -> Unit
+pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
+pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
+pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Bool
+pub fn DWARFBuilder::unregister(Self) -> Unit
+
+pub struct FunctionInfo {
+  name : String
+  func_idx : Int32
+  offset : Int64
+}
+
+// Type aliases
+
+// Traits

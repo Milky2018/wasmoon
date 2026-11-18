@@ -62,8 +62,8 @@ fn ExceptionState::new() -> ExceptionState {
     closed: false,
     traced: false,
     quotas_bound: false,
-    bytes: Quota::unlimited(),
-    objects: Quota::unlimited(),
+    bytes: @ownership.unlimited(),
+    objects: @ownership.unlimited(),
     quota_denied: 0,
   }
 }
@@ -179,12 +179,12 @@ fn ExceptionState::insert(
     None => [] // Empty mask preserves conservative roots for unknown tags.
   }
   let amount = 16L + count.to_int64() * 16L
-  guard !self.quotas_bound || self.bytes.acquire(amount) else {
+  guard !self.quotas_bound || @ownership.acquire(self.bytes, amount) else {
     self.quota_denied = 25
     return -25
   }
-  guard !self.quotas_bound || self.objects.acquire(1L) else {
-    self.bytes.release(amount)
+  guard !self.quotas_bound || @ownership.acquire(self.objects, 1L) else {
+    @ownership.release(self.bytes, amount)
     self.quota_denied = 26
     return -26
   }
@@ -206,8 +206,8 @@ fn ExceptionState::insert(
   )
   guard copied else {
     if self.quotas_bound {
-      self.bytes.release(amount)
-      self.objects.release(1L)
+      @ownership.release(self.bytes, amount)
+      @ownership.release(self.objects, 1L)
     }
     return -9
   }

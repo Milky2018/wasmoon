@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/encoding/utf8",
+  "Milky2018/wasmoon_runtime/native/ffi",
+}
+
+options(
+  "native-stub": [ "dwarf.c" ],
+)

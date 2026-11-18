@@ -11,17 +11,11 @@ pub const WASMOON_JIT_ABI_VERSION : Int32 = 8
 pub const WASMOON_CODEGEN_REVISION : String = "direct-vcode-55"
 
 ///|
-extern "c" fn host_operating_system_abi_tag() -> Int32 = "wasmoon_jit_host_operating_system_abi"
-
-///|
 const AARCH64_LSE_FEATURE : String = "aarch64-lse"
 
 ///|
-extern "c" fn host_has_aarch64_lse() -> Int32 = "wasmoon_jit_host_has_aarch64_lse"
-
-///|
 pub fn host_cpu_features() -> Array[@artifact.CpuFeature] {
-  if host_has_aarch64_lse() != 0 {
+  if @platform.has_aarch64_lse() {
     [{ name: AARCH64_LSE_FEATURE, }]
   } else {
     []
@@ -51,7 +45,7 @@ pub fn wasm_host_cpu_requirements(
   let shared = mod_.memories.any(memory => memory.is_shared) ||
     mod_.imports.any(item => item.desc is Memory(memory) && memory.is_shared)
   if shared &&
-    host_has_aarch64_lse() != 0 &&
+    @platform.has_aarch64_lse() &&
     mod_.codes.any(code => contains_atomic_add(code.body)) {
     [{ name: AARCH64_LSE_FEATURE, }]
   } else {
@@ -69,7 +63,7 @@ fn artifact_architecture(target : NativeTarget) -> @code_object.Architecture {
 
 ///|
 pub fn host_native_target() -> NativeTarget raise JitPipelineError {
-  match c_jit_host_target_arch() {
+  match @platform.target_arch() {
     1 => X64
     2 => AArch64
     value => raise UnsupportedHostArchitecture(tag=value)
@@ -131,7 +125,7 @@ pub fn build_artifact_manifest(
 
 ///|
 pub fn host_operating_system_abi() -> @artifact.OperatingSystemAbi raise JitPipelineError {
-  match host_operating_system_abi_tag() {
+  match @platform.operating_system_abi_tag() {
     1 => MacOS
     2 => LinuxGnu
     3 => LinuxMusl

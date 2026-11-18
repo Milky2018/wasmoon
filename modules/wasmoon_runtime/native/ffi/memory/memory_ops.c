@@ -1,0 +1,533 @@
+// Copyright 2025
+// Memory and table runtime operations for JIT
+// Implements memory.grow, memory.fill, memory.copy, table.grow
+
+#include "../control/trap.h"
+#include "atomic_wait.h"
+#include "memory_ops.h"
+#include "table.h"
+#include "../context/callable_lookup.h"
+#include "../../ownership/native_alloc.h"
+#include <string.h>
+#include <stdlib.h>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+#ifndef _WIN32
+#include <sched.h>
+#endif
+
+#define WASM_MEMORY32_MAX_BYTES (((int64_t)UINT32_MAX) + 1LL)
+
+static size_t host_page_size(void) {
+#ifdef _WIN32
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    return (size_t)info.dwPageSize;
+#else
+    return (size_t)getpagesize();
+#endif
+}
+
+// ============ Guard Page Memory Allocation ============
+// Uses mmap to allocate memory with guard pages for bounds check elimination.
+// Strategy: allocate max_pages worth of virtual address space, but only make
+// the first current_pages accessible. Access beyond memory_size hits guard pages
+// (PROT_NONE), triggering SIGSEGV which is caught and converted to a trap.
+
+// WebAssembly memory32 uses 32-bit addresses plus a 32-bit static offset.
+// The effective address can be up to:
+//   (2^32 - 1) + (2^32 - 1) + (access_size - 1) < 2^33
+// Reserve 8GB (+ one WASM page as slack) so any out-of-bounds access reliably
+// lands in a PROT_NONE region within the same mapping and traps via SIGSEGV.
+#define WASM32_MAX_MEMORY (4ULL * 1024 * 1024 * 1024)
+#define WASM32_GUARD_RESERVATION (WASM32_MAX_MEMORY * 2ULL + WASM_PAGE_SIZE)
+
+// Allocate memory with guard pages using mmap
+// Returns memory base on success, NULL on failure
+static uint8_t *alloc_reserved_memory(wasmoon_memory_t *memory, size_t initial_size, size_t reserve_size) {
+    if (!memory || initial_size > reserve_size || !wasmoon_native_allocation_allowed()) return NULL;
+    size_t logical_size = initial_size;
+    size_t page_size = host_page_size();
+    if (reserve_size > SIZE_MAX - (page_size - 1)) return NULL;
+    reserve_size = (reserve_size + page_size - 1) & ~(page_size - 1);
+    if (reserve_size == 0) reserve_size = page_size;
+    initial_size = (initial_size + page_size - 1) & ~(page_size - 1);
+
+#ifdef _WIN32
+    // Windows: use VirtualAlloc with MEM_RESERVE, then MEM_COMMIT for used pages
+    void *mapping = VirtualAlloc(NULL, reserve_size, MEM_RESERVE, PAGE_NOACCESS);
+    if (mapping == NULL) return NULL;
+
+    // Commit the initial pages
+    if (initial_size > 0) {
+        void *committed = VirtualAlloc(mapping, initial_size, MEM_COMMIT, PAGE_READWRITE);
+        if (committed == NULL) {
+            VirtualFree(mapping, 0, MEM_RELEASE);
+            return NULL;
+        }
+    }
+#else
+    // POSIX: use mmap with PROT_NONE, then mprotect for used pages
+    void *mapping = mmap(NULL, reserve_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mapping == MAP_FAILED) return NULL;
+
+    // Make the initial pages accessible
+    if (initial_size > 0) {
+        if (mprotect(mapping, initial_size, PROT_READ | PROT_WRITE) != 0) {
+            munmap(mapping, reserve_size);
+            return NULL;
+        }
+    }
+#endif
+
+    // Store allocation info in memory object
+    memory->alloc_base = mapping;
+    memory->alloc_size = reserve_size;
+    memory->guard_start = initial_size;
+    memory->is_guarded = 1;
+    memory->base = (uint8_t *)mapping;
+    atomic_store_explicit(&memory->current_length, logical_size, memory_order_release);
+
+    return (uint8_t *)mapping;
+}
+
+// Grow guarded memory by changing protection
+static int grow_guarded_memory(wasmoon_memory_t *memory, size_t old_size, size_t new_size) {
+    if (!memory || !memory->alloc_base || new_size > memory->alloc_size) return -1;
+    size_t logical_size = new_size;
+    size_t page_size = host_page_size();
+    old_size = (old_size + page_size - 1) & ~(page_size - 1);
+    new_size = (new_size + page_size - 1) & ~(page_size - 1);
+    if (new_size > old_size) {
+        uint8_t *base = (uint8_t *)memory->alloc_base;
+        size_t grow_size = new_size - old_size;
+#ifdef _WIN32
+        if (!VirtualAlloc(base + old_size, grow_size, MEM_COMMIT, PAGE_READWRITE)) return -1;
+#else
+        if (mprotect(base + old_size, grow_size, PROT_READ | PROT_WRITE) != 0) return -1;
+#endif
+        memory->guard_start = new_size;
+    }
+    atomic_store_explicit(&memory->current_length, logical_size, memory_order_release);
+    return 0;
+}
+
+// External version of alloc_guarded_memory for managed memory descriptors
+uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size) {
+    (void)max_size;
+    return alloc_reserved_memory(memory, initial_size, (size_t)WASM32_GUARD_RESERVATION);
+}
+
+// Shared memories reserve their declared maximum so native readers never see
+// the backing address move. Logical lengths remain independent of OS pages.
+uint8_t *alloc_shared_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size) {
+    return alloc_reserved_memory(memory, initial_size, max_size);
+}
+
+// Check if address is in the guard region of memory0
+int is_memory_guard_page_access(jit_context_t *ctx, void *addr) {
+    if (!ctx || !ctx_memory0(ctx) || !ctx_memory0(ctx)->is_guarded || !ctx_memory0(ctx)->alloc_base) return 0;
+
+    uintptr_t alloc_base = (uintptr_t)ctx_memory0(ctx)->alloc_base;
+    uintptr_t alloc_end = alloc_base + ctx_memory0(ctx)->alloc_size;
+    uintptr_t guard_start = alloc_base + ctx_memory0(ctx)->guard_start;
+    uintptr_t fault_addr = (uintptr_t)addr;
+
+    // Check if fault is in the guard region (after accessible memory, within allocation)
+    return (fault_addr >= guard_start && fault_addr < alloc_end);
+}
+
+// ============ Descriptor-Only Operations (no ctx) ============
+
+int64_t memory_len_desc_internal(wasmoon_memory_t *mem) {
+    if (!mem) return 0;
+    return (int64_t)atomic_load_explicit(&mem->current_length, memory_order_acquire);
+}
+
+static int64_t memory_grow_desc_locked(wasmoon_memory_t *mem, int64_t delta, int32_t max_pages) {
+    if (!mem) return -1;
+    if (delta < 0) return -1;
+
+    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
+    if (page_size == 0) return -1;
+
+    size_t current_size = atomic_load_explicit(&mem->current_length, memory_order_acquire);
+    int64_t current_pages = (int64_t)(current_size / page_size);
+
+    if (delta > INT64_MAX - current_pages) return -1;
+    int64_t new_pages = current_pages + delta;
+
+    int64_t arch_max_pages;
+    if (mem->is_memory64) {
+        arch_max_pages = INT64_MAX / (int64_t)page_size;
+    } else {
+        const int64_t max_bytes = WASM_MEMORY32_MAX_BYTES;
+        arch_max_pages = mem->page_size_log2 == 0 ? INT64_C(0xfffffffe) : max_bytes / (int64_t)page_size;
+    }
+    if (new_pages > arch_max_pages) return -1;
+
+    uint64_t stored_max = (uint64_t)mem->max_pages;
+    uint64_t effective_max = (max_pages >= 0) ? (uint64_t)max_pages : stored_max;
+
+    if (effective_max > stored_max) effective_max = stored_max;
+    if (effective_max == (uint64_t)SIZE_MAX) {
+        effective_max = (uint64_t)arch_max_pages;
+    }
+
+    if ((uint64_t)new_pages > effective_max) return -1;
+
+    if (delta == 0) return current_pages;
+
+    if ((uint64_t)new_pages > (uint64_t)INT64_MAX / page_size) return -1;
+    size_t new_size = (size_t)new_pages * page_size;
+
+    if (mem->reservation && !wasmoon_reservation_resize(mem->reservation, (int64_t)new_size)) return -1;
+    if (mem->is_guarded) {
+        if (grow_guarded_memory(mem, current_size, new_size) != 0) {
+            if (mem->reservation) wasmoon_reservation_resize(mem->reservation, (int64_t)current_size);
+            return -1;
+        }
+        return current_pages;
+    }
+
+    uint8_t *new_base = (uint8_t *)wasmoon_native_realloc(mem->base, new_size);
+    if (!new_base) {
+        if (mem->reservation) wasmoon_reservation_resize(mem->reservation, (int64_t)current_size);
+        return -1;
+    }
+
+    memset(new_base + current_size, 0, new_size - current_size);
+
+    mem->base = new_base;
+    atomic_store_explicit(&mem->current_length, new_size, memory_order_relaxed);
+
+    return current_pages;
+}
+
+// Serialize all growth entry points on the shared descriptor. No MoonBit code
+// or guest callback runs while the lock is held.
+int64_t memory_grow_desc_internal(wasmoon_memory_t *mem, int64_t delta, int32_t max_pages) {
+    if (!mem) return -1;
+    if (mem->is_shared) {
+        while (atomic_exchange_explicit(&mem->growth_lock, 1, memory_order_acquire)) {
+#ifdef _WIN32
+            SwitchToThread();
+#else
+            sched_yield();
+#endif
+        }
+    }
+    int64_t result = memory_grow_desc_locked(mem, delta, max_pages);
+    if (mem->is_shared) atomic_store_explicit(&mem->growth_lock, 0, memory_order_release);
+    return result;
+}
+
+// ============ Multi-Memory Operations (v4 with memidx) ============
+
+// Helper to get memory object for a given memidx
+static wasmoon_memory_t *get_memory(jit_context_t *ctx, int32_t memidx) {
+    if (!ctx || memidx < 0) return NULL;
+    if (memidx == 0) return ctx_memory0(ctx);
+    if (!ctx_memories(ctx) || memidx >= ctx_memory_count(ctx)) return NULL;
+    return ctx_memories(ctx)[memidx];
+}
+
+static uint8_t *get_memory_base(jit_context_t *ctx, int32_t memidx) {
+    if (!ctx) return NULL;
+    if (memidx == 0) return ctx_memory0_base(ctx);
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    return mem ? mem->base : NULL;
+}
+
+static size_t get_memory_size(jit_context_t *ctx, int32_t memidx) {
+    if (!ctx) return 0;
+    if (memidx == 0 && ctx_memory0(ctx) && !ctx_memory0(ctx)->is_shared) {
+        return atomic_load_explicit(ctx_memory0_size_address(ctx), memory_order_relaxed);
+    }
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    return mem ? atomic_load_explicit(&mem->current_length, memory_order_acquire) : 0;
+}
+
+
+
+// Small-fill fast path to avoid repeated libc memset call overhead in hot loops.
+static inline void fill_bytes_fast(uint8_t *dst, uint8_t val, size_t size) {
+    if (size <= 256) {
+        size_t i = 0;
+        while (i + 16 <= size) {
+            dst[i + 0] = val;
+            dst[i + 1] = val;
+            dst[i + 2] = val;
+            dst[i + 3] = val;
+            dst[i + 4] = val;
+            dst[i + 5] = val;
+            dst[i + 6] = val;
+            dst[i + 7] = val;
+            dst[i + 8] = val;
+            dst[i + 9] = val;
+            dst[i + 10] = val;
+            dst[i + 11] = val;
+            dst[i + 12] = val;
+            dst[i + 13] = val;
+            dst[i + 14] = val;
+            dst[i + 15] = val;
+            i += 16;
+        }
+        while (i < size) {
+            dst[i++] = val;
+        }
+        return;
+    }
+    memset(dst, val, size);
+}
+
+// The producer checked bounds and natural alignment before these calls. Pass
+// the full pointer through the helper ABI; never narrow a memory64 offset.
+static int32_t WASMOON_GUEST_ABI atomic_wait32_indexed(
+    jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t expected, int64_t timeout
+) {
+    wasmoon_memory_t *memory = get_memory(ctx, memidx);
+    return wasmoon_atomic_wait_guest(ctx, memory,
+        (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 4, expected, timeout);
+}
+
+static int32_t WASMOON_GUEST_ABI atomic_wait64_indexed(
+    jit_context_t *ctx, int32_t memidx, int64_t pointer, int64_t expected, int64_t timeout
+) {
+    wasmoon_memory_t *memory = get_memory(ctx, memidx);
+    return wasmoon_atomic_wait_guest(ctx, memory,
+        (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), 8, expected, timeout);
+}
+
+static int32_t WASMOON_GUEST_ABI atomic_notify_indexed(
+    jit_context_t *ctx, int32_t memidx, int64_t pointer, int32_t count
+) {
+    wasmoon_memory_t *memory = get_memory(ctx, memidx);
+    return wasmoon_atomic_notify(memory,
+        (int64_t)((uintptr_t)pointer - (uintptr_t)memory->base), count);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_wait32_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(atomic_wait32_indexed);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_wait64_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(atomic_wait64_indexed);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_atomic_notify_ptr(void) {
+    return WASMOON_GUEST_ADDRESS(atomic_notify_indexed);
+}
+
+int64_t WASMOON_GUEST_ABI memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
+    if (!ctx || delta < 0) return -1;
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    int64_t result = memory_grow_desc_internal(mem, delta, max_pages);
+    if (result != -1 && memidx == 0) ctx_refresh_memory0_fast_fields(ctx);
+    return result;
+}
+
+int64_t WASMOON_GUEST_ABI memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx) {
+    if (!ctx) return 0;
+    if (memidx < 0) return 0;
+    if (memidx > 0 && (!ctx_memories(ctx) || memidx >= ctx_memory_count(ctx))) return 0;
+
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    if (!mem) return 0;
+    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
+    if (page_size == 0) return 0;
+
+    size_t size = atomic_load_explicit(&mem->current_length, memory_order_acquire);
+    return (int64_t)(size / page_size);
+}
+
+void WASMOON_GUEST_ABI memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t dst, int32_t val, int64_t size) {
+    if (!ctx) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+    if (memidx < 0 || (memidx > 0 && (!ctx_memories(ctx) || memidx >= ctx_memory_count(ctx)))) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+
+    uint8_t *mem_base = get_memory_base(ctx, memidx);
+    size_t mem_size = get_memory_size(ctx, memidx);
+
+    if (!mem_base) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+
+    wasmoon_memory_t *mem = get_memory(ctx, memidx);
+    uint64_t dst_offset = mem->is_memory64 ? (uint64_t)dst : (uint32_t)dst;
+    uint64_t length = mem->is_memory64 ? (uint64_t)size : (uint32_t)size;
+    if (dst_offset > mem_size || length > mem_size - dst_offset) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+    if (length != 0) {
+        fill_bytes_fast(mem_base + dst_offset, (uint8_t)val, (size_t)length);
+    }
+}
+
+void WASMOON_GUEST_ABI memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
+                                   int64_t dst, int64_t src, int64_t size) {
+    if (!ctx) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+    if (dst_memidx < 0 || src_memidx < 0) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+    if ((dst_memidx > 0 && (!ctx_memories(ctx) || dst_memidx >= ctx_memory_count(ctx))) ||
+        (src_memidx > 0 && (!ctx_memories(ctx) || src_memidx >= ctx_memory_count(ctx)))) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+
+    uint8_t *dst_base = get_memory_base(ctx, dst_memidx);
+    size_t dst_size = get_memory_size(ctx, dst_memidx);
+    uint8_t *src_base = get_memory_base(ctx, src_memidx);
+    size_t src_size = get_memory_size(ctx, src_memidx);
+
+    if (!dst_base || !src_base) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+
+    wasmoon_memory_t *dst_mem = get_memory(ctx, dst_memidx);
+    wasmoon_memory_t *src_mem = get_memory(ctx, src_memidx);
+    uint64_t dst_offset = dst_mem->is_memory64 ? (uint64_t)dst : (uint32_t)dst;
+    uint64_t src_offset = src_mem->is_memory64 ? (uint64_t)src : (uint32_t)src;
+    uint64_t length = dst_mem->is_memory64 && src_mem->is_memory64
+        ? (uint64_t)size : (uint32_t)size;
+    if (dst_offset > dst_size || length > dst_size - dst_offset ||
+        src_offset > src_size || length > src_size - src_offset) {
+        g_trap_code = 1;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return;
+    }
+    // Imported memory indices can alias the same memory descriptor.
+    if (length != 0) {
+        memmove(dst_base + dst_offset, src_base + src_offset, (size_t)length);
+    }
+}
+
+// ============ Table Operations ============
+
+static int64_t table_grow_owner(wasmoon_table_t *owner, int64_t delta, int64_t init_value, int64_t init_type, size_t maximum) {
+    if (!owner || !owner->entries || delta < 0) return -1;
+    size_t old_size = owner->size;
+    if (delta == 0) return (int64_t)old_size;
+    size_t new_size = old_size + (size_t)delta;
+
+    // Check for overflow
+    if (new_size < old_size) return -1;
+
+    // Check against max size limit
+    if (new_size > maximum) return -1;
+
+    // Check reference-array allocation overflow before the implementation's
+    // element-count limit, after checking the module's declared maximum.
+    if (new_size > SIZE_MAX / sizeof(void *)) {
+        g_trap_code = 22; // failed to allocate
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return -1;
+    }
+    if (new_size > INT32_MAX) return -1;
+
+    // Get the old table pointer
+    void **old_table = owner->entries;
+
+    // Allocate new table (2 slots per entry: func_ptr and type_idx)
+    int64_t charged = owner->reservation ? owner->reservation->amount : 0;
+    if (owner->reservation && !wasmoon_reservation_resize(owner->reservation, (int64_t)new_size)) return -1;
+    void **new_table = (void **)wasmoon_native_calloc(new_size * 2, sizeof(void *));
+    if (!new_table) {
+        if (owner->reservation) wasmoon_reservation_resize(owner->reservation, charged);
+        return -1;
+    }
+
+    // Copy existing elements
+    if (old_table && old_size > 0) {
+        memcpy(new_table, old_table, old_size * 2 * sizeof(void *));
+    }
+
+    // Initialize new elements with init_value
+    for (size_t i = old_size; i < new_size; i++) {
+        new_table[i * 2] = (void *)init_value;      // func_ptr
+        new_table[i * 2 + 1] = (void*)(intptr_t)init_type;
+    }
+
+    // Publish reallocations to every context retaining this stable owner.
+    table_publish_layout(owner, new_table, new_size);
+    owner->revision++;
+
+    // Free old table
+    if (old_table) {
+        free(old_table);
+    }
+
+    return (int64_t)old_size;
+}
+
+int64_t table_grow_ctx_internal(
+    jit_context_t *ctx,
+    int32_t table_idx,
+    int64_t delta,
+    int64_t init_value
+) {
+    if (!ctx || table_idx < 0) return -1;
+    if (table_idx >= ctx_table_count(ctx)) return -1;
+    if (!ctx_tables(ctx) || !ctx_table_sizes(ctx) || !ctx_runtime(ctx)->table_bindings) return -1;
+    if (!ctx_runtime(ctx)->table_bindings[table_idx].owner->entries) return -1;
+
+    size_t maximum = ctx_table_max_sizes(ctx) ? ctx_table_max_sizes(ctx)[table_idx] : SIZE_MAX;
+    wasmoon_table_t *owner = ctx_runtime(ctx)->table_bindings[table_idx].owner;
+    int64_t type = table_type_for_value(ctx, init_value);
+    if (owner->store_references) init_value = callable_store_reference(ctx, init_value);
+    return table_grow_owner(owner, delta, init_value, type, maximum);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_table_grow_value(wasmoon_table_t *owner, int64_t delta, int64_t value, int32_t type) {
+    return table_grow_owner(owner, delta, value, type, SIZE_MAX);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_table_use_store_references(wasmoon_table_t *owner) {
+    if (owner) owner->store_references = 1;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_table_uses_store_references(wasmoon_table_t *owner) {
+    return owner && owner->store_references;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_table_grow_owned(wasmoon_table_t *owner, int64_t delta) {
+    return table_grow_owner(owner, delta, 0, -1, SIZE_MAX);
+}
+
+#if defined(_MSC_VER) && !defined(__clang__)
+WASMOON_DEFINE_GUEST_TARGET(atomic_notify_indexed);
+WASMOON_DEFINE_GUEST_TARGET(atomic_wait32_indexed);
+WASMOON_DEFINE_GUEST_TARGET(atomic_wait64_indexed);
+WASMOON_DEFINE_GUEST_TARGET(memory_copy_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_fill_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_grow_indexed_internal);
+WASMOON_DEFINE_GUEST_TARGET(memory_size_indexed_internal);
+#endif

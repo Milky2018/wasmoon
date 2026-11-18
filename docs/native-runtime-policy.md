@@ -14,14 +14,30 @@ boundary, not completion of the whole epic.
 | State or operation | Current owner | Why native storage or control remains |
 | --- | --- | --- |
 | Wasm objects, object identities, contiguous payload, mark/sweep/compaction | Managed `GCHeapHandle` and native heap implementation | Generated code directly addresses this layout; moving payloads requires refreshing native heap pointers. Logical Store reachability is expanded by MoonBit. |
-| Allocation retries and classification of collection failure, quota denial and exhaustion | MoonBit `jit_ffi/gc_heap.mbt::allocate` | Three call-scoped primitives attempt a physical allocation, collect pinned roots, and read the last physical admission result. C has no retry loop. |
+| Allocation retries and classification of collection failure, quota denial and exhaustion | MoonBit `native/ffi/gc_heap.mbt::allocate` | Three call-scoped primitives attempt a physical allocation, collect pinned roots, and read the last physical admission result. C has no retry loop. |
 | Explicit, live activation, spilled, table and parked roots | Native activation/root registrations plus MoonBit Store visitor | Native stack maps and parked stacks contain machine addresses. The Store visitor traces MoonBit wrappers, exceptions and continuations; its closure exists only during an execution/collection scope. |
 | Collection/rollback protocol, visitor ownership and reentry | MoonBit `CollectionState` | Native code copies root spans and mutates physical object storage. A cached precision flag occupies existing padding and is written from MoonBit outside an active collection; no duplicate visitor or phase machine remains in C. |
 | Stable exception identity, tag layouts, payload registry, admission and reclamation | MoonBit `ExceptionState` with packed numeric metadata and an RC-retained native callback view | One RC storage owner holds fallible payload buffers and physical root/quota leases. C has no identity registry or reclamation decisions. Handler jump buffers remain a control-transfer primitive. |
 | Continuation identities, admission, marks, retirement and sealing | MoonBit `ContinuationState`; an RC bridge retains it | RC physical storage owns bodies, buffers and root/quota leases. Active native cancellation scopes pin bodies directly. Saved machine stacks, platform contexts and stack transfers remain native primitives. |
 | Immutable callable metadata | MoonBit registry with RC-retained native array view | Existing example of one logical owner and direct native reads without a second mutable registry. |
 | Builtin/import semantics and typed values | MoonBit Store host functions plus the shared hostcall trampoline | Native code transports typed value slots and performs ABI entry/exit; import names do not select duplicate C host implementations. ISS-640 has local validation, with new platform acceptance pending. |
-| Tests that allocate private activation layouts | `jit_ffi/testing`, compiled by `jit_ffi` | Test callers retain the `native_test_support` MoonBit facade. No other package allocates a copy of the private activation layout. |
+| Tests that allocate private activation layouts | `native/ffi/testing`, compiled by `native/ffi` | Test callers retain the `native_test_support` MoonBit facade. No other package allocates a copy of the private activation layout. |
+
+## Native source ownership
+
+Within `wasmoon_runtime/native`, `ownership` owns quota reservations, cleanup
+callbacks and fallible allocations. `exec_memory` owns executable mappings,
+`platform` supplies host feature queries, and `dwarf` registers debug metadata
+and resolves captured program counters. The WASI and reactor packages build
+their own stubs and share the descriptor code in `host_io`.
+
+The JIT context, trap activation, parked roots and guest-call helpers share
+private state during a single invocation. Their C sources belong to one
+`ffi` archive. The `context`, `control`, `memory` and `gc` directories own
+the corresponding layouts and operations. `code` owns the entry trampoline,
+and `abi` contains the platform assembly and generated guest bridges. Each
+translation unit includes the contracts it uses. Test fixtures that inspect
+these layouts compile as separate archive members in `testing`.
 
 ## Synchronous GC allocation call
 
@@ -217,19 +233,18 @@ controls, external suites, ownership review and isolated performance samples.
 ## Native test ownership and shared headers
 
 The C helpers and platform assembly that inspect private JIT layouts live
-under `jit_ffi/testing` without a second package declaration. Their object
+under `native/ffi/testing` without a second package declaration. Their object
 files remain separate archive members. Production linking must leave their
 unreferenced objects out; the local release symbol check verifies this rather
 than assuming it. Their MSVC guest bridges remain a separate generated object,
 so production bridge references do not pull test targets into an application.
 The MoonBit facade keeps its original package and imports.
 
-Remaining cross-package C headers are small native contracts: the callable
-registry view, Windows handle operations, Windows filesystem primitives and
-inline path operations. These are not copies of JIT activation layouts. Their
-actual transitive includes still require compiler dependency discovery;
-relocating tests does not solve ISS-634 or justify flattening/inlining every
-header. The installed stable toolchain remains unchanged.
+C code that crosses a package boundary includes the owner's header. Examples
+include quota reservations, fallible allocations, the callable registry view
+and Windows descriptor operations. The VMContext and trap activation layouts
+stay inside the FFI package. Header dependency tracking is covered by
+[issue #595](https://github.com/Milky2018/wasmoon/issues/595).
 
 ## Verification limits
 

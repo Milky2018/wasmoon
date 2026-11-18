@@ -1,10 +1,5 @@
 ///|
-/// platform predicate for native host adapters.
-
-///|
-pub fn is_windows() -> Bool {
-  @jit_ffi.is_windows()
-}
+pub using @platform {is_windows}
 
 ///|
 /// Claim exclusive consumption of a host input descriptor. Returns zero on

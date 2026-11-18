@@ -7,6 +7,7 @@ import {
   "Milky2018/wasmoon_jit/artifact/installer",
   "Milky2018/wasmoon_runtime/native/bridge",
   "Milky2018/wasmoon_runtime/native/callable",
+  "Milky2018/wasmoon_runtime/native/dwarf",
   "Milky2018/wasmoon_runtime/native/execution",
   "Milky2018/wasmoon_runtime/native/ffi",
   "Milky2018/wasmoon_runtime/runtime",
@@ -118,7 +119,7 @@ pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[
 pub fn JITModule::prepare_continuations(Self, Array[@types.SubType], @execution.NativeExecutionState) -> Unit raise JITTrap
 pub fn JITModule::prepare_gc_environment(Self, ArrayView[@types.SubType], ArrayView[Int32], ArrayView[Int32]) -> @wasmoon_jit.PreparedGCEnvironment raise @wasmoon_jit.GCSetupError
 pub fn JITModule::refresh_table_layout(Self, Int32) -> Bool
-pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder raise @wasmoon_jit.NativeSetupError
+pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @dwarf.DWARFBuilder raise @wasmoon_jit.NativeSetupError
 pub fn JITModule::retain_callable_owner(Self) -> () -> Unit
 pub fn JITModule::set_callable_types(Self, Array[Int32], Array[Int32], Array[(Int64, Int32)], Array[Int32]) -> Unit
 pub fn JITModule::set_cooperative_scheduling(Self, Bool, quantum? : Int32) -> Bool

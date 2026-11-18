@@ -1,5 +1,11 @@
-#include "../callable_lookup.h"
-#include "../gc_access.h"
+#include "../control/trap.h"
+#include "../control/hostcall.h"
+#include "../gc/gc_roots.h"
+#include "../gc/gc_ops.h"
+#include "../../ownership/native_alloc.h"
+#include <string.h>
+#include "../context/callable_lookup.h"
+#include "../gc/gc_access.h"
 
 // Enter the guest helper through its declared calling convention without
 // requiring an active TLS context.
@@ -45,7 +51,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_safepoint_ownership(void) {
     return passed;
 }
 
-extern int64_t wasmoon_jit_context_ptr(void *context);
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_test_context_storage_bytes(void *context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);
@@ -271,9 +276,8 @@ static void release_control_capture(void *capture) {
 static int32_t poll_control_capture(void *capture) {
     return *(int32_t *)capture;
 }
-extern void wasmoon_jit_set_cancellation_callback(
-    int64_t context, int32_t (*callback)(void *), void *capture);
-extern void wasmoon_jit_clear_cancellation_callback(int64_t context);
+
+
 
 static void set_control_capture(jit_context_t *ctx, int32_t value) {
     int32_t *capture = moonbit_make_external_object(release_control_capture, sizeof(int32_t));

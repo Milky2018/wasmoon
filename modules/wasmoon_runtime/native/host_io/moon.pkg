@@ -1,5 +1,5 @@
 import {
-  "Milky2018/wasmoon_runtime/native/ffi" @jit_ffi,
+  "Milky2018/wasmoon_runtime/native/platform",
 }
 
 options(

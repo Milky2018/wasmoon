@@ -8,6 +8,7 @@ import {
   "Milky2018/wasmoon_runtime/native/callable",
   "Milky2018/wasmoon_runtime/native/execution",
   "Milky2018/wasmoon_runtime/native/ffi",
+  "Milky2018/wasmoon_runtime/native/ownership",
   "moonbitlang/core/debug",
 }
 
@@ -543,7 +544,7 @@ pub struct ResourceBudget {
   compilation_depth : Int32
   // private fields
 }
-pub fn ResourceBudget::native_quota(Self, ResourceKind) -> @ffi.Quota
+pub fn ResourceBudget::native_quota(Self, ResourceKind) -> @ownership.Quota
 pub fn ResourceBudget::new(compilation_depth? : Int32, memory_bytes? : Int64, table_elements? : Int64, gc_bytes? : Int64, gc_objects? : Int64, instances? : Int64, code_bytes? : Int64, pending_work? : Int64, input_bytes? : Int64, compilation_units? : Int64) -> Self raise RuntimeError
 pub fn ResourceBudget::reserve(Self, ResourceKind, Int64) -> ResourceLease raise RuntimeError
 pub fn ResourceBudget::to_repr(Self) -> @debug.Repr

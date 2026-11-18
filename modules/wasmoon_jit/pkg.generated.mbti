@@ -16,6 +16,7 @@ import {
   "Milky2018/wasmoon_runtime/control",
   "Milky2018/wasmoon_runtime/native/bridge",
   "Milky2018/wasmoon_runtime/native/callable",
+  "Milky2018/wasmoon_runtime/native/dwarf",
   "Milky2018/wasmoon_runtime/native/execution",
   "Milky2018/wasmoon_runtime/native/ffi",
   "Milky2018/wasmoon_runtime/native/layout",
@@ -302,29 +303,6 @@ pub fn NativeSetupError::to_string(Self) -> String
 pub impl Show for NativeSetupError
 
 // Types and methods
-pub struct BacktraceFrame {
-  pc : Int64
-  name : String
-  offset : Int64
-  func_idx : Int32
-}
-
-pub type DWARFBuilder
-pub fn DWARFBuilder::DWARFBuilder() -> Self
-pub fn DWARFBuilder::add_function(Self, String, Int64, Int32, Int32) -> Unit
-pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]
-pub fn DWARFBuilder::destroy(Self) -> Unit
-pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
-pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
-pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Bool
-pub fn DWARFBuilder::unregister(Self) -> Unit
-
-pub struct FunctionInfo {
-  name : String
-  func_idx : Int32
-  offset : Int64
-}
-
 pub(all) struct HostcallImportTrampolineCode {
   code : Array[Int32]
 }
@@ -661,6 +639,8 @@ pub using @loader {type ArtifactIncompatible}
 
 pub using @loader {type ArtifactLoadError}
 
+pub using @dwarf {type BacktraceFrame}
+
 pub using @bridge {type CHeap}
 
 pub using @bridge {type CHeapError}
@@ -668,6 +648,10 @@ pub using @bridge {type CHeapError}
 pub using @layout {type ContextLayout}
 
 pub using @layout {type ContextShape}
+
+pub using @dwarf {type DWARFBuilder}
+
+pub using @dwarf {type FunctionInfo}
 
 pub using @ffi {type GCHeapHandle}
 

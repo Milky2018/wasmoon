@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/native/platform"
+
+// Values
+pub fn has_aarch64_lse() -> Bool
+
+pub fn is_windows() -> Bool
+
+pub fn operating_system_abi_tag() -> Int32
+
+pub fn target_arch() -> Int32
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

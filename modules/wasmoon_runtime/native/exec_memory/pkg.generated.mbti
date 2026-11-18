@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/native/exec_memory"
+
+import {
+  "Milky2018/wasmoon_runtime/native/ownership",
+}
+
+// Values
+pub fn alloc_exec_managed(FixedArray[Byte], Int32) -> ExecCodeHandle
+
+pub fn exec_code_pointer(ExecCodeHandle) -> Int64
+
+pub fn finalize_exec_managed(ExecCodeHandle, FixedArray[Byte], Int32) -> Int32
+
+pub fn release_exec_managed(ExecCodeHandle) -> Int32
+
+pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> ExecCodeHandle
+
+// Errors
+
+// Types and methods
+type ExecCodeHandle
+pub fn ExecCodeHandle::bind_reservation(Self, @ownership.Reservation) -> Bool
+
+// Type aliases
+
+// Traits

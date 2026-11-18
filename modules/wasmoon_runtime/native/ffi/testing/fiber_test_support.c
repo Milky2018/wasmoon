@@ -1,4 +1,15 @@
-#include "../jit_internal.h"
+#include "../control/trap.h"
+#include "../control/fiber.h"
+#include "../control/hostcall.h"
+#include "../gc/gc_roots.h"
+#include "../control/exception.h"
+#include "../control/fiber_protocol.h"
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 #if defined(_MSC_VER) && !defined(__clang__)
 #include "test_guest_bridges.h"
 #endif
@@ -76,27 +87,11 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_test_callback_capture_release_count(void) {
     );
 }
 
-extern void wasmoon_jit_set_cancellation_callback(
-    int64_t ctx_ptr,
-    cancellation_callback_fn callback,
-    void *closure
-);
 
-extern void *wasmoon_native_fiber_alloc(
-    native_fiber_entry_fn entry,
-    void *closure,
-    int64_t stack_size
-);
-extern int wasmoon_native_fiber_continue(void *managed, int64_t resume_value);
-extern int64_t wasmoon_native_fiber_return_value(void *managed);
+
+
 extern int64_t wasmoon_test_native_fiber_register_probe(void *closure);
-extern WASMOON_GUEST_ABI int32_t wasmoon_jit_hostcall(
-    jit_context_t *ctx,
-    int32_t func_idx,
-    int64_t values_ptr,
-    int32_t num_args,
-    int32_t num_results
-);
+
 
 static int WASMOON_GUEST_ABI hostcall_probe_trampoline(
     jit_context_t *ctx,

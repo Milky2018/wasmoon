@@ -1,4 +1,7 @@
-#include "../jit_internal.h"
+#include "../control/trap.h"
+#include "../gc/gc_roots.h"
+#include "../control/exception.h"
+#include "../../ownership/native_alloc.h"
 
 static int run_exception_failure(jit_trap_activation_t *activation, int mode) {
     if (sigsetjmp(activation->jmp_buf, 1) == 0) {
@@ -18,7 +21,6 @@ static int run_exception_failure(jit_trap_activation_t *activation, int mode) {
     return (int)activation->code;
 }
 
-extern int64_t wasmoon_jit_context_ptr(void *context);
 
 MOONBIT_FFI_EXPORT int wasmoon_test_native_failure_recovery(void *context) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context);

@@ -1,0 +1,1030 @@
+// Copyright 2025
+// Trap handling for JIT runtime
+// Handles signals from BRK instructions and stack overflow
+
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
+#include "trap.h"
+#include "fiber.h"
+#include "../memory/memory_ops.h"
+#include "../gc/gc_roots.h"
+#include "exception.h"
+#include "fiber_sanitizer.h"
+#include "trap_codes.h"
+#include <string.h>
+#include <stdlib.h>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
+
+#if defined(__linux__)
+#include <sys/ucontext.h>
+#endif
+
+// glibc exposes REG_RIP/REG_RBP indices for x86_64 in sys/ucontext.h when the
+// right feature macros are enabled. Some build environments omit these defines.
+// Provide fallbacks that match glibc's x86_64 gregset_t layout.
+#if defined(__linux__) && defined(__x86_64__)
+#ifndef REG_RIP
+#define REG_RIP 16
+#endif
+#ifndef REG_RBP
+#define REG_RBP 10
+#endif
+#ifndef REG_RAX
+#define REG_RAX 13
+#endif
+#ifndef REG_RCX
+#define REG_RCX 14
+#endif
+#ifndef REG_RDX
+#define REG_RDX 12
+#endif
+#ifndef REG_RBX
+#define REG_RBX 11
+#endif
+#ifndef REG_RSI
+#define REG_RSI 9
+#endif
+#ifndef REG_RDI
+#define REG_RDI 8
+#endif
+#ifndef REG_R8
+#define REG_R8 0
+#endif
+#ifndef REG_R9
+#define REG_R9 1
+#endif
+#ifndef REG_R10
+#define REG_R10 2
+#endif
+#ifndef REG_R11
+#define REG_R11 3
+#endif
+#ifndef REG_R15
+#define REG_R15 7
+#endif
+#endif
+
+// Shared checked-helper failure: jump only through an active native trap
+// activation; low-level callers without one retain the zero-result contract.
+int64_t jit_trap_result(int32_t code) {
+    g_trap_code = code;
+    if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    return 0;
+}
+
+// ============ Trap Activations (Thread-Local) ============
+
+_Thread_local jit_activation_slot_t wasmoon_jit_activation_slot;
+#define fallback_activation wasmoon_jit_activation_slot.fallback
+#define current_activation wasmoon_jit_activation_slot.current
+static _Thread_local jit_trap_activation_t observed_activation;
+
+static _Thread_local int observed_activation_valid = 0;
+
+
+jit_trap_activation_t *jit_current_trap_activation(void) {
+    return jit_current_trap_activation_fast();
+}
+
+jit_trap_activation_t *jit_observed_trap_activation(void) {
+    return observed_activation_valid
+        ? &observed_activation
+        : jit_current_trap_activation();
+}
+
+void jit_trap_activation_init(
+    jit_trap_activation_t *activation,
+    jit_context_t *context
+) {
+    memset(activation, 0, sizeof(*activation));
+    activation->active = 1;
+    activation->brk_imm = -1;
+    activation->func_idx = -1;
+    activation->context = context;
+    activation->controls = &activation->owned_controls;
+    uintptr_t stack_base = 0;
+    uintptr_t stack_top = 0;
+    uintptr_t guard_base = 0;
+    size_t guard_size = 0;
+    if (wasmoon_native_fiber_stack_bounds(
+            &stack_base,
+            &stack_top,
+            &guard_base,
+            &guard_size
+        )) {
+        activation->stack_base = stack_base;
+        activation->stack_top = stack_top;
+        activation->guard_base = guard_base;
+        activation->guard_size = guard_size;
+    }
+}
+
+static void save_activation_context(jit_trap_activation_t *activation) {
+    jit_context_t *context = activation->context;
+    if (!context || activation->context_detached) return;
+    if (ctx_runtime(context)->execution != &activation->execution) abort();
+    activation->debug_current_func_idx = ctx_debug_current_func_idx(context);
+    ctx_runtime(context)->execution = activation->previous_execution;
+    ctx_set_debug_current_func_idx(context, activation->previous_debug_func_idx);
+    activation->context_detached = 1;
+}
+
+static void restore_activation_context(jit_trap_activation_t *activation) {
+    jit_context_t *context = activation->context;
+    if (!context || !activation->context_detached) return;
+    activation->previous_execution = ctx_runtime(context)->execution;
+    activation->previous_debug_func_idx = ctx_debug_current_func_idx(context);
+    ctx_runtime(context)->execution = &activation->execution;
+    ctx_set_debug_current_func_idx(context, activation->debug_current_func_idx);
+    activation->context_detached = 0;
+}
+
+static int32_t copy_activation_roots(
+    const jit_trap_activation_t *activation, int64_t *destination, int32_t capacity
+) {
+    const jit_execution_state_t *state = &activation->execution;
+    int32_t scoped = jit_copy_root_scopes(state, destination, capacity);
+    if (scoped < 0) return -1;
+    int32_t exception = exception_copy_activation_roots(activation->context, state,
+        destination ? destination + scoped : NULL, capacity - scoped);
+    if (exception < 0) return -1;
+    int32_t at = scoped + exception;
+    int32_t spilled = state->spilled_locals_count > 0 ? state->spilled_locals_count : 0;
+    int32_t scratch = state->gc_root_scratch_len > 0 ? state->gc_root_scratch_len : 0;
+    if (spilled > capacity - at || scratch > capacity - at - spilled ||
+        (spilled && !state->spilled_locals) || (scratch && !state->gc_root_scratch)) {
+        return -1;
+    }
+    if (destination) {
+        if (spilled) {
+            memcpy(destination + at, state->spilled_locals + spilled,
+                (size_t)spilled * sizeof(int64_t));
+        }
+        if (scratch) {
+            memcpy(destination + at + spilled, state->gc_root_scratch,
+                (size_t)scratch * sizeof(int64_t));
+        }
+    }
+    return at + spilled + scratch;
+}
+
+// Snapshot the same activation roots for GC and transaction liveness checks.
+// A null destination counts without allocating or mutating mark state.
+int32_t jit_copy_active_gc_roots(GcHeap *heap, int64_t *destination) {
+    int32_t total = 0;
+    for (jit_trap_activation_t *activation = current_activation;
+         activation; activation = activation->previous) {
+        if (!activation->active || !activation->context ||
+            ctx_gc_heap(activation->context) != heap) continue;
+        int32_t count = copy_activation_roots(activation,
+            destination ? destination + total : NULL, INT32_MAX - total);
+        if (count < 0) return -1;
+        total += count;
+    }
+    return total;
+}
+
+static void mark_activation_gc_roots(void *source, GcHeap *heap) {
+    jit_trap_activation_t *activation = source;
+    jit_context_t *context = activation->context;
+    const jit_execution_state_t *state = &activation->execution;
+    for (const wasmoon_gc_function_frame_t *frame = state->gc_function_frame_head;
+         frame; frame = frame->prev) {
+        for (int32_t slot = 0; slot < frame->slot_count; ++slot) {
+            if ((frame->mask[(uint32_t)slot / 64] >> ((uint32_t)slot % 64)) & 1)
+                gc_heap_mark_roots(heap, frame->roots + slot, 1);
+        }
+    }
+    for (const wasmoon_gc_root_scope_t *scope = state->gc_root_scope_head;
+         scope; scope = scope->prev) {
+        gc_heap_mark_roots(heap, scope->roots, scope->root_count);
+    }
+    exception_mark_activation_roots(heap, context, state);
+    gc_heap_mark_roots(heap, state->spilled_locals ? state->spilled_locals + state->spilled_locals_count : NULL, state->spilled_locals_count);
+    gc_heap_mark_roots(heap, state->gc_root_scratch, state->gc_root_scratch_len);
+}
+
+// Reentrant native calls may collect an outer Store, or share its heap while
+// its activation is detached from a reused context. Both remain live roots.
+void jit_mark_active_gc_roots(GcHeap *heap) {
+    for (jit_trap_activation_t *activation = current_activation;
+         activation; activation = activation->previous) {
+        if (!activation->active || !activation->context ||
+            ctx_gc_heap(activation->context) != heap) continue;
+        mark_activation_gc_roots(activation, heap);
+    }
+}
+
+static int32_t copy_parked_activation_roots(void *source, int64_t *roots) {
+    return copy_activation_roots(source, roots, INT32_MAX);
+}
+
+int jit_parked_gc_roots_register(
+    jit_trap_activation_t *activation,
+    void **registration
+) {
+    if (!registration) return 0;
+    *registration = NULL;
+    if (!activation || !activation->context) return 1;
+    GcHeap *heap = (GcHeap *)ctx_gc_heap(activation->context);
+    if (!heap) return copy_activation_roots(activation, NULL, INT32_MAX) == 0;
+    if (!activation->active || !activation->context_detached) return 0;
+    if (!gc_heap_register_parked_source(heap, &activation->parked_roots,
+            activation, copy_parked_activation_roots, mark_activation_gc_roots)) return 0;
+    *registration = &activation->parked_roots;
+    return 1;
+}
+
+void jit_parked_gc_roots_unregister(void *registration) {
+    gc_heap_unregister_parked_roots(registration);
+}
+
+// Distinguish an active owner from standalone helper state before fresh entry.
+static jit_trap_activation_t *matching_context_activation(jit_context_t *context) {
+    for (jit_trap_activation_t *a = current_activation; a; a = a->previous) {
+        if (a->context == context) return a;
+    }
+    return NULL;
+}
+
+static void release_activation_controls(jit_trap_activation_t *activation);
+
+// Only the current activation publishes generated-code controls. A context
+// without this binding must use the TLS-aware slow poll, including while a
+// child or a parked continuation owns the effective controls.
+static void unpublish_poll_controls(jit_trap_activation_t *activation) {
+    if (!activation) return;
+    activation->execution.poll_controls = NULL;
+    if (activation->context) ctx_runtime(activation->context)->poll_budget = NULL;
+}
+
+static void publish_poll_controls(jit_trap_activation_t *activation) {
+    if (!activation) return;
+    jit_invocation_controls_t *controls = activation->controls;
+    activation->execution.poll_controls = controls;
+    if (activation->context) {
+        ctx_runtime(activation->context)->poll_budget =
+            controls && !controls->cancellation_callback ? &controls->scheduling_budget : NULL;
+    }
+}
+
+int jit_trap_activation_push(jit_trap_activation_t *activation) {
+    activation->previous = current_activation;
+    if (activation->context) {
+        activation->owned_controls = ctx_runtime(activation->context)->control_defaults;
+        if (activation->owned_controls.cancellation_callback_data)
+            moonbit_incref(activation->owned_controls.cancellation_callback_data);
+    }
+    if (activation->inherit_controls && current_activation) {
+        activation->controls = current_activation->controls;
+    }
+    activation->execution.poll_controls = activation->controls;
+    if (activation->context) {
+        jit_execution_state_t *previous = ctx_runtime(activation->context)->execution;
+        int standalone = !matching_context_activation(activation->context);
+        activation->previous_execution = previous;
+        activation->previous_debug_func_idx = ctx_debug_current_func_idx(activation->context);
+        ctx_runtime(activation->context)->execution = &activation->execution;
+        ctx_set_debug_current_func_idx(activation->context, -1);
+        // Preserve explicitly configured standalone roots without sharing the
+        // mutable scratch buffer with this invocation or a nested invocation.
+        if (standalone && previous && previous->gc_root_scratch_len > 0 &&
+            !ctx_gc_set_root_scratch_internal(activation->context,
+                previous->gc_root_scratch, previous->gc_root_scratch_len)) {
+            ctx_runtime(activation->context)->execution = previous;
+            ctx_set_debug_current_func_idx(activation->context, activation->previous_debug_func_idx);
+            jit_execution_state_clear(&activation->execution);
+            release_activation_controls(activation);
+            activation->active = 0;
+            return 0;
+        }
+        if (standalone && previous) exception_reset_execution_state(previous);
+    }
+    unpublish_poll_controls(current_activation);
+    publish_poll_controls(activation);
+    current_activation = activation;
+    return 1;
+}
+
+void jit_trap_activation_publish(jit_trap_activation_t *activation) {
+    memset(&observed_activation, 0, sizeof(observed_activation));
+    observed_activation.code = activation->code;
+    observed_activation.signal = activation->signal;
+    observed_activation.pc = activation->pc;
+    observed_activation.lr = activation->lr;
+    observed_activation.fp = activation->fp;
+    observed_activation.frame_lr = activation->frame_lr;
+    observed_activation.fault_addr = activation->fault_addr;
+    observed_activation.brk_imm = activation->brk_imm;
+    observed_activation.func_idx = activation->func_idx;
+    observed_activation.x0 = activation->x0;
+    observed_activation.x1 = activation->x1;
+    observed_activation.x2 = activation->x2;
+    observed_activation.x3 = activation->x3;
+    observed_activation.x6 = activation->x6;
+    observed_activation.x7 = activation->x7;
+    observed_activation.x8 = activation->x8;
+    observed_activation.x9 = activation->x9;
+    observed_activation.x10 = activation->x10;
+    observed_activation.x11 = activation->x11;
+    observed_activation.x15 = activation->x15;
+    observed_activation.stack_base = activation->stack_base;
+    observed_activation.stack_top = activation->stack_top;
+    observed_activation.guard_base = activation->guard_base;
+    observed_activation.guard_size = activation->guard_size;
+    int frame_count = activation->frame_count;
+    if (frame_count < 0) frame_count = 0;
+    if (frame_count > MAX_TRAP_FRAMES) frame_count = MAX_TRAP_FRAMES;
+    observed_activation.frame_count = frame_count;
+    for (int i = 0; i < frame_count; i++) {
+        observed_activation.frames_pc[i] = activation->frames_pc[i];
+        observed_activation.frames_fp[i] = activation->frames_fp[i];
+    }
+    observed_activation_valid = 1;
+}
+
+static void release_activation_controls(jit_trap_activation_t *activation) {
+    if (activation->owned_controls.cancellation_callback_data)
+        moonbit_decref(activation->owned_controls.cancellation_callback_data);
+    memset(&activation->owned_controls, 0, sizeof(activation->owned_controls));
+    activation->controls = &activation->owned_controls;
+}
+
+void jit_trap_activation_pop(jit_trap_activation_t *activation) {
+    if (activation->parked_roots.heap) abort();
+    if (current_activation != activation) abort();
+    unpublish_poll_controls(activation);
+    save_activation_context(activation);
+    current_activation = activation->previous;
+    publish_poll_controls(current_activation);
+    jit_execution_state_clear(&activation->execution);
+    release_activation_controls(activation);
+    activation->active = 0;
+}
+
+jit_trap_activation_t *jit_trap_activation_detach(void) {
+    jit_trap_activation_t *activation = current_activation;
+    if (!activation) return NULL;
+    unpublish_poll_controls(activation);
+    save_activation_context(activation);
+    current_activation = activation->previous;
+    publish_poll_controls(current_activation);
+    return activation;
+}
+
+void jit_trap_activation_attach(jit_trap_activation_t *activation) {
+    if (!activation) return;
+    activation->previous = current_activation;
+    unpublish_poll_controls(current_activation);
+    restore_activation_context(activation);
+    activation->controls = &activation->owned_controls;
+    if (activation->inherit_controls && current_activation) {
+        activation->controls = current_activation->controls;
+    }
+    publish_poll_controls(activation);
+    current_activation = activation;
+}
+
+void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
+    if (!activation) return;
+    if (activation->parked_roots.heap) abort();
+    if (current_activation == activation) {
+        unpublish_poll_controls(activation);
+        save_activation_context(activation);
+        current_activation = activation->previous;
+        publish_poll_controls(current_activation);
+    }
+    jit_execution_state_clear(&activation->execution);
+    release_activation_controls(activation);
+    activation->active = 0;
+}
+
+#ifndef _WIN32
+// Alternate signal stack for handling stack overflow (per-thread; sigaltstack is per-thread)
+#define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
+static _Thread_local char g_sigstack[SIGSTACK_SIZE];
+static _Thread_local int g_sigstack_installed = 0;
+
+// Stack bounds for overflow detection (per-thread)
+static _Thread_local void *g_stack_base = NULL;
+static _Thread_local size_t g_stack_size = 0;
+
+// ============ Stack Bounds Detection ============
+
+static int init_stack_bounds(void) {
+    if (g_stack_base != NULL) return 1;  // Already initialized
+
+#if defined(__APPLE__)
+    // macOS: use pthread_get_stackaddr_np and pthread_get_stacksize_np
+    pthread_t self = pthread_self();
+    g_stack_base = pthread_get_stackaddr_np(self);
+    g_stack_size = pthread_get_stacksize_np(self);
+#elif defined(__linux__)
+    // Linux: use pthread_attr_getstack
+    pthread_attr_t attr;
+    if (pthread_getattr_np(pthread_self(), &attr) != 0) return 0;
+    void *stack_addr = NULL;
+    size_t stack_size = 0;
+    int result = pthread_attr_getstack(&attr, &stack_addr, &stack_size);
+    pthread_attr_destroy(&attr);
+    if (result != 0 || !stack_addr || !stack_size) return 0;
+    // On Linux, stack_addr is the low address.
+    g_stack_base = (char*)stack_addr + stack_size;
+    g_stack_size = stack_size;
+#elif defined(_WIN32)
+    ULONG_PTR low, high;
+    GetCurrentThreadStackLimits(&low, &high);
+    g_stack_base = (void *)high;
+    g_stack_size = high - low;
+#else
+    // Fallback: estimate from current stack pointer
+    volatile int dummy;
+    g_stack_base = (void*)&dummy;
+    g_stack_size = 8 * 1024 * 1024;  // Assume 8MB stack
+#endif
+    return g_stack_base != NULL && g_stack_size > 0;
+}
+
+// Check if address is near stack boundary (likely stack overflow)
+static int is_stack_overflow(void *fault_addr) {
+    if (g_stack_base == NULL || g_stack_size == 0) {
+        return 0;  // Can't determine
+    }
+
+    // Stack grows down: check if fault address is below stack base
+    // and within a reasonable range (stack region + guard pages)
+    uintptr_t base = (uintptr_t)g_stack_base;
+    uintptr_t addr = (uintptr_t)fault_addr;
+    uintptr_t stack_low = base - g_stack_size;
+
+    // Consider addresses within stack region or slightly below (guard page)
+    // Guard page is typically 4KB-64KB below stack limit
+    size_t guard_zone = 64 * 1024;  // 64KB guard zone
+    if (stack_low > guard_zone) {
+        stack_low -= guard_zone;
+    } else {
+        stack_low = 0;
+    }
+
+    return (addr >= stack_low && addr < base);
+}
+
+// ============ Alternate Signal Stack ============
+
+static int install_alt_stack(void) {
+    if (g_sigstack_installed) return 1;
+
+#ifndef _WIN32
+    // ASan owns the alternate signal stack even with uninstrumented stubs.
+    if (wasmoon_address_sanitizer_active()) return 1;
+    stack_t ss;
+    ss.ss_sp = g_sigstack;
+    ss.ss_size = SIGSTACK_SIZE;
+    ss.ss_flags = 0;
+    if (sigaltstack(&ss, NULL) == 0) {
+        g_sigstack_installed = 1;
+    }
+#endif
+    return g_sigstack_installed;
+}
+
+#endif
+
+// ============ Signal Handlers ============
+
+#ifndef _WIN32
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+// BRK encoding: 0xD4200000 | (imm16 << 5)
+// Match fixed bits [31:21] and [4:0].
+#define BRK_MASK 0xFFE0001FU
+#define BRK_BASE 0xD4200000U
+
+static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
+    if (!out_trap_pc || !out_imm) return 0;
+    // On some platforms, the ucontext PC points to the BRK instruction; on others it points
+    // to the next instruction. Probe both `pc` and `pc-4` and validate the encoding.
+    uint32_t instr = *(uint32_t *)pc;
+    if ((instr & BRK_MASK) == BRK_BASE) {
+        *out_trap_pc = pc;
+        *out_imm = (int)((instr >> 5) & 0xFFFF);
+        return 1;
+    }
+    if (pc >= 4) {
+        uint32_t instr_prev = *(uint32_t *)(pc - 4);
+        if ((instr_prev & BRK_MASK) == BRK_BASE) {
+            *out_trap_pc = pc - 4;
+            *out_imm = (int)((instr_prev >> 5) & 0xFFFF);
+            return 1;
+        }
+    }
+    return 0;
+}
+#elif defined(__x86_64__) || defined(_M_X64)
+// INT3 encoding: 0xCC. We place an imm16 payload (little-endian) immediately
+// after the trapping byte and decode it here.
+#define INT3_BYTE 0xCCU
+
+static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
+    if (!out_trap_pc || !out_imm) return 0;
+    const uint8_t *p = (const uint8_t *)pc;
+    // On some platforms, the ucontext PC points to the trapping instruction; on others
+    // it points to the next instruction. Probe both `pc` and `pc-1`.
+    if (*p == INT3_BYTE) {
+        *out_trap_pc = pc;
+        *out_imm = (int)(p[1] | ((uint16_t)p[2] << 8));
+        return 1;
+    }
+    if (pc >= 1) {
+        const uint8_t *p_prev = (const uint8_t *)(pc - 1);
+        if (*p_prev == INT3_BYTE) {
+            *out_trap_pc = pc - 1;
+            *out_imm = (int)(p_prev[1] | ((uint16_t)p_prev[2] << 8));
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
+#endif // !_WIN32
+
+// Copy bounded frame records while the guest stack is still intact. Recovery
+// on that stack (especially instrumented C frames) may overwrite abandoned frames.
+static void capture_frame_chain(uintptr_t initial_pc, uintptr_t initial_fp,
+                                 uintptr_t stack_base, uintptr_t stack_top) {
+    g_trap_frame_count = 0;
+
+    // Capture first frame (trap location)
+    if (g_trap_frame_count < MAX_TRAP_FRAMES) {
+        g_trap_frames_pc[g_trap_frame_count] = initial_pc;
+        g_trap_frames_fp[g_trap_frame_count] = initial_fp;
+        g_trap_frame_count++;
+    }
+
+    // Walk the frame pointer chain
+    uintptr_t fp = initial_fp;
+    // stack_base already excludes the guard. Never consult a process-global
+    // debugger owner's range while walking another activation's owned stack.
+    uintptr_t valid_low = stack_base;
+
+    while (fp != 0 && g_trap_frame_count < MAX_TRAP_FRAMES) {
+        // Validate FP is within WASM stack bounds
+        if (fp < valid_low || fp >= stack_top ||
+            stack_top - fp < 2 * sizeof(uintptr_t) || (fp & 0xF) != 0) {
+            break;
+        }
+
+        // Read frame record: [fp] = prev_fp, [fp+8] = return_address
+        uintptr_t *frame_ptr = (uintptr_t *)fp;
+        uintptr_t prev_fp = frame_ptr[0];
+        uintptr_t return_addr = frame_ptr[1];
+
+        if (return_addr == 0) {
+            break;  // End of chain
+        }
+
+        // Add this frame
+        g_trap_frames_pc[g_trap_frame_count] = return_addr;
+        g_trap_frames_fp[g_trap_frame_count] = prev_fp;
+        g_trap_frame_count++;
+
+        // Move to previous frame (FP should grow upward as we unwind)
+        if (prev_fp != 0 && prev_fp <= fp) {
+            break;  // Invalid chain
+        }
+        fp = prev_fp;
+    }
+}
+
+void jit_trap_activation_finalize(jit_trap_activation_t *activation) {
+    if (!activation || activation->frame_count != 0) return;
+    if (activation->stack_base != 0 && activation->stack_top != 0) {
+        uintptr_t fp = activation->fp;
+        if (fp >= activation->stack_base && fp < activation->stack_top &&
+            activation->stack_top - fp >= 2 * sizeof(uintptr_t) &&
+            (fp & 0xF) == 0) {
+            activation->frame_lr =
+                *(uintptr_t *)(fp + sizeof(uintptr_t));
+        }
+        capture_frame_chain(
+            activation->pc,
+            activation->fp,
+            activation->stack_base,
+            activation->stack_top
+        );
+    } else if (activation->pc != 0) {
+        activation->frames_pc[0] = activation->pc;
+        activation->frames_fp[0] = activation->fp;
+        activation->frame_count = 1;
+    }
+}
+
+#ifndef _WIN32
+#ifdef __APPLE__
+// Entered only after sigreturn has restored the interrupted thread's signal
+// mask and alternate-stack status. No guest stack space is needed to recover.
+_Noreturn static void darwin_trap_landing(void) {
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+#endif
+
+static void finish_trap_signal(void *ucontext) {
+    // POSIX handlers run on the alternate signal stack. Snapshot before
+    // restoring the activation SP and entering recovery C code on the fiber.
+    jit_trap_activation_finalize(jit_current_trap_activation());
+#ifdef __APPLE__
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    ucontext_t *uc = ucontext;
+#if defined(__aarch64__)
+    __darwin_arm_thread_state64_set_pc_fptr(uc->uc_mcontext->__ss, darwin_trap_landing);
+    __darwin_arm_thread_state64_set_sp(uc->uc_mcontext->__ss, activation->signal_landing_sp);
+#elif defined(__x86_64__)
+    // SysV function entry has an eight-byte return address below aligned RSP.
+    uintptr_t sp = activation->signal_landing_sp - sizeof(uintptr_t);
+    *(uintptr_t *)sp = 0;
+    uc->uc_mcontext->__ss.__rsp = sp;
+    uc->uc_mcontext->__ss.__rip = (uintptr_t)darwin_trap_landing;
+#endif
+#else
+    (void)ucontext;
+    siglongjmp(g_trap_jmp_buf, 1);
+#endif
+}
+
+static void prepare_trap_diagnostics(jit_context_t *ctx) {
+    g_trap_func_idx = ctx ? (sig_atomic_t)ctx_debug_current_func_idx(ctx) : -1;
+    g_trap_x0 = 0;
+    g_trap_x1 = 0;
+    g_trap_x2 = 0;
+    g_trap_x3 = 0;
+    g_trap_x6 = 0;
+    g_trap_x7 = 0;
+    g_trap_x8 = 0;
+    g_trap_x9 = 0;
+    g_trap_x10 = 0;
+    g_trap_x11 = 0;
+    g_trap_x15 = 0;
+}
+
+// Signal handlers only read the supplied context and write thread-local
+// diagnostics here. Frame unwinding still runs before recovery changes stacks.
+static uintptr_t capture_trap_context(void *ucontext) {
+    if (!ucontext) return 0;
+#if defined(__APPLE__) && defined(__aarch64__)
+    // On macOS ARM64, extract PC from ucontext and read BRK immediate
+    ucontext_t *uc = (ucontext_t *)ucontext;
+    uint64_t pc = uc->uc_mcontext->__ss.__pc;
+    g_trap_lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
+    g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
+    g_trap_frame_lr = 0;
+    return (uintptr_t)pc;
+#elif defined(__linux__) && defined(__aarch64__)
+    // On Linux ARM64
+    ucontext_t *uc = (ucontext_t *)ucontext;
+    uint64_t pc = uc->uc_mcontext.pc;
+    g_trap_lr = (uintptr_t)uc->uc_mcontext.regs[30];
+    g_trap_fp = (uintptr_t)uc->uc_mcontext.regs[29];
+    g_trap_frame_lr = 0;
+    return (uintptr_t)pc;
+#elif defined(__APPLE__) && defined(__x86_64__)
+    // macOS x86_64: INT3 payload.
+    ucontext_t *uc = (ucontext_t *)ucontext;
+    uintptr_t pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
+    g_trap_x0 = (uintptr_t)uc->uc_mcontext->__ss.__rax;
+    g_trap_x1 = (uintptr_t)uc->uc_mcontext->__ss.__rcx;
+    g_trap_x2 = (uintptr_t)uc->uc_mcontext->__ss.__rdx;
+    g_trap_x3 = (uintptr_t)uc->uc_mcontext->__ss.__rbx;
+    g_trap_x6 = (uintptr_t)uc->uc_mcontext->__ss.__rsi;
+    g_trap_x7 = (uintptr_t)uc->uc_mcontext->__ss.__rdi;
+    g_trap_x8 = (uintptr_t)uc->uc_mcontext->__ss.__r8;
+    g_trap_x9 = (uintptr_t)uc->uc_mcontext->__ss.__r9;
+    g_trap_x10 = (uintptr_t)uc->uc_mcontext->__ss.__r10;
+    g_trap_x11 = (uintptr_t)uc->uc_mcontext->__ss.__r11;
+    g_trap_x15 = (uintptr_t)uc->uc_mcontext->__ss.__r15;
+    g_trap_lr = 0;
+    g_trap_fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
+    g_trap_frame_lr = 0;
+    return (uintptr_t)pc;
+#elif defined(__linux__) && defined(__x86_64__)
+    // Linux x86_64: INT3 payload.
+    ucontext_t *uc = (ucontext_t *)ucontext;
+    uintptr_t pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+    g_trap_x0 = (uintptr_t)uc->uc_mcontext.gregs[REG_RAX];
+    g_trap_x1 = (uintptr_t)uc->uc_mcontext.gregs[REG_RCX];
+    g_trap_x2 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDX];
+    g_trap_x3 = (uintptr_t)uc->uc_mcontext.gregs[REG_RBX];
+    g_trap_x6 = (uintptr_t)uc->uc_mcontext.gregs[REG_RSI];
+    g_trap_x7 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDI];
+    g_trap_x8 = (uintptr_t)uc->uc_mcontext.gregs[REG_R8];
+    g_trap_x9 = (uintptr_t)uc->uc_mcontext.gregs[REG_R9];
+    g_trap_x10 = (uintptr_t)uc->uc_mcontext.gregs[REG_R10];
+    g_trap_x11 = (uintptr_t)uc->uc_mcontext.gregs[REG_R11];
+    g_trap_x15 = (uintptr_t)uc->uc_mcontext.gregs[REG_R15];
+    g_trap_lr = 0;
+    g_trap_fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
+    g_trap_frame_lr = 0;
+    return (uintptr_t)pc;
+#else
+    (void)ucontext;
+    return 0;
+#endif
+}
+
+// Signal handler for SIGTRAP (BRK/INT3); SA_SIGINFO supplies the fault context.
+static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
+    (void)info;
+
+    if (g_trap_active) {
+        int trap_code = 99;  // Default to unknown
+        uintptr_t trap_pc = 0;
+        int brk_imm = -1;
+
+        jit_context_t *ctx = get_current_jit_context();
+
+        g_trap_signal = sig;
+        g_trap_fault_addr = 0;
+        g_trap_pc = 0;
+        g_trap_lr = 0;
+        g_trap_fp = 0;
+        g_trap_frame_lr = 0;
+        g_trap_brk_imm = -1;
+        prepare_trap_diagnostics(ctx);
+
+#if (defined(__APPLE__) || defined(__linux__)) && (defined(__aarch64__) || defined(__x86_64__))
+        uintptr_t pc = capture_trap_context(ucontext);
+        if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
+            trap_pc = pc;
+        }
+        trap_code = wasmoon_decode_native_trap(brk_imm);
+#else
+        (void)ucontext;
+#endif
+
+        g_trap_code = trap_code;
+        g_trap_pc = trap_pc;
+        g_trap_brk_imm = brk_imm;
+
+        g_trap_frame_count = 0;
+
+        finish_trap_signal(ucontext);
+        return;
+    }
+}
+
+// Signal handler for SIGSEGV (triggered by stack overflow or invalid memory access)
+static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
+    if (g_trap_active) {
+        void *fault_addr = info->si_addr;
+        jit_context_t *ctx = get_current_jit_context();
+        uintptr_t pc = 0;
+
+        g_trap_signal = sig;
+        g_trap_fault_addr = (uintptr_t)fault_addr;
+        g_trap_brk_imm = -1;
+        prepare_trap_diagnostics(ctx);
+
+        pc = capture_trap_context(ucontext);
+        g_trap_pc = pc;
+
+        g_trap_frame_count = 0;
+
+        jit_trap_activation_t *activation = jit_current_trap_activation();
+        uintptr_t fault = (uintptr_t)fault_addr;
+        if (activation->guard_base != 0 &&
+            fault >= activation->guard_base &&
+            fault < activation->guard_base + activation->guard_size) {
+            g_trap_code = 2;
+            finish_trap_signal(ucontext);
+            return;
+        }
+
+        // Check for memory guard page access (bounds check elimination)
+        // This converts out-of-bounds memory access to a proper trap
+        if (ctx && is_memory_guard_page_access(ctx, fault_addr)) {
+            g_trap_code = 1;  // out of bounds memory access
+            finish_trap_signal(ucontext);
+            return;
+        }
+
+        if (is_stack_overflow(fault_addr)) {
+            // Native stack overflow detected for a direct host-stack call.
+            g_trap_code = 2;  // call stack exhausted
+            finish_trap_signal(ucontext);
+            return;
+        } else {
+            // Could be WASM memory access violation or other error
+            // Use unknown trap code since we can't determine the exact cause
+            g_trap_code = 99;
+            finish_trap_signal(ucontext);
+            return;
+        }
+    }
+
+    // Not in JIT context, re-raise signal for default handling
+    signal(SIGSEGV, SIG_DFL);
+    raise(SIGSEGV);
+}
+
+#endif // !_WIN32
+
+#ifdef _WIN32
+// Only recognized guest traps and owned memory guards are recovered. Unrelated
+// host faults continue through normal Windows exception handling.
+static LONG CALLBACK windows_trap_handler(EXCEPTION_POINTERS *exception) {
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    if (!activation || !activation->active) return EXCEPTION_CONTINUE_SEARCH;
+    DWORD code = exception->ExceptionRecord->ExceptionCode;
+    CONTEXT *registers = exception->ContextRecord;
+    int trap = 0;
+    uintptr_t pc = (uintptr_t)exception->ExceptionRecord->ExceptionAddress;
+    uintptr_t fault = 0;
+    if (code == EXCEPTION_BREAKPOINT) {
+        const unsigned char *instruction = (const unsigned char *)pc;
+        MEMORY_BASIC_INFORMATION region;
+        if (!VirtualQuery(instruction, &region, sizeof(region)) ||
+            region.State != MEM_COMMIT ||
+            pc + 3 > (uintptr_t)region.BaseAddress + region.RegionSize ||
+            instruction[0] != 0xcc) return EXCEPTION_CONTINUE_SEARCH;
+        int payload = instruction[1] | (instruction[2] << 8);
+        trap = wasmoon_decode_native_trap(payload);
+        if (trap == WASMOON_TRAP_UNKNOWN) return EXCEPTION_CONTINUE_SEARCH;
+        activation->brk_imm = payload;
+    } else if (code == EXCEPTION_STACK_OVERFLOW) {
+        trap = WASMOON_TRAP_STACK_EXHAUSTED;
+    } else if (code == EXCEPTION_ACCESS_VIOLATION &&
+               exception->ExceptionRecord->NumberParameters >= 2) {
+        fault = exception->ExceptionRecord->ExceptionInformation[1];
+        uintptr_t guard_base = 0;
+        size_t guard_size = 0;
+        if (wasmoon_native_fiber_stack_bounds(NULL, NULL, &guard_base, &guard_size) &&
+            fault >= guard_base && fault - guard_base < guard_size)
+            trap = WASMOON_TRAP_STACK_EXHAUSTED;
+        else if (activation->context &&
+            is_memory_guard_page_access(activation->context, (void *)fault))
+            trap = WASMOON_TRAP_MEMORY_BOUNDS;
+        else return EXCEPTION_CONTINUE_SEARCH;
+    } else return EXCEPTION_CONTINUE_SEARCH;
+    activation->func_idx = activation->context
+        ? (sig_atomic_t)ctx_debug_current_func_idx(activation->context) : -1;
+    activation->code = trap;
+    activation->signal = (sig_atomic_t)code;
+    activation->pc = pc;
+    activation->fault_addr = fault;
+    activation->fp = registers->Rbp;
+    // Windows grows fiber stacks below their initially committed limit. Use
+    // the readable region containing the faulting frame, before recovery can
+    // re-arm guard pages inside the abandoned guest stack.
+    MEMORY_BASIC_INFORMATION frame_region;
+    if (activation->guard_base != 0 &&
+        activation->fp >= activation->guard_base &&
+        activation->fp < activation->stack_top &&
+        VirtualQuery((void *)activation->fp, &frame_region, sizeof(frame_region)) &&
+        (uintptr_t)frame_region.AllocationBase == activation->guard_base &&
+        frame_region.State == MEM_COMMIT &&
+        !(frame_region.Protect & PAGE_GUARD) &&
+        (frame_region.Protect & 0xff) == PAGE_READWRITE) {
+        activation->stack_base = (uintptr_t)frame_region.BaseAddress;
+        uintptr_t region_top = activation->stack_base + frame_region.RegionSize;
+        if (region_top < activation->stack_top) activation->stack_top = region_top;
+    }
+    activation->x0 = registers->Rax;
+    activation->x1 = registers->Rcx;
+    activation->x2 = registers->Rdx;
+    activation->x3 = registers->Rbx;
+    activation->x6 = registers->Rsi;
+    activation->x7 = registers->Rdi;
+    activation->x8 = registers->R8;
+    activation->x9 = registers->R9;
+    activation->x10 = registers->R10;
+    activation->x11 = registers->R11;
+    activation->x15 = registers->R15;
+    jit_trap_activation_finalize(activation);
+    siglongjmp(activation->jmp_buf, 1);
+}
+
+static BOOL CALLBACK install_windows_traps(PINIT_ONCE once, PVOID parameter, PVOID *context) {
+    (void)once; (void)parameter; (void)context;
+    return AddVectoredExceptionHandler(1, windows_trap_handler) != NULL;
+}
+#endif
+
+// ============ Handler Installation ============
+
+int install_trap_handler(void) {
+#ifdef _WIN32
+    static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+    return InitOnceExecuteOnce(&once, install_windows_traps, NULL, NULL) != 0;
+#else
+    // Publish installation only after every process-wide handler succeeds.
+    // Failed partial registration restores the previous handlers and can retry.
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    static int installed;
+    if (pthread_mutex_lock(&lock) != 0) return 0;
+    int ok = installed;
+    if (!installed) {
+        struct sigaction previous_trap, previous_segv, previous_bus;
+        struct sigaction trap_action = {0};
+        trap_action.sa_sigaction = trap_signal_handler;
+        sigemptyset(&trap_action.sa_mask);
+        trap_action.sa_flags = SA_SIGINFO;
+        struct sigaction fault_action = {0};
+        fault_action.sa_sigaction = segv_signal_handler;
+        sigemptyset(&fault_action.sa_mask);
+        fault_action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+        if (sigaction(SIGTRAP, &trap_action, &previous_trap) == 0) {
+            if (sigaction(SIGSEGV, &fault_action, &previous_segv) == 0) {
+                if (sigaction(SIGBUS, &fault_action, &previous_bus) == 0) {
+                    installed = ok = 1;
+                } else {
+                    sigaction(SIGSEGV, &previous_segv, NULL);
+                }
+            }
+            if (!ok) sigaction(SIGTRAP, &previous_trap, NULL);
+        }
+    }
+    pthread_mutex_unlock(&lock);
+    return ok && init_stack_bounds() && install_alt_stack();
+#endif
+}
+
+// ============ Trap Handling FFI Exports ============
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_signal(void) {
+    return (int)jit_observed_trap_activation()->signal;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_pc(void) {
+    return (int64_t)jit_observed_trap_activation()->pc;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_lr(void) {
+    return (int64_t)jit_observed_trap_activation()->lr;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fp(void) {
+    return (int64_t)jit_observed_trap_activation()->fp;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_lr(void) {
+    return (int64_t)jit_observed_trap_activation()->frame_lr;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fault_addr(void) {
+    return (int64_t)jit_observed_trap_activation()->fault_addr;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_xreg(int idx) {
+    jit_trap_activation_t *activation = jit_observed_trap_activation();
+    switch (idx) {
+        case 0: return (int64_t)activation->x0;
+        case 1: return (int64_t)activation->x1;
+        case 2: return (int64_t)activation->x2;
+        case 3: return (int64_t)activation->x3;
+        case 6: return (int64_t)activation->x6;
+        case 7: return (int64_t)activation->x7;
+        case 8: return (int64_t)activation->x8;
+        case 9: return (int64_t)activation->x9;
+        case 10: return (int64_t)activation->x10;
+        case 11: return (int64_t)activation->x11;
+        case 15: return (int64_t)activation->x15;
+        default: return 0;
+    }
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_brk_imm(void) {
+    return (int)jit_observed_trap_activation()->brk_imm;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_func_idx(void) {
+    return (int)jit_observed_trap_activation()->func_idx;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_frame_count(void) {
+    return jit_observed_trap_activation()->frame_count;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_pc(int idx) {
+    jit_trap_activation_t *activation = jit_observed_trap_activation();
+    if (idx >= 0 && idx < activation->frame_count) {
+        return (int64_t)activation->frames_pc[idx];
+    }
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_fp(int idx) {
+    jit_trap_activation_t *activation = jit_observed_trap_activation();
+    if (idx >= 0 && idx < activation->frame_count) {
+        return (int64_t)activation->frames_fp[idx];
+    }
+    return 0;
+}

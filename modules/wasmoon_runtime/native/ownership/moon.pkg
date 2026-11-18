@@ -1,0 +1,8 @@
+options(
+  "native-stub": [ "cleanup.c", "native_alloc.c", "quota.c" ],
+  targets: {
+    "cleanup.mbt": [ "native" ],
+    "quota.mbt": [ "native" ],
+    "ownership_wasm.mbt": [ "wasm" ],
+  },
+)

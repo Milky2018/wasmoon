@@ -1,36 +1,12 @@
-/// Managed executable-memory allocation.
-
 ///|
-type ExecCodeHandle
-
-///|
-#borrow(code)
-pub extern "c" fn alloc_exec_managed(
-  code : FixedArray[Byte],
-  size : Int32,
-) -> ExecCodeHandle = "wasmoon_jit_alloc_exec_managed"
-
-///|
-pub extern "c" fn stage_exec_managed(
-  size : Int32,
-  code_bytes~ : Int32 = -1,
-) -> ExecCodeHandle = "wasmoon_jit_stage_exec_managed"
-
-///|
-#borrow(exec_code, code)
-pub extern "c" fn finalize_exec_managed(
-  exec_code : ExecCodeHandle,
-  code : FixedArray[Byte],
-  size : Int32,
-) -> Int32 = "wasmoon_jit_finalize_exec_managed"
-
-///|
-#borrow(exec_code)
-pub extern "c" fn release_exec_managed(exec_code : ExecCodeHandle) -> Int32 = "wasmoon_jit_release_exec_managed"
-
-///|
-#borrow(exec_code)
-pub extern "c" fn exec_code_pointer(exec_code : ExecCodeHandle) -> Int64 = "wasmoon_jit_exec_code_ptr"
+pub using @exec_memory {
+  type ExecCodeHandle,
+  alloc_exec_managed,
+  stage_exec_managed,
+  finalize_exec_managed,
+  release_exec_managed,
+  exec_code_pointer,
+}
 
 ///|
 /// Shared managed linear-memory allocation. Each handle keeps the descriptor
@@ -86,10 +62,3 @@ pub extern "c" fn MemoryDescriptor::matches_quota(
   self : MemoryDescriptor,
   quota : Quota,
 ) -> Int32 = "wasmoon_memory_matches_quota"
-
-///|
-#borrow(self, reservation)
-pub extern "c" fn ExecCodeHandle::bind_reservation(
-  self : ExecCodeHandle,
-  reservation : Reservation,
-) -> Bool = "wasmoon_exec_bind_reservation"

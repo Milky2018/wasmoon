@@ -15,9 +15,8 @@ class WindowsGuestAbiTests(unittest.TestCase):
     def test_all_guest_helpers_preserve_argument_positions(self):
         signatures = {}
         targets = set()
-        directories = [FFI, FFI / 'testing']
-        bridges = [FFI / 'msvc_guest_bridges.asm', directories[1] / 'test_guest_bridges.asm']
-        for path in [p for directory in directories for p in directory.glob('*.c')]:
+        bridges = [FFI / 'abi/msvc_guest_bridges.asm', FFI / 'testing/test_guest_bridges.asm']
+        for path in FFI.rglob('*.c'):
             targets.update(re.findall(r'WASMOON_GUEST_ADDRESS\((\w+)\)', path.read_text()))
             for match in re.finditer(r'\bWASMOON_GUEST_ABI\s+(\w+)\s*\(([^)]*)\)\s*\{', path.read_text()):
                 signatures[match[1]] = len(match[2].split(','))
