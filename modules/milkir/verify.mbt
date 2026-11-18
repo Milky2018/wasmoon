@@ -17,7 +17,7 @@ pub suberror VerifyError {
   NonDominatingUse(
     value_id~ : Int32,
     defining_block~ : Int32,
-    use_block~ : Int32
+    use_block~ : Int32,
   )
   InstructionOperandMismatch(inst_id~ : Int32)
   InvalidBlockTarget(block_id~ : Int32)

@@ -62,7 +62,7 @@ fn gc_borrow_error(
           | ArrayElements(_)
           | ArrayPayload(_)
           | StructData(_)
-          | FieldData(_, _, _, _, _)
+          | FieldData(_, _, _, _, _),
         ) &&
         inst.results is [value] {
         origins[value.id] = origins.length()

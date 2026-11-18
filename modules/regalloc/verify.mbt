@@ -5,7 +5,7 @@ pub suberror VerifyError {
   FixedConstraintViolation(
     vreg~ : VirtualReg,
     required~ : PhysicalReg,
-    actual~ : Location
+    actual~ : Location,
   )
   InvalidPreference(vreg~ : VirtualReg, preferred~ : PhysicalReg)
   IncorrectValue(vreg~ : VirtualReg, location~ : Location)

@@ -15,8 +15,8 @@ fn loop_materialization_opcode(opcode : @milkir.Opcode) -> Bool {
         | SignedShiftRight
         | UnsignedShiftRight
         | RotateLeft
-        | RotateRight
-      )
+        | RotateRight,
+      ),
     ) => true
     _ => false
   }

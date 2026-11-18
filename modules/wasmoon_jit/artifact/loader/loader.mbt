@@ -18,7 +18,7 @@ pub(all) struct ArtifactCompatibility {
 pub suberror ArtifactIncompatible {
   TargetMismatch(
     expected~ : @artifact.TargetSpec,
-    actual~ : @artifact.TargetSpec
+    actual~ : @artifact.TargetSpec,
   )
   InvalidFunctionIndex(index~ : Int32)
   ContextLayoutMismatch
@@ -28,11 +28,11 @@ pub suberror ArtifactIncompatible {
   CodegenRevisionMismatch(expected~ : String, actual~ : String)
   ModuleIdentityMismatch(
     expected~ : @artifact.ModuleIdentity,
-    actual~ : @artifact.ModuleIdentity
+    actual~ : @artifact.ModuleIdentity,
   )
   CompilationPolicyMismatch(
     expected~ : @artifact.CompilationPolicy,
-    actual~ : @artifact.CompilationPolicy
+    actual~ : @artifact.CompilationPolicy,
   )
   DuplicateFunctionIndex(index~ : Int32)
   DuplicateSymbol(name~ : String)

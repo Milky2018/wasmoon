@@ -68,7 +68,7 @@ pub(all) enum X64Conversion {
   FloatToIntSaturating(
     @native.FloatType,
     @native.IntegerType,
-    @native.Signedness
+    @native.Signedness,
   )
 }
 
@@ -136,7 +136,7 @@ pub(all) enum X64Inst {
     @native.AccessWidth,
     @native.LoadExtension,
     @native.ValueType,
-    UInt64
+    UInt64,
   )
   ScalarStore(@native.AccessWidth, @native.ValueType, UInt64)
   StoreRepeated64(UInt64, UInt32, UInt64)

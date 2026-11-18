@@ -177,7 +177,7 @@ priv enum ValidationTask {
     OperandStack,
     ReadOnlyArray[@types.ValueType],
     Array[Bool],
-    String
+    String,
   )
   ExitControl(OperandStack, ReadOnlyArray[@types.ValueType])
 }

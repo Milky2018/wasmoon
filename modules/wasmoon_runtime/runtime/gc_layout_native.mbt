@@ -13,7 +13,7 @@ fn gc_storage_code(storage : @types.StorageType) -> Int32 {
       | RefContTyped(_)
       | RefNullContTyped(_)
       | NullContRef
-      | RefNoCont
+      | RefNoCont,
     ) => -9
     Val(_) => -8
   }

@@ -60,7 +60,7 @@ pub suberror CallTransferError {
   InvalidSourceStackType(
     index~ : Int32,
     expected~ : ValueType,
-    actual~ : ValueType
+    actual~ : ValueType,
   )
   InvalidSourceStackLayout(index~ : Int32)
   InvalidDestinationClass(index~ : Int32)

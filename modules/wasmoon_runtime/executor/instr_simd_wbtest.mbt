@@ -48,7 +48,7 @@ fn make_i32x4(
   lane2 : Int32,
   lane3 : Int32,
 ) -> Bytes {
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(capacity=16)
   for lane in [lane0, lane1, lane2, lane3] {
     buf.write_byte(lane.to_byte())
     buf.write_byte((lane >> 8).to_byte())

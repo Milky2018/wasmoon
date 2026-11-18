@@ -52,7 +52,7 @@ pub(all) enum EditKind {
     successor_index~ : Int32,
     value~ : Value,
     from~ : Location,
-    to~ : Location
+    to~ : Location,
   )
 }
 

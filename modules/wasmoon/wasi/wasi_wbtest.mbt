@@ -195,7 +195,7 @@ test "wasi: fd_prestat_get" {
   let result = fd_prestat_get(ctx, mem, 3, 0)
   inspect(result, content="0") // Success
   // Check prestat type (should be 0 = dir)
-  inspect(mem.read_byte(0), content="b'\\x00'")
+  assert_eq(mem.read_byte(0), b'\x00')
   // Check name length (at offset 4)
   inspect(mem.read_i32(4), content="11") // len("/guest/path") = 11
 }
@@ -697,7 +697,7 @@ test "wasi: fd_fdstat_get" {
   // Test preopen directory
   let result = fd_fdstat_get(ctx, mem, 3, 0)
   inspect(result, content="0")
-  inspect(mem.read_byte(0), content="b'\\x03'") // directory
+  assert_eq(mem.read_byte(0), b'\x03') // directory
   inspect(mem.read_i64(8) == preopen_base_rights, content="true")
   inspect(mem.read_i64(16) == preopen_inheriting_rights, content="true")
   // Test synthetic socket stream descriptor
@@ -717,7 +717,7 @@ test "wasi: fd_fdstat_get" {
   })
   let result = fd_fdstat_get(ctx, mem, socket_fd, 0)
   inspect(result, content="0")
-  inspect(mem.read_byte(0), content="b'\\x06'") // socket_stream
+  assert_eq(mem.read_byte(0), b'\x06') // socket_stream
 }
 
 ///|
@@ -2143,7 +2143,7 @@ test "wasi: fd_filestat_get" {
   // Test preopen directory
   let result = fd_filestat_get_impl(ctx, mem, 3, 0)
   inspect(result, content="0")
-  inspect(mem.read_byte(16), content="b'\\x03'") // directory
+  assert_eq(mem.read_byte(16), b'\x03') // directory
   // Test opened file
   let test_path = "wasmoon_filestat_test.txt"
   for i, c in test_path {
@@ -3163,9 +3163,9 @@ test "wasi: poll_oneoff with clock" {
   let userdata = mem.read_i64(100)
   inspect(userdata, content="12345")
   let error = mem.read_byte(108)
-  inspect(error, content="b'\\x00'") // Success
+  assert_eq(error, b'\x00') // Success
   let event_type = mem.read_byte(110)
-  inspect(event_type, content="b'\\x00'") // clock
+  assert_eq(event_type, b'\x00') // clock
   inspect(mem.read_i64(116), content="1")
 }
 

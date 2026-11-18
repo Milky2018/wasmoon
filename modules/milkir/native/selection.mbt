@@ -29,7 +29,7 @@ priv enum ComparisonSelection {
     @milkir.Value,
     @milkir.Value,
     UInt64,
-    @lowering.IntComparison
+    @lowering.IntComparison,
   )
 }
 
@@ -833,7 +833,7 @@ fn consumer_selects_constant(
       CompareImmediate(input, _, _)
       | IntImmediate(input, _, _)
       | ShiftImmediate(input, _, _)
-      | LowBitsShiftedLeft(input, _, _)
+      | LowBitsShiftedLeft(input, _, _),
     ) => input != constant
     _ => false
   }

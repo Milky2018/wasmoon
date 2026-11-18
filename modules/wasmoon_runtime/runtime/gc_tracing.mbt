@@ -320,9 +320,17 @@ fn gc_root_key(value : @types.Value) -> (Int32, Int64)? {
 }
 
 ///|
+/// GC compaction and StoreCounts both need the allocated bucket count.
+/// The entry count cannot report storage retained after a sweep.
+#warnings("-deprecated")
+fn[K, V] gc_registry_capacity(registry : Map[K, V]) -> Int32 {
+  registry.capacity()
+}
+
+///|
 fn[K, V] compact_gc_registry(registry : Map[K, V]) -> Map[K, V] {
-  if registry.capacity() > 16 &&
-    registry.capacity().to_int64() > registry.length().to_int64() * 4L {
+  let capacity = gc_registry_capacity(registry)
+  if capacity > 16 && capacity.to_int64() > registry.length().to_int64() * 4L {
     registry.filter((_, _) => true)
   } else {
     registry

@@ -208,7 +208,7 @@ pub(all) suberror ComponentRuntimeError {
   BindingTypeMismatch(
     path~ : String,
     expected~ : ComponentFuncType,
-    actual~ : ComponentFuncType
+    actual~ : ComponentFuncType,
   )
   ArgumentCountMismatch(expected~ : Int32, actual~ : Int32)
   TypeMismatch(path~ : String, expected~ : ComponentValueType, actual~ : String)

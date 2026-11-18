@@ -18,7 +18,7 @@ fn ExecContext::exec_simd(
     }
     I16x8Splat => {
       let v = self.stack.pop_i32()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<8 {
         write_i16_lane(buf, v)
       }
@@ -26,7 +26,7 @@ fn ExecContext::exec_simd(
     }
     I32x4Splat => {
       let v = self.stack.pop_i32()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<4 {
         buf.write_int_le(v)
       }
@@ -34,7 +34,7 @@ fn ExecContext::exec_simd(
     }
     I64x2Splat => {
       let v = self.stack.pop_i64()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<2 {
         buf.write_int64_le(v)
       }
@@ -43,7 +43,7 @@ fn ExecContext::exec_simd(
     F32x4Splat => {
       let f = self.stack.pop_f32()
       let v = f.reinterpret_as_int()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<4 {
         buf.write_int_le(v)
       }
@@ -52,7 +52,7 @@ fn ExecContext::exec_simd(
     F64x2Splat => {
       let f = self.stack.pop_f64()
       let v = f.reinterpret_as_int64()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<2 {
         buf.write_int64_le(v)
       }
@@ -137,7 +137,7 @@ fn ExecContext::exec_simd(
     // Bitwise operations
     V128Not => {
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() ^ 0xFF).to_byte())
       }
@@ -146,7 +146,7 @@ fn ExecContext::exec_simd(
     V128And => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() & b[i].to_int()).to_byte())
       }
@@ -155,7 +155,7 @@ fn ExecContext::exec_simd(
     V128AndNot => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() & (b[i].to_int() ^ 0xFF)).to_byte())
       }
@@ -164,7 +164,7 @@ fn ExecContext::exec_simd(
     V128Or => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() | b[i].to_int()).to_byte())
       }
@@ -173,7 +173,7 @@ fn ExecContext::exec_simd(
     V128Xor => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() ^ b[i].to_int()).to_byte())
       }
@@ -183,7 +183,7 @@ fn ExecContext::exec_simd(
       let c = self.stack.pop_v128() // mask
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         let mask = c[i].to_int()
         let val = (a[i].to_int() & mask) | (b[i].to_int() & (mask ^ 0xFF))
@@ -290,7 +290,7 @@ fn ExecContext::exec_simd(
     I8x16Shl => {
       let shift = self.stack.pop_i32() & 7 // mod 8
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         buf.write_byte(((v[i].to_int() << shift) & 0xFF).to_byte())
       }
@@ -299,7 +299,7 @@ fn ExecContext::exec_simd(
     I8x16ShrS => {
       let shift = self.stack.pop_i32() & 7
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         let signed = sign_i8(v[i].to_int())
         buf.write_byte(((signed >> shift) & 0xFF).to_byte())
@@ -309,7 +309,7 @@ fn ExecContext::exec_simd(
     I8x16ShrU => {
       let shift = self.stack.pop_i32() & 7
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         buf.write_byte((v[i].to_int() >> shift).to_byte())
       }
@@ -318,7 +318,7 @@ fn ExecContext::exec_simd(
     I8x16NarrowI16x8S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let va = get_i16_lane(a, i)
         buf.write_byte(sat_i16_to_i8_s(va))
@@ -332,7 +332,7 @@ fn ExecContext::exec_simd(
     I8x16NarrowI16x8U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let va = get_i16_lane(a, i)
         buf.write_byte(sat_i16_to_u8(va))
@@ -432,7 +432,7 @@ fn ExecContext::exec_simd(
     I16x8Shl => {
       let shift = self.stack.pop_i32() & 15
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let lane = get_i16_lane(v, i)
         let shifted = (lane << shift) & 0xFFFF
@@ -444,7 +444,7 @@ fn ExecContext::exec_simd(
     I16x8ShrS => {
       let shift = self.stack.pop_i32() & 15
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let lane = sign_i16(get_i16_lane(v, i))
         let shifted = (lane >> shift) & 0xFFFF
@@ -456,7 +456,7 @@ fn ExecContext::exec_simd(
     I16x8ShrU => {
       let shift = self.stack.pop_i32() & 15
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let lane = get_i16_lane(v, i)
         let shifted = lane >> shift
@@ -468,7 +468,7 @@ fn ExecContext::exec_simd(
     I16x8NarrowI32x4S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let v = sat_i32_to_i16_s(get_i32_lane(a, i))
         buf.write_byte(v.to_byte())
@@ -484,7 +484,7 @@ fn ExecContext::exec_simd(
     I16x8NarrowI32x4U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let v = sat_i32_to_u16(get_i32_lane(a, i))
         buf.write_byte(v.to_byte())
@@ -499,7 +499,7 @@ fn ExecContext::exec_simd(
     }
     I16x8ExtendLowI8x16S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let b = sign_i8(v[i].to_int())
         buf.write_byte((b & 0xFF).to_byte())
@@ -509,7 +509,7 @@ fn ExecContext::exec_simd(
     }
     I16x8ExtendHighI8x16S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 8..<16 {
         let b = sign_i8(v[i].to_int())
         buf.write_byte((b & 0xFF).to_byte())
@@ -519,7 +519,7 @@ fn ExecContext::exec_simd(
     }
     I16x8ExtendLowI8x16U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         buf.write_byte(v[i])
         buf.write_byte(b'\x00')
@@ -528,7 +528,7 @@ fn ExecContext::exec_simd(
     }
     I16x8ExtendHighI8x16U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 8..<16 {
         buf.write_byte(v[i])
         buf.write_byte(b'\x00')
@@ -537,7 +537,7 @@ fn ExecContext::exec_simd(
     }
     I16x8ExtAddPairwiseI8x16S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let a = sign_i8(v[i * 2].to_int())
         let b = sign_i8(v[i * 2 + 1].to_int())
@@ -549,7 +549,7 @@ fn ExecContext::exec_simd(
     }
     I16x8ExtAddPairwiseI8x16U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let a = v[i * 2].to_int()
         let b = v[i * 2 + 1].to_int()
@@ -562,7 +562,7 @@ fn ExecContext::exec_simd(
     I16x8ExtMulLowI8x16S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let va = sign_i8(a[i].to_int())
         let vb = sign_i8(b[i].to_int())
@@ -575,7 +575,7 @@ fn ExecContext::exec_simd(
     I16x8ExtMulHighI8x16S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 8..<16 {
         let va = sign_i8(a[i].to_int())
         let vb = sign_i8(b[i].to_int())
@@ -588,7 +588,7 @@ fn ExecContext::exec_simd(
     I16x8ExtMulLowI8x16U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let prod = a[i].to_int() * b[i].to_int()
         buf.write_byte(prod.to_byte())
@@ -599,7 +599,7 @@ fn ExecContext::exec_simd(
     I16x8ExtMulHighI8x16U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 8..<16 {
         let prod = a[i].to_int() * b[i].to_int()
         buf.write_byte(prod.to_byte())
@@ -682,7 +682,7 @@ fn ExecContext::exec_simd(
     I32x4Shl => {
       let shift = self.stack.pop_i32() & 31
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let lane = get_i32_lane(v, i) << shift
         buf.write_int_le(lane)
@@ -692,7 +692,7 @@ fn ExecContext::exec_simd(
     I32x4ShrS => {
       let shift = self.stack.pop_i32() & 31
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let lane = get_i32_lane(v, i) >> shift
         buf.write_int_le(lane)
@@ -702,7 +702,7 @@ fn ExecContext::exec_simd(
     I32x4ShrU => {
       let shift = self.stack.pop_i32() & 31
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let lane = get_i32_lane(v, i).reinterpret_as_uint() >> shift
         buf.write_int_le(lane.reinterpret_as_int())
@@ -711,7 +711,7 @@ fn ExecContext::exec_simd(
     }
     I32x4ExtendLowI16x8S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let h = sign_i16(get_i16_lane(v, i))
         buf.write_int_le(h)
@@ -720,7 +720,7 @@ fn ExecContext::exec_simd(
     }
     I32x4ExtendHighI16x8S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 4..<8 {
         let h = sign_i16(get_i16_lane(v, i))
         buf.write_int_le(h)
@@ -729,7 +729,7 @@ fn ExecContext::exec_simd(
     }
     I32x4ExtendLowI16x8U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         buf.write_int_le(get_i16_lane(v, i))
       }
@@ -737,7 +737,7 @@ fn ExecContext::exec_simd(
     }
     I32x4ExtendHighI16x8U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 4..<8 {
         buf.write_int_le(get_i16_lane(v, i))
       }
@@ -745,7 +745,7 @@ fn ExecContext::exec_simd(
     }
     I32x4ExtAddPairwiseI16x8S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let a = sign_i16(get_i16_lane(v, i * 2))
         let b = sign_i16(get_i16_lane(v, i * 2 + 1))
@@ -755,7 +755,7 @@ fn ExecContext::exec_simd(
     }
     I32x4ExtAddPairwiseI16x8U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let a = get_i16_lane(v, i * 2)
         let b = get_i16_lane(v, i * 2 + 1)
@@ -766,7 +766,7 @@ fn ExecContext::exec_simd(
     I32x4ExtMulLowI16x8S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let va = sign_i16(get_i16_lane(a, i))
         let vb = sign_i16(get_i16_lane(b, i))
@@ -777,7 +777,7 @@ fn ExecContext::exec_simd(
     I32x4ExtMulHighI16x8S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 4..<8 {
         let va = sign_i16(get_i16_lane(a, i))
         let vb = sign_i16(get_i16_lane(b, i))
@@ -788,7 +788,7 @@ fn ExecContext::exec_simd(
     I32x4ExtMulLowI16x8U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         buf.write_int_le(get_i16_lane(a, i) * get_i16_lane(b, i))
       }
@@ -797,7 +797,7 @@ fn ExecContext::exec_simd(
     I32x4ExtMulHighI16x8U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 4..<8 {
         buf.write_int_le(get_i16_lane(a, i) * get_i16_lane(b, i))
       }
@@ -806,7 +806,7 @@ fn ExecContext::exec_simd(
     I32x4DotI16x8S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let a0 = sign_i16(get_i16_lane(a, i * 2))
         let a1 = sign_i16(get_i16_lane(a, i * 2 + 1))
@@ -855,7 +855,7 @@ fn ExecContext::exec_simd(
     I64x2Shl => {
       let shift = self.stack.pop_i32() & 63
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let lane = get_i64_lane(v, i) << shift
         buf.write_int64_le(lane)
@@ -865,7 +865,7 @@ fn ExecContext::exec_simd(
     I64x2ShrS => {
       let shift = self.stack.pop_i32() & 63
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let lane = get_i64_lane(v, i) >> shift
         buf.write_int64_le(lane)
@@ -875,7 +875,7 @@ fn ExecContext::exec_simd(
     I64x2ShrU => {
       let shift = self.stack.pop_i32() & 63
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let lane = get_i64_lane(v, i).reinterpret_as_uint64() >> shift
         buf.write_int64_le(lane.reinterpret_as_int64())
@@ -884,7 +884,7 @@ fn ExecContext::exec_simd(
     }
     I64x2ExtendLowI32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         buf.write_int64_le(get_i32_lane(v, i).to_int64())
       }
@@ -892,7 +892,7 @@ fn ExecContext::exec_simd(
     }
     I64x2ExtendHighI32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 2..<4 {
         buf.write_int64_le(get_i32_lane(v, i).to_int64())
       }
@@ -900,7 +900,7 @@ fn ExecContext::exec_simd(
     }
     I64x2ExtendLowI32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         buf.write_int64_le(get_i32_lane(v, i).reinterpret_as_uint().to_int64())
       }
@@ -908,7 +908,7 @@ fn ExecContext::exec_simd(
     }
     I64x2ExtendHighI32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 2..<4 {
         buf.write_int64_le(get_i32_lane(v, i).reinterpret_as_uint().to_int64())
       }
@@ -917,7 +917,7 @@ fn ExecContext::exec_simd(
     I64x2ExtMulLowI32x4S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let va = get_i32_lane(a, i).to_int64()
         let vb = get_i32_lane(b, i).to_int64()
@@ -928,7 +928,7 @@ fn ExecContext::exec_simd(
     I64x2ExtMulHighI32x4S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 2..<4 {
         let va = get_i32_lane(a, i).to_int64()
         let vb = get_i32_lane(b, i).to_int64()
@@ -939,7 +939,7 @@ fn ExecContext::exec_simd(
     I64x2ExtMulLowI32x4U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let va = get_i32_lane(a, i).reinterpret_as_uint().to_int64()
         let vb = get_i32_lane(b, i).reinterpret_as_uint().to_int64()
@@ -950,7 +950,7 @@ fn ExecContext::exec_simd(
     I64x2ExtMulHighI32x4U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 2..<4 {
         let va = get_i32_lane(a, i).reinterpret_as_uint().to_int64()
         let vb = get_i32_lane(b, i).reinterpret_as_uint().to_int64()
@@ -1016,7 +1016,7 @@ fn ExecContext::exec_simd(
     // Conversions
     I32x4TruncSatF32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let f = get_f32_lane(v, i)
         let r = trunc_sat_f32_to_i32_s(f)
@@ -1026,7 +1026,7 @@ fn ExecContext::exec_simd(
     }
     I32x4TruncSatF32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let f = get_f32_lane(v, i)
         let r = trunc_sat_f32_to_u32(f)
@@ -1036,7 +1036,7 @@ fn ExecContext::exec_simd(
     }
     F32x4ConvertI32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let n = get_i32_lane(v, i)
         buf.write_float_le(Float::from_int(n))
@@ -1045,7 +1045,7 @@ fn ExecContext::exec_simd(
     }
     F32x4ConvertI32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let n = get_i32_lane(v, i).reinterpret_as_uint().to_int64().to_double()
         buf.write_float_le(Float::from_double(n))
@@ -1054,7 +1054,7 @@ fn ExecContext::exec_simd(
     }
     I32x4TruncSatF64x2SZero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         let r = trunc_sat_f64_to_i32_s(f)
@@ -1066,7 +1066,7 @@ fn ExecContext::exec_simd(
     }
     I32x4TruncSatF64x2UZero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         let r = trunc_sat_f64_to_u32(f)
@@ -1078,7 +1078,7 @@ fn ExecContext::exec_simd(
     }
     F64x2ConvertLowI32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let n = get_i32_lane(v, i)
         buf.write_double_le(n.to_double())
@@ -1087,7 +1087,7 @@ fn ExecContext::exec_simd(
     }
     F64x2ConvertLowI32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let n = get_i32_lane(v, i).reinterpret_as_uint().to_int64().to_double()
         buf.write_double_le(n)
@@ -1096,7 +1096,7 @@ fn ExecContext::exec_simd(
     }
     F32x4DemoteF64x2Zero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         buf.write_float_le(Float::from_double(f))
@@ -1107,7 +1107,7 @@ fn ExecContext::exec_simd(
     }
     F64x2PromoteLowF32x4 => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let f = get_f32_lane(v, i)
         buf.write_double_le(f.to_double())
@@ -1119,7 +1119,7 @@ fn ExecContext::exec_simd(
     I8x16Shuffle(lanes) => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         let lane = lanes[i]
         if lane < 16 {
@@ -1133,7 +1133,7 @@ fn ExecContext::exec_simd(
     I8x16Swizzle => {
       let s = self.stack.pop_v128() // selector
       let a = self.stack.pop_v128() // source
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         let idx = s[i].to_int()
         if idx < 16 {
@@ -1158,7 +1158,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 16L, mem) {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         buf.write_byte(mem.load_byte_at(effective_addr + i.to_int64()))
       }
@@ -1194,7 +1194,7 @@ fn ExecContext::exec_simd(
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
       let b = mem.load_byte_at(effective_addr)
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<16 {
         buf.write_byte(b)
       }
@@ -1213,7 +1213,7 @@ fn ExecContext::exec_simd(
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
       let v = mem.load_i32_16u_at(effective_addr)
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<8 {
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
@@ -1233,7 +1233,7 @@ fn ExecContext::exec_simd(
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
       let v = mem.load_i32_at(effective_addr)
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<4 {
         buf.write_int_le(v)
       }
@@ -1252,7 +1252,7 @@ fn ExecContext::exec_simd(
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
       let v = mem.load_i64_at(effective_addr)
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for _ in 0..<2 {
         buf.write_int64_le(v)
       }
@@ -1271,7 +1271,7 @@ fn ExecContext::exec_simd(
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
       let v = mem.load_i32_at(effective_addr)
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       buf.write_int_le(v)
       for _ in 0..<12 {
         buf.write_byte(b'\x00')
@@ -1291,7 +1291,7 @@ fn ExecContext::exec_simd(
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
       let v = mem.load_i64_at(effective_addr)
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       buf.write_int64_le(v)
       for _ in 0..<8 {
         buf.write_byte(b'\x00')
@@ -1310,7 +1310,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let b = mem.load_byte_at(effective_addr + i.to_int64())
         let v = sign_i8(b.to_int())
@@ -1331,7 +1331,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let b = mem.load_byte_at(effective_addr + i.to_int64())
         buf.write_byte(b)
@@ -1351,7 +1351,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let h = mem.load_i32_16s_at(effective_addr + i.to_int64() * 2L)
         buf.write_int_le(h)
@@ -1370,7 +1370,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let h = mem.load_i32_16u_at(effective_addr + i.to_int64() * 2L)
         buf.write_int_le(h)
@@ -1389,7 +1389,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let w = mem.load_i32_at(effective_addr + i.to_int64() * 4L)
         buf.write_int64_le(w.to_int64())
@@ -1408,7 +1408,7 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.RuntimeError::OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let w = mem.load_i32_at(effective_addr + i.to_int64() * 4L)
         buf.write_int64_le(w.reinterpret_as_uint().to_int64())
@@ -1555,7 +1555,7 @@ fn ExecContext::exec_simd(
       // Same as swizzle - out-of-range indices return 0 on ARM (TBL behavior)
       let s = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         let idx = s[i].to_int()
         if idx < 16 {
@@ -1569,7 +1569,7 @@ fn ExecContext::exec_simd(
     I32x4RelaxedTruncF32x4S => {
       // Use native truncation - same as saturating for most values
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let f = get_f32_lane(v, i)
         let n = trunc_sat_f32_to_i32_s(f)
@@ -1579,7 +1579,7 @@ fn ExecContext::exec_simd(
     }
     I32x4RelaxedTruncF32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let f = get_f32_lane(v, i)
         let n = trunc_sat_f32_to_u32(f).reinterpret_as_int()
@@ -1589,7 +1589,7 @@ fn ExecContext::exec_simd(
     }
     I32x4RelaxedTruncF64x2SZero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         let n = trunc_sat_f64_to_i32_s(f)
@@ -1602,7 +1602,7 @@ fn ExecContext::exec_simd(
     }
     I32x4RelaxedTruncF64x2UZero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         let n = trunc_sat_f64_to_u32(f).reinterpret_as_int()
@@ -1617,7 +1617,7 @@ fn ExecContext::exec_simd(
       let c = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let fa = get_f32_lane(a, i)
         let fb = get_f32_lane(b, i)
@@ -1632,7 +1632,7 @@ fn ExecContext::exec_simd(
       let c = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let fa = get_f32_lane(a, i)
         let fb = get_f32_lane(b, i)
@@ -1646,7 +1646,7 @@ fn ExecContext::exec_simd(
       let c = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let fa = get_f64_lane(a, i)
         let fb = get_f64_lane(b, i)
@@ -1660,7 +1660,7 @@ fn ExecContext::exec_simd(
       let c = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let fa = get_f64_lane(a, i)
         let fb = get_f64_lane(b, i)
@@ -1675,7 +1675,7 @@ fn ExecContext::exec_simd(
       let mask = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<16 {
         let result = (a[i].to_int() & mask[i].to_int()) |
           (b[i].to_int() & mask[i].to_int().lnot())
@@ -1687,7 +1687,7 @@ fn ExecContext::exec_simd(
       let mask = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let va = get_i16_lane(a, i)
         let vb = get_i16_lane(b, i)
@@ -1701,7 +1701,7 @@ fn ExecContext::exec_simd(
       let mask = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let va = get_i32_lane(a, i)
         let vb = get_i32_lane(b, i)
@@ -1715,7 +1715,7 @@ fn ExecContext::exec_simd(
       let mask = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<2 {
         let va = get_i64_lane(a, i)
         let vb = get_i64_lane(b, i)
@@ -1735,7 +1735,7 @@ fn ExecContext::exec_simd(
       // Same as q15mulr_sat_s - SQRDMULH on ARM
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let va = sign_extend_i16(get_i16_lane(a, i))
         let vb = sign_extend_i16(get_i16_lane(b, i))
@@ -1749,7 +1749,7 @@ fn ExecContext::exec_simd(
       // Dot product: pairs of i8*i8 summed to i16
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<8 {
         let a0 = sign_extend_i8(a[i * 2].to_int())
         let a1 = sign_extend_i8(a[i * 2 + 1].to_int())
@@ -1765,7 +1765,7 @@ fn ExecContext::exec_simd(
       let c = self.stack.pop_v128() // accumulator
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(capacity=16)
       for i in 0..<4 {
         let mut sum = get_i32_lane(c, i)
         for j in 0..<4 {

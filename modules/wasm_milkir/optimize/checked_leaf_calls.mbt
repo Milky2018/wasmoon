@@ -35,7 +35,7 @@ fn checked_leaf_cost(function : @milkir.Function) -> Int32 {
         | Branch(_, _, _, _, _)
         | Brz(_, _, _)
         | Brnz(_, _, _)
-        | Return(_)
+        | Return(_),
       ) => ()
       _ => return -1
     }

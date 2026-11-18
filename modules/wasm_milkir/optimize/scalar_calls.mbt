@@ -41,7 +41,7 @@ fn leaf_cost(function : @milkir.Function) -> (Int32, Bool)? {
             | ArrayGet(_)
             | ArrayGetS(_, _)
             | ArrayGetU(_, _)
-            | ArrayLen
+            | ArrayLen,
           ) => 2
           _ => return None
         }

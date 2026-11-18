@@ -5,7 +5,7 @@ pub suberror NativeLowerError {
   UnsupportedOperation(
     block_id~ : Int32,
     instruction_id~ : Int32,
-    message~ : String
+    message~ : String,
   )
   MissingValue(value_id~ : Int32)
   MissingBlock(block_id~ : Int32)
@@ -1427,7 +1427,7 @@ fn lower_instruction(
       IntConst(_)
       | IntBinary(Add | Mul | ShiftLeft | UnsignedShiftRight)
       | IntCompare(_)
-      | Convert(UnsignedExtend | Bitcast)
+      | Convert(UnsignedExtend | Bitcast),
     )
     | Vector(Bitwise(Not))) &&
     should_defer_instruction(instruction, facts) {
@@ -1599,7 +1599,7 @@ fn lower_terminator(
       true_target,
       true_arguments,
       false_target,
-      false_arguments
+      false_arguments,
     ) => {
       let lowered_true_target = mapped_block(blocks, true_target)
       let lowered_true_arguments = demand_values(

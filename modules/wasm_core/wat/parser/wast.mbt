@@ -694,7 +694,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
       self.advance()
       match lane_type {
         "i8x16" => {
-          let buf : @buffer.Buffer = Buffer(size_hint=16)
+          let buf : @buffer.Buffer = Buffer(capacity=16)
           for _ in 0..<16 {
             let v = self.parse_wast_i32()
             buf.write_byte(v.to_byte())
@@ -702,7 +702,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
           V128(buf.contents())
         }
         "i16x8" => {
-          let buf : @buffer.Buffer = Buffer(size_hint=16)
+          let buf : @buffer.Buffer = Buffer(capacity=16)
           for _ in 0..<8 {
             let v = self.parse_wast_i32()
             buf.write_byte(v.to_byte())
@@ -711,7 +711,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
           V128(buf.contents())
         }
         "i32x4" => {
-          let buf : @buffer.Buffer = Buffer(size_hint=16)
+          let buf : @buffer.Buffer = Buffer(capacity=16)
           for _ in 0..<4 {
             let v = self.parse_wast_i32()
             buf.write_byte(v.to_byte())
@@ -722,7 +722,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
           V128(buf.contents())
         }
         "i64x2" => {
-          let buf : @buffer.Buffer = Buffer(size_hint=16)
+          let buf : @buffer.Buffer = Buffer(capacity=16)
           for _ in 0..<2 {
             let v = self.parse_wast_i64()
             buf.write_byte(v.to_byte())
@@ -762,7 +762,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
             V128Pattern(lanes)
           } else {
             // Build bytes from float values
-            let buf : @buffer.Buffer = Buffer(size_hint=16)
+            let buf : @buffer.Buffer = Buffer(capacity=16)
             for lane in lanes {
               match lane {
                 F32(f) => {
@@ -804,7 +804,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
             V128Pattern(lanes)
           } else {
             // Build bytes from double values
-            let buf : @buffer.Buffer = Buffer(size_hint=16)
+            let buf : @buffer.Buffer = Buffer(capacity=16)
             for lane in lanes {
               match lane {
                 F64(f) => {

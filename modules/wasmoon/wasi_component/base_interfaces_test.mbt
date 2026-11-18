@@ -604,7 +604,7 @@ test "Preview 3 UDP preserves one datagram per async receive" {
   guard remote
     is Variant(
       0,
-      Some(Tuple([U16(port), Tuple([U8(127), U8(0), U8(0), U8(1)])]))
+      Some(Tuple([U16(port), Tuple([U8(127), U8(0), U8(0), U8(1)])])),
     ) &&
     port > 0 else {
     fail("Preview 3 UDP sender address was not loopback")
@@ -738,7 +738,7 @@ test "Preview 2 TCP loopback capability completes a polled connection" {
     is [
       Variant(
         0,
-        Some(Tuple([U32(_accepted), U32(server_input), U32(_server_output)]))
+        Some(Tuple([U32(_accepted), U32(server_input), U32(_server_output)])),
       ),
     ] else {
     fail("listener did not accept the client")
@@ -891,8 +891,8 @@ test "Preview 2 UDP loopback streams preserve datagram boundaries" {
     is Variant(
       1,
       Some(
-        Tuple([U16(0), U16(0), U16(0), U16(0), U16(0), U16(0), U16(0), U16(1)])
-      )
+        Tuple([U16(0), U16(0), U16(0), U16(0), U16(0), U16(0), U16(0), U16(1)]),
+      ),
     ) else {
     fail("localhost resolved outside the loopback capability")
   }

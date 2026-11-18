@@ -73,7 +73,7 @@ fn memory_access(
       ArrayGet(type_)
       | ArrayGetS(type_, _)
       | ArrayGetU(type_, _)
-      | ArraySet(type_)
+      | ArraySet(type_),
     ) =>
       (
         context.array_element(type_),
@@ -87,7 +87,7 @@ fn memory_access(
       StructGet(type_, field)
       | StructGetS(type_, field, _)
       | StructGetU(type_, field, _)
-      | StructSet(type_, field)
+      | StructSet(type_, field),
     ) =>
       (
         context.struct_field(type_, field),

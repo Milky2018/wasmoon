@@ -67,7 +67,7 @@ fn PointerUses::new(
         Copy
         | Convert(Bitcast | UnsignedExtend | SignedExtend | IntReduce)
         | IntBinary(Add | Sub)
-        | Select
+        | Select,
       )) {
       continue
     }

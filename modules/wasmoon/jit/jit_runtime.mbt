@@ -22,19 +22,19 @@ pub suberror JITModuleLoadError {
   UnsupportedImport(
     import_idx~ : Int32,
     module_name~ : String,
-    func_name~ : String
+    func_name~ : String,
   )
   ImportTrampolineAllocationFailed(
     import_idx~ : Int32,
     module_name~ : String,
     func_name~ : String,
-    code_size~ : Int32
+    code_size~ : Int32,
   )
   ImportTrampolineCompilationFailed(
     import_idx~ : Int32,
     module_name~ : String,
     func_name~ : String,
-    message~ : String
+    message~ : String,
   )
   ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
   CodeQuotaExceeded

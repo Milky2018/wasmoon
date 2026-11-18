@@ -71,7 +71,7 @@ pub(all) enum Terminator {
     Block,
     Array[Value],
     Block,
-    Array[Value]
+    Array[Value],
   )
   BranchIntCompareImmediate(
     IntComparison,
@@ -80,7 +80,7 @@ pub(all) enum Terminator {
     Block,
     Array[Value],
     Block,
-    Array[Value]
+    Array[Value],
   )
   Switch(Value, Array[SwitchCase], Block, Array[Value])
   Return(Array[Value])
@@ -113,7 +113,7 @@ pub(all) enum TargetTerminator {
     Int32,
     Array[Int32],
     Int32,
-    Array[Int32]
+    Array[Int32],
   )
   BranchIntCompareImmediate(
     IntComparison,
@@ -122,7 +122,7 @@ pub(all) enum TargetTerminator {
     Int32,
     Array[Int32],
     Int32,
-    Array[Int32]
+    Array[Int32],
   )
   Switch(Int32, Array[TargetSwitchCase], Int32, Array[Int32])
   Return(Array[Int32])
@@ -547,7 +547,7 @@ fn DirectBuilder::flush_terminator(self : DirectBuilder) -> Unit {
       true_target,
       true_arguments,
       false_target,
-      false_arguments
+      false_arguments,
     ) =>
       Branch(
         value_id(condition),
@@ -563,7 +563,7 @@ fn DirectBuilder::flush_terminator(self : DirectBuilder) -> Unit {
       true_target,
       true_arguments,
       false_target,
-      false_arguments
+      false_arguments,
     ) =>
       BranchIntCompare(
         comparison,
@@ -581,7 +581,7 @@ fn DirectBuilder::flush_terminator(self : DirectBuilder) -> Unit {
       true_target,
       true_arguments,
       false_target,
-      false_arguments
+      false_arguments,
     ) =>
       BranchIntCompareImmediate(
         comparison,

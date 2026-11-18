@@ -103,7 +103,7 @@ fn ExecContext::resume_guest_body(
     let values = self.invoke_guest_body(body, input) catch {
       @runtime.GuestContinuationSignal::GuestContinuationYield(
         effect,
-        suspended
+        suspended,
       ) => {
         match effect {
           Suspend(tag, values) =>

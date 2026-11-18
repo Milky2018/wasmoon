@@ -4,7 +4,7 @@ pub suberror X64LowerError {
   UnsupportedOperation(
     block_index~ : Int32,
     instruction_index~ : Int32,
-    operation~ : @lowering.Operation
+    operation~ : @lowering.Operation,
   )
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)

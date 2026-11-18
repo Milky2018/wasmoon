@@ -51,17 +51,17 @@ pub(all) enum ComponentFunc {
     // Optional async callback core function (used by `canon lift ... async (callback ...)`).
     CoreFuncRef?,
     // Whether this canonical lift uses the async ABI (`canon lift ... async ...`).
-    Bool
+    Bool,
   )
   Host(
     FuncType,
     Array[TypeDef?],
-    (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError
+    (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError,
   )
   HostAsync(
     FuncType,
     Array[TypeDef?],
-    (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError
+    (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError,
   )
 }
 
