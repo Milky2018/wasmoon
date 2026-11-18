@@ -232,7 +232,7 @@ allocation, entering its MoonBit policy only on failure. Since its heap can grow
 while allocation keeps succeeding, dead temporary objects need not create GC
 pressure soon enough. The useful upstream idea is a bounded allocation budget
 and live-set-aware growth policy, not a requirement to collect on every refill.
-[Wasmoon policy boundary](../../modules/wasmoon_runtime/native/ffi/gc_allocator.c#L59).
+[Wasmoon policy boundary](../../modules/wasmoon_runtime/native/ffi/gc/gc_allocator.c).
 
 ## Recommended Wasmoon sequence
 

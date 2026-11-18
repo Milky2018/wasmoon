@@ -1,0 +1,8 @@
+#cfg(target="native")
+import {
+  "Milky2018/wasmoon_runtime/native" @ownership,
+}
+
+options(
+  targets: { "exec_memory.mbt": [ "native" ] },
+)

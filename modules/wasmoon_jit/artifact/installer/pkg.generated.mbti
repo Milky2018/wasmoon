@@ -5,7 +5,7 @@ import {
   "Milky2018/vcode/code_object",
   "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit/artifact/loader",
-  "Milky2018/wasmoon_runtime/native/ffi",
+  "Milky2018/wasmoon_runtime/native",
   "moonbitlang/core/debug",
 }
 
@@ -70,7 +70,7 @@ pub struct JitCodeInstaller {
 pub fn JitCodeInstaller::current(Self) -> InstalledCode?
 pub fn JitCodeInstaller::install(Self, @loader.LoadedArtifact) -> InstalledCode raise JitInstallError
 pub fn JitCodeInstaller::install_trampoline(Self, Array[Int32]) -> InstalledTrampoline raise JitInstallError
-pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?, code_quota? : @ffi.Quota?) -> Self
+pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?, code_quota? : @native.Quota?) -> Self
 
 // Type aliases
 

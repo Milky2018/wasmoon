@@ -3,25 +3,29 @@ package "Milky2018/wasmoon_runtime/native/ffi"
 
 import {
   "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_runtime/native",
   "Milky2018/wasmoon_runtime/native/callable",
+  "Milky2018/wasmoon_runtime/native/exec_memory",
   "Milky2018/wasmoon_runtime/native/layout",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn alloc_exec_managed(FixedArray[Byte], Int32) -> ExecCodeHandle
+pub fn alloc_exec_managed(FixedArray[Byte], Int32) -> @exec_memory.ExecCodeHandle
 
-pub fn exec_code_pointer(ExecCodeHandle) -> Int64
+pub fn captured_trap_pcs() -> Array[Int64]
 
-pub fn finalize_exec_managed(ExecCodeHandle, FixedArray[Byte], Int32) -> Int32
+pub fn exec_code_pointer(@exec_memory.ExecCodeHandle) -> Int64
+
+pub fn finalize_exec_managed(@exec_memory.ExecCodeHandle, FixedArray[Byte], Int32) -> Int32
 
 pub fn is_windows() -> Bool
 
-pub fn release_exec_managed(ExecCodeHandle) -> Int32
+pub fn release_exec_managed(@exec_memory.ExecCodeHandle) -> Int32
 
 pub fn snapshot_function_addresses(Int64, Int32) -> FixedArray[Int64]
 
-pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> ExecCodeHandle
+pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> @exec_memory.ExecCodeHandle
 
 // Errors
 #derive(@debug.Debug)
@@ -46,19 +50,12 @@ pub fn NativeAllocationError::to_string(Self) -> String
 pub impl Show for NativeAllocationError
 
 // Types and methods
-pub type CleanupOwner
-pub fn CleanupOwner::close(Self) -> Unit
-pub fn CleanupOwner::new(() -> Unit) -> Self
-
-type ExecCodeHandle
-pub fn ExecCodeHandle::bind_reservation(Self, Reservation) -> Bool
-
 pub type GCHeapHandle
 pub fn GCHeapHandle::allocate_typed(Self, Int32, Int32, FixedArray[Int64], Int32, Bool) -> Int32
 pub fn GCHeapHandle::begin_trace(Self) -> NativeGcTraceHandle
 pub fn GCHeapHandle::begin_young_trace(Self) -> NativeGcTraceHandle
 pub fn GCHeapHandle::bind_generational_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64], (FixedArray[Int64]) -> FixedArray[Int64]?) -> Unit
-pub fn GCHeapHandle::bind_reservations(Self, Reservation, Reservation) -> Bool
+pub fn GCHeapHandle::bind_reservations(Self, @native.Reservation, @native.Reservation) -> Bool
 pub fn GCHeapHandle::bind_root_visitor(Self, (Int32, FixedArray[Int64]) -> FixedArray[Int64]) -> Unit
 pub fn GCHeapHandle::clear_root_visitor(Self) -> Unit
 pub fn GCHeapHandle::define_layout(Self, Int32, FixedArray[Int32], Bool) -> Bool
@@ -89,10 +86,10 @@ pub fn JITContext::set_segments(Self, Array[Bytes], Array[Array[Int64]]) -> Bool
 pub fn JITContext::snapshot_gc_function_addresses(Self, Int64, Int32) -> Unit
 
 pub type MemoryDescriptor
-pub fn MemoryDescriptor::bind_reservation(Self, Reservation) -> Bool
+pub fn MemoryDescriptor::bind_reservation(Self, @native.Reservation) -> Bool
 pub fn MemoryDescriptor::equal(Self, Self) -> Bool
 pub fn MemoryDescriptor::is_null(Self) -> Bool
-pub fn MemoryDescriptor::matches_quota(Self, Quota) -> Int32
+pub fn MemoryDescriptor::matches_quota(Self, @native.Quota) -> Int32
 pub fn MemoryDescriptor::not_equal(Self, Self) -> Bool
 pub fn MemoryDescriptor::null() -> Self
 pub fn MemoryDescriptor::to_repr(Self) -> @debug.Repr
@@ -102,7 +99,7 @@ pub impl @debug.Debug for MemoryDescriptor
 pub struct NativeContinuationArena {
   // private fields
 }
-pub fn NativeContinuationArena::bind_quota(Self, Quota) -> Bool
+pub fn NativeContinuationArena::bind_quota(Self, @native.Quota) -> Bool
 pub fn NativeContinuationArena::clear(Self) -> Unit
 pub fn NativeContinuationArena::gc_roots(Self, Int64) -> FixedArray[Int64]
 pub fn NativeContinuationArena::has_entries(Self) -> Bool
@@ -113,7 +110,7 @@ pub fn NativeContinuationArena::reclaim_retired(Self) -> Unit
 pub struct NativeExceptionArena {
   // private fields
 }
-pub fn NativeExceptionArena::bind_quotas(Self, Quota, Quota) -> Bool
+pub fn NativeExceptionArena::bind_quotas(Self, @native.Quota, @native.Quota) -> Bool
 pub fn NativeExceptionArena::clear(Self) -> Unit
 pub fn NativeExceptionArena::define_tag(Self, Int32, ArrayView[@types.ValueType]) -> Bool
 pub fn NativeExceptionArena::enable_reclamation(Self) -> Unit
@@ -130,7 +127,7 @@ pub fn NativeGcTraceHandle::mark(Self) -> Unit
 pub fn NativeGcTraceHandle::objects(Self) -> FixedArray[Int64]
 
 pub type NativeTableHandle
-pub fn NativeTableHandle::bind_reservation(Self, Reservation) -> Bool
+pub fn NativeTableHandle::bind_reservation(Self, @native.Reservation) -> Bool
 pub fn NativeTableHandle::copy_from(Self, Int32, Self, Int32, Int32) -> Bool
 pub fn NativeTableHandle::fill(Self, Int32, Int32, Int64, Int32) -> Bool
 pub fn NativeTableHandle::grow(Self, Int64) -> Int64
@@ -150,24 +147,17 @@ pub type PreparedSafepoints
 pub fn PreparedSafepoints::check_count(Int32) -> Unit raise GCMetadataError
 pub fn PreparedSafepoints::new(FixedArray[Bytes], FixedArray[FixedArray[Int32]]) -> Self raise GCMetadataError
 
-pub type Quota
-pub fn Quota::new(Int64) -> Self
-pub fn Quota::to_repr(Self) -> @debug.Repr
-pub fn Quota::used(Self) -> Int64
-pub impl @debug.Debug for Quota
-
-pub type Reservation
-pub fn Reservation::close(Self) -> Unit
-pub fn Reservation::matches(Self, Quota) -> Bool
-pub fn Reservation::new(Quota, Int64) -> Self
-pub fn Reservation::resize(Self, Int64) -> Bool
-pub fn Reservation::to_repr(Self) -> @debug.Repr
-pub fn Reservation::valid(Self) -> Bool
-pub impl @debug.Debug for Reservation
-
 // Type aliases
+pub using @native {type CleanupOwner}
+
 pub using @layout {type ContextLayout}
 
+pub using @exec_memory {type ExecCodeHandle}
+
 pub using @callable {type NativeCallableRegistry}
+
+pub using @native {type Quota}
+
+pub using @native {type Reservation}
 
 // Traits

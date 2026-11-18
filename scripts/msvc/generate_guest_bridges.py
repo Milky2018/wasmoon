@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[2] / 'modules/wasmoon_runtime/native/ffi
 def generate(root=ROOT, stem='msvc_guest_bridges'):
     functions = {}
     used = set()
-    for path in root.glob('*.c'):
+    for path in root.rglob('*.c'):
+        if path.is_relative_to(root / 'testing'):
+            continue
         source = path.read_text()
         used.update(re.findall(r'WASMOON_GUEST_ADDRESS\((\w+)\)', source))
         for match in re.finditer(r'([\w*]+)\s+WASMOON_GUEST_ABI\s+(\w+)\s*\(([^)]*)\)\s*\{', source):
@@ -49,9 +51,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    for root, stem in [(ROOT, 'msvc_guest_bridges'), (ROOT / 'testing', 'test_guest_bridges')]:
+    for root, output, stem in [(ROOT, ROOT / 'abi', 'msvc_guest_bridges'),
+                               (ROOT / 'testing', ROOT / 'testing', 'test_guest_bridges')]:
         for name, content in generate(root, stem).items():
-            path = root / name
+            path = output / name
             if args.check:
                 if path.read_text() != content:
                     raise SystemExit(f'Stale generated file: {path}')

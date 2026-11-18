@@ -114,7 +114,7 @@ fn ContinuationState::new() -> ContinuationState {
     dead: 0,
     closed: false,
     quota_bound: false,
-    quota: Quota::unlimited(),
+    quota: @ownership.unlimited(),
   }
 }
 
@@ -243,11 +243,13 @@ fn ContinuationState::create(
   if self.quota_bound {
     self.reclaim()
   }
-  guard !self.quota_bound || self.quota.acquire(1L) else { return 27L }
+  guard !self.quota_bound || @ownership.acquire(self.quota, 1L) else {
+    return 27L
+  }
   let body = self.storage.create(request, self.quota)
   guard body != 0L else {
     if self.quota_bound {
-      self.quota.release(1L)
+      @ownership.release(self.quota, 1L)
     }
     return 9L
   }

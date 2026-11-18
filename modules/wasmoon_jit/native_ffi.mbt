@@ -1,6 +1,5 @@
 ///|
 /// JIT runtime FFI for executable memory management and code execution
-/// These functions call C functions defined in ffi_jit.c
 
 // ============ Trap Handling ============
 
@@ -40,12 +39,6 @@ extern "c" fn c_jit_get_trap_func_idx() -> Int32 = "wasmoon_jit_get_trap_func_id
 /// Get best-effort captured x-register value at trap time (JIT ABI numbering).
 /// Supported indices: 0,1,2,3,6,7,8,9,10,11,15. Others return 0.
 extern "c" fn c_jit_get_trap_xreg(idx : Int32) -> Int64 = "wasmoon_jit_get_trap_xreg"
-
-// ============ Host Target ============
-
-///|
-/// Host target architecture tag: 1=x86_64, 2=aarch64.
-extern "c" fn c_jit_host_target_arch() -> Int32 = "wasmoon_jit_host_target_arch"
 
 // ============ Hostcall Bridge (JIT -> Host) ============
 
@@ -447,82 +440,6 @@ extern "c" fn c_jit_get_exception_spill_locals_ptr() -> Int64 = "wasmoon_jit_get
 /// Signature: get_spilled_local(ctx: *jit_context_t, idx: i32) -> i64
 /// Gets a spilled local value for catch handlers
 extern "c" fn c_jit_get_exception_get_spilled_local_ptr() -> Int64 = "wasmoon_jit_get_exception_get_spilled_local_ptr"
-
-// ============ DWARF Debug Info ============
-
-///|
-/// Create a new DWARF debug info builder
-/// Returns an opaque handle to pass to other DWARF functions
-extern "c" fn c_dwarf_create() -> DWARFBuilder = "wasmoon_dwarf_create"
-
-///|
-/// Add a function to the DWARF debug info
-/// Parameters:
-///   dwarf: Handle from c_dwarf_create()
-///   name: Function name (null-terminated bytes)
-///   addr: Function start address
-///   size: Function size in bytes
-///   func_idx: WebAssembly function index
-#borrow(dwarf, name)
-extern "c" fn c_dwarf_add_function(
-  dwarf : DWARFBuilder,
-  name : Bytes,
-  addr : Int64,
-  size : Int32,
-  func_idx : Int32,
-) -> Unit = "wasmoon_dwarf_add_function"
-
-///|
-/// Register the DWARF debug info with the debugger (LLDB/GDB)
-/// This generates an in-memory Mach-O/ELF object and registers it
-/// via the GDB JIT interface
-/// verbose: if true, print debug info to stderr
-#borrow(dwarf)
-extern "c" fn c_dwarf_register(dwarf : DWARFBuilder, verbose : Int32) -> Bool = "wasmoon_dwarf_register"
-
-///|
-/// Unregister DWARF debug info from the debugger
-#borrow(dwarf)
-extern "c" fn c_dwarf_unregister(dwarf : DWARFBuilder) -> Unit = "wasmoon_dwarf_unregister"
-
-///|
-/// Destroy the DWARF builder and free resources
-/// Also unregisters debug info if registered
-#borrow(dwarf)
-extern "c" fn c_dwarf_destroy(dwarf : DWARFBuilder) -> Unit = "wasmoon_dwarf_destroy"
-
-///|
-/// Set the active DWARF builder for address lookups
-/// This is used for backtrace symbolication
-#borrow(dwarf)
-extern "c" fn c_dwarf_set_active(dwarf : DWARFBuilder) -> Unit = "wasmoon_dwarf_set_active"
-
-///|
-/// Lookup an address in the DWARF debug info
-/// Returns required UTF-8 name bytes including the terminator, or 0 if absent.
-/// If found, writes results to the provided arrays (a zero-sized name buffer probes size).
-#borrow(dwarf, name_out, func_idx_out, offset_out)
-extern "c" fn c_dwarf_lookup_address(
-  dwarf : DWARFBuilder,
-  addr : Int64,
-  name_out : FixedArray[Byte],
-  name_size : Int32,
-  func_idx_out : FixedArray[Int32],
-  offset_out : FixedArray[Int64],
-) -> Int32 = "wasmoon_dwarf_lookup_address"
-
-///|
-/// Capture a backtrace with LR fallback (for when FP is 0)
-/// Returns the number of frames captured
-/// frames_out contains alternating (pc, fp) pairs
-#borrow(frames_out)
-extern "c" fn c_dwarf_capture_backtrace_ex(
-  initial_pc : Int64,
-  initial_fp : Int64,
-  initial_lr : Int64,
-  frames_out : FixedArray[Int64],
-  max_frames : Int32,
-) -> Int32 = "wasmoon_dwarf_capture_backtrace_ex"
 
 // ============ Managed JITContext Operations ============
 

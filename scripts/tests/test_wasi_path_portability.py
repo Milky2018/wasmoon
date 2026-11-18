@@ -30,6 +30,6 @@ int main(int argc, char **argv) {
 ''')
             executable = directory / 'consumer'
             subprocess.run(['cc', '-Wall', '-Wextra', '-Werror',
-                            '-I', str(ROOT / 'modules/wasmoon_runtime/native/ffi/host_io'),
+                            '-I', str(ROOT / 'modules/wasmoon_runtime/native/host_io/wasi'),
                             str(source), '-o', str(executable)], check=True)
             subprocess.run([str(executable), str(directory / 'link')], check=True)

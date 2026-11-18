@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_runtime/native"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn acquire(Quota, Int64) -> Bool
+
+pub fn release(Quota, Int64) -> Unit
+
+pub fn unlimited() -> Quota
+
+// Errors
+
+// Types and methods
+pub type CleanupOwner
+pub fn CleanupOwner::close(Self) -> Unit
+pub fn CleanupOwner::new(() -> Unit) -> Self
+
+pub type Quota
+pub fn Quota::new(Int64) -> Self
+pub fn Quota::to_repr(Self) -> @debug.Repr
+pub fn Quota::used(Self) -> Int64
+pub impl @debug.Debug for Quota
+
+pub type Reservation
+pub fn Reservation::close(Self) -> Unit
+pub fn Reservation::matches(Self, Quota) -> Bool
+pub fn Reservation::new(Quota, Int64) -> Self
+pub fn Reservation::resize(Self, Int64) -> Bool
+pub fn Reservation::to_repr(Self) -> @debug.Repr
+pub fn Reservation::valid(Self) -> Bool
+pub impl @debug.Debug for Reservation
+
+// Type aliases
+
+// Traits

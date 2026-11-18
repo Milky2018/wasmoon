@@ -1,4 +1,15 @@
-#include "../jit_internal.h"
+#include "../memory/atomic_wait.h"
+#include "../context/jit_context.h"
+#include "../memory/memory_ops.h"
+#include "../memory/table.h"
+#include <string.h>
+#include <stdlib.h>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 #ifdef _WIN32
 #include <process.h>
 typedef HANDLE test_thread;
@@ -26,9 +37,8 @@ static void join_worker(test_thread thread) { pthread_join(thread, NULL); }
 static void yield_worker(void) { sched_yield(); }
 #endif
 
-extern int32_t wasmoon_atomic_notify(wasmoon_memory_t *, int64_t, int32_t);
-extern void wasmoon_jit_retain_memory_desc(wasmoon_memory_t *);
-extern void wasmoon_jit_free_memory_desc(wasmoon_memory_t *);
+
+
 
 
 typedef struct {
@@ -213,7 +223,6 @@ MOONBIT_FFI_EXPORT wasmoon_table_t *wasmoon_test_sparse_table(int32_t count) {
     return table;
 }
 
-extern int64_t wasmoon_jit_context_ptr(void *context);
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_test_table_grow(void *context, int32_t index, int64_t delta) {
     return table_grow_ctx_internal((jit_context_t *)(uintptr_t)wasmoon_jit_context_ptr(context),

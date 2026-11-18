@@ -3,6 +3,7 @@ import {
 }
 
 options(
+  "native-stub": [ "reactor.c", "reactor_windows.c", "external_loop.c" ],
   targets: { "reactor.mbt": [ "native" ] },
   warn_list: "+73",
 )

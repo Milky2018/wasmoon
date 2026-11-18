@@ -1,7 +1,4 @@
 ///|
-extern "c" fn continuation_test_is_windows() -> Bool = "wasmoon_host_is_windows"
-
-///|
 test "typed parked continuation resume preserves resource errors and releases ownership" {
   let module_ = @wat.parse(
     (
@@ -40,7 +37,7 @@ test "typed parked continuation resume preserves resource errors and releases ow
   // Sweep the actual host-return/resume boundary: denial before consumption
   // leaves a usable handle; denial inside resume consumes it. Windows also
   // performs thread conversion here even though the parked stack already exists.
-  let attempts = if continuation_test_is_windows() { 8 } else { 4 }
+  let attempts = if @jit_ffi.is_windows() { 8 } else { 4 }
   let mut denied = 0
   let mut consumed = 0
   for attempt in 1..<=attempts {
@@ -83,7 +80,7 @@ test "typed parked continuation resume preserves resource errors and releases ow
     }
   }
   assert_true(denied > 0)
-  if continuation_test_is_windows() {
+  if @jit_ffi.is_windows() {
     assert_true(
       consumed > 0,
       msg="Windows resume resource failure was not exercised",

@@ -102,7 +102,7 @@ pub fn encode_heap_ref(heap_idx : Int32) -> Int64 {
 /// Encode module types for native subtype and allocation helpers.
 fn gc_type_data(types : ArrayView[@types.SubType]) -> FixedArray[Int32] {
   let num_types = types.length()
-  // Extended format (stride = 6, keep in sync with `jit_ffi/jit_internal.h`):
+  // Extended format (stride = 6, keep in sync with `native/ffi/gc/gc_types.h`):
   //   [super_idx, kind, struct_num_fields, array_elem_tag, array_elem_bytes, array_elem_flags]
   let type_stride = 6
   let types_data = FixedArray::make(num_types * type_stride, 0)

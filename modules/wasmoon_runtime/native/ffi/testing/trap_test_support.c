@@ -1,6 +1,10 @@
-#include "../jit_internal.h"
+#include "../control/trap.h"
+#include "../control/hostcall.h"
+#include "../control/trap_codes.h"
+#include <stdlib.h>
 
 #ifdef __APPLE__
+#include <pthread.h>
 typedef struct {
     pthread_mutex_t lock;
     pthread_cond_t condition;
@@ -49,6 +53,7 @@ static int WASMOON_GUEST_ABI signal_mask_trampoline(
 
 MOONBIT_FFI_EXPORT int wasmoon_test_trap_signal_masks(void) {
 #ifdef __APPLE__
+#include <pthread.h>
     signal_mask_probe_t probe = {
         PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, 0, 0
     };
