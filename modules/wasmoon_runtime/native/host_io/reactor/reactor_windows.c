@@ -1,5 +1,5 @@
 #ifdef _WIN32
-#include "../../ffi/host_io/windows_input.h"
+#include "../windows_input.h"
 #include <limits.h>
 #include "reactor.h"
 #include <errno.h>

@@ -1,11 +1,4 @@
 #include "moonbit.h"
-MOONBIT_FFI_EXPORT int wasmoon_host_is_windows(void) {
-#ifdef _WIN32
-    return 1;
-#else
-    return 0;
-#endif
-}
 
 #ifdef _WIN32
 #include "windows_io.h"

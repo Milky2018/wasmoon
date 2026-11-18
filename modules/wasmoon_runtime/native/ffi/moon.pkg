@@ -6,17 +6,6 @@ import {
 
 options(
   "native-stub": [
-    "host_io/windows_fs.c",
-    "host_io/windows_io.c",
-    "host_io/windows_input.c",
-    "host_io/wasi/resolver_native.c",
-    "host_io/wasi/file_semantics_native.c",
-    "host_io/wasi/ffi_native.c",
-    "host_io/wasi/directory_native.c",
-    "host_io/wasi/socket_native.c",
-    "host_io/wasi/socket_semantics_native.c",
-    "host_io/wasi/poll_native.c",
-    "host_io/wasi/process_native.c",
     "jit.c",
     "cleanup.c",
     "atomic.c",

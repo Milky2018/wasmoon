@@ -6,4 +6,17 @@ import {
   "Milky2018/wasmoon_runtime/native/host_io/reactor",
 } for "test"
 
+options(
+  "native-stub": [
+    "directory_native.c",
+    "ffi_native.c",
+    "file_semantics_native.c",
+    "poll_native.c",
+    "process_native.c",
+    "resolver_native.c",
+    "socket_native.c",
+    "socket_semantics_native.c",
+  ],
+)
+
 supported_targets = "+native"

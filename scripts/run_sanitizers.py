@@ -151,7 +151,7 @@ def main():
     include = Path(os.environ.get("MOON_HOME", Path.home() / ".moon")) / "include"
     run(["clang", "-pthread", "-fsanitize=address,undefined", "-fno-sanitize-recover=all",
          "-fno-omit-frame-pointer", "-I", str(include),
-         "-I", str(sources / "wasmoon_runtime/native/ffi/host_io/wasi"),
+         "-I", str(sources / "wasmoon_runtime/native/host_io/wasi"),
          str(ROOT / "scripts/tests/native/resolver_lifecycle.c"),
          "-o", str(allocation_probe)], log=OUT / "allocation-build.log")
     run([str(allocation_probe)], log=OUT / "allocation.log")

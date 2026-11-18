@@ -18,7 +18,10 @@
 #include <setjmp.h>
 
 #ifdef _WIN32
-#include "host_io/windows_io.h"
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #else
 #include <sys/mman.h>
 #include <unistd.h>

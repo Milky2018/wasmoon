@@ -3,6 +3,7 @@ import {
 }
 
 options(
+  "native-stub": [ "windows_fs.c", "windows_input.c", "windows_io.c" ],
   targets: { "platform.mbt": [ "native" ] },
 )
 
