@@ -1,7 +1,5 @@
-#include "moonbit.h"
+#include "reactor.h"
 #include <errno.h>
-
-MOONBIT_FFI_EXPORT int wasmoon_async_reactor_wake(void *object);
 
 /* The main thread owns this reference from installation until the async
    waiter has joined. The foreign-thread callback never touches MoonBit RC. */

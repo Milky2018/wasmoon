@@ -1,7 +1,7 @@
 #ifdef _WIN32
-#include "../windows_input.h"
+#include "../../ffi/host_io/windows_input.h"
 #include <limits.h>
-#include "moonbit.h"
+#include "reactor.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <io.h>

@@ -13,7 +13,7 @@
 #define close _close
 #endif
 
-#include "moonbit.h"
+#include "reactor.h"
 
 #if defined(__APPLE__)
 #include <sys/event.h>
