@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon_runtime/native/exec_memory"
 
 import {
-  "Milky2018/wasmoon_runtime/native/ownership",
+  "Milky2018/wasmoon_runtime/native",
 }
 
 // Values
@@ -20,7 +20,7 @@ pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> ExecCodeHandle
 
 // Types and methods
 type ExecCodeHandle
-pub fn ExecCodeHandle::bind_reservation(Self, @ownership.Reservation) -> Bool
+pub fn ExecCodeHandle::bind_reservation(Self, @native.Reservation) -> Bool
 
 // Type aliases
 

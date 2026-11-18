@@ -21,23 +21,28 @@ boundary, not completion of the whole epic.
 | Continuation identities, admission, marks, retirement and sealing | MoonBit `ContinuationState`; an RC bridge retains it | RC physical storage owns bodies, buffers and root/quota leases. Active native cancellation scopes pin bodies directly. Saved machine stacks, platform contexts and stack transfers remain native primitives. |
 | Immutable callable metadata | MoonBit registry with RC-retained native array view | Existing example of one logical owner and direct native reads without a second mutable registry. |
 | Builtin/import semantics and typed values | MoonBit Store host functions plus the shared hostcall trampoline | Native code transports typed value slots and performs ABI entry/exit; import names do not select duplicate C host implementations. ISS-640 has local validation, with new platform acceptance pending. |
-| Tests that allocate private activation layouts | `native/ffi/testing`, compiled by `native/ffi` | Test callers retain the `native_test_support` MoonBit facade. No other package allocates a copy of the private activation layout. |
+| Tests that allocate private activation layouts | `native/ffi/testing`, compiled by `native` | Test callers retain the `native_test_support` MoonBit facade. No other package allocates a copy of the private activation layout. |
 
 ## Native source ownership
 
-Within `wasmoon_runtime/native`, `ownership` owns quota reservations, cleanup
-callbacks and fallible allocations. `exec_memory` owns executable mappings,
-`platform` supplies host feature queries, and `dwarf` registers debug metadata
-and resolves captured program counters. The WASI and reactor packages build
-their own stubs and share the descriptor code in `host_io`.
+The `wasmoon_runtime/native` package owns quota reservations, cleanup callbacks
+and fallible allocations in its `ownership` directory. `exec_memory` owns
+executable mappings, `platform` supplies host feature queries, and `dwarf`
+registers debug metadata and resolves captured program counters. The WASI and
+reactor packages build their own stubs and share the descriptor code in
+`host_io`.
 
 The JIT context, trap activation, parked roots and guest-call helpers share
-private state during a single invocation. Their C sources belong to one
-`ffi` archive. The `context`, `control`, `memory` and `gc` directories own
-the corresponding layouts and operations. `code` owns the entry trampoline,
-and `abi` contains the platform assembly and generated guest bridges. Each
-translation unit includes the contracts it uses. Test fixtures that inspect
-these layouts compile as separate archive members in `testing`.
+private state during a single invocation. The native package builds one archive
+for these C objects, executable memory, DWARF registration and the shared
+allocator. GNU ld scans package archives once in dependency order. Keeping the C
+call graph in one archive allows each MoonBit API package to link independently
+and keeps the allocator's failure counter unique per thread. The `context`,
+`control`, `memory` and `gc` directories own the corresponding layouts and
+operations. `code` owns the entry trampoline, and `abi` contains the platform
+assembly and generated guest bridges. Each translation unit includes the
+contracts it uses. Test fixtures that inspect these layouts compile as separate
+archive members in `testing`.
 
 ## Synchronous GC allocation call
 

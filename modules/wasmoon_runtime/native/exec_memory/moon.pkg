@@ -1,9 +1,8 @@
 #cfg(target="native")
 import {
-  "Milky2018/wasmoon_runtime/native/ownership",
+  "Milky2018/wasmoon_runtime/native" @ownership,
 }
 
 options(
-  "native-stub": [ "exec_mem.c" ],
   targets: { "exec_memory.mbt": [ "native" ] },
 )

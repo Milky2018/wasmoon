@@ -7,6 +7,7 @@
 #include "fiber_protocol.h"
 #include "../../ownership/native_alloc.h"
 #include "../../ownership/ffi_callbacks.h"
+#include <stdlib.h>
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -17,7 +18,6 @@
 #ifndef _WIN32
 #include <pthread.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>

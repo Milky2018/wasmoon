@@ -2,10 +2,10 @@
 package "Milky2018/wasmoon_jit/jit_ffi"
 
 import {
+  "Milky2018/wasmoon_runtime/native",
   "Milky2018/wasmoon_runtime/native/exec_memory",
   "Milky2018/wasmoon_runtime/native/ffi",
   "Milky2018/wasmoon_runtime/native/layout",
-  "Milky2018/wasmoon_runtime/native/ownership",
 }
 
 // Values
@@ -28,7 +28,7 @@ pub fn stage_exec_managed(Int32, code_bytes? : Int32) -> @exec_memory.ExecCodeHa
 // Types and methods
 
 // Type aliases
-pub using @ownership {type CleanupOwner}
+pub using @native {type CleanupOwner}
 
 pub using @layout {type ContextLayout}
 
@@ -52,8 +52,8 @@ pub using @ffi {type NativeTableHandle}
 
 pub using @ffi {type PreparedSafepoints}
 
-pub using @ownership {type Quota}
+pub using @native {type Quota}
 
-pub using @ownership {type Reservation}
+pub using @native {type Reservation}
 
 // Traits

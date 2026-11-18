@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon_runtime/native/ownership"
+package "Milky2018/wasmoon_runtime/native"
 
 import {
   "moonbitlang/core/debug",
